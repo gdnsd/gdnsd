@@ -137,7 +137,7 @@ bool udp_sock_setup(dns_addr_t *addrconf) {
     const anysin_t* asin = &addrconf->addr;
 
     // mod udp_recv_width down to 1 when unsupported, makes other logic simpler
-    if(!has_mmsg() && addrconf->udp_recv_width > 1)
+    if((!has_mmsg() || RUNNING_ON_VALGRIND) && addrconf->udp_recv_width > 1)
         addrconf->udp_recv_width = 1;
 
     const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
