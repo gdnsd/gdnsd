@@ -1,11 +1,37 @@
-autom4te.cache
+# Autotools junk at top level
+/autom4te.cache/
+/config.log
+/config.status
+/config.h
+/stamp-h1
+/libtool
+
+# Distribution tarballs
+/gdnsd-*.tar.*
+
+# Built, installed binaries
+/gdnsd/gdnsd
+/plugins/meta/libgdmaps/t/gdnsd_geoip_test
+
+# Built, distributed C sources (Ragel outputs)
+/gdnsd/zscan.c
+/gdnsd/zscan_lm.c
+/gdnsd/libgdnsd/vscf.c
+
+# Copied, renamed, distributed, installed
+/gdnsd/libgdnsd/gdnsd-dmn.h
+/gdnsd/libgdnsd/gdnsd-ev.h
+
+# The core testsuite output directory
+/t/testout/
+
+# libgdmaps unit test junk
+/plugins/meta/libgdmaps/t/*.bin
+/plugins/meta/libgdmaps/t/Geo*.dat
+/plugins/meta/libgdmaps/t/fips_include-*
+
+# Various tool outputs in all dirs
 Makefile
-config.log
-config.status
-config.h
-stamp-h1
-libtool
-gdnsd-*.tar.*
 .deps
 .libs
 *.o
