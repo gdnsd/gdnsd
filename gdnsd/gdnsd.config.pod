@@ -1,0 +1,832 @@
+
+=head1 NAME
+
+gdnsd.config - gdnsd configuration file
+
+=head1 SYNOPSIS
+
+  options => {
+    log_stats => 86400
+    tcp_timeout => 15 ; zonefile-style comment
+    include_optional_ns => true
+    listen => [ 127.0.0.1, 192.0.2.1 ]
+  }
+
+  # shell-style comment
+
+  zones => { # "zones" is required, and must define at least 1 zone
+    example.com => { default_ttl => 43200 }
+    example.org => { file => example.com }
+  }
+
+  service_types => {
+    foosvc => { vhost => www.example.com, url_path => /checkme }
+  }
+
+  plugins => {
+    null => {}
+  }
+
+=head1 DESCRIPTION
+
+This man page describes the syntax of the gdnsd
+configuration file.  It can have any name, B<gdnsd.config>
+is just a canonical name for documentation purposes.  The
+default location the daemon searches for this file at will
+be C<$PREFIX/etc/gdnsd/config>
+
+The lower-level syntax and structure of the configuration
+language is described in detail at the end of this document,
+but it should be fairly intuitive from the example above.  It
+is effectively a generic data structure language allowing
+arbitrarily-nested ordered hashes, ordered arrays, and scalar
+values.
+
+The top-level implicit hash of a gdnsd configuration file allows only 4 legal
+keys: B<options>, B<zones>, B<service_types>, and B<plugins>.
+
+Any of them which are present must have a Hash as their value.
+
+Only the B<zones> hash is required (because an authoritative
+server with no zones to serve is senseless). The B<options>,
+B<service_types>, and B<plugins> hashes are optional.
+
+=head1 OPTIONS HASH
+
+These options control the overall behavior of L<gdnsd(8)>.
+
+=over 4
+
+=item B<pidfile>
+
+String, defaults to C<$VARDIR/run/gdnsd.pid>.  This is the
+location the daemon stores its pidfile at.
+
+=item B<username>
+
+String, defaults to "gdnsd".  This is the username the
+daemon drops privileges to the uid/gid of on startup
+if started as root.
+
+=item B<chroot_path>
+
+String, defaults to C<$VARDIR/gdnsd>.  This is the directory
+gdnsd will C<chroot()> into when started as root, just before
+dropping privileges.  It will create and/or fix up the permissions
+of this directory if necessary (but will not create any missing
+parent directories).  This directory should be empty, but gdnsd
+will not attempt to clean it out if you've put anything there.
+
+=item B<zones_dir>
+
+String.  By default zonefiles are loaded from the same directory
+the config file itself was found in.  If this option is set to
+a relative path, that relative path will be appended to the default
+location.  If this option is set to an absolute path, that absolute
+path will replace the default location.
+
+=item B<zones_default_ttl>
+
+Integer seconds, default 86400.  This is the global default
+time-to-live for any record in any zonefile.  It can be overridden
+with a more specific default for individual zonefiles in the
+B<zones> hash, and can also be overriden within zone files themselves
+via the C<$TTL> directive (see L<gdnsd.zonefile(5)>).
+
+=item B<strict_data>
+
+Boolean, default true.  Some of the zone data validation checks have
+their error text prefixed with the string "strict_data:".  These checks
+are not strictly required for the daemon to function correctly, they're
+simply checks for sane zone configuration.  With C<strict_data>
+at the default (true) value, these checks are fatal.  If you set it
+to false, the strict_data checks will generate mere warnings and allow
+the zones to load anyways.
+
+=item B<dns_port>
+
+Integer port, 1-65535, default 53.  This is the global default port number
+for DNS listener addresses which do not specify port numbers themselves.
+
+=item B<http_port>
+
+Integer port, 1-65535, default 3506.  This is the default HTTP port number
+for stats listener addresses which do not specify port numbers themselves.
+
+=item B<listen>
+
+The listen option specifies the socket addresses the server listens on for DNS
+requests.
+
+A listen-address specification is an IP (v4 or v6) address specified as a numeric
+string with standard formatting (anything numeric that C<getaddrinfo()> supports
+on your platform), optionally followed by a colon and a port number.  If no port
+number is specified, it defaults to the value from C<dns_port>, which defaults to C<53>.
+
+Due to various parsing ambiguities, if you wish to specify a non-default port number
+for an IPv6 listen address, you will have to enclose the address part in square
+brackets, and then enclose the entire string in double-quotes.
+
+The structure of the listen option as a whole can take one of three basic
+forms.  In its simplest form, it is just a single listen-address specification
+as a string, such as:
+
+  options => { listen = 192.0.2.1 }
+
+It can also take the form of an array of such addresses, as in:
+
+  options => {
+    listen = [
+      192.0.2.1,
+      192.0.2.2,
+      2001:DB8::1,
+      "[2001:DB8::1234]:5353",
+    ]
+  }
+
+Finally, it can also be a hash where the keys are listen addresses, and the
+values are per-address options, as in:
+
+  options => {
+    listen => {
+      192.0.2.1 => {
+        tcp_timeout = 7
+      },
+      192.0.2.2:5353 => {
+        disable_tcp = true
+      },
+    }
+  }
+
+The per-address options (which are identical to, and locally override, the
+global option of the same name) are C<late_bind_secs>, C<tcp_timeout>,
+C<tcp_clients_per_socket>, C<disable_tcp>, C<udp_recv_width>, C<udp_rcvbuf>,
+C<udp_sndbuf>.
+
+If the listen option isn't specified at all (or is specified as an empty
+array), the default behavior is to scan all available IP (v4 and v6) network
+interfaces via C<getifaddrs()> and set up a separate listener for each
+address found using the default port option C<dns_port>, which defaults to C<53>.
+
+=item B<http_listen>
+
+Basically like B<listen> above, but used for the HTTP listener (serving
+stats information), and defaulting to port 3506.  The hash form isn't
+supported as there are no per-address options.  Also, the default
+addresses are the IPv4 and IPv6 (if supported) any-addresses
+(C<0.0.0.0> and C<::>), rather than the iterated per-interface addresses
+that the DNS listener uses.
+
+It makes common sense to restrict access to this service via firewall
+rules, as the data served leaks information about the rate and nature
+of your DNS traffic.  This is mostly intended for your own internal
+monitoring purposes.
+
+=item B<late_bind_secs>
+
+Integer, default 0, min 0, max 300.  If set to a non-zero value, if
+the initial C<bind(2)> attempt fails with C<EADDRNOTAVAIL> for a DNS
+listener thread, the error will be non-fatal, and after the rest
+of the daemon is fully running, the given thread will loop on retrying
+the C<bind(2)> until it succeeds or returns an error other than
+C<EADDRNOTAVAIL>, sleeping for the configured number of seconds between
+each attempt.
+
+This can be useful when explicitly configuring the daemon to listen
+for DNS requests on a virtual inferface which is not always present
+(e.g. failover address via heartbeat).  Note that when the daemon
+is started as root, the initial C<bind(2)> attempts are done as the
+root user, but late C<bind(2)> attempts are done after the daemon has
+dropped root privileges, which generally means attempts to bind ports
+lower than 1024 will fail.
+
+On Linux systems with libcap installed, the daemon will acquired
+the C<CAP_NET_BIND_SERVICE> capability to work around this problem.
+On other systems you will have to make other arrangements to grant
+the appropriate privileges to the process.  When the daemon is not
+started as root, of course, it is assumed you have made such external
+privilege arrangements in all cases where neccessary.
+
+This option is also available on a per-listener basis in the listener
+options hash.
+
+=item B<tcp_clients_per_socket>
+
+Integer, default 128, min 1, max 65535.  This is maximum
+number of tcp DNS connections gdnsd will allow to
+occur in parallel per listening tcp socket.  Once this limit is
+reached by a given socket, no new connections will be allowed
+to that socket until one of the existing ones closes or times out.
+
+Note in B<listen> above that the default IP address for listen
+specifications results in creating two listening sockets, one
+each for IPv4 and IPv6.  This limit applies separately to each.
+
+=item B<tcp_timeout>
+
+Integer seconds, default 5, min 3, max 60.  TCP DNS connections
+will be forcibly shut down if they go idle without receiving
+and responding to a valid query for this many seconds.  L<gdnsd(8)>
+allows multiple requests per connection, and this idle timeout
+applies to the time between requests as well.
+
+=item B<disable_tcp>
+
+Boolean, default false.  If set to true, TCP DNS listeners will not be started.
+It would be wise to be very sure that you don't have any data large enough to
+require TCP fallback before enabling this.
+
+=item B<udp_recv_width>
+
+Integer, default 8, min 1, max 64.  On supported Linux kernels
+this setting tunes the use of more efficient interfaces to
+receive and send multiple packets with a single syscall.  Higher values
+reduce syscall overhead and generally give the server higher throughput
+and better efficiency under high loads.
+
+You'll need Linux 3.0 or higher headers installed correctly for your architecture
+in order to build a copy of gdnsd which supports this feature.  At runtime,
+the running kernel's version will be checked, falling back to the single-width
+code if it is not 3.0 or higher.
+
+Setting this to a value of 1 will completely disable this code, as if we were
+running on a platform that didn't support it.  On platforms that don't support
+it, this option has no effect and is ignored.
+
+=item B<udp_rcvbuf>
+
+Integer, min 4096, max 1048576.  If set, this value will be used to set the
+C<SO_RCVBUF> socket option on the UDP listening socket(s).  Most users do not
+need to tune this value.  If left unset, the code only takes a somewhat
+heuristic approach, trying to raise the value only if the OS-supplied default
+seems too low.
+
+=item B<udp_sndbuf>
+
+Integer, min 4096, max 1048576.  If set, this value will be used to set the
+C<SO_SNDBUF> socket option on the UDP listening socket(s).  Most users do not
+need to tune this value.  If left unset, the code only takes a somewhat
+heuristic approach, trying to raise the value only if the OS-supplied default
+seems too low.
+
+=item B<max_http_clients>
+
+Integer, default 128, min 1, max 65535.  Maximum number of HTTP
+connections to allow in parallel at any given time.  Once this
+number is reached, no more new connections will be answered until
+an existing connection closes or times out.
+
+=item B<http_timeout>
+
+Integer seconds, default 5, min 3, max 60.  HTTP connections
+will be forcibly shut down if they go idle for more than this
+many seconds.
+
+=item B<lock_mem>
+
+Boolean, default false.  Causes the daemon to do C<mlockall(MCL_CURRENT|MCL_FUTURE)>,
+which effectively locks all daemon memory into RAM, unable to be swapped.
+Possibly helpful in some production cases to ensure swap-in doesn't affect
+DNS latency.
+
+When started as root with lock_mem set to true,
+the daemon will remove any ulimits on locked memory before dropping
+privileges.  When started as a regular user it may not be able to do so,
+and those limits could cause the server to abort execution at any time
+if they are set too low.
+
+=item B<priority>
+
+Signed integer, range -20 to +20, lower values are higher priority.
+If explicitly set, gdnsd will attempt <setpriority()>
+to this value on startup.  If left unset and gdnsd is started as a normal
+user, no C<setpriority()> call will be made.  If left unset and gdnsd
+is started as root, it will default to calling C<setpriority()> with
+the value C<-11>.
+
+=item B<disable_text_autosplit>
+
+Boolean, default false.  On the wire, C<TXT> (and C<SPF>, which are identical
+in wire-format other than the RR-type) records are encoded as discrete chunks
+of up to 255 characters per chunk.  The relevant RFCs state
+that multiple chunks should be treated by clients as if they are concatenated.
+That is to say, it should make no difference to a client whether the C<TXT>
+data is sent as two 16-byte chunks or one 32-byte chunk.
+
+Ordinarily, you may specify chunk(s) of a C<TXT> record in gdnsd zonefiles as
+a string of any size up to the legal length (just short of 64K in practice), and
+gdnsd will auto-split the data into 255-byte chunks for transmission over
+the DNS protocol correctly.  If you choose to manually break up your TXT
+record into multiple strings in the zonefile, gdnsd also honors these boundaries
+and will not attempt to merge them into larger chunks where possible.
+
+If you set this option to true, the auto-splitting behavior is disabled, and
+any single character string specified in a zonefile as part of a C<TXT> or
+C<SPF> record which is larger than 255 bytes will be considered a syntax error.
+
+=item B<include_optional_ns>
+
+Boolean, default false.  Causes the daemon to include the optional NS
+records in the Authority section of simple authoritative responses
+containing actual response data.  Resolvers in general do not seem to
+ever really require this data to resolve any ambiguity, and Caches
+will generally refresh the NS data when necessary.  Leaving this
+option in its default state results in smaller response packets
+and faster response packet generation in many common cases.  This
+is similar in nature to (but not exactly like) BIND's
+"minimal-responses" option, except that we default to the minimal mode.
+
+Regardless of this setting, all *necessary* Authority-section records
+are always included, such as when they are necessary for delegation
+responses, NXDOMAIN responses, and NOERROR responses containing no
+RRsets in the answer section.  Additionally, "glue" address information
+which may be necessary for the namservers of a delegation is *always*
+included.
+
+This option never directly affects the generation of Additional records,
+although when NS records are omitted, obviously that indirectly removes
+any related Additional records which weren't otherwise referenced in
+the Answer section.
+
+As far as additional records go, gdnsd's general policy is to include
+Additional records for any right-hand-side name mentioned in the Answer
+or Authority section if that name is in the same zone as the question
+asked.  Additionally, any C<A> -query will result in C<AAAA> Additional
+records being added and vice-versa, if they exist.
+
+=item B<plugin_search_path>
+
+A single string or an array of strings, default empty.  Normally the daemon
+searches for plugins in the fixed path C<$PREFIX/lib/gdnsd>, using filenames
+of the form C<plugin_${name}.so>.  If you define this parameter, all paths
+in this list will be searched in the given order for plugins *before* trying
+the default, fixed search path.
+
+=item B<realtime_stats>
+
+Boolean, default false.  Normally the daemon self-imposes a limit of not
+recalculating the daemon-wide statistics more often than once per second.
+This improves efficiency in the case that the polling traffic on our HTTP
+interface gets high.
+
+For most uses the default should be fine.  If you set this option to true, the
+stats will be recalculated on the spot for every stats request.  The test suite
+uses this so that it can double-check statistics counters between every
+request it sends.  I don't imagine anyone else will need to use this option,
+and it could even be determinental to performance on SMP machines.
+
+=item B<max_response>
+
+Integer, default 16384, min 4096, max 62464.  This number is used to size the
+per-I/O-thread buffers that we construct response packets in.  For any sane,
+normal use of the DNS, the default value is far more than enough.  For embedded
+or other low memory hosts, you might even consider setting this smaller than
+default to save a bunch of per-socket-context buffer space.
+
+However, if you have strange DNS data that's very large (giant RRsets, giant
+blobs of data in TXT records) which might generate response packets greater
+than the 16K default max here, you *must* set this parameter large enough to
+accomodate them or random very bad things will happen.  It should be noted that
+the odds are high whatever you're trying to do is misguided in the first place.
+You can size this by setting it to the max and running some test queries via
+"dig" (or a similar tool) to find your limit.
+
+This number does not need to take into account 
+UDP, IP, or any lower-level headers.  Typically when probing your data for
+the largest response sizes you should do C<ANY> queries and/or specific RR-type
+queries against the first CNAME in any CNAME chains leading to large RR-sets.
+Keep in mind that the C<include_optional_ns> option will affect the sizing as
+well.  Also keep in mind that wildcards and delegations can match any child
+name, including ones of maximal overall length.  
+
+=item B<max_addtl_rrsets>
+
+Integer, default 64, min 16, max 256.  This is the maximum number of RR sets
+that will ever be added to the Additional section of a response packet.  This
+sets a hard limit on the number of delegation glue NS records a subzone can
+have (which is checked at startup), and a runtime soft limit on other
+Additional section RR sets.  When the limit is reached at runtime, the
+remaining potential additional RR sets are simply not added to the packet.
+
+Most users won't need to raise this value, and users on low-memory/embedded
+hosts might want to lower it to save more memory.
+
+=item B<max_cname_depth>
+
+Integer, default 16, min 4, max 24.  How deep CNAME -> CNAME chains are allowed
+to recurse within local data.  If a chain longer than this is detected between
+normal static CNAME entries in authoritative data at zonefile loading time, an
+error will be thrown.  At runtime during the processing of
+DNS responses, the same limit will be enforced for all CNAME -> CNAME chains,
+including those involving DYNC (dynamic CNAME) plugin responses.
+
+If the limit is exceeded at runtime the code will halt further recursive lookups
+for this request, the response packet will contain a dangling CNAME, and a packet
+error will be logged if packet error logging has been turned on.
+
+Note that this is also the only thing preventing infinite CNAME loops.
+
+=item B<debug>
+
+Boolean, default false.  If (and only if) gdnsd was built in debug
+mode (--enable-developer, which slows things down with a ton of
+assertion checks among other things), setting this option to C<true>
+will cause additional debugging output to syslog/stderr.
+
+=item B<edns_client_subnet>
+
+Boolean, default true.  Enables support for the edns-client-subnet option.  gdnsd
+only includes this EDNS option in responses to queries which also contained the
+option.  In the case of normal responses from static zone data, the scope mask will
+be set to zero.  Dynamic response plugins have access to the query's EDNS
+client-subnet data, and have full control over the response scope mask.
+
+If the option is set to false, gdnsd will ignore the option in queries, never
+set it in its responses, and plugins will not have access to any data provided
+by any ignored edns-client-subnet option in queries.
+
+Of the included standard plugins only C<reflect> and C<geoip> make use of
+edns-client-subnet information.  The rest will leave the scope mask at zero
+as normal for client-location-agnostic static data.
+
+Relevant links documenting edns-client-subnet:
+
+L<http://www.afasterinternet.com/>
+L<http://tools.ietf.org/html/draft-vandergaast-edns-client-subnet-00>
+
+=item B<monitor_force_v6_up>
+
+Boolean, default false.  Forces all monitored resources with IPv6 addresses
+permanently to the UP state, and does not actually send them monitoring
+requests.  Useful if some of your DNS servers don't have working or
+reliable IPv6 routing, which would otherwise fail IPv6 polls and force
+the related addresses to be marked DOWN.  A better alternative would
+be to only host DNS for v6-capable services on v6-capable DNS hosts,
+or install a Tunnelbroker/Sixxs/Teredo/Miredo/etc tunnel to get v6
+routability.
+
+=back
+
+=head1 ZONES
+
+The zones hash must have one key for each authoritative domain
+you wish to serve.  The domainname itself is the key.  It does
+not matter whether you terminate the domainname with a final
+C<.> or not.  In either case it will be interpreted as a
+fully-qualified zone name (as if it did have a final C<.>).
+
+The value for each domain must be a hash of options.  All of them
+have reasonable defaults, so this hash is often empty.
+
+The available per-zone options are:
+
+=over 4
+
+=item B<file>
+
+String, defaults to being identical to the zone name as specified
+in the key (including any optional trailing C<.>).  This is the
+filename the zone data will be loaded from.  If you specify an
+absolute path, it will be used literally.  Otherwise this filename
+is considered relative to the zones directory (see B<zones_dir>
+in the B<options> hash above).  Particularly useful if your zone
+names contain characters that don't work very well in pathnames,
+such as the forward slashes of RFC 2317 -style classless in-addr.arpa
+delegations.
+
+=item B<default_ttl>
+
+Integer.  This overrides the B<options> item B<zones_default_ttl>
+for this particular zone (that option in turn defaults to 86400).
+
+Setting this is identical in function to putting the same value in a
+C<$TTL> directive on the first line of the zone file, and can
+of course be overriden by C<$TTL> directives in the zone file.
+
+=back 
+
+See L<gdnsd.zonefile(5)> for details on the internal syntax of the
+zonefiles themselves.
+
+=head1 SERVICE_TYPES
+
+service_types is used in conjuction with certain gdnsd plugins.  If
+you are not using such a plugin, you can safely ignore this section
+and omit it from your configuration.
+
+The service_types hash contains generic definitions for how
+to monitor the given types of service.  Each service_type uses
+a protocol-specific plugin, and the default is the included
+plugin C<http_status>, which checks HTTP status code responses.
+There are several generic parameters related to timing and anti-flap,
+as well as plugin-specific parameters that vary per plugin.
+
+A service_type does not, however, specify a name or address for
+a specific instance of a service.  Those would occur on a per-address
+basis in a resolving plugin's configuration down in the C<plugins>
+stanza, and the plugin's configuration would then reference a named
+service_type to be used when monitoring said address.
+
+The other included plugin is C<tcp_connect>, which just checks
+TCP C<connect()> success but does no protocol-specific i/o checks.
+
+A service monitored through these mechanisms can be in one of three
+states at runtime: C<UP>, C<DANGER>, or C<DOWN>.  The UP state means
+that all is perfectly well.  The DANGER state means that some isolated
+failures have been seen in the recent past (perhaps even just one),
+but that gdnsd has not yet seen a consistent enough pattern of failure
+to declare the service dead.  The DOWN state, obviously, means that
+gdnsd does consider the service dead.  These states are presented
+to the plugin that requested the monitoring.  It is up to the plugin
+to determine how this affects DNS responses.
+
+Any services monitored for plugins are also have their state reported
+alongside the standard gdnsd statistics report, served by the built-in
+HTTP server (default port is 3506).
+
+There are five built-in service types that can't be overriden:
+
+One built-in service type is implicitly named C<default>.  It uses the
+default C<http_status> plugin and is defined to all of the default
+parameters shown below.
+
+The other four are named C<none>, C<up>, C<danger>, and C<down>.
+These do no actual monitoring, and simply force the state of resources
+using these service_types to a fixed state.  C<none> is just
+an alias for C<up>.
+
+The following are the generic parameters for all service_types:
+
+=over 4
+
+=item B<up_thresh>
+
+Integer, default 20, min 1, max 255.  Number of monitoring requests
+which must succeed with no intervening failures to transition
+a given IP for this resource from the DOWN state to the UP
+state.
+
+=item B<ok_thresh>
+
+Integer, default 10, min 1, max 255.  Number of monitoring requests
+which must succeed with no intervening failures to transition
+a given IP for this resource from the DANGER state to the UP
+state.
+
+=item B<down_thresh>
+
+Integer, default 10, min 1, max 255.  Number of monitoring requests
+which must fail, regardless of any intervening successes,
+to transition a given IP for this resource from the DANGER state
+to the DOWN state.
+
+=item B<interval>
+
+Integer seconds, default 10, min 1, max 255.  Number of seconds
+between successive monitoring requests to a given IP address for
+this resource.
+
+=item B<timeout>
+
+Integer seconds, default 3, min 1, max 255.  Maximum time the
+monitoring code will wait for a successful response before giving
+up and considering the request to be a failure.  Must be less
+than 90% of B<interval>.
+
+=item B<plugin>
+
+String, default "http_status".  This indicates which
+protocol-specific plugin to use to execute the monitoring
+requests.  Any parameters other than the generic ones listed
+here are consumed by the plugin.
+
+=back
+
+The C<tcp_connect> plugin has just one plugin-specific parameter:
+
+=over 4
+
+=item B<port>
+
+Integer, required.  This is the port number to contact
+on the remote host to check this service_type.  It has
+no default and must be specified.
+
+=back
+
+The following are the plugin-specific parameters for the
+default monitoring plugin C<http_status>:
+
+=over 4
+
+=item B<port>
+
+Integer, default 80.  This is the port number to contact
+on the remote host to check this service_type.
+
+=item B<url_path>
+
+String, default C</>.  This is the URL that should be
+used when checking this service_type.
+
+=item B<vhost>
+
+Hostname, no default.  If defined, the HTTP/1.0 monitoring
+request will include this as a C<Host:> header in the
+monitoring request.  If not defined, no C<Host:> header
+will be sent.
+
+=item B<ok_codes>
+
+Array of 3-digit HTTP status codes, default C<[ 200 ]>.  This
+defines the HTTP status codes in responses that will be accepted
+as successful.
+
+=back
+
+=head1 PLUGINS
+
+The plugins hash is optional, and contains one key for every dynamic
+resolution plugin you wish to load and use.  The value must be a
+hash, and the contents of that hash are supplied to the plugin to
+use in configuring itself.  If the plugin requires no configuration,
+the empty hash C<{}> will suffice.  It is up to the plugin to determine
+whether the supplied hash of configuration data is legal or not.
+
+Monitoring-only plugins can also be given plugin-global level configuration
+here if the plugin author deemed it necessary.
+
+gdnsd ships with 3 very trivial dynamic resolution plugins named C<null>, C<static>,
+and C<reflect>.
+
+C<null> simply returns all-zeros addresses for DYNA records, and C<invalid.>
+as the RHS of DYNC records.  It does not pay attention to any plugin-specific
+configuration.
+
+The C<static> plugin can be configured with a map of resource names to IPv4
+addresses or CNAME hostnames, and it will do the obvious: map those resource
+names statically for use in either DYNA or DYNC zonefile records.
+
+C<reflect> is primarily for real-world testing and debugging.  It attempts
+to reflect back to the query originator an address answer showing the server's
+view of where the client is located on the network.  Currently in the common
+case this will be the address of the intermediate cache server which communicated
+directly with gdnsd.  However, if the query contains the draft edns-client-subnet
+option, the response can reflect that as well.
+
+It accepts 4 fixed resource names
+at the zonefile level: C<dns>, C<edns>, C<best>, and C<both>.  C<dns> means
+to ignore edns-client-subnet and always return the cache's address.  C<edns>
+means to ignore the cache's address and always return edns-client-subnet information,
+(or C<0.0.0.0> if not available).  C<best> will return the edns-client-subnet
+information if available, or the cache's address if not.  C<both> returns both
+addresses if edns-client-subnet is available, or just the cache otherwise.  The
+default behavior is C<best>.
+
+gdnsd also includes five other plugins that are more production-useful, all
+of which have their own separate manpage documentation:
+
+=over 4
+
+=item B<simplefo> - simple primary->secondary failover of monitored addresses
+
+=item B<multifo> - all-active failover of monitored round-robin address groups
+
+=item B<weighted> - weighted-round-robin responses with a variety of behavioral flavors, for both monitored addresses and CNAMEs
+
+=item B<metafo> - static-ordered address(-group) meta-failover between 'datacenters', which are resources defined in terms of other plugins
+
+=item B<geoip> - combines metafo's functionality with MaxMind GeoIP databases to select different datacenter address(-group) preference/failover orderings for different clients based on approximate geographic location.  Supports geographically-differentiated CNAME resolution as well.
+
+=back
+
+A configuration example showing the trivial plugins, as well as demonstrating
+the service_types described earlier:
+
+  zones => { example.com => {} }
+
+  service_types => {
+    corpwww_type => {
+      vhost => www.corp.example.com
+      url_path => /check_me
+      down_thresh => 5
+      interval => 5
+    }
+  }
+
+  plugins => {
+    null => {},
+    reflect => {},
+    static => {
+      foo = 192.0.2.2
+      bar = 192.0.2.123
+      somehost = somehost.example.net.
+    },
+  }
+
+And then in your example.com zonefile, you could have (among your other RRs):
+
+  zeros 600 DYNA null
+  reflect 10 DYNA reflect
+  reflect-both 10 DYNA reflect!both
+  pointless 42 DYNA static!foo
+  acname 400 DYNC static!somehost
+
+=head1 LOW-LEVEL SYNTAX
+
+At the lowest level, the syntax of gdnsd config files roughly resembles an anonymous Perl data structure (using reference syntax).  There are three basic data types for values: ordered hashes (associative arrays mapping keys to values), ordered arrays of values, and simple strings.  Hashes and arrays can be nested to arbitrary depth.  Generally speaking, whitespace is optional.  Single-line comments in both shell (C<#>) and DNS zonefile styles (C<;>) are allowed.  They run to the end of the current line and are considered to be whitespace by the parser.
+
+A hash is surrounded by curly braces (C<{> and C<}>).  Keys are separated from their values by either C<=E<gt>> or C<=> (at your stylistic discretion).  Hash keys follow the same rules as simple string values.  Hash values can be simple strings, arrays, or hashes.  Key/value pairs can optionally have a trailing comma for stylistic clarity and separation.
+
+An array is surrounded by square braces (C<[> and C<]>).  Values can be simple strings, arrays, or hashes.  Values can optionally have a trailing comma for style.
+
+Strings (and thus keys) can be written in both quoted and unquoted forms.  In the quoted form, the string is surrounded by double-quotes (C<">), and can contain any literal byte value (even binary/utf-8 stuff, or NUL) other than C<"> or C<\>.  Those two characters must be escaped by C<\>, i.e. C<\"> and C<\\>.
+
+In the unquoted form, there are no surrounding quotes, and the allowed set of unescaped characters is further restricted.  The following are not allowed: C<][}{;#,"=\> (that is, square brackets, curly brackets, semicolons, octothorpes, commas, double quotes, equal signs, and backslashes).
+
+Both forms use the same escaping rules, which are the same RFC-standard escaping rules used in zone files.  The escapes always start with C<\>.  C<\> followed by any single byte other than a digit (C<0> - C<9>) is interepreted as that byte.  C<\> followed by exactly 3 digits interprets those digits as the unsigned decimal integer value of the desired byte (the 3 digit value cannot exceed C<255>).
+
+To illustrate the escaping and quoting, the following sets of example strings show different encodings of the same parsed value:
+
+  example
+  "example"
+  ex\097mpl\e
+  "ex\097mpl\e"
+
+  internal\"doublequote
+  "internal\"doublequote"
+
+  white\ space
+  "white space"
+
+  "braces{every[where]oh}my"
+  braces\{every\[where\]oh\}my
+
+  "\\==="
+  "\092==="
+  "\092\=\=\="
+  \\\=\=\=
+  \092\=\=\=
+  
+The top level of the config file is an implicit hash with no bracing.
+
+As a general rule, anywhere the higher-level syntax allows an array of values, you can substitute a single value.  The code will treat it as if it were an array of length 1.
+
+When we refer in other sections above to a value as being an "Integer" (or other specific scalar type), we're referring to constraints on the content of the character string value.  All scalar values are character strings. "Boolean" values are characters strings which have the value "true" or "false", in any mix of upper or lower case.
+
+The following 3 example configuration files are identical in their parsed meanings, and should clarify anything miscommuincated above:
+
+Example 1 (simple and clean):
+
+  options = {
+    listen = [ 192.0.2.1, 192.0.2.2 ],
+    http_listen = 127.0.0.1,
+  },
+  zones = {
+    example.com = { default_ttl = 1234, file = examplecom.zone },
+    example.net = { default_ttl = 4321, file = examplenet.zone },
+  },
+
+Example 2 (fat arrows, no commas, some arbitrary quoting):
+
+  "options" => {
+    listen => [ 192.0.2.1 192.0.2.2 ]
+    http_listen => 127.0.0.1
+  }
+  zones => {
+    example.com => { "default_ttl" => 1234 file => "examplecom.zone" }
+    example.net => { default_ttl => "4321" file => examplenet.zone }
+  }
+
+Example 3 (compressed and ugly):
+
+  options={listen=[192.0.2.1 192.0.2.2]http_listen=127.0.0.1}
+  zones={example.com={default_ttl=1234,file=examplecom.zone}
+  example.net={default_ttl=4321 file=examplenet.zone}}
+
+=head1 SEE ALSO
+
+L<gdnsd(8)>, L<gdnsd.zonefile(5)>, L<gdnsd-plugin-simplefo(8)>, L<gdnsd-plugin-multifo(8)>, L<gdnsd-plugin-weighted(8)>, L<gdnsd-plugin-metafo(8)>, L<gdnsd-plugin-geoip(8)>, L<gdnsd-plugin-api(3)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2010 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

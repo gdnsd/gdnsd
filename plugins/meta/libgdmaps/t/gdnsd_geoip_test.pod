@@ -1,0 +1,60 @@
+
+=head1 NAME
+
+gdnsd_geoip_test - Commandline test program for gdnsd-plugin-geoip maps
+
+=head1 SYNOPSIS
+
+gdnsd_geoip_test [-c /path/to/config] [map_name addr]
+  -c            gdnsd config file, default '/usr/local/etc/gdnsd/config'
+  map_name      Mapping name from geoip plugin config
+  addr          Client IP address to map.
+
+=head1 DESCRIPTION
+
+This is a simple commandline test program for C<gdnsd-plugin-geoip> map
+configurations.  It parses your standard gdnsd config file, extracts the
+relevant bits from the geoip plugin section, and processes the C<maps>
+section using the same core code as the plugin itself.  It then resolves
+the supplied IP address against the supplied map name, providing an
+ordered datacenter list (and edns scope netmask) result.
+
+The input IP addresses on the commandline do not accept CIDR subnet
+information.  This is intentional.  Because of the method by which
+C<gdnsd-plugin-geoip> builds, optimizes, and performs lookups on the
+internal data, the client subnet mask is irrelevant, and the response
+scope mask is always as specific or general as necessary.  To simulate
+different edns input masks on the same address data, simply zero out
+more of the right hand bits of the address.
+
+If no C<[map_name addr]> is given on the commandline, the program
+enters a REPL (Read-Eval-Print Loop) mode with a prompt, allowing
+you to interactively enter several C<[map_name addr]> pairs without
+reloading the configured database(s).
+
+=head1 SEE ALSO
+
+L<gdnsd-plugin-geoip(8)>, L<gdnsd.config(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2011 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd-plugin-geoip.
+
+gdnsd-plugin-geoip is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd-plugin-geoip is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd-plugin-geoip.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

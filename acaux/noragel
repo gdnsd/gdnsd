@@ -1,0 +1,7 @@
+#! /bin/sh
+
+echo "No ragel v6.6 was found during the configure process"
+echo "Ragel is neccessary for building from an svn checkout,"
+echo " and for anytime you want to edit .rl source files."
+echo "Ragel can be obtained from: http://www.complang.org/ragel/"
+exit 99

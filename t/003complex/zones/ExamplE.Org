@@ -1,0 +1,23 @@
+$ttl 43200
+@	SOA ns1 r00t.eXaMpLe.Net. (
+	1      ; serial
+	7200   ; refresh
+	1800   ; retry
+	259200 ; expire
+        120    ; ncache
+)
+
+; Basic NS records (required)
+@		NS	ns1
+@		NS	ns2
+ns1		A	192.0.2.200
+ns2		A	192.0.2.201
+
+$ttl 43201
+
+foo	A	192.0.2.202
+
+; Wildcard tests over here in the less-populated domain
+*	AAAA	::1
+bar	CNAME	bar.baz.fox
+barmx	MX	0 barmx.xmrab.xxx.fox

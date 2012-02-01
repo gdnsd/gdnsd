@@ -1,0 +1,19 @@
+; These are placed before SOA here to provide
+;  test coverage for SOA not being the first rrset
+;  stored at a given node
+@	NS	ns1
+@	NS	ns2
+
+@	SOA ns1 hostmaster (
+	1      ; serial
+	7200   ; refresh
+	1800   ; retry
+	259200 ; expire
+        900    ; ncache
+)
+
+ns1	A	192.0.2.1
+ns2	A	192.0.2.2
+
+@	A	192.0.2.3
+www	A	192.0.2.4

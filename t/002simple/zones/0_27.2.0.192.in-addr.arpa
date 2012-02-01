@@ -1,0 +1,9 @@
+@	SOA ns1.example.net. hostmaster (
+	1      ; serial
+	7200   ; refresh
+	1800   ; retry
+	259200 ; expire
+        900    ; ncache
+)
+@	NS	ns1.example.net.
+3	PTR	foo.example.net.

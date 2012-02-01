@@ -1,0 +1,189 @@
+
+=head1 NAME
+
+gdnsd - An authoritative DNS daemon
+
+=head1 SYNOPSIS
+
+Usage: gdnsd [-c /a/config/file] action
+  -c specifies a non-default configfile location (default $PREFIX/etc/gdnsd/config)
+Actions:
+  checkconf - Checks validity of configuration and zonefiles
+  startfg - Start gdnsd in foreground mode with logging to stderr
+  start - Start gdnsd as a regular daemon
+  stop - Stops a running daemon previously started by 'start'
+  restart - Effectively equivalent to checkconf && stop && start, but faster
+  status - Checks the status of the running daemon
+  lpe_on - Turns on log_packet_errors in the running daemon
+  lpe_off - Turns off log_packet_errors in the running daemon
+
+=head1 DESCRIPTION
+
+B<gdnsd> is very fast, light, and pluggable authoritative DNS daemon.
+
+The only commandline flag is C<-c>, which allows specifying an
+alternate configuration file from the compiled-in default.
+
+=head1 ACTIONS
+
+B<gdnsd> effectively acts as its own initscript, internalizing
+daemon management functions.  All valid invocations of the gdnsd
+command include an B<action>.
+
+=over 4
+
+=item B<checkconf>
+
+Checks the validity of the configuration file and any referenced
+zonefiles, setting the exit status appropriately (0 for success).
+
+All other actions implicitly do the first half of the C<checkconf>
+work (checking the configfile itself) as they load the configuration
+file anyways (at a minimum, they usually need pidfile information
+from it).  The C<start>, C<startfg>, and C<restart> actions
+implicitly do a full C<checkconf>, since they actually load the zone
+data for runtime use.
+
+=item B<startfg>
+
+Starts gdnsd in foreground mode, with all of the logging that would
+normally go to syslog appearing instead on stderr.  Useful for
+debugging and testing.
+
+=item B<start>
+
+Starts gdnsd as a regular background daemon.
+
+=item B<stop>
+
+Stops the gdnsd daemon previously started by start.
+
+=item B<restart>
+
+This is equivalent to the sequence C<checkconf && stop && start>,
+but faster.  What actually happens behind the scenes is
+a bit more complicated:
+
+C<restart> is a special case of C<start> which first does
+all of the C<checkconf> actions (bringing all the runtime data
+into memory), then stops the existing daemon, and then finishes
+starting itself (acquiring sockets, dropping privs, spawning
+threads, etc).
+
+The net result is that this minimizes the pause
+in service availability during the restart (especially if you
+have a large volume of zone data that takes significant time
+to load), and also leaves the original daemon instance untouched
+if the configuration is invalid (you've made an error in your
+new zone data, etc).
+
+=item B<status>
+
+Checks the status of the running daemon, returning 0 if it
+is running or non-zero if it isn't
+
+=item B<lpe_on>
+
+Turns on log_packet_errors in the running daemon by sending it
+the C<SIGUSR1> signal.
+
+This causes additional syslog messages to be issued for
+per-DNS-request errors, as well as similar pre-request error logging
+for the stats HTTP server, etc.  Normally such errors are only tracked
+in stats counters, as it would be easy to spam someone's syslog files
+by sending malformed packets while log_packet_errors is in effect.
+Mostly useful for debugging issues with specific queries and or
+zone data sets.  One shouldn't leave this on all the time in
+production.
+
+=item B<lpe_off>
+
+Turns off log_packet_errors in the running daemon by sending it
+the C<SIGUSR2> signal.
+
+=back
+
+Any other commandline option will be treated as invalid,
+which will result in displaying a short help text to F<STDERR>
+and exiting with a non-zero exit status.  This includes
+things like the ubiquitous B<--help> and B<--version>.
+
+=head1 ENVIRONMENT VARIABLES
+
+=over 4
+
+=item B<TZ>
+
+On most systems tested, gdnsd's current solution for getting
+syslog timestamps correct while under C<chroot()> seems to
+work fine, as it does C<tzset()> before C<chroot()>, and so
+no special setting of the C<TZ> environment variable is required.
+
+On some systems (notably, Debian Etch Linux, which uses
+a rather old glibc 2.3.6), the syslog messages will revert
+to UTC timestamps after C<chroot()>.  The workaround for these
+systems is to either set the C<TZ> environment variable in gdnsd's
+initscript to a value like C</etc/localtime>, which will make
+glibc cache the timezone correctly, or to copy all of the relevant
+timezone files into the chroot directory (F</etc/localtime> and
+perhaps all of F</usr/share/zoneinfo>).
+
+=back
+
+=head1 SIGNALS
+
+Any signal not explicitly mentioned is not explicitly handled.  That
+is to say, they will have their default actions, which often include
+aborting execution.
+
+=over 4
+
+=item B<SIGTERM>, B<SIGINT>
+
+Causes the daemon to exit gracefully with accompanying log output.
+
+=item B<SIGUSR1>
+
+Enables the logging of packet errors.
+
+=item B<SIGUSR2>
+
+Disables the logging of packet errors.
+
+=item B<SIGHUP>
+
+Ignored when daemonized.
+
+=back
+
+=head1 EXIT STATUS
+
+An exit status of zero indicates success, anything else
+indicates failure.
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2010 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

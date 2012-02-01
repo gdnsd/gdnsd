@@ -1,0 +1,89 @@
+
+Dependencies / System reqs for building from release tarballs
+==============================================================
+
+A modern POSIXy/*nixy operating system with a decent C99 compiler and a
+reasonably up to date and conforming C library.
+
+A reasonably "normal" CPU architecture (pointers at least 32-bits wide and
+supporting cache-coherent atomic writes to uintptr_t-sized/aligned memory in
+the SMP case).
+
+For Linux: libcap 2.x+ is recommended for support of late listener binding
+ on privileged ports.
+
+gdnsd has been tested on the following CPU/OS/Compiler setups:
+
+      x86_64:
+        Linux - Fedora 12: gcc 4.4.3
+        Linux - Fedora 13: gcc 4.4.4
+        Linux - Debian Etch: gcc 4.1.2
+        MacOS X Snow Leopard: gcc 4.2.1, llvm-gcc 4.2.1, clang 1.0.2
+
+      x86:
+        Linux - Fedora 13: gcc 4.4.4
+        FreeBSD 8.0: gcc 4.2.1
+        FreeBSD 7.2: gcc 4.2.1
+        FreeBSD 6.4: gcc 3.4.6
+        OpenBSD 4.4: gcc 3.3.5
+        MacOS X Snow Leopard: gcc 4.0.1
+        OpenSolaris 2009.06: gcc 3.4.3, gcc 4.3.2, Sun Studio C Compiler
+
+      mips32r2 (Big Endian) (Atheros 9132 - Buffalo WZR-HP-G300NH Router):
+        Linux - OpenWRT Backfire: gcc 4.3.3 + uClibc 0.9.30.1
+
+(More tests and reports for more systems welcome!)
+(Also, I last did these tests circa gdnsd 1.2.x, things may have changed since.
+ Mostly, I develop and test only on Linux and MacOS X).
+
+If you want to run the optional testsuite (make check), you will also need Perl
+and the Perl modules Test::More, Net::DNS and LWP.
+
+If you're working from an svn checkout instead of a release tarball, you will
+also need to install Ragel 6.6 or 6.7 from http://www.complang.org/ragel/ .  The
+resulting binary program "ragel" must be in your $PATH when you run the
+configure script.
+
+Running the test suite (make check, etc)
+=========================================
+
+Perl version 5.8.1 or higher is required for running the test suite and
+generating the documentation.
+
+The test suite also needs the following non-standard Perl modules (the "aka"
+are what you will sometimes find them as in OS package managers):
+  Test::More (aka perl-Test-Simple)
+  Net::DNS (aka perl-Net-DNS)
+  LWP (aka perl-libwww-perl)
+  Socket6
+  IO::Socket::INET6
+
+You can install the above modules via the standard CPAN mechanisms, which
+usually involves invoking the CPAN shell "cpan" with appropriate privileges to
+install Perl modules.  Your OS vendor may also have pre-built packages for at
+least some of these modules.
+
+Building and Installing gdnsd
+==============================
+
+gdnsd uses autoconf and automake, so the process here is fairly
+straightforward:
+
+./configure --prefix=/some/where
+make
+make check  # optional, requires Perl stuff above
+sudo make install
+
+Interesting non-standard configure options:
+
+--enable-developer
+  Builds a debugging build (-g) with a lot of extra gcc warnings
+   flags, a large suite of assert()ions, and extra
+   informative debug information via STDERR or syslog().
+
+--with-testport=N
+  The test suite needs to be able to bind to 3 consecutive ports
+   on 127.0.0.1, starting with port N.  The default is 12345.  If
+   this conflicts with some existing service on your machine, change
+   it here.
+

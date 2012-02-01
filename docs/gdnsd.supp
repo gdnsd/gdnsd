@@ -1,0 +1,37 @@
+# Valgrind suppression data
+# These suppress valgrind leak warnings about
+#   per-thread data with process-lifetime scope
+#   which isn't stored in global storage anywhere,
+#   which we never clean up when an iothread is cancelled
+
+{
+  ev_loop_new
+  Memcheck:Leak
+  ...
+  fun:ev_loop_new
+}
+{
+  ev_loop_destroy
+  Memcheck:Leak
+  ...
+  fun:ev_loop_destroy
+}
+{
+  dmn_fmtbuf_alloc
+  Memcheck:Leak
+  ...
+  fun:dmn_fmtbuf_alloc
+}
+{
+  dnsio_tcp_tctx
+  Memcheck:Leak
+  fun:malloc
+  fun:dnsio_tcp_start
+}
+{
+  dnsio_udp_pctx
+  Memcheck:Leak
+  fun:calloc
+  fun:dnspacket_context_new
+  fun:dnsio_udp_start
+}

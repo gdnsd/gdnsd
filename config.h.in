@@ -1,0 +1,359 @@
+/* config.h.in.  Generated from configure.ac by autoheader.  */
+
+/* Define if building universal (internal helper macro) */
+#undef AC_APPLE_UNIVERSAL_BUILD
+
+/* libev verification checks */
+#undef EV_VERIFY
+
+/* Define to 1 if you have the `accept4' function. */
+#undef HAVE_ACCEPT4
+
+/* Define to 1 if you have the `cap_free' function. */
+#undef HAVE_CAP_FREE
+
+/* Define to 1 if you have the `cap_init' function. */
+#undef HAVE_CAP_INIT
+
+/* Define to 1 if you have the `cap_set_flag' function. */
+#undef HAVE_CAP_SET_FLAG
+
+/* Define to 1 if you have the `cap_set_proc' function. */
+#undef HAVE_CAP_SET_PROC
+
+/* Define to 1 if you have the `clock_gettime' function. */
+#undef HAVE_CLOCK_GETTIME
+
+/* "use syscall interface for clock_gettime" */
+#undef HAVE_CLOCK_SYSCALL
+
+/* Define to 1 if you have the declaration of `AF_INET', and to 0 if you
+   don't. */
+#undef HAVE_DECL_AF_INET
+
+/* Define to 1 if you have the declaration of `AF_INET6', and to 0 if you
+   don't. */
+#undef HAVE_DECL_AF_INET6
+
+/* Define to 1 if you have the declaration of `AF_UNSPEC', and to 0 if you
+   don't. */
+#undef HAVE_DECL_AF_UNSPEC
+
+/* Define to 1 if you have the declaration of `CAP_EFFECTIVE', and to 0 if you
+   don't. */
+#undef HAVE_DECL_CAP_EFFECTIVE
+
+/* Define to 1 if you have the declaration of `CAP_NET_BIND_SERVICE', and to 0
+   if you don't. */
+#undef HAVE_DECL_CAP_NET_BIND_SERVICE
+
+/* Define to 1 if you have the declaration of `CAP_PERMITTED', and to 0 if you
+   don't. */
+#undef HAVE_DECL_CAP_PERMITTED
+
+/* Define to 1 if you have the declaration of `CAP_SET', and to 0 if you
+   don't. */
+#undef HAVE_DECL_CAP_SET
+
+/* Define to 1 if you have the declaration of `CAP_SETGID', and to 0 if you
+   don't. */
+#undef HAVE_DECL_CAP_SETGID
+
+/* Define to 1 if you have the declaration of `CAP_SETUID', and to 0 if you
+   don't. */
+#undef HAVE_DECL_CAP_SETUID
+
+/* Define to 1 if you have the declaration of `CAP_SYS_CHROOT', and to 0 if
+   you don't. */
+#undef HAVE_DECL_CAP_SYS_CHROOT
+
+/* Define to 1 if you have the declaration of `cygwin_conv_path', and to 0 if
+   you don't. */
+#undef HAVE_DECL_CYGWIN_CONV_PATH
+
+/* Define to 1 if you have the declaration of `fflush_unlocked', and to 0 if
+   you don't. */
+#undef HAVE_DECL_FFLUSH_UNLOCKED
+
+/* Define to 1 if you have the declaration of `fputs_unlocked', and to 0 if
+   you don't. */
+#undef HAVE_DECL_FPUTS_UNLOCKED
+
+/* Define to 1 if you have the declaration of `IPV6_PKTINFO', and to 0 if you
+   don't. */
+#undef HAVE_DECL_IPV6_PKTINFO
+
+/* Define to 1 if you have the declaration of `IPV6_RECVPKTINFO', and to 0 if
+   you don't. */
+#undef HAVE_DECL_IPV6_RECVPKTINFO
+
+/* Define to 1 if you have the declaration of `IP_PKTINFO', and to 0 if you
+   don't. */
+#undef HAVE_DECL_IP_PKTINFO
+
+/* Define to 1 if you have the declaration of `IP_RECVDSTADDR', and to 0 if
+   you don't. */
+#undef HAVE_DECL_IP_RECVDSTADDR
+
+/* Define to 1 if you have the declaration of `IP_SENDSRCADDR', and to 0 if
+   you don't. */
+#undef HAVE_DECL_IP_SENDSRCADDR
+
+/* Define to 1 if you have the declaration of `NI_MAXHOST', and to 0 if you
+   don't. */
+#undef HAVE_DECL_NI_MAXHOST
+
+/* Define to 1 if you have the declaration of `NI_MAXSERV', and to 0 if you
+   don't. */
+#undef HAVE_DECL_NI_MAXSERV
+
+/* Define to 1 if you have the declaration of `NI_NUMERICHOST', and to 0 if
+   you don't. */
+#undef HAVE_DECL_NI_NUMERICHOST
+
+/* Define to 1 if you have the declaration of `NI_NUMERICSERV', and to 0 if
+   you don't. */
+#undef HAVE_DECL_NI_NUMERICSERV
+
+/* Define to 1 if you have the declaration of `PF_INET', and to 0 if you
+   don't. */
+#undef HAVE_DECL_PF_INET
+
+/* Define to 1 if you have the declaration of `PF_INET6', and to 0 if you
+   don't. */
+#undef HAVE_DECL_PF_INET6
+
+/* Define to 1 if you have the declaration of `PR_SET_KEEPCAPS', and to 0 if
+   you don't. */
+#undef HAVE_DECL_PR_SET_KEEPCAPS
+
+/* Define to 1 if you have the declaration of `SOCK_NONBLOCK', and to 0 if you
+   don't. */
+#undef HAVE_DECL_SOCK_NONBLOCK
+
+/* Define to 1 if you have the declaration of `strerror_r', and to 0 if you
+   don't. */
+#undef HAVE_DECL_STRERROR_R
+
+/* Define if you have the GNU dld library. */
+#undef HAVE_DLD
+
+/* Define to 1 if you have the `dlerror' function. */
+#undef HAVE_DLERROR
+
+/* Define to 1 if you have the <dlfcn.h> header file. */
+#undef HAVE_DLFCN_H
+
+/* Define if you have the _dyld_func_lookup function. */
+#undef HAVE_DYLD
+
+/* Define to 1 if you have the `epoll_ctl' function. */
+#undef HAVE_EPOLL_CTL
+
+/* Define to 1 if you have the `eventfd' function. */
+#undef HAVE_EVENTFD
+
+/* Define to 1 if you have the `getaddrinfo' function. */
+#undef HAVE_GETADDRINFO
+
+/* Define to 1 if you have the `getifaddrs' function. */
+#undef HAVE_GETIFADDRS
+
+/* Define to 1 if you have the `getnameinfo' function. */
+#undef HAVE_GETNAMEINFO
+
+/* Define to 1 if you have the `inet_pton' function. */
+#undef HAVE_INET_PTON
+
+/* Define to 1 if you have the `inotify_init' function. */
+#undef HAVE_INOTIFY_INIT
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the `kqueue' function. */
+#undef HAVE_KQUEUE
+
+/* Define if you have the libdl library or equivalent. */
+#undef HAVE_LIBDL
+
+/* Define if libdlloader will be built on this platform */
+#undef HAVE_LIBDLLOADER
+
+/* Define to 1 if you have the `m' library (-lm). */
+#undef HAVE_LIBM
+
+/* Define to 1 if you have the `rt' library (-lrt). */
+#undef HAVE_LIBRT
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the `nanosleep' function. */
+#undef HAVE_NANOSLEEP
+
+/* Define to 1 if you have the `poll' function. */
+#undef HAVE_POLL
+
+/* Define to 1 if you have the <poll.h> header file. */
+#undef HAVE_POLL_H
+
+/* Define to 1 if you have the `port_create' function. */
+#undef HAVE_PORT_CREATE
+
+/* Define to 1 if you have the <port.h> header file. */
+#undef HAVE_PORT_H
+
+/* Define to 1 if you have the `posix_fadvise' function. */
+#undef HAVE_POSIX_FADVISE
+
+/* Define to 1 if you have the `prctl' function. */
+#undef HAVE_PRCTL
+
+/* Define if you have POSIX threads libraries and header files. */
+#undef HAVE_PTHREAD
+
+/* Define to 1 if you have the `select' function. */
+#undef HAVE_SELECT
+
+/* Define to 1 if you have the `sendmmsg' function. */
+#undef HAVE_SENDMMSG
+
+/* Define if you have the shl_load function. */
+#undef HAVE_SHL_LOAD
+
+/* Define to 1 if you have the `signalfd' function. */
+#undef HAVE_SIGNALFD
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the `strerror_r' function. */
+#undef HAVE_STRERROR_R
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if you have the <sys/epoll.h> header file. */
+#undef HAVE_SYS_EPOLL_H
+
+/* Define to 1 if you have the <sys/eventfd.h> header file. */
+#undef HAVE_SYS_EVENTFD_H
+
+/* Define to 1 if you have the <sys/event.h> header file. */
+#undef HAVE_SYS_EVENT_H
+
+/* Define to 1 if you have the <sys/inotify.h> header file. */
+#undef HAVE_SYS_INOTIFY_H
+
+/* Define to 1 if you have the <sys/select.h> header file. */
+#undef HAVE_SYS_SELECT_H
+
+/* Define to 1 if you have the <sys/signalfd.h> header file. */
+#undef HAVE_SYS_SIGNALFD_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Waste less memory for embedded systems */
+#undef LOWMEM
+
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
+#undef LT_OBJDIR
+
+/* Name of package */
+#undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Define to necessary symbol if this constant uses a non-standard name on
+   your system. */
+#undef PTHREAD_CREATE_JOINABLE
+
+/* The size of `uintptr_t', as computed by sizeof. */
+#undef SIZEOF_UINTPTR_T
+
+/* Define to 1 if you have the ANSI C header files. */
+#undef STDC_HEADERS
+
+/* Define to 1 if strerror_r returns char *. */
+#undef STRERROR_R_CHAR_P
+
+/* Use Linux libcap2+prctl Capabilities */
+#undef USE_LINUX_CAPS
+
+/* Enable extensions on AIX 3, Interix.  */
+#ifndef _ALL_SOURCE
+# undef _ALL_SOURCE
+#endif
+/* Enable GNU extensions on systems that have them.  */
+#ifndef _GNU_SOURCE
+# undef _GNU_SOURCE
+#endif
+/* Enable threading extensions on Solaris.  */
+#ifndef _POSIX_PTHREAD_SEMANTICS
+# undef _POSIX_PTHREAD_SEMANTICS
+#endif
+/* Enable extensions on HP NonStop.  */
+#ifndef _TANDEM_SOURCE
+# undef _TANDEM_SOURCE
+#endif
+/* Enable general extensions on Solaris.  */
+#ifndef __EXTENSIONS__
+# undef __EXTENSIONS__
+#endif
+
+
+/* Version number of package */
+#undef VERSION
+
+/* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
+   significant byte first (like Motorola and SPARC, unlike Intel). */
+#if defined AC_APPLE_UNIVERSAL_BUILD
+# if defined __BIG_ENDIAN__
+#  define WORDS_BIGENDIAN 1
+# endif
+#else
+# ifndef WORDS_BIGENDIAN
+#  undef WORDS_BIGENDIAN
+# endif
+#endif
+
+/* Define to 1 if on MINIX. */
+#undef _MINIX
+
+/* Define to 2 if the system does not provide POSIX.1 features except with
+   this defined. */
+#undef _POSIX_1_SOURCE
+
+/* Define to 1 if you need to in order for `stat' and other things to work. */
+#undef _POSIX_SOURCE

@@ -1,0 +1,4 @@
+
+# For more information on configuration, see "man gdnsd.config"
+options => { zones_default_ttl = 43200 }
+zones => { example.com => { default_ttl = 86400 } }

@@ -1,0 +1,64 @@
+@	SOA ns1 hostmaster (
+	1      ; serial
+	7200   ; refresh
+	1800   ; retry
+	259200 ; expire
+	900    ; ncache
+)
+
+@	NS	ns1
+@	NS	f42
+ns1	A	192.0.2.1
+a	A	192.0.2.2
+
+n	DYNA	null
+n-x	DYNA	null!x
+r	DYNA	reflect
+f42	DYNA	static!foo42
+b41	DYNA	static!bar41
+
+addtl	MX	0 r
+
+subz		NS	ns1.subz
+ns1.subz	DYNA	static!bar41
+
+sfo1	DYNA	simplefo!sfo1
+sfo2	DYNA	simplefo!sfo2
+sfo3	DYNA	simplefo!sfo3
+sfo4	DYNA	simplefo!sfo4
+sfo5	DYNA	simplefo!sfo5
+
+mfo1	DYNA	multifo!mfo1
+mfo2	DYNA	multifo!mfo2
+mfo3	DYNA	multifo!mfo3
+
+wdep-addrs	DYNA weighted!wdep-addrs
+wdep-cnames	DYNC weighted!wdep-cnames
+weighta		DYNA weighted!weighta
+weighta6	DYNA weighted!weighta6
+weightam	DYNA weighted!weightam
+weightg		DYNA weighted!weightg
+weightgm	DYNA weighted!weightgm
+weightc		DYNC weighted!weightc
+weightmixa	DYNA weighted!weightmix
+weightmixc	DYNC weighted!weightmix
+
+ctodyn	CNAME	toa
+
+cn		DYNC null
+cn-x		DYNC null!x
+f43		DYNC static!foo43
+toa		DYNC static!toa
+tomissing	DYNC static!missing
+tomissing2	DYNC static!missing2
+tomissing3	DYNC static!missing3
+test		DYNC static!missing4
+cdn		DYNC static!cdn
+
+chain1 DYNC static!chain1
+chain2 DYNC static!chain2
+chain3 DYNC static!chain3
+chain4	A 192.0.2.3
+
+meta1	DYNA metafo!meta1
+meta2	DYNA metafo!meta2

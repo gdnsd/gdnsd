@@ -1,0 +1,354 @@
+
+=head1 NAME
+
+gdnsd-plugin-weighted - gdnsd plugin implementing "weighted" records
+
+=head1 SYNOPSIS
+
+Example plugin config:
+
+  plugins => {
+    weighted => {
+      multi = false # default
+      service_types = none
+      up_thresh => 0.5 # default
+      corpwww => {
+        lb01 = [ lb01.example.com., 99 ]
+        lb02 = [ lb02.example.com., 15 ]
+        lb03 = [ lb03, 1 ]
+      }
+      frontwww6 => {
+        service_types = up
+        multi = true
+        wwwhost01 = [ 2001:db8::123, 4 ]
+        wwwhost02 = [ 2001:db8::456, 1 ]
+        wwwhost03 = [ 2001:db8::789, 2 ]
+      }
+      pubwww => {
+        service_types = [ web_check, foo ]
+        up_thresh => 0.01,
+        pubhost01 = [ 192.0.2.1, 44 ]
+        pubhost02 = [ 192.0.2.2, 11 ]
+        pubhost02 = [ 192.0.2.3, 11 ]
+        pubhost02 = [ 192.0.2.4, 11 ]
+      }
+      cdnwww => {
+        service_type = web_check
+        datacenter1 => {
+          d1-lb1 = [ 127.0.0.1, 2 ]
+          d1-lb2 = [ 127.0.0.2, 2 ]
+        }
+        datacenter2 => {
+          d2-lb1 = [ 127.0.0.3, 2 ]
+          d2-lb2 = [ 127.0.0.4, 2 ]
+          d2-lb3 = [ 127.0.0.5, 1 ]
+        }
+      }
+      mixed => {
+        multi => false,
+        addrs_v4 => {
+          lb1 = [ 127.0.0.3, 2 ]
+          lb2 = [ 127.0.0.4, 2 ]
+        }
+        addrs_v6 => {
+          multi => true
+          www6set1 = {
+            lb01 => [ 2001:db8::123, 4 ]
+            lb02 => [ 2001:db8::456, 1 ]
+          }
+          www6set2 = {
+            lb01 => [ 2001:db8::789, 4 ]
+            lb02 => [ 2001:db8::ABC, 1 ]
+          }
+        }
+        cnames => {
+          foo = [ lb01.example.com., 99 ]
+          bar = [ lb02.example.com., 15 ]
+        }
+      }
+    }
+  }
+
+Zonefile RRs referencing the above:
+
+  www.corp   300 DYNC weighted!corpwww
+  www6.front 300 DYNA weighted!frontwww6
+  www        300 DYNA weighted!pubwww
+  cdn        300 DYNA weighted!cdnwww
+  mixed-a    300 DYNA weighted!mixed
+  mixed-c    300 DYNC weighted!mixed
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-weighted> can be used to return one (or a subset)
+of several address records, or one of several CNAME records
+based on dynamic-weighted probabilities.
+
+=head1 CONFIGURATION - TOP LEVEL
+
+At the top level, there are three special parameter keys: C<service_types>,
+C<up_thresh>, and C<multi>.  These only affect the behavior of address
+(C<DYNA>) lookups.  They are ignored for CNAME (C<DYNC>) lookups.  All
+of these keys are inherited and override-able at the per-resource and
+per-address-family levels.
+
+The top-level default C<service_types> is C<default>, which is a built-in
+service_type provided by gdnsd.  For more information about
+configuring non-default service_type's, see the main L<gdnsd.config(5)>
+documentation.  The default polls the C</> URL at each IP address
+on port 80 for a "200 OK" response every 10 seconds, and has
+some anti-flap parameters that stabilize the state against isolated,
+intermittent failures.
+
+C<multi> is a boolean that can be C<true> or C<false>, and defaults to
+C<false>.  C<multi> controls the behavior of the algorithm
+for selecting result addresses, discussed in detail later.
+
+C<up_thresh> defines a floating point fraction of summed address weights
+in the range C<(0.0 - 1.0]>, defaulting to C<0.5>, and is used to
+influence failure/failover behavior.
+
+Other than those three, the rest of the top level keys are the names of your resources,
+and their values are the configuration of each resource.
+
+=head1 CONFIGURATION - PER-RESOURCE
+
+Inside a given resource's configuration hash, again the three address-related
+paramters C<services_types>, C<multi>, and C<up_thresh> may be specified to
+override their settings per-resource.
+
+There are two basic configuration modes within a resource:
+
+1) Explicit per-family/type sub-stanzas.  In this mode, the resource contains
+one or more of the keys C<addrs_v4>, C<addrs_v6>, and C<cnames>.  The contents
+of each stanza configure response RRs of the given type for this resource, and
+in the addrs_v[46] cases, the 3 behavioral parameters C<service_types>,
+C<multi>, and C<up_thresh> can be overridden per-address-family as well.
+
+2) Automatic top-level detection of just one family/type.  In this mode, you
+can configure the top-level of a resource with valid contents for one of the
+stanzas C<addrs_v4>, C<addrs_v6>, or C<cnames>, and the family/type will be
+autodetected, and be the only type available in this resource.
+
+=head1 CONFIGURATION - CNAMES
+
+When configuring cnames, the value of each item should be C<[ CNAME, WEIGHT ]>,
+and the resource will be useful for C<DYNC> zonefile records, resolving
+to a weighted CNAME record in responses.  The weighting decision
+will return a single CNAME answer, with the probability
+of each choice being C<weight / total_weight>.
+
+If the CNAMEs are not fully-qualified (do not end in "."), the current
+C<$ORIGIN> value for the zonefile RR being queried will be appended to
+complete the name, much as you would expect if the same not-fully-qualified
+name were substituted into the zonefiles everywhere the relevant DYNC record
+exists.
+
+=head1 CONFIGURATION - ADDRESSES
+
+With the exception that C<addrs_v4> and C<addrs_v6> must contain only
+addresses of the correct family (or in the top-level auto-detect case,
+the top level entries must all be of the same family), the two stanzas
+behave identically.  When both are present, they are both used in every
+C<DYNA> response (as gdnsd always includes opposite-family records in
+the Additional section of A/AAAA queries).
+
+Within either address family type, there are two different binary dimensions
+(multi -> true/false, and grouped-vs-ungrouped) upon which the configuration
+and behavior hinge, leading to four different possible cases: ungrouped-single,
+ungrouped-multi, grouped-single, and grouped-multi.  Each will be discussed
+in detail below:
+
+=head1 THE UNGROUPED SINGLE CASE
+
+This is the simplest case.  The code detects this case when it sees that
+C<multi> is false (the default), and that the values of the keys are arrays
+rather than sub-hashes.  Each hash key is an address label, and each value
+is an array of C<[ IPADDR, WEIGHT ]>.
+
+When answering a query in this case, first the weights are converted to
+dynamic weights.  The dynamic weight of an address is its configured weight
+if the monitored state is C<UP> or C<DANGER>, or zero if the monitored
+state is C<DOWN>.  The dynamic weights are summed to produce a dynamic
+weight total, and then a single address to respond with is chosen from the
+set, with each address having the odds C<addr_dynamic_weight / total_dynamic_weight>.
+
+However, if the C<total_dynamic_weight> is less than
+C<ceil(up_thresh * total_configured_weight)>, then the dynamic weights are all
+reset to their configured full values so that the response odds are the
+same as if all were C<UP>, and resource-level failure is signalled to any
+upper-layer meta-plugin (e.g. metafo or geoip) when applicable.
+
+Example (X could be a whole resource, or an addrs_v4 stanza):
+
+  X => {
+    multi => false # default
+    # odds below assume no addresses are down:
+    lb01 => [ 192.0.2.1, 45 ] # 25% chance (45/180)
+    lb02 => [ 192.0.2.1, 60 ] # 33% chance (60/180)
+    lb03 => [ 192.0.2.1, 75 ] # 42% chance (75/180)
+  }
+
+=head1 THE UNGROUPED MULTI CASE
+
+This case is detected when, (as above) the values of the keys are arrays
+of C<[ IPADDR, WEIGHT]>, but the paramter C<multi> is true.  The change
+from the above behavior is primarily that multiple addresses from the
+weighted set can be returned in each response.  The C<maximum>, rather
+than the sum, of the dynamic weights (again, zero for down addresses,
+configured-weight otherwise), is found, and the odds of each address's
+inclusion in the response set is C<addr_dyanmic_weight / max_dynamic_weight>.
+
+This means all non-C<DOWN> addresses which share the group's maximum
+dynamic weight value will always be included, whereas others will be
+optionally included depending on the odds.  At least one address is always
+returned (because logically, at least one address has the maximum weight,
+giving it a 100% chance), and sometimes the full non-C<DOWN> set will be
+returned.
+
+C<up_thresh> behaves as in the previous case: If the sum of the dynamic
+weight values is less than C<ceil(up_thresh * total_configured_weight)>,
+then the dynamic weights are all set to their configured values and the
+result set is calculated as if all were C<UP>, while signalling resource-level
+failure to upstream meta-plugins (geoip or metafo).
+
+Example:
+
+  X => {
+    multi => true
+    # odds below assume no addresses are down:
+    lb01 => [ 192.0.2.1, 45 ] # 75% chance (45/60)
+    lb02 => [ 192.0.2.1, 60 ] # 100% chance (60/60)
+    lb03 => [ 192.0.2.1, 60 ] # 100% chance (60/60)
+    # overall possible result-sets:
+    # lb01,lb02,lb03 -> 75%
+    # lb02,lb03 -> 25%
+  }
+
+=head1 THE GROUPED SINGLE CASE
+
+The grouped cases are detected when the keys' values are sub-hashes at
+the outer level rather than arrays of C<[ IPADDR, WEIGHT]>.  In the grouped
+case, first the set is divided into named groups, and then within each group
+individual addresses are configured as C<addrlabel =E<gt> [ IPADDR, WEIGHT ]>.
+Example:
+
+   X => {
+     group1 => {
+       lb01 => [ 192.0.2.1, 10 ]
+       lb02 => [ 192.0.2.1, 20 ]
+       lb03 => [ 192.0.2.1, 30 ]
+     }
+     group2 => {
+       lb01 => [ 192.0.2.7, 10 ]
+       lb02 => [ 192.0.2.8, 20 ]
+       lb03 => [ 192.0.2.9, 30 ]
+     }
+   }
+
+The grouped single case, of course, occurs when the configuration layout
+is as shown above, and the C<multi> parameter is C<false> (the default).
+
+In grouped-single mode, essentially the groups are weighted against each
+other similarly to the single case for ungrouped addresses, resulting in
+the choice of a single group from the set of groups. Then the
+addresses within the chosen group are weighted against each other in
+multi-style, returning potentially more than one address from the chosen
+group.
+
+Specifically, each group's odds of being the single group chosen is
+C<group_dyn_weight / total_dyn_weight>, where the group's dynamic weight
+is the sum of the dynamic weights within it (C<DOWN> addresses are zero),
+and the total dynamic weight is the dynamic sum of all groups.  Then
+within each group, the odds of each address being included in the
+multi-response set is C<addr_dyn_weight / group_max_dyn_weight>.
+
+C<up_thresh> operates on all groups as a whole, and if the non-C<DOWN>
+sum of all weights in all groups fails to meet the standard
+of C<ceil(up_thresh * total_sum_configured_weight)>, then all addresses
+will be treated as if they are C<UP> for selection purposes, and
+resource-level failure will be signalled upstream.
+
+=head1 THE GROUPED MULTI CASE
+
+You can probably infer this one's behavior from reading about the
+previous three cases.  The difference from the previous grouped-single
+case is that the multi-vs-single behaviors are reversed.  Multiple
+groups are chosen based on the dynamic maximum weight between the
+groups, and a single weighted address is returned from the subset
+within each chosen group.  All of the details above logically apply
+in the way you would expect, as all of these four cases internally share
+the same code and logic, they just apply different bits of it to
+different subsets of the problem.
+
+=head1 GENERAL NOTES ON ADDRESS MODE CASES ABOVE
+
+Note that any time multi-selection is in effect at a layer
+(the top layer when multi is true, or within a group when
+when multi is false), the minimum count of chosen items will
+be the count of items that share the maximum weight within the set.
+e.g. a set of items with weights C<30, 30, 30, 20, 20> will always
+choose at least 3/5 items (because the first three have 100%
+odds of inclusion), and the total response set will range
+as high as all 5 items with some probability.
+
+A practical use-case example for grouped-single:
+
+Splitting groups on subnet boundaries in grouped-single mode
+gives the result that a single response packet never mixes subnets.
+This would enable your DNS-based balancing to defeat certain forms
+of client-level Destination Address Selection interference, while
+still returning multiple addresses per response (all from one
+subnet).
+
+A practical use-case for grouped-multi:
+
+Suppose you have a large set of addresses which
+can be logically grouped into subsets that have some shared
+failure risk (e.g. subpartitions of a datacenter which
+share infrastructure).  With grouped-multi behavior,
+clients will get up to N (count of groups) addresses in
+a round-robin response, but a given response set will never
+contain two addresses from the same group/subset.  This maximizes
+the chance that the client can successfully fail over
+to another address in the list when its primary selection
+fails, since the total set in each response does not share
+any per-subset failure mode.
+
+=head1 LIMITS
+
+All weights must be positive integer values greater than zero and
+less than 2^20 (1048576).
+
+There is a limit of 64 addresses, address-groups, or cnames at the
+top level of a resource (or per address family in the addrs_v4/addrs_v6
+cases), and a limit of 64 addresses within each address group in
+the grouped modes.
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2011-2012 Anton Tolchanov <me@knyar.net>, 
+Brandon L Black <blblack@gmail.com> and Jay Reitz <jreitz@gmail.com>
+
+This file is part of gdnsd-plugin-weighted.
+
+gdnsd-plugin-weighted is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd-plugin-weighted is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd-plugin-weighted.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

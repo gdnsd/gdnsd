@@ -1,0 +1,116 @@
+#!/bin/bash
+#
+# gdnsd           This shell script takes care of starting and stopping
+#                 gdnsd for CentOS/RHEL.
+#
+# chkconfig: - 13 87
+# description: gdnsd - lightweight dns server.
+#
+# Author: Scott Cameron
+
+GDNSD=/usr/local/sbin/gdnsd
+GDNSD_ETC=/usr/local/etc/gdnsd
+GDNSD_CONF=/usr/local/etc/gdnsd/config
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+start() {
+        [ -x ${GDNSD} ] || exit 1
+
+        if [ ! -r ${GDNSD_CONF} ] ; then
+         echo {$GDNSD_CONF} is not readable.  Exiting.
+         failure
+         echo
+         exit 1
+        fi;
+
+        # Check if process is running.
+        echo -n $"Starting ${GDNSD}: "
+        if [ -n "`/sbin/pidof -o %PPID ${GDNSD}`" ]; then
+         echo -n $"${GDNSD}: already running"
+         failure
+         echo
+         exit 1
+        fi
+
+        # Start the process.  GDNSD does a checkconf prior to starting.
+        daemon ${GDNSD} start >/dev/null 2>&1 
+        RETVAL=$?
+        if [ $RETVAL -eq 0 ]; then
+         success
+         echo
+        fi
+
+        return $RETVAL
+}
+stop() {
+        # Stop process.
+        echo -n $"Stopping ${GDNSD}: "
+  
+        if [ ! -n "`/sbin/pidof -o %PPID ${GDNSD}`" ]; then
+         echo -n $"${GDNSD}: not running"
+         failure
+         echo
+         exit 1
+        fi 
+
+        ${GDNSD} stop >/dev/null 2>&1 
+        RETVAL=$?
+
+        if [ $RETVAL -eq 0 ]; then
+         success
+         echo
+        fi
+
+        return $RETVAL
+}
+restart() {
+        # Restart process.
+        echo "Restarting ${GDNSD}: "
+        ${GDNSD} restart >/dev/null 2>&1
+        RETVAL=$?
+        
+        if [ $RETVAL -eq 0 ]; then
+         success
+         echo
+        fi
+
+        return $RETVAL
+}
+reload() {
+        restart
+}
+checkconfig() {
+        # Check config
+
+        ${GDNSD} checkconf
+        RETVAL=$?
+
+        return $retval
+}
+
+# See how we were called.
+case "$1" in
+        start)
+                start
+                ;;
+        stop)
+                stop
+                ;;
+        restart)
+                restart
+                ;;
+        reload)
+                reload
+                ;;
+        checkconfig|configtest|check|test)
+                checkconfig
+                ;;
+        *)
+                echo $"Usage: $0 {start|stop|restart|reload|configtest}"
+                exit 2
+esac
+
+exit $?
+

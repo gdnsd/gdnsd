@@ -1,0 +1,107 @@
+=head1 NAME
+
+gdnsd-plugin-simplefo - gdnsd plugin for simple primary->secondary address failover
+
+=head1 SYNOPSIS
+
+Example gdnsd config fragment using this plugin:
+
+  plugins => {
+    simplefo => {
+      service_types => [ www ],
+      pubwww => {
+        primary => 192.0.2.1
+        secondary => 192.0.2.100
+      }
+      www6 => {
+        primary => 2001:DB8::1
+        secondary => 2001:DB8::100
+      }
+      mixed => {
+        service_types => [ www, xmpp ]
+        addrs_v4 => {
+          primary => 192.0.2.1
+          secondary => 192.0.2.100
+        }
+        addrs_v6 => {
+          service_types => up
+          primary => 2001:DB8::1
+          secondary => 2001:DB8::100
+        }
+      }
+    }
+  }
+
+Example zonefile RRs:
+
+  www 180 DYNA simplefo!pubwww
+  www6 180 DYNA simplefo!www6
+  mix 180 DYNA simplefo!mixed
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-simplefo> is designed to do simple active/passive
+failover between one primary address and one secondary address.
+The status of the addresses are checked with standard gdnsd
+C<service_types> monitoring.
+
+=head1 TOP-LEVEL PLUGIN CONFIG
+
+At the top level of the plugin's configuration stanza, the special parameter C<service_types> is supported. These sets the default per-resource C<service_types> for all resources.  The default default C<service_types> is C<[ default ]>, which does basic HTTP/1.0 polling for 200 OK status from C<http://IPADDR:80/>.
+
+The rest of the hash entries at the top level are the names of the resources you define.  Each resource gets a configuration hash of its own for containing resource-specific address info.
+
+=head1 RESOURCE CONFIG
+
+Within a resource, C<service_types> is again supported, to set the monitored service type(s) for this specific resource.
+
+If C<addrs_v4> is defined, it must be a hash containing two keys: C<primary> and C<secondary>, each of which has an IPv4 string address value.
+
+Similarly, if C<addrs_v6> is defined, it must be a hash containing two keys: C<primary> and C<secondary>, each of which has an IPv6 string address value.
+
+If neither of those two sub-stanzas is defined, you must define a single pair of C<primary> and C<secondary> addresses for the whole resource.  These can be of either address family, so long as they are both the same family.
+
+When C<addrs_v4> and/or C<addrs_v6> are used, C<service_types> can also be overridden within each, for different behavior per-address-family (e.g. force one protocol always up/down).
+
+=head1 OPERATIONAL MECHANICS
+
+For each address family for which you have supplied data, the following logic is applied independently:
+
+=over 4
+
+=item * First, the worst monitored state of all C<service_types> checks for the primary address is obtained.  If this state is C<UP> or C<DANGER>, the primary address is used.
+
+=item * If the primary address was C<DOWN>, the secondary address is checked: If the secondary is C<UP> or C<DANGER>, it will be used.  If the secondary is also C<DOWN>, then the primary is used.
+
+=item * In any case other than the primary being exactly C<UP>, the response RR-set TTL from the zonefile will be cut in half for both address families.
+
+=back
+
+If both C<primary> and C<secondary> were C<DOWN> for B<either> address family, this plugin will signal total resource failure to any upstream module (geoip or metafo).  The cutting of the TTL only happens once for all address RRs, even if both families had a non-C<UP> primary.
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>, L<gdnsd-plugin-multifo(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2011 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut
