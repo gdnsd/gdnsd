@@ -1,2 +1,4 @@
 gdnsd_geoip_test
 *.bin
+Geo*.dat
+fips_include-*
