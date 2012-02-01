@@ -14422,6 +14422,19 @@ _ACEOF
 
 fi
 
+for ac_header in valgrind/memcheck.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "valgrind/memcheck.h" "ac_cv_header_valgrind_memcheck_h" "$ac_includes_default"
+if test "x$ac_cv_header_valgrind_memcheck_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_VALGRIND_MEMCHECK_H 1
+_ACEOF
+
+fi
+
+done
+
+
 ac_config_headers="$ac_config_headers config.h"
 
 ac_config_files="$ac_config_files Makefile gdnsd/Makefile gdnsd/libgdnsd/Makefile t/Makefile docs/Makefile example/Makefile plugins/Makefile plugins/trivial/Makefile plugins/weighted/Makefile plugins/meta/Makefile plugins/meta/libgdmaps/Makefile plugins/meta/libgdmaps/t/Makefile"

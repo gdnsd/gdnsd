@@ -253,6 +253,8 @@ else
   AC_DEFINE_UNQUOTED([EV_VERIFY], 0, [libev verification checks])
 fi
 
+AC_CHECK_HEADERS([valgrind/memcheck.h])
+
 dnl Output generation
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
