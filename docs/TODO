@@ -1,9 +1,6 @@
 
-Repo Conversion:
-----------------
-The branch merge point for 1.6.0 would be an excellent time to convert to Git.
-
----------------Other random stuff, mostly 1.7.x and beyond:--------------------------------
+1.7.x or later
+=====================
 
 Testing:
 ---------
