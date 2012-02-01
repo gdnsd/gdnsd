@@ -38,11 +38,11 @@
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif
 
-#include "dlsym_fptr.h"
+#include "gdnsd-plugapi-priv.h"
 #include <dlfcn.h>
 
-gen_func_ptr dlsym_fptr(void* restrict handle, const char* restrict symbol) {
-    gen_func_ptr rval;
+gdnsd_gen_func_ptr gdnsd_dlsym_fptr(void* restrict handle, const char* restrict symbol) {
+    gdnsd_gen_func_ptr rval;
     *(void**)(&rval) = dlsym(handle, symbol);
     return rval;
 }

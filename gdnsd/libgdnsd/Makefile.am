@@ -5,12 +5,12 @@ AM_LIBTOOLFLAGS = --silent
 xHEADERS_DIST_NOINST = gdnsd-plugapi-priv.h gdnsd-misc-priv.h gdnsd-net-priv.h
 xHEADERS_DIST = gdnsd-vscf.h gdnsd-dname.h gdnsd-log.h gdnsd-compiler.h gdnsd-monio.h gdnsd-satom.h gdnsd-net.h gdnsd-plugapi.h gdnsd-plugin.h gdnsd-misc.h
 
-libgdnsd_la_SOURCES = dname.c net.c log.c monio.c vscf.c misc.c plugapi.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c evwrap.c evwrap_ch.h $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
+libgdnsd_la_SOURCES = dname.c net.c log.c monio.c vscf.c misc.c plugapi.c dlsym_fptr.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c evwrap.c evwrap_ch.h $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
 nodist_libgdnsd_la_SOURCES = gdnsd-ev.h gdnsd-dmn.h
 
-libgdnsd_la_CPPFLAGS = -I$(srcdir)/libev
+libgdnsd_la_CPPFLAGS = -I$(srcdir)/libev -DLIBDIR=\"$(libdir)\"
 libgdnsd_la_LDFLAGS  = -shared -avoid-version
-libgdnsd_la_LIBADD   = $(NETLIBS) $(EVLIBS)
+libgdnsd_la_LIBADD   = $(NETLIBS) $(EVLIBS) $(LIBADD_DLOPEN)
 
 libgdnsd_la_includedir = $(includedir)
 dist_libgdnsd_la_include_HEADERS = $(xHEADERS_DIST)

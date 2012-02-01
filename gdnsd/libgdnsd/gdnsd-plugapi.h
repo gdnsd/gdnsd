@@ -104,6 +104,7 @@ typedef void (*gdnsd_start_monitors_cb_t)(struct ev_loop* mon_loop);
 //  pointers for all of the possibly documented callbacks
 typedef struct {
     const char* name;
+    gdnsd_load_config_cb_t load_config;
     gdnsd_full_config_cb_t full_config;
     gdnsd_map_resource_dyna_cb_t map_resource_dyna;
     gdnsd_map_resource_dync_cb_t map_resource_dync;

@@ -18,7 +18,6 @@
  */
 
 #include "conf.h"
-#include "dlsym_fptr.h"
 #include "monio.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
@@ -34,7 +33,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <dlfcn.h>
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -44,7 +42,6 @@
 
 static unsigned num_monio_lists = 0;
 static monio_list_t** monio_lists = NULL;
-static bool have_plugins = false;
 
 static const char def_pidfile[] = VARDIR "/run/" PACKAGE_NAME ".pid";
 static const char def_username[] = PACKAGE_NAME;
@@ -216,109 +213,37 @@ static bool configure_zone(const char* zname, unsigned znlen, const vscf_data_t*
     return true;
 }
 
-F_NONNULL
-static gen_func_ptr get_dlsym(void* handle, const char* plugin_name, const char* sym_suffix, bool required) {
-    dmn_assert(handle); dmn_assert(plugin_name); dmn_assert(sym_suffix);
-
-    const unsigned sym_size = 8 + strlen(plugin_name) + strlen(sym_suffix) + 1;
-    char symname[sym_size];
-    if(sprintf(symname, "plugin_%s_%s", plugin_name, sym_suffix) < 0)
-        log_fatal("sprintf() failed for plugin symbol resolution");
-    dlerror(); // clear previous errors
-    gen_func_ptr retval = dlsym_fptr(handle, symname);
-    const char* err = dlerror();
-    if(required && (err || !retval)) log_fatal("Failed to resolve plugin symbol '%s': %s", symname, err);
-    return retval;
-}
-
-F_NONNULL
-static void* dlopen_plugin(const char* name, const char** psearch) {
-    dmn_assert(name); dmn_assert(psearch);
-
-    char plugin_pathname[PATH_MAX];
-    struct stat plugstat;
-    const char* try_path;
-    while((try_path = *psearch++)) {
-        int written = snprintf(plugin_pathname, PATH_MAX, "%s/plugin_%s.so", try_path, name);
-        if(written >= PATH_MAX) {
-            log_warn("Could not construct plugin pathname for plugin '%s' at path '%s', names too long", name, try_path);
-        }
-        else {
-            log_debug("Looking for plugin '%s' at pathname '%s'", name, plugin_pathname);
-            if(0 == stat(plugin_pathname, &plugstat) && S_ISREG(plugstat.st_mode)) {
-                void* plugin_handle = dlopen(plugin_pathname, RTLD_NOW);
-                if(!plugin_handle)
-                    log_fatal("Failed to dlopen() the '%s' plugin: %s", name, dlerror());
-                return plugin_handle;
-            }
-        }
-    }
-
-    log_fatal("Failed to locate plugin '%s' in the plugin search path", name);
-}
-
-F_NONNULLX(1, 3)
-static const plugin_t* load_plugin(const char* name, const vscf_data_t* pconf, const char** psearch) {
-    dmn_assert(name); dmn_assert(psearch);
-
-    have_plugins = true;
+F_NONNULLX(1)
+static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf) {
+    dmn_assert(name);
 
     if(pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
-    plugin_t* this_plugin = gdnsd_plugin_allocate(name);
-    void* plugin_handle = dlopen_plugin(name, psearch);
-    gdnsd_apiv_cb_t apiv = (gdnsd_apiv_cb_t)get_dlsym(plugin_handle, name, "get_api_version", true);
-    unsigned this_version = apiv();
-    if(this_version != GDNSD_PLUGIN_API_VERSION)
-        log_fatal("Plugin '%s' needs to be recompiled (wanted API version %u, got %u)", name, GDNSD_PLUGIN_API_VERSION, this_version);
-
-    gdnsd_load_config_cb_t load_config = (gdnsd_load_config_cb_t)get_dlsym(plugin_handle, this_plugin->name, "load_config", false);
-    if(load_config) {
-        monio_list_t* mlist = load_config(pconf);
+    const plugin_t* plugin = gdnsd_plugin_load(name);
+    if(plugin->load_config) {
+        monio_list_t* mlist = plugin->load_config(pconf);
         if(mlist) {
             for(unsigned i = 0; i < mlist->count; i++) {
                 monio_info_t* m = &mlist->info[i];
                 if(!m->desc)
-                    log_fatal("Plugin '%s' bug: monio_info_t.desc is required", this_plugin->name);
+                    log_fatal("Plugin '%s' bug: monio_info_t.desc is required", plugin->name);
                 if(!m->addr)
-                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.addr is required", this_plugin->name, m->desc);
+                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.addr is required", plugin->name, m->desc);
                 if(!m->state_ptr)
-                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.state_ptr is required", this_plugin->name, m->desc);
+                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.state_ptr is required", plugin->name, m->desc);
             }
             const unsigned this_monio_idx = num_monio_lists++;
             monio_lists = realloc(monio_lists, num_monio_lists * sizeof(monio_list_t*));
             monio_lists[this_monio_idx] = mlist;
         }
     }
-
-    this_plugin->map_resource_dyna = (gdnsd_map_resource_dyna_cb_t)get_dlsym(plugin_handle, this_plugin->name, "map_resource_dyna", false);
-    this_plugin->map_resource_dync = (gdnsd_map_resource_dync_cb_t)get_dlsym(plugin_handle, this_plugin->name, "map_resource_dync", false);
-    this_plugin->full_config = (gdnsd_full_config_cb_t)get_dlsym(plugin_handle, this_plugin->name, "full_config", false);
-    this_plugin->pre_privdrop = (gdnsd_pre_privdrop_cb_t)get_dlsym(plugin_handle, this_plugin->name, "pre_privdrop", false);
-    this_plugin->pre_run = (gdnsd_pre_run_cb_t)get_dlsym(plugin_handle, this_plugin->name, "pre_run", false);
-    this_plugin->iothread_init = (gdnsd_iothread_init_cb_t)get_dlsym(plugin_handle, this_plugin->name, "iothread_init", false);
-    this_plugin->resolve_dynaddr = (gdnsd_resolve_dynaddr_cb_t)get_dlsym(plugin_handle, this_plugin->name, "resolve_dynaddr", false);
-    this_plugin->resolve_dyncname = (gdnsd_resolve_dyncname_cb_t)get_dlsym(plugin_handle, this_plugin->name, "resolve_dyncname", false);
-    this_plugin->exit = (gdnsd_exit_cb_t)get_dlsym(plugin_handle, this_plugin->name, "exit", false);
-    this_plugin->add_svctype = (gdnsd_add_svctype_cb_t)get_dlsym(plugin_handle, this_plugin->name, "add_svctype", false);
-    this_plugin->add_monitor = (gdnsd_add_monitor_cb_t)get_dlsym(plugin_handle, this_plugin->name, "add_monitor", false);
-    this_plugin->init_monitors = (gdnsd_init_monitors_cb_t)get_dlsym(plugin_handle, this_plugin->name, "init_monitors", false);
-    this_plugin->start_monitors = (gdnsd_start_monitors_cb_t)get_dlsym(plugin_handle, this_plugin->name, "start_monitors", false);
-
-    return this_plugin;
 }
 
 F_NONNULL
-static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const vscf_data_t* pconf, void* ps_asvoid) {
-    load_plugin(name, pconf, (const char**) ps_asvoid);
+static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const vscf_data_t* pconf, void* data V_UNUSED) {
+    plugin_load_and_configure(name, pconf);
     return true;
-}
-
-const plugin_t* find_or_load_plugin(const char* plugin_name, const char** search_paths) {
-    dmn_assert(plugin_name);
-    const plugin_t* const p = gdnsd_plugin_find(plugin_name);
-    return p ? p : load_plugin(plugin_name, NULL, search_paths);
 }
 
 // These defines are for the repetitive case of simple checking/assignment
@@ -735,21 +660,7 @@ void conf_load(const char* cfg_file) {
     free(zones_dir);
 
     postproc_zones();
-
-    // Create a plugin search path array
-    int psearch_count = psearch_array
-        ? vscf_array_get_len(psearch_array)
-        : 0;
-    const char** psearch = malloc((psearch_count + 2) * sizeof(const char*));
-    for(int i = 0; i < psearch_count; i++) {
-        const vscf_data_t* psd = vscf_array_get_data(psearch_array, i);
-        if(!vscf_is_simple(psd))
-            log_fatal("Plugin search paths must be strings");
-        psearch[i] = vscf_simple_get_data(psd);
-    }
-
-    psearch[psearch_count++] = LIBDIR "/" PACKAGE_NAME;
-    psearch[psearch_count] = NULL;
+    gdnsd_plugins_set_search_path(psearch_array);
 
     // Load plugins
     const vscf_data_t* plugins_hash = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
@@ -762,14 +673,14 @@ void conf_load(const char* cfg_file) {
         //   the list of meta-plugins will remain short and in-tree.
         const vscf_data_t* geoplug = vscf_hash_get_data_byconstkey(plugins_hash, "geoip", true);
         if(geoplug)
-            load_plugin("geoip", geoplug, psearch);
+            plugin_load_and_configure("geoip", geoplug);
         // ditto for "metafo"
         // Technically, geoip->metafo synthesis will work, but not metafo->geoip synthesis.
         // Both can reference each other directly (%plugin!resource)
         const vscf_data_t* metaplug = vscf_hash_get_data_byconstkey(plugins_hash, "metafo", true);
         if(metaplug)
-            load_plugin("metafo", metaplug, psearch);
-        vscf_hash_iterate(plugins_hash, true, load_plugin_iter, (void*)psearch);
+            plugin_load_and_configure("metafo", metaplug);
+        vscf_hash_iterate(plugins_hash, true, load_plugin_iter, NULL);
     }
 
     // Create servicetypes, which may reference already-loaded plugins, or autoload new ones
@@ -777,17 +688,8 @@ void conf_load(const char* cfg_file) {
     //   might have to be correct unnecessarily, and it also avoids the unnecessary load of http_status
     //   and other work.  A consequence is that the service_types config stanza is not checked for
     //   syntax errors unless monitoring is actually in use.
-    bool have_monitors = false;
-    for(unsigned i = 0; i < num_monio_lists; i++) {
-        if(monio_lists[i]) {
-            have_monitors = true;
-            break;
-        }
-    }
-    if(have_monitors)
-        monio_add_servicetypes(vscf_hash_get_data_byconstkey(cfg_root, "service_types", true), psearch);
-
-    free(psearch);
+    if(num_monio_lists)
+        monio_add_servicetypes(vscf_hash_get_data_byconstkey(cfg_root, "service_types", true));
 
     // Finally, process the monio_list_t's from plugins *after* servicetypes are available.
     // This order of operations wrt loading the plugins stanza, then the servicetypes,
@@ -801,17 +703,15 @@ void conf_load(const char* cfg_file) {
     //   cases though because (a) it will lead to a crash with older address/cname-only
     //   plugins that don't expect a NULL config argument, and (b) most addr/cname plugins
     //   are going to need *some* kind of config anyways.
-    if(have_plugins) {
-        if(atexit(plugins_cleanup))
-            log_fatal("atexit(plugins_cleanup) failed: %s", logf_errno());
-        for(unsigned i = 0; i < num_monio_lists; i++) {
-            monio_list_t* mlist = monio_lists[i];
-            if(mlist) {
-                for(unsigned j = 0; j < mlist->count; j++) {
-                    monio_info_t* m = &mlist->info[j];
-                    dmn_assert(m->desc && m->addr && m->state_ptr);
-                    monio_add_addr(m->svctype, m->desc, m->addr, m->state_ptr);
-                }
+    if(atexit(plugins_cleanup))
+        log_fatal("atexit(plugins_cleanup) failed: %s", logf_errno());
+    for(unsigned i = 0; i < num_monio_lists; i++) {
+        monio_list_t* mlist = monio_lists[i];
+        if(mlist) {
+            for(unsigned j = 0; j < mlist->count; j++) {
+                monio_info_t* m = &mlist->info[j];
+                dmn_assert(m->desc && m->addr && m->state_ptr);
+                monio_add_addr(m->svctype, m->desc, m->addr, m->state_ptr);
             }
         }
     }

@@ -24,7 +24,7 @@
 #include "gdnsd.h"
 
 // conf.c calls this for service_types vscf config and to process plugin monitoring requests
-void monio_add_servicetypes(const vscf_data_t* svctypes_cfg, const char** search_paths);
+void monio_add_servicetypes(const vscf_data_t* svctypes_cfg);
 void monio_add_addr(const char* svctype_name, const char* desc, const char* addr, monio_state_t* monio_state_ptr);
 
 // main.c calls this for adding monio events to the main thread's eventloop

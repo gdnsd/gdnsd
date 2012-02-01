@@ -21,15 +21,29 @@
 #define _GDNSD_PLUGAPI_PRIV_H
 
 #include "gdnsd-plugapi.h"
+#include "gdnsd-vscf.h"
 
-// Assumes no plugin of this name already allocated, not thread-safe.
-plugin_t* gdnsd_plugin_allocate(const char* plugin_name);
+// Wrapper for getting dlsym funcptrs
+typedef void(*gdnsd_gen_func_ptr)(void);
+gdnsd_gen_func_ptr gdnsd_dlsym_fptr(void* restrict handle, const char* restrict symbol);
+
+// MUST call this before loading plugins below, array can be NULL for just the default
+void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array);
+
+F_NONNULL
+const plugin_t* gdnsd_plugin_load(const char* pname);
+
+F_NONNULL
+const plugin_t* gdnsd_plugin_find_or_load(const char* pname);
 
 // action iterators
 void gdnsd_plugins_action_full_config(const unsigned num_threads);
 void gdnsd_plugins_action_pre_privdrop(void);
+F_NONNULL
 void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop);
+F_NONNULL
 void gdnsd_plugins_action_start_monitors(struct ev_loop* mon_loop);
+F_NONNULL
 void gdnsd_plugins_action_pre_run(struct ev_loop* loop);
 void gdnsd_plugins_action_iothread_init(const unsigned threadnum);
 void gdnsd_plugins_action_exit(void);

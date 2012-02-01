@@ -66,21 +66,19 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man5dir)" \
 	"$(DESTDIR)$(man8dir)" "$(DESTDIR)$(docdir)"
 PROGRAMS = $(sbin_PROGRAMS)
-am__gdnsd_SOURCES_DIST = main.c dlsym_fptr.c conf.c zscan.c zscan_lm.c \
-	ltarena.c ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c \
-	monio.c conf.h dlsym_fptr.h dnsio_tcp.h dnsio_udp.h \
-	dnspacket.h dnswire.h ltarena.h ltree.h statio.h monio.h \
-	zscan.h pkterr.h gdnsd.h
+am__gdnsd_SOURCES_DIST = main.c conf.c zscan.c zscan_lm.c ltarena.c \
+	ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c \
+	conf.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h \
+	ltree.h statio.h monio.h zscan.h pkterr.h gdnsd.h
 @LOWMEM_FALSE@am__objects_1 = zscan.$(OBJEXT)
 @LOWMEM_TRUE@am__objects_1 = zscan_lm.$(OBJEXT)
-am_gdnsd_OBJECTS = main.$(OBJEXT) dlsym_fptr.$(OBJEXT) conf.$(OBJEXT) \
-	$(am__objects_1) ltarena.$(OBJEXT) ltree.$(OBJEXT) \
-	dnspacket.$(OBJEXT) dnsio_udp.$(OBJEXT) dnsio_tcp.$(OBJEXT) \
-	statio.$(OBJEXT) monio.$(OBJEXT)
+am_gdnsd_OBJECTS = main.$(OBJEXT) conf.$(OBJEXT) $(am__objects_1) \
+	ltarena.$(OBJEXT) ltree.$(OBJEXT) dnspacket.$(OBJEXT) \
+	dnsio_udp.$(OBJEXT) dnsio_tcp.$(OBJEXT) statio.$(OBJEXT) \
+	monio.$(OBJEXT)
 gdnsd_OBJECTS = $(am_gdnsd_OBJECTS)
 am__DEPENDENCIES_1 =
-gdnsd_DEPENDENCIES = libgdnsd/libgdnsd.la $(am__DEPENDENCIES_1) \
-	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+gdnsd_DEPENDENCIES = libgdnsd/libgdnsd.la $(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_$(V))
 am__v_lt_ = $(am__v_lt_$(AM_DEFAULT_VERBOSITY))
 am__v_lt_0 = --silent
@@ -323,9 +321,9 @@ top_srcdir = @top_srcdir@
 #  --enable-lowmem was passed to configure.
 @LOWMEM_TRUE@ZSCAN_C = zscan_lm.c
 SUBDIRS = libgdnsd
-AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd -DVARDIR=\"$(localstatedir)\" -DETCDIR=\"$(sysconfdir)\" -DLIBDIR=\"$(libdir)\"
-gdnsd_SOURCES = main.c dlsym_fptr.c conf.c $(ZSCAN_C) ltarena.c ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c conf.h dlsym_fptr.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h ltree.h statio.h monio.h zscan.h pkterr.h gdnsd.h
-gdnsd_LDADD = libgdnsd/libgdnsd.la $(LIBADD_DLOPEN) $(NETLIBS) $(CAPLIBS)
+AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd -DVARDIR=\"$(localstatedir)\" -DETCDIR=\"$(sysconfdir)\"
+gdnsd_SOURCES = main.c conf.c $(ZSCAN_C) ltarena.c ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c conf.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h ltree.h statio.h monio.h zscan.h pkterr.h gdnsd.h
+gdnsd_LDADD = libgdnsd/libgdnsd.la $(CAPLIBS)
 MAINTAINERCLEANFILES = $(srcdir)/zscan.c $(srcdir)/zscan_lm.c
 EXTRA_DIST = $(srcdir)/zscan.rl
 PODS_5 = gdnsd.config.pod gdnsd.zonefile.pod
@@ -433,7 +431,6 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/conf.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dlsym_fptr.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dnsio_tcp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dnsio_udp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dnspacket.Po@am__quote@

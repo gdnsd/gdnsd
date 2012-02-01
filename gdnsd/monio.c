@@ -213,7 +213,7 @@ static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, const vscf_data
     log_fatal("Service type '%s', bad option '%s'", (const char*)data, key);
 }
 
-void monio_add_servicetypes(const vscf_data_t* svctypes_cfg, const char** search_paths) {
+void monio_add_servicetypes(const vscf_data_t* svctypes_cfg) {
     if(svctypes_cfg) {
         if(!vscf_is_hash(svctypes_cfg))
             log_fatal("service_types, if defined, must have a hash value");
@@ -225,7 +225,7 @@ void monio_add_servicetypes(const vscf_data_t* svctypes_cfg, const char** search
     service_type_t* def_svc = &service_types[num_svc_types];
 
     def_svc->name = "default";
-    const plugin_t* def_plugin = def_svc->plugin = find_or_load_plugin("http_status", search_paths);
+    const plugin_t* def_plugin = def_svc->plugin = gdnsd_plugin_find_or_load("http_status");
     dmn_assert(def_plugin->add_svctype && def_plugin->add_monitor);
     def_svc->up_thresh = DEF_UP_THRESH;
     def_svc->ok_thresh = DEF_OK_THRESH;
@@ -252,7 +252,7 @@ void monio_add_servicetypes(const vscf_data_t* svctypes_cfg, const char** search
             if(!vscf_is_simple(pname_cfg) || !vscf_simple_get_len(pname_cfg))
                 log_fatal("Service type '%s': 'plugin' must be a string", this_svc->name);
             const char* pname = vscf_simple_get_data(pname_cfg);
-            this_svc->plugin = find_or_load_plugin(pname, search_paths); 
+            this_svc->plugin = gdnsd_plugin_find_or_load(pname);
             if(!this_svc->plugin->add_svctype || !this_svc->plugin->add_monitor)
                 log_fatal("Service type '%s' references plugin '%s', which does not support service monitoring (lacks required callbacks)", this_svc->name, pname);
         }
