@@ -27,7 +27,7 @@ void lta_init(void);
 void lta_close(void);
 
 F_MALLOC F_WUNUSED
-void* lta_malloc(unsigned size, unsigned align_bytes);
+void* lta_malloc(const unsigned size, const unsigned align_bytes);
 
 #define lta_malloc_p(_size) lta_malloc(_size, SIZEOF_UINTPTR_T)
 #define lta_malloc_1(_size) lta_malloc(_size, 1)

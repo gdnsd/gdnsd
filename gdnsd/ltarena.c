@@ -39,6 +39,18 @@
 #  endif
 #endif
 
+// Normally, our pools are initialized to all-zeros for us
+//   by mmap(), and no red zones are employed.  In debug
+//   builds, we initialize a whole pool to 0xDEADBEEF,
+//   define a redzone of 2 pointer widths before and after
+//   each block, and then zero out the valid allocated area
+//   of each block as it's handed out.
+#ifndef NDEBUG
+#  define RED_SIZE (SIZEOF_UINTPTR_T * 2)
+#else
+#  define RED_SIZE 0
+#endif
+
 static unsigned pool = 0;
 static unsigned poffs = 0;
 static void** pools;
@@ -59,15 +71,26 @@ static uint8_t** dnhash;
 #define dnhash_unalloc(_x, _old_mask) \
     munmap((void*)(_x), ((_old_mask) + 1) * sizeof(uint8_t**))
 
+static void* make_pool(void) {
+    void* p = alloc_mmap(POOL_SIZE);
+    if(RED_SIZE) {
+        uint32_t* p32 = (uint32_t*)p;
+        unsigned idx = POOL_SIZE >> 2;
+        while(idx--)
+            p32[idx] = 0xDEADBEEF;
+    }
+    VALGRIND_MAKE_MEM_NOACCESS(p, POOL_SIZE);
+    NOWARN_VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1);
+    return p;
+}
+
 void lta_init(void) {
 #if LOWMEM
     pools = calloc(NUM_POOLS, sizeof(void*));
 #else
     pools = alloc_mmap(NUM_POOLS * sizeof(void*));
 #endif
-    pools[0] = alloc_mmap(POOL_SIZE);
-    VALGRIND_MAKE_MEM_NOACCESS(pools[0], POOL_SIZE);
-    NOWARN_VALGRIND_CREATE_MEMPOOL(pools[0], 0, 1);
+    pools[0] = make_pool();
     dnhash = dnhash_alloc(dnhash_mask);
 }
 
@@ -143,8 +166,13 @@ uint8_t* lta_labeldup(const uint8_t* dn) {
     return retval;
 }
 
-void* lta_malloc(unsigned size, unsigned align_bytes) {
+void* lta_malloc(const unsigned size, const unsigned align_bytes) {
     dmn_assert(size); dmn_assert(align_bytes);
+
+    // assert that if alignment is requested, it's in units of
+    //   the pointer size, so that the redzones don't screw it up
+    if(align_bytes != 1)
+        dmn_assert(!(align_bytes & (SIZEOF_UINTPTR_T - 1)));
 
     // shift poffs forward for alignment if necessary
     unsigned align_mask = align_bytes - 1;
@@ -153,23 +181,29 @@ void* lta_malloc(unsigned size, unsigned align_bytes) {
         poffs += align_bytes;
     }
 
+    // the requested size + redzones on either end, giving the total
+    //   this allocation will steal from the pool
+    const unsigned size_plus_red = size + RED_SIZE + RED_SIZE;
+
     // handle pool switch if we're out of room
-    if(unlikely((size > (POOL_SIZE - poffs)))) {
-        if(unlikely(size > POOL_SIZE))
-            log_fatal("attempted to lta_malloc() a block of size %u", size);
+    if(unlikely((size_plus_red > (POOL_SIZE - poffs)))) {
+        if(unlikely(size_plus_red > POOL_SIZE))
+            log_fatal("attempted to lta_malloc() a block of size %u", size_plus_red);
         if(unlikely(++pool == NUM_POOLS))
             log_fatal("lta ran out of pools!");
-        pools[pool] = alloc_mmap(POOL_SIZE);
+        pools[pool] = make_pool();
         poffs = 0;
-        VALGRIND_MAKE_MEM_NOACCESS(pools[pool], POOL_SIZE);
-        NOWARN_VALGRIND_CREATE_MEMPOOL(pools[pool], 0, 1);
     }
 
     // assign the space and move our poffs pointer
-    void* rval = (void*)((uintptr_t)pools[pool] + poffs);
-    poffs += size;
+    void* rval = (void*)((uintptr_t)pools[pool] + poffs + RED_SIZE);
+    poffs += size_plus_red;
 
+    // mark the true allocation for valgrind and zero it if !NDEBUG
     NOWARN_VALGRIND_MEMPOOL_ALLOC(pools[pool], rval, size);
+    if(RED_SIZE)
+        memset(rval, 0, size);
+
     return rval;
 }
 
