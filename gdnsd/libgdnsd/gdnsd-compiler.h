@@ -73,14 +73,18 @@
 
 // And silence some related warnings on gcc 4.6 + valgrind 3.6
 #if !defined(NDEBUG) && defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 5))
-#  define NOWARN_VALGRIND_CREATE_MEMPOOL(x,y,z) \
-     { _Pragma("GCC diagnostic ignored \"-Wunused-but-set-variable\""); \
+#  define NOWARN_VALGRIND_CREATE_MEMPOOL(x,y,z) { \
+     _Pragma("GCC diagnostic push"); \
+     _Pragma("GCC diagnostic ignored \"-Wunused-but-set-variable\""); \
      VALGRIND_CREATE_MEMPOOL(x,y,z); \
-     _Pragma("GCC diagnostic pop"); }
-#  define NOWARN_VALGRIND_MEMPOOL_ALLOC(x,y,z) \
-     { _Pragma("GCC diagnostic ignored \"-Wunused-but-set-variable\""); \
+     _Pragma("GCC diagnostic pop"); \
+}
+#  define NOWARN_VALGRIND_MEMPOOL_ALLOC(x,y,z) { \
+     _Pragma("GCC diagnostic push"); \
+     _Pragma("GCC diagnostic ignored \"-Wunused-but-set-variable\""); \
      VALGRIND_MEMPOOL_ALLOC(x,y,z); \
-     _Pragma("GCC diagnostic pop"); }
+     _Pragma("GCC diagnostic pop"); \
+}
 #else
 #  define NOWARN_VALGRIND_CREATE_MEMPOOL(x,y,z) \
      VALGRIND_CREATE_MEMPOOL(x,y,z)
