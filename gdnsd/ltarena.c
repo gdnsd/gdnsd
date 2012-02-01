@@ -18,6 +18,7 @@
  */
 
 #include "ltarena.h"
+#include "gdnsd-compiler.h"
 
 #include <string.h>
 #include <sys/mman.h>
@@ -65,6 +66,8 @@ void lta_init(void) {
     pools = alloc_mmap(NUM_POOLS * sizeof(void*));
 #endif
     pools[0] = alloc_mmap(POOL_SIZE);
+    VALGRIND_MAKE_MEM_NOACCESS(pools[0], POOL_SIZE);
+    NOWARN_VALGRIND_CREATE_MEMPOOL(pools[0], 0, 1);
     dnhash = dnhash_alloc(dnhash_mask);
 }
 
@@ -158,12 +161,15 @@ void* lta_malloc(unsigned size, unsigned align_bytes) {
             log_fatal("lta ran out of pools!");
         pools[pool] = alloc_mmap(POOL_SIZE);
         poffs = 0;
+        VALGRIND_MAKE_MEM_NOACCESS(pools[pool], POOL_SIZE);
+        NOWARN_VALGRIND_CREATE_MEMPOOL(pools[pool], 0, 1);
     }
 
     // assign the space and move our poffs pointer
     void* rval = (void*)((uintptr_t)pools[pool] + poffs);
     poffs += size;
 
+    NOWARN_VALGRIND_MEMPOOL_ALLOC(pools[pool], rval, size);
     return rval;
 }
 
