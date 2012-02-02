@@ -96,9 +96,9 @@ am__objects_1 =
 am_libgdnsd_la_OBJECTS = libgdnsd_la-dname.lo libgdnsd_la-net.lo \
 	libgdnsd_la-log.lo libgdnsd_la-monio.lo libgdnsd_la-vscf.lo \
 	libgdnsd_la-misc.lo libgdnsd_la-plugapi.lo \
-	libgdnsd_la-dlsym_fptr.lo libgdnsd_la-dmn_daemon.lo \
-	libgdnsd_la-dmn_log.lo libgdnsd_la-dmn_secure.lo \
-	libgdnsd_la-evwrap.lo $(am__objects_1) $(am__objects_1)
+	libgdnsd_la-dmn_daemon.lo libgdnsd_la-dmn_log.lo \
+	libgdnsd_la-dmn_secure.lo libgdnsd_la-evwrap.lo \
+	$(am__objects_1) $(am__objects_1)
 nodist_libgdnsd_la_OBJECTS =
 libgdnsd_la_OBJECTS = $(am_libgdnsd_la_OBJECTS) \
 	$(nodist_libgdnsd_la_OBJECTS)
@@ -287,7 +287,7 @@ pkglib_LTLIBRARIES = libgdnsd.la
 AM_LIBTOOLFLAGS = --silent
 xHEADERS_DIST_NOINST = gdnsd-plugapi-priv.h gdnsd-misc-priv.h gdnsd-net-priv.h
 xHEADERS_DIST = gdnsd-vscf.h gdnsd-dname.h gdnsd-log.h gdnsd-compiler.h gdnsd-monio.h gdnsd-satom.h gdnsd-net.h gdnsd-plugapi.h gdnsd-plugin.h gdnsd-misc.h
-libgdnsd_la_SOURCES = dname.c net.c log.c monio.c vscf.c misc.c plugapi.c dlsym_fptr.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c evwrap.c evwrap_ch.h $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
+libgdnsd_la_SOURCES = dname.c net.c log.c monio.c vscf.c misc.c plugapi.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c evwrap.c evwrap_ch.h $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
 nodist_libgdnsd_la_SOURCES = gdnsd-ev.h gdnsd-dmn.h
 libgdnsd_la_CPPFLAGS = -I$(srcdir)/libev -DLIBDIR=\"$(libdir)\"
 libgdnsd_la_LDFLAGS = -shared -avoid-version
@@ -390,7 +390,6 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libgdnsd_la-dlsym_fptr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libgdnsd_la-dmn_daemon.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libgdnsd_la-dmn_log.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libgdnsd_la-dmn_secure.Plo@am__quote@
@@ -482,14 +481,6 @@ libgdnsd_la-plugapi.lo: plugapi.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='plugapi.c' object='libgdnsd_la-plugapi.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libgdnsd_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libgdnsd_la-plugapi.lo `test -f 'plugapi.c' || echo '$(srcdir)/'`plugapi.c
-
-libgdnsd_la-dlsym_fptr.lo: dlsym_fptr.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libgdnsd_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libgdnsd_la-dlsym_fptr.lo -MD -MP -MF $(DEPDIR)/libgdnsd_la-dlsym_fptr.Tpo -c -o libgdnsd_la-dlsym_fptr.lo `test -f 'dlsym_fptr.c' || echo '$(srcdir)/'`dlsym_fptr.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libgdnsd_la-dlsym_fptr.Tpo $(DEPDIR)/libgdnsd_la-dlsym_fptr.Plo
-@am__fastdepCC_FALSE@	$(AM_V_CC) @AM_BACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='dlsym_fptr.c' object='libgdnsd_la-dlsym_fptr.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libgdnsd_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libgdnsd_la-dlsym_fptr.lo `test -f 'dlsym_fptr.c' || echo '$(srcdir)/'`dlsym_fptr.c
 
 libgdnsd_la-dmn_daemon.lo: libdmn/dmn_daemon.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libgdnsd_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libgdnsd_la-dmn_daemon.lo -MD -MP -MF $(DEPDIR)/libgdnsd_la-dmn_daemon.Tpo -c -o libgdnsd_la-dmn_daemon.lo `test -f 'libdmn/dmn_daemon.c' || echo '$(srcdir)/'`libdmn/dmn_daemon.c

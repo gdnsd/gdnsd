@@ -118,10 +118,13 @@ static void* plugin_dlopen(const char* pname) {
     log_fatal("Failed to locate plugin '%s' in the plugin search path", pname);
 }
 
-F_NONNULL
-static gdnsd_gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sym_suffix, bool required) {
-    dmn_assert(handle); dmn_assert(pname); dmn_assert(sym_suffix);
+typedef void(*gen_func_ptr)(void);
 
+F_NONNULL
+static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sym_suffix) {
+    dmn_assert(handle); dmn_assert(sym_suffix);
+
+    // construct the full symbol name plugin_PNAME_SYMSUFFIX\0
     const unsigned pname_len = strlen(pname);
     const unsigned suffix_len = strlen(sym_suffix);
     const unsigned sym_size = 7 + pname_len + 1 + suffix_len + 1;
@@ -131,11 +134,11 @@ static gdnsd_gen_func_ptr plugin_dlsym(void* handle, const char* pname, const ch
     memcpy(symname + 7 + pname_len, "_", 1);
     memcpy(symname + 7 + pname_len + 1, sym_suffix, suffix_len);
     memcpy(symname + 7 + pname_len + 1 + suffix_len, "\0", 1);
-    dlerror(); // clear previous errors
-    gdnsd_gen_func_ptr retval = gdnsd_dlsym_fptr(handle, symname);
-    const char* err = dlerror();
-    if(required && (err || !retval)) log_fatal("Failed to resolve plugin symbol '%s': %s", symname, err);
-    return retval;
+
+    // If you see an aliasing warning here, it's ok to ignore it
+    gen_func_ptr rval;
+    *(void**)(&rval) = dlsym(handle, symname);
+    return rval;
 }
 
 const plugin_t* gdnsd_plugin_load(const char* pname) {
@@ -143,7 +146,7 @@ const plugin_t* gdnsd_plugin_load(const char* pname) {
 
     plugin_t* plug = plugin_allocate(pname);
     void* pptr = plugin_dlopen(pname);
-    const gdnsd_apiv_cb_t apiv = (gdnsd_apiv_cb_t)plugin_dlsym(pptr, pname, "get_api_version", true);
+    const gdnsd_apiv_cb_t apiv = (gdnsd_apiv_cb_t)plugin_dlsym(pptr, pname, "get_api_version");
     if(!apiv)
         log_fatal("Plugin '%s' does not appear to be a valid gdnsd plugin", pname);
     const unsigned this_version = apiv();
@@ -151,7 +154,7 @@ const plugin_t* gdnsd_plugin_load(const char* pname) {
         log_fatal("Plugin '%s' needs to be recompiled (wanted API version %u, got %u)",
             pname, GDNSD_PLUGIN_API_VERSION, this_version);
 
-#   define _PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x, false);
+#   define _PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
     _PSETFUNC(load_config)
     _PSETFUNC(map_resource_dyna)
     _PSETFUNC(map_resource_dync)

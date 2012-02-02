@@ -23,10 +23,6 @@
 #include "gdnsd-plugapi.h"
 #include "gdnsd-vscf.h"
 
-// Wrapper for getting dlsym funcptrs
-typedef void(*gdnsd_gen_func_ptr)(void);
-gdnsd_gen_func_ptr gdnsd_dlsym_fptr(void* restrict handle, const char* restrict symbol);
-
 // MUST call this before loading plugins below, array can be NULL for just the default
 void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array);
 
