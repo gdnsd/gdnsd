@@ -23,20 +23,31 @@
 #include <string.h>
 #include <sys/mman.h>
 
-// --enable-lowmem: up to 64MB as 256 pools of 256K
-// 32-bit machines: up to 2GB as 2K pools of 1M
-// 64-bit machines: up to 32GB as 8K pools of 4M
+// ltarena pool sizing/limits/waste:
+//   The arena has a base allocation regardless of how small the
+//     zonefile data is.
+//   The arena is allocated on-demand in terms of fixed number of pools
+//   The size of each pool allocated is at least double the previous
+//     size, up to a certain limit.  That limit defines the absolute
+//     maximum waste.  Waste is also limited to roughly the total allocated.
+//   The arena has a minimum overall allocation limit.  That is to say,
+//     depending on usage patterns the maximum limit varies, but we know
+//     the limit in the worst (min limit) case.
+//   With --enable-lowmem:
+//     Base allocation: 16K + 256-512B overhead
+//     min allocation limit: ~880MB
+//     max waste limit: ~16MB
+//   Without --enable-lowmem:
+//     Base allocation: 16K + 4-8K overhead
+//     min allocation limit: ~253GB
+//     max waste limit: ~256MB
+#define INIT_POOL_SIZE   (16 * 1024)
 #if LOWMEM
-#  define NUM_POOLS 256
-#  define POOL_SIZE 262144
+#  define NUM_POOLS 64
+#  define MAX_POOL_SIZE  (16 * 1024 * 1024)
 #else
-#  if SIZEOF_UINTPTR_T == 4
-#    define NUM_POOLS 2048
-#    define POOL_SIZE 1048576
-#  else
-#    define NUM_POOLS 8192
-#    define POOL_SIZE 4194304
-#  endif
+#  define NUM_POOLS 1024
+#  define MAX_POOL_SIZE (256 * 1024 * 1024)
 #endif
 
 // Normally, our pools are initialized to all-zeros for us
@@ -51,8 +62,6 @@
 #  define RED_SIZE 0
 #endif
 
-static unsigned pool = 0;
-static unsigned poffs = 0;
 static void** pools;
 
 static uint32_t dnhash_count = 0;
@@ -71,26 +80,35 @@ static uint8_t** dnhash;
 #define dnhash_unalloc(_x, _old_mask) \
     munmap((void*)(_x), ((_old_mask) + 1) * sizeof(uint8_t**))
 
-static void* make_pool(void) {
-    void* p = alloc_mmap(POOL_SIZE);
+static void* make_pool(const unsigned bytes) {
+    // basic pool size checks
+    dmn_assert(!(bytes & (bytes - 1))); // power of two
+    dmn_assert(bytes >= INIT_POOL_SIZE);
+    dmn_assert(bytes <= MAX_POOL_SIZE);
+
+    // get mem from mmap, assert pointer-aligned
+    void* p = alloc_mmap(bytes);
+    dmn_assert(!((uintptr_t)p & (SIZEOF_UINTPTR_T - 1)));
+
+    // fill in deadbeef if using redzones
     if(RED_SIZE) {
         uint32_t* p32 = (uint32_t*)p;
-        unsigned idx = POOL_SIZE >> 2;
+        unsigned idx = bytes >> 2;
         while(idx--)
             p32[idx] = 0xDEADBEEF;
     }
-    VALGRIND_MAKE_MEM_NOACCESS(p, POOL_SIZE);
+
+    // let valgrind know what's going on, if running
+    //   and we're a debug build
+    VALGRIND_MAKE_MEM_NOACCESS(p, bytes);
     NOWARN_VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1);
+
     return p;
 }
 
 void lta_init(void) {
-#if LOWMEM
     pools = calloc(NUM_POOLS, sizeof(void*));
-#else
-    pools = alloc_mmap(NUM_POOLS * sizeof(void*));
-#endif
-    pools[0] = make_pool();
+    pools[0] = make_pool(INIT_POOL_SIZE);
     dnhash = dnhash_alloc(dnhash_mask);
 }
 
@@ -169,41 +187,55 @@ uint8_t* lta_labeldup(const uint8_t* dn) {
 void* lta_malloc(const unsigned size, const unsigned align_bytes) {
     dmn_assert(size); dmn_assert(align_bytes);
 
-    // assert that if alignment is requested, it's in units of
+    // assert that if alignment is requested, it's for the pointer
+    //   size exactly, since that's our only use case currently
     //   the pointer size, so that the redzones don't screw it up
-    if(align_bytes != 1)
-        dmn_assert(!(align_bytes & (SIZEOF_UINTPTR_T - 1)));
+    dmn_assert(align_bytes == 1 || align_bytes == SIZEOF_UINTPTR_T);
 
-    // shift poffs forward for alignment if necessary
-    unsigned align_mask = align_bytes - 1;
-    if(poffs & align_mask) {
-        poffs &= ~align_mask;
-        poffs += align_bytes;
-    }
+    // Current pool number, allocation offset, and allocated size
+    static unsigned pool = 0;
+    static unsigned poffs = 0;
+    static unsigned pool_size = INIT_POOL_SIZE;
+
+    // branchless shift of poffs forward for alignment if necessary
+    const unsigned align_mask = align_bytes - 1;
+    poffs += align_mask;
+    poffs &= ~align_mask;
 
     // the requested size + redzones on either end, giving the total
     //   this allocation will steal from the pool
     const unsigned size_plus_red = size + RED_SIZE + RED_SIZE;
 
-    // handle pool switch if we're out of room
-    if(unlikely((size_plus_red > (POOL_SIZE - poffs)))) {
-        if(unlikely(size_plus_red > POOL_SIZE))
-            log_fatal("attempted to lta_malloc() a block of size %u", size_plus_red);
+    // Currently, all allocations obey this assertion.  Should stay that way.
+    dmn_assert(size_plus_red <= MAX_POOL_SIZE);
+
+    // basic sanity assertions on pool sizing
+    dmn_assert(!(pool_size & (pool_size - 1))); // power of two
+    dmn_assert(pool_size >= INIT_POOL_SIZE);
+    dmn_assert(pool_size <= MAX_POOL_SIZE);
+
+    // handle pool switch if we're out of room.  We at least
+    //   double the pool size on each switch, and might double
+    //   multiple times if warranted to fit the new object in
+    //   the very next pool.
+    if(unlikely((poffs + size_plus_red > pool_size))) {
         if(unlikely(++pool == NUM_POOLS))
-            log_fatal("lta ran out of pools!");
-        pools[pool] = make_pool();
+            log_fatal("lta_malloc(): ran out of pools, zone data too large!");
+        if(pool_size < MAX_POOL_SIZE)
+            do { pool_size <<= 1; }
+                while(size_plus_red > pool_size);
         poffs = 0;
+        pools[pool] = make_pool(pool_size);
     }
 
     // assign the space and move our poffs pointer
     void* rval = (void*)((uintptr_t)pools[pool] + poffs + RED_SIZE);
     poffs += size_plus_red;
 
-    // mark the true allocation for valgrind and zero it if !NDEBUG
+    // mark the allocation for valgrind and zero it if doing redzone stuff
     NOWARN_VALGRIND_MEMPOOL_ALLOC(pools[pool], rval, size);
     if(RED_SIZE)
         memset(rval, 0, size);
 
     return rval;
 }
-
