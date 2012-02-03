@@ -26,10 +26,13 @@
 #include <syslog.h>
 #include <stdarg.h>
 #include <time.h>
-#include <pthread.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+
+#ifndef TLS
+#include <pthread.h>
+#endif
 
 #include "dmn.h"
 
@@ -68,20 +71,28 @@ typedef struct {
     char buf[DMN_FMTBUF_SIZE];
 } fmtbuf_t;
 
+#ifdef TLS
+static TLS fmtbuf_t* fmtbuf = NULL;
+#else
 static pthread_key_t fmtbuf_key;
 static pthread_once_t fmtbuf_key_once = PTHREAD_ONCE_INIT;
-
 static void fmtbuf_make_key(void) { pthread_key_create(&fmtbuf_key, NULL); }
+#endif
 
 // Allocate a chunk from the format buffer
 // Allocates the buffer itself on first use per-thread
 char* dmn_fmtbuf_alloc(unsigned size) {
+#ifndef TLS
     fmtbuf_t* fmtbuf;
     pthread_once(&fmtbuf_key_once, fmtbuf_make_key);
     if((fmtbuf = pthread_getspecific(fmtbuf_key)) == NULL) {
         fmtbuf = calloc(1, sizeof(fmtbuf_t));
         pthread_setspecific(fmtbuf_key, (void*)fmtbuf);
     }
+#else
+    if(!fmtbuf)
+        fmtbuf = calloc(1, sizeof(fmtbuf_t));
+#endif
     if(fmtbuf->used + size > DMN_FMTBUF_SIZE)
         dmn_log_fatal("BUG: format buffer exhausted");
     char* retval = &fmtbuf->buf[fmtbuf->used];
@@ -92,9 +103,13 @@ char* dmn_fmtbuf_alloc(unsigned size) {
 // Reset (free allocations within) the format buffer,
 //  but do not trigger initial allocation in the process
 void dmn_fmtbuf_reset(void) {
+#ifndef TLS
     fmtbuf_t* fmtbuf;
     pthread_once(&fmtbuf_key_once, fmtbuf_make_key);
     if((fmtbuf = pthread_getspecific(fmtbuf_key)))
+#else
+    if(fmtbuf)
+#endif
         fmtbuf->used = 0;
 }
 

@@ -24,6 +24,9 @@ CC="$PTHREAD_CC"
 dnl need to know endian-ness
 AC_C_BIGENDIAN
 
+dnl figure out whether and how to use TLS
+AX_TLS
+
 dnl The libtool macros in 2.2.6b - 2.4.2 have a bug that causes
 dnl  them to accidentally add LIBADD_DLOPEN to LIBS permanently,
 dnl  so we workaround that by saving and restoring LIBS

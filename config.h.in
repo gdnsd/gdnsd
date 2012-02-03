@@ -311,6 +311,9 @@
 /* Define to 1 if strerror_r returns char *. */
 #undef STRERROR_R_CHAR_P
 
+/* If the compiler supports a TLS storage class define it to that here */
+#undef TLS
+
 /* Use Linux libcap2+prctl Capabilities */
 #undef USE_LINUX_CAPS
 
