@@ -25,6 +25,9 @@
 # Testsuite output directories
 testout/
 
+# lcov html output from qa/coverage.sh
+/lcovout/
+
 # libgdmaps unit test junk
 /plugins/meta/libgdmaps/t/*.bin
 /plugins/meta/libgdmaps/t/Geo*.dat
@@ -40,6 +43,7 @@ Makefile
 *.la
 *.gcov
 *.trucov
+*.info
 *.gcda
 *.gcno
 *.tmp
