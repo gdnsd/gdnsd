@@ -20,6 +20,7 @@
 #include "ltarena.h"
 #include "gdnsd-compiler.h"
 
+#include <inttypes.h>
 #include <string.h>
 #include <sys/mman.h>
 
@@ -57,7 +58,7 @@
 //   each block, and then zero out the valid allocated area
 //   of each block as it's handed out.
 #ifndef NDEBUG
-#  define RED_SIZE (SIZEOF_UINTPTR_T * 2)
+#  define RED_SIZE (sizeof(uintptr_t) * 2)
 #else
 #  define RED_SIZE 0
 #endif
@@ -88,7 +89,7 @@ static void* make_pool(const unsigned bytes) {
 
     // get mem from mmap, assert pointer-aligned
     void* p = alloc_mmap(bytes);
-    dmn_assert(!((uintptr_t)p & (SIZEOF_UINTPTR_T - 1)));
+    dmn_assert(!((uintptr_t)p & (sizeof(uintptr_t) - 1)));
 
     // fill in deadbeef if using redzones
     if(RED_SIZE) {
@@ -190,7 +191,7 @@ void* lta_malloc(const unsigned size, const unsigned align_bytes) {
     // assert that if alignment is requested, it's for the pointer
     //   size exactly, since that's our only use case currently
     //   the pointer size, so that the redzones don't screw it up
-    dmn_assert(align_bytes == 1 || align_bytes == SIZEOF_UINTPTR_T);
+    dmn_assert(align_bytes == 1 || align_bytes == sizeof(uintptr_t));
 
     // Current pool number, allocation offset, and allocated size
     static unsigned pool = 0;
