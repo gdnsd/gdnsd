@@ -91,7 +91,7 @@ am__installdirs = "$(DESTDIR)$(pkglibdir)" "$(DESTDIR)$(man3dir)" \
 LTLIBRARIES = $(pkglib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
 libgdnsd_la_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
-	$(am__DEPENDENCIES_1)
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 am__objects_1 =
 am_libgdnsd_la_OBJECTS = libgdnsd_la-dname.lo libgdnsd_la-net.lo \
 	libgdnsd_la-log.lo libgdnsd_la-monio.lo libgdnsd_la-vscf.lo \
@@ -99,7 +99,7 @@ am_libgdnsd_la_OBJECTS = libgdnsd_la-dname.lo libgdnsd_la-net.lo \
 	libgdnsd_la-dmn_daemon.lo libgdnsd_la-dmn_log.lo \
 	libgdnsd_la-dmn_secure.lo libgdnsd_la-evwrap.lo \
 	$(am__objects_1) $(am__objects_1)
-nodist_libgdnsd_la_OBJECTS =
+nodist_libgdnsd_la_OBJECTS = $(am__objects_1)
 libgdnsd_la_OBJECTS = $(am_libgdnsd_la_OBJECTS) \
 	$(nodist_libgdnsd_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
@@ -198,6 +198,7 @@ LT_DLLOADERS = @LT_DLLOADERS@
 LT_DLPREOPEN = @LT_DLPREOPEN@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
+MATH_LIB = @MATH_LIB@
 MKDIR_P = @MKDIR_P@
 NETLIBS = @NETLIBS@
 NM = @NM@
@@ -285,17 +286,18 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 pkglib_LTLIBRARIES = libgdnsd.la
 AM_LIBTOOLFLAGS = --silent
+xHEADERS_BUILT = gdnsd-ev.h gdnsd-dmn.h
 xHEADERS_DIST_NOINST = gdnsd-plugapi-priv.h gdnsd-misc-priv.h gdnsd-net-priv.h
 xHEADERS_DIST = gdnsd-vscf.h gdnsd-dname.h gdnsd-log.h gdnsd-compiler.h gdnsd-monio.h gdnsd-satom.h gdnsd-net.h gdnsd-plugapi.h gdnsd-plugin.h gdnsd-misc.h
 libgdnsd_la_SOURCES = dname.c net.c log.c monio.c vscf.c misc.c plugapi.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c evwrap.c evwrap_ch.h $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
-nodist_libgdnsd_la_SOURCES = gdnsd-ev.h gdnsd-dmn.h
+nodist_libgdnsd_la_SOURCES = $(xHEADERS_BUILT)
 libgdnsd_la_CPPFLAGS = -I$(srcdir)/libev -DLIBDIR=\"$(libdir)\"
 libgdnsd_la_LDFLAGS = -shared -avoid-version
-libgdnsd_la_LIBADD = $(NETLIBS) $(EVLIBS) $(LIBADD_DLOPEN)
+libgdnsd_la_LIBADD = $(MATH_LIB) $(EVLIBS) $(NETLIBS) $(LIBADD_DLOPEN)
 libgdnsd_la_includedir = $(includedir)
 dist_libgdnsd_la_include_HEADERS = $(xHEADERS_DIST)
-nodist_libgdnsd_la_include_HEADERS = gdnsd-ev.h gdnsd-dmn.h
-BUILT_SOURCES = gdnsd-ev.h gdnsd-dmn.h
+nodist_libgdnsd_la_include_HEADERS = $(xHEADERS_BUILT)
+BUILT_SOURCES = $(xHEADERS_BUILT)
 CLEANFILES = $(builddir)/gdnsd-ev.h $(builddir)/gdnsd-dmn.h
 MAINTAINERCLEANFILES = $(srcdir)/vscf.c
 EXTRA_DIST = $(srcdir)/vscf.rl $(srcdir)/libev/* $(srcdir)/libdmn/*

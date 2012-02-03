@@ -50,6 +50,15 @@ EVLIBS=$LIBS
 LIBS=$XLIBS
 AC_SUBST([EVLIBS])
 
+dnl explicit check on math lib.  libev also does this, but
+dnl  might not in the future, and we need it directly
+XLIBS=$LIBS
+LIBS=""
+AC_CHECK_LIB(m,ceil)
+MATH_LIB=$LIBS
+LIBS=$XLIBS
+AC_SUBST([MATH_LIB])
+
 dnl posix_fadvise to readahead on zonefiles
 AC_CHECK_FUNCS([posix_fadvise])
 

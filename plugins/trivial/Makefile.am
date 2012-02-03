@@ -10,7 +10,6 @@ plugin_reflect_la_SOURCES = reflect.c
 plugin_static_la_SOURCES = static.c
 plugin_simplefo_la_SOURCES = simplefo.c
 plugin_multifo_la_SOURCES = multifo.c
-plugin_multifo_la_LIBADD = -lm
 plugin_http_status_la_SOURCES = http_status.c
 plugin_tcp_connect_la_SOURCES = tcp_connect.c
 

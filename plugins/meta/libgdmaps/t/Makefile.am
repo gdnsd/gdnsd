@@ -5,7 +5,7 @@ AM_LIBTOOLFLAGS = --silent
 noinst_LTLIBRARIES = libgdmaps_test.la
 libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h
 
-LDADD = libgdmaps_test.la ../libgdmaps.la ../../../../gdnsd/libgdnsd/libgdnsd.la -lm
+LDADD = libgdmaps_test.la ../libgdmaps.la ../../../../gdnsd/libgdnsd/libgdnsd.la
 
 bin_PROGRAMS = gdnsd_geoip_test
 gdnsd_geoip_test_SOURCES = gdnsd_geoip_test.c

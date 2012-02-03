@@ -86,7 +86,7 @@ am__base_list = \
 am__installdirs = "$(DESTDIR)$(pkglibdir)" "$(DESTDIR)$(man8dir)" \
 	"$(DESTDIR)$(docdir)"
 LTLIBRARIES = $(pkglib_LTLIBRARIES)
-plugin_weighted_la_DEPENDENCIES =
+plugin_weighted_la_LIBADD =
 am_plugin_weighted_la_OBJECTS = weighted.lo
 plugin_weighted_la_OBJECTS = $(am_plugin_weighted_la_OBJECTS)
 AM_V_lt = $(am__v_lt_$(V))
@@ -184,6 +184,7 @@ LT_DLLOADERS = @LT_DLLOADERS@
 LT_DLPREOPEN = @LT_DLPREOPEN@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
+MATH_LIB = @MATH_LIB@
 MKDIR_P = @MKDIR_P@
 NETLIBS = @NETLIBS@
 NM = @NM@
@@ -274,7 +275,6 @@ AM_LIBTOOLFLAGS = --silent
 pkglib_LTLIBRARIES = plugin_weighted.la
 plugin_weighted_la_SOURCES = weighted.c
 plugin_weighted_la_LDFLAGS = -avoid-version -module
-plugin_weighted_la_LIBADD = -lm
 PODS_8 = gdnsd-plugin-weighted.pod
 
 # Gather up the .pod files
