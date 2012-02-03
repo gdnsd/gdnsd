@@ -517,9 +517,10 @@ that defines no callbacks would be useless.  Similarly, if you don't implement a
 least one of C<plugin_foo_resolve_dynaddr> or C<plugin_foo_resolve_dyncname> your
 plugin will be fairly useless as well.
 
-=item Version 6
+=item Version 9
 
-This version existed in a long-standing dev series, but never a release build.
+Note: Versions 6-8 existed in the long-running 1.5.x dev series, but never a release build,
+so the V9 info here summarizes all changes from V5 -> V9.
 
 C<plugin_foo_resolve_dyna> and C<plugin_foo_resolve_dyncname> had their C<const anysin_t* client>
 arguments replaced with C<const client_info_t* cinfo>.  If you don't wish to deal
@@ -533,8 +534,6 @@ it *needs* to set C<result-E<gt>edns_scope_mask = cinfo-E<gt>edns_client_mask;> 
 correct behavior.  Plugins whose responses are static with regard to C<cinfo> should not
 do so, as the result scope mask defaults to the appropriate value of C<0>.
 
-=item Version 7
-
 Previously an "extern bool dmn_debug" was available to query daemon debug status, this has
 been replaced with a function call C<bool dmn_get_debug(void);>.  This means any plugin with
 C<log_debug()> statements loses binary compatibility and needs to be rebuilt, but doesn't
@@ -546,8 +545,6 @@ Added four new plugin callbacks to support pluggable monitoring:
     void plugin_foo_add_monitor(const char* svc_name, monio_smgr_t* smgr)
     void plugin_foo_init_monitors(struct ev_loop* mon_loop)
     void plugin_foo_start_monitors(struct ev_loop* mon_loop)
-
-=item Version 8
 
 The internal structure of the data type C<anysin_t> changed.  The old typedef was:
 
@@ -588,8 +585,6 @@ the common process of converting a numeric string address + optional numeric
 string port into an anysin_t using C<getaddrinfo()>, and sets the len field
 correctly.
 
-=item Version 9
-
 C<plugin_foo_resolve_dynaddr()> now needs a return value of type C<bool>,
 was previously C<void>.  Return value should indicate whether other code
 can consider this resource effectively-dead for failover purposes.  You
@@ -600,14 +595,9 @@ return all if everything's down, as if nothing in the resource were down).
 
 =head1 SEE ALSO
 
-The trivial plugins C<null>, C<reflect>, C<static>, C<simplefo>, and C<multifo>
-in the F<plugins/trivial> subdirectory of the core gdnsd source code.
-
-The C<georeg> plugin, available in source form separately at the
-gdnsd download site.
-
-The C<skel> plugin, a baseline autoconf project setup for a new
-plugin, available in the gdnsd source repository.
+The source for the included addr/cname-resolution plugins C<null>, C<reflect>,
+C<static>, C<simplefo>, C<multifo>, C<weighted>, C<metafo>, and C<geoip>.
+The source for the included monitoring plugins C<http_status> and C<tcp_connect>
 
 L<gdnsd(8)>, L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>
 

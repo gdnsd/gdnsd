@@ -12,7 +12,7 @@ the SMP case).
 For Linux: libcap 2.x+ is recommended for support of late listener binding
  on privileged ports.
 
-gdnsd has been tested on the following CPU/OS/Compiler setups:
+gdnsd 1.2.x was tested on the following CPU/OS/Compiler setups:
 
       x86_64:
         Linux - Fedora 12: gcc 4.4.3
@@ -80,10 +80,17 @@ Interesting non-standard configure options:
   Builds a debugging build (-g) with a lot of extra gcc warnings
    flags, a large suite of assert()ions, and extra
    informative debug information via STDERR or syslog().
+  Not generally for production use...
 
 --with-testport=N
   The test suite needs to be able to bind to 3 consecutive ports
    on 127.0.0.1, starting with port N.  The default is 12345.  If
    this conflicts with some existing service on your machine, change
    it here.
+
+--without-libcap
+  Explicitly disable libcap support on Linux
+
+--enable-lowmem
+  Reduce memory consumption (for embedded systems, trades some perf)
 

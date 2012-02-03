@@ -303,8 +303,8 @@ EXTRA_DIST = docs.am
 # Some junk autotools doesn't seem to clean on its own
 DISTCLEANFILES = config.h.in~ configure.ac~
 
-# kill distfiles on maintainer-clean
-MAINTAINERCLEANFILES = gdnsd-*.tar.*
+# kill distfiles and coverage junk on maintainer-clean
+MAINTAINERCLEANFILES = *.info gdnsd-*.tar.*
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
