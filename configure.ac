@@ -2,14 +2,13 @@ AC_INIT([gdnsd],[1.5.13],[blblack@gmail.com],[gdnsd],[http://gdnsd.googlecode.co
 AC_PREREQ([2.68])
 AC_CONFIG_AUX_DIR([acaux])
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([1.11.1 dist-xz foreign tar-ustar -Wall])
+AM_INIT_AUTOMAKE([1.11.3 dist-xz foreign tar-ustar -Wall])
 AM_SILENT_RULES([yes])
 
 dnl These lines pretty much *have* to be in this order, and before
 dnl  anything else that might invoke CC/CPP.  This ensures that
 dnl  we get a C99 CC, a C99 CPP, and a set of #defines to turn
 dnl  on "extended" interfaces in various OS's.
-AC_PROG_CC
 AC_PROG_CC_C99
 if test "x$ac_cv_prog_cc_c99" = xno; then
     AC_MSG_ERROR([Your compiler lacks sufficient C99 support])
@@ -21,8 +20,6 @@ AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
 LIBS="$PTHREAD_LIBS $LIBS"
 CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CC="$PTHREAD_CC"
-
-AC_CHECK_SIZEOF([uintptr_t])
 
 dnl need to know endian-ness
 AC_C_BIGENDIAN
@@ -197,7 +194,7 @@ AC_DEFINE_UNQUOTED([LOWMEM], $LOWMEM, [Waste less memory for embedded systems])
 AM_CONDITIONAL([LOWMEM], [test x$LOWMEM = x1])
 
 dnl Check for perl 5.8.1+ (needed for doc regeneration, and for the test suite)
-dnl and then for Net::DNS / LWP for the test suite
+dnl and then for Test::More, Net::DNS, LWP, and IPv6 stuff for the test suite
 AC_REQUIRE_AUX_FILE([noperl])
 HAVE_TESTSUITE_MODULES=0
 AC_PATH_PROG([PERL],[perl])
@@ -206,7 +203,7 @@ AX_PROG_PERL_VERSION([5.8.1],[
     AC_PATH_PROG([POD2MAN],[pod2man])
     AC_PATH_PROG([POD2TEXT],[pod2text])
     AC_PATH_PROG([POD2HTML],[pod2html])
-    AX_PERL_MODULE_VERSION([Test::More 0 Net::DNS 0.63 LWP 5.805 Socket6 0 IO::Socket::INET6 0],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), Net::DNS 0.63+, LWP (aka libwww-perl) 5.805+, Socket6, and IO::Socket::INET6]]))
+    AX_PROG_PERL_MODULES([Test::More Net::DNS=0.63 LWP=5.805 Socket6 IO::Socket::INET6],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), Net::DNS 0.63+, LWP (aka libwww-perl) 5.805+, Socket6, and IO::Socket::INET6]]))
 ],[
     AC_MSG_WARN([Cannot "make check" or edit the documentation source without perl 5.8.1+])
     PERL=$am_aux_dir/noperl
