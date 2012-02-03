@@ -220,6 +220,9 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
     if(pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
+    if(!strcmp(name, "georeg"))
+        log_warn("plugin_georeg is DEPRECATED for 1.6.x, please consider migrating to the included plugin_geoip");
+
     const plugin_t* plugin = gdnsd_plugin_load(name);
     if(plugin->load_config) {
         monio_list_t* mlist = plugin->load_config(pconf);

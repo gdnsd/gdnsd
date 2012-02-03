@@ -1,4 +1,5 @@
 
+   Added core daemon deprecation warning when plugin_geoip is loaded
    weighted, multifo, simplefo plugins:
      Added "ipv4" or "ipv6" indicator to the descriptive text
        displayed in monitored status outputs, to differentiate.
