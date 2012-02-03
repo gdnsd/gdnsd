@@ -33,7 +33,7 @@ Example plugin config:
         pubhost02 = [ 192.0.2.4, 11 ]
       }
       cdnwww => {
-        service_type = web_check
+        service_types = web_check
         datacenter1 => {
           d1-lb1 = [ 127.0.0.1, 2 ]
           d1-lb2 = [ 127.0.0.2, 2 ]
