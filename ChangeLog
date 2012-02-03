@@ -1,4 +1,8 @@
 
+   weighted, multifo, simplefo plugins:
+     Added "ipv4" or "ipv6" indicator to the descriptive text
+       displayed in monitored status outputs, to differentiate.
+
 1.5.13 - 2012-01-30
     The last-minute geoip+weighted work evolved into a lot more
       than I expected, hopefully for the better...

@@ -125,15 +125,18 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
         int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &as->addrs[which]);
         if(addr_err)
             log_fatal("plugin_simplefo: resource %s: parsing '%s' as an IP address failed: %s", resname, addr_txt, gai_strerror(addr_err));
-        if(as_af == A_IPv6 && as->addrs[which].sa.sa_family != AF_INET6)
+
+        const bool ipv6 = as->addrs[which].sa.sa_family == AF_INET6;
+        if(as_af == A_IPv6 && !ipv6)
             log_fatal("plugin_simplefo: resource %s (%s): '%s' is not an IPv6 address", resname, stanza, addr_txt);
-        else if(as_af == A_IPv4 && as->addrs[which].sa.sa_family != AF_INET)
+        else if(as_af == A_IPv4 && ipv6)
             log_fatal("plugin_simplefo: resource %s (%s): '%s' is not an IPv4 address", resname, stanza, addr_txt);
 
         as->states[which] = malloc(sizeof(monio_state_t) * num_svcs);
         for(unsigned j = 0; j < num_svcs; j++) {
-            char* desc = malloc(strlen(resname) + strlen(which_str_mon[which]) + strlen(svc_names[j]) + 1);
+            char* desc = malloc(strlen(resname) + 6 + strlen(which_str_mon[which]) + strlen(svc_names[j]) + 1);
             strcpy(desc, resname);
+            strcat(desc, ipv6 ? "/ipv6/" : "/ipv4/");
             strcat(desc, which_str_mon[which]);
             strcat(desc, svc_names[j]);
             monio_add(svc_names[j], desc, addr_txt, &as->states[which][j]);

@@ -140,9 +140,9 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
     as->states = malloc(sizeof(monio_state_t) * aset->num_svcs);
 
     for(unsigned i = 0; i < aset->num_svcs; i++) {
-        char *complete_desc = malloc(strlen(resname) + strlen(addr_desc) + strlen(svc_names[i]) + 3);
+        char *complete_desc = malloc(strlen(resname) + 6 + strlen(addr_desc) + 1 + strlen(svc_names[i]) + 1);
         strcpy(complete_desc, resname);
-        strcat(complete_desc, "/");
+        strcat(complete_desc, ipv6 ? "/ipv6/" : "/ipv4/");
         strcat(complete_desc, addr_desc);
         strcat(complete_desc, "/");
         strcat(complete_desc, svc_names[i]);

@@ -164,8 +164,8 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
 
     for(unsigned i = 0; i < addrset->num_svcs; i++) {
         const unsigned svc_name_len = strlen(addrset->svc_names[i]);
-        char *complete_desc = malloc(res_name_len + item_name_len + svc_name_len + 3);
-        sprintf(complete_desc, "%s/%s/%s", res_name, item_name, addrset->svc_names[i]);
+        char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + svc_name_len + 1);
+        sprintf(complete_desc, "%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, addrset->svc_names[i]);
         monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
         monio_info_t* m = &monio_list.info[monio_list.count++];
         m->svctype = addrset->svc_names[i];
@@ -225,8 +225,8 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
 
     for(unsigned i = 0; i < addrset->num_svcs; i++) {
         const unsigned svc_name_len = strlen(addrset->svc_names[i]);
-        char *complete_desc = malloc(res_name_len + item_name_len + lb_name_len + svc_name_len + 4);
-        sprintf(complete_desc, "%s/%s/%s/%s", res_name, item_name, lb_name, addrset->svc_names[i]);
+        char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + lb_name_len + 1 + svc_name_len + 1);
+        sprintf(complete_desc, "%s/%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, lb_name, addrset->svc_names[i]);
         monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
         monio_info_t* m = &monio_list.info[monio_list.count++];
         m->svctype = addrset->svc_names[i];
