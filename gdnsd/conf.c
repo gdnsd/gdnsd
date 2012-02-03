@@ -240,8 +240,9 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
     }
 }
 
-F_NONNULL
+F_NONNULLX(1,3)
 static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const vscf_data_t* pconf, void* data V_UNUSED) {
+    dmn_assert(name); dmn_assert(pconf);
     plugin_load_and_configure(name, pconf);
     return true;
 }

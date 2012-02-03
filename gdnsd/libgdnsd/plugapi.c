@@ -46,6 +46,8 @@ static plugin_t** plugins = NULL;
 static const char** psearch = NULL;
 
 void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array) {
+    dmn_assert(!psearch); // only called once
+
     // Create a plugin search path array
     int psearch_count = psearch_array
         ? vscf_array_get_len(psearch_array)
@@ -122,7 +124,7 @@ typedef void(*gen_func_ptr)(void);
 
 F_NONNULL
 static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sym_suffix) {
-    dmn_assert(handle); dmn_assert(sym_suffix);
+    dmn_assert(handle); dmn_assert(pname); dmn_assert(sym_suffix);
 
     // construct the full symbol name plugin_PNAME_SYMSUFFIX\0
     const unsigned pname_len = strlen(pname);

@@ -23,7 +23,9 @@
 #include "gdnsd-plugapi.h"
 #include "gdnsd-vscf.h"
 
-// MUST call this before loading plugins below, array can be NULL for just the default
+// MUST call this before loading plugins below,
+//   array can be NULL for just the default
+//   MUST only call this once per program
 void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array);
 
 F_NONNULL

@@ -29,7 +29,7 @@
 //     zonefile data is.
 //   The arena is allocated on-demand in terms of fixed number of pools
 //   The size of each pool allocated is at least double the previous
-//     size, up to a certain limit.  That limit defines the absolute
+//     size, up to a certain limit.  That limit also defines the absolute
 //     maximum waste.  Waste is also limited to roughly the total allocated.
 //   The arena has a minimum overall allocation limit.  That is to say,
 //     depending on usage patterns the maximum limit varies, but we know
@@ -190,7 +190,6 @@ void* lta_malloc(const unsigned size, const unsigned align_bytes) {
 
     // assert that if alignment is requested, it's for the pointer
     //   size exactly, since that's our only use case currently
-    //   the pointer size, so that the redzones don't screw it up
     dmn_assert(align_bytes == 1 || align_bytes == sizeof(uintptr_t));
 
     // Current pool number, allocation offset, and allocated size
