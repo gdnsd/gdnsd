@@ -249,6 +249,8 @@ AC_ARG_ENABLE([developer],
     [if test "x$enable_developer" = xyes; then developer=yes; fi])
 
 dnl If developer, set -g and a ton of warnings.  Otherwise, set -DNDEBUG
+dnl Other -Wflags that are interesting to check sometimes, w/ latest gcc:
+dnl    -Wfloat-equal -Wpointer-arith -Wwrite-strings -Wlogical-op -Waddress
 if test "x$developer" != xno; then
   if test x"$ac_cv_prog_cc_g" = xyes; then
     CFLAGS="${CFLAGS} -g -Wall -W -Wshadow"
