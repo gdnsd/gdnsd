@@ -33,7 +33,7 @@ Example plugin config:
         pubhost02 = [ 192.0.2.4, 11 ]
       }
       cdnwww => {
-        service_type = web_check
+        service_types = web_check
         datacenter1 => {
           d1-lb1 = [ 127.0.0.1, 2 ]
           d1-lb2 = [ 127.0.0.2, 2 ]
@@ -93,8 +93,8 @@ of these keys are inherited and override-able at the per-resource and
 per-address-family levels.
 
 The top-level default C<service_types> is C<default>, which is a built-in
-service_type provided by gdnsd.  For more information about
-configuring non-default service_type's, see the main L<gdnsd.config(5)>
+service type provided by gdnsd.  For more information about
+configuring non-default service type's, see the main L<gdnsd.config(5)>
 documentation.  The default polls the C</> URL at each IP address
 on port 80 for a "200 OK" response every 10 seconds, and has
 some anti-flap parameters that stabilize the state against isolated,

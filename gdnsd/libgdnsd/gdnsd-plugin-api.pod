@@ -138,7 +138,7 @@ parameters, and some generic parameters related to timing and anti-flap. e.g.:
         }
     }
 
-A C<service_type> is meant to be re-used to monitor the same service at
+A service type is meant to be re-used to monitor the same service at
 several different addresses.
 
 One of the service type parameters is C<plugin>, naming a custom monitoring

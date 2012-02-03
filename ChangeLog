@@ -17,7 +17,7 @@
       than I expected, hopefully for the better...
     This release is considered fully complete for 1.6.0 features,
       just needs a little testing and verification first.
-    New special built-in service_type names: 'up', 'danger'
+    New special built-in service type names: 'up', 'danger'
       'down', and 'none'.  Each suppresses actual monitoring
       and forces a monitored resource addresses's state
       to a single value permanently.  'none' is simply an
@@ -186,7 +186,7 @@
 
 1.5.9 - 2011-12-20
     Service_type monitoring is now pluggable for additional/custom
-      protocol support.  Existing service_type defs will continue
+      protocol support.  Existing service type defs will continue
       to work exactly as they did before with no changes.  Existing
       plugin API was extended to support this; all plugins can
       optionally do either or both roles (answer requests using
@@ -196,7 +196,7 @@
       if erroneously used as an auto-loaded monitoring plugin.
     New plugin "http_status" contains the previous functionality,
       and is the default if no monitoring plugin is specified.
-    plugin_http_status: new service_type parameter "ok_codes"
+    plugin_http_status: new service type parameter "ok_codes"
       allows an array of zero or more acceptable HTTP status codes.
       default is [ 200 ], which was the existing behavior.
     plugin_multifo: added service type to descriptive monitoring strings
@@ -366,7 +366,7 @@ trunk (released there as part of 1.4.5):
 
 1.4.1 - 2011-01-28
     Fixed a small buffer size bug for the html stats output buffer.
-    Monitored resources are now de-duplicated based on service_type
+    Monitored resources are now de-duplicated based on service type
       and address.  This was always intended, but the lack of it
       slipped through the cracks unnoticed until recently.
     Added new trivial plugin "multifo" for multi-address all-active

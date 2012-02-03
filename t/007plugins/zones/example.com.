@@ -32,8 +32,8 @@ mfo1	DYNA	multifo!mfo1
 mfo2	DYNA	multifo!mfo2
 mfo3	DYNA	multifo!mfo3
 
-wdep-addrs	DYNA weighted!wdep-addrs
-wdep-cnames	DYNC weighted!wdep-cnames
+wv4	DYNA weighted!wv4
+wcnames	DYNC weighted!wcnames
 weighta		DYNA weighted!weighta
 weighta6	DYNA weighted!weighta6
 weightam	DYNA weighted!weightam

@@ -97,7 +97,6 @@ static const vscf_data_t* addrs_hash_from_array(const vscf_data_t* ary, const ch
     }
 
     vscf_hash_inherit(parent, newhash, "up_thresh", false);
-    vscf_hash_inherit(parent, newhash, "service_type", false);
     vscf_hash_inherit(parent, newhash, "service_types", false);
     return newhash;
 }
@@ -165,14 +164,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     unsigned num_addrs = vscf_hash_get_len(cfg);
 
     const char** svc_names;
-    const vscf_data_t* svctype_data = vscf_hash_get_data_byconstkey(cfg, "service_type", true);
     const vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
-    if(svctype_data) {
-        if(svctypes_data)
-            log_fatal("plugin_multifo: resource %s (%s): 'service_type' is a deprecated alias for 'service_types', and you have illegally defined both", resname, stanza);
-        log_warn("plugin_multifo: resource %s (%s): 'service_type' is deprecated, please usse 'service_types' instead", resname, stanza);
-        svctypes_data = svctype_data;
-    }
     if(svctypes_data) {
         num_addrs--;
         aset->num_svcs = vscf_array_get_len(svctypes_data);
@@ -237,7 +229,6 @@ static void config_auto(res_t* res, const char* stanza, const vscf_data_t* auto_
 
     // mark parameters
     vscf_hash_get_data_byconstkey(auto_cfg, "up_thresh", true);
-    vscf_hash_get_data_byconstkey(auto_cfg, "service_type", true);
     vscf_hash_get_data_byconstkey(auto_cfg, "service_types", true);
 
     // clone down to just address-label keys
@@ -280,17 +271,14 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     res_t* res = &resources[rnum];
     res->name = strdup(resname);
 
-    const vscf_data_t* addrs_cfg = NULL;
     const vscf_data_t* addrs_v4_cfg = NULL;
     const vscf_data_t* addrs_v6_cfg = NULL;
 
     if(vscf_is_hash(opts)) {
         // inherit params downhill if applicable
         vscf_hash_bequeath_all(opts, "up_thresh", true, false);
-        vscf_hash_bequeath_all(opts, "service_type", true, false);
         vscf_hash_bequeath_all(opts, "service_types", true, false);
 
-        addrs_cfg = vscf_hash_get_data_byconstkey(opts, "addrs", true);
         addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
         addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
 
@@ -303,16 +291,9 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
             res->aset_v6 = calloc(1, sizeof(addrset_t));
             config_addrs(resname, "addrs_v6", res->aset_v6, true, addrs_v6_cfg);
         }
-
-        if(addrs_cfg) {
-            if(addrs_v4_cfg || addrs_v6_cfg)
-                log_fatal("plugin_multifo: resource '%s': deprecated 'addrs' stanza not compatible with new 'addrs_v4'/'addrs_v6' stanzas", resname);
-            log_warn("plugin_multifo: resource '%s': 'addrs' stanza deprecated, use 'addrs_v4' and/or 'addrs_v6' or move single-family data up a level", resname);
-            config_auto(res, "addrs", addrs_cfg);
-        }
     }
 
-    if(!addrs_cfg && !addrs_v4_cfg && !addrs_v6_cfg)
+    if(!addrs_v4_cfg && !addrs_v6_cfg)
         config_auto(res, "direct", opts);
     else if(vscf_is_hash(opts))
         vscf_hash_iterate(opts, true, bad_res_opt, (void*)resname);
@@ -336,8 +317,6 @@ monio_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
 
     // inherit params downhill
     if(vscf_hash_bequeath_all(config, "up_thresh", true, false))
-        num_resources--;
-    if(vscf_hash_bequeath_all(config, "service_type", true, false))
         num_resources--;
     if(vscf_hash_bequeath_all(config, "service_types", true, false))
         num_resources--;

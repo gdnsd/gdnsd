@@ -515,17 +515,17 @@ you are not using such a plugin, you can safely ignore this section
 and omit it from your configuration.
 
 The service_types hash contains generic definitions for how
-to monitor the given types of service.  Each service_type uses
+to monitor the given types of service.  Each service type uses
 a protocol-specific plugin, and the default is the included
 plugin C<http_status>, which checks HTTP status code responses.
 There are several generic parameters related to timing and anti-flap,
 as well as plugin-specific parameters that vary per plugin.
 
-A service_type does not, however, specify a name or address for
+A service type does not, however, specify a name or address for
 a specific instance of a service.  Those would occur on a per-address
 basis in a resolving plugin's configuration down in the C<plugins>
 stanza, and the plugin's configuration would then reference a named
-service_type to be used when monitoring said address.
+service type to be used when monitoring said address.
 
 The other included plugin is C<tcp_connect>, which just checks
 TCP C<connect()> success but does no protocol-specific i/o checks.
@@ -609,7 +609,7 @@ The C<tcp_connect> plugin has just one plugin-specific parameter:
 =item B<port>
 
 Integer, required.  This is the port number to contact
-on the remote host to check this service_type.  It has
+on the remote host to check this service type.  It has
 no default and must be specified.
 
 =back
@@ -622,12 +622,12 @@ default monitoring plugin C<http_status>:
 =item B<port>
 
 Integer, default 80.  This is the port number to contact
-on the remote host to check this service_type.
+on the remote host to check this service type.
 
 =item B<url_path>
 
 String, default C</>.  This is the URL that should be
-used when checking this service_type.
+used when checking this service type.
 
 =item B<vhost>
 

@@ -37,23 +37,23 @@ _GDT->test_dns(
 );
 
 _GDT->test_dns(
-    qname => 'wdep-addrs.example.com', qtype => 'A',
+    qname => 'wv4.example.com', qtype => 'A',
     rep => 20,
     limit_v4 => 1,
     answer => [
-        'wdep-addrs.example.com 86400 A 192.0.2.171',
-        'wdep-addrs.example.com 86400 A 192.0.2.172',
-        'wdep-addrs.example.com 86400 A 192.0.2.173',
+        'wv4.example.com 86400 A 192.0.2.171',
+        'wv4.example.com 86400 A 192.0.2.172',
+        'wv4.example.com 86400 A 192.0.2.173',
     ],
 );
 
 _GDT->test_dns(
-    qname => 'wdep-cnames.example.com', qtype => 'A',
+    qname => 'wcnames.example.com', qtype => 'A',
     rep => 20,
     # CNAME auto-limits to 1 RR
     answer => [
-        'wdep-cnames.example.com 86400 CNAME foo.example.net',
-        'wdep-cnames.example.com 86400 CNAME fox.example.net',
+        'wcnames.example.com 86400 CNAME foo.example.net',
+        'wcnames.example.com 86400 CNAME fox.example.net',
     ],
 );
 

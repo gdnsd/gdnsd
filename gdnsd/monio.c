@@ -73,7 +73,7 @@ void monio_start(struct ev_loop* mon_loop) {
 }
 
 // We only have to check the address, because the port
-//  is determined by service_type.
+//  is determined by service type.
 static bool addr_eq(const anysin_t* a, const anysin_t* b) {
     if(a->sa.sa_family == b->sa.sa_family) {
         if(a->sa.sa_family == AF_INET) {
@@ -92,7 +92,7 @@ static bool addr_eq(const anysin_t* a, const anysin_t* b) {
 static unsigned num_svc_types = 0;
 static service_type_t* service_types;
 
-// Called for plugins once per monitored service_type+IP combination
+// Called for plugins once per monitored service type+IP combination
 //  immediately after their _load_config() phase (very important)
 //  to request monitoring and initialize various data/state.
 void monio_add_addr(const char* svctype_name, const char* desc, const char* addr, monio_state_t* monio_state_ptr) {
@@ -126,7 +126,7 @@ void monio_add_addr(const char* svctype_name, const char* desc, const char* addr
             }
         }
         if(!this_smgr->svc_type)
-            log_fatal("Invalid service_type '%s' in monitoring request for '%s'", svctype_name, desc);
+            log_fatal("Invalid service type '%s' in monitoring request for '%s'", svctype_name, desc);
     }
 
     const int addr_err = gdnsd_anysin_getaddrinfo(addr, NULL, &this_smgr->addr);
@@ -242,7 +242,7 @@ void monio_add_servicetypes(const vscf_data_t* svctypes_cfg) {
            || !strcmp(this_svc->name, "danger")
            || !strcmp(this_svc->name, "down")
            || !strcmp(this_svc->name, "default"))
-            log_fatal("Explicit service_type name '%s' not allowed", this_svc->name);
+            log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
         const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
         if(!vscf_is_hash(svctype_cfg))
             log_fatal("Definition of service type '%s' must be a hash", this_svc->name);

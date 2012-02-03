@@ -348,17 +348,10 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
 
     /////// Process the parameters...
 
-    // service_type[s]
-    const vscf_data_t* res_stype_old = vscf_hash_get_data_byconstkey(cfg, "service_type", true);
+    // service_types
     const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
-    if (res_stype_old) {
-        if (res_stypes)
-            log_fatal("plugin_weighted: resource '%s' (%s): 'service_type' is a deprecated alias for 'service_types', and you have defined both", res_name, stanza);
-        log_warn("plugin_weighted: resource '%s' (%s): 'service_type' is deprecated, use 'service_types'", res_name, stanza);
-        res_stypes = res_stype_old;
-    }
     if (res_stypes) {
-        addrset->count--; // minus one for service_type[s] entry
+        addrset->count--; // minus one for service_types entry
         addrset->num_svcs = vscf_array_get_len(res_stypes);
         if(!addrset->num_svcs)
             log_fatal("plugin_weighted: resource '%s' (%s): service_types cannot be an empty array", res_name, stanza);
@@ -511,7 +504,6 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
     dmn_assert(res); dmn_assert(res_cfg); dmn_assert(vscf_is_hash(res_cfg));
 
     // mark all possible parameter-keys
-    vscf_hash_get_data_byconstkey(res_cfg, "service_type", true);
     vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
     vscf_hash_get_data_byconstkey(res_cfg, "multi", true);
     vscf_hash_get_data_byconstkey(res_cfg, "up_thresh", true);
@@ -597,24 +589,20 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
      * OR: auto-detect any of the possibilities at the top level as the only subset
      */
 
-    // grab explicit sub-stanzas
+    // Check for bad old config, so that we error out on it.  If we don't, old "addrs"
+    //   config actually looks like a legitimate grouped configuration, which is silently bad.
     const vscf_data_t* addrs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs", true);
+    if(addrs_cfg)
+        log_fatal("plugin_weighted: resource '%s': key 'addrs' is illegal, choose another name for this item", res_name);
+
+    // grab explicit sub-stanzas
     const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v4", true);
     const vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v6", true);
     const vscf_data_t* cnames_cfg = vscf_hash_get_data_byconstkey(res_cfg, "cnames", true);
 
-    if(addrs_cfg || addrs_v4_cfg) {
-        const char* stanza = "addrs";
-        const char* stanza_v4 = "addrs_v4";
-        if(addrs_cfg) {
-             if(addrs_v4_cfg)
-                 log_fatal("plugin_weighted: resource '%s': 'addrs' is a deprecated alias for 'addrs_v4', but you have defined both", res_name);
-             log_warn("plugin_weighted: resource '%s': 'addrs' is a deprecated alias for 'addrs_v4'", res_name);
-             addrs_v4_cfg = addrs_cfg;
-             stanza_v4 = stanza;
-        }
+    if(addrs_v4_cfg) {
         res->addrs_v4 = calloc(1, sizeof(addrset_t));
-        config_addrset(res_name, stanza_v4, false, res->addrs_v4, addrs_v4_cfg);
+        config_addrset(res_name, "addrs_v4", false, res->addrs_v4, addrs_v4_cfg);
     }
 
     if(addrs_v6_cfg) {
@@ -630,7 +618,6 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
         //   marked so that we don't fail the mixed explicit+direct check at the bottom
         //   of this function.
         if(!addrs_v4_cfg && !addrs_v6_cfg) {
-            vscf_hash_get_data_byconstkey(res_cfg, "service_type", true);
             vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
             vscf_hash_get_data_byconstkey(res_cfg, "multi", true);
             vscf_hash_get_data_byconstkey(res_cfg, "up_thresh", true);

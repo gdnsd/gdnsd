@@ -89,14 +89,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
 
     unsigned num_svcs;
     const char** svc_names;
-    const vscf_data_t* svctype_data = vscf_hash_get_data_byconstkey(cfg, "service_type", true);
     const vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
-    if(svctype_data) {
-        if(svctypes_data)
-            log_fatal("plugin_simplefo: resource %s (%s): 'service_type' is a deprecated alias for 'service_types', and you have defined both...", resname, stanza);
-        svctypes_data = svctype_data;
-        log_warn("plugin_simplefo: resource %s (%s): 'service_type' is deprecated, use 'service_types' instead", resname, stanza);
-    }
     if(svctypes_data) {
         as->num_svcs = num_svcs = vscf_array_get_len(svctypes_data);
         if(!num_svcs)
@@ -165,7 +158,6 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     if(vscf_get_type(opts) != VSCF_HASH_T)
         log_fatal("plugin_simplefo: resource %s: value must be a hash", resname);
 
-    vscf_hash_bequeath_all(opts, "service_type", true, false);
     vscf_hash_bequeath_all(opts, "service_types", true, false);
 
     const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
@@ -216,18 +208,6 @@ monio_list_t* plugin_simplefo_load_config(const vscf_data_t* config) {
     // send service_types to either "resources" or the direct resources
     if(vscf_hash_bequeath_all(config, "service_types", true, false))
         num_resources--; // don't count parameter keys
-
-    const vscf_data_t* res_data = vscf_hash_get_data_byconstkey(config, "resources", true);
-    if(res_data) {
-        if(!vscf_is_hash(res_data))
-            log_fatal("plugin_simplefo: deprecated stanza 'resources' must be a hash, if used");
-        log_warn("plugin_simplefo: 'resources' is deprecated.  Simply move its contents up a level to fix");
-        // re-bequeath service_types into resources
-        vscf_hash_bequeath_all(res_data, "service_types", true, false);
-        // set config to use below and reset count correctly
-        config = res_data;
-        num_resources = vscf_hash_get_len(config);
-    }
 
     resources = calloc(num_resources, sizeof(res_t));
     unsigned residx = 0;
