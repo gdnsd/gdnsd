@@ -85,7 +85,7 @@ static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, const vscf_data
 
 F_NONNULL
 static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname, const char* stanza, const vscf_data_t* cfg) {
-    dmn_assert(as); dmn_assert(resname); dmn_assert(stanza); dmn_assert(cfg);
+    dmn_assert(as); dmn_assert(resname); dmn_assert(stanza); dmn_assert(cfg); dmn_assert(vscf_is_hash(cfg));
 
     unsigned num_svcs;
     const char** svc_names;
@@ -119,7 +119,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
     for(unsigned i = 0; i < 2; i++) {
         res_which_t which = both[i];
         const vscf_data_t* addrcfg = vscf_hash_get_data_bystringkey(cfg, which_str[which], true);
-        if(!cfg || VSCF_SIMPLE_T != vscf_get_type(addrcfg))
+        if(!addrcfg || VSCF_SIMPLE_T != vscf_get_type(addrcfg))
             log_fatal("plugin_simplefo: resource %s (%s): '%s' must be defined as an IP address string", resname, stanza, which_str[which]);
         const char* addr_txt = vscf_simple_get_data(addrcfg);
         int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &as->addrs[which]);
