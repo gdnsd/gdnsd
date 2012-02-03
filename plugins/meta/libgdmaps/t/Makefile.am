@@ -45,11 +45,11 @@ TESTLIST = \
 
 check_PROGRAMS = $(TESTLIST:=.bin)
 
-TESTS_ENVIRONMENT = BDIR="$(builddir)" SDIR="$(srcdir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)"
+TESTS_ENVIRONMENT = ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)"
 TESTS = trunner.sh
 EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg)
 
 check-download: tdownload.sh
-	@ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" $(TESTS_ENVIRONMENT) $(srcdir)/tdownload.sh
+	@GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" $(TESTS_ENVIRONMENT) $(srcdir)/tdownload.sh
 
 

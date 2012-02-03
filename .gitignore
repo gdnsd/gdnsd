@@ -22,8 +22,8 @@
 /gdnsd/libgdnsd/gdnsd-dmn.h
 /gdnsd/libgdnsd/gdnsd-ev.h
 
-# The core testsuite output directory
-/t/testout/
+# Testsuite output directories
+testout/
 
 # libgdmaps unit test junk
 /plugins/meta/libgdmaps/t/*.bin
