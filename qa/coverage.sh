@@ -2,6 +2,7 @@
 
 # A script that automates coverage testing with lcov
 # I primarily use this to test 100% branch coverage on dnspacket.c ...
+# Run this from the top directory of the repo
 
 set -x
 set -e
