@@ -1,8 +1,16 @@
-
-   Added core daemon deprecation warning when plugin_geoip is loaded
-   weighted, multifo, simplefo plugins:
-     Added "ipv4" or "ipv6" indicator to the descriptive text
-       displayed in monitored status outputs, to differentiate.
+1.6.0 - 2012-02-03
+    Start of new stable series, 1.6.x will be bugfix-only.
+    weighted, multifo, simplefo plugins:
+      Added "ipv4" or "ipv6" indicator to the descriptive text
+        displayed in monitored status outputs, to differentiate.
+    Added core daemon deprecation warning when plugin_geoip is loaded
+    Some internal refactoring and updates for cleanliness, correctness,
+      portability, validation, debugability, and/or efficiency.
+    Repository migrated to git
+    Many thanks to Paul Dekkers and Anton Tolchanov for all the
+      design discussions and code input during the 1.5.x cycle, and
+      thanks to everyone for being patient through a development
+      cycle that carried on far longer than it should have.
 
 1.5.13 - 2012-01-30
     The last-minute geoip+weighted work evolved into a lot more
