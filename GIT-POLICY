@@ -52,3 +52,5 @@ tons of tiny checkpoint/mistake/temporary commits all over the dev
 branch.  merging master -> dev will happen fairly regularly to import
 bugfix traffic.  dev -> master only happens at the dawn of a new stable
 release series.
+
+========================================================================
