@@ -79,11 +79,8 @@ global_config_t gconfig = {
     .max_addtl_rrsets = 64U
 };
 
-bool skip_plugins_cleanup = false;
-
 static void plugins_cleanup(void) {
-    if(!skip_plugins_cleanup)
-        gdnsd_plugins_action_exit();
+    gdnsd_plugins_action_exit();
 }
 
 // Generic iterator for catching bad config hash keys in various places below

@@ -384,13 +384,8 @@ int main(int argc, char** argv) {
     ping_pthreads();
 
     // Daemonize if applicable
-    if(action != ACT_STARTFG) {
-        // so that the daemonization fork+exit pairs don't
-        //   execute the plugins' exit handlers
-        skip_plugins_cleanup = true;
+    if(action != ACT_STARTFG)
         dmn_daemonize(PACKAGE_NAME, gconfig.pidfile);
-        skip_plugins_cleanup = false;
-    }
 
     // If root, or if user explicitly set a priority...
     if(started_as_root || gconfig.priority != -21) {

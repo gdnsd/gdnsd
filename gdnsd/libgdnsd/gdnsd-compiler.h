@@ -67,8 +67,9 @@
 #else
 #  define RUNNING_ON_VALGRIND 0
 #  define VALGRIND_MAKE_MEM_NOACCESS(x,y) ((void)(0))
-#  define VALGRIND_MEMPOOL_ALLOC(x,y,z)   ((void)(0))
 #  define VALGRIND_CREATE_MEMPOOL(x,y,z)  ((void)(0))
+#  define VALGRIND_DESTROY_MEMPOOL(x)     ((void)(0))
+#  define VALGRIND_MEMPOOL_ALLOC(x,y,z)   ((void)(0))
 #endif
 
 // And silence some related warnings on gcc 4.6 + valgrind 3.6
@@ -77,6 +78,12 @@
      _Pragma("GCC diagnostic push"); \
      _Pragma("GCC diagnostic ignored \"-Wunused-but-set-variable\""); \
      VALGRIND_CREATE_MEMPOOL(x,y,z); \
+     _Pragma("GCC diagnostic pop"); \
+}
+#  define NOWARN_VALGRIND_DESTROY_MEMPOOL(x) { \
+     _Pragma("GCC diagnostic push"); \
+     _Pragma("GCC diagnostic ignored \"-Wunused-but-set-variable\""); \
+     VALGRIND_DESTROY_MEMPOOL(x); \
      _Pragma("GCC diagnostic pop"); \
 }
 #  define NOWARN_VALGRIND_MEMPOOL_ALLOC(x,y,z) { \
@@ -88,6 +95,8 @@
 #else
 #  define NOWARN_VALGRIND_CREATE_MEMPOOL(x,y,z) \
      VALGRIND_CREATE_MEMPOOL(x,y,z)
+#  define NOWARN_VALGRIND_DESTROY_MEMPOOL(x) \
+     VALGRIND_DESTROY_MEMPOOL(x)
 #  define NOWARN_VALGRIND_MEMPOOL_ALLOC(x,y,z) \
      VALGRIND_MEMPOOL_ALLOC(x,y,z);
 #endif

@@ -20,6 +20,7 @@
 #include "ltree.h"
 
 #include <string.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
@@ -27,6 +28,9 @@
 #include "conf.h"
 #include "dnspacket.h"
 #include "ltarena.h"
+
+// Global ltarena for all of ltree, for now
+ltarena_t* lta = NULL;
 
 // This is the global singleton ltree_root
 ltree_node_t* ltree_root = NULL;
@@ -142,8 +146,8 @@ static ltree_node_t* ltree_node_find_or_add_child(ltree_node_t* node, const uint
         child = child->next;
     }
 
-    child = lta_malloc_p(sizeof(ltree_node_t));
-    child->label = lta_labeldup(child_label);
+    child = calloc(1, sizeof(ltree_node_t));
+    child->label = lta_labeldup(lta, child_label);
     child->next = node->child_table[child_hash];
     node->child_table[child_hash] = child;
 
@@ -218,7 +222,7 @@ static ltree_rrset_ ## _typ ## _t* ltree_node_add_rrset_ ## _nam (ltree_node_t* 
     ltree_rrset_t** store_at = &node->rrsets;\
     while(*store_at)\
         store_at = &(*store_at)->gen.next;\
-    *store_at = lta_malloc_p(sizeof(ltree_rrset_ ## _typ ## _t));\
+    *store_at = calloc(1, sizeof(ltree_rrset_ ## _typ ## _t));\
     (*store_at)->gen.type = _dtyp;\
     return &(*store_at)-> _typ;\
 }
@@ -363,7 +367,7 @@ void ltree_add_rec_cname(const uint8_t* dname, const uint8_t* rhs, unsigned ttl)
         log_fatal("Name '%s': Only one CNAME or DYNC record can exist for a given name", logf_dname(dname));
 
     ltree_rrset_cname_t* rrset = ltree_node_add_rrset_cname(node);
-    rrset->c.dname = lta_dnamedup_hashed(rhs);
+    rrset->c.dname = lta_dnamedup(lta, rhs);
     rrset->gen.ttl = htonl(ttl);
     rrset->gen.c.is_static = true;
 }
@@ -383,7 +387,7 @@ void ltree_add_rec_dyncname(const uint8_t* dname, const uint8_t* rhs, const uint
         log_fatal("Name '%s': Only one CNAME or DYNC record can exist for a given name", logf_dname(dname));
   
     ltree_rrset_cname_t* rrset = ltree_node_add_rrset_cname(node);
-    rrset->c.dyn.origin = lta_dnamedup_hashed(origin);
+    rrset->c.dyn.origin = lta_dnamedup(lta, origin);
     rrset->gen.ttl = htonl(ttl);
     
     char* plugin_name = strdup((const char*)rhs);
@@ -439,7 +443,7 @@ void ltree_add_rec_ptr(const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
     ltree_node_t* node = ltree_find_or_add_dname(dname, false);
 
     INSERT_NEXT_RR(ptr, ptr, "PTR");
-    new_rdata->dname = lta_dnamedup_hashed(rhs);
+    new_rdata->dname = lta_dnamedup(lta, rhs);
     new_rdata->ad = NULL;
 }
 
@@ -456,7 +460,7 @@ void ltree_add_rec_ns(const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
         node->flags |= LTNFLAG_DELEG;
 
     INSERT_NEXT_RR(ns, ns, "NS")
-    new_rdata->dname = lta_dnamedup_hashed(rhs);
+    new_rdata->dname = lta_dnamedup(lta, rhs);
     new_rdata->ad = NULL;
 }
 
@@ -468,7 +472,7 @@ void ltree_add_rec_mx(const uint8_t* dname, const uint8_t* rhs, unsigned ttl, un
     ltree_node_t* node = ltree_find_or_add_dname(dname, false);
 
     INSERT_NEXT_RR(mx, mx, "MX")
-    new_rdata->dname = lta_dnamedup_hashed(rhs);
+    new_rdata->dname = lta_dnamedup(lta, rhs);
     new_rdata->pref = htons(pref);
     new_rdata->ad = NULL;
 }
@@ -483,7 +487,7 @@ void ltree_add_rec_srv(const uint8_t* dname, const uint8_t* rhs, unsigned ttl, u
     ltree_node_t* node = ltree_find_or_add_dname(dname, false);
 
     INSERT_NEXT_RR(srv, srv, "SRV")
-    new_rdata->dname = lta_dnamedup_hashed(rhs);
+    new_rdata->dname = lta_dnamedup(lta, rhs);
     new_rdata->priority = htons(priority);
     new_rdata->weight = htons(weight);
     new_rdata->port = htons(port);
@@ -534,7 +538,7 @@ void ltree_add_rec_naptr(const uint8_t* dname, const uint8_t* rhs, unsigned ttl,
     ltree_node_t* node = ltree_find_or_add_dname(dname, false);
 
     INSERT_NEXT_RR(naptr, naptr, "NAPTR")
-    new_rdata->dname = lta_dnamedup_hashed(rhs);
+    new_rdata->dname = lta_dnamedup(lta, rhs);
     new_rdata->order = htons(order);
     new_rdata->pref = htons(pref);
     memcpy(new_rdata->texts, texts, sizeof(new_rdata->texts));
@@ -549,8 +553,9 @@ void ltree_add_rec_txt(const uint8_t* dname, unsigned num_texts, uint8_t** texts
     ltree_node_t* node = ltree_find_or_add_dname(dname, false);
 
     INSERT_NEXT_RR(txt, txt, "TXT")
-    *new_rdata = lta_malloc_p((num_texts + 1) * sizeof(uint8_t*));
-    memcpy(*new_rdata, texts, (num_texts + 1) * sizeof(uint8_t*));
+    const unsigned tsize = (num_texts + 1) * sizeof(uint8_t*);
+    *new_rdata = malloc(tsize);
+    memcpy(*new_rdata, texts, tsize);
 }
 
 void ltree_add_rec_spf(const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl) {
@@ -559,15 +564,24 @@ void ltree_add_rec_spf(const uint8_t* dname, unsigned num_texts, uint8_t** texts
     ltree_node_t* node = ltree_find_or_add_dname(dname, false);
 
     INSERT_NEXT_RR(txt, spf, "SPF")
-    *new_rdata = lta_malloc_p((num_texts + 1) * sizeof(uint8_t*));
-    memcpy(*new_rdata, texts, (num_texts + 1) * sizeof(uint8_t*));
+    const unsigned tsize = (num_texts + 1) * sizeof(uint8_t*);
+    *new_rdata = malloc(tsize);
+    memcpy(*new_rdata, texts, tsize);
 }
 
-// This handles 'foo SPF+ "v=spf1 ..."' and makes both TXT and SPF recs for it, conveniently
-//  aliasing all the string storage
+// This handles 'foo SPF+ "v=spf1 ..."' and makes both TXT and SPF recs for it
 void ltree_add_rec_spftxt(const uint8_t* dname, unsigned texts_size, uint8_t** texts, unsigned ttl) {
+    // duplicate the raw text storage, so that destruction isn't confusing
+    uint8_t* tcopy[texts_size + 1];
+    for(unsigned i = 0; i < texts_size; i++) {
+        const unsigned tlen = *texts[i] + 1;
+        tcopy[i] = malloc(tlen);
+        memcpy(tcopy[i], texts[i], tlen);
+    }
+    tcopy[texts_size] = NULL;
+
     ltree_add_rec_txt(dname, texts_size, texts, ttl);
-    ltree_add_rec_spf(dname, texts_size, texts, ttl);
+    ltree_add_rec_spf(dname, texts_size, tcopy, ttl);
 }
 
 void ltree_add_rec_soa(const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, unsigned serial, unsigned refresh, unsigned retry, unsigned expire, unsigned ncache) {
@@ -582,8 +596,8 @@ void ltree_add_rec_soa(const uint8_t* dname, const uint8_t* master, const uint8_
         log_fatal("Zone '%s': SOA defined twice", logf_dname(dname));
 
     ltree_rrset_soa_t* soa = ltree_node_add_rrset_soa(node);
-    soa->email = lta_dnamedup_hashed(email);
-    soa->master = lta_dnamedup_hashed(master);
+    soa->email = lta_dnamedup(lta, email);
+    soa->master = lta_dnamedup(lta, master);
 
     soa->gen.ttl = htonl(ttl);
     soa->times[0] = htonl(serial);
@@ -613,7 +627,7 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, u
     ltree_rrset_t** store_at = &node->rrsets;
     while(*store_at)
         store_at = &(*store_at)->gen.next;
-    *store_at = lta_malloc_p(sizeof(ltree_rrset_rfc3597_t));
+    *store_at = calloc(1, sizeof(ltree_rrset_rfc3597_t));
     (*store_at)->gen.type = rrtype;
     return &(*store_at)->rfc3597;
 }
@@ -1115,11 +1129,94 @@ static void ltree_fix_masks(ltree_node_t* node) {
     }
 }
 
+F_NONNULL
+static void ltree_node_destroy(ltree_node_t* node) {
+    dmn_assert(node);
+    ltree_rrset_t* rrset = node->rrsets;
+    while(rrset) {
+        ltree_rrset_t* next = rrset->gen.next;
+        switch(rrset->gen.type) {
+            case DNS_TYPE_A:
+                if(rrset->gen.c.is_static) {
+                    if(rrset->addr.a.addrs.v4)
+                        free(rrset->addr.a.addrs.v4);
+                    if(rrset->addr.a.addrs.v6)
+                        free(rrset->addr.a.addrs.v6);
+                }
+                break;
+
+            case DNS_TYPE_NAPTR:
+                for(unsigned i = 0; i < rrset->gen.c.count; i++) {
+                    free(rrset->naptr.rdata[i].texts[NAPTR_TEXTS_REGEXP]);
+                    free(rrset->naptr.rdata[i].texts[NAPTR_TEXTS_SERVICES]);
+                    free(rrset->naptr.rdata[i].texts[NAPTR_TEXTS_FLAGS]);
+                }
+                free(rrset->naptr.rdata);
+                break;
+            case DNS_TYPE_TXT:
+            case DNS_TYPE_SPF:
+                for(unsigned i = 0; i < rrset->gen.c.count; i++) {
+                    uint8_t** tptr = rrset->txt.rdata[i];
+                    uint8_t* t;
+                    while((t = *tptr++))
+                        free(t);
+                    free(rrset->txt.rdata[i]);
+                }
+                free(rrset->txt.rdata);
+                break;
+            case DNS_TYPE_NS:
+                free(rrset->ns.rdata);
+                break;
+            case DNS_TYPE_MX:
+                free(rrset->mx.rdata);
+                break;
+            case DNS_TYPE_PTR:
+                free(rrset->ptr.rdata);
+                break;
+            case DNS_TYPE_SRV:
+                free(rrset->srv.rdata);
+                break;
+            case DNS_TYPE_SOA:
+            case DNS_TYPE_CNAME:
+                break;
+            default:
+                for(unsigned i = 0; i < rrset->gen.c.count; i++)
+                   free(rrset->rfc3597.rdata[i].rd);
+                free(rrset->rfc3597.rdata);
+                break;
+        }
+        free(rrset);
+        rrset = next;
+    }
+
+    if(node->child_table) {
+        const uint32_t cmask = count2mask(node->child_hash_mask);
+        for(unsigned i = 0; i <= cmask; i++) {
+            ltree_node_t* child = node->child_table[i];
+            while(child) {
+                ltree_node_t* next = child->next;
+                ltree_node_destroy(child);
+                child = next;
+            }
+        }
+    }
+
+    free(node->child_table);
+    free(node);
+}
+
+void ltree_destroy(void) {
+    ltree_node_destroy(ltree_root);
+    ltree_root = NULL;
+    lta_destroy(lta);
+    lta = NULL;
+}
+
 void ltree_load_zones(void) {
     // Initialize the ltarena and the root of the ltree
-    lta_init();
-    ltree_root = lta_malloc_p(sizeof(ltree_node_t));
-    ltree_root->label = lta_labeldup((uint8_t*)"");
+    lta = lta_new();
+    ltree_root = calloc(1, sizeof(ltree_node_t));
+    ltree_root->label = lta_labeldup(lta, (uint8_t*)"");
 
     for(unsigned i = 0; i < gconfig.num_zones; i++) {
         const zoneinfo_t* zone = &gconfig.zones[i];
@@ -1132,8 +1229,11 @@ void ltree_load_zones(void) {
     }
 
     // Close the ltarena to further allocations.  Mostly
-    //  this frees the hash lta_dnamedup_hashed() uses.
-    lta_close();
+    //  this frees the hash lta_dnamedup(lta, ) uses.
+    lta_close(lta);
+#ifndef NDEBUG
+    atexit(ltree_destroy);
+#endif
 
     log_debug("Post-processing all zone data");
 

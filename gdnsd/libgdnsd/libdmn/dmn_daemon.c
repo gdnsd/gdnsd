@@ -32,6 +32,7 @@
 #include <sys/select.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #include "dmn.h"
 
@@ -121,7 +122,7 @@ static int fork_and_exit(void) {
     if (mypid == -1)     // parent: failure
         return 0;
     else if (mypid != 0) // parent: success
-        exit(0);
+        _exit(0);
     else                 // child: success
         return 1;
 }

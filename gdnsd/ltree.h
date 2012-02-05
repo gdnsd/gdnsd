@@ -85,6 +85,7 @@ daemon exit time).
 #include "config.h"
 #include "gdnsd.h"
 #include "dnswire.h"
+#include "ltarena.h"
 #include "zscan.h"
 
 // struct/typedef stuff
@@ -139,23 +140,23 @@ typedef struct _ltree_rrset_rfc3597_struct ltree_rrset_rfc3597_t;
 #define AD_GET_PTR(x) ((const ltree_rrset_addr_t*)((uintptr_t)(x) & (~1UL)))
 
 struct _ltree_rdata_ns_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
 };
 
 struct _ltree_rdata_ptr_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
 };
 
 struct _ltree_rdata_mx_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
     uint16_t pref;
 };
 
 struct _ltree_rdata_srv_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
     uint16_t priority;
     uint16_t weight;
@@ -166,7 +167,7 @@ struct _ltree_rdata_srv_struct {
 #define NAPTR_TEXTS_SERVICES 1
 #define NAPTR_TEXTS_REGEXP 2
 struct _ltree_rdata_naptr_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
     uint8_t* texts[3]; // flags, services, regexp
     uint16_t order;
@@ -216,17 +217,17 @@ struct _ltree_rrset_addr_struct {
 
 struct _ltree_rrset_soa_struct {
     ltree_rrset_gen_t gen;
-    uint8_t* email;
-    uint8_t* master;
+    const uint8_t* email;
+    const uint8_t* master;
     uint32_t times[5];
 };
 
 struct _ltree_rrset_cname_struct {
     ltree_rrset_gen_t gen;
     union {
-        uint8_t* dname;
+        const uint8_t* dname;
         struct {
-            uint8_t* origin;
+            const uint8_t* origin;
             gdnsd_resolve_dyncname_cb_t func;
             unsigned resource;
         } dyn;
@@ -370,6 +371,7 @@ typedef enum {
 
 // This is the global singleton ltree_root
 extern ltree_node_t* ltree_root;
+extern ltarena_t* lta;
 
 /********************************************************************
  * This is the excellent fast string hash algorithm DJB came up

@@ -1022,6 +1022,16 @@ static unsigned int encode_rrs_txt(dnspacket_context_t* c, unsigned int offset, 
     return offset;
 }
 
+// stash a resolve_dyncname dname result
+F_NONNULL
+static const uint8_t* _dync_store_dname(dnspacket_context_t* c, const uint8_t* dname) {
+    dmn_assert(c); dmn_assert(dname);
+    dmn_assert(c->dync_count < gconfig.max_cname_depth);
+    uint8_t* dntmp = &c->dync_store[(c->dync_count++ * 256)];
+    gdnsd_dname_copy(dntmp, dname);
+    return dntmp;
+}
+
 // "answer" here is overloaded from its original meaning.
 //   normally it means 'this record's going into the answer section as opposed to auth/additional'
 //   here it means true: 'direct CNAME query, false: chaining through for a non-CNAME query'
@@ -1033,7 +1043,7 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
     uint8_t* packet = c->packet;
   
     unsigned int rdata_offset, ttl;
-    uint8_t* dname;
+    const uint8_t* dname;
      
     if(rd->gen.c.is_static) { 
         ttl = rd->gen.ttl;
@@ -1049,8 +1059,7 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
         ttl = htonl(ans_dync.ttl);
 
         // plugin is responsible for ensuring ans_dync.dname is always valid
-        dname = &c->dync_store[(c->dync_count++ * 256)];
-        gdnsd_dname_copy(dname, ans_dync.dname);
+        dname = _dync_store_dname(c, ans_dync.dname);
     }
  
     // start formulating response

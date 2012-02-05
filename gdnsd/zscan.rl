@@ -203,13 +203,13 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
         const unsigned new_alloc = 1 + z->num_texts + num_whole_chunks + (remainder ? 1 : 0);
         z->texts = realloc(z->texts, new_alloc * sizeof(uint8_t*));
         for(unsigned i = 0; i < num_whole_chunks; i++) {
-            uint8_t* chunk = z->texts[z->num_texts++] = lta_malloc_1(256);
+            uint8_t* chunk = z->texts[z->num_texts++] = malloc(256);
             *chunk++ = 255;
             memcpy(chunk, zptr, 255);
             zptr += 255;
         }
         if(remainder) {
-            uint8_t* chunk = z->texts[z->num_texts++] = lta_malloc_1(remainder + 1);
+            uint8_t* chunk = z->texts[z->num_texts++] = malloc(remainder + 1);
             *chunk++ = remainder;
             memcpy(chunk, zptr, remainder);
         }
@@ -217,7 +217,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
     }
     else {
         z->texts = realloc(z->texts, (z->num_texts + 2) * sizeof(uint8_t*));
-        uint8_t* chunk = z->texts[z->num_texts++] = lta_malloc_1(newlen + 1);
+        uint8_t* chunk = z->texts[z->num_texts++] = malloc(newlen + 1);
         *chunk++ = newlen;
         memcpy(chunk, text_temp, newlen);
         z->texts[z->num_texts] = NULL;

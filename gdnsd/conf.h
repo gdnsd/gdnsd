@@ -70,7 +70,6 @@ typedef struct {
 } global_config_t;
 
 extern global_config_t gconfig;
-extern bool skip_plugins_cleanup;
 
 F_NONNULL
 void conf_load(const char* cfg_file);
