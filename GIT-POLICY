@@ -14,6 +14,7 @@ Read these, in this order roughly:
 http://nvie.com/posts/a-successful-git-branching-model/
 http://osteele.com/archives/2008/05/commit-policies
 http://sandofsky.com/blog/git-workflow.html
+http://randyfay.com/node/91
 
 I'm trying to follow some simlified hybrid of all the above advice.
 
@@ -29,11 +30,26 @@ Pull before push! Do all work in offline (well, not the official
 public, anyways) branches, not just on local copies of master/dev
 (unless the change is truly trivial).
 
+Even better, use fetch/merge separately instead of raw "pull", it will
+get you more oriented towards what's really happening and prevent
+being confused by some corner cases.
+
 Clean up and squash your commits and get them validated and working
-before pushing them upstream as whole feature units.
+before sending them upstream as whole feature units that are well-tested.
+
+Commit to public branches via:
+1) Squash/cleanup your whole feature branch to a single coherent commit
+2) Rebase the feature branch from the (freshly pulled) local tracking
+   copy of the public dev branch (you might want to do this a lot while
+   working as well, before you squash everything)
+3) Rebase your local public dev tracking copy onto the feature branch.
+   This should result in a single feature commit to the tracking copy
+   with no merge commit traffic.
+4) Push that commit to public dev
 
 Make liberal use of "git rebase -i" in your local branches to clean
 them up and squash them up, etc.  It's a powerful tool.
+
 
 ========================================================================
 
