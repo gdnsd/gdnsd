@@ -21,3 +21,7 @@ foo	A	192.0.2.202
 *	AAAA	::1
 bar	CNAME	bar.baz.fox
 barmx	MX	0 barmx.xmrab.xxx.fox
+
+; This is referenced by ct21.example.com and exercises
+;  important CNAME chaining code in dnspacket.c
+ct22	CNAME	foo
