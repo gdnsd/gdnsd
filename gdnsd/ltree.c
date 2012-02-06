@@ -805,19 +805,19 @@ static void p1_proc_cname(const ltree_node_t* zone_root, ltree_rrset_cname_t* no
     bool crossed_root = false;
     ltree_node_t* cn_target;
     ltree_dname_status_t cnstat = ltree_search_dname(node_cname->c.dname, zone_root, &crossed_root, &cn_target);
-    if(cnstat == DNAME_AUTH) {
+    if(crossed_root && cnstat == DNAME_AUTH) {
         if(!cn_target) {
-            log_strict("CNAME '%s' points to known NXDOMAIN '%s'",
+            log_strict("CNAME '%s' points to known same-zone NXDOMAIN '%s'",
                 logf_lstack(lstack, depth), logf_dname(node_cname->c.dname));
         }
         else if(!cn_target->rrsets) {
-            log_strict("CNAME '%s' points to '%s' which has no data",
+            log_strict("CNAME '%s' points to '%s' in the same zone, which has no data",
                 logf_lstack(lstack, depth), logf_dname(node_cname->c.dname));
         }
     }
 
     unsigned cn_depth = 1;
-    while(cnstat == DNAME_AUTH && cn_target && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME && cn_target->rrsets->gen.c.is_static) {
+    while(crossed_root && cn_target && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME && cn_target->rrsets->gen.c.is_static) {
         if(++cn_depth > gconfig.max_cname_depth) {
             log_fatal("CNAME '%s' leads to a CNAME chain longer than %u (max_cname_depth)", logf_lstack(lstack, depth), gconfig.max_cname_depth);
             break;
