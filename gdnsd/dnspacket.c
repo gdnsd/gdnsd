@@ -1660,10 +1660,13 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         status = search_ltree(dname, &resdom, &resauth, resauth, &auth_depth, &resauth_crossed);
         // encode_rr_cname() above updated c->qname_comp, and now we need to update c->auth_comp
         //  to match based on search_ltree's auth_depth output, assuming auth or deleg response
-        if(!resauth_crossed)
+        if(!resauth_crossed) {
             status = DNAME_NOAUTH;
-        else
+            break;
+        }
+        else {
             c->auth_comp = chase_auth_ptr(c->packet, c->qname_comp, auth_depth);
+        }
     }
 
     if(status == DNAME_AUTH) {
