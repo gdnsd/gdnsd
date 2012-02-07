@@ -749,7 +749,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
         for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
             const addrstate_t* addr = &res_item->as[addr_idx];
             const monio_state_uint_t addr_state
-                = gdnsd_monio_min_state(addr->states, aset->num_svcs);
+                = gdnsd_monio_get_min_state(addr->states, aset->num_svcs);
             if(addr_state != MONIO_STATE_UP)
                 *cut_ttl_ptr = true;
             if(addr_state != MONIO_STATE_DOWN) {

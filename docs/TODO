@@ -45,7 +45,7 @@ Come up with a derived "monitored weight factor" that scales from 0.0 -> 1.0 bas
 
 Control Channel:
 -----------------
-Be nice to have a listening unix socket from the main thread for command+control.  Cleaner option than signals for shutdown, LPE on/off, and stats on request w/o http are the first obvious targets.  Beyond that, might be nice to offer an interface here to the core monitor code to force a resource up or down temporarily, and could tie in with other dynamic features down the line...
+Be nice to have a listening unix socket from the main thread for command+control.  Cleaner option than signals for shutdown and stats on request w/o http are the first obvious targets.  Beyond that, might be nice to offer an interface here to the core monitor code to force a resource up or down temporarily, and could tie in with other dynamic features down the line...
 
 Plugin stats ouput:
 ----------------------

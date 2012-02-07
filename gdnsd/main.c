@@ -44,7 +44,6 @@
 #include "statio.h"
 #include "monio.h"
 #include "ltree.h"
-#include "pkterr.h"
 #include "gdnsd-plugapi-priv.h"
 #include "gdnsd-net-priv.h"
 #include "gdnsd-misc-priv.h"
@@ -74,22 +73,6 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int
     ev_break(loop, EVBREAK_ALL);
 }
 
-F_NONNULL
-static void lpe_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
-    dmn_assert(revents == EV_SIGNAL);
-    dmn_assert(w->signum == SIGUSR1 || w->signum == SIGUSR2);
-
-    if(w->signum == SIGUSR1) {
-        log_info("Enabling log_packet_errors (SIGUSR1 received)");
-        satom_set(&log_packet_errors, 1);
-    }
-    else {
-        log_info("Disabling log_packet_errors (SIGUSR2 received)");
-        satom_set(&log_packet_errors, 0);
-    }
-}
-
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     dmn_assert(argv0);
@@ -102,14 +85,12 @@ static void usage(const char* argv0) {
         "Usage: %s [-c /a/config/file] action\n"
         "  -c Use this configfile (default " ETCDIR "/" PACKAGE_NAME "/config)\n"
         "Actions:\n"
-        "  checkconf - Checks validity of config/zone files\n"
+        "  checkconf - Checks validity of config and zone files\n"
         "  startfg - Start " PACKAGE_NAME " in foreground w/ logs to stderr\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
         "  stop - Stops a running daemon previously started by 'start'\n"
         "  restart - Equivalent to checkconf && stop && start, but faster\n"
         "  status - Checks the status of the running daemon\n"
-        "  lpe_on - Turns on log_packet_errors in the running daemon\n"
-        "  lpe_off - Turns off log_packet_errors in the running daemon\n"
         "\nFor updates, bug reports, etc, please visit " PACKAGE_URL "\n",
         argv0
     );
@@ -118,8 +99,6 @@ static void usage(const char* argv0) {
 
 static ev_signal* sig_int;
 static ev_signal* sig_term;
-static ev_signal* sig_usr1;
-static ev_signal* sig_usr2;
 
 // Set up our terminal signal handlers via libev
 F_NONNULL
@@ -128,8 +107,6 @@ static void setup_signals(struct ev_loop* def_loop) {
 
     sig_int = malloc(sizeof(ev_signal));
     sig_term = malloc(sizeof(ev_signal));
-    sig_usr1 = malloc(sizeof(ev_signal));
-    sig_usr2 = malloc(sizeof(ev_signal));
 
     // Set up the signal callback handlers via libev
     //  and start the signal watchers in the default loop
@@ -137,10 +114,6 @@ static void setup_signals(struct ev_loop* def_loop) {
     ev_signal_start(def_loop, sig_int);
     ev_signal_init(sig_term, terminal_signal, SIGTERM);
     ev_signal_start(def_loop, sig_term);
-    ev_signal_init(sig_usr1, lpe_signal, SIGUSR1);
-    ev_signal_start(def_loop, sig_usr1);
-    ev_signal_init(sig_usr2, lpe_signal, SIGUSR2);
-    ev_signal_start(def_loop, sig_usr2);
 }
 
 // I know this looks stupid, but on Linux/glibc this forces
@@ -202,26 +175,22 @@ static void start_threads(void) {
 }
 
 typedef enum {
-    ACT_CHECKCFG   = 0,
-    ACT_STARTFG,  // 1
-    ACT_START,    // 2
-    ACT_STOP,     // 3
-    ACT_RESTART,  // 4
-    ACT_STATUS,   // 5
-    ACT_LPE_ON,   // 6
-    ACT_LPE_OFF,  // 7
-    ACT_UNDEF     // 8
+    ACT_CHECKCFG = 0,
+    ACT_STARTFG  = 1,
+    ACT_START    = 2,
+    ACT_STOP     = 3,
+    ACT_RESTART  = 4,
+    ACT_STATUS   = 5,
+    ACT_UNDEF    = 6
 } action_t;
 
 static const char* act_strs[] = {
-    "checkconf",      // 0
-    "startfg",        // 1
-    "start",          // 2
-    "stop",           // 3
-    "restart",        // 4
-    "status",         // 5
-    "lpe_on",         // 6
-    "lpe_off",        // 7
+    "checkconf", // 0
+    "startfg",   // 1
+    "start",     // 2
+    "stop",      // 3
+    "restart",   // 4
+    "status"     // 5
 };
 
 F_NONNULL F_PURE
@@ -229,7 +198,7 @@ static action_t match_action(const char* arg) {
     dmn_assert(arg);
 
     unsigned i;
-    for(i = 0; i < 8; i++)
+    for(i = ACT_CHECKCFG; i < ACT_UNDEF; i++)
         if(!strcasecmp(act_strs[i], arg))
             return i;
     return ACT_UNDEF;
@@ -284,16 +253,6 @@ int main(int argc, char** argv) {
 
     if(action == ACT_STOP) {
         dmn_stop(gconfig.pidfile);
-        exit(0);
-    }
-
-    if(action == ACT_LPE_ON) {
-        dmn_signal(gconfig.pidfile, SIGUSR1);
-        exit(0);
-    }
-
-    if(action == ACT_LPE_OFF) {
-        dmn_signal(gconfig.pidfile, SIGUSR2);
         exit(0);
     }
 

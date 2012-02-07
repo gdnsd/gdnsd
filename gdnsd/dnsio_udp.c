@@ -265,13 +265,13 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
             if(likely(iov.iov_len)) {
                 const int sent = sendmsg(fd, &msg_hdr, 0);
                 if(unlikely(sent < 0)) {
-                    satom_inc(&pctx->stats->udp.sendfail);
+                    stats_own_inc(&pctx->stats->udp.sendfail);
                     log_err("UDP sendmsg() of %li bytes failed with retval %i for client %s: %s", (long)iov.iov_len, sent, logf_anysin(&asin), logf_errno());
                 }
             }
         }
         else {
-            satom_inc(&pctx->stats->udp.recvfail);
+            stats_own_inc(&pctx->stats->udp.recvfail);
             log_err("UDP recvmsg() error: %s", logf_errno());
         }
     }
@@ -372,7 +372,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
                     int sockerr;
                     socklen_t sock_len;
                     getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
-                    satom_inc(&pctx->stats->udp.sendfail);
+                    stats_own_inc(&pctx->stats->udp.sendfail);
                     if(sent < 0) sent = 0;
                     log_err("UDP sendmmsg() of %li bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, logf_anysin(dgptr[sent].msg_hdr.msg_name), logf_errnum(sockerr));
                     dgptr += sent; // skip past the successes
@@ -383,7 +383,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
             }
         }
         else {
-            satom_inc(&pctx->stats->udp.recvfail);
+            stats_own_inc(&pctx->stats->udp.recvfail);
             log_err("UDP recvmmsg() error: %s", logf_errno());
         }
     }

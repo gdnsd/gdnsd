@@ -31,7 +31,7 @@
 #include "gdnsd-compiler.h"
 #include "gdnsd-net.h"
 #include "gdnsd-log.h"
-#include "gdnsd-satom.h"
+#include "gdnsd-stats.h"
 #include "gdnsd-dmn.h"
 
 /* libdmn custom log formatters and the buffer sizes they use:

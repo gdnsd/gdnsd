@@ -34,16 +34,15 @@ typedef struct {
   // Per-protocol stats
   union {
     struct { // UDP stats
-      satom_t recvfail;
-      satom_t sendfail;
-      satom_t tc;
-      satom_t edns_big;
-      satom_t edns_tc;
+      stats_t recvfail;
+      stats_t sendfail;
+      stats_t tc;
+      stats_t edns_big;
+      stats_t edns_tc;
     } udp;
     struct { // TCP stats
-      satom_t recvfail;
-      satom_t recvsize;
-      satom_t sendfail;
+      stats_t recvfail;
+      stats_t sendfail;
     } tcp;
   };
 
@@ -52,23 +51,23 @@ typedef struct {
   //  of requests received by the DNS layer.  Note that
   //  some of the earlier UDP/TCP-specific failures never make it to
   //  to the DNS layer.
-  satom_t noerror;
-  satom_t refused;
-  satom_t nxdomain;
-  satom_t notimp;
-  satom_t badvers;
-  satom_t formerr;
-  satom_t dropped; // no response sent at all, horribly badly formatted
+  stats_t noerror;
+  stats_t refused;
+  stats_t nxdomain;
+  stats_t notimp;
+  stats_t badvers;
+  stats_t formerr;
+  stats_t dropped; // no response sent at all, horribly badly formatted
 
   // Count of requests over IPv6.  The only valid relation to other stats
   // is that you could compare it to the 7-stat sum above for a percentage
-  satom_t v6;
+  stats_t v6;
 
   // Again, could be counted as a percentage of the 7-stat sum above
-  satom_t edns;
+  stats_t edns;
 
   // A percentage of "edns" above:
-  satom_t edns_clientsub;
+  stats_t edns_clientsub;
 } dnspacket_stats_t;
 
 typedef struct {

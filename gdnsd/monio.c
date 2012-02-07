@@ -96,21 +96,27 @@ static service_type_t* service_types;
 //  immediately after their _load_config() phase (very important)
 //  to request monitoring and initialize various data/state.
 void monio_add_addr(const char* svctype_name, const char* desc, const char* addr, monio_state_t* monio_state_ptr) {
-    monio_state_set(monio_state_ptr, MONIO_STATE_UNINIT);
 
+    stats_uint_t initial = MONIO_STATE_UNINIT;
+
+    // The four special service types that do no real monitoring
+    //   and stay stuck on a specific, forced initial state
     if(svctype_name) {
         if(!strcmp(svctype_name, "none"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_UP);
+            initial = MONIO_STATE_UP;
         else if(!strcmp(svctype_name, "up"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_UP);
+            initial = MONIO_STATE_UP;
         else if(!strcmp(svctype_name, "danger"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_DANGER);
+            initial = MONIO_STATE_DANGER;
         else if(!strcmp(svctype_name, "down"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_DOWN);
-
-        if(monio_state_get(monio_state_ptr) != MONIO_STATE_UNINIT)
-            return;
+            initial = MONIO_STATE_DOWN;
     }
+
+    stats_own_set(monio_state_ptr, initial);
+
+    // No actual setup for the forced states
+    if(initial != MONIO_STATE_UNINIT)
+        return;
 
     monio_smgr_t* this_smgr = calloc(1, sizeof(monio_smgr_t));
 
@@ -145,7 +151,7 @@ void monio_add_addr(const char* svctype_name, const char* desc, const char* addr
             );
             that_smgr->monio_state_ptrs[that_smgr->num_state_ptrs++] = monio_state_ptr;
             if(gconfig.monitor_force_v6_up && that_smgr->addr.sa.sa_family == AF_INET6)
-                monio_state_set(that_smgr->monio_state_ptrs[that_smgr->num_state_ptrs - 1], MONIO_STATE_UP);
+                stats_own_set(that_smgr->monio_state_ptrs[that_smgr->num_state_ptrs - 1], MONIO_STATE_UP);
             return;
         }
     }
@@ -161,7 +167,7 @@ void monio_add_addr(const char* svctype_name, const char* desc, const char* addr
     this_smgr->down_thresh = this_smgr->svc_type->down_thresh;
 
     if(gconfig.monitor_force_v6_up && this_smgr->addr.sa.sa_family == AF_INET6)
-        monio_state_set(this_smgr->monio_state_ptrs[0], MONIO_STATE_UP);
+        stats_own_set(this_smgr->monio_state_ptrs[0], MONIO_STATE_UP);
     else
         this_smgr->svc_type->plugin->add_monitor(svctype_name, this_smgr);
 
@@ -331,7 +337,7 @@ unsigned monio_stats_out_html(char* buf) {
     avail -= http_head_len;
 
     for(unsigned i = 0; i < num_mons; i++) {
-        monio_state_uint_t st = monio_state_get(mons[i]->monio_state_ptrs[0]);
+        monio_state_uint_t st = stats_get(mons[i]->monio_state_ptrs[0]);
         int written = snprintf(buf, avail, http_tmpl, mons[i]->desc, state_txt[st], state_txt[st]);
         if(unlikely(written >= avail || avail < (int)http_foot_len))
             log_fatal("BUG: monio stats buf miscalculated");
@@ -361,7 +367,7 @@ unsigned monio_stats_out_csv(char* buf) {
     avail -= csv_head_len;
 
     for(unsigned i = 0; i < num_mons; i++) {
-        monio_state_uint_t st = monio_state_get(mons[i]->monio_state_ptrs[0]);
+        monio_state_uint_t st = stats_get(mons[i]->monio_state_ptrs[0]);
         int written = snprintf(buf, avail, csv_tmpl, mons[i]->desc, state_txt[st]);
         if(unlikely(written >= avail))
             log_fatal("BUG: monio stats buf miscalculated");

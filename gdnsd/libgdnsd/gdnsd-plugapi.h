@@ -41,8 +41,11 @@
  *   in gdnsd-plugin.h, and also compiled into the gdnsd code.  The two
  *   values are compared at plugin load time to ensure that plugin code
  *   which doesn't match the API of the gdnsd binary is not allowed.
+ * (Of course, in many cases the plugin never even makes it that far,
+ *   because libgdnsd is missing symbols it wants to link against that
+ *   were dropped in the new API.  This is just to protect other cases).
  ***/
-#define GDNSD_PLUGIN_API_VERSION 9
+#define GDNSD_PLUGIN_API_VERSION 10
 
 /*** Data Types ***/
 

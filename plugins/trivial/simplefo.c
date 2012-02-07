@@ -241,10 +241,10 @@ static bool resolve_addr(const addrstate_t* as, dynaddr_result_t* result, bool* 
 
     bool rv = true;
     res_which_t which = A_PRI;
-    monio_state_uint_t p_state = gdnsd_monio_min_state(as->states[A_PRI], as->num_svcs);
+    monio_state_uint_t p_state = gdnsd_monio_get_min_state(as->states[A_PRI], as->num_svcs);
     switch(p_state) {
         case MONIO_STATE_DOWN:
-            if(gdnsd_monio_min_state(as->states[A_SEC], as->num_svcs) != MONIO_STATE_DOWN)
+            if(gdnsd_monio_get_min_state(as->states[A_SEC], as->num_svcs) != MONIO_STATE_DOWN)
                 which = A_SEC;
             else
                 rv = false;

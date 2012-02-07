@@ -181,7 +181,7 @@ once.
 Anytime the gdnsd binary is executed (assuming there is no immediate error in
 parsing the commandline arguments), it will load the gdnsd configuration file.
 This includes when it is invoked for simple control of another running daemon
-instance, such as the actions C<stop>, C<restart>, or C<lpe_on>.  This is
+instance, such as the actions C<stop>, or C<restart>.  This is
 because things like the default location of the pidfile can be overridden in
 the config.
 
@@ -397,25 +397,6 @@ wrap the contents of these functions in a pthread mutex.  However, for
 most imaginable cases, it should be trivial to structure your data and code
 such that these functions can be both lock-free and thread-safe.
 
-gdnsd provides an integer type C<satom_t> and functions C<satom_set>,
-C<satom_inc>, and C<satom_get> which are useful for lock-free multi-threaded
-stats counters.  The basic idea is that you allocate a C<satom_t> per-thread,
-modify it using C<satom_inc> from within calls like resolve_dynaddr, and then
-read and coalesce the data of all threads from the primary thread using
-C<satom_get>.
-
-This is the same mechanism the core gdnsd code uses for basic DNS stats
-counters.  This mechanism is not fully atomic.  You should never use the write
-operations (set and inc) from multiple threads on a single satom_t.  You can,
-however, read a satom_t from many threads in parallel without locking, so long
-as only one thread performs all writing (again, without locking).  If you chose
-to use this mechanism, you need to also be wary of false sharing that may occur
-if you allocate several threads' satom_t structures in the same page of memory.
-
-Since most C libraries now have thread-aware malloc(), it would be best to
-malloc the per-thread satom_t's from the threads themselves during
-C<plugin_foo_iothread_init>.
-
 =head1 CORE API DETAILS
 
 These are the functions exported by the core gdnsd code, which are
@@ -434,8 +415,6 @@ document them correctly, probably doxygen.
 =over 4
 
 =item gdnsd-compiler.h
-
-=item gdnsd-satom.h
 
 =item gdnsd-plugapi.h
 
@@ -594,6 +573,31 @@ was previously C<void>.  Return value should indicate whether other code
 can consider this resource effectively-dead for failover purposes.  You
 should still return some valid result-set (common practice would be to
 return all if everything's down, as if nothing in the resource were down).
+
+=item Version 10
+
+Version 10 is in a developer branch and unpublished other than through
+the git tree itself.  It is subject to continuing changes until a 1.7.x
+release tarball is made.
+
+satom/monio stuff:
+
+The header file gdnsd-satom.h is no longer published, and plugin code which
+directly includes it or uses things only defined there (e.g. satom_t and
+various satom_*() accessors) needs to stop doing so.  It was probably
+never a good idea to expose this or use it in the first place.  The
+replacement is intentionally undocumented for the plugin API.
+
+gdnsd_monio_min_state() renamed gdnsd_monio_get_min_state(), and is
+now the B<only> documented official interface for resolve plugins
+to fetch monitored states.
+
+gdnsd_monio_state_updater() is now the B<required> interface for
+monitoring plugins to send updates to the core, whereas it was
+merely recommended in the past.
+
+A few other minor changes require just a recompile, even if none of
+the above applies.
 
 =back
 

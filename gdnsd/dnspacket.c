@@ -26,7 +26,6 @@
 
 #include "conf.h"
 #include "dnswire.h"
-#include "pkterr.h"
 #include "gdnsd-misc.h"
 #include "gdnsd-plugapi-priv.h"
 
@@ -36,8 +35,6 @@ static const unsigned chaos_fixed_len = sizeof(chaos_fixed) - 1;
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t stats_init_cond = PTHREAD_COND_INITIALIZER;
 static unsigned stats_initialized = 0;
-
-satom_t log_packet_errors;
 
 dnspacket_stats_t** dnspacket_stats;
 
@@ -112,19 +109,19 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
     unsigned llen;
     while((llen = *lqname_ptr++ = buf[pos++])) {
         if(unlikely(llen & 0xC0)) {
-            log_pkterr("Label compression detected in question, failing.");
+            log_debug("Label compression detected in question, failing.");
             pos = 0;
             break;
         }
 
         if(unlikely(pos + llen >= len)) {
-            log_pkterr("Query name truncated (runs off end of packet)");
+            log_debug("Query name truncated (runs off end of packet)");
             pos = 0;
             break;
         }
 
         if(unlikely(pos + llen > 254)) {
-            log_pkterr("Query domain name too long");
+            log_debug("Query domain name too long");
             pos = 0;
             break;
         }
@@ -150,7 +147,7 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
             pos += 2;
         }
         else {
-            log_pkterr("Packet length exhausted before parsing question type/class!");
+            log_debug("Packet length exhausted before parsing question type/class!");
             pos = 0;
         }
     }
@@ -167,7 +164,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
 
     do {
         if(opt_len < 4) {
-            log_pkterr("edns_client_subnet data too short (%u bytes)", opt_len);
+            log_debug("edns_client_subnet data too short (%u bytes)", opt_len);
             rv = true;
             break;
         }
@@ -182,14 +179,14 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         //   additional trailing bytes on the end, since it doesn't hurt us.
         // We must have the correct amount at a minimum, though.
         if(opt_len < 4 + addr_bytes) {
-            log_pkterr("edns_client_subnet: addr length %u too short for src_mask of %u", opt_len, src_mask);
+            log_debug("edns_client_subnet: addr length %u too short for src_mask of %u", opt_len, src_mask);
             rv = true;
             break;
         }
 
         if(family == 1) { // IPv4
             if(src_mask > 32) {
-                log_pkterr("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
+                log_debug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
                 rv = true;
                 break;
             }
@@ -198,7 +195,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         }
         else if(family == 2) { // IPv6
             if(src_mask > 128) {
-                log_pkterr("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
+                log_debug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
                 rv = true;
                 break;
             }
@@ -206,7 +203,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
             memcpy(c->client_info.edns_client.sin6.sin6_addr.s6_addr, opt_data, addr_bytes);
         }
         else {
-            log_pkterr("edns_client_subnet has unknown family %u", family);
+            log_debug("edns_client_subnet has unknown family %u", family);
             rv = true;
             break;
         }
@@ -216,7 +213,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         c->client_info.edns_client_mask = src_mask;
     } while(0);
 
-    satom_inc(&c->stats->edns_clientsub);
+    stats_own_inc(&c->stats->edns_clientsub);
     return rv;
 }
 
@@ -244,16 +241,16 @@ static bool handle_edns_options(dnspacket_context_t* c, unsigned rdlen, const ui
     // minimum edns option length is 4 bytes (2 byte option code, 2 byte data len)
     while(rdlen) {
         if(rdlen < 4) {
-            log_pkterr("EDNS option too short");
-            rv = true; // rdlen too short for a valid option...
+            log_debug("EDNS option too short");
+            rv = true;
             break;
         }
         unsigned opt_code = ntohs(*(const uint16_t*)rdata); rdata += 2;
         unsigned opt_dlen = ntohs(*(const uint16_t*)rdata); rdata += 2;
         rdlen -= 4;
         if(opt_dlen > rdlen) {
-            log_pkterr("EDNS option too long");
-            rv = true; // option data runs off the end, FORMERR
+            log_debug("EDNS option too long");
+            rv = true;
             break;
         }
         if(handle_edns_option(c, opt_code, opt_dlen, rdata)) {
@@ -284,7 +281,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
 
     rcode_rv_t rcode = DECODE_OK;
     c->use_edns = true;            // send OPT RR with response
-    satom_inc(&c->stats->edns);
+    stats_own_inc(&c->stats->edns);
     if(likely(DNS_OPTRR_GET_VERSION(opt) == 0)) {
         if(likely(c->is_udp)) {
             // The "512" here is us not allowing them to specify a size smaller than 512
@@ -297,7 +294,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         unsigned rdlen = htons(opt->rdlen);
         if(rdlen) {
             if(packet_len < offset + sizeof_optrr + rdlen) {
-                log_pkterr("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));
+                log_debug("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));
                 rcode = DECODE_FORMERR;
             }
             else if(handle_edns_options(c, rdlen, opt->rdata)) {
@@ -306,7 +303,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         }
     }
     else {
-        log_pkterr("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", logf_anysin(asin));
+        log_debug("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", logf_anysin(asin));
         rcode = DECODE_BADVERS;
     }
 
@@ -322,7 +319,7 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
     do {
         // 5 is the minimal question length (1 byte root, 2 bytes each type and class)
         if(unlikely(packet_len < (sizeof(wire_dns_header_t) + 5))) {
-            log_pkterr("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
+            log_debug("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
             rcode = DECODE_IGNORE;
         }
 
@@ -342,44 +339,44 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
 */
 
         if(unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
-            log_pkterr("Received request from %s with %hu questions, ignoring", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
+            log_debug("Received request from %s with %hu questions, ignoring", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_QR(hdr))) {
-            log_pkterr("QR bit set in query from %s, ignoring", logf_anysin(asin));
+            log_debug("QR bit set in query from %s, ignoring", logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_TC(hdr))) {
-            log_pkterr("TC bit set in query from %s, ignoring", logf_anysin(asin));
+            log_debug("TC bit set in query from %s, ignoring", logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         unsigned int offset = sizeof(wire_dns_header_t);
         if(unlikely(!(*question_len_ptr = parse_question(c, lqname, &packet[offset], packet_len - offset)))) {
-            log_pkterr("Failed to parse question, ignoring %s", logf_anysin(asin));
+            log_debug("Failed to parse question, ignoring %s", logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(DNSH_GET_OPCODE(hdr)) {
-            log_pkterr("Non-QUERY request (NOTIMP) from %s, opcode is %u", logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
+            log_debug("Non-QUERY request (NOTIMP) from %s, opcode is %u", logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_AXFR)) {
-            log_pkterr("AXFR attempted (NOTIMP) from %s", logf_anysin(asin));
+            log_debug("AXFR attempted (NOTIMP) from %s", logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_IXFR)) {
-            log_pkterr("IXFR attempted (NOTIMP) from %s", logf_anysin(asin));
+            log_debug("IXFR attempted (NOTIMP) from %s", logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
@@ -1686,7 +1683,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
             dmn_assert(soa);
             res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
             offset = encode_rr_soa(c, offset, soa, false);
-            satom_inc(&c->stats->nxdomain);
+            stats_own_inc(&c->stats->nxdomain);
         }
     }
     else if(status == DNAME_DELEG) {
@@ -1699,7 +1696,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         dmn_assert(status == DNAME_NOAUTH);
         if(!via_cname) {
             res_hdr->flags2 = DNS_RCODE_REFUSED;
-            satom_inc(&c->stats->refused);
+            stats_own_inc(&c->stats->refused);
         }
     }
 
@@ -1722,10 +1719,10 @@ static unsigned int answer_from_db_outer(dnspacket_context_t* c, uint8_t* qname,
         c->arcount = 0;
         res_hdr->flags1 |= 0x2; // TC bit
         if(c->use_edns) {
-            satom_inc(&c->stats->udp.edns_tc);
+            stats_own_inc(&c->stats->udp.edns_tc);
         }
         else {
-            satom_inc(&c->stats->udp.tc);
+            stats_own_inc(&c->stats->udp.tc);
         }
         return full_trunc_offset;
     }
@@ -1759,7 +1756,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
 */
 
     if(asin->sa.sa_family == AF_INET6)
-        satom_inc(&c->stats->v6);
+        stats_own_inc(&c->stats->v6);
 
     uint8_t lqname[256];
     unsigned question_len = 0;
@@ -1767,7 +1764,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
     const rcode_rv_t status = decode_query(c, lqname, &question_len, packet_len, asin);
 
     if(status == DECODE_IGNORE) {
-        satom_inc(&c->stats->dropped);
+        stats_own_inc(&c->stats->dropped);
         return 0;
     }
 
@@ -1783,7 +1780,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
     if(status == DECODE_NOTIMP) {
         hdr->qdcount = 0;
         hdr->flags2 = DNS_RCODE_NOTIMP;
-        satom_inc(&c->stats->notimp);
+        stats_own_inc(&c->stats->notimp);
         return res_offset;
     }
 
@@ -1809,17 +1806,17 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
             res_offset += chaos_fixed_len;
         }
 
-        if(hdr->flags2 == DNS_RCODE_NOERROR) satom_inc(&c->stats->noerror);
+        if(hdr->flags2 == DNS_RCODE_NOERROR) stats_own_inc(&c->stats->noerror);
     }
     else {
         if(status == DECODE_FORMERR) {
             hdr->flags2 = DNS_RCODE_FORMERR;
-            satom_inc(&c->stats->formerr);
+            stats_own_inc(&c->stats->formerr);
         }
         else {
             dmn_assert(status == DECODE_BADVERS);
             hdr->flags2 = DNS_RCODE_NOERROR;
-            satom_inc(&c->stats->badvers);
+            stats_own_inc(&c->stats->badvers);
         }
     }
 
@@ -1864,7 +1861,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         if(likely(c->is_udp)) {
             // We only do one kind of truncation: complete truncation.
             //  therefore if we're returning a >512 packet, it wasn't truncated
-            if(res_offset > 512) satom_inc(&c->stats->udp.edns_big);
+            if(res_offset > 512) stats_own_inc(&c->stats->udp.edns_big);
         }
     }
 

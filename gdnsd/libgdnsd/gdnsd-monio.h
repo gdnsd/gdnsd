@@ -20,11 +20,11 @@
 #ifndef _GDNSD_LIBMONIO_H
 #define _GDNSD_LIBMONIO_H
 
-// For satom_t, etc...
-#include <gdnsd-satom.h>
+// For stats_t, etc...
+#include <gdnsd-stats.h>
 #include <gdnsd-net.h>
 
-/* monio_state == satom, but these define
+/* monio_state == stats, but these define
  * wrappers may make it easier if we
  * have to move to another mechanism
  * later.
@@ -33,23 +33,11 @@
 #define MONIO_STATE_DOWN   1
 #define MONIO_STATE_DANGER 2
 #define MONIO_STATE_UP     3
-typedef satom_t monio_state_t;
-typedef satom_uint_t monio_state_uint_t;
-#define monio_state_get(x) satom_get(x)
-#define monio_state_set(x,y) satom_set(x,y)
+typedef stats_t monio_state_t;
+typedef stats_uint_t monio_state_uint_t;
 
 F_NONNULL
-static inline monio_state_uint_t gdnsd_monio_min_state(const monio_state_t* states, const unsigned num_states) {
-    dmn_assert(states);
-    monio_state_uint_t lowest = MONIO_STATE_UP;
-    for(unsigned i = 0; i < num_states; i++) {
-       monio_state_uint_t st = monio_state_get(&states[i]);
-       if(st < lowest)
-           lowest = st;
-    }
-
-    return lowest;
-}
+monio_state_uint_t gdnsd_monio_get_min_state(const monio_state_t* states, const unsigned num_states);
 
 // Your plugin owns all of the storage within or pointed to
 //  by monio_list_t, and it must be durable storage
@@ -85,9 +73,6 @@ typedef struct {
 //   plugins will want to treat it as mostly opaque other than using
 //   "desc" for log/debug output, and reading "addr" during
 //   the _add_monitor callback (copying it for use in your own data).
-// You could, in theory, not use the provided monio_state_updater()
-//   helper though, in which case you'd be on your own for correctly
-//   managing "monio_state_ptrs" in a similar fashion.
 typedef struct _service_type_struct service_type_t;
 typedef struct {
     anysin_t addr;

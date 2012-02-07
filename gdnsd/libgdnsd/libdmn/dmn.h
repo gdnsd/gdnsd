@@ -115,7 +115,9 @@ const char* dmn_get_chroot(void);
 // Get/Set debug flag:
 // When the daemon is built in debug mode (!defined NDEBUG),
 //  *and* this flag is set to true by the daemon,
-//  dmn_log_debug() emits output
+//  dmn_log_debug() emits output.  This is not intended
+//  to be toggled at runtime (especially from threads!),
+//  it is meant to be set once at startup and left alone.
 DMN_F_PURE
 bool dmn_get_debug(void);
 void dmn_set_debug(bool d);

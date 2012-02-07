@@ -46,7 +46,7 @@
  *
  * anysin_t* asin = ...;
  * int pthread_error = ...;
- * log_pkterr("pthread error: %s, regular errno: %s, sockaddr: %s",
+ * log_err("pthread error: %s, regular errno: %s, sockaddr: %s",
  *     logf_errnum(pthread_error), logf_errno(), logf_anysin(asin));
  */
 

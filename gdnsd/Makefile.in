@@ -70,7 +70,7 @@ PROGRAMS = $(sbin_PROGRAMS)
 am__gdnsd_SOURCES_DIST = main.c conf.c zscan.c zscan_lm.c ltarena.c \
 	ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c \
 	conf.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h \
-	ltree.h statio.h monio.h zscan.h pkterr.h gdnsd.h
+	ltree.h statio.h monio.h zscan.h gdnsd.h
 @LOWMEM_FALSE@am__objects_1 = zscan.$(OBJEXT)
 @LOWMEM_TRUE@am__objects_1 = zscan_lm.$(OBJEXT)
 am_gdnsd_OBJECTS = main.$(OBJEXT) conf.$(OBJEXT) $(am__objects_1) \
@@ -330,7 +330,7 @@ top_srcdir = @top_srcdir@
 @LOWMEM_TRUE@ZSCAN_C = zscan_lm.c
 SUBDIRS = libgdnsd
 AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd -DVARDIR=\"$(localstatedir)\" -DETCDIR=\"$(sysconfdir)\"
-gdnsd_SOURCES = main.c conf.c $(ZSCAN_C) ltarena.c ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c conf.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h ltree.h statio.h monio.h zscan.h pkterr.h gdnsd.h
+gdnsd_SOURCES = main.c conf.c $(ZSCAN_C) ltarena.c ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c conf.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h ltree.h statio.h monio.h zscan.h gdnsd.h
 gdnsd_LDADD = libgdnsd/libgdnsd.la $(CAPLIBS)
 MAINTAINERCLEANFILES = $(srcdir)/zscan.c $(srcdir)/zscan_lm.c
 EXTRA_DIST = $(srcdir)/zscan.rl

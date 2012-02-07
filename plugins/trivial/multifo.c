@@ -348,7 +348,7 @@ static bool resolve(const addrset_t* aset, dynaddr_result_t* result, bool* cut_t
     // Add up/danger IPs to result set, signal ttl-cut if any non-up encountered
     for(unsigned i = 0; i < aset->count; i++) {
         const addrstate_t* as = &aset->as[i];
-        const monio_state_uint_t state = gdnsd_monio_min_state(as->states, aset->num_svcs);
+        const monio_state_uint_t state = gdnsd_monio_get_min_state(as->states, aset->num_svcs);
         if(state != MONIO_STATE_UP)
             *cut_ttl_ptr = true;
         if(state != MONIO_STATE_DOWN)

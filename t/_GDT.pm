@@ -137,8 +137,8 @@ my $CSV_TEMPLATE =
     . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
     . "udp_reqs,udp_recvfail,udp_sendfail,udp_tc,udp_edns_big,udp_edns_tc\r\n"
     . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
-    . "tcp_reqs,tcp_recvfail,tcp_recvsize,tcp_sendfail\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n";
+    . "tcp_reqs,tcp_recvfail,tcp_sendfail\r\n"
+    . "([0-9]+),([0-9]+),([0-9]+)\r\n";
 
 my %stats_accum = (
     noerror      => 0,
@@ -158,7 +158,6 @@ my %stats_accum = (
     udp_edns_tc  => 0,
     tcp_reqs     => 0,
     tcp_recvfail => 0,
-    tcp_recvsize => 0,
     tcp_sendfail => 0,
 );
 
@@ -206,8 +205,7 @@ sub check_stats_inner {
         udp_edns_tc     => $17,
         tcp_reqs        => $18,
         tcp_recvfail    => $19,
-        tcp_recvsize    => $20,
-        tcp_sendfail    => $21,
+        tcp_sendfail    => $20,
     };
 
     ## use Data::Dumper; warn Dumper($csv_vals);
@@ -316,7 +314,6 @@ sub spawn_daemon {
             close($gdout_fh)
                 or die "Cannot close '$daemon_out': $!";
             if($is_listening) {
-                kill($SIGS{USR1}, $pid) if $PKTERR; # enable logging of packet errors
                 return $pid;
             }
         }

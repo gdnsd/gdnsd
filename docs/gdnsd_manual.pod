@@ -194,11 +194,8 @@ The TCP thread also counts this stuff:
 =item tcp_reqs - Total count of TCP requests (again, synthesized)
 
 =item tcp_recvfail - Count of abnormal failures in recv() on a DNS TCP
-socket.
-
-=item tcp_recvsize - Count of TCP connections the daemon aborted early
-because the sender indicated they were going to send a much bigger request
-than we're willing to handle (question len >4K).
+socket, including ones where the sender indicated a payload larger
+than we're willing to accept.
 
 =item tcp_sendfail - Count of abnormal failures in send() on a DNS TCP socket.
 
@@ -219,20 +216,6 @@ time.  The other is via an embedded HTTP server which listens by default on
 port 3506.  The HTTP server can give the data in both html (for humans) and
 csv (for monitoring tools) formats.  All of the stats reporting code is
 in statio.c.
-
-=head2 Packet Error Logging
-
-Many of the error conditions which are tracked by the statistical counters
-also have associated per-request syslog messages, which are disabled by default
-to avoid logfile spam attacks.
-
-You can enable the packet error logging at runtime by either sending the
-daemon C<SIGUSR1>, or letting gdnsd do that for you by executing:
-
-   gdnsd -c /my/config/file lpe_on
-
-Similarly, they can be turned back off with C<SIGUSR2> or the
-gdnsd command "lpe_off".
 
 =head2 Truncation Handling and other related things
 

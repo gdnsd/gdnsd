@@ -43,7 +43,7 @@ proper includes in every file, instead of relying on this as a catch-all.
 #include "gdnsd-ev.h"
 #include "gdnsd-vscf.h"
 #include "gdnsd-dname.h"
-#include "gdnsd-satom.h"
+#include "gdnsd-stats.h"
 #include "gdnsd-net.h"
 #include "gdnsd-log.h"
 #include "gdnsd-monio.h"
