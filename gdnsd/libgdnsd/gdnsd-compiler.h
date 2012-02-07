@@ -47,7 +47,7 @@
 #  else
 #    define F_WUNUSED
 #  endif
-#else // Other C99 compilers...
+#else // Other C99+ compilers...
 #  define likely(x)       (!!(x))
 #  define unlikely(x)     (!!(x))
 #  define V_UNUSED
@@ -55,7 +55,11 @@
 #  define F_CONST
 #  define F_PURE
 #  define F_MALLOC
-#  define F_NORETURN
+#  if __STDC_VERSION__ >= 201112L // C11
+#    define F_NORETURN _Noreturn
+#  else
+#    define F_NORETURN
+#  endif
 #  define F_NONNULLX(...)
 #  define F_NONNULL
 #  define F_WUNUSED

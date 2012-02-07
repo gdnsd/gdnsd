@@ -4521,6 +4521,42 @@ $as_echo "$ac_cv_safe_to_define___extensions__" >&6; }
 
 
 
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for variable-length arrays" >&5
+$as_echo_n "checking for variable-length arrays... " >&6; }
+if ${ac_cv_c_vararrays+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+static int x; char a[++x]; a[sizeof a - 1] = 0; return a[0];
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  ac_cv_c_vararrays=yes
+else
+  ac_cv_c_vararrays=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_c_vararrays" >&5
+$as_echo "$ac_cv_c_vararrays" >&6; }
+  if test $ac_cv_c_vararrays = yes; then
+
+$as_echo "#define HAVE_C_VARARRAYS 1" >>confdefs.h
+
+  fi
+
+if test "x$ac_cv_c_vararrays" = xno; then
+    as_fn_error $? "Your compiler lacks support for variable arrays" "$LINENO" 5
+fi
+
 # Make sure we can run config.sub.
 $SHELL "$ac_aux_dir/config.sub" sun4 >/dev/null 2>&1 ||
   as_fn_error $? "cannot run $SHELL $ac_aux_dir/config.sub" "$LINENO" 5

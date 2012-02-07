@@ -5,15 +5,22 @@ AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11.3 dist-xz foreign tar-ustar -Wall])
 AM_SILENT_RULES([yes])
 
-dnl These lines pretty much *have* to be in this order, and before
-dnl  anything else that might invoke CC/CPP.  This ensures that
-dnl  we get a C99 CC, a C99 CPP, and a set of #defines to turn
-dnl  on "extended" interfaces in various OS's.
+dnl TODO: when/if a new autoconf release has a C11 macro,
+dnl    prefer that and fall back to requiring C99.
 AC_PROG_CC_C99
 if test "x$ac_cv_prog_cc_c99" = xno; then
     AC_MSG_ERROR([Your compiler lacks sufficient C99 support])
 fi
+dnl AC_PROG_CC_C99 has to come before this or we don't get a C99 CPP
 AC_USE_SYSTEM_EXTENSIONS
+
+dnl This is explcitly checked by CC_C99 above for now, but
+dnl   the C11 standard reversed course and made this an optional
+dnl   feature, so we may as well double-check here for future-proofing
+AC_C_VARARRAYS
+if test "x$ac_cv_c_vararrays" = xno; then
+    AC_MSG_ERROR([Your compiler lacks support for variable arrays])
+fi
 
 dnl POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))

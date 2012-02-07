@@ -24,6 +24,9 @@
 /* Define to 1 if you have the `clock_gettime' function. */
 #undef HAVE_CLOCK_GETTIME
 
+/* Define to 1 if C supports variable-length arrays. */
+#undef HAVE_C_VARARRAYS
+
 /* Define to 1 if you have the declaration of `AF_INET', and to 0 if you
    don't. */
 #undef HAVE_DECL_AF_INET
