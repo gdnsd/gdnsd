@@ -1019,19 +1019,9 @@ static unsigned int encode_rrs_txt(dnspacket_context_t* c, unsigned int offset, 
     return offset;
 }
 
-// stash a resolve_dyncname dname result
-F_NONNULL
-static const uint8_t* _dync_store_dname(dnspacket_context_t* c, const uint8_t* dname) {
-    dmn_assert(c); dmn_assert(dname);
-    dmn_assert(c->dync_count < gconfig.max_cname_depth);
-    uint8_t* dntmp = &c->dync_store[(c->dync_count++ * 256)];
-    gdnsd_dname_copy(dntmp, dname);
-    return dntmp;
-}
-
-// "answer" here is overloaded from its original meaning.
+// "answer" here is overloaded from its original meaning for the other RRs.
 //   normally it means 'this record's going into the answer section as opposed to auth/additional'
-//   here it means true: 'direct CNAME query, false: chaining through for a non-CNAME query'
+//   here it means true: 'direct CNAME query', false: 'chaining through for a non-CNAME query'
 //    (and in either case, it's going into the answer section)
 F_NONNULL
 static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_cname_t* rd, const bool answer) {
@@ -1047,7 +1037,9 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
         dname = rd->dname;       
     }
     else {
-        dyncname_result_t ans_dync = {0,0,{0}};
+        dmn_assert(c->dync_count < gconfig.max_cname_depth);
+        dyncname_result_t ans_dync = {0, 0, &c->dync_store[(c->dync_count++ * 256)] };
+        dname = ans_dync.dname;
         ans_dync.ttl = ntohl(rd->gen.ttl);
 
         rd->dyn.func(c->threadnum, rd->dyn.resource, rd->dyn.origin, &c->client_info, &ans_dync);
@@ -1055,8 +1047,10 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
             c->edns_client_scope_mask = ans_dync.edns_scope_mask;
         ttl = htonl(ans_dync.ttl);
 
-        // plugin is responsible for ensuring ans_dync.dname is always valid
-        dname = _dync_store_dname(c, ans_dync.dname);
+        // plugin is responsible for ensuring ans_dync.dname contents are valid,
+        //   and not casting away const and overwriting the pointer
+        dmn_assert(dname == ans_dync.dname);
+        dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
     }
  
     // start formulating response

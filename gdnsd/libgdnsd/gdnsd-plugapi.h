@@ -74,7 +74,11 @@ typedef struct {
 typedef struct {
     uint32_t ttl;
     unsigned edns_scope_mask;
-    uint8_t dname[256];
+    // dname pointer is already set, it points at the storage
+    //   you should copy your result to.  Do *not* overwrite
+    //   this with a new pointer (the const should make that
+    //   fail anyways).
+    uint8_t* const dname;
 } dyncname_result_t;
 
 // Push an anysin_t onto a dynaddr_result_t.  Handles both families, asserts
