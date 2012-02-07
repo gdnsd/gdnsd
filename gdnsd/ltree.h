@@ -195,8 +195,8 @@ struct _ltree_rrset_gen_struct {
         struct {
             uint8_t count_v4;
             uint8_t count_v6;
-        } c;
-    } c;
+        };
+    };
 };
 
 struct _ltree_rrset_addr_struct {
@@ -210,7 +210,7 @@ struct _ltree_rrset_addr_struct {
             gdnsd_resolve_dynaddr_cb_t func;
             unsigned resource;
         } dyn;
-    } a;
+    };
     uint16_t limit_v4;
     uint16_t limit_v6;
 };
@@ -231,7 +231,7 @@ struct _ltree_rrset_cname_struct {
             gdnsd_resolve_dyncname_cb_t func;
             unsigned resource;
         } dyn;
-    } c;
+    };
 };
 
 struct _ltree_rrset_ns_struct {

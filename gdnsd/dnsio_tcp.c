@@ -92,9 +92,9 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
         tdata->state == WRITING ? "writing to" : "reading from", logf_anysin(tdata->asin));
 
     if(tdata->state == WRITING)
-        satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.sendfail);
+        satom_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
     else
-        satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.recvfail);
+        satom_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
 
     cleanup_conn_watchers(loop, tdata);
 }
@@ -112,7 +112,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     if(unlikely(written == -1)) {
         if(errno != EAGAIN) {
             log_pkterr("TCP DNS send() failed, dropping response to %s: %s", logf_anysin(tdata->asin), logf_errno());
-            satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.sendfail);
+            satom_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
             cleanup_conn_watchers(loop, tdata);
             return;
         }
@@ -170,7 +170,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
             else if(tdata->size_done) {
                 log_pkterr("TCP DNS recv() from %s: Unexpected EOF", logf_anysin(tdata->asin));
             }
-            satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.recvfail);
+            satom_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
         }
         cleanup_conn_watchers(loop, tdata);
         return;
@@ -183,7 +183,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
             tdata->size = (tdata->buffer[0] << 8) + tdata->buffer[1] + 2;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
                 log_pkterr("Oversized TCP DNS query of length %u from %s", tdata->size, logf_anysin(tdata->asin));
-                satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.recvsize);
+                satom_inc(&tdata->thread_ctx->pctx->stats->tcp.recvsize);
                 cleanup_conn_watchers(loop, tdata);
                 return;
             }

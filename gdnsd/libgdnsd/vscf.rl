@@ -96,7 +96,7 @@ union _vscf_data_t {
     struct {
         vscf_data_t*    parent;
         vscf_type_t     type;
-    } v;
+    };
     vscf_simple_t   simple;
     vscf_array_t    array;
     vscf_hash_t     hash;
@@ -183,7 +183,7 @@ static void hash_grow(vscf_hash_t* h) {
 }
 
 static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, vscf_data_t* v) {
-    v->v.parent = (vscf_data_t*)h;
+    v->parent = (vscf_data_t*)h;
 
     if(!h->children) {
         h->children = calloc(2, sizeof(vscf_hentry_t*));
@@ -237,7 +237,7 @@ static vscf_array_t* array_new(void) {
 }
 
 static void array_add_val(vscf_array_t* a, vscf_data_t* v) {
-    v->v.parent = (vscf_data_t*)a;
+    v->parent = (vscf_data_t*)a;
     unsigned idx = a->len++;
     a->vals = realloc(a->vals, a->len * sizeof(vscf_data_t*));
     a->vals[idx] = v;
@@ -281,7 +281,7 @@ static vscf_simple_t* simple_clone(const vscf_simple_t* s) {
 
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked) {
     vscf_data_t* rv = NULL;
-    switch(d->v.type) {
+    switch(d->type) {
         case VSCF_HASH_T:   rv = (vscf_data_t*)hash_clone(&d->hash, ignore_marked); break;
         case VSCF_ARRAY_T:  rv = (vscf_data_t*)array_clone(&d->array, ignore_marked); break;
         case VSCF_SIMPLE_T: rv = (vscf_data_t*)simple_clone(&d->simple); break;
@@ -316,12 +316,12 @@ static void set_key(vscf_scnr_t* scnr, const char* end) {
 }
 
 static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
-    if(scnr->cont->v.type == VSCF_HASH_T) {
+    if(scnr->cont->type == VSCF_HASH_T) {
         vscf_hash_t* h = &scnr->cont->hash;
         return scnr_hash_add_val(scnr, h, v);
     }
     else {
-        dmn_assert(scnr->cont->v.type == VSCF_ARRAY_T);
+        dmn_assert(scnr->cont->type == VSCF_ARRAY_T);
         vscf_array_t* a = &scnr->cont->array;
         array_add_val(a, v);
         return true;
@@ -373,7 +373,7 @@ static void array_destroy(vscf_array_t* a);
 static void hash_destroy(vscf_hash_t* h);
 
 static void val_destroy(vscf_data_t* d) {
-    switch(d->v.type) {
+    switch(d->type) {
         case VSCF_HASH_T:   hash_destroy(&d->hash); break;
         case VSCF_ARRAY_T:  array_destroy(&d->array); break;
         case VSCF_SIMPLE_T: simple_destroy(&d->simple); break;
@@ -656,12 +656,12 @@ const vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
 
 void vscf_destroy(const vscf_data_t* d) { val_destroy((vscf_data_t*)d); }
 
-vscf_type_t vscf_get_type(const vscf_data_t* d) { return d->v.type; }
-bool vscf_is_simple(const vscf_data_t* d) { return d->v.type == VSCF_SIMPLE_T; }
-bool vscf_is_array(const vscf_data_t* d) { return d->v.type == VSCF_ARRAY_T; }
-bool vscf_is_hash(const vscf_data_t* d) { return d->v.type == VSCF_HASH_T; }
-bool vscf_is_root(const vscf_data_t* d) { return d->v.parent == NULL; }
-const vscf_data_t* vscf_get_parent(const vscf_data_t* d) { return d->v.parent; }
+vscf_type_t vscf_get_type(const vscf_data_t* d) { return d->type; }
+bool vscf_is_simple(const vscf_data_t* d) { return d->type == VSCF_SIMPLE_T; }
+bool vscf_is_array(const vscf_data_t* d) { return d->type == VSCF_ARRAY_T; }
+bool vscf_is_hash(const vscf_data_t* d) { return d->type == VSCF_HASH_T; }
+bool vscf_is_root(const vscf_data_t* d) { return d->parent == NULL; }
+const vscf_data_t* vscf_get_parent(const vscf_data_t* d) { return d->parent; }
 
 unsigned vscf_simple_get_len(const vscf_data_t* d) {
     vscf_simple_ensure_val(&d->simple);
@@ -674,13 +674,13 @@ const char* vscf_simple_get_data(const vscf_data_t* d) {
 }
 
 unsigned vscf_array_get_len(const vscf_data_t* d) {
-    if(d->v.type != VSCF_ARRAY_T)
+    if(d->type != VSCF_ARRAY_T)
         return 1;
     return d->array.len;
 }
 
 const vscf_data_t* vscf_array_get_data(const vscf_data_t* d, unsigned idx) {
-    if(d->v.type != VSCF_ARRAY_T) {
+    if(d->type != VSCF_ARRAY_T) {
         if(idx) return NULL;
         return d;
     }

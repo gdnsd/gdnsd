@@ -45,7 +45,7 @@ typedef struct {
       satom_t recvsize;
       satom_t sendfail;
     } tcp;
-  } p;
+  };
 
   // DNS layer stats, first 6 directly correspond to RCODEs
   // All 7, summed, represent the total count

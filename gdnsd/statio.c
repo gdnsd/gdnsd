@@ -192,17 +192,17 @@ static void accumulate_stats(unsigned threadnum) {
 
     if(this_stats->is_udp) {
         stats.udp_reqs     += this_reqs;
-        stats.udp_recvfail += satom_get(&this_stats->p.udp.recvfail);
-        stats.udp_sendfail += satom_get(&this_stats->p.udp.sendfail);
-        stats.udp_tc       += satom_get(&this_stats->p.udp.tc);
-        stats.udp_edns_big += satom_get(&this_stats->p.udp.edns_big);
-        stats.udp_edns_tc  += satom_get(&this_stats->p.udp.edns_tc);
+        stats.udp_recvfail += satom_get(&this_stats->udp.recvfail);
+        stats.udp_sendfail += satom_get(&this_stats->udp.sendfail);
+        stats.udp_tc       += satom_get(&this_stats->udp.tc);
+        stats.udp_edns_big += satom_get(&this_stats->udp.edns_big);
+        stats.udp_edns_tc  += satom_get(&this_stats->udp.edns_tc);
     }
     else {
         stats.tcp_reqs     += this_reqs;
-        stats.tcp_recvfail += satom_get(&this_stats->p.tcp.recvfail);
-        stats.tcp_recvsize += satom_get(&this_stats->p.tcp.recvsize);
-        stats.tcp_sendfail += satom_get(&this_stats->p.tcp.sendfail);
+        stats.tcp_recvfail += satom_get(&this_stats->tcp.recvfail);
+        stats.tcp_recvsize += satom_get(&this_stats->tcp.recvsize);
+        stats.tcp_sendfail += satom_get(&this_stats->tcp.sendfail);
     }
 
     stats.dns_v6             += satom_get(&this_stats->v6);

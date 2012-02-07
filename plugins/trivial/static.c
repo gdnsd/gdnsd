@@ -31,9 +31,9 @@ typedef struct {
     bool is_addr;
     uint32_t ipaddr;
     uint8_t *dname;
-} static_resource;
+} static_resource_t;
 
-static static_resource* resources = NULL;
+static static_resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
 static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const vscf_data_t* addr, void* data) {
@@ -72,7 +72,7 @@ monio_list_t* plugin_static_load_config(const vscf_data_t* config) {
     dmn_assert(vscf_get_type(config) == VSCF_HASH_T);
 
     num_resources = vscf_hash_get_len(config);
-    resources = malloc(num_resources * sizeof(static_resource));
+    resources = malloc(num_resources * sizeof(static_resource_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, false, config_res, &residx);
 
