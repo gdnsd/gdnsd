@@ -17,8 +17,12 @@
  *
  */
 
-// wrap embedded libev and suppress warnings, because libev is noisy with the gcc warnings
+// wraps embedded libev source
+
+// override assert with ours which syslogs failures in daemonized debug builds
+// (also requires a one-line change in ev.c to disable including assert.h)
 #include "gdnsd-dmn.h"
 #define assert dmn_assert
+// suppress warnings, because libev is noisy with the gcc warnings
 #pragma GCC system_header
 #include "ev.c"

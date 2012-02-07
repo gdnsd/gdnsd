@@ -17,7 +17,8 @@
  *
  */
 
-// wrap embedded libev
+// This wraps libev/ev.c, but we step through evwrap_ch.h first
+// to use gcc's very obtuse system header pragma to silence warnings
 
 #include "evwrap_ch.h"
 

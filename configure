@@ -12870,37 +12870,7 @@ _ACEOF
 
 else
 
-      if test $(uname) = Linux; then
-      { $as_echo "$as_me:${as_lineno-$LINENO}: checking for clock_gettime syscall" >&5
-$as_echo_n "checking for clock_gettime syscall... " >&6; }
-      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include <unistd.h>
-                       #include <sys/syscall.h>
-                       #include <time.h>
-int
-main ()
-{
-struct timespec ts; int status = syscall (SYS_clock_gettime, CLOCK_REALTIME, &ts)
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_have_clock_syscall=1
-
-$as_echo "#define HAVE_CLOCK_SYSCALL 1" >>confdefs.h
-
-                      { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-   fi
-   if test -z "$LIBEV_M4_AVOID_LIBRT" && test -z "$ac_have_clock_syscall"; then
+                                                if test -z "$LIBEV_M4_AVOID_LIBRT" && test -z "$ac_have_clock_syscall"; then
       { $as_echo "$as_me:${as_lineno-$LINENO}: checking for clock_gettime in -lrt" >&5
 $as_echo_n "checking for clock_gettime in -lrt... " >&6; }
 if ${ac_cv_lib_rt_clock_gettime+:} false; then :
@@ -13038,13 +13008,15 @@ fi
 done
 
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for ceil in -lm" >&5
-$as_echo_n "checking for ceil in -lm... " >&6; }
-if ${ac_cv_lib_m_ceil+:} false; then :
+if test -z "$LIBEV_M4_AVOID_LIBM"; then
+   LIBM=m
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing floor" >&5
+$as_echo_n "checking for library containing floor... " >&6; }
+if ${ac_cv_search_floor+:} false; then :
   $as_echo_n "(cached) " >&6
 else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lm  $LIBS"
+  ac_func_search_save_LIBS=$LIBS
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -13054,32 +13026,46 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 #ifdef __cplusplus
 extern "C"
 #endif
-char ceil ();
+char floor ();
 int
 main ()
 {
-return ceil ();
+return floor ();
   ;
   return 0;
 }
 _ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib_m_ceil=yes
-else
-  ac_cv_lib_m_ceil=no
+for ac_lib in '' $LIBM; do
+  if test -z "$ac_lib"; then
+    ac_res="none required"
+  else
+    ac_res=-l$ac_lib
+    LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
+  fi
+  if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_search_floor=$ac_res
 fi
 rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
+    conftest$ac_exeext
+  if ${ac_cv_search_floor+:} false; then :
+  break
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_m_ceil" >&5
-$as_echo "$ac_cv_lib_m_ceil" >&6; }
-if test "x$ac_cv_lib_m_ceil" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBM 1
-_ACEOF
+done
+if ${ac_cv_search_floor+:} false; then :
 
-  LIBS="-lm $LIBS"
+else
+  ac_cv_search_floor=no
+fi
+rm conftest.$ac_ext
+LIBS=$ac_func_search_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_floor" >&5
+$as_echo "$ac_cv_search_floor" >&6; }
+ac_res=$ac_cv_search_floor
+if test "$ac_res" != no; then :
+  test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
+
+$as_echo "#define HAVE_FLOOR 1" >>confdefs.h
 
 fi
 
