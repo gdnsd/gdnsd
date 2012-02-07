@@ -271,10 +271,10 @@ F_CONST static inline unsigned max_unsigned(const unsigned int a, const unsigned
 F_CONST static inline unsigned min_unsigned(const unsigned int a, const unsigned int b) { return a < b ? a : b; }
 
 typedef enum {
-    DECODE_IGNORE  = -4, // totally invalid packet (len < header len or unparseable question)
-    DECODE_FORMERR = -3, // Currently, only bad EDNS0 options
+    DECODE_IGNORE  = -4, // totally invalid packet (len < header len or unparseable question, and we do not respond)
+    DECODE_FORMERR = -3, // slightly better but still invalid input, we return FORMERR
     DECODE_BADVERS = -2, // EDNS version higher than ours (0)
-    DECODE_NOTIMP  = -1, // non-QUERY opcode or [AI]XFER, need to return NOTIMP to client
+    DECODE_NOTIMP  = -1, // non-QUERY opcode or [AI]XFER, we return NOTIMP
     DECODE_OK      =  0, // normal and valid
 } rcode_rv_t;
 
@@ -1624,6 +1624,7 @@ F_NONNULL
 static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname, unsigned int offset) {
     dmn_assert(c); dmn_assert(qname); dmn_assert(offset);
 
+    const unsigned first_offset = offset;
     bool via_cname = false;
     unsigned cname_depth = 0;
     const ltree_node_t* resdom;
@@ -1648,7 +1649,12 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         via_cname = true;
 
         if(++cname_depth > gconfig.max_cname_depth) {
-            log_pkterr("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth), response will contain a dangling CNAME", logf_dname(qname), gconfig.max_cname_depth);
+            log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
+            resdom = NULL; // clear resdom to generate NXDOMAIN-style response
+            // wipe any data already added to the packet
+            offset = first_offset;
+            c->ancount = 0;
+            c->cname_ancount = 0;
             break;
         }
 

@@ -358,26 +358,10 @@ _GDT->test_dns(
 # DYNC that loops on itself until max_cname_depth (16) is reached...
 _GDT->test_dns(
     qname => 'res5.example.com', qtype => 'AAAA',
-    answer => [
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-        'res5.example.com 86400 CNAME dc2cn-loop.example.com',
-        'dc2cn-loop.example.com 86400 CNAME res5.example.com',
-    ],
+    header => { rcode => 'NXDOMAIN' },
+    answer => [],
     auth => $soa,
-    stats => [qw/udp_reqs noerror/],
+    stats => [qw/udp_reqs nxdomain/],
 );
 
 #geoip + weighted

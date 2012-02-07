@@ -241,14 +241,18 @@ are expected to return an integer resource number.
 
 The meaning and mapping of these resource numbers is entirely up to the plugin.
 Any time the given RR is resolved at runtime, the resource number you returned
-here will be passed back to your code for dynamic resolution.  If your DYNC
-plugin supports variable origins (e.g. the same resource name can be re-used
-in multiple zonefiles, and prepends some standard domainname fragment to
-origin in effect for the given RR), it is important that you at least validate
-that you can construct a legal domainname (length limits) from the given
-origin, resource name, and your own config at this time.  You may wish
-to return unique resource numbers for each unique combination of
-origin+resname and cache pre-built return values as well.
+here will be passed back to your code for dynamic resolution.
+
+If your DYNC plugin supports variable origins (e.g. the same resource name can
+be re-used in multiple zonefiles, and prepends some standard domainname fragment
+to origin in effect for the given RR), it is important that you validate that
+you can construct a legal domainname (length limits) from the given origin,
+resource name, and your own config at this time.  This validation is the B<only>
+reason the C<origin> parameter is provided for C<plugin_foo_map_resource_dync>.
+
+Plugins should B<not> return different resource numbers for the same resname
+argument, even in the DYNC case where C<origin> varies.  You will break things
+if you do so.
 
 In the case of the action C<checkconf>, execution stops here.  Only the
 C<start> and C<restart> actions continue on to become full-fledged daemon
