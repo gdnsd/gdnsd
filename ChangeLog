@@ -1,3 +1,30 @@
+1.6.1 - 2012-02-07
+    Various small documentation edits
+    plugin_simplefo: fixed a crash-on-startup (as opposed to clean
+      exit with appropriate error message) that could occur with
+      certain invalid configurations.
+    Four interrelated CNAME bugfixes:
+    Fixed a runtime issue with cross-zone CNAME -> CNAME chains between
+      pairs of local zones: in production builds additional pointless
+      answer-section records were being returned, and in debug builds
+      the daemon would die from an assertion failure.
+    Fixed the zonefile loader to not throw strict_data warnings on
+      cross-zone dangling CNAMEs, because the runtime doesn't chase
+      these regardless and it's more consistent with how we treat
+      other RR-types (e.g. MX, PTR).
+    Fixed the zonefile loader to no longer error out on configurations
+      that contain cross-zone CNAME chains which exceed max_cname_depth,
+      because the runtime code doesn't chase these regardless.
+    Previously if the runtime resolver detected a local CNAME chain
+      exceeding max_cname_depth (which can only happen with
+      DYNC-handling plugins), it returned a packet with a dangling CNAME
+      in the answer section.  This behavior turned out to be
+      unacceptable, because if the source of the problem is an infinite
+      CNAME loop, the client might continuously query us chasing the
+      infinite loop of dangling CNAMEs.  Behavior was changed to return
+      an empty NXDOMAIN response with a loud syslog() error message
+      about fixing the configuration instead.
+
 1.6.0 - 2012-02-03
     Start of new stable series, 1.6.x will be bugfix-only.
     weighted, multifo, simplefo plugins:
