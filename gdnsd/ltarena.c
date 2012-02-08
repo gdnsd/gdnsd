@@ -101,7 +101,7 @@ static void* make_pool(const unsigned bytes) {
 
     // let valgrind know what's going on, if running
     //   and we're a debug build
-    VALGRIND_MAKE_MEM_NOACCESS(p, bytes);
+    NOWARN_VALGRIND_MAKE_MEM_NOACCESS(p, bytes);
     NOWARN_VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1);
 
     return p;

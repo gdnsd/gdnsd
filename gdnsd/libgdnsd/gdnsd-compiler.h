@@ -64,11 +64,13 @@
 // Valgrind hooks for debug builds
 #if !defined(NDEBUG) && defined(HAVE_VALGRIND_MEMCHECK_H)
 #  include <valgrind/memcheck.h>
+#define NOWARN_VALGRIND_MAKE_MEM_NOACCESS(x,y) \
+    do { int _x V_UNUSED; _x = VALGRIND_MAKE_MEM_NOACCESS(x,y); } while(0)
 #else
 #  define RUNNING_ON_VALGRIND 0
-#  define VALGRIND_MAKE_MEM_NOACCESS(x,y) ((void)(0))
 #  define VALGRIND_MEMPOOL_ALLOC(x,y,z)   ((void)(0))
 #  define VALGRIND_CREATE_MEMPOOL(x,y,z)  ((void)(0))
+#  define NOWARN_VALGRIND_MAKE_MEM_NOACCESS(x,y) ((void)(0))
 #endif
 
 // And silence some related warnings on gcc 4.6 + valgrind 3.6
