@@ -74,11 +74,6 @@ if($ENV{TEST_RUNNER}) {
     $TEST_RUNNER = $ENV{TEST_RUNNER};
 }
 
-our $PKTERR = 1;
-if($ENV{NO_PKTERR}) {
-    $PKTERR = 0;
-}
-    
 our $TESTPORT_START = $ENV{TESTPORT_START};
 die "Test port start specification is not a number"
     unless looks_like_number($TESTPORT_START);

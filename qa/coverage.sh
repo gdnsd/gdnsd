@@ -18,7 +18,6 @@ make
 lcov -c -i -d gdnsd -o gdnsd-base.info
 
 make check
-NO_PKTERR=1 make check
 
 lcov -c -d gdnsd -o gdnsd-test.info
 lcov -a gdnsd-base.info -a gdnsd-test.info -o gdnsd-cov.info
