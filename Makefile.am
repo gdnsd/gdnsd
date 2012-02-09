@@ -5,7 +5,7 @@ ACLOCAL_AMFLAGS = -I m4
 # Subdirectories to recurse into
 SUBDIRS = gdnsd plugins example docs t
 
-dist_doc_DATA = README INSTALL AUTHORS COPYING ChangeLog
+MISC_DOCS = README INSTALL AUTHORS COPYING ChangeLog
 
 EXTRA_DIST = docs.am
 
@@ -29,6 +29,11 @@ install-exec-hook:
 	@echo
 
 check-download:
-	@echo Making check-download in plugins
-	@cd plugins && $(MAKE) $(AM_MAKEFLAGS) check-download
+	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
 
+mtaintainer-clean-local: docs-maintainer-clean
+
+clean-local:
+	@rm -rf $(top_srcdir)/gwiki.out
+
+include $(top_srcdir)/docs.am

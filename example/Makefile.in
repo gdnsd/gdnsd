@@ -15,6 +15,18 @@
 
 @SET_MAKE@
 
+#***************************************************************
+#* This must be included in *all* Makefile.am in this project! *
+#***************************************************************
+
+#### Generic doc-building/cleaning rules
+# Intended to be included from Makefile.am in various subdirs
+# Variables to be set by the including Makefile.am:
+# PODS_N    : POD source files for manpages in a given section "N"
+# PODS_MISC : POD source files for non-manpages
+# MISC_DOCS : non-POD docfiles to be distributed + installed
+#####
+
 VPATH = @srcdir@
 pkgdatadir = $(datadir)/@PACKAGE@
 pkgincludedir = $(includedir)/@PACKAGE@
@@ -34,8 +46,9 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
+DIST_COMMON = $(dist_doc_DATA) $(dist_man_MANS) $(srcdir)/Makefile.am \
+	$(srcdir)/Makefile.in $(top_srcdir)/docs.am
 subdir = example
-DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ax_compare_version.m4 \
 	$(top_srcdir)/m4/ax_prog_perl_modules.m4 \
@@ -88,8 +101,8 @@ am__uninstall_files_from_dir = { \
     || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
          $(am__cd) "$$dir" && rm -f $$files; }; \
   }
-am__installdirs = "$(DESTDIR)$(cfdir)"
-DATA = $(cf_DATA)
+am__installdirs = "$(DESTDIR)$(cfdir)" "$(DESTDIR)$(docdir)"
+DATA = $(cf_DATA) $(dist_doc_DATA)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
@@ -122,6 +135,7 @@ GEOLITE_DECOMP = @GEOLITE_DECOMP@
 GEOLITE_DL = @GEOLITE_DL@
 GREP = @GREP@
 HAVE_TESTSUITE_MODULES = @HAVE_TESTSUITE_MODULES@
+HAVE_WIKI_MODULE = @HAVE_WIKI_MODULE@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -163,9 +177,9 @@ PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PERL = @PERL@
 PERL_VERSION = @PERL_VERSION@
-POD2HTML = @POD2HTML@
 POD2MAN = @POD2MAN@
 POD2TEXT = @POD2TEXT@
+POD2WIKI = @POD2WIKI@
 PTHREAD_CC = @PTHREAD_CC@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 PTHREAD_LIBS = @PTHREAD_LIBS@
@@ -233,10 +247,27 @@ top_srcdir = @top_srcdir@
 cfdir = $(sysconfdir)/$(PACKAGE_NAME)
 cf_DATA = config.example example.com
 EXTRA_DIST = config.example example.com
+
+# Gather up the .pod files
+ALL_PODS = $(PODS_MISC) $(PODS_1) $(PODS_3) $(PODS_5) $(PODS_8)
+
+# Manpages for distribution + installation
+dist_man_MANS = $(PODS_1:.pod=.1) $(PODS_3:.pod=.3) $(PODS_5:.pod=.5) $(PODS_8:.pod=.8)
+
+# All generated docs other than the dist_man_MANS above
+GENERATED_DOCS_NOTMAN = $(ALL_PODS:.pod=.txt)
+
+# dist + install all non-man generated docs, the pod sources, and MISC_DOCS
+dist_doc_DATA = $(GENERATED_DOCS_NOTMAN) $(ALL_PODS) $(MISC_DOCS)
+
+# A complete list of generated docs, including dist_man_MANS, for maintainer-clean
+GENERATED_DOCS = $(GENERATED_DOCS_NOTMAN) $(dist_man_MANS)
+GWIKI_DIR = $(abs_top_builddir)/gwiki.out
 all: all-am
 
 .SUFFIXES:
-$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
+.SUFFIXES: .1 .3 .5 .8 .pod .txt
+$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(top_srcdir)/docs.am $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -257,6 +288,7 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe)'; \
 	    cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe);; \
 	esac;
+$(top_srcdir)/docs.am:
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
@@ -290,6 +322,24 @@ uninstall-cfDATA:
 	@list='$(cf_DATA)'; test -n "$(cfdir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(cfdir)'; $(am__uninstall_files_from_dir)
+install-dist_docDATA: $(dist_doc_DATA)
+	@$(NORMAL_INSTALL)
+	test -z "$(docdir)" || $(MKDIR_P) "$(DESTDIR)$(docdir)"
+	@list='$(dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	for p in $$list; do \
+	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
+	  echo "$$d$$p"; \
+	done | $(am__base_list) | \
+	while read files; do \
+	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(docdir)'"; \
+	  $(INSTALL_DATA) $$files "$(DESTDIR)$(docdir)" || exit $$?; \
+	done
+
+uninstall-dist_docDATA:
+	@$(NORMAL_UNINSTALL)
+	@list='$(dist_doc_DATA)'; test -n "$(docdir)" || list=; \
+	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
+	dir='$(DESTDIR)$(docdir)'; $(am__uninstall_files_from_dir)
 tags: TAGS
 TAGS:
 
@@ -331,7 +381,7 @@ check-am: all-am
 check: check-am
 all-am: Makefile $(DATA)
 installdirs:
-	for dir in "$(DESTDIR)$(cfdir)"; do \
+	for dir in "$(DESTDIR)$(cfdir)" "$(DESTDIR)$(docdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -384,7 +434,7 @@ info: info-am
 
 info-am:
 
-install-data-am: install-cfDATA
+install-data-am: install-cfDATA install-dist_docDATA
 
 install-dvi: install-dvi-am
 
@@ -428,22 +478,58 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-cfDATA
+uninstall-am: uninstall-cfDATA uninstall-dist_docDATA
 
 .MAKE: install-am install-strip
 
 .PHONY: all all-am check check-am clean clean-generic clean-libtool \
 	distclean distclean-generic distclean-libtool distdir dvi \
 	dvi-am html html-am info info-am install install-am \
-	install-cfDATA install-data install-data-am install-dvi \
-	install-dvi-am install-exec install-exec-am install-html \
-	install-html-am install-info install-info-am install-man \
-	install-pdf install-pdf-am install-ps install-ps-am \
-	install-strip installcheck installcheck-am installdirs \
-	maintainer-clean maintainer-clean-generic mostlyclean \
-	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	uninstall uninstall-am uninstall-cfDATA
+	install-cfDATA install-data install-data-am \
+	install-dist_docDATA install-dvi install-dvi-am install-exec \
+	install-exec-am install-html install-html-am install-info \
+	install-info-am install-man install-pdf install-pdf-am \
+	install-ps install-ps-am install-strip installcheck \
+	installcheck-am installdirs maintainer-clean \
+	maintainer-clean-generic mostlyclean mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am uninstall uninstall-am \
+	uninstall-cfDATA uninstall-dist_docDATA
 
+
+.pod.8:
+	$(AM_V_GEN)$(POD2MAN) --section=8 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.5:
+	$(AM_V_GEN)$(POD2MAN) --section=5 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.3:
+	$(AM_V_GEN)$(POD2MAN) --section=3 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.1:
+	$(AM_V_GEN)$(POD2MAN) --section=1 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.txt:
+	$(AM_V_GEN)$(POD2TEXT) -l $< $@
+
+gwiki:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir gwiki; \
+	done
+	@if [ ! -d $(GWIKI_DIR) ]; then \
+		$(MKDIR_P) $(GWIKI_DIR); \
+	fi
+	@for podsrc in $(ALL_PODS); do \
+                wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.wiki/'`; \
+		echo Generating gwiki.out/$$wikifn ...; \
+		$(POD2WIKI) --style googlecode $$podsrc $(GWIKI_DIR)/$$wikifn; \
+	done
+
+# clean all generated docs
+docs-maintainer-clean:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir docs-maintainer-clean; \
+	done
+	rm -f $(GENERATED_DOCS)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

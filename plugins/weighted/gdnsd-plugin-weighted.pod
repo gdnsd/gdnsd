@@ -122,7 +122,7 @@ There are two basic configuration modes within a resource:
 1) Explicit per-family/type sub-stanzas.  In this mode, the resource contains
 one or more of the keys C<addrs_v4>, C<addrs_v6>, and C<cnames>.  The contents
 of each stanza configure response RRs of the given type for this resource, and
-in the addrs_v[46] cases, the 3 behavioral parameters C<service_types>,
+in the addrs_v4/addrs_v6 cases, the 3 behavioral parameters C<service_types>,
 C<multi>, and C<up_thresh> can be overridden per-address-family as well.
 
 2) Automatic top-level detection of just one family/type.  In this mode, you
@@ -333,7 +333,7 @@ The gdnsd manual.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2011-2012 Anton Tolchanov <me@knyar.net>, 
+Copyright (c) 2012 Anton Tolchanov <me@knyar.net>,
 Brandon L Black <blblack@gmail.com> and Jay Reitz <jreitz@gmail.com>
 
 This file is part of gdnsd-plugin-weighted.

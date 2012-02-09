@@ -1,4 +1,4 @@
-/* Copyright © 2011 Brandon L Black
+/* Copyright © 2012 Brandon L Black
  *
  * This file is part of vscf.
  *

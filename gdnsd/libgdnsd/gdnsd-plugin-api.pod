@@ -5,8 +5,6 @@ gdnsd-plugin-api - How to write gdnsd plugin code
 
 =head1 SYNOPSIS
 
-  This file documents version 9 of the gdnsd plugin API.
-
   Mandatory preamble macro+header your source must include at the top:
     #define GDNSD_PLUGIN_NAME foo
     #include <gdnsd-plugin.h>
@@ -34,7 +32,18 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     -- cleanup stuff:
     void plugin_foo_exit(void)
 
+=head1 WARNING
+
+Please note that in general, gdnsd's plugin API is poorly documented
+and unstable.  It often goes through fairly large and abrupt changes
+during development cycles, although it tends to be stable for a given
+stable release series.  Write code against it at your own peril
+(or at least, let me know so I can give you some warning on upcoming
+changes and/or solicit your feedback!).
+
 =head1 OVERVIEW
+
+This file documents version 9 of the gdnsd plugin API.
 
 L<gdnsd>'s plugin API offers the ability to write plugins that can
 do either (or both) of two roles:
@@ -174,9 +183,7 @@ summary of all of the API interfaces and semantics follows in a later section,
 but it would be good to read through this lengthy prose explanation at least
 once.
 
-=over 4
-
-=item CONFIGURATION
+=head2 CONFIGURATION
 
 Anytime the gdnsd binary is executed (assuming there is no immediate error in
 parsing the commandline arguments), it will load the gdnsd configuration file.
@@ -258,7 +265,7 @@ In the case of the action C<checkconf>, execution stops here.  Only the
 C<start> and C<restart> actions continue on to become full-fledged daemon
 instances.
 
-=item RUNTIME
+=head2 RUNTIME
 
 At this point in time, more daemon setup occurs (including the act of
 daemonization itself, which includes closing all open file descriptors).  The
@@ -383,8 +390,6 @@ from the main thread's context.  You can log any stats output you wish here,
 and/or destruct any resources you wish (no worry about races from io thread access,
 they're all dead now).
 
-=back
-
 =head1 THREADING
 
 gdnsd uses POSIX threads.  Only the runtime resolve callbacks (
@@ -469,9 +474,7 @@ to error out if the API version is too old for your plugin code).
 Prior to API version 3, there wasn't any good API documentation and no known
 3rd-party plugins.
 
-=over 4
-
-=item Version 4
+=head2 Version 4
 
 The API function gdnsd_monio_add() was removed completely.
 
@@ -486,7 +489,7 @@ whole underwent some changes.  Hash keys and values are now separated by
 C<=E<gt>> or C<=> (rather than C<:> or C<=>), and C<:> is now allowed in
 literal, unquoted keys and values.
 
-=item Verion 5
+=head2 Verion 5
 
 C<plugin_foo_map_resource> was replaced with C<plugin_foo_map_resource_dyna>.
 
@@ -500,7 +503,7 @@ that defines no callbacks would be useless.  Similarly, if you don't implement a
 least one of C<plugin_foo_resolve_dynaddr> or C<plugin_foo_resolve_dyncname> your
 plugin will be fairly useless as well.
 
-=item Version 9
+=head2 Version 9
 
 Note: Versions 6-8 existed in the long-running 1.5.x dev series, but never a release build,
 so the V9 info here summarizes all changes from V5 -> V9.
@@ -574,7 +577,7 @@ can consider this resource effectively-dead for failover purposes.  You
 should still return some valid result-set (common practice would be to
 return all if everything's down, as if nothing in the resource were down).
 
-=item Version 10
+=head2 Version 10
 
 Version 10 is in a developer branch and unpublished other than through
 the git tree itself.  It is subject to continuing changes until a 1.7.x
@@ -599,8 +602,6 @@ merely recommended in the past.
 A few other minor changes require just a recompile, even if none of
 the above applies.
 
-=back
-
 =head1 SEE ALSO
 
 The source for the included addr/cname-resolution plugins C<null>, C<reflect>,
@@ -613,7 +614,7 @@ The gdnsd manual.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2010 Brandon L Black <blblack@gmail.com>
+Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
 
 This file is part of gdnsd.
 

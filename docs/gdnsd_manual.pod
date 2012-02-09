@@ -8,13 +8,13 @@ although perhaps those functions can be split up at a later date.
 
 This manual is not intended to be an exhaustive reference.  For a
 complete rundown of every configuration and commandline option and
-its precise technical meaning, see the man pages for gdnsd,
-gdnsd.config, and gdnsd.zonefile.
+its precise technical meaning, see the man pages.
 
 =head1 Portability Testing
 
 This was done during the run-up to 1.2.0, and hasn't been re-tested
-by me since.
+by me since.  There's a good chance that some platforms have become
+broken since this, especially ones with non-gcc-compatible compilers.
 
 I've personally run through the process of, basically:
 C<./configure && make check && sudo make install && make installcheck>
@@ -96,7 +96,7 @@ necessary socket read/write traffic) or heap allocations at runtime.
 All necessary heap data/buffers are pre-allocated before these threads
 begin serving requests.
 
-The scaling of UDP DNS was looked into extensively.  Adding more threads
+The scaling of UDP DNS was looked into extensively on Linux.  Adding more threads
 per socket never works as the socket itself is a serial, locked
 resource for the operating system and our DNS code is way faster than
 the socket operations themselves.
@@ -134,29 +134,53 @@ for the corresponding DNS response codes (RCODEs):
 
 =over 4
 
-=item refused - Request was refused by the server because the server is not
+=item refused
+
+Request was refused by the server because the server is not
 authoritative for the queried name.
 
-=item nxdomain - Request was for a non-existant domainname.  In other words,
+=item nxdomain
+
+Request was for a non-existant domainname.  In other words,
 a name the daemon is authoritative for, but which does not exist in the
 database.
 
-=item notimp - Requested service not implemented by this daemon, such
-as zone transfer requests.
+=item notimp
 
-=item badvers - Request had an EDNS OPT RR with a version higher than
+Requested service not implemented by this daemon, such as zone transfer requests.
+
+=item badvers
+
+Request had an EDNS OPT RR with a version higher than
 zero, which this daemon does not support (at the time of this writing,
 such a version doesn't even exist).
 
-=item dropped - Request was so horribly malformed that we didn't even
+=item dropped
+
+Request was so horribly malformed that we didn't even
 bother to respond (too short to contain a valid header, unparseable
 question section, QR (Query Response) bit set in a supposed question,
 TC bit set, illegal domainname encoding, etc, etc).
 
-=item noerror - Request did not have any of the above problems.
+=item noerror
 
-=item v6 - Request was from an IPv6 client.  This one isn't RCODE based,
+Request did not have any of the above problems.
+
+=item v6
+
+Request was from an IPv6 client.  This one isn't RCODE based,
 and is orthogonal to all other counts above.
+
+=item edns
+
+Request contained an EDNS OPT-RR.  Not RCODE-based, so
+again orthogonal to the RCODE-based totals above.  Includes the
+ones that generated badvers RCODEs.
+
+=item edns_client_subnet
+
+Subset of the above which specified the
+edns_client_subnet option.
 
 =back
 
@@ -165,50 +189,65 @@ processing:
 
 =over 4
 
-=item udp_reqs - Total count of UDP requests received and passed on
+=item udp_reqs
+
+Total count of UDP requests received and passed on
 to the core DNS request handling code (this is synthesized by summing
 all of the core stat counters (other than v6) above for the UDP threads).
 
-=item udp_tc - Non-EDNS (traditional 512-byte) UDP responses that were
+=item udp_recvfail
+
+Count of UDP recvmsg() errors, where the OS indicated
+that something bad happened on receive.  Obviously, we don't even get these
+requests, so they can't be processed and replied to.
+
+=item udp_sendfail
+
+Count of UDP sendmsg() errors, which almost definitely
+resulted in dropped responses.
+
+=item udp_tc
+
+Non-EDNS (traditional 512-byte) UDP responses that were
 truncated with the TC bit set.
 
-=item udp_edns - Total requests which used EDNS (including bad version ones)
+=item udp_edns_big
 
-=item udp_edns_big - Subset of udp_edns where the response was greater
-than 512 bytes (in other words, EDNS actually did something for you)
+Subset of udp_edns where the response was greater
+than 512 bytes (in other words, EDNS actually did something for you
+size-wise)
 
-=item udp_edns_tc - Subset of udp_edns where the response was truncated
+=item udp_edns_tc
+
+Subset of udp_edns where the response was truncated
 and the TC bit set, meaning that the client's specified edns buffer size
 was too small for the data requested.  gdnsd's own output buffer size is
 autotuned for your data set, so that is never the limitation.
 
-=item udp_sendfail - Count of UDP sendmsg() errors, which almost definitely
-resulted in dropped responses.
-
 =back
 
-The TCP thread also counts this stuff:
+The TCP threads also count this stuff:
 
 =over 4
 
-=item tcp_reqs - Total count of TCP requests (again, synthesized)
+=item tcp_reqs
 
-=item tcp_recvfail - Count of abnormal failures in recv() on a DNS TCP
+Total count of TCP requests (again, synthesized)
+
+=item tcp_recvfail
+
+Count of abnormal failures in recv() on a DNS TCP
 socket, including ones where the sender indicated a payload larger
 than we're willing to accept.
 
-=item tcp_sendfail - Count of abnormal failures in send() on a DNS TCP socket.
+=item tcp_sendfail
+
+Count of abnormal failures in send() on a DNS TCP socket.
 
 =back
 
 These statistics are tracked in per-thread structures.  The actual data slots
-are volatile unsigned longs, which helps with rollover on 64-bit machines.  The
-main thread has pointers to read and aggregate the counters from all DNS threads
-for reporting - hence our portability constraints about "unsigned long" being
-atomic and cache-coherency.  There's only one writer to any given stats variable,
-but another thread needs to be able to read the values sanely.  (This isn't the
-only place we use assumed-atomic volatile unsigned longs, see the section about
-resource state monitoring later in this document).
+are uintptr_t, which helps with rollover on 64-bit machines.
 
 The main thread reports the statistics in two different ways.  The first is
 via syslog every log_stats seconds (default 3600), as well as always at exit
@@ -234,52 +273,6 @@ Also, by default, uneccesary lists of NS records in the Authority section are
 left out completely (they're really only necessary for delegation responses).
 This behavior can be reversed (to always send appropriate NS records even
 when not strictly necessary) via the include_optional_ns option.
-
-=head1 Zone file syntax
-
-Zone file syntax generally follows the RFCs for standard zone files, which means
-they are mostly BIND-compatible.  They do not support the BIND extension
-C<$GENERATE>, and they do not require that the SOA record be the first record
-in the file.
-
-=head1 DNS Database Validation
-
-gdnsd is very picky about the set of zones it is willing to load.  This is no
-accident.  By requiring sanity in the database, the runtime code is made simpler
-because it has fewer ambiguous corner cases to deal with when trying to formulate
-a response from the database.  During internal testing, it was not uncommon to
-see gdnsd rejecting the data that BIND was loading fine.  Usually the reasons
-were pretty good.  In one conversion it found a duplicate CNAME record, a backup
-MX record that pointed at a non-existant hostname in the same domain, and a
-bogus PTR record due to lacking a trailing dot.
-
-This is a list of all of the important validations gdnsd does, as well as other
-related gotchas of the "Hey BIND did this, but it's broken in gdnsd" type:
-
-All names (the left-hand-side of the records in the zonefiles) must be within
-the correct zone for the file they're in, no exceptions.
-
-CNAME records are not allowed to co-exist with any other data at the same
-name.  This is just basic DNS stuff, I think even BIND must enforce this.
-
-When target names (hostnames on the right-hand-side of an NS, MX, SRV,
-or PTR record) are within the authority of the same gdnsd server (even
-in an "unrelated" zone), they will be required to exist and have an A
-record.  An implication of this is you can't target any of these records
-at CNAMEs either.  There's nothing we can do about targets outside of
-our authority of course.
-
-Subzone delegation NS records where the NS target name is within a
-delegated subzone of the current zone itself B<must> have glue addresses,
-in the form of A, AAAA, or DYNA records in the same zonefile.  These glue
-records will never be considered part of the real zone data or seen
-by explicit queries.  They will only be used to fill in NS glue in
-the additional section of the delegation responses.
-
-Best practice on NS records is that the target name on the right-hand-side
-should be within the zone specified on the left-hand-side (or at the very
-least, served by the same authority) when possible and practical to do so.
-This advice is not gdnsd-specific.
 
 =head1 Security
 
@@ -313,53 +306,9 @@ If your host supports randomized address layout for executables (-fPIE in gcc
 terms), gdnsd can be built as such for additional security.  This is not
 the default, but you can simply add it to your CFLAGS when building.
 
-=head1 Plugin Architecture for Dynamic Address/CNAME Resolution
-
-gdnsd supports building separate plugins as shared objects.  These can be
-used to dynamically provide A, AAAA, and CNAME RR-set data to the backend
-of gdnsd.  The plugin can be used to accomplish things like geographic
-loadbalancing and/or failover.
-
-From a user point of view, there are two special RR types in gdnsd zonefiles,
-DYNA for addresses and DYNC for CNAMEs.  The basic idea is that you do things like
-these in the zonefile:
-
-www 300 DYNA plugin_name!resource_name
-admin 300 DYNC plugin_name!resource_name
-
-The named plugin will get a request to give an address for the given
-resource name.  The plugin has access to the DNS client's IP address,
-and can also modify the TTL specified in the original zonefile record
-for each response if it choses to do so.  These RRs are used by the gdnsd
-core code anywhere a regular RR would be used (so for example, a SRV
-query that includes A-records as additional data would serve those A-records
-from the plugin if applicable).
-
-The API and build process for plugins is documented separately in
-as gdnsd-plugin-api(3).  The documentation isn't very complete yet, but
-looking at existing plugins should fill in any gaps.
-
-=head1 Benchmarks
-
-No respectably-well-defined benchmarks have been run on the new gdnsd code, but
-suffice it to say that UDP request handling is extremely efficient.  The network
-stack seems to be the bottleneck for requests over the loopback interface on
-a single socket, at rates in the 50-80K/sec neighborhood depending on various
-local factors.  Scaling over multiple sockets is nearly linear if you have the
-CPU cores and the network hardware for it.  There is ongoing work to improve
-these numbers under Linux, but it will likely be a little while before appropriate
-kernels (and gdnsd versions that take advantage of them) are available.
-
-The last set of benchmarks were done on 1.2.0, and havne't been updated yet for
-newer releases.
-
-=head1 See Also
-
-The manpages: gdnsd(8), gdnsd.config(5), gdnsd.zonefile(5), gdnsd-plugin-api(3)
-
 =head1 Copyright and License
 
-Copyright (c) 2011 Brandon L Black <blblack@gmail.com>
+Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
 
 This file is part of gdnsd.
 

@@ -32,3 +32,4 @@ installcheck-local: precheck
 clean-local:
 	rm -rf $(TESTOUT_DIR)
 
+include $(top_srcdir)/docs.am

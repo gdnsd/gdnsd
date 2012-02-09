@@ -15,6 +15,10 @@
 
 @SET_MAKE@
 
+#***************************************************************
+#* This must be included in *all* Makefile.am in this project! *
+#***************************************************************
+
 #### Generic doc-building/cleaning rules
 # Intended to be included from Makefile.am in various subdirs
 # Variables to be set by the including Makefile.am:
@@ -183,6 +187,7 @@ GEOLITE_DECOMP = @GEOLITE_DECOMP@
 GEOLITE_DL = @GEOLITE_DL@
 GREP = @GREP@
 HAVE_TESTSUITE_MODULES = @HAVE_TESTSUITE_MODULES@
+HAVE_WIKI_MODULE = @HAVE_WIKI_MODULE@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -224,9 +229,9 @@ PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PERL = @PERL@
 PERL_VERSION = @PERL_VERSION@
-POD2HTML = @POD2HTML@
 POD2MAN = @POD2MAN@
 POD2TEXT = @POD2TEXT@
+POD2WIKI = @POD2WIKI@
 PTHREAD_CC = @PTHREAD_CC@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 PTHREAD_LIBS = @PTHREAD_LIBS@
@@ -317,18 +322,19 @@ ALL_PODS = $(PODS_MISC) $(PODS_1) $(PODS_3) $(PODS_5) $(PODS_8)
 dist_man_MANS = $(PODS_1:.pod=.1) $(PODS_3:.pod=.3) $(PODS_5:.pod=.5) $(PODS_8:.pod=.8)
 
 # All generated docs other than the dist_man_MANS above
-GENERATED_DOCS_NOTMAN = $(ALL_PODS:.pod=.txt) $(ALL_PODS:.pod=.html)
+GENERATED_DOCS_NOTMAN = $(ALL_PODS:.pod=.txt)
 
 # dist + install all non-man generated docs, the pod sources, and MISC_DOCS
 dist_doc_DATA = $(GENERATED_DOCS_NOTMAN) $(ALL_PODS) $(MISC_DOCS)
 
 # A complete list of generated docs, including dist_man_MANS, for maintainer-clean
 GENERATED_DOCS = $(GENERATED_DOCS_NOTMAN) $(dist_man_MANS)
+GWIKI_DIR = $(abs_top_builddir)/gwiki.out
 all: $(BUILT_SOURCES)
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
-.SUFFIXES: .1 .3 .5 .8 .c .html .lo .o .obj .pod .txt
+.SUFFIXES: .1 .3 .5 .8 .c .lo .o .obj .pod .txt
 $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(top_srcdir)/docs.am $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
@@ -745,8 +751,8 @@ maintainer-clean-generic:
 	-test -z "$(MAINTAINERCLEANFILES)" || rm -f $(MAINTAINERCLEANFILES)
 clean: clean-am
 
-clean-am: clean-generic clean-libtool clean-local \
-	clean-pkglibLTLIBRARIES mostlyclean-am
+clean-am: clean-generic clean-libtool clean-pkglibLTLIBRARIES \
+	mostlyclean-am
 
 distclean: distclean-am
 	-rm -rf ./$(DEPDIR)
@@ -799,8 +805,7 @@ installcheck-am:
 maintainer-clean: maintainer-clean-am
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
-maintainer-clean-am: distclean-am maintainer-clean-generic \
-	maintainer-clean-local
+maintainer-clean-am: distclean-am maintainer-clean-generic
 
 mostlyclean: mostlyclean-am
 
@@ -825,22 +830,21 @@ uninstall-man: uninstall-man3
 .MAKE: all check install install-am install-strip
 
 .PHONY: CTAGS GTAGS all all-am check check-am clean clean-generic \
-	clean-libtool clean-local clean-pkglibLTLIBRARIES ctags \
-	distclean distclean-compile distclean-generic \
-	distclean-libtool distclean-tags distdir dvi dvi-am html \
-	html-am info info-am install install-am install-data \
-	install-data-am install-dist_docDATA \
-	install-dist_libgdnsd_la_includeHEADERS install-dvi \
-	install-dvi-am install-exec install-exec-am install-html \
-	install-html-am install-info install-info-am install-man \
-	install-man3 install-nodist_libgdnsd_la_includeHEADERS \
-	install-pdf install-pdf-am install-pkglibLTLIBRARIES \
-	install-ps install-ps-am install-strip installcheck \
-	installcheck-am installdirs maintainer-clean \
-	maintainer-clean-generic maintainer-clean-local mostlyclean \
-	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
-	pdf pdf-am ps ps-am tags uninstall uninstall-am \
-	uninstall-dist_docDATA \
+	clean-libtool clean-pkglibLTLIBRARIES ctags distclean \
+	distclean-compile distclean-generic distclean-libtool \
+	distclean-tags distdir dvi dvi-am html html-am info info-am \
+	install install-am install-data install-data-am \
+	install-dist_docDATA install-dist_libgdnsd_la_includeHEADERS \
+	install-dvi install-dvi-am install-exec install-exec-am \
+	install-html install-html-am install-info install-info-am \
+	install-man install-man3 \
+	install-nodist_libgdnsd_la_includeHEADERS install-pdf \
+	install-pdf-am install-pkglibLTLIBRARIES install-ps \
+	install-ps-am install-strip installcheck installcheck-am \
+	installdirs maintainer-clean maintainer-clean-generic \
+	mostlyclean mostlyclean-compile mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am tags uninstall \
+	uninstall-am uninstall-dist_docDATA \
 	uninstall-dist_libgdnsd_la_includeHEADERS uninstall-man \
 	uninstall-man3 uninstall-nodist_libgdnsd_la_includeHEADERS \
 	uninstall-pkglibLTLIBRARIES
@@ -870,15 +874,24 @@ gdnsd-dmn.h:	libdmn/dmn.h
 .pod.txt:
 	$(AM_V_GEN)$(POD2TEXT) -l $< $@
 
-.pod.html:
-	$(AM_V_GEN)$(POD2HTML) --title="$* - $(PACKAGE_NAME) $(VERSION)" --infile=$< --outfile=$@ 2>/dev/null
-
-# clean up pod2xxx tmp files
-clean-local:
-	rm -f *.tmp
+gwiki:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir gwiki; \
+	done
+	@if [ ! -d $(GWIKI_DIR) ]; then \
+		$(MKDIR_P) $(GWIKI_DIR); \
+	fi
+	@for podsrc in $(ALL_PODS); do \
+                wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.wiki/'`; \
+		echo Generating gwiki.out/$$wikifn ...; \
+		$(POD2WIKI) --style googlecode $$podsrc $(GWIKI_DIR)/$$wikifn; \
+	done
 
 # clean all generated docs
-maintainer-clean-local:
+docs-maintainer-clean:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir docs-maintainer-clean; \
+	done
 	rm -f $(GENERATED_DOCS)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.

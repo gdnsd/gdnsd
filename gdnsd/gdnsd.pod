@@ -5,15 +5,15 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-Usage: gdnsd [-c /a/config/file] action
-  -c specifies a non-default configfile location (default $PREFIX/etc/gdnsd/config)
-Actions:
-  checkconf - Checks validity of configuration and zonefiles
-  startfg - Start gdnsd in foreground mode with logging to stderr
-  start - Start gdnsd as a regular daemon
-  stop - Stops a running daemon previously started by 'start'
-  restart - Effectively equivalent to checkconf && stop && start, but faster
-  status - Checks the status of the running daemon
+  Usage: gdnsd [-c /a/config/file] action
+    -c specifies a non-default configfile location (default $PREFIX/etc/gdnsd/config)
+  Actions:
+    checkconf - Checks validity of configuration and zonefiles
+    startfg - Start gdnsd in foreground mode with logging to stderr
+    start - Start gdnsd as a regular daemon
+    stop - Stops a running daemon previously started by 'start'
+    restart - Effectively equivalent to checkconf && stop && start, but faster
+    status - Checks the status of the running daemon
 
 =head1 DESCRIPTION
 
@@ -98,14 +98,14 @@ syslog timestamps correct while under C<chroot()> seems to
 work fine, as it does C<tzset()> before C<chroot()>, and so
 no special setting of the C<TZ> environment variable is required.
 
-On some systems (notably, Debian Etch Linux, which uses
-a rather old glibc 2.3.6), the syslog messages will revert
+On some older/stranger systems, the syslog messages will revert
 to UTC timestamps after C<chroot()>.  The workaround for these
 systems is to either set the C<TZ> environment variable in gdnsd's
 initscript to a value like C</etc/localtime>, which will make
 glibc cache the timezone correctly, or to copy all of the relevant
 timezone files into the chroot directory (F</etc/localtime> and
-perhaps all of F</usr/share/zoneinfo>).
+perhaps all of F</usr/share/zoneinfo>).  Or whatever your platform
+may require.  Patches welcome.
 
 =back
 
@@ -140,7 +140,7 @@ The gdnsd manual.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2010 Brandon L Black <blblack@gmail.com>
+Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
 
 This file is part of gdnsd.
 
