@@ -150,7 +150,7 @@ Enables the logging of packet errors.
 
 Disables the logging of packet errors.
 
-=item B<SIGHUP>
+=item B<SIGHUP>, B<SIGPIPE>
 
 Ignored when daemonized.
 
