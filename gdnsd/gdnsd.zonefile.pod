@@ -110,26 +110,34 @@ RFC 3597 format for types gdnsd explicitly supports (all of
 which predate 3597 anyways), and that even in the RFC 3597 case
 we still only allow class C<IN> RRs.
 
-Additionally, gdnsd supports two special-case, non-standard
+Additionally, gdnsd supports three special-case, non-standard
 virtual resource record types:
 
-C<SPF+> is simply shorthand for specifying a single set of text
-data which is duplicated as both TXT and SPF records at the same
-name.  It is always equivalent to removing the C<+>, copying the
-whole record, and changing C<SPF> to C<TXT> in the second copy.
+=head2 DYNA
 
 C<DYNA> is for dynamically-determined address records (both A
 and AAAA) via plugin code.  The right-hand-side of a C<DYNA>
 RR is a plugin name and a resource name separated by an exclamation
 mark.  The named plugin will be fed the resource name and
 the DNS client's IP address, and it is up to the plugin code
-which addresses of which types to return in the response.  The
-dynamic plugin response will be generated in answer to A or
-AAAA queries for the given name, and contain A and/or AAAA
-resource records as appropriate.
+which addresses of which types to return in the response.
 
-C<DYNA> cannot co-exist with actual static A or AAAA records
-at the same name.
+The dynamic plugin response will be generated in answer to A or
+AAAA queries for the given name, and contain A and/or AAAA
+resource records as appropriate.  C<DYNA> cannot co-exist with
+actual static A or AAAA records at the same name.
+
+=head2 DYNC
+
+C<DYNC> is C<DYNA>'s counterpart for dynamically-determined CNAME
+records via plugin code.
+
+=head2 SPF+
+
+C<SPF+> is simply shorthand for specifying a single set of text
+data which is duplicated as both TXT and SPF records at the same
+name.  It is always equivalent to removing the C<+>, copying the
+whole record, and changing C<SPF> to C<TXT> in the second copy.
 
 Our C<TXT> (and SPF, and SPF+) RRs support the auto-splitting
 of long string constants.  Rather than manually breaking the
@@ -137,45 +145,15 @@ data into 255-byte chunks, you can specify a single long chunk
 and have the server break it at 255 byte boundaries automatically.
 (this behavior can be disabled via L<gdnsd.config(5)> as well.)
 
-=head1 VALIDATION RULES
+=head1 VALIDATION
 
-Each zone must have exactly one SOA record.  The standard requires
-it to be the first RR in a zone file.  gdnsd does not care where
-it appears, so long as it appears exactly once.
-
-Each zone must have one or more top-level NS records.
-
-The "master" field of the SOA record must match one of the NS records
-for the zone.
-
-If the target (right-hand-side) of an NS, PTR, MX, SRV, NAPTR, or CNAME record
-is within an undelegated portion of any authoritative zone served
-by this server, the target name must exist and have appropriate records.
-
-Any NS records occuring at other names beneath the top level of an
-authoritative zone indicate a delegation cut.  In general, no other RRs
-may exist at or beneath this delegation point.  As an exception to
-the general rule, if the target of any NS record (not just the current
-cut records) lies within delegated space, A and/or AAAA records may
-(and in fact, must) be included to be used as glue records.  These RRs
-will not exist in the traditional sense for queries.  They are simply
-returned as necessary glue data in the additional section when required.
-
-You will be warned if any chains of CNAMEs to more CNAMEs exceeds
-a depth of 4, and any infinite loops in such chains will cause a
-fairly fast failure at startup time.
-
-As per all standard zonefiles, CNAME cannot co-exist with any other
-RR type at the same name, and the TTLs of all records with both
-the same name and RR type must match.  Additionally, we require
-that A and AAAA records at the same name also have matching TTLs.
-
-For many purposes, A and AAAA are considered part of a single RRset
-in gdnsd's internals.  Anywhere one would include A records in an
-additional section, gdnsd will include all relevant A and AAAA
-records.  When queried explicitly for A or AAAA RRs, the asked-for
-RRset will be included in the Answer section, and the other will be included
-in the Additional section.
+gdnsd does a fair amount of zone data validation at startup.  Some
+of the validation checks just issue warnings, and some are fatal.
+Of the fatal ones, some of them are tagged with the prefix
+C<strict_data:>.  These checks, while considered important for
+the sanity of your data, are not strictly necessary for correct
+operation.  They can be downgraded to mere warnings by setting
+the C<strict_data> option to C<false> (see gdnsd.config(5)).
 
 =head1 SEE ALSO
 

@@ -218,10 +218,6 @@ occur in parallel per listening tcp socket.  Once this limit is
 reached by a given socket, no new connections will be allowed
 to that socket until one of the existing ones closes or times out.
 
-Note in B<listen> above that the default IP address for listen
-specifications results in creating two listening sockets, one
-each for IPv4 and IPv6.  This limit applies separately to each.
-
 =item B<tcp_timeout>
 
 Integer seconds, default 5, min 3, max 60.  TCP DNS connections
@@ -259,15 +255,13 @@ Integer, min 4096, max 1048576.  If set, this value will be used to set the
 C<SO_RCVBUF> socket option on the UDP listening socket(s).  Most users do not
 need to tune this value.  If left unset, the code only takes a somewhat
 heuristic approach, trying to raise the value only if the OS-supplied default
-seems too low.
+seems too low, and multiplying it a bit in the case of C<udp_recv_width> > 1.
 
 =item B<udp_sndbuf>
 
 Integer, min 4096, max 1048576.  If set, this value will be used to set the
-C<SO_SNDBUF> socket option on the UDP listening socket(s).  Most users do not
-need to tune this value.  If left unset, the code only takes a somewhat
-heuristic approach, trying to raise the value only if the OS-supplied default
-seems too low.
+C<SO_SNDBUF> socket option on the UDP listening socket(s).  Tuning advice
+mirrors the above.
 
 =item B<max_http_clients>
 
@@ -328,31 +322,16 @@ C<SPF> record which is larger than 255 bytes will be considered a syntax error.
 
 Boolean, default false.  Causes the daemon to include the optional NS
 records in the Authority section of simple authoritative responses
-containing actual response data.  Resolvers in general do not seem to
-ever really require this data to resolve any ambiguity, and Caches
-will generally refresh the NS data when necessary.  Leaving this
-option in its default state results in smaller response packets
-and faster response packet generation in many common cases.  This
-is similar in nature to (but not exactly like) BIND's
-"minimal-responses" option, except that we default to the minimal mode.
+containing actual response data.  Leaving this option in its default
+state results in smaller response packets and faster response packet
+generation in many common cases.  This is similar in nature to (but
+not exactly like) BIND's "minimal-responses" option, except that we
+default to the minimal mode.
 
 Regardless of this setting, all *necessary* Authority-section records
 are always included, such as when they are necessary for delegation
 responses, NXDOMAIN responses, and NOERROR responses containing no
-RRsets in the answer section.  Additionally, "glue" address information
-which may be necessary for the namservers of a delegation is *always*
-included.
-
-This option never directly affects the generation of Additional records,
-although when NS records are omitted, obviously that indirectly removes
-any related Additional records which weren't otherwise referenced in
-the Answer section.
-
-As far as additional records go, gdnsd's general policy is to include
-Additional records for any right-hand-side name mentioned in the Answer
-or Authority section if that name is in the same zone as the question
-asked.  Additionally, any C<A> -query will result in C<AAAA> Additional
-records being added and vice-versa, if they exist.
+RRsets in the answer section.
 
 =item B<plugin_search_path>
 
@@ -421,10 +400,11 @@ DNS responses, the same limit will be enforced for all CNAME -> CNAME chains,
 including those involving DYNC (dynamic CNAME) plugin responses.
 
 If the limit is exceeded at runtime the code will halt further recursive lookups
-for this request, the response packet will contain a dangling CNAME, and a packet
-error will be logged if packet error logging has been turned on.
+for this request and return an empty B<NXDOMAIN> response, and log a loud
+message to syslog on every single request for this broken domainname.
 
-Note that this is also the only thing preventing infinite CNAME loops.
+Note that this is the only thing preventing infinite CNAME loops caused by
+bad DYNC plugin configurations.
 
 =item B<debug>
 
