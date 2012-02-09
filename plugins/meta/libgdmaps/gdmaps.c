@@ -930,58 +930,58 @@ static void ntree_append_net_ ## IPVN(ntree_t* tree, const IPTYPE ip, const unsi
         dmn_assert(tree->ipv4_root || !tree->ipv6); \
     }                                               \
     dmn_assert(mask <= BITDEPTH);                   \
-    unsigned current_off = ISV6 ? 0 : tree->ipv4_root;                   \
-    int depth = BITDEPTH - 1;                   \
-    unsigned saved_dclist = 0;                   \
-    bool under_old_terminal = false;                   \
-    while(mask != ((BITDEPTH - 1) - depth)) {                   \
-        if(tree->store[current_off].terminal) {                   \
-            dmn_assert(!under_old_terminal);                   \
-            under_old_terminal = true;                   \
-            saved_dclist = tree->store[current_off].dclist;                   \
-            memset(&tree->store[current_off], 0, sizeof(nnode_t));                   \
-            tree->terminals--; \
-        }                   \
-        unsigned next_off = 0;                   \
-        const bool our_direction = CHKBIT_ ## IPVN ## A(ip, depth);                   \
+    unsigned current_off = ISV6 ? 0 : tree->ipv4_root; \
+    int depth = BITDEPTH - 1;                       \
+    unsigned saved_dclist = 0;                      \
+    bool under_old_terminal = false;                \
+    while(mask != ((BITDEPTH - 1) - depth)) {       \
+        if(tree->store[current_off].terminal) {     \
+            dmn_assert(!under_old_terminal);        \
+            under_old_terminal = true;              \
+            saved_dclist = tree->store[current_off].dclist;        \
+            memset(&tree->store[current_off], 0, sizeof(nnode_t)); \
+            tree->terminals--;                      \
+        }                                           \
+        unsigned next_off = 0;                      \
+        const bool our_direction = CHKBIT_ ## IPVN ## A(ip, depth);  \
         if(!our_direction || under_old_terminal) {                   \
-            if(!tree->store[current_off].zero) {                   \
-                unsigned temp_off = ntree_add_node(tree);                   \
-                tree->store[current_off].zero = temp_off;                   \
-            }                   \
-            else { dmn_assert(!our_direction); }                   \
-            if(!our_direction) { next_off = tree->store[current_off].zero; }                   \
-            else {                   \
-                nnode_t* zero = &tree->store[tree->store[current_off].zero];                   \
-                zero->terminal = 1;                   \
-                zero->dclist = saved_dclist;                   \
-                tree->terminals++; \
-            }                   \
-        }                   \
-        if(our_direction || under_old_terminal) {                   \
-            if(!tree->store[current_off].one) {                   \
-                unsigned temp_off = ntree_add_node(tree);                   \
-                tree->store[current_off].one = temp_off;                   \
-                ONE_ADDED_CODE                   \
-            }                   \
-            else { dmn_assert(our_direction); }                   \
-            if(our_direction) { next_off = tree->store[current_off].one; }                   \
-            else {                   \
-                nnode_t* one = &tree->store[tree->store[current_off].one];                   \
-                one->terminal = 1;                   \
-                one->dclist = saved_dclist;                   \
-                tree->terminals++; \
-            }                   \
-        }                   \
-        dmn_assert(next_off < tree->count);                   \
-        depth--;                   \
-        current_off = next_off;                   \
-    }                   \
-    tree->store[current_off].zero = 0;                   \
-    tree->store[current_off].one = 0;                   \
-    tree->store[current_off].terminal = 1U;                   \
-    tree->store[current_off].dclist = dclist;                   \
-    tree->terminals++; \
+            if(!tree->store[current_off].zero) {                     \
+                unsigned temp_off = ntree_add_node(tree);            \
+                tree->store[current_off].zero = temp_off;            \
+            }                                                        \
+            else { dmn_assert(!our_direction); }                     \
+            if(!our_direction) { next_off = tree->store[current_off].zero; } \
+            else {                                                           \
+                nnode_t* zero = &tree->store[tree->store[current_off].zero]; \
+                zero->terminal = 1;                       \
+                zero->dclist = saved_dclist;              \
+                tree->terminals++;                        \
+            }                                             \
+        }                                                 \
+        if(our_direction || under_old_terminal) {         \
+            if(!tree->store[current_off].one) {           \
+                unsigned temp_off = ntree_add_node(tree); \
+                tree->store[current_off].one = temp_off;  \
+                ONE_ADDED_CODE                            \
+            }                                             \
+            else { dmn_assert(our_direction); }           \
+            if(our_direction) { next_off = tree->store[current_off].one; } \
+            else {                                                         \
+                nnode_t* one = &tree->store[tree->store[current_off].one]; \
+                one->terminal = 1;            \
+                one->dclist = saved_dclist;   \
+                tree->terminals++;            \
+            }                                 \
+        }                                     \
+        dmn_assert(next_off < tree->count);   \
+        depth--;                              \
+        current_off = next_off;               \
+    }                                         \
+    tree->store[current_off].zero = 0;        \
+    tree->store[current_off].one = 0;         \
+    tree->store[current_off].terminal = 1U;   \
+    tree->store[current_off].dclist = dclist; \
+    tree->terminals++;                        \
 }
 
 #define IPV6_ONE_ADDED_CODE \
@@ -1111,7 +1111,7 @@ static int v6_v4compat(const uint8_t* restrict in, uint32_t* restrict ipv4) {
         // Teredo
         if(in[1] == 0x01 && in_16[1] == 0x0000) {
             mask_adj = 96;
-            *ipv4 = in_32[3] ^ 0xFFFFFFF;
+            *ipv4 = in_32[3] ^ 0xFFFFFFFF;
         }
         // 6to4
         else if(in[1] == 0x02) {
