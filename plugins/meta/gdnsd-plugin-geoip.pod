@@ -191,11 +191,15 @@ A binary program C<gdnsd_geoip_test> is included.  This can be used directly fro
 
 Resource-level configuration within the C<resources> stanza is nearly identical to the resources configuration of the metafo plugin, with all of the same basic behaviors about synthesizing or directly referencing the configuration of other plugins per-datacenter.  Only the key differences will be covered here:
 
+=over 4
+
 =item * metafo's per-resource C<datacenters> array is replaced with C<map =E<gt> mapname>, which references one of the maps defined in the C<maps> stanza, described in detail earlier.  The set of defined datacenters in the C<dcmap> stanza must match the total set of datacenters defined by the referenced map.
 
 =item * metafo's restriction to just address-based (DYNA) results is lifted.  If the per-resource sub-plugin configurations used by a geoip resource support CNAME (DYNC) results, then that geoip resource will also support DYNC results.  Because there is no DYNC monitoring, only the first datacenter from each datacenter sub-list in the C<map> will be used for the result; there is no failover, only geographic differentiation.
 
 =item * For the common case of a single CNAME result per-datacenter, the CNAME data can be supplied directly as the singular string value of each datacenter in the C<dcmap>, without involving a sub-plugin at all.
+
+=back
 
 =head1 META-PLUGIN INTERACTION
 
