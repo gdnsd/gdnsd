@@ -611,6 +611,7 @@ ac_includes_default="\
 # include <unistd.h>
 #endif"
 
+ac_unique_file="gdnsd/main.c"
 ac_subst_vars='am__EXEEXT_FALSE
 am__EXEEXT_TRUE
 LTLIBOBJS
@@ -619,11 +620,12 @@ TESTPORT_START
 GEOLITE_DL
 GEOLITE_DECOMP
 RAGEL
+HAVE_WIKI_MODULE
 HAVE_TESTSUITE_MODULES
-POD2HTML
+PERL_VERSION
+POD2WIKI
 POD2TEXT
 POD2MAN
-PERL_VERSION
 PERL
 LOWMEM_FALSE
 LOWMEM_TRUE
@@ -13887,8 +13889,9 @@ else
 fi
 
 
-
 HAVE_TESTSUITE_MODULES=0
+HAVE_WIKI_MODULE=0
+
 # Extract the first word of "perl", so it can be a program name with args.
 set dummy perl; ac_word=$2
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
@@ -13916,6 +13919,7 @@ done
   done
 IFS=$as_save_IFS
 
+  test -z "$ac_cv_path_PERL" && ac_cv_path_PERL="$am_aux_dir/noperl"
   ;;
 esac
 fi
@@ -13923,6 +13927,129 @@ PERL=$ac_cv_path_PERL
 if test -n "$PERL"; then
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PERL" >&5
 $as_echo "$PERL" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+# Extract the first word of "pod2man", so it can be a program name with args.
+set dummy pod2man; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_POD2MAN+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $POD2MAN in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_POD2MAN="$POD2MAN" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
+    ac_cv_path_POD2MAN="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_POD2MAN" && ac_cv_path_POD2MAN="$am_aux_dir/noperl"
+  ;;
+esac
+fi
+POD2MAN=$ac_cv_path_POD2MAN
+if test -n "$POD2MAN"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $POD2MAN" >&5
+$as_echo "$POD2MAN" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+# Extract the first word of "pod2text", so it can be a program name with args.
+set dummy pod2text; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_POD2TEXT+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $POD2TEXT in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_POD2TEXT="$POD2TEXT" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
+    ac_cv_path_POD2TEXT="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_POD2TEXT" && ac_cv_path_POD2TEXT="$am_aux_dir/noperl"
+  ;;
+esac
+fi
+POD2TEXT=$ac_cv_path_POD2TEXT
+if test -n "$POD2TEXT"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $POD2TEXT" >&5
+$as_echo "$POD2TEXT" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+# Extract the first word of "pod2wiki", so it can be a program name with args.
+set dummy pod2wiki; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_POD2WIKI+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $POD2WIKI in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_POD2WIKI="$POD2WIKI" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
+    ac_cv_path_POD2WIKI="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_POD2WIKI" && ac_cv_path_POD2WIKI="$am_aux_dir/noperl"
+  ;;
+esac
+fi
+POD2WIKI=$ac_cv_path_POD2WIKI
+if test -n "$POD2WIKI"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $POD2WIKI" >&5
+$as_echo "$POD2WIKI" >&6; }
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -13982,127 +14109,6 @@ x$ax_compare_version_B" | sed 's/^ *//' | sort | sed "s/x${ax_compare_version_A}
     if test "$ax_compare_version" = "true" ; then
 
 	    :
-
-    HAVE_PERL=1
-    # Extract the first word of "pod2man", so it can be a program name with args.
-set dummy pod2man; ac_word=$2
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-$as_echo_n "checking for $ac_word... " >&6; }
-if ${ac_cv_path_POD2MAN+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  case $POD2MAN in
-  [\\/]* | ?:[\\/]*)
-  ac_cv_path_POD2MAN="$POD2MAN" # Let the user override the test with a path.
-  ;;
-  *)
-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  test -z "$as_dir" && as_dir=.
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
-    ac_cv_path_POD2MAN="$as_dir/$ac_word$ac_exec_ext"
-    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  ;;
-esac
-fi
-POD2MAN=$ac_cv_path_POD2MAN
-if test -n "$POD2MAN"; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $POD2MAN" >&5
-$as_echo "$POD2MAN" >&6; }
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-
-
-    # Extract the first word of "pod2text", so it can be a program name with args.
-set dummy pod2text; ac_word=$2
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-$as_echo_n "checking for $ac_word... " >&6; }
-if ${ac_cv_path_POD2TEXT+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  case $POD2TEXT in
-  [\\/]* | ?:[\\/]*)
-  ac_cv_path_POD2TEXT="$POD2TEXT" # Let the user override the test with a path.
-  ;;
-  *)
-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  test -z "$as_dir" && as_dir=.
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
-    ac_cv_path_POD2TEXT="$as_dir/$ac_word$ac_exec_ext"
-    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  ;;
-esac
-fi
-POD2TEXT=$ac_cv_path_POD2TEXT
-if test -n "$POD2TEXT"; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $POD2TEXT" >&5
-$as_echo "$POD2TEXT" >&6; }
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-
-
-    # Extract the first word of "pod2html", so it can be a program name with args.
-set dummy pod2html; ac_word=$2
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-$as_echo_n "checking for $ac_word... " >&6; }
-if ${ac_cv_path_POD2HTML+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  case $POD2HTML in
-  [\\/]* | ?:[\\/]*)
-  ac_cv_path_POD2HTML="$POD2HTML" # Let the user override the test with a path.
-  ;;
-  *)
-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  test -z "$as_dir" && as_dir=.
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
-    ac_cv_path_POD2HTML="$as_dir/$ac_word$ac_exec_ext"
-    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  ;;
-esac
-fi
-POD2HTML=$ac_cv_path_POD2HTML
-if test -n "$POD2HTML"; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $POD2HTML" >&5
-$as_echo "$POD2HTML" >&6; }
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-
 
 
 
@@ -14192,18 +14198,88 @@ $as_echo "$as_me: WARNING: could not find perl" >&2;}
 fi
 
 
+
+
+
+
+# Make sure we have perl
+if test -z "$PERL"; then
+# Extract the first word of "perl", so it can be a program name with args.
+set dummy perl; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_prog_PERL+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  if test -n "$PERL"; then
+  ac_cv_prog_PERL="$PERL" # Let the user override the test.
+else
+as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if { test -f "$as_dir/$ac_word$ac_exec_ext" && $as_test_x "$as_dir/$ac_word$ac_exec_ext"; }; then
+    ac_cv_prog_PERL="perl"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+fi
+fi
+PERL=$ac_cv_prog_PERL
+if test -n "$PERL"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PERL" >&5
+$as_echo "$PERL" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+fi
+
+if test "x$PERL" != x; then
+  ax_perl_modules_failed=0
+  for ax_perl_module in 'Pod::Simple::Wiki::Googlecode' ; do
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for perl module $ax_perl_module" >&5
+$as_echo_n "checking for perl module $ax_perl_module... " >&6; }
+
+    # Would be nice to log result here, but can't rely on autoconf internals
+    $PERL -e "use $ax_perl_module; exit" > /dev/null 2>&1
+    if test $? -ne 0; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; };
+      ax_perl_modules_failed=1
+   else
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
+$as_echo "ok" >&6; };
+    fi
+  done
+
+  # Run optional shell commands
+  if test "$ax_perl_modules_failed" = 0; then
+    :
+    HAVE_WIKI_MODULE=1
+  else
+    :
+
+  fi
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: could not find perl" >&5
+$as_echo "$as_me: WARNING: could not find perl" >&2;}
+fi
+
+
     else
 	    :
 
-    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Cannot \"make check\" or edit the documentation source without perl 5.8.1+" >&5
-$as_echo "$as_me: WARNING: Cannot \"make check\" or edit the documentation source without perl 5.8.1+" >&2;}
-    PERL=$am_aux_dir/noperl
-    POD2MAN=$am_aux_dir/noperl
-    POD2TEXT=$am_aux_dir/noperl
-    POD2HTML=$am_aux_dir/noperl
-
-
-
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Cannot \"make check\" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)" >&5
+$as_echo "$as_me: WARNING: Cannot \"make check\" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)" >&2;}
 
 
   fi
@@ -14214,24 +14290,18 @@ else
         { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: could not find the perl interpreter" >&5
 $as_echo "$as_me: WARNING: could not find the perl interpreter" >&2;}
 
-    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Cannot \"make check\" or edit the documentation source without perl 5.8.1+" >&5
-$as_echo "$as_me: WARNING: Cannot \"make check\" or edit the documentation source without perl 5.8.1+" >&2;}
-    PERL=$am_aux_dir/noperl
-    POD2MAN=$am_aux_dir/noperl
-    POD2TEXT=$am_aux_dir/noperl
-    POD2HTML=$am_aux_dir/noperl
-
-
-
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Cannot \"make check\" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)" >&5
+$as_echo "$as_me: WARNING: Cannot \"make check\" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)" >&2;}
 
 
 fi
 
 
 
+
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Ragel v6.6 or v6.7" >&5
 $as_echo_n "checking for Ragel v6.6 or v6.7... " >&6; };
-
 if test -z "$RAGEL"; then
   ac_path_RAGEL_found=false
   # Loop through the user's path and test for each of PROGNAME-LIST
@@ -14251,7 +14321,7 @@ $ac_path_RAGEL --version |$EGREP 'Ragel State Machine Compiler version 6\.(6 Dec
   done
 IFS=$as_save_IFS
   if test -z "$ac_cv_path_RAGEL"; then
-    ac_cv_path_RAGEL=$am_aux_dir/noragel
+    ac_cv_path_RAGEL=$am_aux_dir/noperl
   fi
 else
   ac_cv_path_RAGEL=$RAGEL
@@ -14398,6 +14468,8 @@ _ACEOF
 fi
 
 done
+
+
 
 
 ac_config_headers="$ac_config_headers config.h"

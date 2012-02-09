@@ -15,6 +15,18 @@
 
 @SET_MAKE@
 
+#***************************************************************
+#* This must be included in *all* Makefile.am in this project! *
+#***************************************************************
+
+#### Generic doc-building/cleaning rules
+# Intended to be included from Makefile.am in various subdirs
+# Variables to be set by the including Makefile.am:
+# PODS_N    : POD source files for manpages in a given section "N"
+# PODS_MISC : POD source files for non-manpages
+# MISC_DOCS : non-POD docfiles to be distributed + installed
+#####
+
 VPATH = @srcdir@
 pkgdatadir = $(datadir)/@PACKAGE@
 pkgincludedir = $(includedir)/@PACKAGE@
@@ -34,13 +46,14 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-subdir = .
 DIST_COMMON = README $(am__configure_deps) $(dist_doc_DATA) \
-	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
-	$(srcdir)/config.h.in $(top_srcdir)/configure AUTHORS COPYING \
-	ChangeLog INSTALL acaux/compile acaux/config.guess \
-	acaux/config.sub acaux/depcomp acaux/install-sh \
-	acaux/ltmain.sh acaux/missing acaux/noperl acaux/noragel
+	$(dist_man_MANS) $(srcdir)/Makefile.am $(srcdir)/Makefile.in \
+	$(srcdir)/config.h.in $(top_srcdir)/configure \
+	$(top_srcdir)/docs.am AUTHORS COPYING ChangeLog INSTALL \
+	acaux/compile acaux/config.guess acaux/config.sub \
+	acaux/depcomp acaux/install-sh acaux/ltmain.sh acaux/missing \
+	acaux/noperl acaux/noragel
+subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ax_compare_version.m4 \
 	$(top_srcdir)/m4/ax_prog_perl_modules.m4 \
@@ -183,6 +196,7 @@ GEOLITE_DECOMP = @GEOLITE_DECOMP@
 GEOLITE_DL = @GEOLITE_DL@
 GREP = @GREP@
 HAVE_TESTSUITE_MODULES = @HAVE_TESTSUITE_MODULES@
+HAVE_WIKI_MODULE = @HAVE_WIKI_MODULE@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -224,9 +238,9 @@ PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PERL = @PERL@
 PERL_VERSION = @PERL_VERSION@
-POD2HTML = @POD2HTML@
 POD2MAN = @POD2MAN@
 POD2TEXT = @POD2TEXT@
+POD2WIKI = @POD2WIKI@
 PTHREAD_CC = @PTHREAD_CC@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 PTHREAD_LIBS = @PTHREAD_LIBS@
@@ -297,7 +311,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
 SUBDIRS = gdnsd plugins example docs t
-dist_doc_DATA = README INSTALL AUTHORS COPYING ChangeLog
+MISC_DOCS = README INSTALL AUTHORS COPYING ChangeLog
 EXTRA_DIST = docs.am
 
 # Some junk autotools doesn't seem to clean on its own
@@ -305,13 +319,30 @@ DISTCLEANFILES = config.h.in~ configure.ac~
 
 # kill distfiles and coverage junk on maintainer-clean
 MAINTAINERCLEANFILES = *.info gdnsd-*.tar.*
+
+# Gather up the .pod files
+ALL_PODS = $(PODS_MISC) $(PODS_1) $(PODS_3) $(PODS_5) $(PODS_8)
+
+# Manpages for distribution + installation
+dist_man_MANS = $(PODS_1:.pod=.1) $(PODS_3:.pod=.3) $(PODS_5:.pod=.5) $(PODS_8:.pod=.8)
+
+# All generated docs other than the dist_man_MANS above
+GENERATED_DOCS_NOTMAN = $(ALL_PODS:.pod=.txt)
+
+# dist + install all non-man generated docs, the pod sources, and MISC_DOCS
+dist_doc_DATA = $(GENERATED_DOCS_NOTMAN) $(ALL_PODS) $(MISC_DOCS)
+
+# A complete list of generated docs, including dist_man_MANS, for maintainer-clean
+GENERATED_DOCS = $(GENERATED_DOCS_NOTMAN) $(dist_man_MANS)
+GWIKI_DIR = $(abs_top_builddir)/gwiki.out
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
 .SUFFIXES:
+.SUFFIXES: .1 .3 .5 .8 .pod .txt
 am--refresh: Makefile
 	@:
-$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
+$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(top_srcdir)/docs.am $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -334,6 +365,7 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe)'; \
 	    cd $(top_builddir) && $(SHELL) ./config.status $@ $(am__depfiles_maybe);; \
 	esac;
+$(top_srcdir)/docs.am:
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	$(SHELL) ./config.status --recheck
@@ -753,7 +785,7 @@ maintainer-clean-generic:
 	-test -z "$(MAINTAINERCLEANFILES)" || rm -f $(MAINTAINERCLEANFILES)
 clean: clean-recursive
 
-clean-am: clean-generic clean-libtool mostlyclean-am
+clean-am: clean-generic clean-libtool clean-local mostlyclean-am
 
 distclean: distclean-recursive
 	-rm -f $(am__CONFIG_DISTCLEAN_FILES)
@@ -828,9 +860,9 @@ uninstall-am: uninstall-dist_docDATA
 
 .PHONY: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) CTAGS GTAGS \
 	all all-am all-local am--refresh check check-am clean \
-	clean-generic clean-libtool ctags ctags-recursive dist \
-	dist-all dist-bzip2 dist-gzip dist-lzip dist-lzma dist-shar \
-	dist-tarZ dist-xz dist-zip distcheck distclean \
+	clean-generic clean-libtool clean-local ctags ctags-recursive \
+	dist dist-all dist-bzip2 dist-gzip dist-lzip dist-lzma \
+	dist-shar dist-tarZ dist-xz dist-zip distcheck distclean \
 	distclean-generic distclean-hdr distclean-libtool \
 	distclean-tags distcleancheck distdir distuninstallcheck dvi \
 	dvi-am html html-am info info-am install install-am \
@@ -859,8 +891,47 @@ install-exec-hook:
 	@echo
 
 check-download:
-	@echo Making check-download in plugins
-	@cd plugins && $(MAKE) $(AM_MAKEFLAGS) check-download
+	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
+
+mtaintainer-clean-local: docs-maintainer-clean
+
+clean-local:
+	@rm -rf $(top_srcdir)/gwiki.out
+
+.pod.8:
+	$(AM_V_GEN)$(POD2MAN) --section=8 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.5:
+	$(AM_V_GEN)$(POD2MAN) --section=5 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.3:
+	$(AM_V_GEN)$(POD2MAN) --section=3 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.1:
+	$(AM_V_GEN)$(POD2MAN) --section=1 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
+
+.pod.txt:
+	$(AM_V_GEN)$(POD2TEXT) -l $< $@
+
+gwiki:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir gwiki; \
+	done
+	@if [ ! -d $(GWIKI_DIR) ]; then \
+		$(MKDIR_P) $(GWIKI_DIR); \
+	fi
+	@for podsrc in $(ALL_PODS); do \
+                wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.wiki/'`; \
+		echo Generating gwiki.out/$$wikifn ...; \
+		$(POD2WIKI) --style googlecode $$podsrc $(GWIKI_DIR)/$$wikifn; \
+	done
+
+# clean all generated docs
+docs-maintainer-clean:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir docs-maintainer-clean; \
+	done
+	rm -f $(GENERATED_DOCS)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

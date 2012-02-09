@@ -15,8 +15,7 @@ plugin_metafo_la_LDFLAGS  = -avoid-version -module -export-symbols-regex ^plugin
 EXTRA_DIST = meta_core.c
 
 check-download:
-	@echo Making check-download in libgdmaps
-	@cd libgdmaps && $(MAKE) $(AM_MAKEFLAGS) check-download
+	@$(MAKE) $(AM_MAKEFLAGS) -C libgdmaps check-download
 
 PODS_8 = gdnsd-plugin-metafo.pod gdnsd-plugin-geoip.pod
 include $(top_srcdir)/docs.am

@@ -688,15 +688,25 @@ of which have their own separate manpage documentation:
 
 =over 4
 
-=item B<simplefo> - simple primary->secondary failover of monitored addresses
+=item B<simplefo>
 
-=item B<multifo> - all-active failover of monitored round-robin address groups
+Simple primary->secondary failover of monitored addresses
 
-=item B<weighted> - weighted-round-robin responses with a variety of behavioral flavors, for both monitored addresses and CNAMEs
+=item B<multifo>
 
-=item B<metafo> - static-ordered address(-group) meta-failover between 'datacenters', which are resources defined in terms of other plugins
+All-active failover of monitored round-robin address groups
 
-=item B<geoip> - combines metafo's functionality with MaxMind GeoIP databases to select different datacenter address(-group) preference/failover orderings for different clients based on approximate geographic location.  Supports geographically-differentiated CNAME resolution as well.
+=item B<weighted>
+
+Weighted-round-robin responses with a variety of behavioral flavors, for both monitored addresses and CNAMEs
+
+=item B<metafo>
+
+Static-ordered address(-group) meta-failover between 'datacenters', which are resources defined in terms of other plugins
+
+=item B<geoip>
+
+Combines metafo's functionality with MaxMind GeoIP databases to select different datacenter address(-group) preference/failover orderings for different clients based on approximate geographic location.  Supports geographically-differentiated CNAME resolution as well.
 
 =back
 
@@ -812,7 +822,7 @@ The gdnsd manual.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2010 Brandon L Black <blblack@gmail.com>
+Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
 
 This file is part of gdnsd.
 

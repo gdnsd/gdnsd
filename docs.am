@@ -1,4 +1,8 @@
 
+#***************************************************************
+#* This must be included in *all* Makefile.am in this project! *
+#***************************************************************
+
 #### Generic doc-building/cleaning rules
 # Intended to be included from Makefile.am in various subdirs
 # Variables to be set by the including Makefile.am:
@@ -14,7 +18,7 @@ ALL_PODS = $(PODS_MISC) $(PODS_1) $(PODS_3) $(PODS_5) $(PODS_8)
 dist_man_MANS = $(PODS_1:.pod=.1) $(PODS_3:.pod=.3) $(PODS_5:.pod=.5) $(PODS_8:.pod=.8)
 
 # All generated docs other than the dist_man_MANS above
-GENERATED_DOCS_NOTMAN = $(ALL_PODS:.pod=.txt) $(ALL_PODS:.pod=.html)
+GENERATED_DOCS_NOTMAN = $(ALL_PODS:.pod=.txt)
 
 # dist + install all non-man generated docs, the pod sources, and MISC_DOCS
 dist_doc_DATA = $(GENERATED_DOCS_NOTMAN) $(ALL_PODS) $(MISC_DOCS)
@@ -37,14 +41,26 @@ GENERATED_DOCS = $(GENERATED_DOCS_NOTMAN) $(dist_man_MANS)
 .pod.txt:
 	$(AM_V_GEN)$(POD2TEXT) -l $< $@
 
-.pod.html:
-	$(AM_V_GEN)$(POD2HTML) --title="$* - $(PACKAGE_NAME) $(VERSION)" --infile=$< --outfile=$@ 2>/dev/null
+GWIKI_DIR = $(abs_top_builddir)/gwiki.out
 
-# clean up pod2xxx tmp files
-clean-local:
-	rm -f *.tmp
+
+gwiki:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir gwiki; \
+	done
+	@if [ ! -d $(GWIKI_DIR) ]; then \
+		$(MKDIR_P) $(GWIKI_DIR); \
+	fi
+	@for podsrc in $(ALL_PODS); do \
+                wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.wiki/'`; \
+		echo Generating gwiki.out/$$wikifn ...; \
+		$(POD2WIKI) --style googlecode $$podsrc $(GWIKI_DIR)/$$wikifn; \
+	done
 
 # clean all generated docs
-maintainer-clean-local:
+docs-maintainer-clean:
+	@for sdir in $(SUBDIRS); do \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir docs-maintainer-clean; \
+	done
 	rm -f $(GENERATED_DOCS)
 

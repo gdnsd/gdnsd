@@ -196,35 +196,29 @@ AC_ARG_ENABLE([lowmem], [
 AC_DEFINE_UNQUOTED([LOWMEM], $LOWMEM, [Waste less memory for embedded systems])
 AM_CONDITIONAL([LOWMEM], [test x$LOWMEM = x1])
 
-dnl Check for perl 5.8.1+ (needed for doc regeneration, and for the test suite)
-dnl and then for Test::More, Net::DNS, LWP, and IPv6 stuff for the test suite
-AC_REQUIRE_AUX_FILE([noperl])
+dnl Check for perl stuff for doc generation and core regression testsuite
 HAVE_TESTSUITE_MODULES=0
-AC_PATH_PROG([PERL],[perl])
+HAVE_WIKI_MODULE=0
+AC_REQUIRE_AUX_FILE([noperl])
+AC_PATH_PROG([PERL],[perl],[$am_aux_dir/noperl])
+AC_PATH_PROG([POD2MAN],[pod2man],[$am_aux_dir/noperl])
+AC_PATH_PROG([POD2TEXT],[pod2text],[$am_aux_dir/noperl])
+AC_PATH_PROG([POD2WIKI],[pod2wiki],[$am_aux_dir/noperl])
 AX_PROG_PERL_VERSION([5.8.1],[
-    HAVE_PERL=1
-    AC_PATH_PROG([POD2MAN],[pod2man])
-    AC_PATH_PROG([POD2TEXT],[pod2text])
-    AC_PATH_PROG([POD2HTML],[pod2html])
     AX_PROG_PERL_MODULES([Test::More Net::DNS=0.63 LWP=5.805 Socket6 IO::Socket::INET6],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), Net::DNS 0.63+, LWP (aka libwww-perl) 5.805+, Socket6, and IO::Socket::INET6]]))
+    AC_PROG_PERL_MODULES([Pod::Simple::Wiki::Googlecode],[HAVE_WIKI_MODULE=1])
 ],[
-    AC_MSG_WARN([Cannot "make check" or edit the documentation source without perl 5.8.1+])
-    PERL=$am_aux_dir/noperl
-    POD2MAN=$am_aux_dir/noperl
-    POD2TEXT=$am_aux_dir/noperl
-    POD2HTML=$am_aux_dir/noperl
-    AC_SUBST([POD2MAN])
-    AC_SUBST([POD2TEXT])
-    AC_SUBST([POD2HTML])
+    AC_MSG_WARN([Cannot "make check" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)])
 ])
 AC_SUBST([HAVE_TESTSUITE_MODULES])
+AC_SUBST([HAVE_WIKI_MODULE])
 
 dnl Find ragel
-AC_MSG_CHECKING([for Ragel v6.6 or v6.7]);
 AC_REQUIRE_AUX_FILE([noragel])
+AC_MSG_CHECKING([for Ragel v6.6 or v6.7]);
 AC_PATH_PROGS_FEATURE_CHECK([RAGEL], [ragel],
   [[$ac_path_RAGEL --version |$EGREP 'Ragel State Machine Compiler version 6\.(6 Dec 2009|7 May 2011)' >/dev/null && ac_cv_path_RAGEL=$ac_path_RAGEL ac_path_RAGEL_found=:]],
-  [ac_cv_path_RAGEL=$am_aux_dir/noragel])
+  [ac_cv_path_RAGEL=$am_aux_dir/noperl])
 AC_SUBST([RAGEL], [$ac_cv_path_RAGEL])
 AC_MSG_RESULT([$ac_cv_path_RAGEL])
 
@@ -265,6 +259,9 @@ else
 fi
 
 AC_CHECK_HEADERS([valgrind/memcheck.h])
+
+dnl doublecheck user-supplied srcdir argument
+AC_CONFIG_SRCDIR([gdnsd/main.c])
 
 dnl Output generation
 AC_CONFIG_HEADERS([config.h])

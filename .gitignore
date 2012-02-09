@@ -48,6 +48,8 @@ Makefile
 *.gcno
 *.tmp
 *~
+
+# generated docs
 *.txt
-*.html
 *.[0-9]
+/gwiki.out/

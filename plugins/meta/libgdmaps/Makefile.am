@@ -8,6 +8,6 @@ noinst_LTLIBRARIES = libgdmaps.la
 libgdmaps_la_SOURCES = gdmaps.c gdmaps.h fips104.c fips104.h
 
 check-download:
-	@echo Making check-download in t
-	@cd t && $(MAKE) $(AM_MAKEFLAGS) check-download
+	@$(MAKE) $(AM_MAKEFLAGS) -C t check-download
 
+include $(top_srcdir)/docs.am
