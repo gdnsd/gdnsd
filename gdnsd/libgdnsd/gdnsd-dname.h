@@ -272,6 +272,24 @@ bool gdnsd_dname_isinzone(const uint8_t* zone, const uint8_t* dname);
 F_NONNULL
 bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child);
 
+// both arguments must be DNAME_VALID, and dname must be known
+//   to be a child of (or equal to) parent (e.g. via gdnsd_dname_isinzone()).
+// chops the zone part off the end of dname, re-rooting it as a valid name.
+// this is used for the LHS of in-zone records that are fully qualified
+//   during zonefile scanning, since insertion is rooted at the top of the
+//   zone.
+F_NONNULL
+static inline void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot) {
+    dmn_assert(dname); dmn_assert(zroot);
+    dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
+    dmn_assert(gdnsd_dname_status(zroot) == DNAME_VALID);
+    dmn_assert((*dname) >= (*zroot));
+    const unsigned newterm = (*dname) - ((*zroot) - 1);
+    dmn_assert(dname[newterm] == zroot[1]);
+    dname[0] = newterm;
+    dname[newterm] = 0;
+}
+
 // Returns true if dname is a wildcard name (first label is a lone "*").
 // Argument must be DNAME_VALID or DNAME_PARTIAL
 F_NONNULL

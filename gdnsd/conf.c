@@ -175,13 +175,7 @@ static bool configure_zone(const char* zname, unsigned znlen, const vscf_data_t*
 
     const unsigned zidx = gconfig.num_zones++;
 
-    {
-        char* z = malloc(znlen + 1);
-        memcpy(z, zname, znlen + 1);
-        gconfig.zones[zidx].name = z;
-    }
     gconfig.zones[zidx].dname = make_zone_dname(zname, znlen);
-    gconfig.zones[zidx].zones_dir = strdup(zones_dir);
 
     const vscf_data_t* this_zone_file = vscf_hash_get_data_byconstkey(this_zone, "file", true);
     if(this_zone_file) {
@@ -346,14 +340,6 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
         } \
     } while(0)
 
-F_NONNULL
-static void add_subzone(zoneinfo_t* z, const uint8_t* child) {
-    dmn_assert(z); dmn_assert(child);
-    log_debug("Adding '%s' as a child zone of zone '%s'", logf_dname(child), logf_dname(z->dname));
-    z->subzones = realloc(z->subzones, sizeof(uint8_t*) * (z->n_subzones + 1));
-    z->subzones[z->n_subzones++] = child;
-}
-
 // Sort the zones array by the zone name length descending
 F_PURE F_NONNULL
 static int zones_cmp(const zoneinfo_t* a, const zoneinfo_t* b) {
@@ -364,8 +350,7 @@ static int zones_cmp(const zoneinfo_t* a, const zoneinfo_t* b) {
 
 // This operates on gconfig.zones, accomplishing two primary tasks:
 //  (1) Catching duplicate zones with a fatal error
-//  (2) Setting up the subzones array for each zone, which is a list
-//    of explicitly-loaded subzones of a given zone.
+//  (2) Catching subzones with a fatal error
 static void postproc_zones(void) {
     // Because these will be frequently referenced
     zoneinfo_t* zones = gconfig.zones;
@@ -386,12 +371,9 @@ static void postproc_zones(void) {
             log_fatal("Zone name duplicated in config: '%s'", logf_dname(zones[zidx1].dname));
 
         // Walk down remainder of list from longest to shortest zone name
-        for(int zidx2 = zidx_next; zidx2 > -1; zidx2--) {
-            if(dname_isparentof(zones[zidx2].dname, zones[zidx1].dname)) {
-                add_subzone(&zones[zidx2], zones[zidx1].dname);
-                break; // a zone can only have one parent zone
-            }
-        }
+        for(int zidx2 = zidx_next; zidx2 > -1; zidx2--)
+            if(dname_isparentof(zones[zidx2].dname, zones[zidx1].dname))
+                log_fatal("Zone '%s' is a subzone of '%s' (try using $INCLUDE instead?)", logf_dname(zones[zidx1].dname), logf_dname(zones[zidx2].dname));
     }
 }
 
@@ -574,7 +556,6 @@ void conf_load(const char* cfg_file) {
     const vscf_data_t* options = vscf_hash_get_data_byconstkey(cfg_root, "options", true);
 
     const char* zdopt = NULL;
-    char* zones_dir = NULL;
     const vscf_data_t* listen_opt = NULL;
     const vscf_data_t* http_listen_opt = NULL;
     const vscf_data_t* psearch_array = NULL;
@@ -631,9 +612,6 @@ void conf_load(const char* cfg_file) {
         vscf_hash_iterate(options, true, bad_key, (void*)"options");
     }
 
-    // Potentially a subdirectory of cfg_dir
-    zones_dir = make_zones_dir(gdnsd_get_cfdir(), zdopt);
-
     // Set up the http listener data
     process_http_listen(http_listen_opt, def_http_port);
 
@@ -655,8 +633,9 @@ void conf_load(const char* cfg_file) {
 
     // This creates the gconfig.zones array.
     //   configure_zone increments gconfig.num_zones as it goes.
+    char* zones_dir = make_zones_dir(gdnsd_get_cfdir(), zdopt);
     gconfig.zones = calloc(sizeof(zoneinfo_t), n_zones);
-    vscf_hash_iterate(zones, false, configure_zone, (void*)zones_dir);
+    vscf_hash_iterate(zones, false, configure_zone, zones_dir);
     dmn_assert(gconfig.num_zones == n_zones);
     free(zones_dir);
 

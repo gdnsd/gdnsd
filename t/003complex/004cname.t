@@ -83,7 +83,7 @@ _GDT->test_dns(
     addtl => [
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
         'subeasyns1.example.com 21600 A 192.0.2.3',
-        'ns1.example.org 43200 A 192.0.2.200',
+        'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
 

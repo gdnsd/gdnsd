@@ -8,6 +8,8 @@
 
 @	NS	ns1
 @	NS	f42
+@	NS	ns1.example.net.
+ns1.example.net. DYNA static!bar41
 ns1	A	192.0.2.1
 a	A	192.0.2.2
 

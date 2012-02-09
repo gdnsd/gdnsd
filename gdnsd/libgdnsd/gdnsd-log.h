@@ -50,18 +50,12 @@
  *     logf_errnum(pthread_error), logf_errno(), logf_anysin(asin));
  */
 
-F_PURE
-const char* gdnsd_logf_rrtype(const unsigned rrtype); // host order
-
 const char* gdnsd_logf_dname(const uint8_t* dname);
-const char* gdnsd_logf_lstack(const uint8_t** lstack, const int depth);
 const char* gdnsd_logf_anysin(const anysin_t* asin);
 const char* gdnsd_logf_anysin_noport(const anysin_t* asin);
 #define gdnsd_logf_errnum dmn_strerror
 #define gdnsd_logf_errno() dmn_strerror(errno)
-#define logf_rrtype gdnsd_logf_rrtype
 #define logf_dname gdnsd_logf_dname
-#define logf_lstack gdnsd_logf_lstack
 #define logf_anysin gdnsd_logf_anysin
 #define logf_anysin_noport gdnsd_logf_anysin_noport
 #define logf_errnum dmn_strerror

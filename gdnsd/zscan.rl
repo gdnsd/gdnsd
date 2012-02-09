@@ -17,8 +17,6 @@
  *
  */
 
-#include "zscan.h"
-
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -45,7 +43,6 @@ typedef struct {
     bool     in_paren;
     bool     zn_err_detect;
     bool     lhs_is_ooz;
-    unsigned n_subzones;
     unsigned lcount;
     unsigned num_texts;
     unsigned def_ttl;
@@ -61,12 +58,10 @@ typedef struct {
     unsigned limit_v4;
     unsigned limit_v6;
     uint8_t* rfc3597_data;
-    const uint8_t** subzones;
-    const char* zones_dir;
+    const zoneinfo_t* zone;
     const char* curfn;
     const char* tstart;
     uint8_t* include_filename;
-    uint8_t  zroot[256];
     uint8_t  origin[256];
     uint8_t  lhs_dname[256];
     uint8_t  rhs_dname[256];
@@ -116,53 +111,73 @@ static void set_ipv6(zscan_t* z, const char* end) {
 
 F_NONNULL
 static void validate_dname_in_zone(const zscan_t* z, const uint8_t* dname) {
-    dmn_assert(z); dmn_assert(z->zroot); dmn_assert(dname);
-    if(!dname_isinzone(z->zroot, dname))
-        parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zroot));
+    dmn_assert(z); dmn_assert(z->zone->dname); dmn_assert(dname);
+    if(!dname_isinzone(z->zone->dname, dname))
+        parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zone->dname));
 }
 
 F_NONNULL
 static void validate_lhs_not_ooz(const zscan_t* z) {
     dmn_assert(z);
     if(z->lhs_is_ooz)
-        parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zroot));
+        parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
 }
 
 F_NONNULL
 static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
-    dmn_assert(z); dmn_assert(dname); dmn_assert(z->zroot); dmn_assert(z->origin);
+    dmn_assert(z); dmn_assert(dname); dmn_assert(z->zone->dname); dmn_assert(z->origin);
     dname_status_t catstat;
-    dname_status_t status = dname_from_string(dname, (const uint8_t*)z->tstart, len);
+    dname_status_t status;
+
+    if(len) {
+        status = dname_from_string(dname, (const uint8_t*)z->tstart, len);
+    }
+    else {
+        dmn_assert(lhs);
+        dname_copy(dname, z->origin);
+        status = DNAME_VALID;
+    }
+
     switch(status) {
         case DNAME_INVALID:
             parse_error_noargs("unparseable domainname");
             break;
         case DNAME_VALID:
-            if(lhs) z->lhs_is_ooz = !dname_isinzone(z->zroot, dname);
+            if(lhs) {
+                const bool inzone = dname_isinzone(z->zone->dname, dname);
+                z->lhs_is_ooz = !inzone;
+                // in-zone LHS dnames are made relative to zroot
+                if(inzone)
+                    gdnsd_dname_drop_zone(dname, z->zone->dname);
+            }
             break;
         case DNAME_PARTIAL:
-            if(lhs) z->lhs_is_ooz = false;
+            // even though in the lhs case we commonly trim
+            //   back most or all of z->origin from dname, we
+            //   still have to construct it just for validity checks
             catstat = dname_cat(dname, z->origin);
             if(catstat == DNAME_INVALID)
                 parse_error_noargs("illegal domainname");
+            dmn_assert(catstat == DNAME_VALID);
+            if(lhs) {
+                z->lhs_is_ooz = false;
+                gdnsd_dname_drop_zone(dname, z->zone->dname);
+            }
             break;
     }
 }
 
 F_NONNULL
-static zscan_t* zscan_init(zscan_t* z, const char* zones_dir, const uint8_t* zname, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6, const unsigned n_subzones, const uint8_t** subzones) {
-    dmn_assert(z); dmn_assert(zname); dmn_assert(origin); dmn_assert(fn);
+static zscan_t* zscan_init(const zoneinfo_t* zone, zscan_t* z, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6) {
+    dmn_assert(zone); dmn_assert(z); dmn_assert(origin); dmn_assert(fn);
     memset(z, 0, sizeof(zscan_t));
     z->lcount = 1;
     z->def_ttl = def_ttl_arg;
     z->curfn = fn;
-    z->n_subzones = n_subzones;
-    z->subzones = subzones;
-    z->zones_dir = zones_dir;
     z->limit_v4 = limit_v4;
     z->limit_v6 = limit_v6;
-    dname_copy(z->zroot, zname);
     dname_copy(z->origin, origin);
+    z->zone = zone;
 
     return z;
 }
@@ -174,14 +189,6 @@ static void text_start(zscan_t* z) {
     dmn_assert(z);
     z->num_texts = 0;
     z->texts = NULL;
-}
-
-// Only if we didn't add_rec, as normally
-//  add_rec consumes the allocation.
-F_NONNULL
-static void texts_free(zscan_t* z) {
-    for(unsigned i = 0; i < z->num_texts; i++)
-        free(z->texts[i]);
 }
 
 F_NONNULL
@@ -268,28 +275,33 @@ static unsigned hexbyte(const char* intxt) {
 }
 
 F_NONNULL
-static bool lhs_subzones_ok(zscan_t* z) {
-    for(unsigned i = 0; i < z->n_subzones; i++) {
-        if(dname_isinzone(z->subzones[i], z->lhs_dname)) {
-            log_warn("Ignoring RRs for name '%s' in zone '%s' because they overlap subzone '%s'",
-                logf_dname(z->lhs_dname), logf_dname(z->zroot), logf_dname(z->subzones[i]));
-            return false;
-        }
-    }
+static char* _make_zfn(const char* curfn, const char* include_fn) {
+    dmn_assert(curfn); dmn_assert(include_fn);
 
-    return true;
+    if(include_fn[0] == '/')
+        return strdup(include_fn);
+
+    const char* slashpos = strrchr(curfn, '/');
+    const unsigned cur_copy = (slashpos - curfn) + 1;
+    const unsigned include_len = strlen(include_fn);
+    char* rv = malloc(cur_copy + include_len + 1);
+    memcpy(rv, curfn, cur_copy);
+    memcpy(rv + cur_copy, include_fn, include_len);
+    rv[cur_copy + include_len] = 0;
+
+    return rv;
 }
 
 F_NONNULL
 static void process_include(zscan_t* z) {
     dmn_assert(z);
     dmn_assert(z->include_filename);
-    char* zfn = gdnsd_make_abs_fn(z->zones_dir, (char*)z->include_filename);
+    char* zfn = _make_zfn(z->curfn, (char*)z->include_filename);
     free(z->include_filename);
     z->include_filename = NULL;
     validate_dname_in_zone(z, z->rhs_dname);
     zscan_t* znew = malloc(sizeof(zscan_t));
-    zscan_init(znew, z->zones_dir, z->zroot, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6, z->n_subzones, z->subzones);
+    zscan_init(z->zone, znew, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
     int newfd = open(zfn, O_RDONLY);
     if(newfd < 0)
         parse_error("Cannot open $INCLUDE file '%s' for reading: %s", zfn, logf_errno());
@@ -326,73 +338,64 @@ static void set_dyna(zscan_t* z, const char* fpc) {
 F_NONNULL
 static void rec_soa(zscan_t* z) {
     dmn_assert(z);
-    if(dname_cmp(z->lhs_dname, z->zroot))
+    validate_lhs_not_ooz(z);
+    if(dname_cmp(z->lhs_dname, (uint8_t*)"\1\0"))
         parse_error_noargs("SOA record can only be defined for the root of the zone");
-    ltree_add_rec_soa(z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5);
+    ltree_add_rec_soa(z->zone, z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5);
 }
 
 F_NONNULL
 static void rec_a(zscan_t* z) {
     dmn_assert(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_a(z->lhs_dname, z->ipv4, z->ttl, z->limit_v4, z->lhs_is_ooz ? z->zroot : NULL);
+    ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->limit_v4, z->lhs_is_ooz);
 }
 
 F_NONNULL
 static void rec_aaaa(zscan_t* z) {
     dmn_assert(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_aaaa(z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz ? z->zroot : NULL);
+    ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz);
 }
 
 F_NONNULL
 static void rec_ns(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_ns(z->lhs_dname, z->rhs_dname, z->ttl);
+    ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl);
 }
 
 F_NONNULL
 static void rec_cname(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_cname(z->lhs_dname, z->rhs_dname, z->ttl);
+    ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl);
 }
 
 F_NONNULL
 static void rec_ptr(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_ptr(z->lhs_dname, z->rhs_dname, z->ttl);
+    ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl);
 }
 
 F_NONNULL
 static void rec_mx(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_mx(z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1);
+    ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1);
 }
 
 F_NONNULL
 static void rec_srv(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_srv(z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3);
+    ltree_add_rec_srv(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3);
 }
 
 F_NONNULL
 static void rec_naptr(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_naptr(z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->num_texts, z->texts);
-    else
-        texts_free(z);
+    ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->num_texts, z->texts);
     free(z->texts);
 }
 
@@ -400,10 +403,7 @@ F_NONNULL
 static void rec_txt(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_txt(z->lhs_dname, z->num_texts, z->texts, z->ttl);
-    else
-        texts_free(z);
+    ltree_add_rec_txt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl);
     free(z->texts);
 }
 
@@ -411,10 +411,7 @@ F_NONNULL
 static void rec_spf(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_spf(z->lhs_dname, z->num_texts, z->texts, z->ttl);
-    else
-        texts_free(z);
+    ltree_add_rec_spf(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl);
     free(z->texts);
 }
 
@@ -422,29 +419,21 @@ F_NONNULL
 static void rec_spftxt(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_spftxt(z->lhs_dname, z->num_texts, z->texts, z->ttl);
-    else
-        texts_free(z);
+    ltree_add_rec_spftxt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl);
     free(z->texts);
 }
 
 F_NONNULL
 static void rec_dyna(zscan_t* z) {
     dmn_assert(z);
-    validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_dynaddr(z->lhs_dname, z->eml_dname, z->ttl, z->limit_v4, z->limit_v6);
+    ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->eml_dname, z->ttl, z->limit_v4, z->limit_v6, z->lhs_is_ooz);
 }
 
 F_NONNULL
 static void rec_dyncname(zscan_t* z) {
     dmn_assert(z);
-
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z)) {
-        ltree_add_rec_dyncname(z->lhs_dname, z->eml_dname, z->origin, z->ttl);
-    }
+    ltree_add_rec_dyncname(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl);
 }
 
 F_NONNULL
@@ -453,10 +442,7 @@ static void rec_rfc3597(zscan_t* z) {
     if(z->rfc3597_data_written < z->rfc3597_data_len)
         parse_error("RFC3597 generic RR claimed rdata length of %u, but only %u bytes of data present", z->rfc3597_data_len, z->rfc3597_data_written);
     validate_lhs_not_ooz(z);
-    if(lhs_subzones_ok(z))
-        ltree_add_rec_rfc3597(z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data);
-    else
-        free(z->rfc3597_data);
+    ltree_add_rec_rfc3597(z->zone, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data);
 }
 
 %%{
@@ -464,7 +450,8 @@ static void rec_rfc3597(zscan_t* z) {
 
     action token_start { z->tstart = fpc; }
 
-    action set_lhs_origin { dname_copy(z->lhs_dname, z->origin); }
+    # special case for LHS: dname_set w/ len of zero -> use origin and trim zone root
+    action set_lhs_origin { dname_set(z, z->lhs_dname, 0, true); }
     action set_lhs_dname { dname_set(z, z->lhs_dname, fpc - z->tstart, true); }
     action set_lhs_qword { z->tstart++; dname_set(z, z->lhs_dname, fpc - z->tstart - 1, true); }
     action set_rhs_origin { dname_copy(z->rhs_dname, z->origin); }
@@ -767,7 +754,7 @@ void scan_zone(const zoneinfo_t* zone) {
     log_debug("Scanning zone '%s'", logf_dname(zone->dname));
 
     zscan_t* z = malloc(sizeof(zscan_t));
-    zscan_init(z, zone->zones_dir, zone->dname, zone->dname, zone->file, zone->def_ttl, 0, 0, zone->n_subzones, zone->subzones);
+    zscan_init(zone, z, zone->dname, zone->file, zone->def_ttl, 0, 0);
     int fd = open(zone->file, O_RDONLY);
     if(fd < 0)
         log_fatal("Cannot open zone file '%s' for reading: %s", zone->file, logf_errno());

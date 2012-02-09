@@ -22,7 +22,7 @@
 
 #include "config.h"
 #include "gdnsd.h"
-#include "zscan.h"
+#include "ltree.h"
 
 typedef struct {
     anysin_t addr;

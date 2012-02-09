@@ -93,10 +93,12 @@ _GDT->test_dns(
     answer => [
         'example.com 86400 NS ns1.example.com',
         'example.com 86400 NS f42.example.com',
+        'example.com 86400 NS ns1.example.net',
     ],
     addtl => [
         'ns1.example.com 86400 A 192.0.2.1',
         'f42.example.com 86400 A 192.0.2.42',
+        'ns1.example.net 86400 A 192.0.2.41',
     ],
 );
 

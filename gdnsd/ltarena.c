@@ -27,14 +27,14 @@
 // ltarena: used for dname/label strings only, pooled to
 //   reduce the per-alloc overhead of malloc aligning and
 //   tracking every single one needlessly.
-// Each pool is 1K, non-growing to preserve *some* amount
-//   of locality-of-reference to the related objects referencing
-//   the strings.
+// Each pool is normally POOL_SIZE, non-growing to preserve
+//   *some* amount of locality-of-reference to the related
+//   objects referencing the strings.
 // We initially reserve room in the ltarena object to track
-//   8 pools (~8K of dname/label data), which expands by
-//   doubling to support far more pools than needed by
-//   even the largest zones in existence today.
-#define POOL_SIZE 1024U     // *must* be 2^n && >= 4
+//   8 pools, which expands by doubling to support far more
+//   pools than needed by even the largest zones in existence.
+#define POOL_SIZE 512U // *must* be >= (256 + (red_size*2)),
+                       //    && multiple of 4
 #define INIT_POOLS_ALLOC 8U // *must* be 2^n && > 0
 
 // Normally, our pools are initialized to all-zeros for us
@@ -68,7 +68,7 @@ typedef struct {
 F_MALLOC F_WUNUSED
 static dnhash_t* dnhash_new(void) {
     dmn_assert(INIT_DNHASH_MASK);
-    dmn_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK));
+    dmn_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK)); // 2^n-1
 
     dnhash_t* rv = malloc(sizeof(dnhash_t));
     rv->count = 0;
@@ -141,27 +141,25 @@ struct _ltarena {
 };
 
 static void* make_pool(void) {
-    // basic pool size checks
-    const unsigned bytes = POOL_SIZE;
-    dmn_assert(!(bytes & (bytes - 1U))); // power of two
+    dmn_assert(!(POOL_SIZE & 3U)); // multiple of four
 
     void* p;
     if(RED_SIZE) {
         // malloc + fill in deadbeef if using redzones
-        p = malloc(bytes);
+        p = malloc(POOL_SIZE);
         uint32_t* p32 = (uint32_t*)p;
-        unsigned idx = bytes >> 2U;
+        unsigned idx = POOL_SIZE >> 2U;
         while(idx--)
             p32[idx] = 0xDEADBEEF;
     }
     else {
         // get mem from calloc
-        p = calloc(1, bytes);
+        p = calloc(1, POOL_SIZE);
     }
 
     // let valgrind know what's going on, if running
     //   and we're a debug build
-    NOWARN_VALGRIND_MAKE_MEM_NOACCESS(p, bytes);
+    NOWARN_VALGRIND_MAKE_MEM_NOACCESS(p, POOL_SIZE);
     NOWARN_VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1U);
 
     return p;
@@ -180,6 +178,7 @@ void lta_close(ltarena_t* lta) {
     if(lta->dnhash) {
         dnhash_destroy(lta->dnhash);
         lta->dnhash = NULL;
+        lta->pools = realloc(lta->pools, (lta->pool + 1) * sizeof(void*));
     }
 }
 
@@ -207,9 +206,14 @@ static void* lta_malloc(ltarena_t* lta, const unsigned size) {
     //   this allocation will steal from the pool
     const unsigned size_plus_red = size + RED_SIZE + RED_SIZE;
 
-    // handle pool switch if we're out of room.  We always
-    //   double the pool size on switch, and we also take
-    //   care to extend the pools array if necc.
+    // this could be a compile-time check, just stuffing here instead for now
+    dmn_assert(POOL_SIZE >= (256 + RED_SIZE + RED_SIZE));
+
+    // This logically follows from the above asserts, but JIC
+    dmn_assert(size_plus_red <= POOL_SIZE);
+
+    // handle pool switch if we're out of room
+    //   + take care to extend the pools array if necc.
     if(unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
         if(unlikely(++lta->pool == lta->palloc)) {
             lta->palloc <<= 1U;

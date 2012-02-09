@@ -244,19 +244,18 @@ gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restr
     dmn_assert(dname_status(dn1) != DNAME_INVALID);
     dmn_assert(dname_status(dn2) != DNAME_INVALID);
 
+    gdnsd_dname_status_t rv = DNAME_INVALID;
     const unsigned dn1_len = *dn1;
     const unsigned dn2_len = *dn2;
     const unsigned final_len = (dn1_len + dn2_len - 1);
 
-    if(final_len > 255)
-        return DNAME_INVALID;
+    if(final_len < 256) {
+        dn1[0] = final_len;
+        memcpy(dn1 + dn1_len, dn2 + 1, dn2_len);
+        rv = (dn1[final_len] == 0) ? DNAME_VALID : DNAME_PARTIAL;
+    }
 
-    memcpy(dn1 + dn1_len, dn2 + 1, dn2_len);
-    dn1[0] = final_len;
-
-    return (dn1[*dn1] == 0)
-        ? DNAME_VALID
-        : DNAME_PARTIAL;
+    return rv;
 }
 
 gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
