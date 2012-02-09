@@ -91,45 +91,41 @@ Any other keys present at this level will be inherited down inside of each per-r
 
 The C<maps> stanza supports one special configuration key at the top level:
 
-=over 4
-
-=item C<city_region_names = /path/to/fips_include>
+=head2 C<city_region_names = /path/to/fips_include>
 
 String, default unset.  GeoIP City databases use FIPS 10-4 codes for the names of Regions outside of the US and Canada.  For example the Geneve region of Switzerland is identified as C<07> in the database.  By default you would have to use these relatively confusing region codes in your hierarchical maps that make use of Region-level information (e.g. C<EU =E<gt> { CH =E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is specified, it points to a text file that maps these FIPS codes to canonical, memorable full names for clearer map configuration (e.g. C<EU =E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.
 
 The file format is a simple subset of the CSV format with 3 fields: ISO 3166-1 country code, FIPS 10-4 region code, and the region name in double-quotes.  It is recommended you download this file directly from MaxMind's reference copy in this format.  As of this writing, it is available from them at the following URL: L<http://www.maxmind.com/app/fips_include>
 
-=back
+=head1 CONFIGURATION - PER-MAP
 
 All other C<maps>-level configuration keys are the names of the maps you choose to define.  A map, conceptually, is a mapping between geography and/or network topology to varying ordered datacenter sub-sets.  The value of each named map must be a hash, and the following configuration keys apply within:
 
-=over 4
-
-=item C<geoip_db = /path/to/GeoIP.dat>
+=head2 C<geoip_db = /path/to/GeoIP.dat>
 
 String, pathname, required.  This is the filesystem path to one of the supported MaxMind GeoIP database types.  It will be loaded and converted to an internal representation for this particular map once at startup time, and re-loaded again if it changes during the daemon's lifetime.
 
 In the common case of the gdnsd daemon being started by root and securing itself via C<setuid()>, C<chroot()>, etc, the C<geoip_db> pathname must lie within the daemon's chroot path in order for runtime reloads to work.  If it does not, the plugin will still function correctly in all other respects, but database updates can only be reloaded by restarting the whole daemon.  The default gdnsd chroot path is F</var/gdnsd/>, or something similar depending on the installation prefix (e.g. F</usr/local/var/gdnsd/>).
 
-=item C<geoip_db_v4_overlay = /path/to/GeoIP.dat>
+=head2 C<geoip_db_v4_overlay = /path/to/GeoIP.dat>
 
 String, pathname, optional.  This specifies an optional IPv4-level GeoIP database to overwrite the IPv4 sub-space of the IPv6 data loaded from C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be a V6-format database.  When runtime reloads are performed, if either database changes, both will be reloaded.
 
 As of this writing, MaxMind doesn't sell a commercial GeoIPv6 database.  What they offer are free IPv6 GeoLite database downloads, which include the IPv4 subset in the less-accurate GeoLite form.  This option allows you to use these GeoLitev6 databases for IPv6 coverage, and then overlay your paid commercial GeoIPv4 data on top for more accurate IPv4 results.
 
-=item C<datacenters = [ one, two, three, ... ]>
+=head2 C<datacenters = [ one, two, three, ... ]>
 
 Array of strings, required.  This is the total set of datacenter names used by this map.  You must define at least one datacenter name (although 2 or more would be infinitely more useful).  At this time, there is a maximum limit of 254 datacenter names per map, although this could be raised if anyone requires it.  The order specified here is the fallback default result ordering in various default cases (e.g. if no explicit top-level map default list is given).
 
-=item C<city_no_region = true>
+=head2 C<city_no_region = true>
 
 Boolean, default C<false>.  If this key is set to C<true> and C<geoip_db> references a City-level database, the Region-level information within it will be completely ignored for mapping purposes.  Your hierarchical map structure will now be C<continent =E<gt> country =E<gt> city> rather than C<continent =E<gt> country =E<gt> region =E<gt> city>.
 
-=item C<city_no_city = true>
+=head2 C<city_no_city = true>
 
 Boolean, default C<false>.  Very similar to the above, but ignores the final, city-level information instead, leaving you with only the information to map your hierarchy as  C<continent =E<gt> country =E<gt> region>.  If both options were set to C<true>, you would only have the ability to map by C<continent =E<gt> country>, as if it were a Country-level database.
 
-=item C<nets = { ... }>
+=head2 C<nets = { ... }>
 
 Key-value hash, optional.  If specified, the contents should be key-value pairs of C<network/netmask> mapped to a datacenter name (or an array of datacenter names).  This is intended for doing one-off overrides of special networks (to you), such as private space.  Entries specified here will override any GeoIP-based mapping from C<map> below.  Note that this is implemented in a simplistic way which isn't optimized for large sets of C<nets>.  If you really need a giant custom map, consider generating a custom GeoIP.dat instead (there's some related perl code in gdnsd's test suite...).  Example:
 
@@ -151,7 +147,7 @@ Always just specify the IPv4 network itself to cover all of these cases.  The fo
    2001::NNNN:NNNN/32    # Teredo (NNNN:NNNN is xor'd with FFFF:FFFF)
    2002:NNNN:NNNN::/16   # 6to4
 
-=item C<map = { ... }>
+=head2 C<map = { ... }>
 
 Key-value hash, optional.  This is the heart of a named map: the map itself, which maps places to ordered lists of datacenters.
 
@@ -166,8 +162,6 @@ The next two layers deep are for Region and City level information, only availab
 The actual City names at the final layer appear to be encoded using some form of ISO8859-1 and/or CP1252 character set in the databases themselves, and your map entries will have to match byte-for-byte in the case of non-ASCII characters.  May come up with a better solution for this down the road.
 
 There is also one other special key (aside from C<default>) available at all levels of the map hierarchy, a boolean named C<skip_level>, default C<false>.  If set within the hierarchical C<map> at any layer, it causes the next layer of detail to be skipped for this portion of the map.  For example, setting this at the very top layer would mean that the top layer would contain country-level codes directly, without an enclosing continent-level hierarchy.  Setting it within a country would mean that city names are used directly within that country, without an intervening layer of region names.  This option is not aware of the C<city_no_region> option, so e.g. setting that option and specifying C<skip_level> at the country-level would result in no further information being available within that country (as C<skip_level> would skip the remaining layer of city data).
-
-=back
 
 =head1 CONFIGURATION - MAPS - CITY AUTO MODE
 
