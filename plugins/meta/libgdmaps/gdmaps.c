@@ -1111,7 +1111,7 @@ static int v6_v4compat(const uint8_t* restrict in, uint32_t* restrict ipv4) {
         // Teredo
         if(in[1] == 0x01 && in_16[1] == 0x0000) {
             mask_adj = 96;
-            *ipv4 = in_32[3] ^ 0xFFFFFFF;
+            *ipv4 = in_32[3] ^ 0xFFFFFFFF;
         }
         // 6to4
         else if(in[1] == 0x02) {
