@@ -8,7 +8,8 @@ Would be nice to formulate some unit tests where they make sense, espcially libg
 
 Documentation:
 ---------------
-All of the documentation sucks, it would be nice to get it all cleaned up.  Of special note is the plugin API documentation, which is virtually non-existent other than showing the runtime callback flow.  Converting all of the static docs to asciidoc, editing them for clarity and completeness, and using something like doxygen for the plugin API are all good directions.
+Really need to get with something like doxygen going for the plugin API.
+I've pretty much settled on sticking with POD for the rest for now, the competitors (txt2tags, reST, asciidoc, etc) just don't stack up on various utilitarian needs I have for exporting and such, at least not enough to be worth converting for.
 
 Config format:
 ---------------
