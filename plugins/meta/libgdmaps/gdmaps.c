@@ -208,8 +208,8 @@ static dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_aut
                 || lon > 180.0 || lon < -180.0
             )
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be an array of two floating-point values representation a legal latitude and longitude in decimal degrees", map_name, dcname);
-            info->coords[(i * 2)] = lat * DEG2RAD;
-            info->coords[(i * 2) + 1] = lon * DEG2RAD;
+            info->coords[(dcidx * 2)] = lat * DEG2RAD;
+            info->coords[(dcidx * 2) + 1] = lon * DEG2RAD;
         }
     }
     else {
