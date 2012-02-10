@@ -1,3 +1,14 @@
+
+1.6.2 - 2012-02-10
+   Lots of documentation fixes
+   Two plugin_geoip bugs fixed:
+     The address conversion logic for Teredo (Microsoft IPv6 tunneling
+       stuff) had a bug that would cause incorrect geographic mapping
+       for some Teredo client IPs.
+     City-auto-mode's automatic mapping was basically always broken
+       unless "auto_dc_coords" was specified in the exact same order as
+       the primary "datacenters" list.  (Issue #11 on googlecode)
+
 1.6.1 - 2012-02-07
     Various small documentation edits
     plugin_simplefo: fixed a crash-on-startup (as opposed to clean
