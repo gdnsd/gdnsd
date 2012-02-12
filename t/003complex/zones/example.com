@@ -62,6 +62,7 @@ subooz		NS	ns1.example.net.
 subooz		NS	ns2.example.net.
 ns1.example.net. A	192.0.2.77
 ns2.example.net. A	192.0.2.78
+ns2.example.net. AAAA	2001:DB8::1
 
 ; mixed out-of-zone glue
 submixooz	NS	ns1.example.net.

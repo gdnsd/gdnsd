@@ -14,3 +14,4 @@ subzweb	CNAME	subz
 subzmx	MX	0	subz
 subz	NS	subz
 subz	A	192.0.2.3
+a6.subz	AAAA	2001:DB8::1

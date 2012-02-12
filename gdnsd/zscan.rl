@@ -341,7 +341,7 @@ static void rec_a(zscan_t* z) {
 F_NONNULL
 static void rec_aaaa(zscan_t* z) {
     dmn_assert(z);
-    if(!z->lhs_is_ooz)
+    if(lhs_subzones_ok(z))
         ltree_add_rec_aaaa(z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz ? z->zroot : NULL);
 }
 
