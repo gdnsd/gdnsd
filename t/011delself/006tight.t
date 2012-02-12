@@ -2,7 +2,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 7;
+use Test::More tests => 8;
 
 my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, '006gdnsd.conf'));
 
@@ -41,6 +41,13 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'nx.subz.example.com', qtype => 'A',
+    header => { rcode => 'NXDOMAIN' },
+    auth => 'subz.example.com 86400 SOA subz.example.com hostmaster.subz.example.com 1 7200 1800 259200 900',
+    stats => [qw/udp_reqs nxdomain/],
+);
+
+_GDT->test_dns(
+    qname => 'a6.subz.example.com', qtype => 'AAAA',
     header => { rcode => 'NXDOMAIN' },
     auth => 'subz.example.com 86400 SOA subz.example.com hostmaster.subz.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],

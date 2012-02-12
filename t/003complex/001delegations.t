@@ -287,6 +287,7 @@ _GDT->test_dns(
     addtl => [
         'ns1.example.net 21600 A 192.0.2.77',
         'ns2.example.net 21600 A 192.0.2.78',
+        'ns2.example.net 21600 AAAA 2001:DB8::1',
     ],
 );
 
