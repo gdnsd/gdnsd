@@ -69,4 +69,8 @@ branch.  merging master -> dev will happen fairly regularly to import
 bugfix traffic.  dev -> master only happens at the dawn of a new stable
 release series.
 
+On merge conflicts, leave the conflict info in the commit message when
+you're done fixing it.  I had been deleting these earlier until I
+realized it was best to leave them in...
+
 ========================================================================
