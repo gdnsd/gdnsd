@@ -831,8 +831,7 @@ static void p1_proc_cname(const ltree_node_t* zone_root, ltree_rrset_cname_t* no
     }
 
     unsigned cn_depth = 1;
-    while(crossed_root && cn_target && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME && cn_target->rrsets->gen.is_static) {
-        dmn_assert(cnstat == DNAME_AUTH);
+    while(crossed_root && cnstat == DNAME_AUTH && cn_target && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME && cn_target->rrsets->gen.is_static) {
         if(++cn_depth > gconfig.max_cname_depth) {
             log_fatal("CNAME '%s' leads to a CNAME chain longer than %u (max_cname_depth)", logf_lstack(lstack, depth), gconfig.max_cname_depth);
             break;
@@ -895,7 +894,7 @@ static void p1_proc_ns(const ltree_node_t* zone_root, ltree_rdata_ns_t* this_ns,
                     logf_lstack(lstack, depth), logf_dname(this_ns->dname));
         }
 
-        // log_fatal check for DYNA, and then use the glue (without requiring TC unless it
+        // And then use the glue (without requiring TC unless it
         //   was truly a local in-bailiwick delegation glue).
         if(target_addr && !ooz_target_addr) {
             this_ns->ad = target_addr;
