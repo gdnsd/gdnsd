@@ -146,8 +146,10 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
     exit(57);\
 } while(0)
 
+// DMN_NO_UNREACH_BUILTIN is to work around gcov coverage testing, which
+//   flags un-taken branches for all of the __builtin_unreachable()
 #ifdef NDEBUG
-#  ifdef DMN_HAVE_UNREACH_BUILTIN
+#  if defined(DMN_HAVE_UNREACH_BUILTIN) && !defined(DMN_NO_UNREACH_BUILTIN)
 #    define dmn_assert(expr) do { if (!(expr)) __builtin_unreachable(); } while (0)
 #  else
 #    define dmn_assert(expr) ((void)(0))
