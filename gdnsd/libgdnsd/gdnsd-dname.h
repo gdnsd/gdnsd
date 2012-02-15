@@ -108,7 +108,7 @@
  *   within 254 (255 for ASCIIZ) doesn't imply legality
  *   either.  Example:
  *   63 . 63 . 63 . 62 -> 254 (256, illegal, in wire form)
- *  
+ *
  */
 
 /*

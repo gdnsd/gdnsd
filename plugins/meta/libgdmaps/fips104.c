@@ -97,7 +97,7 @@ static void fips_parse(fips_t* fips, FILE* file) {
                 log_fatal("plugin_geoip: parse error in FIPS region name data, line %u", line);
             return;
         }
-      
+
         uint32_t key = ((unsigned)ccrr[0])
             + ((unsigned)ccrr[1] << 8U)
             + ((unsigned)ccrr[2] << 16U)

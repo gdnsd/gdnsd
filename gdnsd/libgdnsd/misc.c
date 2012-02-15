@@ -137,9 +137,9 @@ struct _gdnsd_rstate_t {
     bool buf32_ok;
 };
 
-uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) { 
+uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) {
     uint64_t t;
- 
+
     rs->x = 1490024343005336237ULL * rs->x + 123456789;
     rs->y ^= rs->y << 21;
     rs->y ^= rs->y >> 17;

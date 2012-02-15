@@ -1042,13 +1042,13 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
     dmn_assert(c); dmn_assert(c->packet); dmn_assert(offset); dmn_assert(rd);
 
     uint8_t* packet = c->packet;
-  
+
     unsigned int rdata_offset, ttl;
     const uint8_t* dname;
-     
-    if(rd->gen.is_static) { 
+
+    if(rd->gen.is_static) {
         ttl = rd->gen.ttl;
-        dname = rd->dname;       
+        dname = rd->dname;
     }
     else {
         dmn_assert(c->dync_count < gconfig.max_cname_depth);
@@ -1066,12 +1066,12 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
         dmn_assert(dname == ans_dync.dname);
         dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
     }
- 
+
     // start formulating response
     offset += repeat_name(c, offset, c->qname_comp, false);
     *((uint32_t*)&packet[offset]) = DNS_RRFIXED_CNAME;
     offset += 4;
- 
+
     *((uint32_t*)&packet[offset]) = ttl;
     offset += 6;
 
@@ -1661,7 +1661,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
 
         const ltree_rrset_cname_t* cname = &resdom->rrsets->cname;
         offset = encode_rr_cname(c, offset, cname, false);
-                        
+
         bool resauth_crossed = false;
         const uint8_t* dname = cname->gen.is_static ? cname->dname : &c->dync_store[(c->dync_count - 1) * 256];
         status = search_ltree(dname, &resdom, &resauth, resauth, &auth_depth, &resauth_crossed);

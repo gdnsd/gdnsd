@@ -396,7 +396,7 @@ void ltree_add_rec_dynaddr(const zoneinfo_t* zone, const uint8_t* dname, const u
         if(!p->resolve_dynaddr) {
             log_fatal("Name '%s': DYNA refers to a plugin which does not support dynamic address resolution", logf_dname(dname));
         }
-        else {                
+        else {
             rrset->dyn.resource = p->map_resource_dyna ? p->map_resource_dyna(resource_name) : 0;
             rrset->dyn.func = p->resolve_dynaddr;
             free(plugin_name);
@@ -845,7 +845,7 @@ static void ooz_fix_addr_limits(ltree_node_t* zroot) {
             while(ooz_node) {
                 dmn_assert(ooz_node->rrsets);
                 dmn_assert(ooz_node->rrsets->gen.type == DNS_TYPE_A);
-                dmn_assert(!ooz_node->rrsets->gen.next); 
+                dmn_assert(!ooz_node->rrsets->gen.next);
                 fix_addr_limits(&ooz_node->rrsets->addr);
                 ooz_node = ooz_node->next;
             }

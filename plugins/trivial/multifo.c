@@ -115,7 +115,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
     dmn_assert(addr_desc); dmn_assert(addr_data); dmn_assert(aid_asvoid);
 
     addrs_iter_data_t* aid = (addrs_iter_data_t*)aid_asvoid;
-    
+
     const char* resname = aid->resname;
     const char* stanza = aid->stanza;
     const char** svc_names = aid->svc_names;

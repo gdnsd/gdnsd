@@ -89,7 +89,6 @@ unsigned plugin_static_map_resource_dyna(const char* resname) {
                 log_fatal("plugin_static: resource '%s' defined as a CNAME and then used as an address", resources[i].name);
             return i;
         }
-              
 
     log_fatal("Unknown static plugin resource '%s'", resname);
 }
@@ -111,7 +110,6 @@ unsigned plugin_static_map_resource_dync(const char* resname, const uint8_t* ori
             }
             return i;
         }
-              
 
     log_fatal("Unknown static plugin resource '%s'", resname);
 }

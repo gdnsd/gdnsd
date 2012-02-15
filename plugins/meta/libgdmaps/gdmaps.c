@@ -530,7 +530,7 @@ static bool _v6_is_related(const uint8_t* check, const unsigned check_mask, cons
     const unsigned v4_final = v4[byte] & byte_mask;
     if(check_final != v4_final)
         return false;
-    
+
     return true;
 }
 
@@ -626,7 +626,7 @@ static nets_t* nets_new(const vscf_data_t* nets_cfg, dclists_t* dclists, const c
         }
 
         free(net_str);
-        
+
         // get dclist integer from rhs
         const vscf_data_t* dc_cfg = vscf_hash_get_data_byindex(nets_cfg, i);
         nets->nets[i].dclist = dclists_find_or_add_vscf(dclists, dc_cfg, map_name, false);
@@ -1302,14 +1302,14 @@ static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, const vscf_da
 F_NONNULLX(1,2)
 static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fips_t* fips) {
     dmn_assert(name); dmn_assert(map_cfg);
- 
+
     // basics
     gdmap_t* gdmap = calloc(1, sizeof(gdmap_t));
     gdmap->name = strdup(name);
     gdmap->fips = fips;
     if(!vscf_is_hash(map_cfg))
         log_fatal("plugin_geoip: value for map '%s' must be a hash", name);
- 
+
     // datacenters config
     const vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(map_cfg, "datacenters", true);
     if(!dc_cfg)

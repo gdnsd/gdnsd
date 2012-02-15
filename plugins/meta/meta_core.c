@@ -455,7 +455,7 @@ bool CB_RES_A(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t*
             const dc_t* dc = &res->dcs[dcnum];
             success = dc->plugin->resolve_dynaddr(threadnum, dc->res_num_dyna, cinfo, result);
         }
- 
+
         // all datacenters failed, flag failure upstream (if any upstream) and use first dc
         if(!success) {
             memset(result, 0, sizeof(dynaddr_result_t));

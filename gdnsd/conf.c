@@ -443,7 +443,7 @@ static void process_listen(const vscf_data_t* listen_opt, const unsigned def_dns
                 temp_asin.sin6.sin6_port = htons(def_dns_port);
             else
                 temp_asin.sin.sin_port = htons(def_dns_port);
-            
+
             if(dns_addr_is_dupe(&temp_asin))
                 continue;
 
