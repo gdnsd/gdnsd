@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <setjmp.h>
 
 #include "conf.h"
 #include "ltree.h"
@@ -31,11 +32,34 @@
 #define INET6_ADDRSTRLEN 46
 #endif
 
+/*
+ * The longest possible tstart-based token is a maximum-length
+ *  quoted TXT string, which given autosplit, can be up to
+ *  roughly 64K, which means buffer size has to be that big
+ *  to accomodate that.  There probably wouldn't be any bugs
+ *  going down to something reasonable like 4K, but it would
+ *  cause parse errors if anyone tried to use longer TXT strings.
+ * Another important thing: for integers, we use atoi() directly
+ *  on the buffer itself.  In the normal case this works because
+ *  there is always some non-integer after it in the buffer, which
+ *  halts atoi().  The corner case is if the last digit of an
+ *  integer happened to be the last byte of the buffer.  This
+ *  is why we allocate one extra buffer byte and set it to zero.
+ */
+#define BUFSIZE 65536
+
+
 #define parse_error(_fmt, ...) \
-    log_fatal("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->curfn,__VA_ARGS__)
+    do {\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->curfn,__VA_ARGS__);\
+        siglongjmp(z->jbuf, 1);\
+    } while(0)
 
 #define parse_error_noargs(_fmt) \
-    log_fatal("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->curfn)
+    do {\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->curfn);\
+        siglongjmp(z->jbuf, 1);\
+    } while(0)
 
 typedef struct {
     uint8_t  ipv6[16];
@@ -67,10 +91,11 @@ typedef struct {
     uint8_t  rhs_dname[256];
     uint8_t  eml_dname[256];
     uint8_t** texts;
+    sigjmp_buf jbuf;
 } zscan_t;
 
 F_NONNULL
-static void scanner(zscan_t* z, int fd);
+static void scanner(zscan_t* z, char* buf, int fd);
 
 /******** IP Addresses ********/
 
@@ -99,25 +124,23 @@ static void set_ipv6(zscan_t* z, const char* end) {
     memcpy(txt, z->tstart, len);
     txt[len] = 0;
     z->tstart = NULL;
-    struct in6_addr* v6a = malloc(sizeof(struct in6_addr));
-    int status = inet_pton(AF_INET6, txt, v6a);
+    struct in6_addr v6a;
+    int status = inet_pton(AF_INET6, txt, &v6a);
     if(status > 0)
-        memcpy(z->ipv6, v6a->s6_addr, 16);
+        memcpy(z->ipv6, v6a.s6_addr, 16);
     else
         parse_error("IPv6 address '%s' invalid", txt);
-
-    free(v6a);
 }
 
 F_NONNULL
-static void validate_dname_in_zone(const zscan_t* z, const uint8_t* dname) {
+static void validate_dname_in_zone(zscan_t* z, const uint8_t* dname) {
     dmn_assert(z); dmn_assert(z->zone->dname); dmn_assert(dname);
     if(!dname_isinzone(z->zone->dname, dname))
         parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zone->dname));
 }
 
 F_NONNULL
-static void validate_lhs_not_ooz(const zscan_t* z) {
+static void validate_lhs_not_ooz(zscan_t* z) {
     dmn_assert(z);
     if(z->lhs_is_ooz)
         parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
@@ -168,9 +191,16 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
 }
 
 F_NONNULL
-static zscan_t* zscan_init(const zoneinfo_t* zone, zscan_t* z, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6) {
-    dmn_assert(zone); dmn_assert(z); dmn_assert(origin); dmn_assert(fn);
-    memset(z, 0, sizeof(zscan_t));
+static bool zscan_do(const zoneinfo_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6) {
+    dmn_assert(zone); dmn_assert(origin); dmn_assert(fn);
+
+    int fd = open(fn, O_RDONLY);
+    if(fd < 0) {
+        log_err("Cannot open file '%s' for reading: %s", fn, logf_errno());
+        return true;
+    }
+
+    zscan_t* z = calloc(1, sizeof(zscan_t));
     z->lcount = 1;
     z->def_ttl = def_ttl_arg;
     z->curfn = fn;
@@ -179,7 +209,32 @@ static zscan_t* zscan_init(const zoneinfo_t* zone, zscan_t* z, const uint8_t* or
     dname_copy(z->origin, origin);
     z->zone = zone;
 
-    return z;
+    volatile bool failed = true;
+    char* buf = malloc(BUFSIZE + 1);
+    if(!sigsetjmp(z->jbuf, 0)) {
+        scanner(z, buf, fd);
+        failed = false;
+    }
+
+    if(close(fd)) {
+        log_err("Cannot close file '%s': %s", fn, logf_errno());
+        failed = true;
+    }
+
+    free(buf);
+
+    if(z->texts) {
+        for(unsigned i = 0; i < z->num_texts; i++)
+            if(z->texts[i])
+                free(z->texts[i]);
+        free(z->texts);
+    }
+    if(z->rfc3597_data)
+        free(z->rfc3597_data);
+    if(z->include_filename)
+        free(z->include_filename);
+    free(z);
+    return failed;
 }
 
 /********** TXT/SPF ******************/
@@ -296,20 +351,15 @@ F_NONNULL
 static void process_include(zscan_t* z) {
     dmn_assert(z);
     dmn_assert(z->include_filename);
+
+    validate_dname_in_zone(z, z->rhs_dname);
     char* zfn = _make_zfn(z->curfn, (char*)z->include_filename);
     free(z->include_filename);
     z->include_filename = NULL;
-    validate_dname_in_zone(z, z->rhs_dname);
-    zscan_t* znew = malloc(sizeof(zscan_t));
-    zscan_init(z->zone, znew, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
-    int newfd = open(zfn, O_RDONLY);
-    if(newfd < 0)
-        parse_error("Cannot open $INCLUDE file '%s' for reading: %s", zfn, logf_errno());
-    scanner(znew, newfd);
-    if(close(newfd))
-        parse_error("Cannot close $INCLUDE file '%s': %s", zfn, logf_errno());
+    bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
     free(zfn);
-    free(znew);
+    if(subfailed)
+       siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
@@ -341,99 +391,121 @@ static void rec_soa(zscan_t* z) {
     validate_lhs_not_ooz(z);
     if(dname_cmp(z->lhs_dname, (uint8_t*)"\1\0"))
         parse_error_noargs("SOA record can only be defined for the root of the zone");
-    ltree_add_rec_soa(z->zone, z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5);
+    if(ltree_add_rec_soa(z->zone, z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_a(zscan_t* z) {
     dmn_assert(z);
-    ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->limit_v4, z->lhs_is_ooz);
+    if(ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->limit_v4, z->lhs_is_ooz))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_aaaa(zscan_t* z) {
     dmn_assert(z);
-    ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz);
+    if(ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_ns(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl);
+    if(ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_cname(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl);
+    if(ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_ptr(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl);
+    if(ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_mx(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1);
+    if(ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_srv(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_srv(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3);
+    if(ltree_add_rec_srv(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3))
+        siglongjmp(z->jbuf, 1);
+}
+
+F_NONNULL
+static void texts_cleanup(zscan_t* z) {
+    dmn_assert(z);
+    free(z->texts);
+    z->texts = NULL;
+    z->num_texts = 0;
 }
 
 F_NONNULL
 static void rec_naptr(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->num_texts, z->texts);
-    free(z->texts);
+    if(ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->num_texts, z->texts))
+        siglongjmp(z->jbuf, 1);
+    texts_cleanup(z);
 }
 
 F_NONNULL
 static void rec_txt(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_txt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl);
-    free(z->texts);
+    if(ltree_add_rec_txt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
+        siglongjmp(z->jbuf, 1);
+    texts_cleanup(z);
 }
 
 F_NONNULL
 static void rec_spf(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_spf(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl);
-    free(z->texts);
+    if(ltree_add_rec_spf(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
+        siglongjmp(z->jbuf, 1);
+    texts_cleanup(z);
 }
 
 F_NONNULL
 static void rec_spftxt(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_spftxt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl);
-    free(z->texts);
+    if(ltree_add_rec_spftxt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
+        siglongjmp(z->jbuf, 1);
+    texts_cleanup(z);
 }
 
 F_NONNULL
 static void rec_dyna(zscan_t* z) {
     dmn_assert(z);
-    ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->eml_dname, z->ttl, z->limit_v4, z->limit_v6, z->lhs_is_ooz);
+    if(ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->eml_dname, z->ttl, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_dyncname(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_dyncname(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl);
+    if(ltree_add_rec_dyncname(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl))
+        siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
@@ -442,7 +514,57 @@ static void rec_rfc3597(zscan_t* z) {
     if(z->rfc3597_data_written < z->rfc3597_data_len)
         parse_error("RFC3597 generic RR claimed rdata length of %u, but only %u bytes of data present", z->rfc3597_data_len, z->rfc3597_data_written);
     validate_lhs_not_ooz(z);
-    ltree_add_rec_rfc3597(z->zone, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data);
+    if(ltree_add_rec_rfc3597(z->zone, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data))
+        siglongjmp(z->jbuf, 1);
+    z->rfc3597_data = NULL;
+}
+
+F_NONNULL
+static void rfc3597_data_setup(zscan_t* z) {
+    dmn_assert(z);
+    z->rfc3597_data_len = z->uval;
+    z->rfc3597_data_written = 0;
+    z->rfc3597_data = malloc(z->uval);
+}
+
+F_NONNULL
+static void rfc3597_octet(zscan_t* z) {
+    dmn_assert(z);
+    if(z->rfc3597_data_written == z->rfc3597_data_len)
+       parse_error_noargs("RFC3597 generic RR: more rdata is present than the indicated length");
+    z->rfc3597_data[z->rfc3597_data_written++] = hexbyte(z->tstart);
+}
+
+F_NONNULL
+static void set_limit_v4(zscan_t* z) {
+    dmn_assert(z);
+    if(z->uval > 65535)
+        parse_error("$ADDR_LIMIT_V4 value %u out of range (0-65535)", z->uval);
+    z->limit_v4 = z->uval;
+}
+
+F_NONNULL
+static void set_limit_v6(zscan_t* z) {
+    dmn_assert(z);
+    if(z->uval > 65535)
+        parse_error("$ADDR_LIMIT_V6 value %u out of range (0-65535)", z->uval);
+    z->limit_v6 = z->uval;
+}
+
+F_NONNULL
+static void open_paren(zscan_t* z) {
+    dmn_assert(z);
+    if(z->in_paren)
+        parse_error_noargs("Parenthetical error: double-open");
+    z->in_paren = true;
+}
+
+F_NONNULL
+static void close_paren(zscan_t* z) {
+    dmn_assert(z);
+    if(!z->in_paren)
+        parse_error_noargs("Parenthetical error: unneccesary close");
+    z->in_paren = false;
 }
 
 %%{
@@ -490,17 +612,8 @@ static void rec_rfc3597(zscan_t* z) {
     action set_uv_4    { z->uv_4 = z->uval; }
     action set_uv_5    { z->uv_5 = z->uval; }
 
-    action set_limit_v4 {
-        if(z->uval > 65535)
-            parse_error("$ADDR_LIMIT_V4 value %u out of range (0-65535)", z->uval);
-        z->limit_v4 = z->uval;
-    }
-
-    action set_limit_v6 {
-        if(z->uval > 65535)
-            parse_error("$ADDR_LIMIT_V6 value %u out of range (0-65535)", z->uval);
-        z->limit_v6 = z->uval;
-    }
+    action set_limit_v4 { set_limit_v4(z); }
+    action set_limit_v6 { set_limit_v6(z); }
 
     # We re-use eml_dname to store dyna strings
     action set_dyna { set_dyna(z, fpc); }
@@ -521,11 +634,10 @@ static void rec_rfc3597(zscan_t* z) {
     action rec_dync { rec_dyncname(z); }
     action rec_rfc3597 { rec_rfc3597(z); }
 
-    action rfc3597_data_setup { z->rfc3597_data_len = z->uval; z->rfc3597_data_written = 0; z->rfc3597_data = malloc(z->uval); }
-
-
-    action open_paren { if(z->in_paren) parse_error_noargs("Parenthetical error: double-open"); z->in_paren = true; }
-    action close_paren { if(!z->in_paren) parse_error_noargs("Parenthetical error: unneccesary close"); z->in_paren = false; }
+    action rfc3597_data_setup { rfc3597_data_setup(z); }
+    action rfc3597_octet { rfc3597_octet(z); }
+    action open_paren { open_paren(z); }
+    action close_paren { close_paren(z); }
     action in_paren { z->in_paren }
 
     # newlines, count them
@@ -616,11 +728,7 @@ static void rec_rfc3597(zscan_t* z) {
     # NAPTR's rdata as a whole
     naptr_rdata = uval %set_uv_1 ws uval %set_uv_2 ws naptr_txt ws dname_rhs;
 
-    rfc3597_octet = ([0-9A-Fa-f]{2}) >token_start %{
-        if(z->rfc3597_data_written == z->rfc3597_data_len)
-           parse_error_noargs("RFC3597 generic RR: more rdata is present than the indicated length");
-        z->rfc3597_data[z->rfc3597_data_written++] = hexbyte(z->tstart);
-    };
+    rfc3597_octet = ([0-9A-Fa-f]{2}) >token_start %rfc3597_octet;
     rfc3597_rdata = uval %set_uv_1 ws '\\' '#' ws uval %rfc3597_data_setup
         (ws rfc3597_octet+ $1 %0)* $1 %0;
 
@@ -677,36 +785,20 @@ static void rec_rfc3597(zscan_t* z) {
     write data nofinal;
 }%%
 
-/*
- * The longest possible tstart-based token is a maximum-length
- *  quoted TXT string, which given autosplit, can be up to
- *  roughly 64K, which means buffer size has to be that big
- *  to accomodate that.  There probably wouldn't be any bugs
- *  going down to something reasonable like 4K, but it would
- *  cause parse errors if anyone tried to use longer TXT strings.
- * Another important thing: for integers, we use atoi() directly
- *  on the buffer itself.  In the normal case this works because
- *  there is always some non-integer after it in the buffer, which
- *  halts atoi().  The corner case is if the last digit of an
- *  integer happened to be the last byte of the buffer.  This
- *  is why we allocate one extra buffer byte and set it to zero.
- */
-#define BUFSIZE 65536
-
 F_NONNULL
-static void scanner(zscan_t* z, int fd) {
+static void scanner(zscan_t* z, char* buf, int fd) {
     dmn_assert(z);
 
 #ifdef HAVE_POSIX_FADVISE
     {
         struct stat fdstat;
-        if(fstat(fd, &fdstat))
-            log_fatal("fstat() of '%s' failed: %s", z->curfn, logf_errno());
-        posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
+        if(!fstat(fd, &fdstat))
+            posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
+        else
+            log_warn("fstat(%s) failed for fadvise use, not critical...", z->curfn);
     }
 #endif
 
-    char* buf = malloc(BUFSIZE + 1);
     char* read_at;
     buf[BUFSIZE] = 0;
 
@@ -744,22 +836,10 @@ static void scanner(zscan_t* z, int fd) {
         if(cs == zone_error)
             parse_error_noargs("unparseable");
     }
-
-    free(buf);
 }
 
-void scan_zone(const zoneinfo_t* zone) {
+bool scan_zone(const zoneinfo_t* zone) {
     dmn_assert(zone);
-
     log_debug("Scanning zone '%s'", logf_dname(zone->dname));
-
-    zscan_t* z = malloc(sizeof(zscan_t));
-    zscan_init(zone, z, zone->dname, zone->file, zone->def_ttl, 0, 0);
-    int fd = open(zone->file, O_RDONLY);
-    if(fd < 0)
-        log_fatal("Cannot open zone file '%s' for reading: %s", zone->file, logf_errno());
-    scanner(z, fd);
-    if(close(fd))
-        log_fatal("Cannot close zone file '%s': %s", zone->file, logf_errno());
-    free(z);
+    return zscan_do(zone, zone->dname, zone->file, zone->def_ttl, 0, 0);
 }
