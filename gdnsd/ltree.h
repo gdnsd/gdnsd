@@ -316,15 +316,17 @@ struct _ltree_node_struct {
 
 typedef struct {
     unsigned def_ttl;
-    const char* file;     // zonefile pathname
+    unsigned nfiles;
+    const char** files;   // absolute pathnames, first is main zonefile,
+                          //   rest are $INCLUDEd files
     const uint8_t* dname; // zone name as a dname
     ltarena_t* arena;     // arena for dname/label storage
-    ltree_node_t* root; // the zone root within the ltree
+    ltree_node_t* root;   // the zone root within the ltree
 } zoneinfo_t;
 
 // This is provided by the Ragel-based code in zscan.rl
 F_WUNUSED F_NONNULL
-bool scan_zone(const zoneinfo_t* zone);
+bool scan_zone(zoneinfo_t* zone);
 
 // Adding data to the ltree (called from parser)
 F_WUNUSED F_NONNULL
@@ -409,5 +411,8 @@ static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack) {
     return lcount;
 }
 
-#undef _RC
+// how conf.c passes zones config to ltree
+F_NONNULL
+void ltree_config_zones(const vscf_data_t* zones_cfg, const char* zones_dir);
+
 #endif // _GDNSD_LTREE_H

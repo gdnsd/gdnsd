@@ -82,7 +82,7 @@ typedef struct {
     unsigned limit_v4;
     unsigned limit_v6;
     uint8_t* rfc3597_data;
-    const zoneinfo_t* zone;
+    zoneinfo_t* zone;
     const char* curfn;
     const char* tstart;
     uint8_t* include_filename;
@@ -191,7 +191,7 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
 }
 
 F_NONNULL
-static bool zscan_do(const zoneinfo_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6) {
+static bool zscan_do(zoneinfo_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6) {
     dmn_assert(zone); dmn_assert(origin); dmn_assert(fn);
 
     int fd = open(fn, O_RDONLY);
@@ -356,8 +356,11 @@ static void process_include(zscan_t* z) {
     char* zfn = _make_zfn(z->curfn, (char*)z->include_filename);
     free(z->include_filename);
     z->include_filename = NULL;
+
+    const unsigned fidx = z->zone->nfiles++;
+    z->zone->files = realloc(z->zone->files, z->zone->nfiles * sizeof(char*));
+    z->zone->files[fidx] = zfn;
     bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
-    free(zfn);
     if(subfailed)
        siglongjmp(z->jbuf, 1);
 }
@@ -838,8 +841,12 @@ static void scanner(zscan_t* z, char* buf, int fd) {
     }
 }
 
-bool scan_zone(const zoneinfo_t* zone) {
+bool scan_zone(zoneinfo_t* zone) {
     dmn_assert(zone);
+    dmn_assert(zone->nfiles);
+    dmn_assert(zone->dname);
+    dmn_assert(zone->files);
+    dmn_assert(zone->files[0]);
     log_debug("Scanning zone '%s'", logf_dname(zone->dname));
-    return zscan_do(zone, zone->dname, zone->file, zone->def_ttl, 0, 0);
+    return zscan_do(zone, zone->dname, zone->files[0], zone->def_ttl, 0, 0);
 }

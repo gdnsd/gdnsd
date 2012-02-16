@@ -28,12 +28,13 @@
 #include "conf.h"
 #include "dnspacket.h"
 #include "ltarena.h"
+#include "gdnsd-vscf.h"
+#include "gdnsd-dname.h"
 
 // This is the global singleton ltree_root
+//   and its ltarena storage
 ltree_node_t* ltree_root = NULL;
-
-// Global ltarena for all of ltree, for now
-static ltarena_t* lta = NULL;
+static ltarena_t* arena_root = NULL;
 
 // This controls some bits about ltree reload/destruct,
 //   because in the rootserver case lta/ltree_root
@@ -44,6 +45,9 @@ static bool rootserver = false;
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists
 static const uint8_t ooz_glue_label[1] = { 0 };
+
+static zoneinfo_t** zones = NULL;
+static unsigned num_zones = 0;
 
 #define log_zfatal(...)\
     do {\
@@ -153,11 +157,11 @@ F_NONNULL F_PURE
 static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8_t* child_label) {
     dmn_assert(node); dmn_assert(child_label);
 
-    const uint32_t child_mask = count2mask(node->child_hash_mask);
-    const uint32_t child_hash = label_djb_hash(child_label, child_mask);
     ltree_node_t* rv = NULL;
 
     if(node->child_table) {
+        const uint32_t child_mask = count2mask(node->child_hash_mask);
+        const uint32_t child_hash = label_djb_hash(child_label, child_mask);
         ltree_node_t* child = node->child_table[child_hash];
         while(child) {
             if(!memcmp(child->label, child_label, *child_label + 1)) {
@@ -168,6 +172,17 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
         }
     }
 
+    return rv;
+}
+
+// Creates a new, disconnected node
+F_NONNULL
+static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label, const uint32_t flags) {
+    dmn_assert(arena); dmn_assert(label);
+
+    ltree_node_t* rv = calloc(1, sizeof(ltree_node_t));
+    rv->label = lta_labeldup(arena, label);
+    rv->flags = flags;
     return rv;
 }
 
@@ -190,8 +205,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
         child = child->next;
     }
 
-    child = calloc(1, sizeof(ltree_node_t));
-    child->label = lta_labeldup(arena, child_label);
+    child = ltree_node_new(arena, child_label, 0);
     child->next = node->child_table[child_hash];
     node->child_table[child_hash] = child;
 
@@ -200,6 +214,31 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
     node->child_hash_mask++;
 
     return child;
+}
+
+// splices zone root "child" as a child of a dns root "node".
+// assumes (requires!) no conflict, intended for attaching unique zone
+// roots to a new root tree which has been prepared with
+// ltree_create_root() -> branch_for(), which pre-grow the child tables,
+// and that masks are already fixed as well
+F_NONNULL
+static void ltree_node_splice_root(ltree_node_t* node, ltree_node_t* child) {
+    dmn_assert(node); dmn_assert(child);
+
+    const uint32_t child_hash = label_djb_hash(child->label, node->child_hash_mask);
+
+    dmn_assert(node->child_table);
+    dmn_assert(node->child_hash_mask);
+
+    const uint8_t* child_label = child->label;
+    ltree_node_t** slot = &node->child_table[child_hash];
+    ltree_node_t* check;
+    while((check = *slot)) {
+        dmn_assert(!memcmp(check->label, child_label, *child_label + 1));
+        slot = &check->next;
+    }
+
+    *slot = child;
 }
 
 // "dname" should be an FQDN format-wise, but:
@@ -224,29 +263,62 @@ static ltree_node_t* ltree_find_or_add_dname(const zoneinfo_t* zone, const uint8
     return current;
 }
 
-// as above, but for creating zone roots under a non-authoritative root tree.
-//   we use the global root-level "lta" up until the zone root itself, when
-//   we switch to the zone's own storage
+// splice a disconnected zone root node into a DNS root tree
+// zone root node *cannot* already exist
 F_NONNULL
-static ltree_node_t* ltree_find_or_add_dname_zroot(zoneinfo_t* zone) {
-    dmn_assert(zone);
-    dmn_assert(zone->arena); dmn_assert(zone->dname);
-    dmn_assert(*zone->dname); // not root of DNS
-    dmn_assert(lta); dmn_assert(ltree_root); // lta/ltree_root already set up
-    dmn_assert(lta != zone->arena); // not root zone
+static void ltree_splice_root(ltree_node_t* dnsroot, ltree_node_t* zroot, const uint8_t* dname) {
+    dmn_assert(dnsroot); dmn_assert(zroot); dmn_assert(dname);
 
-    // Construct a label stack from dname
-    const uint8_t* dname = zone->dname;
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(dname, lstack);
     dmn_assert(lcount); // which means, we didn't call this on the root dname itself
 
-    ltree_node_t* current = ltree_root;
-    while(lcount > 1)
-        current = ltree_node_find_or_add_child(lta, current, lstack[--lcount]);
-    current = ltree_node_find_or_add_child(zone->arena, current, lstack[0]);
+    ltree_node_t* current = dnsroot;
+    while(lcount > 1) {
+        current = ltree_node_find_child(current, lstack[--lcount]);
+        dmn_assert(current);
+    }
 
-    return current;
+    ltree_node_splice_root(current, zroot);
+}
+
+// For a new root-of-dns "root", add empty branches leading to "dname",
+//   but not the "dname" node itself.  Also pre-grows the child table
+//   at the tip of the branch to accomodate the to-be-added zone root,
+//   so that masks can be fixed before splicing in the root nodes.
+F_NONNULL
+static void ltree_branch_for(ltree_node_t* dnsroot, ltarena_t* arena, const uint8_t* dname) {
+    dmn_assert(dnsroot); dmn_assert(arena); dmn_assert(dname);
+
+    const uint8_t* lstack[127];
+    unsigned lcount = dname_to_lstack(dname, lstack);
+    dmn_assert(lcount); // which means, we didn't call this on the root dname itself
+
+    ltree_node_t* current = dnsroot;
+    while(lcount > 1)
+        current = ltree_node_find_or_add_child(arena, current, lstack[--lcount]);
+
+    // grow the tip of the branch to account for the to-be-added root
+    if(!current->child_table) {
+        dmn_assert(!current->child_hash_mask);
+        current->child_table = calloc(2, sizeof(ltree_node_t*));
+    }
+    if(current->child_hash_mask == count2mask(current->child_hash_mask))
+        ltree_childtable_grow(current);
+    current->child_hash_mask++;
+}
+
+// create a new root zone containing the branches that lead to all of the roots
+//   in zones, without actually creating the zone root nodes themselves
+F_NONNULL
+static ltree_node_t* ltree_create_root(ltarena_t* arena) {
+    dmn_assert(arena);
+    ltree_node_t* root_of_dns = calloc(1, sizeof(ltree_node_t));
+    root_of_dns->label = lta_labeldup(arena, (uint8_t*)"");
+    for(unsigned i = 0; i < num_zones; i++)
+        ltree_branch_for(root_of_dns, arena, zones[i]->dname);
+
+    return root_of_dns;
 }
 
 #define MK_RRSET_GET(_typ, _nam, _dtyp) \
@@ -1201,15 +1273,14 @@ static void ltree_fix_masks(ltree_node_t* node) {
     }
 }
 
-// local forward decl
-static void ltree_destroy(void);
-
-// common processing for rootserver zone or normal zones
+// common processing for zones
 F_WUNUSED F_NONNULL
 static bool process_zone(zoneinfo_t* zone) {
     dmn_assert(zone);
 
-    zone->root->flags = LTNFLAG_ZROOT;
+    zone->arena = lta_new();
+    zone->root = ltree_node_new(zone->arena, zone->dname + 1, LTNFLAG_ZROOT);
+
     if(unlikely(scan_zone(zone)))
         return true;
 
@@ -1241,39 +1312,53 @@ static bool process_zone(zoneinfo_t* zone) {
     return false;
 }
 
-void ltree_load_zones(void) {
-    dmn_assert(gconfig.num_zones);
+// local forward decls
+static void ltree_destroy(void);
+static void ltree_node_destroy(ltree_node_t* node);
 
-    // Initialize the global (root-level) ltarena and ltree_root
-    lta = lta_new();
-    ltree_root = calloc(1, sizeof(ltree_node_t));
-    ltree_root->label = lta_labeldup(lta, (uint8_t*)"");
+void ltree_load_zones(void) {
+    dmn_assert(num_zones);
 
     // rootserver case (if num_zones > 1, by definition duplication
     //   or subzoning will cause a quick failure if one of them is the root)
-    if(gconfig.num_zones == 1 && gconfig.zones[0].dname[0] == 1 && gconfig.zones[0].dname[1] == 0) {
+    zoneinfo_t* first_zone = zones[0];
+    if(num_zones == 1 && first_zone->dname[0] == 1 && first_zone->dname[1] == 0)
         rootserver = true;
-        zoneinfo_t* auth_root = &gconfig.zones[0];
-        auth_root->arena = lta;
-        auth_root->root = ltree_root;
-        if(unlikely(process_zone(auth_root)))
-            log_fatal("Failed to load root zone");
+
+    // if not rootserver, create a new root for attaching zones to
+    if(!rootserver) {
+        arena_root = lta_new();
+        ltree_root = ltree_create_root(arena_root);
+        lta_close(arena_root);
+        ltree_fix_masks(ltree_root);
+    }
+
+    // load each zone as a disconnected subtree
+    for(unsigned i = 0; i < num_zones; i++) {
+        zoneinfo_t* zone = zones[i];
+        if(unlikely(process_zone(zone)))
+            log_fatal("Failed to load zone '%s'", logf_dname(zone->dname));
+#ifndef NDEBUG
+        // destroy and reload to exercise memory bugs
+        ltree_node_destroy(zone->root);
+        lta_destroy(zone->arena);
+        zone->root = NULL;
+        zone->arena = NULL;
+        if(unlikely(process_zone(zone)))
+            log_fatal("Failed to load zone '%s'", logf_dname(zone->dname));
+#endif
+    }
+
+    // alias the root zone or attach roots as appropriate
+    if(rootserver) {
+        arena_root = first_zone->arena;
+        ltree_root = first_zone->root;
     }
     else {
-       // normal zones under a non-authoritative root
-       for(unsigned i = 0; i < gconfig.num_zones; i++) {
-           zoneinfo_t* zone = &gconfig.zones[i];
-           zone->arena = lta_new();
-           zone->root = ltree_find_or_add_dname_zroot(zone);
-           if(unlikely(process_zone(zone)))
-               log_fatal("Failed to load zone '%s'", logf_dname(zone->dname));
-       }
-       // Close the top-level ltarena to further allocations.
-       lta_close(lta);
-       // Fixup masks in the non-auth areas above the zone roots
-       // This also redundantly fixes the auth nodes themselves,
-       //   but no point branching for it in the long run...
-       ltree_fix_masks(ltree_root);
+        for(unsigned i = 0; i < num_zones; i++) {
+            zoneinfo_t* zone = zones[i];
+            ltree_splice_root(ltree_root, zone->root, zone->dname);
+        }
     }
 
 #ifndef NDEBUG
@@ -1360,8 +1445,148 @@ static void ltree_destroy(void) {
     ltree_node_destroy(ltree_root);
     ltree_root = NULL;
     if(!rootserver)
-        for(unsigned i = 0; i < gconfig.num_zones; i++)
-            lta_destroy(gconfig.zones[i].arena);
-    lta_destroy(lta);
-    lta = NULL;
+        for(unsigned i = 0; i < num_zones; i++)
+            lta_destroy(zones[i]->arena);
+    lta_destroy(arena_root);
+    arena_root = NULL;
 }
+
+/*****************
+ * zoneinfo_t conf stuff
+ *****************/
+
+// Sort the zones array by the zone name length descending
+F_PURE F_NONNULL
+static int zones_cmp(const zoneinfo_t** ap, const zoneinfo_t** bp) {
+    dmn_assert(ap); dmn_assert(bp);
+    dmn_assert(*ap); dmn_assert(*bp);
+    dmn_assert((*ap)->dname); dmn_assert((*bp)->dname);
+    return dname_cmp((*ap)->dname, (*bp)->dname);
+}
+
+// This operates on zones, accomplishing two primary tasks:
+//  (1) Catching duplicate zones with a fatal error
+//  (2) Catching subzones with a fatal error
+static void postproc_zones_info(void) {
+
+    // Sort zones by zone name length ascending.
+    // Note that with dname_cmp as the comparator,
+    //  any duplicates would be paired in the list
+    qsort(zones, num_zones, sizeof(zoneinfo_t*),
+        (int (*)(const void*, const void*))zones_cmp);
+
+    // Walk down the list from longest to shortest zone name
+    for(int zidx1 = num_zones - 1; zidx1 > 0; zidx1--) {
+
+        // Check next entry for a duplicate
+        const int zidx_next = zidx1 - 1;
+        if(!dname_cmp(zones[zidx_next]->dname, zones[zidx1]->dname))
+            log_fatal("Zone name duplicated in config: '%s'", logf_dname(zones[zidx1]->dname));
+
+        // Walk down remainder of list from longest to shortest zone name
+        for(int zidx2 = zidx_next; zidx2 > -1; zidx2--)
+            if(dname_isparentof(zones[zidx2]->dname, zones[zidx1]->dname))
+                log_fatal("Zone '%s' is a subzone of '%s' (try using $INCLUDE instead?)", logf_dname(zones[zidx1]->dname), logf_dname(zones[zidx2]->dname));
+    }
+}
+
+F_NONNULL
+static bool bad_zattr(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* zname) {
+    dmn_assert(key); dmn_assert(zname);
+    log_fatal("Invalid zone attribute key '%s' for zone '%s'", key, (const char*)zname);
+}
+
+F_NONNULL F_MALLOC F_WUNUSED
+static uint8_t* make_zone_dname(const char* txtname, unsigned txtname_len) {
+    dmn_assert(txtname);
+
+    if(!txtname_len)
+        log_fatal("Empty zone name in config (did you mean ., the root zone?)");
+
+    uint8_t* dname = malloc(256);
+
+    // This will probably crash on well-crafted invalid input in the config file, because
+    //   no parser is pre-checking for escape sequence validity before this.  E.g.:
+    //     zones => { example.co\\ => {} }
+    // ... would decode to a string key with a trailing '\', which in turn will be crashy
+    //   when dname_from_string() tries to decode that dangling escape...
+    // The right fix is to upgrade vscf keys to be able to be native dnames in the same
+    //   sense that simple string values are.  In practice that looks a little hairy to
+    //   implement due to the special nature of keys (iteration callbacks, sorting, etc..).
+    // For that matter all of the data interpretations on simple string values (e.g. integer)
+    //   could be handy for keys in some cases...
+
+    dname_status_t status = dname_from_string(dname, (const uint8_t*)txtname, txtname_len);
+    if(status == DNAME_INVALID)
+        log_fatal("Zone name '%s' is illegal", txtname);
+
+    if(dname_iswild(dname))
+        log_fatal("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
+
+    if(status == DNAME_PARTIAL)
+        dname_terminate(dname);
+
+    return dname;
+}
+
+F_NONNULL
+static zoneinfo_t* make_zinfo(const char* zname, const unsigned znlen, const vscf_data_t* zone_cfg, const char* zdir) {
+    dmn_assert(zname); dmn_assert(zone_cfg); dmn_assert(zdir);
+
+    if(!vscf_is_hash(zone_cfg))
+        log_fatal("The value of zone '%s' in the configuration must be a hash", zname);
+
+    if(!znlen)
+        log_fatal("Empty zone names are not legal");
+
+    zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
+
+    zone->dname = make_zone_dname(zname, znlen);
+    zone->nfiles = 1;
+    zone->files = malloc(sizeof(char*));
+
+    const vscf_data_t* zfn_cfg = vscf_hash_get_data_byconstkey(zone_cfg, "file", true);
+    if(zfn_cfg) {
+        if(!vscf_is_simple(zfn_cfg))
+            log_fatal("Attribute 'file' for zone '%s' must have a string value", zname);
+        zone->files[0] = gdnsd_make_abs_fn(zdir, vscf_simple_get_data(zfn_cfg));
+    }
+    else {
+        zone->files[0] = gdnsd_make_abs_fn(zdir, zname);
+    }
+
+    const vscf_data_t* zttl_cfg = vscf_hash_get_data_byconstkey(zone_cfg, "default_ttl", true);
+    if(zttl_cfg) {
+        unsigned long zttl;
+        if(!vscf_is_simple(zttl_cfg) || !vscf_simple_get_as_ulong(zttl_cfg, &zttl))
+            log_fatal("Attribute 'default_ttl' for zone '%s' must have a simple unsigned integer value", zname);
+        if(zttl > 2147483647)
+            log_fatal("Attribute 'default_ttl' for zone '%s' must be less than 2147483648", zname);
+        zone->def_ttl = zttl;
+    }
+    else {
+        zone->def_ttl = gconfig.zones_default_ttl;
+    }
+
+    vscf_hash_iterate(zone_cfg, true, bad_zattr, (void*)zname);
+
+    return zone;
+}
+
+void ltree_config_zones(const vscf_data_t* zones_cfg, const char* zones_dir) {
+    dmn_assert(zones_cfg); dmn_assert(zones_dir);
+    if(!vscf_is_hash(zones_cfg))
+        log_fatal("'zones' value is wrong type (must be hash)");
+    num_zones = vscf_hash_get_len(zones_cfg);
+    if(!num_zones)
+        log_fatal("No zones in 'zones' stanza");
+    zones = calloc(num_zones, sizeof(zoneinfo_t*));
+    for(unsigned i = 0; i < num_zones; i++) {
+        unsigned znlen;
+        const char* zname = vscf_hash_get_key_byindex(zones_cfg, i, &znlen);
+        const vscf_data_t* zcfg = vscf_hash_get_data_byindex(zones_cfg, i);
+        zones[i] = make_zinfo(zname, znlen, zcfg, zones_dir);
+    }
+    postproc_zones_info(); // checks dupes / child zones, re-orders array
+}
+

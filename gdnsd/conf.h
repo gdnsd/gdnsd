@@ -42,7 +42,6 @@ typedef struct {
 } dns_addr_t;
 
 typedef struct {
-    zoneinfo_t* zones;
     dns_addr_t* dns_addrs;
     anysin_t*   http_addrs;
     const char*     pidfile;
@@ -60,7 +59,6 @@ typedef struct {
     unsigned log_stats;
     unsigned max_http_clients;
     unsigned http_timeout;
-    unsigned num_zones;
     unsigned num_dns_addrs;
     unsigned num_http_addrs;
     unsigned num_io_threads;

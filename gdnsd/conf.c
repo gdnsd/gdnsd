@@ -49,7 +49,6 @@ static const char def_chroot_path[] = VARDIR "/" PACKAGE_NAME;
 
 // Global config, readonly after loaded from conf file
 global_config_t gconfig = {
-    .zones = NULL,
     .dns_addrs = NULL,
     .http_addrs = NULL,
     .pidfile = def_pidfile,
@@ -71,7 +70,6 @@ global_config_t gconfig = {
     .log_stats = 3600U,
     .max_http_clients = 128U,
     .http_timeout = 5U,
-    .num_zones = 0U,
     .num_dns_addrs = 0U,
     .num_http_addrs = 0U,
     .max_response = 16384U,
@@ -97,7 +95,6 @@ static inline void make_addr(const char* lspec_txt, const unsigned def_port, any
         log_fatal("Could not process listen-address spec '%s': %s", lspec_txt, gai_strerror(addr_err));
 }
 
-// for zones_dir, etc
 F_NONNULLX(1)
 static char* make_zones_dir(const char* cfg_dir, const char* opt) {
     dmn_assert(cfg_dir);
@@ -120,88 +117,6 @@ static char* make_zones_dir(const char* cfg_dir, const char* opt) {
         log_fatal("Zones directory '%s' is not a directory", absfn);
 
     return absfn;
-}
-
-F_NONNULL
-static bool bad_zattr(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* zname) {
-    dmn_assert(key); dmn_assert(zname);
-    log_fatal("Invalid zone attribute key '%s' for zone '%s'", key, (const char*)zname);
-}
-
-F_NONNULL F_MALLOC F_WUNUSED
-static uint8_t* make_zone_dname(const char* txtname, unsigned txtname_len) {
-    dmn_assert(txtname);
-
-    if(!txtname_len)
-        log_fatal("Empty zone name in config (did you mean ., the root zone?)");
-
-    uint8_t* dname = malloc(256);
-
-    // This will probably crash on well-crafted invalid input in the config file, because
-    //   no parser is pre-checking for escape sequence validity before this.  E.g.:
-    //     zones => { example.co\\ => {} }
-    // ... would decode to a string key with a trailing '\', which in turn will be crashy
-    //   when dname_from_string() tries to decode that dangling escape...
-    // The right fix is to upgrade vscf keys to be able to be native dnames in the same
-    //   sense that simple string values are.  In practice that looks a little hairy to
-    //   implement due to the special nature of keys (iteration callbacks, sorting, etc..).
-    // For that matter all of the data interpretations on simple string values (e.g. integer)
-    //   could be handy for keys in some cases...
-
-    dname_status_t status = dname_from_string(dname, (const uint8_t*)txtname, txtname_len);
-    if(status == DNAME_INVALID)
-        log_fatal("Zone name '%s' is illegal", txtname);
-
-    if(dname_iswild(dname))
-        log_fatal("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
-
-    if(status == DNAME_PARTIAL)
-        dname_terminate(dname);
-
-    return dname;
-}
-
-F_NONNULL
-static bool configure_zone(const char* zname, unsigned znlen, const vscf_data_t* this_zone, void* data) {
-    dmn_assert(zname); dmn_assert(this_zone); dmn_assert(data);
-
-    if(!vscf_is_hash(this_zone))
-        log_fatal("The value of zone '%s' in the configuration must be a hash", zname);
-
-    if(!znlen)
-        log_fatal("Empty zone names are not legal");
-
-    const char* zones_dir = (const char*)data;
-
-    const unsigned zidx = gconfig.num_zones++;
-
-    gconfig.zones[zidx].dname = make_zone_dname(zname, znlen);
-
-    const vscf_data_t* this_zone_file = vscf_hash_get_data_byconstkey(this_zone, "file", true);
-    if(this_zone_file) {
-        if(!vscf_is_simple(this_zone_file))
-            log_fatal("Attribute 'file' for zone '%s' must have a string value", zname);
-        gconfig.zones[zidx].file = gdnsd_make_abs_fn(zones_dir, vscf_simple_get_data(this_zone_file));
-    }
-    else {
-        gconfig.zones[zidx].file = gdnsd_make_abs_fn(zones_dir, zname);
-    }
-
-    const vscf_data_t* this_zone_ttl = vscf_hash_get_data_byconstkey(this_zone, "default_ttl", true);
-    if(this_zone_ttl) {
-        unsigned long zttl;
-        if(!vscf_is_simple(this_zone_ttl) || !vscf_simple_get_as_ulong(this_zone_ttl, &zttl))
-            log_fatal("Attribute 'default_ttl' for zone '%s' must have a simple unsigned integer value", zname);
-        if(zttl > 2147483647)
-            log_fatal("Attribute 'default_ttl' for zone '%s' must be less than 2147483648", zname);
-        gconfig.zones[zidx].def_ttl = zttl;
-    }
-    else {
-        gconfig.zones[zidx].def_ttl = gconfig.zones_default_ttl;
-    }
-
-    vscf_hash_iterate(this_zone, true, bad_zattr, (void*)zname);
-    return true;
 }
 
 F_NONNULLX(1)
@@ -339,43 +254,6 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
             _store_at = vscf_simple_get_data(_opt_setting); \
         } \
     } while(0)
-
-// Sort the zones array by the zone name length descending
-F_PURE F_NONNULL
-static int zones_cmp(const zoneinfo_t* a, const zoneinfo_t* b) {
-    dmn_assert(a); dmn_assert(b);
-    dmn_assert(a->dname); dmn_assert(b->dname);
-    return dname_cmp(a->dname, b->dname);
-}
-
-// This operates on gconfig.zones, accomplishing two primary tasks:
-//  (1) Catching duplicate zones with a fatal error
-//  (2) Catching subzones with a fatal error
-static void postproc_zones(void) {
-    // Because these will be frequently referenced
-    zoneinfo_t* zones = gconfig.zones;
-    const unsigned num_zones = gconfig.num_zones;
-
-    // Sort zones by zone name length ascending.
-    // Note that with dname_cmp as the comparator,
-    //  any duplicates would be paired in the list
-    qsort(zones, num_zones, sizeof(zoneinfo_t),
-        (int (*)(const void*, const void*))zones_cmp);
-
-    // Walk down the list from longest to shortest zone name
-    for(int zidx1 = num_zones - 1; zidx1 > 0; zidx1--) {
-
-        // Check next entry for a duplicate
-        const int zidx_next = zidx1 - 1;
-        if(!dname_cmp(zones[zidx_next].dname, zones[zidx1].dname))
-            log_fatal("Zone name duplicated in config: '%s'", logf_dname(zones[zidx1].dname));
-
-        // Walk down remainder of list from longest to shortest zone name
-        for(int zidx2 = zidx_next; zidx2 > -1; zidx2--)
-            if(dname_isparentof(zones[zidx2].dname, zones[zidx1].dname))
-                log_fatal("Zone '%s' is a subzone of '%s' (try using $INCLUDE instead?)", logf_dname(zones[zidx1].dname), logf_dname(zones[zidx2].dname));
-    }
-}
 
 static void process_http_listen(const vscf_data_t* http_listen_opt, const unsigned def_http_port) {
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
@@ -621,25 +499,13 @@ void conf_load(const char* cfg_file) {
     // Assign globally unique thread numbers for each socket-handling thread
     assign_thread_nums();
 
-    const vscf_data_t* zones = vscf_hash_get_data_byconstkey(cfg_root, "zones", true);
-    if(!zones)
-        log_fatal("No zones specified");
-    if(!vscf_is_hash(zones))
-        log_fatal("Zones value is wrong type (must be hash)");
-
-    unsigned n_zones = vscf_hash_get_len(zones);
-    if(!n_zones)
-        log_fatal("No zones specified");
-
-    // This creates the gconfig.zones array.
-    //   configure_zone increments gconfig.num_zones as it goes.
     char* zones_dir = make_zones_dir(gdnsd_get_cfdir(), zdopt);
-    gconfig.zones = calloc(sizeof(zoneinfo_t), n_zones);
-    vscf_hash_iterate(zones, false, configure_zone, zones_dir);
-    dmn_assert(gconfig.num_zones == n_zones);
+    const vscf_data_t* zones_cfg = vscf_hash_get_data_byconstkey(cfg_root, "zones", true);
+    if(!zones_cfg)
+        log_fatal("Missing required 'zones' config");
+    ltree_config_zones(zones_cfg, zones_dir);
     free(zones_dir);
 
-    postproc_zones();
     gdnsd_plugins_set_search_path(psearch_array);
 
     // Load plugins
