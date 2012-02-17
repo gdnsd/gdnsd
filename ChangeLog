@@ -1,4 +1,18 @@
 
+1.6.3 - 2012-02-17
+   Minor docs fixes
+   Compile fix for non-gcc compilers
+   Added a deprecation warning when explicit subzones are loaded, as
+     this (undocumented) feature will be dropped in 1.7.x and beyond.
+   A minor bugfix related to the nature of the failure and/or error
+     message when one erroneously defines a CNAME inside a delegation.
+   Fixed an AAAA logic error in the zonefile parser, which
+     fixes a pair of related bugs:
+   Out-of-zone NS->AAAA glue was being ignored completely.
+   AAAA records which overlapped subzones loaded separately were
+     being included in the subzone's data when they should have
+     been ignored.
+
 1.6.2 - 2012-02-10
    Lots of documentation fixes
    Two plugin_geoip bugs fixed:
