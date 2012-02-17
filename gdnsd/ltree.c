@@ -1441,6 +1441,7 @@ static void ltree_node_destroy(ltree_node_t* node) {
     free(node);
 }
 
+F_UNUSED
 static void ltree_destroy(void) {
     ltree_node_destroy(ltree_root);
     ltree_root = NULL;
