@@ -391,6 +391,7 @@ static void postproc_zones(void) {
         // Walk down remainder of list from longest to shortest zone name
         for(int zidx2 = zidx_next; zidx2 > -1; zidx2--) {
             if(dname_isparentof(zones[zidx2].dname, zones[zidx1].dname)) {
+                log_warn("Explicit subzones in separate files are DEPRECATED, and will no longer be supported in 1.7.x and beyond.  $INCLUDE might do what you need.  You have such a case with the zones '%s' and '%s'", zones[zidx2].dname, zones[zidx1].dname);
                 add_subzone(&zones[zidx2], zones[zidx1].dname);
                 break; // a zone can only have one parent zone
             }
