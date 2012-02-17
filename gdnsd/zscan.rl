@@ -46,7 +46,7 @@
  *  integer happened to be the last byte of the buffer.  This
  *  is why we allocate one extra buffer byte and set it to zero.
  */
-#define BUFSIZE 65536
+#define MAX_BUFSIZE 65536
 
 
 #define parse_error(_fmt, ...) \
@@ -95,7 +95,7 @@ typedef struct {
 } zscan_t;
 
 F_NONNULL
-static void scanner(zscan_t* z, char* buf, int fd);
+static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd);
 
 /******** IP Addresses ********/
 
@@ -190,6 +190,21 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
     }
 }
 
+// this is broken out into a separate function to avoid
+//   issues with setjmp and all of the local auto variables
+//   in zscan_do() below
+F_NONNULL
+static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
+    dmn_assert(z); dmn_assert(buf);
+
+    volatile bool failed = true;
+    if(!sigsetjmp(z->jbuf, 0)) {
+        scanner(z, buf, bufsize, fd);
+        failed = false;
+    }
+    return failed;
+}
+
 F_NONNULL
 static bool zscan_do(zoneinfo_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6) {
     dmn_assert(zone); dmn_assert(origin); dmn_assert(fn);
@@ -198,6 +213,21 @@ static bool zscan_do(zoneinfo_t* zone, const uint8_t* origin, const char* fn, co
     if(fd < 0) {
         log_err("Cannot open file '%s' for reading: %s", fn, logf_errno());
         return true;
+    }
+
+    unsigned bufsize = MAX_BUFSIZE;
+    {
+        struct stat fdstat;
+        if(!fstat(fd, &fdstat)) {
+#ifdef HAVE_POSIX_FADVISE
+            posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
+#endif
+            if(fdstat.st_size < bufsize)
+                bufsize = fdstat.st_size;
+        }
+        else {
+            log_warn("fstat(%s) failed for advice, not critical...", fn);
+        }
     }
 
     zscan_t* z = calloc(1, sizeof(zscan_t));
@@ -209,12 +239,10 @@ static bool zscan_do(zoneinfo_t* zone, const uint8_t* origin, const char* fn, co
     dname_copy(z->origin, origin);
     z->zone = zone;
 
-    volatile bool failed = true;
-    char* buf = malloc(BUFSIZE + 1);
-    if(!sigsetjmp(z->jbuf, 0)) {
-        scanner(z, buf, fd);
-        failed = false;
-    }
+    char* buf = malloc(bufsize + 1);
+    buf[bufsize] = 0;
+
+    bool failed = _scan_isolate_jmp(z, buf, bufsize, fd);
 
     if(close(fd)) {
         log_err("Cannot close file '%s': %s", fn, logf_errno());
@@ -789,21 +817,10 @@ static void close_paren(zscan_t* z) {
 }%%
 
 F_NONNULL
-static void scanner(zscan_t* z, char* buf, int fd) {
+static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
     dmn_assert(z);
 
-#ifdef HAVE_POSIX_FADVISE
-    {
-        struct stat fdstat;
-        if(!fstat(fd, &fdstat))
-            posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
-        else
-            log_warn("fstat(%s) failed for fadvise use, not critical...", z->curfn);
-    }
-#endif
-
     char* read_at;
-    buf[BUFSIZE] = 0;
 
     const char* pe = NULL;
     const char* eof = NULL;
@@ -820,7 +837,7 @@ static void scanner(zscan_t* z, char* buf, int fd) {
             z->tstart = buf;
         }
 
-        const int space = BUFSIZE - have;
+        const int space = bufsize - have;
         const char* p = read_at = buf + have;
 
         const int len = read(fd, read_at, space);
