@@ -2,47 +2,37 @@
 Dependencies / System reqs for building from release tarballs
 ==============================================================
 
-A modern POSIXy/*nixy operating system with a decent C99 compiler and a
-reasonably up to date and conforming C library.
+A reasonably "normal" 32 or 64 bit CPU architecture
+A modern POSIX-ish operating system with a decent C99 compiler and a
+  reasonably up to date and conforming libc and POSIX threads support.
+For Linux: libcap 2.x+ is recommended
 
-A reasonably "normal" CPU architecture (pointers at least 32-bits wide and
-supporting cache-coherent atomic writes to uintptr_t-sized/aligned memory in
-the SMP case).
+Most development and testing is done on modern Linux and MacOS X machines,
+  and mostly on x86_64 CPUs.
 
-For Linux: libcap 2.x+ is recommended for support of late listener binding
- on privileged ports.
+In the past the code has been tested successfully on several Linux and
+  *BSD variants on x86 and x86_64 CPUs, OpenSolaris, and even an embedded
+  Linux target running on a big-endian MIPS CPU.  Most of these haven't
+  been re-tested in several releases now, so there could be minor fixups
+  in order as far as I know.  Bug reports and/or patches welcome.
 
-gdnsd 1.2.x was tested on the following CPU/OS/Compiler setups:
+If you want to run the optional testsuite (make check), you will also need
+  Perl and the Perl modules Test::More, Net::DNS and LWP.
 
-      x86_64:
-        Linux - Fedora 12: gcc 4.4.3
-        Linux - Fedora 13: gcc 4.4.4
-        Linux - Debian Etch: gcc 4.1.2
-        MacOS X Snow Leopard: gcc 4.2.1, llvm-gcc 4.2.1, clang 1.0.2
+Building from git
+==================
 
-      x86:
-        Linux - Fedora 13: gcc 4.4.4
-        FreeBSD 8.0: gcc 4.2.1
-        FreeBSD 7.2: gcc 4.2.1
-        FreeBSD 6.4: gcc 3.4.6
-        OpenBSD 4.4: gcc 3.3.5
-        MacOS X Snow Leopard: gcc 4.0.1
-        OpenSolaris 2009.06: gcc 3.4.3, gcc 4.3.2, Sun Studio C Compiler
+While the distribution tarballs contain just about everything they need
+short of "make" and "cc", most auto-generated distribution files are
+not included in the git repository, so you'll need additional
+tools installed in your $PATH to get things working
 
-      mips32r2 (Big Endian) (Atheros 9132 - Buffalo WZR-HP-G300NH Router):
-        Linux - OpenWRT Backfire: gcc 4.3.3 + uClibc 0.9.30.1
+The latest versions of GNU autoconf, automake, and libtool
+Ragel v6.6+: http://complang.org/ragel
+And everything listed below for the testsuite...
 
-(More tests and reports for more systems welcome!)
-(Also, I last did these tests circa gdnsd 1.2.x, things may have changed since.
- Mostly, I develop and test only on Linux and MacOS X).
-
-If you want to run the optional testsuite (make check), you will also need Perl
-and the Perl modules Test::More, Net::DNS and LWP.
-
-If you're working from an svn checkout instead of a release tarball, you will
-also need to install Ragel 6.6 or 6.7 from http://www.complang.org/ragel/ .  The
-resulting binary program "ragel" must be in your $PATH when you run the
-configure script.
+On a fresh git clone, start with "autoreconf", which will re-generate
+all of the autotools outputs and then run "./configure && make".
 
 Running the test suite (make check, etc)
 =========================================
@@ -78,9 +68,12 @@ Interesting non-standard configure options:
 
 --enable-developer
   Builds a debugging build (-g) with a lot of extra gcc warnings
-   flags, a large suite of assert()ions, and extra
-   informative debug information via STDERR or syslog().
-  Not generally for production use...
+    flags, a large suite of assert()ions, and extra
+    informative debug information via STDERR or syslog().
+    It also does other excessive runtime checks that really
+    slow things down.
+  Not generally for production use.  If you just want debug
+    symbols, put -g in your CFLAGS.
 
 --with-testport=N
   The test suite needs to be able to bind to 3 consecutive ports
