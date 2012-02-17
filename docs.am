@@ -57,10 +57,7 @@ gwiki:
 		$(POD2WIKI) --style googlecode $$podsrc $(GWIKI_DIR)/$$wikifn; \
 	done
 
-# clean all generated docs
 docs-maintainer-clean:
-	@for sdir in $(SUBDIRS); do \
-		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir docs-maintainer-clean; \
-	done
-	rm -f $(GENERATED_DOCS)
+	-test -z "$(GENERATED_DOCS)" || rm -f $(GENERATED_DOCS)
 
+maintainer-clean-local: docs-maintainer-clean

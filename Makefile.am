@@ -31,8 +31,6 @@ install-exec-hook:
 check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
 
-mtaintainer-clean-local: docs-maintainer-clean
-
 clean-local:
 	@rm -rf $(top_srcdir)/gwiki.out
 
