@@ -9,32 +9,52 @@ Minimal example gdnsd config file using this plugin:
 
   zones => { example.com => {} }
   plugins => { geoip => {
-    maps => { my_prod_map => {
-      geoip_db => /var/gdnsd/GeoIPCity.dat,
-      datacenters => [dc-03, dc-02, dc-01],
-      map => {
-          EU => {
-              DE => [dc-03, dc-01],
-              CH => [dc-01, dc-03]
-          },
-          NA => { MX => [dc-02] }
+    maps => {
+      my_prod_map => {
+        geoip_db => /var/gdnsd/GeoIPCity.dat,
+        datacenters => [dc-03, dc-02, dc-01],
+        map => {
+            EU => {
+                DE => [dc-03, dc-01],
+                CH => [dc-01, dc-03]
+            },
+            NA => { MX => [dc-02] }
+        }
+      },
+      my_auto_map => {
+        geoip_db => /var/gdnsd/GeoIPCityv6.dat,
+        datacenters => [dc1, dc2],
+        auto_dc_coords => {
+           dc1 => [ 38.9, -77 ],
+           dc2 => [ 50.1, 8.7 ],
+        }
       }
-    }}
-    resources => { prod_www => {
-      map => my_prod_map
-      service_types => default
-      dcmap => {
-        dc-01 => 192.0.2.1
-        dc-02 => { lb01 => 192.0.2.2, lb02 => 192.0.2.3 }
-        dc-03 => [ 192.0.2.4, 192.0.2.5, 192.0.2.6 ]
+    },
+    resources => {
+      prod_www => {
+        map => my_prod_map
+        service_types => default
+        dcmap => {
+          dc-01 => 192.0.2.1,
+          dc-02 => { lb01 => 192.0.2.2, lb02 => 192.0.2.3 },
+          dc-03 => [ 192.0.2.4, 192.0.2.5, 192.0.2.6 ]
+        }
       }
-    }}
+      corp_www => {
+        map => my_auto_map
+        dcmap => {
+          dc1 => 192.0.2.100,
+          dc2 => 192.0.2.101
+        }
+      }
+    }
   }}
 
 Example zonefile RRs:
 
   www      600 DYNA geoip!prod_www
   www-dc01 600 DYNA geoip!prod_www/dc-01
+  www.corp 600 DYNA geoip!corp_www
 
 =head1 DESCRIPTION
 

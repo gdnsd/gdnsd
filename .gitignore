@@ -1,10 +1,13 @@
 # Autotools junk at top level
 /autom4te.cache/
+/aclocal.m4
+/config.h
+/config.h.in
 /config.log
 /config.status
-/config.h
-/stamp-h1
+/configure
 /libtool
+/stamp-h1
 
 # Distribution tarballs
 /gdnsd-*.tar.*
@@ -35,6 +38,7 @@ testout/
 
 # Various tool outputs in all dirs
 Makefile
+Makefile.in
 .deps
 .libs
 *.o

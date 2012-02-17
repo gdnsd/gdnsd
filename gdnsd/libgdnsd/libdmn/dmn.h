@@ -41,6 +41,7 @@
 #    define DMN_HAVE_UNREACH_BUILTIN 1
 #  endif
 #else
+#  define DMN_F_PURE
 #  define DMN_F_PRINTF(X,Y)
 #  define DMN_F_NONNULLX(...)
 #  define DMN_F_NONNULL

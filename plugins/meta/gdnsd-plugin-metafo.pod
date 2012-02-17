@@ -32,7 +32,7 @@ Example zonefile RRs:
 
 B<gdnsd-plugin-metafo> is a meta-plugin.  It does static-ordered
 address failover between multiple C<datacenters> (which may or may not
-correspong with real datacenters, it's just a convenient label).
+correspond with real datacenters, it's just a convenient label).
 Each datacenter is defined in terms of other plugins such as
 C<multifo>, C<weighted>, etc, as described below.
 
@@ -132,7 +132,7 @@ However, to make life simpler in the simple cases, plugin_metafo can synthesize 
     #}
   }
 
-Within such a hash above, the special key C<plugin> will be stripped out internally and used to name the plugin we synthesize the config for.  C<plugin> defaults to C<multifo> if not specified.  Note that C<plugin> could also be specified at the resource level (just inside of the C<resA> stanza) to change the default for all C<dcmap> entries in one resource, and could also be specified at the outer-most scope (just inside the C<metafo> stanza) to change the default for all resources.
+Within a hash like the above, the special key C<plugin> will be stripped out internally and used to name the plugin we synthesize the config for.  C<plugin> defaults to C<multifo> if not specified.  Note that C<plugin> could also be specified at the resource level (just inside of the C<resA> stanza) to change the default for all C<dcmap> entries in one resource, and could also be specified at the outer-most scope (just inside the C<metafo> stanza) to change the default for all resources.
 
 The defaulted-down C<plugin> is also the default for the direct-reference C<%plugin!resource> form discussed earlier.  With the correct default plugin name, it can be shortened to just C<!resource>.
 

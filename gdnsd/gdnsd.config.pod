@@ -292,7 +292,7 @@ if they are set too low.
 =item B<priority>
 
 Signed integer, range -20 to +20, lower values are higher priority.
-If explicitly set, gdnsd will attempt <setpriority()>
+If explicitly set, gdnsd will attempt C<setpriority()>
 to this value on startup.  If left unset and gdnsd is started as a normal
 user, no C<setpriority()> call will be made.  If left unset and gdnsd
 is started as root, it will default to calling C<setpriority()> with
