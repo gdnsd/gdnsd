@@ -384,11 +384,8 @@ static void process_include(zscan_t* z) {
     char* zfn = _make_zfn(z->curfn, (char*)z->include_filename);
     free(z->include_filename);
     z->include_filename = NULL;
-
-    const unsigned fidx = z->zone->nfiles++;
-    z->zone->files = realloc(z->zone->files, z->zone->nfiles * sizeof(char*));
-    z->zone->files[fidx] = zfn;
     bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
+    free(zfn);
     if(subfailed)
        siglongjmp(z->jbuf, 1);
 }
@@ -860,10 +857,8 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
 
 bool scan_zone(zoneinfo_t* zone) {
     dmn_assert(zone);
-    dmn_assert(zone->nfiles);
     dmn_assert(zone->dname);
-    dmn_assert(zone->files);
-    dmn_assert(zone->files[0]);
+    dmn_assert(zone->file);
     log_debug("Scanning zone '%s'", logf_dname(zone->dname));
-    return zscan_do(zone, zone->dname, zone->files[0], zone->def_ttl, 0, 0);
+    return zscan_do(zone, zone->dname, zone->file, zone->def_ttl, 0, 0);
 }

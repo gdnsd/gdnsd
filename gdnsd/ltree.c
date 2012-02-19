@@ -1543,17 +1543,16 @@ static zoneinfo_t* make_zinfo(const char* zname, const unsigned znlen, const vsc
     zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
 
     zone->dname = make_zone_dname(zname, znlen);
-    zone->nfiles = 1;
-    zone->files = malloc(sizeof(char*));
+    zone->file = malloc(sizeof(char*));
 
     const vscf_data_t* zfn_cfg = vscf_hash_get_data_byconstkey(zone_cfg, "file", true);
     if(zfn_cfg) {
         if(!vscf_is_simple(zfn_cfg))
             log_fatal("Attribute 'file' for zone '%s' must have a string value", zname);
-        zone->files[0] = gdnsd_make_abs_fn(zdir, vscf_simple_get_data(zfn_cfg));
+        zone->file = gdnsd_make_abs_fn(zdir, vscf_simple_get_data(zfn_cfg));
     }
     else {
-        zone->files[0] = gdnsd_make_abs_fn(zdir, zname);
+        zone->file = gdnsd_make_abs_fn(zdir, zname);
     }
 
     const vscf_data_t* zttl_cfg = vscf_hash_get_data_byconstkey(zone_cfg, "default_ttl", true);
