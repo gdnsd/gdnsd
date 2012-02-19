@@ -190,18 +190,25 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
     }
 }
 
-// this is broken out into a separate function to avoid
-//   issues with setjmp and all of the local auto variables
-//   in zscan_do() below
-F_NONNULL
+// This is broken out into a separate function (called via
+//   function pointer to eliminate the possibility of
+//   inlining on non-gcc compilers, I hope) to avoid issues with
+//   setjmp and all of the local auto variables in zscan_do() below.
+typedef bool (*sij_func_t)(zscan_t*,char*,const unsigned,const int);
+F_NONNULL F_NOINLINE
 static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
-    dmn_assert(z); dmn_assert(buf);
+    dmn_assert(z); dmn_assert(buf); dmn_assert(fd >= 0);
 
     volatile bool failed = true;
+
     if(!sigsetjmp(z->jbuf, 0)) {
         scanner(z, buf, bufsize, fd);
         failed = false;
     }
+    else {
+        failed = true;
+    }
+
     return failed;
 }
 
@@ -242,7 +249,8 @@ static bool zscan_do(zoneinfo_t* zone, const uint8_t* origin, const char* fn, co
     char* buf = malloc(bufsize + 1);
     buf[bufsize] = 0;
 
-    bool failed = _scan_isolate_jmp(z, buf, bufsize, fd);
+    sij_func_t sij = &_scan_isolate_jmp;
+    bool failed = sij(z, buf, bufsize, fd);
 
     if(close(fd)) {
         log_err("Cannot close file '%s': %s", fn, logf_errno());

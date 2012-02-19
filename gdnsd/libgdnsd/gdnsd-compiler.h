@@ -34,6 +34,11 @@
 #  define F_PURE          __attribute__((__pure__))
 #  define F_MALLOC        __attribute__((__malloc__))
 #  define F_NORETURN      __attribute__((__noreturn__))
+#  if __GNUC__ > 3 || __GNUC_MINOR__ > 0 // gcc 3.1+
+#    define F_NOINLINE    __attribute__((__noinline__))
+#  else
+#    define F_NOINLINE
+#  endif
 #  if __GNUC__ > 3 || __GNUC_MINOR__ > 2 // gcc 3.3+
 #    define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
 #    define F_NONNULL       __attribute__((__nonnull__))
@@ -60,6 +65,7 @@
 #  else
 #    define F_NORETURN
 #  endif
+#  define F_NOINLINE
 #  define F_NONNULLX(...)
 #  define F_NONNULL
 #  define F_WUNUSED
