@@ -123,7 +123,7 @@ static void init_rand(const unsigned tnum) {
 // it's important that the modulo operation happen in 64-bit space,
 //   even though modval and the effective return value are in 32-bit space,
 //   because it vastly reduces the bias in the returned numbers.
-static inline uint64_t get_rand(const unsigned tnum, const uint64_t modval) {
+static uint64_t get_rand(const unsigned tnum, const uint64_t modval) {
     return gdnsd_rand_get64(per_thread_rstates[tnum]) % modval;
 }
 

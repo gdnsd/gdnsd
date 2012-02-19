@@ -88,7 +88,7 @@ static bool bad_key(const char* key, unsigned klen V_UNUSED, const vscf_data_t* 
     log_fatal("Invalid %s key '%s'", (const char*)data, key);
 }
 
-static inline void make_addr(const char* lspec_txt, const unsigned def_port, anysin_t* result) {
+static void make_addr(const char* lspec_txt, const unsigned def_port, anysin_t* result) {
     dmn_assert(result);
     const int addr_err = gdnsd_anysin_fromstr(lspec_txt, def_port, result);
     if(addr_err)

@@ -72,7 +72,7 @@ static const uint8_t lcmap[256] = {
   0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF
 };
 
-static inline void map_lc(uint8_t* data, unsigned len) {
+static void map_lc(uint8_t* data, unsigned len) {
     for(unsigned i = 0; i < len; i++)
         data[i] = lcmap[data[i]];
 }

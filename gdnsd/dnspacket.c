@@ -91,7 +91,7 @@ dnspacket_context_t* dnspacket_context_new(const unsigned int this_threadnum, co
 }
 
 F_NONNULL
-static inline void reset_context(dnspacket_context_t* c) {
+static void reset_context(dnspacket_context_t* c) {
     dmn_assert(c);
     memset(
         &c->answer_addr_rrset, 0,

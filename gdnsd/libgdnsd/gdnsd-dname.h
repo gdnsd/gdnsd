@@ -252,7 +252,7 @@ static inline uint8_t* gdnsd_dname_dup(uint8_t* dname, bool exact) {
 //  somewhat meaningless.
 // Equality (0) will only be returned on a complete match,
 //  including the difference between VALID and PARTIAL.
-F_NONNULL
+F_NONNULL F_PURE
 static inline int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2) {
     dmn_assert(dn1); dmn_assert(dn2);
     dmn_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
@@ -263,13 +263,13 @@ static inline int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2) {
 // returns true if dname is within zone
 // returns true if they are identical (only difference from _isparentof)
 // dname and zone must be DNAME_VALID (fully-qualified).
-F_NONNULL
+F_NONNULL F_PURE
 bool gdnsd_dname_isinzone(const uint8_t* zone, const uint8_t* dname);
 
 // returns true if parent is the parent of child, false otherwise.
 // returns false if they are identical (only difference from _isinzone)
 // parent and child must be DNAME_VALID (fully-qualified).
-F_NONNULL
+F_NONNULL F_PURE
 bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child);
 
 // both arguments must be DNAME_VALID, and dname must be known
@@ -292,7 +292,7 @@ static inline void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot) {
 
 // Returns true if dname is a wildcard name (first label is a lone "*").
 // Argument must be DNAME_VALID or DNAME_PARTIAL
-F_NONNULL
+F_NONNULL F_PURE
 static inline bool gdnsd_dname_iswild(const uint8_t* dname) {
     dmn_assert(dname);
     dmn_assert(gdnsd_dname_status(dname) != DNAME_INVALID);
