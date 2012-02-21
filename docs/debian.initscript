@@ -9,14 +9,14 @@
 ##  and it will do the required actions and give you an exit value
 ##  of 0 on success and 1 on failure.
 
-# What configfile are we using? (this is up to the user)
-CONFIG_PATH=/usr/local/etc/gdnsd/config
+# What data root does the daemon use for config/pid files?
+GDNSD_ROOT=/srv/gdnsd
 
 # Where the gdnsd binary was installed
 GDNSD_PATH=/usr/local/sbin/gdnsd
 
 # Shouldn't need to edit this stuff:
-GDNSD_CMD="$GDNSD_PATH -c $CONFIG_PATH"
+GDNSD_CMD="$GDNSD_PATH -d $GDNSD_ROOT"
 
 . /lib/init/vars.sh
 . /lib/lsb/init-functions

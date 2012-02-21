@@ -22,10 +22,9 @@
 
 #include "gdnsd-misc.h"
 
-// Called by core daemon, sets internal config directory
-//  based on absolute path of cfg_file.
+// Called by core daemon, sets data/chroot directory
 F_NONNULL
-void gdnsd_set_cfdir(const char* cfg_file);
+const char* gdnsd_set_rootdir(const char* rootdir_in);
 
 // Globally initialize meta-prng at daemon startup
 void gdnsd_rand_meta_init(void);

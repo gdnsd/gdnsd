@@ -8,22 +8,16 @@
 #
 # Author: Scott Cameron
 
+# These are the defaults anyways, for an installation
+#   to /usr/local from a source tarball
 GDNSD=/usr/local/sbin/gdnsd
-GDNSD_ETC=/usr/local/etc/gdnsd
-GDNSD_CONF=/usr/local/etc/gdnsd/config
+GDNSD_ROOT=/srv/gdnsd
 
 # Source function library.
 . /etc/rc.d/init.d/functions
 
 start() {
         [ -x ${GDNSD} ] || exit 1
-
-        if [ ! -r ${GDNSD_CONF} ] ; then
-         echo {$GDNSD_CONF} is not readable.  Exiting.
-         failure
-         echo
-         exit 1
-        fi;
 
         # Check if process is running.
         echo -n $"Starting ${GDNSD}: "
@@ -35,7 +29,7 @@ start() {
         fi
 
         # Start the process.  GDNSD does a checkconf prior to starting.
-        daemon ${GDNSD} start >/dev/null 2>&1 
+        daemon ${GDNSD} -d ${GDNSD_ROOT} start >/dev/null 2>&1
         RETVAL=$?
         if [ $RETVAL -eq 0 ]; then
          success
@@ -47,15 +41,15 @@ start() {
 stop() {
         # Stop process.
         echo -n $"Stopping ${GDNSD}: "
-  
+
         if [ ! -n "`/sbin/pidof -o %PPID ${GDNSD}`" ]; then
          echo -n $"${GDNSD}: not running"
          failure
          echo
          exit 1
-        fi 
+        fi
 
-        ${GDNSD} stop >/dev/null 2>&1 
+        ${GDNSD} -d ${GDNSD_ROOT} stop >/dev/null 2>&1
         RETVAL=$?
 
         if [ $RETVAL -eq 0 ]; then
@@ -68,9 +62,9 @@ stop() {
 restart() {
         # Restart process.
         echo "Restarting ${GDNSD}: "
-        ${GDNSD} restart >/dev/null 2>&1
+        ${GDNSD} -d ${GDNSD_ROOT} restart >/dev/null 2>&1
         RETVAL=$?
-        
+
         if [ $RETVAL -eq 0 ]; then
          success
          echo
@@ -84,7 +78,7 @@ reload() {
 checkconfig() {
         # Check config
 
-        ${GDNSD} checkconf
+        ${GDNSD} -d ${GDNSD_ROOT} checkconf
         RETVAL=$?
 
         return $retval
@@ -113,4 +107,3 @@ case "$1" in
 esac
 
 exit $?
-

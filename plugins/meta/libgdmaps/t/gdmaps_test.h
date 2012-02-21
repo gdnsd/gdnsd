@@ -27,11 +27,8 @@
 
 #include "gdmaps.h"
 
-// init gdmaps_t from a configfile, including starting
-//   reload watcher thread.  Lookups, destruction, etc
-//   can use the normal gdmaps public API.
-F_NONNULL
-gdmaps_t* gdmaps_test_init(const char* config_path);
+// init gdmaps_t based on user-supplied rootdir (or default if NULL)
+gdmaps_t* gdmaps_test_init(const char* input_rootdir);
 
 // A complete results-checker.  It will terminate with stderr output if
 //  the data comparison (or any earlier part of the operation) fails.

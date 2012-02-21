@@ -25,7 +25,7 @@
 
 int main(int argc, char* argv[]) {
     if(argc != 2)
-        log_fatal("config file must be set on commandline");
+        log_fatal("root directory must be set on commandline");
 
     gdmaps_t* gdmaps = gdmaps_test_init(argv[1]);
     unsigned tnum = 0;

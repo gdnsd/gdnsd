@@ -1342,14 +1342,19 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
         log_fatal("plugin_geoip: map '%s': missing required 'geoip_db' value", name);
     if(!vscf_is_simple(gdb_cfg) || !vscf_simple_get_len(gdb_cfg))
         log_fatal("plugin_geoip: map '%s': 'geoip_db' must have a non-empty string value", name);
-    gdmap->geoip_path = gdnsd_make_abs_fn(gdnsd_get_cfdir(), vscf_simple_get_data(gdb_cfg));
+    gdmap->geoip_path = gdnsd_valid_rootpath(gdnsd_make_rootdir_path2("/etc/geoip", vscf_simple_get_data(gdb_cfg)));
+    if(!gdmap->geoip_path)
+        log_fatal("plugin_geoip: map '%s': 'geoip_db' pathname '%s' invalid or file does not exist within '%s'", name, vscf_simple_get_data(gdb_cfg), gdnsd_get_rootdir());
 
     // geoip_db_v4_overlay config
     const vscf_data_t* gdb_v4o_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db_v4_overlay", true);
     if(gdb_v4o_cfg) {
         if(!vscf_is_simple(gdb_v4o_cfg) || !vscf_simple_get_len(gdb_v4o_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' must have a non-empty string value", name);
-        gdmap->geoip_v4o_path = gdnsd_make_abs_fn(gdnsd_get_cfdir(), vscf_simple_get_data(gdb_v4o_cfg));
+        gdmap->geoip_v4o_path = gdnsd_make_rootdir_path2("/etc/geoip", vscf_simple_get_data(gdb_v4o_cfg));
+        gdmap->geoip_v4o_path = gdnsd_valid_rootpath(gdnsd_make_rootdir_path2("/etc/geoip", vscf_simple_get_data(gdb_v4o_cfg)));
+        if(!gdmap->geoip_v4o_path)
+            log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' pathname '%s' invalid or file does not exist within '%s'", name, vscf_simple_get_data(gdb_v4o_cfg), gdnsd_get_rootdir());
     }
 
     // optional GeoIPCity behavior flags
@@ -1429,94 +1434,17 @@ static void gdmap_load_geoip(gdmap_t* gdmap) {
         log_fatal("plugin_geoip: map '%s': Initial tree construction failed", gdmap->name);
 }
 
-#define GEOIP_PATHRELOAD_PFX "plugin_geoip: map '%s': runtime reload of GeoIP database '%s' not possible: "
-#define GEOIP_PATHRELOAD_ARGS gdmap->name, *path_ptr
-
-F_NONNULL
-static void _gdmap_geoip_chroot_fixup(gdmap_t* gdmap, char** path_ptr, const char* chroot_fixup) {
-    dmn_assert(gdmap); dmn_assert(path_ptr); dmn_assert(chroot_fixup);
-
-    char* path = *path_ptr;
-    if(path[0] != '/') {
-        log_err(GEOIP_PATHRELOAD_PFX "needs to be an absolute path within the daemon's chroot directory '%s'", GEOIP_PATHRELOAD_ARGS, chroot_fixup);
-        free(path);
-        *path_ptr = NULL;
-        return;
-    }
-
-    // both of these need to be free()'d
-    char* geoip_path_fixed = realpath(path, NULL);
-    if(!geoip_path_fixed) {
-        log_err(GEOIP_PATHRELOAD_PFX "realpath() on database file failed: %s", GEOIP_PATHRELOAD_ARGS, logf_errno());
-        free(path);
-        *path_ptr = NULL;
-        return;
-    }
-
-    char* chroot_path_fixed = realpath(chroot_fixup, NULL);
-    if(!chroot_path_fixed) {
-        log_err(GEOIP_PATHRELOAD_PFX "realpath() on chroot directory '%s' failed: %s", GEOIP_PATHRELOAD_ARGS, chroot_fixup, logf_errno());
-        free(geoip_path_fixed);
-        free(path);
-        *path_ptr = NULL;
-        return;
-    }
-
-    const unsigned geoip_len = strlen(geoip_path_fixed);
-    unsigned chroot_len = strlen(chroot_path_fixed);
-
-    // add missing trailing slash to chroot path (realpath probably always removes it if it's there)
-    if(chroot_path_fixed[chroot_len - 1] != '/') {
-        char* temp = malloc(chroot_len + 2);
-        memcpy(temp, chroot_path_fixed, chroot_len);
-        temp[chroot_len++] = '/';
-        temp[chroot_len] = '\0';
-        free(chroot_path_fixed);
-        chroot_path_fixed = temp;
-    }
-
-    // check for path prefix as a string prefix comparison
-    if(geoip_len > chroot_len && !memcmp(chroot_path_fixed, geoip_path_fixed, chroot_len)) {
-        chroot_len--; // stop considering the trailing slash
-        const unsigned rebased_path_len = geoip_len - chroot_len;
-        char* temp = malloc(rebased_path_len + 1);
-        memcpy(temp, &geoip_path_fixed[chroot_len], rebased_path_len + 1);
-        dmn_assert(temp[0] == '/');
-        dmn_assert(temp[rebased_path_len] == '\0');
-        log_info("plugin_geoip: map '%s': GeoIP database path '%s' cleaned up and rebased under chroot path '%s' as '%s'", gdmap->name, path, chroot_fixup, temp);
-        free(path);
-        *path_ptr = temp;
-        free(geoip_path_fixed);
-        free(chroot_path_fixed);
-    }
-    else {
-        log_err(GEOIP_PATHRELOAD_PFX "needs to be an absolute path within the daemon's chroot directory '%s'", GEOIP_PATHRELOAD_ARGS, chroot_fixup);
-        free(geoip_path_fixed);
-        free(chroot_path_fixed);
-        free(path);
-        *path_ptr = NULL;
-    }
-}
-
 F_NONNULL
 static void gdmap_setup_geoip_watcher_path(gdmap_t* gdmap, const char* chroot_fixup) {
     dmn_assert(gdmap); dmn_assert(gdmap->geoip_path); dmn_assert(chroot_fixup);
 
-    _gdmap_geoip_chroot_fixup(gdmap, &gdmap->geoip_path, chroot_fixup);
+    char* temp = gdmap->geoip_path;
+    gdmap->geoip_path = gdnsd_strip_rootdir(temp);
+    free(temp);
     if(gdmap->geoip_v4o_path) {
-        if(gdmap->geoip_path) {
-            _gdmap_geoip_chroot_fixup(gdmap, &gdmap->geoip_v4o_path, chroot_fixup);
-            // if v4o fails, we have to wipe out runtime reload of both
-            if(gdmap->geoip_path && !gdmap->geoip_v4o_path) {
-                free(gdmap->geoip_path);
-                gdmap->geoip_path = NULL;
-            }
-        }
-        else {
-            // ... and if primary failed, we have to wipe v4o as well
-            free(gdmap->geoip_v4o_path);
-            gdmap->geoip_v4o_path = NULL;
-        }
+        temp = gdmap->geoip_v4o_path;
+        gdmap->geoip_v4o_path = gdnsd_strip_rootdir(temp);
+        free(temp);
     }
 }
 
@@ -1551,24 +1479,7 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
 F_NONNULL
 static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
     dmn_assert(gdmap); dmn_assert(loop);
-
-    // May have been nulled out during chroot check/setup earlier
-    if(!gdmap->geoip_path)
-        return;
-
-    // check stat on gdmap->geoip_path to make sure it (still) exists, esp given chroot fixups above...
-    struct stat geoip_stat;
-    if(lstat(gdmap->geoip_path, &geoip_stat) || (geoip_stat.st_mode & S_IFMT) != S_IFREG) {
-        log_err(GEOIP_PATHRELOAD_PFX "%s", gdmap->name, gdmap->geoip_path, logf_errno());
-        return;
-    }
-
-    if(gdmap->geoip_v4o_path) {
-        if(lstat(gdmap->geoip_v4o_path, &geoip_stat) || (geoip_stat.st_mode & S_IFMT) != S_IFREG) {
-            log_err(GEOIP_PATHRELOAD_PFX "%s", gdmap->name, gdmap->geoip_v4o_path, logf_errno());
-            return;
-        }
-    }
+    dmn_assert(gdmap->geoip_path);
 
     // the reload settling timer
     gdmap->geoip_reload_timer = malloc(sizeof(ev_timer));
@@ -2385,6 +2296,7 @@ void gdmaps_setup_geoip_watcher_paths(gdmaps_t* gdmaps) {
     // If the daemon plans to chroot(), we'll get a non-NULL chroot path here
     const char* chroot_path = dmn_get_chroot();
     if(chroot_path) {
+        dmn_assert(!strcmp(chroot_path, gdnsd_get_rootdir()));
         for(unsigned i = 0; i < gdmaps->count; i++)
             gdmap_setup_geoip_watcher_path(gdmaps->maps[i], chroot_path);
     }

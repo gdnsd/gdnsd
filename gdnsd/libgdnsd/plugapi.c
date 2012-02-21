@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 
+#include "cfg-dirs.h"
+
 void gdnsd_dynaddr_add_result_anysin(dynaddr_result_t* result, const anysin_t* asin) {
     dmn_assert(result); dmn_assert(asin);
     if(asin->sa.sa_family == AF_INET6) {
@@ -61,7 +63,7 @@ void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array) {
         psearch[i] = strdup(vscf_simple_get_data(psd));
     }
 
-    psearch[psearch_count++] = LIBDIR "/" PACKAGE_NAME;
+    psearch[psearch_count++] = GDNSD_LIBDIR;
     psearch[psearch_count] = NULL;
 }
 

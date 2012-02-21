@@ -35,6 +35,7 @@ use Net::DNS::Resolver ();
 use Net::DNS ();
 use LWP::UserAgent ();
 use Test::More ();
+use File::Copy qw//;
 use Socket qw/AF_INET/;
 use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
@@ -57,16 +58,20 @@ my %SIGS;
     }
 }
 
-# Set up per-testfile output directory
+# Set up per-testfile output directory and zones input directory
 our $OUTDIR;
+our $ZONES_IN;
 {
     my $tname = $FindBin::Bin;
     $tname =~ s{^.*/}{};
     $tname .= '_' . $FindBin::Script;
     $tname =~ s{\.t$}{};
 
+    $ZONES_IN = $FindBin::Bin . '/zones/';
     $OUTDIR = $ENV{TESTOUT_DIR} . '/' . $tname;
-    mkdir($OUTDIR) unless -d $OUTDIR;
+    foreach my $d ($OUTDIR, "$OUTDIR/etc", "$OUTDIR/etc/zones") {
+        mkdir $d unless -d $d
+    }
 }
 
 our $TEST_RUNNER = "";
@@ -235,15 +240,14 @@ sub check_stats {
 sub spawn_daemon {
     my ($class, $cfgfile, $geoip_data) = @_;
 
-    my (undef, $cfdir, undef) = File::Spec->splitpath($cfgfile);
-    $cfdir =~ s/\/$//;
-
     my $daemon_out = $OUTDIR . '/gdnsd.out';
-    my $cfgout = $OUTDIR . '/gdnsd.conf';
+    my $cfgout = $OUTDIR . '/etc/config';
+    my $zonesout = $OUTDIR . '/etc/zones/';
 
     if($geoip_data) {
         require _FakeGeoIP;
-        my $geoip_out = $OUTDIR . '/FakeGeoIP.dat';
+        mkdir "$OUTDIR/etc/geoip" unless -d "$OUTDIR/etc/geoip";
+        my $geoip_out = $OUTDIR . '/etc/geoip/FakeGeoIP.dat';
         _FakeGeoIP::make_fake_geoip($geoip_out, $geoip_data);
     }
 
@@ -266,16 +270,23 @@ sub spawn_daemon {
         s/\@dns_port\@/$DNS_PORT/g;
         s/\@http_port\@/$HTTP_PORT/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
-        s/\@cfdir\@/$cfdir/g;
         s/\@pluginpath\@/$PLUGIN_PATH/g;
         print $out_fh $_;
     }
     close($orig_fh) or die "Cannot close test configfile '$cfgfile': $!";
     close($out_fh) or die "Cannot close test config text output file '$cfgout': $!";
 
+    opendir(my $dh, $ZONES_IN) or die "Cannot open zones subdirectory: $!";
+    my @zfiles_list = grep { !/^\./ && ! -d $_ } readdir($dh);
+    closedir($dh);
+    foreach my $zfile (@zfiles_list) {
+        File::Copy::copy("$ZONES_IN/$zfile", $zonesout)
+            or die "Failed to copy zonefile '$zfile' to test area: $!";
+    }
+
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -c $cfgout startfg}
-        : qq{$GDNSD_BIN -c $cfgout startfg};
+        ? qq{$TEST_RUNNER $GDNSD_BIN -d $OUTDIR startfg}
+        : qq{$GDNSD_BIN -d $OUTDIR startfg};
 
     my $pid = fork();
     die "Fork failed!" if !defined $pid;

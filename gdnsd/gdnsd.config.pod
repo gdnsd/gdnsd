@@ -14,11 +14,6 @@ gdnsd.config - gdnsd configuration file
 
   # shell-style comment
 
-  zones => { # "zones" is required, and must define at least 1 zone
-    example.com => { default_ttl => 43200 }
-    example.org => { file => example.com }
-  }
-
   service_types => {
     foosvc => { vhost => www.example.com, url_path => /checkme }
   }
@@ -29,11 +24,14 @@ gdnsd.config - gdnsd configuration file
 
 =head1 DESCRIPTION
 
-This man page describes the syntax of the gdnsd
-configuration file.  It can have any name, B<gdnsd.config>
-is just a canonical name for documentation purposes.  The
-default location the daemon searches for this file at will
-be C<$PREFIX/etc/gdnsd/config>
+This man page describes the syntax of the primary gdnsd
+configuration file.  It always lives at the pathname
+F</etc/config> within the data root directory for a
+given execution of the gdnsd binary (the C<-d> argument,
+which in turn defaults to F<PREFIX/gdnsd>).  For example,
+when a default installation to F</usr/local> is invoked
+with the default data root directory, the config file
+is loaded from C</usr/local/gdnsd/etc/config>.
 
 The lower-level syntax and structure of the configuration
 language is described in detail at the end of this document,
@@ -42,14 +40,13 @@ is effectively a generic data structure language allowing
 arbitrarily-nested ordered hashes, ordered arrays, and scalar
 values.
 
-The top-level implicit hash of a gdnsd configuration file allows only 4 legal
-keys: B<options>, B<zones>, B<service_types>, and B<plugins>.
+The top-level implicit hash of a gdnsd configuration file allows
+only 3 legal keys: B<options>, B<service_types>, and B<plugins>.
 
 Any of them which are present must have a Hash as their value.
 
-Only the B<zones> hash is required (because an authoritative
-server with no zones to serve is senseless). The B<options>,
-B<service_types>, and B<plugins> hashes are optional.
+All of them are optional, as is the configuration file itself
+if you're happy with an all-default configuration.
 
 =head1 OPTIONS HASH
 
@@ -57,40 +54,17 @@ These options control the overall behavior of L<gdnsd(8)>.
 
 =over 4
 
-=item B<pidfile>
-
-String, defaults to C<$VARDIR/run/gdnsd.pid>.  This is the
-location the daemon stores its pidfile at.
-
 =item B<username>
 
 String, defaults to "gdnsd".  This is the username the
 daemon drops privileges to the uid/gid of on startup
 if started as root.
 
-=item B<chroot_path>
-
-String, defaults to C<$VARDIR/gdnsd>.  This is the directory
-gdnsd will C<chroot()> into when started as root, just before
-dropping privileges.  It will create and/or fix up the permissions
-of this directory if necessary (but will not create any missing
-parent directories).  This directory should be empty, but gdnsd
-will not attempt to clean it out if you've put anything there.
-
-=item B<zones_dir>
-
-String.  By default zonefiles are loaded from the same directory
-the config file itself was found in.  If this option is set to
-a relative path, that relative path will be appended to the default
-location.  If this option is set to an absolute path, that absolute
-path will replace the default location.
-
 =item B<zones_default_ttl>
 
 Integer seconds, default 86400.  This is the global default
 time-to-live for any record in any zonefile.  It can be overridden
-with a more specific default for individual zonefiles in the
-B<zones> hash, and can also be overriden within zone files themselves
+with a more specific default within zone files themselves
 via the C<$TTL> directive (see L<gdnsd.zonefile(5)>).
 
 =item B<strict_data>
@@ -447,47 +421,6 @@ routability.
 
 =back
 
-=head1 ZONES
-
-The zones hash must have one key for each authoritative domain
-you wish to serve.  The domainname itself is the key.  It does
-not matter whether you terminate the domainname with a final
-C<.> or not.  In either case it will be interpreted as a
-fully-qualified zone name (as if it did have a final C<.>).
-
-The value for each domain must be a hash of options.  All of them
-have reasonable defaults, so this hash is often empty.
-
-The available per-zone options are:
-
-=over 4
-
-=item B<file>
-
-String, defaults to being identical to the zone name as specified
-in the key (including any optional trailing C<.>).  This is the
-filename the zone data will be loaded from.  If you specify an
-absolute path, it will be used literally.  Otherwise this filename
-is considered relative to the zones directory (see B<zones_dir>
-in the B<options> hash above).  Particularly useful if your zone
-names contain characters that don't work very well in pathnames,
-such as the forward slashes of RFC 2317 -style classless in-addr.arpa
-delegations.
-
-=item B<default_ttl>
-
-Integer.  This overrides the B<options> item B<zones_default_ttl>
-for this particular zone (that option in turn defaults to 86400).
-
-Setting this is identical in function to putting the same value in a
-C<$TTL> directive on the first line of the zone file, and can
-of course be overriden by C<$TTL> directives in the zone file.
-
-=back 
-
-See L<gdnsd.zonefile(5)> for details on the internal syntax of the
-zonefiles themselves.
-
 =head1 SERVICE_TYPES
 
 service_types is used in conjuction with certain gdnsd plugins.  If
@@ -693,8 +626,6 @@ Combines metafo's functionality with MaxMind GeoIP databases to select different
 A configuration example showing the trivial plugins, as well as demonstrating
 the service_types described earlier:
 
-  zones => { example.com => {} }
-
   service_types => {
     corpwww_type => {
       vhost => www.corp.example.com
@@ -771,28 +702,18 @@ Example 1 (simple and clean):
   options = {
     listen = [ 192.0.2.1, 192.0.2.2 ],
     http_listen = 127.0.0.1,
-  },
-  zones = {
-    example.com = { default_ttl = 1234, file = examplecom.zone },
-    example.net = { default_ttl = 4321, file = examplenet.zone },
-  },
+  }
 
 Example 2 (fat arrows, no commas, some arbitrary quoting):
 
   "options" => {
     listen => [ 192.0.2.1 192.0.2.2 ]
-    http_listen => 127.0.0.1
-  }
-  zones => {
-    example.com => { "default_ttl" => 1234 file => "examplecom.zone" }
-    example.net => { default_ttl => "4321" file => examplenet.zone }
+    http_listen => "127.0.0.1"
   }
 
 Example 3 (compressed and ugly):
 
   options={listen=[192.0.2.1 192.0.2.2]http_listen=127.0.0.1}
-  zones={example.com={default_ttl=1234,file=examplecom.zone}
-  example.net={default_ttl=4321 file=examplenet.zone}}
 
 =head1 SEE ALSO
 

@@ -45,14 +45,16 @@
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
-F_NONNULL
-static const vscf_data_t* conf_load(const char* cfg_file) {
-    dmn_assert(cfg_file);
+#include "cfg-dirs.h"
 
+static const vscf_data_t* conf_load() {
+
+    char* cfg_file = gdnsd_make_rootdir_path("/etc/config");
     char* vscf_err;
     const vscf_data_t* cfg_root = vscf_scan_filename(cfg_file, &vscf_err);
     if(!cfg_root)
         log_fatal("Configuration load failed: %s", vscf_err);
+    free(cfg_file);
 
     dmn_assert(vscf_is_hash(cfg_root));
     return cfg_root;
@@ -147,12 +149,16 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
         log_fatal("Subtest %u failed: Wanted scope mask %u, got %u", tnum, scope_cmp, scope);
 }
 
-gdmaps_t* gdmaps_test_init(const char* config_path) {
-    dmn_assert(config_path);
+static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
 
-    const vscf_data_t* cfg_root = conf_load(config_path);
+gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
+
+    if(!input_rootdir)
+        input_rootdir = def_rootdir;
+
+    gdnsd_set_rootdir(input_rootdir);
+    const vscf_data_t* cfg_root = conf_load();
     conf_options(cfg_root);
-    gdnsd_set_cfdir(config_path);
 
     const vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* gdmaps = gdmaps_new(maps_cfg);

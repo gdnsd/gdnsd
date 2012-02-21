@@ -48,6 +48,10 @@
 #include "gdnsd-net-priv.h"
 #include "gdnsd-misc-priv.h"
 
+#include "cfg-dirs.h"
+
+#define PID_SUBPATH "/var/" PACKAGE_NAME ".pid"
+
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
 
@@ -79,11 +83,11 @@ static void usage(const char* argv0) {
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION
 #ifndef NDEBUG
-        " (debug build)"
+        " (developer build)"
 #endif
         "\n"
-        "Usage: %s [-c /a/config/file] action\n"
-        "  -c Use this configfile (default " ETCDIR "/" PACKAGE_NAME "/config)\n"
+        "Usage: %s [-d " GDNSD_DEF_ROOTDIR " ] action\n"
+        "  -d data root dir (see man page for details)\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
         "  startfg - Start " PACKAGE_NAME " in foreground w/ logs to stderr\n"
@@ -204,16 +208,16 @@ static action_t match_action(const char* arg) {
     return ACT_UNDEF;
 }
 
-static const char def_cfg_path[] = ETCDIR "/" PACKAGE_NAME "/config";
+static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
 
 int main(int argc, char** argv) {
     action_t action = ACT_UNDEF;
 
-    char* conf_arg = NULL;
+    const char* input_rootdir = def_rootdir;
     switch(argc) {
-        case 4: // gdnsd -c x foo
-            if(strcmp(argv[1], "-c")) usage(argv[0]);
-            conf_arg = strdup(argv[2]);
+        case 4: // gdnsd -d x foo
+            if(strcmp(argv[1], "-d")) usage(argv[0]);
+            input_rootdir = argv[2];
             action = match_action(argv[3]);
             break;
         case 2: // gdnsd foo
@@ -224,10 +228,24 @@ int main(int argc, char** argv) {
     if(action == ACT_UNDEF)
         usage(argv[0]);
 
-    // cfg_file needs to be writeable storage
-    //  for portability
-    if(!conf_arg)
-        conf_arg = strdup(def_cfg_path);
+    const char* rootdir = gdnsd_set_rootdir(input_rootdir);
+    char* pidpath = gdnsd_make_rootdir_path(PID_SUBPATH);
+
+    // Take simple actions quickly, without further init
+    if(action == ACT_STATUS) {
+        const int oldpid = dmn_status(pidpath);
+        if(!oldpid) {
+            log_info("Not running, based on pidfile '%s'", pidpath);
+            exit(1);
+        }
+        log_info("Running at pid %i in pidfile %s", oldpid, pidpath);
+        exit(0);
+    }
+
+    if(action == ACT_STOP) {
+        dmn_stop(pidpath);
+        exit(0);
+    }
 
     // Initialize net stuff in libgdnsd (protoents, tcp_v6_ok)
     gdnsd_init_net();
@@ -237,24 +255,12 @@ int main(int argc, char** argv) {
 
     // Actually load the config
     log_info("Loading configuration");
-    conf_load(conf_arg);
-    free(conf_arg);
+    conf_load();
 
-    // Take action
-    if(action == ACT_STATUS) {
-        const int oldpid = dmn_status(gconfig.pidfile);
-        if(!oldpid) {
-            log_info("Not running");
-            exit(1);
-        }
-        log_info("Running at pid %i", oldpid);
-        exit(0);
-    }
-
-    if(action == ACT_STOP) {
-        dmn_stop(gconfig.pidfile);
-        exit(0);
-    }
+    // Set up and validate privdrop info if necc
+    const bool started_as_root = !geteuid();
+    if(started_as_root)
+        dmn_secure_setup(gconfig.username, rootdir, true);
 
     // Call plugin full_config actions
     const unsigned num_threads = gconfig.num_dns_addrs * 2;
@@ -270,15 +276,10 @@ int main(int argc, char** argv) {
 
     if(action == ACT_RESTART) {
         log_info("Attempting to stop the running daemon instance for restart...");
-        if(dmn_stop(gconfig.pidfile))
+        if(dmn_stop(pidpath))
             log_fatal("...Running daemon failed to stop, cannot continue with restart...");
         log_info("...Previous daemon successfully shut down (or was not up), this instance coming online");
     }
-
-    const bool started_as_root = !geteuid();
-
-    if(started_as_root)
-        dmn_secure_setup(gconfig.username, gconfig.chroot_path, true);
 
 #ifdef RLIMIT_MEMLOCK
     // Die or inform about memlock ulimit here as applicable.
@@ -344,7 +345,7 @@ int main(int argc, char** argv) {
 
     // Daemonize if applicable
     if(action != ACT_STARTFG)
-        dmn_daemonize(PACKAGE_NAME, gconfig.pidfile);
+        dmn_daemonize(PACKAGE_NAME, pidpath);
 
     // If root, or if user explicitly set a priority...
     if(started_as_root || gconfig.priority != -21) {

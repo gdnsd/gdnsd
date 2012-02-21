@@ -37,73 +37,74 @@
 
 /* misc */
 
-static char* cfdir = NULL;
+static char* rootdir = NULL;
+static unsigned rdlen = 0;
 
-// Make a copy of inpath that's definitely absolute
-F_MALLOC F_WUNUSED F_NONNULL
-static char* absify(const char* inpath) {
-    dmn_assert(inpath);
-    if(*inpath == '/') return strdup(inpath);
-
-    char* out = malloc(PATH_MAX);
-    if(!getcwd(out, PATH_MAX))
-        log_fatal("getcwd() failed: %s", logf_errno());
-
-    size_t cwdlen = strlen(out);
-    size_t inlen = strlen(inpath);
-    size_t final = cwdlen + inlen + 2;
-
-    if(final >= PATH_MAX)
-        log_fatal("Fully-qualified config pathname exceeds PATH_MAX");
-
-    out = realloc(out, final);
-    out[cwdlen] = '/';
-    memcpy(out + cwdlen + 1, inpath, inlen + 1);
-
-    return out;
+const char* gdnsd_set_rootdir(const char* rootdir_in) {
+    dmn_assert(rootdir_in);
+    dmn_assert(!rootdir);
+    rootdir = realpath(rootdir_in, NULL);
+    if(!rootdir)
+        log_fatal("Cleanup/validation of data root pathname '%s' failed: %s", rootdir_in, dmn_strerror(errno));
+    log_debug("Root path cleaned up as '%s'", rootdir);
+    rdlen = strlen(rootdir);
+    return rootdir;
 }
 
-const char* gdnsd_get_cfdir(void) { return cfdir; }
+const char* gdnsd_get_rootdir(void) { return rootdir; }
 
-void gdnsd_set_cfdir(const char* cfg_file) {
-    dmn_assert(!cfdir);
-
-    char* real_config_pathname = absify(cfg_file);
-    char* tmp_cfg_dir = dirname(real_config_pathname);
-    if(!tmp_cfg_dir)
-        log_fatal("gdnsd_set_cfdir(%s): dirname(%s) failed: %s", cfg_file, real_config_pathname, logf_errno());
-    unsigned tmp_cfg_dir_len = strlen(tmp_cfg_dir);
-    cfdir = malloc(tmp_cfg_dir_len + 2);
-    memcpy(cfdir, tmp_cfg_dir, tmp_cfg_dir_len);
-    cfdir[tmp_cfg_dir_len] = '/';
-    cfdir[tmp_cfg_dir_len + 1] = '\0';
-    free(real_config_pathname);
+char* gdnsd_make_rootdir_path(const char* suffix) {
+    dmn_assert(rootdir); dmn_assert(suffix);
+    const unsigned suflen = strlen(suffix);
+    dmn_assert(suflen);
+    dmn_assert(suflen > 1);
+    dmn_assert(suffix[0] == '/');
+    dmn_assert(suffix[suflen - 1] != '/');
+    char* rv = malloc(rdlen + suflen + 1);
+    memcpy(rv, rootdir, rdlen);
+    memcpy(&rv[rdlen], suffix, suflen);
+    rv[rdlen + suflen] = 0;
+    return rv;
 }
 
-char* gdnsd_make_abs_fn(const char* absdir, const char* fn) {
-    dmn_assert(absdir); dmn_assert(fn);
-    dmn_assert(absdir[0] == '/');
+// XXX it seems like in practice, valid_rootpath will never
+//  be used on rootdir_path(), but will always be used on rootdir_path2(),
+//  in which case we can merge and simplify things a bit ...
+char* gdnsd_make_rootdir_path2(const char* suffix, const char* suffix2) {
+    dmn_assert(rootdir); dmn_assert(suffix); dmn_assert(suffix2);
+    const unsigned suflen = strlen(suffix);
+    const unsigned suf2len = strlen(suffix2);
+    dmn_assert(suflen);
+    dmn_assert(suflen > 1);
+    dmn_assert(suffix[0] == '/');
+    dmn_assert(suffix[suflen - 1] != '/');
+    char* rv = malloc(rdlen + suflen + 1 + suf2len + 1);
+    memcpy(rv, rootdir, rdlen);
+    memcpy(&rv[rdlen], suffix, suflen);
+    rv[rdlen + suflen] = '/';
+    memcpy(&rv[rdlen + suflen + 1], suffix2, suf2len);
+    rv[rdlen + suflen + 1 + suf2len] = 0;
+    return rv;
+}
 
-    if(fn[0] == '/')
-        return strdup(fn);
-
-    char* retval;
-
-    const unsigned fn_len = strlen(fn);
-    const unsigned absdir_len = strlen(absdir);
-    if(absdir[absdir_len - 1] == '/') {
-        retval = malloc(absdir_len + fn_len + 1);
-        memcpy(retval, absdir, absdir_len);
-        memcpy(retval + absdir_len, fn, fn_len + 1);
+char* gdnsd_valid_rootpath(char* path_in) {
+    dmn_assert(path_in); dmn_assert(rootdir);
+    char* rv = realpath(path_in, NULL);
+    free(path_in);
+    if(rv && (strlen(rv) < rdlen || strncmp(rv, rootdir, rdlen))) {
+        free(rv);
+        rv = NULL;
     }
-    else {
-        retval = malloc(absdir_len + fn_len + 2);
-        memcpy(retval, absdir, absdir_len);
-        retval[absdir_len] = '/';
-        memcpy(retval + absdir_len + 1, fn, fn_len + 1);
-    }
+    return rv;
+}
 
-    return retval;
+char* gdnsd_strip_rootdir(const char* path_in) {
+    dmn_assert(path_in); dmn_assert(rootdir);
+    dmn_assert(strlen(path_in) > rdlen);
+    dmn_assert(!strncmp(path_in, rootdir, rdlen));
+    dmn_assert(path_in[rdlen] == '/');
+    char* newpath = strdup(&path_in[rdlen]);
+    return newpath;
 }
 
 /***************

@@ -9,7 +9,7 @@ xHEADERS_DIST = gdnsd-vscf.h gdnsd-dname.h gdnsd-log.h gdnsd-compiler.h gdnsd-mo
 libgdnsd_la_SOURCES = dname.c net.c log.c monio.c vscf.c misc.c plugapi.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c evwrap.c evwrap_ch.h $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
 nodist_libgdnsd_la_SOURCES = $(xHEADERS_BUILT)
 
-libgdnsd_la_CPPFLAGS = -I$(srcdir)/libev -DLIBDIR=\"$(libdir)\"
+libgdnsd_la_CPPFLAGS = -I$(srcdir)/libev
 libgdnsd_la_LDFLAGS  = -shared -avoid-version
 libgdnsd_la_LIBADD   = $(MATH_LIB) $(EVLIBS) $(NETLIBS) $(LIBADD_DLOPEN)
 

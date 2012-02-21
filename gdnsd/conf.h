@@ -44,9 +44,7 @@ typedef struct {
 typedef struct {
     dns_addr_t* dns_addrs;
     anysin_t*   http_addrs;
-    const char*     pidfile;
-    const char*     username;
-    const char*     chroot_path;
+    const char* username;
     bool     include_optional_ns;
     bool     realtime_stats;
     bool     lock_mem;
@@ -70,10 +68,7 @@ typedef struct {
 extern global_config_t gconfig;
 
 F_NONNULL
-void conf_load(const char* cfg_file);
-
-F_NONNULL
-char* make_cf_fn(const char* dir, const char* fn);
+void conf_load(void);
 
 // retval indicates we need runtime CAP_NET_BIND_DEVICE
 bool dns_lsock_init(void);
@@ -83,8 +78,4 @@ bool dns_lsock_init(void);
 F_NONNULL F_PURE
 bool is_any_addr(const anysin_t* asin);
 
-F_NONNULL
-const plugin_t* find_or_load_plugin(const char* plugin_name, const char** search_paths);
-
-#undef _RC
 #endif // _GDNSD_CONF_H

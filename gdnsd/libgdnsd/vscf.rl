@@ -303,7 +303,9 @@ static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked) {
  */
 static unsigned unescape_string(char** outp, const char* in, unsigned len) {
     char* out = malloc(len + 1);
-    unsigned newlen = dns_unescape((uint8_t*)out, (const uint8_t*)in, len);
+    unsigned newlen = len;
+    if(len)
+        newlen = dns_unescape((uint8_t*)out, (const uint8_t*)in, len);
     out = realloc(out, newlen + 1); // downsize
     out[newlen] = 0;
     *outp = out;

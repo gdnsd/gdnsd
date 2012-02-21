@@ -23,14 +23,46 @@
 #include <gdnsd-compiler.h>
 #include <inttypes.h>
 
-// Returns directory path set above, always /-terminated.
+// Returns the invocation's data root path (chroot path
+//   in the chroot case), e.g. "/usr/local/gdnsd".
+// Within this directory, the following paths are fixed:
+//   /etc/config        - main config file
+//   /etc/zones/        - directory for zonefiles
+//   /var/run/gdnsd.pid - daemon pidfile
+// After a certain point in the startup process,
 F_PURE
-const char* gdnsd_get_cfdir(void);
+const char* gdnsd_get_rootdir(void);
 
-// Ensure filename fn is absolute, prepending directory absdir if not.
-// Returns new storage the caller owns regardless.
-F_NONNULL
-char* gdnsd_make_abs_fn(const char* absdir, const char* fn);
+// returns a new string (malloc-based) which is
+//   the path concatenation of "suffix" onto the rootdir.
+// Suffix must be a hardcoded constant which starts with "/"
+//   and does not end with "/".
+F_MALLOC F_WUNUSED F_NONNULL
+char* gdnsd_make_rootdir_path(const char* suffix);
+
+// As above, but takes second suffix as well, which has
+//  no explicit rules, mostly for user-derived input.
+// e.g.:
+//  gdnsd_make_rootdir_path2("/etc/zones", zone_name);
+F_MALLOC F_WUNUSED F_NONNULL
+char* gdnsd_make_rootdir_path2(const char* suffix, const char* suffix2);
+
+// After gdnsd_make_rootdir_path[2](), if suffix was based on
+//   user input, pass it through here to check for validity.
+// If the pathname does not exist, or exits the rootdir via
+//   ".." and/or symlinks, this will return NULL.
+// Always frees the original input, and a non-NULL return
+//   value is a fresh malloc allocation.
+F_MALLOC F_WUNUSED F_NONNULL
+char* gdnsd_valid_rootpath(char* path_in);
+
+// Returns a newly-malloc'd string which is path_in with
+//   the leading rootdir stripped out.  Does not alter
+//   path_in.  Code must be sure that the rootdir
+//   is a prefix before using, e.g. by using the
+//   functions above...
+F_MALLOC F_WUNUSED F_NONNULL
+char* gdnsd_strip_rootdir(const char* path_in);
 
 // PRNG:
 // gdnsd_rand_init() allocates an opaque PRNG state which can

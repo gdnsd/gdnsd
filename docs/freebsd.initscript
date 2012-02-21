@@ -9,8 +9,7 @@
 # Add the following lines to /etc/rc.conf to enable gdnsd:
 # gdnsd_enable (bool):          Set to "NO" by default.
 #                               Set it to "YES" to enable gdnsd
-# gdnsd_config (str):           Set to "/usr/local/etc/gdnsd/config" by default.
-# gdnsd_pidfile (str):		Set to "/usr/local/var/run/gdnsd.pid" by default.
+# gdnsd_root (str):             Set to "/usr/local/gdnsd" by default.
 
 . /etc/rc.subr
 
@@ -21,25 +20,18 @@ command="/usr/local/sbin/gdnsd"
 # set defaults
 load_rc_config $name
 : ${gdnsd_enable:="NO"}
-: ${gdnsd_config:="/usr/local/etc/gdnsd/config"}
-: ${gdnsd_pidfile:="/usr/local/var/run/gdnsd.pid"}
+: ${gdnsd_root:="/srv/gdnsd"}
 
-required_files=${gdnsd_config}
-command_args="-c ${gdnsd_config} start"
+command_args="-d ${gdnsd_root} start"
 procname=${command}
 extra_commands="checkconf"
 checkconf_cmd="gdnsd_checkconf"
 
 stop_postcmd=stop_postcmd
 
-stop_postcmd()
-{
-  rm -f ${gdnsd_pidfile}
-}
-
 gdnsd_checkconf()
 {
-  ${command} -c ${gdnsd_config} checkconf
+  ${command} -d ${gdnsd_root} checkconf
 }
 
 run_rc_command "$1"

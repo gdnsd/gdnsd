@@ -43,17 +43,15 @@
 static unsigned num_monio_lists = 0;
 static monio_list_t** monio_lists = NULL;
 
-static const char def_pidfile[] = VARDIR "/run/" PACKAGE_NAME ".pid";
+#define CFG_SUBPATH "/etc/config"
+
 static const char def_username[] = PACKAGE_NAME;
-static const char def_chroot_path[] = VARDIR "/" PACKAGE_NAME;
 
 // Global config, readonly after loaded from conf file
 global_config_t gconfig = {
     .dns_addrs = NULL,
     .http_addrs = NULL,
-    .pidfile = def_pidfile,
     .username = def_username,
-    .chroot_path = def_chroot_path,
     .include_optional_ns = false,
     .realtime_stats = false,
     .lock_mem = false,
@@ -93,30 +91,6 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, anysin_t* 
     const int addr_err = gdnsd_anysin_fromstr(lspec_txt, def_port, result);
     if(addr_err)
         log_fatal("Could not process listen-address spec '%s': %s", lspec_txt, gai_strerror(addr_err));
-}
-
-F_NONNULLX(1)
-static char* make_zones_dir(const char* cfg_dir, const char* opt) {
-    dmn_assert(cfg_dir);
-
-    if(!opt)
-        return strdup(cfg_dir);
-
-    char* absfn = gdnsd_make_abs_fn(cfg_dir, opt);
-    unsigned abs_len = strlen(absfn);
-    if(absfn[abs_len - 1] != '/') {
-        absfn = realloc(absfn, abs_len + 2);
-        absfn[abs_len++] = '/';
-        absfn[abs_len] = '\0';
-    }
-
-    struct stat zdstat;
-    if(stat(absfn, &zdstat))
-        log_fatal("Cannot stat zones directory '%s': %s", absfn, logf_errno());
-    if((zdstat.st_mode & S_IFMT) != S_IFDIR)
-        log_fatal("Zones directory '%s' is not a directory", absfn);
-
-    return absfn;
 }
 
 F_NONNULLX(1)
@@ -411,29 +385,45 @@ static void assign_thread_nums(void) {
     gconfig.num_io_threads = tnum;
 }
 
-void conf_load(const char* cfg_file) {
-    dmn_assert(cfg_file);
-    log_debug("Loading configuration");
+void conf_load(void) {
 
-    char* vscf_err;
-    const vscf_data_t* cfg_root = vscf_scan_filename(cfg_file, &vscf_err);
-    if(!cfg_root)
-        log_fatal("Configuration load failed: %s", vscf_err);
+    char* cfg_file = gdnsd_make_rootdir_path(CFG_SUBPATH);
+
+    {
+        struct stat cfg_stat;
+        if(!stat(cfg_file, &cfg_stat)) {
+            log_debug("Loading configuration from '%s'", cfg_file);
+        }
+        else {
+            log_debug("No config file at '%s', using defaults + zones auto-scan", cfg_file);
+            free(cfg_file);
+            cfg_file = NULL;
+        }
+    }
+
+    const vscf_data_t* cfg_root = NULL;
+
+    if(cfg_file) {
+        char* vscf_err;
+        cfg_root = vscf_scan_filename(cfg_file, &vscf_err);
+        if(!cfg_root)
+            log_fatal("Configuration from '%s' failed: %s", cfg_file, vscf_err);
+        free(cfg_file);
+    }
 
 #ifndef NDEBUG
     // in developer debug builds, exercise clone+destroy
-    const vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
-    vscf_destroy(cfg_root);
-    cfg_root = temp_cfg;
+    if(cfg_root) {
+        const vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
+        vscf_destroy(cfg_root);
+        cfg_root = temp_cfg;
+    }
 #endif
 
-    dmn_assert(vscf_is_hash(cfg_root));
+    dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
 
-    gdnsd_set_cfdir(cfg_file);
+    const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
 
-    const vscf_data_t* options = vscf_hash_get_data_byconstkey(cfg_root, "options", true);
-
-    const char* zdopt = NULL;
     const vscf_data_t* listen_opt = NULL;
     const vscf_data_t* http_listen_opt = NULL;
     const vscf_data_t* psearch_array = NULL;
@@ -480,10 +470,7 @@ void conf_load(const char* cfg_file) {
         // Nobody should have even the default 16-depth CNAMEs anyways :P
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
-        CFG_OPT_STR(options, pidfile);
         CFG_OPT_STR(options, username);
-        CFG_OPT_STR(options, chroot_path);
-        CFG_OPT_STR_NOCOPY(options, zones_dir, zdopt);
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
         http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
@@ -499,17 +486,10 @@ void conf_load(const char* cfg_file) {
     // Assign globally unique thread numbers for each socket-handling thread
     assign_thread_nums();
 
-    char* zones_dir = make_zones_dir(gdnsd_get_cfdir(), zdopt);
-    const vscf_data_t* zones_cfg = vscf_hash_get_data_byconstkey(cfg_root, "zones", true);
-    if(!zones_cfg)
-        log_fatal("Missing required 'zones' config");
-    ltree_config_zones(zones_cfg, zones_dir);
-    free(zones_dir);
-
     gdnsd_plugins_set_search_path(psearch_array);
 
     // Load plugins
-    const vscf_data_t* plugins_hash = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
+    const vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
     if(plugins_hash) {
         if(!vscf_is_hash(plugins_hash))
             log_fatal("Config setting 'plugins' must have a hash value");
@@ -534,7 +514,7 @@ void conf_load(const char* cfg_file) {
     //   might have to be correct unnecessarily, and it also avoids the unnecessary load of http_status
     //   and other work.  A consequence is that the service_types config stanza is not checked for
     //   syntax errors unless monitoring is actually in use.
-    if(num_monio_lists)
+    if(num_monio_lists && cfg_root)
         monio_add_servicetypes(vscf_hash_get_data_byconstkey(cfg_root, "service_types", true));
 
     // Finally, process the monio_list_t's from plugins *after* servicetypes are available.
@@ -563,8 +543,10 @@ void conf_load(const char* cfg_file) {
     }
 
     // Throw an error if there are any other unretrieved root config keys
-    vscf_hash_iterate(cfg_root, true, bad_key, (void*)"top-level config");
-    vscf_destroy(cfg_root);
+    if(cfg_root) {
+        vscf_hash_iterate(cfg_root, true, bad_key, (void*)"top-level config");
+        vscf_destroy(cfg_root);
+    }
 }
 
 bool dns_lsock_init(void) {

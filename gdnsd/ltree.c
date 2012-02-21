@@ -24,11 +24,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 #include "conf.h"
 #include "dnspacket.h"
 #include "ltarena.h"
-#include "gdnsd-vscf.h"
 #include "gdnsd-dname.h"
 
 // This is the global singleton ltree_root
@@ -1315,8 +1316,10 @@ static bool process_zone(zoneinfo_t* zone) {
 // local forward decls
 static void ltree_destroy(void);
 static void ltree_node_destroy(ltree_node_t* node);
+static void ltree_config_zones(void);
 
 void ltree_load_zones(void) {
+    ltree_config_zones();
     dmn_assert(num_zones);
 
     // rootserver case (if num_zones > 1, by definition duplication
@@ -1492,105 +1495,93 @@ static void postproc_zones_info(void) {
         // Walk down remainder of list from longest to shortest zone name
         for(int zidx2 = zidx_next; zidx2 > -1; zidx2--)
             if(dname_isparentof(zones[zidx2]->dname, zones[zidx1]->dname))
-                log_fatal("Zone '%s' is a subzone of '%s' (try using $INCLUDE instead?)", logf_dname(zones[zidx1]->dname), logf_dname(zones[zidx2]->dname));
+                log_fatal("Zone '%s' is a subzone of '%s'", logf_dname(zones[zidx1]->dname), logf_dname(zones[zidx2]->dname));
     }
 }
 
-F_NONNULL
-static bool bad_zattr(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* zname) {
-    dmn_assert(key); dmn_assert(zname);
-    log_fatal("Invalid zone attribute key '%s' for zone '%s'", key, (const char*)zname);
-}
-
 F_NONNULL F_MALLOC F_WUNUSED
-static uint8_t* make_zone_dname(const char* txtname, unsigned txtname_len) {
-    dmn_assert(txtname);
+static uint8_t* make_zone_dname(const char* zf_name) {
+    dmn_assert(zf_name);
 
-    if(!txtname_len)
-        log_fatal("Empty zone name in config (did you mean ., the root zone?)");
+    unsigned zf_name_len = strlen(zf_name);
+    if(zf_name_len > 1004)
+        log_fatal("Zone file name '%s' is illegal", zf_name);
 
+    // Storage for making alterations...
+    uint8_t alter[zf_name_len + 1];
+
+    // check for root zone...
+    if(unlikely(zf_name_len == 9 && !strncmp(zf_name, "ROOT_ZONE", 9))) {
+        alter[0] = '.';
+        alter[1] = 0;
+        zf_name_len = 1;
+    }
+    else {
+        // else copy the original, and...
+        memcpy(alter, zf_name, zf_name_len);
+        alter[zf_name_len] = 0;
+
+        // convert all '@' to '/' for RFC2137 reverse delegation zones
+        for(unsigned i = 0; i < zf_name_len; i++)
+            if(unlikely(alter[i] == '@'))
+                alter[i] = '/';
+    }
+
+    // Convert to terminated-dname format and check for problems
     uint8_t* dname = malloc(256);
-
-    // This will probably crash on well-crafted invalid input in the config file, because
-    //   no parser is pre-checking for escape sequence validity before this.  E.g.:
-    //     zones => { example.co\\ => {} }
-    // ... would decode to a string key with a trailing '\', which in turn will be crashy
-    //   when dname_from_string() tries to decode that dangling escape...
-    // The right fix is to upgrade vscf keys to be able to be native dnames in the same
-    //   sense that simple string values are.  In practice that looks a little hairy to
-    //   implement due to the special nature of keys (iteration callbacks, sorting, etc..).
-    // For that matter all of the data interpretations on simple string values (e.g. integer)
-    //   could be handy for keys in some cases...
-
-    dname_status_t status = dname_from_string(dname, (const uint8_t*)txtname, txtname_len);
+    dname_status_t status = dname_from_string(dname, alter, zf_name_len);
     if(status == DNAME_INVALID)
-        log_fatal("Zone name '%s' is illegal", txtname);
-
+        log_fatal("Zone name '%s' is illegal", alter);
     if(dname_iswild(dname))
         log_fatal("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
-
     if(status == DNAME_PARTIAL)
         dname_terminate(dname);
 
     return dname;
 }
 
-F_NONNULL
-static zoneinfo_t* make_zinfo(const char* zname, const unsigned znlen, const vscf_data_t* zone_cfg, const char* zdir) {
-    dmn_assert(zname); dmn_assert(zone_cfg); dmn_assert(zdir);
+static void auto_zones_config(void) {
+    char* zonesdir = gdnsd_make_rootdir_path("/etc/zones");
+    DIR* zdhandle = opendir(zonesdir);
+    if(!zdhandle)
+        log_fatal("Cannot open zones directory '%s': %s", zonesdir, dmn_strerror(errno));
 
-    if(!vscf_is_hash(zone_cfg))
-        log_fatal("The value of zone '%s' in the configuration must be a hash", zname);
+    unsigned zones_alloc = 8;
+    zones = malloc(zones_alloc * sizeof(zoneinfo_t*));
 
-    if(!znlen)
-        log_fatal("Empty zone names are not legal");
-
-    zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
-
-    zone->dname = make_zone_dname(zname, znlen);
-
-    const vscf_data_t* zfn_cfg = vscf_hash_get_data_byconstkey(zone_cfg, "file", true);
-    if(zfn_cfg) {
-        if(!vscf_is_simple(zfn_cfg))
-            log_fatal("Attribute 'file' for zone '%s' must have a string value", zname);
-        zone->file = gdnsd_make_abs_fn(zdir, vscf_simple_get_data(zfn_cfg));
-    }
-    else {
-        zone->file = gdnsd_make_abs_fn(zdir, zname);
-    }
-
-    const vscf_data_t* zttl_cfg = vscf_hash_get_data_byconstkey(zone_cfg, "default_ttl", true);
-    if(zttl_cfg) {
-        unsigned long zttl;
-        if(!vscf_is_simple(zttl_cfg) || !vscf_simple_get_as_ulong(zttl_cfg, &zttl))
-            log_fatal("Attribute 'default_ttl' for zone '%s' must have a simple unsigned integer value", zname);
-        if(zttl > 2147483647)
-            log_fatal("Attribute 'default_ttl' for zone '%s' must be less than 2147483648", zname);
-        zone->def_ttl = zttl;
-    }
-    else {
-        zone->def_ttl = gconfig.zones_default_ttl;
+    struct dirent* zfdi;
+    while((zfdi = readdir(zdhandle))) {
+        if(likely(zfdi->d_name[0] != '.' && zfdi->d_name[0])) {
+            char* zfpath = gdnsd_make_rootdir_path2("/etc/zones", zfdi->d_name);
+            struct stat zfstat;
+            if(lstat(zfpath, &zfstat))
+                log_fatal("Cannot lstat(%s): %s", zfpath, dmn_strerror(errno));
+            if(!S_ISREG(zfstat.st_mode))
+                log_fatal("Candidate zone file '%s' is not a regular file!", zfdi->d_name);
+            zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
+            zone->dname = make_zone_dname(zfdi->d_name);
+            zone->file = zfpath;
+            zone->def_ttl = gconfig.zones_default_ttl;
+            const unsigned this_zidx = num_zones++;
+            if(num_zones > zones_alloc) {
+                zones_alloc *= 2;
+                zones = realloc(zones, zones_alloc * sizeof(zoneinfo_t*));
+            }
+            zones[this_zidx] = zone;
+        }
     }
 
-    vscf_hash_iterate(zone_cfg, true, bad_zattr, (void*)zname);
+    if(closedir(zdhandle))
+        log_fatal("closedir(%s) failed: %s", zonesdir, dmn_strerror(errno));
+    if(!num_zones)
+        log_fatal("No zonefiles found in zones directory %s", zonesdir);
 
-    return zone;
+    zones = realloc(zones, num_zones * sizeof(zoneinfo_t*));
+    free(zonesdir);
 }
 
-void ltree_config_zones(const vscf_data_t* zones_cfg, const char* zones_dir) {
-    dmn_assert(zones_cfg); dmn_assert(zones_dir);
-    if(!vscf_is_hash(zones_cfg))
-        log_fatal("'zones' value is wrong type (must be hash)");
-    num_zones = vscf_hash_get_len(zones_cfg);
-    if(!num_zones)
-        log_fatal("No zones in 'zones' stanza");
-    zones = calloc(num_zones, sizeof(zoneinfo_t*));
-    for(unsigned i = 0; i < num_zones; i++) {
-        unsigned znlen;
-        const char* zname = vscf_hash_get_key_byindex(zones_cfg, i, &znlen);
-        const vscf_data_t* zcfg = vscf_hash_get_data_byindex(zones_cfg, i);
-        zones[i] = make_zinfo(zname, znlen, zcfg, zones_dir);
-    }
+static void ltree_config_zones(void) {
+    auto_zones_config();
     postproc_zones_info(); // checks dupes / child zones, re-orders array
 }
 

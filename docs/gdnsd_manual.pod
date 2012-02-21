@@ -290,13 +290,12 @@ to anyone else.  It's a DNS server, not a DNS client.
 
 Perhaps more importantly, gdnsd doesn't trust itself to be root on your machine.
 Any time gdnsd is started as root, it will drop privileges to those of the
-user named C<gdnsd> (configurable) and chroot into an empty, unwritable, root-
-owned directory (path configurable) before answering any network queries.
+user named C<gdnsd> (configurable) and chroot into the default data root
+directory (or a non-default data root directory given by C<-d> on the
+commandline) before answering any network queries.
 
-gdnsd will create the chroot dir and modify the permissions and ownership
-as necessary before dropping privileges if it can.  If any security-related
-operation fails, the daemon will fail to start itself and abort with a log
-message indicating the problem.
+If any security-related operation fails, the daemon will fail to start itself
+and abort with a log message indicating the problem.
 
 While this doesn't erase other security concerns, it certainly helps in
 minimizing the potential impact of any future remote exploit that may be

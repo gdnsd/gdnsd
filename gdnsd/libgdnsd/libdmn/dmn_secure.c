@@ -64,22 +64,22 @@ void dmn_secure_setup(const char* username, const char* chroot_path, const bool 
     if(!chroot_path)
         return;
 
-    // Make sure chroot_path exists and has appropriate
-    //  permissions, creating nonrecursively if necessary.
+    // XXX
+    // Make sure chroot_path exists and has appropriate perms,
+    //   fixing the perms a bit if necc.  This will force the
+    //   chroot directory itself to be root-owned and unwriteable
+    //   by other users, but doesn't attempt to recursively check
+    //   other data within, which one could argue we should be
+    //   doing.  Arguably if we do that, we should provide config
+    //   for the owning user to be non-root, in case they want
+    //   the editing tools to use a (different) non-privileged
+    //   account.  That or get rid of chroot_fixup completely,
+    //   since some may not like us forcing the root owner.
+    // No fixup attempts are done unless chroot_fixup arg is true
+    //   (which results in failure instead if they need fixing)
     struct stat st;
-    if(lstat(chroot_path, &st) == -1) {
-        if(errno == ENOENT) {
-            if(!chroot_fixup)
-                dmn_log_fatal("chroot() path '%s' does not exist", chroot_path);
-            if(mkdir(chroot_path, PERMS755) == -1)
-                dmn_log_fatal("Failed to mkdir(%s, 0755) for chroot() path: %s", chroot_path, dmn_strerror(errno));
-            if(lstat(chroot_path, &st) == -1)
-                dmn_log_fatal("Failed to stat() chroot() path '%s' right after successful mkdir(): %s", chroot_path, dmn_strerror(errno));
-        }
-        else {
-            dmn_log_fatal("Failed to stat() chroot() path '%s': %s", chroot_path, dmn_strerror(errno));
-        }
-    }
+    if(lstat(chroot_path, &st) == -1)
+        dmn_log_fatal("Failed to stat() chroot() path '%s': %s", chroot_path, dmn_strerror(errno));
 
     if(!S_ISDIR(st.st_mode)) dmn_log_fatal("chroot() path '%s' is not a directory", chroot_path);
 

@@ -270,6 +270,28 @@ AC_CHECK_HEADERS([valgrind/memcheck.h])
 dnl doublecheck user-supplied srcdir argument
 AC_CONFIG_SRCDIR([gdnsd/main.c])
 
+dnl Default rootdir for chroot, zonefiles, pidfile, config.
+dnl This is one of the few hardcoded paths in gdnsd, but it does not
+dnl   really affect relocation or the build/tests.  Simply define
+dnl   it to a sensible final default in the case that relocation
+dnl   after installation is expected (e.g. distro packaging).
+dnl Worst case it can always be overridden on the commandline,
+dnl   and that's the expected user behavior for running multiple
+dnl   distinct instances.
+dnl The default makes basic sense for the FHS standard, but your OS
+dnl   or distribution may want something different, e.g. perhaps
+dnl   /srv/jails/gdnsd, /srv/chroot/gdnsd, /var/gdnsd, etc...
+rootdir_fail="The --with-def-rootdir= option must specify an absolute pathname";
+AC_ARG_WITH([def-rootdir],[
+AS_HELP_STRING([--with-def-rootdir=/srv/gdnsd],[Set default runtime data root directory.  Defaults to /srv/gdnsd, must be absolute!])
+],[
+    echo $with_def_rootdir | $GREP '^/' >/dev/null || AC_MSG_ERROR($rootdir_fail)
+],[
+    with_def_rootdir=/srv/gdnsd
+])
+GDNSD_DEF_ROOTDIR=$with_def_rootdir
+AC_SUBST([GDNSD_DEF_ROOTDIR])
+
 dnl Output generation
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
@@ -278,7 +300,6 @@ AC_CONFIG_FILES([
   gdnsd/libgdnsd/Makefile
   t/Makefile
   docs/Makefile
-  example/Makefile
   plugins/Makefile
   plugins/trivial/Makefile
   plugins/weighted/Makefile

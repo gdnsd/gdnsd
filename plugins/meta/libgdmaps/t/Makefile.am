@@ -1,5 +1,5 @@
 
-AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(srcdir)/.. -DETCDIR=\"$(sysconfdir)\"
+AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(srcdir)/..
 AM_LIBTOOLFLAGS = --silent
 
 noinst_LTLIBRARIES = libgdmaps_test.la
@@ -52,4 +52,5 @@ EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg)
 check-download: tdownload.sh
 	@GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" $(TESTS_ENVIRONMENT) $(srcdir)/tdownload.sh
 
-
+clean-local:
+	rm -rf $(builddir)/testroot

@@ -11,7 +11,7 @@ Minimal example gdnsd config file using this plugin:
   plugins => { geoip => {
     maps => {
       my_prod_map => {
-        geoip_db => /var/gdnsd/GeoIPCity.dat,
+        geoip_db => GeoIPCity.dat,
         datacenters => [dc-03, dc-02, dc-01],
         map => {
             EU => {
@@ -22,7 +22,7 @@ Minimal example gdnsd config file using this plugin:
         }
       },
       my_auto_map => {
-        geoip_db => /var/gdnsd/GeoIPCityv6.dat,
+        geoip_db => GeoIPCityv6.dat,
         datacenters => [dc1, dc2],
         auto_dc_coords => {
            dc1 => [ 38.9, -77 ],
@@ -111,25 +111,25 @@ Any other keys present at this level will be inherited down inside of each per-r
 
 The C<maps> stanza supports one special configuration key at the top level:
 
-=head2 C<city_region_names = /path/to/fips_include>
+=head2 C<city_region_names = fips_include>
 
-String, default unset.  GeoIP City databases use FIPS 10-4 codes for the names of Regions outside of the US and Canada.  For example the Geneve region of Switzerland is identified as C<07> in the database.  By default you would have to use these relatively confusing region codes in your hierarchical maps that make use of Region-level information (e.g. C<EU =E<gt> { CH =E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is specified, it points to a text file that maps these FIPS codes to canonical, memorable full names for clearer map configuration (e.g. C<EU =E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.
+String, filename, optional.  GeoIP City databases use FIPS 10-4 codes for the names of Regions outside of the US and Canada.  For example the Geneve region of Switzerland is identified as C<07> in the database.  By default you would have to use these relatively confusing region codes in your hierarchical maps that make use of Region-level information (e.g. C<EU =E<gt> { CH =E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is specified, it points to a text file that maps these FIPS codes to canonical, memorable full names for clearer map configuration (e.g. C<EU =E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.
 
 The file format is a simple subset of the CSV format with 3 fields: ISO 3166-1 country code, FIPS 10-4 region code, and the region name in double-quotes.  It is recommended you download this file directly from MaxMind's reference copy in this format.  As of this writing, it is available from them at the following URL: L<http://www.maxmind.com/app/fips_include>
+
+This filename is considered relative to the F</etc/geoip/> subdirectory of the current daemon invocation's data root directory (C<-d> argument), which in turn defaults to F<PREFIX/gdnsd/>.  Currently, it is not tracked for runtime reloads on file content changes.
 
 =head1 CONFIGURATION - PER-MAP
 
 All other C<maps>-level configuration keys are the names of the maps you choose to define.  A map, conceptually, is a mapping between geography and/or network topology to varying ordered datacenter sub-sets.  The value of each named map must be a hash, and the following configuration keys apply within:
 
-=head2 C<geoip_db = /path/to/GeoIP.dat>
+=head2 C<geoip_db = GeoIPv6.dat>
 
-String, pathname, required.  This is the filesystem path to one of the supported MaxMind GeoIP database types.  It will be loaded and converted to an internal representation for this particular map once at startup time, and re-loaded again if it changes during the daemon's lifetime.
+String, filename, required.  This is the filename of one of the supported MaxMind GeoIP database types.  It is considered relative to the F</etc/geoip/> subdirectory of the current daemon invocation's data root directory (C<-d> argument), which in turn defaults to F<PREFIX/gdnsd/>.  It will be reloaded at runtime (without any singificant query interruptions) if a change to the database file is detected.
 
-In the common case of the gdnsd daemon being started by root and securing itself via C<setuid()>, C<chroot()>, etc, the C<geoip_db> pathname must lie within the daemon's chroot path in order for runtime reloads to work.  If it does not, the plugin will still function correctly in all other respects, but database updates can only be reloaded by restarting the whole daemon.  The default gdnsd chroot path is F</var/gdnsd/>, or something similar depending on the installation prefix (e.g. F</usr/local/var/gdnsd/>).
+=head2 C<geoip_db_v4_overlay = GeoIP.dat>
 
-=head2 C<geoip_db_v4_overlay = /path/to/GeoIP.dat>
-
-String, pathname, optional.  This specifies an optional IPv4-level GeoIP database to overwrite the IPv4 sub-space of the IPv6 data loaded from C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be a V6-format database.  When runtime reloads are performed, if either database changes, both will be reloaded.
+String, pathname, optional.  This specifies an optional IPv4-level GeoIP database to overwrite the IPv4 sub-space of the IPv6 data loaded from C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be a V6-format database.  When runtime reloads are performed, if either database changes, both will be reloaded.  In all other respects, it is similar to C<geoip_db>.
 
 As of this writing, MaxMind doesn't sell a commercial GeoIPv6 database.  What they offer are free IPv6 GeoLite database downloads, which include the IPv4 subset in the less-accurate GeoLite form.  This option allows you to use these GeoLitev6 databases for IPv6 coverage, and then overlay your paid commercial GeoIPv4 data on top for more accurate IPv4 results.
 
@@ -241,10 +241,10 @@ A relatively-maximal example config, showing the interaction of valid C<maps> an
   plugins => {
     geoip => {
       maps => {
-        city_region_names => /etc/fips_include,
+        city_region_names => fips_include,
         my_prod_map => {
-          geoip_db => /var/gdnsd/GeoIPCityv6.dat,
-          geoip_db_v4_overlay => /var/gdnsd/GeoIPCity.dat,
+          geoip_db => GeoIPCityv6.dat,
+          geoip_db_v4_overlay => GeoIPCity.dat,
           city_no_region => false, # default
           city_no_city => false, # default
           datacenters => [us-01, de-01, sg-01],
@@ -275,8 +275,8 @@ A relatively-maximal example config, showing the interaction of valid C<maps> an
           }
         }
         my_auto_map => {
-          geoip_db => /var/gdnsd/GeoIPCityv6.dat,
-          geoip_db_v4_overlay => /var/gdnsd/GeoIPCity.dat,
+          geoip_db => GeoIPCityv6.dat,
+          geoip_db_v4_overlay => GeoIPCity.dat,
           datacenters => [us-01, de-01, sg-01],
           auto_dc_coords => {
              us-01 => [ 38.9, -77 ],

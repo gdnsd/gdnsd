@@ -21,12 +21,16 @@
 /gdnsd/zscan_lm.c
 /gdnsd/libgdnsd/vscf.c
 
+# Built headers, not distributed
+/cfg-dirs.h
+
 # Copied, renamed, distributed, installed
 /gdnsd/libgdnsd/gdnsd-dmn.h
 /gdnsd/libgdnsd/gdnsd-ev.h
 
-# Testsuite output directories
+# Testsuite input/output directories
 testout/
+testroot/
 
 # lcov html output from qa/coverage.sh
 /lcovout/

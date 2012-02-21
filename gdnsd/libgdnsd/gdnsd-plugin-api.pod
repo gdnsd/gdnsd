@@ -273,8 +273,8 @@ next callback you will receive is C<plugin_foo_pre_privdrop>.  This is an
 optional callback.  This is your plugin's last chance to take any actions which
 may require special operating system privileges (such as opening low-numbered
 listening sockets, or opening most files in general).  Immediately after the
-pre_privdrop callback, the daemon will C<chroot()> itself into an empty
-directory and drop all privileges.
+pre_privdrop callback, the daemon will C<chroot()> itself into the configured
+data root directory and drop all privileges.
 
 After dropping privileges, gdnsd will initialize (but not yet enter) the libev
 event loop which controls the primary thread of execution at runtime.  This

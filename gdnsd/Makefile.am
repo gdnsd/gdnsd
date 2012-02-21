@@ -8,7 +8,7 @@ ZSCAN_C = zscan.c
 endif
 
 SUBDIRS = libgdnsd
-AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd -DVARDIR=\"$(localstatedir)\" -DETCDIR=\"$(sysconfdir)\"
+AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd
 
 # How to build gdnsd
 sbin_PROGRAMS = gdnsd
@@ -23,14 +23,6 @@ zscan_lm.c:	zscan.rl
 
 MAINTAINERCLEANFILES = $(srcdir)/zscan.c $(srcdir)/zscan_lm.c
 EXTRA_DIST = $(srcdir)/zscan.rl
-
-common-instdirs-gdnsd:
-	for dir in "$(DESTDIR)$(localstatedir)/run" "$(DESTDIR)$(localstatedir)/gdnsd"; do \
-          test -z "$$dir" || $(MKDIR_P) "$$dir"; \
-        done
-
-install-exec-local:	common-instdirs-gdnsd
-installdirs-local:	common-instdirs-gdnsd
 
 PODS_5 = gdnsd.config.pod gdnsd.zonefile.pod
 PODS_8 = gdnsd.pod

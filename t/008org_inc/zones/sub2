@@ -1,6 +1,0 @@
-
-ftp2	A	192.0.2.151
-$ORIGIN sub2.example.com.
-www	A	192.0.2.200
-$ORIGIN foxes
-$INCLUDE subsub2 ss2

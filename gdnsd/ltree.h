@@ -409,8 +409,4 @@ static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack) {
     return lcount;
 }
 
-// how conf.c passes zones config to ltree
-F_NONNULL
-void ltree_config_zones(const vscf_data_t* zones_cfg, const char* zones_dir);
-
 #endif // _GDNSD_LTREE_H

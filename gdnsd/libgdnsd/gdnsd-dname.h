@@ -157,10 +157,11 @@ typedef enum {
 // Unescape the string "in" into the storage at "out", using
 //  DNS zonefile escaping rules.
 // Return value is output len, which will be <= input len
+// input len must be >0
 // Note: you are responsible for allocating output storage of at least "len" at "out".
-// Note: implicitly assumes a parser has validated this already
-//  in the sense that there are no dangling or invalid escapes.
 // This function cannot fail given correct inputs.
+// If it is given invalid/dangling escapes, it will return
+//   the error indication by returning a zero length
 // Note the use of "restrict": out and in cannot overlap
 F_NONNULL
 unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, const unsigned len);

@@ -57,10 +57,11 @@ and/or deviations.
 
 =head1 DIRECTIVES
 
-The standard C<$TTL>, C<$ORIGIN>, and C<$INCLUDE> directives
-are supported with their normal syntax.  C<$TTL> changes the
-default TTL of any records coming after it, and can occur
-multiple times.
+The standard C<$TTL> and C<$ORIGIN> directives
+are supported with their normal syntax.
+
+C<$TTL> changes the default TTL of any records coming after it,
+and can occur multiple times.
 
 C<$ORIGIN> changes what is appended to unqualified hostnames
 (those lacking a final C<.>) seen in the zone file from that
@@ -70,23 +71,21 @@ name, in which case the previous origin is appended to it.
 Any fully-qualified C<$ORIGIN> must be within the zone described
 by this zonefile.  The default origin is the zone name itself.
 
-C<$INCLUDE> includes another file as if its contents existed
-at the point of the C<$INCLUDE> directive.  Include directives
-may specify an optional origin, which has the same effect
-as C<$ORIGIN> at the top of the included file.  Changes to
-the origin (and default ttl) within included files have no
-effect on the outer file.
-
 C<$ADDR_LIMIT_V4> is a non-standard, gdnsd-specific directive.
 It requires a single unsigned integer argument.  The argument
 limits the total number of C<A> records to include in the server's
 responses for any given C<A> rrset (whether static or dynamic).
 The default limit is zero, which is interpreted as no limit.
 Setting the limit via this directive affects all rrsets until
-the value is changed again by another directive, and inherits
-down into C<$INCLUDE> files as well.
+the value is changed again by another directive.
 
 C<$ADDR_LIMIT_V6> same as above, but for IPv6 C<AAAA> rrsets.
+
+The RFC-standard C<$INCLUDE> directive is not supported.  It
+greatly complicates the detection of zone update transactions.
+Most legitimate uses of C<$INCLUDE> to reduce redundancy
+should be replaced with a zonefile-generating script instead,
+perhaps using a template system.
 
 BIND's C<$GENERATE> extension is not supported at this time.
 

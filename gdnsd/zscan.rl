@@ -51,13 +51,13 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->curfn,__VA_ARGS__);\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->file,__VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->curfn);\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->file);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
@@ -83,9 +83,7 @@ typedef struct {
     unsigned limit_v6;
     uint8_t* rfc3597_data;
     zoneinfo_t* zone;
-    const char* curfn;
     const char* tstart;
-    uint8_t* include_filename;
     uint8_t  origin[256];
     uint8_t  lhs_dname[256];
     uint8_t  rhs_dname[256];
@@ -133,17 +131,17 @@ static void set_ipv6(zscan_t* z, const char* end) {
 }
 
 F_NONNULL
-static void validate_dname_in_zone(zscan_t* z, const uint8_t* dname) {
-    dmn_assert(z); dmn_assert(z->zone->dname); dmn_assert(dname);
-    if(!dname_isinzone(z->zone->dname, dname))
-        parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zone->dname));
+static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin) {
+    dmn_assert(z); dmn_assert(z->zone->dname); dmn_assert(origin);
+    if(!dname_isinzone(z->zone->dname, origin))
+        parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zone->dname));
 }
 
 F_NONNULL
 static void validate_lhs_not_ooz(zscan_t* z) {
     dmn_assert(z);
     if(z->lhs_is_ooz)
-        parse_error("domainname %s is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
+        parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
 }
 
 F_NONNULL
@@ -190,90 +188,6 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
     }
 }
 
-// This is broken out into a separate function (called via
-//   function pointer to eliminate the possibility of
-//   inlining on non-gcc compilers, I hope) to avoid issues with
-//   setjmp and all of the local auto variables in zscan_do() below.
-typedef bool (*sij_func_t)(zscan_t*,char*,const unsigned,const int);
-F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
-    dmn_assert(z); dmn_assert(buf); dmn_assert(fd >= 0);
-
-    volatile bool failed = true;
-
-    if(!sigsetjmp(z->jbuf, 0)) {
-        scanner(z, buf, bufsize, fd);
-        failed = false;
-    }
-    else {
-        failed = true;
-    }
-
-    return failed;
-}
-
-F_NONNULL
-static bool zscan_do(zoneinfo_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6) {
-    dmn_assert(zone); dmn_assert(origin); dmn_assert(fn);
-
-    int fd = open(fn, O_RDONLY);
-    if(fd < 0) {
-        log_err("Cannot open file '%s' for reading: %s", fn, logf_errno());
-        return true;
-    }
-
-    unsigned bufsize = MAX_BUFSIZE;
-    {
-        struct stat fdstat;
-        if(!fstat(fd, &fdstat)) {
-#ifdef HAVE_POSIX_FADVISE
-            posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
-#endif
-            if(fdstat.st_size < bufsize)
-                bufsize = fdstat.st_size;
-        }
-        else {
-            log_warn("fstat(%s) failed for advice, not critical...", fn);
-        }
-    }
-
-    zscan_t* z = calloc(1, sizeof(zscan_t));
-    z->lcount = 1;
-    z->def_ttl = def_ttl_arg;
-    z->curfn = fn;
-    z->limit_v4 = limit_v4;
-    z->limit_v6 = limit_v6;
-    dname_copy(z->origin, origin);
-    z->lhs_dname[0] = 1; // set lhs to relative origin initially
-    z->zone = zone;
-
-    char* buf = malloc(bufsize + 1);
-    buf[bufsize] = 0;
-
-    sij_func_t sij = &_scan_isolate_jmp;
-    bool failed = sij(z, buf, bufsize, fd);
-
-    if(close(fd)) {
-        log_err("Cannot close file '%s': %s", fn, logf_errno());
-        failed = true;
-    }
-
-    free(buf);
-
-    if(z->texts) {
-        for(unsigned i = 0; i < z->num_texts; i++)
-            if(z->texts[i])
-                free(z->texts[i]);
-        free(z->texts);
-    }
-    if(z->rfc3597_data)
-        free(z->rfc3597_data);
-    if(z->include_filename)
-        free(z->include_filename);
-    free(z);
-    return failed;
-}
-
 /********** TXT/SPF ******************/
 
 F_NONNULL
@@ -288,8 +202,11 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
     dmn_assert(z);
 
     uint8_t text_temp[len + 1];
+    text_temp[0] = 0;
+    unsigned newlen = len;
+    if(len)
+        newlen = dns_unescape(text_temp, (const uint8_t*)z->tstart, len);
 
-    const unsigned newlen = dns_unescape(text_temp, (const uint8_t*)z->tstart, len);
     dmn_assert(newlen <= len);
 
     if(newlen > 255) {
@@ -325,17 +242,6 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
     z->tstart = NULL;
 }
 
-F_NONNULL
-static void set_filename(zscan_t* z, const unsigned len) {
-    dmn_assert(z);
-    uint8_t* fn = malloc(len + 1);
-    const unsigned newlen = dns_unescape(fn, (const uint8_t*)z->tstart, len);
-    dmn_assert(newlen <= len);
-    z->include_filename = fn = realloc(fn, newlen + 1);
-    fn[newlen] = 0;
-    z->tstart = NULL;
-}
-
 // Input must have two bytes of text constrained to [0-9A-Fa-f]
 F_NONNULL
 static unsigned hexbyte(const char* intxt) {
@@ -364,39 +270,6 @@ static unsigned hexbyte(const char* intxt) {
         out |= ((intxt[1] | 0x20) - ('a' - 10));
 
     return out;
-}
-
-F_NONNULL
-static char* _make_zfn(const char* curfn, const char* include_fn) {
-    dmn_assert(curfn); dmn_assert(include_fn);
-
-    if(include_fn[0] == '/')
-        return strdup(include_fn);
-
-    const char* slashpos = strrchr(curfn, '/');
-    const unsigned cur_copy = (slashpos - curfn) + 1;
-    const unsigned include_len = strlen(include_fn);
-    char* rv = malloc(cur_copy + include_len + 1);
-    memcpy(rv, curfn, cur_copy);
-    memcpy(rv + cur_copy, include_fn, include_len);
-    rv[cur_copy + include_len] = 0;
-
-    return rv;
-}
-
-F_NONNULL
-static void process_include(zscan_t* z) {
-    dmn_assert(z);
-    dmn_assert(z->include_filename);
-
-    validate_dname_in_zone(z, z->rhs_dname);
-    char* zfn = _make_zfn(z->curfn, (char*)z->include_filename);
-    free(z->include_filename);
-    z->include_filename = NULL;
-    bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
-    free(zfn);
-    if(subfailed)
-       siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
@@ -620,14 +493,9 @@ static void close_paren(zscan_t* z) {
     action set_eml_qword { z->tstart++; dname_set(z, z->eml_dname, fpc - z->tstart - 1, false); }
 
     action reset_origin {
-        validate_dname_in_zone(z, z->rhs_dname);
+        validate_origin_in_zone(z, z->rhs_dname);
         dname_copy(z->origin, z->rhs_dname);
     }
-
-    action set_filename { set_filename(z, fpc - z->tstart); }
-    action set_filename_q { z->tstart++; set_filename(z, fpc - z->tstart - 1); }
-
-    action process_include { process_include(z); }
 
     action start_txt { text_start(z); }
     action push_txt_rdata { text_add_tok(z, fpc - z->tstart, true); }
@@ -739,9 +607,6 @@ static void close_paren(zscan_t* z) {
     # A whole set of TXT rdata
     txt_rdata = (ws | txt_item)+ $1 %0 >start_txt;
 
-    # filenames for $INCLUDE
-    filename  = (tword %set_filename | qword %set_filename_q) >token_start;
-
     # plugin!resource for DYN[AC] records
     dyna_rdata = (plugres ('!' plugres)?) >token_start %set_dyna;
 
@@ -809,7 +674,6 @@ static void close_paren(zscan_t* z) {
     cmd = '$' (
           ('TTL'i ws ttl %set_def_ttl)
         | ('ORIGIN'i ws dname_rhs %reset_origin)
-        | ('INCLUDE'i ws filename (ws dname_rhs)?) $1 %0 %process_include
         | ('ADDR_LIMIT_V4'i ws uval %set_limit_v4)
         | ('ADDR_LIMIT_V6'i ws uval %set_limit_v6)
     );
@@ -864,10 +728,85 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
     }
 }
 
+// This is broken out into a separate function (called via
+//   function pointer to eliminate the possibility of
+//   inlining on non-gcc compilers, I hope) to avoid issues with
+//   setjmp and all of the local auto variables in scan_zone() below.
+typedef bool (*sij_func_t)(zscan_t*,char*,const unsigned,const int);
+F_NONNULL F_NOINLINE
+static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
+    dmn_assert(z); dmn_assert(buf); dmn_assert(fd >= 0);
+
+    volatile bool failed = true;
+
+    if(!sigsetjmp(z->jbuf, 0)) {
+        scanner(z, buf, bufsize, fd);
+        failed = false;
+    }
+    else {
+        failed = true;
+    }
+
+    return failed;
+}
+
 bool scan_zone(zoneinfo_t* zone) {
     dmn_assert(zone);
     dmn_assert(zone->dname);
     dmn_assert(zone->file);
     log_debug("Scanning zone '%s'", logf_dname(zone->dname));
-    return zscan_do(zone, zone->dname, zone->file, zone->def_ttl, 0, 0);
+
+    const int fd = open(zone->file, O_RDONLY);
+    if(fd < 0) {
+        log_err("Cannot open file '%s' for reading: %s", zone->file, logf_errno());
+        return true;
+    }
+
+    unsigned bufsize = MAX_BUFSIZE;
+    {
+        struct stat fdstat;
+        if(!fstat(fd, &fdstat)) {
+#ifdef HAVE_POSIX_FADVISE
+            posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
+#endif
+            if(fdstat.st_size < bufsize)
+                bufsize = fdstat.st_size;
+        }
+        else {
+            log_warn("fstat(%s) failed for advice, not critical...", zone->file);
+        }
+    }
+
+    zscan_t* z = calloc(1, sizeof(zscan_t));
+    z->lcount = 1;
+    z->def_ttl = zone->def_ttl;
+    z->zone = zone;
+    dname_copy(z->origin, zone->dname);
+    z->lhs_dname[0] = 1; // set lhs to relative origin initially
+
+    char* buf = malloc(bufsize + 1);
+    buf[bufsize] = 0;
+
+    sij_func_t sij = &_scan_isolate_jmp;
+    bool failed = sij(z, buf, bufsize, fd);
+
+    if(close(fd)) {
+        log_err("Cannot close file '%s': %s", zone->file, logf_errno());
+        failed = true;
+    }
+
+    free(buf);
+
+    if(z->texts) {
+        for(unsigned i = 0; i < z->num_texts; i++)
+            if(z->texts[i])
+                free(z->texts[i]);
+        free(z->texts);
+    }
+    if(z->rfc3597_data)
+        free(z->rfc3597_data);
+    free(z);
+
+    return failed;
 }
+

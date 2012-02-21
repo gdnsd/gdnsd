@@ -78,31 +78,46 @@ static void map_lc(uint8_t* data, unsigned len) {
 }
 
 unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, const unsigned len) {
-    dmn_assert(out); dmn_assert(in || !len);
+    dmn_assert(out); dmn_assert(len);
 
-    uint8_t* out_start = out;
+    uint8_t* optr = out;
     for(unsigned i = 0; i < len; i++) {
         if(likely(in[i] != '\\')) {
-            *out++ = in[i];
+            *optr++ = in[i];
         }
         else {
             i++;
-            dmn_assert(i < len);
+            if(unlikely(i >= len)) { // dangling escape
+                optr = out;
+                break;
+            }
             if(in[i] <= '9' && in[i] >= '0') {
-                dmn_assert(i + 2 < len);
+                if(unlikely( // incomplete numeric escape
+                    ((i + 2) >= len)
+                    || (in[i + 1] > '9')
+                    || (in[i + 1] < '0')
+                    || (in[i + 2] > '9')
+                    || (in[i + 2] < '0')
+                )) {
+                    optr = out;
+                    break;
+                }
                 unsigned x = ((in[i++] - '0') * 100);
                 x += ((in[i++] - '0') * 10);
                 x += (in[i] - '0');
-                dmn_assert(x < 256);
-                *out++ = (uint8_t)x;
+                if(unlikely(x > 255)) { // numeric escape val too large
+                    optr = out;
+                    break;
+                }
+                *optr++ = (uint8_t)x;
             }
             else {
-                *out++ = in[i];
+                *optr++ = in[i];
             }
         }
     }
 
-    return out - out_start;
+    return optr - out;
 }
 
 gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const uint8_t* restrict instr, const unsigned len) {
@@ -187,6 +202,9 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const uint
 
         // unescape to label_buf
         unsigned llen = gdnsd_dns_unescape(label_buf, label_start, raw_llen);
+
+        // Label invalid (error return from above)
+        if(!llen) return DNAME_INVALID;
 
         // Label too long
         if(llen > 63) return DNAME_INVALID;
