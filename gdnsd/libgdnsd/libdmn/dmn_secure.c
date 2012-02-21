@@ -43,6 +43,11 @@ static bool is_secured = false;
 void dmn_secure_setup(const char* username, const char* chroot_path, const bool chroot_fixup) {
     dmn_assert(username);
 
+    // This isn't really a security thing, we'd fail somewhere else along the line anyways,
+    //   it's just a handy error bailout to point out developer bugs in using these interfaces.
+    if(geteuid())
+        dmn_log_fatal("BUG: dmn_secure_*() calls should only be executed when running as root");
+
     // Get the user info, verify they don't have root's uid/gid, store them...
     errno = 0;
     struct passwd* p = getpwnam(username);
@@ -101,15 +106,29 @@ void dmn_secure_me(void) {
     if(!secure_uid || !secure_gid)
         dmn_log_fatal("BUG: secure_setup() must be called before secure_me()");
 
-    // On most systems, this seems to get the timezone cached for vsyslog() to use inside chroot()
-    tzset();
-
+    // lock self into the chroot directory
     if(secure_chroot) {
+        // On most systems, this seems to get the timezone cached for vsyslog() to use inside chroot()
+        tzset();
         if(chroot(secure_chroot) == -1) dmn_log_fatal("chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
         if(chdir("/") == -1) dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
     }
-    if(setgid(secure_gid) == -1) dmn_log_fatal("setgid(%u) failed: %s", secure_gid, dmn_strerror(errno));
-    if(setuid(secure_uid) == -1) dmn_log_fatal("setuid(%u) failed: %s", secure_uid, dmn_strerror(errno));
+
+    // drop privs
+    if(setgid(secure_gid))
+        dmn_log_fatal("setgid(%u) failed: %s", secure_gid, dmn_strerror(errno));
+    if(setuid(secure_uid))
+        dmn_log_fatal("setuid(%u) failed: %s", secure_uid, dmn_strerror(errno));
+
+    // verify that regaining root privs fails, and [e][ug]id values are as expected
+    if(    !setegid(0)
+        || !seteuid(0)
+        || geteuid() != secure_uid
+        || getuid() != secure_uid
+        || getegid() != secure_gid
+        || getgid() != secure_gid
+    )
+        dmn_log_fatal("Platform-specific BUG: setgid() and/or setuid() do not permanently drop privs as expected!");
 
     if(secure_chroot)
         dmn_log_info("Security measures (chroot(%s), setgid(%u), setuid(%u)) completed successfully", secure_chroot, secure_gid, secure_uid);
