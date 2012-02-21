@@ -3,7 +3,7 @@
 ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
-SUBDIRS = gdnsd plugins example docs t
+SUBDIRS = gdnsd plugins docs t
 
 MISC_DOCS = README INSTALL AUTHORS COPYING ChangeLog
 
