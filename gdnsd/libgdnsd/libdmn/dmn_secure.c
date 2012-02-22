@@ -30,7 +30,7 @@
 #include "dmn.h"
 
 #define PERMS755 (S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH)
-#define PERMS011 (S_IWGRP|S_IWOTH)
+#define PERMS022 (S_IWGRP|S_IWOTH)
 
 // State storage between secure_setup() and secure_me()
 static uid_t secure_uid = 0;
@@ -85,10 +85,10 @@ void dmn_secure_setup(const char* username, const char* chroot_path, const bool 
             dmn_log_fatal("Failed to chown(%s, 0, 0): %s", chroot_path, dmn_strerror(errno));
     }
 
-    if((st.st_mode & PERMS011)) {
+    if((st.st_mode & PERMS022)) {
         if(!chroot_fixup)
             dmn_log_fatal("chroot() path '%s' is writable", chroot_path);
-        mode_t new_perms = st.st_mode & (~PERMS011);
+        mode_t new_perms = st.st_mode & (~PERMS022);
         if(chmod(chroot_path, new_perms) == -1) {
             dmn_log_fatal("Failed to chmod(%s, %o): %s", chroot_path, (unsigned)new_perms, dmn_strerror(errno));
         }
