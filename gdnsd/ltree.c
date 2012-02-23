@@ -1543,7 +1543,6 @@ static zoneinfo_t* make_zinfo(const char* zname, const unsigned znlen, const vsc
     zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
 
     zone->dname = make_zone_dname(zname, znlen);
-    zone->file = malloc(sizeof(char*));
 
     const vscf_data_t* zfn_cfg = vscf_hash_get_data_byconstkey(zone_cfg, "file", true);
     if(zfn_cfg) {
