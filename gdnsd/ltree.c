@@ -1431,7 +1431,8 @@ static void ltree_node_destroy(ltree_node_t* node) {
             ltree_node_t* child = node->child_table[i];
             while(child) {
                 ltree_node_t* next = child->next;
-                ltree_node_destroy(child);
+                if(likely(!(child->flags & LTNFLAG_ZROOT)))
+                    ltree_node_destroy(child);
                 child = next;
             }
         }
@@ -1445,9 +1446,13 @@ F_UNUSED
 static void ltree_destroy(void) {
     ltree_node_destroy(ltree_root);
     ltree_root = NULL;
-    if(!rootserver)
-        for(unsigned i = 0; i < num_zones; i++)
-            lta_destroy(zones[i]->arena);
+    if(!rootserver) {
+        for(unsigned i = 0; i < num_zones; i++) {
+            zoneinfo_t* z = zones[i];
+            ltree_node_destroy(z->root);
+            lta_destroy(z->arena);
+        }
+    }
     lta_destroy(arena_root);
     arena_root = NULL;
 }
