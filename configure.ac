@@ -32,7 +32,7 @@ dnl  them to accidentally add LIBADD_DLOPEN to LIBS permanently,
 dnl  so we workaround that by saving and restoring LIBS
 XLIBS=$LIBS
 AC_DISABLE_STATIC
-LT_INIT([disable-fast-install dlopen])
+LT_INIT([dlopen])
 LT_PREREQ([2.4.2])
 LT_LIB_DLLOAD
 AC_SUBST([LIBTOOL_DEPS])
