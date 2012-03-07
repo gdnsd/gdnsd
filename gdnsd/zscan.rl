@@ -244,7 +244,7 @@ static bool zscan_do(zoneinfo_t* zone, const uint8_t* origin, const char* fn, co
     z->limit_v4 = limit_v4;
     z->limit_v6 = limit_v6;
     dname_copy(z->origin, origin);
-    dname_copy(z->lhs_dname, origin);
+    z->lhs_dname[0] = 1; // set lhs to relative origin initially
     z->zone = zone;
 
     char* buf = malloc(bufsize + 1);
