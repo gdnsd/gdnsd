@@ -256,8 +256,11 @@ F_NONNULL
 static inline int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2) {
     dmn_assert(dn1); dmn_assert(dn2);
     dmn_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
-    dmn_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
-    return memcmp(dn1, dn2, *dn1 + 1);
+    dmn_assert(gdnsd_dname_status(dn2) != DNAME_INVALID);
+    int rv = *dn1 - *dn2;
+    if(!rv)
+        rv = memcmp(dn1, dn2, *dn1 + 1);
+    return rv;
 }
 
 // returns true if dname is within zone
