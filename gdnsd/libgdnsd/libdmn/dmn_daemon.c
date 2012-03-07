@@ -216,7 +216,7 @@ void dmn_signal(const char* pidfile, int sig) {
     const int pid = check_pidfile(pidfile);
     if(!pid)
         dmn_log_err("Did not find a running daemon to signal!");
-    if(kill(pid, sig))
+    else if(kill(pid, sig))
         dmn_log_err("Cannot signal daemon at pid %i", pid);
 }
 

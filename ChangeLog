@@ -1,4 +1,20 @@
 
+   Bugfix: The zonefile parser did not correctly handle the case
+     where the left-hand domainname was left blank (indicating
+     repetition of the previous name) and the zonefile contained
+     no previous name.  This resulted in a segfault on startup
+     in production builds and an assertion failure in debug builds.
+     This case is now handled by making the current origin the
+     implicit default previous name.
+   Bugfix: The deprecation warning message for subzones (added
+     in 1.6.3) was not properly formatting its arguments for
+     terminal display.
+   A few small fixups to the autotools infrastructure, including
+     one that should make life easier for distribution packaging
+     tools that make use of "make install DESTDIR=..."
+   Bugfix: The lpe_on and lpe_off commands were sending pointless
+     signals to the shell if the daemon wasn't running.
+
 1.6.3 - 2012-02-17
    Minor docs fixes
    Compile fix for non-gcc compilers
