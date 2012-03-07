@@ -163,6 +163,7 @@ static zscan_t* zscan_init(zscan_t* z, const char* zones_dir, const uint8_t* zna
     z->limit_v6 = limit_v6;
     dname_copy(z->zroot, zname);
     dname_copy(z->origin, origin);
+    dname_copy(z->lhs_dname, origin);
 
     return z;
 }
