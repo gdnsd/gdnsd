@@ -1,7 +1,10 @@
 
   ; You can start a one-line comment anywhere reasonable
 
-@	SOA ns1 hostmaster (
+; blank for the SOA is intended here, to test that it
+;  uses the origin instead of causing a problem..
+
+	SOA ns1 hostmaster (
 	1      ; serial
 	7200   ; refresh
 	30M    ; retry
