@@ -426,7 +426,7 @@ F_NONNULL
 static void rec_soa(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(dname_cmp(z->lhs_dname, (uint8_t*)"\1\0"))
+    if(z->lhs_dname[0] != 1)
         parse_error_noargs("SOA record can only be defined for the root of the zone");
     if(ltree_add_rec_soa(z->zone, z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5))
         siglongjmp(z->jbuf, 1);
