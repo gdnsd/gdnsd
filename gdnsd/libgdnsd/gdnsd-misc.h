@@ -22,6 +22,7 @@
 
 #include <gdnsd-compiler.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 // Returns the invocation's data root path (chroot path
 //   in the chroot case), e.g. "/usr/local/gdnsd".
@@ -83,5 +84,9 @@ gdnsd_rstate_t* gdnsd_rand_init(void);
 //  that's 2^32 or smaller.
 uint32_t gdnsd_rand_get32(gdnsd_rstate_t* rs);
 uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs);
+
+// Returns true if running on Linux with a kernel version >= x.y.z
+// Returns false for non-Linux systems, or Linux kernels older than specified.
+bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z);
 
 #endif // _GDNSD_MISC_H

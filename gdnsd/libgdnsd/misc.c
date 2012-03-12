@@ -31,6 +31,8 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -243,5 +245,27 @@ gdnsd_rstate_t* gdnsd_rand_init(void) {
     while(throw_away--)
         gdnsd_rand_get64(newstate);
     return newstate;
+}
+
+// fold X.Y.Z to a single uint32_t, same as <linux/version.h>
+F_CONST
+static uint32_t _version_fold(const unsigned x, const unsigned y, const unsigned z) {
+    dmn_assert(x < 65536); dmn_assert(y < 256); dmn_assert(z < 256);
+    return (x << 16) + (y << 8) + z;
+}
+
+bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z) {
+    bool rv = false;
+    struct utsname uts;
+    if(!uname(&uts) && !strcmp("Linux", uts.sysname)) {
+        unsigned sys_x, sys_y, sys_z;
+        if(sscanf(uts.release, "%u.%u.%u", &sys_x, &sys_y, &sys_z) == 3) {
+            const uint32_t vers_have = _version_fold(sys_x, sys_y, sys_z);
+            const uint32_t vers_wanted = _version_fold(x, y, z);
+            if(vers_have >= vers_wanted)
+                rv = true;
+        }
+    }
+    return rv;
 }
 

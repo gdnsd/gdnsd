@@ -280,17 +280,11 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
 #ifdef HAVE_SENDMMSG
 
 // check for linux 3.0+ for sendmmsg() (implies recvmmsg w/ MSG_WAITFORONE)
-#include <sys/utsname.h>
 static bool has_mmsg(void) {
     static bool checked_mmsg = false;
     static bool rv = false;
     if(!checked_mmsg) {
-        int maj;
-        struct utsname uts;
-        if(uname(&uts) || strcmp("Linux", uts.sysname) || !sscanf(uts.release, "%d.%*d", &maj) || (maj < 3))
-            rv = false;
-        else
-            rv = true;
+        rv = gdnsd_linux_min_version(3, 0, 0);
         checked_mmsg = true;
     }
     return rv;
