@@ -1,4 +1,5 @@
 
+1.6.4 - 2012-03-11
    Bugfix: The zonefile parser did not correctly handle the case
      where the left-hand domainname was left blank (indicating
      repetition of the previous name) and the zonefile contained
