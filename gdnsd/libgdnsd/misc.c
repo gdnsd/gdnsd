@@ -67,10 +67,7 @@ char* gdnsd_make_rootdir_path(const char* suffix) {
     return rv;
 }
 
-// XXX it seems like in practice, valid_rootpath will never
-//  be used on rootdir_path(), but will always be used on rootdir_path2(),
-//  in which case we can merge and simplify things a bit ...
-char* gdnsd_make_rootdir_path2(const char* suffix, const char* suffix2) {
+char* gdnsd_make_validated_rootpath(const char* suffix, const char* suffix2) {
     dmn_assert(rootdir); dmn_assert(suffix); dmn_assert(suffix2);
     const unsigned suflen = strlen(suffix);
     const unsigned suf2len = strlen(suffix2);
@@ -78,19 +75,18 @@ char* gdnsd_make_rootdir_path2(const char* suffix, const char* suffix2) {
     dmn_assert(suflen > 1);
     dmn_assert(suffix[0] == '/');
     dmn_assert(suffix[suflen - 1] != '/');
-    char* rv = malloc(rdlen + suflen + 1 + suf2len + 1);
-    memcpy(rv, rootdir, rdlen);
-    memcpy(&rv[rdlen], suffix, suflen);
-    rv[rdlen + suflen] = '/';
-    memcpy(&rv[rdlen + suflen + 1], suffix2, suf2len);
-    rv[rdlen + suflen + 1 + suf2len] = 0;
-    return rv;
-}
 
-char* gdnsd_valid_rootpath(char* path_in) {
-    dmn_assert(path_in); dmn_assert(rootdir);
-    char* rv = realpath(path_in, NULL);
-    free(path_in);
+    // Construct "/rootdir/suffix/suffix2"
+    char tmppath[rdlen + suflen + 1 + suf2len + 1];
+    memcpy(tmppath, rootdir, rdlen);
+    memcpy(&tmppath[rdlen], suffix, suflen);
+    tmppath[rdlen + suflen] = '/';
+    memcpy(&tmppath[rdlen + suflen + 1], suffix2, suf2len);
+    tmppath[rdlen + suflen + 1 + suf2len] = 0;
+
+    // Cleanup via realpath, return NULL if realpath fails,
+    //   (which includes if the file doesn't exist)
+    char* rv = realpath(tmppath, NULL);
     if(rv && (strlen(rv) < rdlen || strncmp(rv, rootdir, rdlen))) {
         free(rv);
         rv = NULL;

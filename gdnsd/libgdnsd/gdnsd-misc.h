@@ -41,20 +41,13 @@ F_MALLOC F_WUNUSED F_NONNULL
 char* gdnsd_make_rootdir_path(const char* suffix);
 
 // As above, but takes second suffix as well, which has
-//  no explicit rules, mostly for user-derived input.
+//  no explicit rules, mostly for user-derived input.  Also
+//  cleans up result via realpath() and validates existence,
+//  returning NULL unless it all resolves to a real file on the FS.
 // e.g.:
-//  gdnsd_make_rootdir_path2("/etc/zones", zone_name);
+//  gdnsd_make_validated_rootpath("/etc/zones", zone_name);
 F_MALLOC F_WUNUSED F_NONNULL
-char* gdnsd_make_rootdir_path2(const char* suffix, const char* suffix2);
-
-// After gdnsd_make_rootdir_path[2](), if suffix was based on
-//   user input, pass it through here to check for validity.
-// If the pathname does not exist, or exits the rootdir via
-//   ".." and/or symlinks, this will return NULL.
-// Always frees the original input, and a non-NULL return
-//   value is a fresh malloc allocation.
-F_MALLOC F_WUNUSED F_NONNULL
-char* gdnsd_valid_rootpath(char* path_in);
+char* gdnsd_make_validated_rootpath(const char* suffix, const char* suffix2);
 
 // Returns a newly-malloc'd string which is path_in with
 //   the leading rootdir stripped out.  Does not alter

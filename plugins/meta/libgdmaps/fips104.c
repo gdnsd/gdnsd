@@ -127,7 +127,9 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 fips_t* fips_init(const char* pathname) {
     dmn_assert(pathname);
 
-    char* path_resolved = gdnsd_make_rootdir_path2("/etc/geoip", pathname);
+    char* path_resolved = gdnsd_make_validated_rootpath("/etc/geoip", pathname);
+    if(!path_resolved)
+        log_fatal("plugin_geoip: FIPS region file pathname '%s' not valid or does not exist in '%s/etc/geoip'", pathname, gdnsd_get_rootdir());
     FILE* file = fopen(path_resolved, "r");
     if(!file)
         log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", path_resolved, logf_errno());

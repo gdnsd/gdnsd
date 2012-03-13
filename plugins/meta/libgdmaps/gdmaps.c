@@ -1342,19 +1342,18 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
         log_fatal("plugin_geoip: map '%s': missing required 'geoip_db' value", name);
     if(!vscf_is_simple(gdb_cfg) || !vscf_simple_get_len(gdb_cfg))
         log_fatal("plugin_geoip: map '%s': 'geoip_db' must have a non-empty string value", name);
-    gdmap->geoip_path = gdnsd_valid_rootpath(gdnsd_make_rootdir_path2("/etc/geoip", vscf_simple_get_data(gdb_cfg)));
+    gdmap->geoip_path = gdnsd_make_validated_rootpath("/etc/geoip", vscf_simple_get_data(gdb_cfg));
     if(!gdmap->geoip_path)
-        log_fatal("plugin_geoip: map '%s': 'geoip_db' pathname '%s' invalid or file does not exist within '%s'", name, vscf_simple_get_data(gdb_cfg), gdnsd_get_rootdir());
+        log_fatal("plugin_geoip: map '%s': 'geoip_db' pathname '%s' invalid or file does not exist within '%s/etc/geoip'", name, vscf_simple_get_data(gdb_cfg), gdnsd_get_rootdir());
 
     // geoip_db_v4_overlay config
     const vscf_data_t* gdb_v4o_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db_v4_overlay", true);
     if(gdb_v4o_cfg) {
         if(!vscf_is_simple(gdb_v4o_cfg) || !vscf_simple_get_len(gdb_v4o_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' must have a non-empty string value", name);
-        gdmap->geoip_v4o_path = gdnsd_make_rootdir_path2("/etc/geoip", vscf_simple_get_data(gdb_v4o_cfg));
-        gdmap->geoip_v4o_path = gdnsd_valid_rootpath(gdnsd_make_rootdir_path2("/etc/geoip", vscf_simple_get_data(gdb_v4o_cfg)));
+        gdmap->geoip_v4o_path = gdnsd_make_validated_rootpath("/etc/geoip", vscf_simple_get_data(gdb_v4o_cfg));
         if(!gdmap->geoip_v4o_path)
-            log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' pathname '%s' invalid or file does not exist within '%s'", name, vscf_simple_get_data(gdb_v4o_cfg), gdnsd_get_rootdir());
+            log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' pathname '%s' invalid or file does not exist within '%s/etc/geoip'", name, vscf_simple_get_data(gdb_v4o_cfg), gdnsd_get_rootdir());
     }
 
     // optional GeoIPCity behavior flags

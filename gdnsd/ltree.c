@@ -1552,10 +1552,13 @@ static void auto_zones_config(void) {
     struct dirent* zfdi;
     while((zfdi = readdir(zdhandle))) {
         if(likely(zfdi->d_name[0] != '.' && zfdi->d_name[0])) {
-            char* zfpath = gdnsd_make_rootdir_path2("/etc/zones", zfdi->d_name);
+            char* zfpath = gdnsd_make_validated_rootpath("/etc/zones", zfdi->d_name);
+            // because this came from readdir, this failure cause should almost never happen...
+            if(!zfpath)
+                log_fatal("Zone filename '%s' not valid or does not exist in '%s/etc/zones'", zfdi->d_name, gdnsd_get_rootdir());
             struct stat zfstat;
             if(lstat(zfpath, &zfstat))
-                log_fatal("Cannot lstat(%s): %s", zfpath, dmn_strerror(errno));
+                log_fatal("Cannot lstat() zonefile '%s': %s", zfpath, dmn_strerror(errno));
             if(!S_ISREG(zfstat.st_mode))
                 log_fatal("Candidate zone file '%s' is not a regular file!", zfdi->d_name);
             zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
