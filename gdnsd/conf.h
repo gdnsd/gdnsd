@@ -49,7 +49,6 @@ typedef struct {
     bool     realtime_stats;
     bool     lock_mem;
     bool     disable_text_autosplit;
-    bool     strict_data;
     bool     edns_client_subnet;
     bool     monitor_force_v6_up;
     int      priority;

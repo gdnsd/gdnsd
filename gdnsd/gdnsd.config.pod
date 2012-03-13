@@ -67,16 +67,6 @@ time-to-live for any record in any zonefile.  It can be overridden
 with a more specific default within zone files themselves
 via the C<$TTL> directive (see L<gdnsd.zonefile(5)>).
 
-=item B<strict_data>
-
-Boolean, default true.  Some of the zone data validation checks have
-their error text prefixed with the string "strict_data:".  These checks
-are not strictly required for the daemon to function correctly, they're
-simply checks for sane zone configuration.  With C<strict_data>
-at the default (true) value, these checks are fatal.  If you set it
-to false, the strict_data checks will generate mere warnings and allow
-the zones to load anyways.
-
 =item B<dns_port>
 
 Integer port, 1-65535, default 53.  This is the global default port number

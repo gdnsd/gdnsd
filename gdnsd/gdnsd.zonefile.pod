@@ -144,16 +144,6 @@ data into 255-byte chunks, you can specify a single long chunk
 and have the server break it at 255 byte boundaries automatically.
 (this behavior can be disabled via L<gdnsd.config(5)> as well.)
 
-=head1 VALIDATION
-
-gdnsd does a fair amount of zone data validation at startup.  Some
-of the validation checks just issue warnings, and some are fatal.
-Of the fatal ones, some of them are tagged with the prefix
-C<strict_data:>.  These checks, while considered important for
-the sanity of your data, are not strictly necessary for correct
-operation.  They can be downgraded to mere warnings by setting
-the C<strict_data> option to C<false> (see gdnsd.config(5)).
-
 =head1 SEE ALSO
 
 L<gdnsd(8)>, L<gdnsd.config(5)>

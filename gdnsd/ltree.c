@@ -56,14 +56,6 @@ static unsigned num_zones = 0;
         return true;\
     } while(0)
 
-#define log_strict(...)\
-    do {\
-        if(gconfig.strict_data)\
-            log_zfatal("strict_data: " __VA_ARGS__);\
-        else\
-            log_warn("strict_data: " __VA_ARGS__);\
-    } while(0)
-
 // don't use this directly, use macro below
 // this logs the lstack labels as a partial domainname (possibly empty),
 // intended to be completed with the zone name via the macro below
@@ -394,11 +386,11 @@ bool ltree_add_rec_a(const zoneinfo_t* zone, const uint8_t* dname, uint32_t addr
         if(unlikely(!rrset->gen.is_static))
             log_zfatal("Name '%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname));
         if(unlikely(rrset->gen.ttl != htonl(ttl)))
-            log_strict("Name '%s': All TTLs for A and/or AAAA records at the same name must agree", logf_dname(dname));
+            log_warn("Name '%s': All TTLs for A and/or AAAA records at the same name must agree", logf_dname(dname));
         if(unlikely(rrset->gen.count_v4 == UINT8_MAX))
             log_zfatal("Name '%s': Too many RRs of type A", logf_dname(dname));
         if(unlikely(rrset->gen.count_v4 > 0 && rrset->limit_v4 != limit_v4))
-            log_strict("Name '%s': All $ADDR_LIMIT_4 for A-records at the same name must agree", logf_dname(dname));
+            log_warn("Name '%s': All $ADDR_LIMIT_4 for A-records at the same name must agree", logf_dname(dname));
         rrset->limit_v4 = limit_v4;
         rrset->addrs.v4 = realloc(rrset->addrs.v4, sizeof(uint32_t) * (1 + rrset->gen.count_v4));
         rrset->addrs.v4[rrset->gen.count_v4++] = addr;
@@ -432,11 +424,11 @@ bool ltree_add_rec_aaaa(const zoneinfo_t* zone, const uint8_t* dname, const uint
         if(unlikely(!rrset->gen.is_static))
             log_zfatal("Name '%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname));
         if(unlikely(rrset->gen.ttl != htonl(ttl)))
-            log_strict("Name '%s': All TTLs for A and/or AAAA records at the same name must agree", logf_dname(dname));
+            log_warn("Name '%s': All TTLs for A and/or AAAA records at the same name must agree", logf_dname(dname));
         if(unlikely(rrset->gen.count_v6 == UINT8_MAX))
             log_zfatal("Name '%s': Too many RRs of type AAAA", logf_dname(dname));
         if(unlikely(rrset->gen.count_v6 > 0 && rrset->limit_v6 != limit_v6))
-            log_strict("Name '%s': All $ADDR_LIMIT_6 for AAAA-records at the same name must agree", logf_dname(dname));
+            log_warn("Name '%s': All $ADDR_LIMIT_6 for AAAA-records at the same name must agree", logf_dname(dname));
         rrset->limit_v6 = limit_v6;
         rrset->addrs.v6 = realloc(rrset->addrs.v6, 16 * (1 + rrset->gen.count_v6));
         memcpy(rrset->addrs.v6 + (rrset->gen.count_v6++ * 16), addr, 16);
@@ -574,7 +566,7 @@ bool ltree_add_rec_dyncname(const zoneinfo_t* zone, const uint8_t* dname, const 
     }\
     else {\
         if(unlikely(rrset->gen.ttl != htonl(ttl)))\
-            log_strict("Name '%s': All TTLs for type %s must match", logf_dname(dname), _pnam);\
+            log_warn("Name '%s': All TTLs for type %s must match", logf_dname(dname), _pnam);\
         if(unlikely(rrset->gen.count == UINT16_MAX))\
             log_zfatal("Name '%s': Too many RRs of type %s", logf_dname(dname), _pnam);\
         if(_szassume == 1 || rrset->gen.count >= _szassume) \
@@ -751,7 +743,7 @@ bool ltree_add_rec_soa(const zoneinfo_t* zone, const uint8_t* dname, const uint8
     dmn_assert(zone); dmn_assert(dname); dmn_assert(master); dmn_assert(email);
 
     if(unlikely(ncache > 10800U))
-        log_strict("Zone '%s': SOA negative-cache field too large (%u, must be <= 10800)", logf_dname(dname), ncache);
+        log_warn("Zone '%s': SOA negative-cache field too large (%u, must be <= 10800)", logf_dname(dname), ncache);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -833,7 +825,7 @@ bool ltree_add_rec_rfc3597(const zoneinfo_t* zone, const uint8_t* dname, unsigne
     }
     else {
         if(unlikely(rrset->gen.ttl != htonl(ttl)))
-            log_strict("Name '%s': All TTLs for type RFC3597 TYPE%u must match", logf_dname(dname), rrtype);
+            log_warn("Name '%s': All TTLs for type RFC3597 TYPE%u must match", logf_dname(dname), rrtype);
         if(unlikely(rrset->gen.count == UINT16_MAX))
             log_zfatal("Name '%s': Too many RFC3597 RRs of type TYPE%u", logf_dname(dname), rrtype);
         rrset->rdata = realloc(rrset->rdata, (1 + rrset->gen.count) * sizeof(ltree_rdata_rfc3597_t));
@@ -955,11 +947,11 @@ static bool p1_proc_cname(const zoneinfo_t* zone, const ltree_rrset_cname_t* nod
     ltree_dname_status_t cnstat = ltree_search_dname_zone(node_cname->dname, zone, &cn_target);
     if(cnstat == DNAME_AUTH) {
         if(unlikely(!cn_target)) {
-            log_strict("CNAME '%s%s' points to known same-zone NXDOMAIN '%s'",
+            log_warn("CNAME '%s%s' points to known same-zone NXDOMAIN '%s'",
                 logf_lstack(lstack, depth, zone->dname), logf_dname(node_cname->dname));
         }
         else if(unlikely(!cn_target->rrsets)) {
-            log_strict("CNAME '%s%s' points to '%s' in the same zone, which has no data",
+            log_warn("CNAME '%s%s' points to '%s' in the same zone, which has no data",
                 logf_lstack(lstack, depth, zone->dname), logf_dname(node_cname->dname));
         }
     }
@@ -1101,23 +1093,23 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     if(node_ptr)
         for(unsigned i = 0; i < node_ptr->gen.count; i++)
             if(unlikely(!set_valid_addr(node_ptr->rdata[i].dname, zone, &(node_ptr->rdata[i].ad))))
-                log_strict("In rrset '%s%s PTR', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_ptr->rdata[i].dname));
+                log_warn("In rrset '%s%s PTR', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_ptr->rdata[i].dname));
 
     if(node_mx)
         for(unsigned i = 0; i < node_mx->gen.count; i++)
             if(unlikely(!set_valid_addr(node_mx->rdata[i].dname, zone, &(node_mx->rdata[i].ad))))
-                log_strict("In rrset '%s%s MX', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_mx->rdata[i].dname));
+                log_warn("In rrset '%s%s MX', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_mx->rdata[i].dname));
 
     if(node_srv)
         for(unsigned i = 0; i < node_srv->gen.count; i++)
             if(unlikely(!set_valid_addr(node_srv->rdata[i].dname, zone, &(node_srv->rdata[i].ad))))
-                log_strict("In rrset '%s%s SRV', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_srv->rdata[i].dname));
+                log_warn("In rrset '%s%s SRV', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_srv->rdata[i].dname));
 
     if(node_naptr) {
         for(unsigned i = 0; i < node_naptr->gen.count; i++) {
             if(binstr_hasichr(node_naptr->rdata[i].texts[NAPTR_TEXTS_FLAGS], 'A')) {
                 if(unlikely(!set_valid_addr(node_naptr->rdata[i].dname, zone, &(node_naptr->rdata[i].ad))))
-                    log_strict("In rrset '%s%s NAPTR', same-zone A-target '%s' has no A or AAAA records", logf_lstack(lstack, depth, zone->dname), logf_dname(node_naptr->rdata[i].dname));
+                    log_warn("In rrset '%s%s NAPTR', same-zone A-target '%s' has no A or AAAA records", logf_lstack(lstack, depth, zone->dname), logf_dname(node_naptr->rdata[i].dname));
            }
         }
     }

@@ -56,7 +56,6 @@ global_config_t gconfig = {
     .realtime_stats = false,
     .lock_mem = false,
     .disable_text_autosplit = false,
-    .strict_data = true,
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
      // legal values are -20 to 20, so -21
@@ -448,7 +447,6 @@ void conf_load(void) {
         CFG_OPT_BOOL(options, realtime_stats);
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
-        CFG_OPT_BOOL(options, strict_data);
         CFG_OPT_BOOL(options, edns_client_subnet);
         CFG_OPT_BOOL(options, monitor_force_v6_up);
         CFG_OPT_UINT(options, log_stats, 1LU, 2147483647LU);
