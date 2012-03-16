@@ -178,6 +178,102 @@ static void start_threads(void) {
     pthread_attr_destroy(&attribs);
 }
 
+static void memlock_rlimits(const bool started_as_root) {
+#ifdef RLIMIT_MEMLOCK
+    struct rlimit rlim;
+    if(getrlimit(RLIMIT_MEMLOCK, &rlim))
+        log_fatal("getrlimit(RLIMIT_MEMLOCK) failed: %s", logf_errno());
+
+    if(rlim.rlim_cur != RLIM_INFINITY) {
+        if(!started_as_root) {
+            // First, raise _cur to _max, which should never fail
+            if(rlim.rlim_cur != rlim.rlim_max) {
+                rlim.rlim_cur = rlim.rlim_max;
+                if(setrlimit(RLIMIT_MEMLOCK, &rlim))
+                    log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = max) "
+                        "failed: %s", logf_errno());
+            }
+
+            if(rlim.rlim_cur < 1048576)
+                log_fatal("Not started as root, lock_mem was set, "
+                    "and the rlimit for locked memory is unreasonably "
+                    "low (%li bytes), failing", (long)rlim.rlim_cur);
+
+            log_info("The rlimit for locked memory is %li MB, and the "
+                "daemon can't do anything about that since it wasn't "
+                "started as root.  This may or may not be too small at "
+                "runtime, leading to failure.  You have been warned.",
+                (long)(rlim.rlim_cur >> 20));
+        }
+        else {
+            // Luckily, root can do as he pleases with the ulimits, but
+            //  we'll do it in two steps just in case any platforms
+            //  are braindead about it.  This does open a hole in the
+            //  sense that if someone were to remotely take control
+            //  of the daemon via exploit, they can now lock large
+            //  amounts of memory even though the daemon has dropped
+            //  privileges for most other dangerous operations.
+            //  The other alternatives are trying to pre-calculate
+            //  all future memory usage (possible, but a PITA to
+            //  maintain), or simply letting the code fail post-
+            //  daemonization in an unfortunately rather common case.
+            // Another option would be to offer a configfile parameter
+            //  for the rlimit value in this case.
+            // If the daemon gets compromised, even with privdrop
+            //  and chroot in place, memlock is probably the least
+            //  of your worries anyways.
+            rlim.rlim_max = RLIM_INFINITY;
+            if(setrlimit(RLIMIT_MEMLOCK, &rlim))
+                log_fatal("setrlimit(RLIMIT_MEMLOCK, max = INF) "
+                    "failed: %s", logf_errno());
+
+            rlim.rlim_cur = RLIM_INFINITY;
+            if(setrlimit(RLIMIT_MEMLOCK, &rlim))
+                log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = INF, "
+                    "max = INF) failed: %s", logf_errno());
+        }
+    }
+}
+#endif
+
+static void caps_pre_secure(void) {
+#if USE_LINUX_CAPS
+    const cap_value_t pre_caps[] = {
+        CAP_NET_BIND_SERVICE,
+        CAP_SYS_CHROOT,
+        CAP_SETGID,
+        CAP_SETUID,
+    };
+    dmn_log_debug("Attempting to use Linux capabilities to allow late binding of ports < 1024");
+    cap_t mycaps = cap_init();
+    if(cap_set_flag(mycaps, CAP_PERMITTED, 4, pre_caps, CAP_SET))
+        dmn_log_fatal("cap_set_flag(PERMITTED, pre_caps) failed: %s", logf_errno());
+    if(cap_set_flag(mycaps, CAP_EFFECTIVE, 4, pre_caps, CAP_SET))
+        dmn_log_fatal("cap_set_flag(EFFECTIVE, pre_caps) failed: %s", logf_errno());
+    if(cap_set_proc(mycaps))
+        dmn_log_fatal("cap_set_proc(pre_caps) failed: %s", logf_errno());
+    if(prctl(PR_SET_KEEPCAPS, 1))
+        dmn_log_fatal("prctl(PR_SET_KEEPCAPS, 1) failed: %s", logf_errno());
+    cap_free(mycaps);
+#else
+    dmn_log_warn("Some DNS listeners are configured for and attempting to use late binding (late_bind_secs) on privileged ports (< 1024), the daemon is dropping privs from root to a non-root user, and your build does not have Linux capabilities support.  Unless you have made some OS-specific arrangements to give this process the capability to bind these ports after dropping privileges, most likely the late bind(2) will fail fatally for lack of permissions...");
+#endif
+}
+
+static void caps_post_secure(void) {
+#if USE_LINUX_CAPS
+    const cap_value_t cap_netbind = CAP_NET_BIND_SERVICE;
+    cap_t mycaps = cap_init();
+    if(cap_set_flag(mycaps, CAP_PERMITTED, 1, &cap_netbind, CAP_SET))
+        dmn_log_fatal("cap_set_flag(PERMITTED, NET_BIND) failed: %s", logf_errno());
+    if(cap_set_flag(mycaps, CAP_EFFECTIVE, 1, &cap_netbind, CAP_SET))
+        dmn_log_fatal("cap_set_flag(EFFECTIVE, NET_BIND) failed: %s", logf_errno());
+    if(cap_set_proc(mycaps))
+        dmn_log_fatal("cap_set_proc() (post-setuid) failed: %s", logf_errno());
+    cap_free(mycaps);
+#endif
+}
+
 typedef enum {
     ACT_CHECKCFG = 0,
     ACT_STARTFG  = 1,
@@ -210,7 +306,7 @@ static action_t match_action(const char* arg) {
 
 static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
 
-int main(int argc, char** argv) {
+static action_t parse_args(int argc, char** argv) {
     action_t action = ACT_UNDEF;
 
     const char* input_rootdir = def_rootdir;
@@ -228,25 +324,12 @@ int main(int argc, char** argv) {
     if(action == ACT_UNDEF)
         usage(argv[0]);
 
-    const char* rootdir = gdnsd_set_rootdir(input_rootdir);
-    char* pidpath = gdnsd_make_rootdir_path(PID_SUBPATH);
+    gdnsd_set_rootdir(input_rootdir);
 
-    // Take simple actions quickly, without further init
-    if(action == ACT_STATUS) {
-        const int oldpid = dmn_status(pidpath);
-        if(!oldpid) {
-            log_info("Not running, based on pidfile '%s'", pidpath);
-            exit(1);
-        }
-        log_info("Running at pid %i in pidfile %s", oldpid, pidpath);
-        exit(0);
-    }
+    return action;
+}
 
-    if(action == ACT_STOP) {
-        dmn_stop(pidpath);
-        exit(0);
-    }
-
+static void init_config(const bool started_as_root) {
     // Initialize net stuff in libgdnsd (protoents, tcp_v6_ok)
     gdnsd_init_net();
 
@@ -258,15 +341,47 @@ int main(int argc, char** argv) {
     conf_load();
 
     // Set up and validate privdrop info if necc
-    const bool started_as_root = !geteuid();
     if(started_as_root)
-        dmn_secure_setup(gconfig.username, rootdir, true);
+        dmn_secure_setup(gconfig.username, gdnsd_get_rootdir(), true);
 
     // Call plugin full_config actions
     gdnsd_plugins_action_full_config(gconfig.num_io_threads);
 
     log_info("Loading zone data");
     ltree_load_zones();
+}
+
+int main(int argc, char** argv) {
+
+    // Parse args, setting the libgdnsd rootdir and
+    //   returning the action.  Exits on cmdline errors
+    action_t action = parse_args(argc, argv);
+
+    // Create pidfile path string from the rootdir
+    char* pidpath = gdnsd_make_rootdir_path(PID_SUBPATH);
+
+    // Take simple pidfile-based actions quickly, without further init
+    if(action == ACT_STATUS) {
+        const int oldpid = dmn_status(pidpath);
+        if(!oldpid) {
+            log_info("Not running, based on pidfile '%s'", pidpath);
+            exit(1);
+        }
+        log_info("Running at pid %i in pidfile %s", oldpid, pidpath);
+        exit(0);
+    }
+    else if(action == ACT_STOP) {
+        dmn_stop(pidpath);
+        exit(0);
+    }
+
+    // Did we start as root?  This determines whether we try to chroot(),
+    //   how we handle memlock rlimits, capabilities, etc...
+    const bool started_as_root = !geteuid();
+
+    // Initializes basic libgdnsd stuff, loads config file, loads zones,
+    //   configures plugins all the way through full_config()
+    init_config(started_as_root);
 
     if(action == ACT_CHECKCFG) {
         log_info("Configuration and zone data loads just fine");
@@ -280,64 +395,9 @@ int main(int argc, char** argv) {
         log_info("...Previous daemon successfully shut down (or was not up), this instance coming online");
     }
 
-#ifdef RLIMIT_MEMLOCK
-    // Die or inform about memlock ulimit here as applicable.
-    if(gconfig.lock_mem) {
-        struct rlimit rlim;
-        if(getrlimit(RLIMIT_MEMLOCK, &rlim))
-            log_fatal("getrlimit(RLIMIT_MEMLOCK) failed: %s", logf_errno());
-
-        if(rlim.rlim_cur != RLIM_INFINITY) {
-            if(!started_as_root) {
-                // First, raise _cur to _max, which should never fail
-                if(rlim.rlim_cur != rlim.rlim_max) {
-                    rlim.rlim_cur = rlim.rlim_max;
-                    if(setrlimit(RLIMIT_MEMLOCK, &rlim))
-                        log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = max) "
-                            "failed: %s", logf_errno());
-                }
-
-                if(rlim.rlim_cur < 1048576)
-                    log_fatal("Not started as root, lock_mem was set, "
-                        "and the rlimit for locked memory is unreasonably "
-                        "low (%li bytes), failing", (long)rlim.rlim_cur);
-
-                log_info("The rlimit for locked memory is %li MB, and the "
-                    "daemon can't do anything about that since it wasn't "
-                    "started as root.  This may or may not be too small at "
-                    "runtime, leading to failure.  You have been warned.",
-                    (long)(rlim.rlim_cur >> 20));
-            }
-            else {
-                // Luckily, root can do as he pleases with the ulimits, but
-                //  we'll do it in two steps just in case any platforms
-                //  are braindead about it.  This does open a hole in the
-                //  sense that if someone were to remotely take control
-                //  of the daemon via exploit, they can now lock large
-                //  amounts of memory even though the daemon has dropped
-                //  privileges for most other dangerous operations.
-                //  The other alternatives are trying to pre-calculate
-                //  all future memory usage (possible, but a PITA to
-                //  maintain), or simply letting the code fail post-
-                //  daemonization in an unfortunately rather common case.
-                // Another option would be to offer a configfile parameter
-                //  for the rlimit value in this case.
-                // If the daemon gets compromised, even with privdrop
-                //  and chroot in place, memlock is probably the least
-                //  of your worries anyways.
-                rlim.rlim_max = RLIM_INFINITY;
-                if(setrlimit(RLIMIT_MEMLOCK, &rlim))
-                    log_fatal("setrlimit(RLIMIT_MEMLOCK, max = INF) "
-                        "failed: %s", logf_errno());
-
-                rlim.rlim_cur = RLIM_INFINITY;
-                if(setrlimit(RLIMIT_MEMLOCK, &rlim))
-                    log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = INF, "
-                        "max = INF) failed: %s", logf_errno());
-            }
-        }
-    }
-#endif
+    // Check/set rlimits for mlockall() if necessary and possible
+    if(gconfig.lock_mem)
+        memlock_rlimits(started_as_root);
 
     // Ping the pthreads implementation...
     ping_pthreads();
@@ -380,49 +440,9 @@ int main(int argc, char** argv) {
     // Now that config is read, we're daemonized, the pidfile is written,
     //  and all listening sockets are open, we can chroot and drop privs
     if(started_as_root) {
-
-#if USE_LINUX_CAPS
-
-        if(need_caps) {
-            const cap_value_t pre_caps[] = {
-                CAP_NET_BIND_SERVICE,
-                CAP_SYS_CHROOT,
-                CAP_SETGID,
-                CAP_SETUID,
-            };
-            dmn_log_debug("Attempting to use Linux capabilities to allow late binding of ports < 1024");
-            cap_t mycaps = cap_init();
-            if(cap_set_flag(mycaps, CAP_PERMITTED, 4, pre_caps, CAP_SET))
-                dmn_log_fatal("cap_set_flag(PERMITTED, pre_caps) failed: %s", logf_errno());
-            if(cap_set_flag(mycaps, CAP_EFFECTIVE, 4, pre_caps, CAP_SET))
-                dmn_log_fatal("cap_set_flag(EFFECTIVE, pre_caps) failed: %s", logf_errno());
-            if(cap_set_proc(mycaps))
-                dmn_log_fatal("cap_set_proc(pre_caps) failed: %s", logf_errno());
-            if(prctl(PR_SET_KEEPCAPS, 1))
-                dmn_log_fatal("prctl(PR_SET_KEEPCAPS, 1) failed: %s", logf_errno());
-            cap_free(mycaps);
-        }
-#else
-        if(need_caps)
-            dmn_log_warn("Some DNS listeners are configured for and attempting to use late binding (late_bind_secs) on privileged ports (< 1024), the daemon is dropping privs from root to a non-root user, and your build does not have Linux capabilities support.  Unless you have made some OS-specific arrangements to give this process the capability to bind these ports after dropping privileges, most likely the late bind(2) will fail fatally for lack of permissions...");
-#endif
-
+        if(need_caps) caps_pre_secure();
         dmn_secure_me();
-
-#if USE_LINUX_CAPS
-        if(need_caps) {
-            const cap_value_t cap_netbind = CAP_NET_BIND_SERVICE;
-            cap_t mycaps = cap_init();
-            if(cap_set_flag(mycaps, CAP_PERMITTED, 1, &cap_netbind, CAP_SET))
-                dmn_log_fatal("cap_set_flag(PERMITTED, NET_BIND) failed: %s", logf_errno());
-            if(cap_set_flag(mycaps, CAP_EFFECTIVE, 1, &cap_netbind, CAP_SET))
-                dmn_log_fatal("cap_set_flag(EFFECTIVE, NET_BIND) failed: %s", logf_errno());
-            if(cap_set_proc(mycaps))
-                dmn_log_fatal("cap_set_proc() (post-setuid) failed: %s", logf_errno());
-            cap_free(mycaps);
-        }
-#endif
-
+        if(need_caps) caps_post_secure();
     }
 
     // Construct the default loop for the main thread
