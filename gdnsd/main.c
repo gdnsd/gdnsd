@@ -298,8 +298,7 @@ int main(int argc, char** argv) {
     }
 
     // Call plugin full_config actions
-    const unsigned num_threads = gconfig.num_dns_addrs * 2;
-    gdnsd_plugins_action_full_config(num_threads);
+    gdnsd_plugins_action_full_config(gconfig.num_io_threads);
 
     log_info("Loading zone data");
     ltree_load_zones();
