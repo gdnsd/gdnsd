@@ -315,7 +315,6 @@ struct _ltree_node_struct {
 };
 
 typedef struct {
-    unsigned def_ttl;     // default $TTL
     const char* file;     // absolute pathname of main zonefile,
     const uint8_t* dname; // zone name as a dname
     ltarena_t* arena;     // arena for dname/label storage

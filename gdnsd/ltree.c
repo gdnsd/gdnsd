@@ -1556,7 +1556,6 @@ static void auto_zones_config(void) {
             zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
             zone->dname = make_zone_dname(zfdi->d_name);
             zone->file = zfpath;
-            zone->def_ttl = gconfig.zones_default_ttl;
             const unsigned this_zidx = num_zones++;
             if(num_zones > zones_alloc) {
                 zones_alloc *= 2;

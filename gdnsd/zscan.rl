@@ -779,7 +779,7 @@ bool scan_zone(zoneinfo_t* zone) {
 
     zscan_t* z = calloc(1, sizeof(zscan_t));
     z->lcount = 1;
-    z->def_ttl = zone->def_ttl;
+    z->def_ttl = gconfig.zones_default_ttl;
     z->zone = zone;
     dname_copy(z->origin, zone->dname);
     z->lhs_dname[0] = 1; // set lhs to relative origin initially
