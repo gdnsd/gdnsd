@@ -225,7 +225,7 @@ AC_REQUIRE_AUX_FILE([noragel])
 AC_MSG_CHECKING([for Ragel v6.6 or v6.7]);
 AC_PATH_PROGS_FEATURE_CHECK([RAGEL], [ragel],
   [[$ac_path_RAGEL --version |$EGREP 'Ragel State Machine Compiler version 6\.(6 Dec 2009|7 May 2011)' >/dev/null && ac_cv_path_RAGEL=$ac_path_RAGEL ac_path_RAGEL_found=:]],
-  [ac_cv_path_RAGEL=$am_aux_dir/noperl])
+  [ac_cv_path_RAGEL=$am_aux_dir/noragel])
 AC_SUBST([RAGEL], [$ac_cv_path_RAGEL])
 AC_MSG_RESULT([$ac_cv_path_RAGEL])
 
