@@ -168,7 +168,7 @@ static dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_aut
         unsigned long auto_limit_ul;
         if(!vscf_is_simple(dc_auto_limit_cfg) || !vscf_simple_get_as_ulong(dc_auto_limit_cfg, &auto_limit_ul))
             log_fatal("plugin_geoip: map '%s': auto_dc_limit must be a single unsigned integer value", map_name);
-        if(auto_limit_ul > num_dcs)
+        if(auto_limit_ul > num_dcs || !auto_limit_ul)
             auto_limit_ul = num_dcs;
         info->auto_limit = auto_limit_ul;
     }

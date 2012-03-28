@@ -1,4 +1,17 @@
 
+1.6.5 - 2012-03-28
+   plugin_geoip: if auto_dc_limit was set to the explicit value
+     of zero, most queries would return no results due to the
+     code taking the zero very literally.  The expected, sane
+     behavior would be to interpret zero as "unlimited", and
+     the code and docs have been updated to that behavior now.
+     (Issue #14 on googlecode)
+   A minor efficiency fixup for plugins: the core code would
+     indicate a larger iothread count than really existed when
+     TCP was disabled for any sockets, resulting in some wasted
+     initialization.  Fixed in master for correctness, in case
+     it causes fallout bugs for 3rd-party plugin-specific code.
+
 1.6.4 - 2012-03-11
    Bugfix: The zonefile parser did not correctly handle the case
      where the left-hand domainname was left blank (indicating

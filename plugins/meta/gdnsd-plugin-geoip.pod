@@ -197,7 +197,7 @@ With city-auto-mode enabled, the top-level map C<default> defaults to C<auto>, b
 
 =item C<auto_dc_limit = N>
 
-Unsigned integer, optional, default 3.  When city-auto-mode is in effect, this is the upper length limit for auto-generated lists.  3 is a reasonable default even if you have a considerably longer set of datacenters, as this provides a primary as well as two fallbacks.  Raising this to a large number in the presence of a long datacenter list will cause the set of unique result datacenter lists to increase rapidly, and thus reduce the optimization of the final result database for edns-client-subnet purposes.
+Unsigned integer, optional, default 3.  When city-auto-mode is in effect, this is the upper length limit for auto-generated lists.  3 is a reasonable default even if you have a considerably longer set of datacenters, as this provides a primary as well as two fallbacks.  Raising this to a large number in the presence of a long datacenter list will cause the set of unique result datacenter lists to increase rapidly, and thus reduce the optimization of the final result database for edns-client-subnet purposes.  It's really not worth raising this value in almost any case, unless you really need to handle more than 3 random datacenters going offline at the same time and still have clients fail elsewhere.  The value zero is treated as unlimited (highly un-recommended).
 
 =back
 
