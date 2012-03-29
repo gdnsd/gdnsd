@@ -693,8 +693,9 @@ void conf_load(const char* cfg_file) {
     //   might have to be correct unnecessarily, and it also avoids the unnecessary load of http_status
     //   and other work.  A consequence is that the service_types config stanza is not checked for
     //   syntax errors unless monitoring is actually in use.
+    const vscf_data_t* stypes_cfg = vscf_hash_get_data_byconstkey(cfg_root, "service_types", true);
     if(num_monio_lists)
-        monio_add_servicetypes(vscf_hash_get_data_byconstkey(cfg_root, "service_types", true));
+        monio_add_servicetypes(stypes_cfg);
 
     // Finally, process the monio_list_t's from plugins *after* servicetypes are available.
     // This order of operations wrt loading the plugins stanza, then the servicetypes,
