@@ -85,13 +85,9 @@ bool dmn_is_daemonized(void);
 
 // Takes a username and a chroot() path, does as much pre-validation
 //  as possible and stores the results for a later call to dmn_secure_me().
-// If chroot_fixup is true, this code will attempt to create any non-existent
-//  chroot_path w/ mode 755, and/or fix an existing chroot_path's ownership
-//  (set to uid/gid 0) and permissions (strip group/other write bits).
-// If chroot_path is NULL, no chroot checking is done here, and no chroot()
-//  is done during the following secure_me() call.
+// If chroot_path is NULL, no chroot() is done during the following secure_me() call.
 DMN_F_NONNULLX(1)
-void dmn_secure_setup(const char* username, const char* chroot_path, const bool chroot_fixup);
+void dmn_secure_setup(const char* username, const char* chroot_path);
 
 // Executes the actual chroot()/chuid()/etc calls based on previous
 //  dmn_secure_setup(), which must be called first.

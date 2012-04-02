@@ -109,7 +109,7 @@ static long make_pidfile(const char* pidfile) {
         unlink(pidfile);
         dmn_log_fatal("writing to new pidfile %s failed: %s", pidfile, dmn_strerror(errno));
     }
-    if(close(pidfd) == -1) {
+    if(close(pidfd)) {
         unlink(pidfile);
         dmn_log_fatal("closing new pidfile %s failed: %s", pidfile, dmn_strerror(errno));
     }
@@ -143,16 +143,16 @@ void dmn_daemonize(const char* logname, const char* pidfile) {
     sa.sa_flags = 0;
     sa.sa_handler = SIG_IGN;
 
-    if(sigaction(SIGHUP, &sa, NULL) == -1)
+    if(sigaction(SIGHUP, &sa, NULL))
         dmn_log_fatal("sigaction to ignore SIGHUP failed: %s", dmn_strerror(errno));
 
-    if(sigaction(SIGPIPE, &sa, NULL) == -1)
+    if(sigaction(SIGPIPE, &sa, NULL))
         dmn_log_fatal("sigaction to ignore SIGPIPE failed: %s", dmn_strerror(errno));
 
     if(!fork_and_exit())
         dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
 
-    if(chdir("/") == -1)
+    if(chdir("/"))
         dmn_log_fatal("chdir(/) failed: %s", dmn_strerror(errno));
 
     umask(022);

@@ -342,7 +342,7 @@ static void init_config(const bool started_as_root) {
 
     // Set up and validate privdrop info if necc
     if(started_as_root)
-        dmn_secure_setup(gconfig.username, gdnsd_get_rootdir(), true);
+        dmn_secure_setup(gconfig.username, gdnsd_get_rootdir());
 
     // Call plugin full_config actions
     gdnsd_plugins_action_full_config(gconfig.num_io_threads);

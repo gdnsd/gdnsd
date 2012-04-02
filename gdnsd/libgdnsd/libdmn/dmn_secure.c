@@ -40,7 +40,7 @@ static char* secure_chroot = NULL;
 // Status flag for accessor func
 static bool is_secured = false;
 
-void dmn_secure_setup(const char* username, const char* chroot_path, const bool chroot_fixup) {
+void dmn_secure_setup(const char* username, const char* chroot_path) {
     dmn_assert(username);
 
     // This isn't really a security thing, we'd fail somewhere else along the line anyways,
@@ -61,45 +61,14 @@ void dmn_secure_setup(const char* username, const char* chroot_path, const bool 
     secure_uid = p->pw_uid;
     secure_gid = p->pw_gid;
 
-    if(!chroot_path)
-        return;
-
-    // XXX
-    // Make sure chroot_path exists and has appropriate perms,
-    //   fixing the perms a bit if necc.  This will force the
-    //   chroot directory itself to be root-owned and unwriteable
-    //   by other users, but doesn't attempt to recursively check
-    //   other data within, which one could argue we should be
-    //   doing.  Arguably if we do that, we should provide config
-    //   for the owning user to be non-root, in case they want
-    //   the editing tools to use a (different) non-privileged
-    //   account.  That or get rid of chroot_fixup completely,
-    //   since some may not like us forcing the root owner.
-    // No fixup attempts are done unless chroot_fixup arg is true
-    //   (which results in failure instead if they need fixing)
-    struct stat st;
-    if(lstat(chroot_path, &st) == -1)
-        dmn_log_fatal("Failed to stat() chroot() path '%s': %s", chroot_path, dmn_strerror(errno));
-
-    if(!S_ISDIR(st.st_mode)) dmn_log_fatal("chroot() path '%s' is not a directory", chroot_path);
-
-    if(st.st_uid != 0 || st.st_gid != 0) {
-        if(!chroot_fixup)
-            dmn_log_fatal("chroot() path '%s' is not owned by the root user/group", chroot_path);
-        if(chown(chroot_path, 0, 0) == -1)
-            dmn_log_fatal("Failed to chown(%s, 0, 0): %s", chroot_path, dmn_strerror(errno));
+    if(chroot_path) {
+        secure_chroot = strdup(chroot_path);
+        struct stat st;
+        if(lstat(secure_chroot, &st))
+            dmn_log_fatal("Cannot lstat(%s): %s", secure_chroot, dmn_strerror(errno));
+        if(!S_ISDIR(st.st_mode))
+            dmn_log_fatal("chroot() path '%s' is not a directory!", secure_chroot);
     }
-
-    if((st.st_mode & PERMS022)) {
-        if(!chroot_fixup)
-            dmn_log_fatal("chroot() path '%s' is writable", chroot_path);
-        mode_t new_perms = st.st_mode & (~PERMS022);
-        if(chmod(chroot_path, new_perms) == -1) {
-            dmn_log_fatal("Failed to chmod(%s, %o): %s", chroot_path, (unsigned)new_perms, dmn_strerror(errno));
-        }
-    }
-
-    secure_chroot = strdup(chroot_path);
 }
 
 void dmn_secure_me(void) {
@@ -110,8 +79,8 @@ void dmn_secure_me(void) {
     if(secure_chroot) {
         // On most systems, this seems to get the timezone cached for vsyslog() to use inside chroot()
         tzset();
-        if(chroot(secure_chroot) == -1) dmn_log_fatal("chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
-        if(chdir("/") == -1) dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
+        if(chroot(secure_chroot)) dmn_log_fatal("chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
+        if(chdir("/")) dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
     }
 
     // drop privs
