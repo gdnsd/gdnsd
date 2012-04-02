@@ -19,6 +19,7 @@
 
 #include "ltarena.h"
 #include "gdnsd-compiler.h"
+#include "gdnsd-dname.h"
 
 #include <inttypes.h>
 #include <string.h>
@@ -86,22 +87,6 @@ static void dnhash_destroy(dnhash_t* dnhash) {
     free(dnhash);
 }
 
-// This is almost a complete copy of label_djb_hash from ltree.h,
-//  but note that the while loop is on --len instead of len--.  For
-//  full domainnames, we don't want to hash the constant \0 terminator
-//  (hence --len), whereas for labels we do want to use every byte (len--).
-F_PURE
-static unsigned dname_djb_hash(const uint8_t* input, const unsigned hash_mask) {
-   dmn_assert(input);
-
-   unsigned hash = 5381U;
-   unsigned len = *input++;
-   while(--len)
-       hash = (hash * 33U) ^ *input++;
-
-   return hash & hash_mask;
-}
-
 // grow a dnhash_t's hashtable size by doubling
 F_NONNULL
 static void dnhash_grow(dnhash_t* dnhash) {
@@ -117,7 +102,7 @@ static void dnhash_grow(dnhash_t* dnhash) {
         const uint8_t* item = old_table[i];
         if(item) {
             unsigned jmpby = 1U;
-            unsigned new_slot = dname_djb_hash(item, new_mask);
+            unsigned new_slot = dname_hash(item) & new_mask;
             while(new_table[new_slot]) {
                 new_slot += jmpby++;
                 new_slot &= new_mask;
@@ -255,7 +240,7 @@ const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
     const unsigned hmask = dnhash->mask;
     const uint8_t** table = dnhash->table;
     uint32_t jmpby = 1U;
-    uint32_t slotnum = dname_djb_hash(dname, hmask);
+    uint32_t slotnum = dname_hash(dname) & hmask;
     while(table[slotnum]) {
         if(!memcmp(table[slotnum], dname, dnlen))
             return table[slotnum];

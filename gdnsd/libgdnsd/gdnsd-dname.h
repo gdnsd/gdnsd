@@ -305,6 +305,23 @@ static inline bool gdnsd_dname_iswild(const uint8_t* dname) {
     return false;
 }
 
+// This is almost a complete copy of label_djb_hash from ltree.h,
+//  but note that the while loop is on --len instead of len--.  For
+//  full domainnames, we don't want to hash the constant \0 terminator
+//  (hence --len), whereas for labels we do want to use every byte (len--).
+F_PURE
+static inline unsigned gdnsd_dname_hash(const uint8_t* input) {
+   dmn_assert(input);
+
+   unsigned hash = 5381U;
+   unsigned len = *input++;
+   while(--len)
+       hash = (hash * 33U) ^ *input++;
+
+   return hash;
+}
+
+
 typedef gdnsd_dname_status_t dname_status_t;
 #define dns_unescape gdnsd_dns_unescape
 #define dname_from_string gdnsd_dname_from_string
@@ -319,5 +336,6 @@ typedef gdnsd_dname_status_t dname_status_t;
 #define dname_isinzone gdnsd_dname_isinzone
 #define dname_isparentof gdnsd_dname_isparentof
 #define dname_iswild gdnsd_dname_iswild
+#define dname_hash gdnsd_dname_hash
 
 #endif // _GDNSD_DNAME_H
