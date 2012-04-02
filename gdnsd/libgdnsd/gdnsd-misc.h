@@ -24,39 +24,9 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-// Returns the invocation's data root path (chroot path
-//   in the chroot case), e.g. "/usr/local/gdnsd".
-// Within this directory, the following paths are fixed:
-//   /etc/config        - main config file
-//   /etc/zones/        - directory for zonefiles
-//   /var/run/gdnsd.pid - daemon pidfile
-// After a certain point in the startup process,
-F_PURE
-const char* gdnsd_get_rootdir(void);
-
-// returns a new string (malloc-based) which is
-//   the path concatenation of "suffix" onto the rootdir.
-// Suffix must be a hardcoded constant which starts with "/"
-//   and does not end with "/".
-F_MALLOC F_WUNUSED F_NONNULL
-char* gdnsd_make_rootdir_path(const char* suffix);
-
-// As above, but takes second suffix as well, which has
-//  no explicit rules, mostly for user-derived input.  Also
-//  cleans up result via realpath() and validates existence,
-//  returning NULL unless it all resolves to a real file on the FS.
-// e.g.:
-//  gdnsd_make_validated_rootpath("/etc/zones", zone_name);
-F_MALLOC F_WUNUSED F_NONNULL
-char* gdnsd_make_validated_rootpath(const char* suffix, const char* suffix2);
-
-// Returns a newly-malloc'd string which is path_in with
-//   the leading rootdir stripped out.  Does not alter
-//   path_in.  Code must be sure that the rootdir
-//   is a prefix before using, e.g. by using the
-//   functions above...
-F_MALLOC F_WUNUSED F_NONNULL
-char* gdnsd_strip_rootdir(const char* path_in);
+// allocate a new string, concatenating s1+s2
+F_MALLOC F_NONNULL F_WUNUSED
+char* str_combine(const char* s1, const char* s2);
 
 // PRNG:
 // gdnsd_rand_init() allocates an opaque PRNG state which can

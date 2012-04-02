@@ -24,31 +24,16 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
-#include <sys/types.h>
-#include <dirent.h>
 
 #include "conf.h"
 #include "dnspacket.h"
 #include "ltarena.h"
 #include "gdnsd-dname.h"
-
-// This is the global singleton ltree_root
-//   and its ltarena storage
-ltree_node_t* ltree_root = NULL;
-static ltarena_t* arena_root = NULL;
-
-// This controls some bits about ltree reload/destruct,
-//   because in the rootserver case lta/ltree_root
-//   above alias the per-zone lta/root for the
-//   authoritative root zone
-static bool rootserver = false;
+#include "zscan.h"
 
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists
 static const uint8_t ooz_glue_label[1] = { 0 };
-
-static zoneinfo_t** zones = NULL;
-static unsigned num_zones = 0;
 
 #define log_zfatal(...)\
     do {\
@@ -169,12 +154,13 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 }
 
 // Creates a new, disconnected node
-F_NONNULL
+F_NONNULLX(1)
 static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label, const uint32_t flags) {
-    dmn_assert(arena); dmn_assert(label);
+    dmn_assert(arena);
 
     ltree_node_t* rv = calloc(1, sizeof(ltree_node_t));
-    rv->label = lta_labeldup(arena, label);
+    if(label)
+        rv->label = lta_labeldup(arena, label);
     rv->flags = flags;
     return rv;
 }
@@ -209,38 +195,13 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
     return child;
 }
 
-// splices zone root "child" as a child of a dns root "node".
-// assumes (requires!) no conflict, intended for attaching unique zone
-// roots to a new root tree which has been prepared with
-// ltree_create_root() -> branch_for(), which pre-grow the child tables,
-// and that masks are already fixed as well
-F_NONNULL
-static void ltree_node_splice_root(ltree_node_t* node, ltree_node_t* child) {
-    dmn_assert(node); dmn_assert(child);
-
-    const uint32_t child_hash = label_djb_hash(child->label, node->child_hash_mask);
-
-    dmn_assert(node->child_table);
-    dmn_assert(node->child_hash_mask);
-
-    const uint8_t* child_label = child->label;
-    ltree_node_t** slot = &node->child_table[child_hash];
-    ltree_node_t* check;
-    while((check = *slot)) {
-        dmn_assert(!memcmp(check->label, child_label, *child_label + 1));
-        slot = &check->next;
-    }
-
-    *slot = child;
-}
-
 // "dname" should be an FQDN format-wise, but:
 //   (a) Must be in-zone for the given zone
 //   (b) Must have the zone portion cut off the end,
 //     e.g. for zone "example.com.", the dname normally
 //     known as "www.example.com." should be just "www."
 F_NONNULL
-static ltree_node_t* ltree_find_or_add_dname(const zoneinfo_t* zone, const uint8_t* dname) {
+static ltree_node_t* ltree_find_or_add_dname(const zone_t* zone, const uint8_t* dname) {
     dmn_assert(zone); dmn_assert(dname);
     dmn_assert(zone->root); dmn_assert(zone->dname);
     dmn_assert(dname_status(dname) == DNAME_VALID);
@@ -254,64 +215,6 @@ static ltree_node_t* ltree_find_or_add_dname(const zoneinfo_t* zone, const uint8
         current = ltree_node_find_or_add_child(zone->arena, current, lstack[lcount]);
 
     return current;
-}
-
-// splice a disconnected zone root node into a DNS root tree
-// zone root node *cannot* already exist
-F_NONNULL
-static void ltree_splice_root(ltree_node_t* dnsroot, ltree_node_t* zroot, const uint8_t* dname) {
-    dmn_assert(dnsroot); dmn_assert(zroot); dmn_assert(dname);
-
-    const uint8_t* lstack[127];
-    unsigned lcount = dname_to_lstack(dname, lstack);
-    dmn_assert(lcount); // which means, we didn't call this on the root dname itself
-
-    ltree_node_t* current = dnsroot;
-    while(lcount > 1) {
-        current = ltree_node_find_child(current, lstack[--lcount]);
-        dmn_assert(current);
-    }
-
-    ltree_node_splice_root(current, zroot);
-}
-
-// For a new root-of-dns "root", add empty branches leading to "dname",
-//   but not the "dname" node itself.  Also pre-grows the child table
-//   at the tip of the branch to accomodate the to-be-added zone root,
-//   so that masks can be fixed before splicing in the root nodes.
-F_NONNULL
-static void ltree_branch_for(ltree_node_t* dnsroot, ltarena_t* arena, const uint8_t* dname) {
-    dmn_assert(dnsroot); dmn_assert(arena); dmn_assert(dname);
-
-    const uint8_t* lstack[127];
-    unsigned lcount = dname_to_lstack(dname, lstack);
-    dmn_assert(lcount); // which means, we didn't call this on the root dname itself
-
-    ltree_node_t* current = dnsroot;
-    while(lcount > 1)
-        current = ltree_node_find_or_add_child(arena, current, lstack[--lcount]);
-
-    // grow the tip of the branch to account for the to-be-added root
-    if(!current->child_table) {
-        dmn_assert(!current->child_hash_mask);
-        current->child_table = calloc(2, sizeof(ltree_node_t*));
-    }
-    if(current->child_hash_mask == count2mask(current->child_hash_mask))
-        ltree_childtable_grow(current);
-    current->child_hash_mask++;
-}
-
-// create a new root zone containing the branches that lead to all of the roots
-//   in zones, without actually creating the zone root nodes themselves
-F_NONNULL
-static ltree_node_t* ltree_create_root(ltarena_t* arena) {
-    dmn_assert(arena);
-    ltree_node_t* root_of_dns = calloc(1, sizeof(ltree_node_t));
-    root_of_dns->label = lta_labeldup(arena, (uint8_t*)"");
-    for(unsigned i = 0; i < num_zones; i++)
-        ltree_branch_for(root_of_dns, arena, zones[i]->dname);
-
-    return root_of_dns;
 }
 
 #define MK_RRSET_GET(_typ, _nam, _dtyp) \
@@ -361,7 +264,7 @@ MK_RRSET_ADD(naptr, naptr, DNS_TYPE_NAPTR)
 MK_RRSET_ADD(txt, txt, DNS_TYPE_TXT)
 MK_RRSET_ADD(txt, spf, DNS_TYPE_SPF)
 
-bool ltree_add_rec_a(const zoneinfo_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, unsigned limit_v4, const bool ooz) {
+bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, unsigned limit_v4, const bool ooz) {
     dmn_assert(zone); dmn_assert(dname);
 
     ltree_node_t* node;
@@ -399,7 +302,7 @@ bool ltree_add_rec_a(const zoneinfo_t* zone, const uint8_t* dname, uint32_t addr
     return false;
 }
 
-bool ltree_add_rec_aaaa(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, unsigned limit_v6, const bool ooz) {
+bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, unsigned limit_v6, const bool ooz) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(addr);
 
     ltree_node_t* node;
@@ -437,7 +340,7 @@ bool ltree_add_rec_aaaa(const zoneinfo_t* zone, const uint8_t* dname, const uint
     return false;
 }
 
-bool ltree_add_rec_dynaddr(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned limit_v4, unsigned limit_v6, const bool ooz) {
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned limit_v4, unsigned limit_v6, const bool ooz) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node;
@@ -484,7 +387,7 @@ bool ltree_add_rec_dynaddr(const zoneinfo_t* zone, const uint8_t* dname, const u
     log_zfatal("Name '%s': DYNA RR refers to plugin '%s', which is not loaded", logf_dname(dname), plugin_name);
 }
 
-bool ltree_add_rec_cname(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
+bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -506,7 +409,7 @@ bool ltree_add_rec_cname(const zoneinfo_t* zone, const uint8_t* dname, const uin
     return false;
 }
 
-bool ltree_add_rec_dyncname(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, unsigned ttl) {
+bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, unsigned ttl) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -575,7 +478,7 @@ bool ltree_add_rec_dyncname(const zoneinfo_t* zone, const uint8_t* dname, const 
     }\
 }
 
-bool ltree_add_rec_ptr(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
+bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -586,17 +489,18 @@ bool ltree_add_rec_ptr(const zoneinfo_t* zone, const uint8_t* dname, const uint8
     return false;
 }
 
-bool ltree_add_rec_ns(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
+bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
-    if(unlikely(node->label[0] == 1 && node->label[1] == '*'))
-        log_zfatal("Name '%s': Cannot delegate via wildcards", logf_dname(dname));
-
     // If this is a delegation by definition, (NS rec not at zone root), flag it
-    if(!(node->flags & LTNFLAG_ZROOT))
+    //   and check for wildcard
+    if(!(node->flags & LTNFLAG_ZROOT)) {
         node->flags |= LTNFLAG_DELEG;
+        if(unlikely(node->label[0] == 1 && node->label[1] == '*'))
+            log_zfatal("Name '%s': Cannot delegate via wildcards", logf_dname(dname));
+    }
 
     INSERT_NEXT_RR(ns, ns, "NS", 2)
     new_rdata->dname = lta_dnamedup(zone->arena, rhs);
@@ -604,7 +508,7 @@ bool ltree_add_rec_ns(const zoneinfo_t* zone, const uint8_t* dname, const uint8_
     return false;
 }
 
-bool ltree_add_rec_mx(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned pref) {
+bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned pref) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     if(unlikely(pref > 65535U))
@@ -619,7 +523,7 @@ bool ltree_add_rec_mx(const zoneinfo_t* zone, const uint8_t* dname, const uint8_
     return false;
 }
 
-bool ltree_add_rec_srv(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned priority, unsigned weight, unsigned port) {
+bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned priority, unsigned weight, unsigned port) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     if(unlikely(priority > 65535U))
@@ -666,7 +570,7 @@ static void naptr_validate_flags(const uint8_t* dname, const uint8_t* flags) {
     }
 }
 
-bool ltree_add_rec_naptr(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned order, unsigned pref, unsigned num_texts V_UNUSED, uint8_t** texts) {
+bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned order, unsigned pref, unsigned num_texts V_UNUSED, uint8_t** texts) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs); dmn_assert(texts); dmn_assert(num_texts == 3);
 
     if(unlikely(order > 65535U))
@@ -691,7 +595,7 @@ bool ltree_add_rec_naptr(const zoneinfo_t* zone, const uint8_t* dname, const uin
 
 // We copy the array of pointers, but alias the actual data (which is malloc'd for
 //   us per call in the parser).
-bool ltree_add_rec_txt(const zoneinfo_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl) {
+bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(texts); dmn_assert(num_texts);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -703,7 +607,7 @@ bool ltree_add_rec_txt(const zoneinfo_t* zone, const uint8_t* dname, unsigned nu
     return false;
 }
 
-bool ltree_add_rec_spf(const zoneinfo_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl) {
+bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(texts); dmn_assert(num_texts);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -716,7 +620,7 @@ bool ltree_add_rec_spf(const zoneinfo_t* zone, const uint8_t* dname, unsigned nu
 }
 
 // This handles 'foo SPF+ "v=spf1 ..."' and makes both TXT and SPF recs for it
-bool ltree_add_rec_spftxt(const zoneinfo_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl) {
+bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(texts); dmn_assert(num_texts);
 
     if(ltree_add_rec_txt(zone, dname, num_texts, texts, ttl))
@@ -739,7 +643,7 @@ bool ltree_add_rec_spftxt(const zoneinfo_t* zone, const uint8_t* dname, unsigned
     return false;
 }
 
-bool ltree_add_rec_soa(const zoneinfo_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, unsigned serial, unsigned refresh, unsigned retry, unsigned expire, unsigned ncache) {
+bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, unsigned serial, unsigned refresh, unsigned retry, unsigned expire, unsigned ncache) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(master); dmn_assert(email);
 
     if(unlikely(ncache > 10800U))
@@ -790,7 +694,7 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, u
 }
 
 
-bool ltree_add_rec_rfc3597(const zoneinfo_t* zone, const uint8_t* dname, unsigned rrtype, unsigned ttl, unsigned rdlen, uint8_t* rd) {
+bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, unsigned rrtype, unsigned ttl, unsigned rdlen, uint8_t* rd) {
     dmn_assert(zone); dmn_assert(dname);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -838,7 +742,7 @@ bool ltree_add_rec_rfc3597(const zoneinfo_t* zone, const uint8_t* dname, unsigne
 }
 
 F_NONNULL
-static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const zoneinfo_t* zone, ltree_node_t** node_out) {
+static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const zone_t* zone, ltree_node_t** node_out) {
     dmn_assert(dname); dmn_assert(zone); dmn_assert(node_out);
     dmn_assert(*dname != 0); dmn_assert(*dname != 2); // these are always illegal dnames
 
@@ -899,7 +803,7 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
 // retval: true, all is well (although we didn't necessarily set an address)
 //         false, the target points at an authoritative name in the same zone which doesn't exist
 F_NONNULL
-static bool set_valid_addr(const uint8_t* dname, const zoneinfo_t* zone, ltree_rrset_addr_t** addr_out) {
+static bool set_valid_addr(const uint8_t* dname, const zone_t* zone, ltree_rrset_addr_t** addr_out) {
     dmn_assert(dname); dmn_assert(*dname); dmn_assert(zone); dmn_assert(addr_out);
 
     ltree_node_t* node;
@@ -940,7 +844,7 @@ static void fix_addr_limits(ltree_rrset_addr_t* node_addr) {
 }
 
 F_WUNUSED F_NONNULL
-static bool p1_proc_cname(const zoneinfo_t* zone, const ltree_rrset_cname_t* node_cname, const uint8_t** lstack, const unsigned depth) {
+static bool p1_proc_cname(const zone_t* zone, const ltree_rrset_cname_t* node_cname, const uint8_t** lstack, const unsigned depth) {
     dmn_assert(zone); dmn_assert(node_cname); dmn_assert(lstack);
 
     ltree_node_t* cn_target;
@@ -970,7 +874,7 @@ static bool p1_proc_cname(const zoneinfo_t* zone, const ltree_rrset_cname_t* nod
 }
 
 F_WUNUSED F_NONNULL
-static bool p1_proc_ns(const zoneinfo_t* zone, const bool in_deleg, ltree_rdata_ns_t* this_ns, const uint8_t** lstack, const unsigned depth) {
+static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t* this_ns, const uint8_t** lstack, const unsigned depth) {
     dmn_assert(zone); dmn_assert(this_ns); dmn_assert(lstack);
     dmn_assert(!this_ns->ad);
 
@@ -1021,7 +925,7 @@ static bool p1_proc_ns(const zoneinfo_t* zone, const bool in_deleg, ltree_rdata_
 // 2) Setting various inter-node pointers for the dnspacket code (and
 //    Phase 2) to chase later.
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* node, const zoneinfo_t* zone, const unsigned depth, const bool in_deleg) {
+static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg) {
     dmn_assert(lstack); dmn_assert(node); dmn_assert(zone);
 
     bool node_has_rfc3597 = false;
@@ -1122,7 +1026,7 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
 //  Checks the total count of glue RRs per delegation
 //  Checks TTL matching between NS and glue RRs
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* node, const zoneinfo_t* zone, const unsigned depth, const bool in_deleg) {
+static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg) {
     dmn_assert(lstack); dmn_assert(node); dmn_assert(zone);
 
     if(in_deleg) {
@@ -1150,7 +1054,7 @@ static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* no
 }
 
 F_WUNUSED F_NONNULLX(1, 2, 3)
-static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zoneinfo_t*, const unsigned, const bool), const uint8_t** lstack, ltree_node_t* node, const zoneinfo_t* zone, const unsigned depth, bool in_deleg) {
+static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool), const uint8_t** lstack, ltree_node_t* node, const zone_t* zone, const unsigned depth, bool in_deleg) {
     dmn_assert(fn); dmn_assert(lstack); dmn_assert(node);
 
     if(node->flags & LTNFLAG_DELEG) {
@@ -1181,7 +1085,7 @@ static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, c
 }
 
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_zone(const zoneinfo_t* zone, bool (*fn)(const uint8_t**, const ltree_node_t*, const zoneinfo_t*, const unsigned, const bool)) {
+static bool ltree_postproc_zone(const zone_t* zone, bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool)) {
     dmn_assert(zone); dmn_assert(fn);
 
     // label stack:
@@ -1193,7 +1097,7 @@ static bool ltree_postproc_zone(const zoneinfo_t* zone, bool (*fn)(const uint8_t
 }
 
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_zroot_phase1(const zoneinfo_t* zone) {
+static bool ltree_postproc_zroot_phase1(const zone_t* zone) {
     dmn_assert(zone);
 
     ltree_node_t* zroot = zone->root;
@@ -1232,7 +1136,7 @@ static bool ltree_postproc_zroot_phase1(const zoneinfo_t* zone) {
     return false;
 }
 
-static void ltree_postproc_zroot_phase2(const zoneinfo_t* zone) {
+static void ltree_postproc_zroot_phase2(const zone_t* zone) {
     ltree_node_t* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
     if(ooz) {
         for(unsigned i = 0; i <= ooz->child_hash_mask; i++) {
@@ -1267,12 +1171,13 @@ static void ltree_fix_masks(ltree_node_t* node) {
 }
 
 // common processing for zones
-F_WUNUSED F_NONNULL
-static bool process_zone(zoneinfo_t* zone) {
+bool ltree_process_zone(zone_t* zone) {
     dmn_assert(zone);
+    dmn_assert(zone->dname);
+    dmn_assert(zone->arena);
+    dmn_assert(!zone->root);
 
-    zone->arena = lta_new();
-    zone->root = ltree_node_new(zone->arena, zone->dname + 1, LTNFLAG_ZROOT);
+    zone->root = ltree_node_new(zone->arena, NULL, LTNFLAG_ZROOT);
 
     if(unlikely(scan_zone(zone)))
         return true;
@@ -1305,63 +1210,22 @@ static bool process_zone(zoneinfo_t* zone) {
     return false;
 }
 
-// local forward decls
-static void ltree_destroy(void);
-static void ltree_node_destroy(ltree_node_t* node);
-static void ltree_config_zones(void);
-
-void ltree_load_zones(void) {
-    ltree_config_zones();
-    dmn_assert(num_zones);
-
-    // rootserver case (if num_zones > 1, by definition duplication
-    //   or subzoning will cause a quick failure if one of them is the root)
-    zoneinfo_t* first_zone = zones[0];
-    if(num_zones == 1 && first_zone->dname[0] == 1 && first_zone->dname[1] == 0)
-        rootserver = true;
-
-    // if not rootserver, create a new root for attaching zones to
-    if(!rootserver) {
-        arena_root = lta_new();
-        ltree_root = ltree_create_root(arena_root);
-        lta_close(arena_root);
-        ltree_fix_masks(ltree_root);
-    }
-
-    // load each zone as a disconnected subtree
-    for(unsigned i = 0; i < num_zones; i++) {
-        zoneinfo_t* zone = zones[i];
-        if(unlikely(process_zone(zone)))
-            log_fatal("Failed to load zone '%s'", logf_dname(zone->dname));
-#ifndef NDEBUG
-        // destroy and reload to exercise memory bugs
-        ltree_node_destroy(zone->root);
-        lta_destroy(zone->arena);
-        zone->root = NULL;
-        zone->arena = NULL;
-        if(unlikely(process_zone(zone)))
-            log_fatal("Failed to load zone '%s'", logf_dname(zone->dname));
-#endif
-    }
-
-    // alias the root zone or attach roots as appropriate
-    if(rootserver) {
-        arena_root = first_zone->arena;
-        ltree_root = first_zone->root;
-    }
-    else {
-        for(unsigned i = 0; i < num_zones; i++) {
-            zoneinfo_t* zone = zones[i];
-            ltree_splice_root(ltree_root, zone->root, zone->dname);
-        }
-    }
-
-#ifndef NDEBUG
+/*
+            char* zfpath = gdnsd_make_validated_rootpath("/etc/zones", zfdi->d_name);
+            if(!zfpath)
+                log_fatal("Zone filename '%s' not valid or does not exist in '%s/etc/zones'", zfdi->d_name, gdnsd_get_rootdir());
+            struct stat zfstat;
+            if(lstat(zfpath, &zfstat))
+                log_fatal("Cannot lstat() zonefile '%s': %s", zfpath, dmn_strerror(errno));
+            if(!S_ISREG(zfstat.st_mode))
+                log_fatal("Candidate zone file '%s' is not a regular file!", zfdi->d_name);
+*/
+/*
+ * zlist_destroy atexit??? XXX
     atexit(ltree_destroy);
-#endif
-}
+*/
 
-static void ltree_node_destroy(ltree_node_t* node) {
+void ltree_destroy(ltree_node_t* node) {
     dmn_assert(node);
     ltree_rrset_t* rrset = node->rrsets;
     while(rrset) {
@@ -1426,8 +1290,7 @@ static void ltree_node_destroy(ltree_node_t* node) {
             ltree_node_t* child = node->child_table[i];
             while(child) {
                 ltree_node_t* next = child->next;
-                if(likely(!(child->flags & LTNFLAG_ZROOT)))
-                    ltree_node_destroy(child);
+                ltree_destroy(child);
                 child = next;
             }
         }
@@ -1435,147 +1298,5 @@ static void ltree_node_destroy(ltree_node_t* node) {
 
     free(node->child_table);
     free(node);
-}
-
-F_UNUSED
-static void ltree_destroy(void) {
-    ltree_node_destroy(ltree_root);
-    ltree_root = NULL;
-    if(!rootserver) {
-        for(unsigned i = 0; i < num_zones; i++) {
-            zoneinfo_t* z = zones[i];
-            ltree_node_destroy(z->root);
-            lta_destroy(z->arena);
-        }
-    }
-    lta_destroy(arena_root);
-    arena_root = NULL;
-}
-
-/*****************
- * zoneinfo_t conf stuff
- *****************/
-
-// Sort the zones array by the zone name length descending
-F_PURE F_NONNULL
-static int zones_cmp(const zoneinfo_t** ap, const zoneinfo_t** bp) {
-    dmn_assert(ap); dmn_assert(bp);
-    dmn_assert(*ap); dmn_assert(*bp);
-    dmn_assert((*ap)->dname); dmn_assert((*bp)->dname);
-    return dname_cmp((*ap)->dname, (*bp)->dname);
-}
-
-// This operates on zones, accomplishing two primary tasks:
-//  (1) Catching duplicate zones with a fatal error
-//  (2) Catching subzones with a fatal error
-static void postproc_zones_info(void) {
-
-    // Sort zones by zone name length ascending.
-    // Note that with dname_cmp as the comparator,
-    //  any duplicates would be paired in the list
-    qsort(zones, num_zones, sizeof(zoneinfo_t*),
-        (int (*)(const void*, const void*))zones_cmp);
-
-    // Walk down the list from longest to shortest zone name
-    for(int zidx1 = num_zones - 1; zidx1 > 0; zidx1--) {
-
-        // Check next entry for a duplicate
-        const int zidx_next = zidx1 - 1;
-        if(!dname_cmp(zones[zidx_next]->dname, zones[zidx1]->dname))
-            log_fatal("Zone name duplicated in config: '%s'", logf_dname(zones[zidx1]->dname));
-
-        // Walk down remainder of list from longest to shortest zone name
-        for(int zidx2 = zidx_next; zidx2 > -1; zidx2--)
-            if(dname_isparentof(zones[zidx2]->dname, zones[zidx1]->dname))
-                log_fatal("Zone '%s' is a subzone of '%s'", logf_dname(zones[zidx1]->dname), logf_dname(zones[zidx2]->dname));
-    }
-}
-
-F_NONNULL F_MALLOC F_WUNUSED
-static uint8_t* make_zone_dname(const char* zf_name) {
-    dmn_assert(zf_name);
-
-    unsigned zf_name_len = strlen(zf_name);
-    if(zf_name_len > 1004)
-        log_fatal("Zone file name '%s' is illegal", zf_name);
-
-    // Storage for making alterations...
-    uint8_t alter[zf_name_len + 1];
-
-    // check for root zone...
-    if(unlikely(zf_name_len == 9 && !strncmp(zf_name, "ROOT_ZONE", 9))) {
-        alter[0] = '.';
-        alter[1] = 0;
-        zf_name_len = 1;
-    }
-    else {
-        // else copy the original, and...
-        memcpy(alter, zf_name, zf_name_len);
-        alter[zf_name_len] = 0;
-
-        // convert all '@' to '/' for RFC2137 reverse delegation zones
-        for(unsigned i = 0; i < zf_name_len; i++)
-            if(unlikely(alter[i] == '@'))
-                alter[i] = '/';
-    }
-
-    // Convert to terminated-dname format and check for problems
-    uint8_t* dname = malloc(256);
-    dname_status_t status = dname_from_string(dname, alter, zf_name_len);
-    if(status == DNAME_INVALID)
-        log_fatal("Zone name '%s' is illegal", alter);
-    if(dname_iswild(dname))
-        log_fatal("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
-    if(status == DNAME_PARTIAL)
-        dname_terminate(dname);
-
-    return dname;
-}
-
-static void auto_zones_config(void) {
-    char* zonesdir = gdnsd_make_rootdir_path("/etc/zones");
-    DIR* zdhandle = opendir(zonesdir);
-    if(!zdhandle)
-        log_fatal("Cannot open zones directory '%s': %s", zonesdir, dmn_strerror(errno));
-
-    unsigned zones_alloc = 8;
-    zones = malloc(zones_alloc * sizeof(zoneinfo_t*));
-
-    struct dirent* zfdi;
-    while((zfdi = readdir(zdhandle))) {
-        if(likely(zfdi->d_name[0] != '.' && zfdi->d_name[0])) {
-            char* zfpath = gdnsd_make_validated_rootpath("/etc/zones", zfdi->d_name);
-            // because this came from readdir, this failure cause should almost never happen...
-            if(!zfpath)
-                log_fatal("Zone filename '%s' not valid or does not exist in '%s/etc/zones'", zfdi->d_name, gdnsd_get_rootdir());
-            struct stat zfstat;
-            if(lstat(zfpath, &zfstat))
-                log_fatal("Cannot lstat() zonefile '%s': %s", zfpath, dmn_strerror(errno));
-            if(!S_ISREG(zfstat.st_mode))
-                log_fatal("Candidate zone file '%s' is not a regular file!", zfdi->d_name);
-            zoneinfo_t* zone = calloc(1, sizeof(zoneinfo_t));
-            zone->dname = make_zone_dname(zfdi->d_name);
-            zone->file = zfpath;
-            const unsigned this_zidx = num_zones++;
-            if(num_zones > zones_alloc) {
-                zones_alloc *= 2;
-                zones = realloc(zones, zones_alloc * sizeof(zoneinfo_t*));
-            }
-            zones[this_zidx] = zone;
-        }
-    }
-
-    if(closedir(zdhandle))
-        log_fatal("closedir(%s) failed: %s", zonesdir, dmn_strerror(errno));
-    if(!num_zones)
-        log_fatal("No zonefiles found in zones directory %s", zonesdir);
-
-    zones = realloc(zones, num_zones * sizeof(zoneinfo_t*));
-    free(zonesdir);
-}
-
-static void ltree_config_zones(void) {
-    auto_zones_config();
-    postproc_zones_info(); // checks dupes / child zones, re-orders array
 }
 

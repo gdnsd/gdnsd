@@ -17,6 +17,8 @@
  *
  */
 
+#include "zscan.h"
+
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -51,13 +53,13 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->file,__VA_ARGS__);\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->fn,__VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->file);\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->fn);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
@@ -82,7 +84,7 @@ typedef struct {
     unsigned limit_v4;
     unsigned limit_v6;
     uint8_t* rfc3597_data;
-    zoneinfo_t* zone;
+    zone_t* zone;
     const char* tstart;
     uint8_t  origin[256];
     uint8_t  lhs_dname[256];
@@ -750,15 +752,15 @@ static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, con
     return failed;
 }
 
-bool scan_zone(zoneinfo_t* zone) {
+bool scan_zone(zone_t* zone) {
     dmn_assert(zone);
     dmn_assert(zone->dname);
-    dmn_assert(zone->file);
+    dmn_assert(zone->fn);
     log_debug("Scanning zone '%s'", logf_dname(zone->dname));
 
-    const int fd = open(zone->file, O_RDONLY);
+    const int fd = open(zone->fn, O_RDONLY);
     if(fd < 0) {
-        log_err("Cannot open file '%s' for reading: %s", zone->file, logf_errno());
+        log_err("Cannot open file '%s' for reading: %s", zone->fn, logf_errno());
         return true;
     }
 
@@ -773,7 +775,7 @@ bool scan_zone(zoneinfo_t* zone) {
                 bufsize = fdstat.st_size;
         }
         else {
-            log_warn("fstat(%s) failed for advice, not critical...", zone->file);
+            log_warn("fstat(%s) failed for advice, not critical...", zone->fn);
         }
     }
 
@@ -791,7 +793,7 @@ bool scan_zone(zoneinfo_t* zone) {
     bool failed = sij(z, buf, bufsize, fd);
 
     if(close(fd)) {
-        log_err("Cannot close file '%s': %s", zone->file, logf_errno());
+        log_err("Cannot close file '%s': %s", zone->fn, logf_errno());
         failed = true;
     }
 

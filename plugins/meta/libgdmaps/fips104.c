@@ -29,6 +29,7 @@
 #include <gdnsd-misc.h>
 
 #include "fips104.h"
+#include "gdmaps.h"
 
 // Data source URL is http://www.maxmind.com/app/fips_include
 // As of this writing (Nov 29, 2011), the file was last updated
@@ -127,17 +128,15 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 fips_t* fips_init(const char* pathname) {
     dmn_assert(pathname);
 
-    char* path_resolved = gdnsd_make_validated_rootpath("/etc/geoip", pathname);
-    if(!path_resolved)
-        log_fatal("plugin_geoip: FIPS region file pathname '%s' not valid or does not exist in '%s/etc/geoip'", pathname, gdnsd_get_rootdir());
-    FILE* file = fopen(path_resolved, "r");
+    char* full_path = str_combine(GEOIP_DIR, pathname);
+    FILE* file = fopen(full_path, "r");
     if(!file)
-        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", path_resolved, logf_errno());
+        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", full_path, logf_errno());
     fips_t* fips = calloc(1, sizeof(fips_t));
     fips_parse(fips, file);
     if(fclose(file))
-        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", path_resolved, logf_errno());
-    free(path_resolved);
+        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", full_path, logf_errno());
+    free(full_path);
     return fips;
 }
 

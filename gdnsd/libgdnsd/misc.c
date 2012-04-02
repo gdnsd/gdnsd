@@ -40,69 +40,38 @@
 /* misc */
 
 static char* rootdir = NULL;
-static unsigned rdlen = 0;
 
-const char* gdnsd_set_rootdir(const char* rootdir_in) {
+void gdnsd_set_rootdir(const char* rootdir_in) {
     dmn_assert(rootdir_in);
     dmn_assert(!rootdir);
     rootdir = realpath(rootdir_in, NULL);
     if(!rootdir)
         log_fatal("Cleanup/validation of data root pathname '%s' failed: %s", rootdir_in, dmn_strerror(errno));
-    log_debug("Root path cleaned up as '%s'", rootdir);
-    rdlen = strlen(rootdir);
-    return rootdir;
+    if(strcmp(rootdir_in, rootdir))
+        log_info("Root path '%s' cleaned up as '%s'", rootdir_in, rootdir);
+
+    struct stat st;
+    if(lstat(rootdir, &st))
+        log_fatal("Failed to lstat() data root directory '%s': %s", rootdir, dmn_strerror(errno));
+    if(!S_ISDIR(st.st_mode))
+        log_fatal("data root directory '%s' is not a directory", rootdir);
+
+    if(chdir(rootdir))
+        log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_strerror(errno));
 }
 
 const char* gdnsd_get_rootdir(void) { return rootdir; }
 
-char* gdnsd_make_rootdir_path(const char* suffix) {
-    dmn_assert(rootdir); dmn_assert(suffix);
-    const unsigned suflen = strlen(suffix);
-    dmn_assert(suflen);
-    dmn_assert(suflen > 1);
-    dmn_assert(suffix[0] == '/');
-    dmn_assert(suffix[suflen - 1] != '/');
-    char* rv = malloc(rdlen + suflen + 1);
-    memcpy(rv, rootdir, rdlen);
-    memcpy(&rv[rdlen], suffix, suflen);
-    rv[rdlen + suflen] = 0;
-    return rv;
-}
-
-char* gdnsd_make_validated_rootpath(const char* suffix, const char* suffix2) {
-    dmn_assert(rootdir); dmn_assert(suffix); dmn_assert(suffix2);
-    const unsigned suflen = strlen(suffix);
-    const unsigned suf2len = strlen(suffix2);
-    dmn_assert(suflen);
-    dmn_assert(suflen > 1);
-    dmn_assert(suffix[0] == '/');
-    dmn_assert(suffix[suflen - 1] != '/');
-
-    // Construct "/rootdir/suffix/suffix2"
-    char tmppath[rdlen + suflen + 1 + suf2len + 1];
-    memcpy(tmppath, rootdir, rdlen);
-    memcpy(&tmppath[rdlen], suffix, suflen);
-    tmppath[rdlen + suflen] = '/';
-    memcpy(&tmppath[rdlen + suflen + 1], suffix2, suf2len);
-    tmppath[rdlen + suflen + 1 + suf2len] = 0;
-
-    // Cleanup via realpath, return NULL if realpath fails,
-    //   (which includes if the file doesn't exist)
-    char* rv = realpath(tmppath, NULL);
-    if(rv && (strlen(rv) < rdlen || strncmp(rv, rootdir, rdlen))) {
-        free(rv);
-        rv = NULL;
-    }
-    return rv;
-}
-
-char* gdnsd_strip_rootdir(const char* path_in) {
-    dmn_assert(path_in); dmn_assert(rootdir);
-    dmn_assert(strlen(path_in) > rdlen);
-    dmn_assert(!strncmp(path_in, rootdir, rdlen));
-    dmn_assert(path_in[rdlen] == '/');
-    char* newpath = strdup(&path_in[rdlen]);
-    return newpath;
+char* str_combine(const char* s1, const char* s2) {
+    dmn_assert(s1); dmn_assert(s2);
+    const unsigned s1_len = strlen(s1);
+    const unsigned s2_len = strlen(s2);
+    const unsigned oal = s1_len + s2_len;
+    char* out = malloc(oal + 1);
+    memcpy(out, s1, s1_len);
+    memcpy(out + s1_len, s2, s2_len);
+    out[oal] = 0;
+    return out;
 }
 
 /***************

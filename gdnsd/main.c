@@ -43,14 +43,14 @@
 #include "dnspacket.h"
 #include "statio.h"
 #include "monio.h"
-#include "ltree.h"
+#include "zlist.h"
 #include "gdnsd-plugapi-priv.h"
 #include "gdnsd-net-priv.h"
 #include "gdnsd-misc-priv.h"
 
 #include "cfg-dirs.h"
 
-#define PID_SUBPATH "/var/" PACKAGE_NAME ".pid"
+static const char PID_PATH[] = "var/" PACKAGE_NAME ".pid";
 
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
@@ -348,7 +348,7 @@ static void init_config(const bool started_as_root) {
     gdnsd_plugins_action_full_config(gconfig.num_io_threads);
 
     log_info("Loading zone data");
-    ltree_load_zones();
+    zlist_load_zones();
 }
 
 int main(int argc, char** argv) {
@@ -357,21 +357,18 @@ int main(int argc, char** argv) {
     //   returning the action.  Exits on cmdline errors
     action_t action = parse_args(argc, argv);
 
-    // Create pidfile path string from the rootdir
-    char* pidpath = gdnsd_make_rootdir_path(PID_SUBPATH);
-
     // Take simple pidfile-based actions quickly, without further init
     if(action == ACT_STATUS) {
-        const int oldpid = dmn_status(pidpath);
+        const int oldpid = dmn_status(PID_PATH);
         if(!oldpid) {
-            log_info("Not running, based on pidfile '%s'", pidpath);
+            log_info("Not running, based on pidfile '%s'", PID_PATH);
             exit(1);
         }
-        log_info("Running at pid %i in pidfile %s", oldpid, pidpath);
+        log_info("Running at pid %i in pidfile %s", oldpid, PID_PATH);
         exit(0);
     }
     else if(action == ACT_STOP) {
-        dmn_stop(pidpath);
+        dmn_stop(PID_PATH);
         exit(0);
     }
 
@@ -390,7 +387,7 @@ int main(int argc, char** argv) {
 
     if(action == ACT_RESTART) {
         log_info("Attempting to stop the running daemon instance for restart...");
-        if(dmn_stop(pidpath))
+        if(dmn_stop(PID_PATH))
             log_fatal("...Running daemon failed to stop, cannot continue with restart...");
         log_info("...Previous daemon successfully shut down (or was not up), this instance coming online");
     }
@@ -404,7 +401,7 @@ int main(int argc, char** argv) {
 
     // Daemonize if applicable
     if(action != ACT_STARTFG)
-        dmn_daemonize(PACKAGE_NAME, pidpath);
+        dmn_daemonize(PACKAGE_NAME, PID_PATH);
 
     // If root, or if user explicitly set a priority...
     if(started_as_root || gconfig.priority != -21) {

@@ -28,6 +28,7 @@
 #include "dnswire.h"
 #include "gdnsd-misc.h"
 #include "gdnsd-plugapi-priv.h"
+#include "zlist.h"
 
 static const uint8_t chaos_fixed[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00\x00\x06\x05gdnsd";
 static const unsigned chaos_fixed_len = sizeof(chaos_fixed) - 1;
@@ -1508,91 +1509,6 @@ static unsigned int construct_normal_response(dnspacket_context_t* c, unsigned i
     return offset;
 }
 
-F_NONNULLX(1, 2, 3)
-static ltree_dname_status_t search_ltree(const uint8_t* restrict dname, const ltree_node_t** restrict node_out, const ltree_node_t** restrict auth_out, const ltree_node_t* checkroot, unsigned* auth_depth_out, bool* checkroot_crossed) {
-    dmn_assert(dname); dmn_assert(node_out); dmn_assert(auth_out); dmn_assert(*dname != 0); dmn_assert(*dname != 2);
-
-    dmn_assert( (checkroot && checkroot_crossed && !*checkroot_crossed)
-         || (!checkroot && !checkroot_crossed) );
-
-    // construct label ptr stack
-    const uint8_t* lstack[127];
-    unsigned lcount = dname_to_lstack(dname, lstack);
-
-    ltree_dname_status_t rval = DNAME_NOAUTH;
-    const ltree_node_t* rv_node = NULL;
-    const ltree_node_t* rv_auth = NULL;
-    unsigned rv_auth_depth = 0;
-
-    const ltree_node_t* current = ltree_root;
-    dmn_assert(current);
-
-    do {
-        top_loop:;
-        if(rval == DNAME_NOAUTH) {
-            if(current->flags & LTNFLAG_ZROOT) {
-                dmn_assert(!(current->flags & LTNFLAG_DELEG));
-                if(checkroot && current == checkroot)
-                    *checkroot_crossed = true;
-                rv_auth_depth = lcount;
-                unsigned i = lcount;
-                while(i) { rv_auth_depth += lstack[--i][0]; }
-                rv_auth = current;
-                rval = DNAME_AUTH;
-                if(!lcount)
-                    rv_node = current;
-            }
-        }
-        else {
-            dmn_assert(rval == DNAME_AUTH);
-            dmn_assert(!(current->flags & LTNFLAG_ZROOT));
-            if(current->flags & LTNFLAG_DELEG) {
-                rv_auth_depth = lcount;
-                unsigned i = lcount;
-                while(i) { rv_auth_depth += lstack[--i][0]; }
-                rv_node = current;
-                rval = DNAME_DELEG;
-                break;
-            }
-            else if(!lcount) {
-                rv_node = current;
-            }
-        }
-
-        if(!lcount || !current->child_table)
-            break;
-
-        lcount--;
-        const uint8_t* child_label = lstack[lcount];
-        const ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
-
-        while(entry) {
-            if(!memcmp(entry->label, child_label, *child_label + 1)) {
-                current = entry;
-                goto top_loop;
-            }
-            entry = entry->next;
-        }
-    } while(0);
-
-    //  If in auth space with no match, and we still have a child_table, check for wildcard
-    if(!rv_node && rval == DNAME_AUTH && current->child_table) {
-        const ltree_node_t* entry = current->child_table[label_djb_hash((const uint8_t*)"\001*", current->child_hash_mask)];
-        while(entry) {
-            if(entry->label[0] == 1 && entry->label[1] == '*') {
-                rv_node = entry;
-                break;
-            }
-            entry = entry->next;
-        }
-    }
-
-    *node_out = rv_node;
-    *auth_out = rv_auth;
-    *auth_depth_out = rv_auth_depth;
-    return rval;
-}
-
 // Find the start of the (uncompressed) auth zone name at auth_depth bytes into the name at qname_offset,
 //  chasing compression pointers as necc.
 // XXX - really, the necessity of this is sort of the last straw on the current scheme involving
@@ -1622,59 +1538,128 @@ static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned 
 }
 
 F_NONNULL
+static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zone_t* zone, const ltree_node_t** node_out, unsigned* auth_deleg_mod) {
+    dmn_assert(dname); dmn_assert(zone); dmn_assert(node_out);
+    dmn_assert(*dname != 0); dmn_assert(*dname != 2); // these are always illegal dnames
+    dmn_assert(dname_isinzone(zone->dname, dname));
+
+    ltree_dname_status_t rval = DNAME_AUTH;
+    ltree_node_t* rv_node = NULL;
+    uint8_t local_dname[256];
+    gdnsd_dname_copy(local_dname, dname);
+    gdnsd_dname_drop_zone(local_dname, zone->dname);
+
+    // construct label ptr stack
+    const uint8_t* lstack[127];
+    unsigned lcount = dname_to_lstack(local_dname, lstack);
+
+    ltree_node_t* current = zone->root;
+    unsigned deleg_mod = 0;
+
+    do {
+        top_loop:;
+        if(current->flags & LTNFLAG_DELEG) {
+            rval = DNAME_DELEG;
+            *auth_deleg_mod -= deleg_mod;
+            rv_node = current;
+            break;
+        }
+
+        if(!lcount || !current->child_table) {
+            if(!lcount) rv_node = current;
+            break;
+        }
+
+        lcount--;
+        const uint8_t* child_label = lstack[lcount];
+        deleg_mod += *child_label;
+        deleg_mod++;
+        ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
+
+        while(entry) {
+            if(!memcmp(entry->label, child_label, *child_label + 1)) {
+                current = entry;
+                goto top_loop;
+            }
+            entry = entry->next;
+        }
+    } while(0);
+
+    //  If in auth space with no match, and we still have a child_table, check for wildcard
+    if(!rv_node && rval == DNAME_AUTH && current->child_table) {
+        ltree_node_t* entry = current->child_table[label_djb_hash((const uint8_t*)"\001*", current->child_hash_mask)];
+        while(entry) {
+            if(entry->label[0] == '\001' && entry->label[1] == '*') {
+                rv_node = entry;
+                break;
+            }
+            entry = entry->next;
+        }
+    }
+
+    *node_out = rv_node;
+    return rval;
+}
+
+F_NONNULL
 static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname, unsigned int offset) {
     dmn_assert(c); dmn_assert(qname); dmn_assert(offset);
 
     const unsigned first_offset = offset;
     bool via_cname = false;
     unsigned cname_depth = 0;
-    const ltree_node_t* resdom;
-    const ltree_node_t* resauth;
+    const ltree_node_t* resdom = NULL;
+    const ltree_node_t* resauth = NULL;
     wire_dns_header_t* res_hdr = (wire_dns_header_t*)c->packet;
 
-    // In the initial search, it's known that "qname" is in fact the real query name and therefore
-    //  uncompressed, which is what makes the simplistic c->auth_comp calculation possible.
+    ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
-    ltree_dname_status_t status = search_ltree(qname, &resdom, &resauth, NULL, &auth_depth, NULL);
-    c->auth_comp = c->qname_comp + auth_depth;
+    zone_t* query_zone = zlist_find_dname(qname, &auth_depth);
 
-    // CNAME handling, which fills in 1+ CNAME RRs and then alters status/resdom/via_cname
-    //  for the normal response handling code below.  The explicit check of the first
-    //  rrsets entry works because if CNAME exists at all, by definition it is the only
-    //  type of rrset at this node.
-    while(resdom && resdom->rrsets
-        && resdom->rrsets->gen.type == DNS_TYPE_CNAME && c->qtype != DNS_TYPE_CNAME) {
-        dmn_assert(status == DNAME_AUTH); dmn_assert(resauth);
+    if(query_zone) { // matches auth space somewhere
+        // In the initial search, it's known that "qname" is in fact the real query name and therefore
+        //  uncompressed, which is what makes the simplistic c->auth_comp calculation possible.
+        resauth = query_zone->root;
+        status = search_zone_for_dname(qname, query_zone, &resdom, &auth_depth);
+        c->auth_comp = c->qname_comp + auth_depth;
+        dmn_assert(status == DNAME_AUTH || status == DNAME_DELEG);
 
-        res_hdr->flags1 |= 4; // AA bit
-        via_cname = true;
+        // CNAME handling, which fills in 1+ CNAME RRs and then alters status/resdom/via_cname
+        //  for the normal response handling code below.  The explicit check of the first
+        //  rrsets entry works because if CNAME exists at all, by definition it is the only
+        //  type of rrset at this node.
+        while(resdom && resdom->rrsets
+            && resdom->rrsets->gen.type == DNS_TYPE_CNAME && c->qtype != DNS_TYPE_CNAME) {
+            dmn_assert(status == DNAME_AUTH);
 
-        if(++cname_depth > gconfig.max_cname_depth) {
-            log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
-            resdom = NULL; // clear resdom to generate NXDOMAIN-style response
-            // wipe any data already added to the packet
-            offset = first_offset;
-            c->ancount = 0;
-            c->cname_ancount = 0;
-            break;
-        }
+            res_hdr->flags1 |= 4; // AA bit
+            via_cname = true;
 
-        const ltree_rrset_cname_t* cname = &resdom->rrsets->cname;
-        offset = encode_rr_cname(c, offset, cname, false);
+            if(++cname_depth > gconfig.max_cname_depth) {
+                log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
+                resdom = NULL; // clear resdom to generate NXDOMAIN-style response
+                // wipe any data already added to the packet
+                offset = first_offset;
+                c->ancount = 0;
+                c->cname_ancount = 0;
+                break;
+            }
 
-        bool resauth_crossed = false;
-        const uint8_t* dname = cname->gen.is_static ? cname->dname : &c->dync_store[(c->dync_count - 1) * 256];
-        status = search_ltree(dname, &resdom, &resauth, resauth, &auth_depth, &resauth_crossed);
-        // encode_rr_cname() above updated c->qname_comp, and now we need to update c->auth_comp
-        //  to match based on search_ltree's auth_depth output, assuming auth or deleg response
-        if(!resauth_crossed) {
-            status = DNAME_NOAUTH;
-            break;
-        }
-        else {
-            c->auth_comp = chase_auth_ptr(c->packet, c->qname_comp, auth_depth);
-        }
-    }
+            const ltree_rrset_cname_t* cname = &resdom->rrsets->cname;
+            offset = encode_rr_cname(c, offset, cname, false);
+
+            const uint8_t* dname = cname->gen.is_static ? cname->dname : &c->dync_store[(c->dync_count - 1) * 256];
+            if(dname_isinzone(query_zone->dname, dname)) {
+                auth_depth = *dname - *query_zone->dname;
+                status = search_zone_for_dname(dname, query_zone, &resdom, &auth_depth);
+                c->auth_comp = chase_auth_ptr(c->packet, c->qname_comp, auth_depth);
+            }
+            else {
+                status = DNAME_NOAUTH;
+                break;
+            }
+        } // end CNAME block
+    } // end if(query_zone) block
 
     if(status == DNAME_AUTH) {
         dmn_assert(resauth);

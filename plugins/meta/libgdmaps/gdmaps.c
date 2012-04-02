@@ -1342,18 +1342,14 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
         log_fatal("plugin_geoip: map '%s': missing required 'geoip_db' value", name);
     if(!vscf_is_simple(gdb_cfg) || !vscf_simple_get_len(gdb_cfg))
         log_fatal("plugin_geoip: map '%s': 'geoip_db' must have a non-empty string value", name);
-    gdmap->geoip_path = gdnsd_make_validated_rootpath("/etc/geoip", vscf_simple_get_data(gdb_cfg));
-    if(!gdmap->geoip_path)
-        log_fatal("plugin_geoip: map '%s': 'geoip_db' pathname '%s' invalid or file does not exist within '%s/etc/geoip'", name, vscf_simple_get_data(gdb_cfg), gdnsd_get_rootdir());
+    gdmap->geoip_path = str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_cfg));
 
     // geoip_db_v4_overlay config
     const vscf_data_t* gdb_v4o_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db_v4_overlay", true);
     if(gdb_v4o_cfg) {
         if(!vscf_is_simple(gdb_v4o_cfg) || !vscf_simple_get_len(gdb_v4o_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' must have a non-empty string value", name);
-        gdmap->geoip_v4o_path = gdnsd_make_validated_rootpath("/etc/geoip", vscf_simple_get_data(gdb_v4o_cfg));
-        if(!gdmap->geoip_v4o_path)
-            log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' pathname '%s' invalid or file does not exist within '%s/etc/geoip'", name, vscf_simple_get_data(gdb_v4o_cfg), gdnsd_get_rootdir());
+        gdmap->geoip_v4o_path = str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_v4o_cfg));
     }
 
     // optional GeoIPCity behavior flags
@@ -1431,20 +1427,6 @@ static void gdmap_load_geoip(gdmap_t* gdmap) {
     dmn_assert(gdmap->init_dclists);
     if(gdmap_reload_geoip(gdmap))
         log_fatal("plugin_geoip: map '%s': Initial tree construction failed", gdmap->name);
-}
-
-F_NONNULL
-static void gdmap_setup_geoip_watcher_path(gdmap_t* gdmap, const char* chroot_fixup) {
-    dmn_assert(gdmap); dmn_assert(gdmap->geoip_path); dmn_assert(chroot_fixup);
-
-    char* temp = gdmap->geoip_path;
-    gdmap->geoip_path = gdnsd_strip_rootdir(temp);
-    free(temp);
-    if(gdmap->geoip_v4o_path) {
-        temp = gdmap->geoip_v4o_path;
-        gdmap->geoip_v4o_path = gdnsd_strip_rootdir(temp);
-        free(temp);
-    }
 }
 
 F_NONNULL
@@ -2287,18 +2269,6 @@ void gdmaps_load_geoip_databases(gdmaps_t* gdmaps) {
     dmn_assert(gdmaps);
     for(unsigned i = 0; i < gdmaps->count; i++)
         gdmap_load_geoip(gdmaps->maps[i]);
-}
-
-void gdmaps_setup_geoip_watcher_paths(gdmaps_t* gdmaps) {
-    dmn_assert(gdmaps);
-
-    // If the daemon plans to chroot(), we'll get a non-NULL chroot path here
-    const char* chroot_path = dmn_get_chroot();
-    if(chroot_path) {
-        dmn_assert(!strcmp(chroot_path, gdnsd_get_rootdir()));
-        for(unsigned i = 0; i < gdmaps->count; i++)
-            gdmap_setup_geoip_watcher_path(gdmaps->maps[i], chroot_path);
-    }
 }
 
 static void* gdmaps_reload_thread(void* arg) {

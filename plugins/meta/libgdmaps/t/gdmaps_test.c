@@ -49,12 +49,10 @@
 
 static const vscf_data_t* conf_load() {
 
-    char* cfg_file = gdnsd_make_rootdir_path("/etc/config");
     char* vscf_err;
-    const vscf_data_t* cfg_root = vscf_scan_filename(cfg_file, &vscf_err);
+    const vscf_data_t* cfg_root = vscf_scan_filename("etc/config", &vscf_err);
     if(!cfg_root)
         log_fatal("Configuration load failed: %s", vscf_err);
-    free(cfg_file);
 
     dmn_assert(vscf_is_hash(cfg_root));
     return cfg_root;
@@ -165,7 +163,6 @@ gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
     vscf_destroy(cfg_root);
 
     gdmaps_load_geoip_databases(gdmaps);
-    gdmaps_setup_geoip_watcher_paths(gdmaps);
     gdmaps_setup_geoip_watchers(gdmaps);
 
     return gdmaps;

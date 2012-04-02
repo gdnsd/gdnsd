@@ -43,15 +43,14 @@
 static unsigned num_monio_lists = 0;
 static monio_list_t** monio_lists = NULL;
 
-#define CFG_SUBPATH "/etc/config"
-
-static const char def_username[] = PACKAGE_NAME;
+static const char CFG_PATH[] = "etc/config";
+static const char DEF_USERNAME[] = PACKAGE_NAME;
 
 // Global config, readonly after loaded from conf file
 global_config_t gconfig = {
     .dns_addrs = NULL,
     .http_addrs = NULL,
-    .username = def_username,
+    .username = DEF_USERNAME,
     .include_optional_ns = false,
     .realtime_stats = false,
     .lock_mem = false,
@@ -386,28 +385,18 @@ static void assign_thread_nums(void) {
 
 void conf_load(void) {
 
-    char* cfg_file = gdnsd_make_rootdir_path(CFG_SUBPATH);
-
-    {
-        struct stat cfg_stat;
-        if(!stat(cfg_file, &cfg_stat)) {
-            log_debug("Loading configuration from '%s'", cfg_file);
-        }
-        else {
-            log_debug("No config file at '%s', using defaults + zones auto-scan", cfg_file);
-            free(cfg_file);
-            cfg_file = NULL;
-        }
-    }
-
     const vscf_data_t* cfg_root = NULL;
 
-    if(cfg_file) {
+    struct stat cfg_stat;
+    if(!stat(CFG_PATH, &cfg_stat)) {
+        log_debug("Loading configuration from '%s'", CFG_PATH);
         char* vscf_err;
-        cfg_root = vscf_scan_filename(cfg_file, &vscf_err);
+        cfg_root = vscf_scan_filename(CFG_PATH, &vscf_err);
         if(!cfg_root)
-            log_fatal("Configuration from '%s' failed: %s", cfg_file, vscf_err);
-        free(cfg_file);
+            log_fatal("Configuration from '%s' failed: %s", CFG_PATH, vscf_err);
+    }
+    else {
+        log_debug("No config file at '%s', using defaults + zones auto-scan", CFG_PATH);
     }
 
 #ifndef NDEBUG
