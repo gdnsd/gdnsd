@@ -53,13 +53,13 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->fn,__VA_ARGS__);\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,logf_pathname(z->zone->fn),__VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,z->zone->fn);\
+        log_err("Zonefile parse error at line %u of %s: " _fmt,z->lcount,logf_pathname(z->zone->fn));\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
@@ -760,7 +760,7 @@ bool scan_zone(zone_t* zone) {
 
     const int fd = open(zone->fn, O_RDONLY);
     if(fd < 0) {
-        log_err("Cannot open file '%s' for reading: %s", zone->fn, logf_errno());
+        log_err("Cannot open file '%s' for reading: %s", logf_pathname(zone->fn), logf_errno());
         return true;
     }
 
@@ -775,7 +775,7 @@ bool scan_zone(zone_t* zone) {
                 bufsize = fdstat.st_size;
         }
         else {
-            log_warn("fstat(%s) failed for advice, not critical...", zone->fn);
+            log_warn("fstat(%s) failed for advice, not critical...", logf_pathname(zone->fn));
         }
     }
 
@@ -793,7 +793,7 @@ bool scan_zone(zone_t* zone) {
     bool failed = sij(z, buf, bufsize, fd);
 
     if(close(fd)) {
-        log_err("Cannot close file '%s': %s", zone->fn, logf_errno());
+        log_err("Cannot close file '%s': %s", logf_pathname(zone->fn), logf_errno());
         failed = true;
     }
 

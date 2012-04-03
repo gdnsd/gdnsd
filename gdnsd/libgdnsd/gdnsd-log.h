@@ -53,6 +53,11 @@
 const char* gdnsd_logf_dname(const uint8_t* dname);
 const char* gdnsd_logf_anysin(const anysin_t* asin);
 const char* gdnsd_logf_anysin_noport(const anysin_t* asin);
+// for relative paths within rootdir
+//   e.g. input "etc/config" prints "/srv/gdnsd/etc/config",
+//   uses current rootdir in effect.
+const char* gdnsd_logf_pathname(const char* relpath);
+
 #define gdnsd_logf_errnum dmn_strerror
 #define gdnsd_logf_errno() dmn_strerror(errno)
 #define logf_dname gdnsd_logf_dname
@@ -60,5 +65,6 @@ const char* gdnsd_logf_anysin_noport(const anysin_t* asin);
 #define logf_anysin_noport gdnsd_logf_anysin_noport
 #define logf_errnum dmn_strerror
 #define logf_errno() dmn_strerror(errno)
+#define logf_pathname gdnsd_logf_pathname
 
 #endif // _GDNSD_LOG_H

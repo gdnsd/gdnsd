@@ -1999,14 +1999,14 @@ DEFUN_TREE_XLATE(v6, struct in6_addr, ip6_zero, 128, V6_V4ROOT_CODE, V6_SKIP_COD
 static int geoip_tree_xlate(const gdmap_t* gdmap, ntree_t* tree, const geoip_db_t* db, const geoip_db_t* db_v4o) {
     dmn_assert(gdmap); dmn_assert(tree); dmn_assert(db);
 
-    log_info("plugin_geoip: map '%s': Processing GeoIP database '%s'...", gdmap->name, gdmap->geoip_path);
+    log_info("plugin_geoip: map '%s': Processing GeoIP database '%s'...", gdmap->name, logf_pathname(gdmap->geoip_path));
 
     int rv;
     if(db->ipv6) {
         rv = geoip_tree_xlate_v6(gdmap, tree, db);
         ntree_fixup_v4root(tree, !!db_v4o);
         if(!rv && db_v4o) {
-            log_info("plugin_geoip: map '%s': Processing GeoIP v4_overlay database '%s'...", gdmap->name, gdmap->geoip_v4o_path);
+            log_info("plugin_geoip: map '%s': Processing GeoIP v4_overlay database '%s'...", gdmap->name, logf_pathname(gdmap->geoip_v4o_path));
             rv = geoip_tree_xlate_v4(gdmap, tree, db_v4o);
         }
     }
@@ -2024,12 +2024,12 @@ static int geoip_db_close(geoip_db_t* db) {
     if(db->fd != -1) {
         if(db->data) {
             if(-1 == munmap(db->data, db->size)) {
-                log_err("plugin_geoip: munmap() of '%s' failed: %s", db->pathname, logf_errno());
+                log_err("plugin_geoip: munmap() of '%s' failed: %s", logf_pathname(db->pathname), logf_errno());
                 rv = -1;
             }
         }
         if(close(db->fd) == -1) {
-            log_err("plugin_geoip: close() of '%s' failed: %s", db->pathname, logf_errno());
+            log_err("plugin_geoip: close() of '%s' failed: %s", logf_pathname(db->pathname), logf_errno());
             rv = -1;
         }
     }
@@ -2049,14 +2049,14 @@ static geoip_db_t* geoip_db_open(const char* pathname, const fips_t* fips, const
     db->pathname = strdup(pathname);
 
     if((db->fd = open(pathname, O_RDONLY)) == -1) {
-        log_err("plugin_geoip: map '%s': Cannot open '%s' for reading: %s", map_name, pathname, logf_errno());
+        log_err("plugin_geoip: map '%s': Cannot open '%s' for reading: %s", map_name, logf_pathname(pathname), logf_errno());
         geoip_db_close(db);
         return NULL;
     }
 
     struct stat db_stat;
     if(fstat(db->fd, &db_stat) == -1) {
-        log_err("plugin_geoip: map '%s': Cannot fstat '%s': %s", map_name, pathname, logf_errno());
+        log_err("plugin_geoip: map '%s': Cannot fstat '%s': %s", map_name, logf_pathname(pathname), logf_errno());
         geoip_db_close(db);
         return NULL;
     }
@@ -2068,14 +2068,14 @@ static geoip_db_t* geoip_db_open(const char* pathname, const fips_t* fips, const
     //   to a single countryid, plus the requisite 0xFFFFFF
     //   end marker.
     if(db->size < 9) {
-        log_err("plugin_geoip: map '%s': GeoIP database '%s' too small", map_name, pathname);
+        log_err("plugin_geoip: map '%s': GeoIP database '%s' too small", map_name, logf_pathname(pathname));
         geoip_db_close(db);
         return NULL;
     }
 
     if((db->data = mmap(NULL, db->size, PROT_READ, MAP_SHARED, db->fd, 0)) == MAP_FAILED) {
         db->data = 0;
-        log_err("plugin_geoip: map '%s': Failed to mmap GeoIP DB '%s': %s", map_name, pathname, logf_errno());
+        log_err("plugin_geoip: map '%s': Failed to mmap GeoIP DB '%s': %s", map_name, logf_pathname(pathname), logf_errno());
         geoip_db_close(db);
         return NULL;
     }
@@ -2109,7 +2109,7 @@ static geoip_db_t* geoip_db_open(const char* pathname, const fips_t* fips, const
             case GEOIP_CITY_EDITION_REV1:
                 break;
             default:
-                log_err("plugin_geoip: map '%s': GeoIP DB '%s' is not a City-level database and this map uses auto_dc_coords", map_name, db->pathname);
+                log_err("plugin_geoip: map '%s': GeoIP DB '%s' is not a City-level database and this map uses auto_dc_coords", map_name, logf_pathname(db->pathname));
                 geoip_db_close(db);
                 return NULL;
         }
@@ -2145,7 +2145,7 @@ static geoip_db_t* geoip_db_open(const char* pathname, const fips_t* fips, const
             break;
 
         default:
-            log_err("plugin_geoip: map '%s': GeoIP DB '%s': Unrecognized DB type %i", map_name, db->pathname, db->type);
+            log_err("plugin_geoip: map '%s': GeoIP DB '%s': Unrecognized DB type %i", map_name, logf_pathname(db->pathname), db->type);
             geoip_db_close(db);
             return NULL;
     }

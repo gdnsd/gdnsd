@@ -128,15 +128,15 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 fips_t* fips_init(const char* pathname) {
     dmn_assert(pathname);
 
-    char* full_path = str_combine(GEOIP_DIR, pathname);
-    FILE* file = fopen(full_path, "r");
+    char* relpath = str_combine(GEOIP_DIR, pathname);
+    FILE* file = fopen(relpath, "r");
     if(!file)
-        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", full_path, logf_errno());
+        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", logf_pathname(relpath), logf_errno());
     fips_t* fips = calloc(1, sizeof(fips_t));
     fips_parse(fips, file);
     if(fclose(file))
-        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", full_path, logf_errno());
-    free(full_path);
+        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", logf_pathname(relpath), logf_errno());
+    free(relpath);
     return fips;
 }
 

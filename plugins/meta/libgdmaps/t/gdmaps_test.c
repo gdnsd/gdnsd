@@ -47,12 +47,14 @@
 
 #include "cfg-dirs.h"
 
+static const char CFG_PATH[] = "etc/config";
+
 static const vscf_data_t* conf_load() {
 
     char* vscf_err;
-    const vscf_data_t* cfg_root = vscf_scan_filename("etc/config", &vscf_err);
+    const vscf_data_t* cfg_root = vscf_scan_filename(CFG_PATH, &vscf_err);
     if(!cfg_root)
-        log_fatal("Configuration load failed: %s", vscf_err);
+        log_fatal("Configuration load from %s failed: %s", logf_pathname(CFG_PATH), vscf_err);
 
     dmn_assert(vscf_is_hash(cfg_root));
     return cfg_root;

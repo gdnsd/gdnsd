@@ -361,10 +361,10 @@ int main(int argc, char** argv) {
     if(action == ACT_STATUS) {
         const int oldpid = dmn_status(PID_PATH);
         if(!oldpid) {
-            log_info("Not running, based on pidfile '%s'", PID_PATH);
+            log_info("Not running, based on pidfile '%s'", logf_pathname(PID_PATH));
             exit(1);
         }
-        log_info("Running at pid %i in pidfile %s", oldpid, PID_PATH);
+        log_info("Running at pid %i in pidfile %s", oldpid, logf_pathname(PID_PATH));
         exit(0);
     }
     else if(action == ACT_STOP) {

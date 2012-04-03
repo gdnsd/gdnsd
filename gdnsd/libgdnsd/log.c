@@ -33,6 +33,7 @@
 #include "gdnsd-log.h"
 #include "gdnsd-stats.h"
 #include "gdnsd-dmn.h"
+#include "gdnsd-misc-priv.h"
 
 /* libdmn custom log formatters and the buffer sizes they use:
  *
@@ -143,3 +144,15 @@ const char* gdnsd_logf_dname(const uint8_t* dname) {
     return dnbuf;
 }
 
+const char* gdnsd_logf_pathname(const char* relpath) {
+    const char* rootpath = gdnsd_get_rootdir();
+    const unsigned rootlen = strlen(rootpath);
+    const unsigned rplen = relpath ? strlen(relpath) : 0;
+    const unsigned oal = rootlen + 1 + rplen;
+    char* space = dmn_fmtbuf_alloc(oal + 1);
+    memcpy(space, rootpath, rootlen);
+    space[rootlen] = '/';
+    memcpy(space + rootlen + 1, relpath, rplen);
+    space[oal] = 0;
+    return space;
+}
