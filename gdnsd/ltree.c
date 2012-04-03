@@ -391,16 +391,6 @@ bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
-
-    // This zone root check is redundant given some other checks
-    //   in the processing phases, but it's still a nice explicit
-    //   early bailout point.
-    if(unlikely(node->flags & LTNFLAG_ZROOT))
-        log_zfatal("Name '%s': No CNAME allowed at a zone root", logf_dname(dname));
-
-    if(unlikely(ltree_node_get_rrset_cname(node)))
-        log_zfatal("Name '%s': Only one CNAME or DYNC record can exist for a given name", logf_dname(dname));
-
     ltree_rrset_cname_t* rrset = ltree_node_add_rrset_cname(node);
     rrset->dname = lta_dnamedup(zone->arena, rhs);
     rrset->gen.ttl = htonl(ttl);
@@ -413,16 +403,6 @@ bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
-
-    // This zone root check is redundant given some other checks
-    //   in the processing phases, but it's still a nice explicit
-    //   early bailout point.
-    if(unlikely(node->flags & LTNFLAG_ZROOT))
-        log_zfatal("Name '%s': No CNAME allowed at a zone root", logf_dname(dname));
-
-    if(unlikely(ltree_node_get_rrset_cname(node)))
-        log_zfatal("Name '%s': Only one CNAME or DYNC record can exist for a given name", logf_dname(dname));
-
     ltree_rrset_cname_t* rrset = ltree_node_add_rrset_cname(node);
     rrset->dyn.origin = lta_dnamedup(zone->arena, origin);
     rrset->gen.ttl = htonl(ttl);
@@ -495,8 +475,8 @@ bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* r
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     // If this is a delegation by definition, (NS rec not at zone root), flag it
-    //   and check for wildcard
-    if(!(node->flags & LTNFLAG_ZROOT)) {
+    //   and check for wildcard.  Zone root is quickly identified by lack of a label.
+    if(node->label) {
         node->flags |= LTNFLAG_DELEG;
         if(unlikely(node->label[0] == 1 && node->label[1] == '*'))
             log_zfatal("Name '%s': Cannot delegate via wildcards", logf_dname(dname));
@@ -977,8 +957,7 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     }
 
     if(node_cname) {
-        dmn_assert(!(node->flags & LTNFLAG_ZROOT)); // Because we checked this earlier in add_rec_cname
-        if((node->rrsets->gen.next))
+        if(node->rrsets->gen.next) // basically "if first RR for this node has a link to a second RR"
             log_zfatal("CNAME not allowed alongside other data at domainname '%s%s'", logf_lstack(lstack, depth, zone->dname));
         if((node_cname->gen.is_static))
             if(p1_proc_cname(zone, node_cname, lstack, depth))
@@ -1058,7 +1037,7 @@ static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, c
     dmn_assert(fn); dmn_assert(lstack); dmn_assert(node);
 
     if(node->flags & LTNFLAG_DELEG) {
-        dmn_assert(!(node->flags & LTNFLAG_ZROOT));
+        dmn_assert(node->label);
         if(unlikely(in_deleg))
             log_zfatal("Delegation '%s%s' is within another delegation", logf_lstack(lstack, depth, zone->dname));
         in_deleg = true;
@@ -1115,7 +1094,7 @@ static bool ltree_postproc_zroot_phase1(const zone_t* zone) {
         }
     }
 
-    dmn_assert(zroot->flags & LTNFLAG_ZROOT);
+    dmn_assert(!zroot->label); // zone roots don't get a label
     if(unlikely(!zroot_soa))
         log_zfatal("Zone '%s' has no SOA record", logf_dname(zone->dname));
     if(unlikely(!zroot_ns))
@@ -1177,7 +1156,7 @@ bool ltree_process_zone(zone_t* zone) {
     dmn_assert(zone->arena);
     dmn_assert(!zone->root);
 
-    zone->root = ltree_node_new(zone->arena, NULL, LTNFLAG_ZROOT);
+    zone->root = ltree_node_new(zone->arena, NULL, 0);
 
     if(unlikely(scan_zone(zone)))
         return true;

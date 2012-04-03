@@ -31,16 +31,19 @@ labels, e.g:
                 /   \
               www   ns1
 
-  The ltree always starts at the root of the DNS, even if the auth data in the
-zonefiles begins at a much lower level.
+  A whole ltree represents a whole zone as a linked tree of per-label nodes
+starting at the root of the zone (the root zone of DNS in the example above).
+The actual root node of the tree has no label, as the labels are only useful
+in seaching the children of a node.  The root node itself is tracked and
+searched through another data structure, the "zones list" in zlist.h.
 
   Each node in the ltree (ltree_node_t) contains a resizable hash table of
 child nodes, as well as the data for its own local rrsets and a flags field for
-identifying zone roots, delegation points, etc.
+identifying important properties like delegation points.
 
   The zonefile parser (zscan.rl) constructs the label tree by making
-ltree_add_rec_* calls into the ltree.c code.  After all zonefiles have been
-parsed and their raw data added to the ltree, the ltree code does multiple
+ltree_add_rec_* calls into the ltree.c code.  After a zonefile has been
+parsed and its raw data added to its ltree, the ltree code does multiple
 phases of post-processing where it walks the entire tree, doing many data
 validation checks and setting up inter-node references (such as NS->A glue,
 MX->A additionals, etc).
@@ -288,19 +291,12 @@ union _ltree_rrset_union {
 };
 
 // For ltree_node_t.flags
-// XXX probably we can collapse all of this now:
-//   zroot nodes are implicit, they're zone_t->root entries and they have no label...
-//   gused nodes don't really share a flag-space with the rest...
-#define LTNFLAG_ZROOT 0x1 // This is the exact start of authority for a zone root
-                          // Nodes with this flag are *required* to have NS and SOA records
-                          // There can never be a ZROOT node beneath another ZROOT node
-#define LTNFLAG_DELEG 0x2 // This is the exact start of a delegated zone.  Must occur
-                          //  underneath a ZROOT node.  These nodes *must* have an NS rrset
-                          //  (that's how they're detected in the first place), and otherwise
-                          //  can only have addr rrsets, and child nodes which contain only
-                          //  addr rrsets (for NS glue)
-                          // There can never be a DELEG or ZROOT node beneath a DELEG node
-#define LTNFLAG_GUSED 0x4 // For nodes at or below DELEG points which contain addresses, this
+#define LTNFLAG_DELEG 0x1 // This is the exact start of a delegated zone.
+                          // These nodes *must* have an NS rrset (that's how they're
+                          //  detected in the first place), and otherwise can only have
+                          //  addr rrsets, and child nodes which contain only addr rrsets
+                          //  (for NS glue)
+#define LTNFLAG_GUSED 0x2 // For nodes at or below DELEG points which contain addresses, this
                           //  is set when the glue is used, and later checked for "glue unused"
                           //  warnings.  Also re-used in the same manner for out-of-zone glue,
                           //  which is stored under a special child node of the zone root.
