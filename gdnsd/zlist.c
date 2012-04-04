@@ -27,28 +27,34 @@
 #include "gdnsd-dname.h"
 #include "gdnsd-misc.h"
 
+// the zones list itself
 static zone_t** zlist = NULL;
+
+// size zlist is currently allocated to
 static unsigned zlist_alloc = 0;
+
+// number of actual zones in the list
 static unsigned num_zones = 0;
+
+// number of non-NULL slots in the list
+//  (this includes slots where zones were
+//  deleted, which haven't yet been
+//  reclaimed by by a colliding new zone
+//  or a resize operation).
+// this is the important number for
+//  managing load factor, not num_zones.
+static unsigned num_slots_used = 0;
 
 // when a zone_t* is deleted from the hashtable,
 //   its pointer is replaced with this magic value
 //   so that the closed hash can skip over it, and
 //   new insertions can re-use the slot if/when
 //   applicable.
-const void* ZONE_DELETED = (void*)(uintptr_t)0xFFFFFFFF;
+static const void* ZONE_DELETED = (void*)(uintptr_t)0x1;
 
-F_PURE
-static unsigned zlist_djb_hash(const uint8_t* dname) {
-   dmn_assert(dname);
-
-   unsigned hash = 5381U;
-   unsigned len = *dname++;
-   while(--len)
-       hash = (hash * 33U) ^ *dname++;
-
-   return hash;
-}
+// fast check for a true, non-deleted entry
+//   (as opposed to a real empty slot, or a deleted one)
+#define SLOT_REAL(x) ((uintptr_t)x & ~1UL)
 
 // "dname" can be any legal FQDN
 // Current implementation starts by searching for "dname" itself
@@ -65,12 +71,12 @@ zone_t* zlist_find_dname(const uint8_t* dname, unsigned* auth_depth_out) {
 
     zone_t* rv = NULL;
     do {
-        const unsigned dhash = zlist_djb_hash(dnptr);
+        const unsigned dhash = gdnsd_dname_hash(dnptr);
         unsigned slot = dhash & hash_mask;
         unsigned jmpby = 1;
         while(zlist[slot]) {
             zone_t* zone = zlist[slot];
-            if(zone != ZONE_DELETED && zone->hash == dhash && !dname_cmp(zone->dname, dnptr)) {
+            if(SLOT_REAL(zone) && zone->hash == dhash && !dname_cmp(zone->dname, dnptr)) {
                 rv = zone;
                 goto out;
             }
@@ -105,12 +111,13 @@ static void zlist_grow(void) {
         zone_t** new_list = calloc(new_alloc, sizeof(zone_t*));
         for(unsigned i = 0; i < zlist_alloc; i++) {
             zone_t* zone = zlist[i];
-            if(zone && zone != ZONE_DELETED)
+            if(SLOT_REAL(zone))
                 new_list[zone->hash & new_hash_mask] = zone;
         }
         free(zlist);
         zlist = new_list;
         zlist_alloc = new_alloc;
+        num_slots_used = num_zones; // we reclaimed all deletes
     }
 }
 
@@ -118,8 +125,10 @@ static void zlist_grow(void) {
 //   key on the zfn, the dname, or the zone_t*...
 
 static bool zlist_add_zfile(const char* zfn) {
-    // grow to maintain an allocation >= num_zones*4
-    if(unlikely(zlist_alloc <= (num_zones << 2)))
+    // grow to maintain an allocation >= num_slots_used*4,
+    //   but never shrink in the face of deletions even
+    //   after reclaiming them during a grow
+    if(unlikely(zlist_alloc <= (num_slots_used << 2)))
         zlist_grow();
 
     bool rv = false;
@@ -129,9 +138,9 @@ static bool zlist_add_zfile(const char* zfn) {
     zone_t* conflict = zlist_find_dname(new_zone->dname, &conflict_depth);
     if(conflict) {
         if(conflict_depth)
-            log_err("Illegal subzone... XXX");
+            log_err("Cannot load zone '%s': subzone of existing zone '%s'", logf_dname(new_zone->dname), logf_dname(conflict->dname));
         else
-            log_err("Duplicate zone... XXX");
+            log_err("Cannot load zone '%s' (file: '%s'): duplicate zone name from file '%s'", logf_dname(new_zone->dname), logf_pathname(new_zone->fn), logf_pathname(conflict->fn));
         zone_delete(new_zone);
         rv = true;
     }
@@ -139,12 +148,18 @@ static bool zlist_add_zfile(const char* zfn) {
         unsigned jmpby = 1;
         const unsigned hash_mask = zlist_alloc - 1;
         unsigned slot = new_zone->hash & hash_mask;
-        while(zlist[slot] && zlist[slot] != ZONE_DELETED) {
+        while(SLOT_REAL(zlist[slot])) {
             slot += jmpby++;
             slot &= hash_mask;
         }
+
+        // don't increment num_slots_used if overwriting a delete
+        if(!zlist[slot])
+            num_slots_used++;
+
         // XXX lock this on runtime updates
         zlist[slot] = new_zone;
+        num_zones++;
     }
     else { // scanning failed...
         zone_delete(new_zone);
@@ -159,11 +174,15 @@ void zlist_load_zones(void) {
     if(!zdhandle)
         log_fatal("Cannot open zones directory '%s': %s", ZONES_DIR, dmn_strerror(errno));
 
+    unsigned failed = 0;
     struct dirent* zfdi;
     while((zfdi = readdir(zdhandle)))
         if(likely(zfdi->d_name[0] != '.'))
-            zlist_add_zfile(zfdi->d_name);
+            if(zlist_add_zfile(zfdi->d_name))
+                failed++;
 
     if(closedir(zdhandle))
         log_fatal("closedir(%s) failed: %s", ZONES_DIR, dmn_strerror(errno));
+
+    log_info("%u zones loaded successfully (%u failed)", num_zones, failed);
 }
