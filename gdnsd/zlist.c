@@ -169,6 +169,8 @@ static bool zlist_add_zfile(const char* zfn) {
     return rv;
 }
 
+// XXX in the future when this merges with the non-inotify
+//   reload scanner, we don't want directory errors to be fatal
 void zlist_load_zones(void) {
     DIR* zdhandle = opendir(ZONES_DIR);
     if(!zdhandle)
@@ -186,3 +188,8 @@ void zlist_load_zones(void) {
 
     log_info("%u zones loaded successfully (%u failed)", num_zones, failed);
 }
+
+/*
+ * zlist_destroy atexit??? XXX
+    atexit(ltree_destroy);
+*/

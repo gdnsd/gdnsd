@@ -28,8 +28,9 @@
 // Argument is any legal fully-qualified dname
 // Output is the zone_t structure for the known containing zone,
 //   or NULL if no current zone contains the name.
-// auth_depth_out indicates how much of "dname" is consumed by
-//   the zone name itself, details TBD XXX
+// auth_depth_out is mostly useful for dnspacket.c, it tells you
+//   how many bytes into the dname the authoritative zone name
+//   starts at.
 F_NONNULLX(1)
 zone_t* zlist_find_dname(const uint8_t* dname, unsigned* auth_depth_out);
 

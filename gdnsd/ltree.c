@@ -1189,21 +1189,6 @@ bool ltree_process_zone(zone_t* zone) {
     return false;
 }
 
-/*
-            char* zfpath = gdnsd_make_validated_rootpath("/etc/zones", zfdi->d_name);
-            if(!zfpath)
-                log_fatal("Zone filename '%s' not valid or does not exist in '%s/etc/zones'", zfdi->d_name, gdnsd_get_rootdir());
-            struct stat zfstat;
-            if(lstat(zfpath, &zfstat))
-                log_fatal("Cannot lstat() zonefile '%s': %s", zfpath, dmn_strerror(errno));
-            if(!S_ISREG(zfstat.st_mode))
-                log_fatal("Candidate zone file '%s' is not a regular file!", zfdi->d_name);
-*/
-/*
- * zlist_destroy atexit??? XXX
-    atexit(ltree_destroy);
-*/
-
 void ltree_destroy(ltree_node_t* node) {
     dmn_assert(node);
     ltree_rrset_t* rrset = node->rrsets;
