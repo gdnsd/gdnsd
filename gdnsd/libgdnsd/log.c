@@ -152,7 +152,8 @@ const char* gdnsd_logf_pathname(const char* relpath) {
     char* space = dmn_fmtbuf_alloc(oal + 1);
     memcpy(space, rootpath, rootlen);
     space[rootlen] = '/';
-    memcpy(space + rootlen + 1, relpath, rplen);
+    if(relpath)
+        memcpy(space + rootlen + 1, relpath, rplen);
     space[oal] = 0;
     return space;
 }
