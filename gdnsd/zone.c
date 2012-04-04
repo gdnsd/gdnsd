@@ -44,12 +44,14 @@ static const uint8_t* make_zone_dname(const char* zf_name, ltarena_t* arena) {
         memcpy(alter, zf_name, zf_name_len);
         alter[zf_name_len] = 0;
 
-        // convert all '@' to '/' for RFC2137 reverse delegation zones
-        for(unsigned i = 0; i < zf_name_len; i++)
-            if(unlikely(alter[i] == '@'))
+        // convert all '@' to '/' for RFC2137 reverse delegation zones,
+        //   and map uppercase alpha to lowercase.
+        for(unsigned i = 0; i < zf_name_len; i++) {
+            if(alter[i] <= 'Z' && alter[i] >= 'A')
+                alter[i] |= 0x20;
+            else if(unlikely(alter[i] == '@'))
                 alter[i] = '/';
-
-        // XXX normalize alpha to lowercase
+        }
     }
 
     // Convert to terminated-dname format and check for problems
