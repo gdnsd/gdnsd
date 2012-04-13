@@ -62,15 +62,18 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
 
 const char* gdnsd_get_rootdir(void) { return rootdir; }
 
-char* str_combine(const char* s1, const char* s2) {
+char* str_combine(const char* s1, const char* s2, const char** s2_offs) {
     dmn_assert(s1); dmn_assert(s2);
     const unsigned s1_len = strlen(s1);
     const unsigned s2_len = strlen(s2);
-    const unsigned oal = s1_len + s2_len;
-    char* out = malloc(oal + 1);
-    memcpy(out, s1, s1_len);
-    memcpy(out + s1_len, s2, s2_len);
-    out[oal] = 0;
+    char* out = malloc(s1_len + s2_len + 1);
+    char* work = out;
+    memcpy(work, s1, s1_len);
+    work += s1_len;
+    memcpy(work, s2, s2_len);
+    work[s2_len] = 0;
+    if(s2_offs)
+        *s2_offs = work;
     return out;
 }
 

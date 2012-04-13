@@ -24,9 +24,12 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-// allocate a new string, concatenating s1+s2
-F_MALLOC F_NONNULL F_WUNUSED
-char* str_combine(const char* s1, const char* s2);
+// allocate a new string, concatenating s1 + s2.
+// retval is the new string
+// if s2_offs is not NULL, *s2_offs will be set
+//   to the offset of the copy of s2 within the retval.
+F_MALLOC F_NONNULLX(1,2) F_WUNUSED
+char* str_combine(const char* s1, const char* s2, const char** s2_offs);
 
 // PRNG:
 // gdnsd_rand_init() allocates an opaque PRNG state which can

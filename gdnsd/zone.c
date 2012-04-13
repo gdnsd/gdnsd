@@ -77,7 +77,7 @@ static const uint8_t* make_zone_dname(const char* zf_name, ltarena_t* arena) {
 zone_t* zone_new(const char* zfn) {
     dmn_assert(zfn);
     zone_t* rv = calloc(1, sizeof(zone_t));
-    rv->fn = str_combine(ZONES_DIR, zfn);
+    rv->fn = str_combine(ZONES_DIR, zfn, NULL);
     rv->arena = lta_new();
     rv->dname = make_zone_dname(zfn, rv->arena);
     if(!rv->dname) {
