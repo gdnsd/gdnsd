@@ -74,6 +74,7 @@ HAS_SENDMMSG=0
 AC_CHECK_FUNCS([sendmmsg],[HAS_SENDMMSG=1])
 
 dnl ======== Begin Network Stuff ==========
+AC_DEFINE_UNQUOTED([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3452 IPv6 stuff])
 
 dnl Find out if -lsocket -lnsl is needed, and put them
 dnl  in $NETLIBS if so, and use them for these network-related
@@ -112,8 +113,8 @@ dnl Whereas the equivalent IPv6 source-addr/flow/interface stuff is absolutely
 dnl  required even for specific listen-adddreses, because we have to at minimum
 dnl  copy the sending hosts' flow labels.  We allow IPV6_RECVPKTINFO to be optional,
 dnl  but not the corresponding IPV6_PKTINFO (for the MacOS quirk of
-dnl  re-using IPV6_PKTINFO as IPV6_RECVPKTINO, where we #define the latter to
-dnl  the former).
+dnl  re-using IPV6_PKTINFO as IPV6_RECVPKTINFO prior to Lion, where we #define
+dnl  the latter to the former).
 AC_CHECK_DECLS([IPV6_PKTINFO],,AC_MSG_ERROR([IPV6_PKTINFO is required]),[
     #include <sys/types.h>
     #include <sys/socket.h>
