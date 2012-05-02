@@ -335,11 +335,11 @@ static unsigned map_res(const char* resname, const uint8_t* origin V_UNUSED) {
                             this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
                         if(!this_dc->plugin)
                             log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
-                        //   we map through to the child plugin here and ignore
-                        //   the return value, to give them a chance to error-check
-                        //   "origin" on their own.
-                        this_dc->res_num_dync
-                            = this_dc->plugin->map_resource_dync(this_dc->res_name, origin);
+                        if(!this_dc->plugin->resolve_dyncname)
+                            log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNC resources", res->name, this_dc->dc_name, this_dc->plugin_name);
+                        this_dc->res_num_dync = this_dc->plugin->map_resource_dync
+                            ? this_dc->plugin->map_resource_dync(this_dc->res_name, origin)
+                            : 0;
                     }
                 }
             }
@@ -359,8 +359,11 @@ static unsigned map_res(const char* resname, const uint8_t* origin V_UNUSED) {
                         this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
                     if(!this_dc->plugin)
                         log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
-                    this_dc->res_num_dyna
-                        = this_dc->plugin->map_resource_dyna(this_dc->res_name);
+                    if(!this_dc->plugin->resolve_dynaddr)
+                        log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNA resources", res->name, this_dc->dc_name, this_dc->plugin_name);
+                    this_dc->res_num_dyna = this_dc->plugin->map_resource_dyna
+                        ? this_dc->plugin->map_resource_dyna(this_dc->res_name)
+                        : 0;
                 }
             }
 
