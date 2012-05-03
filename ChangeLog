@@ -1,4 +1,17 @@
 
+    Bugfix: Issue 15: When using the meta-plugins geoip and/or
+      metafo, if one misconfigured things such that a DYNC record
+      tries to resolve through a plugin that only supports DYNA
+      (or vice-versa) the daemon would segfault during checkconf
+      or startup phase instead of giving a clean error message.
+    Bugfix: MacOS Lion IPv6-related build-time bugfix (./configure
+      would fail on this platform).
+    Bugfix: If "service_types" was defined, but completely unused
+      by definition (no plugins making using of monitoring), an
+      incorrect fatal config error would be triggered on startup
+      indicating that "service_types" was not a legal config
+      stanza.
+
 1.6.5 - 2012-03-28
    plugin_geoip: if auto_dc_limit was set to the explicit value
      of zero, most queries would return no results due to the
