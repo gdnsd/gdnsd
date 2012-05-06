@@ -1,4 +1,14 @@
 
+1.6.7 - 2012-05-07
+    This release is just to fix up packaging issues and expand
+      the self-init-script code a bit, no real functional code
+      changes.
+    An official specfile and initscript are now included under
+      the pkg/rpm/ subdirectory for building RPMs.  My primary
+      target with these is currently Amazon Linux, but they
+      should work for other Redhat-ish distros.  The specfile
+      is based on Matthias Saou's earlier work for Fedora.
+
 1.6.6 - 2012-05-04
     Bugfix: Issue 15: When using the meta-plugins geoip and/or
       metafo, if one misconfigured things such that a DYNC record

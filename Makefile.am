@@ -4,8 +4,9 @@ ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
 SUBDIRS = gdnsd plugins docs t
+
 MISC_DOCS = README INSTALL AUTHORS COPYING ChangeLog
-EXTRA_DIST = docs.am
+EXTRA_DIST = docs.am pkg
 BUILT_SOURCES = cfg-dirs.h
 CLEANFILES = cfg-dirs.h
 

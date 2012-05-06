@@ -13,6 +13,10 @@ gdnsd - An authoritative DNS daemon
     start - Start gdnsd as a regular daemon
     stop - Stops a running daemon previously started by 'start'
     restart - Effectively equivalent to checkconf && stop && start, but faster
+    reload - Aliases 'restart'
+    force-reload - Aliases 'restart'
+    condrestart - Does 'restart' action only if already running
+    try-restart - Aliases 'condrestart'
     status - Checks the status of the running daemon
 
 =head1 DESCRIPTION
@@ -95,9 +99,10 @@ zonefiles themselves.
 
 =head1 ACTIONS
 
-B<gdnsd> effectively acts as its own initscript, internalizing
+B<gdnsd> acts as its own initscript, internalizing
 daemon management functions.  All valid invocations of the gdnsd
-command include an B<action>.
+command include an B<action>, most of which model normal initscript
+actions.
 
 =over 4
 
@@ -142,6 +147,28 @@ have a large volume of zone data that takes significant time
 to load), and also leaves the original daemon instance untouched
 if the configuration is invalid (you've made an error in your
 new zone data, etc).
+
+=item B<reload>
+
+Alias for C<restart>.  gdnsd does not have any other way
+to reload configuration, and it's a fairly seamless restart in
+any case.
+
+=item B<force-reload>
+
+Again, an aliase for C<restart>.
+
+=item B<condrestart>
+
+This is basically "restart only if already running".
+
+Performs the same actions as C<restart>, but aborts early
+(with a successful exit value) if the daemon was not already
+running.
+
+=item B<try-restart>
+
+Alias for C<condrestart>.
 
 =item B<status>
 

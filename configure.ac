@@ -1,8 +1,8 @@
 AC_INIT([gdnsd],[1.7.0],[blblack@gmail.com],[gdnsd],[http://gdnsd.googlecode.com])
-AC_PREREQ([2.68])
+AC_PREREQ([2.69])
 AC_CONFIG_AUX_DIR([acaux])
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([1.11.3 dist-xz foreign tar-ustar -Wall])
+AM_INIT_AUTOMAKE([1.12 dist-xz foreign tar-ustar -Wall])
 AM_SILENT_RULES([yes])
 
 dnl TODO: when/if a new autoconf release has a C11 macro,
@@ -33,6 +33,9 @@ AC_C_BIGENDIAN
 
 dnl figure out whether and how to use TLS
 AX_TLS
+
+dnl Apparently libtool+automake need this now...
+AM_PROG_AR
 
 dnl The libtool macros in 2.2.6b - 2.4.2 have a bug that causes
 dnl  them to accidentally add LIBADD_DLOPEN to LIBS permanently,
