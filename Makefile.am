@@ -3,11 +3,11 @@
 ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
-SUBDIRS = gdnsd plugins example docs t
+SUBDIRS = gdnsd plugins docs t
 
 MISC_DOCS = README INSTALL AUTHORS COPYING ChangeLog
 
-EXTRA_DIST = docs.am
+EXTRA_DIST = docs.am pkg
 
 # Some junk autotools doesn't seem to clean on its own
 DISTCLEANFILES = config.h.in~ configure.ac~

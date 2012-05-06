@@ -1,0 +1,9 @@
+
+*** Subdirs ***
+
+rpm: RPM packaging stuff, currently a specfile and an initscript,
+  both of which should hopefully work for Redhat-ish distros.
+
+misc: Various user-contributed initscripts.  These tend to use
+  the distros' style, whereas the one in pkg/rpm/ lets gdnsd
+  manage itself, which I like better.

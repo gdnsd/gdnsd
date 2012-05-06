@@ -272,7 +272,6 @@ AC_CONFIG_FILES([
   gdnsd/libgdnsd/Makefile
   t/Makefile
   docs/Makefile
-  example/Makefile
   plugins/Makefile
   plugins/trivial/Makefile
   plugins/weighted/Makefile

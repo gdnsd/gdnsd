@@ -25,7 +25,7 @@ MAINTAINERCLEANFILES = $(srcdir)/zscan.c $(srcdir)/zscan_lm.c
 EXTRA_DIST = $(srcdir)/zscan.rl
 
 common-instdirs-gdnsd:
-	for dir in "$(DESTDIR)$(localstatedir)/run" "$(DESTDIR)$(localstatedir)/gdnsd"; do \
+	for dir in "$(DESTDIR)$(sysconfdir)/gdnsd" "$(DESTDIR)$(localstatedir)/run" "$(DESTDIR)$(localstatedir)/gdnsd"; do \
           test -z "$$dir" || $(MKDIR_P) "$$dir"; \
         done
 
