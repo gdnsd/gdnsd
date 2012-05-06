@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# gdnsd        Authoritative DNS server
+#
+# chkconfig:   - 20 80
+# description: Authoritative DNS server with optional facilities
+#              for geographic (and/or local) balancing, redirection,
+#              and monitored failover.
+
+### BEGIN INIT INFO
+# Provides: gdnsd
+# Required-Start: $local_fs $network $syslog
+# Required-Stop: $local_fs $network $syslog
+# Should-Start: 
+# Should-Stop: 
+# Default-Start: 
+# Default-Stop: 0 1 2 3 4 5 6
+# Short-Description: Authoritative DNS server
+# Description: Authoritative DNS server with optional facilities
+#              for geographic (and/or local) balancing, redirection,
+#              and monitored failover.
+### END INIT INFO
+
+# Basic defaults for a single instance with default paths
+exec="/usr/sbin/gdnsd"
+prog="gdnsd"
+config="/etc/gdnsd/config"
+
+# May override exec/config from above:
+[ -e /etc/sysconfig/$prog ] && . /etc/sysconfig/$prog
+
+# gdnsd manages itself and understands the "normal" initscript commands
+exec $exec -c $config $1
