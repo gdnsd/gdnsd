@@ -11,11 +11,11 @@ Requires(post): /sbin/chkconfig
 Requires(preun): /sbin/service, /sbin/chkconfig
 Requires(postun): /sbin/service
 BuildRequires: libcap-devel
-BuildRequires(check): perl(Test::More)
-BuildRequires(check): perl(Net::DNS)
-BuildRequires(check): perl(LWP)
-BuildRequires(check): perl(Socket6)
-BuildRequires(check): perl(IO::Socket::INET6)
+BuildRequires: perl(Test::More)
+BuildRequires: perl(Net::DNS)
+BuildRequires: perl(LWP)
+BuildRequires: perl(Socket6)
+BuildRequires: perl(IO::Socket::INET6)
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 %description
