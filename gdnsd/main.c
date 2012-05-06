@@ -99,14 +99,18 @@ static void usage(const char* argv0) {
         " (debug build)"
 #endif
         "\n"
-        "Usage: %s [-c /a/config/file] action\n"
-        "  -c Use this configfile (default " ETCDIR "/" PACKAGE_NAME "/config)\n"
+        "Usage: %s [-c " ETCDIR "/" PACKAGE_NAME "/config ] action\n"
+        "  -c Use a non-default config file path\n"
         "Actions:\n"
         "  checkconf - Checks validity of config/zone files\n"
         "  startfg - Start " PACKAGE_NAME " in foreground w/ logs to stderr\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
         "  stop - Stops a running daemon previously started by 'start'\n"
         "  restart - Equivalent to checkconf && stop && start, but faster\n"
+        "  reload - Aliases 'restart'\n"
+        "  force-reload - Aliases 'restart'\n"
+        "  condrestart - Does 'restart' action only if already running\n"
+        "  try-restart - Aliases 'condrestart'\n"
         "  status - Checks the status of the running daemon\n"
         "  lpe_on - Turns on log_packet_errors in the running daemon\n"
         "  lpe_off - Turns off log_packet_errors in the running daemon\n"
@@ -203,35 +207,46 @@ static void start_threads(void) {
 
 typedef enum {
     ACT_CHECKCFG   = 0,
-    ACT_STARTFG,  // 1
-    ACT_START,    // 2
-    ACT_STOP,     // 3
-    ACT_RESTART,  // 4
-    ACT_STATUS,   // 5
-    ACT_LPE_ON,   // 6
-    ACT_LPE_OFF,  // 7
-    ACT_UNDEF     // 8
+    ACT_STARTFG,
+    ACT_START,
+    ACT_STOP,
+    ACT_RESTART,
+    ACT_CRESTART,
+    ACT_STATUS,
+    ACT_LPE_ON,
+    ACT_LPE_OFF,
+    ACT_UNDEF
 } action_t;
 
-static const char* act_strs[] = {
-    "checkconf",      // 0
-    "startfg",        // 1
-    "start",          // 2
-    "stop",           // 3
-    "restart",        // 4
-    "status",         // 5
-    "lpe_on",         // 6
-    "lpe_off",        // 7
+typedef struct {
+    const char* cmdstring;
+    action_t action;
+} actmap_t;
+
+static actmap_t actionmap[] = {
+    { "checkconf",    ACT_CHECKCFG }, // 1
+    { "startfg",      ACT_STARTFG },  // 2
+    { "start",        ACT_START },    // 3
+    { "stop",         ACT_STOP },     // 4
+    { "restart",      ACT_RESTART },  // 5
+    { "reload",       ACT_RESTART },  // 6
+    { "force-reload", ACT_RESTART },  // 7
+    { "condrestart",  ACT_CRESTART }, // 8
+    { "try-restart",  ACT_CRESTART }, // 9
+    { "status",       ACT_STATUS },   // 10
+    { "lpe_on",       ACT_LPE_ON },   // 11
+    { "lpe_off",      ACT_LPE_OFF },  // 12
 };
+#define ACTIONMAP_COUNT 12
 
 F_NONNULL F_PURE
 static action_t match_action(const char* arg) {
     dmn_assert(arg);
 
     unsigned i;
-    for(i = 0; i < 8; i++)
-        if(!strcasecmp(act_strs[i], arg))
-            return i;
+    for(i = 0; i < ACTIONMAP_COUNT; i++)
+        if(!strcasecmp(actionmap[i].cmdstring, arg))
+            return actionmap[i].action;
     return ACT_UNDEF;
 }
 
@@ -271,20 +286,23 @@ int main(int argc, char** argv) {
     conf_load(conf_arg);
     free(conf_arg);
 
+    // Check if we're already running...
+    const int oldpid = dmn_status(gconfig.pidfile);
+
     // Take action
     if(action == ACT_STATUS) {
-        const int oldpid = dmn_status(gconfig.pidfile);
         if(!oldpid) {
-            log_info("Not running");
-            exit(1);
+            log_info("status: not running");
+            exit(3);
         }
-        log_info("Running at pid %i", oldpid);
+        log_info("status: running at pid %i", oldpid);
         exit(0);
     }
 
     if(action == ACT_STOP) {
-        dmn_stop(gconfig.pidfile);
-        exit(0);
+        exit(
+            dmn_stop(gconfig.pidfile) ? 1 : 0
+        );
     }
 
     if(action == ACT_LPE_ON) {
@@ -295,6 +313,14 @@ int main(int argc, char** argv) {
     if(action == ACT_LPE_OFF) {
         dmn_signal(gconfig.pidfile, SIGUSR2);
         exit(0);
+    }
+
+    if(action == ACT_CRESTART) {
+        if(!oldpid) {
+            log_info("condrestart: not running, will not restart");
+            exit(0);
+        }
+        action = ACT_RESTART;
     }
 
     // Call plugin full_config actions
