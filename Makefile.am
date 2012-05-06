@@ -27,13 +27,15 @@ libtool: $(LIBTOOL_DEPS)
 
 all-local: libtool
 
-gdnsd-install-rootdir:
-	for dir in "$(GDNSD_DEF_ROOTDIR)/etc/zones" "$(GDNSD_DEF_ROOTDIR)/var"; do \
-          test -z "$$dir" || $(MKDIR_P) "$$dir"; \
-        done
-
-install-exec-local:	gdnsd-install-rootdir
-installdirs-local:	gdnsd-install-rootdir
+# This creates an empty skeleton in e.g. /srv/gdnsd
+# It's not executed as part of "make install", because it
+#   doesn't live within $prefix, and this "make distcheck"
+#   would fail on it...
+install-gdnsd-rootdir:
+	umask 022
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEF_ROOTDIR)/etc/zones"
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEF_ROOTDIR)/etc/geoip"
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEF_ROOTDIR)/var"
 
 install-exec-hook:
 	@echo
@@ -43,6 +45,7 @@ install-exec-hook:
 	@echo   static configuration, places your zonefiles \(named for their zones\) in the
 	@echo   directory \"$(GDNSD_DEF_ROOTDIR)/etc/zones/\", and invoke \"$(PACKAGE_NAME) start\"
 	@echo   as root.
+	@echo You can run \"make install-gdnsd-rootdir\" to have the basic directory layout created for you.
 
 check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
