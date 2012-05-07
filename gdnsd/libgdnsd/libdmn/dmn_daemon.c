@@ -152,9 +152,6 @@ void dmn_daemonize(const char* logname, const char* pidfile) {
     if(!fork_and_exit())
         dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
 
-    if(chdir("/"))
-        dmn_log_fatal("chdir(/) failed: %s", dmn_strerror(errno));
-
     umask(022);
 
     long pid = make_pidfile(pidfile);
