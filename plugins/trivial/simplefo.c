@@ -216,15 +216,18 @@ monio_list_t* plugin_simplefo_load_config(const vscf_data_t* config) {
     return &monio_list;
 }
 
-unsigned plugin_simplefo_map_resource_dyna(const char* resname) {
-    if(!resname)
-        log_fatal("simplefo plugin requires a resource name");
+int plugin_simplefo_map_resource_dyna(const char* resname) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++)
+            if(!strcmp(resname, resources[i].name))
+                return (int)i;
+        log_err("plugin_simplefo: Unknown resource '%s'", resname);
+    }
+    else {
+        log_err("plugin_simplfo: resource name required");
+    }
 
-    for(unsigned i = 0; i < num_resources; i++)
-        if(!strcmp(resname, resources[i].name))
-            return i;
-
-    log_fatal("Unknown simplefo plugin resource '%s'", resname);
+    return -1;
 }
 
 // ---state chart-------------

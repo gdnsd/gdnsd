@@ -661,43 +661,58 @@ void plugin_weighted_full_config(const unsigned num_threads) {
     init_rand_storage(num_threads);
 }
 
-unsigned plugin_weighted_map_resource_dyna(const char* resname) {
-    if (!resname)
-        log_fatal("plugin_weighted: resource name should be present");
-
-    for (unsigned i = 0; i < num_resources; i++)
-        if (!strcmp(resname, resources[i].name)) {
-            if(!resources[i].addrs_v4 && !resources[i].addrs_v6)
-                log_fatal("plugin_weighted: Resource '%s' used in a DYNA RR, but has no address config data", resources[i].name);
-            log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
-            return i;
+int plugin_weighted_map_resource_dyna(const char* resname) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++) {
+            if (!strcmp(resname, resources[i].name)) {
+                if(!resources[i].addrs_v4 && !resources[i].addrs_v6) {
+                    log_err("plugin_weighted: Resource '%s' used in a DYNA RR, but has no address config data", resources[i].name);
+                    return -1;
+                }
+                log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
+                return (int)i;
+            }
         }
+        log_err("plugin_weighted: unknown resource '%s'", resname);
+    }
+    else {
+        log_err("plugin_weighted: resource name required");
+    }
 
-    log_fatal("plugin_weighted: unknown resource '%s'", resname);
+    return -1;
 }
 
-unsigned plugin_weighted_map_resource_dync(const char* resname, const uint8_t* origin) {
-    if (!resname)
-        log_fatal("plugin_weighted: resource name required in zonefile references");
-    for (unsigned i = 0; i < num_resources; i++) {
-        if (!strcmp(resname, resources[i].name)) {
-            cnset_t* cnset = resources[i].cnames;
-            if(!cnset)
-                log_fatal("plugin_weighted: Resource '%s' used in a DYNC RR, but has no cnames config data", resources[i].name);
-            for(unsigned j = 0; j < cnset->count; j++) {
-                const uint8_t* dname = cnset->items[j].cname;
-                if (dname_status(dname) == DNAME_PARTIAL) {
-                    uint8_t dnbuf[256];
-                    dname_copy(dnbuf, dname);
-                    if (dname_cat(dnbuf, origin) != DNAME_VALID)
-                        log_fatal("plugin_weighted: Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), resources[i].name, logf_dname(origin));
+int plugin_weighted_map_resource_dync(const char* resname, const uint8_t* origin) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++) {
+            if (!strcmp(resname, resources[i].name)) {
+                cnset_t* cnset = resources[i].cnames;
+                if(!cnset) {
+                    log_err("plugin_weighted: Resource '%s' used in a DYNC RR, but has no cnames config data", resources[i].name);
+                    return -1;
                 }
+                for(unsigned j = 0; j < cnset->count; j++) {
+                    const uint8_t* dname = cnset->items[j].cname;
+                    if(dname_status(dname) == DNAME_PARTIAL) {
+                        uint8_t dnbuf[256];
+                        dname_copy(dnbuf, dname);
+                        if(dname_cat(dnbuf, origin) != DNAME_VALID) {
+                            log_err("plugin_weighted: Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), resources[i].name, logf_dname(origin));
+                            return -1;
+                        }
+                    }
+                }
+                log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
+                return (int)i;
             }
-            log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
-            return i;
         }
+        log_err("plugin_weighted: unknown resource '%s'", resname);
     }
-    log_fatal("plugin_weighted: unknown resource '%s'", resname);
+    else {
+        log_err("plugin_weighted: resource name required in zonefile references");
+    }
+
+    return -1;
 }
 
 void plugin_weighted_iothread_init(const unsigned threadnum) { init_rand(threadnum); }

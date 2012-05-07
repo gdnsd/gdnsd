@@ -79,39 +79,53 @@ monio_list_t* plugin_static_load_config(const vscf_data_t* config) {
     return NULL;
 }
 
-unsigned plugin_static_map_resource_dyna(const char* resname) {
-    if(!resname)
-        log_fatal("static plugin requires a resource name");
-
-    for(unsigned i = 0; i < num_resources; i++)
-        if(!strcmp(resname, resources[i].name)) {
-            if(!resources[i].is_addr)
-                log_fatal("plugin_static: resource '%s' defined as a CNAME and then used as an address", resources[i].name);
-            return i;
+int plugin_static_map_resource_dyna(const char* resname) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++) {
+            if(!strcmp(resname, resources[i].name)) {
+                if(!resources[i].is_addr) {
+                    log_err("plugin_static: resource '%s' defined as a CNAME and then used as an address", resources[i].name);
+                    return -1;
+                }
+                return (int)i;
+            }
         }
+        log_err("plugin_static: Unknown resource '%s'", resname);
+    }
+    else {
+        log_err("plugin_static: resource name required");
+    }
 
-    log_fatal("Unknown static plugin resource '%s'", resname);
+    return -1;
 }
 
-unsigned plugin_static_map_resource_dync(const char* resname, const uint8_t* origin) {
-    if(!resname)
-        log_fatal("static plugin requires a resource name");
-
-    for(unsigned i = 0; i < num_resources; i++)
-        if(!strcmp(resname, resources[i].name)) {
-            if(resources[i].is_addr)
-                log_fatal("plugin_static: resource '%s' defined as an address and then used as a CNAME", resources[i].name);
-            if(dname_is_partial(resources[i].dname)) {
-                uint8_t dnbuf[256];
-                dname_copy(dnbuf, resources[i].dname);
-                dname_status_t status = dname_cat(dnbuf, origin);
-                if(status != DNAME_VALID)
-                    log_fatal("plugin_static: CNAME resource '%s' (configured with partial domainname '%s') creates an invalid domainname when used at origin '%s'", resources[i].name, logf_dname(resources[i].dname), logf_dname(origin));
+int plugin_static_map_resource_dync(const char* resname, const uint8_t* origin) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++) {
+            if(!strcmp(resname, resources[i].name)) {
+                if(resources[i].is_addr) {
+                    log_err("plugin_static: resource '%s' defined as an address and then used as a CNAME", resources[i].name);
+                    return -1;
+                }
+                if(dname_is_partial(resources[i].dname)) {
+                    uint8_t dnbuf[256];
+                    dname_copy(dnbuf, resources[i].dname);
+                    dname_status_t status = dname_cat(dnbuf, origin);
+                    if(status != DNAME_VALID) {
+                        log_err("plugin_static: CNAME resource '%s' (configured with partial domainname '%s') creates an invalid domainname when used at origin '%s'", resources[i].name, logf_dname(resources[i].dname), logf_dname(origin));
+                        return -1;
+                    }
+                }
+                return (int)i;
             }
-            return i;
         }
+        log_err("plugin_static: Unknown resource '%s'", resname);
+    }
+    else {
+        log_err("plugin_static: resource name required");
+    }
 
-    log_fatal("Unknown static plugin resource '%s'", resname);
+    return -1;
 }
 
 bool plugin_static_resolve_dynaddr(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {

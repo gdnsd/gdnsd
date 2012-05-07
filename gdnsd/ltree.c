@@ -378,7 +378,16 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8
             log_zfatal("Name '%s': DYNA refers to a plugin which does not support dynamic address resolution", logf_dname(dname));
         }
         else {
-            rrset->dyn.resource = p->map_resource_dyna ? p->map_resource_dyna(resource_name) : 0;
+            if(p->map_resource_dyna) {
+                const int res = p->map_resource_dyna(resource_name);
+                if(res < 0)
+                    log_zfatal("Name '%s': DYNA plugin '%s' rejected resource name '%s'", logf_dname(dname), plugin_name, resource_name);
+                else
+                    rrset->dyn.resource = (unsigned)res;
+            }
+            else {
+                rrset->dyn.resource = 0;
+            }
             rrset->dyn.func = p->resolve_dynaddr;
         }
         return false;
@@ -420,9 +429,18 @@ bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint
             log_zfatal("Name '%s': DYNC refers to a plugin which does not support dynamic CNAME resolution", logf_dname(dname));
         }
         else {
-            // we pass rrset->dyn.origin instead of origin here, in case the plugin author saves the pointer
-            //  (which he probably shouldn't, but can't hurt to make life easier)
-            rrset->dyn.resource = p->map_resource_dync ? p->map_resource_dync(resource_name, rrset->dyn.origin) : 0;
+            if(p->map_resource_dync) {
+                // we pass rrset->dyn.origin instead of origin here, in case the plugin author saves the pointer
+                //  (which he probably shouldn't, but can't hurt to make life easier)
+                const int res = p->map_resource_dync(resource_name, rrset->dyn.origin);
+                if(res < 0)
+                    log_zfatal("Name '%s': DYNC plugin '%s' rejected resource name '%s' at origin '%s'", logf_dname(dname), plugin_name, resource_name, rrset->dyn.origin);
+                else
+                    rrset->dyn.resource = (unsigned)res;
+            }
+            else {
+                rrset->dyn.resource = 0;
+            }
             rrset->dyn.func = p->resolve_dyncname;
         }
         return false;

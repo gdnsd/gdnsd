@@ -90,8 +90,8 @@ void gdnsd_dynaddr_add_result_anysin(dynaddr_result_t* result, const anysin_t* a
 
 typedef unsigned (*gdnsd_apiv_cb_t)(void);
 typedef monio_list_t* (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
-typedef unsigned (*gdnsd_map_resource_dyna_cb_t)(const char* resname);
-typedef unsigned (*gdnsd_map_resource_dync_cb_t)(const char* resname, const uint8_t* origin);
+typedef int (*gdnsd_map_resource_dyna_cb_t)(const char* resname);
+typedef int (*gdnsd_map_resource_dync_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
 typedef void (*gdnsd_pre_privdrop_cb_t)(void);
 typedef void (*gdnsd_pre_run_cb_t)(struct ev_loop* loop);

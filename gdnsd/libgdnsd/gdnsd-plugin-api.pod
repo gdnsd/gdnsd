@@ -15,8 +15,6 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     void plugin_foo_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
     # only 'checkconf', 'start', 'restart' continue past this point
     void plugin_foo_full_config(unsigned num_threads)
-    unsigned plugin_foo_map_resource_dyna(const char* resname)
-    unsigned plugin_foo_map_resource_dync(const char* resname, const uint8_t* origin)
     void plugin_foo_add_monitor(const char* svc_name, monio_smgr_t* smgr)
     # only 'start' and 'restart' continue past this point
     void plugin_foo_pre_privdrop(void)
@@ -25,9 +23,15 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     void plugin_foo_pre_run(struct ev_loop* loop)
     void plugin_foo_iothread_init(unsigned threadnum)
 
-    -- runtime stuff (called from iothread context)
+    -- runtime stuff (called from iothread context, anytime after iothread_init())
     bool plugin_foo_resolve_dynaddr(unsigned threadnum, unsigned resnum, const client_info_t* cinfo, dynaddr_result_t* result)
     void plugin_foo_resolve_dyncname(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyncname_result_t* result)
+
+    -- runtime stuff (called from main or zonefile thread, anytime after full_config())
+    --   (you won't get parallel calls to these, and in general they should be readonly
+    --    operations anyways)
+    int plugin_foo_map_resource_dyna(const char* resname)
+    int plugin_foo_map_resource_dync(const char* resname, const uint8_t* origin)
 
     -- cleanup stuff:
     void plugin_foo_exit(void)
@@ -244,7 +248,8 @@ with all C<DYNC> RRs and C<plugin_foo_map_resource_dync>.  In the C<DYNA>
 case, you get the resource name and are expected to return an integer resource
 number.  In the C<DYNC> case, you get both the resource name and an origin
 argument indicating the current C<$ORIGIN> in effect for the RR, and again
-are expected to return an integer resource number.
+are expected to return an integer resource number which is greater than or
+equal to zero.
 
 The meaning and mapping of these resource numbers is entirely up to the plugin.
 Any time the given RR is resolved at runtime, the resource number you returned
@@ -260,6 +265,11 @@ reason the C<origin> parameter is provided for C<plugin_foo_map_resource_dync>.
 Plugins should B<not> return different resource numbers for the same resname
 argument, even in the DYNC case where C<origin> varies.  You will break things
 if you do so.
+
+If your map_resource operation fails (e.g. unknown resource name, or illegal
+origin-based CNAME construction), log the error and return -1.  Do B<not>
+fail fatally, as these calls happen at runtime during dynamic zonefile
+reloads.
 
 In the case of the action C<checkconf>, execution stops here.  Only the
 C<start> and C<restart> actions continue on to become full-fledged daemon
@@ -389,6 +399,12 @@ I/O threads, then comes another which invokes each plugin's C<plugin_foo_exit()>
 from the main thread's context.  You can log any stats output you wish here,
 and/or destruct any resources you wish (no worry about races from io thread access,
 they're all dead now).
+
+The C<map_resource_dyna> amd C<map_resource_dync> callbacks may also be called
+at any time during normal runtime as a result of zonefiles being dynamically
+reloaded.  These should be readonly operations so there shouldn't be any locking
+concerns.  It's important that these calls never fail fatally.  Simply log
+an error and return -1.
 
 =head1 THREADING
 

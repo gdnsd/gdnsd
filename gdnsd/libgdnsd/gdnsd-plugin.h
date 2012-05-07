@@ -80,8 +80,8 @@ unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
 
 monio_list_t* SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(const vscf_data_t* config);
-unsigned SYM_MAP_RESOURCEA(GDNSD_PLUGIN_NAME)(const char* resname);
-unsigned SYM_MAP_RESOURCEC(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
+int SYM_MAP_RESOURCEA(GDNSD_PLUGIN_NAME)(const char* resname);
+int SYM_MAP_RESOURCEC(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
 void SYM_FULL_CONFIG(GDNSD_PLUGIN_NAME)(unsigned num_threads);
 void SYM_PRE_PRIVDROP(GDNSD_PLUGIN_NAME)(void);
 F_NONNULL

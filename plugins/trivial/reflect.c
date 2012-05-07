@@ -39,15 +39,16 @@ static const char* response_text[NUM_RTYPES] = {
 
 // resource names (and numbers) are used by this plugin to choose
 //  one of four response types above, defaulting to "best".
-unsigned plugin_reflect_map_resource_dyna(const char* resname) {
+int plugin_reflect_map_resource_dyna(const char* resname) {
     if(!resname)
         return RESPONSE_BEST;
 
     for(unsigned i = 0; i < NUM_RTYPES; i++)
         if(!strcasecmp(resname, response_text[i]))
-            return i;
+            return (int)i;
 
-    log_fatal("plugin_reflect: resource name '%s' invalid (must be one of 'dns', 'edns', 'best', 'both')", resname);
+    log_err("plugin_reflect: resource name '%s' invalid (must be one of 'dns', 'edns', 'best', 'both')", resname);
+    return -1;
 }
 
 bool plugin_reflect_resolve_dynaddr(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t* cinfo, dynaddr_result_t* result) {
