@@ -24,10 +24,10 @@
 # Basic defaults for a single instance with default paths
 exec="/usr/sbin/gdnsd"
 prog="gdnsd"
-config="/etc/gdnsd/config"
+dataroot="/srv/gdnsd"
 
-# May override exec/config from above:
+# May override exec/dataroot from above:
 [ -e /etc/sysconfig/$prog ] && . /etc/sysconfig/$prog
 
 # gdnsd manages itself and understands the "normal" initscript commands
-exec $exec -c $config $1
+exec $exec -d $dataroot $1

@@ -1,6 +1,6 @@
 Summary: Authoritative DNS Server
 Name: gdnsd
-Version: 1.6.7
+Version: 1.7.0
 Release: 1%{?dist}
 License: GPLv3+
 Group: System Environment/Daemons
@@ -47,6 +47,7 @@ make check
 %install
 rm -rf %{buildroot}
 make install DESTDIR=%{buildroot}
+make install-gdnsd-rootdir DESTDIR=%{buildroot}
 install -D -p -m 0755 pkg/rpm/gdnsd.init %{buildroot}%{_initddir}/gdnsd
 
 %clean
@@ -75,7 +76,6 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%dir %{_sysconfdir}/gdnsd/
 %{_initddir}/gdnsd
 %dir %{_libdir}/gdnsd/
 %{_libdir}/gdnsd/*.so
@@ -86,7 +86,7 @@ fi
 %doc %{_mandir}/man5/*
 %doc %{_mandir}/man8/*
 %doc %{_defaultdocdir}/gdnsd/*
-%dir %{_var}/gdnsd/
+/srv/gdnsd
 
 %files devel
 %defattr(-,root,root,-)
@@ -94,6 +94,9 @@ fi
 %doc %{_mandir}/man3/*
 
 %changelog
+* Sun May  6 2012 Brandon Black <blblack@gmail.com> 1.7.0-1
+- Updated for dev branch fs layouts, no release yet.
+
 * Fri May  4 2012 Brandon Black <blblack@gmail.com> 1.6.7-1
 - Forked from Matthias' work on Fedora RPMs.  My primary
   target here is Amazon Linux RPMs, but it will probably
