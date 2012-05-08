@@ -350,7 +350,7 @@ static int map_res(const char* resname, const uint8_t* origin V_UNUSED) {
                         }
                         if(this_dc->plugin->map_resource_dync) {
                             const int resnum = this_dc->plugin->map_resource_dync(this_dc->res_name, origin);
-                            if(res < 0) {
+                            if(resnum < 0) {
                                 log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNC resource name '%s' at origin '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(origin));
                                 return -1;
                             }
