@@ -1212,6 +1212,12 @@ typedef struct {
 } gdmap_t;
 
 typedef struct {
+    unsigned offset;
+    unsigned dclist;
+} offset_cache_item_t;
+#define OFFSET_CACHE_SIZE (1 << 18)
+
+typedef struct {
     char* pathname;
     uint8_t* data;
     const fips_t* fips;
@@ -1220,6 +1226,8 @@ typedef struct {
     int type;
     unsigned base;
     bool ipv6;
+
+    offset_cache_item_t *offset_cache[OFFSET_CACHE_SIZE];
 } geoip_db_t;
 
 F_NONNULL
@@ -1227,7 +1235,7 @@ static int geoip_db_close(geoip_db_t* db);
 F_NONNULLX(1)
 static geoip_db_t* geoip_db_open(const char* pathname, const fips_t* fips, const char* map_name, const bool city_required);
 F_NONNULLX(1, 2, 3)
-static int geoip_tree_xlate(const gdmap_t* gdmap, ntree_t* tree, const geoip_db_t* db, const geoip_db_t* db_v4o);
+static int geoip_tree_xlate(const gdmap_t* gdmap, ntree_t* tree, geoip_db_t* db, geoip_db_t* db_v4o);
 
 F_NONNULL
 static ntree_t* gdmap_make_tree(const gdmap_t* gdmap, const dclists_t* old_dclists) {
@@ -1846,10 +1854,18 @@ static unsigned city_lookup_dclist(const geoip_db_t* db, unsigned int offs, cons
 }
 
 F_NONNULL
-static unsigned get_dclist(const gdmap_t* gdmap, const ntree_t* tree, const geoip_db_t* db, const unsigned int offset) {
+static unsigned get_dclist(const gdmap_t* gdmap, const ntree_t* tree, geoip_db_t* db, const unsigned int offset) {
     dmn_assert(gdmap); dmn_assert(db);
 
     unsigned dclist = 0;
+    unsigned bucket_size = 0;
+    unsigned ndx = offset % OFFSET_CACHE_SIZE;
+
+    if (db->offset_cache[ndx]) {
+        for (bucket_size = 0; db->offset_cache[ndx][bucket_size].offset; bucket_size++)
+            if (db->offset_cache[ndx][bucket_size].offset == offset)
+                return db->offset_cache[ndx][bucket_size].dclist;
+    }
 
     switch(db->type) {
         case GEOIP_CITY_EDITION_REV1_V6:
@@ -1872,6 +1888,11 @@ static unsigned get_dclist(const gdmap_t* gdmap, const ntree_t* tree, const geoi
             break;
     }
 
+    db->offset_cache[ndx] = realloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size+2));
+    db->offset_cache[ndx][bucket_size].offset = offset;
+    db->offset_cache[ndx][bucket_size].dclist = dclist;
+    db->offset_cache[ndx][bucket_size+1].offset = 0;
+
     return dclist;
 }
 
@@ -1880,7 +1901,7 @@ static unsigned get_dclist(const gdmap_t* gdmap, const ntree_t* tree, const geoi
 // C really needs a better macro/template idea :(
 #define DEFUN_TREE_XLATE(IPVN, IPTYPE, IPZERO, BITDEPTH, V4ROOT_CODE, SKIP_CODE) \
 F_NONNULL              \
-static int geoip_tree_xlate_ ## IPVN(const gdmap_t* gdmap, ntree_t* tree, const geoip_db_t* db) { \
+static int geoip_tree_xlate_ ## IPVN(const gdmap_t* gdmap, ntree_t* tree, geoip_db_t* db) { \
     dmn_assert(gdmap); dmn_assert(tree); dmn_assert(db); \
     struct {                                             \
         int depth;                                       \
@@ -1996,7 +2017,7 @@ DEFUN_TREE_XLATE(v4, uint32_t, 0, 32, ;, ;)
 
 DEFUN_TREE_XLATE(v6, struct in6_addr, ip6_zero, 128, V6_V4ROOT_CODE, V6_SKIP_CODE)
 
-static int geoip_tree_xlate(const gdmap_t* gdmap, ntree_t* tree, const geoip_db_t* db, const geoip_db_t* db_v4o) {
+static int geoip_tree_xlate(const gdmap_t* gdmap, ntree_t* tree, geoip_db_t* db, geoip_db_t* db_v4o) {
     dmn_assert(gdmap); dmn_assert(tree); dmn_assert(db);
 
     log_info("plugin_geoip: map '%s': Processing GeoIP database '%s'...", gdmap->name, logf_pathname(gdmap->geoip_path));
@@ -2034,6 +2055,8 @@ static int geoip_db_close(geoip_db_t* db) {
         }
     }
 
+    for (unsigned i = 0; i < OFFSET_CACHE_SIZE; i++)
+        free(db->offset_cache[i]);
     if(db->pathname)
         free(db->pathname);
     free(db);
