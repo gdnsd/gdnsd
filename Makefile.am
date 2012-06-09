@@ -32,6 +32,6 @@ check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
 
 clean-local:
-	@rm -rf $(top_srcdir)/gwiki.out
+	@rm -rf $(top_srcdir)/wikidocs
 
 include $(top_srcdir)/docs.am
