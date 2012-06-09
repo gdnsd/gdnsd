@@ -4,8 +4,8 @@ Version: 1.6.7
 Release: 1%{?dist}
 License: GPLv3+
 Group: System Environment/Daemons
-URL: http://code.google.com/p/gdnsd/
-Source0: http://gdnsd.googlecode.com/files/gdnsd-%{version}.tar.xz
+URL: https://github.com/blblack/gdnsd
+Source0: https://github.com/downloads/blblack/gdnsd/gdnsd-%{version}.tar.xz
 Requires(pre): /usr/sbin/useradd
 Requires(post): /sbin/chkconfig
 Requires(preun): /sbin/service, /sbin/chkconfig
