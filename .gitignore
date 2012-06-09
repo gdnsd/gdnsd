@@ -60,4 +60,4 @@ Makefile.in
 # generated docs
 *.txt
 *.[0-9]
-/gwiki.out/
+/wikidocs/

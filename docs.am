@@ -41,20 +41,26 @@ GENERATED_DOCS = $(GENERATED_DOCS_NOTMAN) $(dist_man_MANS)
 .pod.txt:
 	$(AM_V_GEN)$(POD2TEXT) -l $< $@
 
-GWIKI_DIR = $(abs_top_builddir)/gwiki.out
-
-
-gwiki:
+# "make wikidocs" ->
+# Basically it finds all the podfiles in the source tree,
+#   renames them from e.g. gdnsd-plugin-geoip.pod to GdnsdPluginGeoip.pod,
+#   and stuffs them all in a flat new directory "wikidocs" at the top
+#   level of the checkout.  From there I copy them to the gollum repo
+#   for GitHub, wherever I happen to have that checked out at.  It's a
+#   manual step on new stable releases to push these docs through to
+#   the Github wiki.
+WIKI_DIR = $(abs_top_builddir)/wikidocs
+wikidocs:
 	@for sdir in $(SUBDIRS); do \
-		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir gwiki; \
+		test $$sdir != . && $(MAKE) $(AM_MAKEFLAGS) -C $$sdir wikidocs; \
 	done
-	@if [ ! -d $(GWIKI_DIR) ]; then \
-		$(MKDIR_P) $(GWIKI_DIR); \
+	@if [ ! -d $(WIKI_DIR) ]; then \
+		$(MKDIR_P) $(WIKI_DIR); \
 	fi
 	@for podsrc in $(ALL_PODS); do \
-                wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.wiki/'`; \
-		echo Generating gwiki.out/$$wikifn ...; \
-		$(POD2WIKI) --style googlecode $$podsrc $(GWIKI_DIR)/$$wikifn; \
+		wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.pod/'`; \
+		echo Copying $$podsrc to $(WIKI_DIR)/$$wikifn ...; \
+		cp $$podsrc $(WIKI_DIR)/$$wikifn; \
 	done
 
 docs-maintainer-clean:

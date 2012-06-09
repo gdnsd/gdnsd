@@ -5,7 +5,7 @@ ACLOCAL_AMFLAGS = -I m4
 # Subdirectories to recurse into
 SUBDIRS = gdnsd plugins docs t
 
-MISC_DOCS = README INSTALL AUTHORS COPYING ChangeLog
+MISC_DOCS = README.md INSTALL AUTHORS COPYING ChangeLog
 EXTRA_DIST = docs.am pkg
 BUILT_SOURCES = cfg-dirs.h
 CLEANFILES = cfg-dirs.h
@@ -51,6 +51,6 @@ check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
 
 clean-local:
-	@rm -rf $(top_srcdir)/gwiki.out
+	@rm -rf $(top_srcdir)/wikidocs
 
 include $(top_srcdir)/docs.am
