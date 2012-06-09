@@ -1,19 +1,33 @@
 
-See the INSTALL file for details on prerequisites and build procedure.
+## Overview
 
-Home Page, Support, Etc
-========================
+gdnsd is an Authoritative-only DNS server. The initial g stands for Geographic, as gdnsd offers a plugin system for geographic (or other sorts of) balancing, redirection, and service-state-conscious failover. The plugin system can also do things like weighted address/cname records.  If you don't care about these features you can ignore them :).
 
-This project is hosted at Github:
+gdnsd is written in C using libev and pthreads with a focus on high performance, low latency service. It does not offer any form of caching or recursive service, and does not support DNSSEC.  There's a strong focus on making the code efficient, lean, and resilient.  The core DNS code has decent regression testsuite and scripted validation of valgrind (and some other tools') verification.
 
-  https://github.com/blblack/gdnsd 
+## Resources
 
-Please read there for more information.
+This project is hosted at Github: https://github.com/blblack/gdnsd 
 
-Filing bug reports via the Issues tool there would be appreciated.
+Release downloads: https://github.com/blblack/gdnsd/downloads
 
-COPYRIGHT AND LICENSING
-========================
+Bug reports: https://github.com/blblack/gdnsd/issues
+
+Wikified docs: https://github.com/blblack/gdnsd/wiki
+
+Google Group for discussion: https://groups.google.com/forum/#!forum/gdnsd
+
+See the INSTALL file for details on prerequisites and build procedure
+for working from the source tree or a source tarball.
+
+The documentation is included in the source tree in POD format
+and installed as manpages and textfiles on installation.
+
+## Portability
+
+The primary target platform is modern x86_64 Linux.  The code also compiles and works fine on MacOS X.  In theory, it should be portable to any reasonably-modern POSIXy platform with a good C99 compiler.  Several releases ago I spent some effort testing that it did in fact compile, pass tests, and operate correctly at runtime on a number of *BSDs, OpenSolaris w/ Sun's compiler, and even an embedded Linux router with a big-endian MIPS CPU.  YMMV on such targets with the modern codebase as I only regularly test Linux and Mac targets, but clean portability patches are always welcome.
+
+## COPYRIGHT AND LICENSING
 
 Some files within this distribution are externally sourced
 open source software, and are covered by their own seperate
