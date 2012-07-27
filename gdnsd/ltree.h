@@ -95,7 +95,7 @@ struct _ltree_node_struct;
 typedef struct _ltree_node_struct ltree_node_t;
 
 // depends on ltree_node_t above
-#include "zone.h"
+#include "zlist.h"
 
 struct _ltree_rdata_ns_struct;
 struct _ltree_rdata_ptr_struct;
@@ -316,8 +316,10 @@ struct _ltree_node_struct {
 };
 
 // zlist/zone code uses these to create and destroy per-zone ltrees:
+F_NONNULL
+void ltree_init_zone(zone_t* zone);
 F_WUNUSED F_NONNULL
-bool ltree_process_zone(zone_t* zone);
+bool ltree_postproc_zone(zone_t* zone);
 F_NONNULL
 void ltree_destroy(ltree_node_t* node);
 

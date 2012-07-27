@@ -21,10 +21,10 @@
 #define _GDNSD_ZSCAN_H
 
 #include "config.h"
-#include "zone.h"
+#include "zlist.h"
 
-// Actually scan the zonefile, creating zone->root
+// Actually scan the zonefile, creating the data
 F_WUNUSED F_NONNULL
-bool scan_zone(zone_t* zone);
+bool scan_zone(zone_t* zone, const char* fn);
 
 #endif // _GDNSD_ZSCAN_H

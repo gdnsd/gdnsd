@@ -17,8 +17,8 @@
 /plugins/meta/libgdmaps/t/gdnsd_geoip_test
 
 # Built, distributed C sources (Ragel outputs)
-/gdnsd/zscan.c
-/gdnsd/zscan_lm.c
+/gdnsd/zscan_rfc1035.c
+/gdnsd/zscan_rfc1035_lm.c
 /gdnsd/libgdnsd/vscf.c
 
 # Built headers, not distributed

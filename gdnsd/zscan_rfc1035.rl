@@ -17,7 +17,7 @@
  *
  */
 
-#include "zscan.h"
+#include "zscan_rfc1035.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -752,15 +752,15 @@ static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, con
     return failed;
 }
 
-bool scan_zone(zone_t* zone) {
+bool scan_zone(zone_t* zone, const char* fn) {
     dmn_assert(zone);
     dmn_assert(zone->dname);
-    dmn_assert(zone->fn);
+    dmn_assert(fn);
     log_debug("Scanning zone '%s'", logf_dname(zone->dname));
 
-    const int fd = open(zone->fn, O_RDONLY);
+    const int fd = open(fn, O_RDONLY);
     if(fd < 0) {
-        log_err("Cannot open file '%s' for reading: %s", logf_pathname(zone->fn), logf_errno());
+        log_err("Cannot open file '%s' for reading: %s", logf_pathname(fn), logf_errno());
         return true;
     }
 
@@ -775,7 +775,7 @@ bool scan_zone(zone_t* zone) {
                 bufsize = fdstat.st_size;
         }
         else {
-            log_warn("fstat(%s) failed for advice, not critical...", logf_pathname(zone->fn));
+            log_warn("fstat(%s) failed for advice, not critical...", logf_pathname(fn));
         }
     }
 
@@ -793,7 +793,7 @@ bool scan_zone(zone_t* zone) {
     bool failed = sij(z, buf, bufsize, fd);
 
     if(close(fd)) {
-        log_err("Cannot close file '%s': %s", logf_pathname(zone->fn), logf_errno());
+        log_err("Cannot close file '%s': %s", logf_pathname(fn), logf_errno());
         failed = true;
     }
 

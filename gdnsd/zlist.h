@@ -21,10 +21,34 @@
 #define _GDNSD_ZLIST_H
 
 #include "config.h"
+#include "gdnsd.h"
 
 #include <inttypes.h>
-#include "zone.h"
+#include "ltarena.h"
 
+// mutually-dependent stuff between zone.h and ltree.h
+struct _zone_struct;
+typedef struct _zone_struct zone_t;
+
+#include "ltree.h"
+
+struct _zone_struct {
+    unsigned hash;        // hash of dname
+    time_t mtime;         // mod time of source
+    char* src;            // string description of src, e.g. "rfc1035:example.com"
+    const uint8_t* dname; // zone name as a dname (stored in ->arena)
+    ltarena_t* arena;     // arena for dname/label storage
+    ltree_node_t* root;   // the zone root
+    zone_t* next;         // init to NULL, owned by zlist...
+};
+
+// Singleton init
+void zlist_init(void);
+
+// primary interface for zone data sources
+void zlist_update(zone_t* z_old, zone_t* z_new);
+
+// primary interface for zone data runtime lookups
 // Argument is any legal fully-qualified dname
 // Output is the zone_t structure for the known containing zone,
 //   or NULL if no current zone contains the name.
@@ -32,9 +56,6 @@
 //   how many bytes into the dname the authoritative zone name
 //   starts at.
 F_NONNULLX(1)
-zone_t* zlist_find_dname(const uint8_t* dname, unsigned* auth_depth_out);
-
-// Scans the zones directory and loads all zones
-void zlist_load_zones(void);
+zone_t* zlist_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 
 #endif // _GDNSD_ZLIST_H

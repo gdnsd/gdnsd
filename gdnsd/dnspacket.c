@@ -1614,7 +1614,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
 
     ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
-    zone_t* query_zone = zlist_find_dname(qname, &auth_depth);
+    zone_t* query_zone = zlist_find_zone_for(qname, &auth_depth);
 
     if(query_zone) { // matches auth space somewhere
         // In the initial search, it's known that "qname" is in fact the real query name and therefore

@@ -29,7 +29,6 @@
 #include "dnspacket.h"
 #include "ltarena.h"
 #include "gdnsd-dname.h"
-#include "zscan.h"
 
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists
@@ -1082,7 +1081,7 @@ static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, c
 }
 
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_zone(const zone_t* zone, bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool)) {
+static bool ltree_postproc(const zone_t* zone, bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool)) {
     dmn_assert(zone); dmn_assert(fn);
 
     // label stack:
@@ -1168,18 +1167,21 @@ static void ltree_fix_masks(ltree_node_t* node) {
 }
 
 // common processing for zones
-bool ltree_process_zone(zone_t* zone) {
+void ltree_init_zone(zone_t* zone) {
     dmn_assert(zone);
     dmn_assert(zone->dname);
     dmn_assert(zone->arena);
     dmn_assert(!zone->root);
 
     zone->root = ltree_node_new(zone->arena, NULL, 0);
+}
 
-    if(unlikely(scan_zone(zone)))
-        return true;
+bool ltree_postproc_zone(zone_t* zone) {
+    dmn_assert(zone);
+    dmn_assert(zone->dname);
+    dmn_assert(zone->arena);
+    dmn_assert(zone->root);
 
-    lta_close(zone->arena);
     ltree_fix_masks(zone->root);
 
     // zroot phase1 is a readonly check of zone basics
@@ -1194,7 +1196,7 @@ bool ltree_process_zone(zone_t* zone) {
     //   flagging glue in the glue-address cases and
     //   marking it as used.  Ditto for additional data
     //   for local CNAME targets.
-    if(unlikely(ltree_postproc_zone(zone, ltree_postproc_phase1)))
+    if(unlikely(ltree_postproc(zone, ltree_postproc_phase1)))
         return true;
 
     // zroot phase2 checks for unused out-of-zone glue addresses,
@@ -1202,7 +1204,7 @@ bool ltree_process_zone(zone_t* zone) {
     ltree_postproc_zroot_phase2(zone);
     // tree phase2 looks for unused delegation glue addresses,
     //   and delegation glue address sets that exceed max_addtl_rrsets
-    if(unlikely(ltree_postproc_zone(zone, ltree_postproc_phase2)))
+    if(unlikely(ltree_postproc(zone, ltree_postproc_phase2)))
         return true;
     return false;
 }
