@@ -55,16 +55,20 @@ static const char PID_PATH[] = "var/" PACKAGE_NAME ".pid";
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
 
-static pthread_t* threadids = NULL;
+static pthread_t* io_threadids = NULL; // TCP/UDP threads
+static pthread_t zone_data_threadid;
 
 static void threads_cleanup(void) {
-    if(threadids) {
-        unsigned num_threads = gconfig.num_io_threads;
-        for(unsigned i = 0; i < num_threads; i++)
-            pthread_cancel(threadids[i]);
-        for(unsigned i = 0; i < num_threads; i++)
-            pthread_join(threadids[i], NULL);
-    }
+    dmn_assert(io_threadids);
+
+    pthread_cancel(zone_data_threadid);
+    unsigned num_threads = gconfig.num_io_threads;
+    for(unsigned i = 0; i < num_threads; i++)
+        pthread_cancel(io_threadids[i]);
+
+    pthread_join(zone_data_threadid, NULL);
+    for(unsigned i = 0; i < num_threads; i++)
+        pthread_join(io_threadids[i], NULL);
 }
 
 F_NONNULL
@@ -124,6 +128,21 @@ static void setup_signals(struct ev_loop* def_loop) {
     ev_signal_start(def_loop, sig_term);
 }
 
+static void* zone_data_runtime(void* unused V_UNUSED) {
+    struct ev_loop* zdata_loop = ev_loop_new(EVFLAG_AUTO);
+    if(!zdata_loop)
+        log_fatal("Could not initialize the zone data libev loop");
+    ev_set_timeout_collect_interval(zdata_loop, 0.1);
+    ev_set_io_collect_interval(zdata_loop, 0.05);
+
+    zsrc_rfc1035_runtime_init(zdata_loop);
+
+    ev_run(zdata_loop, 0);
+    ev_loop_destroy(zdata_loop);
+
+    return NULL;
+}
+
 // I know this looks stupid, but on Linux/glibc this forces
 //  gcc_s to be loaded before chroot(), avoiding an otherwise
 //  very late failure at shutdown time of pthread_cancel().
@@ -154,12 +173,12 @@ static void start_threads(void) {
     pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
 
     unsigned num_addrs = gconfig.num_dns_addrs;
-    threadids = calloc(gconfig.num_io_threads, sizeof(pthread_t));
+    io_threadids = calloc(gconfig.num_io_threads, sizeof(pthread_t));
 
     // Start UDP threads
     for(uintptr_t i = 0; i < num_addrs; i++) {
         const dns_addr_t* addrconf = &gconfig.dns_addrs[i];
-        int pthread_err = pthread_create(&threadids[addrconf->udp_threadnum], &attribs, &dnsio_udp_start, (void*)addrconf);
+        int pthread_err = pthread_create(&io_threadids[addrconf->udp_threadnum], &attribs, &dnsio_udp_start, (void*)addrconf);
         if(pthread_err) log_fatal("pthread_create() of UDP DNS thread failed: %s", logf_errnum(pthread_err));
     }
 
@@ -167,9 +186,14 @@ static void start_threads(void) {
     for(uintptr_t i = 0; i < num_addrs; i++) {
         const dns_addr_t* addrconf = &gconfig.dns_addrs[i];
         if(!addrconf->tcp_disabled) {
-            int pthread_err = pthread_create(&threadids[addrconf->tcp_threadnum], &attribs, &dnsio_tcp_start, (void*)addrconf);
+            int pthread_err = pthread_create(&io_threadids[addrconf->tcp_threadnum], &attribs, &dnsio_tcp_start, (void*)addrconf);
             if(pthread_err) log_fatal("pthread_create() of TCP DNS thread failed: %s", logf_errnum(pthread_err));
         }
+    }
+
+    {
+        int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
+        if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
     }
 
     // Invoke thread cleanup handlers at exit time
@@ -484,6 +508,7 @@ int main(int argc, char** argv) {
     // Start up all of the UDP and TCP threads, each of
     // which has all signals blocked and has its own
     // event loop (libev for TCP, manual blocking loop for UDP)
+    // Also starts the zone data reload thread
     start_threads();
 
     // This waits for all of the stat structures to be allocated

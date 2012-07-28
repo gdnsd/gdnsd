@@ -180,3 +180,7 @@ void zsrc_rfc1035_load_zones(void) {
     if(atexit(zsrc_rfc1035_unload_zones))
         log_fatal("atexit(zsrc_rfc1035_unload_zones) failed: %s", logf_errno());
 }
+
+void zsrc_rfc1035_runtime_init(struct ev_loop* zdata_loop) {
+    dmn_assert(zdata_loop);
+}
