@@ -733,7 +733,7 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
 // This is broken out into a separate function (called via
 //   function pointer to eliminate the possibility of
 //   inlining on non-gcc compilers, I hope) to avoid issues with
-//   setjmp and all of the local auto variables in scan_zone() below.
+//   setjmp and all of the local auto variables in zscan_rfc1035() below.
 typedef bool (*sij_func_t)(zscan_t*,char*,const unsigned,const int);
 F_NONNULL F_NOINLINE
 static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
@@ -752,7 +752,7 @@ static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, con
     return failed;
 }
 
-bool scan_zone(zone_t* zone, const char* fn) {
+bool zscan_rfc1035(zone_t* zone, const char* fn) {
     dmn_assert(zone);
     dmn_assert(zone->dname);
     dmn_assert(fn);

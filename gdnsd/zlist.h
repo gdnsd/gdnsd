@@ -65,4 +65,13 @@ zone_t* zlist_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 void zlist_rdlock(void);
 void zlist_unlock(void);
 
+// These are for zsrc_* code to create/delete detached zone_t's used
+//   in zlist_update() calls.
+F_NONNULL
+zone_t* zone_new(const char* zname, const char* source);
+F_NONNULL
+bool zone_finalize(zone_t* zone);
+F_NONNULL
+void zone_delete(zone_t* zone);
+
 #endif // _GDNSD_ZLIST_H

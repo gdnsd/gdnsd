@@ -25,6 +25,6 @@
 
 // Actually scan the zonefile, creating the data
 F_WUNUSED F_NONNULL
-bool scan_zone(zone_t* zone, const char* fn);
+bool zscan_rfc1035(zone_t* zone, const char* fn);
 
 #endif // _GDNSD_ZSCAN_H

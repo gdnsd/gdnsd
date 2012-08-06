@@ -88,6 +88,50 @@ static void* const ZONE_DELETED = (void*)(uintptr_t)0x1;
 //   (as opposed to a real empty slot, or a deleted one)
 #define SLOT_REAL(x) ((uintptr_t)x & ~1UL)
 
+void zone_delete(zone_t* zone) {
+    dmn_assert(zone);
+    if(zone->root)
+        ltree_destroy(zone->root);
+    lta_destroy(zone->arena);
+    free(zone->src);
+    free(zone);
+}
+
+zone_t* zone_new(const char* zname, const char* source) {
+    dmn_assert(zname);
+
+    // Convert to terminated-dname format and check for problems
+    uint8_t dname[256];
+    dname_status_t status = dname_from_string(dname, (const uint8_t*)zname, strlen(zname));
+
+    if(status == DNAME_INVALID) {
+        log_err("Zone name '%s' is illegal", zname);
+        return NULL;
+    }
+
+    if(dname_iswild(dname)) {
+        log_err("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
+        return NULL;
+    }
+
+    if(status == DNAME_PARTIAL)
+        dname_terminate(dname);
+
+    zone_t* z = calloc(1, sizeof(zone_t));
+    z->arena = lta_new();
+    z->dname = lta_dnamedup(z->arena, dname);
+    z->hash = dname_hash(z->dname);
+    z->src = strdup(source);
+    ltree_init_zone(z);
+
+    return z;
+}
+
+bool zone_finalize(zone_t* zone) {
+    lta_close(zone->arena);
+    return ltree_postproc_zone(zone);
+}
+
 // "dname" can be any legal FQDN
 // Current implementation starts by searching for "dname" itself
 //   as a zone name, and then chops off labels from the left hand
@@ -232,11 +276,17 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
         }
         else {
             log_warn("New zone data for '%s' from '%s' suppresses existing data from '%s'...", logf_dname(z_new->dname), z_new->src, (*conflict_ptr)->src);
-            // store to front of duplicates chain
+            // XXX need sorting here, which affects warn output as well?
+            //  current behavior simply stores the newest added variant
+            //   of the zone to the front of the list, make it the active copy
+            //   until it's deleted which promotes the next in line.
+            //  better behavior would be to sort-on-insert via a comparator that checks:
+            //   (1) If both have a defined Serial which is >0, highest Serial wins
+            //   (2) Else if both have a defined source mtime >0, highest mtime wins
+            //   (3) Else fall back to preferring the newest added in realtime
             z_new->next = *conflict_ptr;
             zlist_wrlock();
             *conflict_ptr = z_new;
-            // XXX need sorting here, which affects warn output as well?
             zlist_unlock();
         }
     }

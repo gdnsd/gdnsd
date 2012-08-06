@@ -82,16 +82,6 @@ static void* const ZFILE_DELETED = (void*)(uintptr_t)0x1;
 // SLOT_REAL means not NULL and also not a reclaimable deleted entry
 #define SLOT_REAL(x) ((uintptr_t)x & ~1UL)
 
-// XXX this should move over to zlist...
-static void zone_delete(zone_t* zone) {
-    dmn_assert(zone);
-    if(zone->root)
-        ltree_destroy(zone->root);
-    lta_destroy(zone->arena);
-    free(zone->src);
-    free(zone);
-}
-
 F_NONNULL
 static void zf_delete(zfile_t* zf) {
     dmn_assert(zf);
@@ -234,82 +224,49 @@ static zfile_t* zfhash_find(const char* zfn) {
 }
 
 F_NONNULL
-static const uint8_t* make_zone_dname(const char* zf_name, ltarena_t* arena) {
-    dmn_assert(zf_name); dmn_assert(arena);
+static char* make_zone_name(const char* zf_name) {
+    dmn_assert(zf_name);
 
     unsigned zf_name_len = strlen(zf_name);
-    uint8_t alter[zf_name_len + 1]; // Storage for making alterations...
-    const uint8_t* rv = NULL;
+    char* out = NULL;
 
-    if(zf_name_len > 1004) {
+    if(unlikely(zf_name_len > 1004)) {
         log_err("Zone file name '%s' is illegal", zf_name);
-        goto out;
-    }
-
-    // check for root zone...
-    if(unlikely(zf_name_len == 9 && !strncmp(zf_name, "ROOT_ZONE", 9))) {
-        alter[0] = '.';
-        alter[1] = 0;
-        zf_name_len = 1;
     }
     else {
-        // else copy the original, and...
-        memcpy(alter, zf_name, zf_name_len);
-        alter[zf_name_len] = 0;
-
-        // convert all '@' to '/' for RFC2137 reverse delegation zones,
-        //   and map uppercase alpha to lowercase.
-        for(unsigned i = 0; i < zf_name_len; i++) {
-            if(alter[i] <= 'Z' && alter[i] >= 'A')
-                alter[i] |= 0x20;
-            else if(unlikely(alter[i] == '@'))
-                alter[i] = '/';
+        out = malloc(zf_name_len + 1);
+        // check for root zone...
+        if(unlikely(zf_name_len == 9 && !strncmp(zf_name, "ROOT_ZONE", 9))) {
+            out[0] = '.';
+            out[1] = 0;
+        }
+        else {
+            // convert all '@' to '/' for RFC2137 reverse delegation zones
+            for(unsigned i = 0; i <= zf_name_len; i++) {
+                if(unlikely(zf_name[i] == '@'))
+                    out[i] = '/';
+                else
+                    out[i] = zf_name[i];
+            }
         }
     }
 
-    // Convert to terminated-dname format and check for problems
-    uint8_t dname[256];
-    dname_status_t status = dname_from_string(dname, alter, zf_name_len);
-    if(status == DNAME_INVALID) {
-        log_err("Zone name '%s' is illegal", alter);
-        goto out;
-    }
-    if(dname_iswild(dname)) {
-        log_err("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
-        goto out;
-    }
-    if(status == DNAME_PARTIAL)
-        dname_terminate(dname);
-
-    rv = lta_dnamedup(arena, dname);
-
-    out:
-    return rv;
+    return out;
 }
 
 F_NONNULL
 static zone_t* zone_from_zf(zfile_t* zf) {
     dmn_assert(zf);
-    zone_t* z = calloc(1, sizeof(zone_t));
-    z->src = str_combine("rfc1035:", zf->fn, NULL);
-    z->arena = lta_new();
-    z->dname = make_zone_dname(zf->fn, z->arena);
-    if(!z->dname) {
-        zone_delete(z);
-        return NULL;
-    }
 
-    z->hash = dname_hash(z->dname);
-    ltree_init_zone(z);
-    if(unlikely(scan_zone(z, zf->full_fn))) {
-        zone_delete(z);
-        return NULL;
-    }
+    char* src = str_combine("rfc1035:", zf->fn, NULL);
+    char* name = make_zone_name(zf->fn);
+    zone_t* z = zone_new(name, src);
+    free(name);
+    free(src);
 
-    lta_close(z->arena);
-    if(unlikely(ltree_postproc_zone(z))) {
+    if(zscan_rfc1035(z, zf->full_fn) || zone_finalize(z)) {
         zone_delete(z);
-        return NULL;
+        z = NULL;
     }
 
     return z;
