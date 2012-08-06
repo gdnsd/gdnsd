@@ -199,6 +199,15 @@ LIBS=$XLIBS
 
 dnl ======== End Capabilities Stuff ==========
 
+dnl == inotify stuff ==
+dnl inotify_init1() is 2.6.27+ and IN_EXCL_UNLINK is 2.6.36+
+dnl We require both to use inotify for zonefile scanning
+USE_INOTIFY=1
+AC_CHECK_FUNCS([inotify_init1],,[USE_INOTIFY=0])
+AC_CHECK_DECLS([IN_EXCL_UNLINK],,[USE_INOTIFY=0],[[#include <sys/inotify.h>]])
+AC_DEFINE_UNQUOTED([USE_INOTIFY], $USE_INOTIFY, [Use Linux 2.6.36+ inotify support])
+AM_CONDITIONAL([USE_INOTIFY], [test x$USE_INOTIFY = x1])
+
 dnl --enable-lowmem reduces memory waste for tiny environments where it matters
 LOWMEM=0
 AC_ARG_ENABLE([lowmem], [
@@ -315,6 +324,7 @@ if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$LOWMEM" = x1; then CFSUM_LM=Yes; else CFSUM_LM=No; fi
 if test "x$USE_LINUX_CAPS" = x1; then CFSUM_CAP=Yes; else CFSUM_CAP=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
+if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
 CFSUM_TP=$TESTPORT_START
 
 echo "======================================="
@@ -323,6 +333,7 @@ echo "| Developer Build?        $CFSUM_DEV"
 echo "| Low Memory Build?       $CFSUM_LM"
 echo "| Linux libcap support:   $CFSUM_CAP"
 echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
+echo "| Linux inotify support:  $CFSUM_INOTIFY"
 echo "| Test Port Start:        $CFSUM_TP"
 echo "======================================="
 
