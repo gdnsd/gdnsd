@@ -1614,6 +1614,9 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
 
     ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
+
+    zlist_rdlock();
+
     zone_t* query_zone = zlist_find_zone_for(qname, &auth_depth);
 
     if(query_zone) { // matches auth space somewhere
@@ -1688,6 +1691,8 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
             stats_own_inc(&c->stats->refused);
         }
     }
+
+    zlist_unlock();
 
     return offset;
 }

@@ -20,9 +20,44 @@
 #include "zlist.h"
 
 #include <stdlib.h>
+#include <pthread.h>
 
 #include "gdnsd-dname.h"
 #include "gdnsd-misc.h"
+
+// pthread lock stuff
+static pthread_rwlock_t zlist_lock;
+
+static void setup_lock(void) {
+    int pthread_err;
+    pthread_rwlockattr_t lockatt;
+    if((pthread_err = pthread_rwlockattr_init(&lockatt)))
+        log_fatal("zlist: pthread_rwlockattr_init() failed: %s", logf_errnum(pthread_err));
+
+    // Non-portable way to boost writer priority.  Our writelocks are held very briefly
+    //  and very rarely, whereas the readlocks could be very spammy, and we don't want to
+    //  block the write operation forever.  This works on Linux+glibc.
+#   ifdef PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP
+        if((pthread_err = pthread_rwlockattr_setkind_np(&lockatt, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP)))
+            log_fatal("zlist: pthread_rwlockattr_setkind_np(PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP) failed: %s", logf_errnum(pthread_err));
+#   endif
+
+    if((pthread_err = pthread_rwlock_init(&zlist_lock, &lockatt)))
+        log_fatal("zlist: pthread_rwlock_init() failed: %s", logf_errnum(pthread_err));
+    if((pthread_err = pthread_rwlockattr_destroy(&lockatt)))
+        log_fatal("zlist: pthread_rwlockattr_destroy() failed: %s", logf_errnum(pthread_err));
+}
+
+static void destroy_lock(void) {
+    int pthread_err;
+    if((pthread_err = pthread_rwlock_destroy(&zlist_lock)))
+        log_fatal("zlist: pthread_rwlock_destroy() failed: %s", logf_errnum(pthread_err));
+}
+
+void zlist_rdlock(void) { pthread_rwlock_rdlock(&zlist_lock); }
+void zlist_unlock(void) { pthread_rwlock_unlock(&zlist_lock); }
+// because only this file does writes...
+static void zlist_wrlock(void) { pthread_rwlock_wrlock(&zlist_lock); }
 
 // the zones list itself
 static zone_t** zlist = NULL;
@@ -138,6 +173,7 @@ static void zlist_destroy(void) {
         }
     }
     free(zlist);
+    destroy_lock();
 }
 
 void zlist_init(void) {
@@ -145,6 +181,7 @@ void zlist_init(void) {
     dmn_assert(!zlist_alloc);
     zlist_alloc = 8; // must be power of two
     zlist = calloc(zlist_alloc, sizeof(zone_t*));
+    setup_lock();
     if(atexit(zlist_destroy))
         log_fatal("atexit(zlist_destroy) failed: %s", logf_errno());
 }
@@ -163,6 +200,8 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
             cand = &((*cand)->next);
             dmn_assert(cand && *cand);
         }
+
+        zlist_wrlock();
         if(z_new) {
             z_new->next = (*cand)->next;
             *cand = z_new;
@@ -177,6 +216,7 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
             else
                 *cand = (*cand)->next;
         }
+        zlist_unlock();
 
         return;
     }
@@ -194,8 +234,10 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
             log_warn("New zone data for '%s' from '%s' suppresses existing data from '%s'...", logf_dname(z_new->dname), z_new->src, (*conflict_ptr)->src);
             // store to front of duplicates chain
             z_new->next = *conflict_ptr;
+            zlist_wrlock();
             *conflict_ptr = z_new;
             // XXX need sorting here, which affects warn output as well?
+            zlist_unlock();
         }
     }
     else {
@@ -212,7 +254,8 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
         if(!zlist[slot])
             num_slots_used++;
 
-        // XXX lock this on runtime updates
+        zlist_wrlock();
+
         zlist[slot] = z_new;
         num_zones++;
 
@@ -221,5 +264,7 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
         //   after reclaiming them during a grow
         if(unlikely(zlist_alloc <= (num_slots_used << 2)))
             zlist_grow();
+
+        zlist_unlock();
     }
 }

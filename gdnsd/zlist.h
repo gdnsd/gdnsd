@@ -58,4 +58,11 @@ void zlist_update(zone_t* z_old, zone_t* z_new);
 F_NONNULLX(1)
 zone_t* zlist_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 
+// zlist readlock for access
+// callers of zlist_find_zone_for() need to lock before calling, and then
+//   need to keep that lock for as long as they continue to reference data
+//   from the resulting zone_t* (which should be brief...)
+void zlist_rdlock(void);
+void zlist_unlock(void);
+
 #endif // _GDNSD_ZLIST_H
