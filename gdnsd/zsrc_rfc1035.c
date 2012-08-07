@@ -53,6 +53,7 @@ typedef struct {
     int main_fd;
     int watch_desc;
     ev_io* io_watcher;
+    ev_timer* fallback_watcher;
 } inot_data;
 static inot_data inot;
 
@@ -524,6 +525,91 @@ static const char* logf_inmask(uint32_t mask) {
     return output;
 }
 
+F_NONNULL
+static void inot_reader(struct ev_loop* loop, ev_io* w, int revents);
+
+static bool inotify_setup(void) {
+    bool rv = false;
+
+    inot.main_fd = inotify_init1(IN_NONBLOCK);
+    if(inot.main_fd < 0) {
+        log_err("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
+        rv = true;
+    }
+    else {
+        inot.watch_desc = inotify_add_watch(inot.main_fd, RFC1035_DIR, INL_MASK);
+        if(inot.watch_desc < 0) {
+            log_err("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(RFC1035_DIR), logf_errno());
+            close(inot.main_fd);
+            rv = true;
+        }
+        else {
+            ev_io_init(inot.io_watcher, inot_reader, inot.main_fd, EV_READ);
+        }
+    }
+
+    return rv;
+}
+
+static bool inotify_initial_failure = true;
+
+static void inotify_initial_setup(void) {
+    // Set up the actual inotify bits...
+    memset(&inot, 0, sizeof(inot_data));
+    inot.io_watcher = malloc(sizeof(ev_io));
+    inot.fallback_watcher = malloc(sizeof(ev_timer));
+    inotify_initial_failure = inotify_setup();
+}
+
+static void inotify_run(struct ev_loop* loop) {
+    ev_io_start(loop, inot.io_watcher);
+}
+
+F_NONNULL
+static void inotify_fallback_scan(struct ev_loop* loop, ev_timer* rtimer, int revents);
+
+static void inotify_initial_run(struct ev_loop* loop) {
+    ev_io_start(loop, inot.io_watcher);
+    if(!inotify_initial_failure) {
+        inotify_run(loop);
+    }
+    else {
+        log_warn("rfc1035: Initial inotify() setup failed, using fallback scandir() method until recovery");
+        ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gconfig.zreload_scan_interval, gconfig.zreload_scan_interval);
+        ev_timer_start(loop, inot.fallback_watcher);
+    }
+}
+
+static void inotify_fallback_scan(struct ev_loop* loop, ev_timer* rtimer, int revents) {
+    dmn_assert(loop);
+    dmn_assert(rtimer);
+    dmn_assert(revents == EV_TIMER);
+
+    bool setup_failure = inotify_setup();
+    periodic_scan(loop, rtimer, revents);
+    if(!setup_failure) {
+        log_warn("rfc1035: inotify() recovered");
+        ev_timer_stop(loop, rtimer);
+        inotify_run(loop);
+    }
+}
+
+F_NONNULL
+static void handle_inotify_failure(struct ev_loop* loop) {
+    dmn_assert(loop);
+
+    log_warn("rfc1035: inotify() failed, using fallback scandir() method until recovery");
+
+    // clean up old watcher setup
+    ev_io_stop(loop, inot.io_watcher);
+    inotify_rm_watch(inot.main_fd, inot.watch_desc);
+    close(inot.main_fd);
+
+    // insert periodic timer for fallback/retry scanning
+    ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gconfig.zreload_scan_interval, gconfig.zreload_scan_interval);
+    ev_timer_start(loop, inot.fallback_watcher);
+}
+
 // retval: true -> halt inotify loop
 // This will not perform correctly in all cases.  This code can easily
 //   be tricked into attempting to load partially-written zonefiles if
@@ -545,7 +631,8 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
             // XXX we probably want to differentiate here for syslog advice output, and perhaps
             //   even for retry strategies, once the code gets that far.
             log_err("inotify watcher cannot continue (queue overflow, directory deleted/renamed, etc..) XXX");
-            rv = true; // break the inotify watcher loop
+            handle_inotify_failure(loop);
+            rv = true;
         }
         // Other directory-level events (e.g. IN_MODIFY) are ignored.
         // We'll see their fallout as e.g. IN_MOVED_X operations on the contained filenames.
@@ -571,7 +658,6 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
     return rv;
 }
 
-F_NONNULL
 static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_READ);
 
@@ -585,7 +671,7 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
                     log_err("rfc1035: read() of inotify file descriptor failed: %s", logf_errno());
                 else
                     log_err("rfc1035: Got EOF on inotify file descriptor!");
-                ev_break(loop, EVBREAK_ONE);
+                handle_inotify_failure(loop);
             }
             return;
         }
@@ -596,48 +682,10 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
             struct inotify_event* evt = (void*)&evtbuf[offset];
             offset += sizeof(struct inotify_event);
             offset += evt->len;
-            // XXX this mechanism of fallback via ev_break() comes from some
-            //   old testing code, and needs a new model that doesn't break
-            //   the loop for other sources.
-            if(inot_process_event((evt->len > 0 ? evt->name : NULL), loop, evt->mask)) {
-                ev_break(loop, EVBREAK_ONE);
+            if(inot_process_event((evt->len > 0 ? evt->name : NULL), loop, evt->mask))
                 return;
-            }
         }
     }
-}
-
-static void inotify_initial_setup(void) {
-
-    // Set up the actual inotify bits...
-    memset(&inot, 0, sizeof(inot_data));
-
-    inot.main_fd = inotify_init1(IN_NONBLOCK);
-    if(inot.main_fd < 0)
-        log_fatal("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
-
-    inot.watch_desc = inotify_add_watch(inot.main_fd, RFC1035_DIR, INL_MASK);
-    if(inot.watch_desc < 0) {
-        // XXX fatal for now, but once integrated with runtime and scandir()
-        //  fallbacks, we'll find a way to survive this...
-        log_fatal("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(RFC1035_DIR), logf_errno());
-        close(inot.main_fd);
-    }
-
-    // set up runtime data
-    inot.io_watcher = malloc(sizeof(ev_io));
-    ev_io_init(inot.io_watcher, inot_reader, inot.main_fd, EV_READ);
-}
-
-static void inotify_run(struct ev_loop* loop) {
-    ev_io_start(loop, inot.io_watcher);
-
-/* XXX some cleanup from old code, will be useful later
-    ev_io_stop(zw_loop, zwi.io_watcher);
-    free(zwi.io_watcher);
-    inotify_rm_watch(zwi.inotify_fd, zwi.watch_desc);
-    close(zwi.inotify_fd);
-*/
 }
 
 #else
@@ -675,7 +723,7 @@ void zsrc_rfc1035_runtime_init(struct ev_loop* zdata_loop) {
     dmn_assert(zdata_loop);
 
     if(using_inotify) {
-        inotify_run(zdata_loop);
+        inotify_initial_run(zdata_loop);
     }
     else {
         reload_timer = calloc(1, sizeof(ev_timer));
