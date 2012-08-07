@@ -61,12 +61,15 @@ static pthread_t zone_data_threadid;
 static void threads_cleanup(void) {
     dmn_assert(io_threadids);
 
-    pthread_cancel(zone_data_threadid);
     unsigned num_threads = gconfig.num_io_threads;
+
+    if(!gconfig.zreload_disable)
+        pthread_cancel(zone_data_threadid);
     for(unsigned i = 0; i < num_threads; i++)
         pthread_cancel(io_threadids[i]);
 
-    pthread_join(zone_data_threadid, NULL);
+    if(!gconfig.zreload_disable)
+        pthread_join(zone_data_threadid, NULL);
     for(unsigned i = 0; i < num_threads; i++)
         pthread_join(io_threadids[i], NULL);
 }
@@ -191,9 +194,12 @@ static void start_threads(void) {
         }
     }
 
-    {
+    if(!gconfig.zreload_disable) {
         int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
         if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
+    }
+    else {
+        log_info("Runtime reloading of zone data explicitly disabled (config option zreload_disable)");
     }
 
     // Invoke thread cleanup handlers at exit time

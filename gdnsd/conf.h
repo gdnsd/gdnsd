@@ -51,6 +51,7 @@ typedef struct {
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
     bool     monitor_force_v6_up;
+    bool     zreload_disable;
     int      priority;
     unsigned zones_default_ttl;
     unsigned log_stats;
@@ -62,6 +63,8 @@ typedef struct {
     unsigned max_response;
     unsigned max_cname_depth;
     unsigned max_addtl_rrsets;
+    unsigned zreload_scan_interval;
+    unsigned zreload_quiesce_period;
 } global_config_t;
 
 extern global_config_t gconfig;

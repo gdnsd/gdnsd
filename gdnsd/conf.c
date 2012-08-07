@@ -57,6 +57,7 @@ global_config_t gconfig = {
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
+    .zreload_disable = false,
      // legal values are -20 to 20, so -21
      //  is really just an indicator that the user
      //  didn't explicitly set it.  The default
@@ -70,7 +71,9 @@ global_config_t gconfig = {
     .num_http_addrs = 0U,
     .max_response = 16384U,
     .max_cname_depth = 16U,
-    .max_addtl_rrsets = 64U
+    .max_addtl_rrsets = 64U,
+    .zreload_scan_interval = 31U,
+    .zreload_quiesce_period = 5U
 };
 
 static void plugins_cleanup(void) {
@@ -457,6 +460,12 @@ void conf_load(void) {
         // Nobody should have even the default 16-depth CNAMEs anyways :P
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
+        // it's important that neither of these reload times have a lower
+        //   bound below the 2s mark, as it could cause us to miss fast
+        //   events on filesystems with 1-second mtime resolution.
+        CFG_OPT_UINT(options, zreload_scan_interval, 10LU, 600LU);
+        CFG_OPT_UINT(options, zreload_quiesce_period, 3LU, 60LU);
+        CFG_OPT_BOOL(options, zreload_disable);
         CFG_OPT_STR(options, username);
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
         http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
