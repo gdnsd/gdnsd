@@ -26,6 +26,40 @@
 #include <unistd.h>
 #include <dirent.h>
 
+
+#if USE_INOTIFY
+
+#include <sys/inotify.h>
+
+// this is set true once at startup if applicable
+static bool using_inotify = false;
+
+// size of our read(2) buffer for the inotify fd.
+// must be able to handle sizeof(struct inotify_event)
+//  + the max len of a filename in the zones directory
+// XXX start out small and double-up if reads come up short?
+//  if too small, read(2) returns EINVAL...
+#define INOTIFY_BUFSIZE 1024
+
+// The inotify mask for the zones dir watcher
+#define INL_MASK ( IN_ONLYDIR | IN_DONT_FOLLOW \
+     | IN_EXCL_UNLINK | IN_MODIFY | IN_ATTRIB \
+     | IN_CLOSE_WRITE | IN_MOVED_TO | IN_MOVED_FROM \
+     | IN_CREATE | IN_DELETE | IN_MOVE_SELF | IN_DELETE_SELF)
+
+// runtime inotify bits
+typedef struct {
+    char* zpath;
+    int main_fd;
+    int watch_desc;
+    ev_io* io_watcher;
+} inot_data;
+static inot_data inot;
+
+#else // not USE_INOTIFY
+static const bool using_inotify = false;
+#endif
+
 static const char RFC1035_DIR[] = "etc/zones/";
 
 // POSIX states that inode+dev uniquely identifies a file on
@@ -442,11 +476,191 @@ static void periodic_scan(struct ev_loop* reload_loop, ev_timer* rtimer, int rev
 // ev stuff
 static ev_timer* reload_timer = NULL;
 
+static void set_inotify(void) {
+#   if USE_INOTIFY
+        // Technically, it wouldn't be hard to support as low as 2.6.25 if
+        //   we dropped IN_EXCL_UNLINK (merely an optimization) and didn't
+        //   use inotify_init1(), but 2.6.36 seems a reasonably-old target
+        //   for new code at this point in time, esp given we have a generic
+        //   fallback with the scandir()-based model.
+        using_inotify = gdnsd_linux_min_version(2, 6, 36);
+#   endif
+    if(using_inotify)
+        log_info("rfc1035: will use inotify for zone change detection");
+}
+
+#if USE_INOTIFY
+
+// This is for event debugging only
+#define _maskcat(_x) if(mask & _x) strcat(optr, #_x "|")
+static const char* logf_inmask(uint32_t mask) {
+    char* output = dmn_fmtbuf_alloc(256);
+    char* optr = output;
+    optr[0] = 0;
+
+    _maskcat(IN_ISDIR);
+    _maskcat(IN_IGNORED);
+    _maskcat(IN_Q_OVERFLOW);
+    _maskcat(IN_UNMOUNT);
+// I think all of the below are mutually exclusive:
+    _maskcat(IN_ACCESS);
+    _maskcat(IN_ATTRIB);
+    _maskcat(IN_CLOSE_WRITE);
+    _maskcat(IN_CLOSE_NOWRITE);
+    _maskcat(IN_CREATE);
+    _maskcat(IN_DELETE);
+    _maskcat(IN_DELETE_SELF);
+    _maskcat(IN_MODIFY);
+    _maskcat(IN_MOVE_SELF);
+    _maskcat(IN_MOVED_FROM);
+    _maskcat(IN_MOVED_TO);
+    _maskcat(IN_OPEN);
+
+    return output;
+}
+
+// retval: true -> halt inotify loop
+// This will not perform correctly in all cases.  This code can easily
+//   be tricked into attempting to load partially-written zonefiles if
+//   the zonefile management tools do silly things like overwriting
+//   zonefiles in place and/or moving open files around while they're
+//   being written to.
+// The code makes a certain amount of effort to handle this sort of thing
+//   which will mostly Just Work assuming there aren't huge delays between
+//   the in-place writes, but there's no gaurantees unless the zonefile
+//   updating tools strictly adhere to using atomic (i.e. rename(2)/mv(1))
+//   moves to update the zones.
+static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t emask) {
+
+    bool rv = false;
+
+    if(!fname) { // directory-level event
+        log_debug("rfc1035: inotified for directory event: %s", logf_inmask(emask));
+        if(unlikely(emask & (IN_Q_OVERFLOW|IN_IGNORED|IN_UNMOUNT|IN_DELETE_SELF|IN_MOVE_SELF))) {
+            // XXX we probably want to differentiate here for syslog advice output, and perhaps
+            //   even for retry strategies, once the code gets that far.
+            log_err("inotify watcher cannot continue (queue overflow, directory deleted/renamed, etc..) XXX");
+            rv = true; // break the inotify watcher loop
+        }
+        // Other directory-level events (e.g. IN_MODIFY) are ignored.
+        // We'll see their fallout as e.g. IN_MOVED_X operations on the contained filenames.
+    }
+    else if(fname[0] != '.') { // skip dotfiles
+        log_debug("rfc1035: inotified for file: %s event: %s", fname, logf_inmask(emask));
+        //   IN_CLOSE_WRITE, IN_MOVED_TO, IN_MOVED_FROM, and IN_DELETE are expected to commonly
+        //     leave the zonefile in a consistent, user-desired state, so they cause a short
+        //     quiesence timer (and downgrade running long-duration ones).
+        //   IN_CREATE and IN_MODIFY will virtually always mean the file is being overwritten
+        //     in-place (bad practice).  We make a best-effort to support this by using
+        //     a longer-duration quiesce timer which can drop back to a short one on
+        //     the events above.
+        //   IN_ATTRIB is of neutral disposition.  If it happens while a longer-duration
+        //     quiesce timer is active due to CREATE/MODIFY, it bumps the longer-duration timer.
+        //     if it happens at any other time (first recent event on pathname, or during
+        //     a short-duration timer), it bumps as a short timer.
+        double quiesce_time = 1.02; // XXX
+        if(emask & (IN_CREATE|IN_MODIFY))
+            quiesce_time = 5.0; // XXX
+        else if(emask & IN_ATTRIB)
+            quiesce_time = 5.0; // XXX
+        process_zonefile(fname, loop, quiesce_time);
+    }
+
+    return rv;
+}
+
+F_NONNULL
+static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_READ);
+
+    uint8_t evtbuf[INOTIFY_BUFSIZE];
+
+    while(1) {
+        int bytes = read(w->fd, evtbuf, INOTIFY_BUFSIZE);
+        if(bytes < 1) {
+            if(!bytes || errno != EAGAIN) {
+                if(bytes)
+                    log_err("rfc1035: read() of inotify file descriptor failed: %s", logf_errno());
+                else
+                    log_err("rfc1035: Got EOF on inotify file descriptor!");
+                ev_break(loop, EVBREAK_ONE);
+            }
+            return;
+        }
+
+        unsigned offset = 0;
+        while(offset < (unsigned)bytes) {
+            dmn_assert((bytes - offset) >= sizeof(struct inotify_event));
+            struct inotify_event* evt = (void*)&evtbuf[offset];
+            offset += sizeof(struct inotify_event);
+            offset += evt->len;
+            // XXX this mechanism of fallback via ev_break() comes from some
+            //   old testing code, and needs a new model that doesn't break
+            //   the loop for other sources.
+            if(inot_process_event((evt->len > 0 ? evt->name : NULL), loop, evt->mask)) {
+                ev_break(loop, EVBREAK_ONE);
+                return;
+            }
+        }
+    }
+}
+
+static void inotify_initial_setup(void) {
+
+    // Set up the actual inotify bits...
+    memset(&inot, 0, sizeof(inot_data));
+
+    inot.main_fd = inotify_init1(IN_NONBLOCK);
+    if(inot.main_fd < 0)
+        log_fatal("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
+
+    inot.watch_desc = inotify_add_watch(inot.main_fd, RFC1035_DIR, INL_MASK);
+    if(inot.watch_desc < 0) {
+        // XXX fatal for now, but once integrated with runtime and scandir()
+        //  fallbacks, we'll find a way to survive this...
+        log_fatal("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(RFC1035_DIR), logf_errno());
+        close(inot.main_fd);
+    }
+
+    // set up runtime data
+    inot.io_watcher = malloc(sizeof(ev_io));
+    ev_io_init(inot.io_watcher, inot_reader, inot.main_fd, EV_READ);
+}
+
+static void inotify_run(struct ev_loop* loop) {
+    ev_io_start(loop, inot.io_watcher);
+
+/* XXX some cleanup from old code, will be useful later
+    ev_io_stop(zw_loop, zwi.io_watcher);
+    free(zwi.io_watcher);
+    free(zwi.zpath);
+    inotify_rm_watch(zwi.inotify_fd, zwi.watch_desc);
+    close(zwi.inotify_fd);
+*/
+}
+
+#else
+
+static void inotify_initial_setup(void) {
+    dmn_assert(false);
+    log_fatal("inotify code called in non-inotify build???");
+}
+
+static void inotify_run(struct ev_loop* loop V_UNUSED) {
+    dmn_assert(false);
+    log_fatal("inotify code called in non-inotify build???");
+}
+
+#endif
+
 /*************************/
 /*** Public interfaces ***/
 /*************************/
 
 void zsrc_rfc1035_load_zones(void) {
+    set_inotify();
+    if(using_inotify)
+        inotify_initial_setup();
     struct ev_loop* temp_load_loop = ev_loop_new(EVFLAG_AUTO);
     scan_dir(temp_load_loop, 0.);
     ev_run(temp_load_loop, 0);
@@ -459,8 +673,13 @@ void zsrc_rfc1035_load_zones(void) {
 void zsrc_rfc1035_runtime_init(struct ev_loop* zdata_loop) {
     dmn_assert(zdata_loop);
 
-    // XXX "10" should be configurable
-    reload_timer = calloc(1, sizeof(ev_timer));
-    ev_timer_init(reload_timer, periodic_scan, 10.0, 10.0);
-    ev_timer_start(zdata_loop, reload_timer);
+    if(using_inotify) {
+        inotify_run(zdata_loop);
+    }
+    else {
+        // XXX "10" should be configurable
+        reload_timer = calloc(1, sizeof(ev_timer));
+        ev_timer_init(reload_timer, periodic_scan, 10.0, 10.0);
+        ev_timer_start(zdata_loop, reload_timer);
+    }
 }
