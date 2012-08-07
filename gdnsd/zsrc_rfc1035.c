@@ -313,8 +313,8 @@ static zone_t* zone_from_zf(zfile_t* zf) {
 }
 
 F_NONNULL
-static void quiesce_check(struct ev_loop* reload_loop, ev_timer* timer, int revents) {
-    dmn_assert(reload_loop);
+static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
+    dmn_assert(loop);
     dmn_assert(timer);
     dmn_assert(revents = EV_TIMER);
 
@@ -345,7 +345,7 @@ static void quiesce_check(struct ev_loop* reload_loop, ev_timer* timer, int reve
                 if(z)
                      zone_delete(z);
                 ev_timer_set(timer, gconfig.zreload_quiesce_period, 0.);
-                ev_timer_start(reload_loop, timer);
+                ev_timer_start(loop, timer);
             }
             else {
                 if(z) {
@@ -368,14 +368,14 @@ static void quiesce_check(struct ev_loop* reload_loop, ev_timer* timer, int reve
     else {
         log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer for %u seconds...", zf->fn, gconfig.zreload_quiesce_period);
         ev_timer_set(timer, gconfig.zreload_quiesce_period, 0.);
-        ev_timer_start(reload_loop, timer);
+        ev_timer_start(loop, timer);
     }
 }
 
 F_NONNULL
-static void process_zonefile(const char* zfn, struct ev_loop* reload_loop, const double initial_quiesce_time) {
+static void process_zonefile(const char* zfn, struct ev_loop* loop, const double initial_quiesce_time) {
     dmn_assert(zfn);
-    dmn_assert(reload_loop);
+    dmn_assert(loop);
 
     const char* fn;
     char* full_fn = str_combine(RFC1035_DIR, zfn, &fn);
@@ -401,9 +401,9 @@ static void process_zonefile(const char* zfn, struct ev_loop* reload_loop, const
             if(!statcmp_eq(&newstat, &current_zft->pending)) { // but it changed again!
                 log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %u secs for further changes...", current_zft->fn, gconfig.zreload_quiesce_period);
                 memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
-                ev_timer_stop(reload_loop, current_zft->pending_event);
+                ev_timer_stop(loop, current_zft->pending_event);
                 ev_timer_set(current_zft->pending_event, gconfig.zreload_quiesce_period, 0.);
-                ev_timer_start(reload_loop, current_zft->pending_event);
+                ev_timer_start(loop, current_zft->pending_event);
             }
             // else (if pending state has not changed) let timer continue as it was...
         }
@@ -416,7 +416,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* reload_loop, const
             current_zft->pending_event = malloc(sizeof(ev_timer));
             ev_timer_init(current_zft->pending_event, quiesce_check, initial_quiesce_time, 0.);
             current_zft->pending_event->data = current_zft;
-            ev_timer_start(reload_loop, current_zft->pending_event);
+            ev_timer_start(loop, current_zft->pending_event);
         }
     }
 }
@@ -431,7 +431,7 @@ static void unload_zones(void) {
     }
 }
 
-static void scan_dir(struct ev_loop* reload_loop, double initial_quiesce_time) {
+static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
     DIR* zdhandle = opendir(RFC1035_DIR);
     if(!zdhandle) {
         log_err("Cannot open zones directory '%s': %s", RFC1035_DIR, dmn_strerror(errno));
@@ -440,7 +440,7 @@ static void scan_dir(struct ev_loop* reload_loop, double initial_quiesce_time) {
         struct dirent* zfdi;
         while((zfdi = readdir(zdhandle)))
             if(likely(zfdi->d_name[0] != '.'))
-                process_zonefile(zfdi->d_name, reload_loop, initial_quiesce_time);
+                process_zonefile(zfdi->d_name, loop, initial_quiesce_time);
         if(closedir(zdhandle))
             log_err("closedir(%s) failed: %s", RFC1035_DIR, dmn_strerror(errno));
     }
@@ -453,8 +453,8 @@ static void scan_dir(struct ev_loop* reload_loop, double initial_quiesce_time) {
 //  were not seen during scandir(), and feed them back into
 //  process_zonefile() to be picked up as deletions.
 F_NONNULL
-static void check_missing(struct ev_loop* reload_loop) {
-    dmn_assert(reload_loop);
+static void check_missing(struct ev_loop* loop) {
+    dmn_assert(loop);
     dmn_assert(generation);
 
     for(unsigned i = 0; i < zfhash_alloc; i++) {
@@ -462,21 +462,21 @@ static void check_missing(struct ev_loop* reload_loop) {
         if(SLOT_REAL(zf)) {
             if(zf->generation != generation) {
                 log_debug("rfc1035: check_missing() found deletion of zonefile '%s', triggering process_zonefile()", zf->fn);
-                process_zonefile(zf->fn, reload_loop, gconfig.zreload_quiesce_period);
+                process_zonefile(zf->fn, loop, gconfig.zreload_quiesce_period);
             }
         }
     }
 }
 
 F_NONNULL
-static void periodic_scan(struct ev_loop* reload_loop, ev_timer* rtimer, int revents) {
-    dmn_assert(reload_loop);
+static void periodic_scan(struct ev_loop* loop, ev_timer* rtimer, int revents) {
+    dmn_assert(loop);
     dmn_assert(rtimer);
     dmn_assert(revents == EV_TIMER);
 
     generation++;
-    scan_dir(reload_loop, gconfig.zreload_quiesce_period);
-    check_missing(reload_loop);
+    scan_dir(loop, gconfig.zreload_quiesce_period);
+    check_missing(loop);
 }
 
 // ev stuff
@@ -719,15 +719,15 @@ void zsrc_rfc1035_load_zones(void) {
         log_fatal("atexit(unload_zones) failed: %s", logf_errno());
 }
 
-void zsrc_rfc1035_runtime_init(struct ev_loop* zdata_loop) {
-    dmn_assert(zdata_loop);
+void zsrc_rfc1035_runtime_init(struct ev_loop* loop) {
+    dmn_assert(loop);
 
     if(using_inotify) {
-        inotify_initial_run(zdata_loop);
+        inotify_initial_run(loop);
     }
     else {
         reload_timer = calloc(1, sizeof(ev_timer));
         ev_timer_init(reload_timer, periodic_scan, gconfig.zreload_scan_interval, gconfig.zreload_scan_interval);
-        ev_timer_start(zdata_loop, reload_timer);
+        ev_timer_start(loop, reload_timer);
     }
 }
