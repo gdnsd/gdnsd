@@ -292,15 +292,20 @@ F_NONNULL
 static zone_t* zone_from_zf(zfile_t* zf) {
     dmn_assert(zf);
 
-    char* src = str_combine("rfc1035:", zf->fn, NULL);
     char* name = make_zone_name(zf->fn);
-    zone_t* z = zone_new(name, src);
-    free(name);
-    free(src);
+    if(!name)
+        return NULL;
 
-    if(zscan_rfc1035(z, zf->full_fn) || zone_finalize(z)) {
-        zone_delete(z);
-        z = NULL;
+    char* src = str_combine("rfc1035:", zf->fn, NULL);
+    zone_t* z = zone_new(name, src);
+    free(src);
+    free(name);
+
+    if(z) {
+        if(zscan_rfc1035(z, zf->full_fn) || zone_finalize(z)) {
+            zone_delete(z);
+            z = NULL;
+        }
     }
 
     return z;
