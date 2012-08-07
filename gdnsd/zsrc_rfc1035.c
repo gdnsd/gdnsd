@@ -286,8 +286,12 @@ static void quiesce_check(struct ev_loop* reload_loop, ev_timer* timer, int reve
     if(statcmp_eq(&newstat, &zf->pending)) {
         if(statcmp_nx(&newstat)) {
             if(zf->zone) {
+                log_debug("rfc1035: zonefile '%s' quiesce timer: acting on deletion, removing zone data from runtime...", zf->fn);
                 dmn_assert(!statcmp_nx(&zf->loaded));
                 zlist_update(zf->zone, NULL);
+            }
+            else {
+                log_debug("rfc1035: zonefile '%s' quiesce timer: processing delete without runtime effects (add->remove before quiescence ended?)", zf->fn);
             }
             zfhash_del(zf);
         }
@@ -297,6 +301,7 @@ static void quiesce_check(struct ev_loop* reload_loop, ev_timer* timer, int reve
             statcmp_t post_check;
             statcmp_set(zf->full_fn, &post_check);
             if(!statcmp_eq(&zf->pending, &post_check)) {
+                log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed during zonefile parsing, restarting timer...", zf->fn);
                 if(z)
                      zone_delete(z);
                 ev_timer_set(timer, 5., 0.); // XXX needs to match old timer, or something...?
@@ -304,6 +309,7 @@ static void quiesce_check(struct ev_loop* reload_loop, ev_timer* timer, int reve
             }
             else {
                 if(z) {
+                    log_debug("rfc1035: zonefile '%s' quiesce timer: new zone data being added/updated for runtime...", zf->fn);
                     memcpy(&zf->loaded, &zf->pending, sizeof(statcmp_t));
                     z->mtime = zf->loaded.m;
                     zlist_update(zf->zone, z);
@@ -311,12 +317,16 @@ static void quiesce_check(struct ev_loop* reload_loop, ev_timer* timer, int reve
                         zone_delete(zf->zone);
                     zf->zone = z;
                 }
+                else {
+                    log_debug("rfc1035: zonefile '%s' quiesce timer: zone parsing failed while lstat() info remained stable, dropping event, awaiting further fresh FS notification to try new syntax fixes...", zf->fn);
+                }
                 free(zf->pending_event);
                 zf->pending_event = NULL;
             }
         }
     }
     else {
+        log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer...", zf->fn);
         ev_timer_set(timer, 5., 0.); // XXX needs to match old timer, or something...?
         ev_timer_start(reload_loop, timer);
     }
@@ -347,8 +357,9 @@ static void process_zonefile(const char* zfn, struct ev_loop* reload_loop, const
 
     if(current_zft) {
         current_zft->generation = generation;
-        if(current_zft->pending_event) { // already had a change queued...
+        if(current_zft->pending_event) { // we already had a pending change
             if(!statcmp_eq(&newstat, &current_zft->pending)) { // but it changed again!
+                log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %.1g secs for further changes...", current_zft->fn, quiesce_time);
                 memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
                 ev_timer_stop(reload_loop, current_zft->pending_event);
                 ev_timer_set(current_zft->pending_event, quiesce_time, 0.); // XXX timer params config
@@ -356,7 +367,11 @@ static void process_zonefile(const char* zfn, struct ev_loop* reload_loop, const
             }
             // else (if pending state has not changed) let timer continue as it was...
         }
-        else if(!statcmp_eq(&newstat, &current_zft->pending)) { // initial change detected
+        else if(!statcmp_eq(&newstat, &current_zft->loaded)) { // initial change detected
+            if(statcmp_nx(&current_zft->loaded))
+                log_debug("rfc1035: New zonefile '%s', delaying %.1g secs for further changes...", current_zft->fn, quiesce_time);
+            else
+                log_debug("rfc1035: New change detected for stable zonefile '%s', delaying %.1g secs for further changes...", current_zft->fn, quiesce_time);
             memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
             current_zft->pending_event = malloc(sizeof(ev_timer));
             ev_timer_init(current_zft->pending_event, quiesce_check, quiesce_time, 0.); // XXX timer params config
@@ -406,6 +421,7 @@ static void check_missing(struct ev_loop* reload_loop) {
         zfile_t* zf = zfhash[i];
         if(SLOT_REAL(zf)) {
             if(zf->generation != generation) {
+                log_debug("rfc1035: check_missing() found deletion of zonefile '%s', triggering process_zonefile()", zf->fn);
                 process_zonefile(zf->fn, reload_loop, 5.0); // XXX timeout config again
             }
         }
@@ -443,8 +459,8 @@ void zsrc_rfc1035_load_zones(void) {
 void zsrc_rfc1035_runtime_init(struct ev_loop* zdata_loop) {
     dmn_assert(zdata_loop);
 
-    // XXX "30" should be configurable
+    // XXX "10" should be configurable
     reload_timer = calloc(1, sizeof(ev_timer));
-    ev_timer_init(reload_timer, periodic_scan, 30., 30.);
+    ev_timer_init(reload_timer, periodic_scan, 10.0, 10.0);
     ev_timer_start(zdata_loop, reload_timer);
 }

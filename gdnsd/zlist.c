@@ -233,6 +233,14 @@ void zlist_init(void) {
 void zlist_update(zone_t* z_old, zone_t* z_new) {
     dmn_assert((uintptr_t)z_old | (uintptr_t)z_new); // (NULL,NULL) illegal
 
+    // when replacing, the old and new zones must be the same,
+    //  and I think it's even universally true that "src" should match
+    if(z_old && z_new) {
+        dmn_assert(!dname_cmp(z_old->dname, z_new->dname));
+        dmn_assert(!strcmp(z_old->src, z_new->src));
+    }
+
+
     if(z_old) {
         // z_old must be a previous z_new, etc, hence the asserts
         unsigned conflict_depth = 0;
@@ -249,16 +257,27 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
         if(z_new) {
             z_new->next = (*cand)->next;
             *cand = z_new;
+            if(hidden)
+                log_info("zlist: updated hidden zone data for '%s' (source '%s' updated) - runtime data set unaffected", logf_dname(z_old->dname), z_old->src);
+            else
+                log_info("zlist: updated current zone data for '%s' (source '%s' updated)", logf_dname(z_old->dname), z_old->src);
         }
         else {
             // if actual zlist slot, and there is no
             //   ->next to promote, we can't just NULL
             //   it out, we have to set ZONE_DELETED
             //   for the hashtable to skip properly.
-            if(!hidden && !(*cand)->next)
+            if(!hidden && !(*cand)->next) {
                 *cand = ZONE_DELETED;
-            else
+                log_info("zlist: deleting zone '%s' (only source '%s' removed)", logf_dname(z_old->dname), z_old->src);
+            }
+            else {
                 *cand = (*cand)->next;
+                if(hidden)
+                    log_info("zlist: deleting hidden zone data for '%s' (source '%s' removed) - runtime data set unaffected", logf_dname(z_old->dname), z_old->src);
+                else
+                    log_info("zlist: current zone data for '%s' from source '%s' removed - alternate existing data from source '%s' promoted for runtime lookup", logf_dname(z_old->dname), z_old->src, (*cand)->src);
+            }
         }
         zlist_unlock();
 
@@ -272,10 +291,10 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
     zone_t** conflict_ptr = zlist_find_zone_slot_for(z_new->dname, &conflict_depth);
     if(conflict_ptr) {
         if(conflict_depth) {
-            log_warn("New zone '%s': subzone of existing zone '%s'...", logf_dname(z_new->dname), logf_dname((*conflict_ptr)->dname)); // XXX we don't warn when added in reverse order though...
+            log_warn("zlist: added new zone '%s' (source '%s'): subzone of existing zone '%s', will suppress overlapping data in parent (and usually results in poor delegation behavior...)", logf_dname(z_new->dname), z_new->src, logf_dname((*conflict_ptr)->dname)); // XXX we don't warn when added in reverse order though...
         }
         else {
-            log_warn("New zone data for '%s' from '%s' suppresses existing data from '%s'...", logf_dname(z_new->dname), z_new->src, (*conflict_ptr)->src);
+            log_info("zlist: zone data for '%s' updated from source '%s', suppressing previous data from '%s'", logf_dname(z_new->dname), z_new->src, (*conflict_ptr)->src);
             // XXX need sorting here, which affects warn output as well?
             //  current behavior simply stores the newest added variant
             //   of the zone to the front of the list, make it the active copy
@@ -284,6 +303,8 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
             //   (1) If both have a defined Serial which is >0, highest Serial wins
             //   (2) Else if both have a defined source mtime >0, highest mtime wins
             //   (3) Else fall back to preferring the newest added in realtime
+            // XXX sort needs to be considered in the data replacement case
+            //   earlier in this function as well
             z_new->next = *conflict_ptr;
             zlist_wrlock();
             *conflict_ptr = z_new;
@@ -292,6 +313,8 @@ void zlist_update(zone_t* z_old, zone_t* z_new) {
     }
     else {
         // an actual new zone (no other conflict)
+        log_info("zlist: added new zone '%s' (source '%s')", logf_dname(z_new->dname), z_new->src);
+
         unsigned jmpby = 1;
         const unsigned hash_mask = zlist_alloc - 1;
         unsigned slot = z_new->hash & hash_mask;
