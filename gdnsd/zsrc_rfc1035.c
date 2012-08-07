@@ -38,9 +38,8 @@ static bool using_inotify = false;
 // size of our read(2) buffer for the inotify fd.
 // must be able to handle sizeof(struct inotify_event)
 //  + the max len of a filename in the zones directory
-// XXX start out small and double-up if reads come up short?
-//  if too small, read(2) returns EINVAL...
-#define INOTIFY_BUFSIZE 1024
+// read(2) will return EINVAL if this ends up being too small...
+static const unsigned inotify_bufsize = 4096;
 
 // The inotify mask for the zones dir watcher
 #define INL_MASK ( IN_ONLYDIR | IN_DONT_FOLLOW \
@@ -661,10 +660,10 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
 static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_READ);
 
-    uint8_t evtbuf[INOTIFY_BUFSIZE];
+    uint8_t evtbuf[inotify_bufsize];
 
     while(1) {
-        int bytes = read(w->fd, evtbuf, INOTIFY_BUFSIZE);
+        int bytes = read(w->fd, evtbuf, inotify_bufsize);
         if(bytes < 1) {
             if(!bytes || errno != EAGAIN) {
                 if(bytes)
