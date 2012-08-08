@@ -25,6 +25,7 @@
 
 #include "gdnsd-dmn.h"
 #include "gdnsd-compiler.h"
+#include "gdnsd-misc.h"
 #include "gdnsd-dname.h"
 
 /* The semantics of these functions are described in gdnsd-dname.h ... */
@@ -366,64 +367,9 @@ bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child) {
     return false;
 }
 
-// gdnsd_dname_hash is lookup2() by Bob Jenkins,
-//   from http://www.burtleburtle.net/bob/c/lookup2.c,
-//   which is in the public domain.
-// It's just been reformatted/styled to match my code,
-//   and specialized to the form of input.
-
-#define mix(a,b,c) { \
-    a -= b; a -= c; a ^= (c>>13); \
-    b -= c; b -= a; b ^= (a<<8);  \
-    c -= a; c -= b; c ^= (b>>13); \
-    a -= b; a -= c; a ^= (c>>12); \
-    b -= c; b -= a; b ^= (a<<16); \
-    c -= a; c -= b; c ^= (b>>5);  \
-    a -= b; a -= c; a ^= (c>>3);  \
-    b -= c; b -= a; b ^= (a<<10); \
-    c -= a; c -= b; c ^= (b>>15); \
-}
-
 uint32_t gdnsd_dname_hash(const uint8_t *k) {
     dmn_assert(k);
 
-    const uint32_t orig_len = *k++ - 1;
-    uint32_t len = orig_len;
-
-    uint32_t a = 0x9e3779b9;
-    uint32_t b = 0x9e3779b9;
-    uint32_t c = 0xdeadbeef;
-
-    while(len >= 12) {
-        a += (k[0] + ((uint32_t)k[1]  << 8)
-                   + ((uint32_t)k[2]  << 16)
-                   + ((uint32_t)k[3]  << 24));
-        b += (k[4] + ((uint32_t)k[5]  << 8)
-                   + ((uint32_t)k[6]  << 16)
-                   + ((uint32_t)k[7]  << 24));
-        c += (k[8] + ((uint32_t)k[9]  << 8)
-                   + ((uint32_t)k[10] << 16)
-                   + ((uint32_t)k[11] << 24));
-        mix(a,b,c);
-        k += 12; len -= 12;
-    }
-
-    c += orig_len;
-
-    switch(len) {
-        case 11: c += ((uint32_t)k[10] << 24);
-        case 10: c += ((uint32_t)k[9]  << 16);
-        case 9 : c += ((uint32_t)k[8]  << 8);
-        case 8 : b += ((uint32_t)k[7]  << 24);
-        case 7 : b += ((uint32_t)k[6]  << 16);
-        case 6 : b += ((uint32_t)k[5]  << 8);
-        case 5 : b += k[4];
-        case 4 : a += ((uint32_t)k[3]  << 24);
-        case 3 : a += ((uint32_t)k[2]  << 16);
-        case 2 : a += ((uint32_t)k[1]  << 8);
-        case 1 : a += k[0];
-    }
-
-    mix(a,b,c);
-    return c;
+    const uint32_t len = *k++ - 1;
+    return gdnsd_lookup2((const char*)k, len);
 }

@@ -62,4 +62,7 @@ uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs);
 // Returns false for non-Linux systems, or Linux kernels older than specified.
 bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z);
 
+// Jenkins lookup2
+uint32_t gdnsd_lookup2(const char *k, uint32_t len);
+
 #endif // _GDNSD_MISC_H
