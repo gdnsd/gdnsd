@@ -145,19 +145,6 @@ static void statcmp_set(const char* full_fn, statcmp_t* out) {
     }
 }
 
-// probably a poor choice, just wanted something quick for testing XXX
-F_NONNULL
-static unsigned str_djb_hash(const char* input) {
-   dmn_assert(input);
-
-   unsigned hash = 5381;
-   char c;
-   while((c = *input++))
-       hash = (hash * 33) ^ c;
-
-   return hash;
-}
-
 // grow hash by doubling, while also
 //   clearing out deletion placeholders
 F_NONNULL
@@ -241,7 +228,7 @@ static zfile_t* zfhash_find(const char* zfn) {
     dmn_assert(zfn);
 
     if(likely(zfhash_alloc)) {
-        const unsigned zfn_hash = str_djb_hash(zfn);
+        const unsigned zfn_hash = gdnsd_lookup2(zfn, strlen(zfn));
         const unsigned hash_mask = zfhash_alloc - 1;
         unsigned slot = zfn_hash & hash_mask;
         unsigned jmpby = 1;
@@ -387,7 +374,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
         current_zft = calloc(1, sizeof(zfile_t));
         current_zft->full_fn = full_fn;
         current_zft->fn = fn;
-        current_zft->hash = str_djb_hash(fn);
+        current_zft->hash = gdnsd_lookup2(fn, strlen(fn));
         zfhash_add(current_zft);
     }
     else {
