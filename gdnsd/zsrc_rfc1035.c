@@ -497,7 +497,13 @@ static void set_inotify(void) {
 #if USE_INOTIFY
 
 // This is for event debugging only
-#define _maskcat(_x) if(mask & _x) strcat(optr, #_x "|")
+#define _maskcat(_x) \
+    if(mask & _x) { \
+        if(!optr[0]) \
+            strcat(optr, #_x); \
+        else \
+            strcat(optr, "|" #_x); \
+    }
 static const char* logf_inmask(uint32_t mask) {
     char* output = dmn_fmtbuf_alloc(256);
     char* optr = output;
@@ -507,7 +513,6 @@ static const char* logf_inmask(uint32_t mask) {
     _maskcat(IN_IGNORED);
     _maskcat(IN_Q_OVERFLOW);
     _maskcat(IN_UNMOUNT);
-// I think all of the below are mutually exclusive:
     _maskcat(IN_ACCESS);
     _maskcat(IN_ATTRIB);
     _maskcat(IN_CLOSE_WRITE);
@@ -627,9 +632,7 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
     if(!fname) { // directory-level event
         log_debug("rfc1035: inotified for directory event: %s", logf_inmask(emask));
         if(unlikely(emask & (IN_Q_OVERFLOW|IN_IGNORED|IN_UNMOUNT|IN_DELETE_SELF|IN_MOVE_SELF))) {
-            // XXX we probably want to differentiate here for syslog advice output, and perhaps
-            //   even for retry strategies, once the code gets that far.
-            log_err("inotify watcher cannot continue (queue overflow, directory deleted/renamed, etc..) XXX");
+            log_err("inotify watcher stopping due to directory-level event %s", logf_inmask(emask));
             handle_inotify_failure(loop);
             rv = true;
         }
@@ -637,7 +640,7 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
         // We'll see their fallout as e.g. IN_MOVED_X operations on the contained filenames.
     }
     else if(fname[0] != '.') { // skip dotfiles
-        log_debug("rfc1035: inotified for file: %s event: %s", fname, logf_inmask(emask));
+        log_debug("rfc1035: inotified for zonefile: %s event: %s", fname, logf_inmask(emask));
         // IN_MOVED_TO, IN_MOVED_FROM, and IN_DELETE are expected to commonly
         //   leave the zonefile in a consistent, user-desired state, so they cause a short
         //   initial quiesence timer if they're the first event seen recently on a file.
