@@ -209,7 +209,7 @@ static void zlist_grow(void) {
 static void zlist_destroy(void) {
     dmn_assert(zlist);
     dmn_assert(zlist_alloc);
-    if(1) { // XXX debug only or something?
+    if(dmn_debug()) {
         for(unsigned i = 0; i < zlist_alloc; i++) {
             zone_t* z = zlist[i];
             if(SLOT_REAL(z))
