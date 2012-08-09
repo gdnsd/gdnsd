@@ -35,14 +35,19 @@
 
 #include "dmn.h"
 
-static bool dmn_daemonized = false;
+// this simply trusts fcntl pid info
+//  on the lock we hold for daemon lifetime
+//  to inform us of a running daemon's pid.
+// the string pid stored in the file is just
+//  for reference for humans or other tools.
 
+static bool dmn_daemonized = false;
 static const size_t pblen = 22;
 
-static int check_pidfile(const char* pidfile) {
-    dmn_assert(pidfile);
+static int status_finish_fd = -1;
 
-    char pidbuf[pblen];
+static pid_t check_pidfile(const char* pidfile) {
+    dmn_assert(pidfile);
 
     const int pidfd = open(pidfile, O_RDONLY);
     if(pidfd == -1) {
@@ -50,140 +55,191 @@ static int check_pidfile(const char* pidfile) {
         else dmn_log_fatal("open() of pidfile '%s' failed: %s", pidfile, dmn_strerror(errno));
     }
 
-    const int readrv = read(pidfd, pidbuf, (size_t) 15);
-    if(readrv == -1) {
-        close(pidfd);
-        dmn_log_fatal("read() from pidfile '%s' failed: %s", pidfile, dmn_strerror(errno));
-    }
+    struct flock pidlock_info;
+    memset(&pidlock_info, 0, sizeof(struct flock));
+    pidlock_info.l_type = F_WRLCK;
+    pidlock_info.l_whence = SEEK_SET;
+
+    // should not fail unless something's horribly wrong
+    if(fcntl(pidfd, F_GETLK, &pidlock_info))
+        dmn_log_fatal("bug: fcntl(%s, F_GETLK) failed: %s", pidfile, dmn_strerror(errno));
 
     close(pidfd);
 
-    if(readrv == 0) {
-        dmn_log_info("empty pidfile '%s', wiping it out", pidfile);
-        unlink(pidfile);
-        return 0;
-    }
-    pidbuf[readrv] = '\0';
-
-    errno = 0;
-    const int pidnum = strtol(pidbuf, NULL, 10);
-    if(errno) {
-        dmn_log_info("wiping out pidfile '%s': %s", pidfile, dmn_strerror(errno));
-        unlink(pidfile);
+    if(pidlock_info.l_type == F_UNLCK) {
+        dmn_log_debug("Found stale pidfile at %s, ignoring", pidfile);
         return 0;
     }
 
-    if(pidnum <= 0) {
-        dmn_log_info("invalid pid found in pidfile in '%s', wiping it out", pidfile);
-        unlink(pidfile);
-        return 0;
-    }
-
-    if(kill(pidnum, 0)) {
-        dmn_log_info("Found stale pidfile for pid %i in %s, wiping it out", pidnum, pidfile);
-        unlink(pidfile);
-        return 0;
-    }
-
-    return pidnum;
+    return pidlock_info.l_pid;
 }
 
-static long make_pidfile(const char* pidfile) {
+static bool pidrace_inner(const pid_t pid, const int pidfd) {
+    bool rv = true; // cannot get lock
+
+    char pidbuf[pblen];
+    const ssize_t pidlen = snprintf(pidbuf, pblen, "%li\n", (long)pid);
+    if(pidlen < 2)
+        dmn_log_fatal("snprintf() for pidfile failed");
+
+    struct flock pidlock_set;
+    memset(&pidlock_set, 0, sizeof(struct flock));
+    pidlock_set.l_type = F_WRLCK;
+    pidlock_set.l_whence = SEEK_SET;
+    if(fcntl(pidfd, F_SETLK, &pidlock_set)) {
+        if(errno != EAGAIN && errno != EACCES)
+            dmn_log_fatal("bug? fcntl(pidfile, F_SETLK) failed: %s", dmn_strerror(errno));
+    }
+    else {
+        rv = false; // got lock
+        if(ftruncate(pidfd, 0))
+            dmn_log_fatal("truncating pidfile failed: %s", dmn_strerror(errno));
+        if(write(pidfd, pidbuf, (size_t) pidlen) != pidlen)
+            dmn_log_fatal("writing to pidfile failed: %s", dmn_strerror(errno));
+    }
+
+    return rv;
+}
+
+static pid_t startup_pidrace(const char* pidfile, const bool restart) {
     dmn_assert(pidfile);
 
-    long pid = (long)getpid();
-    char pidbuf[pblen];
+    pid_t pid = getpid();
 
-    int pidfd = open(pidfile, O_WRONLY | O_CREAT | O_EXCL, 0666);
-    if(pidfd == -1) dmn_log_fatal("creation of new pidfile %s failed: %s", pidfile, dmn_strerror(errno));
+    int pidfd = open(pidfile, O_WRONLY | O_CREAT, 0666);
+    if(pidfd == -1)
+        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", pidfile, dmn_strerror(errno));
+    if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(%s, F_SETDF, FD_CLOEXEC) failed: %s", pidfile, dmn_strerror(errno));
 
-    const ssize_t pidlen = snprintf(pidbuf, pblen, "%li\n", pid);
-    if(pidlen < 2) {
-        close(pidfd);
-        unlink(pidfile);
-        dmn_log_fatal("snprintf() for pidfile failed");
+    if(restart) {
+        struct timeval tv;
+        unsigned tries = 1;
+        unsigned maxtries = 10;
+        while(tries++ <= maxtries) {
+            const pid_t old_pid = check_pidfile(pidfile);
+            if(old_pid && !kill(old_pid, SIGTERM)) {
+                tv.tv_sec = 0;
+                tv.tv_usec = 100000 * tries;
+                select(0, NULL, NULL, NULL, &tv);
+            }
+            if(!pidrace_inner(pid, pidfd))
+                return pid;
+        }
+        dmn_log_fatal("Could not restart: failed to shut down previous instance and acquire pidfile lock");
     }
-    if(write(pidfd, pidbuf, (size_t) pidlen) != pidlen) {
-        close(pidfd);
-        unlink(pidfile);
-        dmn_log_fatal("writing to new pidfile %s failed: %s", pidfile, dmn_strerror(errno));
-    }
-    if(close(pidfd) == -1) {
-        unlink(pidfile);
-        dmn_log_fatal("closing new pidfile %s failed: %s", pidfile, dmn_strerror(errno));
+    else if(pidrace_inner(pid, pidfd)) {
+        dmn_log_fatal("Could not start: another instance of this daemon is already running");
     }
 
     return pid;
 }
 
-static int fork_and_exit(void) {
-    const int mypid = fork();
-    if (mypid == -1)     // parent: failure
-        return 0;
-    else if (mypid != 0) // parent: success
-        exit(0);
-    else                 // child: success
-        return 1;
+// original process (before any forks) waits on readpipe here to
+//   see if final daemon child succeeded in pidfile locking and
+//   startup, then exits with an appropriate exit value.
+// the child itself will take care of string outputs, as it doesn't
+//   close stdio descriptors until after the critical section
+static void parent_status_wait(const int readpipe) {
+    int exitval = 1;
+    char statuschar;
+    const int readrv = read(readpipe, &statuschar, 1);
+    if(readrv == 1 && statuschar == '$')
+        exitval = 0;
+    exit(exitval);
 }
 
-void dmn_daemonize(const char* logname, const char* pidfile) {
+void dmn_daemonize(const char* logname, const char* pidfile, const bool restart) {
     dmn_assert(pidfile);
 
-    const int oldpid = check_pidfile(pidfile);
-    if(oldpid)
-        dmn_log_fatal("I am already running at pid %i in %s, failing", oldpid, pidfile);
+    // This pipe is used to communicate daemonization success
+    //   (which must happen two forks later because fcntl() does
+    //   not fork-inherit) back to the top-level parent for
+    //   correct exit value.
+    int statuspipe[2];
+    if(pipe(statuspipe))
+        dmn_log_fatal("pipe() failed: %s", dmn_strerror(errno));
 
-    if(!fork_and_exit()) dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
+    // Fork for the first time, closing the writer in the parent
+    //  and the reader in the child, and sending the parent off
+    //  to wait for status in parent_status_wait()
+    const pid_t first_fork_pid = fork();
+    if(first_fork_pid == -1)
+        dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
+    if(first_fork_pid) { // original parent proc
+        if(close(statuspipe[1])) // close write-side
+            dmn_log_fatal("close() of status pipe write-side failed in first parent: %s", dmn_strerror(errno));
+        parent_status_wait(statuspipe[0]);
+        dmn_assert(0); // above never returns control
+    }
 
+    if(close(statuspipe[0])) // close read-side
+        dmn_log_fatal("close() of status pipe read-side failed in first child: %s", dmn_strerror(errno));
+
+    // setsid() and ignore HUP/PIPE before the second fork
     if(setsid() == -1) dmn_log_fatal("setsid() failed: %s", dmn_strerror(errno));
-
     struct sigaction sa;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sa.sa_handler = SIG_IGN;
-
     if(sigaction(SIGHUP, &sa, NULL) == -1)
         dmn_log_fatal("sigaction to ignore SIGHUP failed: %s", dmn_strerror(errno));
-
     if(sigaction(SIGPIPE, &sa, NULL) == -1)
         dmn_log_fatal("sigaction to ignore SIGPIPE failed: %s", dmn_strerror(errno));
 
-    if(!fork_and_exit())
+    // Fork again.  This time the intermediate parent exits immediately.
+    const pid_t second_fork_pid = fork();
+    if(second_fork_pid == -1)
         dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
+    if(second_fork_pid) // intermediate parent proc
+        exit(0);
+
+    // we're now in the final child daemon
 
     if(chdir("/") == -1)
         dmn_log_fatal("chdir(/) failed: %s", dmn_strerror(errno));
-
     umask(022);
 
-    long pid = make_pidfile(pidfile);
+    const pid_t pid = startup_pidrace(pidfile, restart);
 
     if(!freopen("/dev/null", "r", stdin))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
     if(!freopen("/dev/null", "w", stdout))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
-
-    dmn_log_info("Daemonizing at pid %li ...", pid);
-
+    dmn_log_info("Daemonized successfully, pid is %li ...", (long)pid);
     if(!freopen("/dev/null", "r+", stderr))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
     openlog(logname, LOG_NDELAY|LOG_PID, LOG_DAEMON);
     dmn_daemonized = true;
-    dmn_log_info("Daemonized succesfully, pid is %li", pid);
+    dmn_log_info("Daemonized succesfully, pid is %li", (long)pid);
+
+    // track fd for later dmn_daemonize_finish()
+    status_finish_fd = statuspipe[1];
 }
 
-int dmn_status(const char* pidfile) { dmn_assert(pidfile); return check_pidfile(pidfile); }
+void dmn_daemonize_finish(void) {
+    dmn_assert(dmn_daemonized);
+    dmn_assert(status_finish_fd != -1);
 
-int dmn_stop(const char* pidfile) {
+    // inform original parent of our success, but if for some reason
+    //   it died before we could do so, carry on anyways...
+    errno = 0;
+    char successchar = '$';
+    if(1 != write(status_finish_fd, &successchar, 1))
+        dmn_log_err("Bug? failed to notify parent of daemonization success! Errno was %s", dmn_strerror(errno));
+    close(status_finish_fd);
+}
+
+pid_t dmn_status(const char* pidfile) { dmn_assert(pidfile); return check_pidfile(pidfile); }
+
+pid_t dmn_stop(const char* pidfile) {
     dmn_assert(pidfile);
 
-    const int pid = check_pidfile(pidfile);
+    const pid_t pid = check_pidfile(pidfile);
     if(!pid) {
         dmn_log_info("Did not find a running daemon to stop!");
         return 0;
     }
-
-    struct timeval tv;
 
     // This will basically do a kill/sleep
     //  loop for a total of 10 attempts over
@@ -191,6 +247,7 @@ int dmn_stop(const char* pidfile) {
     //  up, with the sleep delay increasing from
     //  100ms at the start up to 1s at the end.
 
+    struct timeval tv;
     unsigned tries = 1;
     unsigned maxtries = 10;
     while(tries++ <= maxtries && !kill(pid, SIGTERM)) {
@@ -200,11 +257,9 @@ int dmn_stop(const char* pidfile) {
     }
 
     if(!kill(pid, 0)) {
-        dmn_log_err("Cannot stop daemon at pid %i", pid);
+        dmn_log_err("Cannot stop daemon at pid %li", (long)pid);
         return pid;
     }
-
-    unlink(pidfile);
 
     return 0;
 }
@@ -212,11 +267,11 @@ int dmn_stop(const char* pidfile) {
 void dmn_signal(const char* pidfile, int sig) {
     dmn_assert(pidfile);
 
-    const int pid = check_pidfile(pidfile);
+    const pid_t pid = check_pidfile(pidfile);
     if(!pid)
         dmn_log_err("Did not find a running daemon to signal!");
     else if(kill(pid, sig))
-        dmn_log_err("Cannot signal daemon at pid %i", pid);
+        dmn_log_err("Cannot signal daemon at pid %li", (long)pid);
 }
 
 bool dmn_is_daemonized(void) { return dmn_daemonized; }

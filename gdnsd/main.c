@@ -211,7 +211,7 @@ typedef enum {
     ACT_START,
     ACT_STOP,
     ACT_RESTART,
-    ACT_CRESTART,
+    ACT_CRESTART, // downgrades to ACT_RESTART after checking...
     ACT_STATUS,
     ACT_LPE_ON,
     ACT_LPE_OFF,
@@ -286,16 +286,14 @@ int main(int argc, char** argv) {
     conf_load(conf_arg);
     free(conf_arg);
 
-    // Check if we're already running...
-    const int oldpid = dmn_status(gconfig.pidfile);
-
     // Take action
     if(action == ACT_STATUS) {
+        const pid_t oldpid = dmn_status(gconfig.pidfile);
         if(!oldpid) {
             log_info("status: not running");
             exit(3);
         }
-        log_info("status: running at pid %i", oldpid);
+        log_info("status: running at pid %li", (long)oldpid);
         exit(0);
     }
 
@@ -316,6 +314,7 @@ int main(int argc, char** argv) {
     }
 
     if(action == ACT_CRESTART) {
+        const pid_t oldpid = dmn_status(gconfig.pidfile);
         if(!oldpid) {
             log_info("condrestart: not running, will not restart");
             exit(0);
@@ -334,12 +333,11 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    if(action == ACT_RESTART) {
-        log_info("Attempting to stop the running daemon instance for restart...");
-        if(dmn_stop(gconfig.pidfile))
-            log_fatal("...Running daemon failed to stop, cannot continue with restart...");
-        log_info("...Previous daemon successfully shut down (or was not up), this instance coming online");
-    }
+    // from here out, all actions are attempting startup...
+    dmn_assert(action == ACT_STARTFG
+            || action == ACT_START
+            || action == ACT_RESTART
+    );
 
     const bool started_as_root = !geteuid();
 
@@ -413,7 +411,7 @@ int main(int argc, char** argv) {
         // so that the daemonization fork+exit pairs don't
         //   execute the plugins' exit handlers
         skip_plugins_cleanup = true;
-        dmn_daemonize(PACKAGE_NAME, gconfig.pidfile);
+        dmn_daemonize(PACKAGE_NAME, gconfig.pidfile, (action == ACT_RESTART));
         skip_plugins_cleanup = false;
     }
 
@@ -527,6 +525,10 @@ int main(int argc, char** argv) {
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
+
+    // Report success back to whoever invoked "start" or "restart" command...
+    if(dmn_is_daemonized())
+       dmn_daemonize_finish();
 
     // Start the primary event loop in this thread, to handle
     // signals and statio stuff.  Should not return until we
