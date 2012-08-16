@@ -1,3 +1,13 @@
+1.6.8 - 2012-08-17
+    Pidfile/Initscript/Daemonization bugfixes (many thanks
+      to Timo Teräs for bringing them up and walking me
+      through the proper solution).
+    Note that while the behavior is improved in this version,
+      it still has some corner-case bugs required for
+      compatibility with previous 1.6.x instances (e.g. for
+      restart on upgrade), which will be removed in post-1.6.x
+      releases.
+    Various text/link updates from the move to Github hosting.
 
 1.6.7 - 2012-05-07
     This release is just to fix up packaging issues and expand

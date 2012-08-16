@@ -1,6 +1,6 @@
 Summary: Authoritative DNS Server
 Name: gdnsd
-Version: 1.6.7
+Version: 1.6.8
 Release: 1%{?dist}
 License: GPLv3+
 Group: System Environment/Daemons
@@ -94,6 +94,9 @@ fi
 %doc %{_mandir}/man3/*
 
 %changelog
+* Thu Aug 16 2012 Brandon Black <blblack@gmail.com> 1.6.8-1
+- Update to 1.6.8
+
 * Fri May  4 2012 Brandon Black <blblack@gmail.com> 1.6.7-1
 - Forked from Matthias' work on Fedora RPMs.  My primary
   target here is Amazon Linux RPMs, but it will probably
