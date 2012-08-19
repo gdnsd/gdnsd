@@ -64,14 +64,31 @@ static pid_t check_pidfile(const char* pidfile) {
     if(fcntl(pidfd, F_GETLK, &pidlock_info))
         dmn_log_fatal("bug: fcntl(%s, F_GETLK) failed: %s", pidfile, dmn_strerror(errno));
 
-    close(pidfd);
+    pid_t rv = 0;
 
     if(pidlock_info.l_type == F_UNLCK) {
-        dmn_log_debug("Found stale pidfile at %s, ignoring", pidfile);
-        return 0;
+        // Backwards-compat check for pre-1.6.8 instances
+        char pidbuf[pblen];
+        const int readrv = read(pidfd, pidbuf, (size_t) 15);
+        if(readrv == -1)
+            dmn_log_fatal("read() from pidfile '%s' failed: %s", pidfile, dmn_strerror(errno));
+
+        if(readrv > 0) {
+            pidbuf[readrv] = '\0';
+            errno = 0;
+            const pid_t pidnum = (pid_t)strtol(pidbuf, NULL, 10);
+            if(!errno && pidnum > 0 && !kill(pidnum, 0)) {
+                dmn_log_info("Found unlocked but seemingly-valid pid for pre-1.6.8 daemon instance...");
+                rv = pidnum;
+            }
+        }
+    }
+    else {
+        rv = pidlock_info.l_pid;
     }
 
-    return pidlock_info.l_pid;
+    close(pidfd);
+    return rv;
 }
 
 static bool pidrace_inner(const pid_t pid, const int pidfd) {
@@ -118,17 +135,17 @@ static pid_t startup_pidrace(const char* pidfile, const bool restart) {
         unsigned maxtries = 10;
         while(tries++ <= maxtries) {
             const pid_t old_pid = check_pidfile(pidfile);
-            if(old_pid && !kill(old_pid, SIGTERM)) {
-                tv.tv_sec = 0;
-                tv.tv_usec = 100000 * tries;
-                select(0, NULL, NULL, NULL, &tv);
-            }
-            if(!pidrace_inner(pid, pidfd))
+            if(!old_pid && !pidrace_inner(pid, pidfd))
                 return pid;
+            if(old_pid)
+                kill(old_pid, SIGTERM);
+            tv.tv_sec = 0;
+            tv.tv_usec = 100000 * tries;
+            select(0, NULL, NULL, NULL, &tv);
         }
         dmn_log_fatal("Could not restart: failed to shut down previous instance and acquire pidfile lock");
     }
-    else if(pidrace_inner(pid, pidfd)) {
+    else if(check_pidfile(pidfile) || pidrace_inner(pid, pidfd)) {
         dmn_log_fatal("Could not start: another instance of this daemon is already running");
     }
 
