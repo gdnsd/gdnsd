@@ -53,7 +53,7 @@ My test servers/domains are at: http://gdnsd.net . These tend to run the latest 
 
 ## Portability
 
-The primary target platform is modern x86_64 Linux.  The code also compiles and works fine on MacOS X.  In theory, it should be portable to any reasonably-modern POSIXy platform with a good C99 compiler.  Several releases ago I spent some effort testing that it did in fact compile, pass tests, and operate correctly at runtime on a number of *BSDs, OpenSolaris w/ Sun's compiler, and even an embedded Linux router with a big-endian MIPS CPU.  YMMV on such targets with the modern codebase as I only regularly test Linux and Mac targets, but clean portability patches are always welcome.
+The primary target platform is modern x86_64 Linux.  The code also compiles and works fine on MacOS X.  In theory, it should be portable to any reasonably-modern POSIXy platform with a good C99 compiler.  Several releases ago I spent some effort testing that it did in fact compile, pass tests, and operate correctly at runtime on a number of *BSDs, OpenSolaris w/ Sun's compiler, and even an embedded Linux router with a big-endian MIPS CPU.  YMMV on such targets with the modern codebase as I only regularly test Linux and Mac targets, but clean portability patches are always welcome.  There's a FreeBSD port at: http://portsmon.freebsd.org/portoverview.py?category=dns&portname=gdnsd
 
 ## Release Numbering and Policy
 
