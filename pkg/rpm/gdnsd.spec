@@ -97,6 +97,9 @@ fi
 * Sun May  6 2012 Brandon Black <blblack@gmail.com> 1.7.0-1
 - Updated for dev branch fs layouts, no release yet.
 
+* Thu Aug 16 2012 Brandon Black <blblack@gmail.com> 1.6.8-1
+- Update to 1.6.8
+
 * Fri May  4 2012 Brandon Black <blblack@gmail.com> 1.6.7-1
 - Forked from Matthias' work on Fedora RPMs.  My primary
   target here is Amazon Linux RPMs, but it will probably

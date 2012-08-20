@@ -314,7 +314,7 @@ typedef enum {
     ACT_START,
     ACT_STOP,
     ACT_RESTART,
-    ACT_CRESTART,
+    ACT_CRESTART, // downgrades to ACT_RESTART after checking...
     ACT_STATUS,
     ACT_UNDEF
 } action_t;
@@ -403,14 +403,14 @@ int main(int argc, char** argv) {
     //   returning the action.  Exits on cmdline errors
     action_t action = parse_args(argc, argv);
 
-    // Take simple pidfile-based actions quickly, without further init
-    const int oldpid = dmn_status(PID_PATH);
+    // Take action
     if(action == ACT_STATUS) {
+        const pid_t oldpid = dmn_status(PID_PATH);
         if(!oldpid) {
             log_info("status: not running, based on pidfile '%s'", logf_pathname(PID_PATH));
             exit(3);
         }
-        log_info("status: running at pid %i in pidfile %s", oldpid, logf_pathname(PID_PATH));
+        log_info("status: running at pid %li in pidfile %s", (long)oldpid, logf_pathname(PID_PATH));
         exit(0);
     }
     else if(action == ACT_STOP) {
@@ -418,7 +418,9 @@ int main(int argc, char** argv) {
             dmn_stop(PID_PATH) ? 1 : 0
         );
     }
-    else if(action == ACT_CRESTART) {
+
+    if(action == ACT_CRESTART) {
+        const pid_t oldpid = dmn_status(PID_PATH);
         if(!oldpid) {
             log_info("condrestart: not running, will not restart");
             exit(0);
@@ -439,12 +441,11 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
-    if(action == ACT_RESTART) {
-        log_info("Attempting to stop the running daemon instance for restart...");
-        if(dmn_stop(PID_PATH))
-            log_fatal("...Running daemon failed to stop, cannot continue with restart...");
-        log_info("...Previous daemon successfully shut down (or was not up), this instance coming online");
-    }
+    // from here out, all actions are attempting startup...
+    dmn_assert(action == ACT_STARTFG
+            || action == ACT_START
+            || action == ACT_RESTART
+    );
 
     // Check/set rlimits for mlockall() if necessary and possible
     if(gconfig.lock_mem)
@@ -455,7 +456,7 @@ int main(int argc, char** argv) {
 
     // Daemonize if applicable
     if(action != ACT_STARTFG)
-        dmn_daemonize(PACKAGE_NAME, PID_PATH);
+        dmn_daemonize(PACKAGE_NAME, PID_PATH, (action == ACT_RESTART));
 
     // If root, or if user explicitly set a priority...
     if(started_as_root || gconfig.priority != -21) {
@@ -528,6 +529,10 @@ int main(int argc, char** argv) {
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
+
+    // Report success back to whoever invoked "start" or "restart" command...
+    if(dmn_is_daemonized())
+       dmn_daemonize_finish();
 
     // Start the primary event loop in this thread, to handle
     // signals and statio stuff.  Should not return until we

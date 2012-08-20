@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <syslog.h>
+#include <sys/types.h>
 
 // gcc function attributes
 #if defined __GNUC__ && __GNUC__ >= 3 // gcc 3.0+
@@ -53,15 +54,25 @@
 
 // Attempt to daemonize the current process using "pidfile"
 //  as the pidfile pathname.  logname is used as the daemon's
-//  official name for openlog() purposes.
+//  official name for openlog() purposes.  If "restart" is
+//  true, attempt unracy shutdown of any previous instance and
+//  take over.
+// You must invoke dmn_daemonize_finish shortly afterwards.  If
+//  you have post-daemonization setup to do which could lead
+//  to early daemon abort, do it between the two.
 DMN_F_NONNULL
-void dmn_daemonize(const char* logname, const char* pidfile);
+void dmn_daemonize(const char* logname, const char* pidfile, const bool restart);
+
+// Called after the above.  This releases the original parent
+//   process to exit with value zero (if you just die/abort
+//   without calling this, it will exit non-zero).
+void dmn_daemonize_finish(void);
 
 // Check the status of a daemon using "pidfile".  Return value
 //  of zero means not running, otherwise the return value is
 //  the pid of the running daemon
 DMN_F_NONNULL
-int dmn_status(const char* pidfile);
+pid_t dmn_status(const char* pidfile);
 
 // Attempt to stop any running daemon using "pidfile".  This function
 //  will make several attempts (with an increasing delay) to terminate
@@ -69,7 +80,7 @@ int dmn_status(const char* pidfile);
 // retval == 0 means daemon was not running, or was successfully killed.
 // retval != 0 means daemon is still running (and the pid is the retval)
 DMN_F_NONNULL
-int dmn_stop(const char* pidfile);
+pid_t dmn_stop(const char* pidfile);
 
 // Send an aribtrary signal to a running daemon using "pidfile".
 DMN_F_NONNULL
