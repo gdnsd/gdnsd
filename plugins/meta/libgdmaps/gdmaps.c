@@ -148,6 +148,7 @@ static dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_aut
     dcinfo_t* info = malloc(sizeof(dcinfo_t));
 
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
+    unsigned num_auto = 0;
     if(!num_dcs)
         log_fatal("plugin_geoip: map '%s': 'datacenters' must be an array of one or more strings", map_name);
     if(num_dcs > 254)
@@ -164,34 +165,26 @@ static dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_aut
             log_fatal("plugin_geoip: map '%s': datacenter name 'auto' is illegal", map_name);
     }
 
-    if(dc_auto_limit_cfg) {
-        unsigned long auto_limit_ul;
-        if(!vscf_is_simple(dc_auto_limit_cfg) || !vscf_simple_get_as_ulong(dc_auto_limit_cfg, &auto_limit_ul))
-            log_fatal("plugin_geoip: map '%s': auto_dc_limit must be a single unsigned integer value", map_name);
-        if(auto_limit_ul > num_dcs || !auto_limit_ul)
-            auto_limit_ul = num_dcs;
-        info->auto_limit = auto_limit_ul;
-    }
-    else {
-        info->auto_limit = (num_dcs > 3) ? 3 : num_dcs;
-    }
-
     if(dc_auto_cfg) {
         if(!vscf_is_hash(dc_auto_cfg))
             log_fatal("plugin_geoip: map '%s': auto_dc_coords must be a key-value hash", map_name);
-        const unsigned num_auto = vscf_hash_get_len(dc_auto_cfg);
-        if(num_auto != num_dcs)
-            log_fatal("plugin_geoip: map '%s': auto_dc_coords hash must contain one entry for each datacenter in 'datacenters'", map_name);
-        info->coords = malloc(num_auto * 2 * sizeof(double));
+        num_auto = vscf_hash_get_len(dc_auto_cfg);
+        if (info->auto_limit > num_auto)
+            info->auto_limit = num_auto;
+        info->coords = malloc(num_dcs * 2 * sizeof(double));
+        for(unsigned i = 0; i < 2*num_dcs; i++)
+            info->coords[i] = NAN;
         for(unsigned i = 0; i < num_auto; i++) {
             const char* dcname = vscf_hash_get_key_byindex(dc_auto_cfg, i, NULL);
             unsigned dcidx;
-            for(dcidx = 0; dcidx < info->num_dcs; dcidx++) {
+            for(dcidx = 0; dcidx < num_dcs; dcidx++) {
                 if(!strcmp(dcname, info->names[dcidx]))
                     break;
             }
-            if(dcidx == info->num_dcs)
+            if(dcidx == num_dcs)
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' not matched from 'datacenters' list", map_name, dcname);
+            if(!isnan(info->coords[(dcidx*2)]))
+                log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' defined twice", map_name, dcname);
             const vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
             const vscf_data_t* lat_cfg;
             const vscf_data_t* lon_cfg;
@@ -214,6 +207,18 @@ static dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_aut
     }
     else {
         info->coords = NULL;
+    }
+
+    if(dc_auto_limit_cfg) {
+        unsigned long auto_limit_ul;
+        if(!vscf_is_simple(dc_auto_limit_cfg) || !vscf_simple_get_as_ulong(dc_auto_limit_cfg, &auto_limit_ul))
+            log_fatal("plugin_geoip: map '%s': auto_dc_limit must be a single unsigned integer value", map_name);
+        if(auto_limit_ul > num_auto || !auto_limit_ul)
+            auto_limit_ul = num_auto;
+        info->auto_limit = auto_limit_ul;
+    }
+    else {
+        info->auto_limit = (num_auto > 3) ? 3 : num_auto;
     }
 
     return info;
@@ -438,7 +443,10 @@ static unsigned dclists_city_auto_map(dclists_t* lists, const char* map_name, co
     double dists[store_len];
     for(unsigned i = 0; i < num_dcs; i++) {
         const unsigned c_offs = i * 2;
-        dists[i + 1] = haversine(lat_rad, lon_rad, coords[c_offs], coords[c_offs + 1]);
+        if (!isnan(coords[c_offs]))
+            dists[i + 1] = haversine(lat_rad, lon_rad, coords[c_offs], coords[c_offs + 1]);
+        else
+            dists[i + 1] = +INFINITY;
     }
 
     // Given the relatively small num_dcs of most configs,
