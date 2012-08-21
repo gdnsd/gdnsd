@@ -1889,6 +1889,7 @@ static unsigned get_dclist(const gdmap_t* gdmap, const ntree_t* tree, geoip_db_t
     }
 
     db->offset_cache[ndx] = realloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size+2));
+    dmn_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
     db->offset_cache[ndx][bucket_size+1].offset = 0;
