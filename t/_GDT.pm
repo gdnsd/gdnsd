@@ -49,6 +49,11 @@ if($Net::DNS::VERSION == '0.65') {
     $Net::DNS::RR::_LOADED{'Net::DNS::RR::AAAA'}++;
 }
 
+# Net::DNS 0.68 renamed a public method on us, so...
+require Net::DNS::Header;
+*Net::DNS::Header::data = *Net::DNS::Header::encode
+    unless *Net::DNS::Header::data{CODE};
+
 my %SIGS;
 {
     my $i = 0;
