@@ -148,7 +148,7 @@ static dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_aut
     dcinfo_t* info = malloc(sizeof(dcinfo_t));
 
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
-    unsigned num_auto = 0;
+    unsigned num_auto = num_dcs;
     if(!num_dcs)
         log_fatal("plugin_geoip: map '%s': 'datacenters' must be an array of one or more strings", map_name);
     if(num_dcs > 254)
@@ -169,8 +169,6 @@ static dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_aut
         if(!vscf_is_hash(dc_auto_cfg))
             log_fatal("plugin_geoip: map '%s': auto_dc_coords must be a key-value hash", map_name);
         num_auto = vscf_hash_get_len(dc_auto_cfg);
-        if (info->auto_limit > num_auto)
-            info->auto_limit = num_auto;
         info->coords = malloc(num_dcs * 2 * sizeof(double));
         for(unsigned i = 0; i < 2*num_dcs; i++)
             info->coords[i] = NAN;
