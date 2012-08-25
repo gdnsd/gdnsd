@@ -43,6 +43,7 @@
 #include "dnspacket.h"
 #include "statio.h"
 #include "monio.h"
+#include "ztree.h"
 #include "zsrc_rfc1035.h"
 #include "gdnsd-plugapi-priv.h"
 #include "gdnsd-net-priv.h"
@@ -393,7 +394,7 @@ static void init_config(const bool started_as_root) {
     gdnsd_plugins_action_full_config(gconfig.num_io_threads);
 
     log_info("Loading zone data");
-    zlist_init();
+    ztree_init();
     zsrc_rfc1035_load_zones();
 }
 

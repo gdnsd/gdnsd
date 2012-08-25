@@ -28,7 +28,7 @@
 #include "dnswire.h"
 #include "gdnsd-misc.h"
 #include "gdnsd-plugapi-priv.h"
-#include "zlist.h"
+#include "ztree.h"
 
 static const uint8_t chaos_fixed[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00\x00\x06\x05gdnsd";
 static const unsigned chaos_fixed_len = sizeof(chaos_fixed) - 1;
@@ -1615,9 +1615,9 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
     ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
 
-    zlist_rdlock();
+    ztree_rdlock();
 
-    zone_t* query_zone = zlist_find_zone_for(qname, &auth_depth);
+    zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
 
     if(query_zone) { // matches auth space somewhere
         // In the initial search, it's known that "qname" is in fact the real query name and therefore
@@ -1692,7 +1692,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         }
     }
 
-    zlist_unlock();
+    ztree_unlock();
 
     return offset;
 }

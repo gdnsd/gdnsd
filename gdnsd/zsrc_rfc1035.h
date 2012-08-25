@@ -22,7 +22,6 @@
 
 #include "config.h"
 #include "gdnsd.h"
-#include "zlist.h"
 
 void zsrc_rfc1035_load_zones(void);
 

@@ -35,7 +35,7 @@ labels, e.g:
 starting at the root of the zone (the root zone of DNS in the example above).
 The actual root node of the tree has no label, as the labels are only useful
 in seaching the children of a node.  The root node itself is tracked and
-searched through another data structure, the "zones list" in zlist.h.
+searched through another data structure, the "zones tree" in ztree.h.
 
   Each node in the ltree (ltree_node_t) contains a resizable hash table of
 child nodes, as well as the data for its own local rrsets and a flags field for
@@ -95,7 +95,7 @@ struct _ltree_node_struct;
 typedef struct _ltree_node_struct ltree_node_t;
 
 // depends on ltree_node_t above
-#include "zlist.h"
+#include "ztree.h"
 
 struct _ltree_rdata_ns_struct;
 struct _ltree_rdata_ptr_struct;
@@ -315,7 +315,7 @@ struct _ltree_node_struct {
     ltree_rrset_t* rrsets;     // The list of rrsets
 };
 
-// zlist/zone code uses these to create and destroy per-zone ltrees:
+// ztree/zone code uses these to create and destroy per-zone ltrees:
 F_NONNULL
 void ltree_init_zone(zone_t* zone);
 F_WUNUSED F_NONNULL

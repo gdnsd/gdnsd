@@ -21,7 +21,7 @@
 #define _GDNSD_ZSCAN_H
 
 #include "config.h"
-#include "zlist.h"
+#include "ztree.h"
 
 // Actually scan the zonefile, creating the data
 F_WUNUSED F_NONNULL

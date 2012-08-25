@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_ZLIST_H
-#define _GDNSD_ZLIST_H
+#ifndef _GDNSD_ZTREE_H
+#define _GDNSD_ZTREE_H
 
 #include "config.h"
 #include "gdnsd.h"
@@ -43,10 +43,10 @@ struct _zone_struct {
 };
 
 // Singleton init
-void zlist_init(void);
+void ztree_init(void);
 
 // primary interface for zone data sources
-void zlist_update(zone_t* z_old, zone_t* z_new);
+void ztree_update(zone_t* z_old, zone_t* z_new);
 
 // primary interface for zone data runtime lookups
 // Argument is any legal fully-qualified dname
@@ -55,18 +55,18 @@ void zlist_update(zone_t* z_old, zone_t* z_new);
 // auth_depth_out is mostly useful for dnspacket.c, it tells you
 //   how many bytes into the dname the authoritative zone name
 //   starts at.
-F_NONNULLX(1)
-zone_t* zlist_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
+F_NONNULL
+zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 
-// zlist readlock for access
-// callers of zlist_find_zone_for() need to lock before calling, and then
+// ztree readlock for access
+// callers of ztree_find_zone_for() need to lock before calling, and then
 //   need to keep that lock for as long as they continue to reference data
 //   from the resulting zone_t* (which should be brief...)
-void zlist_rdlock(void);
-void zlist_unlock(void);
+void ztree_rdlock(void);
+void ztree_unlock(void);
 
 // These are for zsrc_* code to create/delete detached zone_t's used
-//   in zlist_update() calls.
+//   in ztree_update() calls.
 F_NONNULL
 zone_t* zone_new(const char* zname, const char* source);
 F_NONNULL
@@ -74,4 +74,4 @@ bool zone_finalize(zone_t* zone);
 F_NONNULL
 void zone_delete(zone_t* zone);
 
-#endif // _GDNSD_ZLIST_H
+#endif // _GDNSD_ZTREE_H

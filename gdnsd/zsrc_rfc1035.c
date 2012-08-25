@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <dirent.h>
 
+#include "ztree.h"
 
 #if USE_INOTIFY
 
@@ -314,7 +315,7 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
             if(zf->zone) {
                 log_debug("rfc1035: zonefile '%s' quiesce timer: acting on deletion, removing zone data from runtime...", zf->fn);
                 dmn_assert(!statcmp_nx(&zf->loaded));
-                zlist_update(zf->zone, NULL);
+                ztree_update(zf->zone, NULL);
             }
             else {
                 log_debug("rfc1035: zonefile '%s' quiesce timer: processing delete without runtime effects (add->remove before quiescence ended?)", zf->fn);
@@ -338,7 +339,7 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
                     log_debug("rfc1035: zonefile '%s' quiesce timer: new zone data being added/updated for runtime...", zf->fn);
                     memcpy(&zf->loaded, &zf->pending, sizeof(statcmp_t));
                     z->mtime = zf->loaded.m;
-                    zlist_update(zf->zone, z);
+                    ztree_update(zf->zone, z);
                     if(zf->zone)
                         zone_delete(zf->zone);
                     zf->zone = z;
@@ -411,7 +412,7 @@ static void unload_zones(void) {
     for(unsigned i = 0; i < zfhash_alloc; i++) {
         zfile_t* zf = zfhash[i];
         if(SLOT_REAL(zf)) {
-            zlist_update(zf->zone, NULL);
+            ztree_update(zf->zone, NULL);
             zf_delete(zf);
         }
     }
