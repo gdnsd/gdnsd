@@ -259,7 +259,7 @@ bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned 
 }
 
 uint32_t gdnsd_lookup2(const char *k, uint32_t len) {
-    dmn_assert(k);
+    dmn_assert(k || !len);
 
     const uint32_t orig_len = len;
 
