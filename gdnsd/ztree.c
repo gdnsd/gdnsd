@@ -211,12 +211,13 @@ static void ztree_node_grow(ztree_t* node) {
                 new_children[slot] = entry;
             }
         }
-        free(node->children);
+        ztree_t** old = node->children;
         ztree_wrlock();
         node->children = new_children;
         node->child_alloc = new_alloc;
         node->child_count = new_count;
         ztree_unlock();
+        free(old);
     }
 }
 
