@@ -126,14 +126,24 @@ bool zone_finalize(zone_t* zone) {
 // retval < 0 means za is first
 // retval > 0 means zb is first
 // retval == 0 means equal
-// XXX This function probably doesn't cope well with large
-//    serials and needs some serial number math?
+static const uint32_t u_i32_max = 0x80000000UL;
 F_PURE F_NONNULL
 static int zone_cmp(zone_t* za, zone_t* zb) {
     dmn_assert(za); dmn_assert(zb);
-    int rv = zb->serial - za->serial;
-    if(!rv)
+
+    const unsigned sa = za->serial;
+    const unsigned sb = zb->serial;
+    int rv = 0;
+    if(sa != sb) {
+        if(  ((sa > sb) && ((sa - sb) < u_i32_max))
+          || ((sa < sb) && ((sb - sa) > u_i32_max))) 
+            rv = -1;
+        else
+            rv = 1;
+    }
+    else {
        rv = zb->mtime - za->mtime;
+    }
     return rv;
 }
 
