@@ -385,7 +385,14 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
                 hidden2 = true;
                 sort_pp = &(*sort_pp)->next;
             }
-            if(sort_pp != zold_pp) {
+            if(sort_pp == zold_pp || sort_pp == &(*zold_pp)->next) {
+                // sorts same as old if old is not present, single-step swap
+                z_new->next = (*zold_pp)->next;
+                if(!hidden) ztree_wrlock();
+                *zold_pp = z_new;
+                if(!hidden) ztree_unlock();
+            }
+            else {
                 // move required, 2-step swap (add then delete)
                 // (I know this looks stupid now, but thinking ahead
                 //   for liburcu stuff)
@@ -396,12 +403,6 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
                 if(!hidden2) ztree_unlock();
                 if(!hidden) ztree_wrlock();
                 *zold_pp = (*zold_pp)->next;
-                if(!hidden) ztree_unlock();
-            }
-            else { // sorts same as old, single-step swap
-                z_new->next = (*zold_pp)->next;
-                if(!hidden) ztree_wrlock();
-                *zold_pp = z_new;
                 if(!hidden) ztree_unlock();
             }
         }
