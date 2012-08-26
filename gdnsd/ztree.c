@@ -119,6 +119,24 @@ bool zone_finalize(zone_t* zone) {
     return ltree_postproc_zone(zone);
 }
 
+// Compare two zones for sorting duplicate sources.
+// The comparison is by serial and then mtime.
+// The way the comparison is used below, in the equal case
+//   the "new" zone wins (the one being inserted/updated).
+// retval < 0 means za is first
+// retval > 0 means zb is first
+// retval == 0 means equal
+// XXX This function probably doesn't cope well with large
+//    serials and needs some serial number math?
+F_PURE F_NONNULL
+static int zone_cmp(zone_t* za, zone_t* zb) {
+    dmn_assert(za); dmn_assert(zb);
+    int rv = zb->serial - za->serial;
+    if(!rv)
+       rv = zb->mtime - za->mtime;
+    return rv;
+}
+
 /******* ztree code *********/
 
 static inline unsigned label_hash(const uint8_t* label) {
@@ -253,8 +271,8 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
         memcpy(rv->label, label, *label + 1);
         ztree_wrlock();
         node->children[slot] = rv;
-        node->child_count++;
         ztree_unlock();
+        node->child_count++;
     }
 
     return rv;
@@ -299,6 +317,11 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
         dmn_assert(!strcmp(z_old->src, z_new->src));
     }
 
+    // note we only need to writelock when updating ztree->zone, not
+    //  when updating some zone's ->next pointer, because the lookup
+    //  code only ever looks at the head of the list.  The booleans
+    //  "hidden" and "hidden2" track this below...
+
     if(!z_old) { // insert
         dmn_assert(z_new);
         log_debug("ztree_update: inserting new data for zone '%s' from src '%s'", logf_dname(z_new->dname), z_new->src);
@@ -310,12 +333,19 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
             dmn_assert(this_zt);
         }
 
-        // insert at front of chain
-        // XXX should be sorted rather than implicit arrival order?
-        z_new->next = this_zt->zone;
-        ztree_wrlock();
-        this_zt->zone = z_new;
-        ztree_unlock();
+        // Assume existing entries are sorted, find our insert position...
+        bool hidden = false;
+        zone_t** ins_pp = &this_zt->zone;
+        while(*ins_pp && (zone_cmp(*ins_pp, z_new) < 0)) {
+            hidden = true;
+            ins_pp = &(*ins_pp)->next;
+        }
+
+        // only have to lock if updating head of list
+        z_new->next = *ins_pp;
+        if(!hidden) ztree_wrlock();
+        *ins_pp = z_new;
+        if(!hidden) ztree_unlock();
     }
     else { // update or delete
         if(z_new)
@@ -342,21 +372,38 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
             zold_pp = &(*zold_pp)->next;
         }
 
-        // only need to lock if the target was the front
-        //   of the ->zone chain (in active use for lookups),
-        //   because lookup code never uses ->next.
-        if(!hidden)
-            ztree_wrlock();
-        if(z_new) { // update case
-            // XXX if we sort on insert above, we have to
-            //  re-sort on update here...
-            z_new->next = z_old->next;
-            *zold_pp = z_new;
-        }
-        else { // delete case
+        if(!z_new) { // delete case
+            if(!hidden) ztree_wrlock();
             *zold_pp = (*zold_pp)->next;
+            if(!hidden) ztree_unlock();
         }
-        if(!hidden)
-            ztree_unlock();
+        else { // update case
+            // Scan for correct sort position
+            bool hidden2 = false;
+            zone_t** sort_pp = &this_zt->zone;
+            while(*sort_pp && (zone_cmp(*sort_pp, z_new) < 0)) {
+                hidden2 = true;
+                sort_pp = &(*sort_pp)->next;
+            }
+            if(sort_pp != zold_pp) {
+                // move required, 2-step swap (add then delete)
+                // (I know this looks stupid now, but thinking ahead
+                //   for liburcu stuff)
+                dmn_assert(hidden || hidden2); // both can't be the head...
+                z_new->next = *sort_pp;
+                if(!hidden2) ztree_wrlock();
+                *sort_pp = z_new;
+                if(!hidden2) ztree_unlock();
+                if(!hidden) ztree_wrlock();
+                *zold_pp = (*zold_pp)->next;
+                if(!hidden) ztree_unlock();
+            }
+            else { // sorts same as old, single-step swap
+                z_new->next = (*zold_pp)->next;
+                if(!hidden) ztree_wrlock();
+                *zold_pp = z_new;
+                if(!hidden) ztree_unlock();
+            }
+        }
     }
 }
