@@ -301,7 +301,7 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
 
     if(!z_old) { // insert
         dmn_assert(z_new);
-        log_debug("zlist_update: inserting new data for zone '%s' from src '%s'", logf_dname(z_new->dname), z_new->src);
+        log_debug("ztree_update: inserting new data for zone '%s' from src '%s'", logf_dname(z_new->dname), z_new->src);
         const uint8_t* lstack[127];
         unsigned lcount = dname_to_lstack(z_new->dname, lstack);
         ztree_t* this_zt = ztree_root;
@@ -319,9 +319,9 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
     }
     else { // update or delete
         if(z_new)
-            log_debug("zlist_update: updating data for zone '%s' from src '%s'", logf_dname(z_old->dname), z_old->src);
+            log_debug("ztree_update: updating data for zone '%s' from src '%s'", logf_dname(z_old->dname), z_old->src);
         else
-            log_debug("zlist_update: deleting data for zone '%s' from src '%s'", logf_dname(z_old->dname), z_old->src);
+            log_debug("ztree_update: deleting data for zone '%s' from src '%s'", logf_dname(z_old->dname), z_old->src);
 
         const uint8_t* lstack[127];
         unsigned lcount = dname_to_lstack(z_old->dname, lstack);

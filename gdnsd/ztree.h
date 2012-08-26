@@ -39,7 +39,7 @@ struct _zone_struct {
     const uint8_t* dname; // zone name as a dname (stored in ->arena)
     ltarena_t* arena;     // arena for dname/label storage
     ltree_node_t* root;   // the zone root
-    zone_t* next;         // init to NULL, owned by zlist...
+    zone_t* next;         // init to NULL, owned by ztree...
 };
 
 // Singleton init
