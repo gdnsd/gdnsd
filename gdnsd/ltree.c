@@ -1093,7 +1093,7 @@ static bool ltree_postproc(const zone_t* zone, bool (*fn)(const uint8_t**, const
 }
 
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_zroot_phase1(const zone_t* zone) {
+static bool ltree_postproc_zroot_phase1(zone_t* zone) {
     dmn_assert(zone);
 
     ltree_node_t* zroot = zone->root;
@@ -1129,6 +1129,8 @@ static bool ltree_postproc_zroot_phase1(const zone_t* zone) {
     if(unlikely(!ok))
         log_warn("Zone '%s': SOA Master does not match any NS records for this zone", logf_dname(zone->dname));
 
+    // copy SOA Serial field up to zone_t for easy comparisons
+    zone->serial = zroot_soa->times[0];
     return false;
 }
 
@@ -1185,7 +1187,7 @@ bool ltree_postproc_zone(zone_t* zone) {
     ltree_fix_masks(zone->root);
 
     // zroot phase1 is a readonly check of zone basics
-    //   (e.g. NS/SOA existence)
+    //   (e.g. NS/SOA existence), also sets zone->serial
     if(unlikely(ltree_postproc_zroot_phase1(zone)))
         return true;
     // tree phase1 does a ton of readonly per-node checks

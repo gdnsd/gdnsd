@@ -34,6 +34,7 @@ typedef struct _zone_struct zone_t;
 
 struct _zone_struct {
     unsigned hash;        // hash of dname
+    unsigned serial;      // SOA serial from zone data
     time_t mtime;         // mod time of source
     char* src;            // string description of src, e.g. "rfc1035:example.com"
     const uint8_t* dname; // zone name as a dname (stored in ->arena)
