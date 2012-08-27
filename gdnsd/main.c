@@ -45,6 +45,7 @@
 #include "monio.h"
 #include "ztree.h"
 #include "zsrc_rfc1035.h"
+#include "zsrc_djb.h"
 #include "gdnsd-plugapi-priv.h"
 #include "gdnsd-net-priv.h"
 #include "gdnsd-misc-priv.h"
@@ -139,6 +140,7 @@ static void* zone_data_runtime(void* unused V_UNUSED) {
     ev_set_timeout_collect_interval(zdata_loop, 0.1);
     ev_set_io_collect_interval(zdata_loop, 0.05);
 
+    zsrc_djb_runtime_init(zdata_loop);
     zsrc_rfc1035_runtime_init(zdata_loop);
 
     ev_run(zdata_loop, 0);
@@ -395,6 +397,7 @@ static void init_config(const bool started_as_root) {
 
     log_info("Loading zone data");
     ztree_init();
+    zsrc_djb_load_zones();
     zsrc_rfc1035_load_zones();
 }
 
