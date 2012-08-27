@@ -53,13 +53,13 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("Zone '%s': Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount,__VA_ARGS__);\
+        log_err("rfc1035: Zone '%s': Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount,__VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("Zone '%s': Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount);\
+        log_err("rfc1035: Zone '%s': Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
@@ -756,11 +756,11 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     dmn_assert(zone);
     dmn_assert(zone->dname);
     dmn_assert(fn);
-    log_debug("Scanning zone '%s'", logf_dname(zone->dname));
+    log_debug("rfc1035: Scanning zone '%s'", logf_dname(zone->dname));
 
     const int fd = open(fn, O_RDONLY);
     if(fd < 0) {
-        log_err("Cannot open file '%s' for reading: %s", logf_pathname(fn), logf_errno());
+        log_err("rfc1035: Cannot open file '%s' for reading: %s", logf_pathname(fn), logf_errno());
         return true;
     }
 
@@ -775,7 +775,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
                 bufsize = fdstat.st_size;
         }
         else {
-            log_warn("fstat(%s) failed for advice, not critical...", logf_pathname(fn));
+            log_warn("rfc1035: fstat(%s) failed for advice, not critical...", logf_pathname(fn));
         }
     }
 
@@ -793,7 +793,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     bool failed = sij(z, buf, bufsize, fd);
 
     if(close(fd)) {
-        log_err("Cannot close file '%s': %s", logf_pathname(fn), logf_errno());
+        log_err("rfc1035: Cannot close file '%s': %s", logf_pathname(fn), logf_errno());
         failed = true;
     }
 

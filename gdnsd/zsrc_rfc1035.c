@@ -253,7 +253,7 @@ static char* make_zone_name(const char* zf_name) {
     char* out = NULL;
 
     if(unlikely(zf_name_len > 1004)) {
-        log_err("Zone file name '%s' is illegal", zf_name);
+        log_err("rfc1035: Zone file name '%s' is illegal", zf_name);
     }
     else {
         out = malloc(zf_name_len + 1);
@@ -421,7 +421,7 @@ static void unload_zones(void) {
 static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
     DIR* zdhandle = opendir(RFC1035_DIR);
     if(!zdhandle) {
-        log_err("Cannot open zones directory '%s': %s", RFC1035_DIR, dmn_strerror(errno));
+        log_err("rfc1035: Cannot open zones directory '%s': %s", RFC1035_DIR, dmn_strerror(errno));
     }
     else {
         struct dirent* zfdi;
@@ -429,7 +429,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
             if(likely(zfdi->d_name[0] != '.'))
                 process_zonefile(zfdi->d_name, loop, initial_quiesce_time);
         if(closedir(zdhandle))
-            log_err("closedir(%s) failed: %s", RFC1035_DIR, dmn_strerror(errno));
+            log_err("rfc1035: closedir(%s) failed: %s", RFC1035_DIR, dmn_strerror(errno));
     }
 }
 
@@ -620,7 +620,7 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
     if(!fname) { // directory-level event
         log_debug("rfc1035: inotified for directory event: %s", logf_inmask(emask));
         if(unlikely(emask & (IN_Q_OVERFLOW|IN_IGNORED|IN_UNMOUNT|IN_DELETE_SELF|IN_MOVE_SELF))) {
-            log_err("inotify watcher stopping due to directory-level event %s", logf_inmask(emask));
+            log_err("rfc1035: inotify watcher stopping due to directory-level event %s", logf_inmask(emask));
             handle_inotify_failure(loop);
             rv = true;
         }
@@ -682,12 +682,12 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
 
 static void inotify_initial_setup(void) {
     dmn_assert(false);
-    log_fatal("inotify code called in non-inotify build???");
+    log_fatal("rfc1035: inotify code called in non-inotify build???");
 }
 
 static void inotify_run(struct ev_loop* loop V_UNUSED) {
     dmn_assert(false);
-    log_fatal("inotify code called in non-inotify build???");
+    log_fatal("rfc1035: inotify code called in non-inotify build???");
 }
 
 #endif
@@ -706,7 +706,7 @@ void zsrc_rfc1035_load_zones(void) {
     ev_loop_destroy(temp_load_loop);
     free(reload_timer);
     if(atexit(unload_zones))
-        log_fatal("atexit(unload_zones) failed: %s", logf_errno());
+        log_fatal("rfc1035: atexit(unload_zones) failed: %s", logf_errno());
 }
 
 void zsrc_rfc1035_runtime_init(struct ev_loop* loop) {
