@@ -70,7 +70,7 @@ HAS_SENDMMSG=0
 AC_CHECK_FUNCS([sendmmsg],[HAS_SENDMMSG=1])
 
 dnl ======== Begin Network Stuff ==========
-AC_DEFINE_UNQUOTED([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3452 IPv6 stuff])
+AC_DEFINE_UNQUOTED([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
 
 dnl Find out if -lsocket -lnsl is needed, and put them
 dnl  in $NETLIBS if so, and use them for these network-related
