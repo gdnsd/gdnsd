@@ -49,7 +49,16 @@ void ztree_init(void);
 // primary interface for zone data sources
 void ztree_update(zone_t* z_old, zone_t* z_new);
 
-// primary interface for zone data runtime lookups
+// These are for zsrc_* code to create/delete detached zone_t's used
+//   in ztree_update() calls.
+F_NONNULL
+zone_t* zone_new(const char* zname, const char* source);
+F_NONNULL
+bool zone_finalize(zone_t* zone);
+F_NONNULL
+void zone_delete(zone_t* zone);
+
+// primary interface for zone data runtime lookups from dnsio threads
 // Argument is any legal fully-qualified dname
 // Output is the zone_t structure for the known containing zone,
 //   or NULL if no current zone contains the name.
@@ -59,20 +68,38 @@ void ztree_update(zone_t* z_old, zone_t* z_new);
 F_NONNULL
 zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 
-// ztree readlock for access
-// callers of ztree_find_zone_for() need to lock before calling, and then
-//   need to keep that lock for as long as they continue to reference data
-//   from the resulting zone_t* (which should be brief...)
-void ztree_rdlock(void);
-void ztree_unlock(void);
+// ztree locking for readers (DNS I/O threads):
+// thread start -> ztree_reader_thread_start()
+//  loop:
+//   enter i/o wait (epoll/recvmsg) -> ztree_reader_offline()
+//   return from i/o wait -> ztree_reader_online()
+//   ztree_reader_lock()
+//   z = ztree_find_zone_for(...)
+//   finish using all data subordinate to "z"
+//   ztree_reader_unlock()
+//   goto loop
 
-// These are for zsrc_* code to create/delete detached zone_t's used
-//   in ztree_update() calls.
-F_NONNULL
-zone_t* zone_new(const char* zname, const char* source);
-F_NONNULL
-bool zone_finalize(zone_t* zone);
-F_NONNULL
-void zone_delete(zone_t* zone);
+#ifdef HAVE_QSBR
+
+#define _LGPL_SOURCE 1
+#include <urcu-qsbr.h>
+
+F_UNUSED static void ztree_reader_thread_start(void) { rcu_register_thread(); }
+F_UNUSED static void ztree_reader_thread_end(void) { rcu_unregister_thread(); }
+F_UNUSED static void ztree_reader_online(void) { rcu_thread_online(); } 
+F_UNUSED static void ztree_reader_lock(void) { rcu_read_lock(); }
+F_UNUSED static void ztree_reader_unlock(void) { rcu_read_unlock(); }
+F_UNUSED static void ztree_reader_offline(void) { rcu_thread_offline(); }
+
+#else
+
+F_UNUSED static void ztree_reader_thread_start(void) { }
+F_UNUSED static void ztree_reader_thread_end(void) { }
+F_UNUSED static void ztree_reader_online(void) { }
+void ztree_reader_lock(void);
+void ztree_reader_unlock(void);
+F_UNUSED static void ztree_reader_offline(void) { }
+
+#endif
 
 #endif // _GDNSD_ZTREE_H

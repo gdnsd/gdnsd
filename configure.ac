@@ -140,6 +140,21 @@ LIBS=$XLIBS
 
 dnl ======== End Network Stuff ==========
 
+dnl liburcu-qsbr
+HAVE_QSBR=0
+QSBRLIBS=
+AC_CHECK_HEADER(urcu-qsbr.h,[
+    XLIBS=$LIBS
+    LIBS=""
+    AC_CHECK_LIB([urcu-qsbr],[perror],[
+        HAVE_QSBR=1
+        AC_DEFINE_UNQUOTED([HAVE_QSBR], $HAVE_QSBR, [Use liburcu-qsbr])
+        QSBRLIBS="-lurcu-qsbr"
+    ])
+    LIBS=$XLIBS
+])
+AC_SUBST([QSBRLIBS])
+
 dnl ======== Begin Capabilities Stuff ==========
 
 dnl Check libcap on Linux, plus the prctl support for surviving setuid,
@@ -269,6 +284,8 @@ if test "x$developer" != xno; then
     CFLAGS="${CFLAGS} -g -Wall -W -Wshadow"
   fi
   AC_DEFINE_UNQUOTED([EV_VERIFY], 3, [libev verification checks])
+  AC_DEFINE_UNQUOTED([DEBUG_RCU], 1, [liburcu verification checks])
+  AC_DEFINE_UNQUOTED([RCU_DEBUG], 1, [liburcu verification checks])
 else
   CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
   AC_DEFINE_UNQUOTED([EV_VERIFY], 0, [libev verification checks])
@@ -322,6 +339,7 @@ dnl Summary output for the user
 
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$LOWMEM" = x1; then CFSUM_LM=Yes; else CFSUM_LM=No; fi
+if test "x$HAVE_QSBR" = x1; then CFSUM_QSBR=Yes; else CFSUM_QSBR=No; fi
 if test "x$USE_LINUX_CAPS" = x1; then CFSUM_CAP=Yes; else CFSUM_CAP=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
@@ -331,6 +349,7 @@ echo "======================================="
 echo "| Configuration Summary:"
 echo "| Developer Build?        $CFSUM_DEV"
 echo "| Low Memory Build?       $CFSUM_LM"
+echo "| Userspace-rcu support:  $CFSUM_QSBR"
 echo "| Linux libcap support:   $CFSUM_CAP"
 echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
 echo "| Linux inotify support:  $CFSUM_INOTIFY"

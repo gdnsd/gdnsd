@@ -10,6 +10,8 @@ Requires(pre): /usr/sbin/useradd
 Requires(post): /sbin/chkconfig
 Requires(preun): /sbin/service, /sbin/chkconfig
 Requires(postun): /sbin/service
+Requires: userspace-rcu
+BuildRequires: userspace-rcu-devel
 BuildRequires: libcap-devel
 BuildRequires: perl(Test::More)
 BuildRequires: perl(Net::DNS)

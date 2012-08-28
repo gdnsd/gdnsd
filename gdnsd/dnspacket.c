@@ -1615,7 +1615,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
     ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
 
-    ztree_rdlock();
+    ztree_reader_lock();
 
     zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
 
@@ -1692,7 +1692,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         }
     }
 
-    ztree_unlock();
+    ztree_reader_unlock();
 
     return offset;
 }

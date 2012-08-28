@@ -20,13 +20,36 @@
 #include "ztree.h"
 
 #include <stdlib.h>
-#include <pthread.h>
 
 #include "gdnsd-dname.h"
 #include "gdnsd-misc.h"
 
-// pthread lock stuff
+#ifdef HAVE_QSBR
+
+#define _LGPL_SOURCE 1
+#include <urcu-qsbr.h>
+
+#define zt_assign(d,s) rcu_assign_pointer((d),(s))
+#define zt_deref(s) rcu_dereference((s))
+#define zt_update_lock()
+#define zt_update_unlock() synchronize_rcu()
+
+static void setup_lock(void) { }
+static void destroy_lock(void) { }
+
+#else // use pthreads instead
+
+#include <pthread.h>
+
 static pthread_rwlock_t ztree_lock;
+
+void ztree_reader_lock(void) { pthread_rwlock_rdlock(&ztree_lock); }
+void ztree_reader_unlock(void) { pthread_rwlock_unlock(&ztree_lock); }
+
+#define zt_assign(d,s) (d) = (s)
+#define zt_deref(s) (s)
+#define zt_update_lock() pthread_rwlock_wrlock(&ztree_lock)
+#define zt_update_unlock() pthread_rwlock_unlock(&ztree_lock)
 
 static void setup_lock(void) {
     int pthread_err;
@@ -54,10 +77,7 @@ static void destroy_lock(void) {
         log_fatal("ztree: pthread_rwlock_destroy() failed: %s", logf_errnum(pthread_err));
 }
 
-void ztree_rdlock(void) { pthread_rwlock_rdlock(&ztree_lock); }
-void ztree_unlock(void) { pthread_rwlock_unlock(&ztree_lock); }
-// because only this file does writes...
-static void ztree_wrlock(void) { pthread_rwlock_wrlock(&ztree_lock); }
+#endif
 
 // The tree data structure that will hold the zone_t's
 struct ztree;
@@ -160,20 +180,33 @@ static inline unsigned label_hash(const uint8_t* label) {
 
 // search the children of one node for a given label
 F_NONNULL
-static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label) {
+static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label, const bool reader) {
     dmn_assert(node); dmn_assert(label);
 
     ztree_t* rv = NULL;
-    ztchildren_t* children = node->children;
+    ztchildren_t* children;
+    if(reader)
+        children = zt_deref(node->children);
+    else
+        children = node->children;
     if(children) {
         dmn_assert(children->alloc);
         const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
         unsigned slot = label_hash(label) & child_mask;
-        while((rv = children->store[slot])
-          && memcmp(rv->label, label, *label + 1)) {
-            slot += jmpby++;
-            slot &= child_mask;
+        if(reader) {
+            while((rv = zt_deref(children->store[slot]))
+              && memcmp(rv->label, label, *label + 1)) {
+                slot += jmpby++;
+                slot &= child_mask;
+            }
+        }
+        else {
+            while((rv = children->store[slot])
+              && memcmp(rv->label, label, *label + 1)) {
+                slot += jmpby++;
+                slot &= child_mask;
+            }
         }
     }
 
@@ -191,11 +224,10 @@ zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(dname, lstack);
     ztree_t* current = ztree_root;
-    while(current && !current->zone && lcount)
-        current = ztree_node_find_child(current, lstack[--lcount]);
+    while(current && !(rv = zt_deref(current->zone)) && lcount)
+        current = ztree_node_find_child(current, lstack[--lcount], true);
 
-    if(current && current->zone) {
-        rv = current->zone;
+    if(rv) {
         unsigned auth_depth = lcount;
         while(lcount--)
             auth_depth += lstack[lcount][0];
@@ -218,9 +250,7 @@ static void ztree_node_check_grow(ztree_t* node) {
         ztchildren_t* children = calloc(1, sizeof(ztchildren_t));
         children->store = calloc(16, sizeof(ztree_t*));
         children->alloc = 16;
-        ztree_wrlock();
-        node->children = children;
-        ztree_unlock();
+        zt_assign(node->children, children);
     }
     // max load is 25%
     else if(old_children->count >= (old_children->alloc >> 2)) {
@@ -242,9 +272,9 @@ static void ztree_node_check_grow(ztree_t* node) {
                 new_children->store[slot] = entry;
             }
         }
-        ztree_wrlock();
-        node->children = new_children;
-        ztree_unlock();
+        zt_update_lock();
+        zt_assign(node->children, new_children);
+        zt_update_unlock();
         free(old_children->store);
         free(old_children);
     }
@@ -277,9 +307,7 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
         rv = calloc(1, sizeof(ztree_t));
         rv->label = malloc(*label + 1);
         memcpy(rv->label, label, *label + 1);
-        ztree_wrlock();
-        children->store[slot] = rv;
-        ztree_unlock();
+        zt_assign(children->store[slot], rv);
         children->count++;
     }
 
@@ -308,8 +336,8 @@ static void ztree_atexit(void) {
 
 void ztree_init(void) {
     dmn_assert(!ztree_root);
-    ztree_root = calloc(1, sizeof(ztree_t));
     setup_lock();
+    ztree_root = calloc(1, sizeof(ztree_t));
     if(atexit(ztree_atexit))
         log_fatal("atexit(ztree_atexit) failed: %s", logf_errno());
 }
@@ -354,9 +382,10 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
 
         // only have to lock if updating head of list
         z_new->next = *ins_pp;
-        if(!hidden) ztree_wrlock();
-        *ins_pp = z_new;
-        if(!hidden) ztree_unlock();
+        if(hidden)
+            *ins_pp = z_new;
+        else
+            zt_assign(*ins_pp, z_new);
     }
     else { // update or delete
         if(z_new)
@@ -368,7 +397,7 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
         unsigned lcount = dname_to_lstack(z_old->dname, lstack);
         ztree_t* this_zt = ztree_root;
         while(lcount) {
-            this_zt = ztree_node_find_child(this_zt, lstack[--lcount]);
+            this_zt = ztree_node_find_child(this_zt, lstack[--lcount], false);
             dmn_assert(this_zt);
         }
 
@@ -384,9 +413,14 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
         }
 
         if(!z_new) { // delete case
-            if(!hidden) ztree_wrlock();
-            *zold_pp = (*zold_pp)->next;
-            if(!hidden) ztree_unlock();
+            if(hidden) {
+                *zold_pp = (*zold_pp)->next;
+            }
+            else {
+                zt_update_lock();
+                zt_assign(*zold_pp, (*zold_pp)->next);
+                zt_update_unlock();
+            }
         }
         else { // update case
             // Scan for correct sort position
@@ -399,22 +433,35 @@ void ztree_update(zone_t* z_old, zone_t* z_new) {
             if(sort_pp == zold_pp || sort_pp == &(*zold_pp)->next) {
                 // sorts same as old if old is not present, single-step swap
                 z_new->next = (*zold_pp)->next;
-                if(!hidden) ztree_wrlock();
-                *zold_pp = z_new;
-                if(!hidden) ztree_unlock();
+                if(hidden) {
+                    *zold_pp = z_new;
+                }
+                else {
+                    zt_update_lock();
+                    zt_assign(*zold_pp, z_new);
+                    zt_update_unlock();
+                }
             }
             else {
                 // move required, 2-step swap (add then delete)
-                // (I know this looks stupid now, but thinking ahead
-                //   for liburcu stuff)
-                dmn_assert(hidden || hidden2); // both can't be the head...
+                dmn_assert(hidden | hidden2); // both can't be the head...
                 z_new->next = *sort_pp;
-                if(!hidden2) ztree_wrlock();
-                *sort_pp = z_new;
-                if(!hidden2) ztree_unlock();
-                if(!hidden) ztree_wrlock();
-                *zold_pp = (*zold_pp)->next;
-                if(!hidden) ztree_unlock();
+                if(hidden2) {
+                    *sort_pp = z_new;
+                }
+                else {
+                    zt_update_lock();
+                    zt_assign(*sort_pp, z_new);
+                    zt_update_unlock();
+                }
+                if(hidden) {
+                    *zold_pp = (*zold_pp)->next;
+                }
+                else {
+                    zt_update_lock();
+                    zt_assign(*zold_pp, (*zold_pp)->next);
+                    zt_update_unlock();
+                }
             }
         }
     }

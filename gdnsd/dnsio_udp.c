@@ -35,6 +35,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
+#include "ztree.h"
 
 #ifndef SOL_IPV6
 #define SOL_IPV6 IPPROTO_IPV6
@@ -261,7 +262,9 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
         msg_hdr.msg_controllen = cmsg_size;
         msg_hdr.msg_namelen    = ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
+        ztree_reader_offline();
         const int buf_in_len = recvmsg(fd, &msg_hdr, 0);
+        ztree_reader_online();
         if(likely(buf_in_len >= 0)) {
             asin.len = msg_hdr.msg_namelen;
             iov.iov_len = process_dns_query(pctx, &asin, (void*)iov.iov_base, buf_in_len);
@@ -329,7 +332,9 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
             dgrams[i].msg_hdr.msg_flags      = 0;
         }
 
+        ztree_reader_offline();
         int pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+        ztree_reader_online();
         dmn_assert(pkts <= (int)width);
         if(likely(pkts > 0)) {
             for(int i = 0; i < pkts; i++) {
@@ -404,9 +409,14 @@ static bool needs_cmsg(const anysin_t* asin) {
         : false;
 }
 
+static void thread_clean(void* unused_arg V_UNUSED) {
+    ztree_reader_thread_end();
+}
+
 F_NORETURN
 void* dnsio_udp_start(void* addrconf_asvoid) {
     dmn_assert(addrconf_asvoid);
+
     const dns_addr_t* addrconf = (const dns_addr_t*) addrconf_asvoid;
 
     dnspacket_context_t* pctx = dnspacket_context_new(addrconf->udp_threadnum, true);
@@ -427,6 +437,9 @@ void* dnsio_udp_start(void* addrconf_asvoid) {
 
     const bool need_cmsg = needs_cmsg(&addrconf->addr);
 
+    ztree_reader_thread_start();
+    pthread_cleanup_push(thread_clean, NULL);
+
 #ifdef HAVE_SENDMMSG
     if(addrconf->udp_recv_width > 1) {
         log_info("sendmmsg() with a width of %u enabled for UDP socket %s",
@@ -438,4 +451,6 @@ void* dnsio_udp_start(void* addrconf_asvoid) {
     {
         mainloop(addrconf->udp_sock, pctx, need_cmsg);
     }
+
+    pthread_cleanup_pop(1);
 }

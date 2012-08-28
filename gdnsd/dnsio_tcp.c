@@ -365,6 +365,18 @@ bool tcp_dns_listen_setup(dns_addr_t *addrconf) {
     return false;
 }
 
+static void thread_clean(void* arg_unused V_UNUSED) {
+    ztree_reader_thread_end();
+}
+
+static void ztstate_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {
+    ztree_reader_offline();
+}
+
+static void ztstate_online(struct ev_loop* loop V_UNUSED, ev_check* w V_UNUSED, int revents V_UNUSED) {
+    ztree_reader_online();
+}
+
 void* dnsio_tcp_start(void* addrconf_asvoid) {
     dmn_assert(addrconf_asvoid);
 
@@ -406,7 +418,17 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
 
     ev_io_start(loop, accept_watcher);
 
+    ztree_reader_thread_start();
+    pthread_cleanup_push(thread_clean, NULL);
+
+    struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));
+    struct ev_check* check_watcher = malloc(sizeof(struct ev_prepare));
+    ev_prepare_init(prep_watcher, ztstate_offline);
+    ev_check_init(check_watcher, ztstate_online);
+    ev_set_priority(check_watcher, EV_MAXPRI);
     ev_run(loop, 0);
+
+    pthread_cleanup_pop(1);
 
     return NULL;
 }
