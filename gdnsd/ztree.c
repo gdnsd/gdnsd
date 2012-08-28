@@ -62,12 +62,16 @@ static void ztree_wrlock(void) { pthread_rwlock_wrlock(&ztree_lock); }
 // The tree data structure that will hold the zone_t's
 struct ztree;
 typedef struct ztree ztree_t;
+typedef struct {
+    ztree_t** store;
+    unsigned alloc;
+    unsigned count;
+} ztchildren_t;
+
 struct ztree {
     uint8_t* label;
     zone_t* zone;
-    ztree_t** children;
-    unsigned child_alloc;
-    unsigned child_count;
+    ztchildren_t* children;
 };
 
 // The root node.
@@ -160,12 +164,13 @@ static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label) {
     dmn_assert(node); dmn_assert(label);
 
     ztree_t* rv = NULL;
-    if(node->children) {
-        dmn_assert(node->child_alloc);
-        const unsigned child_mask = node->child_alloc - 1;
+    ztchildren_t* children = node->children;
+    if(children) {
+        dmn_assert(children->alloc);
+        const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
         unsigned slot = label_hash(label) & child_mask;
-        while((rv = node->children[slot])
+        while((rv = children->store[slot])
           && memcmp(rv->label, label, *label + 1)) {
             slot += jmpby++;
             slot &= child_mask;
@@ -205,47 +210,43 @@ zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
 // XXX should we prune empty subtrees during grow?
 //   or during deletion, or at all?
 F_NONNULL
-static void ztree_node_grow(ztree_t* node) {
+static void ztree_node_check_grow(ztree_t* node) {
     dmn_assert(node);
 
-    if(!node->children) {
-        dmn_assert(!node->child_alloc);
-        dmn_assert(!node->child_count);
-        ztree_t** temp = calloc(16, sizeof(ztree_t*));
-        // XXX really, the whole child table
-        // needs to be a single object for this swap,
-        // including alloc/count, if we want to urcu...
+    ztchildren_t* old_children = node->children;
+    if(!old_children) {
+        ztchildren_t* children = calloc(1, sizeof(ztchildren_t));
+        children->store = calloc(16, sizeof(ztree_t*));
+        children->alloc = 16;
         ztree_wrlock();
-        node->children = temp;
-        node->child_alloc = 16;
-        node->child_count = 0;
+        node->children = children;
         ztree_unlock();
     }
-    else {
-        const unsigned new_alloc = node->child_alloc << 1; // double
+    // max load is 25%
+    else if(old_children->count >= (old_children->alloc >> 2)) {
+        const unsigned new_alloc = old_children->alloc << 1; // double
         const unsigned new_hash_mask = new_alloc - 1;
-        unsigned new_count = 0;
-        ztree_t** new_children = calloc(new_alloc, sizeof(ztree_t*));
-        for(unsigned i = 0; i < node->child_alloc; i++) {
-            ztree_t* entry = node->children[i];
+        ztchildren_t* new_children = calloc(1, sizeof(ztchildren_t));
+        new_children->store = calloc(new_alloc, sizeof(ztree_t*));
+        new_children->alloc = new_alloc;
+        for(unsigned i = 0; i < old_children->alloc; i++) {
+            ztree_t* entry = old_children->store[i];
             if(entry) {
-                new_count++;
+                new_children->count++;
                 unsigned jmpby = 1;
                 unsigned slot = label_hash(entry->label) & new_hash_mask;
-                while(new_children[slot]) {
+                while(new_children->store[slot]) {
                     slot += jmpby++;
                     slot &= new_hash_mask;
                 }
-                new_children[slot] = entry;
+                new_children->store[slot] = entry;
             }
         }
-        ztree_t** old = node->children;
         ztree_wrlock();
         node->children = new_children;
-        node->child_alloc = new_alloc;
-        node->child_count = new_count;
         ztree_unlock();
-        free(old);
+        free(old_children->store);
+        free(old_children);
     }
 }
 
@@ -255,19 +256,16 @@ F_NONNULL
 static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label) {
     dmn_assert(node); dmn_assert(label);
 
-    // max load is 25%
-    if(!node->children || node->child_count >= (node->child_alloc >> 2))
-        ztree_node_grow(node);
-    dmn_assert(node->children);
-    dmn_assert(node->child_alloc);
-    dmn_assert(node->child_count < (node->child_alloc >> 2));
+    ztree_node_check_grow(node);
+    ztchildren_t* children = node->children;
+    dmn_assert(children);
 
     ztree_t* rv;
 
-    const unsigned child_mask = node->child_alloc - 1;
+    const unsigned child_mask = children->alloc - 1;
     unsigned jmpby = 1;
     unsigned slot = label_hash(label) & child_mask;
-    while((rv = node->children[slot])
+    while((rv = children->store[slot])
       && memcmp(rv->label, label, *label + 1)) {
         slot += jmpby++;
         slot &= child_mask;
@@ -280,9 +278,9 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
         rv->label = malloc(*label + 1);
         memcpy(rv->label, label, *label + 1);
         ztree_wrlock();
-        node->children[slot] = rv;
+        children->store[slot] = rv;
         ztree_unlock();
-        node->child_count++;
+        children->count++;
     }
 
     return rv;
@@ -290,10 +288,13 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
 
 static void ztree_leak_warn(ztree_t* node) {
     dmn_assert(node);
-    for(unsigned i = 0; i < node->child_alloc; i++) {
-        ztree_t* child = node->children[i];
-        if(child)
-            ztree_leak_warn(child);
+    ztchildren_t* children = node->children;
+    if(children) {
+        for(unsigned i = 0; i < children->alloc; i++) {
+            ztree_t* child = children->store[i];
+            if(child)
+                ztree_leak_warn(child);
+        }
     }
     if(node->zone)
         log_warn("Zone '%s' from (%s) was still in ztree at termination, leak...", logf_dname(node->zone->dname), node->zone->src);
