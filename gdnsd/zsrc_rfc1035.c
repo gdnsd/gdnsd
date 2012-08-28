@@ -685,7 +685,7 @@ static void inotify_initial_setup(void) {
     log_fatal("rfc1035: inotify code called in non-inotify build???");
 }
 
-static void inotify_run(struct ev_loop* loop V_UNUSED) {
+static void inotify_initial_run(struct ev_loop* loop V_UNUSED) {
     dmn_assert(false);
     log_fatal("rfc1035: inotify code called in non-inotify build???");
 }
