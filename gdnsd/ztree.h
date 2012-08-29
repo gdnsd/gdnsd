@@ -46,8 +46,26 @@ struct _zone_struct {
 // Singleton init
 void ztree_init(void);
 
-// primary interface for zone data sources
+// --- zsrc_* interfaces ---
+
+// Single-zone transaction:
+//  if(z_old && !z_new) -> delete z_old from ztree
+//  if(!z_old && z_new) -> insert z_new into ztree
+//  if(z_old && z_new) -> replace z_old with z_new in ztree
+//  if(!z_old && !z_new) -> illegal
 void ztree_update(zone_t* z_old, zone_t* z_new);
+
+// Multi-zone transaction. As above, but there are rules:
+//  1) txn_update() can only happen inbetween txn_start()/txn_end()
+//  2) You must txn_end() or txn_abort(), do not leave a txn hanging
+//  3) regular zlist_update() not allowed during txn.
+//  4) Updates will not appear for runtime until after txn_end() returns
+//  5) You cannot delete any referenced zone_t's (z_old arguments)
+//     until after txn_end() returns.
+void ztree_txn_start(void);
+void ztree_txn_update(zone_t* z_old, zone_t* z_new);
+void ztree_txn_abort(void);
+void ztree_txn_end(void);
 
 // These are for zsrc_* code to create/delete detached zone_t's used
 //   in ztree_update() calls.
@@ -57,6 +75,8 @@ F_NONNULL
 bool zone_finalize(zone_t* zone);
 F_NONNULL
 void zone_delete(zone_t* zone);
+
+// --- dnsio/dnspacket reader interfaces ---
 
 // primary interface for zone data runtime lookups from dnsio threads
 // Argument is any legal fully-qualified dname
