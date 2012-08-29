@@ -46,11 +46,17 @@ static monio_list_t** monio_lists = NULL;
 static const char CFG_PATH[] = "etc/config";
 static const char DEF_USERNAME[] = PACKAGE_NAME;
 
+// just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
+static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00";
+static const unsigned chaos_prefix_len = 10;
+static const char chaos_def[] = "gdnsd";
+
 // Global config, readonly after loaded from conf file
 global_config_t gconfig = {
     .dns_addrs = NULL,
     .http_addrs = NULL,
     .username = DEF_USERNAME,
+    .chaos = NULL,
     .include_optional_ns = false,
     .realtime_stats = false,
     .lock_mem = false,
@@ -58,6 +64,7 @@ global_config_t gconfig = {
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
     .zreload_disable = false,
+    .chaos_len = 0,
      // legal values are -20 to 20, so -21
      //  is really just an indicator that the user
      //  didn't explicitly set it.  The default
@@ -75,6 +82,25 @@ global_config_t gconfig = {
     .zreload_scan_interval = 31U,
     .zreload_quiesce_period = 5U
 };
+
+F_NONNULL
+static void set_chaos(const char* data) {
+    dmn_assert(data);
+
+    const unsigned dlen = strlen(data);
+    if(dlen > 254)
+        log_fatal("Option 'chaos_response' must be a string less than 255 characters long");
+
+    const unsigned overall_len = chaos_prefix_len + 3 + dlen;
+    char* combined = malloc(overall_len);
+    memcpy(combined, chaos_prefix, chaos_prefix_len);
+    combined[chaos_prefix_len] = 0;
+    combined[chaos_prefix_len + 1] = dlen + 1;
+    combined[chaos_prefix_len + 2] = dlen;
+    memcpy(combined + chaos_prefix_len + 3, data, dlen);
+    gconfig.chaos = (const uint8_t*)combined;
+    gconfig.chaos_len = overall_len;
+}
 
 static void plugins_cleanup(void) {
     gdnsd_plugins_action_exit();
@@ -418,6 +444,7 @@ void conf_load(void) {
     const vscf_data_t* listen_opt = NULL;
     const vscf_data_t* http_listen_opt = NULL;
     const vscf_data_t* psearch_array = NULL;
+    const char* chaos_data = chaos_def;
     unsigned def_dns_port = 53U;
     unsigned def_http_port = 3506U;
     unsigned def_tcp_cps = 128U;
@@ -467,11 +494,15 @@ void conf_load(void) {
         CFG_OPT_UINT(options, zreload_quiesce_period, 3LU, 60LU);
         CFG_OPT_BOOL(options, zreload_disable);
         CFG_OPT_STR(options, username);
+        CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
         http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate(options, true, bad_key, (void*)"options");
     }
+
+    // set response string for CHAOS queries
+    set_chaos(chaos_data);
 
     // Set up the http listener data
     process_http_listen(http_listen_opt, def_http_port);

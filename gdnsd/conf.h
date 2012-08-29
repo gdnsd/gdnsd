@@ -45,6 +45,7 @@ typedef struct {
     dns_addr_t* dns_addrs;
     anysin_t*   http_addrs;
     const char* username;
+    const uint8_t* chaos;
     bool     include_optional_ns;
     bool     realtime_stats;
     bool     lock_mem;
@@ -53,6 +54,7 @@ typedef struct {
     bool     monitor_force_v6_up;
     bool     zreload_disable;
     int      priority;
+    unsigned chaos_len;
     unsigned zones_default_ttl;
     unsigned log_stats;
     unsigned max_http_clients;

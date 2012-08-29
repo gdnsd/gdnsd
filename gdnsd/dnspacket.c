@@ -30,9 +30,6 @@
 #include "gdnsd-plugapi-priv.h"
 #include "ztree.h"
 
-static const uint8_t chaos_fixed[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00\x00\x06\x05gdnsd";
-static const unsigned chaos_fixed_len = sizeof(chaos_fixed) - 1;
-
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t stats_init_cond = PTHREAD_COND_INITIALIZER;
 static unsigned stats_initialized = 0;
@@ -1796,8 +1793,8 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         }
         else {
             c->ancount = 1;
-            memcpy(&packet[res_offset], chaos_fixed, chaos_fixed_len);
-            res_offset += chaos_fixed_len;
+            memcpy(&packet[res_offset], gconfig.chaos, gconfig.chaos_len);
+            res_offset += gconfig.chaos_len;
         }
 
         if(hdr->flags2 == DNS_RCODE_NOERROR) stats_own_inc(&c->stats->noerror);
