@@ -63,7 +63,7 @@ global_config_t gconfig = {
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
-    .zreload_disable = false,
+    .zones_rfc1035_auto = true,
     .chaos_len = 0,
      // legal values are -20 to 20, so -21
      //  is really just an indicator that the user
@@ -79,8 +79,8 @@ global_config_t gconfig = {
     .max_response = 16384U,
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
-    .zreload_scan_interval = 31U,
-    .zreload_quiesce_period = 5U
+    .zones_rfc1035_auto_interval = 31U,
+    .zones_rfc1035_auto_quiesce = 5U,
 };
 
 F_NONNULL
@@ -490,9 +490,9 @@ void conf_load(void) {
         // it's important that neither of these reload times have a lower
         //   bound below the 2s mark, as it could cause us to miss fast
         //   events on filesystems with 1-second mtime resolution.
-        CFG_OPT_UINT(options, zreload_scan_interval, 10LU, 600LU);
-        CFG_OPT_UINT(options, zreload_quiesce_period, 3LU, 60LU);
-        CFG_OPT_BOOL(options, zreload_disable);
+        CFG_OPT_BOOL(options, zones_rfc1035_auto);
+        CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
+        CFG_OPT_UINT(options, zones_rfc1035_auto_quiesce, 3LU, 60LU);
         CFG_OPT_STR(options, username);
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);

@@ -84,7 +84,7 @@ pid_t dmn_stop(const char* pidfile);
 
 // Send an aribtrary signal to a running daemon using "pidfile".
 DMN_F_NONNULL
-void dmn_signal(const char* pidfile, int sig);
+int dmn_signal(const char* pidfile, int sig);
 
 // Find out if the process is currently daemonized or not
 DMN_F_PURE

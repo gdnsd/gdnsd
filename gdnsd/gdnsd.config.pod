@@ -240,37 +240,61 @@ Integer seconds, default 5, min 3, max 60.  HTTP connections
 will be forcibly shut down if they go idle for more than this
 many seconds.
 
-=item B<zreload_disable>
+=item B<zones_rfc1035_auto>
 
-Boolean, default false.  If set to true, any mechanism for dynamically
-updating zone data at runtime will be disabled, and the server daemon
-will have to go through a complete restart cycle to pick up any
-changes.
+Boolean, default C<true>.
 
-=item B<zreload_scan_interval>
+If auto is enabled (the default), the daemon will detect changes
+to zone data automatically at runtime and apply them as they
+appear.  In the general case this is done via periodically
+scanning C<lstat()> data on the contents of the zones directory
+and looking for metadata changes since last check.
 
-Integer seconds, default 31, min 10, max 600.  For zone data sources
-which support loading new data at runtime (such as the default and
-only rfc1035 zonefiles source, for now), this represents the interval
-for the code to check for new zone data updates.
+On recent Linux systems, the daemon may also use C<inotify()>
+to detect filesystem modifications in realtime and not need
+to run the periodic full directory scan, making the average
+delay much smaller (subject to compile- and run- time compatibility).
 
-Note that depending on the source type and the platform, there could be
-efficient mechanisms for receiving notifications faster than this (e.g.
-C<inotify()> on modern Linux), in which case the scan interval might only
-apply to some rare corner cases when the more efficient mechanism fails.
+Regardless of whether this setting is true or false, you can
+always manually trigger a rescan of the zones directory for
+new data by sending the daemon a C<SIGHUP> (or executing
+the "reload" command / initscript action, which sends
+SIGHUP for you).
 
-=item B<zreload_quiesce_period>
+The following two parameters tweak the timing behavior of
+the auto mode.
 
-Integer seconds, default 5, min 3, max 60.  When a zone data change
-is detected (via periodic scanning controlled by B<reload_scan_interval>,
-or directly via e.g. C<inotify()>), the change will remain pending
-for this period of time to ensure that rapid-fire updates to the source
-are coalesced into a single, consistent data reload.
+=item B<zones_rfc1035_auto_interval>
 
-If the source changes while the quiesce period is counting down, the
+Integer seconds, default 31, min 10, max 600.  Only applies when
+C<zones_rfc1035_auto> is C<true>.
+
+Sets the time interval for periodically checking the zonefile directory
+for changes.  On systems which support C<inotify()>, however, the
+automatic mode will almost always use that mechanism instead for even
+faster detection with less overhead.  In the C<inotify()> case, the
+interval is used only occasionally when recovering from temporary
+C<inotify()> failures.
+
+=item B<zones_rfc1035_auto_quiesce>
+
+Integer seconds, default 5, min 3, max 60.  Only applies when
+C<zones_rfc1035_auto> is C<true>.
+
+When a change is detected in automatic mode, this value is used
+as a quiescence timer before actually processing the change.
+
+If the source changes while the quiescence timer is counting down, the
 counter will be reset.  Only after the zone data source has stabilized
 for the full period of this timeout (plus the time to actually load the
-data) will the new data be loaded for runtime queries.
+data) will the new data be loaded and presented for runtime queries.
+
+When not using C<inotify()>, this quiesce period applies to all
+detected changes.  In the C<inotify()> case, however, certain types
+of change activity which generally result from consistent atomic
+operations (e.g. mv/rename new zone data into place, unlink zonefile)
+will quiesce in 1.02 seconds instead of waiting for e.g. further
+write traffic like the general case.
 
 =item B<lock_mem>
 

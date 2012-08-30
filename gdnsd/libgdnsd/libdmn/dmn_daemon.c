@@ -262,17 +262,27 @@ pid_t dmn_stop(const char* pidfile) {
         return pid;
     }
 
+    dmn_log_info("Daemon instance at pid %li stopped", (long)pid);
     return 0;
 }
 
-void dmn_signal(const char* pidfile, int sig) {
+int dmn_signal(const char* pidfile, int sig) {
     dmn_assert(pidfile);
 
+    int rv = 1; // error
     const pid_t pid = check_pidfile(pidfile);
-    if(!pid)
+    if(!pid) {
         dmn_log_err("Did not find a running daemon to signal!");
-    else if(kill(pid, sig))
+    }
+    else if(kill(pid, sig)) {
         dmn_log_err("Cannot signal daemon at pid %li", (long)pid);
+    }
+    else {
+        dmn_log_info("SIGHUP sent to daemon instance at pid %li", (long)pid);
+        rv = 0; // success
+    }
+
+    return rv;
 }
 
 bool dmn_is_daemonized(void) { return dmn_daemonized; }

@@ -12,8 +12,8 @@ gdnsd - An authoritative DNS daemon
     startfg - Start gdnsd in foreground mode with logging to stderr
     start - Start gdnsd as a regular daemon
     stop - Stops a running daemon previously started by 'start'
+    reload - Send SIGHUP to running daemon for zone data reload
     restart - Effectively equivalent to checkconf && stop && start, but faster
-    reload - Aliases 'restart'
     force-reload - Aliases 'restart'
     condrestart - Does 'restart' action only if already running
     try-restart - Aliases 'condrestart'
@@ -216,7 +216,11 @@ aborting execution.
 
 Causes the daemon to exit gracefully with accompanying log output.
 
-=item B<SIGHUP>, B<SIGPIPE>
+=item B<SIGHUP>
+
+Causes the daemon to attempt to load any new changes to the zone data.
+
+=item B<SIGPIPE>
 
 Ignored when daemonized.
 

@@ -28,4 +28,6 @@ void zsrc_rfc1035_load_zones(void);
 F_NONNULL
 void zsrc_rfc1035_runtime_init(struct ev_loop* loop);
 
+void zsrc_rfc1035_sighup(void);
+
 #endif // _GDNSD_ZSRC_RFC1035_H

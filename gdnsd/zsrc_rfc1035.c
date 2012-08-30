@@ -328,10 +328,10 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
             statcmp_t post_check;
             statcmp_set(zf->full_fn, &post_check);
             if(!statcmp_eq(&zf->pending, &post_check)) {
-                log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed during zonefile parsing, restarting timer for %u seconds...", zf->fn, gconfig.zreload_quiesce_period);
+                log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed during zonefile parsing, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_auto_quiesce);
                 if(z)
                      zone_delete(z);
-                ev_timer_set(timer, gconfig.zreload_quiesce_period, 0.);
+                ev_timer_set(timer, gconfig.zones_rfc1035_auto_quiesce, 0.);
                 ev_timer_start(loop, timer);
             }
             else {
@@ -353,8 +353,8 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
         }
     }
     else {
-        log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer for %u seconds...", zf->fn, gconfig.zreload_quiesce_period);
-        ev_timer_set(timer, gconfig.zreload_quiesce_period, 0.);
+        log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_auto_quiesce);
+        ev_timer_set(timer, gconfig.zones_rfc1035_auto_quiesce, 0.);
         ev_timer_start(loop, timer);
     }
 }
@@ -386,10 +386,10 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
         current_zft->generation = generation;
         if(current_zft->pending_event) { // we already had a pending change
             if(!statcmp_eq(&newstat, &current_zft->pending)) { // but it changed again!
-                log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %u secs for further changes...", current_zft->fn, gconfig.zreload_quiesce_period);
+                log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %u secs for further changes...", current_zft->fn, gconfig.zones_rfc1035_auto_quiesce);
                 memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
                 ev_timer_stop(loop, current_zft->pending_event);
-                ev_timer_set(current_zft->pending_event, gconfig.zreload_quiesce_period, 0.);
+                ev_timer_set(current_zft->pending_event, gconfig.zones_rfc1035_auto_quiesce, 0.);
                 ev_timer_start(loop, current_zft->pending_event);
             }
             // else (if pending state has not changed) let timer continue as it was...
@@ -449,10 +449,18 @@ static void check_missing(struct ev_loop* loop) {
         if(SLOT_REAL(zf)) {
             if(zf->generation != generation) {
                 log_debug("rfc1035: check_missing() found deletion of zonefile '%s', triggering process_zonefile()", zf->fn);
-                process_zonefile(zf->fn, loop, gconfig.zreload_quiesce_period);
+                process_zonefile(zf->fn, loop, gconfig.zones_rfc1035_auto_quiesce);
             }
         }
     }
+}
+
+F_NONNULL
+static void do_scandir(struct ev_loop* loop) {
+    dmn_assert(loop);
+    generation++;
+    scan_dir(loop, gconfig.zones_rfc1035_auto_quiesce);
+    check_missing(loop);
 }
 
 F_NONNULL
@@ -460,29 +468,23 @@ static void periodic_scan(struct ev_loop* loop, ev_timer* rtimer, int revents) {
     dmn_assert(loop);
     dmn_assert(rtimer);
     dmn_assert(revents == EV_TIMER);
-
-    generation++;
-    scan_dir(loop, gconfig.zreload_quiesce_period);
-    check_missing(loop);
+    do_scandir(loop);
 }
 
 // ev stuff
 static ev_timer* reload_timer = NULL;
 
+#if USE_INOTIFY
+
 static void set_inotify(void) {
-#   if USE_INOTIFY
-        // Technically, it wouldn't be hard to support as low as 2.6.25 if
-        //   we dropped IN_EXCL_UNLINK (merely an optimization) and didn't
-        //   use inotify_init1(), but 2.6.36 seems a reasonably-old target
-        //   for new code at this point in time, esp given we have a generic
-        //   fallback with the scandir()-based model.
-        using_inotify = gdnsd_linux_min_version(2, 6, 36) && !gconfig.zreload_disable;
-#   endif
-    if(using_inotify)
+    // Technically, it wouldn't be hard to support as low as 2.6.25 if
+    //   we dropped IN_EXCL_UNLINK (merely an optimization) and didn't
+    //   use inotify_init1(), but 2.6.36 seems a reasonably-old target
+    //   for new code at this point in time, esp given we have a generic
+    //   fallback with the scandir()-based model.
+    if((using_inotify = gdnsd_linux_min_version(2, 6, 36)))
         log_info("rfc1035: will use inotify for zone change detection");
 }
-
-#if USE_INOTIFY
 
 // This is for event debugging only
 #define _maskcat(_x) \
@@ -567,7 +569,7 @@ static void inotify_initial_run(struct ev_loop* loop) {
     }
     else {
         log_warn("rfc1035: Initial inotify() setup failed, using fallback scandir() method until recovery");
-        ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gconfig.zreload_scan_interval, gconfig.zreload_scan_interval);
+        ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
         ev_timer_start(loop, inot.fallback_watcher);
     }
 }
@@ -598,7 +600,7 @@ static void handle_inotify_failure(struct ev_loop* loop) {
     close(inot.main_fd);
 
     // insert periodic timer for fallback/retry scanning
-    ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gconfig.zreload_scan_interval, gconfig.zreload_scan_interval);
+    ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
     ev_timer_start(loop, inot.fallback_watcher);
 }
 
@@ -641,7 +643,7 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
         //   quiesce period, even if the final event was one of the "fast quiesce" ones above.
         double quiesce_time = 1.02; // fast reload on "normal" events
         if(emask & (IN_CREATE|IN_MODIFY|IN_CLOSE_WRITE|IN_ATTRIB))
-            quiesce_time = gconfig.zreload_quiesce_period;
+            quiesce_time = gconfig.zones_rfc1035_auto_quiesce;
         process_zonefile(fname, loop, quiesce_time);
     }
 
@@ -678,7 +680,9 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
     }
 }
 
-#else
+#else // no compile-time support for inotify
+
+static void set_inotify(void) { }
 
 static void inotify_initial_setup(void) {
     dmn_assert(false);
@@ -697,9 +701,11 @@ static void inotify_initial_run(struct ev_loop* loop V_UNUSED) {
 /*************************/
 
 void zsrc_rfc1035_load_zones(void) {
-    set_inotify();
-    if(using_inotify)
-        inotify_initial_setup();
+    if(gconfig.zones_rfc1035_auto) {
+        set_inotify();
+        if(using_inotify)
+            inotify_initial_setup();
+    }
     struct ev_loop* temp_load_loop = ev_loop_new(EVFLAG_AUTO);
     scan_dir(temp_load_loop, 0);
     ev_run(temp_load_loop, 0);
@@ -709,15 +715,39 @@ void zsrc_rfc1035_load_zones(void) {
         log_fatal("rfc1035: atexit(unload_zones) failed: %s", logf_errno());
 }
 
+// we track the loop here for the async sighup request
+static struct ev_loop* zones_loop = NULL;
+static ev_async* sighup_waker = NULL;
+
+// called within our thread/loop to take sighup action
+F_NONNULL
+static void sighup_cb(struct ev_loop* loop, ev_async* w, int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w);
+    do_scandir(loop);
+}
+
+// called from main thread to feed ev_async
+void zsrc_rfc1035_sighup(void) {
+    dmn_assert(zones_loop); dmn_assert(sighup_waker);
+    ev_async_send(zones_loop, sighup_waker);
+}
+
 void zsrc_rfc1035_runtime_init(struct ev_loop* loop) {
     dmn_assert(loop);
 
-    if(using_inotify) {
-        inotify_initial_run(loop);
-    }
-    else {
-        reload_timer = calloc(1, sizeof(ev_timer));
-        ev_timer_init(reload_timer, periodic_scan, gconfig.zreload_scan_interval, gconfig.zreload_scan_interval);
-        ev_timer_start(loop, reload_timer);
+    zones_loop = loop;
+    sighup_waker = malloc(sizeof(ev_async));
+    ev_async_init(sighup_waker, sighup_cb);
+    ev_async_start(loop, sighup_waker);
+
+    if(gconfig.zones_rfc1035_auto) {
+        if(using_inotify) {
+            inotify_initial_run(loop);
+        }
+        else {
+            reload_timer = calloc(1, sizeof(ev_timer));
+            ev_timer_init(reload_timer, periodic_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
+            ev_timer_start(loop, reload_timer);
+        }
     }
 }

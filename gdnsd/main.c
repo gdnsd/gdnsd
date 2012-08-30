@@ -24,6 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <sys/types.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -33,7 +34,6 @@
 #include <time.h>
 
 #if USE_LINUX_CAPS
-#include <sys/types.h>
 #include <sys/capability.h>
 #include <sys/prctl.h>
 #endif
@@ -65,13 +65,11 @@ static void threads_cleanup(void) {
 
     unsigned num_threads = gconfig.num_io_threads;
 
-    if(!gconfig.zreload_disable)
-        pthread_cancel(zone_data_threadid);
+    pthread_cancel(zone_data_threadid);
     for(unsigned i = 0; i < num_threads; i++)
         pthread_cancel(io_threadids[i]);
 
-    if(!gconfig.zreload_disable)
-        pthread_join(zone_data_threadid, NULL);
+    pthread_join(zone_data_threadid, NULL);
     for(unsigned i = 0; i < num_threads; i++)
         pthread_join(io_threadids[i], NULL);
 }
@@ -84,6 +82,17 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int
 
     log_info("Received terminating signal %i, exiting", w->signum);
     ev_break(loop, EVBREAK_ALL);
+}
+
+F_NONNULL
+static void hup_signal(struct ev_loop* loop, struct ev_signal *w, const int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w);
+    dmn_assert(revents == EV_SIGNAL);
+    dmn_assert(w->signum == SIGHUP);
+
+    log_debug("Received SIGHUP");
+    // these functions should log_info() that they're taking SIGHUP actions, as appropriate
+    zsrc_rfc1035_sighup();
 }
 
 F_NONNULL F_NORETURN
@@ -102,8 +111,8 @@ static void usage(const char* argv0) {
         "  startfg - Start " PACKAGE_NAME " in foreground w/ logs to stderr\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
         "  stop - Stops a running daemon previously started by 'start'\n"
+        "  reload - Send SIGHUP to running daemon for zone data reload\n"
         "  restart - Equivalent to checkconf && stop && start, but faster\n"
-        "  reload - Aliases 'restart'\n"
         "  force-reload - Aliases 'restart'\n"
         "  condrestart - Does 'restart' action only if already running\n"
         "  try-restart - Aliases 'condrestart'\n"
@@ -116,6 +125,7 @@ static void usage(const char* argv0) {
 
 static ev_signal* sig_int;
 static ev_signal* sig_term;
+static ev_signal* sig_hup;
 
 // Set up our terminal signal handlers via libev
 F_NONNULL
@@ -124,6 +134,7 @@ static void setup_signals(struct ev_loop* def_loop) {
 
     sig_int = malloc(sizeof(ev_signal));
     sig_term = malloc(sizeof(ev_signal));
+    sig_hup = malloc(sizeof(ev_signal));
 
     // Set up the signal callback handlers via libev
     //  and start the signal watchers in the default loop
@@ -131,6 +142,8 @@ static void setup_signals(struct ev_loop* def_loop) {
     ev_signal_start(def_loop, sig_int);
     ev_signal_init(sig_term, terminal_signal, SIGTERM);
     ev_signal_start(def_loop, sig_term);
+    ev_signal_init(sig_hup, hup_signal, SIGHUP);
+    ev_signal_start(def_loop, sig_hup);
 }
 
 static void* zone_data_runtime(void* unused V_UNUSED) {
@@ -197,13 +210,8 @@ static void start_threads(void) {
         }
     }
 
-    if(!gconfig.zreload_disable) {
-        int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
-        if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
-    }
-    else {
-        log_info("Runtime reloading of zone data explicitly disabled (config option zreload_disable)");
-    }
+    int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
+    if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
 
     // Invoke thread cleanup handlers at exit time
     if(atexit(threads_cleanup))
@@ -316,6 +324,7 @@ typedef enum {
     ACT_STARTFG,
     ACT_START,
     ACT_STOP,
+    ACT_RELOAD,
     ACT_RESTART,
     ACT_CRESTART, // downgrades to ACT_RESTART after checking...
     ACT_STATUS,
@@ -332,8 +341,8 @@ static actmap_t actionmap[] = {
     { "startfg",      ACT_STARTFG },  // 2
     { "start",        ACT_START },    // 3
     { "stop",         ACT_STOP },     // 4
-    { "restart",      ACT_RESTART },  // 5
-    { "reload",       ACT_RESTART },  // 6
+    { "reload",       ACT_RELOAD },   // 5
+    { "restart",      ACT_RESTART },  // 6
     { "force-reload", ACT_RESTART },  // 7
     { "condrestart",  ACT_CRESTART }, // 8
     { "try-restart",  ACT_CRESTART }, // 9
@@ -418,9 +427,10 @@ int main(int argc, char** argv) {
         exit(0);
     }
     else if(action == ACT_STOP) {
-        exit(
-            dmn_stop(PID_PATH) ? 1 : 0
-        );
+        exit(dmn_stop(PID_PATH) ? 1 : 0);
+    }
+    else if(action == ACT_RELOAD) {
+        exit(dmn_signal(PID_PATH, SIGHUP));
     }
 
     if(action == ACT_CRESTART) {
