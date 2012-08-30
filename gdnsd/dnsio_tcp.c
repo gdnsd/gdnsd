@@ -426,6 +426,8 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
     ev_prepare_init(prep_watcher, ztstate_offline);
     ev_check_init(check_watcher, ztstate_online);
     ev_set_priority(check_watcher, EV_MAXPRI);
+    ev_prepare_start(loop, prep_watcher);
+    ev_check_start(loop, check_watcher);
     ev_run(loop, 0);
 
     pthread_cleanup_pop(1);
