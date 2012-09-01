@@ -544,7 +544,7 @@ void conf_load(void) {
     const vscf_data_t* stypes_cfg = cfg_root
         ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
         : NULL;
-    if(num_monio_lists && stypes_cfg)
+    if(num_monio_lists)
         monio_add_servicetypes(stypes_cfg);
 
     // Finally, process the monio_list_t's from plugins *after* servicetypes are available.
