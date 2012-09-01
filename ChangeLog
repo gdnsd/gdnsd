@@ -1,3 +1,67 @@
+1.7.1 - 2012-09-01
+    THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
+      HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
+      stable release, and 1.8.x will be the future stable release
+      containing these changes.
+    Changes from 1.6.x are fairly dramatic, just covering the
+      user-visible highlights here:
+    Commandline "-c /etc/gdnsd/config" replaced with "-d /srv/gdnsd"
+      "-d" means data root directory, it's the base directory under
+        which gdnsd finds all config/data input, etc...
+      When chroot() is used, it always uses the "-d" data root dir
+      Regardless, all data input (config, zones, geoip data, etc)
+        as well as the daemon's pidfile are restricted to live
+        within the data root dir, with the following standardized
+        layout:
+          main config -> /etc/config
+          zones dir -> /etc/zones/
+          geoip data -> /etc/geoip/
+          pidfile -> /var/gdnsd.pid
+    Dropped related config options: pidfile, chroot_path, zones_dir
+    The "zones" stanza in the main config file doesn't exist anymore;
+      the set of zones is determined by scanning /etc/zones
+    The zones directory has many restrictions to make scanning
+      more reliable and sane:
+        All files must be named for the zone they represent
+        No $INCLUDE statements
+        No subdirectories
+        No symlinks
+        Filenames starting with "." are ignored
+        Daemon does s,@,/, to make RFC2137 in-addr.arpa zones easier
+    Since everything in the config file is now optional, the config
+       file itself is now optional as well.
+    Added configure argument --with-def-rootdir, which defaults
+      to /srv/gdnsd to basically comply with the FHS.
+    By default, zonefiles are now automatically reloaded when they
+      change on disk.  On recent Linux this happens quickly via
+      inotify(), on others it happens eventually via periodic
+      directory scanning.  No need to restart the daemon because the
+      zone data changed anymore.  It's best (but not necessary) to
+      manage the zones directory with atomic rename()/unlink() (mv/rm).
+    Automatic scan/reload of data at runtime can be disable
+      via config option "zones_rfc1035_auto".
+    SIGHUP now triggers a zone data reload regardless of auto setting.
+    The "reload" commandline/initscript action sends SIGHUP.
+    Several deprecated things in 1.6.x were killed, mostly
+      plugin-related things (e.g. service_type vs service_types).
+    The "log_pkterr" stuff was removed (lpe_on/off, SIGUSR1),
+      these messages were replaced with debug or warning
+      messages as appropriate.
+    The "strict_data" option doesn't exist anymore, and all
+      such errors were downgraded to warnings.
+    In general, zones are much more isolated from each other, and
+      no queries use cross-zonefile data in their results.
+    DYNA now works for out-of-zone NS glue targets.
+    New optional dependency on liburcu.  If detected at configure
+      time, it will make zone data reloads more efficient.
+    plugin_geoip: GeoIP databases should load considerably faster
+      than before thanks to Timo's speedup patch.
+    plugin_geoip: auto_dc_coords can now omit datacenters from its
+      list of coordinates.  Omitted datacenters can still be returned
+      via specific map entries or net entries, but will not be returned
+      for automatic results.
+    Innumerable smaller fixes and updates...
+
 1.6.8 - 2012-08-17
     Pidfile/Initscript/Daemonization bugfixes (many thanks
       to Timo Teräs for bringing them up and walking me
