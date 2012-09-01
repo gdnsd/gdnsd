@@ -465,6 +465,16 @@ be to only host DNS for v6-capable services on v6-capable DNS hosts,
 or install a Tunnelbroker/Sixxs/Teredo/Miredo/etc tunnel to get v6
 routability.
 
+=item C<chaos_response>
+
+String, default "gdnsd".  When gdnsd receives any query with the class
+C<CH> ("Chaos"), as opposed to the normal C<IN> ("Internet"), it will
+return a single response record of class C<CH> and type C<TXT>, which
+contains the string defined here.  This is something like BIND's
+version reporting, which responds to "version.bind" queries in the
+C<CH> class, and is what a client will see if they use such a query
+against a gdnsd server.
+
 =back
 
 =head1 SERVICE_TYPES
