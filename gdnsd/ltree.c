@@ -1130,7 +1130,7 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone) {
         log_warn("Zone '%s': SOA Master does not match any NS records for this zone", logf_dname(zone->dname));
 
     // copy SOA Serial field up to zone_t for easy comparisons
-    zone->serial = zroot_soa->times[0];
+    zone->serial = ntohl(zroot_soa->times[0]);
     return false;
 }
 
