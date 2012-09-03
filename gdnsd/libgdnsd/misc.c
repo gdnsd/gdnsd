@@ -41,23 +41,40 @@
 
 static char* rootdir = NULL;
 
+static void ensure_dir(const char* dpath, const bool relative) {
+    struct stat st;
+    if(lstat(dpath, &st)) {
+        if(mkdir(dpath, 0755))
+            log_fatal("mkdir(%s) failed: %s",
+                relative ? logf_pathname(dpath) : dpath,
+                dmn_strerror(errno));
+    }
+    else if(!S_ISDIR(st.st_mode)) {
+        log_fatal("'%s' is not a directory (but should be)!",
+            relative ? logf_pathname(dpath) : dpath);
+    }
+}
+
 void gdnsd_set_rootdir(const char* rootdir_in) {
     dmn_assert(rootdir_in);
     dmn_assert(!rootdir);
+
+    // realpath() wants an extant file to reference,
+    //  so we have to do our stat/mkdir on the original first
+    ensure_dir(rootdir_in, false);
     rootdir = realpath(rootdir_in, NULL);
     if(!rootdir)
         log_fatal("Cleanup/validation of data root pathname '%s' failed: %s", rootdir_in, dmn_strerror(errno));
     if(strcmp(rootdir_in, rootdir))
         log_info("Root path '%s' cleaned up as '%s'", rootdir_in, rootdir);
 
-    struct stat st;
-    if(lstat(rootdir, &st))
-        log_fatal("Failed to lstat() data root directory '%s': %s", rootdir, dmn_strerror(errno));
-    if(!S_ISDIR(st.st_mode))
-        log_fatal("data root directory '%s' is not a directory", rootdir);
-
     if(chdir(rootdir))
         log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_strerror(errno));
+
+    ensure_dir("etc", true);
+    ensure_dir("etc/zones", true);
+    ensure_dir("etc/geoip", true);
+    ensure_dir("var", true);
 }
 
 const char* gdnsd_get_rootdir(void) { return rootdir; }
