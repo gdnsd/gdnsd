@@ -42,7 +42,6 @@
 // the string pid stored in the file is just
 //  for reference for humans or other tools.
 
-static bool dmn_daemonized = false;
 static const size_t pblen = 22;
 
 static int status_finish_fd = -1;
@@ -150,7 +149,7 @@ static void parent_status_wait(const int readpipe) {
     _exit(exitval);
 }
 
-void dmn_daemonize(const char* logname, const char* pidfile, const bool restart) {
+void dmn_daemonize(const char* pidfile, const bool restart) {
     dmn_assert(pidfile);
 
     // This pipe is used to communicate daemonization success
@@ -207,19 +206,17 @@ void dmn_daemonize(const char* logname, const char* pidfile, const bool restart)
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
     if(!freopen("/dev/null", "w", stdout))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
-    dmn_log_info("Daemonized successfully, pid is %li ...", (long)pid);
     if(!freopen("/dev/null", "r+", stderr))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
-    openlog(logname, LOG_NDELAY|LOG_PID, LOG_DAEMON);
-    dmn_daemonized = true;
-    dmn_log_info("Daemonized succesfully, pid is %li", (long)pid);
+    dmn_log_info("Daemonized, final pid is %li", (long)pid);
 
     // track fd for later dmn_daemonize_finish()
     status_finish_fd = statuspipe[1];
 }
 
+void _dmn_close_alt_stderr(void); // from dmn_log.c, private-ish
+
 void dmn_daemonize_finish(void) {
-    dmn_assert(dmn_daemonized);
     dmn_assert(status_finish_fd != -1);
 
     // inform original parent of our success, but if for some reason
@@ -229,6 +226,11 @@ void dmn_daemonize_finish(void) {
     if(1 != write(status_finish_fd, &successchar, 1))
         dmn_log_err("Bug? failed to notify parent of daemonization success! Errno was %s", dmn_strerror(errno));
     close(status_finish_fd);
+
+    // this shuts off our saved copy of stderr, which
+    //  was kept open to inform the outer process/user
+    //  of late initialzation failures post-daemonization.
+    _dmn_close_alt_stderr();
 }
 
 pid_t dmn_status(const char* pidfile) { dmn_assert(pidfile); return check_pidfile(pidfile); }
@@ -285,4 +287,3 @@ int dmn_signal(const char* pidfile, int sig) {
     return rv;
 }
 
-bool dmn_is_daemonized(void) { return dmn_daemonized; }

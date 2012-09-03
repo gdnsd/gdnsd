@@ -412,6 +412,8 @@ static void init_config(const bool started_as_root) {
 
 int main(int argc, char** argv) {
 
+    dmn_init_log();
+
     // Parse args, setting the libgdnsd rootdir and
     //   returning the action.  Exits on cmdline errors
     action_t action = parse_args(argc, argv);
@@ -461,6 +463,9 @@ int main(int argc, char** argv) {
             || action == ACT_RESTART
     );
 
+    if(action != ACT_STARTFG)
+        dmn_start_syslog(PACKAGE_NAME);
+
     // Check/set rlimits for mlockall() if necessary and possible
     if(gconfig.lock_mem)
         memlock_rlimits(started_as_root);
@@ -470,7 +475,7 @@ int main(int argc, char** argv) {
 
     // Daemonize if applicable
     if(action != ACT_STARTFG)
-        dmn_daemonize(PACKAGE_NAME, PID_PATH, (action == ACT_RESTART));
+        dmn_daemonize(PID_PATH, (action == ACT_RESTART));
 
     // If root, or if user explicitly set a priority...
     if(started_as_root || gconfig.priority != -21) {
@@ -545,7 +550,7 @@ int main(int argc, char** argv) {
     log_info("DNS listeners started");
 
     // Report success back to whoever invoked "start" or "restart" command...
-    if(dmn_is_daemonized())
+    if(action != ACT_STARTFG)
        dmn_daemonize_finish();
 
     // Start the primary event loop in this thread, to handle

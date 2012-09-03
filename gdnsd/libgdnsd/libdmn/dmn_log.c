@@ -139,17 +139,39 @@ const char* dmn_strerror(const int errnum) {
     return buf;
 }
 
+static bool dmn_syslog_alive = false;
+void dmn_start_syslog(const char* logname) {
+    openlog(logname, LOG_NDELAY|LOG_PID, LOG_DAEMON);
+    dmn_syslog_alive = true;
+}
+
+// Copy of stderr, so that we can properly /dev/null
+//   the real stderr and still write to this for
+//   a bit to report late errors (we can't just wait
+//   to /dev/null the real stderr, because /dev/null
+//   is gone after chroot...).
+static FILE* alt_stderr = NULL;
+static bool alt_stderr_init = false;
+void dmn_init_log(void) {
+    alt_stderr = fdopen(dup(fileno(stderr)), "w");
+    if(!alt_stderr) {
+        perror("Failed to fdopen(dup(fileno(stderr)))");
+        abort();
+   }
+   alt_stderr_init = true;
+}
+
+void _dmn_close_alt_stderr(void) {
+    fclose(alt_stderr);
+    alt_stderr = NULL;
+}
+
 /*****************************************************************/
 /*** The core logging funcs: dmn_loggerv and dmn_logger **********/
 /*****************************************************************/
 
 void dmn_loggerv(int level, const char* fmt, va_list ap) {
-    dmn_assert(fmt);
-
-    if(dmn_is_daemonized()) {
-        vsyslog(level, fmt, ap);
-    }
-    else {
+    if(alt_stderr) {
         time_t t = time(NULL);
         struct tm tmp;
         localtime_r(&t, &tmp);
@@ -172,23 +194,28 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
             case LOG_CRIT: pfx = pfx_crit; break;
             default: pfx = pfx_unknown; break;
         }
-        flockfile(stderr);
-        fputs_unlocked(tstamp, stderr);
+        flockfile(alt_stderr);
+        fputs_unlocked(tstamp, alt_stderr);
 #if defined SYS_gettid && !defined __APPLE__
-        fputs_unlocked(tidbuf, stderr);
+        fputs_unlocked(tidbuf, alt_stderr);
 #endif
-        fputs_unlocked(pfx, stderr);
-        vfprintf(stderr, fmt, ap);
-        putc_unlocked('\n', stderr);
-        fflush_unlocked(stderr);
-        funlockfile(stderr);
+        fputs_unlocked(pfx, alt_stderr);
+        va_list apcpy;
+        va_copy(apcpy, ap);
+        vfprintf(alt_stderr, fmt, apcpy);
+        va_end(apcpy);
+        putc_unlocked('\n', alt_stderr);
+        fflush_unlocked(alt_stderr);
+        funlockfile(alt_stderr);
     }
+
+    if(dmn_syslog_alive)
+        vsyslog(level, fmt, ap);
 
     dmn_fmtbuf_reset();
 }
 
 void dmn_logger(int level, const char* fmt, ...) {
-    dmn_assert(fmt);
     va_list ap;
     va_start(ap, fmt);
     dmn_loggerv(level, fmt, ap);
