@@ -371,6 +371,35 @@ static void zones_sort(zone_t** list, const unsigned len) {
     }
 }
 
+F_NONNULL
+static void ztree_subzone_reporter(const ztree_t* zt, const uint8_t* parent_dname, const char* msg) {
+    dmn_assert(zt); dmn_assert(parent_dname); dmn_assert(msg);
+    const ztchildren_t* ztc = zt->children;
+    if(ztc) {
+        for(unsigned i = 0; i < ztc->alloc; i++) {
+            ztree_t* child = ztc->store[i];
+            if(child) {
+                if(child->zones)
+                    log_warn(msg, logf_dname(child->zones[0]->dname), logf_dname(parent_dname));
+                else
+                    ztree_subzone_reporter(child, parent_dname, msg);
+            }
+        }
+    }
+}
+
+F_NONNULL
+static void ztree_report_hidden_subzones(const ztree_t* zt, const uint8_t* parent_dname) {
+    dmn_assert(zt); dmn_assert(parent_dname);
+    ztree_subzone_reporter(zt, parent_dname, "Zone %s: is now a hidden subzone of new parent zone %s");
+}
+
+F_NONNULL
+static void ztree_report_revealed_subzones(const ztree_t* zt, const uint8_t* parent_dname) {
+    dmn_assert(zt); dmn_assert(parent_dname);
+    ztree_subzone_reporter(zt, parent_dname, "Zone %s: subzone unhidden due to removal of parent zone %s");
+}
+
 static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const bool in_txn) {
     dmn_assert(root);
     dmn_assert((uintptr_t)z_old | (uintptr_t)z_new); // (NULL,NULL) illegal
@@ -395,7 +424,10 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
         const uint8_t* lstack[127];
         unsigned lcount = dname_to_lstack(z_new->dname, lstack);
         this_zt = root;
+        const uint8_t* hiding_zone = NULL;
         while(lcount) {
+            if(this_zt->zones)
+                hiding_zone = this_zt->zones[0]->dname;
             this_zt = ztree_node_find_or_add_child(this_zt, lstack[--lcount]);
             dmn_assert(this_zt);
         }
@@ -428,12 +460,19 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
         else {
             log_info("Zone %s: source %s with serial %u loaded (but is hidden by extant source %s with serial %u)", logf_dname(z_new->dname), z_new->src, z_new->serial, new_list[0]->src, new_list[0]->serial);
         }
+        if(hiding_zone)
+            log_warn("Zone %s was added as a hidden subzone of extant parent %s", logf_dname(z_new->dname), logf_dname(hiding_zone));
+        else if(!old_head)
+            ztree_report_hidden_subzones(this_zt, z_new->dname);
     }
     else { // update or delete
         const uint8_t* lstack[127];
         unsigned lcount = dname_to_lstack(z_old->dname, lstack);
         this_zt = root;
+        const uint8_t* hiding_zone = NULL;
         while(lcount) {
+            if(this_zt->zones)
+                hiding_zone = this_zt->zones[0]->dname;
             this_zt = ztree_node_find_child(this_zt, lstack[--lcount], false);
             dmn_assert(this_zt);
         }
@@ -447,6 +486,8 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             if(this_zt->zones_len == 1) {
                 new_list = NULL;
                 log_info("Zone %s: authoritative source %s with serial %u removed (zone no longer exists)", logf_dname(z_old->dname), z_old->src, z_old->serial);
+                if(!hiding_zone)
+                    ztree_report_revealed_subzones(this_zt, z_old->dname);
             }
             else {
                 const zone_t* old_head = old_list[0];
