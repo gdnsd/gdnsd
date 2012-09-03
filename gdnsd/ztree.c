@@ -385,18 +385,13 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
         dmn_assert(!strcmp(z_old->src, z_new->src));
     }
 
-    // note we only need to writelock when updating ztree->zone, not
-    //  when updating some zone's ->next pointer, because the lookup
-    //  code only ever looks at the head of the list.  The booleans
-    //  "hidden" and "hidden2" track this below...
-
     ztree_t* this_zt;
     zone_t** new_list = NULL;
     zone_t** old_list = NULL;
 
     if(!z_old) { // insert
         dmn_assert(z_new);
-        log_debug("ztree_update: inserting new data for zone '%s' from src '%s'", logf_dname(z_new->dname), z_new->src);
+        log_debug("ztree_update: inserting new data for zone %s from src %s", logf_dname(z_new->dname), z_new->src);
         const uint8_t* lstack[127];
         unsigned lcount = dname_to_lstack(z_new->dname, lstack);
         this_zt = root;
@@ -405,6 +400,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             dmn_assert(this_zt);
         }
 
+        const zone_t* old_head = NULL;
         old_list = this_zt->zones;
         if(!this_zt->zones) {
             new_list = malloc(sizeof(zone_t*));
@@ -413,6 +409,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
         }
         else {
             // copy zone list and insert new zone at end, then sort
+            old_head = old_list[0];
             const unsigned old_len = this_zt->zones_len;
             old_list = this_zt->zones;
             new_list = malloc((old_len + 1) * sizeof(zone_t*));
@@ -420,6 +417,16 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             new_list[old_len] = z_new;
             zones_sort(new_list, old_len + 1);
             this_zt->zones_len++;
+        }
+
+        if(z_new == new_list[0]) {
+            if(old_head)
+                log_info("Zone %s: source %s with serial %u loaded as authoritative (supercedes extant source %s with serial %u)", logf_dname(z_new->dname), z_new->src, z_new->serial, old_head->src, old_head->serial);
+            else
+                log_info("Zone %s: source %s with serial %u loaded as authoritative", logf_dname(z_new->dname), z_new->src, z_new->serial);
+        }
+        else {
+            log_info("Zone %s: source %s with serial %u loaded (but is hidden by extant source %s with serial %u)", logf_dname(z_new->dname), z_new->src, z_new->serial, new_list[0]->src, new_list[0]->serial);
         }
     }
     else { // update or delete
@@ -436,11 +443,13 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
 
         const unsigned old_len = this_zt->zones_len;
         if(!z_new) { // delete case
-            log_debug("ztree_update: deleting data for zone '%s' from src '%s'", logf_dname(z_old->dname), z_old->src);
+            log_debug("ztree_update: deleting data for zone %s from src %s", logf_dname(z_old->dname), z_old->src);
             if(this_zt->zones_len == 1) {
                 new_list = NULL;
+                log_info("Zone %s: authoritative source %s with serial %u removed (zone no longer exists)", logf_dname(z_old->dname), z_old->src, z_old->serial);
             }
             else {
+                const zone_t* old_head = old_list[0];
                 new_list = malloc((old_len - 1) * sizeof(zone_t*));
                 unsigned i,j;
                 for(i = 0, j = 0; j < old_len; i++, j++) {
@@ -449,18 +458,34 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
                     else
                        new_list[i] = old_list[j];
                 }
+                if(old_head == z_old)
+                    log_info("Zone %s: authoritative source %s with serial %u removed (extant source %s with serial %u promoted to authoritative)", logf_dname(z_old->dname), z_old->src, z_old->serial, new_list[0]->src, new_list[0]->serial);
+                else
+                    log_info("Zone %s: hidden source %s with serial %u removed (extant source %s with serial %u continues to be authoritative)", logf_dname(z_old->dname), z_old->src, z_old->serial, new_list[0]->src, new_list[0]->serial);
             }
-            this_zt->zones_len--;
         }
         else { // update case
-            log_debug("ztree_update: updating data for zone '%s' from src '%s'", logf_dname(z_old->dname), z_old->src);
+            log_debug("ztree_update: updating data for zone %s from src %s", logf_dname(z_old->dname), z_old->src);
             // replace old with new in new_list
+            const zone_t* old_head = old_list[0];
             new_list = malloc(old_len * sizeof(zone_t*));
             memcpy(new_list, old_list, old_len * sizeof(zone_t*));
             for(unsigned i = 0; i < old_len; i++)
                 if(new_list[i] == z_old)
                     new_list[i] = z_new;
             zones_sort(new_list, old_len);
+            if(z_old == old_head) {
+                if(z_new == new_list[0])
+                    log_info("Zone %s: source %s updated to serial %u from serial %u, continues to be authoritative", logf_dname(z_old->dname), z_old->src, z_new->serial, z_old->serial);
+                else
+                    log_info("Zone %s: source %s updated to serial %u from serial %u and demoted to hidden.  Extant source %s with serial %u promoted to authoritative", logf_dname(z_old->dname), z_old->src, z_new->serial, z_old->serial, new_list[0]->src, new_list[0]->serial);
+            }
+            else {
+                if(z_new == new_list[0])
+                    log_info("Zone %s: source %s updated to serial %u from serial %u, promoted to authoritative (extant source %s with serial %u demoted)", logf_dname(z_old->dname), z_old->src, z_new->serial, z_old->serial, old_head->src, old_head->serial);
+                else
+                    log_info("Zone %s: hidden source %s updated to serial %u from serial %u. Extant source %s with serial %u continues to be authoritative", logf_dname(z_old->dname), z_old->src, z_new->serial, z_old->serial, old_head->src, old_head->serial);
+            }
         }
     }
 
@@ -540,6 +565,7 @@ void ztree_txn_start(void) {
     dmn_assert(ztree_root);
     dmn_assert(!new_root); // no txn currently ongoing
     new_root = ztree_clone(ztree_root);
+    log_info("Multi-zone update transaction starting ...");
 }
 
 void ztree_txn_abort(void) {
@@ -547,6 +573,7 @@ void ztree_txn_abort(void) {
     dmn_assert(new_root);
     ztree_destroy_clone(new_root);
     new_root = NULL;
+    log_info("Multi-zone update transaction aborted");
 }
 
 void ztree_txn_end(void) {
@@ -558,4 +585,5 @@ void ztree_txn_end(void) {
     zt_update_unlock();
     ztree_destroy_clone(old_root);
     new_root = NULL;
+    log_info("Multi-zone update transaction committed");
 }
