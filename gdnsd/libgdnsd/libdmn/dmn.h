@@ -53,15 +53,14 @@
 ***/
 
 // Attempt to daemonize the current process using "pidfile"
-//  as the pidfile pathname.  logname is used as the daemon's
-//  official name for openlog() purposes.  If "restart" is
-//  true, attempt unracy shutdown of any previous instance and
-//  take over.
+//  as the pidfile pathname.
+// If "restart" is true, attempt unracy shutdown of any previous
+//  instance and take over.
 // You must invoke dmn_daemonize_finish shortly afterwards.  If
 //  you have post-daemonization setup to do which could lead
 //  to early daemon abort, do it between the two.
 DMN_F_NONNULL
-void dmn_daemonize(const char* logname, const char* pidfile, const bool restart);
+void dmn_daemonize(const char* pidfile, const bool restart);
 
 // Called after the above.  This releases the original parent
 //   process to exit with value zero (if you just die/abort
@@ -85,10 +84,6 @@ pid_t dmn_stop(const char* pidfile);
 // Send an aribtrary signal to a running daemon using "pidfile".
 DMN_F_NONNULL
 void dmn_signal(const char* pidfile, int sig);
-
-// Find out if the process is currently daemonized or not
-DMN_F_PURE
-bool dmn_is_daemonized(void);
 
 /***
 **** chroot/privdrop security interfaces
@@ -131,6 +126,15 @@ const char* dmn_get_chroot(void);
 DMN_F_PURE
 bool dmn_get_debug(void);
 void dmn_set_debug(bool d);
+
+// Call before any log_* calls, right at proc startup...
+void dmn_init_log(void);
+
+// Start syslogging log_*() calls (does openlog),
+//   prior to this they go to stderr only (until
+//   it's closed for a daemon).
+DMN_F_NONNULL
+void dmn_start_syslog(const char* logname);
 
 // This is a syslog()-like interface that will log
 //  to stderr and/or syslog as appropriate depending

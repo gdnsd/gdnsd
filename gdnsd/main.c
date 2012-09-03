@@ -253,6 +253,9 @@ static action_t match_action(const char* arg) {
 static const char def_cfg_path[] = ETCDIR "/" PACKAGE_NAME "/config";
 
 int main(int argc, char** argv) {
+
+    dmn_init_log();
+
     action_t action = ACT_UNDEF;
 
     char* conf_arg = NULL;
@@ -339,6 +342,10 @@ int main(int argc, char** argv) {
             || action == ACT_RESTART
     );
 
+
+    if(action != ACT_STARTFG)
+        dmn_start_syslog(PACKAGE_NAME);
+
     const bool started_as_root = !geteuid();
 
     if(started_as_root)
@@ -411,7 +418,7 @@ int main(int argc, char** argv) {
         // so that the daemonization fork+exit pairs don't
         //   execute the plugins' exit handlers
         skip_plugins_cleanup = true;
-        dmn_daemonize(PACKAGE_NAME, gconfig.pidfile, (action == ACT_RESTART));
+        dmn_daemonize(gconfig.pidfile, (action == ACT_RESTART));
         skip_plugins_cleanup = false;
     }
 
@@ -527,7 +534,7 @@ int main(int argc, char** argv) {
     log_info("DNS listeners started");
 
     // Report success back to whoever invoked "start" or "restart" command...
-    if(dmn_is_daemonized())
+    if(action != ACT_STARTFG)
        dmn_daemonize_finish();
 
     // Start the primary event loop in this thread, to handle

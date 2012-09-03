@@ -148,6 +148,9 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
 }
 
 gdmaps_t* gdmaps_test_init(const char* config_path) {
+
+    dmn_init_log();
+
     dmn_assert(config_path);
 
     const vscf_data_t* cfg_root = conf_load(config_path);
