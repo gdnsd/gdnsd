@@ -723,6 +723,7 @@ static ev_async* sighup_waker = NULL;
 F_NONNULL
 static void sighup_cb(struct ev_loop* loop, ev_async* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
+    log_info("rfc1035: received SIGHUP notification, scanning for changes...");
     do_scandir(loop);
 }
 
