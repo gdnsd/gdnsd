@@ -308,9 +308,13 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
     zfile_t* zf = (zfile_t*)timer->data;
     dmn_assert(zf->pending_event == timer);
 
+    // check lstat() again for a new change during quiesce period
     statcmp_t newstat;
     statcmp_set(zf->full_fn, &newstat);
+
+    // if it stayed stable...
     if(statcmp_eq(&newstat, &zf->pending)) {
+        // stable delete
         if(statcmp_nx(&newstat)) {
             if(zf->zone) {
                 log_debug("rfc1035: zonefile '%s' quiesce timer: acting on deletion, removing zone data from runtime...", zf->fn);
@@ -322,7 +326,8 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
             }
             zfhash_del(zf);
         }
-        else { // quiesced state isn't deleted, we need to load data
+        // quiesced state isn't deleted, we need to load data
+        else {
             zone_t* z = zone_from_zf(zf);
             // re-check that file didn't change while loading
             statcmp_t post_check;
@@ -372,6 +377,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
     zfile_t* current_zft = zfhash_find(fn);
 
     if(!statcmp_nx(&newstat) && !current_zft) {
+        // file was found, but previously unknown to the zfhash
         current_zft = calloc(1, sizeof(zfile_t));
         current_zft->full_fn = full_fn;
         current_zft->fn = fn;
@@ -379,10 +385,20 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
         zfhash_add(current_zft);
     }
     else {
+        // else we don't need this new copy of the full fn,
+        //   it's already there in the current_zft
+        dmn_assert(!strcmp(current_zft->full_fn, full_fn));
         free(full_fn);
     }
 
+    // the outer if-block here on the rest of this code means
+    //   we take no action if both the file in question did
+    //   not exist in the zfhash and also does not currently
+    //   exist on-disk.
     if(current_zft) {
+        // setting current_zft->generation for every file picked up
+        //   by scandir() is what keeps check_missing() from thinking
+        //   this zfile_t*'s target was deleted from the filesystem.
         current_zft->generation = generation;
         if(current_zft->pending_event) { // we already had a pending change
             if(!statcmp_eq(&newstat, &current_zft->pending)) { // but it changed again!
@@ -393,6 +409,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
                 ev_timer_start(loop, current_zft->pending_event);
             }
             // else (if pending state has not changed) let timer continue as it was...
+            //   (spurious notification of already-detected change)
         }
         else if(!statcmp_eq(&newstat, &current_zft->loaded)) { // initial change detected
             if(statcmp_nx(&current_zft->loaded))
