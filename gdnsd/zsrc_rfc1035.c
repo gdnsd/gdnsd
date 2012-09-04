@@ -437,7 +437,8 @@ static void unload_zones(void) {
     for(unsigned i = 0; i < zfhash_alloc; i++) {
         zfile_t* zf = zfhash[i];
         if(SLOT_REAL(zf)) {
-            ztree_update(zf->zone, NULL);
+            if(zf->zone)
+                ztree_update(zf->zone, NULL);
             zf_delete(zf);
         }
     }
