@@ -52,6 +52,7 @@ typedef struct {
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
     bool     monitor_force_v6_up;
+    bool     zones_rfc1035_strict_startup;
     bool     zones_rfc1035_auto;
     int      priority;
     unsigned chaos_len;

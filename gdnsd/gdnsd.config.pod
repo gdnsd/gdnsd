@@ -240,6 +240,23 @@ Integer seconds, default 5, min 3, max 60.  HTTP connections
 will be forcibly shut down if they go idle for more than this
 many seconds.
 
+=item B<zones_rfc1035_strict_startup>
+
+Boolean, default C<true>
+
+If true (the default), on daemon startup (via C<start> or C<restart>)
+if any zonefile fails to parse and load correctly, the daemon
+will abort.  If false, the daemon will simply ignore the failed
+zonefile and continue operations.
+
+Runtime reloads via SIGHUP and/or periodic/inotify scanning always
+treat bad zone data non-fatally (leaving any existing good copy intact
+in memory for lookups).
+
+This also affects the C<checkconf> action.  It will only fail
+in terms of exit value on bad zonfiles if this is true (although it
+will note any failures to stderr regardless).
+
 =item B<zones_rfc1035_auto>
 
 Boolean, default C<true>.

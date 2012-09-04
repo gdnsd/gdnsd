@@ -63,6 +63,7 @@ global_config_t gconfig = {
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
+    .zones_rfc1035_strict_startup = true,
     .zones_rfc1035_auto = true,
     .chaos_len = 0,
      // legal values are -20 to 20, so -21
@@ -501,10 +502,11 @@ void conf_load(void) {
         // Nobody should have even the default 16-depth CNAMEs anyways :P
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
+        CFG_OPT_BOOL(options, zones_rfc1035_strict_startup);
+        CFG_OPT_BOOL(options, zones_rfc1035_auto);
         // it's important that neither of these reload times have a lower
         //   bound below the 2s mark, as it could cause us to miss fast
         //   events on filesystems with 1-second mtime resolution.
-        CFG_OPT_BOOL(options, zones_rfc1035_auto);
         CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
         CFG_OPT_UINT_FAKEMIN(options, zones_rfc1035_quiesce, 3LU, 60LU);
         CFG_OPT_STR(options, username);

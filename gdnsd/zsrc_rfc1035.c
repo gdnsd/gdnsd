@@ -33,6 +33,12 @@
 
 #include <sys/inotify.h>
 
+// IFF gconfig.zones_rfc1035_strict_startup is true,
+//   this flag will be temporarily set to true during
+//   the initial scan, then set back to false, making
+//   zonefile parsing errors fatal for the initial scan.
+static bool fail_fatally = false;
+
 // this is set true once at startup if applicable
 static bool using_inotify = false;
 
@@ -350,6 +356,8 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
                     zf->zone = z;
                 }
                 else {
+                    if(fail_fatally)
+                        log_fatal("rfc1035: Cannot load zonefile '%s', failing", zf->fn);
                     log_debug("rfc1035: zonefile '%s' quiesce timer: zone parsing failed while lstat() info remained stable, dropping event, awaiting further fresh FS notification to try new syntax fixes...", zf->fn);
                 }
                 free(zf->pending_event);
@@ -723,11 +731,14 @@ void zsrc_rfc1035_load_zones(void) {
         if(using_inotify)
             inotify_initial_setup();
     }
+    if(gconfig.zones_rfc1035_strict_startup)
+        fail_fatally = true;
     struct ev_loop* temp_load_loop = ev_loop_new(EVFLAG_AUTO);
     scan_dir(temp_load_loop, 0);
     ev_run(temp_load_loop, 0);
     ev_loop_destroy(temp_load_loop);
     free(reload_timer);
+    fail_fatally = false;
     if(atexit(unload_zones))
         log_fatal("rfc1035: atexit(unload_zones) failed: %s", logf_errno());
 }
