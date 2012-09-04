@@ -66,6 +66,7 @@ my %SIGS;
 # Set up per-testfile output directory and zones input directory
 our $OUTDIR;
 our $ZONES_IN;
+our $ALTZONES_IN;
 {
     my $tname = $FindBin::Bin;
     $tname =~ s{^.*/}{};
@@ -73,6 +74,7 @@ our $ZONES_IN;
     $tname =~ s{\.t$}{};
 
     $ZONES_IN = $FindBin::Bin . '/zones/';
+    $ALTZONES_IN = $FindBin::Bin . '/altzones/';
     $OUTDIR = $ENV{TESTOUT_DIR} . '/' . $tname;
     foreach my $d ($OUTDIR, "$OUTDIR/etc", "$OUTDIR/etc/zones") {
         mkdir $d unless -d $d
@@ -242,6 +244,8 @@ sub check_stats {
     }
 }
 
+our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
+
 sub spawn_daemon {
     my ($class, $cfgfile, $geoip_data) = @_;
 
@@ -281,6 +285,14 @@ sub spawn_daemon {
     close($orig_fh) or die "Cannot close test configfile '$cfgfile': $!";
     close($out_fh) or die "Cannot close test config text output file '$cfgout': $!";
 
+    # Wipe zones, in case of dynamic stuff from earlier run
+    opendir(my $zdh, $zonesout) or die "Cannot open zones output subdirectory: $!";
+    foreach my $zf (grep { !/^\./ } readdir($zdh)) {
+        unlink($zonesout . $zf)
+            or die "Cannot unlink zonefile '$_': $!";
+    }
+    closedir($zdh);
+
     opendir(my $dh, $ZONES_IN) or die "Cannot open zones subdirectory: $!";
     my @zfiles_list = grep { !/^\./ && ! -d $_ } readdir($dh);
     closedir($dh);
@@ -316,24 +328,21 @@ sub spawn_daemon {
     select(undef, undef, undef, $retry_delay);
     while($retry--) {
         if(-f $daemon_out) {
-            open(my $gdout_fh, '<', $daemon_out)
+            open($GDOUT_FH, '<', $daemon_out)
                 or die "Cannot open '$daemon_out' for reading: $!";
             my $is_listening;
-            while(<$gdout_fh>) {
-                $is_listening = 1 if /\Qinfo: DNS listeners started\E$/;
+            while(<$GDOUT_FH>) {
+                return $pid if /\Qinfo: DNS listeners started\E$/;
             }
-            close($gdout_fh)
-                or die "Cannot close '$daemon_out': $!";
-            if($is_listening) {
-                return $pid;
-            }
+            close($GDOUT_FH)
+                or die "Cannot close '$daemon_out' for reading: $!";
         }
         select(undef, undef, undef, $retry_delay);
     }
 
-    my $gdout = '';
     open(my $gdout_fh, '<', $daemon_out)
         or die "gdnsd failed to finish starting properly, and no output file could be found";
+    my $gdout = '';
     while(<$gdout_fh>) { $gdout .= $_ }
     close($gdout_fh);
     die "gdnsd failed to finish starting properly.  output (if any):\n" . $gdout;
@@ -354,6 +363,46 @@ sub test_spawn_daemon {
 
     return $pid;
 }
+
+##### START RELOAD STUFF
+
+sub send_sighup {
+    kill(1, $saved_pid)
+        or die "Cannot send SIGHUP to gdnsd at pid $saved_pid";
+}
+
+sub test_log_output {
+    my ($class, $text) = @_;
+
+    my $ok = 0;
+    my $retry_delay = $TEST_RUNNER ? 0.5 : 0.1;
+    my $retry = 100;
+    while($retry--) {
+        while(<$GDOUT_FH>) {
+            if($_ =~ /\Q$text\E/) {
+                Test::More::ok(1);
+                return;
+            }
+        }
+        select(undef, undef, undef, $retry_delay);
+    }
+    Test::More::ok(0);
+    Test::More::diag("Failed to match string '$text' in daemon output in a reasonable timeframe");
+}
+
+sub insert_altzone {
+    my ($class, $fn, $destfn) = @_;
+    File::Copy::copy("$ALTZONES_IN/$fn", $OUTDIR . "/etc/zones/$destfn")
+        or die "Failed to copy alt zonefile '$fn' to 'etc/zones/$destfn': $!";
+}
+
+sub delete_altzone {
+    my ($class, $fn) = @_;
+    unlink($OUTDIR . "/etc/zones/$fn")
+        or die "Failed to unlink zonefile '$fn': $!";
+}
+
+##### END RELOAD STUFF
 
 my $_resolver;
 my $_resolver6;
