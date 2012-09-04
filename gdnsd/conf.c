@@ -80,7 +80,7 @@ global_config_t gconfig = {
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
     .zones_rfc1035_auto_interval = 31U,
-    .zones_rfc1035_auto_quiesce = 5U,
+    .zones_rfc1035_quiesce = 5U,
 };
 
 F_NONNULL
@@ -492,7 +492,7 @@ void conf_load(void) {
         //   events on filesystems with 1-second mtime resolution.
         CFG_OPT_BOOL(options, zones_rfc1035_auto);
         CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
-        CFG_OPT_UINT(options, zones_rfc1035_auto_quiesce, 3LU, 60LU);
+        CFG_OPT_UINT(options, zones_rfc1035_quiesce, 3LU, 60LU);
         CFG_OPT_STR(options, username);
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);

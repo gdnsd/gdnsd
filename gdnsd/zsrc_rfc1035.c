@@ -328,10 +328,10 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
             statcmp_t post_check;
             statcmp_set(zf->full_fn, &post_check);
             if(!statcmp_eq(&zf->pending, &post_check)) {
-                log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed during zonefile parsing, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_auto_quiesce);
+                log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed during zonefile parsing, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_quiesce);
                 if(z)
                      zone_delete(z);
-                ev_timer_set(timer, gconfig.zones_rfc1035_auto_quiesce, 0.);
+                ev_timer_set(timer, gconfig.zones_rfc1035_quiesce, 0.);
                 ev_timer_start(loop, timer);
             }
             else {
@@ -353,8 +353,8 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
         }
     }
     else {
-        log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_auto_quiesce);
-        ev_timer_set(timer, gconfig.zones_rfc1035_auto_quiesce, 0.);
+        log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_quiesce);
+        ev_timer_set(timer, gconfig.zones_rfc1035_quiesce, 0.);
         ev_timer_start(loop, timer);
     }
 }
@@ -386,10 +386,10 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
         current_zft->generation = generation;
         if(current_zft->pending_event) { // we already had a pending change
             if(!statcmp_eq(&newstat, &current_zft->pending)) { // but it changed again!
-                log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %u secs for further changes...", current_zft->fn, gconfig.zones_rfc1035_auto_quiesce);
+                log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %u secs for further changes...", current_zft->fn, gconfig.zones_rfc1035_quiesce);
                 memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
                 ev_timer_stop(loop, current_zft->pending_event);
-                ev_timer_set(current_zft->pending_event, gconfig.zones_rfc1035_auto_quiesce, 0.);
+                ev_timer_set(current_zft->pending_event, gconfig.zones_rfc1035_quiesce, 0.);
                 ev_timer_start(loop, current_zft->pending_event);
             }
             // else (if pending state has not changed) let timer continue as it was...
@@ -449,7 +449,7 @@ static void check_missing(struct ev_loop* loop) {
         if(SLOT_REAL(zf)) {
             if(zf->generation != generation) {
                 log_debug("rfc1035: check_missing() found deletion of zonefile '%s', triggering process_zonefile()", zf->fn);
-                process_zonefile(zf->fn, loop, gconfig.zones_rfc1035_auto_quiesce);
+                process_zonefile(zf->fn, loop, gconfig.zones_rfc1035_quiesce);
             }
         }
     }
@@ -459,7 +459,7 @@ F_NONNULL
 static void do_scandir(struct ev_loop* loop) {
     dmn_assert(loop);
     generation++;
-    scan_dir(loop, gconfig.zones_rfc1035_auto_quiesce);
+    scan_dir(loop, gconfig.zones_rfc1035_quiesce);
     check_missing(loop);
 }
 
@@ -643,7 +643,7 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
         //   quiesce period, even if the final event was one of the "fast quiesce" ones above.
         double quiesce_time = 1.02; // fast reload on "normal" events
         if(emask & (IN_CREATE|IN_MODIFY|IN_CLOSE_WRITE|IN_ATTRIB))
-            quiesce_time = gconfig.zones_rfc1035_auto_quiesce;
+            quiesce_time = gconfig.zones_rfc1035_quiesce;
         process_zonefile(fname, loop, quiesce_time);
     }
 

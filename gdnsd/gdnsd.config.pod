@@ -276,12 +276,12 @@ faster detection with less overhead.  In the C<inotify()> case, the
 interval is used only occasionally when recovering from temporary
 C<inotify()> failures.
 
-=item B<zones_rfc1035_auto_quiesce>
+=item B<zones_rfc1035_quiesce>
 
 Integer seconds, default 5, min 3, max 60.  Only applies when
 C<zones_rfc1035_auto> is C<true>.
 
-When a change is detected in automatic mode, this value is used
+When a change is detected, this value is used
 as a quiescence timer before actually processing the change.
 
 If the source changes while the quiescence timer is counting down, the

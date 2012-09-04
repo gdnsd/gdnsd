@@ -66,7 +66,7 @@ typedef struct {
     unsigned max_cname_depth;
     unsigned max_addtl_rrsets;
     unsigned zones_rfc1035_auto_interval;
-    unsigned zones_rfc1035_auto_quiesce;
+    unsigned zones_rfc1035_quiesce;
 } global_config_t;
 
 extern global_config_t gconfig;
