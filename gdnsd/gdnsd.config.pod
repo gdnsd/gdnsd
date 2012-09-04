@@ -261,9 +261,6 @@ new data by sending the daemon a C<SIGHUP> (or executing
 the "reload" command / initscript action, which sends
 SIGHUP for you).
 
-The following two parameters tweak the timing behavior of
-the auto mode.
-
 =item B<zones_rfc1035_auto_interval>
 
 Integer seconds, default 31, min 10, max 600.  Only applies when
@@ -278,8 +275,7 @@ C<inotify()> failures.
 
 =item B<zones_rfc1035_quiesce>
 
-Integer seconds, default 5, min 3, max 60.  Only applies when
-C<zones_rfc1035_auto> is C<true>.
+Integer seconds, default 5, min 3, max 60.
 
 When a change is detected, this value is used
 as a quiescence timer before actually processing the change.
