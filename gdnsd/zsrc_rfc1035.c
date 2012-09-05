@@ -29,15 +29,15 @@
 
 #include "ztree.h"
 
-#if USE_INOTIFY
-
-#include <sys/inotify.h>
-
 // IFF gconfig.zones_rfc1035_strict_startup is true,
 //   this flag will be temporarily set to true during
 //   the initial scan, then set back to false, making
 //   zonefile parsing errors fatal for the initial scan.
 static bool fail_fatally = false;
+
+#if USE_INOTIFY
+
+#include <sys/inotify.h>
 
 // this is set true once at startup if applicable
 static bool using_inotify = false;
