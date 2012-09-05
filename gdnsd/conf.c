@@ -81,7 +81,8 @@ global_config_t gconfig = {
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
     .zones_rfc1035_auto_interval = 31U,
-    .zones_rfc1035_quiesce = 5U,
+    .zones_rfc1035_quiesce = 5.0,
+    .zones_rfc1035_min_quiesce = 0.0,
 };
 
 F_NONNULL
@@ -195,17 +196,17 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
         } \
     } while(0)
 
-#define CFG_OPT_UINT_FAKEMIN(_opt_set, _gconf_loc, _min, _max) \
+#define CFG_OPT_DBL(_opt_set, _gconf_loc, _min, _max) \
     do { \
         const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
-            unsigned long _val; \
+            double _val; \
             if(!vscf_is_simple(_opt_setting) \
-            || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
-                log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val > _max) \
-                log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
-            gconfig._gconf_loc = (unsigned) _val; \
+            || !vscf_simple_get_as_double(_opt_setting, &_val)) \
+                log_fatal("Config option %s: Value must be a valid floating-point number", #_gconf_loc); \
+            if(_val < _min || _val > _max) \
+                log_fatal("Config option %s: Value out of range (%.3g, %.3g)", #_gconf_loc, _min, _max); \
+            gconfig._gconf_loc = _val; \
         } \
     } while(0)
 
@@ -508,20 +509,14 @@ void conf_load(void) {
         //   bound below the 2s mark, as it could cause us to miss fast
         //   events on filesystems with 1-second mtime resolution.
         CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
-        CFG_OPT_UINT_FAKEMIN(options, zones_rfc1035_quiesce, 3LU, 60LU);
+        CFG_OPT_DBL(options, zones_rfc1035_min_quiesce, 0.0, 5.0);
+        CFG_OPT_DBL(options, zones_rfc1035_quiesce, 0.0, 60.0);
         CFG_OPT_STR(options, username);
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
         http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate(options, true, bad_key, (void*)"options");
-    }
-
-    if(gconfig.zones_rfc1035_quiesce < 3U) {
-        if(!gconfig.zones_rfc1035_quiesce)
-            log_err("zones_rfc1035_quiesce is set to ZERO.  This is only intended for internal testsuite usage!  This is unsupported in the real world and should not be used!");
-        else
-            log_fatal("zones_rfc1035_quiesce values below 3 are not legal!");
     }
 
     // set response string for CHAOS queries

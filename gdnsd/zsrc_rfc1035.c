@@ -24,8 +24,11 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include "ztree.h"
 
@@ -34,6 +37,15 @@
 //   the initial scan, then set back to false, making
 //   zonefile parsing errors fatal for the initial scan.
 static bool fail_fatally = false;
+
+// quiesce time values.
+// these are configurable via zones_rfc1035_min_quiesce
+//   and zones_rfc1035_quiesce, respectively, but the first
+//   may be adjusted upwards depending on compile-/run-
+//   time detected OS/Filesystem constraints, and the latter
+//   will always be adjusted (if necessary) to be >= the former.
+static double min_quiesce = 1.02;
+static double full_quiesce = 5.0;
 
 #if USE_INOTIFY
 
@@ -78,9 +90,9 @@ static const char RFC1035_DIR[] = "etc/zones/";
 //   to indicate an invalid zonefile (e.g. the pathname is
 //   a subdirectory, a socket, a softlink, etc...)
 typedef struct {
-    time_t m; // st.st_mtime
-    ino_t i;  // st.st_inode
-    dev_t d;  // st.st_dev
+    uint64_t m; // see ztree.h
+    ino_t i;    // st.st_inode
+    dev_t d;    // st.st_dev
 } statcmp_t;
 
 static bool statcmp_eq(statcmp_t* a, statcmp_t* b) {
@@ -141,7 +153,7 @@ static void statcmp_set(const char* full_fn, statcmp_t* out) {
     struct stat st;
     int lstat_rv = lstat(full_fn, &st);
     if(likely(!lstat_rv && S_ISREG(st.st_mode))) {
-        out->m = st.st_mtime;
+        out->m = get_extended_mtime(&st);
         out->i = st.st_ino;
         out->d = st.st_dev;
     }
@@ -339,10 +351,10 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
             statcmp_t post_check;
             statcmp_set(zf->full_fn, &post_check);
             if(!statcmp_eq(&zf->pending, &post_check)) {
-                log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed during zonefile parsing, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_quiesce);
+                log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed during zonefile parsing, restarting timer for %.3g seconds...", zf->fn, full_quiesce);
                 if(z)
                      zone_delete(z);
-                ev_timer_set(timer, gconfig.zones_rfc1035_quiesce, 0.);
+                ev_timer_set(timer, full_quiesce, 0.);
                 ev_timer_start(loop, timer);
             }
             else {
@@ -366,8 +378,8 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
         }
     }
     else {
-        log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer for %u seconds...", zf->fn, gconfig.zones_rfc1035_quiesce);
-        ev_timer_set(timer, gconfig.zones_rfc1035_quiesce, 0.);
+        log_debug("rfc1035: zonefile '%s' quiesce timer: lstat() changed again, restarting timer for %.3g seconds...", zf->fn, full_quiesce);
+        ev_timer_set(timer, full_quiesce, 0.);
         ev_timer_start(loop, timer);
     }
 }
@@ -410,10 +422,10 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
         current_zft->generation = generation;
         if(current_zft->pending_event) { // we already had a pending change
             if(!statcmp_eq(&newstat, &current_zft->pending)) { // but it changed again!
-                log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %u secs for further changes...", current_zft->fn, gconfig.zones_rfc1035_quiesce);
+                log_debug("rfc1035: Change detected for already-pending zonefile '%s', delaying %.3g secs for further changes...", current_zft->fn, full_quiesce);
                 memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
                 ev_timer_stop(loop, current_zft->pending_event);
-                ev_timer_set(current_zft->pending_event, gconfig.zones_rfc1035_quiesce, 0.);
+                ev_timer_set(current_zft->pending_event, full_quiesce, 0.);
                 ev_timer_start(loop, current_zft->pending_event);
             }
             // else (if pending state has not changed) let timer continue as it was...
@@ -421,9 +433,9 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
         }
         else if(!statcmp_eq(&newstat, &current_zft->loaded)) { // initial change detected
             if(statcmp_nx(&current_zft->loaded))
-                log_debug("rfc1035: New zonefile '%s', delaying %.2g secs for further changes...", current_zft->fn, initial_quiesce_time);
+                log_debug("rfc1035: New zonefile '%s', delaying %.3g secs for further changes...", current_zft->fn, initial_quiesce_time);
             else
-                log_debug("rfc1035: New change detected for stable zonefile '%s', delaying %.2g secs for further changes...", current_zft->fn, initial_quiesce_time);
+                log_debug("rfc1035: New change detected for stable zonefile '%s', delaying %.3g secs for further changes...", current_zft->fn, initial_quiesce_time);
             memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
             current_zft->pending_event = malloc(sizeof(ev_timer));
             ev_timer_init(current_zft->pending_event, quiesce_check, initial_quiesce_time, 0.);
@@ -475,7 +487,7 @@ static void check_missing(struct ev_loop* loop) {
         if(SLOT_REAL(zf)) {
             if(zf->generation != generation) {
                 log_debug("rfc1035: check_missing() found deletion of zonefile '%s', triggering process_zonefile()", zf->fn);
-                process_zonefile(zf->fn, loop, gconfig.zones_rfc1035_quiesce);
+                process_zonefile(zf->fn, loop, full_quiesce);
             }
         }
     }
@@ -485,7 +497,7 @@ F_NONNULL
 static void do_scandir(struct ev_loop* loop) {
     dmn_assert(loop);
     generation++;
-    scan_dir(loop, gconfig.zones_rfc1035_quiesce);
+    scan_dir(loop, full_quiesce);
     check_missing(loop);
 }
 
@@ -667,10 +679,10 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
         // Note that in any case, any time a quiesce period gets overlapped by a double-change
         //   to a single pathname, the second change *will* fall back to the longer, configured
         //   quiesce period, even if the final event was one of the "fast quiesce" ones above.
-        double quiesce_time = 1.02; // fast reload on "normal" events
+        double delay = min_quiesce; // fast reload on "normal" events
         if(emask & (IN_CREATE|IN_MODIFY|IN_CLOSE_WRITE|IN_ATTRIB))
-            quiesce_time = gconfig.zones_rfc1035_quiesce;
-        process_zonefile(fname, loop, quiesce_time);
+            delay = full_quiesce;
+        process_zonefile(fname, loop, delay);
     }
 
     return rv;
@@ -720,13 +732,72 @@ static void inotify_initial_run(struct ev_loop* loop V_UNUSED) {
     log_fatal("rfc1035: inotify code called in non-inotify build???");
 }
 
+#endif // not-inotify
+
+#ifndef O_SYNC
+#define O_SYNC 0
 #endif
+
+F_UNUSED F_NONNULL
+static uint64_t try_zone_mtime(const char* testfn) {
+    int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR);
+    if(fd < 0)
+        log_fatal("rfc1035: failed to open %s: %s", testfn, logf_errno());
+    if(9 != write(fd, "testmtime", 9))
+        log_fatal("rfc1035: failed to write 9 bytes to %s: %s", testfn, logf_errno());
+    if(close(fd))
+        log_fatal("rfc1035: failed to close %s: %s", testfn, logf_errno());
+    struct stat st;
+    if(lstat(testfn, &st))
+        log_fatal("rfc1035: failed to lstat %s: %s", testfn, logf_errno());
+    if(unlink(testfn))
+        log_fatal("rfc1035: failed to unlink %s: %s", testfn, logf_errno());
+    return get_extended_mtime(&st);
+}
+
+static void set_quiesce(void) {
+    double sys_min_quiesce = 1.02; // portable default
+
+#if has_mtimens // ztree.h, no point trying if no nanoseconds in stat
+    // The idea here is to touch a file and grab the high-res
+    //   mtime 5 times in a row (with a small sleep between each),
+    //   attempts to see whether the <10ms numbers are consistently zero.
+    char* testfn = str_combine(RFC1035_DIR, ".mtime_test", NULL);
+    const struct timespec nsdelay = { 0, 2765432 }; // ~2.7ms
+    unsigned attempts = 5;
+    while(attempts--) {
+        const uint64_t mt = try_zone_mtime(testfn);
+        if(mt % 10000000) { // apparent precision better than 10ms
+            sys_min_quiesce = 0.01; // set to 10ms
+            break;
+        }
+        nanosleep(&nsdelay, NULL);
+    }
+    free(testfn);
+#endif // has_mtimens
+
+    min_quiesce = (sys_min_quiesce > gconfig.zones_rfc1035_min_quiesce)
+        ? sys_min_quiesce
+        : gconfig.zones_rfc1035_min_quiesce;
+    full_quiesce = (min_quiesce > gconfig.zones_rfc1035_quiesce)
+        ? min_quiesce
+        : gconfig.zones_rfc1035_quiesce;
+    log_info("rfc1035: quiescence times are %.3g min, %.3g full", min_quiesce, full_quiesce);
+
+    // undocumented env var to speed startup for the testsuite on slow filesystems,
+    //   which is ok if we don't plan to test dynamic changes to the zonefiles
+    if(getenv("GDNSD_TESTSUITE_NO_ZONEFILE_MODS")) {
+        log_warn("rfc1035: fast testsuite mode activited via env var!");
+        full_quiesce = min_quiesce = 0.0;
+    }
+}
 
 /*************************/
 /*** Public interfaces ***/
 /*************************/
 
 void zsrc_rfc1035_load_zones(void) {
+    set_quiesce();
     if(gconfig.zones_rfc1035_auto) {
         set_inotify();
         if(using_inotify)
@@ -735,7 +806,7 @@ void zsrc_rfc1035_load_zones(void) {
     if(gconfig.zones_rfc1035_strict_startup)
         fail_fatally = true;
     struct ev_loop* temp_load_loop = ev_loop_new(EVFLAG_AUTO);
-    scan_dir(temp_load_loop, 0);
+    scan_dir(temp_load_loop, min_quiesce);
     ev_run(temp_load_loop, 0);
     ev_loop_destroy(temp_load_loop);
     free(reload_timer);

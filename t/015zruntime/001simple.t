@@ -7,6 +7,9 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 14;
 
+# slow-start on slow-fs for change detection accuracy
+delete $ENV{GDNSD_TESTSUITE_NO_ZONEFILE_MODS};
+
 my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
 
 # example.com exists from the start

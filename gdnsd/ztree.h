@@ -26,6 +26,25 @@
 #include <inttypes.h>
 #include "ltarena.h"
 
+// high-res mtime stuff, for zsrc_*.c to use internally...
+#if defined HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
+#  define get_mtimens(_xst) ((_xst).st_mtim.tv_nsec)
+#  define has_mtimens 1
+#elif defined HAVE_STRUCT_STAT_ST_MTIMESPEC_TV_NSEC
+#  define get_mtimens(_xst) ((_xst).st_mtimespec.tv_nsec)
+#  define has_mtimens 1
+#elif defined HAVE_STRUCT_STAT_ST_MTIMENSEC
+#  define get_mtimens(_xst) ((_xst).st_mtimensec)
+#  define has_mtimens 1
+#else
+#  define get_mtimens(_xst) 0
+#  define has_mtimens 0
+#endif
+static inline uint64_t get_extended_mtime(const struct stat* st) {
+    return (((uint64_t)st->st_mtime) * 1000000000ULL)
+        + (uint64_t)get_mtimens(*st);
+}
+
 // mutually-dependent stuff between zone.h and ltree.h
 struct _zone_struct;
 typedef struct _zone_struct zone_t;
@@ -35,7 +54,8 @@ typedef struct _zone_struct zone_t;
 struct _zone_struct {
     unsigned hash;        // hash of dname
     unsigned serial;      // SOA serial from zone data
-    time_t mtime;         // mod time of source
+    uint64_t mtime;       // mod time of source as uint64_t nanoseconds unix-time
+                          //    (use get_extended_mtime() above if src is struct stat!)
     char* src;            // string description of src, e.g. "rfc1035:example.com"
     const uint8_t* dname; // zone name as a dname (stored in ->arena)
     ltarena_t* arena;     // arena for dname/label storage

@@ -290,24 +290,45 @@ faster detection with less overhead.  In the C<inotify()> case, the
 interval is used only occasionally when recovering from temporary
 C<inotify()> failures.
 
+=item B<zones_rfc1035_min_quiesce>
+
+Floating-point seconds, default 0.0, min 0.0, max 5.0
+
+This short-duration quiescence timeout applies to certain
+internal cases when validating zonefile update activity.
+(Specifically: delays after C<inotify()> events for atomic
+move/delete and delayed initial zonefile loading on
+daemon startup).
+
+At daemon start, a heuristic test will determine whether
+we can use a faster 0.01s or the default 1.02s as
+a basic sane minimum for the zones filesystem, and this
+config setting will be adjusted upwards to the detected
+minimum as necessary.
+
+Most users should not need to mess with this setting! The
+only reason to do so would be if you suspected operating
+system or filesystem bugs related to high-res mtimes (or
+bugs so severe that even 1-second mtime resolution isn't
+reliable, in which case you might want to try values in
+the 3-5s range, or just find a new FS and/or OS...).
+
 =item B<zones_rfc1035_quiesce>
 
-Integer seconds, default 5, min 3, max 60.
+Floating-point seconds, default 5.0, min 0.0, max 60.0
 
-When a change is detected, this value is used
-as a quiescence timer before actually processing the change.
+This timer is related to the above, but is used in cases
+where we're not only worried about filesystem-level timestamp
+accuracy, but also waiting out additional intentional actions
+by scripts, programs, or users which might be actively modifying
+a zonefile.  It applies to all changes detected via SIGHUP
+or periodic automatic scanning, and to C<inotify()> events
+which do not indicate atomic operations (e.g. create/write/close,
+rather than move/delete).
 
-If the source changes while the quiescence timer is counting down, the
-counter will be reset.  Only after the zone data source has stabilized
-for the full period of this timeout (plus the time to actually load the
-data) will the new data be loaded and presented for runtime queries.
-
-When not using C<inotify()>, this quiesce period applies to all
-detected changes.  In the C<inotify()> case, however, certain types
-of change activity which generally result from consistent atomic
-operations (e.g. mv/rename new zone data into place, unlink zonefile)
-will quiesce in 1.02 seconds instead of waiting for e.g. further
-write traffic like the general case.
+If the value specified is less than the final runtime value
+of C<zones_rfc1035_min_quiesce> above, it will be adjusted
+upwards to that minimum value for correct operation.
 
 =item B<lock_mem>
 

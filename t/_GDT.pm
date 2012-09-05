@@ -81,6 +81,12 @@ our $ALTZONES_IN;
     }
 }
 
+# this makes gdnsd start faster on low-res filesystems,
+#   individual scripts which actually test runtime
+#   zone data changes must disable this for the
+#   tests to work accurately!
+$ENV{GDNSD_TESTSUITE_NO_ZONEFILE_MODS} = 1;
+
 our $TEST_RUNNER = "";
 if($ENV{TEST_RUNNER}) {
     $TEST_RUNNER = $ENV{TEST_RUNNER};

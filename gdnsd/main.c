@@ -150,8 +150,9 @@ static void* zone_data_runtime(void* unused V_UNUSED) {
     struct ev_loop* zdata_loop = ev_loop_new(EVFLAG_AUTO);
     if(!zdata_loop)
         log_fatal("Could not initialize the zone data libev loop");
-    ev_set_timeout_collect_interval(zdata_loop, 0.1);
-    ev_set_io_collect_interval(zdata_loop, 0.05);
+    // nothing happens faster than 10ms here...
+    ev_set_timeout_collect_interval(zdata_loop, 0.01);
+    ev_set_io_collect_interval(zdata_loop, 0.01);
 
     zsrc_djb_runtime_init(zdata_loop);
     zsrc_rfc1035_runtime_init(zdata_loop);

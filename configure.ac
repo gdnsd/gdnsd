@@ -72,6 +72,11 @@ AC_SUBST([MATH_LIB])
 dnl posix_fadvise to readahead on zonefiles
 AC_CHECK_FUNCS([posix_fadvise])
 
+dnl high-precision mtime from struct stat
+AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])
+AC_CHECK_MEMBERS([struct stat.st_mtimespec.tv_nsec])
+AC_CHECK_MEMBERS([struct stat.st_mtimensec])
+
 dnl *mmsg for Linux
 HAS_SENDMMSG=0
 AC_CHECK_FUNCS([sendmmsg],[HAS_SENDMMSG=1])
