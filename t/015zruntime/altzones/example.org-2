@@ -3,3 +3,4 @@
 @ NS ns2
 ns1 A 192.0.2.32
 ns2 A 192.0.2.42
+www 5 DYNA reflect

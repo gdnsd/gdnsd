@@ -5,7 +5,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 13;
+use Test::More tests => 14;
 
 my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
 
@@ -63,6 +63,12 @@ _GDT->test_log_output('Zone example.org.: source rfc1035:example.org with serial
 _GDT->test_dns(
     qname => 'ns1.example.org', qtype => 'A',
     answer => 'ns1.example.org 86400 A 192.0.2.32',
+);
+# new one also has a reflect plugin result
+_GDT->test_dns(
+    qname => 'www.example.org', qtype => 'A',
+    answer => 'www.example.org 5 A 127.0.0.1',
+    v4_only => 1
 );
 
 _GDT->test_kill_daemon($pid);
