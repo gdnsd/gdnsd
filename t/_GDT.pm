@@ -251,6 +251,7 @@ sub check_stats {
 }
 
 our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
+our $INOTIFY_ENABLED = 0;
 
 sub spawn_daemon {
     my ($class, $cfgfile, $geoip_data) = @_;
@@ -338,6 +339,7 @@ sub spawn_daemon {
                 or die "Cannot open '$daemon_out' for reading: $!";
             my $is_listening;
             while(<$GDOUT_FH>) {
+                $INOTIFY_ENABLED = 1 if /\Qrfc1035: will use inotify for zone change detection\E$/;
                 return $pid if /\Qinfo: DNS listeners started\E$/;
             }
             close($GDOUT_FH)
@@ -372,9 +374,11 @@ sub test_spawn_daemon {
 
 ##### START RELOAD STUFF
 
-sub send_sighup {
-    kill(1, $saved_pid)
-        or die "Cannot send SIGHUP to gdnsd at pid $saved_pid";
+sub send_sighup_unless_inotify {
+    if(!$INOTIFY_ENABLED) {
+        kill(1, $saved_pid)
+            or die "Cannot send SIGHUP to gdnsd at pid $saved_pid";
+    }
 }
 
 sub test_log_output {
