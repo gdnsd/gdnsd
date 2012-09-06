@@ -811,7 +811,7 @@ void zsrc_rfc1035_load_zones(void) {
     ev_loop_destroy(temp_load_loop);
     free(reload_timer);
     fail_fatally = false;
-    if(atexit(unload_zones))
+    if(dmn_get_debug() && atexit(unload_zones))
         log_fatal("rfc1035: atexit(unload_zones) failed: %s", logf_errno());
 }
 
