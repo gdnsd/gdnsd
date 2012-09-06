@@ -485,6 +485,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             log_debug("ztree_update: deleting data for zone %s from src %s", logf_dname(z_old->dname), z_old->src);
             if(this_zt->zones_len == 1) {
                 new_list = NULL;
+                this_zt->zones_len = 0;
                 log_info("Zone %s: authoritative source %s with serial %u removed (zone no longer exists)", logf_dname(z_old->dname), z_old->src, z_old->serial);
                 if(!hiding_zone)
                     ztree_report_revealed_subzones(this_zt, z_old->dname);
@@ -499,6 +500,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
                     else
                        new_list[i] = old_list[j];
                 }
+                this_zt->zones_len--;
                 if(old_head == z_old)
                     log_info("Zone %s: authoritative source %s with serial %u removed (extant source %s with serial %u promoted to authoritative)", logf_dname(z_old->dname), z_old->src, z_old->serial, new_list[0]->src, new_list[0]->serial);
                 else
