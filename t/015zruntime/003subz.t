@@ -57,10 +57,10 @@ _GDT->test_dns(
 _GDT->delete_altzone('example.com');
 _GDT->send_sighup_unless_inotify();
 _GDT->test_log_output('Zone example.com.: authoritative source rfc1035:example.com with serial 1 removed (zone no longer exists)');
-_GDT->test_log_output('Zone s2.example.com.: subzone unhidden due to removal of parent zone example.com.');
-# both of these lines should be present, but there is no ordering gaurantee,
-#   so we cannot reliably test for both:
-# _GDT->test_log_output('Zone s1.example.com.: subzone unhidden due to removal of parent zone example.com.');
+_GDT->test_log_output([
+    'Zone s2.example.com.: subzone unhidden due to removal of parent zone example.com.',
+    'Zone s1.example.com.: subzone unhidden due to removal of parent zone example.com.',
+]);
 
 # now s1/s2 are visible
 _GDT->test_dns(
@@ -91,9 +91,10 @@ _GDT->test_dns(
 _GDT->insert_altzone('example.com', 'example.com');
 _GDT->send_sighup_unless_inotify();
 _GDT->test_log_output('Zone example.com.: source rfc1035:example.com with serial 1 loaded as authoritative');
-_GDT->test_log_output('Zone s1.example.com.: is now a hidden subzone of new parent zone example.com.');
-# again, both, but can only check one due to random ordering...
-# _GDT->test_log_output('Zone s2.example.com.: is now a hidden subzone of new parent zone example.com.');
+_GDT->test_log_output([
+    'Zone s1.example.com.: is now a hidden subzone of new parent zone example.com.',
+    'Zone s2.example.com.: is now a hidden subzone of new parent zone example.com.',
+]);
 
 # example.com is back
 _GDT->test_dns(
@@ -130,9 +131,10 @@ _GDT->test_log_output('Zone s2.example.com.: authoritative source rfc1035:s2.exa
 _GDT->delete_altzone('example.com');
 _GDT->send_sighup_unless_inotify();
 _GDT->test_log_output('Zone example.com.: authoritative source rfc1035:example.com with serial 1 removed (zone no longer exists)');
-_GDT->test_log_output('Zone s3.s2.example.com.: subzone unhidden due to removal of parent zone example.com.');
-# again, can't check both, but this output should be there too:
-# _GDT->test_log_output('Zone s1.example.com.: subzone unhidden due to removal of parent zone example.com.');
+_GDT->test_log_output([
+    'Zone s3.s2.example.com.: subzone unhidden due to removal of parent zone example.com.',
+    'Zone s1.example.com.: subzone unhidden due to removal of parent zone example.com.',
+]);
 
 # Now only s1 and s3.2 exist, and both should lookup correctly
 _GDT->test_dns(

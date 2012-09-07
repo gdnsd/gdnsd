@@ -382,22 +382,39 @@ sub send_sighup_unless_inotify {
 }
 
 sub test_log_output {
-    my ($class, $text) = @_;
+    my ($class, $texts_in) = @_;
+
+    $texts_in = [ $texts_in ] unless ref $texts_in;
+
+    # convert to hash for deletions...
+    my $i = 0;
+    my $texts = { map { $i++ => $_ } @$texts_in };
 
     my $ok = 0;
     my $retry_delay = $TEST_RUNNER ? 0.5 : 0.1;
     my $retry = 100;
-    while($retry--) {
-        while(<$GDOUT_FH>) {
-            if($_ =~ /\Q$text\E/) {
-                Test::More::ok(1);
-                return;
+    while(scalar(keys %$texts) && $retry--) {
+        while(scalar(keys %$texts) && ($_ = <$GDOUT_FH>)) {
+            foreach my $k (keys %$texts) {
+                my $this_text = $texts->{$k};
+                if($_ =~ /\Q$this_text\E/) {
+                    delete $texts->{$k};
+                    last;
+                }
             }
         }
         select(undef, undef, undef, $retry_delay);
     }
-    Test::More::ok(0);
-    Test::More::diag("Failed to match string '$text' in daemon output in a reasonable timeframe");
+
+    if(!scalar(keys %$texts)) {
+        Test::More::ok(1);
+    }
+    else {
+        Test::More::ok(0);
+        foreach my $v (values %$texts) {
+            Test::More::diag("Failed to match log output '$v' in a reasonable timeframe");
+        }
+    }
 }
 
 sub insert_altzone {
