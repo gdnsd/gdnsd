@@ -53,13 +53,13 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("rfc1035: Zone '%s': Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount,__VA_ARGS__);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount,__VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("rfc1035: Zone '%s': Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount);\
         siglongjmp(z->jbuf, 1);\
     } while(0)
 
