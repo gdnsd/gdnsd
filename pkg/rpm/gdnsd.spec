@@ -1,6 +1,6 @@
 Summary: Authoritative DNS Server
 Name: gdnsd
-Version: 1.6.8
+Version: 1.6.9
 Release: 1%{?dist}
 License: GPLv3+
 Group: System Environment/Daemons
