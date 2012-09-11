@@ -129,6 +129,7 @@ static pid_t startup_pidrace(const char* pidfile, const bool restart) {
         dmn_log_fatal("fcntl(%s, F_SETDF, FD_CLOEXEC) failed: %s", pidfile, dmn_strerror(errno));
 
     if(restart) {
+        dmn_log_info("restart: Stopping previous daemon instance, if any");
         struct timeval tv;
         unsigned tries = 1;
         unsigned maxtries = 10;
@@ -142,10 +143,10 @@ static pid_t startup_pidrace(const char* pidfile, const bool restart) {
             tv.tv_usec = 100000 * tries;
             select(0, NULL, NULL, NULL, &tv);
         }
-        dmn_log_fatal("Could not restart: failed to shut down previous instance and acquire pidfile lock");
+        dmn_log_fatal("restart: failed, cannot shut down previous instance and acquire pidfile lock");
     }
     else if(check_pidfile(pidfile) || pidrace_inner(pid, pidfd)) {
-        dmn_log_fatal("Could not start: another instance of this daemon is already running");
+        dmn_log_fatal("start: failed, another instance of this daemon is already running");
     }
 
     return pid;
