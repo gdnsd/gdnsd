@@ -740,7 +740,7 @@ static void inotify_initial_run(struct ev_loop* loop V_UNUSED) {
 
 F_UNUSED F_NONNULL
 static uint64_t try_zone_mtime(const char* testfn) {
-    int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR);
+    int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR, 0644);
     if(fd < 0)
         log_fatal("rfc1035: failed to open %s: %s", testfn, logf_errno());
     if(9 != write(fd, "testmtime", 9))
