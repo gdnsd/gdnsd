@@ -1,3 +1,25 @@
+1.7.2 - 2012-09-11
+    THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
+      HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
+      stable release, and 1.8.x will be the future stable release
+      containing these changes.
+    The zones_rfc1035_* config options changed in name and function
+      a bit, see the docs.
+    A lot of new tests were added for the new runtime zone
+      (re-)loading code
+    A bunch of syslog output was added to help document what's
+      happening with the zone (re-)loading and unloading process
+      at runtime as it's happening.
+    The data root directory (as well as its basic subdirectories)
+      will now be created on startup if missing.  The parent of
+      the data root must already exist, though.  When data root
+      is created for you, you're on a completely default
+      configuration with no authoritative zones being served
+      (all queries REFUSED), but it will automatically load
+      and begin serving any zonefiles you drop into the etc/zones
+      subdir while it's running.
+    Several bugfixes over 1.7.1
+
 1.7.1 - 2012-09-01
     THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
       HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
