@@ -84,6 +84,16 @@
       for automatic results.
     Innumerable smaller fixes and updates...
 
+1.6.9 - 2012-09-11
+    Slight improvements to daemonization: better syslog/stderr
+      messages in some cases, and all messages related to
+      any immediate failure on daemon startup attempt
+      should be reflected in stderr (before, sometimes they
+      would only go to syslog, even though the outer
+      process exited non-zero correctly to indicate the
+      problem).
+    Fixed a testsuite compatibility bug with Net::DNS 0.68
+
 1.6.8 - 2012-08-17
     Pidfile/Initscript/Daemonization bugfixes (many thanks
       to Timo Teräs for bringing them up and walking me
