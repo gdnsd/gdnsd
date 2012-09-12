@@ -11,12 +11,12 @@ gdnsd-plugin-api - How to write gdnsd plugin code
 
   Callback hooks you may implement (all are optional, and executed in this order):
     -- startup/config stuff:
+    # only 'checkconf', 'start', 'restart', 'condrestart' invoke plugin callbacks at all
     monio_list_t* plugin_foo_load_config(const vscf_data_t* pc)
     void plugin_foo_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
-    # only 'checkconf', 'start', 'restart' continue past this point
     void plugin_foo_full_config(unsigned num_threads)
     void plugin_foo_add_monitor(const char* svc_name, monio_smgr_t* smgr)
-    # only 'start' and 'restart' continue past this point
+    # only 'start', 'restart', and 'condrestart' continue past this point
     void plugin_foo_pre_privdrop(void)
     void plugin_foo_init_monitors(struct ev_loop* mon_loop)
     void plugin_foo_start_monitors(struct ev_loop* mon_loop)
@@ -190,11 +190,11 @@ once.
 =head2 CONFIGURATION
 
 Anytime the gdnsd binary is executed (assuming there is no immediate error in
-parsing the commandline arguments), it will load the gdnsd configuration file.
-This includes when it is invoked for simple control of another running daemon
-instance, such as the actions C<stop>, or C<restart>.  This is
-because things like the default location of the pidfile can be overridden in
-the config.
+parsing the commandline arguments), if (and only if) the action is C<checkconf>,
+or one of the startup actions (C<start>, C<restart>, C<condrestart>), it will
+load the gdnsd configuration file.  Other actions (such as C<stop> or C<status>)
+do not load the daemon config file, and do not load plugins or invoke their
+callbacks.
 
 As soon as the configuration file as a whole has been validated and loaded,
 gdnsd goes about setting various internal parameters from this
@@ -227,18 +227,15 @@ C<plugin_foo_load_config()> calls will be processed, which results in
 per-address callbacks to monitoring plugins' C<plugin_foo_add_monitor()>.
 This is when a monitoring plugin sets up per-address data structures.
 
-Assuming the daemon continues beyond this point (C<checkconf>, C<start>,
-C<restart> actions), the next callback will be C<plugin_foo_full_config()>.
-If you have expensive post-load_config operations
-to perform (such as loading large databases into memory), this is the time to
-do them.  If you believe anything in your configuration could lead to a fatal
-startup error in later callbacks, it would be best to validate that condition
-now.  The sole argument provided to this callback is num_threads, which is the
-total count of I/O threads that will exist at runtime, in case you need it in
-order to allocate per-thread data.  They are numbered from zero to
-num_threads - 1.  The thread number of the calling thread will be passed to
-to other relevant callbacks later, when they are executed in I/O thread
-context.
+The next callback will be C<plugin_foo_full_config()>.  This is an ideal
+time for a monitoring plugin to do any global config/setup operations
+that need to happen after all C<plugin_foo_add_monitor()>, or for a resolver
+plugin to initialize per-iothread data.  The sole argument provided to this
+callback is num_threads, which is the total count of I/O threads that will
+exist at runtime, in case you need it in order to allocate per-thread data.
+They are numbered from zero to num_threads - 1.  The thread number of the
+calling thread will be passed to to other relevant callbacks later, when
+they are executed in I/O thread context.
 
 After full_config, the daemon loads and parses all zonefiles, constructing the
 internal runtime DNS database.  During the zonefile loading phase, when it
