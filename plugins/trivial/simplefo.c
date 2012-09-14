@@ -134,9 +134,9 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
 
         as->states[which] = malloc(sizeof(monio_state_t) * num_svcs);
         for(unsigned j = 0; j < num_svcs; j++) {
-            char* desc = malloc(strlen(resname) + 6 + strlen(which_str_mon[which]) + strlen(svc_names[j]) + 1);
+            char* desc = malloc(strlen(resname) + 5 + strlen(which_str_mon[which]) + strlen(svc_names[j]) + 1);
             strcpy(desc, resname);
-            strcat(desc, ipv6 ? "/ipv6/" : "/ipv4/");
+            strcat(desc, ipv6 ? "/ipv6" : "/ipv4");
             strcat(desc, which_str_mon[which]);
             strcat(desc, svc_names[j]);
             monio_add(svc_names[j], desc, addr_txt, &as->states[which][j]);
