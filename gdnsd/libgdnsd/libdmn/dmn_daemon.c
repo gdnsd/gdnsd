@@ -126,7 +126,7 @@ static pid_t startup_pidrace(const char* pidfile, const bool restart) {
     if(pidfd == -1)
         dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", pidfile, dmn_strerror(errno));
     if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(%s, F_SETDF, FD_CLOEXEC) failed: %s", pidfile, dmn_strerror(errno));
+        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", pidfile, dmn_strerror(errno));
 
     if(restart) {
         dmn_log_info("restart: Stopping previous daemon instance, if any");
