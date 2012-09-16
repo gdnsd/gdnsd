@@ -137,6 +137,17 @@ void dmn_init_log(void);
 DMN_F_NONNULL
 void dmn_start_syslog(const char* logname);
 
+// special API for extmon helper.  Sets up
+//   logging stderr output via an already-open
+//   fd, to be stopped later via dmn_log_close_strerr()
+void dmn_log_set_alt_stderr(const int fd);
+
+// closes stderr logging via alternate descriptor...
+void dmn_log_close_alt_stderr(void);
+
+// get fd number of open alt_stderr, for passing to a child...
+int dmn_log_get_alt_stderr_fd(void);
+
 // This is a syslog()-like interface that will log
 //  to stderr and/or syslog as appropriate depending
 //  on daemon lifecycle, and is thread-safe.

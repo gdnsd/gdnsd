@@ -215,8 +215,6 @@ void dmn_daemonize(const char* pidfile, const bool restart) {
     status_finish_fd = statuspipe[1];
 }
 
-void _dmn_close_alt_stderr(void); // from dmn_log.c, private-ish
-
 void dmn_daemonize_finish(void) {
     dmn_assert(status_finish_fd != -1);
 
@@ -231,7 +229,7 @@ void dmn_daemonize_finish(void) {
     // this shuts off our saved copy of stderr, which
     //  was kept open to inform the outer process/user
     //  of late initialzation failures post-daemonization.
-    _dmn_close_alt_stderr();
+    dmn_log_close_alt_stderr();
 }
 
 pid_t dmn_status(const char* pidfile) { dmn_assert(pidfile); return check_pidfile(pidfile); }

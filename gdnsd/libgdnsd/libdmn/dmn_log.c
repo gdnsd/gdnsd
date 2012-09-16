@@ -152,22 +152,23 @@ void dmn_start_syslog(const char* logname) {
 //   to /dev/null the real stderr, because /dev/null
 //   is gone after chroot...).
 static FILE* alt_stderr = NULL;
-static bool alt_stderr_init = false;
 void dmn_init_log(void) {
     alt_stderr = fdopen(dup(fileno(stderr)), "w");
     if(!alt_stderr) {
         perror("Failed to fdopen(dup(fileno(stderr)))");
         abort();
     }
-    if(fcntl(fileno(alt_stderr), F_SETFD, FD_CLOEXEC)) {
-        perror("fcntl(fileno(stderr_copy), F_SETFD, FD_CLOEXEC) failed");
-        abort();
-    }
-
-    alt_stderr_init = true;
 }
 
-void _dmn_close_alt_stderr(void) {
+int dmn_log_get_alt_stderr_fd(void) {
+    return fileno(alt_stderr);
+}
+
+void dmn_log_set_alt_stderr(const int fd) {
+    alt_stderr = fdopen(fd, "w");
+}
+
+void dmn_log_close_alt_stderr(void) {
     fclose(alt_stderr);
     alt_stderr = NULL;
 }
