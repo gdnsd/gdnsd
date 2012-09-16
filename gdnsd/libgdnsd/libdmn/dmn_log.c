@@ -159,8 +159,10 @@ void dmn_init_log(void) {
         perror("Failed to fdopen(dup(fileno(stderr)))");
         abort();
     }
-    if(fcntl(fileno(alt_stderr), F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(fileno(stderr_copy), F_SETFD, FD_CLOEXEC) failed: %s", dmn_strerror(errno));
+    if(fcntl(fileno(alt_stderr), F_SETFD, FD_CLOEXEC)) {
+        perror("fcntl(fileno(stderr_copy), F_SETFD, FD_CLOEXEC) failed");
+        abort();
+    }
 
     alt_stderr_init = true;
 }
