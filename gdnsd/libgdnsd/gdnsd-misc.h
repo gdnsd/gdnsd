@@ -23,6 +23,15 @@
 #include <gdnsd-compiler.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+// cleanup path_in via realpath() (symlink / relative eliminated),
+//  returning a newly allocated string.  path_in must actually
+//  exist to succeed.
+// "desc" will be used to log errors or to log_info() the path translation.
+F_NONNULL
+char* gdnsd_realpath(const char* path_in, const char* desc);
 
 // allocate a new string, concatenating s1 + s2.
 // retval is the new string

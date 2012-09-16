@@ -55,6 +55,16 @@ static void ensure_dir(const char* dpath, const bool relative) {
     }
 }
 
+char* gdnsd_realpath(const char* path_in, const char* desc) {
+    char* out = realpath(path_in, NULL);
+    if(!out)
+        log_fatal("Cleanup/validation of %s pathname '%s' failed: %s",
+            desc, path_in, dmn_strerror(errno));
+    if(strcmp(path_in, out))
+        log_info("%s path '%s' cleaned up as '%s'", desc, path_in, out);
+    return out;
+}
+
 void gdnsd_set_rootdir(const char* rootdir_in) {
     dmn_assert(rootdir_in);
     dmn_assert(!rootdir);
@@ -62,12 +72,7 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
     // realpath() wants an extant file to reference,
     //  so we have to do our stat/mkdir on the original first
     ensure_dir(rootdir_in, false);
-    rootdir = realpath(rootdir_in, NULL);
-    if(!rootdir)
-        log_fatal("Cleanup/validation of data root pathname '%s' failed: %s", rootdir_in, dmn_strerror(errno));
-    if(strcmp(rootdir_in, rootdir))
-        log_info("Root path '%s' cleaned up as '%s'", rootdir_in, rootdir);
-
+    rootdir = gdnsd_realpath(rootdir_in, "data root");
     if(chdir(rootdir))
         log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_strerror(errno));
 
