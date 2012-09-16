@@ -28,6 +28,7 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/syscall.h>
 
 #ifndef TLS
@@ -157,8 +158,11 @@ void dmn_init_log(void) {
     if(!alt_stderr) {
         perror("Failed to fdopen(dup(fileno(stderr)))");
         abort();
-   }
-   alt_stderr_init = true;
+    }
+    if(fcntl(fileno(alt_stderr), F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(fileno(stderr_copy), F_SETFD, FD_CLOEXEC) failed: %s", dmn_strerror(errno));
+
+    alt_stderr_init = true;
 }
 
 void _dmn_close_alt_stderr(void) {
