@@ -163,6 +163,7 @@ const plugin_t* gdnsd_plugin_load(const char* pname) {
     _PSETFUNC(map_resource_dyna)
     _PSETFUNC(map_resource_dync)
     _PSETFUNC(full_config)
+    _PSETFUNC(post_daemonize)
     _PSETFUNC(pre_privdrop)
     _PSETFUNC(pre_run)
     _PSETFUNC(iothread_init)
@@ -190,6 +191,12 @@ void gdnsd_plugins_action_full_config(const unsigned num_threads) {
     for(unsigned i = 0; i < num_plugins; i++)
         if(plugins[i]->full_config)
             plugins[i]->full_config(num_threads);
+}
+
+void gdnsd_plugins_action_post_daemonize(void) {
+    for(unsigned i = 0; i < num_plugins; i++)
+        if(plugins[i]->post_daemonize)
+            plugins[i]->post_daemonize();
 }
 
 void gdnsd_plugins_action_pre_privdrop(void) {

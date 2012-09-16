@@ -478,6 +478,9 @@ int main(int argc, char** argv) {
     if(action != ACT_STARTFG)
         dmn_daemonize(PID_PATH, (action == ACT_RESTART));
 
+    // Call plugin pre-privdrop actions
+    gdnsd_plugins_action_post_daemonize();
+
     // If root, or if user explicitly set a priority...
     if(started_as_root || gconfig.priority != -21) {
         // If root and no explicit value, use -11

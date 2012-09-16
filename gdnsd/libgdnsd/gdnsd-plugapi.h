@@ -94,6 +94,7 @@ typedef int (*gdnsd_map_resource_dyna_cb_t)(const char* resname);
 typedef int (*gdnsd_map_resource_dync_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
 typedef void (*gdnsd_pre_privdrop_cb_t)(void);
+typedef void (*gdnsd_post_daemonize_cb_t)(void);
 typedef void (*gdnsd_pre_run_cb_t)(struct ev_loop* loop);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
 typedef bool (*gdnsd_resolve_dynaddr_cb_t)(unsigned threadnum, unsigned resnum, const client_info_t* cinfo, dynaddr_result_t* result);
@@ -115,6 +116,7 @@ typedef struct {
     gdnsd_full_config_cb_t full_config;
     gdnsd_map_resource_dyna_cb_t map_resource_dyna;
     gdnsd_map_resource_dync_cb_t map_resource_dync;
+    gdnsd_post_daemonize_cb_t post_daemonize;
     gdnsd_pre_privdrop_cb_t pre_privdrop;
     gdnsd_pre_run_cb_t pre_run;
     gdnsd_iothread_init_cb_t iothread_init;

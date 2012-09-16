@@ -17,6 +17,7 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     void plugin_foo_full_config(unsigned num_threads)
     void plugin_foo_add_monitor(const char* svc_name, monio_smgr_t* smgr)
     # only 'start', 'restart', and 'condrestart' continue past this point
+    void plugin_foo_post_daemonize(void)
     void plugin_foo_pre_privdrop(void)
     void plugin_foo_init_monitors(struct ev_loop* mon_loop)
     void plugin_foo_start_monitors(struct ev_loop* mon_loop)
@@ -274,14 +275,17 @@ instances.
 
 =head2 RUNTIME
 
-At this point in time, more daemon setup occurs (including the act of
-daemonization itself, which includes closing all open file descriptors).  The
-next callback you will receive is C<plugin_foo_pre_privdrop>.  This is an
-optional callback.  This is your plugin's last chance to take any actions which
+At this point in time, more daemon setup occurs, including the act of
+daemonization if applicable.  The next callback you will receive
+is C<plugin_foo_post_daemonize()>.  After that, the daemon does some
+runtime setup such as creating DNS listening sockets, etc.
+
+The next callback you will receive is C<plugin_foo_pre_privdrop>.
+This is your plugin's last chance to take any actions which
 may require special operating system privileges (such as opening low-numbered
 listening sockets, or opening most files in general).  Immediately after the
 pre_privdrop callback, the daemon will C<chroot()> itself into the configured
-data root directory and drop all privileges.
+data root directory and drop all privileges (if applicable).
 
 After dropping privileges, gdnsd will initialize (but not yet enter) the libev
 event loop which controls the primary thread of execution at runtime.  This
