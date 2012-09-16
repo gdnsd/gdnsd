@@ -513,7 +513,7 @@ int main(int argc, char** argv) {
     //  and all listening sockets are open, we can chroot and drop privs
     if(started_as_root) {
         if(need_caps) caps_pre_secure();
-        dmn_secure_me();
+        dmn_secure_me(false);
         if(need_caps) caps_post_secure();
     }
 

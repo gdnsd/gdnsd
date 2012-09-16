@@ -96,8 +96,11 @@ DMN_F_NONNULLX(1)
 void dmn_secure_setup(const char* username, const char* chroot_path);
 
 // Executes the actual chroot()/chuid()/etc calls based on previous
-//  dmn_secure_setup(), which must be called first.
-void dmn_secure_me(void);
+//  dmn_secure_setup(), which must be called first.  skip_chroot
+//  will skip the chroot() part even if dmn_secure_setup() specified
+//  and validated a chroot path.  So far this is only used in a corner
+//  case for gdnsd_plugin_extmon...
+void dmn_secure_me(const bool skip_chroot);
 
 // This accessor indicates whether dmn_secure_me() has been called or not
 DMN_F_PURE

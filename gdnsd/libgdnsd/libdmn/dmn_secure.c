@@ -71,12 +71,12 @@ void dmn_secure_setup(const char* username, const char* chroot_path) {
     }
 }
 
-void dmn_secure_me(void) {
+void dmn_secure_me(const bool skip_chroot) {
     if(!secure_uid || !secure_gid)
         dmn_log_fatal("BUG: secure_setup() must be called before secure_me()");
 
     // lock self into the chroot directory
-    if(secure_chroot) {
+    if(secure_chroot && !skip_chroot) {
         // On most systems, this seems to get the timezone cached for vsyslog() to use inside chroot()
         tzset();
         if(chroot(secure_chroot)) dmn_log_fatal("chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
