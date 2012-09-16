@@ -14,6 +14,7 @@
 
 # Built, installed binaries
 /gdnsd/gdnsd
+/plugins/extmon/gdnsd_extmon_helper
 /plugins/meta/libgdmaps/t/gdnsd_geoip_test
 
 # Built, distributed C sources (Ragel outputs)

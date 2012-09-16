@@ -62,6 +62,9 @@ void gdnsd_monio_state_updater(monio_smgr_t* smgr, const bool latest) {
     const monio_state_uint_t now_state = stats_own_get(smgr->monio_state_ptrs[0]);
     monio_state_uint_t new_state = now_state;
 
+    // a bit spammy to leave in all debug builds, but handy at times...
+    //log_debug("'%s' new monitor result: %s", smgr->desc, latest ? "OK" : "FAIL");
+
     if(latest) { // New Success
         switch(now_state) {
             case MONIO_STATE_UP:

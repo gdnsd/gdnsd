@@ -521,6 +521,12 @@ The service_types hash contains generic definitions for how
 to monitor the given types of service.  Each service type uses
 a protocol-specific plugin, and the default is the included
 plugin C<http_status>, which checks HTTP status code responses.
+
+The other included monitoring plugins are C<tcp_connect> (documented
+below alongside C<http_status>, just checks TCP), and C<extmon>,
+which executes external monitoring commands/scripts and has its
+own documentation at L<gdnsd-plugin-extmon(8)>.
+
 There are several generic parameters related to timing and anti-flap,
 as well as plugin-specific parameters that vary per plugin.
 
@@ -529,9 +535,6 @@ a specific instance of a service.  Those would occur on a per-address
 basis in a resolving plugin's configuration down in the C<plugins>
 stanza, and the plugin's configuration would then reference a named
 service type to be used when monitoring said address.
-
-The other included plugin is C<tcp_connect>, which just checks
-TCP C<connect()> success but does no protocol-specific i/o checks.
 
 A service monitored through these mechanisms can be in one of three
 states at runtime: C<UP>, C<DANGER>, or C<DOWN>.  The UP state means
@@ -807,7 +810,7 @@ Example 3 (compressed and ugly):
 
 =head1 SEE ALSO
 
-L<gdnsd(8)>, L<gdnsd.zonefile(5)>, L<gdnsd-plugin-simplefo(8)>, L<gdnsd-plugin-multifo(8)>, L<gdnsd-plugin-weighted(8)>, L<gdnsd-plugin-metafo(8)>, L<gdnsd-plugin-geoip(8)>, L<gdnsd-plugin-api(3)>
+L<gdnsd(8)>, L<gdnsd.zonefile(5)>, L<gdnsd-plugin-simplefo(8)>, L<gdnsd-plugin-multifo(8)>, L<gdnsd-plugin-weighted(8)>, L<gdnsd-plugin-metafo(8)>, L<gdnsd-plugin-geoip(8)>, L<gdnsd-plugin-extmon(8)>, L<gdnsd-plugin-api(3)>
 
 The gdnsd manual.
 

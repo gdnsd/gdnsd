@@ -1,0 +1,156 @@
+
+=head1 NAME
+
+gdnsd-plugin-extmon - gdnsd plugin for monitoring via external commands
+
+=head1 SYNOPSIS
+
+Example plugin config:
+
+  service_types => {
+    pingit => {
+      plugin => "extmon",
+      timeout => 5,
+      cmd => ['/bin/ping', '-w', '2', '-c', '2', '%%IPADDR%%']
+    },
+    svc_alwaysok => {
+      plugin => "extmon",
+      timeout => 1,
+      cmd => ['/bin/sh', '-c', 'exit 0']
+    },
+    svc_alwaysfail_via_timeout => {
+      plugin => "extmon",
+      timeout => 2,
+      cmd => ['/bin/sh', '-c', 'sleep 5']
+    }
+  }
+
+  # optional, if installed path confuses the daemon...
+  plugins => {
+    extmon => { helper_path => "/usr/sbin/gdnsd_extmon_helper" }
+  }
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-extmon> allows you to configure external commands
+to provide monitoring feedback to the dynamic address plugins.
+
+=head1 CONFIGURATION - GLOBAL
+
+These are plugin-global settings which are configured within
+C<plugins =E<gt> { extmon =E<gt> { ... } }>.
+
+=over 4
+
+=item B<helper_path>
+
+String pathname, optional.
+
+Normally, this plugin will successfully locate its helper
+binary F<gdnsd_extmon_helper> in the installation F<sbin> directory
+for gdnsd.  If for some reason it can't do successfully do so,
+e.g. due to a relocated installation, you can set an explicit
+full pathname to the helper here.  Note that in this case
+you're probably also having to set the daemon-global config
+option C<plugin_search_path> as well, since locating plugin
+objects uses similar mechanisms to find the installation
+F<lib/gdnsd> path.
+
+=item B<helper_failure_action>
+
+String, one of C<stasis>, C<fail_once>, or C<kill_daemon>.
+Default is C<fail_once>.
+
+This configures the behavior of the plugin if the helper
+process F<gdnsd_extmon_helper> unexpectedly dies, which prevents
+the gathering of any further legitimate monitoring state updates.
+
+Regardless of this setting, there will be at least one
+syslog message indicating the failure.
+
+If set to C<stasis>, all monitored states are left as-is with
+no further updates.  The downside is unless someone notices
+the syslog message, this failure mode is hard to notice.
+
+If set to C<fail_once> (the default), a single artificial monitoring
+failure is triggered for each resource.  This will transition
+steady-state C<UP> resources to C<DANGER> (and could trigger
+C<DOWN> on resources that had already been in C<DANGER> for
+several updates), making the failure condition a little
+more obvious while not generally affecting users too much
+(other than reduced TTLs for plugins that do that on C<DANGER>).
+
+If set to C<kill_daemon>, the whole gdnsd daemon will fail fatally.
+
+=back
+
+=head1 CONFIGURATION - PER-SERVICE-TYPE
+
+The universal, plugin-neutral service_type parameters all apply
+in their usual sense: C<up_thresh>, C<ok_thresh>, C<down_thresh>,
+C<interval>, C<plugin>, and C<timeout>.  See L<gdnsd.config(5)> for
+basic information on these.  The following are specific to this
+C<extmon> plugin:
+
+=over 4
+
+=item B<cmd>
+
+Array of one or more strings, required.
+
+This sets the command and arguments to execute for the monitoring check.
+The array is passed directly to C<execv()> for execution (with re-use of
+the first element as the pathname to execute).  If you need to use shell
+facilities, start the argument list with e.g. C<"/bin/sh", "-c", ...>.
+
+All argument strings are searched for the magic string C<%%IPADDR%%> (which
+can appear multiple times per argument).  Everywhere this magic string is found,
+the IP address of the resource being monitored will be substituded in its place.
+
+The command must exit with an exit value of zero for success or non-zero
+for failure.
+
+=back
+
+=head1 EXECUTION ENVIRONMENT
+
+The executed scripts will run outside of the daemon's chroot,
+but with the same userid the daemon normal drops privileges to.
+Standard input will be open on F</dev/null>, and standard output/error
+will be pipes back to the main daemon for recording error output
+on failure.
+
+The plugin launches a helper binary F<gdnsd_extmon_helper> before
+the main daemon does its C<chroot()> call, and this helper does
+the actual runtime command executions.  It manages the timeouts
+and intervals and feeds results back to the plugin over a pipe.  This
+communication is one-way at runtime (no daemon -> helper traffic)
+for security reasons (to help ensure that a compromised daemon can't
+easily leverage the helper to escape chroot).
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

@@ -120,6 +120,7 @@ our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
 # During installcheck, the default hardcoded plugin path
 #  should work correctly for finding the installed plugins
 our $PLUGIN_PATH;
+our $EXTMON_HELPER_CFG = '';
 if($ENV{INSTALLCHECK_SBINDIR}) {
     $PLUGIN_PATH = "/xxx_does_not_exist";
 }
@@ -137,6 +138,7 @@ else {
         )
         . q{"]};
     closedir($dh);
+    $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$ENV{TOP_BUILDDIR}/plugins/extmon/gdnsd_extmon_helper" }|;
 }
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
@@ -287,6 +289,7 @@ sub spawn_daemon {
         s/\@http_port\@/$HTTP_PORT/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
         s/\@pluginpath\@/$PLUGIN_PATH/g;
+        s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
         print $out_fh $_;
     }
     close($orig_fh) or die "Cannot close test configfile '$cfgfile': $!";
