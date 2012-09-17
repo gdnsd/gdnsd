@@ -99,11 +99,6 @@ void dmn_secure_me(const bool skip_chroot) {
     )
         dmn_log_fatal("Platform-specific BUG: setgid() and/or setuid() do not permanently drop privs as expected!");
 
-    if(secure_chroot)
-        dmn_log_info("Security measures (chroot(%s), setgid(%u), setuid(%u)) completed successfully", secure_chroot, secure_gid, secure_uid);
-    else
-        dmn_log_info("Security measures (setgid(%u), setuid(%u)) completed successfully", secure_gid, secure_uid);
-
     is_secured = true;
 }
 
