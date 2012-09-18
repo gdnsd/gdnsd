@@ -56,12 +56,15 @@ static bool dmn_debug = false;
 #endif
 
 // Log message prefixes when using stderr
-static const char* pfx_debug = "debug: ";
-static const char* pfx_info = "info: ";
-static const char* pfx_warning = "warning: ";
-static const char* pfx_err = "error: ";
-static const char* pfx_crit = "fatal: ";
-static const char* pfx_unknown = "???: ";
+static const char* pfx_debug = " debug: ";
+static const char* pfx_info = " info: ";
+static const char* pfx_warning = " warning: ";
+static const char* pfx_err = " error: ";
+static const char* pfx_crit = " fatal: ";
+static const char* pfx_unknown = " ???: ";
+
+// current openlog() identifier, for stderr copies + syslog
+static char* our_logname = NULL;
 
 /*********************************************************************/
 /*** fmtbuf code *****************************************************/
@@ -141,8 +144,8 @@ const char* dmn_strerror(const int errnum) {
 }
 
 static bool dmn_syslog_alive = false;
-void dmn_start_syslog(const char* logname) {
-    openlog(logname, LOG_NDELAY|LOG_PID, LOG_DAEMON);
+void dmn_start_syslog(void) {
+    openlog(our_logname, LOG_NDELAY|LOG_PID, LOG_DAEMON);
     dmn_syslog_alive = true;
 }
 
@@ -152,7 +155,8 @@ void dmn_start_syslog(const char* logname) {
 //   to /dev/null the real stderr, because /dev/null
 //   is gone after chroot...).
 static FILE* alt_stderr = NULL;
-void dmn_init_log(void) {
+void dmn_init_log(const char* logname) {
+    our_logname = strdup(logname);
     alt_stderr = fdopen(dup(fileno(stderr)), "w");
     if(!alt_stderr) {
         perror("Failed to fdopen(dup(fileno(stderr)))");
@@ -189,7 +193,7 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
 #if defined SYS_gettid && !defined __APPLE__
         pid_t tid = syscall(SYS_gettid);
         char tidbuf[16];
-        snprintf(tidbuf, 16, "[%i] ", tid);
+        snprintf(tidbuf, 16, " [%i]", tid);
 #endif
 
         const char* pfx;
@@ -203,6 +207,8 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
         }
         flockfile(alt_stderr);
         fputs_unlocked(tstamp, alt_stderr);
+        if(our_logname)
+            fputs_unlocked(our_logname, alt_stderr);
 #if defined SYS_gettid && !defined __APPLE__
         fputs_unlocked(tidbuf, alt_stderr);
 #endif

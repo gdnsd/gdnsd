@@ -413,7 +413,7 @@ static void init_config(const bool started_as_root) {
 
 int main(int argc, char** argv) {
 
-    dmn_init_log();
+    dmn_init_log(PACKAGE_NAME);
 
     // Parse args, setting the libgdnsd rootdir and
     //   returning the action.  Exits on cmdline errors
@@ -465,7 +465,7 @@ int main(int argc, char** argv) {
     );
 
     if(action != ACT_STARTFG)
-        dmn_start_syslog(PACKAGE_NAME);
+        dmn_start_syslog();
 
     // Check/set rlimits for mlockall() if necessary and possible
     if(gconfig.lock_mem)

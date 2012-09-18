@@ -212,12 +212,14 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
 }
 
 int main(int argc, char** argv) {
+    dmn_init_log("gdnsd_extmon_helper");
+
     // start up syslog IFF it appears the daemon
     //   was *not* started via "startfg".  Regular
     //   start/restart would have /dev/null'd the
     //   standard descriptors before forking us off.
     if(!isatty(0))
-        dmn_start_syslog("gdnsd_extmon_helper");
+        dmn_start_syslog();
 
     // Bail out early if we don't have the right argument
     //   count, and try to tell the user not to run us

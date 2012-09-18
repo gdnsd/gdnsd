@@ -129,13 +129,13 @@ bool dmn_get_debug(void);
 void dmn_set_debug(bool d);
 
 // Call before any log_* calls, right at proc startup...
-void dmn_init_log(void);
+void dmn_init_log(const char* logname);
 
 // Start syslogging log_*() calls (does openlog),
 //   prior to this they go to stderr only (until
 //   it's closed for a daemon).
 DMN_F_NONNULL
-void dmn_start_syslog(const char* logname);
+void dmn_start_syslog(void);
 
 // special API for extmon helper.  Sets up
 //   logging stderr output via an already-open

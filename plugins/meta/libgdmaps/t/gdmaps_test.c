@@ -153,7 +153,7 @@ static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
 
 gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
 
-    dmn_init_log();
+    dmn_init_log("gdmaps_test");
 
     if(!input_rootdir)
         input_rootdir = def_rootdir;
