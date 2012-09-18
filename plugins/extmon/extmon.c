@@ -255,8 +255,9 @@ static void send_cmd(const unsigned idx, const mon_t* mon) {
         .desc = mon->smgr->desc,
     };
 
-    emc_write_command(helper_write_fd, &this_cmd);
-    emc_read_exact(helper_read_fd, "CMD_ACK");
+    if(emc_write_command(helper_write_fd, &this_cmd)
+        || emc_read_exact(helper_read_fd, "CMD_ACK"))
+        log_fatal("plugin_extmon: failed to write command for '%s' to helper!", mon->smgr->desc);
 
     for(unsigned i = 0; i < mon->svc->num_args; i++)
         free(this_args[i]);
@@ -296,21 +297,27 @@ static void spawn_helper(void) {
     helper_write_fd = writepipe[1];
     helper_read_fd = readpipe[0];
 
-    emc_write_string(helper_write_fd, "HELO", 4);
-    emc_read_exact(helper_read_fd, "HELO_ACK");
+    if(emc_write_string(helper_write_fd, "HELO", 4))
+        log_fatal("plugin_extmon: failed to write HELO to helper process, helper died immediately?");
+    if(emc_read_exact(helper_read_fd, "HELO_ACK"))
+        log_fatal("plugin_extmon: failed to read HELO_ACK from helper process, helper died immediately?");
 
     char cmds_buf[7];
     memcpy(cmds_buf, "CMDS:", 5);
     uint16_t* moncount_ptr = (uint16_t*)&cmds_buf[5];
     *moncount_ptr = num_mons;
-    emc_write_string(helper_write_fd, cmds_buf, 7);
-    emc_read_exact(helper_read_fd, "CMDS_ACK");
+    if(emc_write_string(helper_write_fd, cmds_buf, 7))
+        log_fatal("plugin_extmon: failed to write command count to helper process");
+    if(emc_read_exact(helper_read_fd, "CMDS_ACK"))
+        log_fatal("plugin_extmon: failed to read CMDS_ACK from helper process");
 
     for(unsigned i = 0; i < num_mons; i++)
          send_cmd(i, &mons[i]);
 
-    emc_write_string(helper_write_fd, "END_CMDS", 8);
-    emc_read_exact(helper_read_fd, "END_CMDS_ACK");
+    if(emc_write_string(helper_write_fd, "END_CMDS", 8))
+        log_fatal("plugin_extmon: failed to write END_CMDS to helper process");
+    if(emc_read_exact(helper_read_fd, "END_CMDS_ACK"))
+        log_fatal("plugin_extmon: failed to read END_CMDS_ACK from helper process");
 
     // done sending stuff, close writepipe and go nonblock on read side for eventloop
     close(helper_write_fd);

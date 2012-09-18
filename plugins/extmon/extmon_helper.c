@@ -260,18 +260,21 @@ int main(int argc, char** argv) {
     if(fcntl(plugin_write_fd, F_SETFD, FD_CLOEXEC))
         log_fatal("Failed to set FD_CLOEXEC on plugin write fd: %s", dmn_strerror(errno));
 
-    emc_read_exact(plugin_read_fd, "HELO");
-    emc_write_string(plugin_write_fd, "HELO_ACK", 8);
+    if(emc_read_exact(plugin_read_fd, "HELO"))
+        log_fatal("Failed to read HELO from plugin");
+    if(emc_write_string(plugin_write_fd, "HELO_ACK", 8))
+        log_fatal("Failed to write HELO_ACK to plugin");
 
     char ccount_buf[7];
-    emc_read_nbytes(plugin_read_fd, 7, ccount_buf);
-    if(strncmp(ccount_buf, "CMDS:", 5))
-        log_fatal("Bad CMDS: prefix");
+    if(emc_read_nbytes(plugin_read_fd, 7, ccount_buf)
+        || strncmp(ccount_buf, "CMDS:", 5))
+        log_fatal("Failed to read command count from plugin");
     uint16_t* num_mons_ptr = (uint16_t*)&ccount_buf[5];
     num_mons = *num_mons_ptr;
     mons = calloc(num_mons, sizeof(mon_t));
 
-    emc_write_string(plugin_write_fd, "CMDS_ACK", 8);
+    if(emc_write_string(plugin_write_fd, "CMDS_ACK", 8))
+        log_fatal("Failed to write CMDS_ACK to plugin");
 
     // Note, it's merely a happy coincidence that our mons[]
     //   indices exactly match cmd->idx numbers.  Always use
@@ -279,13 +282,18 @@ int main(int argc, char** argv) {
     //   to the main daemon!
     for(unsigned i = 0; i < num_mons; i++) {
         mons[i].cmd = emc_read_command(plugin_read_fd);
+        if(!mons[i].cmd)
+            log_fatal("Failed to read command %u from plugin", i);
         if(i != mons[i].cmd->idx)
             log_fatal("BUG: plugin index issues, %u vs %u", i, mons[i].cmd->idx);
-        emc_write_string(plugin_write_fd, "CMD_ACK", 7);
+        if(emc_write_string(plugin_write_fd, "CMD_ACK", 7))
+            log_fatal("Failed to write CMD_ACK for command %u to plugin", i);
     }
 
-    emc_read_exact(plugin_read_fd, "END_CMDS");
-    emc_write_string(plugin_write_fd, "END_CMDS_ACK", 12);
+    if(emc_read_exact(plugin_read_fd, "END_CMDS"))
+        log_fatal("Failed to read END_CMDS from plugin");
+    if(emc_write_string(plugin_write_fd, "END_CMDS_ACK", 12))
+        log_fatal("Failed to write END_CMDS_ACK to plugin");
 
 
     // done with the serial setup, close the readpipe and go nonblocking on write for eventloop...

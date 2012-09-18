@@ -39,13 +39,19 @@ typedef struct {
 
 // these are used for simple protocol messages during
 //   initial plugin<->helper setup.  They automatically
-//   retry/restart read/write on e.g. EINTR, etc, they
-//   operate in blocking mode, and they fail fatally
-//   if anything's wrong.
-void emc_write_string(const int fd, const char* str, const unsigned len);
-void emc_read_exact(const int fd, const char* str);
-void emc_read_nbytes(const int fd, const unsigned len, char* out);
-void emc_write_command(const int fd, const extmon_cmd_t* cmd);
+//   retry/restart read/write on e.g. EINTR, etc, and they
+//   operate in blocking mode.
+// The ones with bool retvals return zero on success, and
+//   emc_read_command() returns NULL on failure.
+F_WUNUSED F_NONNULL
+bool emc_write_string(const int fd, const char* str, const unsigned len);
+F_WUNUSED F_NONNULL
+bool emc_read_exact(const int fd, const char* str);
+F_WUNUSED F_NONNULL
+bool emc_read_nbytes(const int fd, const unsigned len, char* out);
+F_WUNUSED F_NONNULL
+bool emc_write_command(const int fd, const extmon_cmd_t* cmd);
+F_WUNUSED
 extmon_cmd_t* emc_read_command(const int fd);
 
 // encoding of helper -> daemon monitor results as uint32_t.
