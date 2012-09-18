@@ -79,6 +79,7 @@ typedef enum {
 static fail_t fail_mode = FAIL_ONCE;
 
 static void total_helper_failure(struct ev_loop* loop) {
+    log_err("plugin_extmon: Cannot continue monitoring!");
     switch(fail_mode) {
         case FAIL_ONCE:
             for(unsigned i = 0; i < num_mons; i++)
@@ -99,7 +100,6 @@ static void total_helper_failure(struct ev_loop* loop) {
     if(ev_is_active(helper_child_watcher))
         kill(helper_pid, SIGKILL);
     total_helper_failure_flag = true;
-    log_err("plugin_extmon: Cannot continue monitoring!");
 }
 
 static void helper_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED) {
@@ -147,6 +147,9 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
             }
             else if(rv != 0) {
                 log_err("plugin_extmon: BUG: short pipe read for mon results");
+            }
+            else {
+                log_err("plugin_extmon: helper pipe closed, no more results");
             }
             total_helper_failure(loop);
             return;

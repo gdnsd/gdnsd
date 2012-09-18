@@ -271,6 +271,8 @@ int main(int argc, char** argv) {
         log_fatal("Failed to read command count from plugin");
     uint16_t* num_mons_ptr = (uint16_t*)&ccount_buf[5];
     num_mons = *num_mons_ptr;
+    if(!num_mons)
+        log_fatal("Received command count of zero from plugin");
     mons = calloc(num_mons, sizeof(mon_t));
 
     if(emc_write_string(plugin_write_fd, "CMDS_ACK", 8))
