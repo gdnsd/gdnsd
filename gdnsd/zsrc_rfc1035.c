@@ -318,7 +318,7 @@ static zone_t* zone_from_zf(zfile_t* zf) {
 }
 
 F_NONNULL
-static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents) {
+static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents V_UNUSED) {
     dmn_assert(loop);
     dmn_assert(timer);
     dmn_assert(revents = EV_TIMER);
@@ -502,7 +502,7 @@ static void do_scandir(struct ev_loop* loop) {
 }
 
 F_NONNULL
-static void periodic_scan(struct ev_loop* loop, ev_timer* rtimer, int revents) {
+static void periodic_scan(struct ev_loop* loop, ev_timer* rtimer V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop);
     dmn_assert(rtimer);
     dmn_assert(revents == EV_TIMER);
@@ -821,7 +821,7 @@ static ev_async* sighup_waker = NULL;
 
 // called within our thread/loop to take sighup action
 F_NONNULL
-static void sighup_cb(struct ev_loop* loop, ev_async* w, int revents V_UNUSED) {
+static void sighup_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
     log_info("rfc1035: received SIGHUP notification, scanning for changes...");
     do_scandir(loop);

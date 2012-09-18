@@ -274,7 +274,7 @@ typedef enum {
 } rcode_rv_t;
 
 F_NONNULL
-static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* opt, const anysin_t* asin, const unsigned packet_len, const unsigned offset) {
+static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* opt, const anysin_t* asin V_UNUSED, const unsigned packet_len, const unsigned offset) {
     dmn_assert(c); dmn_assert(opt); dmn_assert(asin);
 
     rcode_rv_t rcode = DECODE_OK;

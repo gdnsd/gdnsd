@@ -231,6 +231,7 @@ static ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _nam (const ltree_no
 
 MK_RRSET_GET(addr, addr, DNS_TYPE_A)
 MK_RRSET_GET(soa, soa, DNS_TYPE_SOA)
+F_UNUSED
 MK_RRSET_GET(cname, cname, DNS_TYPE_CNAME)
 MK_RRSET_GET(ns, ns, DNS_TYPE_NS)
 MK_RRSET_GET(ptr, ptr, DNS_TYPE_PTR)
