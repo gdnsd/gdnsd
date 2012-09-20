@@ -10,6 +10,8 @@ libgdmaps_la_SOURCES = \
 	gdmaps.h \
 	dcinfo.c \
 	dcinfo.h \
+	dclists.c \
+	dclists.h \
 	fips104.c \
 	fips104.h
 
