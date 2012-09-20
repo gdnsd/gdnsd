@@ -5,7 +5,13 @@ AM_LIBTOOLFLAGS = --silent
 SUBDIRS = . t
 
 noinst_LTLIBRARIES = libgdmaps.la
-libgdmaps_la_SOURCES = gdmaps.c gdmaps.h fips104.c fips104.h
+libgdmaps_la_SOURCES = \
+	gdmaps.c \
+	gdmaps.h \
+	dcinfo.c \
+	dcinfo.h \
+	fips104.c \
+	fips104.h
 
 check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C t check-download
