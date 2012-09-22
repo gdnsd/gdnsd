@@ -39,6 +39,7 @@ typedef struct {
     ev_timer* cmd_timeout;
     ev_child* child_watcher;
     pid_t cmd_pid;
+    bool result_pending;
 } mon_t;
 
 static unsigned num_mons = 0;
@@ -119,6 +120,7 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
+    dmn_assert(this_mon->result_pending);
     dmn_log_warn("Monitor child process for '%s' timed out after %u seconds.  Marking failed and sending SIGKILL...", this_mon->cmd->desc, this_mon->cmd->timeout);
     kill(this_mon->cmd_pid, SIGKILL);
     // note we don't stop the child_watcher because we still
@@ -130,6 +132,7 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     //   could do in that case anyways.
     sendq_enq(emc_encode_mon(this_mon->cmd->idx, true));
     ev_io_start(loop, plugin_write_watcher);
+    this_mon->result_pending = false;
 }
 
 static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED) {
@@ -154,14 +157,20 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
             dmn_log_warn("Monitor child process for '%s' terminated abnormally...", this_mon->cmd->desc);
     }
 
-    sendq_enq(emc_encode_mon(this_mon->cmd->idx, failed));
-    ev_io_start(loop, plugin_write_watcher);
+    // If timeout already sent a failure, don't double-send
+    //   here when we reap the SIGKILL'd child
+    if(this_mon->result_pending) {
+        sendq_enq(emc_encode_mon(this_mon->cmd->idx, failed));
+        ev_io_start(loop, plugin_write_watcher);
+        this_mon->result_pending = false;
+    }
 }
 
 static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
+    dmn_assert(!this_mon->result_pending);
 
     this_mon->cmd_pid = fork();
     if(this_mon->cmd_pid == -1)
@@ -175,6 +184,7 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         log_fatal("execv(%s, ...) failed: %s", this_mon->cmd->args[0], dmn_strerror(errno));
     }
 
+    this_mon->result_pending = true;
     ev_timer_set(this_mon->cmd_timeout, this_mon->cmd->timeout, 0);
     ev_timer_start(loop, this_mon->cmd_timeout);
     ev_child_set(this_mon->child_watcher, this_mon->cmd_pid, 0);
