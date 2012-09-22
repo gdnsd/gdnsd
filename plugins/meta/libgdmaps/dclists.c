@@ -22,15 +22,6 @@
 #include "config.h"
 #include "dclists.h"
 
-//XXX#include <inttypes.h>
-//XXX#include <stddef.h>
-//XXX#include <stdlib.h>
-//XXX#include <string.h>
-//XXX#include <fcntl.h>
-//XXX#include <unistd.h>
-//XXX#include <sys/stat.h>
-//XXX#include <sys/mman.h>
-//XXX#include <pthread.h>
 #include <math.h>
 
 #include <gdnsd-log.h>
