@@ -100,6 +100,19 @@ const char* gdnsd_logf_anysin_noport(const anysin_t* asin) {
     return buf;
 }
 
+const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
+    anysin_t tempsin;
+    memset(&tempsin, 0, sizeof(anysin_t));
+    tempsin.sin.sin_family = AF_INET6;
+    memcpy(tempsin.sin6.sin6_addr.s6_addr, ipv6, 16);
+    tempsin.len = sizeof(struct sockaddr_in6);
+    return gdnsd_logf_anysin_noport(&tempsin);
+}
+
+const char* gdnsd_logf_in6a(const struct in6_addr* in6a) {
+    return gdnsd_logf_ipv6(in6a->s6_addr);
+}
+
 const char* gdnsd_logf_dname(const uint8_t* dname) {
     if(!dname)
         return generic_nullstr;

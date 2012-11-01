@@ -28,7 +28,6 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <syslog.h>
-
 #include <gdnsd-dmn.h>
 
 #define gdnsd_logger dmn_logger
@@ -58,6 +57,12 @@ const char* gdnsd_logf_anysin_noport(const anysin_t* asin);
 //   uses current rootdir in effect.
 const char* gdnsd_logf_pathname(const char* relpath);
 
+// "ipv6" must be allocated for 16 bytes, containing
+//   a network-order address
+const char* gdnsd_logf_ipv6(const uint8_t* ipv6);
+// standard "struct in6_addr" (basically the same thing...)
+const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
+
 #define gdnsd_logf_errnum dmn_strerror
 #define gdnsd_logf_errno() dmn_strerror(errno)
 #define logf_dname gdnsd_logf_dname
@@ -66,5 +71,7 @@ const char* gdnsd_logf_pathname(const char* relpath);
 #define logf_errnum dmn_strerror
 #define logf_errno() dmn_strerror(errno)
 #define logf_pathname gdnsd_logf_pathname
+#define logf_ipv6 gdnsd_logf_ipv6
+#define logf_in6a gdnsd_logf_in6a
 
 #endif // _GDNSD_LOG_H
