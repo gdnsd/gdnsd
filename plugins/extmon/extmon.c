@@ -242,7 +242,7 @@ static char* ipaddr_xlate(const char* instr, const char* addrstr, const unsigned
 static void send_cmd(const unsigned idx, const mon_t* mon) {
     char** this_args = malloc(mon->svc->num_args * sizeof(char*));
 
-    const char* addrstr = get_smgr_addr_str(mon->smgr);
+    char* addrstr = get_smgr_addr_str(mon->smgr);
     const unsigned addrstr_len = strlen(addrstr);
     dmn_assert(addrstr_len);
 
@@ -265,6 +265,7 @@ static void send_cmd(const unsigned idx, const mon_t* mon) {
     for(unsigned i = 0; i < mon->svc->num_args; i++)
         free(this_args[i]);
     free(this_args);
+    free(addrstr);
 }
 
 static void spawn_helper(void) {
