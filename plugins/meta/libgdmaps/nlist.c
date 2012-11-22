@@ -88,13 +88,18 @@ F_NONNULL
 static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask) {
     dmn_assert(ipv6); dmn_assert(mask < 129);
 
-    const unsigned revmask = 128 - mask;
-    const unsigned byte_mask = ~(0xFF << (revmask & 7)) & 0xFF;
-    unsigned bbyte = 15 - (revmask >> 3);
+    if(likely(mask)) {
+        const unsigned revmask = 128 - mask;
+        const unsigned byte_mask = ~(0xFF << (revmask & 7)) & 0xFF;
+        unsigned bbyte = 15 - (revmask >> 3);
 
-    dmn_assert(!(ipv6[bbyte] & byte_mask));
-    while(++bbyte < 16)
-        dmn_assert(!ipv6[bbyte]);
+        dmn_assert(!(ipv6[bbyte] & byte_mask));
+        while(++bbyte < 16)
+            dmn_assert(!ipv6[bbyte]);
+    }
+    else {
+        dmn_assert(!memcmp(ipv6, &ip6_zero, 16));
+    }
 }
 #else
 #define assert_clear_mask_bits(x, y)
@@ -104,22 +109,28 @@ F_NONNULL
 static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned mask) {
     dmn_assert(map_name); dmn_assert(ipv6); dmn_assert(mask < 129);
 
-    const unsigned revmask = 128 - mask;
-    const unsigned byte_mask = ~(0xFF << (revmask & 7)) & 0xFF;
-    unsigned bbyte = 15 - (revmask >> 3);
-
     bool maskbad = false;
 
-    if(ipv6[bbyte] & byte_mask) {
-        maskbad = true;
-        ipv6[bbyte] &= ~byte_mask;
-    }
+    if(likely(mask)) {
+        const unsigned revmask = 128 - mask;
+        const unsigned byte_mask = ~(0xFF << (revmask & 7)) & 0xFF;
+        unsigned bbyte = 15 - (revmask >> 3);
 
-    while(++bbyte < 16) {
-        if(ipv6[bbyte]) {
+        if(ipv6[bbyte] & byte_mask) {
             maskbad = true;
-            ipv6[bbyte] = 0;
+            ipv6[bbyte] &= ~byte_mask;
         }
+
+        while(++bbyte < 16) {
+            if(ipv6[bbyte]) {
+                maskbad = true;
+                ipv6[bbyte] = 0;
+            }
+        }
+    }
+    else if(memcmp(ipv6, &ip6_zero, 16)) {
+        maskbad = true;
+        memset(ipv6, 0, 16);
     }
 
     if(maskbad)
