@@ -44,7 +44,12 @@ TESTLIST = \
 	t13_castatdef \
 	t14_missingcoords \
 	t15_nogeo \
-	t16_extnets
+	t16_extnets \
+	t17_extn_empty \
+	t18_extn_all \
+	t19_extn_allg \
+	t20_extn_allgs \
+	t21_extn_subs
 
 check_PROGRAMS = $(TESTLIST:=.bin)
 
