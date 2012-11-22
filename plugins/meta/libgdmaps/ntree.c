@@ -196,7 +196,7 @@ static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned
 //   v4compat (our canonical one), convert to v4compat,
 //   and return a mask_adj to v4_compat.
 // else, leave addr as-is and return 0.
-F_NONNULL F_PURE
+F_NONNULL
 static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
     dmn_assert(in); dmn_assert(mask_adj);
 
