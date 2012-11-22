@@ -65,6 +65,7 @@ typedef struct {
     char* name;
     char* geoip_path;
     char* geoip_v4o_path;
+    char* nets_path;
     const fips_t* fips;
     dcinfo_t* dcinfo; // basic datacenter list/info
     dcmap_t* dcmap; // map of locinfo -> dclist
@@ -79,8 +80,10 @@ typedef struct {
     ntree_t* tree; // merged->translated from the lists above
     ev_stat* geoip_stat_watcher;
     ev_stat* geoip_v4o_stat_watcher;
+    ev_stat* nets_stat_watcher;
     ev_timer* geoip_reload_timer;
     ev_timer* geoip_v4o_reload_timer;
+    ev_timer* nets_reload_timer;
     ev_timer* tree_update_timer;
     bool city_no_region;
     bool city_auto_mode;
@@ -144,9 +147,19 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
 
     // nets config
     const vscf_data_t* nets_cfg = vscf_hash_get_data_byconstkey(map_cfg, "nets", true);
-    if(nets_cfg && !vscf_is_hash(nets_cfg))
-        log_fatal("plugin_geoip: map '%s': 'nets' stanza must be a hash", name);
-    gdmap->nets_list = nets_make_list(nets_cfg, gdmap->dclists_pend, name);
+    if(!nets_cfg || vscf_is_hash(nets_cfg)) {
+        // statically-defined hash or empty, load now, leave path undefined
+        gdmap->nets_list = nets_make_list(nets_cfg, gdmap->dclists_pend, name);
+        if(!gdmap->nets_list)
+            log_fatal("plugin_geoip: map '%s': error in 'nets' data, cannot continue", name);
+    }
+    else if(vscf_is_simple(nets_cfg) && vscf_simple_get_len(nets_cfg)) {
+        // external file, define path for later loading and stat-watching
+        gdmap->nets_path = str_combine(GEOIP_DIR, vscf_simple_get_data(nets_cfg), NULL);
+    }
+    else {
+        log_fatal("plugin_geoip: map '%s': 'nets' stanza must be a hash of direct entries or a filename", name);
+    }
 
     // optional GeoIPCity behavior flags
     gdmap->city_no_region = false;
@@ -264,6 +277,53 @@ static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_l
 }
 
 F_NONNULL
+static bool gdmap_update_nets(gdmap_t* gdmap) {
+    dmn_assert(gdmap);
+    dmn_assert(gdmap->nets_path);
+
+    dclists_t* update_dclists;
+
+    if(!gdmap->dclists_pend) {
+        dmn_assert(gdmap->dclists);
+        update_dclists = dclists_clone(gdmap->dclists);
+    }
+    else {
+        update_dclists = gdmap->dclists_pend;
+    }
+
+
+    char* vscf_err;
+    const vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path, &vscf_err);
+    nlist_t* new_list = NULL;
+    if(nets_cfg) {
+        new_list = nets_make_list(nets_cfg, update_dclists, gdmap->name);
+        if(!new_list)
+            log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed!", gdmap->name, logf_pathname(gdmap->nets_path));
+        vscf_destroy(nets_cfg);
+    }
+    else {
+        log_err("plugin_geoip: map '%s': parsing nets file '%s' failed: %s", gdmap->name, logf_pathname(gdmap->nets_path), vscf_err);
+    }
+
+    bool rv = false;
+
+    if(!new_list) {
+        if(!gdmap->dclists_pend)
+            dclists_destroy(update_dclists, KILL_NEW_LISTS);
+        rv = true;
+    }
+    else {
+        if(!gdmap->dclists_pend)
+            gdmap->dclists_pend = update_dclists;
+        if(gdmap->nets_list)
+            nlist_destroy(gdmap->nets_list);
+        gdmap->nets_list = new_list;
+    }
+
+    return rv;
+}
+
+F_NONNULL
 static void gdmap_initial_load_all(gdmap_t* gdmap) {
     dmn_assert(gdmap);
     dmn_assert(gdmap->dclists_pend);
@@ -278,6 +338,12 @@ static void gdmap_initial_load_all(gdmap_t* gdmap) {
         if(gdmap->geoip_v4o_path)
             if(gdmap_update_geoip(gdmap, gdmap->geoip_v4o_path, &gdmap->geoip_v4o_list, V4O_SECONDARY))
                 log_fatal("plugin_geoip: map '%s': cannot continue initial load", gdmap->name);
+    }
+
+    if(!gdmap->nets_list) {
+        dmn_assert(gdmap->nets_path);
+        if(gdmap_update_nets(gdmap))
+            log_fatal("plugin_geoip: map '%s': cannot continue initial load", gdmap->name);
     }
 
     gdmap_tree_update(gdmap);
@@ -328,6 +394,22 @@ static void gdmap_geoip_v4o_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_
 }
 
 F_NONNULL
+static void gdmap_nets_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSED, int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+
+    gdmap_t* gdmap = (gdmap_t*)w->data;
+    dmn_assert(gdmap);
+    dmn_assert(gdmap->nets_path);
+
+    ev_timer_stop(loop, gdmap->nets_reload_timer);
+
+    if(!gdmap_update_nets(gdmap)) {
+        dmn_assert(gdmap->dclists_pend);
+        gdmap_kick_tree_update(gdmap, loop);
+    }
+}
+
+F_NONNULL
 static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
 
@@ -355,6 +437,29 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
 }
 
 F_NONNULL
+static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
+
+    gdmap_t* gdmap = (gdmap_t*)w->data;
+    dmn_assert(gdmap);
+    dmn_assert(gdmap->nets_path);
+    dmn_assert(gdmap->nets_path == w->path);
+
+    if(w->attr.st_nlink) { // file exists
+        if(w->attr.st_mtime != w->prev.st_mtime || !w->prev.st_nlink) {
+            if(!ev_is_active(gdmap->nets_reload_timer))
+                log_info("plugin_geoip: map '%s': Change detected in nets file '%s', waiting for %gs of change quiescence...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
+            else
+                log_debug("plugin_geoip: map '%s': Timer for nets file '%s' re-kicked for %gs due to rapid change...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
+            ev_timer_again(loop, gdmap->nets_reload_timer);
+        }
+    }
+    else {
+        log_warn("plugin_geoip: map '%s': nets file '%s' dissappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, logf_pathname(w->path));
+    }
+}
+
+F_NONNULL
 static void gdmap_tree_update_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
@@ -362,6 +467,24 @@ static void gdmap_tree_update_cb(struct ev_loop* loop, ev_timer* w, int revents 
     dmn_assert(gdmap);
     ev_timer_stop(loop, gdmap->tree_update_timer);
     gdmap_tree_update(gdmap);
+}
+
+F_NONNULL
+static void gdmap_setup_nets_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
+    dmn_assert(gdmap); dmn_assert(loop);
+    dmn_assert(gdmap->nets_path);
+
+    gdmap->nets_reload_timer = malloc(sizeof(ev_timer));
+    ev_init(gdmap->nets_reload_timer, gdmap_nets_reload_timer_cb);
+    ev_set_priority(gdmap->nets_reload_timer, -1);
+    gdmap->nets_reload_timer->repeat = STAT_RELOAD_WAIT;
+    gdmap->nets_reload_timer->data = gdmap;
+
+    gdmap->nets_stat_watcher = malloc(sizeof(ev_stat));
+    ev_stat_init(gdmap->nets_stat_watcher, gdmap_nets_reload_stat_cb, gdmap->nets_path, 0);
+    ev_set_priority(gdmap->nets_stat_watcher, 0);
+    gdmap->nets_stat_watcher->data = gdmap;
+    ev_stat_start(loop, gdmap->nets_stat_watcher);
 }
 
 F_NONNULL
@@ -407,6 +530,8 @@ static void gdmap_setup_watchers(gdmap_t* gdmap, struct ev_loop* loop) {
     dmn_assert(gdmap); dmn_assert(loop);
     if(gdmap->geoip_path)
         gdmap_setup_geoip_watcher(gdmap, loop);
+    if(gdmap->nets_path)
+        gdmap_setup_nets_watcher(gdmap, loop);
 
     gdmap->tree_update_timer = malloc(sizeof(ev_timer));
     ev_init(gdmap->tree_update_timer, gdmap_tree_update_cb);
@@ -452,14 +577,20 @@ static void gdmap_destroy(gdmap_t* gdmap) {
         nlist_destroy(gdmap->geoip_list);
     if(gdmap->geoip_v4o_list)
         nlist_destroy(gdmap->geoip_v4o_list);
+    if(gdmap->nets_path)
+        free(gdmap->nets_path);
     if(gdmap->geoip_v4o_path)
         free(gdmap->geoip_v4o_path);
     if(gdmap->geoip_path)
         free(gdmap->geoip_path);
+    if(gdmap->nets_stat_watcher)
+        free(gdmap->nets_stat_watcher);
     if(gdmap->geoip_v4o_stat_watcher)
         free(gdmap->geoip_v4o_stat_watcher);
     if(gdmap->geoip_stat_watcher)
         free(gdmap->geoip_stat_watcher);
+    if(gdmap->nets_reload_timer)
+        free(gdmap->nets_reload_timer);
     if(gdmap->geoip_v4o_reload_timer)
         free(gdmap->geoip_v4o_reload_timer);
     if(gdmap->geoip_reload_timer)

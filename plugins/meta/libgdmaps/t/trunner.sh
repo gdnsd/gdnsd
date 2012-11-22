@@ -16,6 +16,10 @@ if [ $skip_all -eq 1 ]; then
     exit 0
 fi
 
+for netsfile in $ASDIR/*.nets; do
+    cp $netsfile $TODIR/etc/geoip/
+done
+
 for tnam in $TLIST; do
     echo "Running test $tnam ..."
     cp $ASDIR/$tnam.cfg $TODIR/etc/config >/dev/null 2>&1

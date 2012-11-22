@@ -143,13 +143,17 @@ Boolean, default C<false>.  If this key is set to C<true> and C<geoip_db> refere
 
 =head2 C<nets = { ... }>
 
-Key-value hash, optional.  If specified, the contents should be key-value pairs of C<network/netmask> mapped to a datacenter name (or an array of datacenter names).  Any network-to-datacenter mappings specified here will override mappings determined via GeoIP.  Note that it is illegal to specify networks in the IPv4-like subspaces of IPv6 other than v4compat, but it is legal to specify actual IPv4 networks (which are treated identically to v4compat).  See the section on IPv4 Compatible Addresses later in this document for more details.  The order of the networks is unimportant; they will always be sorted and inserted such that an entry which is a subnet of another entry is not obliterated by the parent supernet.
+Key-value hash, optional (see below for alternate form).  If specified, the contents should be key-value pairs of C<network/netmask> mapped to a datacenter name (or an array of datacenter names).  Any network-to-datacenter mappings specified here will override mappings determined via GeoIP.  Note that it is illegal to specify networks in the IPv4-like subspaces of IPv6 other than v4compat, but it is legal to specify actual IPv4 networks (which are treated identically to v4compat).  See the section on IPv4 Compatible Addresses later in this document for more details.  The order of the networks is unimportant; they will always be sorted and inserted such that an entry which is a subnet of another entry is not obliterated by the parent supernet.
 
     nets => {
         10.0.0.0/8 => [ dc1, dc2 ],
         192.0.2.128/25 => dc3
         2001:DB8::/32 => [ dc4, dc5, dc6 ],
     }
+
+=head2 C<nets = nets_file_name>
+
+String pathname, optional.  A variant of the above, but the contents of the key-value hash are loaded from the named external file (which is relative to and should reside within the F</etc/geoip/> subdirectory, just like e.g. geoip_db).  This makes life easier for external tools and scripts generating large sets of nets entries (e.g. from BGP data).  The file will be monitored for changes and reloaded at runtime much like the GeoIP databases.
 
 =head2 C<map = { ... }>
 

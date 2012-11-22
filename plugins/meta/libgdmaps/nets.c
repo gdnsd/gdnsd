@@ -55,12 +55,13 @@ static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask) {
     );
 }
 
-// XXX obviously, once we add runtime file parsing, none of the below can be fatal errors...
-// XXX arguably, with at least some of the v4-like spaces we could simply translate and hope to de-dupe,
+// arguably, with at least some of the v4-like spaces we could simply translate and hope to de-dupe,
 //   if we upgraded nlist_normalize1 to de-dupe matching dclists instead of failing them
 F_NONNULL
-static void nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name, nlist_t* nl) {
+static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name, nlist_t* nl) {
     dmn_assert(nets_cfg); dmn_assert(dclists); dmn_assert(map_name); dmn_assert(nl);
+
+    bool rv = false;
 
     const unsigned input_nnets = vscf_hash_get_len(nets_cfg);
 
@@ -68,13 +69,19 @@ static void nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
         // convert 192.0.2.0/24 -> anysin_t w/ mask in port field
         char* net_str = strdup(vscf_hash_get_key_byindex(nets_cfg, i, NULL));
         char* mask_str = strchr(net_str, '/');
-        if(!mask_str)
-            log_fatal("plugin_geoip: map '%s': nets entry '%s' does not parse as addr/mask", map_name, net_str);
+        if(!mask_str) {
+            log_err("plugin_geoip: map '%s': nets entry '%s' does not parse as addr/mask", map_name, net_str);
+            rv = true;
+            break;
+        }
         *mask_str++ = '\0';
         anysin_t tempsin;
         int addr_err = gdnsd_anysin_getaddrinfo(net_str, mask_str, &tempsin);
-        if(addr_err) // this errmsg could be a little confusing if it references the "port"...
-            log_fatal("plugin_geoip: map '%s': nets entry '%s/%s' does not parse as addr/mask: %s", map_name, net_str, mask_str, gai_strerror(addr_err));
+        if(addr_err) {
+            log_err("plugin_geoip: map '%s': nets entry '%s/%s' does not parse as addr/mask: %s", map_name, net_str, mask_str, gai_strerror(addr_err));
+            rv = true;
+            break;
+        }
 
         unsigned mask;
         uint8_t ipv6[16];
@@ -82,17 +89,26 @@ static void nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
         // now store the anysin data into net_t
         if(tempsin.sa.sa_family == AF_INET6) {
             mask = ntohs(tempsin.sin6.sin6_port);
-            if(mask > 128)
-                log_fatal("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv6 mask (>128)", map_name, net_str, mask_str);
+            if(mask > 128) {
+                log_err("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv6 mask (>128)", map_name, net_str, mask_str);
+                rv = true;
+                break;
+            }
             memcpy(ipv6, tempsin.sin6.sin6_addr.s6_addr, 16);
-            if(check_v4_issues(ipv6, mask))
-                log_fatal("plugin_geoip: map '%s': 'nets' entry '%s/%s' covers illegal IPv4-like space, see the documentation for more info", map_name, net_str, mask_str);
+            if(check_v4_issues(ipv6, mask)) {
+                log_err("plugin_geoip: map '%s': 'nets' entry '%s/%s' covers illegal IPv4-like space, see the documentation for more info", map_name, net_str, mask_str);
+                rv = true;
+                break;
+            }
         }
         else {
             dmn_assert(tempsin.sa.sa_family == AF_INET);
             mask = ntohs(tempsin.sin.sin_port) + 96;
-            if(mask > 128)
-                log_fatal("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv4 mask (>32)", map_name, net_str, mask_str);
+            if(mask > 128) {
+                log_err("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv4 mask (>32)", map_name, net_str, mask_str);
+                rv = true;
+                break;
+            }
             memset(ipv6, 0, 16);
             memcpy(&ipv6[12], &tempsin.sin.sin_addr.s_addr, 4);
         }
@@ -104,6 +120,8 @@ static void nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
         const unsigned dclist = dclists_find_or_add_vscf(dclists, dc_cfg, map_name, false);
         nlist_append(nl, ipv6, mask, dclist);
     }
+
+    return rv;
 }
 
 nlist_t* nets_make_list(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name) {
@@ -113,24 +131,32 @@ nlist_t* nets_make_list(const vscf_data_t* nets_cfg, dclists_t* dclists, const c
 
     if(nets_cfg) {
         dmn_assert(vscf_is_hash(nets_cfg));
-        nets_parse(nets_cfg, dclists, map_name, nl);
+        if(nets_parse(nets_cfg, dclists, map_name, nl)) {
+            nlist_destroy(nl);
+            nl = NULL;
+        }
     }
 
-    // This masks out the 4x v4-like spaces that we *never*
-    //   lookup directly.  These "NN_UNDEF" dclists will
-    //   never be seen by runtime lookups.  The only
-    //   reason these exist is so that supernets and
-    //   adjacent networks get proper masks.  Otherwise
-    //   lookups in these nearby spaces might return
-    //   oversized edns-client-subnet masks and cause
-    //   the cache to affect lookup of these spaces...
-    nlist_append(nl, start_v4mapped, 96, NN_UNDEF);
-    nlist_append(nl, start_siit, 96, NN_UNDEF);
-    nlist_append(nl, start_6to4, 16, NN_UNDEF);
-    nlist_append(nl, start_teredo, 32, NN_UNDEF);
+    if(nl) {
+        // This masks out the 4x v4-like spaces that we *never*
+        //   lookup directly.  These "NN_UNDEF" dclists will
+        //   never be seen by runtime lookups.  The only
+        //   reason these exist is so that supernets and
+        //   adjacent networks get proper masks.  Otherwise
+        //   lookups in these nearby spaces might return
+        //   oversized edns-client-subnet masks and cause
+        //   the cache to affect lookup of these spaces...
+        nlist_append(nl, start_v4mapped, 96, NN_UNDEF);
+        nlist_append(nl, start_siit, 96, NN_UNDEF);
+        nlist_append(nl, start_6to4, 16, NN_UNDEF);
+        nlist_append(nl, start_teredo, 32, NN_UNDEF);
 
-    if(nlist_finish(nl))
-        log_fatal("plugin_geoip: map '%s': normalization of 'nets' failed (see above)", map_name);
+        if(nlist_finish(nl)) {
+            log_err("plugin_geoip: map '%s': normalization of 'nets' failed (see above)", map_name);
+            nlist_destroy(nl);
+            nl = NULL;
+        }
+    }
 
     return nl;
 }
