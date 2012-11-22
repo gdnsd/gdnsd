@@ -42,7 +42,8 @@ TESTLIST = \
 	t11_def2 \
 	t12_defnone \
 	t13_castatdef \
-	t14_missingcoords
+	t14_missingcoords \
+	t15_nogeo
 
 check_PROGRAMS = $(TESTLIST:=.bin)
 

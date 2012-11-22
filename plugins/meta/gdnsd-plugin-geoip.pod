@@ -125,11 +125,11 @@ All other C<maps>-level configuration keys are the names of the maps you choose 
 
 =head2 C<geoip_db = GeoIPv6.dat>
 
-String, filename, required.  This is the filename of one of the supported MaxMind GeoIP database types.  It is considered relative to the F</etc/geoip/> subdirectory of the current daemon invocation's data root directory (C<-d> argument), which in turn defaults to F<PREFIX/gdnsd/>.  It will be reloaded at runtime (without any singificant query interruptions) if a change to the database file is detected.
+String, filename, optional.  This is the filename of one of the supported MaxMind GeoIP database types.  It is considered relative to the F</etc/geoip/> subdirectory of the current daemon invocation's data root directory (C<-d> argument), which in turn defaults to F<PREFIX/gdnsd/>.  It will be reloaded at runtime (without any significant query interruptions) if a change to the database file is detected.
 
 =head2 C<geoip_db_v4_overlay = GeoIP.dat>
 
-String, pathname, optional.  This specifies an optional IPv4-level GeoIP database to overwrite the IPv4 sub-space of the IPv6 data loaded from C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be a V6-format database.  When runtime reloads are performed, if either database changes, both will be reloaded.  In all other respects, it is similar to C<geoip_db>.
+String, pathname, optional.  This specifies an optional IPv4-level GeoIP database to overwrite the IPv4 sub-space of the IPv6 data loaded from C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be defined as a V6-format database.  In all other respects, it is similar to C<geoip_db>.
 
 As of this writing, MaxMind doesn't sell a commercial GeoIPv6 database.  What they offer are free IPv6 GeoLite database downloads, which include the IPv4 subset in the less-accurate GeoLite form.  This option allows you to use these GeoLitev6 databases for IPv6 coverage, and then overlay your paid commercial GeoIPv4 data on top for more accurate IPv4 results.
 
@@ -141,13 +141,9 @@ Array of strings, required.  This is the total set of datacenter names used by t
 
 Boolean, default C<false>.  If this key is set to C<true> and C<geoip_db> references a City-level database, the Region-level information within it will be completely ignored for mapping purposes.  Your hierarchical map structure will now be C<continent =E<gt> country =E<gt> city> rather than C<continent =E<gt> country =E<gt> region =E<gt> city>.
 
-=head2 C<city_no_city = true>
-
-Boolean, default C<false>.  Very similar to the above, but ignores the final, city-level information instead, leaving you with only the information to map your hierarchy as  C<continent =E<gt> country =E<gt> region>.  If both options were set to C<true>, you would only have the ability to map by C<continent =E<gt> country>, as if it were a Country-level database.
-
 =head2 C<nets = { ... }>
 
-Key-value hash, optional.  If specified, the contents should be key-value pairs of C<network/netmask> mapped to a datacenter name (or an array of datacenter names).  This is intended for doing one-off overrides of special networks (to you), such as private space.  Entries specified here will override any GeoIP-based mapping from C<map> below.  Note that this is implemented in a simplistic way which isn't optimized for large sets of C<nets>.  If you really need a giant custom map, consider generating a custom GeoIP.dat instead (there's some related perl code in gdnsd's test suite...).  Example:
+Key-value hash, optional.  If specified, the contents should be key-value pairs of C<network/netmask> mapped to a datacenter name (or an array of datacenter names).  Any network-to-datacenter mappings specified here will override mappings determined via GeoIP.  Note that it is illegal to specify networks in the IPv4-like subspaces of IPv6 other than v4compat, but it is legal to specify actual IPv4 networks (which are treated identically to v4compat).  See the section on IPv4 Compatible Addresses later in this document for more details.  The order of the networks is unimportant; they will always be sorted and inserted such that an entry which is a subnet of another entry is not obliterated by the parent supernet.
 
     nets => {
         10.0.0.0/8 => [ dc1, dc2 ],
@@ -155,21 +151,9 @@ Key-value hash, optional.  If specified, the contents should be key-value pairs 
         2001:DB8::/32 => [ dc4, dc5, dc6 ],
     }
 
-Note that IPv6 entries in "nets" are illegal unless the C<geoip_db> is also IPv6-enabled.  Regardless of the order specified in the config, the networks in 'nets' will be sorted in an order that prevents larger subnets from obliterating the effects of smaller ones.  Specifically, IPv6 networks will be applied before IPv4 networks, and within each type the networks are sorted by ascending network number.
-
-Also note that you cannot directly specify IPv6 networks within the trivially-translatable v4-compat, v4-mapped, SIIT, Teredo, or 6to4 address spaces here.  Such assignments would be ineffective because the lookup-time code always translates these addresses into a canonical IPv4 address first before traversing the network tree.  For related reasons, IPv6 supernets of these spaces are also not allowed as nets entries.
-
-Always just specify the IPv4 network itself to cover all of these cases.  The following are the IPv4-like IPv6 address spaces referenced above, with "NNNN:NNNN" representing the 32 bits the effective IPv4 address is taken from:
-
-   ::NNNN:NNNN/96        # v4-compat
-   ::FFFF:NNNN:NNNN/96   # v4-mapped
-   ::FFFF:0:NNNN:NNNN/96 # SIIT
-   2001::NNNN:NNNN/32    # Teredo (NNNN:NNNN is xor'd with FFFF:FFFF)
-   2002:NNNN:NNNN::/16   # 6to4
-
 =head2 C<map = { ... }>
 
-Key-value hash, optional.  This is the heart of a named map: the map itself, which maps places to ordered lists of datacenters.
+Key-value hash, optional.  This is the heart of a named map which uses GeoIP: the map itself, which maps places to ordered lists of datacenters.  It requires that C<geoip_db> is also specified, and makes no sense without it.
 
 This is a nested key-value hash.  At each level, the keys are location codes (continent, country, region, or city information depending on depth), and the values are either an ordered datacenter array (e.g. C<[ dc03, dc01, dc04 ]>), or a sub-hash containing a deeper level of distinction.  At each layer, a special key named C<default> is available, which sets the default for everything within the current scope.  The top-level default itself defaults to the ordered list from C<datacenters> in the normal case.  If the entire C<map> stanza is missing or empty, you just get the default behavior of C<default>.  A datacenter array can also be empty, which implies that this location is mapped to receive no response data (the server will still respond to the query, and will not issue an NXDOMAIN.  It will simply be a NODATA/NOERROR response like you'd get if there were no records of this type, but could be records of other types for the same name).
 
@@ -231,6 +215,22 @@ Bear in mind that once you begin using inter-meta-plugin references, you could c
 
 Additionally, C<geoip> can synthesize configuration for C<metafo> resources, but the reverse does not hold; C<metafo> cannot synthesize configuration for C<geoip> resources.
 
+=head2 IPv4 Compatible Addresses
+
+This plugin knows of five different relatively-trivial ways to map IPv4 addresses into the IPv6 address space.  These are shown below, with C<NNNN:NNNN> in place of the copied IPv4 address bytes:
+
+   ::NNNN:NNNN/96        # v4compat - canonical form for this plugin
+   ::FFFF:NNNN:NNNN/96   # v4mapped
+   ::FFFF:0:NNNN:NNNN/96 # SIIT
+   2001::NNNN:NNNN/32    # Teredo (NNNN:NNNN is xor'd with FFFF:FFFF)
+   2002:NNNN:NNNN::/16   # 6to4
+
+All of this plugin's internal lookup databases are IPv6 databases, and any IPv4-like information is always stored in the v4compat space within these databases.  When doing runtime lookups all other v4-like addresses (raw IPv4 addresses, v4mapped, SIIT, Teredo, and 6to4) are converted to the canonical v4compat IPv6 representation before querying the internal databases.  The other representations (v4mapped, SIIT, Teredo, 6to4) are Undefined internally, and will never be referenced at lookup-time due to the v4compat conversion mentioned earlier.
+
+The C<nets> stanza is not allowed to specify entries in the four undefined v4-like IPv6 spaces (those other than v4compat).  Specify those networks as normal IPv4 networks or v4compat networks instead.  Legitimate IPv6 C<nets> entries which happen to be a supernet of any v4-like spaces will *not* undely affect v4-like lookups.  There is no functional difference between v4compat and native v4 forms in C<nets>, e.g. C<192.0.2.0/24> and C<::C000:0200/120> are completely identical.
+
+GeoIP databases that are natively IPv4-only get all of their data loaded into the v4compat space only.  For IPv6 GeoIP databases, by default we load the v4compat space directly (which is where MaxMind stores IPv4 data in their IPv6 databases), but ignore the v4mapped/SIIT/Teredo/6to4 spaces (some of which are empty in MaxMind's databases, and some of which simply alias the v4compat space).  When using an IPv6 GeoIP database combined with an IPv4 GeoIP overlay (geoip_db_v4_overlay config), the v4compat space of the IPv6 database is also ignored on loading, and the direct IPv4 data from the IPv4 databasee takes its place.
+
 =head1 ANOTHER CONFIG EXAMPLE
 
 A relatively-maximal example config, showing the interaction of valid C<maps> and C<resources> sections:
@@ -248,7 +248,6 @@ A relatively-maximal example config, showing the interaction of valid C<maps> an
           geoip_db => GeoIPCityv6.dat,
           geoip_db_v4_overlay => GeoIPCity.dat,
           city_no_region => false, # default
-          city_no_city => false, # default
           datacenters => [us-01, de-01, sg-01],
           map => {
               # Hierarchy is Continent -> Country -> Region -> City

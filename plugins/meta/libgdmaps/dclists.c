@@ -104,11 +104,6 @@ const uint8_t* dclists_get_list(const dclists_t* lists, const unsigned idx) {
     return lists->list[idx];
 }
 
-void dclists_iterate(const dclists_t* lists, dclists_iter_cb_t f, void* data) {
-    for(unsigned i = 0; i < lists->count; i++)
-        f(lists->list[i], data);
-}
-
 // Locates an existing dclist that matches newlist and returns its index, or if no match
 //  it copies newlist to the storage area and returns the new index.
 // If someone complains about load-time performance with large datecenter sets, this func
@@ -123,9 +118,12 @@ static unsigned dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
         if(!strcmp((const char*)newlist, (const char*)(lists->list[i])))
             return i;
 
-    // it's actually unsigned, but we are using -1 in other places for auto-mode, which
-    //   limits the available space when passed through those layers..
-    if(lists->count == INT32_MAX)
+    // it's actually unsigned, but the top bit is reserved for nnode_t
+    //   to use to flag the difference between node recursion and a
+    //   terminal dclist, and the special value INT32_MAX - 1 (also
+    //   with the top bit set), is used as an error signal in nnode_t.
+    // Therefore the maximum legal index is INT32_MAX - 2
+    if(lists->count == (INT32_MAX - 1))
         log_fatal("plugin_geoip: map '%s': too many unique dclists (>%u)", map_name, lists->count);
 
     const unsigned newidx = lists->count;

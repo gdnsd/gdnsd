@@ -122,15 +122,13 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
         log_fatal("Subtest %u failed: Map name '%s' not found in configuration", tnum, map_name);
 
     client_info_t cinfo;
-    cinfo.edns_client_mask = 150U;
+    cinfo.edns_client_mask = 128U;
     unsigned scope = 175U;
 
     const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &cinfo.edns_client);
     if(addr_err)
         log_fatal("Subtest %u failed: Cannot parse address '%s': %s", tnum, addr_txt, gai_strerror(addr_err));
 
-    // To void gdmaps fallback pitfalls
-    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(anysin_t));
     const uint8_t* dclist = gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope);
 
     // w/ edns_client_mask set, scope_mask should *always* be set by gdmaps_lookup();
@@ -166,8 +164,8 @@ gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
     gdmaps_t* gdmaps = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);
 
-    gdmaps_load_geoip_databases(gdmaps);
-    gdmaps_setup_geoip_watchers(gdmaps);
+    gdmaps_load_databases(gdmaps);
+    gdmaps_setup_watchers(gdmaps);
 
     return gdmaps;
 }

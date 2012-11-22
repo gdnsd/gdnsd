@@ -14,6 +14,13 @@ libgdmaps_la_SOURCES = \
 	dclists.h \
 	dcmap.c \
 	dcmap.h \
+	nlist.c \
+	nlist.h \
+	ntree.c \
+	ntree.h \
+	nets.c \
+	nets.h \
+	gdgeoip.c \
 	gdgeoip.h \
 	fips104.c \
 	fips104.h

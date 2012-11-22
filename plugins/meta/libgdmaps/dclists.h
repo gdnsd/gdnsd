@@ -27,7 +27,6 @@
 #include <stdbool.h>
 
 typedef struct _dclists dclists_t;
-typedef void (*dclists_iter_cb_t)(const uint8_t* dclist, void* data);
 
 typedef enum {
    KILL_NO_LISTS,
@@ -43,8 +42,6 @@ F_NONNULL
 unsigned dclists_get_count(const dclists_t* lists);
 F_NONNULL
 const uint8_t* dclists_get_list(const dclists_t* lists, const unsigned idx);
-F_NONNULLX(1,2)
-void dclists_iterate(const dclists_t* lists, dclists_iter_cb_t f, void* data);
 F_NONNULL
 void dclists_replace_list0(dclists_t* lists, uint8_t* newlist);
 F_NONNULL

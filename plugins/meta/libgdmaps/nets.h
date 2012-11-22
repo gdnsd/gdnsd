@@ -17,22 +17,15 @@
  *
  */
 
-#ifndef GDMAPS_TEST_H
-#define GDMAPS_TEST_H
+#ifndef NETS_H
+#define NETS_H
 
 #include "config.h"
-#include <inttypes.h>
+#include "dclists.h"
+#include "nlist.h"
 #include <gdnsd-vscf.h>
-#include <gdnsd-plugapi.h>
 
-#include "gdmaps.h"
+F_NONNULLX(2, 3)
+nlist_t* nets_make_list(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name);
 
-// init gdmaps_t based on user-supplied rootdir (or default if NULL)
-gdmaps_t* gdmaps_test_init(const char* input_rootdir);
-
-// A complete results-checker.  It will terminate with stderr output if
-//  the data comparison (or any earlier part of the operation) fails.
-F_NONNULL
-void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp);
-
-#endif // GDMAPS_TEST_H
+#endif // NETS_H
