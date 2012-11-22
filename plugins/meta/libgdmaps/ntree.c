@@ -85,6 +85,7 @@ static void ntree_dump_recurse(const ntree_t* tree, const unsigned bitdepth, con
 
 F_NONNULL
 static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, const unsigned val, struct in6_addr ipv6) {
+    dmn_assert(tree);
     if(NN_IS_DCLIST(val)) {
         anysin_t tempsin;
         memset(&tempsin, 0, sizeof(tempsin));
@@ -100,6 +101,7 @@ static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, con
 }
 
 static void ntree_dump_recurse(const ntree_t* tree, const unsigned bitdepth, const unsigned offset, struct in6_addr ipv6) {
+    dmn_assert(tree);
     const nnode_t* this_node = &tree->store[offset];
     ntree_dump_rec_sub(tree, bitdepth, this_node->zero, ipv6);
     SETBIT_v6(ipv6.s6_addr, 127 - bitdepth);
@@ -196,7 +198,7 @@ static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned
 // else, leave addr as-is and return 0.
 F_NONNULL F_PURE
 static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
-    dmn_assert(in);
+    dmn_assert(in); dmn_assert(mask_adj);
 
     // easier access to various bits of the ipv6 space
     uint16_t* in_16 = (uint16_t*)in;

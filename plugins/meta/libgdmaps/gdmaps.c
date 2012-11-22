@@ -219,8 +219,9 @@ static void gdmap_tree_update(gdmap_t* gdmap) {
     log_info("plugin_geoip: map '%s' runtime db updated. nets: %u dclists: %u", gdmap->name, gdmap->tree->count + 1, dclists_get_count(gdmap->dclists));
 }
 
+F_NONNULL
 static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_list_ptr, gdgeoip_v4o_t v4o_flag) {
-    dmn_assert(gdmap);
+    dmn_assert(gdmap); dmn_assert(path); dmn_assert(out_list_ptr);
 
     dclists_t* update_dclists;
 
@@ -592,8 +593,10 @@ void gdmaps_load_databases(gdmaps_t* gdmaps) {
         gdmap_initial_load_all(gdmaps->maps[i]);
 }
 
+F_NONNULL
 static void* gdmaps_reload_thread(void* arg) {
     gdmaps_t* gdmaps = (gdmaps_t*)arg;
+    dmn_assert(gdmaps);
 
     gdmaps->reload_loop = ev_loop_new(EVFLAG_AUTO);
     ev_set_timeout_collect_interval(gdmaps->reload_loop, 0.5);

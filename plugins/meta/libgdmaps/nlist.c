@@ -102,7 +102,7 @@ static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask) {
 
 F_NONNULL
 static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned mask) {
-    dmn_assert(ipv6); dmn_assert(mask < 129);
+    dmn_assert(map_name); dmn_assert(ipv6); dmn_assert(mask < 129);
 
     const unsigned revmask = 128 - mask;
     const unsigned byte_mask = ~(0xFF << (revmask & 7)) & 0xFF;

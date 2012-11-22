@@ -409,7 +409,9 @@ static unsigned get_dclist_cached(geoip_db_t* db, const unsigned offset) {
     return dclist;
 }
 
+F_NONNULL
 static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, const int depth, const unsigned db_off) {
+    dmn_assert(db); dmn_assert(nl);
     dmn_assert(depth < 129);
     dmn_assert(depth > 0);
 
@@ -467,6 +469,7 @@ static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, 
     return rv;
 }
 
+F_NONNULL
 static bool geoip_db_close(geoip_db_t* db) {
     dmn_assert(db);
     bool rv = false;
