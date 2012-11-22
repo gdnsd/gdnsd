@@ -134,7 +134,7 @@ static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned 
     }
 
     if(maskbad)
-        log_warn("plugin_geoip: map '%s': input network %s/%u has bits beyond mask (cleared)", map_name, logf_ipv6(ipv6), mask);
+        log_warn("plugin_geoip: map '%s': input network %s/%u had illegal bits beyond mask, which were cleared", map_name, logf_ipv6(ipv6), mask);
 }
 
 // Sort an array of net_t.  Sort prefers
