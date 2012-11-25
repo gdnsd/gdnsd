@@ -29,7 +29,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <pthread.h>
 
 #include <gdnsd-dmn.h>
 #include <gdnsd-log.h>

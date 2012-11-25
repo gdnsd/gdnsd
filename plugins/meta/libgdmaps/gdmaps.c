@@ -46,6 +46,7 @@
 #include <gdnsd-vscf.h>
 #include <gdnsd-ev.h>
 #include <gdnsd-misc.h>
+#include "gdnsd-prcu-priv.h"
 
 // When an input file change is detected, we wait this long
 //  for a followup change notification before processing.  Every time we get
@@ -61,7 +62,6 @@
 #define ALL_RELOAD_WAIT 7.0
 
 typedef struct {
-    pthread_rwlock_t tree_lock;
     char* name;
     char* geoip_path;
     char* geoip_v4o_path;
@@ -172,25 +172,6 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     // check for invalid keys
     vscf_hash_iterate(map_cfg, true, _gdmap_badkey, (void*)name);
 
-    // Set up tree lock for runtime reloads
-    int pthread_err;
-    pthread_rwlockattr_t lockatt;
-    if((pthread_err = pthread_rwlockattr_init(&lockatt)))
-        log_fatal("plugin_geoip: pthread_rwlockattr_init() failed: %s", logf_errnum(pthread_err));
-
-    // Non-portable way to boost writer priority.  Our writelocks are held very briefly
-    //  and very rarely, whereas the readlocks could be very spammy, and we don't want to
-    //  block the write operation forever.  This works on Linux+glibc.
-#   ifdef PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP
-        if((pthread_err = pthread_rwlockattr_setkind_np(&lockatt, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP)))
-            log_fatal("plugin_geoip: pthread_rwlockattr_setkind_np(PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP) failed: %s", logf_errnum(pthread_err));
-#   endif
-
-    if((pthread_err = pthread_rwlock_init(&gdmap->tree_lock, &lockatt)))
-        log_fatal("plugin_geoip: pthread_rwlock_init() failed: %s", logf_errnum(pthread_err));
-    if((pthread_err = pthread_rwlockattr_destroy(&lockatt)))
-        log_fatal("plugin_geoip: pthread_rwlockattr_destroy() failed: %s", logf_errnum(pthread_err));
-
     return gdmap;
 }
 
@@ -216,12 +197,10 @@ static void gdmap_tree_update(gdmap_t* gdmap) {
     ntree_t* old_tree = gdmap->tree;
     dclists_t* old_lists = gdmap->dclists;
 
-    // This data swap is designed to be RCU-compatible for
-    //   a future performance upgrade...
-    pthread_rwlock_wrlock(&gdmap->tree_lock);
-    gdmap->dclists = gdmap->dclists_pend;
-    gdmap->tree = merged;
-    pthread_rwlock_unlock(&gdmap->tree_lock);
+    gdnsd_prcu_upd_lock();
+    gdnsd_prcu_upd_assign(gdmap->dclists, gdmap->dclists_pend);
+    gdnsd_prcu_upd_assign(gdmap->tree, merged);
+    gdnsd_prcu_upd_unlock();
 
     gdmap->dclists_pend = NULL;
     if(old_tree)
@@ -550,10 +529,20 @@ F_NONNULL
 static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, unsigned* scope_mask) {
     dmn_assert(gdmap); dmn_assert(client);
 
-    pthread_rwlock_rdlock(&gdmap->tree_lock);
-    const unsigned dclist_u = ntree_lookup(gdmap->tree, client, scope_mask);
-    const uint8_t* dclist_u8 = dclists_get_list(gdmap->dclists, dclist_u);
-    pthread_rwlock_unlock(&gdmap->tree_lock);
+    // gdnsd_prcu_rdr_online() + gdnsd_prcu_rdr_lock()
+    //   is handled by the iothread and dns lookup code
+    //   in the main daemon, in a far outer scope from
+    //   this code in runtime terms.
+
+    const unsigned dclist_u = ntree_lookup(
+        gdnsd_prcu_rdr_deref(gdmap->tree),
+        client,
+        scope_mask
+    );
+    const uint8_t* dclist_u8 = dclists_get_list(
+        gdnsd_prcu_rdr_deref(gdmap->dclists),
+        dclist_u
+    );
 
     dmn_assert(dclist_u8);
     return dclist_u8;
@@ -566,9 +555,6 @@ F_NONNULL
 static void gdmap_destroy(gdmap_t* gdmap) {
     dmn_assert(gdmap);
 
-    int pthread_err;
-    if((pthread_err = pthread_rwlock_destroy(&gdmap->tree_lock)))
-        log_fatal("plugin_geoip: pthread_rwlock_destroy() failed: %s", logf_errnum(pthread_err));
     if(gdmap->tree)
         ntree_destroy(gdmap->tree);
     if(gdmap->nets_list)
