@@ -23,61 +23,7 @@
 
 #include "gdnsd-dname.h"
 #include "gdnsd-misc.h"
-
-#ifdef HAVE_QSBR
-
-#define _LGPL_SOURCE 1
-#include <urcu-qsbr.h>
-
-#define zt_assign(d,s) rcu_assign_pointer((d),(s))
-#define zt_deref(s) rcu_dereference((s))
-#define zt_update_lock()
-#define zt_update_unlock() synchronize_rcu()
-
-static void setup_lock(void) { }
-static void destroy_lock(void) { }
-
-#else // use pthreads instead
-
-#include <pthread.h>
-
-static pthread_rwlock_t ztree_lock;
-
-void ztree_reader_lock(void) { pthread_rwlock_rdlock(&ztree_lock); }
-void ztree_reader_unlock(void) { pthread_rwlock_unlock(&ztree_lock); }
-
-#define zt_assign(d,s) (d) = (s)
-#define zt_deref(s) (s)
-#define zt_update_lock() pthread_rwlock_wrlock(&ztree_lock)
-#define zt_update_unlock() pthread_rwlock_unlock(&ztree_lock)
-
-static void setup_lock(void) {
-    int pthread_err;
-    pthread_rwlockattr_t lockatt;
-    if((pthread_err = pthread_rwlockattr_init(&lockatt)))
-        log_fatal("ztree: pthread_rwlockattr_init() failed: %s", logf_errnum(pthread_err));
-
-    // Non-portable way to boost writer priority.  Our writelocks are held very briefly
-    //  and very rarely, whereas the readlocks could be very spammy, and we don't want to
-    //  block the write operation forever.  This works on Linux+glibc.
-#   ifdef PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP
-        if((pthread_err = pthread_rwlockattr_setkind_np(&lockatt, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP)))
-            log_fatal("ztree: pthread_rwlockattr_setkind_np(PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP) failed: %s", logf_errnum(pthread_err));
-#   endif
-
-    if((pthread_err = pthread_rwlock_init(&ztree_lock, &lockatt)))
-        log_fatal("ztree: pthread_rwlock_init() failed: %s", logf_errnum(pthread_err));
-    if((pthread_err = pthread_rwlockattr_destroy(&lockatt)))
-        log_fatal("ztree: pthread_rwlockattr_destroy() failed: %s", logf_errnum(pthread_err));
-}
-
-static void destroy_lock(void) {
-    int pthread_err;
-    if((pthread_err = pthread_rwlock_destroy(&ztree_lock)))
-        log_fatal("ztree: pthread_rwlock_destroy() failed: %s", logf_errnum(pthread_err));
-}
-
-#endif // QSBR-vs-pthreads
+#include "gdnsd-prcu-priv.h"
 
 // The tree data structure that will hold the zone_t's
 struct _ztree_struct;
@@ -101,7 +47,7 @@ struct _ztree_struct {
 F_NONNULL
 static inline zone_t* ztree_reader_get_zone(const ztree_t* zt) {
     dmn_assert(zt);
-    zone_t** temp = zt_deref(zt->zones);
+    zone_t** temp = gdnsd_prcu_rdr_deref(zt->zones);
     return temp ? *temp : NULL;
 }
 
@@ -200,7 +146,7 @@ static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label, const
     ztree_t* rv = NULL;
     ztchildren_t* children;
     if(reader)
-        children = zt_deref(node->children);
+        children = gdnsd_prcu_rdr_deref(node->children);
     else
         children = node->children;
     if(children) {
@@ -209,7 +155,7 @@ static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label, const
         unsigned jmpby = 1;
         unsigned slot = label_hash(label) & child_mask;
         if(reader) {
-            while((rv = zt_deref(children->store[slot]))
+            while((rv = gdnsd_prcu_rdr_deref(children->store[slot]))
               && memcmp(rv->label, label, *label + 1)) {
                 slot += jmpby++;
                 slot &= child_mask;
@@ -237,7 +183,7 @@ zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
 
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(dname, lstack);
-    ztree_t* current = zt_deref(ztree_root);
+    ztree_t* current = gdnsd_prcu_rdr_deref(ztree_root);
     while(current && !(rv = ztree_reader_get_zone(current)) && lcount)
         current = ztree_node_find_child(current, lstack[--lcount], true);
 
@@ -264,7 +210,7 @@ static void ztree_node_check_grow(ztree_t* node) {
         ztchildren_t* children = calloc(1, sizeof(ztchildren_t));
         children->store = calloc(16, sizeof(ztree_t*));
         children->alloc = 16;
-        zt_assign(node->children, children);
+        gdnsd_prcu_upd_assign(node->children, children);
     }
     // max load is 25%
     else if(old_children->count >= (old_children->alloc >> 2)) {
@@ -286,9 +232,9 @@ static void ztree_node_check_grow(ztree_t* node) {
                 new_children->store[slot] = entry;
             }
         }
-        zt_update_lock();
-        zt_assign(node->children, new_children);
-        zt_update_unlock();
+        gdnsd_prcu_upd_lock();
+        gdnsd_prcu_upd_assign(node->children, new_children);
+        gdnsd_prcu_upd_unlock();
         free(old_children->store);
         free(old_children);
     }
@@ -321,7 +267,7 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
         rv = calloc(1, sizeof(ztree_t));
         rv->label = malloc(*label + 1);
         memcpy(rv->label, label, *label + 1);
-        zt_assign(children->store[slot], rv);
+        gdnsd_prcu_upd_assign(children->store[slot], rv);
         children->count++;
     }
 
@@ -345,12 +291,12 @@ static void ztree_leak_warn(ztree_t* node) {
 static void ztree_atexit(void) {
     if(dmn_get_debug())
         ztree_leak_warn(ztree_root);
-    destroy_lock();
+    gdnsd_prcu_destroy_lock();
 }
 
 void ztree_init(void) {
     dmn_assert(!ztree_root);
-    setup_lock();
+    gdnsd_prcu_setup_lock();
     ztree_root = calloc(1, sizeof(ztree_t));
     if(atexit(ztree_atexit))
         log_fatal("atexit(ztree_atexit) failed: %s", logf_errno());
@@ -537,9 +483,9 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
         this_zt->zones = new_list;
     }
     else {
-        zt_update_lock();
-        zt_assign(this_zt->zones, new_list);
-        zt_update_unlock();
+        gdnsd_prcu_upd_lock();
+        gdnsd_prcu_upd_assign(this_zt->zones, new_list);
+        gdnsd_prcu_upd_unlock();
     }
     if(old_list)
         free(old_list);
@@ -623,9 +569,9 @@ void ztree_txn_end(void) {
     dmn_assert(ztree_root);
     dmn_assert(new_root);
     ztree_t* old_root = ztree_root;
-    zt_update_lock();
-    zt_assign(ztree_root, new_root);
-    zt_update_unlock();
+    gdnsd_prcu_upd_lock();
+    gdnsd_prcu_upd_assign(ztree_root, new_root);
+    gdnsd_prcu_upd_unlock();
     ztree_destroy_clone(old_root);
     new_root = NULL;
     log_info("Multi-zone update transaction committed");

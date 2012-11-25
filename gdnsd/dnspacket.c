@@ -28,6 +28,7 @@
 #include "dnswire.h"
 #include "gdnsd-misc.h"
 #include "gdnsd-plugapi-priv.h"
+#include "gdnsd-prcu-priv.h"
 #include "ztree.h"
 
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -1612,7 +1613,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
     ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
 
-    ztree_reader_lock();
+    gdnsd_prcu_rdr_lock();
 
     zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
 
@@ -1689,7 +1690,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         }
     }
 
-    ztree_reader_unlock();
+    gdnsd_prcu_rdr_unlock();
 
     return offset;
 }

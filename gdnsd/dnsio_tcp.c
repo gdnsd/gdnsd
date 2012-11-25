@@ -31,6 +31,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
+#include "gdnsd-prcu-priv.h"
 
 typedef enum {
     READING_INITIAL = 0,
@@ -366,15 +367,15 @@ bool tcp_dns_listen_setup(dns_addr_t *addrconf) {
 }
 
 static void thread_clean(void* arg_unused V_UNUSED) {
-    ztree_reader_thread_end();
+    gdnsd_prcu_rdr_thread_end();
 }
 
 static void ztstate_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {
-    ztree_reader_offline();
+    gdnsd_prcu_rdr_offline();
 }
 
 static void ztstate_online(struct ev_loop* loop V_UNUSED, ev_check* w V_UNUSED, int revents V_UNUSED) {
-    ztree_reader_online();
+    gdnsd_prcu_rdr_online();
 }
 
 void* dnsio_tcp_start(void* addrconf_asvoid) {
@@ -418,7 +419,7 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
 
     ev_io_start(loop, accept_watcher);
 
-    ztree_reader_thread_start();
+    gdnsd_prcu_rdr_thread_start();
     pthread_cleanup_push(thread_clean, NULL);
 
     struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));

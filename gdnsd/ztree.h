@@ -108,38 +108,4 @@ void zone_delete(zone_t* zone);
 F_NONNULL
 zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 
-// ztree locking for readers (DNS I/O threads):
-// thread start -> ztree_reader_thread_start()
-//  loop:
-//   enter i/o wait (epoll/recvmsg) -> ztree_reader_offline()
-//   return from i/o wait -> ztree_reader_online()
-//   ztree_reader_lock()
-//   z = ztree_find_zone_for(...)
-//   finish using all data subordinate to "z"
-//   ztree_reader_unlock()
-//   goto loop
-
-#ifdef HAVE_QSBR
-
-#define _LGPL_SOURCE 1
-#include <urcu-qsbr.h>
-
-F_UNUSED static void ztree_reader_thread_start(void) { rcu_register_thread(); }
-F_UNUSED static void ztree_reader_thread_end(void) { rcu_unregister_thread(); }
-F_UNUSED static void ztree_reader_online(void) { rcu_thread_online(); } 
-F_UNUSED static void ztree_reader_lock(void) { rcu_read_lock(); }
-F_UNUSED static void ztree_reader_unlock(void) { rcu_read_unlock(); }
-F_UNUSED static void ztree_reader_offline(void) { rcu_thread_offline(); }
-
-#else
-
-F_UNUSED static void ztree_reader_thread_start(void) { }
-F_UNUSED static void ztree_reader_thread_end(void) { }
-F_UNUSED static void ztree_reader_online(void) { }
-void ztree_reader_lock(void);
-void ztree_reader_unlock(void);
-F_UNUSED static void ztree_reader_offline(void) { }
-
-#endif
-
 #endif // _GDNSD_ZTREE_H
