@@ -146,18 +146,29 @@ LIBS=$XLIBS
 dnl ======== End Network Stuff ==========
 
 dnl liburcu-qsbr
+KILL_QSBR=0
+AC_ARG_WITH([urcu],[
+AS_HELP_STRING([--without-urcu],[Explicitly disable userspace-rcu detection])
+],[
+    if test "x$withval" = xno; then
+        KILL_QSBR=1
+    fi
+])
+
 HAVE_QSBR=0
 QSBRLIBS=
-AC_CHECK_HEADER(urcu-qsbr.h,[
-    XLIBS=$LIBS
-    LIBS=""
-    AC_CHECK_LIB([urcu-qsbr],[perror],[
-        HAVE_QSBR=1
-        AC_DEFINE_UNQUOTED([HAVE_QSBR], $HAVE_QSBR, [Use liburcu-qsbr])
-        QSBRLIBS="-lurcu-qsbr"
+if test $KILL_QSBR -eq 0; then
+    AC_CHECK_HEADER(urcu-qsbr.h,[
+        XLIBS=$LIBS
+        LIBS=""
+        AC_CHECK_LIB([urcu-qsbr],[perror],[
+            HAVE_QSBR=1
+            AC_DEFINE_UNQUOTED([HAVE_QSBR], $HAVE_QSBR, [Use liburcu-qsbr])
+            QSBRLIBS="-lurcu-qsbr"
+        ])
+        LIBS=$XLIBS
     ])
-    LIBS=$XLIBS
-])
+fi
 AC_SUBST([QSBRLIBS])
 
 dnl ======== Begin Capabilities Stuff ==========
@@ -345,10 +356,18 @@ dnl Summary output for the user
 
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$LOWMEM" = x1; then CFSUM_LM=Yes; else CFSUM_LM=No; fi
-if test "x$HAVE_QSBR" = x1; then CFSUM_QSBR=Yes; else CFSUM_QSBR=No; fi
 if test "x$USE_LINUX_CAPS" = x1; then CFSUM_CAP=Yes; else CFSUM_CAP=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
+if test "x$HAVE_QSBR" = x1; then
+    CFSUM_QSBR=Yes
+else
+    if test "x$KILL_QSBR" = x1; then
+        CFSUM_QSBR=Disabled
+    else
+        CFSUM_QSBR=No
+    fi
+fi
 CFSUM_TP=$TESTPORT_START
 
 echo "======================================="
