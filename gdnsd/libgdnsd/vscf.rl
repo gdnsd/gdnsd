@@ -412,8 +412,6 @@ static void hash_destroy(vscf_hash_t* h) {
     ### Actions and rules related to simple text parsing/types
     ##########
 
-    action count_lines { scnr->lcount++; }
-
     action token_start { scnr->tstart = fpc; }
 
     action set_key { set_key(scnr, fpc); }
@@ -435,18 +433,18 @@ static void hash_destroy(vscf_hash_t* h) {
     }
 
     # newlines, count them
-    nl      = '\n' $count_lines;
+    nl      = '\r'? '\n' %{ scnr->lcount++; };
 
     # Single line comment, e.g. ; dns comment or # sh comment
-    slc     = ([;#] [^\n]* nl);
+    slc     = ([;#] [^\r\n]* nl);
 
     # Whitespace, which includes newlines and comments, and is
     #  always optional wherever it occurs.
-    ws      = ([ \r\t] | nl | slc)*;
+    ws      = ([ \t] | nl | slc)*;
 
     # Escape sequences in general for any character-string
     escape_int = 25[0-5] | ( 2[0-4] | [01][0-9] ) [0-9] ;
-    escapes = ('\\' [^0-9\n]) | ('\\' escape_int) | ('\\' nl);
+    escapes = ('\\' [^0-9\r\n]) | ('\\' escape_int) | ('\\' nl);
 
     # The base set of literal characters allowed in unquoted
     #  charater-srings
@@ -457,7 +455,7 @@ static void hash_destroy(vscf_hash_t* h) {
     #  forcing the parser to prefer staying in the string over other
     #  alternatives.
     unquoted = (chr | escapes)+ $1 %0;
-    quoted   = ('"' ([^"\n\\]|escapes|nl)* '"');
+    quoted   = ('"' ([^"\r\n\\]|escapes|nl)* '"');
 
     # Keys and Values are both character-strings, and either can
     #  optionally be in quoted form.  However, they trigger different code.
