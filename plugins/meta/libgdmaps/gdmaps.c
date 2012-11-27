@@ -41,7 +41,7 @@
 #include <sys/mman.h>
 #include <pthread.h>
 
-#include <libev/ev.h>
+#include <ev.h>
 
 #include <gdnsd-dmn.h>
 #include <gdnsd-log.h>

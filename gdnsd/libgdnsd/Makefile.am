@@ -10,7 +10,7 @@ libgdnsd_la_SOURCES = gdnsd-prcu.c dname.c net.c log.c monio.c vscf.c misc.c plu
 nodist_libgdnsd_la_SOURCES = $(xHEADERS_BUILT)
 
 libgdnsd_la_LDFLAGS  = -shared -avoid-version
-libgdnsd_la_LIBADD   = $(QSBRLIBS) $(MATH_LIB) $(EVLIBS) $(NETLIBS) $(LIBADD_DLOPEN)
+libgdnsd_la_LIBADD   = $(QSBRLIBS) $(MATH_LIB) $(LIBEV_LIBS) $(NETLIBS) $(LIBADD_DLOPEN)
 
 libgdnsd_la_includedir = $(includedir)
 dist_libgdnsd_la_include_HEADERS = $(xHEADERS_DIST)

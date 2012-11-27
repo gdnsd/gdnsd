@@ -24,7 +24,7 @@
 #include <inttypes.h>
 
 // For struct ev_loop
-#include <libev/ev.h>
+#include <ev.h>
 
 // For vscf_data_t
 #include <gdnsd-vscf.h>

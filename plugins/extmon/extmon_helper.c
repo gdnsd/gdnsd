@@ -32,7 +32,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#include <libev/ev.h>
+#include <ev.h>
 
 typedef struct {
     extmon_cmd_t* cmd;

@@ -164,16 +164,21 @@ fi
 AC_SUBST([QSBRLIBS])
 
 dnl libev
-XLIBS=$LIBS
-LIBS=""
-AC_CHECK_LIB([ev],[ev_break],,AC_MSG_ERROR([libev 4.x library not found!]))
-AC_CHECK_HEADER([libev/ev.h],,AC_MSG_ERROR([libev 4.x headers not found!]))
-AC_CHECK_DECLS([EVBREAK_ALL],,AC_MSG_ERROR([libev 4.x headers not found!]),[
-    #include <libev/ev.h>
-])
-EVLIBS=$LIBS
-LIBS=$XLIBS
-AC_SUBST([EVLIBS])
+PKG_CHECK_MODULES([LIBEV],[libev >= 4.0],
+    CPPFLAGS="${CPPFLAGS} ${LIBEV_CFLAGS}"
+,
+    # try manually...
+    XLIBS=$LIBS
+    LIBS=""
+    AC_CHECK_LIB([ev],[ev_break],,AC_MSG_ERROR([libev 4.x library not found!]))
+    AC_CHECK_DECLS([EVBREAK_ALL],,AC_MSG_ERROR([libev 4.x headers not found!]),[
+        #include <ev.h>
+    ])
+    LIBEV_LIBS=$LIBS
+    LIBS=$XLIBS
+)
+AC_SUBST([LIBEV_LIBS])
+
 
 dnl ======== Begin Capabilities Stuff ==========
 
