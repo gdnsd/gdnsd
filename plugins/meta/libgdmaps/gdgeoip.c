@@ -33,7 +33,6 @@
 #include <gdnsd-dmn.h>
 #include <gdnsd-log.h>
 #include <gdnsd-vscf.h>
-#include <gdnsd-ev.h>
 #include <gdnsd-misc.h>
 
 

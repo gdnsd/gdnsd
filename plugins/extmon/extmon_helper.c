@@ -20,7 +20,6 @@
 #include "config.h"
 #include "gdnsd-compiler.h"
 #include "gdnsd-log.h"
-#include "gdnsd-ev.h"
 
 #include "extmon_comms.h"
 
@@ -32,6 +31,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
+
+#include <libev/ev.h>
 
 typedef struct {
     extmon_cmd_t* cmd;

@@ -52,14 +52,6 @@ LIBS=$XLIBS
 dnl include libdmn configure stuff (only sets some config.h stuff)
 m4_include([gdnsd/libgdnsd/libdmn/libdmn.m4])
 
-dnl include libev configure stuff
-XLIBS=$LIBS
-LIBS=""
-m4_include([gdnsd/libgdnsd/libev/libev.m4])
-EVLIBS=$LIBS
-LIBS=$XLIBS
-AC_SUBST([EVLIBS])
-
 dnl explicit check on math lib.  libev also does this, but
 dnl  might not in the future, and we need it directly
 XLIBS=$LIBS
@@ -170,6 +162,18 @@ if test $KILL_QSBR -eq 0; then
     ])
 fi
 AC_SUBST([QSBRLIBS])
+
+dnl libev
+XLIBS=$LIBS
+LIBS=""
+AC_CHECK_LIB([ev],[ev_break],,AC_MSG_ERROR([libev 4.x library not found!]))
+AC_CHECK_HEADER([libev/ev.h],,AC_MSG_ERROR([libev 4.x headers not found!]))
+AC_CHECK_DECLS([EVBREAK_ALL],,AC_MSG_ERROR([libev 4.x headers not found!]),[
+    #include <libev/ev.h>
+])
+EVLIBS=$LIBS
+LIBS=$XLIBS
+AC_SUBST([EVLIBS])
 
 dnl ======== Begin Capabilities Stuff ==========
 
@@ -299,12 +303,10 @@ if test "x$developer" != xno; then
   if test x"$ac_cv_prog_cc_g" = xyes; then
     CFLAGS="${CFLAGS} -g -Wall -W -Wshadow"
   fi
-  AC_DEFINE_UNQUOTED([EV_VERIFY], 3, [libev verification checks])
   AC_DEFINE_UNQUOTED([DEBUG_RCU], 1, [liburcu verification checks])
   AC_DEFINE_UNQUOTED([RCU_DEBUG], 1, [liburcu verification checks])
 else
   CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
-  AC_DEFINE_UNQUOTED([EV_VERIFY], 0, [libev verification checks])
 fi
 
 AC_CHECK_HEADERS([valgrind/memcheck.h])

@@ -450,8 +450,6 @@ document them correctly, probably doxygen.
 
 =item gdnsd-monio.h
 
-=item gdnsd-ev.h
-
 =item gdnsd-dname.h
 
 =back
@@ -596,9 +594,9 @@ return all if everything's down, as if nothing in the resource were down).
 
 =head2 Version 10
 
-Version 10 is in a developer branch and unpublished other than through
-the git tree itself.  It is subject to continuing changes until a 1.7.x
-release tarball is made.
+Version 10 contains all the changes leading up to 1.8.0.  It's a moving
+target, and you'll need to rebuild your plugins regularly if you're tracking
+the 1.7.x in-progress development stuff.
 
 satom/monio stuff:
 
@@ -615,6 +613,11 @@ to fetch monitored states.
 gdnsd_monio_state_updater() is now the B<required> interface for
 monitoring plugins to send updates to the core, whereas it was
 merely recommended in the past.
+
+The embedded copy of libev was removed in favor of using an external
+installation as a dependency.  This means you'll need to have your
+own copy of libev's development headers in place to build 3rd-party
+plugins, and they should match the libev version gdnsd was built with.
 
 A few other minor changes require just a recompile, even if none of
 the above applies.

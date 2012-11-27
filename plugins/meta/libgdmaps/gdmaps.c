@@ -41,10 +41,11 @@
 #include <sys/mman.h>
 #include <pthread.h>
 
+#include <libev/ev.h>
+
 #include <gdnsd-dmn.h>
 #include <gdnsd-log.h>
 #include <gdnsd-vscf.h>
-#include <gdnsd-ev.h>
 #include <gdnsd-misc.h>
 #include "gdnsd-prcu-priv.h"
 

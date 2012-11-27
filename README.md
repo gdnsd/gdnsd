@@ -79,24 +79,6 @@ The rest is all relatively well-documented in the ChangeLog.
 
 ## COPYRIGHT AND LICENSING
 
-Some files within this distribution are externally sourced
-open source software, and are covered by their own seperate
-copyright and license terms.  Notably:
-
- *) All files in the subdirectory gdnsd/libev come from Marc
-Alexander Lehmann's libev distribution, and are covered by his
-separate LICENSE file, which is also included in that directory.
-His license is GPL-compatible (specifically, it is an either/or
-of GPL and other terms).
-
- *) Several autoconf-related files (macros and helper scripts
-and so-on) contain their own embedded copyright and
-GPL-compatible licensing terms.
-
-All actual gdnsd source code is licensed under the terms of the
-GPLv3, and includes an appropriate copyright/licensing block
-near the top of each source file.
-
 gdnsd is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or

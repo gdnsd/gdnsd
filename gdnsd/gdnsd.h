@@ -39,8 +39,9 @@ proper includes in every file, instead of relying on this as a catch-all.
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <libev/ev.h>
+
 #include "gdnsd-compiler.h"
-#include "gdnsd-ev.h"
 #include "gdnsd-vscf.h"
 #include "gdnsd-dname.h"
 #include "gdnsd-stats.h"
