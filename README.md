@@ -55,6 +55,27 @@ My test servers/domains are at: http://gdnsd.net . These tend to run the latest 
 
 The primary target platform is modern x86_64 Linux.  The code also compiles and works fine on MacOS X.  In theory, it should be portable to any reasonably-modern POSIXy platform with a good C99 compiler.  Several releases ago I spent some effort testing that it did in fact compile, pass tests, and operate correctly at runtime on a number of *BSDs, OpenSolaris w/ Sun's compiler, and even an embedded Linux router with a big-endian MIPS CPU.  YMMV on such targets with the modern codebase as I only regularly test Linux and Mac targets, but clean portability patches are always welcome.  There's a FreeBSD port at: http://portsmon.freebsd.org/portoverview.py?category=dns&portname=gdnsd
 
+## Building From Source
+
+In general, this is a standard autoconf-style project: ./configure && make check && sudo make install
+
+If your starting point is a tarball download, the following prerequisites apply:
+
+* A basically functional POSIX build environment with a C99 compiler
+* libev headers and libraries, version 4.x: distro pkg or http://software.schmorp.de/pkg/libev.html
+
+The following are optional, but generally recommended:
+
+* liburcu aka userspace-rcu headers and libraries. Use distro pkg or http://lttng.org/urcu/
+* libcap headers and libraries on Linux hosts (use distro pkg generally)
+
+The following have no real effect on the build or runtime, but are required in order to run the testsuite:
+
+* Perl 5.8.1 or higher
+* Perl modules: Net::DNS 0.63+, LWP 5.805+, Socket6, IO::Socket::INET6
+
+If working directly from a git clone rather than a tarball, you'll also need a full suite of the latest autoconf/automake/libtool (start with the "autoreconf" command to generate an initial ./configure), as well as a working copy of Ragel: http://www.complang.org/ragel/
+
 ## Release Numbering and Policy
 
 All modern gdnsd release numbers take the form X.Y.Z.  X hasn't been incremented from 1 yet, but I imagine it will take a pretty significant re-design or a huge set of feature changes to warrant it.  Y increments on major feature releases.  Only even-numbered Y's are stable releases, with the odd numbers between reserved for development feature previews of unstable code leading towards the next even-numbered stable series.  New feature series often break backwards compatibility in some way or other. Z increments for minor patches.
