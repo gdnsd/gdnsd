@@ -1,16 +1,44 @@
-1.7.3 - 2012-09-18
+
+Next...
     THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
       HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
       stable release, and 1.8.x will be the future stable release
       containing these changes.
+    Embedded libev removed.  Libev is now an external pre-requisite.
+    DOS-style line endings (\r\n) are now accepted when parsing
+      configuration and zone files.
+    URCU (userspace-rcu) can be explicitly disabled via autoconf
+    plugin_extmon: a couple of small bugfixes
+    plugin_geoip:
+      Code heavily refactored
+      pointless city_no_city feature removed
+      Now uses URCU (if avail) instead of pthread rwlock for updates.
+      GeoIP databases are now optional; one can choose to use only
+        "nets" data (or none at all, resulting in everyone getting
+        the default).
+      GeoIP database runtime reloading is now more efficient and
+        doesn't trigger a re-scan of other unchanged database files.
+      "nets" can be specified as the pathname of an external file of
+        arbitrary size.  This file will be runtime-reloaded on
+        change just like the GeoIP databases are.
+      "nets" is now properly and optimally merged onto the baseline
+        GeoIP data rather than hacked on top of it.
+      "nets" now allows most of the IPv6 address space to be
+        specified.  Most of the "v4-compatible" IPv6 areas are still
+        illegal other than v4compat.  Previously any supernet of
+        those areas was also illegal.
+      The dubious and ill-defined fallback behavior from an
+        edns-client-subnet lookup that produced questionable results
+        to a cache IP lookup has been removed.  If edns-client-subnet
+        information is available with any netmask greater than zero,
+        it will be used for results.  The cache's IP is only checked
+        when edns-client-subnet data isn't available.
+
+1.7.3 - 2012-09-18
     New monitoring plugin "extmon", which can run external commands
       for status updates.
 
 1.7.2 - 2012-09-11
-    THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
-      HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
-      stable release, and 1.8.x will be the future stable release
-      containing these changes.
     The zones_rfc1035_* config options changed in name and function
       a bit, see the docs.
     A lot of new tests were added for the new runtime zone
@@ -961,4 +989,3 @@ trunk (released there as part of 1.4.5):
 
 0.02 - 2008-06-09
     Initial public release
-
