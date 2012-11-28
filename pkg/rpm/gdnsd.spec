@@ -11,7 +11,9 @@ Requires(post): /sbin/chkconfig
 Requires(preun): /sbin/service, /sbin/chkconfig
 Requires(postun): /sbin/service
 Requires: userspace-rcu
+Requires: libev
 BuildRequires: userspace-rcu-devel
+BuildRequires: libev-devel
 BuildRequires: libcap-devel
 BuildRequires: perl(Test::More)
 BuildRequires: perl(Net::DNS)
