@@ -1,5 +1,5 @@
 [Unit]
-Description=Authoritative DNS Server
+Description=gdnsd
 After=local-fs.target
 After=syslog.target
 After=network.target
@@ -7,11 +7,11 @@ After=network.target
 [Service]
 Type=forking
 EnvironmentFile=/etc/sysconfig/gdnsd
-PidFile=$GDNSD_ROOT/var/gdnsd.pid
 ExecStart=/usr/sbin/gdnsd -d $GDNSD_ROOT start
 ExecStop=/usr/sbin/gdnsd -d $GDNSD_ROOT stop
 ExecReload=/usr/sbin/gdnsd -d $GDNSD_ROOT restart
-Restart=on-failure
+StandardOutput=tty
+StandardError=inherit
 
 [Install]
 WantedBy=multi-user.target
