@@ -442,7 +442,7 @@ void* dnsio_udp_start(void* addrconf_asvoid) {
 
 #ifdef HAVE_SENDMMSG
     if(addrconf->udp_recv_width > 1) {
-        log_info("sendmmsg() with a width of %u enabled for UDP socket %s",
+        log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
             addrconf->udp_recv_width, logf_anysin(&addrconf->addr));
         mainloop_mmsg(addrconf->udp_recv_width, addrconf->udp_sock, pctx, need_cmsg);
     }
