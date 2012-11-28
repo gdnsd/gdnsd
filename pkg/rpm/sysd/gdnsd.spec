@@ -7,11 +7,13 @@ Group: System Environment/Daemons
 URL: https://github.com/blblack/gdnsd
 Source0: https://github.com/downloads/blblack/gdnsd/gdnsd-%{version}.tar.xz
 Requires(pre): /usr/sbin/useradd
-Requires(post): /sbin/chkconfig
-Requires(preun): /sbin/service, /sbin/chkconfig
-Requires(postun): /sbin/service
+Requires(post): systemd
+Requires(preun): systemd
+Requires(postun): systemd
 Requires: userspace-rcu
 Requires: libev
+%{?systemd_requires}
+BuildRequires: systemd
 BuildRequires: userspace-rcu-devel
 BuildRequires: libev-devel
 BuildRequires: libcap-devel
@@ -52,7 +54,8 @@ make check
 rm -rf %{buildroot}
 make install DESTDIR=%{buildroot}
 make install-gdnsd-rootdir DESTDIR=%{buildroot}
-install -D -p -m 0755 pkg/rpm/gdnsd.init %{buildroot}%{_initddir}/gdnsd
+install -D -p -m 0644 pkg/rpm/sysd/gdnsd.service %{buildroot}%{_unitdir}/gdnsd.service
+install -D -p -m 0644 pkg/rpm/sysd/gdnsd.env %{buildroot}%{_sysconfdir}/sysconfig/gdnsd
 
 %clean
 rm -rf %{buildroot}
@@ -63,24 +66,18 @@ if [ $1 -eq 1 ]; then
 fi
 
 %post
-if [ $1 -eq 1 ]; then
-    /sbin/chkconfig --add gdnsd
-fi
+%systemd_post gdnsd.service
 
 %preun
-if [ $1 -eq 0 ]; then
-    /sbin/service gdnsd stop &>/dev/null || :
-    /sbin/chkconfig --del gdnsd
-fi
+%systemd_preun gdnsd.service
 
 %postun
-if [ $1 -ge 1 ]; then
-    /sbin/service gdnsd condrestart &>/dev/null || :
-fi
+%systemd_postun gdnsd.service
 
 %files
 %defattr(-,root,root,-)
-%{_initddir}/gdnsd
+%config %{_sysconfdir}/sysconfig/gdnsd
+%{_unitdir}/gdnsd.service
 %dir %{_libdir}/gdnsd/
 %{_libdir}/gdnsd/*.so
 %exclude %{_libdir}/gdnsd/*.la
