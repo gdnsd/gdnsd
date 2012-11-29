@@ -114,12 +114,6 @@ for failure.
 
 =head1 EXECUTION ENVIRONMENT
 
-The executed scripts will run outside of the daemon's chroot,
-but with the same userid the daemon normal drops privileges to.
-Standard input will be open on F</dev/null>, and standard output/error
-will be pipes back to the main daemon for recording error output
-on failure.
-
 The plugin launches a helper binary F<gdnsd_extmon_helper> before
 the main daemon does its C<chroot()> call, and this helper does
 the actual runtime command executions.  It manages the timeouts
@@ -127,6 +121,13 @@ and intervals and feeds results back to the plugin over a pipe.  This
 communication is one-way at runtime (no daemon -> helper traffic)
 for security reasons (to help ensure that a compromised daemon can't
 easily leverage the helper to escape chroot).
+
+The executed scripts will run outside of the daemon's chroot,
+but with the same userid the daemon normally drops privileges to.
+The stdout, stdin, and stderr descriptors will usually be
+set to F</dev/null>.  stdout and stderr may be open to the current
+tty if the main daemon was started in foreground debugging mode
+via C<startfg>.
 
 =head1 SEE ALSO
 

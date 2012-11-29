@@ -236,7 +236,7 @@ int main(int argc, char** argv) {
     //   count, and try to tell the user not to run us
     //   if stderr happens to be hooked up to a terminal
     if(argc != 5) {
-        fprintf(stderr, "This binary is not for human execution!");
+        fprintf(stderr, "This binary is not for human execution!\n");
         abort();
     }
 
@@ -307,7 +307,6 @@ int main(int argc, char** argv) {
         log_fatal("Failed to read END_CMDS from plugin");
     if(emc_write_string(plugin_write_fd, "END_CMDS_ACK", 12))
         log_fatal("Failed to write END_CMDS_ACK to plugin");
-
 
     // done with the serial setup, close the readpipe and go nonblocking on write for eventloop...
     close(plugin_read_fd);
