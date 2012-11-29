@@ -64,7 +64,9 @@ gdnsd_rstate_t* gdnsd_rand_init(void);
 //  2^32-1 -> 50%
 // Whereas _get64() will have a bias < 0.00000003% for any modulo
 //  that's 2^32 or smaller.
+F_NONNULL
 uint32_t gdnsd_rand_get32(gdnsd_rstate_t* rs);
+F_NONNULL
 uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs);
 
 // Returns true if running on Linux with a kernel version >= x.y.z

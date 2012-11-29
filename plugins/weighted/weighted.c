@@ -124,6 +124,7 @@ static void init_rand(const unsigned tnum) {
 //   even though modval and the effective return value are in 32-bit space,
 //   because it vastly reduces the bias in the returned numbers.
 static uint64_t get_rand(const unsigned tnum, const uint64_t modval) {
+    dmn_assert(modval);
     return gdnsd_rand_get64(per_thread_rstates[tnum]) % modval;
 }
 
@@ -724,6 +725,7 @@ void plugin_weighted_resolve_dyncname(unsigned threadnum, unsigned resnum, const
     dmn_assert(resource);
     cnset_t* cnset = resource->cnames;
     dmn_assert(cnset);
+    dmn_assert(cnset->weight);
 
     const unsigned item_rand = get_rand(threadnum, cnset->weight);
     unsigned running_total = 0;
@@ -810,6 +812,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
             const unsigned item_rand = get_rand(threadnum, dyn_items_max);
             const unsigned isum = dyn_item_sums[item_idx];
             if(item_rand < isum) {
+                dmn_assert(isum); // given that they're both uints
                 // Inner decision: choose one addr based on dyn_item->sum
                 const unsigned addr_rand = get_rand(threadnum, isum);
                 unsigned addr_running_total = 0;
@@ -833,6 +836,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
                 const res_aitem_t* chosen = &aset->items[item_idx];
                 // Inner decision: choose multiple addrs based on chosen's dynamic max
                 const unsigned addr_max = dyn_item_maxs[item_idx];
+                dmn_assert(addr_max);
                 for(unsigned addr_idx = 0; addr_idx < chosen->count; addr_idx++) {
                     const unsigned addr_rand = get_rand(threadnum, addr_max);
                     if(addr_rand < dyn_addr_weights[item_idx][addr_idx])

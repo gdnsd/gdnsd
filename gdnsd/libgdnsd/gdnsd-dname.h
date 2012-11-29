@@ -230,8 +230,10 @@ static inline uint8_t* gdnsd_dname_trim(uint8_t* dname) {
 //  large enough (256 max).
 F_NONNULL
 static inline void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
-    dmn_assert(dest); dmn_assert(source); dmn_assert(*source);
-    memcpy(dest, source, *source + 1);
+    dmn_assert(dest); dmn_assert(source);
+    const unsigned len = *source;
+    dmn_assert(len); dmn_assert(len < 256U);
+    memcpy(dest, source, len + 1U);
 }
 
 // Allocate new storage (via malloc()), clone the input dname into it, and return.

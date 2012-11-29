@@ -447,6 +447,16 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
                        new_list[i] = old_list[j];
                 }
                 this_zt->zones_len--;
+
+                // it may not be very obvious due to the strange
+                //   copy-loop above, but only one entry is removed,
+                //   and the list must still contain at least one entry
+                // XXX - re-write the above in a clearer way, and/or
+                //    somehow assert the lack of duplicates in the original list?
+                dmn_assert(this_zt->zones_len);
+                dmn_assert(i == this_zt->zones_len);
+                dmn_assert(new_list[0]);
+
                 if(old_head == z_old)
                     log_info("Zone %s: authoritative source %s with serial %u removed (extant source %s with serial %u promoted to authoritative)", logf_dname(z_old->dname), z_old->src, z_old->serial, new_list[0]->src, new_list[0]->serial);
                 else

@@ -85,7 +85,7 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int
 }
 
 F_NONNULL
-static void hup_signal(struct ev_loop* loop, struct ev_signal *w V_UNUSED, const int revents V_UNUSED) {
+static void hup_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w V_UNUSED, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
     dmn_assert(revents == EV_SIGNAL);
     dmn_assert(w->signum == SIGHUP);

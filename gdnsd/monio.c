@@ -240,6 +240,9 @@ void monio_add_servicetypes(const vscf_data_t* svctypes_cfg) {
     unsigned timeout = DEF_TIMEOUT;
     def_svc->plugin->add_svctype(def_svc->name, NULL, interval, timeout);
 
+    // if this loop executes at all, svctypes_cfg is defined
+    //   (see if() block at top of func, and definition of num_svc_types)
+    dmn_assert(svctypes_cfg || !num_svc_types);
     for(unsigned i = 0; i < num_svc_types; i++) {
         service_type_t* this_svc = &service_types[i];
         this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));

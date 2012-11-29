@@ -136,7 +136,10 @@ static unsigned count2mask(unsigned x) {
     return x;
 }
 
+F_NONNULL
 static unsigned djb_hash(const char* k, unsigned klen, const unsigned hash_mask) {
+   dmn_assert(k);
+
    unsigned hash = 5381;
 
    while(klen--)
@@ -151,7 +154,10 @@ static vscf_hash_t* hash_new(void) {
     return h;
 }
 
+F_NONNULL
 static void hash_grow(vscf_hash_t* h) {
+    dmn_assert(h);
+
     const unsigned old_hash_mask = count2mask(h->child_count);
     const unsigned new_hash_mask = (old_hash_mask << 1) | 1;
     vscf_hentry_t** new_table = calloc(new_hash_mask + 1, sizeof(vscf_hentry_t*));
@@ -182,7 +188,9 @@ static void hash_grow(vscf_hash_t* h) {
     h->ordered = realloc(h->ordered, (new_hash_mask + 1) * sizeof(vscf_hentry_t*));
 }
 
+F_NONNULL
 static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, vscf_data_t* v) {
+    dmn_assert(key); dmn_assert(h); dmn_assert(v);
     v->parent = (vscf_data_t*)h;
 
     if(!h->children) {
@@ -217,7 +225,13 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
     return true;
 }
 
+F_NONNULL
 static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v) {
+    dmn_assert(scnr);
+    dmn_assert(h);
+    dmn_assert(v);
+    dmn_assert(scnr->cur_key);
+
     bool rv = hash_add_val(scnr->cur_key, scnr->cur_klen, h, v);
     if(rv) {
         free(scnr->cur_key);
@@ -236,14 +250,18 @@ static vscf_array_t* array_new(void) {
     return a;
 }
 
+F_NONNULL
 static void array_add_val(vscf_array_t* a, vscf_data_t* v) {
+    dmn_assert(a); dmn_assert(v);
     v->parent = (vscf_data_t*)a;
     unsigned idx = a->len++;
     a->vals = realloc(a->vals, a->len * sizeof(vscf_data_t*));
     a->vals[idx] = v;
 }
 
+F_NONNULL
 static vscf_simple_t* simple_new(const char* rval, const unsigned rlen) {
+    dmn_assert(rval);
     vscf_simple_t* s = calloc(1, sizeof(vscf_simple_t));
     char* storage = malloc(rlen);
     memcpy(storage, rval, rlen);
@@ -253,9 +271,12 @@ static vscf_simple_t* simple_new(const char* rval, const unsigned rlen) {
     return s;
 }
 
+F_NONNULL
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked);
 
+F_NONNULL
 static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked) {
+    dmn_assert(h);
     vscf_hash_t* nh = hash_new();
     for(unsigned i = 0; i < h->child_count; i++) {
         const vscf_hentry_t* hentry = h->ordered[i];
@@ -267,7 +288,9 @@ static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked) {
     return nh;
 }
 
+F_NONNULL
 static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked) {
+    dmn_assert(a);
     vscf_array_t* na = array_new();
     for(unsigned i = 0; i < a->len; i++) {
         array_add_val(na, val_clone(a->vals[i], ignore_marked));
@@ -275,11 +298,14 @@ static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked
     return na;
 }
 
+F_NONNULL
 static vscf_simple_t* simple_clone(const vscf_simple_t* s) {
+    dmn_assert(s);
     return simple_new(s->rval, s->rlen);
 }
 
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked) {
+    dmn_assert(d);
     vscf_data_t* rv = NULL;
     switch(d->type) {
         case VSCF_HASH_T:   rv = (vscf_data_t*)hash_clone(&d->hash, ignore_marked); break;
@@ -301,7 +327,10 @@ static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked) {
  *   embedded NULs are irrelevant (such as our own numeric conversions, and
  *   probably many user-code cases too).
  */
+F_NONNULL
 static unsigned unescape_string(char** outp, const char* in, unsigned len) {
+    dmn_assert(outp);
+    dmn_assert(in);
     char* out = malloc(len + 1);
     unsigned newlen = len;
     if(len)
@@ -312,12 +341,21 @@ static unsigned unescape_string(char** outp, const char* in, unsigned len) {
     return newlen;
 }
 
+F_NONNULL
 static void set_key(vscf_scnr_t* scnr, const char* end) {
+    dmn_assert(scnr);
+    dmn_assert(scnr->tstart);
+    dmn_assert(end);
     scnr->cur_klen = unescape_string(&scnr->cur_key, scnr->tstart, end - scnr->tstart);
     scnr->tstart = NULL;
 }
 
+F_NONNULL
 static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
+    dmn_assert(scnr);
+    dmn_assert(scnr->cont);
+    dmn_assert(v);
+
     if(scnr->cont->type == VSCF_HASH_T) {
         vscf_hash_t* h = &scnr->cont->hash;
         return scnr_hash_add_val(scnr, h, v);
@@ -330,20 +368,28 @@ static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
     }
 }
 
+F_NONNULL
 static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end) {
+    dmn_assert(scnr);
+    dmn_assert(scnr->tstart);
+    dmn_assert(end);
     unsigned rlen = end - scnr->tstart;
     vscf_simple_t* s = simple_new(scnr->tstart, rlen);
     scnr->tstart = NULL;
     return add_to_cur_container(scnr, (vscf_data_t*)s);
 }
 
+F_NONNULL
 static void vscf_simple_ensure_val(const vscf_simple_t* cs) {
+    dmn_assert(cs);
     vscf_simple_t* s = (vscf_simple_t*)cs; // kill const...
     if(!s->val)
         s->len = unescape_string(&s->val, s->rval, s->rlen);
 }
 
+F_NONNULL
 static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
+    dmn_assert(scnr); dmn_assert(c);
     dmn_assert(scnr->cont);
 
     if(++scnr->cont_stack_top == (signed)scnr->cont_stack_alloc)
@@ -358,23 +404,31 @@ static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
     return true;
 }
 
+F_NONNULL
 static void cont_stack_pop(vscf_scnr_t* scnr) {
+    dmn_assert(scnr);
     dmn_assert(scnr->cont_stack_top > -1);
     scnr->cont = scnr->cont_stack[scnr->cont_stack_top--];
 }
 
 /*** Destructors ***/
 
+F_NONNULL
 static void simple_destroy(vscf_simple_t* s) {
+    dmn_assert(s);
     free(s->rval);
     if(s->val) free(s->val);
     free(s);
 }
 
+F_NONNULL
 static void array_destroy(vscf_array_t* a);
+F_NONNULL
 static void hash_destroy(vscf_hash_t* h);
 
+F_NONNULL
 static void val_destroy(vscf_data_t* d) {
+    dmn_assert(d);
     switch(d->type) {
         case VSCF_HASH_T:   hash_destroy(&d->hash); break;
         case VSCF_ARRAY_T:  array_destroy(&d->array); break;
@@ -383,6 +437,7 @@ static void val_destroy(vscf_data_t* d) {
 }
 
 static void array_destroy(vscf_array_t* a) {
+    dmn_assert(a);
     for(unsigned i = 0; i < a->len; i++)
         val_destroy(a->vals[i]);
     free(a->vals);
@@ -390,6 +445,7 @@ static void array_destroy(vscf_array_t* a) {
 }
 
 static void hash_destroy(vscf_hash_t* h) {
+    dmn_assert(h);
     for(unsigned i = 0; i < h->child_count; i++) {
         vscf_hentry_t* hentry = h->ordered[i];
         val_destroy(hentry->val);
@@ -631,18 +687,23 @@ static const vscf_data_t* vscf_scan_fd_or_stream(const int fd, FILE* const strea
 /****************************/
 
 const vscf_data_t* vscf_scan_fd(int fd, const char* desc, char** err) {
+    dmn_assert(desc); dmn_assert(err);
     *err = NULL;
+
     return vscf_scan_fd_or_stream(fd, NULL, desc, err);
 }
 
 const vscf_data_t* vscf_scan_stream(FILE* stream, const char* desc, char** err) {
+    dmn_assert(stream); dmn_assert(desc); dmn_assert(err);
     *err = NULL;
-    if(stream) return vscf_scan_fd_or_stream(0, stream, desc, err);
-    else return NULL;
+
+    return vscf_scan_fd_or_stream(0, stream, desc, err);
 }
 
 const vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
+    dmn_assert(fn); dmn_assert(err);
     *err = NULL;
+
     int fd = open(fn, O_RDONLY);
     if(fd < 0) {
         set_err(err, "Cannot open config file '%s' for reading: errno %i\n", fn, errno);
@@ -654,32 +715,36 @@ const vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
     return retval;
 }
 
-void vscf_destroy(const vscf_data_t* d) { val_destroy((vscf_data_t*)d); }
+void vscf_destroy(const vscf_data_t* d) { dmn_assert(d); val_destroy((vscf_data_t*)d); }
 
-vscf_type_t vscf_get_type(const vscf_data_t* d) { return d->type; }
-bool vscf_is_simple(const vscf_data_t* d) { return d->type == VSCF_SIMPLE_T; }
-bool vscf_is_array(const vscf_data_t* d) { return d->type == VSCF_ARRAY_T; }
-bool vscf_is_hash(const vscf_data_t* d) { return d->type == VSCF_HASH_T; }
-bool vscf_is_root(const vscf_data_t* d) { return d->parent == NULL; }
-const vscf_data_t* vscf_get_parent(const vscf_data_t* d) { return d->parent; }
+vscf_type_t vscf_get_type(const vscf_data_t* d) { dmn_assert(d); return d->type; }
+bool vscf_is_simple(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_SIMPLE_T; }
+bool vscf_is_array(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_ARRAY_T; }
+bool vscf_is_hash(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_HASH_T; }
+bool vscf_is_root(const vscf_data_t* d) { dmn_assert(d); return d->parent == NULL; }
+const vscf_data_t* vscf_get_parent(const vscf_data_t* d) { dmn_assert(d); return d->parent; }
 
 unsigned vscf_simple_get_len(const vscf_data_t* d) {
+    dmn_assert(d); dmn_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     return d->simple.len;
 }
 
 const char* vscf_simple_get_data(const vscf_data_t* d) {
+    dmn_assert(d); dmn_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     return d->simple.val;
 }
 
 unsigned vscf_array_get_len(const vscf_data_t* d) {
+    dmn_assert(d);
     if(d->type != VSCF_ARRAY_T)
         return 1;
     return d->array.len;
 }
 
 const vscf_data_t* vscf_array_get_data(const vscf_data_t* d, unsigned idx) {
+    dmn_assert(d);
     if(d->type != VSCF_ARRAY_T) {
         if(idx) return NULL;
         return d;
@@ -689,10 +754,13 @@ const vscf_data_t* vscf_array_get_data(const vscf_data_t* d, unsigned idx) {
 }
 
 unsigned vscf_hash_get_len(const vscf_data_t* d) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
     return d->hash.child_count;
 }
 
 const vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, unsigned klen, bool set_mark) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
+    dmn_assert(key);
     if(d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
         unsigned child_hash = djb_hash(key, klen, child_mask);
@@ -710,17 +778,25 @@ const vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* ke
 }
 
 const char* vscf_hash_get_key_byindex(const vscf_data_t* d, unsigned idx, unsigned* klen_ptr) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
     if(idx >= d->hash.child_count) return NULL;
     if(klen_ptr) *klen_ptr = d->hash.ordered[idx]->klen;
-    return d->hash.ordered[idx]->key;
+    const char *rv = d->hash.ordered[idx]->key;
+    dmn_assert(rv);
+    return rv;
 }
 
 const vscf_data_t* vscf_hash_get_data_byindex(const vscf_data_t* d, unsigned idx) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
     if(idx >= d->hash.child_count) return NULL;
-    return d->hash.ordered[idx]->val;
+    const vscf_data_t* rv = d->hash.ordered[idx]->val;
+    dmn_assert(rv);
+    return rv;
 }
 
 int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned klen) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
+    dmn_assert(key);
     if(d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
         unsigned child_hash = djb_hash(key, klen, child_mask);
@@ -736,6 +812,8 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
 }
 
 void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb_t f, void* data) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
+    dmn_assert(f);
     for(unsigned i = 0; i < d->hash.child_count; i++) {
         const vscf_hentry_t* hentry = d->hash.ordered[i];
         if(!ignore_mark || !hentry->marked)
@@ -745,6 +823,8 @@ void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb
 }
 
 void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
+    dmn_assert(f);
     qsort(d->hash.ordered, d->hash.child_count, sizeof(vscf_hentry_t*),
         (int(*)(const void*, const void*))f
     );
@@ -753,6 +833,8 @@ void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f) {
 }
 
 bool vscf_simple_get_as_ulong(const vscf_data_t* d, unsigned long* out) {
+    dmn_assert(d); dmn_assert(vscf_is_simple(d));
+    dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
     if(!d->simple.len) return false;
     char* eptr;
@@ -769,6 +851,8 @@ bool vscf_simple_get_as_ulong(const vscf_data_t* d, unsigned long* out) {
 }
 
 bool vscf_simple_get_as_long(const vscf_data_t* d, long* out) {
+    dmn_assert(d); dmn_assert(vscf_is_simple(d));
+    dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
     if(!d->simple.len) return false;
     char* eptr;
@@ -785,6 +869,8 @@ bool vscf_simple_get_as_long(const vscf_data_t* d, long* out) {
 }
 
 bool vscf_simple_get_as_double(const vscf_data_t* d, double* out) {
+    dmn_assert(d); dmn_assert(vscf_is_simple(d));
+    dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
     if(!d->simple.len) return false;
     char* eptr;
@@ -801,6 +887,8 @@ bool vscf_simple_get_as_double(const vscf_data_t* d, double* out) {
 }
 
 bool vscf_simple_get_as_bool(const vscf_data_t* d, bool* out) {
+    dmn_assert(d); dmn_assert(vscf_is_simple(d));
+    dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
     if(d->simple.len == 4
         && (d->simple.val[0] == 'T' || d->simple.val[0] == 't')
@@ -825,6 +913,8 @@ bool vscf_simple_get_as_bool(const vscf_data_t* d, bool* out) {
 }
 
 dname_status_t vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname) {
+    dmn_assert(d); dmn_assert(vscf_is_simple(d));
+    dmn_assert(dname);
     return dname_from_string(dname, (const uint8_t*)d->simple.rval, d->simple.rlen);
 }
 
@@ -833,18 +923,23 @@ vscf_data_t* vscf_hash_new(void) { return (vscf_data_t*)hash_new(); }
 vscf_data_t* vscf_array_new(void) { return (vscf_data_t*)array_new(); }
 
 vscf_data_t* vscf_simple_new(const char* rval, const unsigned rlen) {
+    dmn_assert(rval);
     return (vscf_data_t*)simple_new(rval, rlen);
 }
 
 void vscf_array_add_val(vscf_data_t* a, vscf_data_t* v) {
+    dmn_assert(a); dmn_assert(vscf_is_array(a));
+    dmn_assert(v);
     array_add_val(&a->array, v);
 }
 
 bool vscf_hash_add_val(const char* key, const unsigned klen, vscf_data_t* h, vscf_data_t* v) {
-     return hash_add_val(key, klen, &h->hash, v);
+    dmn_assert(h); dmn_assert(vscf_is_hash(h));
+    dmn_assert(key); dmn_assert(v);
+    return hash_add_val(key, klen, &h->hash, v);
 }
 
-vscf_data_t* vscf_clone(const vscf_data_t* d, const bool ignore_marked) { return val_clone(d, ignore_marked); }
+vscf_data_t* vscf_clone(const vscf_data_t* d, const bool ignore_marked) { dmn_assert(d); return val_clone(d, ignore_marked); }
 
 void vscf_hash_inherit(const vscf_data_t* src, vscf_data_t* dest, const char* k, const bool mark_src) {
     dmn_assert(src); dmn_assert(dest); dmn_assert(k);

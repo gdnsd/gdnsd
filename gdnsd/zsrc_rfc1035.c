@@ -688,7 +688,7 @@ static bool inot_process_event(const char* fname, struct ev_loop* loop, uint32_t
     return rv;
 }
 
-static void inot_reader(struct ev_loop* loop, ev_io* w, int revents) {
+static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_READ);
 
     uint8_t evtbuf[inotify_bufsize];

@@ -131,6 +131,8 @@ struct _gdnsd_rstate_t {
 };
 
 uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) {
+    dmn_assert(rs);
+
     uint64_t t;
 
     rs->x = 1490024343005336237ULL * rs->x + 123456789;
@@ -145,6 +147,8 @@ uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) {
 }
 
 uint32_t gdnsd_rand_get32(gdnsd_rstate_t* rs) {
+    dmn_assert(rs);
+
     if(rs->buf32_ok) {
        rs->buf32_ok = false;
        return rs->buf32;
@@ -163,7 +167,10 @@ static gdnsd_rstate_t rand_init_state = { 0, 0, 0, 0, 0, 0, 0, false };
 
 // Try to get 5x uint64_t from /dev/urandom, ensuring
 //   none of them are all-zeros.
+F_NONNULL
 static bool get_urand_data(uint64_t* rdata) {
+    dmn_assert(rdata);
+
     bool rv = false;
     int urfd = open("/dev/urandom", O_RDONLY);
     if(urfd > -1) {
