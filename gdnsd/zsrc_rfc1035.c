@@ -407,7 +407,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
     else {
         // else we don't need this new copy of the full fn,
         //   it's already there in the current_zft
-        dmn_assert(!strcmp(current_zft->full_fn, full_fn));
+        dmn_assert(!current_zft || !strcmp(current_zft->full_fn, full_fn));
         free(full_fn);
     }
 
