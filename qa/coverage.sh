@@ -20,10 +20,10 @@ find . -name "*.gcov" -o -name "*.gcda" -o -name "*.gcno"|xargs rm -f
 CFLAGS="-O0 -fprofile-arcs -ftest-coverage" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN" ./configure --disable-developer
 make
 
-lcov -c -i -d gdnsd -o gdnsd-base.info
+lcov -c -i -d . -o gdnsd-base.info
 
 make check
 
-lcov -c -d gdnsd -o gdnsd-test.info
+lcov -c -d . -o gdnsd-test.info
 lcov -a gdnsd-base.info -a gdnsd-test.info -o gdnsd-cov.info
 genhtml -o lcovout gdnsd-cov.info
