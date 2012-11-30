@@ -4,6 +4,11 @@
 # I primarily use this to test 100% branch coverage on dnspacket.c ...
 # Run this from the top directory of the repo
 
+if [ ! -f $PWD/qa/gdnsd.supp ]; then
+   echo "Run this from the root of the source tree!"
+   exit 99
+fi
+
 set -x
 set -e
 

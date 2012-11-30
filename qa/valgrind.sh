@@ -4,6 +4,10 @@
 #  valgrind needs --trace-children=yes to see through the libtool
 #  wrapper in-tree, and thus gets cluttered with unrelated errors
 #  from shellscripts.
+if [ ! -f $PWD/qa/gdnsd.supp ]; then
+   echo "Run this from the root of the source tree!"
+   exit 99
+fi
 set -x
 set -e
 CFLAGS="-O0" ./configure --enable-developer --prefix=/tmp/_gdnsd_inst --with-def-rootdir=/tmp/_gdnsd_inst/root
