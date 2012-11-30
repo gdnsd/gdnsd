@@ -1,4 +1,4 @@
-AC_INIT([gdnsd],[1.7.3],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/gdnsd])
+AC_INIT([gdnsd],[1.7.4],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/gdnsd])
 AC_PREREQ([2.69])
 AC_CONFIG_AUX_DIR([acaux])
 AC_CONFIG_MACRO_DIR([m4])
