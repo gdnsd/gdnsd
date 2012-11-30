@@ -27,7 +27,7 @@ include $(top_srcdir)/docs.am
 GEOLITE_URL_BASE = http://gdnsd.net/GeoLiteTestData/
 GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat fips_include-20111210
 
-TESTLIST = \
+TESTLIST_NONETS = \
 	t00_v4db \
 	t01_v6db \
 	t02_v4citydb \
@@ -43,7 +43,9 @@ TESTLIST = \
 	t12_defnone \
 	t13_castatdef \
 	t14_missingcoords \
-	t15_nogeo \
+	t15_nogeo
+
+TESTLIST_NETS = \
 	t16_extnets \
 	t17_extn_empty \
 	t18_extn_all \
@@ -51,11 +53,13 @@ TESTLIST = \
 	t20_extn_allgs \
 	t21_extn_subs
 
+TESTLIST = $(TESTLIST_NONETS) $(TESTLIST_NETS)
+
 check_PROGRAMS = $(TESTLIST:=.bin)
 
 TESTS_ENVIRONMENT = ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)"
 TESTS = trunner.sh
-EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg)
+EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg) $(TESTLIST_NETS:=.nets)
 
 check-download: tdownload.sh
 	@GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" $(TESTS_ENVIRONMENT) $(srcdir)/tdownload.sh

@@ -30,6 +30,7 @@ for tnam in $TLIST; do
     if [ $? -eq 1 -o $skip_geoip -eq 0 ]; then
         echo "Running test $tnam ..."
         TOFILE=$TODIR/$tnam.out
+        rm -f $TODIR/etc/config >/dev/null 2>&1
         cp $ASDIR/$tnam.cfg $TODIR/etc/config >/dev/null 2>&1
         if [ "x$TEST_RUNNER" != "x" ]; then
             $TEST_RUNNER $ABDIR/.libs/$tnam.bin $TODIR >$TOFILE 2>&1
