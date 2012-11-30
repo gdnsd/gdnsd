@@ -141,70 +141,87 @@ static bool nul_within_n_bytes(const char* instr, const unsigned len) {
 }
 
 extmon_cmd_t* emc_read_command(const int fd) {
-    extmon_cmd_t* cmd = malloc(sizeof(extmon_cmd_t));
 
-    char fixed_part[10];
-    if(emc_read_nbytes(fd, 10, fixed_part)
-        || strncmp(fixed_part, "CMD:", 4)) {
-        log_debug("emc_read_command() failed to read CMD: prefix");
-        return NULL;
-    }
-    uint16_t* idx_ptr = (uint16_t*)(&fixed_part[4]);
-    cmd->idx = *idx_ptr;
-    cmd->timeout = *((uint8_t*)&fixed_part[6]);
-    cmd->interval = *((uint8_t*)&fixed_part[7]);
+    extmon_cmd_t* cmd = NULL;
 
-    // note we add an extra NULL at the end of args here, for execl()
-    uint16_t* var_len_ptr = (uint16_t*)&fixed_part[8];
-    const unsigned var_len = *var_len_ptr;
-    if(var_len < 4) {
-        // 4 bytes would be enough for num_args, a single 1-byte argument
-        //   and its NUL termiantor, and a zero-length NUL-terminated desc
-        log_debug("emc_read_command() variable section too short (%u)!", var_len);
-        return NULL;
-    }
+    {
+        char fixed_part[10];
+        if(emc_read_nbytes(fd, 10, fixed_part)
+            || strncmp(fixed_part, "CMD:", 4)) {
+            log_debug("emc_read_command() failed to read CMD: prefix");
+            goto out_error;
+        }
 
-    char var_part[var_len];
-    if(emc_read_nbytes(fd, var_len, var_part)) {
-        log_debug("emc_read_command() failed to read %u-byte variable section", var_len);
-        return NULL;
-    }
+        cmd = malloc(sizeof(extmon_cmd_t));
+        uint16_t* idx_ptr = (uint16_t*)(&fixed_part[4]);
+        cmd->idx = *idx_ptr;
+        cmd->timeout = *((uint8_t*)&fixed_part[6]);
+        cmd->interval = *((uint8_t*)&fixed_part[7]);
+        cmd->args = NULL;
+        cmd->num_args = 0;
 
-    cmd->num_args = *((uint8_t*)var_part);
-    if(!cmd->num_args) {
-        log_debug("emc_read_command() got zero-arg command!");
-        return NULL;
-    }
+        // note we add an extra NULL at the end of args here, for execl()
+        uint16_t* var_len_ptr = (uint16_t*)&fixed_part[8];
+        const unsigned var_len = *var_len_ptr;
+        if(var_len < 4) {
+            // 4 bytes would be enough for num_args, a single 1-byte argument
+            //   and its NUL termiantor, and a zero-length NUL-terminated desc
+            log_debug("emc_read_command() variable section too short (%u)!", var_len);
+            goto out_error;
+        }
 
-    cmd->args = malloc((cmd->num_args + 1) * sizeof(char*));
-    const char* current = &var_part[1];
-    unsigned len_remain = var_len - 1;
-    for(unsigned i = 0; i < cmd->num_args; i++) {
+        char var_part[var_len];
+        if(emc_read_nbytes(fd, var_len, var_part)) {
+            log_debug("emc_read_command() failed to read %u-byte variable section", var_len);
+            goto out_error;
+        }
+
+        const unsigned n_args = *((uint8_t*)var_part);
+        if(!n_args) {
+            log_debug("emc_read_command() got zero-arg command!");
+            goto out_error;
+        }
+
+        cmd->args = malloc((n_args + 1) * sizeof(char*));
+        const char* current = &var_part[1];
+        unsigned len_remain = var_len - 1;
+        for(cmd->num_args = 0; cmd->num_args < n_args; cmd->num_args++) {
+            const unsigned cmdlen = strnlen(current, len_remain) + 1;
+            cmd->args[cmd->num_args] = malloc(cmdlen);
+            if(!nul_within_n_bytes(current, len_remain)) {
+                log_debug("emc_read_command(): argument runs off end of buffer");
+                goto out_error;
+            }
+            memcpy((char*)cmd->args[cmd->num_args], current, cmdlen);
+            current += cmdlen;
+            len_remain -= cmdlen;
+        }
+        cmd->args[cmd->num_args] = NULL;
+
         if(!nul_within_n_bytes(current, len_remain)) {
             log_debug("emc_read_command(): argument runs off end of buffer");
-            return NULL;
+            goto out_error;
         }
-        const unsigned cmdlen = strlen(current) + 1;
-        cmd->args[i] = malloc(cmdlen);
-        memcpy((char*)cmd->args[i], current, cmdlen);
-        current += cmdlen;
-        len_remain -= cmdlen;
-    }
-    cmd->args[cmd->num_args] = NULL;
+        cmd->desc = strdup(current);
+        current += strlen(current);
+        current++;
 
-    if(!nul_within_n_bytes(current, len_remain)) {
-        log_debug("emc_read_command(): argument runs off end of buffer");
-        return NULL;
-    }
-    cmd->desc = strdup(current);
-    current += strlen(current);
-    current++;
-
-    if(current != (var_part + var_len)) {
-        log_debug("emc_read_command(): unused len at end of buffer!");
-        return NULL;
+        if(current != (var_part + var_len)) {
+            log_debug("emc_read_command(): unused len at end of buffer!");
+            goto out_error;
+        }
     }
 
     return cmd;
-}
 
+    out_error:
+    if(cmd) {
+        if(cmd->args) {
+            for(unsigned x = 0; x < cmd->num_args; x++)
+                free((char*)cmd->args[x]);
+            free(cmd->args);
+        }
+        free(cmd);
+    }
+    return NULL;
+}
