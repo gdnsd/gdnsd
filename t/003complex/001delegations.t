@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 26;
+use Test::More tests => 29;
 
 my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
 
@@ -311,6 +311,25 @@ _GDT->test_dns(
         'ns1.example.net 21600 A 192.0.2.77',
         'ns1.submixooz.example.com 21600 A 192.0.2.79',
     ],
+);
+
+# These checks verify that "unused.glue.example.net" doesn't
+#  infect the local data in any obvious way
+_GDT->test_dns(
+    qname => 'unused.glue.example.net', qtype => 'A',
+    header => { aa => 0, rcode => 'REFUSED' },
+    stats => [qw/udp_reqs refused/],
+);
+_GDT->test_dns(
+    qname => 'unused.glue.example.net.example.org', qtype => 'A',
+    auth => 'example.org 43200 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120',
+    addtl => 'unused.glue.example.net.example.org 43201 AAAA 0:0:0:0:0:0:0:1' # from wildcard...
+);
+
+# check that the minimal out-of-zone-glue domain mostly works
+_GDT->test_dns(
+    qname => 'example.xxx', qtype => 'NS',
+    answer => 'example.xxx 21600 NS somewhere.over.the.rainbow'
 );
 
 _GDT->test_kill_daemon($pid);

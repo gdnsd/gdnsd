@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 11;
+use Test::More tests => 12;
 
 my $standard_soa = 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
@@ -85,6 +85,16 @@ _GDT->test_dns(
         'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
+);
+
+# -> local NXDOMAIN several layers deep, with unprintable label char on LHS
+#   (this exercises a few previously-uncovered blocks of code in ltree.c)
+_GDT->test_dns(
+    qname => 'asdf\003.example.org', qtype => 'A',
+    header => { rcode => 'NXDOMAIN' },
+    answer => 'asdf\003.example.org 43201 CNAME deep.layers.of.nxd.subdomain.*.example.org',
+    auth => 'example.org 43200 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120',
+    stats => [qw/udp_reqs nxdomain/],
 );
 
 _GDT->test_kill_daemon($pid);
