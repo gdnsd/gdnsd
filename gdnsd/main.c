@@ -119,7 +119,7 @@ static void usage(const char* argv0) {
         "\nFor updates, bug reports, etc, please visit " PACKAGE_URL "\n",
         argv0
     );
-    exit(99);
+    exit(2);
 }
 
 static ev_signal* sig_int;
