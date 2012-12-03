@@ -97,7 +97,6 @@ static void hup_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w V_UNUS
 
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
-    dmn_assert(argv0);
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION
 #ifndef NDEBUG
@@ -364,14 +363,16 @@ static action_t match_action(const char* arg) {
 
 static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
 
-static action_t parse_args(int argc, char** argv) {
-    action_t action = ACT_UNDEF;
+static action_t parse_args(int argc, char** argv, const char** rootdir_out) {
+    dmn_assert(rootdir_out);
 
-    const char* input_rootdir = def_rootdir;
+    action_t action = ACT_UNDEF;
+    *rootdir_out = def_rootdir;
+
     switch(argc) {
         case 4: // gdnsd -d x foo
             if(strcmp(argv[1], "-d")) usage(argv[0]);
-            input_rootdir = argv[2];
+            *rootdir_out = argv[2];
             action = match_action(argv[3]);
             break;
         case 2: // gdnsd foo
@@ -381,8 +382,6 @@ static action_t parse_args(int argc, char** argv) {
 
     if(action == ACT_UNDEF)
         usage(argv[0]);
-
-    gdnsd_set_rootdir(input_rootdir);
 
     return action;
 }
@@ -413,11 +412,34 @@ static void init_config(const bool started_as_root) {
 
 int main(int argc, char** argv) {
 
-    dmn_init_log(PACKAGE_NAME);
+    // Parse args, finding the libgdnsd rootdir and
+    //   returning the action.  Exits on cmdline errors,
+    //   does not use libdmn assert/log stuff.
+    const char* rootdir;
+    action_t action = parse_args(argc, argv, &rootdir);
 
-    // Parse args, setting the libgdnsd rootdir and
-    //   returning the action.  Exits on cmdline errors
-    action_t action = parse_args(argc, argv);
+    // will we daemonize? startfg doesn't count...
+    bool will_daemonize = false;
+    switch(action) {
+        ACT_START:
+        ACT_RESTART:
+        ACT_CRESTART:
+            will_daemonize = true;
+    }
+
+    // Init the log subsystem, which initially only sends
+    //   to stderr.  Second arg is "stderr_info", which controls
+    //   whether info-level messages are sent to stderr or not
+    //   (all are sent regardless in debug builds).
+    dmn_init_log(PACKAGE_NAME, !will_daemonize);
+
+    // Start syslog (in addition to stderr) logging immediately
+    //   in cases leading to daemonized daemon start
+    if(will_daemonize)
+        dmn_start_syslog();
+
+    // Set the rootdir functionally, which may fail
+    gdnsd_set_rootdir(rootdir);
 
     // Take action
     if(action == ACT_STATUS) {
@@ -463,9 +485,6 @@ int main(int argc, char** argv) {
             || action == ACT_START
             || action == ACT_RESTART
     );
-
-    if(action != ACT_STARTFG)
-        dmn_start_syslog();
 
     // Check/set rlimits for mlockall() if necessary and possible
     if(gconfig.lock_mem)

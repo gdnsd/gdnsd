@@ -129,7 +129,7 @@ bool dmn_get_debug(void);
 void dmn_set_debug(bool d);
 
 // Call before any log_* calls, right at proc startup...
-void dmn_init_log(const char* logname);
+void dmn_init_log(const char* logname, const bool stderr_info);
 
 // Start syslogging log_*() calls (does openlog),
 //   prior to this they go to stderr only (until

@@ -223,7 +223,7 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
 }
 
 int main(int argc, char** argv) {
-    dmn_init_log("gdnsd_extmon_helper");
+    dmn_init_log("gdnsd_extmon_helper", true);
 
     // start up syslog IFF it appears the daemon
     //   was *not* started via "startfg".  Regular

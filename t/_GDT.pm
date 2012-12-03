@@ -343,7 +343,7 @@ sub spawn_daemon {
             my $is_listening;
             while(<$GDOUT_FH>) {
                 $INOTIFY_ENABLED = 1 if /\Qrfc1035: will use inotify for zone change detection\E$/;
-                return $pid if /\Qinfo: DNS listeners started\E$/;
+                return $pid if /\QDNS listeners started\E$/;
             }
             close($GDOUT_FH)
                 or die "Cannot close '$daemon_out' for reading: $!";

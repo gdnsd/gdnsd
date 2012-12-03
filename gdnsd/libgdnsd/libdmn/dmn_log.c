@@ -50,6 +50,10 @@
 //  dmn_log_debug() emits output
 static bool dmn_debug = false;
 
+// whether INFO -level messages get sent to stderr in
+//   non-debug builds.
+static bool send_stderr_info = true;
+
 // Length of the whole format buffer
 #ifndef DMN_FMTBUF_SIZE
 #define DMN_FMTBUF_SIZE 4096U
@@ -155,7 +159,8 @@ void dmn_start_syslog(void) {
 //   to /dev/null the real stderr, because /dev/null
 //   is gone after chroot...).
 static FILE* alt_stderr = NULL;
-void dmn_init_log(const char* logname) {
+void dmn_init_log(const char* logname, const bool stderr_info) {
+    send_stderr_info = stderr_info;
     our_logname = strdup(logname);
     alt_stderr = fdopen(dup(fileno(stderr)), "w");
     if(!alt_stderr) {
@@ -183,6 +188,8 @@ void dmn_log_close_alt_stderr(void) {
 
 void dmn_loggerv(int level, const char* fmt, va_list ap) {
     if(alt_stderr) {
+#ifndef NDEBUG
+
         time_t t = time(NULL);
         struct tm tmp;
         localtime_r(&t, &tmp);
@@ -190,11 +197,11 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
         if(!strftime(tstamp, 10, "%T ", &tmp))
             strcpy(tstamp, "--:--:-- ");
 
-#if defined SYS_gettid && !defined __APPLE__
+#  if defined SYS_gettid && !defined __APPLE__
         pid_t tid = syscall(SYS_gettid);
         char tidbuf[16];
         snprintf(tidbuf, 16, " [%i]", tid);
-#endif
+#  endif
 
         const char* pfx;
         switch(level) {
@@ -209,9 +216,9 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
         fputs_unlocked(tstamp, alt_stderr);
         if(our_logname)
             fputs_unlocked(our_logname, alt_stderr);
-#if defined SYS_gettid && !defined __APPLE__
+#  if defined SYS_gettid && !defined __APPLE__
         fputs_unlocked(tidbuf, alt_stderr);
-#endif
+#  endif
         fputs_unlocked(pfx, alt_stderr);
         va_list apcpy;
         va_copy(apcpy, ap);
@@ -220,6 +227,19 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
         putc_unlocked('\n', alt_stderr);
         fflush_unlocked(alt_stderr);
         funlockfile(alt_stderr);
+
+#else // NDEBUG
+        if(level != LOG_INFO || send_stderr_info) {
+            va_list apcpy;
+            va_copy(apcpy, ap);
+            flockfile(alt_stderr);
+            vfprintf(alt_stderr, fmt, apcpy);
+            va_end(apcpy);
+            putc_unlocked('\n', alt_stderr);
+            fflush_unlocked(alt_stderr);
+            funlockfile(alt_stderr);
+        }
+#endif // NDEBUG
     }
 
     if(dmn_syslog_alive)
