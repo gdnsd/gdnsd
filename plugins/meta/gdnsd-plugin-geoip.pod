@@ -7,7 +7,6 @@ gdnsd-plugin-geoip - gdnsd meta-plugin for GSLB + failover via MaxMind's GeoIP d
 
 Minimal example gdnsd config file using this plugin:
 
-  zones => { example.com => {} }
   plugins => { geoip => {
     maps => {
       my_prod_map => {
@@ -239,7 +238,6 @@ GeoIP databases that are natively IPv4-only get all of their data loaded into th
 
 A relatively-maximal example config, showing the interaction of valid C<maps> and C<resources> sections:
 
-  zones => { example.com => {} }
   service_types => {
     xmpp_svc => { plugin => "tcp_connect", ... }
     www_svc => { plugin => "http_status", ... }

@@ -7,7 +7,6 @@ gdnsd-plugin-metafo - gdnsd plugin for address meta-failover
 
 Minimal example gdnsd config file using this plugin:
 
-  zones => { example.com => {} }
   plugins => {
     metafo => {
       resources => {

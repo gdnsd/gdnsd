@@ -27,11 +27,7 @@ and installed as manpages and textfiles on installation.
 
 ## Basic Configuration
 
-If all you need to do is serve an authoritative domain or two, all you need is your standard BIND/RFC1035-style zonefiles and a simple, short gdnsd configuration file that looks like this:
-
-    zones = { example.com = {}, example.org = {} }
-
-Name the zonefiles the same as their respective zone names, place them in the same directory as the above configuration file, and invoke "gdnsd -c /path/to/config.file start".
+If all you need to do is serve an authoritative domain or two, all you need is your standard BIND/RFC1035-style zonefiles, with the files named same as their respective zone names and placed in gdnsd's zones directory.
 
 If you need to do trickier things, a world of non-default options are available: check out the Documentation.
 
