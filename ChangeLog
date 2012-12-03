@@ -314,7 +314,7 @@
       TTL cutting like multifo: if any addr in a resource is not UP,
         TTL is cut in half.
       up_thresh, multi, and service_types now do cascading inheritance,
-        can be specified/overriden at plugin-level, resource-level, and
+        can be specified/overridden at plugin-level, resource-level, and
         addrs_vN level.
     plugin_multifo:-----------------------
       'addrs' config stanza now deprecated

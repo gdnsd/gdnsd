@@ -181,7 +181,7 @@ There is also one other special key (aside from C<default>) available at all lev
 
 Key-value hash, optional.  If this option is specified, the whole map's basic mode of operation changes to "city-auto-mode".  The contents of the hash are a key for each datacenter named in C<datacenters>, with their values set to an array of C<[lat, lon]> in decimal degree units.  When city-auto-mode is enabled by this, the following configuration-validation changes occur from the default, static-mapping mode: the loaded GeoIP database(s) are required be City-level databases, and the special keyword C<auto> becomes a legal "datacenter list" in the C<map> stanza.
 
-With city-auto-mode enabled, the top-level map C<default> defaults to C<auto>, but can be overriden with a manual list.  For any location that maps to C<auto>, the coordinates specified here in C<auto_dc_coords> will be compared with the coordinates from the City-level database(s) to determine an automatic distance-sorted datacenter list.
+With city-auto-mode enabled, the top-level map C<default> defaults to C<auto>, but can be overridden with a manual list.  For any location that maps to C<auto>, the coordinates specified here in C<auto_dc_coords> will be compared with the coordinates from the City-level database(s) to determine an automatic distance-sorted datacenter list.
 
 If you omit one or more defined datacenters from the coordinate list in C<auto_dc_coords>, those datacenters will not be used in automatic results, but will still be available for manual use via C<map> and/or C<nets> entries.
 

@@ -114,7 +114,7 @@ and their values are the configuration of each resource.
 =head1 CONFIGURATION - PER-RESOURCE
 
 Inside a given resource's configuration hash, again the three address-related
-paramters C<services_types>, C<multi>, and C<up_thresh> may be specified to
+parameters C<services_types>, C<multi>, and C<up_thresh> may be specified to
 override their settings per-resource.
 
 There are two basic configuration modes within a resource:
@@ -192,7 +192,7 @@ Example (X could be a whole resource, or an addrs_v4 stanza):
 =head1 THE UNGROUPED MULTI CASE
 
 This case is detected when, (as above) the values of the keys are arrays
-of C<[ IPADDR, WEIGHT]>, but the paramter C<multi> is true.  The change
+of C<[ IPADDR, WEIGHT]>, but the parameter C<multi> is true.  The change
 from the above behavior is primarily that multiple addresses from the
 weighted set can be returned in each response.  The C<maximum>, rather
 than the sum, of the dynamic weights (again, zero for down addresses,

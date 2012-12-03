@@ -169,7 +169,7 @@ the C<CAP_NET_BIND_SERVICE> capability to work around this problem.
 On other systems you will have to make other arrangements to grant
 the appropriate privileges to the process.  When the daemon is not
 started as root, of course, it is assumed you have made such external
-privilege arrangements in all cases where neccessary.
+privilege arrangements in all cases where necessary.
 
 This option is also available on a per-listener basis in the listener
 options hash.
@@ -419,7 +419,7 @@ default to save a bunch of per-socket-context buffer space.
 However, if you have strange DNS data that's very large (giant RRsets, giant
 blobs of data in TXT records) which might generate response packets greater
 than the 16K default max here, you *must* set this parameter large enough to
-accomodate them or random very bad things will happen.  It should be noted that
+accommodate them or random very bad things will happen.  It should be noted that
 the odds are high whatever you're trying to do is misguided in the first place.
 You can size this by setting it to the max and running some test queries via
 "dig" (or a similar tool) to find your limit.
@@ -513,7 +513,7 @@ against a gdnsd server.
 
 =head1 SERVICE_TYPES
 
-service_types is used in conjuction with certain gdnsd plugins.  If
+service_types is used in conjunction with certain gdnsd plugins.  If
 you are not using such a plugin, you can safely ignore this section
 and omit it from your configuration.
 
@@ -550,7 +550,7 @@ Any services monitored for plugins are also have their state reported
 alongside the standard gdnsd statistics report, served by the built-in
 HTTP server (default port is 3506).
 
-There are five built-in service types that can't be overriden:
+There are five built-in service types that can't be overridden:
 
 One built-in service type is implicitly named C<default>.  It uses the
 default C<http_status> plugin and is defined to all of the default

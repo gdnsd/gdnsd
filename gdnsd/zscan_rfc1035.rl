@@ -38,7 +38,7 @@
  * The longest possible tstart-based token is a maximum-length
  *  quoted TXT string, which given autosplit, can be up to
  *  roughly 64K, which means buffer size has to be that big
- *  to accomodate that.  There probably wouldn't be any bugs
+ *  to accommodate that.  There probably wouldn't be any bugs
  *  going down to something reasonable like 4K, but it would
  *  cause parse errors if anyone tried to use longer TXT strings.
  * Another important thing: for integers, we use atoi() directly
@@ -475,7 +475,7 @@ F_NONNULL
 static void close_paren(zscan_t* z) {
     dmn_assert(z);
     if(!z->in_paren)
-        parse_error_noargs("Parenthetical error: unneccesary close");
+        parse_error_noargs("Parenthetical error: unnecessary close");
     z->in_paren = false;
 }
 

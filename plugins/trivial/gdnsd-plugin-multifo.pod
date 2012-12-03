@@ -66,7 +66,7 @@ Within a resource, you have two basic options.
 1) You can directly specify a set of C<label =E<gt> address> pairs which are all the same family (IPv4 or IPv6).
 2) You can use the sub-stanzas C<addrs_v4> and/or C<addrs_v6> to specify one or both families in the same resource.
 
-The C<up_thresh> and C<service_types> parameters are inherited through every level, and can be overriden at any level (even per-address-family):
+The C<up_thresh> and C<service_types> parameters are inherited through every level, and can be overridden at any level (even per-address-family):
 
 =over 4
 
