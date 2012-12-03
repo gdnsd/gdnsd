@@ -364,8 +364,6 @@ static action_t match_action(const char* arg) {
 static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
 
 static action_t parse_args(int argc, char** argv, const char** rootdir_out) {
-    dmn_assert(rootdir_out);
-
     action_t action = ACT_UNDEF;
     *rootdir_out = def_rootdir;
 
@@ -421,9 +419,9 @@ int main(int argc, char** argv) {
     // will we daemonize? startfg doesn't count...
     bool will_daemonize = false;
     switch(action) {
-        ACT_START:
-        ACT_RESTART:
-        ACT_CRESTART:
+        case ACT_START:
+        case ACT_RESTART:
+        case ACT_CRESTART:
             will_daemonize = true;
     }
 
