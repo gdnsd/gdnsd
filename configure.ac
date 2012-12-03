@@ -2,7 +2,7 @@ AC_INIT([gdnsd],[1.7.4],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/
 AC_PREREQ([2.69])
 AC_CONFIG_AUX_DIR([acaux])
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([1.12 dist-xz foreign tar-ustar -Wall])
+AM_INIT_AUTOMAKE([1.11.6 dist-xz foreign tar-ustar -Wall])
 AM_SILENT_RULES([yes])
 
 dnl TODO: when/if a new autoconf release has a C11 macro,
