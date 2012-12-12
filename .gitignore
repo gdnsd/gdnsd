@@ -27,7 +27,6 @@
 
 # Copied, renamed, distributed, installed
 /gdnsd/libgdnsd/gdnsd-dmn.h
-/gdnsd/libgdnsd/gdnsd-ev.h
 
 # Testsuite input/output directories
 testout/
