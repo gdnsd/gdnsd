@@ -10,7 +10,7 @@ plugin_extmon_la_SOURCES  = extmon.c extmon_comms.h
 plugin_extmon_la_LDFLAGS  = -avoid-version -module -export-symbols-regex ^plugin_extmon_
 plugin_extmon_la_LIBADD  = libextmon_comms.la
 
-sbin_PROGRAMS = gdnsd_extmon_helper
+pkglibexec_PROGRAMS = gdnsd_extmon_helper
 gdnsd_extmon_helper_SOURCES = extmon_helper.c extmon_comms.h
 gdnsd_extmon_helper_LDADD = libextmon_comms.la $(top_builddir)/gdnsd/libgdnsd/libgdnsd.la
 

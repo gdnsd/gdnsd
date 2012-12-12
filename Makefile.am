@@ -19,7 +19,7 @@ MAINTAINERCLEANFILES = *.info gdnsd-*.tar.*
 cfg-dirs.h:	Makefile
 	$(AM_V_GEN)echo '#define GDNSD_DEF_ROOTDIR "$(GDNSD_DEF_ROOTDIR)"' >$@
 	@echo '#define GDNSD_LIBDIR "$(libdir)/gdnsd"' >>$@
-	@echo '#define GDNSD_SBINDIR "$(sbindir)"' >>$@
+	@echo '#define GDNSD_LIBEXECDIR "$(libexecdir)/gdnsd"' >>$@
 
 test:	check
 
