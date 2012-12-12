@@ -21,7 +21,7 @@
 #define _GDNSD_PRCU_PRIV_H
 
 #include "config.h"
-#include <gdnsd-compiler.h>
+#include <gdnsd/compiler.h>
 
 #ifdef HAVE_QSBR
 

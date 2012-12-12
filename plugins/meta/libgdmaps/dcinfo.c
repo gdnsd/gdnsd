@@ -19,7 +19,7 @@
 
 #include "config.h"
 #include "dcinfo.h"
-#include <gdnsd-log.h>
+#include <gdnsd/log.h>
 #include <math.h>
 
 /***************************************

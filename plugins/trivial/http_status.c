@@ -20,7 +20,7 @@
 #define GDNSD_PLUGIN_NAME http_status
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in_systm.h>
@@ -54,7 +54,7 @@ typedef struct {
     ev_io* write_watcher;
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
-    monio_smgr_t* smgr;
+    mon_smgr_t* smgr;
     anysin_t addr;
     char res_buf[14];
     int sock;
@@ -69,7 +69,7 @@ static http_svc_t* service_types = NULL;
 static http_events_t** mons = NULL;
 
 F_NONNULL
-static void monio_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
+static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
@@ -140,11 +140,11 @@ static void monio_interval_cb(struct ev_loop* loop, struct ev_timer* t, const in
     // This is only reachable via "break"'s above, which indicate an immediate failure
     log_debug("plugin_http_status: State poll of %s failed very quickly", md->smgr->desc);
     md->hstate = HTTP_STATE_WAITING;
-    gdnsd_monio_state_updater(md->smgr, false);
+    gdnsd_mon_state_updater(md->smgr, false);
 }
 
 F_NONNULL
-static void monio_write_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
+static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
@@ -181,7 +181,7 @@ static void monio_write_cb(struct ev_loop* loop, struct ev_io* io, const int rev
             ev_io_stop(loop, md->write_watcher);
             ev_timer_stop(loop, md->timeout_watcher);
             md->hstate = HTTP_STATE_WAITING;
-            gdnsd_monio_state_updater(md->smgr, false);
+            gdnsd_mon_state_updater(md->smgr, false);
             return;
         }
         md->already_connected = true;
@@ -210,7 +210,7 @@ static void monio_write_cb(struct ev_loop* loop, struct ev_io* io, const int rev
         ev_io_stop(loop, md->write_watcher);
         ev_timer_stop(loop, md->timeout_watcher);
         md->hstate = HTTP_STATE_WAITING;
-        gdnsd_monio_state_updater(md->smgr, false);
+        gdnsd_mon_state_updater(md->smgr, false);
     }
     if(unlikely(sent != (signed)to_send)) {
         md->done += sent;
@@ -225,7 +225,7 @@ static void monio_write_cb(struct ev_loop* loop, struct ev_io* io, const int rev
 }
 
 F_NONNULL
-static void monio_read_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
+static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
@@ -282,11 +282,11 @@ static void monio_read_cb(struct ev_loop* loop, struct ev_io* io, const int reve
     ev_io_stop(loop, md->read_watcher);
     ev_timer_stop(loop, md->timeout_watcher);
     md->hstate = HTTP_STATE_WAITING;
-    gdnsd_monio_state_updater(md->smgr, final_status);
+    gdnsd_mon_state_updater(md->smgr, final_status);
 }
 
 F_NONNULL
-static void monio_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
+static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
@@ -306,7 +306,7 @@ static void monio_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int
     close(md->sock);
     md->sock = -1;
     md->hstate = HTTP_STATE_WAITING;
-    gdnsd_monio_state_updater(md->smgr, false);
+    gdnsd_mon_state_updater(md->smgr, false);
 }
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
@@ -397,51 +397,51 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_http_status_add_monitor(const char* svc_name, monio_smgr_t* smgr) {
+void plugin_http_status_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
     dmn_assert(svc_name); dmn_assert(smgr);
 
-    http_events_t* this_monio = calloc(1, sizeof(http_events_t));
+    http_events_t* this_mon = calloc(1, sizeof(http_events_t));
 
     for(unsigned i = 0; i < num_http_svcs; i++) {
         if(!strcmp(service_types[i].name, svc_name)) {
-            this_monio->http_svc = &service_types[i];
+            this_mon->http_svc = &service_types[i];
             break;
         }
     }
 
-    dmn_assert(this_monio->http_svc);
+    dmn_assert(this_mon->http_svc);
 
-    memcpy(&this_monio->addr, &smgr->addr, sizeof(anysin_t));
-    if(this_monio->addr.sa.sa_family == AF_INET) {
-        this_monio->addr.sin.sin_port = htons(this_monio->http_svc->port);
+    memcpy(&this_mon->addr, &smgr->addr, sizeof(anysin_t));
+    if(this_mon->addr.sa.sa_family == AF_INET) {
+        this_mon->addr.sin.sin_port = htons(this_mon->http_svc->port);
     }
     else {
-        dmn_assert(this_monio->addr.sa.sa_family == AF_INET6);
-        this_monio->addr.sin6.sin6_port = htons(this_monio->http_svc->port);
+        dmn_assert(this_mon->addr.sa.sa_family == AF_INET6);
+        this_mon->addr.sin6.sin6_port = htons(this_mon->http_svc->port);
     }
 
-    this_monio->smgr = smgr;
-    this_monio->hstate = HTTP_STATE_WAITING;
-    this_monio->sock = -1;
+    this_mon->smgr = smgr;
+    this_mon->hstate = HTTP_STATE_WAITING;
+    this_mon->sock = -1;
 
-    this_monio->read_watcher = malloc(sizeof(ev_io));
-    ev_io_init(this_monio->read_watcher, &monio_read_cb, -1, 0);
-    this_monio->read_watcher->data = this_monio;
+    this_mon->read_watcher = malloc(sizeof(ev_io));
+    ev_io_init(this_mon->read_watcher, &mon_read_cb, -1, 0);
+    this_mon->read_watcher->data = this_mon;
 
-    this_monio->write_watcher = malloc(sizeof(ev_io));
-    ev_io_init(this_monio->write_watcher, &monio_write_cb, -1, 0);
-    this_monio->write_watcher->data = this_monio;
+    this_mon->write_watcher = malloc(sizeof(ev_io));
+    ev_io_init(this_mon->write_watcher, &mon_write_cb, -1, 0);
+    this_mon->write_watcher->data = this_mon;
 
-    this_monio->timeout_watcher = malloc(sizeof(ev_timer));
-    ev_timer_init(this_monio->timeout_watcher, &monio_timeout_cb, 0, 0);
-    this_monio->timeout_watcher->data = this_monio;
+    this_mon->timeout_watcher = malloc(sizeof(ev_timer));
+    ev_timer_init(this_mon->timeout_watcher, &mon_timeout_cb, 0, 0);
+    this_mon->timeout_watcher->data = this_mon;
 
-    this_monio->interval_watcher = malloc(sizeof(ev_timer));
-    ev_timer_init(this_monio->interval_watcher, &monio_interval_cb, 0, 0);
-    this_monio->interval_watcher->data = this_monio;
+    this_mon->interval_watcher = malloc(sizeof(ev_timer));
+    ev_timer_init(this_mon->interval_watcher, &mon_interval_cb, 0, 0);
+    this_mon->interval_watcher->data = this_mon;
 
     mons = realloc(mons, sizeof(http_events_t*) * (num_mons + 1));
-    mons[num_mons++] = this_monio;
+    mons[num_mons++] = this_mon;
 }
 
 void plugin_http_status_init_monitors(struct ev_loop* mon_loop) {

@@ -43,11 +43,11 @@
 
 #include <ev.h>
 
-#include <gdnsd-dmn.h>
-#include <gdnsd-log.h>
-#include <gdnsd-vscf.h>
-#include <gdnsd-misc.h>
-#include "gdnsd-prcu-priv.h"
+#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/misc.h>
+#include "gdnsd/prcu-priv.h"
 
 // When an input file change is detected, we wait this long
 //  for a followup change notification before processing.  Every time we get

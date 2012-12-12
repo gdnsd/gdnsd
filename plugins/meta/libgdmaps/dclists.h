@@ -22,7 +22,7 @@
 
 #include "config.h"
 #include "dcinfo.h"
-#include <gdnsd-vscf.h>
+#include <gdnsd/vscf.h>
 #include <inttypes.h>
 #include <stdbool.h>
 

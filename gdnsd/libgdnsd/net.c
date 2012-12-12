@@ -27,9 +27,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "gdnsd-net.h"
-#include "gdnsd-net-priv.h"
-#include "gdnsd-log.h"
+#include "gdnsd/net.h"
+#include "gdnsd/net-priv.h"
+#include "gdnsd/log.h"
 
 /* network utils */
 

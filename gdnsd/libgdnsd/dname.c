@@ -23,12 +23,12 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "gdnsd-dmn.h"
-#include "gdnsd-compiler.h"
-#include "gdnsd-misc.h"
-#include "gdnsd-dname.h"
+#include "gdnsd/dmn.h"
+#include "gdnsd/compiler.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/dname.h"
 
-/* The semantics of these functions are described in gdnsd-dname.h ... */
+/* The semantics of these functions are described in gdnsd/dname.h ... */
 
 // Map uppercase ASCII to lowercase while preserving other bytes.
 static const uint8_t lcmap[256] = {

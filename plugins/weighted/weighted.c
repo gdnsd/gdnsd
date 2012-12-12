@@ -22,7 +22,7 @@
 
 #include "config.h"
 #define GDNSD_PLUGIN_NAME weighted
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <math.h>
 
 // Importantly, 1048575 * 64 * 64 barely fits in uint32_t
@@ -51,7 +51,7 @@
 typedef struct {
     anysin_t addr;
     unsigned weight;
-    monio_state_t* states;
+    mon_state_t* states;
 } addrstate_t;
 
 typedef struct {
@@ -100,7 +100,7 @@ typedef struct {
 static resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static monio_list_t monio_list = { 0, NULL };
+static mon_list_t mon_list = { 0, NULL };
 
 // tracked configured max sizes, for dynamic arrays later
 static unsigned cfg_max_items_per_res = 1;
@@ -149,7 +149,7 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
 
     res_item->count = 1;
     res_item->as = calloc(res_item->count, sizeof(addrstate_t));
-    res_item->as[0].states = calloc(addrset->num_svcs, sizeof(monio_state_t));
+    res_item->as[0].states = calloc(addrset->num_svcs, sizeof(mon_state_t));
     res_item->as[0].weight = wtemp;
     res_item->max_weight = wtemp;
     res_item->weight = wtemp;
@@ -167,8 +167,8 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
         const unsigned svc_name_len = strlen(addrset->svc_names[i]);
         char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + svc_name_len + 1);
         sprintf(complete_desc, "%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, addrset->svc_names[i]);
-        monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
-        monio_info_t* m = &monio_list.info[monio_list.count++];
+        mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
+        mon_info_t* m = &mon_list.info[mon_list.count++];
         m->svctype = addrset->svc_names[i];
         m->desc = complete_desc;
         m->addr = addr_txt;
@@ -212,7 +212,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
             || lb_weight < 1 || lb_weight > MAX_WEIGHT )
         log_fatal("plugin_weighted: resource '%s', group '%s': values in address group mode must be arrays of [ IPADDR, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, item_name);
 
-    res_item->as[lb_idx].states = calloc(addrset->num_svcs, sizeof(monio_state_t));
+    res_item->as[lb_idx].states = calloc(addrset->num_svcs, sizeof(mon_state_t));
     res_item->as[lb_idx].weight = lb_weight;
 
     const char* addr_txt = vscf_simple_get_data(vscf_array_get_data(lb_data, 0));
@@ -228,8 +228,8 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
         const unsigned svc_name_len = strlen(addrset->svc_names[i]);
         char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + lb_name_len + 1 + svc_name_len + 1);
         sprintf(complete_desc, "%s/%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, lb_name, addrset->svc_names[i]);
-        monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
-        monio_info_t* m = &monio_list.info[monio_list.count++];
+        mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
+        mon_info_t* m = &mon_list.info[mon_list.count++];
         m->svctype = addrset->svc_names[i];
         m->desc = complete_desc;
         m->addr = addr_txt;
@@ -639,7 +639,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
 
 ////// exported callbacks start here
 
-monio_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
+mon_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
     dmn_assert(config);
     dmn_assert(vscf_is_hash(config));
 
@@ -654,7 +654,7 @@ monio_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
     resources = calloc(num_resources, sizeof(resource_t));
     unsigned idx = 0;
     vscf_hash_iterate(config, true, config_res, &idx);
-    return &monio_list;
+    return &mon_list;
 }
 
 void plugin_weighted_full_config(const unsigned num_threads) {
@@ -765,11 +765,11 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
         dyn_item_maxs[item_idx] = 0;
         for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
             const addrstate_t* addr = &res_item->as[addr_idx];
-            const monio_state_uint_t addr_state
-                = gdnsd_monio_get_min_state(addr->states, aset->num_svcs);
-            if(addr_state != MONIO_STATE_UP)
+            const mon_state_uint_t addr_state
+                = gdnsd_mon_get_min_state(addr->states, aset->num_svcs);
+            if(addr_state != MON_STATE_UP)
                 *cut_ttl_ptr = true;
-            if(addr_state != MONIO_STATE_DOWN) {
+            if(addr_state != MON_STATE_DOWN) {
                 dyn_addr_weights[item_idx][addr_idx] = addr->weight;
                 dyn_item_sums[item_idx] += addr->weight;
                 if(addr->weight > dyn_item_maxs[item_idx])

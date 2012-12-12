@@ -19,7 +19,7 @@
 
 #include "config.h"
 #include "ntree.h"
-#include <gdnsd-log.h>
+#include <gdnsd/log.h>
 
 // Initial node allocation count,
 //   must be power of two due to alloc code,

@@ -7,15 +7,15 @@ gdnsd-plugin-api - How to write gdnsd plugin code
 
   Mandatory preamble macro+header your source must include at the top:
     #define GDNSD_PLUGIN_NAME foo
-    #include <gdnsd-plugin.h>
+    #include <gdnsd/plugin.h>
 
   Callback hooks you may implement (all are optional, and executed in this order):
     -- startup/config stuff:
     # only 'checkconf', 'start', 'restart', 'condrestart' invoke plugin callbacks at all
-    monio_list_t* plugin_foo_load_config(const vscf_data_t* pc)
+    mon_list_t* plugin_foo_load_config(const vscf_data_t* pc)
     void plugin_foo_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
     void plugin_foo_full_config(unsigned num_threads)
-    void plugin_foo_add_monitor(const char* svc_name, monio_smgr_t* smgr)
+    void plugin_foo_add_monitor(const char* svc_name, mon_smgr_t* smgr)
     # only 'start', 'restart', and 'condrestart' continue past this point
     void plugin_foo_post_daemonize(void)
     void plugin_foo_pre_privdrop(void)
@@ -168,12 +168,12 @@ There must be one primary plugin source file which implements the callback
 hooks, and this file must include the following before any other code:
 
     #define GDNSD_PLUGIN_NAME foo
-    #include <gdnsd-plugin.h>
+    #include <gdnsd/plugin.h>
 
 If you wish to split your implementation over multiple files, you can access
 the relevant API interfaces via the other C<gdnsd-*.h> headers directly.
 However all of the actual callback hooks must be implemented in the primary
-source file, and your other source files should B<not> include C<gdnsd-plugin.h>.
+source file, and your other source files should B<not> include C<gdnsd/plugin.h>.
 
 =head1 RUNTIME CALLBACK FLOW
 
@@ -210,7 +210,7 @@ cease shortly.  Because of this, any expensive configuration steps should be
 avoided in the load_config callback.  Your goal in load_config is to validate
 your configuration data and store it somewhere, nothing more.
 
-You may also return a C<monio_list_t*> from load_config (or NULL if not
+You may also return a C<mon_list_t*> from load_config (or NULL if not
 applicable).  This defines the resources your plugin wants the core daemon
 to monitor via its internal HTTP state checker, so that you can implement
 simple failover policies easily.
@@ -223,7 +223,7 @@ For each service type that uses a given plugin, the plugin will receive a
 C<plugin_foo_add_svctype()> callback.  Use this to set up local data
 structures for each service type you've been assigned.
 
-Next, all of the C<monio_list_t*>'s that were returned by all
+Next, all of the C<mon_list_t*>'s that were returned by all
 C<plugin_foo_load_config()> calls will be processed, which results in
 per-address callbacks to monitoring plugins' C<plugin_foo_add_monitor()>.
 This is when a monitoring plugin sets up per-address data structures.
@@ -309,7 +309,7 @@ checks endlessly the next time the loop is invoked.
 
 When your libev monitoring callbacks have determined a success or failure
 for a monitored resource, they're expected to call the helper function
-C<gdnsd_monio_state_updater()> from F<gdnsd-monio.h> to send the state
+C<gdnsd_mon_state_updater()> from F<gdnsd/mon.h> to send the state
 info upstream for anti-flap calculations and re-destribution to plugins
 which are monitoring the given resource.
 
@@ -427,7 +427,7 @@ in a library named C<libgdnsd>, which the gdnsd daemon has already
 loaded before loading your plugin.  You don't need to (and shouldn't)
 explicitly link against libgdnsd.  The interfaces are defined in a set
 of header files grouped by functionality.  Note that in your
-primary plugin source file which includes F<gdnsd-plugin.h>, all of
+primary plugin source file which includes F<gdnsd/plugin.h>, all of
 these header files have already been included for you indirectly.
 
 For now, the documentation of these interfaces exists solely in
@@ -436,21 +436,21 @@ document them correctly, probably doxygen.
 
 =over 4
 
-=item gdnsd-compiler.h
+=item gdnsd/compiler.h
 
-=item gdnsd-plugapi.h
+=item gdnsd/plugapi.h
 
-=item gdnsd-vscf.h
+=item gdnsd/vscf.h
 
-=item gdnsd-net.h
+=item gdnsd/net.h
 
-=item gdnsd-misc.h
+=item gdnsd/misc.h
 
-=item gdnsd-log.h
+=item gdnsd/log.h
 
-=item gdnsd-monio.h
+=item gdnsd/mon.h
 
-=item gdnsd-dname.h
+=item gdnsd/dname.h
 
 =back
 
@@ -466,10 +466,10 @@ code, and make liberal use of C<assert()> and C<log_debug()> where applicable.
 
 You do not declare function prototypes for the callback functions
 (plugin_foo_*).  The prototypes are declared for you when you include the
-F<gdnsd-plugin.h> header.  You need merely define the functions themselves.
+F<gdnsd/plugin.h> header.  You need merely define the functions themselves.
 
 There is an internal API version number documented at the top of this document
-and set in C<gdnsd-plugapi.h>.  This number is only incremented when incompatible
+and set in C<gdnsd/plugapi.h>.  This number is only incremented when incompatible
 changes are made to the plugin API interface or semantics which require
 recompiling plugins and/or updating their code.  When gdnsd is compiled this
 version number is hardcoded into the daemon binary.  When plugins are compiled
@@ -491,12 +491,12 @@ Prior to API version 3, there wasn't any good API documentation and no known
 
 =head2 Version 4
 
-The API function gdnsd_monio_add() was removed completely.
+The API function gdnsd_mon_add() was removed completely.
 
 The prototype for plugin_foo_load_config() changed: the return value
-(previously void) is now C<monio_list_t*>.  If you were previously using
-gdnsd_monio_add() during plugin_foo_load_config(), you now return that data via
-the return value instead.  If you were not using gdnsd_monio_add(), you can
+(previously void) is now C<mon_list_t*>.  If you were previously using
+gdnsd_mon_add() during plugin_foo_load_config(), you now return that data via
+the return value instead.  If you were not using gdnsd_mon_add(), you can
 simply update the return value type and return NULL from this callback now.
 
 Also, while not technically an API change, the configuration file format as a
@@ -543,7 +543,7 @@ information regarding privdrop/chroot/daemonization status as well.
 
 Added four new plugin callbacks to support pluggable monitoring:
     void plugin_foo_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
-    void plugin_foo_add_monitor(const char* svc_name, monio_smgr_t* smgr)
+    void plugin_foo_add_monitor(const char* svc_name, mon_smgr_t* smgr)
     void plugin_foo_init_monitors(struct ev_loop* mon_loop)
     void plugin_foo_start_monitors(struct ev_loop* mon_loop)
 
@@ -598,19 +598,23 @@ Version 10 contains all the changes leading up to 1.8.0.  It's a moving
 target, and you'll need to rebuild your plugins regularly if you're tracking
 the 1.7.x in-progress development stuff.
 
-satom/monio stuff:
+All header files renamed from the form C<gdnsd-X.h> to C<gdnsd/X.h>.
 
-The header file gdnsd-satom.h is no longer published, and plugin code which
+satom/mon stuff:
+The header file gdnsd/satom.h is no longer published, and plugin code which
 directly includes it or uses things only defined there (e.g. satom_t and
 various satom_*() accessors) needs to stop doing so.  It was probably
 never a good idea to expose this or use it in the first place.  The
 replacement is intentionally undocumented for the plugin API.
 
-gdnsd_monio_min_state() renamed gdnsd_monio_get_min_state(), and is
+s/monio/mon/ in general on any types/symbols/macros referenced from the
+API include files, to clean up some package-internal naming conflict stuff.
+
+gdnsd_mon_min_state() renamed gdnsd_mon_get_min_state(), and is
 now the B<only> documented official interface for resolve plugins
 to fetch monitored states.
 
-gdnsd_monio_state_updater() is now the B<required> interface for
+gdnsd_mon_state_updater() is now the B<required> interface for
 monitoring plugins to send updates to the core, whereas it was
 merely recommended in the past.
 

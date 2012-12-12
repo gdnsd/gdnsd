@@ -28,7 +28,7 @@
 #include "conf.h"
 #include "ltree.h"
 #include "ltarena.h"
-#include "gdnsd-misc.h"
+#include "gdnsd/misc.h"
 
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN 46

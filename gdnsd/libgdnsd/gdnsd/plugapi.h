@@ -27,18 +27,18 @@
 #include <ev.h>
 
 // For vscf_data_t
-#include <gdnsd-vscf.h>
+#include <gdnsd/vscf.h>
 
 // For anysin_t
-#include <gdnsd-net.h>
+#include <gdnsd/net.h>
 
-// For monio_list_t
-#include <gdnsd-monio.h>
+// For mon_list_t
+#include <gdnsd/mon.h>
 
 /***
  * Plugin API version, bumped on any change that's not backwards-compat.
  * This is hardcoded as a the return value of plugin_foo_get_api_version()
- *   in gdnsd-plugin.h, and also compiled into the gdnsd code.  The two
+ *   in gdnsd/plugin.h, and also compiled into the gdnsd code.  The two
  *   values are compared at plugin load time to ensure that plugin code
  *   which doesn't match the API of the gdnsd binary is not allowed.
  * (Of course, in many cases the plugin never even makes it that far,
@@ -89,7 +89,7 @@ void gdnsd_dynaddr_add_result_anysin(dynaddr_result_t* result, const anysin_t* a
 /**** Typedefs for plugin callbacks ****/
 
 typedef unsigned (*gdnsd_apiv_cb_t)(void);
-typedef monio_list_t* (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
+typedef mon_list_t* (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
 typedef int (*gdnsd_map_resource_dyna_cb_t)(const char* resname);
 typedef int (*gdnsd_map_resource_dync_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
@@ -104,7 +104,7 @@ typedef void (*gdnsd_exit_cb_t)(void);
 /**** New callbacks for monitoring plugins ****/
 
 typedef void (*gdnsd_add_svctype_cb_t)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
-typedef void (*gdnsd_add_monitor_cb_t)(const char* svc_name, monio_smgr_t* smgr);
+typedef void (*gdnsd_add_monitor_cb_t)(const char* svc_name, mon_smgr_t* smgr);
 typedef void (*gdnsd_init_monitors_cb_t)(struct ev_loop* mon_loop);
 typedef void (*gdnsd_start_monitors_cb_t)(struct ev_loop* mon_loop);
 

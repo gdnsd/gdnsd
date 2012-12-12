@@ -21,7 +21,7 @@
 #define DCINFO_H
 
 #include "config.h"
-#include <gdnsd-vscf.h>
+#include <gdnsd/vscf.h>
 
 // DEG2RAD converts degrees to radians.  Our auto_dc_coords input
 //   and GeoIPCity coordinate data is in degrees, and must be

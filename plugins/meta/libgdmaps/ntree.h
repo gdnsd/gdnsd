@@ -22,7 +22,7 @@
 
 #include "config.h"
 #include <inttypes.h>
-#include <gdnsd-plugapi.h>
+#include <gdnsd/plugapi.h>
 
 /***************************************
  * ntree_t and related methods

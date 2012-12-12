@@ -20,15 +20,15 @@
 #ifndef _GDNSD_LOG_H
 #define _GDNSD_LOG_H
 
-#include <gdnsd-compiler.h>
-#include <gdnsd-net.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/net.h>
 
 #include <inttypes.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <syslog.h>
-#include <gdnsd-dmn.h>
+#include <gdnsd/dmn.h>
 
 #define gdnsd_logger dmn_logger
 #define gdnsd_loggerv dmn_loggerv

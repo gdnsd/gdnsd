@@ -18,7 +18,7 @@
  */
 
 #include "zsrc_rfc1035.h"
-#include "gdnsd-misc.h"
+#include "gdnsd/misc.h"
 #include "zscan_rfc1035.h"
 #include "conf.h"
 

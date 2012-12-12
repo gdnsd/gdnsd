@@ -20,7 +20,7 @@
 #define GDNSD_PLUGIN_NAME reflect
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 
 #define NUM_RTYPES 4

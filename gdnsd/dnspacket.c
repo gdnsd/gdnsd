@@ -26,9 +26,9 @@
 
 #include "conf.h"
 #include "dnswire.h"
-#include "gdnsd-misc.h"
-#include "gdnsd-plugapi-priv.h"
-#include "gdnsd-prcu-priv.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/plugapi-priv.h"
+#include "gdnsd/prcu-priv.h"
 #include "ztree.h"
 
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;

@@ -24,7 +24,7 @@
 #include "dcmap.h"
 #include "gdgeoip.h"
 
-#include <gdnsd-log.h>
+#include <gdnsd/log.h>
 #include <stdbool.h>
 
 /***************************************

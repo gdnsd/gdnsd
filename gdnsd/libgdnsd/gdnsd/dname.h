@@ -25,8 +25,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#include <gdnsd-compiler.h>
-#include <gdnsd-dmn.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/dmn.h>
 
 /*
  * Notes about Domain Names in general:

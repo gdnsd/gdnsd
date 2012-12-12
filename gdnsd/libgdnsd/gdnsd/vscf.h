@@ -24,7 +24,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-#include <gdnsd-dname.h>
+#include <gdnsd/dname.h>
 
 // Opaque data type used for all complex data pointers in the public API
 typedef union _vscf_data_t vscf_data_t;
@@ -118,7 +118,7 @@ F_NONNULL bool vscf_simple_get_as_bool(const vscf_data_t* d, bool* out);
 
 // Get a simple value as a "dname"-formatted domainname, according to
 //  the same basic rules and return value as gdnsd_dname_from_string()
-//  in gdnsd-dname.h.  The "dname" argument must be pre-allocated to
+//  in gdnsd/dname.h.  The "dname" argument must be pre-allocated to
 //  256 bytes.
 F_NONNULL
 dname_status_t vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname);

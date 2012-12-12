@@ -20,7 +20,7 @@
 #define GDNSD_PLUGIN_NAME null
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 
 bool plugin_null_resolve_dynaddr(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {
@@ -44,7 +44,7 @@ typedef struct {
 
 typedef struct {
     null_svc_t* svc;
-    monio_smgr_t* smgr;
+    mon_smgr_t* smgr;
     ev_timer* interval_watcher;
 } null_mon_t;
 
@@ -59,7 +59,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 
     null_mon_t* mon = (null_mon_t*)t->data;
     dmn_assert(mon);
-    gdnsd_monio_state_updater(mon->smgr, false);
+    gdnsd_mon_state_updater(mon->smgr, false);
 }
 
 void plugin_null_add_svctype(const char* name, const vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED) {
@@ -70,7 +70,7 @@ void plugin_null_add_svctype(const char* name, const vscf_data_t* svc_cfg V_UNUS
     this_svc->interval = interval;
 }
 
-void plugin_null_add_monitor(const char* svc_name, monio_smgr_t* smgr) {
+void plugin_null_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
     null_svc_t* this_svc = NULL;
 
     for(unsigned i = 0; i < num_svcs; i++) {

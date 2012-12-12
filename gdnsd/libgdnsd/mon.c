@@ -19,14 +19,14 @@
 
 #include "config.h"
 
-#include "gdnsd-monio.h"
-#include "gdnsd-log.h"
+#include "gdnsd/mon.h"
+#include "gdnsd/log.h"
 
-monio_state_uint_t gdnsd_monio_get_min_state(const monio_state_t* states, const unsigned num_states) {
+mon_state_uint_t gdnsd_mon_get_min_state(const mon_state_t* states, const unsigned num_states) {
     dmn_assert(states);
-    monio_state_uint_t lowest = MONIO_STATE_UP;
+    mon_state_uint_t lowest = MON_STATE_UP;
     for(unsigned i = 0; i < num_states; i++) {
-       monio_state_uint_t st = stats_get(&states[i]);
+       mon_state_uint_t st = stats_get(&states[i]);
        if(st < lowest)
            lowest = st;
     }
@@ -56,63 +56,63 @@ state_updater {
 }
 */
 
-void gdnsd_monio_state_updater(monio_smgr_t* smgr, const bool latest) {
+void gdnsd_mon_state_updater(mon_smgr_t* smgr, const bool latest) {
     dmn_assert(smgr);
 
-    const monio_state_uint_t now_state = stats_own_get(smgr->monio_state_ptrs[0]);
-    monio_state_uint_t new_state = now_state;
+    const mon_state_uint_t now_state = stats_own_get(smgr->mon_state_ptrs[0]);
+    mon_state_uint_t new_state = now_state;
 
     // a bit spammy to leave in all debug builds, but handy at times...
     //log_debug("'%s' new monitor result: %s", smgr->desc, latest ? "OK" : "FAIL");
 
     if(latest) { // New Success
         switch(now_state) {
-            case MONIO_STATE_UP:
+            case MON_STATE_UP:
                 break;
-            case MONIO_STATE_DANGER:
+            case MON_STATE_DANGER:
                 if(++(smgr->n_success) == smgr->ok_thresh) {
                     log_info("'%s' transitioned to the UP state", smgr->desc);
-                    new_state = MONIO_STATE_UP;
+                    new_state = MON_STATE_UP;
                 }
                 break;
-            case MONIO_STATE_DOWN:
+            case MON_STATE_DOWN:
                 if(++(smgr->n_success) == smgr->up_thresh) {
                     log_info("'%s' transitioned to the UP state", smgr->desc);
-                    new_state = MONIO_STATE_UP;
+                    new_state = MON_STATE_UP;
                 }
                 break;
-            case MONIO_STATE_UNINIT:
+            case MON_STATE_UNINIT:
                 log_info("'%s' initialized to the UP state", smgr->desc);
-                new_state = MONIO_STATE_UP;
+                new_state = MON_STATE_UP;
                 break;
         }
     }
     else { // New Failure
         smgr->n_success = 0;
         switch(now_state) {
-            case MONIO_STATE_UP:
+            case MON_STATE_UP:
                 smgr->n_failure = 1;
                 log_info("'%s' transitioned to the DANGER state", smgr->desc);
-                new_state = MONIO_STATE_DANGER;
+                new_state = MON_STATE_DANGER;
                 break;
-            case MONIO_STATE_DANGER:
+            case MON_STATE_DANGER:
                 if(++(smgr->n_failure) == smgr->down_thresh) {
                     log_info("'%s' transitioned to the DOWN state", smgr->desc);
-                    new_state = MONIO_STATE_DOWN;
+                    new_state = MON_STATE_DOWN;
                 }
                 break;
-            case MONIO_STATE_DOWN:
+            case MON_STATE_DOWN:
                 break;
-            case MONIO_STATE_UNINIT:
+            case MON_STATE_UNINIT:
                 log_info("'%s' initialized to the DOWN state", smgr->desc);
-                new_state = MONIO_STATE_DOWN;
+                new_state = MON_STATE_DOWN;
                 break;
         }
     }
 
     if(new_state != now_state) {
         for(unsigned i = 0; i < smgr->num_state_ptrs; i++)
-            stats_own_set(smgr->monio_state_ptrs[i], new_state);
+            stats_own_set(smgr->mon_state_ptrs[i], new_state);
     }
 }
 

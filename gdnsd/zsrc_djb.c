@@ -29,7 +29,7 @@
 #include "ltree.h"
 #include "ltarena.h"
 #include "ztree.h"
-#include "gdnsd-misc.h"
+#include "gdnsd/misc.h"
 
 static void unload_zones(void) {
     // for every zone_t created and sent to ztree earlier

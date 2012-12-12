@@ -20,8 +20,8 @@
 #ifndef _GDNSD_PLUGAPI_PRIV_H
 #define _GDNSD_PLUGAPI_PRIV_H
 
-#include "gdnsd-plugapi.h"
-#include "gdnsd-vscf.h"
+#include "gdnsd/plugapi.h"
+#include "gdnsd/vscf.h"
 
 // MUST call this before loading plugins below,
 //   array can be NULL for just the default

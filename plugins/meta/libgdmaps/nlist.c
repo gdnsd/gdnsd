@@ -21,8 +21,8 @@
 #include "nlist.h"
 #include <string.h>
 #include <stdlib.h>
-#include <gdnsd-log.h>
-#include <gdnsd-misc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
 
 #define NLIST_INITSIZE 64
 #define MASK_DELETED 0xFFFFFFFF

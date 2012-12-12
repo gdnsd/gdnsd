@@ -23,8 +23,8 @@
 // For uintptr_t
 #include <inttypes.h>
 
-#include <gdnsd-compiler.h>
-#include <gdnsd-dmn.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/dmn.h>
 
 /*
  * This header defines two data types named stats_t and stats_uint_t,

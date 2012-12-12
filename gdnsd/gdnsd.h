@@ -41,14 +41,14 @@ proper includes in every file, instead of relying on this as a catch-all.
 
 #include <ev.h>
 
-#include "gdnsd-compiler.h"
-#include "gdnsd-vscf.h"
-#include "gdnsd-dname.h"
-#include "gdnsd-stats.h"
-#include "gdnsd-net.h"
-#include "gdnsd-log.h"
-#include "gdnsd-monio.h"
-#include "gdnsd-plugapi.h"
-#include "gdnsd-dmn.h"
+#include "gdnsd/compiler.h"
+#include "gdnsd/vscf.h"
+#include "gdnsd/dname.h"
+#include "gdnsd/stats.h"
+#include "gdnsd/net.h"
+#include "gdnsd/log.h"
+#include "gdnsd/mon.h"
+#include "gdnsd/plugapi.h"
+#include "gdnsd/dmn.h"
 
 #endif // _GDNSD_H

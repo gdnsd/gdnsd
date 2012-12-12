@@ -20,7 +20,7 @@
 #ifndef GDGEOIP_H
 #define GDGEOIP_H
 
-#include <gdnsd-log.h>
+#include <gdnsd/log.h>
 #include "fips104.h"
 #include "dclists.h"
 #include "dcmap.h"

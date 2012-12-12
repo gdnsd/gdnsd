@@ -20,7 +20,7 @@
 #ifndef _GDNSD_NET_PRIV_H
 #define _GDNSD_NET_PRIV_H
 
-#include "gdnsd-net.h"
+#include "gdnsd/net.h"
 
 // This is for the core code only, called early and single-threaded.
 void gdnsd_init_net(void);

@@ -28,7 +28,7 @@
 #include <netdb.h>
 #include <stdbool.h>
 
-#include <gdnsd-compiler.h>
+#include <gdnsd/compiler.h>
 
 /* Socket union type */
 // note anonymous union here, which gcc has supported

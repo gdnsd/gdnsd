@@ -20,7 +20,7 @@
 // Unit test for gdmaps
 
 #include "config.h"
-#include <gdnsd-log.h>
+#include <gdnsd/log.h>
 #include "gdmaps_test.h"
 
 int main(int argc, char* argv[]) {

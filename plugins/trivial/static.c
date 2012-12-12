@@ -20,7 +20,7 @@
 #define GDNSD_PLUGIN_NAME static
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -66,7 +66,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     return true;
 }
 
-monio_list_t* plugin_static_load_config(const vscf_data_t* config) {
+mon_list_t* plugin_static_load_config(const vscf_data_t* config) {
     if(!config)
         log_fatal("static plugin requires a 'plugins' configuration stanza");
     dmn_assert(vscf_get_type(config) == VSCF_HASH_T);

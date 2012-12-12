@@ -24,8 +24,8 @@
 
 #include <math.h>
 
-#include <gdnsd-log.h>
-#include <gdnsd-vscf.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
 
 /***************************************
  * dclists_t and related methods

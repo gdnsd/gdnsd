@@ -17,41 +17,41 @@
  *
  */
 
-#ifndef _GDNSD_LIBMONIO_H
-#define _GDNSD_LIBMONIO_H
+#ifndef _GDNSD_MON_H
+#define _GDNSD_MON_H
 
 // For stats_t, etc...
-#include <gdnsd-stats.h>
-#include <gdnsd-net.h>
+#include <gdnsd/stats.h>
+#include <gdnsd/net.h>
 
-/* monio_state == stats, but these define
+/* mon_state == stats, but these define
  * wrappers may make it easier if we
  * have to move to another mechanism
  * later.
  */
-#define MONIO_STATE_UNINIT 0
-#define MONIO_STATE_DOWN   1
-#define MONIO_STATE_DANGER 2
-#define MONIO_STATE_UP     3
-typedef stats_t monio_state_t;
-typedef stats_uint_t monio_state_uint_t;
+#define MON_STATE_UNINIT 0
+#define MON_STATE_DOWN   1
+#define MON_STATE_DANGER 2
+#define MON_STATE_UP     3
+typedef stats_t mon_state_t;
+typedef stats_uint_t mon_state_uint_t;
 
 F_NONNULL
-monio_state_uint_t gdnsd_monio_get_min_state(const monio_state_t* states, const unsigned num_states);
+mon_state_uint_t gdnsd_mon_get_min_state(const mon_state_t* states, const unsigned num_states);
 
 // Your plugin owns all of the storage within or pointed to
-//  by monio_list_t, and it must be durable storage
+//  by mon_list_t, and it must be durable storage
 //  at the time _load_config() returns.  You are free to destroy
 //  it during later callbacks, keeping in mind that the actual
-//  monio_state_t pointed to by monio_info_t.state_ptr must
+//  mon_state_t pointed to by mon_info_t.state_ptr must
 //  exist during normal operations for the monitoring code to
 //  send status updates through.  It can only be de-allocated
 //  at plugin _exit() time.
-// It is also permissible for pointers inside of monio_list_t to
+// It is also permissible for pointers inside of mon_list_t to
 //  directly reference temporary storage from vscf, (e.g. the
 //  "const char*" returned by vscf_simple_get_data()), as the
 //  vscf config tree won't be destroyed until the daemon is
-//  done processing your monio_list_t.
+//  done processing your mon_list_t.
 
 // If svctype_name is NULL, it will be interpreted as "default".
 // Other arguments are required.
@@ -61,13 +61,13 @@ typedef struct {
     const char* svctype;
     const char* desc;
     const char* addr;
-    monio_state_t* state_ptr;
-} monio_info_t;
+    mon_state_t* state_ptr;
+} mon_info_t;
 
 typedef struct {
     unsigned count;
-    monio_info_t* info;
-} monio_list_t;
+    mon_info_t* info;
+} mon_list_t;
 
 // This is for monitoring plugins rather than resolver plugins.  Most
 //   plugins will want to treat it as mostly opaque other than using
@@ -76,7 +76,7 @@ typedef struct {
 typedef struct _service_type_struct service_type_t;
 typedef struct {
     anysin_t addr;
-    monio_state_t** monio_state_ptrs;
+    mon_state_t** mon_state_ptrs;
     service_type_t* svc_type;
     const char* desc;
     unsigned num_state_ptrs;
@@ -85,12 +85,12 @@ typedef struct {
     unsigned down_thresh;
     unsigned n_failure;
     unsigned n_success;
-} monio_smgr_t;
+} mon_smgr_t;
 
 // Plugins call this helper after every raw state check of a monitored
 //   address, so that it can manage long-term state.
 // latest -> 0 failed, 1 succeeded
 F_NONNULL
-void gdnsd_monio_state_updater(monio_smgr_t* smgr, const bool latest);
+void gdnsd_mon_state_updater(mon_smgr_t* smgr, const bool latest);
 
-#endif // _GDNSD_LIBMONIO_H
+#endif // _GDNSD_MON_H

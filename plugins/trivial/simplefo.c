@@ -20,7 +20,7 @@
 #define GDNSD_PLUGIN_NAME simplefo
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -49,7 +49,7 @@ static const char* which_str_mon[2] = {
 
 typedef struct {
     anysin_t addrs[2];
-    monio_state_t* states[2];
+    mon_state_t* states[2];
     unsigned num_svcs;
 } addrstate_t;
 
@@ -62,7 +62,7 @@ typedef struct {
 static res_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static monio_list_t monio_list = { 0, NULL };
+static mon_list_t mon_list = { 0, NULL };
 
 static const char DEFAULT_SVCNAME[] = "default";
 
@@ -70,9 +70,9 @@ static const char DEFAULT_SVCNAME[] = "default";
 /* Local, static functions       */
 /*********************************/
 
-static void monio_add(const char* svctype, const char* resname, const char* addr_txt, monio_state_t* state_ptr) {
-    monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
-    monio_info_t* m = &monio_list.info[monio_list.count++];
+static void mon_add(const char* svctype, const char* resname, const char* addr_txt, mon_state_t* state_ptr) {
+    mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
+    mon_info_t* m = &mon_list.info[mon_list.count++];
     m->svctype = svctype;
     m->desc = resname;
     m->addr = addr_txt;
@@ -125,14 +125,14 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
         else if(as_af == A_IPv4 && ipv6)
             log_fatal("plugin_simplefo: resource %s (%s): '%s' is not an IPv4 address", resname, stanza, addr_txt);
 
-        as->states[which] = malloc(sizeof(monio_state_t) * num_svcs);
+        as->states[which] = malloc(sizeof(mon_state_t) * num_svcs);
         for(unsigned j = 0; j < num_svcs; j++) {
             char* desc = malloc(strlen(resname) + 5 + strlen(which_str_mon[which]) + strlen(svc_names[j]) + 1);
             strcpy(desc, resname);
             strcat(desc, ipv6 ? "/ipv6" : "/ipv4");
             strcat(desc, which_str_mon[which]);
             strcat(desc, svc_names[j]);
-            monio_add(svc_names[j], desc, addr_txt, &as->states[which][j]);
+            mon_add(svc_names[j], desc, addr_txt, &as->states[which][j]);
         }
     }
 
@@ -197,7 +197,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 /* Exported callbacks start here */
 /*********************************/
 
-monio_list_t* plugin_simplefo_load_config(const vscf_data_t* config) {
+mon_list_t* plugin_simplefo_load_config(const vscf_data_t* config) {
     if(!config)
         log_fatal("simplefo plugin requires a 'plugins' configuration stanza");
 
@@ -213,7 +213,7 @@ monio_list_t* plugin_simplefo_load_config(const vscf_data_t* config) {
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
 
-    return &monio_list;
+    return &mon_list;
 }
 
 int plugin_simplefo_map_resource_dyna(const char* resname) {
@@ -244,19 +244,19 @@ static bool resolve_addr(const addrstate_t* as, dynaddr_result_t* result, bool* 
 
     bool rv = true;
     res_which_t which = A_PRI;
-    monio_state_uint_t p_state = gdnsd_monio_get_min_state(as->states[A_PRI], as->num_svcs);
+    mon_state_uint_t p_state = gdnsd_mon_get_min_state(as->states[A_PRI], as->num_svcs);
     switch(p_state) {
-        case MONIO_STATE_DOWN:
-            if(gdnsd_monio_get_min_state(as->states[A_SEC], as->num_svcs) != MONIO_STATE_DOWN)
+        case MON_STATE_DOWN:
+            if(gdnsd_mon_get_min_state(as->states[A_SEC], as->num_svcs) != MON_STATE_DOWN)
                 which = A_SEC;
             else
                 rv = false;
             // fall-through
-        case MONIO_STATE_DANGER:;
+        case MON_STATE_DANGER:;
             *cut_ttl_ptr = true;
             break;
         default:
-            dmn_assert(p_state == MONIO_STATE_UP);
+            dmn_assert(p_state == MON_STATE_UP);
     }
 
     gdnsd_dynaddr_add_result_anysin(result, &as->addrs[which]);

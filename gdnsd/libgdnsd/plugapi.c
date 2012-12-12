@@ -19,10 +19,10 @@
 
 #include "config.h"
 
-#include "gdnsd-plugapi.h"
-#include "gdnsd-plugapi-priv.h"
-#include "gdnsd-log.h"
-#include "gdnsd-net.h"
+#include "gdnsd/plugapi.h"
+#include "gdnsd/plugapi-priv.h"
+#include "gdnsd/log.h"
+#include "gdnsd/net.h"
 
 #include <string.h>
 #include <stdlib.h>

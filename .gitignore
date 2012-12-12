@@ -26,7 +26,7 @@
 /cfg-dirs.h
 
 # Copied, renamed, distributed, installed
-/gdnsd/libgdnsd/gdnsd-dmn.h
+/gdnsd/libgdnsd/gdnsd/dmn.h
 
 # Testsuite input/output directories
 testout/

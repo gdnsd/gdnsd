@@ -24,9 +24,9 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include <gdnsd-dmn.h>
-#include <gdnsd-log.h>
-#include <gdnsd-misc.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
 
 #include "fips104.h"
 #include "gdmaps.h"

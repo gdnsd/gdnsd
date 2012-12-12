@@ -31,7 +31,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
-#include "gdnsd-prcu-priv.h"
+#include "gdnsd/prcu-priv.h"
 
 typedef enum {
     READING_INITIAL = 0,

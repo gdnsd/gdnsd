@@ -21,7 +21,7 @@
 #define GDNSD_PLUGIN_NAME multifo
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -34,7 +34,7 @@ static const double DEF_UP_THRESH = 0.5;
 
 typedef struct {
     anysin_t addr;
-    monio_state_t* states;
+    mon_state_t* states;
 } addrstate_t;
 
 typedef struct {
@@ -53,15 +53,15 @@ typedef struct {
 static res_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static monio_list_t monio_list = { 0, NULL };
+static mon_list_t mon_list = { 0, NULL };
 
 /*********************************/
 /* Local, static functions       */
 /*********************************/
 
-static void monio_add(const char* svctype, const char* desc, const char* addr_txt, monio_state_t* state_ptr) {
-    monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
-    monio_info_t* m = &monio_list.info[monio_list.count++];
+static void mon_add(const char* svctype, const char* desc, const char* addr_txt, mon_state_t* state_ptr) {
+    mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
+    mon_info_t* m = &mon_list.info[mon_list.count++];
     m->svctype = strdup(svctype);
     m->desc = desc;
     m->addr = strdup(addr_txt);
@@ -136,7 +136,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
     else if(!ipv6 && as->addr.sa.sa_family != AF_INET)
         log_fatal("plugin_multifo: resource %s (%s): address '%s' for '%s' is not IPv4", resname, stanza, addr_txt, addr_desc);
 
-    as->states = malloc(sizeof(monio_state_t) * aset->num_svcs);
+    as->states = malloc(sizeof(mon_state_t) * aset->num_svcs);
 
     for(unsigned i = 0; i < aset->num_svcs; i++) {
         char *complete_desc = malloc(strlen(resname) + 6 + strlen(addr_desc) + 1 + strlen(svc_names[i]) + 1);
@@ -145,7 +145,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
         strcat(complete_desc, addr_desc);
         strcat(complete_desc, "/");
         strcat(complete_desc, svc_names[i]);
-        monio_add(svc_names[i], complete_desc, addr_txt, &as->states[i]);
+        mon_add(svc_names[i], complete_desc, addr_txt, &as->states[i]);
     }
 
     return true;
@@ -307,7 +307,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 /* Exported callbacks start here */
 /*********************************/
 
-monio_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
+mon_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
     if(!config)
         log_fatal("multifo plugin requires a 'plugins' configuration stanza");
 
@@ -325,7 +325,7 @@ monio_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
 
-    return &monio_list;
+    return &mon_list;
 }
 
 int plugin_multifo_map_resource_dyna(const char* resname) {
@@ -351,10 +351,10 @@ static bool resolve(const addrset_t* aset, dynaddr_result_t* result, bool* cut_t
     // Add up/danger IPs to result set, signal ttl-cut if any non-up encountered
     for(unsigned i = 0; i < aset->count; i++) {
         const addrstate_t* as = &aset->as[i];
-        const monio_state_uint_t state = gdnsd_monio_get_min_state(as->states, aset->num_svcs);
-        if(state != MONIO_STATE_UP)
+        const mon_state_uint_t state = gdnsd_mon_get_min_state(as->states, aset->num_svcs);
+        if(state != MON_STATE_UP)
             *cut_ttl_ptr = true;
-        if(state != MONIO_STATE_DOWN)
+        if(state != MON_STATE_DOWN)
             gdnsd_dynaddr_add_result_anysin(result, &as->addr);
     }
 

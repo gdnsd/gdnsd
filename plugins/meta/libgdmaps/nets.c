@@ -23,8 +23,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <gdnsd-log.h>
-#include <gdnsd-net.h>
+#include <gdnsd/log.h>
+#include <gdnsd/net.h>
 
 // Check whether the passed network is a subnet
 //  of (or the entirety of) any of the "undefined"

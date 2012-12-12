@@ -22,7 +22,7 @@
 #include "config.h"
 #include "cfg-dirs.h" // XXX this wouldn't work for a 3rd party... fix that?
 #include "extmon_comms.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -41,7 +41,7 @@ typedef struct {
 
 typedef struct {
     const svc_t* svc;
-    monio_smgr_t* smgr;
+    mon_smgr_t* smgr;
     ev_timer* local_timeout;
     bool seen_once;
 } mon_t;
@@ -83,7 +83,7 @@ static void total_helper_failure(struct ev_loop* loop) {
     switch(fail_mode) {
         case FAIL_ONCE:
             for(unsigned i = 0; i < num_mons; i++)
-                gdnsd_monio_state_updater(mons[i].smgr, false);
+                gdnsd_mon_state_updater(mons[i].smgr, false);
             // fall-through
         case FAIL_STASIS:
             for(unsigned i = 0; i < num_mons; i++)
@@ -160,7 +160,7 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         if(idx >= num_mons)
             log_fatal("plugin_extmon: BUG: got helper result for out of range index %u", idx);
         mon_t* this_mon = &mons[idx];
-        gdnsd_monio_state_updater(this_mon->smgr, !failed); // wants true for success
+        gdnsd_mon_state_updater(this_mon->smgr, !failed); // wants true for success
         if(init_phase) {
             ev_timer_stop(loop, this_mon->local_timeout);
             if(!this_mon->seen_once) {
@@ -187,7 +187,7 @@ static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UN
     dmn_assert(this_mon->local_timeout == w);
 
     log_info("plugin_extmon: '%s': helper is very late for a status update, locally applying a negative update...", this_mon->smgr->desc);
-    gdnsd_monio_state_updater(this_mon->smgr, false);
+    gdnsd_mon_state_updater(this_mon->smgr, false);
     if(!init_phase) {
         bump_local_timeout(loop, this_mon);
     }
@@ -207,7 +207,7 @@ static char* num_to_str(const int i) {
 }
 
 F_NONNULL
-static char* get_smgr_addr_str(const monio_smgr_t* smgr) {
+static char* get_smgr_addr_str(const mon_smgr_t* smgr) {
     dmn_assert(smgr);
 
     char hostbuf[NI_MAXHOST + 1];
@@ -333,7 +333,7 @@ static bool bad_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* 
     log_fatal("plugin_extmon: bad global option '%s'", key);
 }
 
-monio_list_t* plugin_extmon_load_config(const vscf_data_t* config) {
+mon_list_t* plugin_extmon_load_config(const vscf_data_t* config) {
     if(config) {
         const vscf_data_t* helper_path_cfg = vscf_hash_get_data_byconstkey(config, "helper_path", true);
         if(helper_path_cfg) {
@@ -393,7 +393,7 @@ void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     }
 }
 
-void plugin_extmon_add_monitor(const char* svc_name, monio_smgr_t* smgr) {
+void plugin_extmon_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
     dmn_assert(svc_name);
     dmn_assert(smgr);
 

@@ -22,8 +22,8 @@
 
 #include "config.h"
 #include <inttypes.h>
-#include <gdnsd-vscf.h>
-#include <gdnsd-plugapi.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/plugapi.h>
 
 static const char GEOIP_DIR[] = "etc/geoip/";
 

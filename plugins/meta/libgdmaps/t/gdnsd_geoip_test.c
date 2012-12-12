@@ -30,10 +30,10 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#include <gdnsd-dmn.h>
-#include <gdnsd-log.h>
-#include <gdnsd-vscf.h>
-#include <gdnsd-plugapi.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/plugapi.h>
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"

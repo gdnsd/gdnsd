@@ -416,7 +416,7 @@ static int map_res(const char* resname, const uint8_t* origin V_UNUSED) {
 
 /********** Callbacks from gdnsd **************/
 
-monio_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
+mon_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
     if(!config)
         log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
 

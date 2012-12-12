@@ -24,7 +24,7 @@
 #define GDNSD_PLUGIN_NAME tcp_connect
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in_systm.h>
@@ -52,7 +52,7 @@ typedef struct {
     ev_io* connect_watcher;
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
-    monio_smgr_t* smgr;
+    mon_smgr_t* smgr;
     anysin_t addr;
     tcp_state_t tcp_state;
     int sock;
@@ -64,7 +64,7 @@ static tcp_svc_t* service_types = NULL;
 static tcp_events_t** mons = NULL;
 
 F_NONNULL
-static void monio_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
+static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
@@ -132,11 +132,11 @@ static void monio_interval_cb(struct ev_loop* loop, struct ev_timer* t, const in
     }
 
     close(sock);
-    gdnsd_monio_state_updater(md->smgr, success);
+    gdnsd_mon_state_updater(md->smgr, success);
 }
 
 F_NONNULL
-static void monio_connect_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
+static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
@@ -178,11 +178,11 @@ static void monio_connect_cb(struct ev_loop* loop, struct ev_io* io, const int r
     ev_io_stop(loop, md->connect_watcher);
     ev_timer_stop(loop, md->timeout_watcher);
     md->tcp_state = TCP_STATE_WAITING;
-    gdnsd_monio_state_updater(md->smgr, success);
+    gdnsd_mon_state_updater(md->smgr, success);
 }
 
 F_NONNULL
-static void monio_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
+static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
@@ -199,7 +199,7 @@ static void monio_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int
     close(md->sock);
     md->sock = -1;
     md->tcp_state = TCP_STATE_WAITING;
-    gdnsd_monio_state_updater(md->smgr, false);
+    gdnsd_mon_state_updater(md->smgr, false);
 }
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
@@ -236,47 +236,47 @@ void plugin_tcp_connect_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_tcp_connect_add_monitor(const char* svc_name, monio_smgr_t* smgr) {
+void plugin_tcp_connect_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
     dmn_assert(svc_name); dmn_assert(smgr);
 
-    tcp_events_t* this_monio = calloc(1, sizeof(tcp_events_t));
+    tcp_events_t* this_mon = calloc(1, sizeof(tcp_events_t));
 
     for(unsigned i = 0; i < num_tcp_svcs; i++) {
         if(!strcmp(service_types[i].name, svc_name)) {
-            this_monio->tcp_svc = &service_types[i];
+            this_mon->tcp_svc = &service_types[i];
             break;
         }
     }
 
-    dmn_assert(this_monio->tcp_svc);
+    dmn_assert(this_mon->tcp_svc);
 
-    memcpy(&this_monio->addr, &smgr->addr, sizeof(anysin_t));
-    if(this_monio->addr.sa.sa_family == AF_INET) {
-        this_monio->addr.sin.sin_port = htons(this_monio->tcp_svc->port);
+    memcpy(&this_mon->addr, &smgr->addr, sizeof(anysin_t));
+    if(this_mon->addr.sa.sa_family == AF_INET) {
+        this_mon->addr.sin.sin_port = htons(this_mon->tcp_svc->port);
     }
     else {
-        dmn_assert(this_monio->addr.sa.sa_family == AF_INET6);
-        this_monio->addr.sin6.sin6_port = htons(this_monio->tcp_svc->port);
+        dmn_assert(this_mon->addr.sa.sa_family == AF_INET6);
+        this_mon->addr.sin6.sin6_port = htons(this_mon->tcp_svc->port);
     }
 
-    this_monio->smgr = smgr;
-    this_monio->tcp_state = TCP_STATE_WAITING;
-    this_monio->sock = -1;
+    this_mon->smgr = smgr;
+    this_mon->tcp_state = TCP_STATE_WAITING;
+    this_mon->sock = -1;
 
-    this_monio->connect_watcher = malloc(sizeof(ev_io));
-    ev_io_init(this_monio->connect_watcher, &monio_connect_cb, -1, 0);
-    this_monio->connect_watcher->data = this_monio;
+    this_mon->connect_watcher = malloc(sizeof(ev_io));
+    ev_io_init(this_mon->connect_watcher, &mon_connect_cb, -1, 0);
+    this_mon->connect_watcher->data = this_mon;
 
-    this_monio->timeout_watcher = malloc(sizeof(ev_timer));
-    ev_timer_init(this_monio->timeout_watcher, &monio_timeout_cb, 0, 0);
-    this_monio->timeout_watcher->data = this_monio;
+    this_mon->timeout_watcher = malloc(sizeof(ev_timer));
+    ev_timer_init(this_mon->timeout_watcher, &mon_timeout_cb, 0, 0);
+    this_mon->timeout_watcher->data = this_mon;
 
-    this_monio->interval_watcher = malloc(sizeof(ev_timer));
-    ev_timer_init(this_monio->interval_watcher, &monio_interval_cb, 0, 0);
-    this_monio->interval_watcher->data = this_monio;
+    this_mon->interval_watcher = malloc(sizeof(ev_timer));
+    ev_timer_init(this_mon->interval_watcher, &mon_interval_cb, 0, 0);
+    this_mon->interval_watcher->data = this_mon;
 
     mons = realloc(mons, sizeof(tcp_events_t*) * (num_mons + 1));
-    mons[num_mons++] = this_monio;
+    mons[num_mons++] = this_mon;
 }
 
 void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {

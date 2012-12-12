@@ -20,8 +20,8 @@
 #ifndef _GDNSD_MISC_PRIV_H
 #define _GDNSD_MISC_PRIV_H
 
-#include "gdnsd-compiler.h"
-#include "gdnsd-misc.h"
+#include "gdnsd/compiler.h"
+#include "gdnsd/misc.h"
 
 // Called by core daemon only, once at startup.
 //   It cleans up "rootdir_in" via realpath(), verifies

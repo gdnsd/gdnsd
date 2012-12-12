@@ -32,15 +32,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <gdnsd-dmn.h>
-#include <gdnsd-log.h>
-#include <gdnsd-vscf.h>
-#include <gdnsd-plugapi.h>
-#include <gdnsd-misc.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/plugapi.h>
+#include <gdnsd/misc.h>
 
 // be evil and use the private interface to set the cfdir,
 //   since this is for test mocking and we're part of the main dist
-#include "gdnsd-misc-priv.h"
+#include "gdnsd/misc-priv.h"
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"

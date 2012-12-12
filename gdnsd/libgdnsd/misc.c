@@ -19,9 +19,9 @@
 
 #include "config.h"
 
-#include "gdnsd-misc.h"
-#include "gdnsd-misc-priv.h"
-#include "gdnsd-log.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/misc-priv.h"
+#include "gdnsd/log.h"
 
 #include <string.h>
 #include <stdlib.h>

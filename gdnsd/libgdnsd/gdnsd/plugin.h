@@ -18,23 +18,23 @@
  */
 
 #ifdef _GDNSD_PLUGIN_H
-#error gdnsd-plugin.h must be included *exactly once* from *exactly one* source file per plugin
+#error gdnsd/plugin.h must be included *exactly once* from *exactly one* source file per plugin
 #endif
 
 #define _GDNSD_PLUGIN_H
 
 // Include all of the libgdnsd stuff for convenience
-#include <gdnsd-compiler.h>
-#include <gdnsd-vscf.h>
-#include <gdnsd-dname.h>
-#include <gdnsd-net.h>
-#include <gdnsd-log.h>
-#include <gdnsd-monio.h>
-#include <gdnsd-plugapi.h>
-#include <gdnsd-misc.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/dname.h>
+#include <gdnsd/net.h>
+#include <gdnsd/log.h>
+#include <gdnsd/mon.h>
+#include <gdnsd/plugapi.h>
+#include <gdnsd/misc.h>
 
 #ifndef GDNSD_PLUGIN_NAME
-#error You must define GDNSD_PLUGIN_NAME before including <gdnsd-plugin.h>
+#error You must define GDNSD_PLUGIN_NAME before including <gdnsd/plugin.h>
 #endif
 
 /* All of the below is just to declare the API functions the plugin
@@ -80,7 +80,7 @@ F_CONST
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
 
-monio_list_t* SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(const vscf_data_t* config);
+mon_list_t* SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(const vscf_data_t* config);
 int SYM_MAP_RESOURCEA(GDNSD_PLUGIN_NAME)(const char* resname);
 int SYM_MAP_RESOURCEC(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
 void SYM_FULL_CONFIG(GDNSD_PLUGIN_NAME)(unsigned num_threads);
@@ -97,7 +97,7 @@ void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
 F_NONNULLX(1)
 void SYM_ADD_SVC(GDNSD_PLUGIN_NAME)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 F_NONNULL
-void SYM_ADD_MON(GDNSD_PLUGIN_NAME)(const char* svc_name, monio_smgr_t* smgr);
+void SYM_ADD_MON(GDNSD_PLUGIN_NAME)(const char* svc_name, mon_smgr_t* smgr);
 F_NONNULL
 void SYM_INIT_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 F_NONNULL

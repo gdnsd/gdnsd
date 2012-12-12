@@ -23,7 +23,7 @@
 #include "config.h"
 
 #include <inttypes.h>
-#include <gdnsd-compiler.h>
+#include <gdnsd/compiler.h>
 
 typedef struct _fips_t fips_t;
 

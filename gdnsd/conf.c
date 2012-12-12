@@ -21,9 +21,9 @@
 #include "monio.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
-#include "gdnsd-misc.h"
-#include "gdnsd-misc-priv.h"
-#include "gdnsd-plugapi-priv.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/misc-priv.h"
+#include "gdnsd/plugapi-priv.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -40,8 +40,8 @@
 #include <ifaddrs.h>
 #include <netinet/in.h>
 
-static unsigned num_monio_lists = 0;
-static monio_list_t** monio_lists = NULL;
+static unsigned num_mon_lists = 0;
+static mon_list_t** mon_lists = NULL;
 
 static const char CFG_PATH[] = "etc/config";
 static const char DEF_USERNAME[] = PACKAGE_NAME;
@@ -134,20 +134,20 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
 
     const plugin_t* plugin = gdnsd_plugin_load(name);
     if(plugin->load_config) {
-        monio_list_t* mlist = plugin->load_config(pconf);
+        mon_list_t* mlist = plugin->load_config(pconf);
         if(mlist) {
             for(unsigned i = 0; i < mlist->count; i++) {
-                monio_info_t* m = &mlist->info[i];
+                mon_info_t* m = &mlist->info[i];
                 if(!m->desc)
-                    log_fatal("Plugin '%s' bug: monio_info_t.desc is required", plugin->name);
+                    log_fatal("Plugin '%s' bug: mon_info_t.desc is required", plugin->name);
                 if(!m->addr)
-                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.addr is required", plugin->name, m->desc);
+                    log_fatal("Plugin '%s' bug: '%s' mon_info_t.addr is required", plugin->name, m->desc);
                 if(!m->state_ptr)
-                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.state_ptr is required", plugin->name, m->desc);
+                    log_fatal("Plugin '%s' bug: '%s' mon_info_t.state_ptr is required", plugin->name, m->desc);
             }
-            const unsigned this_monio_idx = num_monio_lists++;
-            monio_lists = realloc(monio_lists, num_monio_lists * sizeof(monio_list_t*));
-            monio_lists[this_monio_idx] = mlist;
+            const unsigned this_monio_idx = num_mon_lists++;
+            mon_lists = realloc(mon_lists, num_mon_lists * sizeof(mon_list_t*));
+            mon_lists[this_monio_idx] = mlist;
         }
     }
 }
@@ -562,12 +562,12 @@ void conf_load(void) {
     const vscf_data_t* stypes_cfg = cfg_root
         ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
         : NULL;
-    if(num_monio_lists)
+    if(num_mon_lists)
         monio_add_servicetypes(stypes_cfg);
 
-    // Finally, process the monio_list_t's from plugins *after* servicetypes are available.
+    // Finally, process the mon_list_t's from plugins *after* servicetypes are available.
     // This order of operations wrt loading the plugins stanza, then the servicetypes,
-    //   and then finally doing deferred processing of monio_list_t's from all plugin
+    //   and then finally doing deferred processing of mon_list_t's from all plugin
     //   _load_config()s gaurantees things like having a single plugin take on both roles
     //   actually works, even with autoloaded plugins.
     // Technically, we could even allow autoloading of address/cname-resolving plugins as
@@ -579,11 +579,11 @@ void conf_load(void) {
     //   are going to need *some* kind of config anyways.
     if(atexit(plugins_cleanup))
         log_fatal("atexit(plugins_cleanup) failed: %s", logf_errno());
-    for(unsigned i = 0; i < num_monio_lists; i++) {
-        monio_list_t* mlist = monio_lists[i];
+    for(unsigned i = 0; i < num_mon_lists; i++) {
+        mon_list_t* mlist = mon_lists[i];
         if(mlist) {
             for(unsigned j = 0; j < mlist->count; j++) {
-                monio_info_t* m = &mlist->info[j];
+                mon_info_t* m = &mlist->info[j];
                 dmn_assert(m->desc && m->addr && m->state_ptr);
                 monio_add_addr(m->svctype, m->desc, m->addr, m->state_ptr);
             }

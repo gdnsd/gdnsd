@@ -24,7 +24,7 @@
 
 #define GDNSD_PLUGIN_NAME geoip
 
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 
 #include "gdmaps.h"
 

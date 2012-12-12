@@ -22,7 +22,7 @@
 
 #include "config.h"
 #include "dclists.h"
-#include <gdnsd-vscf.h>
+#include <gdnsd/vscf.h>
 #include <inttypes.h>
 
 typedef struct _dcmap dcmap_t;

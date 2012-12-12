@@ -20,7 +20,7 @@
 #ifndef _GDNSD_MISC_H
 #define _GDNSD_MISC_H
 
-#include <gdnsd-compiler.h>
+#include <gdnsd/compiler.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <sys/types.h>
