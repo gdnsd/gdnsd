@@ -12,7 +12,7 @@ plugin_extmon_la_LIBADD  = libextmon_comms.la
 
 pkglibexec_PROGRAMS = gdnsd_extmon_helper
 gdnsd_extmon_helper_SOURCES = extmon_helper.c extmon_comms.h
-gdnsd_extmon_helper_LDADD = libextmon_comms.la $(top_builddir)/gdnsd/libgdnsd/libgdnsd.la
+gdnsd_extmon_helper_LDADD = libextmon_comms.la $(top_builddir)/gdnsd/libgdnsd/libgdnsd.la $(QSBRLIBS) $(LIBEV_LIBS)
 
 PODS_8 = gdnsd-plugin-extmon.pod
 include $(top_srcdir)/docs.am
