@@ -12,9 +12,9 @@ nodist_libgdnsd_la_SOURCES = $(xHEADERS_BUILT)
 libgdnsd_la_LDFLAGS  = -shared -avoid-version
 libgdnsd_la_LIBADD   = $(QSBRLIBS) $(MATH_LIB) $(LIBEV_LIBS) $(NETLIBS) $(LIBADD_DLOPEN)
 
-libgdnsd_la_includedir = $(includedir)
-dist_libgdnsd_la_include_HEADERS = $(xHEADERS_DIST)
-nodist_libgdnsd_la_include_HEADERS = $(xHEADERS_BUILT)
+libgdnsd_la_pkgincludedir = $(pkgincludedir)
+dist_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_DIST)
+nodist_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_BUILT)
 
 BUILT_SOURCES = $(xHEADERS_BUILT)
 
