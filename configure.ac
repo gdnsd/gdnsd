@@ -341,6 +341,12 @@ AS_HELP_STRING([--with-def-rootdir=/srv/gdnsd],[Set default runtime data root di
 GDNSD_DEF_ROOTDIR=$with_def_rootdir
 AC_SUBST([GDNSD_DEF_ROOTDIR])
 
+dnl clump up all of the libgdnsd libdeps for re-use in LDADD for
+dnl   binaries that link libgdnsd on platforms where libtool's
+dnl   automatic dep resolution is disabled
+LIBGDNSD_LIBS="$QSBRLIBS $MATH_LIB $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
+AC_SUBST([LIBGDNSD_LIBS])
+
 dnl Output generation
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
