@@ -24,16 +24,10 @@ Related: config should support include-files, shouldn't be too hard regardless o
 
 Related: if we stick with vscf, refactor the API into a new namespace (vscfg_?) with compat wrappers for transition.  Mostly this is to get rid of deprecated stuff, stop supporting embedded NULs in hash keys and string data, stop returning everything as const, etc.  Keep in mind the comments at conf.c:146 as well about dname keys.
 
-Scripted Monitoring Plugins:
-----------------------------
-Scott Cameron brought this up: Monitoring plugins are something lots will want custom versions of for whatever protocol, and writing C-based plugins is fairly non-trivial.  Perhaps offer a meta monitoring plugin that loads a script interpreter for some easy language and offers a base class that makes it easy to monitor new protocols.  e.g. 'service_types => { foo => { plugin => "perl", mod => "MyProto.pm" ... } }', which loads the C plugin "plugin_perl.so", which links in a libperl interpreter and a static copy of EV.xs linked against libgdnsd.so's instance of libev, then loads MyProto.pm for the implementation, which could in turn 'use base "GDNSD::MonPlugin"' to get a bunch of stuff done for free and just implement proto-specific bits.
-
-As detailed above, the decision to embed libev has too much fallout to have a stable, usable scripting interface that ties directly into a scripting language libev module.  So, perhaps it would be better to abstract this all away through a socket or pipe.  Keep the embedded libev private to the core + modules programmed directly in C, and write a built C-based monitoring pseudo-plugin that can request monitoring over a pipe/socket from another process/thread.  Then let interpreted, scripted plugins be forked off and interact through that mechanism.  The API bits relevant to monitoring plugins would become protocol bits spoken over the pipe/socket.
-
 Lua:
 ----
 
-Lua might be an interesting language to fill both of the above roles: a scripting language for monitoring plugins and a configuration language that's both more flexible and more standardized than vscf.  Lua-based config could be quite powerful actually, given that you could write code constructs to generate complex, repetitive configuration stanzas in Lua code in the configfile itself.  We could even have a zonefile syntax extension to embed Lua-generated RRs as well.
+Lua might be an interesting language to fill two roles: a scripting language for monitoring plugins and a configuration language that's both more flexible and more standardized than vscf.  Lua-based config could be quite powerful actually, given that you could write code constructs to generate complex, repetitive configuration stanzas in Lua code in the configfile itself.  We could even have a zonefile syntax extension to embed Lua-generated RRs as well.
 
 As for config syntax, it might be within reach to both (a) implement a new config language using Lua objects, and (b) implement a lua script which parses the existing vscf language (a few odd corner cases aside) into the same config object the new config language uses, to allow for backwards compat for a major rev or two during the transition.
 
@@ -54,11 +48,11 @@ Plugins should have a way to report stats counters back to the core code for inc
 
 AXFR, and runtime zone reloading in general:
 ----------------------------------------------
-Realistically, AXFR is pretty far down the priority list.  I think a higher-priority but related task would be to get zonefiles to reload at runtime based on a stat() watcher (would have to be inside the chroot()), let people use an external AXFR receiver if they want, and then maybe someday if enough people ask for it or I get bored, implement an AXFR sender.  Partial runtime config loading should be considered as well, at the very least the zones list...
+Realistically, AXFR is pretty far down the priority list.  People can use an external AXFR receiver if they want, taking advantage of 1.8's dynamic zone support.
 
 Other zonefile formats:
 -------------------------
-Load other zonefile (or zone data in general) formats?  The BIND syntax sucks, but I'm keeping it as the default, it's too widespread not to.  However, the zonefile scanner is mostly cleanly separated from the rest of the code, and it wouldn't be that hard to add support for more formats (djbdns? a SQL connection? in both cases, they could periodically update using the same switching mechanism as stat() watcher above...).
+Load other zonefile (or zone data in general) formats?  The BIND syntax sucks, but I'm keeping it as the default, it's too widespread not to.  However, the zonefile scanner is mostly cleanly separated from the rest of the code, and it wouldn't be that hard to add support for more formats (djbdns? a SQL connection?).
 
 Stuff from conversations w/ Paul Dekkers: --------
 
