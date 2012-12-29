@@ -10,7 +10,7 @@
 /stamp-h1
 
 # Distribution tarballs
-/gdnsd-*.tar.*
+/gdnsd-*.tar.xz
 
 # Built, installed binaries
 /gdnsd/gdnsd
@@ -19,7 +19,6 @@
 
 # Built, distributed C sources (Ragel outputs)
 /gdnsd/zscan_rfc1035.c
-/gdnsd/zscan_rfc1035_lm.c
 /gdnsd/libgdnsd/vscf.c
 
 # Built headers, not distributed
@@ -43,6 +42,7 @@ testroot/
 # Various tool outputs in all dirs
 Makefile
 Makefile.in
+.dirstamp
 .deps
 .libs
 *.o
