@@ -123,7 +123,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     if(gdb_cfg) {
         if(!vscf_is_simple(gdb_cfg) || !vscf_simple_get_len(gdb_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db' must have a non-empty string value", name);
-        gdmap->geoip_path = str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_cfg), NULL);
+        gdmap->geoip_path = gdnsd_str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_cfg), NULL);
     }
 
     // geoip_db_v4_overlay config
@@ -133,7 +133,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' requires an IPv6 'geoip_db'", name);
         if(!vscf_is_simple(gdb_v4o_cfg) || !vscf_simple_get_len(gdb_v4o_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' must have a non-empty string value", name);
-        gdmap->geoip_v4o_path = str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_v4o_cfg), NULL);
+        gdmap->geoip_v4o_path = gdnsd_str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_v4o_cfg), NULL);
     }
 
     // map config
@@ -156,7 +156,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     }
     else if(vscf_is_simple(nets_cfg) && vscf_simple_get_len(nets_cfg)) {
         // external file, define path for later loading and stat-watching
-        gdmap->nets_path = str_combine(GEOIP_DIR, vscf_simple_get_data(nets_cfg), NULL);
+        gdmap->nets_path = gdnsd_str_combine(GEOIP_DIR, vscf_simple_get_data(nets_cfg), NULL);
     }
     else {
         log_fatal("plugin_geoip: map '%s': 'nets' stanza must be a hash of direct entries or a filename", name);

@@ -128,7 +128,7 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 fips_t* fips_init(const char* pathname) {
     dmn_assert(pathname);
 
-    char* relpath = str_combine(GEOIP_DIR, pathname, NULL);
+    char* relpath = gdnsd_str_combine(GEOIP_DIR, pathname, NULL);
     FILE* file = fopen(relpath, "r");
     if(!file)
         log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", logf_pathname(relpath), logf_errno());

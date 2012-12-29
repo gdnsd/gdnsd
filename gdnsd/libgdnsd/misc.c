@@ -84,7 +84,7 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
 
 const char* gdnsd_get_rootdir(void) { return rootdir; }
 
-char* str_combine(const char* s1, const char* s2, const char** s2_offs) {
+char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
     dmn_assert(s1); dmn_assert(s2);
     const unsigned s1_len = strlen(s1);
     const unsigned s2_len = strlen(s2);

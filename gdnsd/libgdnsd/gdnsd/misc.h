@@ -38,7 +38,7 @@ char* gdnsd_realpath(const char* path_in, const char* desc);
 // if s2_offs is not NULL, *s2_offs will be set
 //   to the offset of the copy of s2 within the retval.
 F_MALLOC F_NONNULLX(1,2) F_WUNUSED
-char* str_combine(const char* s1, const char* s2, const char** s2_offs);
+char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
 
 // PRNG:
 // gdnsd_rand_init() allocates an opaque PRNG state which can

@@ -302,7 +302,7 @@ static zone_t* zone_from_zf(zfile_t* zf) {
     if(!name)
         return NULL;
 
-    char* src = str_combine("rfc1035:", zf->fn, NULL);
+    char* src = gdnsd_str_combine("rfc1035:", zf->fn, NULL);
     zone_t* z = zone_new(name, src);
     free(src);
     free(name);
@@ -390,7 +390,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
     dmn_assert(loop);
 
     const char* fn;
-    char* full_fn = str_combine(RFC1035_DIR, zfn, &fn);
+    char* full_fn = gdnsd_str_combine(RFC1035_DIR, zfn, &fn);
 
     statcmp_t newstat;
     statcmp_set(full_fn, &newstat);
@@ -762,7 +762,7 @@ static void set_quiesce(void) {
     // The idea here is to touch a file and grab the high-res
     //   mtime 5 times in a row (with a small sleep between each),
     //   attempts to see whether the <10ms numbers are consistently zero.
-    char* testfn = str_combine(RFC1035_DIR, ".mtime_test", NULL);
+    char* testfn = gdnsd_str_combine(RFC1035_DIR, ".mtime_test", NULL);
     const struct timespec nsdelay = { 0, 2765432 }; // ~2.7ms
     unsigned attempts = 5;
     while(attempts--) {
