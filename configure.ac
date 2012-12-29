@@ -292,7 +292,7 @@ AC_ARG_ENABLE([developer],
     [if test "x$enable_developer" = xyes; then developer=yes; fi])
 
 dnl If developer, set -g and a ton of warnings.  Otherwise, set -DNDEBUG
-GCC_WARNFLAGS="-Wall -W -Wmissing-declarations -Wmissing-prototypes -Wpointer-arith -Wsign-compare -Wchar-subscripts -Wstrict-prototypes -Wshadow -Wformat-security -Wtype-limits -Wfloat-equal -Wwrite-strings -Wlogical-op -Waddress"
+GCC_WARNFLAGS="-Wall -W -Wextra -Wmissing-declarations -Wmissing-prototypes -Wpointer-arith -Wsign-compare -Wchar-subscripts -Wstrict-prototypes -Wshadow -Wformat-security -Wtype-limits -Wfloat-equal -Wwrite-strings -Wlogical-op -Waddress -Wcast-align -Wredundant-decls"
 if test "x$developer" != xno; then
   if test x"$ac_cv_prog_cc_g" = xyes; then
     CFLAGS="${CFLAGS} -g $GCC_WARNFLAGS"
