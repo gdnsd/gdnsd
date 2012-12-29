@@ -33,15 +33,15 @@ F_NONNULL
 gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg);
 F_NONNULL
 void gdmaps_load_databases(gdmaps_t* gdmaps);
-F_NONNULL
+F_NONNULL F_PURE
 int gdmaps_name2idx(const gdmaps_t* gdmaps, const char* map_name);
-F_NONNULL
+F_NONNULL F_PURE
 const char* gdmaps_idx2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx);
-F_NONNULL
+F_NONNULL F_PURE
 unsigned gdmaps_get_dc_count(const gdmaps_t* gdmaps, const unsigned gdmap_idx);
-F_NONNULL
+F_NONNULL F_PURE
 unsigned gdmaps_dcname2num(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const char* dcname);
-F_NONNULL
+F_NONNULL F_PURE
 const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum);
 F_NONNULL
 const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const uint8_t* dclist);

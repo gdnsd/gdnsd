@@ -1201,7 +1201,7 @@ static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, 
 //  of the list because ltree already validated at startup that in all
 //  cases where we call these, the given RRset exists.
 #define MK_RRSET_GET(_typ, _nam, _dtyp) \
-F_NONNULL \
+F_NONNULL F_PURE \
 static const ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _nam (const ltree_node_t* node) {\
     dmn_assert(node);\
     const ltree_rrset_t* rrsets = node->rrsets;\

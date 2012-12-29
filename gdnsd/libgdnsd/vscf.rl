@@ -136,7 +136,7 @@ static unsigned count2mask(unsigned x) {
     return x;
 }
 
-F_NONNULL
+F_NONNULL F_PURE
 static unsigned djb_hash(const char* k, unsigned klen, const unsigned hash_mask) {
    dmn_assert(k);
 

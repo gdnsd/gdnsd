@@ -520,7 +520,7 @@ static void gdmap_setup_watchers(gdmap_t* gdmap, struct ev_loop* loop) {
     gdmap->tree_update_timer->data = gdmap;
 }
 
-F_NONNULL
+F_NONNULL F_PURE
 static const char* gdmap_get_name(const gdmap_t* gdmap) {
     dmn_assert(gdmap);
     return gdmap->name;

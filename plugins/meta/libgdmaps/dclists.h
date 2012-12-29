@@ -38,9 +38,9 @@ F_NONNULL
 dclists_t* dclists_new(const dcinfo_t* info);
 F_NONNULL
 dclists_t* dclists_clone(const dclists_t* old);
-F_NONNULL
+F_NONNULL F_PURE
 unsigned dclists_get_count(const dclists_t* lists);
-F_NONNULL
+F_NONNULL F_PURE
 const uint8_t* dclists_get_list(const dclists_t* lists, const unsigned idx);
 F_NONNULL
 void dclists_replace_list0(dclists_t* lists, uint8_t* newlist);

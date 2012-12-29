@@ -58,6 +58,7 @@ extmon_cmd_t* emc_read_command(const int fd);
 // these uin32_t results are the only runtime traffic, and
 // they only flow in the helper->plugin direction
 
+F_CONST
 static inline uint32_t emc_encode_mon(const unsigned idx, const bool failed) {
     dmn_assert(idx < 0x10000);
     return (idx << 16)

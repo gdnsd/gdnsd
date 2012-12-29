@@ -34,15 +34,15 @@ typedef struct _dcinfo dcinfo_t;
 
 F_NONNULLX(1, 4)
 dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, const vscf_data_t* dc_auto_limit_cfg, const char* map_name);
-F_NONNULL
+F_NONNULL F_PURE
 unsigned dcinfo_get_count(const dcinfo_t* info);
-F_NONNULL
+F_NONNULL F_PURE
 unsigned dcinfo_get_limit(const dcinfo_t* info);
-F_NONNULL
+F_NONNULL F_PURE
 const double* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum);
 F_NONNULLX(1) F_PURE
 unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname);
-F_NONNULL
+F_NONNULL F_PURE
 const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum);
 F_NONNULL
 void dcinfo_destroy(dcinfo_t* info);
