@@ -32,9 +32,6 @@ CC="$PTHREAD_CC"
 dnl need to know endian-ness
 AC_C_BIGENDIAN
 
-dnl figure out whether and how to use TLS
-AX_TLS
-
 dnl Apparently libtool+automake need this now...
 AM_PROG_AR
 
