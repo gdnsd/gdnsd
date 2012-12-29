@@ -89,6 +89,3 @@ Interesting non-standard configure options:
 --without-libcap
   Explicitly disable libcap support on Linux
 
---enable-lowmem
-  Reduce memory consumption (for embedded systems, trades some perf)
-
