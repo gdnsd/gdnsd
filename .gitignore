@@ -55,6 +55,8 @@ Makefile.in
 *.gcda
 *.gcno
 *.tmp
+*.log
+*.trs
 *~
 
 # generated docs
