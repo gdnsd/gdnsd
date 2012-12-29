@@ -423,6 +423,9 @@ int main(int argc, char** argv) {
         case ACT_RESTART:
         case ACT_CRESTART:
             will_daemonize = true;
+            break;
+        default:
+            break;
     }
 
     // Init the log subsystem, which initially only sends

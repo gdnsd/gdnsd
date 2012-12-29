@@ -49,8 +49,7 @@
 
 static const char CFG_PATH[] = "etc/config";
 
-static const vscf_data_t* conf_load() {
-
+static const vscf_data_t* conf_load(void) {
     char* vscf_err;
     const vscf_data_t* cfg_root = vscf_scan_filename(CFG_PATH, &vscf_err);
     if(!cfg_root)
