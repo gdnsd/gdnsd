@@ -269,7 +269,7 @@ AC_SUBST([RAGEL], [$ac_cv_path_RAGEL])
 AC_MSG_RESULT([$ac_cv_path_RAGEL])
 
 dnl download/unpack for GeoLite data for plugin_geoip tests
-AC_CHECK_PROGS(GEOLITE_DECOMP, [xz gzip], [none])
+AC_CHECK_PROGS(GEOLITE_DECOMP, [xz], [none])
 AC_CHECK_PROGS(GEOLITE_DL, [wget curl], [none])
 
 dnl Allow user to override the port range we use for testing
