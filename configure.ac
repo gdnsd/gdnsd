@@ -1,8 +1,9 @@
-AC_INIT([gdnsd],[1.7.4],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/gdnsd])
 AC_PREREQ([2.69])
+AC_INIT([gdnsd],[1.7.4],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/gdnsd])
+AC_CONFIG_SRCDIR([gdnsd/main.c])
 AC_CONFIG_AUX_DIR([acaux])
+AM_INIT_AUTOMAKE([1.11.6 dist-xz no-dist-gzip foreign tar-ustar -Wall])
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([1.11.6 dist-xz foreign tar-ustar -Wall])
 AM_SILENT_RULES([yes])
 
 dnl TODO: when/if a new autoconf release has a C11 macro,
@@ -302,11 +303,10 @@ AC_ARG_ENABLE([developer],
     [if test "x$enable_developer" = xyes; then developer=yes; fi])
 
 dnl If developer, set -g and a ton of warnings.  Otherwise, set -DNDEBUG
-dnl Other -Wflags that are interesting to check sometimes, w/ latest gcc:
-dnl    -Wfloat-equal -Wpointer-arith -Wwrite-strings -Wlogical-op -Waddress
+GCC_WARNFLAGS="-Wall -W -Wmissing-declarations -Wmissing-prototypes -Wpointer-arith -Wsign-compare -Wchar-subscripts -Wstrict-prototypes -Wshadow -Wformat-security -Wtype-limits -Wfloat-equal -Wwrite-strings -Wlogical-op -Waddress"
 if test "x$developer" != xno; then
   if test x"$ac_cv_prog_cc_g" = xyes; then
-    CFLAGS="${CFLAGS} -g -Wall -W -Wshadow"
+    CFLAGS="${CFLAGS} -g $GCC_WARNFLAGS"
   fi
   AC_DEFINE_UNQUOTED([DEBUG_RCU], 1, [liburcu verification checks])
   AC_DEFINE_UNQUOTED([RCU_DEBUG], 1, [liburcu verification checks])
@@ -315,9 +315,6 @@ else
 fi
 
 AC_CHECK_HEADERS([valgrind/memcheck.h])
-
-dnl doublecheck user-supplied srcdir argument
-AC_CONFIG_SRCDIR([gdnsd/main.c])
 
 dnl Default rootdir for chroot, zonefiles, pidfile, config.
 dnl This is one of the few hardcoded paths in gdnsd, but it does not
