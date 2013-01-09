@@ -291,15 +291,26 @@ AC_ARG_ENABLE([developer],
     [  --enable-developer      Turn on gcc developer warnings, debugging, etc (default=no)],
     [if test "x$enable_developer" = xyes; then developer=yes; fi])
 
-dnl If developer, set -g and a ton of warnings.  Otherwise, set -DNDEBUG
-GCC_WARNFLAGS="-Wall -W -Wextra -Wmissing-declarations -Wmissing-prototypes -Wpointer-arith -Wsign-compare -Wchar-subscripts -Wstrict-prototypes -Wshadow -Wformat-security -Wtype-limits -Wfloat-equal -Wwrite-strings -Wlogical-op -Waddress -Wcast-align -Wredundant-decls"
+dnl normal builds set -DNDEBUG because we make very very heavy
+dnl   use of assertions that really slow stuff down, and also
+dnl   adds "-Wall -W" to CFLAGS if the compiler is gcc.
+dnl --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
+dnl   and also sets "-g" for debug if the compiler supports it,
+dnl   and sets a ton of gcc 4.x extra warnings flags.
+GCC_WARNFLAGS="-Wall -W"
+GCC_DEV_WARNFLAGS="${GCC_WARNFLAGS} -Wmissing-declarations -Wmissing-prototypes -Wpointer-arith -Wsign-compare -Wchar-subscripts -Wstrict-prototypes -Wshadow -Wformat-security -Wfloat-equal -Wwrite-strings -Wcast-align -Wredundant-decls"
 if test "x$developer" != xno; then
-  if test x"$ac_cv_prog_cc_g" = xyes; then
-    CFLAGS="${CFLAGS} -g $GCC_WARNFLAGS"
+  if test "x$ac_cv_c_compiler_gnu" = xyes; then
+    CFLAGS="${CFLAGS} -g ${GCC_DEV_WARNFLAGS}"
+  elif test "x$ac_cv_prog_cc_g" = xyes; then
+    CFLAGS="${CFLAGS} -g"
   fi
   AC_DEFINE_UNQUOTED([DEBUG_RCU], 1, [liburcu verification checks])
   AC_DEFINE_UNQUOTED([RCU_DEBUG], 1, [liburcu verification checks])
 else
+  if test "x$ac_cv_c_compiler_gnu" = xyes; then
+    CFLAGS="${CFLAGS} ${GCC_WARNFLAGS}"
+  fi
   CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
 fi
 
