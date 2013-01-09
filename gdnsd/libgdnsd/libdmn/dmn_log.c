@@ -56,6 +56,7 @@ static bool send_stderr_info = true;
 #define DMN_FMTBUF_SIZE 4096U
 #endif
 
+#ifndef NDEBUG
 // Log message prefixes when using stderr
 static const char* pfx_debug = " debug: ";
 static const char* pfx_info = " info: ";
@@ -63,6 +64,7 @@ static const char* pfx_warning = " warning: ";
 static const char* pfx_err = " error: ";
 static const char* pfx_crit = " fatal: ";
 static const char* pfx_unknown = " ???: ";
+#endif
 
 // current openlog() identifier, for stderr copies + syslog
 static char* our_logname = NULL;
