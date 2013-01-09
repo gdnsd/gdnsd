@@ -10,9 +10,6 @@ gdnsd_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS) $(CAPLIBS)
 zscan_rfc1035.c:	zscan_rfc1035.rl
 	$(AM_V_GEN)$(RAGEL) -G2 -o $(srcdir)/zscan_rfc1035.c $(srcdir)/zscan_rfc1035.rl
 
-zscan_rfc1035_lm.c:	zscan_rfc1035.rl
-	$(AM_V_GEN)$(RAGEL) -T0 -o $(srcdir)/zscan_rfc1035_lm.c $(srcdir)/zscan_rfc1035.rl
-
 MAINTAINERCLEANFILES = $(srcdir)/zscan_rfc1035.c
 EXTRA_DIST = $(srcdir)/zscan_rfc1035.rl
 
