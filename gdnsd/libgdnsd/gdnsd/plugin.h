@@ -32,6 +32,7 @@
 #include <gdnsd/mon.h>
 #include <gdnsd/plugapi.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/paths.h>
 
 #ifndef GDNSD_PLUGIN_NAME
 #error You must define GDNSD_PLUGIN_NAME before including <gdnsd/plugin.h>

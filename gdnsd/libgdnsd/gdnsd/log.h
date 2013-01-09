@@ -52,10 +52,13 @@
 const char* gdnsd_logf_dname(const uint8_t* dname);
 const char* gdnsd_logf_anysin(const anysin_t* asin);
 const char* gdnsd_logf_anysin_noport(const anysin_t* asin);
-// for relative paths within rootdir
-//   e.g. input "etc/config" prints "/srv/gdnsd/etc/config",
-//   uses current rootdir in effect.
-const char* gdnsd_logf_pathname(const char* relpath);
+
+// For logging pathnames returned by gdnsd/path.h functions,
+//   e.g. gdnsd_resolve_path_cfg() and gdnsd_get_pidpath().
+// In the system-paths case it will return normal pathnames.
+// In the rooted case it will return things like:
+//    "[/srv/gdnsd]/etc/geoip/GeoIPRegion.dat"
+const char* gdnsd_logf_pathname(const char* path);
 
 // "ipv6" must be allocated for 16 bytes, containing
 //   a network-order address

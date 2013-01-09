@@ -316,27 +316,37 @@ fi
 
 AC_CHECK_HEADERS([valgrind/memcheck.h])
 
-dnl Default rootdir for chroot, zonefiles, pidfile, config.
-dnl This is one of the few hardcoded paths in gdnsd, but it does not
-dnl   really affect relocation or the build/tests.  Simply define
-dnl   it to a sensible final default in the case that relocation
-dnl   after installation is expected (e.g. distro packaging).
-dnl Worst case it can always be overridden on the commandline,
-dnl   and that's the expected user behavior for running multiple
-dnl   distinct instances.
-dnl The default makes basic sense for the FHS standard, but your OS
-dnl   or distribution may want something different, e.g. perhaps
-dnl   /srv/jails/gdnsd, /srv/chroot/gdnsd, /var/gdnsd, etc...
-rootdir_fail="The --with-def-rootdir= option must specify an absolute pathname";
-AC_ARG_WITH([def-rootdir],[
-AS_HELP_STRING([--with-def-rootdir=/srv/gdnsd],[Set default runtime data root directory.  Defaults to /srv/gdnsd, must be absolute!])
+dnl A default build of gdnsd uses system paths as specified
+dnl   via the standard --prefix, --sysconfdir, --localstatedir, etc
+dnl   (as well as --with-rundir for e.g. /run).
+dnl The default build *can* be used for chroot operation if gdnsd
+dnl   is supplied a "-d /some/path" argument on every invocation,
+dnl   e.g. by a custom initscript.
+dnl Specifying --with-rootdir=/some/path enables the chroot mode
+dnl   of operation by default with no daemon arguments, using
+dnl   the specified path as the default chroot location.
+rootdir_fail="The --with-rootdir= option must specify an absolute pathname if used";
+AC_ARG_WITH([rootdir],[
+AS_HELP_STRING([--with-rootdir=/some/path],[Enables default chroot operation using the default chroot path specified])
 ],[
-    echo $with_def_rootdir | $GREP '^/' >/dev/null || AC_MSG_ERROR($rootdir_fail)
+  echo "$with_rootdir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rootdir_fail)
 ],[
-    with_def_rootdir=/srv/gdnsd
+  with_rootdir="system"
 ])
-GDNSD_DEF_ROOTDIR=$with_def_rootdir
-AC_SUBST([GDNSD_DEF_ROOTDIR])
+AC_DEFINE_UNQUOTED([GDNSD_DEF_ROOTDIR],"$with_rootdir",[Default -d argument])
+
+dnl Allow specifying an alternate rundir (default $localstatedir/run) for distros
+dnl   that prefer e.g. /run to /var/run
+rundir_fail="The --with-rundir= option must specify an absolute pathname if used";
+AC_ARG_WITH([rundir],[
+AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specific rundir, e.g. /run, for non-chroot cases])
+],[
+  echo "$with_rundir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rundir_fail)
+  GDNSD_SYSRUNDIR="$with_rundir"
+],[
+  GDNSD_SYSRUNDIR="${localstatedir}/run"
+])
+AC_SUBST([GDNSD_SYSRUNDIR])
 
 dnl clump up all of the libgdnsd libdeps for re-use in LDADD for
 dnl   binaries that link libgdnsd on platforms where libtool's

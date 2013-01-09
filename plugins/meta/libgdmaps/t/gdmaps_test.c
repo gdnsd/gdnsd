@@ -40,12 +40,10 @@
 
 // be evil and use the private interface to set the cfdir,
 //   since this is for test mocking and we're part of the main dist
-#include "gdnsd/misc-priv.h"
+#include "gdnsd/paths-priv.h"
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"
-
-#include "cfg-dirs.h"
 
 static const char CFG_PATH[] = "etc/config";
 
@@ -146,14 +144,9 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
         log_fatal("Subtest %u failed: Wanted scope mask %u, got %u", tnum, scope_cmp, scope);
 }
 
-static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
-
 gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
 
     dmn_init_log("gdmaps_test", true);
-
-    if(!input_rootdir)
-        input_rootdir = def_rootdir;
 
     gdnsd_set_rootdir(input_rootdir);
     const vscf_data_t* cfg_root = conf_load();

@@ -5,8 +5,7 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsd [-d /data/root ] action
-    -d data root dir (default PREFIX/gdnsd)
+  Usage: gdnsd [-d <rootdir> ] <action>
   Actions:
     checkconf - Checks validity of configuration and zonefiles
     startfg - Start gdnsd in foreground mode with logging to stderr
@@ -23,54 +22,70 @@ gdnsd - An authoritative DNS daemon
 
 B<gdnsd> is very fast, light, and pluggable authoritative DNS daemon.
 
-The only commandline flag is C<-d>, which allows specifying an
-alternate data root directory from the compiled-in default.
+Other than the C<action> argument, the only other argument is C<-d> for setting
+a chroot directory, which is discussed in detail below.  The commandline parsing
+is sensitive to ordering: C<-d> must come before the action, if used.
 
-=head1 THE DATA ROOT DIRECTORY
+=head1 THE ROOTDIR ARGUMENT
 
-This is an important, central concept in gdnsd's execution.  The data
-root directory is considered unique to a given instance of gdnsd in
-the case that multiple instances are running on the same machine.
+The C<-d E<lt>rootdirE<gt>> argument specifies whether gdnsd will use a
+chroot directory (or not) and the path of that directory.  The special
+value C<system> indicates to *not* use a chroot directory, and use
+the normal system paths defined via autoconf.  The default can be changed
+at build time, and you can see what your build's default is by executing
+e.g. C<gdnsd --help>.  The default default is C<system>.
 
-Within a data root directory there should be a standardized directory
-tree with fixed paths for various configuration inputs as well
-as the daemon's runtime pidfile.
+If a default or commandline-supplied chroot directory is in use, all
+files which gdnsd interacts with live within that chroot directory,
+and the daemon will attempt to create the basic skeleton of the chroot
+directory tree on startup if it's missing.
 
-The layout within the data root is as follows:
+=head1 BASIC SECURITY
 
-  /etc/config    -> The primary config file, documented in gdnsd.config(8)
-  /etc/zones/    -> Contains all zonefiles
-  /var/gdnsd.pid -> Pidfile managed by gdnsd
+When started as the C<root> user, gdnsd will always attempt to drop
+privileges to another user, and will fail fatally if that does not
+succeed.  The default username for this is C<gdnsd>, but this can
+be overridden in the main config file.
 
-Other paths within the data root are possible for future functionality or
-plugin support.  For example, currently the geoip plugin loads GeoIP
-databases from F</etc/geoip/> within the data root.
+If a chroot directory is in use and gdnsd is started as the C<root>
+user, the daemon will also permanently chroot itself into that directory
+on startup.  If a chroot directory is specified, but the daemon is
+started as a regular user, the daemon will C<chdir> to the root directory
+and use relative paths to mimick the chroot functionality.  This can
+be useful if, for example, you're using external software to secure
+the daemon in some jail-like structure, or running tests as a regular
+user against test data.
 
-Note that the primary config file, F</etc/config>, it not technically
-required.  If it's missing or empty, you'll get an all-defaults
-configuration serving the zonefiles found in F</etc/zones>.
+=head1 BASIC CONFIGURATION
 
-When gdnsd is invoked as root and becomes a daemon, it performs a
-C<chroot()> into the data root directory just prior to dropping privileges.
-The data root directory and everything beneath it should be owned by root
-in this case for increased security.  In cases where gdnsd is initially
-invoked as an unprivileged user and does not take care of security
-functionality like C<chroot()> or dropping privileges itself, the data
-root directory and everything beneath it should still be owned by
-some user other than the one gdnsd executes as, with the exception
-of the F</var> directory (as the daemon will need to write its pidfile
-there).
+There is a single primary configuration file, and its pathname is fixed
+at build time for the C<system> case, and fixed relative to the chroot
+directory in the chroot case.  In the C<system> case it will live at
+F<$sysconfdir/gdnsd/config>, where C<$sysconfdir> will typically be
+F</etc> or F</usr/local/etc> depending on autoconf configuration.
 
-Regardless, all configured input data is constrained to live within the
-data root directory's tree at the specified locations.
+In the chroot case the path is C</etc/config> within the chroot directory.
+
+Note that the configuration file does not have to exist for successful
+startup.  Without a configuration file, gdnsd will load all of the zones
+in the zones directory and listen on port 53 of all available interfaces
+using default settings.
 
 =head1 ZONE FILES
 
-All files in the subdirectory F</etc/zones/> of the data root are
+The zones directory is the subdirectory named C<zones> in the same
+location as the main config file (see above re: chroot -vs- system).
+
+All files in the zones directory are
 considered zone files.  In general there should be exactly one file
 per zone, and the filename should match the zone name.  Filenames
 beginning with C<.> are ignored.  All other files must be regular
 files (as opposed to directories, symlinks, sockets, etc).
+
+The zones directory is handled dynamically.  It can be empty at
+startup, which results in all queries returning C<REFUSED>.  As
+files are added, modified, and deleted in this directory, zone
+data will automatically change at runtime.
 
 In order to better support the special case of RFC 2137 -style
 classless in-addr.arpa delegation zones (which contain forward
@@ -91,8 +106,19 @@ reason you need a strange character in your zone name.
 Trailing dots on zonefile names are ignored; e.g. F<example.com>
 and F<example.com.> are functionally equivalent.
 
-No zone is allowed to be a subzone of another zone, and duplicate
-zones are not allowed.
+Duplicate zones (e.g. having both of the above representations of
+C<example.com> present in the zones directory) are handled by
+loading both and giving runtime lookup priority to one of the copies
+based on some simple sanity rules about C<serial> and C<mtime> values.
+If the primary copy is later removed, any remaining copy of the zone
+will be promoted for runtime lookups.
+
+Subzones (e.g. having zonefiles for both C<example.com> and
+C<subz.example.com>) are only marginally supported.  The child zone
+will be loaded into memory, but its data won't be available for
+lookup, as it is suppressed by the existence of the parent zone.
+If the parent zone is later removed, the subzone data will become
+available.
 
 See L<gdnsd.zonefile(5)> for details on the internal syntax of the
 zonefiles themselves.
@@ -102,7 +128,9 @@ zonefiles themselves.
 B<gdnsd> acts as its own initscript, internalizing
 daemon management functions.  All valid invocations of the gdnsd
 command include an B<action>, most of which model normal initscript
-actions.
+actions.  You may still want a light initscript wrapper
+to comply with distribution standards for e.g. terminal output
+on success/failure, but it's not necessary for basic functionality.
 
 =over 4
 

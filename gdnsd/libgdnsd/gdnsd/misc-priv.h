@@ -23,22 +23,6 @@
 #include "gdnsd/compiler.h"
 #include "gdnsd/misc.h"
 
-// Called by core daemon only, once at startup.
-//   It cleans up "rootdir_in" via realpath(), verifies
-//   existence, and does a chdir() into it.
-// From here forward, the data root dir paths
-//   are used as relative paths, e.g. "etc/config",
-//   "etc/geoip/GeoIPRegion.dat", etc...
-F_NONNULL
-void gdnsd_set_rootdir(const char* rootdir_in);
-
-// Returns the realpath()-cleaned actual rootdir
-//   determined and used above.  Almost none of the
-//   code should actually need this, except the
-//   security code for chroot().
-F_PURE
-const char* gdnsd_get_rootdir(void);
-
 // Globally initialize meta-prng at daemon startup
 void gdnsd_rand_meta_init(void);
 

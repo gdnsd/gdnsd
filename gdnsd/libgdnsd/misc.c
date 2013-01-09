@@ -26,11 +26,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <libgen.h>
 #include <limits.h>
 #include <sys/time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/utsname.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -38,51 +35,6 @@
 #include <pthread.h>
 
 /* misc */
-
-static char* rootdir = NULL;
-
-static void ensure_dir(const char* dpath, const bool relative) {
-    struct stat st;
-    if(lstat(dpath, &st)) {
-        if(mkdir(dpath, 0755))
-            log_fatal("mkdir(%s) failed: %s",
-                relative ? logf_pathname(dpath) : dpath,
-                dmn_strerror(errno));
-    }
-    else if(!S_ISDIR(st.st_mode)) {
-        log_fatal("'%s' is not a directory (but should be)!",
-            relative ? logf_pathname(dpath) : dpath);
-    }
-}
-
-char* gdnsd_realpath(const char* path_in, const char* desc) {
-    char* out = realpath(path_in, NULL);
-    if(!out)
-        log_fatal("Cleanup/validation of %s pathname '%s' failed: %s",
-            desc, path_in, dmn_strerror(errno));
-    if(strcmp(path_in, out))
-        log_info("%s path '%s' cleaned up as '%s'", desc, path_in, out);
-    return out;
-}
-
-void gdnsd_set_rootdir(const char* rootdir_in) {
-    dmn_assert(rootdir_in);
-    dmn_assert(!rootdir);
-
-    // realpath() wants an extant file to reference,
-    //  so we have to do our stat/mkdir on the original first
-    ensure_dir(rootdir_in, false);
-    rootdir = gdnsd_realpath(rootdir_in, "data root");
-    if(chdir(rootdir))
-        log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_strerror(errno));
-
-    ensure_dir("etc", true);
-    ensure_dir("etc/zones", true);
-    ensure_dir("etc/geoip", true);
-    ensure_dir("var", true);
-}
-
-const char* gdnsd_get_rootdir(void) { return rootdir; }
 
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
     dmn_assert(s1); dmn_assert(s2);
@@ -98,6 +50,7 @@ char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
         *s2_offs = work;
     return out;
 }
+
 
 /***************
  * This Public-Domain JLKISS64 PRNG implementation is from:
@@ -213,7 +166,7 @@ void gdnsd_rand_meta_init(void) {
         throw_away += (rdata.u32[8] & THROW_MASK);
     }
     else {
-        log_info("Did not get valid PRNG init via /dev/urandom, using iffy sources");
+        log_warn("Did not get valid PRNG init via /dev/urandom, using iffy sources");
         struct timeval t;
         gettimeofday(&t, NULL);
         pid_t pidval = getpid();

@@ -49,10 +49,7 @@
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/net-priv.h"
 #include "gdnsd/misc-priv.h"
-
-#include "cfg-dirs.h"
-
-static const char PID_PATH[] = "var/" PACKAGE_NAME ".pid";
+#include "gdnsd/paths-priv.h"
 
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
@@ -103,8 +100,10 @@ static void usage(const char* argv0) {
         " (developer build)"
 #endif
         "\n"
-        "Usage: %s [-d " GDNSD_DEF_ROOTDIR " ] action\n"
-        "  -d data root dir (see man page for details)\n"
+        "Usage: %s [-d <rootdir> ] <action>\n"
+        "  -d <rootdir> - Use the given directory as the daemon chroot.  The\n"
+        "     special value 'system' uses system default paths with no chroot.\n"
+        "     The default for this build is '%s'.  See gdnsd(8) for more info.\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
         "  startfg - Start " PACKAGE_NAME " in foreground w/ logs to stderr\n"
@@ -117,7 +116,7 @@ static void usage(const char* argv0) {
         "  try-restart - Aliases 'condrestart'\n"
         "  status - Checks the status of the running daemon\n"
         "\nFor updates, bug reports, etc, please visit " PACKAGE_URL "\n",
-        argv0
+        argv0, gdnsd_get_def_rootdir()
     );
     exit(2);
 }
@@ -361,11 +360,10 @@ static action_t match_action(const char* arg) {
     return ACT_UNDEF;
 }
 
-static const char def_rootdir[] = GDNSD_DEF_ROOTDIR;
-
-static action_t parse_args(int argc, char** argv, const char** rootdir_out) {
+static action_t parse_args(const int argc, char** argv, const char** rootdir_out) {
     action_t action = ACT_UNDEF;
-    *rootdir_out = def_rootdir;
+
+    *rootdir_out = NULL;
 
     switch(argc) {
         case 4: // gdnsd -d x foo
@@ -410,11 +408,11 @@ static void init_config(const bool started_as_root) {
 
 int main(int argc, char** argv) {
 
-    // Parse args, finding the libgdnsd rootdir and
+    // Parse args, getting the libgdnsd rootdir and
     //   returning the action.  Exits on cmdline errors,
     //   does not use libdmn assert/log stuff.
-    const char* rootdir;
-    action_t action = parse_args(argc, argv, &rootdir);
+    const char* rootdir_arg = NULL;
+    action_t action = parse_args(argc, argv, &rootdir_arg);
 
     // will we daemonize? startfg doesn't count...
     bool will_daemonize = false;
@@ -434,33 +432,35 @@ int main(int argc, char** argv) {
     //   (all are sent regardless in debug builds).
     dmn_init_log(PACKAGE_NAME, !will_daemonize);
 
+    // set the rootdir
+    gdnsd_set_rootdir(rootdir_arg);
+
     // Start syslog (in addition to stderr) logging immediately
     //   in cases leading to daemonized daemon start
     if(will_daemonize)
         dmn_start_syslog();
 
-    // Set the rootdir functionally, which may fail
-    gdnsd_set_rootdir(rootdir);
+    char* pid_path = gdnsd_get_pidpath();
 
     // Take action
     if(action == ACT_STATUS) {
-        const pid_t oldpid = dmn_status(PID_PATH);
+        const pid_t oldpid = dmn_status(pid_path);
         if(!oldpid) {
-            log_info("status: not running, based on pidfile '%s'", logf_pathname(PID_PATH));
+            log_info("status: not running, based on pidfile '%s'", logf_pathname(pid_path));
             exit(3);
         }
-        log_info("status: running at pid %li in pidfile %s", (long)oldpid, logf_pathname(PID_PATH));
+        log_info("status: running at pid %li in pidfile %s", (long)oldpid, logf_pathname(pid_path));
         exit(0);
     }
     else if(action == ACT_STOP) {
-        exit(dmn_stop(PID_PATH) ? 1 : 0);
+        exit(dmn_stop(pid_path) ? 1 : 0);
     }
     else if(action == ACT_RELOAD) {
-        exit(dmn_signal(PID_PATH, SIGHUP));
+        exit(dmn_signal(pid_path, SIGHUP));
     }
 
     if(action == ACT_CRESTART) {
-        const pid_t oldpid = dmn_status(PID_PATH);
+        const pid_t oldpid = dmn_status(pid_path);
         if(!oldpid) {
             log_info("condrestart: not running, will not restart");
             exit(0);
@@ -496,7 +496,10 @@ int main(int argc, char** argv) {
 
     // Daemonize if applicable
     if(action != ACT_STARTFG)
-        dmn_daemonize(PID_PATH, (action == ACT_RESTART));
+        dmn_daemonize(pid_path, (action == ACT_RESTART));
+
+    // free pid_path, done with it
+    free(pid_path);
 
     // Call plugin pre-privdrop actions
     gdnsd_plugins_action_post_daemonize();

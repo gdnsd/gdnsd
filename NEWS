@@ -1,4 +1,27 @@
 
+    The forced chroot mode that has been the default for most of
+      1.7.x has now been made optional.  The default default
+      is now "-d system", which triggers the use of system paths
+      (e.g. /etc/gdnsd/config), and this can be overriden at
+      configure-time via --with-rootdir=/srv/gdnsd for the old
+      behavior, or at runtime via "-d /srv/gdnsd".  Regardless
+      of the configure/build-time setting, all builds can operate
+      in both modes at runtime if given the appropriate "-d" argument.
+    A new configure argument "--with-rundir=/run" is available for
+      distributions that want the pidfile undef e.g. /run instead of
+      the default /var/run ($localstatedir/run in autoconf terms).
+      This only affects the default "system"-style invocation.
+      In the chroot case the pidfile still lives within the chroot.
+      In both cases the pidfile path is now $rundir/gdnsd/gdnsd.pid
+    Due to the pidfile moving above, running instances from before
+      this change won't be stopped by the new code properly, you'll
+      have to shutdown before upgrading, or manually kill the old one.
+    Tons of minor code quality fixups, distribution compatibility
+      fixups, packacging/autoconf fixups, etc.
+    A few key changes for external plugins, mostly that the include
+      file paths are now of the form <gdnsd/plugin.h> rather than
+      <gdnsd-plugin.h>.
+
 1.7.4 - 2012-11-30
     THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
       HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current

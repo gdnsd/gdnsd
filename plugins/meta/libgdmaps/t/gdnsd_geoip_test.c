@@ -37,11 +37,10 @@
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"
-#include "cfg-dirs.h"
 
 static void usage(const char* argv0) {
-    fprintf(stderr, "\nUsage: %s [-d " GDNSD_DEF_ROOTDIR " ] [map_name addr]\n"
-        "  -d\t\tgdnsd data root dir to find config from\n"
+    fprintf(stderr, "\nUsage: %s [-d <rootdir> ] [map_name addr]\n"
+        "  -d\t\tsame as main gdnsd binary...\n"
         "  map_name\tMapping name from geoip plugin config\n"
         "  addr\t\tClient IP address to map.\n\n",
         argv0);
@@ -138,7 +137,7 @@ int main(int argc, char* argv[]) {
     const char* ip_arg = NULL;
 
     switch(argc) {
-        // gdnsd_geoip_test -c x map_name ip
+        // gdnsd_geoip_test -d x map_name ip
         case 5:
             if(strcmp(argv[1], "-d")) usage(argv[0]);
             input_rootdir = argv[2];
@@ -147,7 +146,7 @@ int main(int argc, char* argv[]) {
             break;
         // gdnsd_geoip_test map_name ip
         //   -or-
-        // gdnsd_geoip_test -c x
+        // gdnsd_geoip_test -d x
         case 3:
             if(!strcmp(argv[1], "-d")) {
                 input_rootdir = argv[2];

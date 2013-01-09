@@ -19,6 +19,7 @@
 
 #include "zsrc_rfc1035.h"
 #include "gdnsd/misc.h"
+#include "gdnsd/paths.h"
 #include "zscan_rfc1035.h"
 #include "conf.h"
 
@@ -79,7 +80,7 @@ static inot_data inot;
 static const bool using_inotify = false;
 #endif
 
-static const char RFC1035_DIR[] = "etc/zones/";
+char* rfc1035_dir = NULL;
 
 // POSIX states that inode+dev uniquely identifies a file on
 //   a given system.  Therefore those + mtime should uniquely
@@ -390,7 +391,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
     dmn_assert(loop);
 
     const char* fn;
-    char* full_fn = gdnsd_str_combine(RFC1035_DIR, zfn, &fn);
+    char* full_fn = gdnsd_str_combine(rfc1035_dir, zfn, &fn);
 
     statcmp_t newstat;
     statcmp_set(full_fn, &newstat);
@@ -457,9 +458,9 @@ static void unload_zones(void) {
 }
 
 static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
-    DIR* zdhandle = opendir(RFC1035_DIR);
+    DIR* zdhandle = opendir(rfc1035_dir);
     if(!zdhandle) {
-        log_err("rfc1035: Cannot open zones directory '%s': %s", RFC1035_DIR, dmn_strerror(errno));
+        log_err("rfc1035: Cannot open zones directory '%s': %s", rfc1035_dir, dmn_strerror(errno));
     }
     else {
         struct dirent* zfdi;
@@ -467,7 +468,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
             if(likely(zfdi->d_name[0] != '.'))
                 process_zonefile(zfdi->d_name, loop, initial_quiesce_time);
         if(closedir(zdhandle))
-            log_err("rfc1035: closedir(%s) failed: %s", RFC1035_DIR, dmn_strerror(errno));
+            log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, dmn_strerror(errno));
     }
 }
 
@@ -569,9 +570,9 @@ static bool inotify_setup(void) {
         rv = true;
     }
     else {
-        inot.watch_desc = inotify_add_watch(inot.main_fd, RFC1035_DIR, INL_MASK);
+        inot.watch_desc = inotify_add_watch(inot.main_fd, rfc1035_dir, INL_MASK);
         if(inot.watch_desc < 0) {
-            log_err("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(RFC1035_DIR), logf_errno());
+            log_err("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(rfc1035_dir), logf_errno());
             close(inot.main_fd);
             rv = true;
         }
@@ -742,7 +743,7 @@ F_UNUSED F_NONNULL
 static uint64_t try_zone_mtime(const char* testfn) {
     int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR, 0644);
     if(fd < 0)
-        log_fatal("rfc1035: failed to open %s: %s", testfn, logf_errno());
+        log_fatal("rfc1035: failed to open %s for writing: %s", testfn, logf_errno());
     if(9 != write(fd, "testmtime", 9))
         log_fatal("rfc1035: failed to write 9 bytes to %s: %s", testfn, logf_errno());
     if(close(fd))
@@ -762,7 +763,7 @@ static void set_quiesce(void) {
     // The idea here is to touch a file and grab the high-res
     //   mtime 5 times in a row (with a small sleep between each),
     //   attempts to see whether the <10ms numbers are consistently zero.
-    char* testfn = gdnsd_str_combine(RFC1035_DIR, ".mtime_test", NULL);
+    char* testfn = gdnsd_str_combine(rfc1035_dir, ".mtime_test", NULL);
     const struct timespec nsdelay = { 0, 2765432 }; // ~2.7ms
     unsigned attempts = 5;
     while(attempts--) {
@@ -797,6 +798,9 @@ static void set_quiesce(void) {
 /*************************/
 
 void zsrc_rfc1035_load_zones(void) {
+    dmn_assert(!rfc1035_dir);
+
+    rfc1035_dir = gdnsd_resolve_path_cfg("zones/", NULL);
     set_quiesce();
     if(gconfig.zones_rfc1035_auto) {
         set_inotify();

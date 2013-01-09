@@ -25,13 +25,7 @@ gdnsd.config - gdnsd configuration file
 =head1 DESCRIPTION
 
 This man page describes the syntax of the primary gdnsd
-configuration file.  It always lives at the pathname
-F</etc/config> within the data root directory for a
-given execution of the gdnsd binary (the C<-d> argument,
-which in turn defaults to F<PREFIX/gdnsd>).  For example,
-when a default installation to F</usr/local> is invoked
-with the default data root directory, the config file
-is loaded from C</usr/local/gdnsd/etc/config>.
+configuration file.
 
 The lower-level syntax and structure of the configuration
 language is described in detail at the end of this document,

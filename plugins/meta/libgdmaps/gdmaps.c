@@ -46,7 +46,7 @@
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
-#include <gdnsd/misc.h>
+#include <gdnsd/paths.h>
 #include "gdnsd/prcu-priv.h"
 
 // When an input file change is detected, we wait this long
@@ -123,7 +123,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     if(gdb_cfg) {
         if(!vscf_is_simple(gdb_cfg) || !vscf_simple_get_len(gdb_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db' must have a non-empty string value", name);
-        gdmap->geoip_path = gdnsd_str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_cfg), NULL);
+        gdmap->geoip_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(gdb_cfg), "geoip");
     }
 
     // geoip_db_v4_overlay config
@@ -133,7 +133,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' requires an IPv6 'geoip_db'", name);
         if(!vscf_is_simple(gdb_v4o_cfg) || !vscf_simple_get_len(gdb_v4o_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' must have a non-empty string value", name);
-        gdmap->geoip_v4o_path = gdnsd_str_combine(GEOIP_DIR, vscf_simple_get_data(gdb_v4o_cfg), NULL);
+        gdmap->geoip_v4o_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(gdb_v4o_cfg), "geoip");
     }
 
     // map config
@@ -156,7 +156,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     }
     else if(vscf_is_simple(nets_cfg) && vscf_simple_get_len(nets_cfg)) {
         // external file, define path for later loading and stat-watching
-        gdmap->nets_path = gdnsd_str_combine(GEOIP_DIR, vscf_simple_get_data(nets_cfg), NULL);
+        gdmap->nets_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(nets_cfg), "geoip");
     }
     else {
         log_fatal("plugin_geoip: map '%s': 'nets' stanza must be a hash of direct entries or a filename", name);
@@ -625,7 +625,9 @@ gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg) {
     if(crn_cfg) {
         if(!vscf_is_simple(crn_cfg))
             log_fatal("plugin_geoip: 'city_region_names' must be a filename as a simple string value");
-        gdmaps->fips = fips_init(vscf_simple_get_data(crn_cfg));
+        char* fips_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(crn_cfg), "geoip");
+        gdmaps->fips = fips_init(fips_path);
+        free(fips_path);
     }
 
     vscf_hash_iterate(maps_cfg, true, _gdmaps_new_iter, gdmaps);

@@ -26,7 +26,7 @@
 
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
-#include <gdnsd/misc.h>
+#include <gdnsd/paths.h>
 
 #include "fips104.h"
 #include "gdmaps.h"
@@ -128,15 +128,13 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 fips_t* fips_init(const char* pathname) {
     dmn_assert(pathname);
 
-    char* relpath = gdnsd_str_combine(GEOIP_DIR, pathname, NULL);
-    FILE* file = fopen(relpath, "r");
+    FILE* file = fopen(pathname, "r");
     if(!file)
-        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", logf_pathname(relpath), logf_errno());
+        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", logf_pathname(pathname), logf_errno());
     fips_t* fips = calloc(1, sizeof(fips_t));
     fips_parse(fips, file);
     if(fclose(file))
-        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", logf_pathname(relpath), logf_errno());
-    free(relpath);
+        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", logf_pathname(pathname), logf_errno());
     return fips;
 }
 

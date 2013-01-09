@@ -33,7 +33,7 @@
 #include "gdnsd/log.h"
 #include "gdnsd/stats.h"
 #include "gdnsd/dmn.h"
-#include "gdnsd/misc-priv.h"
+#include "gdnsd/paths-priv.h"
 
 /* libdmn custom log formatters and the buffer sizes they use:
  *
@@ -157,16 +157,31 @@ const char* gdnsd_logf_dname(const uint8_t* dname) {
     return dnbuf;
 }
 
-const char* gdnsd_logf_pathname(const char* relpath) {
-    const char* rootpath = gdnsd_get_rootdir();
-    const unsigned rootlen = strlen(rootpath);
-    const unsigned rplen = relpath ? strlen(relpath) : 0;
-    const unsigned oal = rootlen + 1 + rplen;
-    char* space = dmn_fmtbuf_alloc(oal + 1);
-    memcpy(space, rootpath, rootlen);
-    space[rootlen] = '/';
-    if(relpath)
-        memcpy(space + rootlen + 1, relpath, rplen);
-    space[oal] = 0;
+const char* gdnsd_logf_pathname(const char* inpath) {
+    char* space = NULL;
+
+    if(!inpath) {
+        space = dmn_fmtbuf_alloc(7);
+        memcpy(space, "<NULL>", 7); // includes NUL
+    }
+    else {
+        const unsigned inlen = strlen(inpath);
+        const char* rootpath = gdnsd_get_rootdir();
+        if(rootpath) {
+            const unsigned rootlen = strlen(rootpath);
+            const unsigned toalloc = 1 + rootlen + 1 + 1 + inlen + 1;
+            char* space_ptr = space = dmn_fmtbuf_alloc(toalloc);
+            *space_ptr++ = '[';
+            memcpy(space_ptr, rootpath, rootlen); space_ptr += rootlen;
+            *space_ptr++ = ']';
+            *space_ptr++ = '/';
+            memcpy(space_ptr, inpath, inlen + 1); // includes NUL
+        }
+        else {
+            space = dmn_fmtbuf_alloc(inlen + 1);
+            memcpy(space, inpath, inlen + 1); // includes NUL
+        }
+    }
+
     return space;
 }

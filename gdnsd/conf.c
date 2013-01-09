@@ -22,7 +22,7 @@
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 #include "gdnsd/misc.h"
-#include "gdnsd/misc-priv.h"
+#include "gdnsd/paths.h"
 #include "gdnsd/plugapi-priv.h"
 
 #include <unistd.h>
@@ -43,7 +43,6 @@
 static unsigned num_mon_lists = 0;
 static mon_list_t** mon_lists = NULL;
 
-static const char CFG_PATH[] = "etc/config";
 static const char DEF_USERNAME[] = PACKAGE_NAME;
 
 // just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
@@ -428,21 +427,30 @@ static void assign_thread_nums(void) {
     gconfig.num_io_threads = tnum;
 }
 
-void conf_load(void) {
+static const vscf_data_t* conf_load_vscf(void) {
+    const vscf_data_t* out = NULL;
 
-    const vscf_data_t* cfg_root = NULL;
+    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
 
     struct stat cfg_stat;
-    if(!stat(CFG_PATH, &cfg_stat)) {
-        log_debug("Loading configuration from '%s'", CFG_PATH);
+    if(!stat(cfg_path, &cfg_stat)) {
+        log_debug("Loading configuration from '%s'", cfg_path);
         char* vscf_err;
-        cfg_root = vscf_scan_filename(CFG_PATH, &vscf_err);
-        if(!cfg_root)
-            log_fatal("Configuration from '%s' failed: %s", CFG_PATH, vscf_err);
+        out = vscf_scan_filename(cfg_path, &vscf_err);
+        if(!out)
+            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
     }
     else {
-        log_debug("No config file at '%s', using defaults + zones auto-scan", CFG_PATH);
+        log_debug("No config file at '%s', using defaults + zones auto-scan", cfg_path);
     }
+
+    free(cfg_path);
+    return out;
+}
+
+void conf_load(void) {
+
+    const vscf_data_t* cfg_root = conf_load_vscf();
 
 #ifndef NDEBUG
     // in developer debug builds, exercise clone+destroy

@@ -25,8 +25,6 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/plugapi.h>
 
-static const char GEOIP_DIR[] = "etc/geoip/";
-
 typedef struct _gdmaps_t gdmaps_t;
 
 F_NONNULL
