@@ -92,7 +92,7 @@ To resolve these issues, I re-wrote the core code in C and added all the basic f
 
 Late in 2009, I started working on a major refactor.  The primary goals here were to move the configuration parsing into the C code like a normal daemon, add a ton of new testsuite coverage (100% branch coverage of the core packet parse/generate code was the goal, which was achieved), and to move the geographic redirection code out to a DSO-based plugin so that other techniques could be experimented on without touching the relatively stable core DNS code.  This effort finally lead to a new stable release series (1.0.x) in April of 2010.
 
-The rest is all relatively well-documented in the ChangeLog.
+The rest is all relatively well-documented in the NEWS file.
 
 ## COPYRIGHT AND LICENSING
 
