@@ -36,9 +36,18 @@ at build time, and you can see what your build's default is by executing
 e.g. C<gdnsd --help>.  The default default is C<system>.
 
 If a default or commandline-supplied chroot directory is in use, all
-files which gdnsd interacts with live within that chroot directory,
-and the daemon will attempt to create the basic skeleton of the chroot
-directory tree on startup if it's missing.
+files which gdnsd interacts with live within that chroot directory.
+
+In the system case, gdnsd will create its own basic configuration and run
+directories if they're missing on startup, but will not recursively
+create parent directories (e.g. it will create F</var/run/gdnsd> if missing,
+but will fail if F</var/run> itself is missing.  In the same manner
+it will create F</etc/gdnsd> (and other gdnsd-specific subdirectories
+thereof), but will fail if F</etc> itself is missing.
+
+In the chroot case, gdnsd will create the chroot directory and all
+structure within on startup if necessary, but will not create the parent
+of the chroot directory for you.
 
 =head1 BASIC SECURITY
 

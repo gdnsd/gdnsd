@@ -8,16 +8,18 @@
       of the configure/build-time setting, all builds can operate
       in both modes at runtime if given the appropriate "-d" argument.
     A new configure argument "--with-rundir=/run" is available for
-      distributions that want the pidfile undef e.g. /run instead of
+      distributions that want the pidfile under e.g. /run instead of
       the default /var/run ($localstatedir/run in autoconf terms).
-      This only affects the default "system"-style invocation.
+      This only affects the default "system"-style invocation, and
+      the actual pidfile ends up in e.g. /run/gdnsd/gdnsd.pid, or
+      /usr/local/var/run/gdnsd/gdnsd.pid if no alternate prefix,
+      localstatedir, or with-rundir is specified.
       In the chroot case the pidfile still lives within the chroot.
-      In both cases the pidfile path is now $rundir/gdnsd/gdnsd.pid
     Due to the pidfile moving above, running instances from before
       this change won't be stopped by the new code properly, you'll
       have to shutdown before upgrading, or manually kill the old one.
     Tons of minor code quality fixups, distribution compatibility
-      fixups, packacging/autoconf fixups, etc.
+      fixups, packaging/autoconf fixups, etc.
     A few key changes for external plugins, mostly that the include
       file paths are now of the form <gdnsd/plugin.h> rather than
       <gdnsd-plugin.h>.
