@@ -276,12 +276,11 @@ int main(int argc, char** argv) {
     if(emc_write_string(plugin_write_fd, "HELO_ACK", 8))
         log_fatal("Failed to write HELO_ACK to plugin");
 
-    char ccount_buf[7];
+    uint8_t ccount_buf[7];
     if(emc_read_nbytes(plugin_read_fd, 7, ccount_buf)
-        || strncmp(ccount_buf, "CMDS:", 5))
+        || strncmp((char*)ccount_buf, "CMDS:", 5))
         log_fatal("Failed to read command count from plugin");
-    uint16_t* num_mons_ptr = (uint16_t*)&ccount_buf[5];
-    num_mons = *num_mons_ptr;
+    num_mons = ((unsigned)ccount_buf[5] << 16) + ccount_buf[6];
     if(!num_mons)
         log_fatal("Received command count of zero from plugin");
     mons = calloc(num_mons, sizeof(mon_t));

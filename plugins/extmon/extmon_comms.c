@@ -50,7 +50,7 @@ bool emc_write_string(const int fd, const char* str, const unsigned len) {
     return rv;
 }
 
-bool emc_read_nbytes(const int fd, const unsigned len, char* out) {
+bool emc_read_nbytes(const int fd, const unsigned len, uint8_t* out) {
     bool rv = false;
     unsigned seen = 0;
     while(seen < len) {
@@ -76,7 +76,7 @@ bool emc_read_nbytes(const int fd, const unsigned len, char* out) {
 
 bool emc_read_exact(const int fd, const char* str) {
     const unsigned len = strlen(str);
-    char buf[len];
+    uint8_t buf[len];
     return (emc_read_nbytes(fd, len, buf)
         || !!memcmp(str, buf, len));
 }
@@ -91,8 +91,8 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
     len += 4;
 
     // 2-byte index, 1-byte timeout, 1-byte interval
-    *((uint16_t*)&buf[len]) = cmd->idx;
-    len += 2;
+    buf[len++] = cmd->idx >> 8;
+    buf[len++] = cmd->idx & 0xFF;
     buf[len++] = cmd->timeout;
     buf[len++] = cmd->interval;
 
@@ -122,14 +122,16 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
 
     // now go back and fill in the overall len
     //   of the variable area for desc/args.
-    *((uint16_t*)&buf[8]) = len - 10;
+    const unsigned var_len = len - 10;
+    buf[8] = var_len >> 8;
+    buf[9] = var_len & 0xFF;
 
     bool rv = emc_write_string(fd, buf, len);
     free(buf);
     return rv;
 }
 
-static bool nul_within_n_bytes(const char* instr, const unsigned len) {
+static bool nul_within_n_bytes(const uint8_t* instr, const unsigned len) {
     bool rv = false;
     for(unsigned j = 0; j < len; j++) {
         if(!instr[j]) {
@@ -145,24 +147,22 @@ extmon_cmd_t* emc_read_command(const int fd) {
     extmon_cmd_t* cmd = NULL;
 
     {
-        char fixed_part[10];
+        uint8_t fixed_part[10];
         if(emc_read_nbytes(fd, 10, fixed_part)
-            || strncmp(fixed_part, "CMD:", 4)) {
+            || strncmp((char*)fixed_part, "CMD:", 4)) {
             log_debug("emc_read_command() failed to read CMD: prefix");
             goto out_error;
         }
 
         cmd = malloc(sizeof(extmon_cmd_t));
-        uint16_t* idx_ptr = (uint16_t*)(&fixed_part[4]);
-        cmd->idx = *idx_ptr;
-        cmd->timeout = *((uint8_t*)&fixed_part[6]);
-        cmd->interval = *((uint8_t*)&fixed_part[7]);
+        cmd->idx = ((unsigned)fixed_part[4] << 8) + fixed_part[5];
+        cmd->timeout = fixed_part[6];
+        cmd->interval = fixed_part[7];
         cmd->args = NULL;
         cmd->num_args = 0;
 
         // note we add an extra NULL at the end of args here, for execl()
-        uint16_t* var_len_ptr = (uint16_t*)&fixed_part[8];
-        const unsigned var_len = *var_len_ptr;
+        const unsigned var_len = ((unsigned)fixed_part[8] << 8) + fixed_part[9];
         if(var_len < 4) {
             // 4 bytes would be enough for num_args, a single 1-byte argument
             //   and its NUL termiantor, and a zero-length NUL-terminated desc
@@ -170,23 +170,23 @@ extmon_cmd_t* emc_read_command(const int fd) {
             goto out_error;
         }
 
-        char var_part[var_len];
+        uint8_t var_part[var_len];
         if(emc_read_nbytes(fd, var_len, var_part)) {
             log_debug("emc_read_command() failed to read %u-byte variable section", var_len);
             goto out_error;
         }
 
-        const unsigned n_args = *((uint8_t*)var_part);
+        const unsigned n_args = *var_part;
         if(!n_args) {
             log_debug("emc_read_command() got zero-arg command!");
             goto out_error;
         }
 
         cmd->args = malloc((n_args + 1) * sizeof(char*));
-        const char* current = &var_part[1];
+        const uint8_t* current = &var_part[1];
         unsigned len_remain = var_len - 1;
         for(cmd->num_args = 0; cmd->num_args < n_args; cmd->num_args++) {
-            const unsigned cmdlen = strnlen(current, len_remain) + 1;
+            const unsigned cmdlen = strnlen((const char*)current, len_remain) + 1;
             cmd->args[cmd->num_args] = malloc(cmdlen);
             if(!nul_within_n_bytes(current, len_remain)) {
                 log_debug("emc_read_command(): argument runs off end of buffer");
@@ -202,8 +202,8 @@ extmon_cmd_t* emc_read_command(const int fd) {
             log_debug("emc_read_command(): argument runs off end of buffer");
             goto out_error;
         }
-        cmd->desc = strdup(current);
-        current += strlen(current);
+        cmd->desc = strdup((const char*)current);
+        current += strlen((const char*)current);
         current++;
 
         if(current != (var_part + var_len)) {

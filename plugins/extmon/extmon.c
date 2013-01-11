@@ -308,8 +308,8 @@ static void spawn_helper(void) {
 
     char cmds_buf[7];
     memcpy(cmds_buf, "CMDS:", 5);
-    uint16_t* moncount_ptr = (uint16_t*)&cmds_buf[5];
-    *moncount_ptr = num_mons;
+    cmds_buf[5] = num_mons >> 8;
+    cmds_buf[6] = num_mons & 0xFF;
     if(emc_write_string(helper_write_fd, cmds_buf, 7))
         log_fatal("plugin_extmon: failed to write command count to helper process");
     if(emc_read_exact(helper_read_fd, "CMDS_ACK"))
