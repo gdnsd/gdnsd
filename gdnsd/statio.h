@@ -21,7 +21,8 @@
 #define _GDSND_STATIO_H
 
 #include "config.h"
-#include "gdnsd.h"
+#include "gdnsd/compiler.h"
+#include <ev.h>
 
 void statio_log_stats(void);
 void statio_log_uptime(void);

@@ -21,8 +21,7 @@
 #define _GDNSD_LTARENA_H
 
 #include "config.h"
-#include "gdnsd.h"
-
+#include "gdnsd/compiler.h"
 #include <inttypes.h>
 #include <string.h>
 

@@ -30,6 +30,7 @@
 #include "dnsio_tcp.h"
 #include "dnspacket.h"
 #include "monio.h"
+#include "gdnsd/log.h"
 
 // Macro to add an offset to a void* portably...
 #define ADDVOID(_vstar,_offs) ((void*)(((char*)(_vstar)) + _offs))

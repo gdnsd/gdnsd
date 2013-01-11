@@ -21,7 +21,6 @@
 #define _GDNSD_DNSIO_TCP_H
 
 #include "config.h"
-#include "gdnsd.h"
 #include "conf.h"
 
 #if HAVE_DECL_SOCK_NONBLOCK && defined HAVE_ACCEPT4

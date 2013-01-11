@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 #include "gdnsd/dname.h"
+#include "gdnsd/log.h"
 #include "gdnsd/misc.h"
 #include "gdnsd/prcu-priv.h"
 

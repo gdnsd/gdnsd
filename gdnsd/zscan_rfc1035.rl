@@ -28,6 +28,7 @@
 #include "conf.h"
 #include "ltree.h"
 #include "ltarena.h"
+#include "gdnsd/log.h"
 #include "gdnsd/misc.h"
 
 #ifndef INET6_ADDRSTRLEN

@@ -18,7 +18,6 @@
  */
 
 #include "config.h"
-#include "gdnsd.h"
 #include "conf.h"
 
 #include <string.h>
@@ -46,6 +45,7 @@
 #include "ztree.h"
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
+#include "gdnsd/log.h"
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/net-priv.h"
 #include "gdnsd/misc-priv.h"

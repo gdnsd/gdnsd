@@ -21,7 +21,8 @@
 #define _GDNSD_ZSRC_RFC1035_H
 
 #include "config.h"
-#include "gdnsd.h"
+#include "gdnsd/compiler.h"
+#include <ev.h>
 
 void zsrc_rfc1035_load_zones(void);
 

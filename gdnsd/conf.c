@@ -22,6 +22,7 @@
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 #include "gdnsd/misc.h"
+#include "gdnsd/log.h"
 #include "gdnsd/paths.h"
 #include "gdnsd/plugapi-priv.h"
 

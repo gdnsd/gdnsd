@@ -21,7 +21,9 @@
 #define _GDNSD_MONIO_H
 
 #include "config.h"
-#include "gdnsd.h"
+#include "gdnsd/vscf.h"
+#include "gdnsd/mon.h"
+#include <ev.h>
 
 // conf.c calls this for service_types vscf config and to process plugin monitoring requests
 void monio_add_servicetypes(const vscf_data_t* svctypes_cfg);

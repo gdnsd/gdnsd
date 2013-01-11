@@ -21,7 +21,6 @@
 #define _GDNSD_DNSIO_UDP_H
 
 #include "config.h"
-#include "gdnsd.h"
 #include "conf.h"
 
 // retval indicates need for net bind caps, if possible

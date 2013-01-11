@@ -29,6 +29,7 @@
 #include "dnspacket.h"
 #include "ltarena.h"
 #include "gdnsd/dname.h"
+#include "gdnsd/log.h"
 
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists

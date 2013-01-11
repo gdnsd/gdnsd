@@ -21,7 +21,6 @@
 #define _GDNSD_DNSPACKET_H
 
 #include "config.h"
-#include "gdnsd.h"
 #include "ltree.h"
 #include "gdnsd/misc.h"
 

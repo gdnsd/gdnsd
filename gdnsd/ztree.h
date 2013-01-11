@@ -21,9 +21,11 @@
 #define _GDNSD_ZTREE_H
 
 #include "config.h"
-#include "gdnsd.h"
 
 #include <inttypes.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "ltarena.h"
 
 // high-res mtime stuff, for zsrc_*.c to use internally...

@@ -21,7 +21,6 @@
 #define _GDNSD_CONF_H
 
 #include "config.h"
-#include "gdnsd.h"
 #include "ltree.h"
 
 typedef struct {

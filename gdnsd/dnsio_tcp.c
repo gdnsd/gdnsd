@@ -31,6 +31,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
+#include "gdnsd/log.h"
 #include "gdnsd/prcu-priv.h"
 
 typedef enum {
