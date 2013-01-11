@@ -1,4 +1,12 @@
 
+1.7.5 - 2012-01-10
+    THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
+      HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
+      stable release, and 1.8.x will be the future stable release
+      containing these changes.
+    That being said, we're pretty much feature complete for 1.8.0 at
+      this point, and this should be considered a release candidate
+      of sorts.
     The forced chroot mode that has been the default for most of
       1.7.x has now been made optional.  The default default
       is now "-d system", which triggers the use of system paths
@@ -25,10 +33,6 @@
       <gdnsd-plugin.h>.
 
 1.7.4 - 2012-11-30
-    THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
-      HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
-      stable release, and 1.8.x will be the future stable release
-      containing these changes.
     Embedded libev removed.  Libev is now an external pre-requisite.
     DOS-style line endings (\r\n) are now accepted when parsing
       configuration and zone files.

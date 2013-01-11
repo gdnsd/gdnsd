@@ -1,11 +1,11 @@
 Summary: Authoritative DNS Server
 Name: gdnsd
-Version: 1.7.4
+Version: 1.7.5
 Release: 1%{?dist}
 License: GPLv3+
 Group: System Environment/Daemons
 URL: https://github.com/blblack/gdnsd
-Source0: https://github.com/downloads/blblack/gdnsd/gdnsd-%{version}.tar.xz
+Source0: http://downloads.gdnsd.net/gdnsd-%{version}.tar.xz
 Requires(pre): /usr/sbin/useradd
 Requires(post): systemd
 Requires(preun): systemd
