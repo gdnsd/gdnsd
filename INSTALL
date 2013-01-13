@@ -16,9 +16,6 @@ In the past the code has been tested successfully on several Linux and
   been re-tested in several releases now, so there could be minor fixups
   in order as far as I know.  Bug reports and/or patches welcome.
 
-If you want to run the optional testsuite (make check), you will also need
-  Perl and the Perl modules Test::More, Net::DNS and LWP.
-
 Building from git
 ==================
 
@@ -27,7 +24,7 @@ short of "make" and "cc", most auto-generated distribution files are
 not included in the git repository, so you'll need additional
 tools installed in your $PATH to get things working
 
-The latest versions of GNU autoconf, automake, and libtool
+The latest versions of GNU autoconf, automake, libtool and libltdl
 Ragel v6.6+: http://complang.org/ragel
 And everything listed below for the testsuite...
 
@@ -52,6 +49,7 @@ are what you will sometimes find them as in OS package managers):
   LWP (aka perl-libwww-perl)
   Socket6
   IO::Socket::INET6
+  HTTP::Daemon
 
 You can install the above modules via the standard CPAN mechanisms, which
 usually involves invoking the CPAN shell "cpan" with appropriate privileges to
