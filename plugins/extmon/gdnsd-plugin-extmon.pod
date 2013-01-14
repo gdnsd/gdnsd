@@ -11,17 +11,17 @@ Example plugin config:
     pingit => {
       plugin => "extmon",
       timeout => 5,
-      cmd => ['/bin/ping', '-w', '2', '-c', '2', '%%IPADDR%%']
+      cmd => ["/bin/ping", "-w", "2", "-c", "2", "%%IPADDR%%"]
     },
     svc_alwaysok => {
       plugin => "extmon",
       timeout => 1,
-      cmd => ['/bin/sh', '-c', 'exit 0']
+      cmd => ["/bin/sh", "-c", "exit 0"]
     },
     svc_alwaysfail_via_timeout => {
       plugin => "extmon",
       timeout => 2,
-      cmd => ['/bin/sh', '-c', 'sleep 5']
+      cmd => ["/bin/sh", "-c", "sleep 5"]
     }
   }
 
