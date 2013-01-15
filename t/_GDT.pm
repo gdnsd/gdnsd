@@ -394,8 +394,11 @@ sub test_log_output {
     my $texts = { map { $i++ => $_ } @$texts_in };
 
     my $ok = 0;
-    my $retry_delay = $TEST_RUNNER ? 0.5 : 0.1;
-    my $retry = 100;
+    # $retry_delay doubles after each wait, and thus
+    #   settings of 0.05 and 9 leads to a total wait
+    #   time of up to 25.55 seconds.
+    my $retry_delay = 0.05;
+    my $retry = 9;
     while(scalar(keys %$texts) && $retry--) {
         while(scalar(keys %$texts) && ($_ = <$GDOUT_FH>)) {
             foreach my $k (keys %$texts) {
@@ -407,6 +410,7 @@ sub test_log_output {
             }
         }
         select(undef, undef, undef, $retry_delay);
+        $retry_delay *= 2;
     }
 
     if(!scalar(keys %$texts)) {
