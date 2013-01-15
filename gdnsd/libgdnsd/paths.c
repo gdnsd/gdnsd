@@ -102,9 +102,6 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
         // Not using a root directory, using system paths
         if(chdir("/"))
             log_fatal("Failed to chdir('/'): %s", dmn_strerror(errno));
-        ensure_dir(GDNSD_ETCDIR);
-        ensure_dir(GDNSD_ETCDIR "/zones");
-        ensure_dir(GDNSD_ETCDIR "/geoip");
         ensure_dir(GDNSD_RUNDIR);
     }
     else {
