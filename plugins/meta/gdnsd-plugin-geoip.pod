@@ -114,11 +114,13 @@ Any other keys present at this level will be inherited down inside of each per-r
 
 The C<maps> stanza supports one special configuration key at the top level:
 
-=head2 C<city_region_names = fips_include_filename>
+=head2 C<city_region_names = region_codes.csv>
 
-String, filename, optional.  GeoIP City databases use FIPS 10-4 codes for the names of Regions outside of the US and Canada.  For example the Geneve region of Switzerland is identified as C<07> in the database.  By default you would have to use these relatively confusing region codes in your hierarchical maps that make use of Region-level information (e.g. C<EU =E<gt> { CH =E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is specified, it points to a text file that maps these FIPS codes to canonical, memorable full names for clearer map configuration (e.g. C<EU =E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.
+String, filename, optional.  GeoIP City databases use FIPS 10-4 codes for the names of Regions outside of the US and Canada, and two-letter national alpha codes within the US and Canada.  For example the Geneve region of Switzerland is identified as C<07> in the database.  By default you would have to use these relatively confusing region codes in your hierarchical maps that make use of Region-level information (e.g. C<EU =E<gt> { CH =E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is specified, it points to a text file that maps these FIPS codes to canonical, memorable full names for clearer map configuration (e.g. C<EU =E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  Note that while older versions of this data did not map the US/Canadian two-letter alpha codes, newer versions do (e.g. TX -> Texas).
 
-The file format is a simple subset of the CSV format with 3 fields: ISO 3166-1 country code, FIPS 10-4 region code, and the region name in double-quotes.  It is recommended you download this file directly from MaxMind's reference copy in this format.  As of this writing, it is available from them at the following URL: L<http://www.maxmind.com/app/fips_include>
+This setting does not affect the GeoIP C<Region> -format databases, which have no region codes outside of the US and Canada, and always need the two-letter alpha codes in the map.
+
+The file format is a simple subset of the CSV format with 3 fields: ISO 3166-1 country code, FIPS 10-4 region code (or two-letter alpha in US/Canada), and the region name in double-quotes.  It is recommended you download this file directly from MaxMind's reference copy in this format.  As of this writing, it is available from them at the following URL: L<http://dev.maxmind.com/static/maxmind-region-codes.csv>.
 
 =head1 CONFIGURATION - PER-MAP
 

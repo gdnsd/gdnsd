@@ -14,6 +14,8 @@ done
 
 if [ $skip_geoip -eq 1 ]; then
     echo "Skipping GeoIP-based libgdmaps unit tests; missing GeoLite data."
+    echo "If you care to run these, execute 'make check-download' before 'make check'"
+    echo "(This will download several megabytes of data from the public Internet!)"
 fi
 
 for netsfile in $ASDIR/*.nets; do

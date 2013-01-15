@@ -24,8 +24,8 @@ include $(top_srcdir)/docs.am
 # This product includes GeoLite data created by MaxMind, available from http://maxmind.com/
 # These files are subject to MaxMind's GeoLite Open Data license, which is also re-distributed by download
 
-GEOLITE_URL_BASE = http://gdnsd.net/GeoLiteTestData/
-GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat fips_include-20111210
+GEOLITE_URL_BASE = http://downloads.gdnsd.net/GeoLiteTestData/
+GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat regioncodes-20130115.csv
 
 TESTLIST_NONETS = \
 	t00_v4db \

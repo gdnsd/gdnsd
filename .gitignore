@@ -37,7 +37,7 @@ testroot/
 # libgdmaps unit test junk
 /plugins/meta/libgdmaps/t/*.bin
 /plugins/meta/libgdmaps/t/Geo*.dat
-/plugins/meta/libgdmaps/t/fips_include-*
+/plugins/meta/libgdmaps/t/regioncodes-*
 
 # Various tool outputs in all dirs
 Makefile
