@@ -742,19 +742,46 @@ static void inotify_initial_run(struct ev_loop* loop V_UNUSED) {
 
 F_UNUSED F_NONNULL
 static uint64_t try_zone_mtime(const char* testfn) {
-    int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR, 0644);
-    if(fd < 0)
-        log_fatal("rfc1035: failed to open %s for writing: %s", testfn, logf_errno());
-    if(9 != write(fd, "testmtime", 9))
-        log_fatal("rfc1035: failed to write 9 bytes to %s: %s", testfn, logf_errno());
-    if(close(fd))
-        log_fatal("rfc1035: failed to close %s: %s", testfn, logf_errno());
-    struct stat st;
-    if(lstat(testfn, &st))
-        log_fatal("rfc1035: failed to lstat %s: %s", testfn, logf_errno());
-    if(unlink(testfn))
-        log_fatal("rfc1035: failed to unlink %s: %s", testfn, logf_errno());
-    return get_extended_mtime(&st);
+    uint64_t rv = UINT64_MAX;
+
+    do {
+        int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR, 0644);
+
+        if(fd < 0) {
+            log_warn("rfc1035: failed to open %s for writing: %s", testfn, logf_errno());
+            break;
+        }
+
+        if(9 != write(fd, "testmtime", 9)) {
+            log_warn("rfc1035: failed to write 9 bytes to %s: %s", testfn, logf_errno());
+            close(fd);
+            unlink(testfn);
+            break;
+        }
+
+        if(close(fd)) {
+            log_warn("rfc1035: failed to close %s: %s", testfn, logf_errno());
+            unlink(testfn);
+            break;
+        }
+
+        struct stat st;
+
+        if(lstat(testfn, &st)) {
+            log_warn("rfc1035: failed to lstat %s: %s", testfn, logf_errno());
+            unlink(testfn);
+            break;
+        }
+
+        if(unlink(testfn)) {
+            log_warn("rfc1035: failed to unlink %s: %s", testfn, logf_errno());
+            break;
+        }
+
+        rv = get_extended_mtime(&st);
+    } while(0);
+
+    return rv;
 }
 
 static void set_quiesce(void) {
@@ -769,6 +796,8 @@ static void set_quiesce(void) {
     unsigned attempts = 5;
     while(attempts--) {
         const uint64_t mt = try_zone_mtime(testfn);
+        if(mt == UINT64_MAX)
+            break; // can't do .mtime_test at all
         if(mt % 10000000) { // apparent precision better than 10ms
             sys_min_quiesce = 0.01; // set to 10ms
             break;
