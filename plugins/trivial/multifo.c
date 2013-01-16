@@ -1,4 +1,4 @@
-/* Copyright © 2011 Logitech
+/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
