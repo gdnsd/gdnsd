@@ -8,6 +8,7 @@ for gdata in $GEOLITE_FILES; do
     if [ ! -f $ABDIR/$gdata ]; then
         skip_geoip=1
     else
+        rm -f $TODIR/etc/geoip/$gdata
         ln -s $ABDIR/$gdata $TODIR/etc/geoip/$gdata
     fi
 done
