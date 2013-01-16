@@ -55,7 +55,7 @@ struct _dcinfo {
 
 // Technically we could/should check for duplicates here.  The plugin will
 //  still fail later though: when a resource is defined, the datacenter
-//  names go into a hash requiring uniquness, and the count is required
+//  names go into a hash requiring uniqueness, and the count is required
 //  to match (ditto for auto_dc_coords never succeeding with dupes in the
 //  datacenters list).
 dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, const vscf_data_t* dc_auto_limit_cfg, const char* map_name) {

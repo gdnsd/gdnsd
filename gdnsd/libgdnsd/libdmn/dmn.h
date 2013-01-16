@@ -81,7 +81,7 @@ pid_t dmn_status(const char* pidfile);
 DMN_F_NONNULL
 pid_t dmn_stop(const char* pidfile);
 
-// Send an aribtrary signal to a running daemon using "pidfile".
+// Send an arbitrary signal to a running daemon using "pidfile".
 DMN_F_NONNULL
 int dmn_signal(const char* pidfile, int sig);
 
@@ -107,7 +107,7 @@ DMN_F_PURE
 bool dmn_is_secured(void);
 
 // This accessor returns the chroot path configured through dmn_secure_setup(),
-//   if that setup has occured yet.  If dmn_secure_setup() was not (yet) called,
+//   if that setup has occurred yet.  If dmn_secure_setup() was not (yet) called,
 //   or was called with chroot_path set to NULL, it returns NULL.  Note that
 //   if this returns a path, dmn_is_secured() tells you whether we've already
 //   chroot'd into that path.

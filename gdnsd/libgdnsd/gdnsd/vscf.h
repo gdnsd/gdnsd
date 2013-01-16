@@ -178,7 +178,7 @@ typedef bool (*vscf_hash_iter_cb_t)(const char* key, unsigned klen, const vscf_d
 F_NONNULLX(1,3)
 void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb_t f, void* data);
 
-// Re-sort hash keys from default order (order defined in config file) to an arbitary
+// Re-sort hash keys from default order (order defined in config file) to an arbitrary
 //  order of your choosing, using a qsort()-like compare callback.  Calls to vscf_hash_iterate
 //  after vscf_hash_sort will iterate in the new sort order.  Not thread-safe (all access to
 //  a given hash should be locked if it's being sorted in a threaded environment).

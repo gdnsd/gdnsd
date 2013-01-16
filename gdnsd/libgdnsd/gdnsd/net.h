@@ -48,7 +48,7 @@ typedef struct {
 // input text fields must be numeric, not hostnames or port names.
 // caller must allocate result to sizeof(anysin_t)
 // port can be NULL, in which case the proto-specific port field will be zero
-// retval is retval from getaddrinfo() itself (if non-zero, error occured and
+// retval is retval from getaddrinfo() itself (if non-zero, error occurred and
 //   string representation is available from gai_strerror()).
 // result is unaffected if an error occurs.
 int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, anysin_t* result);

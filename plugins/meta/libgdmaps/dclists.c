@@ -42,7 +42,7 @@
 //  to update this structure when we create the ntree_t
 //  later.
 // So it has a clone operation which clones the list and
-//  copys the string pointers, and various levels of
+//  copies the string pointers, and various levels of
 //  destroy operation that destroy only the newly-added
 //  strings, all strings, or no strings.
 // The idea is when a new tree is being constructed on the

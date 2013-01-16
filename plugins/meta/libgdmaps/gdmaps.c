@@ -412,7 +412,7 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
         }
     }
     else {
-        log_warn("plugin_geoip: map '%s': GeoIP database '%s' dissappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, logf_pathname(w->path));
+        log_warn("plugin_geoip: map '%s': GeoIP database '%s' disappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, logf_pathname(w->path));
     }
 }
 
@@ -435,7 +435,7 @@ static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int reve
         }
     }
     else {
-        log_warn("plugin_geoip: map '%s': nets file '%s' dissappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, logf_pathname(w->path));
+        log_warn("plugin_geoip: map '%s': nets file '%s' disappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, logf_pathname(w->path));
     }
 }
 
