@@ -66,7 +66,6 @@ static const vscf_data_t* conf_load_vscf(void) {
     return out;
 }
 
-F_NONNULL
 static void conf_options(const vscf_data_t* cfg_root) {
     dmn_assert(cfg_root);
 
