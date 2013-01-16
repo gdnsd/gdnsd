@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_MON_H
-#define _GDNSD_MON_H
+#ifndef GDNSD_MON_H
+#define GDNSD_MON_H
 
 // For stats_t, etc...
 #include <gdnsd/stats.h>
@@ -93,4 +93,4 @@ typedef struct {
 F_NONNULL
 void gdnsd_mon_state_updater(mon_smgr_t* smgr, const bool latest);
 
-#endif // _GDNSD_MON_H
+#endif // GDNSD_MON_H

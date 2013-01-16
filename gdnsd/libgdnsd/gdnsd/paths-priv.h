@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_PATHS_PRIV_H
-#define _GDNSD_PATHS_PRIV_H
+#ifndef GDNSD_PATHS_PRIV_H
+#define GDNSD_PATHS_PRIV_H
 
 #include "gdnsd/compiler.h"
 #include "gdnsd/paths.h"
@@ -50,4 +50,4 @@ const char* gdnsd_get_def_rootdir(void);
 // get a pathname for pidfile operations
 char* gdnsd_get_pidpath(void);
 
-#endif // _GDNSD_PATHS_PRIV_H
+#endif // GDNSD_PATHS_PRIV_H

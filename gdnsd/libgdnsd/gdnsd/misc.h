@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_MISC_H
-#define _GDNSD_MISC_H
+#ifndef GDNSD_MISC_H
+#define GDNSD_MISC_H
 
 #include <gdnsd/compiler.h>
 #include <inttypes.h>
@@ -67,4 +67,4 @@ bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned 
 // Jenkins lookup2
 uint32_t gdnsd_lookup2(const char *k, uint32_t len);
 
-#endif // _GDNSD_MISC_H
+#endif // GDNSD_MISC_H

@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_DNSIO_TCP_H
-#define _GDNSD_DNSIO_TCP_H
+#ifndef GDNSD_DNSIO_TCP_H
+#define GDNSD_DNSIO_TCP_H
 
 #include "config.h"
 #include "conf.h"
@@ -43,4 +43,4 @@ int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED);
 F_NONNULL
 bool tcp_dns_listen_setup(dns_addr_t *addrconf);
 
-#endif // _GDNSD_DNSIO_TCP_H
+#endif // GDNSD_DNSIO_TCP_H

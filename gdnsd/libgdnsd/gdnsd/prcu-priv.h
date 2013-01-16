@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_PRCU_PRIV_H
-#define _GDNSD_PRCU_PRIV_H
+#ifndef GDNSD_PRCU_PRIV_H
+#define GDNSD_PRCU_PRIV_H
 
 #include "config.h"
 #include <gdnsd/compiler.h>
@@ -64,4 +64,4 @@ void gdnsd_prcu_destroy_lock(void);
 
 #endif // HAVE_QSBR
 
-#endif // _GDNSD_PRCU_PRIV_H
+#endif // GDNSD_PRCU_PRIV_H

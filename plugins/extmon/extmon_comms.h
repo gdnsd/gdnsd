@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_EXTMON_COMMS_H
-#define _GDNSD_EXTMON_COMMS_H
+#ifndef GDNSD_EXTMON_COMMS_H
+#define GDNSD_EXTMON_COMMS_H
 
 #include "config.h"
 #include <gdnsd/compiler.h>
@@ -84,4 +84,4 @@ static inline bool emc_decode_mon_failed(const uint32_t data) {
     return rv;
 }
 
-#endif // _GDNSD_EXTMON_COMMS_H
+#endif // GDNSD_EXTMON_COMMS_H

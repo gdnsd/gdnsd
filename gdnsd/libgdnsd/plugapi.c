@@ -158,23 +158,23 @@ const plugin_t* gdnsd_plugin_load(const char* pname) {
         log_fatal("Plugin '%s' needs to be recompiled (wanted API version %u, got %u)",
             pname, GDNSD_PLUGIN_API_VERSION, this_version);
 
-#   define _PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
-    _PSETFUNC(load_config)
-    _PSETFUNC(map_resource_dyna)
-    _PSETFUNC(map_resource_dync)
-    _PSETFUNC(full_config)
-    _PSETFUNC(post_daemonize)
-    _PSETFUNC(pre_privdrop)
-    _PSETFUNC(pre_run)
-    _PSETFUNC(iothread_init)
-    _PSETFUNC(resolve_dynaddr)
-    _PSETFUNC(resolve_dyncname)
-    _PSETFUNC(exit)
-    _PSETFUNC(add_svctype)
-    _PSETFUNC(add_monitor)
-    _PSETFUNC(init_monitors)
-    _PSETFUNC(start_monitors)
-#   undef _PSETFUNC
+#   define PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
+    PSETFUNC(load_config)
+    PSETFUNC(map_resource_dyna)
+    PSETFUNC(map_resource_dync)
+    PSETFUNC(full_config)
+    PSETFUNC(post_daemonize)
+    PSETFUNC(pre_privdrop)
+    PSETFUNC(pre_run)
+    PSETFUNC(iothread_init)
+    PSETFUNC(resolve_dynaddr)
+    PSETFUNC(resolve_dyncname)
+    PSETFUNC(exit)
+    PSETFUNC(add_svctype)
+    PSETFUNC(add_monitor)
+    PSETFUNC(init_monitors)
+    PSETFUNC(start_monitors)
+#   undef PSETFUNC
 
     return plug;
 }

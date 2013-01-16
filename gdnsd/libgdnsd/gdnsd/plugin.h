@@ -17,11 +17,11 @@
  *
  */
 
-#ifdef _GDNSD_PLUGIN_H
+#ifdef GDNSD_PLUGIN_H
 #error gdnsd/plugin.h must be included *exactly once* from *exactly one* source file per plugin
 #endif
 
-#define _GDNSD_PLUGIN_H
+#define GDNSD_PLUGIN_H
 
 // Include all of the libgdnsd stuff for convenience
 #include <gdnsd/compiler.h>

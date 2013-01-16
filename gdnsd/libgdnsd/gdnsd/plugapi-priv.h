@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_PLUGAPI_PRIV_H
-#define _GDNSD_PLUGAPI_PRIV_H
+#ifndef GDNSD_PLUGAPI_PRIV_H
+#define GDNSD_PLUGAPI_PRIV_H
 
 #include "gdnsd/plugapi.h"
 #include "gdnsd/vscf.h"
@@ -47,4 +47,4 @@ void gdnsd_plugins_action_pre_run(struct ev_loop* loop);
 void gdnsd_plugins_action_iothread_init(const unsigned threadnum);
 void gdnsd_plugins_action_exit(void);
 
-#endif // _GDNSD_PLUGINAPI_PRIV_H
+#endif // GDNSD_PLUGINAPI_PRIV_H

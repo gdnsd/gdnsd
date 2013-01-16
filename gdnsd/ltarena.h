@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_LTARENA_H
-#define _GDNSD_LTARENA_H
+#ifndef GDNSD_LTARENA_H
+#define GDNSD_LTARENA_H
 
 #include "config.h"
 #include "gdnsd/compiler.h"
@@ -59,4 +59,4 @@ void lta_close(ltarena_t* lta);
 F_NONNULL
 void lta_destroy(ltarena_t* lta);
 
-#endif // _GDNSD_LTARENA_H
+#endif // GDNSD_LTARENA_H

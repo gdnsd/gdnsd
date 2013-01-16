@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_ZSRC_DJB_H
-#define _GDNSD_ZSRC_DJB_H
+#ifndef GDNSD_ZSRC_DJB_H
+#define GDNSD_ZSRC_DJB_H
 
 #include "config.h"
 #include "ztree.h"
@@ -28,4 +28,4 @@ void zsrc_djb_load_zones(void);
 F_NONNULL
 void zsrc_djb_runtime_init(struct ev_loop* loop);
 
-#endif // _GDNSD_ZSRC_DJB_H
+#endif // GDNSD_ZSRC_DJB_H

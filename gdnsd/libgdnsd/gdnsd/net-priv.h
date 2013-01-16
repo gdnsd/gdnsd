@@ -17,12 +17,12 @@
  *
  */
 
-#ifndef _GDNSD_NET_PRIV_H
-#define _GDNSD_NET_PRIV_H
+#ifndef GDNSD_NET_PRIV_H
+#define GDNSD_NET_PRIV_H
 
 #include "gdnsd/net.h"
 
 // This is for the core code only, called early and single-threaded.
 void gdnsd_init_net(void);
 
-#endif // _GDNSD_NET_PRIV_H
+#endif // GDNSD_NET_PRIV_H

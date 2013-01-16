@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_ZTREE_H
-#define _GDNSD_ZTREE_H
+#ifndef GDNSD_ZTREE_H
+#define GDNSD_ZTREE_H
 
 #include "config.h"
 
@@ -110,4 +110,4 @@ void zone_delete(zone_t* zone);
 F_NONNULL
 zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 
-#endif // _GDNSD_ZTREE_H
+#endif // GDNSD_ZTREE_H

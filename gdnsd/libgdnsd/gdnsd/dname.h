@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_DNAME_H
-#define _GDNSD_DNAME_H
+#ifndef GDNSD_DNAME_H
+#define GDNSD_DNAME_H
 
 #include <inttypes.h>
 #include <string.h>
@@ -327,4 +327,4 @@ typedef gdnsd_dname_status_t dname_status_t;
 #define dname_iswild gdnsd_dname_iswild
 #define dname_hash gdnsd_dname_hash
 
-#endif // _GDNSD_DNAME_H
+#endif // GDNSD_DNAME_H

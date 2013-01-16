@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_PLUGAPI_H
-#define _GDNSD_PLUGAPI_H
+#ifndef GDNSD_PLUGAPI_H
+#define GDNSD_PLUGAPI_H
 
 // for uint8_t
 #include <inttypes.h>
@@ -134,4 +134,4 @@ typedef struct {
 F_NONNULL F_PURE
 const plugin_t* gdnsd_plugin_find(const char* plugin_name);
 
-#endif // _GDNSD_PLUGINAPI_H
+#endif // GDNSD_PLUGINAPI_H

@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_PATHS_H
-#define _GDNSD_PATHS_H
+#ifndef GDNSD_PATHS_H
+#define GDNSD_PATHS_H
 
 #include <gdnsd/compiler.h>
 
@@ -49,4 +49,4 @@ char* gdnsd_realpath(const char* path_in, const char* desc);
 F_NONNULLX(1)
 char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx);
 
-#endif // _GDNSD_PATHS_H
+#endif // GDNSD_PATHS_H

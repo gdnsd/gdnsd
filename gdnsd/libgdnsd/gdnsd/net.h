@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_NET_H
-#define _GDNSD_NET_H
+#ifndef GDNSD_NET_H
+#define GDNSD_NET_H
 
 // For sockaddr structs
 #include <sys/types.h>
@@ -74,4 +74,4 @@ int gdnsd_getproto_tcp(void);
 F_PURE
 bool gdnsd_tcp_v6_ok(void);
 
-#endif // _GDNSD_NET_H
+#endif // GDNSD_NET_H

@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_ZSCAN_H
-#define _GDNSD_ZSCAN_H
+#ifndef GDNSD_ZSCAN_H
+#define GDNSD_ZSCAN_H
 
 #include "config.h"
 #include "ztree.h"
@@ -27,4 +27,4 @@
 F_WUNUSED F_NONNULL
 bool zscan_rfc1035(zone_t* zone, const char* fn);
 
-#endif // _GDNSD_ZSCAN_H
+#endif // GDNSD_ZSCAN_H

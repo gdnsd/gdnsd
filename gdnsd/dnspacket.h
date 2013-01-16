@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_DNSPACKET_H
-#define _GDNSD_DNSPACKET_H
+#ifndef GDNSD_DNSPACKET_H
+#define GDNSD_DNSPACKET_H
 
 #include "config.h"
 #include "ltree.h"
@@ -174,4 +174,4 @@ void dnspacket_wait_stats(void);
 
 extern dnspacket_stats_t** dnspacket_stats;
 
-#endif // _GDNSD_DNSPACKET_H
+#endif // GDNSD_DNSPACKET_H

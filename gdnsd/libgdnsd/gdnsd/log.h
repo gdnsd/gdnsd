@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_LOG_H
-#define _GDNSD_LOG_H
+#ifndef GDNSD_LOG_H
+#define GDNSD_LOG_H
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/net.h>
@@ -77,4 +77,4 @@ const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
 #define logf_ipv6 gdnsd_logf_ipv6
 #define logf_in6a gdnsd_logf_in6a
 
-#endif // _GDNSD_LOG_H
+#endif // GDNSD_LOG_H

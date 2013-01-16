@@ -82,8 +82,8 @@ daemon exit time).
 
 */
 
-#ifndef _GDNSD_LTREE_H
-#define _GDNSD_LTREE_H
+#ifndef GDNSD_LTREE_H
+#define GDNSD_LTREE_H
 
 #include "config.h"
 #include "dnswire.h"
@@ -406,4 +406,4 @@ static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack) {
     return lcount;
 }
 
-#endif // _GDNSD_LTREE_H
+#endif // GDNSD_LTREE_H

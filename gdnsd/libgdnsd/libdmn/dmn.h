@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _DMN_H
-#define _DMN_H
+#ifndef DMN_H
+#define DMN_H
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -229,4 +229,4 @@ void dmn_fmtbuf_reset(void);
 //  and POSIX strerror_r() variants.
 const char* dmn_strerror(const int errnum);
 
-#endif // _DMN_H
+#endif // DMN_H

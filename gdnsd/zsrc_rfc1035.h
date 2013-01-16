@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_ZSRC_RFC1035_H
-#define _GDNSD_ZSRC_RFC1035_H
+#ifndef GDNSD_ZSRC_RFC1035_H
+#define GDNSD_ZSRC_RFC1035_H
 
 #include "config.h"
 #include "gdnsd/compiler.h"
@@ -31,4 +31,4 @@ void zsrc_rfc1035_runtime_init(struct ev_loop* loop);
 
 void zsrc_rfc1035_sighup(void);
 
-#endif // _GDNSD_ZSRC_RFC1035_H
+#endif // GDNSD_ZSRC_RFC1035_H

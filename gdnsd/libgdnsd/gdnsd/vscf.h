@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _VSCF_H
-#define _VSCF_H
+#ifndef VSCF_H
+#define VSCF_H
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -241,4 +241,4 @@ void vscf_hash_inherit_all(const vscf_data_t* src, vscf_data_t* dest, const bool
 F_NONNULL
 bool vscf_hash_bequeath_all(const vscf_data_t* src, const char* k, const bool mark_src, const bool skip_marked);
 
-#endif /* _VSCF_H */
+#endif /* VSCF_H */

@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDSND_STATIO_H
-#define _GDSND_STATIO_H
+#ifndef GDSND_STATIO_H
+#define GDSND_STATIO_H
 
 #include "config.h"
 #include "gdnsd/compiler.h"
@@ -30,5 +30,5 @@ void statio_log_uptime(void);
 F_NONNULL void statio_start(struct ev_loop* statio_loop);
 void statio_init(void);
 
-#endif // _GDSND_STATIO_H
+#endif // GDSND_STATIO_H
 

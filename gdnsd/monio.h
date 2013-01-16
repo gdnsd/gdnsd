@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_MONIO_H
-#define _GDNSD_MONIO_H
+#ifndef GDNSD_MONIO_H
+#define GDNSD_MONIO_H
 
 #include "config.h"
 #include "gdnsd/vscf.h"
@@ -37,4 +37,4 @@ unsigned monio_get_max_stats_len(void);
 F_NONNULL unsigned monio_stats_out_csv(char* buf);
 F_NONNULL unsigned monio_stats_out_html(char* buf);
 
-#endif // _GDNSD_MONIO_H
+#endif // GDNSD_MONIO_H

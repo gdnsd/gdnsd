@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_DNSWIRE_H
-#define _GDNSD_DNSWIRE_H
+#ifndef GDNSD_DNSWIRE_H
+#define GDNSD_DNSWIRE_H
 
 #include "config.h"
 #include <inttypes.h>
@@ -153,4 +153,4 @@ static const uint32_t DNS_RRFIXED_NAPTR = _mkrrf(DNS_TYPE_NAPTR, DNS_CLASS_IN);
 static const uint32_t DNS_RRFIXED_OPT   = _mkrrf(DNS_TYPE_OPT, DNS_CLASS_IN);
 static const uint32_t DNS_RRFIXED_SPF   = _mkrrf(DNS_TYPE_SPF, DNS_CLASS_IN);
 
-#endif // _GDNSD_DNSWIRE_H
+#endif // GDNSD_DNSWIRE_H

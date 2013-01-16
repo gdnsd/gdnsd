@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_COMPILER_H
-#define _GDNSD_COMPILER_H
+#ifndef GDNSD_COMPILER_H
+#define GDNSD_COMPILER_H
 
 // GCC features we can take advantage of
 
@@ -113,4 +113,4 @@
      VALGRIND_MEMPOOL_ALLOC(x,y,z);
 #endif
 
-#endif // _GDNSD_COMPILER_H
+#endif // GDNSD_COMPILER_H

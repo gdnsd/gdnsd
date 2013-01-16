@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_STATS_H
-#define _GDNSD_STATS_H
+#ifndef GDNSD_STATS_H
+#define GDNSD_STATS_H
 
 // For uintptr_t
 #include <inttypes.h>
@@ -85,4 +85,4 @@ F_NONNULL
 static inline stats_uint_t stats_get(const stats_t* s)
     { dmn_assert(s); return *(volatile stats_uint_t*)&s->_x; }
 
-#endif // _GDNSD_STATS_H
+#endif // GDNSD_STATS_H

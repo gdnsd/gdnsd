@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _GDNSD_CONF_H
-#define _GDNSD_CONF_H
+#ifndef GDNSD_CONF_H
+#define GDNSD_CONF_H
 
 #include "config.h"
 #include "ltree.h"
@@ -83,4 +83,4 @@ bool dns_lsock_init(void);
 F_NONNULL F_PURE
 bool is_any_addr(const anysin_t* asin);
 
-#endif // _GDNSD_CONF_H
+#endif // GDNSD_CONF_H
