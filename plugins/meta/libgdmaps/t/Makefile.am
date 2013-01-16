@@ -55,11 +55,16 @@ TESTLIST_NETS = \
 
 TESTLIST = $(TESTLIST_NONETS) $(TESTLIST_NETS)
 
+EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg) $(TESTLIST_NETS:=.nets)
+
 check_PROGRAMS = $(TESTLIST:=.bin)
 
-TESTS_ENVIRONMENT = ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)"
-TESTS = trunner.sh
-EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg) $(TESTLIST_NETS:=.nets)
+test_verbose = $(test_verbose_@AM_V@)
+test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
+test_verbose_0 = @echo TEST $@;
+
+check-local:
+	$(test_verbose)ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)" $(srcdir)/trunner.sh
 
 check-download: tdownload.sh
 	@GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" $(TESTS_ENVIRONMENT) $(srcdir)/tdownload.sh
