@@ -1,5 +1,4 @@
 
-1.7.5 - 2012-01-10
     THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
       HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
       stable release, and 1.8.x will be the future stable release
@@ -7,6 +6,23 @@
     That being said, we're pretty much feature complete for 1.8.0 at
       this point, and this should be considered a release candidate
       of sorts.
+    Fix for gdnsd_geoip_test breakage (1.7.5 system paths stuff)
+    In system paths mode, we no longer attempt to create a missing
+      config dir or subdirectories thereof.  In chroot mode we still
+      do.  In both modes, the .mtime_test write is still attempted
+      in the zones subdirectory, but it fails gracefully in readonly
+      or missing-subdir scenarios and the only fallout is a longer
+      delay on loading zonefile changes in some scenarios.
+    plugin_geoip:
+      Fixed a small bug that could cause a crash on invalid
+        input from a binary GeoIP database.
+      Fixed a small but rather ugly and confusing bug with the code's
+        understanding of the GeoIP header format for identifying
+        the database type.  It worked before on most MaxMind
+        databases just by luck and circumstance.
+    A few other small bugfixes, docfixes, quality stuff.
+
+1.7.5 - 2012-01-10
     The forced chroot mode that has been the default for most of
       1.7.x has now been made optional.  The default default
       is now "-d system", which triggers the use of system paths
