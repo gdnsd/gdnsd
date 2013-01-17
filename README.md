@@ -70,7 +70,10 @@ The following have no real effect on the build or runtime, but are required in o
 * Perl 5.8.1 or higher
 * Perl modules: Net::DNS 0.63+, LWP 5.805+, Socket6, IO::Socket::INET6
 
-If working directly from a git clone rather than a tarball, you'll also need a full suite of the latest autoconf/automake/libtool (start with the "autoreconf" command to generate an initial ./configure), as well as a working copy of Ragel: http://www.complang.org/ragel/
+If working directly from a git clone rather than a tarball, in addition to all of the above:
+* ./autogen.sh will construct the configure script to get started
+* You may need to install updated autoconf, automake, and libtool packages
+* You will need a working copy of Ragel: http://www.complang.org/ragel/ (or distro package)
 
 ## Release Numbering and Policy
 
