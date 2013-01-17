@@ -35,4 +35,9 @@ gdmaps_t* gdmaps_test_init(const char* input_rootdir);
 F_NONNULL
 void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp);
 
+// This variant only validates that we can complete the lookup operation
+//   without crashing, it doesn't care about the data in the results
+F_NONNULL
+void gdmaps_lookup_noop(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt);
+
 #endif // GDMAPS_TEST_H

@@ -43,7 +43,8 @@ TESTLIST_NONETS = \
 	t12_defnone \
 	t13_castatdef \
 	t14_missingcoords \
-	t15_nogeo
+	t15_nogeo \
+	t99_loadonly
 
 TESTLIST_NETS = \
 	t16_extnets \
