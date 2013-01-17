@@ -67,7 +67,7 @@ check-local:
 	$(test_verbose)ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)" $(srcdir)/trunner.sh
 
 check-download: tdownload.sh
-	@GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" $(TESTS_ENVIRONMENT) $(srcdir)/tdownload.sh
+	@ABDIR="$(abs_builddir)" GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" GEOLITE_FILES="$(GEOLITE_FILES)" $(srcdir)/tdownload.sh
 
 clean-local:
 	rm -rf $(builddir)/testroot
