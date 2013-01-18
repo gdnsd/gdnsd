@@ -12,6 +12,7 @@ Requires(preun): systemd
 Requires(postun): systemd
 Requires: userspace-rcu
 Requires: libev
+Requires: libcap
 %{?systemd_requires}
 BuildRequires: systemd
 BuildRequires: userspace-rcu-devel
@@ -19,6 +20,7 @@ BuildRequires: libev-devel
 BuildRequires: libcap-devel
 BuildRequires: perl(Test::More)
 BuildRequires: perl(Net::DNS)
+BuildRequires: perl(HTTP::Daemon)
 BuildRequires: perl(LWP)
 BuildRequires: perl(Socket6)
 BuildRequires: perl(IO::Socket::INET6)
@@ -33,12 +35,12 @@ good at being a very fast, lean, and resilient authoritative-only
 server for static DNS data.
 
 %package devel
-Summary: Header files and libraries needed for gdnsd plugin development
+Summary: Header files and docs needed for gdnsd plugin development
 Group: Development/Libraries
 Requires: %{name} = %{version}-%{release}
 
 %description devel
-Header files and libraries needed for gdnsd plugin development.
+Header files and docs needed for gdnsd plugin development.
 
 %prep
 %setup -q
@@ -53,16 +55,18 @@ make check
 %install
 rm -rf %{buildroot}
 make install DESTDIR=%{buildroot}
-make install-gdnsd-rootdir DESTDIR=%{buildroot}
 install -D -p -m 0644 pkg/rpm/sysd/gdnsd.service %{buildroot}%{_unitdir}/gdnsd.service
-install -D -p -m 0644 pkg/rpm/sysd/gdnsd.env %{buildroot}%{_sysconfdir}/sysconfig/gdnsd
+mkdir -p %{buildroot}%{_var}/run/gdnsd
+mkdir -p %{buildroot}%{_sysconfdir}/gdnsd
+mkdir -p %{buildroot}%{_sysconfdir}/gdnsd/zones
+echo '# gdnsd main config file, see gdnsd.config(5) for details' >%{buildroot}%{_sysconfdir}/gdnsd/config
 
 %clean
 rm -rf %{buildroot}
 
 %pre
 if [ $1 -eq 1 ]; then
-    /usr/sbin/useradd -c "gdnsd user" -s /sbin/nologin -r -d %{_var}/gdnsd gdnsd &>/dev/null || :
+    /usr/sbin/useradd -c "gdnsd user" -s /sbin/nologin -r -d %{_var}/run/gdnsd gdnsd &>/dev/null || :
 fi
 
 %post
@@ -76,21 +80,23 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%config %{_sysconfdir}/sysconfig/gdnsd
 %{_unitdir}/gdnsd.service
 %dir %{_libdir}/gdnsd/
 %{_libdir}/gdnsd/*.so
 %exclude %{_libdir}/gdnsd/*.la
 %{_bindir}/gdnsd_geoip_test
 %{_sbindir}/gdnsd
-%{_sbindir}/gdnsd_extmon_helper
+%{_libexecdir}/gdnsd/gdnsd_extmon_helper
+%{_var}/run/gdnsd/
+%{_sysconfdir}/gdnsd/
+%{_sysconfdir}/gdnsd/zones/
+%config %{_sysconfdir}/gdnsd/config
 %doc %{_mandir}/man1/*
 %doc %{_mandir}/man5/*
 %doc %{_mandir}/man8/*
 %doc %{_defaultdocdir}/gdnsd/*
-/srv/gdnsd
 
 %files devel
 %defattr(-,root,root,-)
-%{_includedir}/gdnsd-*.h
+%{_includedir}/gdnsd/*.h
 %doc %{_mandir}/man3/*

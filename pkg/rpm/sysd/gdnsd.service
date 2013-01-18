@@ -18,9 +18,8 @@ After=network.target
 
 [Service]
 Type=forking
-EnvironmentFile=/etc/sysconfig/gdnsd
-ExecStart=/usr/sbin/gdnsd -d $GDNSD_ROOT start
-ExecStop=/usr/sbin/gdnsd -d $GDNSD_ROOT stop
+ExecStart=/usr/sbin/gdnsd start
+ExecStop=/usr/sbin/gdnsd stop
 
 [Install]
 WantedBy=multi-user.target
