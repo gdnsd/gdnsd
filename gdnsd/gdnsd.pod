@@ -36,14 +36,7 @@ at build time, and you can see what your build's default is by executing
 e.g. C<gdnsd --help>.  The default default is C<system>.
 
 If a default or commandline-supplied chroot directory is in use, all
-files which gdnsd interacts with live within that chroot directory.
-
-In the system case, gdnsd will create its own basic configuration and run
-directories if they're missing on startup, but will not recursively
-create parent directories (e.g. it will create F</var/run/gdnsd> if missing,
-but will fail if F</var/run> itself is missing.  In the same manner
-it will create F</etc/gdnsd> (and other gdnsd-specific subdirectories
-thereof), but will fail if F</etc> itself is missing.
+files which gdnsd interacts with at runtime live within that chroot directory.
 
 In the chroot case, gdnsd will create the chroot directory and all
 structure within on startup if necessary, but will not create the parent
@@ -116,7 +109,8 @@ Trailing dots on zonefile names are ignored; e.g. F<example.com>
 and F<example.com.> are functionally equivalent.
 
 Duplicate zones (e.g. having both of the above representations of
-C<example.com> present in the zones directory) are handled by
+C<example.com> present in the zones directory, and/or adding a
+different case-mapping such as F<EXample.Com>) are handled by
 loading both and giving runtime lookup priority to one of the copies
 based on some simple sanity rules about C<serial> and C<mtime> values.
 If the primary copy is later removed, any remaining copy of the zone
