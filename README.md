@@ -11,7 +11,7 @@ The geographically-aware features also support the emerging EDNS Client Subnet d
 
 This project is hosted at Github: https://github.com/blblack/gdnsd 
 
-Release downloads: https://github.com/blblack/gdnsd/downloads
+Release downloads: http://downloads.gdnsd.net/
 
 Bug reports: https://github.com/blblack/gdnsd/issues
 
