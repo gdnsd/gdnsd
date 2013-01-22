@@ -24,13 +24,9 @@ if [ x"$GDMAPS_GEOIP_TEST_LOAD" = x ]; then
     echo "If you wish to test basic loading success for arbitrary local"
     echo "  GeoIP databases with plugin_geoip, please specify a list of"
     echo "  absolute pathnames in \$GDMAPS_GEOIP_TEST_LOAD"
+    echo "By default, tests will be run against any existing databases"
+    echo "  matching the pathname glob /usr/share/GeoIP/Geo*.dat"
     GDMAPS_GEOIP_TEST_LOAD="/usr/share/GeoIP/Geo*.dat"
-    if stat -t $GDMAPS_GEOIP_TEST_LOAD >/dev/null 2>/dev/null; then
-        echo "Defaulting to testing the following files from /usr/share/GeoIP:"
-        for testdb in $GDMAPS_GEOIP_TEST_LOAD; do
-            echo "  $testdb"
-        done
-    fi
 fi
 
 for netsfile in $ASDIR/*.nets; do
@@ -64,9 +60,9 @@ for tnam in $TLIST; do
     fi
 done
 
-if stat -t $GDMAPS_GEOIP_TEST_LOAD >/dev/null 2>/dev/null; then
-    tnam="t99_loadonly"
-    for testdb in $GDMAPS_GEOIP_TEST_LOAD; do
+tnam="t99_loadonly"
+for testdb in $GDMAPS_GEOIP_TEST_LOAD; do
+   if test -r $testdb; then
         echo -n "Checking basic database load on file $testdb ... "
         TOFILE=$TODIR/${tnam}.out
         rm -f $TODIR/etc/config >/dev/null 2>&1
@@ -86,7 +82,7 @@ if stat -t $GDMAPS_GEOIP_TEST_LOAD >/dev/null 2>/dev/null; then
         else
             echo "OK"
         fi
-    done
-fi
+    fi
+done
 
 exit 0
