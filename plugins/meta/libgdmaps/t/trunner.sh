@@ -25,7 +25,7 @@ if [ x"$GDMAPS_GEOIP_TEST_LOAD" = x ]; then
     echo "  GeoIP databases with plugin_geoip, please specify a list of"
     echo "  absolute pathnames in \$GDMAPS_GEOIP_TEST_LOAD"
     GDMAPS_GEOIP_TEST_LOAD="/usr/share/GeoIP/Geo*.dat"
-    if [ x"$GDMAPS_GEOIP_TEST_LOAD" != x ]; then
+    if stat -t $GDMAPS_GEOIP_TEST_LOAD >/dev/null 2>/dev/null; then
         echo "Defaulting to testing the following files from /usr/share/GeoIP:"
         for testdb in $GDMAPS_GEOIP_TEST_LOAD; do
             echo "  $testdb"
@@ -64,7 +64,7 @@ for tnam in $TLIST; do
     fi
 done
 
-if [ x"$GDMAPS_GEOIP_TEST_LOAD" != x ]; then
+if stat -t $GDMAPS_GEOIP_TEST_LOAD >/dev/null 2>/dev/null; then
     tnam="t99_loadonly"
     for testdb in $GDMAPS_GEOIP_TEST_LOAD; do
         echo -n "Checking basic database load on file $testdb ... "
