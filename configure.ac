@@ -296,8 +296,8 @@ dnl   adds "-Wall -W" to CFLAGS if the compiler is gcc.
 dnl --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
 dnl   and also sets "-g" for debug if the compiler supports it,
 dnl   and sets a ton of gcc 4.x extra warnings flags.
-GCC_WARNFLAGS="-Wall -W"
-GCC_DEV_WARNFLAGS="${GCC_WARNFLAGS} -Wmissing-declarations -Wmissing-prototypes -Wpointer-arith -Wsign-compare -Wchar-subscripts -Wstrict-prototypes -Wshadow -Wformat-security -Wfloat-equal -Wwrite-strings -Wcast-align -Wredundant-decls"
+GCC_WARNFLAGS="-Wall -W -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wshadow -Wredundant-decls -Wwrite-strings -Wformat=2"
+GCC_DEV_WARNFLAGS="${GCC_WARNFLAGS} -Wpointer-arith -Wfloat-equal -Wcast-align"
 if test "x$developer" != xno; then
   if test "x$ac_cv_c_compiler_gnu" = xyes; then
     CFLAGS="${CFLAGS} -g ${GCC_DEV_WARNFLAGS}"
