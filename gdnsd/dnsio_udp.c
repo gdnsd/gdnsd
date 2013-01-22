@@ -35,6 +35,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
+#include "sendmmsg-compat.h"
 #include "gdnsd/log.h"
 #include "gdnsd/prcu-priv.h"
 
@@ -284,7 +285,7 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
     }
 }
 
-#ifdef HAVE_SENDMMSG
+#ifdef USE_MMSG
 
 // check for linux 3.0+ for sendmmsg() (implies recvmmsg w/ MSG_WAITFORONE)
 static bool has_mmsg(void) {
@@ -392,11 +393,11 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
     }
 }
 
-#else // HAVE_SENDMMSG
+#else // USE_MMSG
 
 static bool has_mmsg(void) { return false; }
 
-#endif // HAVE_SENDMMSG
+#endif // USE_MMSG
 
 // We need to use cmsg stuff in the case of any IPv6 address (at minimum,
 //  to copy the flow label correctly, if not the interface + source addr),
@@ -441,7 +442,7 @@ void* dnsio_udp_start(void* addrconf_asvoid) {
     gdnsd_prcu_rdr_thread_start();
     pthread_cleanup_push(thread_clean, NULL);
 
-#ifdef HAVE_SENDMMSG
+#ifdef USE_MMSG
     if(addrconf->udp_recv_width > 1) {
         log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
             addrconf->udp_recv_width, logf_anysin(&addrconf->addr));
