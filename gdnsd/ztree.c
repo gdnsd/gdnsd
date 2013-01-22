@@ -318,18 +318,22 @@ static void zones_sort(zone_t** list, const unsigned len) {
     }
 }
 
+static const char zt_msg_hidden[] = "Zone %s: is now a hidden subzone of new parent zone %s";
+static const char zt_msg_revealed[] = "Zone %s: subzone unhidden due to removal of parent zone %s";
+
 F_NONNULL
-static void ztree_subzone_reporter(const ztree_t* zt, const uint8_t* parent_dname, const char* msg) {
-    dmn_assert(zt); dmn_assert(parent_dname); dmn_assert(msg);
+static void ztree_subzone_reporter(const ztree_t* zt, const uint8_t* parent_dname, const bool hide) {
+    dmn_assert(zt); dmn_assert(parent_dname);
     const ztchildren_t* ztc = zt->children;
     if(ztc) {
         for(unsigned i = 0; i < ztc->alloc; i++) {
             ztree_t* child = ztc->store[i];
             if(child) {
                 if(child->zones)
-                    log_warn(msg, logf_dname(child->zones[0]->dname), logf_dname(parent_dname));
+                    log_warn(hide ? zt_msg_hidden : zt_msg_revealed,
+                        logf_dname(child->zones[0]->dname), logf_dname(parent_dname));
                 else
-                    ztree_subzone_reporter(child, parent_dname, msg);
+                    ztree_subzone_reporter(child, parent_dname, hide);
             }
         }
     }
@@ -338,13 +342,13 @@ static void ztree_subzone_reporter(const ztree_t* zt, const uint8_t* parent_dnam
 F_NONNULL
 static void ztree_report_hidden_subzones(const ztree_t* zt, const uint8_t* parent_dname) {
     dmn_assert(zt); dmn_assert(parent_dname);
-    ztree_subzone_reporter(zt, parent_dname, "Zone %s: is now a hidden subzone of new parent zone %s");
+    ztree_subzone_reporter(zt, parent_dname, true);
 }
 
 F_NONNULL
 static void ztree_report_revealed_subzones(const ztree_t* zt, const uint8_t* parent_dname) {
     dmn_assert(zt); dmn_assert(parent_dname);
-    ztree_subzone_reporter(zt, parent_dname, "Zone %s: subzone unhidden due to removal of parent zone %s");
+    ztree_subzone_reporter(zt, parent_dname, false);
 }
 
 static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const bool in_txn) {
