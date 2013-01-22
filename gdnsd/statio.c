@@ -116,7 +116,7 @@ static const char http_headers[] =
 
 static const char csv_fixed[] =
     "uptime\r\n"
-    "%u\r\n"
+    "%" PRIu64 "\r\n"
     "noerror,refused,nxdomain,notimp,badvers,formerr,dropped,v6,edns,edns_clientsub\r\n"
     "%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR "\r\n"
     "udp_reqs,udp_recvfail,udp_sendfail,udp_tc,udp_edns_big,udp_edns_tc\r\n"
@@ -157,6 +157,7 @@ static const char html_footer[] =
     "</body></html>\r\n";
 
 static time_t start_time;
+static time_t pop_statio_time = 0;
 static ev_timer* log_watcher = NULL;
 static ev_io** accept_watchers;
 static int* lsocks;
@@ -165,7 +166,6 @@ static unsigned num_conn_watchers = 0;
 static unsigned data_buffer_size = 0;
 static unsigned hdr_buffer_size = 0;
 static statio_t statio;
-static time_t pop_statio_time = 0;
 
 static void accumulate_statio(unsigned threadnum) {
     dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
@@ -218,15 +218,18 @@ static void populate_stats(void) {
             accumulate_statio(i);
         pop_statio_time = now;
     }
+    dmn_assert(pop_statio_time >= start_time);
 }
 
 #define IVAL_BUFSZ 16
 static char ival_buf[IVAL_BUFSZ];
-static const char* fmt_ival(const unsigned interval) {
+static const char* fmt_uptime(const time_t now) {
+    dmn_assert(now >= start_time);
+    const uint64_t interval = now - start_time;
     const double dinterval = interval;
 
-    if(interval < 128)           // 2m 8s
-        snprintf(ival_buf, IVAL_BUFSZ, "%u secs", interval);
+    if(interval < 128)      // 2m 8s
+        snprintf(ival_buf, IVAL_BUFSZ, "%u secs", (unsigned)interval);
     else if(interval < 7680)     // 2h 8m
         snprintf(ival_buf, IVAL_BUFSZ, "~ %.1f mins", dinterval / 60.0);
     else if(interval < 180000)   // 50h
@@ -244,10 +247,7 @@ static const char* fmt_ival(const unsigned interval) {
 }
 
 void statio_log_uptime(void) {
-    const time_t now = time(NULL);
-    const unsigned long uptime = now - start_time;
-
-    log_info("Uptime: %s", fmt_ival(uptime));
+    log_info("Uptime: %s", fmt_uptime(time(NULL)));
 }
 
 void statio_log_stats(void) {
@@ -262,7 +262,9 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs) {
     dmn_assert(outbufs);
     populate_stats();
 
-    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, (unsigned)(pop_statio_time - start_time), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
+    dmn_assert(pop_statio_time >= start_time);
+
+    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, (uint64_t)pop_statio_time - start_time, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
     outbufs[1].iov_len += monio_stats_out_csv(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "text/plain", (unsigned)outbufs[1].iov_len);
@@ -273,8 +275,6 @@ static void statio_fill_outbuf_html(struct iovec* outbufs) {
     dmn_assert(outbufs);
     populate_stats();
 
-    const unsigned long uptime = pop_statio_time - start_time;
-
     struct tm now_tm;
     if(!gmtime_r(&pop_statio_time, &now_tm))
         log_fatal("gmtime_r() failed");
@@ -283,7 +283,7 @@ static void statio_fill_outbuf_html(struct iovec* outbufs) {
     if(!asctime_r(&now_tm, now_char))
         log_fatal("asctime_r() failed");
 
-    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_ival(uptime), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
+    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_uptime(pop_statio_time), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
     outbufs[1].iov_len += monio_stats_out_html(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), html_footer, (sizeof(html_footer)) - 1);
@@ -559,7 +559,7 @@ void statio_init(void) {
     data_buffer_size =
         (sizeof(html_fixed) - 1)        // html_fixed format string
         + (25 - 2)                      // max asctime output - 2 for the original %s
-        + (IVAL_BUFSZ - 2)              // max fmt_ival output, again - 2 for %s
+        + (IVAL_BUFSZ - 2)              // max fmt_uptime output, again - 2 for %s
         + (19 * (stat_len - strlen(PRIuPTR))) // 19 stats, up to 20 bytes long each
         + monio_get_max_stats_len()     // whatever monio tells us...
         + (sizeof(html_footer) - 1);    // html_footer fixed string
