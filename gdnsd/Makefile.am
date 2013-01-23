@@ -4,7 +4,7 @@ AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd
 
 # How to build gdnsd
 sbin_PROGRAMS = gdnsd
-gdnsd_SOURCES = main.c conf.c zsrc_djb.c zsrc_djb.h zsrc_rfc1035.c zsrc_rfc1035.h ztree.c ztree.h zscan_rfc1035.c ltarena.c ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c conf.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h ltree.h statio.h monio.h zscan_rfc1035.h
+gdnsd_SOURCES = main.c conf.c zsrc_djb.c zsrc_djb.h zsrc_rfc1035.c zsrc_rfc1035.h ztree.c ztree.h zscan_rfc1035.c ltarena.c ltree.c dnspacket.c dnsio_udp.c dnsio_tcp.c statio.c monio.c conf.h dnsio_tcp.h dnsio_udp.h dnspacket.h dnswire.h ltarena.h ltree.h statio.h monio.h zscan_rfc1035.h sendmmsg-compat.h
 gdnsd_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS) $(CAPLIBS)
 
 zscan_rfc1035.c:	zscan_rfc1035.rl
