@@ -1,5 +1,5 @@
 
-1.7.6 - 2012-01-17
+1.7.7 - 2012-01-22
     THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
       HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
       stable release, and 1.8.x will be the future stable release
@@ -7,6 +7,14 @@
     That being said, we're pretty much feature complete for 1.8.0 at
       this point, and this should be considered a release candidate
       of sorts.
+    Testsuite bugfix for hosts without a GeoIP database installed
+      in the usual location
+    Linux sendmmsg() compatibility stuff, for hosts with 3.x
+      kernels paired with an older glibc.
+    RPM specfiles updated
+    Various minor code/doc fixups
+
+1.7.6 - 2012-01-17
     Fix for gdnsd_geoip_test breakage (1.7.5 system paths stuff)
     In system paths mode, we no longer attempt to create a missing
       config dir or subdirectories thereof.  In chroot mode we still
