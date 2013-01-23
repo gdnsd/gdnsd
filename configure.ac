@@ -237,11 +237,12 @@ LIBS=$XLIBS
 dnl ======== End Capabilities Stuff ==========
 
 dnl == inotify stuff ==
-dnl inotify_init1() is 2.6.27+ and IN_EXCL_UNLINK is 2.6.36+
-dnl We require both to use inotify for zonefile scanning
+dnl inotify_init1() is Linux 2.6.27+ and glibc 2.9
+dnl We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
+dnl   fix that with a manual ifndef for the define and a runtime
+dnl   kernel version check for the support
 USE_INOTIFY=1
 AC_CHECK_FUNCS([inotify_init1],,[USE_INOTIFY=0])
-AC_CHECK_DECLS([IN_EXCL_UNLINK],,[USE_INOTIFY=0],[[#include <sys/inotify.h>]])
 AC_DEFINE_UNQUOTED([USE_INOTIFY], $USE_INOTIFY, [Use Linux 2.6.36+ inotify support])
 AM_CONDITIONAL([USE_INOTIFY], [test x$USE_INOTIFY = x1])
 

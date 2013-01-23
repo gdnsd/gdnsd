@@ -53,6 +53,11 @@ static double full_quiesce = 5.0;
 
 #include <sys/inotify.h>
 
+// this doesn't appear in glibc headers until 2.13
+#ifndef IN_EXCL_UNLINK
+#define IN_EXCL_UNLINK 0x04000000
+#endif
+
 // this is set true once at startup if applicable
 static bool using_inotify = false;
 
