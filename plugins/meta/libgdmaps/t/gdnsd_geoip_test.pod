@@ -5,8 +5,8 @@ gdnsd_geoip_test - Commandline test program for gdnsd-plugin-geoip maps
 
 =head1 SYNOPSIS
 
-  gdnsd_geoip_test [-c /path/to/config] [map_name addr]
-    -c            gdnsd config file, default '/usr/local/etc/gdnsd/config'
+  gdnsd_geoip_test [-d <rootdir>] [map_name addr]
+    -d            gdnsd rootdir, see main gdnsd(8) manpage for details
     map_name      Mapping name from geoip plugin config
     addr          Client IP address to map.
 

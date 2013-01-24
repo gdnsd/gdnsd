@@ -193,7 +193,7 @@ processing:
 
 Total count of UDP requests received and passed on
 to the core DNS request handling code (this is synthesized by summing
-all of the core stat counters (other than v6) above for the UDP threads).
+all of the RCODE-based stat counters above for the UDP threads).
 
 =item udp_recvfail
 
@@ -203,8 +203,13 @@ requests, so they can't be processed and replied to.
 
 =item udp_sendfail
 
-Count of UDP sendmsg() errors, which almost definitely
-resulted in dropped responses.
+Count of UDP C<sendmsg()> errors, which almost definitely
+resulted in dropped responses from the client's point of view.
+
+Note that a common cause for these I've seen on Linux is requests
+with a source port of zero.  For some reason Linux will pass these
+to us on the input side, but then the C<sendmsg()> call to send a
+response back to port zero immediately fails due to the bad port number.
 
 =item udp_tc
 
@@ -221,8 +226,7 @@ size-wise)
 
 Subset of udp_edns where the response was truncated
 and the TC bit set, meaning that the client's specified edns buffer size
-was too small for the data requested.  gdnsd's own output buffer size is
-autotuned for your data set, so that is never the limitation.
+was too small for the data requested.
 
 =back
 
@@ -232,7 +236,8 @@ The TCP threads also count this stuff:
 
 =item tcp_reqs
 
-Total count of TCP requests (again, synthesized)
+Total count of TCP requests (again, synthesized by summing the RCODE-based
+stats for only TCP threads).
 
 =item tcp_recvfail
 
@@ -264,7 +269,7 @@ unable to fit all the desirable additional records into the Additional section,
 and in the case that Answer or Authority records don't fit, it returns an empty
 (other than perhaps an EDNS OPT RR) packet with the TC bit set.  The space for
 the EDNS OPT RR is reserved from the start when applicable, so it will never be
-elided to make room for other additional records.  Nameserver address RRs for
+elided to make room for other records.  Nameserver address RRs for
 delegation glue are considered part of the required set above (i.e. if they
 don't fit, the whole packet will be truncated w/ TC, even though they go in
 the Additional section).

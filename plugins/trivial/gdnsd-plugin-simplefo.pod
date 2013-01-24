@@ -43,7 +43,8 @@ Example zonefile RRs:
 B<gdnsd-plugin-simplefo> is designed to do simple active/passive
 failover between one primary address and one secondary address.
 The status of the addresses are checked with standard gdnsd
-C<service_types> monitoring.
+C<service_types> monitoring.  If you need more than a simple
+two-address failover list, the C<metafo> plugin is more appropriate.
 
 =head1 TOP-LEVEL PLUGIN CONFIG
 

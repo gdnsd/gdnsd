@@ -60,7 +60,7 @@ user against test data.
 
 =head1 BASIC CONFIGURATION
 
-There is a single primary configuration file, and its pathname is fixed
+There is a single primary configuration file. Its pathname is fixed
 at build time for the C<system> case, and fixed relative to the chroot
 directory in the chroot case.  In the C<system> case it will live at
 F<$sysconfdir/gdnsd/config>, where C<$sysconfdir> will typically be
@@ -112,16 +112,22 @@ Duplicate zones (e.g. having both of the above representations of
 C<example.com> present in the zones directory, and/or adding a
 different case-mapping such as F<EXample.Com>) are handled by
 loading both and giving runtime lookup priority to one of the copies
-based on some simple sanity rules about C<serial> and C<mtime> values.
-If the primary copy is later removed, any remaining copy of the zone
-will be promoted for runtime lookups.
+based on a couple of simple rules: the highest C<serial> wins,
+and if more than one file have the highest serial, the highest
+filesystem C<mtime> value wins.  If the primary copy is later
+removed, any remaining copy of the zone will be promoted for
+runtime lookups according to that same ordering.
 
 Subzones (e.g. having zonefiles for both C<example.com> and
 C<subz.example.com>) are only marginally supported.  The child zone
 will be loaded into memory, but its data won't be available for
 lookup, as it is suppressed by the existence of the parent zone.
 If the parent zone is later removed, the subzone data will become
-available.
+available.  Logically, it is not possible for a single server to
+be authoritative for both a subzone and its parent zone at the
+same time, as each "role" (parent and child) requires different
+responses to requests for data within the child zone.  gdnsd
+choses to default to the "parent" role in these conflict cases.
 
 See L<gdnsd.zonefile(5)> for details on the internal syntax of the
 zonefiles themselves.
@@ -142,7 +148,7 @@ on success/failure, but it's not necessary for basic functionality.
 Checks the validity of the configuration file and
 zonefiles, setting the exit status appropriately (0 for success).
 
-The C<start>, C<startfg>, and C<restart> actions implicitly do
+The C<start>, C<startfg>, and all C<restart>-like actions implicitly do
 the same checks as C<checkconf> as they load the configuration
 for runtime use.
 
@@ -181,13 +187,12 @@ new zone data, etc).
 
 =item B<reload>
 
-Alias for C<restart>.  gdnsd does not have any other way
-to reload configuration, and it's a fairly seamless restart in
-any case.
+Sends C<SIGHUP> to the running daemon, forcing a manual re-check
+of the zones directory for updated files.
 
 =item B<force-reload>
 
-Again, an aliase for C<restart>.
+An alias for C<restart>.
 
 =item B<condrestart>
 

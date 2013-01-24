@@ -40,7 +40,7 @@
 
 static void usage(const char* argv0) {
     fprintf(stderr, "\nUsage: %s [-d <rootdir> ] [map_name addr]\n"
-        "  -d\t\tsame as main gdnsd binary...\n"
+        "  -d\t\tgdnsd rootdir, see main gdnsd(8) manpage for details\n"
         "  map_name\tMapping name from geoip plugin config\n"
         "  addr\t\tClient IP address to map.\n\n",
         argv0);

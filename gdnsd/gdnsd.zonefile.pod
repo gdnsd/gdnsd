@@ -61,7 +61,10 @@ The standard C<$TTL> and C<$ORIGIN> directives
 are supported with their normal syntax.
 
 C<$TTL> changes the default TTL of any records coming after it,
-and can occur multiple times.
+and can occur multiple times.  Note that in the absence of a
+zonefile-level C<$TTL> setting, the default TTL comes from the
+global config option C<zones_default_ttl>, which in turn defaults
+to C<86400> (1 day).
 
 C<$ORIGIN> changes what is appended to unqualified hostnames
 (those lacking a final C<.>) seen in the zone file from that

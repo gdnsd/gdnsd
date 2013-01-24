@@ -27,7 +27,7 @@ Example plugin config:
 
   # optional, if installed path confuses the daemon...
   plugins => {
-    extmon => { helper_path => "/usr/sbin/gdnsd_extmon_helper" }
+    extmon => { helper_path => "/usr/libexec/gdnsd/gdnsd_extmon_helper" }
   }
 
 =head1 DESCRIPTION
@@ -47,14 +47,14 @@ C<plugins =E<gt> { extmon =E<gt> { ... } }>.
 String pathname, optional.
 
 Normally, this plugin will successfully locate its helper
-binary F<gdnsd_extmon_helper> in the installation F<sbin> directory
-for gdnsd.  If for some reason it can't do successfully do so,
+binary F<gdnsd_extmon_helper> in the installation C<$libexec/gdnsd>
+directory for gdnsd.  If for some reason it can't do so,
 e.g. due to a relocated installation, you can set an explicit
 full pathname to the helper here.  Note that in this case
 you're probably also having to set the daemon-global config
 option C<plugin_search_path> as well, since locating plugin
 objects uses similar mechanisms to find the installation
-F<lib/gdnsd> path.
+F<$libdir/gdnsd> path.
 
 =item B<helper_failure_action>
 
@@ -69,7 +69,7 @@ Regardless of this setting, there will be at least one
 syslog message indicating the failure.
 
 If set to C<stasis>, all monitored states are left as-is with
-no further updates.  The downside is unless someone notices
+no further updates.  The downside is that unless someone notices
 the syslog message, this failure mode is hard to notice.
 
 If set to C<fail_once> (the default), a single artificial monitoring
@@ -105,7 +105,7 @@ facilities, start the argument list with e.g. C<"/bin/sh", "-c", ...>.
 
 All argument strings are searched for the magic string C<%%IPADDR%%> (which
 can appear multiple times per argument).  Everywhere this magic string is found,
-the IP address of the resource being monitored will be substituded in its place.
+the IP address of the resource being monitored will be substituted in its place.
 
 The command must exit with an exit value of zero for success or non-zero
 for failure.

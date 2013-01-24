@@ -1,5 +1,5 @@
 
-1.7.x or later
+1.9.x or later
 =====================
 
 Testing:
@@ -33,26 +33,61 @@ As for config syntax, it might be within reach to both (a) implement a new confi
 
 A downside (with any script language, not just Lua) is introducing an external versioned dependency for gdnsd.
 
+Stats upgrades:
+------------------
+Upgrade the stats-tracking code to be more flexible and do more by default.
+Plugin-generated stats, monitoring stats, per-"datacenter" stats, etc...
+Build up a generic, internal API layer for querying all of the stats
+
+Ditch the built-in HTTP server in favor of dumping the same basic data to a
+JSON file on disk.  We could ship an example "gdnsd.html" which uses some
+simple javascript to load the JSON data and display it in some pretty format,
+and even refresh it occasionally.  The idea is if you want this HTTP-based
+info, run nginx or lighttpd on your DNS server and have it serve gdnsd.html
+(or your own similar UI code) and the ever-changing JSON stats file.
+
+DYNA/DYNC refactor:
+--------------------
+It's becoming increasingly apparent that the current design which splits
+dynamic CNAME and A/AAAA into completely separate entities and code-paths
+isn't working out.  It's much easier this way from the perspective of
+the core code for e.g. dnspacket.c and ltree.c, but it's very limiting when
+it comes to plugin features (we really need the ability for plugins to
+mix-and-match, e.g. serve addresses when they're up and fallback to CNAME
+to a static CDN provider when all addrs are down as a last resort).
+
+It's also always been a source of extra confusion and bug possibilities at the
+plugin-code layer (getting CNAME-related calls when the plugin isn't configured
+to do CNAME for a given resource, etc...).
+
+Probably need to switch the model to just be a "DYN" record and let plugins
+return either type of response.  Although I see little point for other dynamic
+RRs, at that point we may as well implement them as well just for
+future-proofing (e.g. PTR, NS, MX, etc...).  It shouldn't be hard to keep
+DYNA/DYNC around as deprecated backwards-compat stuff at the zonefile level,
+but doing it at the plugin-API level as well would be complicated.  Probably
+more likely to just break the API again, as I've never claimed it was very
+stable.
+
 Monitoring upgrades:
 ----------------------
-Track more stats on the HTTP status page (per-resource ok/fail counts over various windows?)
 Come up with a derived "monitored weight factor" that scales from 0.0 -> 1.0 based on recent monitor history (1.0 being UP, 0.0 being DOWN, and the middle values representing various DANGER cases), and then provide some way to hook that to plugins so that they could optionally use it to scale configured, static weightings?
 
 Control Channel:
 -----------------
-Be nice to have a listening unix socket from the main thread for command+control.  Cleaner option than signals for shutdown and stats on request w/o http are the first obvious targets.  Beyond that, might be nice to offer an interface here to the core monitor code to force a resource up or down temporarily, and could tie in with other dynamic features down the line...
+Be nice to have a listening unix socket from the main thread for command+control.  Cleaner option than signals for shutdown, data reload, etc.  Beyond that, might be nice to offer an interface here to the core monitor code to force a resource up or down temporarily, and could tie in with other dynamic features down the line.  Also another user of the new stats query API above.
 
-Plugin stats ouput:
-----------------------
-Plugins should have a way to report stats counters back to the core code for inclusion in the HTTP status page...
+I suspect we'd ship a basic gdnsdctl binary to interact with the socket's protocol, but that also the protocol itself would be published so that people can talk to the socket with other tools.  Expect multiple clients on the socket (stream-mode, btw).  Need to think about the perms issues on the socket, of course.  Maybe default them to root-access only (which we confirm/fix on startup before dropping privs), with a configurable option to use some other username or access mode).
 
-AXFR, and runtime zone reloading in general:
-----------------------------------------------
-Realistically, AXFR is pretty far down the priority list.  People can use an external AXFR receiver if they want, taking advantage of 1.8's dynamic zone support.
+AXFR
+------
+Realistically, AXFR is pretty far down the priority list.  I've always thought I should eventually implement it for completeness even though I hate it, but lately it seems more and more people come around easier to the idea of syncing zone data via external mechanisms (rsync or config management in general, etc...).  Implementing AXFR receive at this point would probably just mean an external, separate program that drops updates into the dynamic zones directory.  AXFR send would be some tricky (but not that tricky) updates to the dnsio_tcp code to handle spooling out the zone data.
+
+No easy way around AXFR send of a zone containing DYNA/DYNC, though.  We could skip those records, but then it's not really an authentic copy of the zone.  We could just refuse to send those zones.  We could do a special flag/signal over AXFR so that gdnsd can detect other gdnsds and send them as an extension, but there's still no gaurantee that geoip!foo means the same thing in the config files on both ends...
 
 Other zonefile formats:
 -------------------------
-Load other zonefile (or zone data in general) formats?  The BIND syntax sucks, but I'm keeping it as the default, it's too widespread not to.  However, the zonefile scanner is mostly cleanly separated from the rest of the code, and it wouldn't be that hard to add support for more formats (djbdns? a SQL connection?).
+Load other zonefile (or zone data in general) formats?  The BIND syntax sucks, but I'm keeping it as the default, it's too widespread not to.  However, the zonefile scanner is mostly cleanly separated from the rest of the code, and it wouldn't be that hard to add support for more formats (djbdns? a SQL connection?).  Update: the core code is basically ready for this.  I even created a mostly-empty zsrc_djb.c file since that's likely the first/easiest target.  Just needs implementation.
 
 Stuff from conversations w/ Paul Dekkers: --------
 

@@ -59,42 +59,18 @@ Example zonefile RRs:
 
 B<gdnsd-plugin-geoip> uses MaxMind's GeoIP binary databases to
 map address and CNAME results based on geography and (in the address
-case) monitored service availability.
+case) monitored service availability.  It fully supports both
+IPv6 and the emerging edns-client-subnet standard.
 
-Like the older L<gdnsd-plugin-georeg>, this plugin can operate in
-an automatic distance-based mode (using City-level coordinate
-information rather than an external file and a Region-level db).  It
-can also operate coordinate-free and rely on the user to configure a
-hierarchical map of cascading default user_location-to-datacenter mappings,
-starting at the continent level.  The two modes can also be effectively
-mixed at geographic boundaries.  This avoids the previous complications
-surrounding coordinate math, the F<georeg.locations> file, and lengthy
-manual C<overrides> sections to correct real-world load distribution and
-network topography vs rough geographic guesswork.
+This plugin can operate in an automatic distance-based mode (using
+City-level coordinate information rather than an external file and a
+Region-level db).  It can also operate coordinate-free and rely on the
+user to configure a hierarchical map of cascading default
+user-location-to-datacenter mappings, starting at the continent level.
 
-Other key improvements over L<gdnsd-plugin-georeg>:
+The two modes can also be effectively mixed at geographic boundaries.
 
-=over 4
-
-=item * Supports multiple geographic mappings and datacenter-sets
-
-=item * Full support for IPv4 and IPv6 Country, Region, and City databases
-
-=item * Fully supports IPv6 from every angle
-
-=item * Reloads GeoIP database updates without restarts or query delays
-
-=item * Supports the emerging edns-client-subnet standard very optimally
-
-=item * Does not require libGeoIP as a dependency
-
-=item * Easy to expand for future alternative database format support and methods of geographical mapping without breaking configuration compatibility
-
-=item * Delegates out the per-datacenter work to other various plugins, using the same code as the metafo plugin
-
-=back
-
-The edns-client-subnet optimizations are worth mentioning in particular.  For each C<map> you define (which maps geographic location codes to preference-ordered lists of your datacenter locations), this plugin merges all of the raw GeoIP subnets into the largest possible supernets which contain identical responses in your configuration.  These in turn are used to set larger edns-client-ip scope masks than you'd see simply returning raw GeoIP results.
+For each C<map> you define (which maps geographic location codes to preference-ordered lists of your datacenter locations), this plugin merges all of the raw GeoIP subnets into the largest possible supernets which contain identical responses in your configuration.  These in turn are used to set larger edns-client-subnet scope masks than you'd see simply returning raw GeoIP results.
 
 =head1 PLUGIN_METAFO
 
