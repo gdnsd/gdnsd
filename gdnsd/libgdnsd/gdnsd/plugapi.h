@@ -45,7 +45,7 @@
  *   because libgdnsd is missing symbols it wants to link against that
  *   were dropped in the new API.  This is just to protect other cases).
  ***/
-#define GDNSD_PLUGIN_API_VERSION 10
+#define GDNSD_PLUGIN_API_VERSION 11
 
 /*** Data Types ***/
 

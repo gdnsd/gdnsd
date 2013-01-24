@@ -48,7 +48,7 @@ changes and/or solicit your feedback!).
 
 =head1 OVERVIEW
 
-This file documents version 9 of the gdnsd plugin API.
+This file documents version 11 of the gdnsd plugin API.
 
 L<gdnsd>'s plugin API offers the ability to write plugins that can
 do either (or both) of two roles:
@@ -630,11 +630,11 @@ effectively-dead for failover purposes.  You should still return some
 valid result-set (common practice would be to return all if
 everything's down, as if nothing in the resource were down).
 
-=head2 Version 10
+=head2 Version 11
 
-Version 10 contains all the changes leading up to 1.8.0.  It's a moving
-target, and you'll need to rebuild your plugins regularly if you're
-tracking the 1.7.x in-progress development stuff.
+Note: Version 10 existed in the long-running 1.7.x dev series, but
+never a release build, so the V11 info here summarizes all changes from
+V9 -> V11.
 
 All header files renamed from the form C<gdnsd-X.h> to C<gdnsd/X.h>.
 
