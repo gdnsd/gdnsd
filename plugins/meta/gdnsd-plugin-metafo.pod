@@ -37,13 +37,22 @@ C<multifo>, C<weighted>, etc, as described below.
 
 =head1 CONFIGURATION - TOP-LEVEL
 
-The top level of the metafo plugin's configuration (i.e. C<plugins =E<gt> { metafo =E<gt> { ... } }>) supports only one fixed, required key, C<resources>, whose value must be a hash.  The contents of C<resources> is a key per named resource, with the value defining that resource.
+The top level of the metafo plugin's configuration (i.e. C<plugins =E<gt> {
+metafo =E<gt> { ... } }>) supports only one fixed, required key,
+C<resources>, whose value must be a hash.  The contents of C<resources> is
+a key per named resource, with the value defining that resource.
 
-Any other keys present at the top level will be inherited down inside of each per-resource hash inside the C<resources> stanza, acting as per-resource defaults for anything not defined explicitly there, as explained below.
+Any other keys present at the top level will be inherited down inside of
+each per-resource hash inside the C<resources> stanza, acting as
+per-resource defaults for anything not defined explicitly there, as
+explained below.
 
 =head1 CONFIGURATION - RESOURCES
 
-All keys within the resources stanza represent named resources, which can be referenced by C<DYNA> RRs in zonefiles (e.g. C<www DYNA metafo!resource_name>).  Each resource's value must be a key-value hash configuring the resource itself.  Lightweight structural example:
+All keys within the resources stanza represent named resources, which can
+be referenced by C<DYNA> RRs in zonefiles (e.g. C<www DYNA
+metafo!resource_name>).  Each resource's value must be a key-value hash
+configuring the resource itself.  Lightweight structural example:
 
   plugins => {
     metafo => {
@@ -57,11 +66,16 @@ Within a resource, there are only two specifically meaningful keys:
 
 =item C<datacenters = [ A, B, C, ... ]>
 
-Array of datacenter names, required.  This is the set of datacenter name labels used for this resource, in the order they will be checked for failover.
+Array of datacenter names, required.  This is the set of datacenter name
+labels used for this resource, in the order they will be checked for
+failover.
 
 =item C<dcmap = { ... }>
 
-Hash, required.  The C<dcmap> is a key-value hash where the keys must be exactly the list of datacenters defined in this resource's C<datacenters> list, and the values defined the address configuration of each datacenter.  Another minimal structural example down to this level:
+Hash, required.  The C<dcmap> is a key-value hash where the keys must be
+exactly the list of datacenters defined in this resource's C<datacenters>
+list, and the values defined the address configuration of each datacenter.
+Another minimal structural example down to this level:
 
   plugins => {
     metafo => {
@@ -78,15 +92,23 @@ Hash, required.  The C<dcmap> is a key-value hash where the keys must be exactly
   }
 
 
-There are several forms the per-datacenter values (C<???> above) can take, documented in the next section.
+There are several forms the per-datacenter values (C<???> above) can take,
+documented in the next section.
 
 =back
 
-Any keys other than C<datacenters> and C<dcmap> at the per-resource level serve as inherited defaults for each per-datacenter configuration inside of the C<dcmap>.
+Any keys other than C<datacenters> and C<dcmap> at the per-resource level
+serve as inherited defaults for each per-datacenter configuration inside of
+the C<dcmap>.
 
 =head1 PER-DATACENTER RESOLUTION
 
-The value of the datacenters within the C<dcmap> section of a resource can take several forms.  It is important to understand that for the most part, plugin_metafo does not deal with this level of results itself, but instead delegates the work at this scope to other plugins.  The most direct and obvious way to do this is with a direct reference of the form C<%plugin!resource>, as shown here:
+The value of the datacenters within the C<dcmap> section of a resource can
+take several forms.  It is important to understand that for the most part,
+plugin_metafo does not deal with this level of results itself, but instead
+delegates the work at this scope to other plugins.  The most direct and
+obvious way to do this is with a direct reference of the form
+C<%plugin!resource>, as shown here:
 
   plugins => {
     metafo => {
@@ -106,7 +128,8 @@ The value of the datacenters within the C<dcmap> section of a resource can take 
     }
   }
 
-However, to make life simpler in the simple cases, plugin_metafo can synthesize the lower-level plugin's configuration from a hash, like so:
+However, to make life simpler in the simple cases, plugin_metafo can
+synthesize the lower-level plugin's configuration from a hash, like so:
 
   plugins => {
     metafo => {
@@ -131,13 +154,33 @@ However, to make life simpler in the simple cases, plugin_metafo can synthesize 
     #}
   }
 
-Within a hash like the above, the special key C<plugin> will be stripped out internally and used to name the plugin we synthesize the config for.  C<plugin> defaults to C<multifo> if not specified.  Note that C<plugin> could also be specified at the resource level (just inside of the C<resA> stanza) to change the default for all C<dcmap> entries in one resource, and could also be specified at the outer-most scope (just inside the C<metafo> stanza) to change the default for all resources.
+Within a hash like the above, the special key C<plugin> will be stripped
+out internally and used to name the plugin we synthesize the config for.
+C<plugin> defaults to C<multifo> if not specified.  Note that C<plugin>
+could also be specified at the resource level (just inside of the C<resA>
+stanza) to change the default for all C<dcmap> entries in one resource, and
+could also be specified at the outer-most scope (just inside the C<metafo>
+stanza) to change the default for all resources.
 
-The defaulted-down C<plugin> is also the default for the direct-reference C<%plugin!resource> form discussed earlier.  With the correct default plugin name, it can be shortened to just C<!resource>.
+The defaulted-down C<plugin> is also the default for the direct-reference
+C<%plugin!resource> form discussed earlier.  With the correct default
+plugin name, it can be shortened to just C<!resource>.
 
-The same sort of key-value inheritance scheme (top-level -> per-resource level -> per-datacenter level) can also be used for any other parameter in synthesized resource configurations specific to the per-datacenter plugin(s) you are using.  A common example would be the C<service_types> parameter that most plugins which support monitored address results have.  Note that these other values (e.g. service_types) would only apply to synthesized resources, B<not> to direct-references like C<%multifo!foo>, which must be configured entirely separately within that plugin's config.
+The same sort of key-value inheritance scheme (top-level -> per-resource
+level -> per-datacenter level) can also be used for any other parameter in
+synthesized resource configurations specific to the per-datacenter
+plugin(s) you are using.  A common example would be the C<service_types>
+parameter that most plugins which support monitored address results have.
+Note that these other values (e.g. service_types) would only apply to
+synthesized resources, B<not> to direct-references like C<%multifo!foo>,
+which must be configured entirely separately within that plugin's config.
 
-There are two other possible shortcut values for datacenters: a single direct address, or an array of addresses.  If a single IP address or an array of IP addresses are specified, plugin_metafo will synthesize a hash from them with the plugin forced to C<multifo> (since it cannot know the syntax of hashes for all other plugins, which may differ), and give them address labels C<1>, C<2>, etc.
+There are two other possible shortcut values for datacenters: a single
+direct address, or an array of addresses.  If a single IP address or an
+array of IP addresses are specified, plugin_metafo will synthesize a hash
+from them with the plugin forced to C<multifo> (since it cannot know the
+syntax of hashes for all other plugins, which may differ), and give them
+address labels C<1>, C<2>, etc.
 
 A much more complete example, showing off most of the features above:
 
@@ -178,18 +221,25 @@ A much more complete example, showing off most of the features above:
     }
   }
 
-Note in the example above that C<%multifo!bar> and C<%simplefo!foo> would have had their default
-C<service_types = default> rather than the one specified at the metafo level, because they were
-not synthesized.  It would be up to you to keep all of the service_types in sync when using
-direct references.
+Note in the example above that C<%multifo!bar> and C<%simplefo!foo> would
+have had their default C<service_types = default> rather than the one
+specified at the metafo level, because they were not synthesized.  It would
+be up to you to keep all of the service_types in sync when using direct
+references.
 
 =head1 SYNTHETIC PER-DATACENTER RESOURCES
 
-This plugin will synthesize additional, per-datacenter resource names from your configuration.  They are named as C<resname/dcname>.  For example, if you define a metafo resource named C<prodwww> with the datacenter list C<[ pri, sec ]>, the resource names C<prodwww/pri> and C<prodwww/sec> will be sythesized and can be used in zonefile records, e.g.:
+This plugin will synthesize additional, per-datacenter resource names from
+your configuration.  They are named as C<resname/dcname>.  For example, if
+you define a metafo resource named C<prodwww> with the datacenter list
+C<[ pri, sec ]>, the resource names C<prodwww/pri> and C<prodwww/sec> will
+be sythesized and can be used in zonefile records, e.g.:
 
   www-backup 300 DYNA metafo!prodwww/sec
 
-When used, these per-datacenter synthetic resource names cause a given lookup to skip the normal failover process and directly return results from that particular datacenter.
+When used, these per-datacenter synthetic resource names cause a given
+lookup to skip the normal failover process and directly return results from
+that particular datacenter.
 
 =head1 SEE ALSO
 

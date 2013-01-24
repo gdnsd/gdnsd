@@ -12,7 +12,7 @@ gdnsd - An authoritative DNS daemon
     start - Start gdnsd as a regular daemon
     stop - Stops a running daemon previously started by 'start'
     reload - Send SIGHUP to running daemon for zone data reload
-    restart - Effectively equivalent to checkconf && stop && start, but faster
+    restart - Equivalent to checkconf && stop && start, but faster
     force-reload - Aliases 'restart'
     condrestart - Does 'restart' action only if already running
     try-restart - Aliases 'condrestart'
@@ -22,21 +22,23 @@ gdnsd - An authoritative DNS daemon
 
 B<gdnsd> is very fast, light, and pluggable authoritative DNS daemon.
 
-Other than the C<action> argument, the only other argument is C<-d> for setting
-a chroot directory, which is discussed in detail below.  The commandline parsing
-is sensitive to ordering: C<-d> must come before the action, if used.
+Other than the C<action> argument, the only other argument is C<-d> for
+setting a chroot directory, which is discussed in detail below.  The
+commandline parsing is sensitive to ordering: C<-d> must come before
+the action, if used.
 
 =head1 THE ROOTDIR ARGUMENT
 
 The C<-d E<lt>rootdirE<gt>> argument specifies whether gdnsd will use a
 chroot directory (or not) and the path of that directory.  The special
-value C<system> indicates to *not* use a chroot directory, and use
-the normal system paths defined via autoconf.  The default can be changed
-at build time, and you can see what your build's default is by executing
-e.g. C<gdnsd --help>.  The default default is C<system>.
+value C<system> indicates to *not* use a chroot directory, and use the
+normal system paths defined via autoconf.  The default can be changed
+at build time, and you can see what your build's default is by
+executing e.g. C<gdnsd --help>.  The default default is C<system>.
 
 If a default or commandline-supplied chroot directory is in use, all
-files which gdnsd interacts with at runtime live within that chroot directory.
+files which gdnsd interacts with at runtime live within that chroot
+directory.
 
 In the chroot case, gdnsd will create the chroot directory and all
 structure within on startup if necessary, but will not create the parent
@@ -50,13 +52,13 @@ succeed.  The default username for this is C<gdnsd>, but this can
 be overridden in the main config file.
 
 If a chroot directory is in use and gdnsd is started as the C<root>
-user, the daemon will also permanently chroot itself into that directory
-on startup.  If a chroot directory is specified, but the daemon is
-started as a regular user, the daemon will C<chdir> to the root directory
-and use relative paths to mimick the chroot functionality.  This can
-be useful if, for example, you're using external software to secure
-the daemon in some jail-like structure, or running tests as a regular
-user against test data.
+user, the daemon will also permanently chroot itself into that
+directory on startup.  If a chroot directory is specified, but the
+daemon is started as a regular user, the daemon will C<chdir> to the
+root directory and use relative paths to mimick the chroot
+functionality.  This can be useful if, for example, you're using
+external software to secure the daemon in some jail-like structure, or
+running tests as a regular user against test data.
 
 =head1 BASIC CONFIGURATION
 
@@ -66,7 +68,8 @@ directory in the chroot case.  In the C<system> case it will live at
 F<$sysconfdir/gdnsd/config>, where C<$sysconfdir> will typically be
 F</etc> or F</usr/local/etc> depending on autoconf configuration.
 
-In the chroot case the path is C</etc/config> within the chroot directory.
+In the chroot case the path is C</etc/config> within the chroot
+directory.
 
 Note that the configuration file does not have to exist for successful
 startup.  Without a configuration file, gdnsd will load all of the zones
@@ -134,23 +137,23 @@ zonefiles themselves.
 
 =head1 ACTIONS
 
-B<gdnsd> acts as its own initscript, internalizing
-daemon management functions.  All valid invocations of the gdnsd
-command include an B<action>, most of which model normal initscript
-actions.  You may still want a light initscript wrapper
-to comply with distribution standards for e.g. terminal output
-on success/failure, but it's not necessary for basic functionality.
+B<gdnsd> acts as its own initscript, internalizing daemon management
+functions.  All valid invocations of the gdnsd command include an
+B<action>, most of which model normal initscript actions.  You may
+still want a light initscript wrapper to comply with distribution
+standards for e.g. terminal output on success/failure, but it's not
+necessary for basic functionality.
 
 =over 4
 
 =item B<checkconf>
 
-Checks the validity of the configuration file and
-zonefiles, setting the exit status appropriately (0 for success).
+Checks the validity of the configuration file and zonefiles, setting
+the exit status appropriately (0 for success).
 
 The C<start>, C<startfg>, and all C<restart>-like actions implicitly do
-the same checks as C<checkconf> as they load the configuration
-for runtime use.
+the same checks as C<checkconf> as they load the configuration for
+runtime use.
 
 =item B<startfg>
 
@@ -168,22 +171,20 @@ Stops the gdnsd daemon previously started by start.
 
 =item B<restart>
 
-This is equivalent to the sequence C<checkconf && stop && start>,
-but faster.  What actually happens behind the scenes is
-a bit more complicated:
+This is equivalent to the sequence C<checkconf && stop && start>, but
+faster.  What actually happens behind the scenes is a bit more
+complicated:
 
-C<restart> is a special case of C<start> which first does
-all of the C<checkconf> actions (bringing all the runtime data
-into memory), then stops the existing daemon, and then finishes
-starting itself (acquiring sockets, dropping privs, spawning
-threads, etc).
+C<restart> is a special case of C<start> which first does all of the
+C<checkconf> actions (bringing all the runtime data into memory), then
+stops the existing daemon, and then finishes starting itself (acquiring
+sockets, dropping privs, spawning threads, etc).
 
-The net result is that this minimizes the pause
-in service availability during the restart (especially if you
-have a large volume of zone data that takes significant time
-to load), and also leaves the original daemon instance untouched
-if the configuration is invalid (you've made an error in your
-new zone data, etc).
+The net result is that this minimizes the pause in service availability
+during the restart (especially if you have a large volume of zone data
+that takes significant time to load), and also leaves the original
+daemon instance untouched if the configuration is invalid (you've made
+an error in your new zone data, etc).
 
 =item B<reload>
 
@@ -209,7 +210,7 @@ Alias for C<condrestart>.
 =item B<status>
 
 Checks the status of the running daemon, returning 0 if it
-is running or non-zero if it isn't
+is running or non-zero if it isn't.
 
 =back
 
@@ -264,8 +265,8 @@ Ignored when daemonized.
 
 =head1 EXIT STATUS
 
-An exit status of zero indicates success, anything else
-indicates failure.
+An exit status of zero indicates success, anything else indicates
+failure.
 
 =head1 SEE ALSO
 

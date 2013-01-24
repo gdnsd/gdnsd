@@ -108,35 +108,36 @@ C<up_thresh> defines a floating point fraction of summed address weights
 in the range C<(0.0 - 1.0]>, defaulting to C<0.5>, and is used to
 influence failure/failover behavior.
 
-Other than those three, the rest of the top level keys are the names of your resources,
-and their values are the configuration of each resource.
+Other than those three, the rest of the top level keys are the names of
+your resources, and their values are the configuration of each resource.
 
 =head1 CONFIGURATION - PER-RESOURCE
 
-Inside a given resource's configuration hash, again the three address-related
-parameters C<services_types>, C<multi>, and C<up_thresh> may be specified to
-override their settings per-resource.
+Inside a given resource's configuration hash, again the three
+address-related parameters C<services_types>, C<multi>, and C<up_thresh>
+may be specified to override their settings per-resource.
 
 There are two basic configuration modes within a resource:
 
-1) Explicit per-family/type sub-stanzas.  In this mode, the resource contains
-one or more of the keys C<addrs_v4>, C<addrs_v6>, and C<cnames>.  The contents
-of each stanza configure response RRs of the given type for this resource, and
-in the addrs_v4/addrs_v6 cases, the 3 behavioral parameters C<service_types>,
-C<multi>, and C<up_thresh> can be overridden per-address-family as well.
+1) Explicit per-family/type sub-stanzas.  In this mode, the resource
+contains one or more of the keys C<addrs_v4>, C<addrs_v6>, and C<cnames>.
+The contents of each stanza configure response RRs of the given type for
+this resource, and in the addrs_v4/addrs_v6 cases, the 3 behavioral
+parameters C<service_types>, C<multi>, and C<up_thresh> can be overridden
+per-address-family as well.
 
-2) Automatic top-level detection of just one family/type.  In this mode, you
-can configure the top-level of a resource with valid contents for one of the
-stanzas C<addrs_v4>, C<addrs_v6>, or C<cnames>, and the family/type will be
-autodetected, and be the only type available in this resource.
+2) Automatic top-level detection of just one family/type.  In this mode,
+you can configure the top-level of a resource with valid contents for one
+of the stanzas C<addrs_v4>, C<addrs_v6>, or C<cnames>, and the family/type
+will be autodetected, and be the only type available in this resource.
 
 =head1 CONFIGURATION - CNAMES
 
-When configuring cnames, the value of each item should be C<[ CNAME, WEIGHT ]>,
-and the resource will be useful for C<DYNC> zonefile records, resolving
-to a weighted CNAME record in responses.  The weighting decision
-will return a single CNAME answer, with the probability
-of each choice being C<weight / total_weight>.
+When configuring cnames, the value of each item should be
+C<[ CNAME, WEIGHT ]>, and the resource will be useful for C<DYNC> zonefile
+records, resolving to a weighted CNAME record in responses.  The weighting
+decision will return a single CNAME answer, with the probability of each
+choice being C<weight / total_weight>.
 
 If the CNAMEs are not fully-qualified (do not end in "."), the current
 C<$ORIGIN> value for the zonefile RR being queried will be appended to
@@ -153,11 +154,11 @@ behave identically.  When both are present, they are both used in every
 C<DYNA> response (as gdnsd always includes opposite-family records in
 the Additional section of A/AAAA queries).
 
-Within either address family type, there are two different binary dimensions
-(multi -> true/false, and grouped-vs-ungrouped) upon which the configuration
-and behavior hinge, leading to four different possible cases: ungrouped-single,
-ungrouped-multi, grouped-single, and grouped-multi.  Each will be discussed
-in detail below:
+Within either address family type, there are two different binary
+dimensions (multi -> true/false, and grouped-vs-ungrouped) upon which the
+configuration and behavior hinge, leading to four different possible cases:
+ungrouped-single, ungrouped-multi, grouped-single, and grouped-multi.  Each
+will be discussed in detail below:
 
 =head1 THE UNGROUPED SINGLE CASE
 
@@ -171,13 +172,14 @@ dynamic weights.  The dynamic weight of an address is its configured weight
 if the monitored state is C<UP> or C<DANGER>, or zero if the monitored
 state is C<DOWN>.  The dynamic weights are summed to produce a dynamic
 weight total, and then a single address to respond with is chosen from the
-set, with each address having the odds C<addr_dynamic_weight / total_dynamic_weight>.
+set, with each address having the odds C<addr_dynamic_weight /
+total_dynamic_weight>.
 
-However, if the C<total_dynamic_weight> is less than
-C<ceil(up_thresh * total_configured_weight)>, then the dynamic weights are all
-reset to their configured full values so that the response odds are the
-same as if all were C<UP>, and resource-level failure is signalled to any
-upper-layer meta-plugin (e.g. metafo or geoip) when applicable.
+However, if the C<total_dynamic_weight> is less than C<ceil(up_thresh *
+total_configured_weight)>, then the dynamic weights are all reset to their
+configured full values so that the response odds are the same as if all
+were C<UP>, and resource-level failure is signalled to any upper-layer
+meta-plugin (e.g. metafo or geoip) when applicable.
 
 Example (X could be a whole resource, or an addrs_v4 stanza):
 
@@ -197,7 +199,8 @@ from the above behavior is primarily that multiple addresses from the
 weighted set can be returned in each response.  The C<maximum>, rather
 than the sum, of the dynamic weights (again, zero for down addresses,
 configured-weight otherwise), is found, and the odds of each address's
-inclusion in the response set is C<addr_dyanmic_weight / max_dynamic_weight>.
+inclusion in the response set is
+C<addr_dyanmic_weight / max_dynamic_weight>.
 
 This means all non-C<DOWN> addresses which share the group's maximum
 dynamic weight value will always be included, whereas others will be
@@ -209,8 +212,8 @@ returned.
 C<up_thresh> behaves as in the previous case: If the sum of the dynamic
 weight values is less than C<ceil(up_thresh * total_configured_weight)>,
 then the dynamic weights are all set to their configured values and the
-result set is calculated as if all were C<UP>, while signalling resource-level
-failure to upstream meta-plugins (geoip or metafo).
+result set is calculated as if all were C<UP>, while signalling
+resource-level failure to upstream meta-plugins (geoip or metafo).
 
 Example:
 
@@ -230,7 +233,9 @@ Example:
 The grouped cases are detected when the keys' values are sub-hashes at
 the outer level rather than arrays of C<[ IPADDR, WEIGHT]>.  In the grouped
 case, first the set is divided into named groups, and then within each group
-individual addresses are configured as C<addrlabel =E<gt> [ IPADDR, WEIGHT ]>.
+individual addresses are configured as
+C<addrlabel =E<gt> [ IPADDR, WEIGHT ]>.
+
 Example:
 
    X => {
@@ -303,17 +308,15 @@ subnet).
 
 A practical use-case for grouped-multi:
 
-Suppose you have a large set of addresses which
-can be logically grouped into subsets that have some shared
-failure risk (e.g. subpartitions of a datacenter which
-share infrastructure).  With grouped-multi behavior,
-clients will get up to N (count of groups) addresses in
-a round-robin response, but a given response set will never
-contain two addresses from the same group/subset.  This maximizes
-the chance that the client can successfully fail over
-to another address in the list when its primary selection
-fails, since the total set in each response does not share
-any per-subset failure mode.
+Suppose you have a large set of addresses which can be logically grouped
+into subsets that have some shared failure risk (e.g. subpartitions of a
+datacenter which share infrastructure).  With grouped-multi behavior,
+clients will get up to N (count of groups) addresses in a round-robin
+response, but a given response set will never contain two addresses from
+the same group/subset.  This maximizes the chance that the client can
+successfully fail over to another address in the list when its primary
+selection fails, since the total set in each response does not share any
+per-subset failure mode.
 
 =head1 LIMITS
 
@@ -338,7 +341,8 @@ Brandon L Black <blblack@gmail.com> and Jay Reitz <jreitz@gmail.com>
 
 This file is part of gdnsd-plugin-weighted.
 
-gdnsd-plugin-weighted is free software: you can redistribute it and/or modify
+gdnsd-plugin-weighted is free software: you can redistribute it and/or
+modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
@@ -349,6 +353,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with gdnsd-plugin-weighted.  If not, see <http://www.gnu.org/licenses/>.
+along with gdnsd-plugin-weighted.  If not, see
+<http://www.gnu.org/licenses/>.
 
 =cut
