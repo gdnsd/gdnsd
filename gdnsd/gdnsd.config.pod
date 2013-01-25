@@ -463,8 +463,8 @@ save more memory.
 Integer, default 16, min 4, max 24.  How deep CNAME -> CNAME chains are
 allowed to recurse within local data in a single zonefile.  If a chain
 longer than this is detected between normal static CNAME entries in the
-authoritative data of a single zonefile loading time, an error will be
-thrown.
+authoritative data of a single zonefile, an error will be thrown when
+loading the zonefile.
 
 If the limit is exceeded at runtime (due to C<DYNC> dynamic CNAME
 responses) the code will halt further recursive lookups for this

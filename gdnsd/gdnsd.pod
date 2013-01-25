@@ -116,7 +116,7 @@ C<example.com> present in the zones directory, and/or adding a
 different case-mapping such as F<EXample.Com>) are handled by
 loading both and giving runtime lookup priority to one of the copies
 based on a couple of simple rules: the highest C<serial> wins,
-and if more than one file have the highest serial, the highest
+and if more than one file has the highest serial, the highest
 filesystem C<mtime> value wins.  If the primary copy is later
 removed, any remaining copy of the zone will be promoted for
 runtime lookups according to that same ordering.
