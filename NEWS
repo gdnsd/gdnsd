@@ -1,4 +1,104 @@
 
+1.8.0 - Not yet released, just working on the text here...
+    Start of new stable series, 1.8.x will mostly be just bugfixes.
+    While the 1.7.x entries below provide a deeper description of
+      how we arrived here from the previous 1.6.x stable series, I'll
+      recap the net highlights in this entry:
+
+   User-visible stuff:
+
+     The packet error logging facility (lpe_on/lpe_off commands, SIGUSR[12],
+       etc) is gone, and its messages have either been upgraded to full
+       warnings or eliminated as appropriate.
+     A new monitoring plugin "extmon" allows gathering monitor results
+       via external commands.
+     The previous commandline option "-c <configfile>" has been replaced
+       with "-d <rootdir>".  In a normal build with no "-d" option supplied,
+       the config file location is fixed at compile-time to
+       "/etc/gdnsd/config", where the leading "/etc" is whatever autoconf's
+       $sysconfdir is.  When the "-d <rootdir>" option is used, the daemon
+       chroots to the specified directory and all config and zone data is
+       located within it.  It is possible to default to a chroot directory
+       at compile-time, in which case "-d system" is used to operate in
+       non-chroot mode.  See the primary gdnsd(8) manpage for more detail.
+     The entire config file is optional now.  With a missing or empty config
+       file, gdnsd will listen on port 53 of all interfaces with default
+       options and serve any zones that appear in the zones directory.
+     The previous config options "pidfile", "chroot_dir", and "zones_dir"
+       no longer exist, as these paths are always either fixed system paths
+       or fixed subpaths relative to the compiled-in or commandline-provided
+       chroot directory.
+
+     Dynamic zonefile processing and the Zones Directory:
+       The "zones" stanza in the primary config file no longer exists.
+       The set of zonefiles is determined by scanning the Zones Directory,
+          which would commonly be "/etc/gdnsd/zones" or "etc/zones" within
+          a chroot execution environment.
+       Each zonefile must be named for the zone it represents.  Trailing
+          dots are ignored.  The transformation "s,@,/," is performed
+          when converting filenames to zone names, to make RFC2137
+          in-addr.arpa zones easier.
+       The zones directory cannot contain subdirectories, symlinks, or
+          other non-normal files (e.g. sockets).  Filenames beginning with
+          "." are ignored.
+       Any changes to the contents of the zones directory (file updates,
+          new files, deleted files) will be processed automatically at
+          runtime by default.  The frequency and timing of processing
+          these changes can be tuned in the config options, or turned
+          off completely.  Linux systems with kernel 2.6.36 or higher
+          will use inotify() to greatly improve the speed and efficiency
+          of detecting changes.
+       SIGHUP or "gdnsd reload" will trigger a manual update of the zones
+          directory data, regardless of whether automatic reloading is
+          enabled or disabled.
+
+     Zonefile parsing/data changes:
+       Zonefiles are now completely independent of each other.  There are
+         no internal references between them, and a lookup on a name in
+         one zone will not, for example, automatically construct glue
+         records from other locally-available zonefiles, or include
+         any cross-zone portions of a chain of CNAME results.
+       DYNA records can now be used for NS glue.
+       The "strict_data" option no longer exists, and its more-important
+         messages have been downgraded to mere warnings.
+       $INCLUDE is no longer supported.
+
+     plugin_geoip changes:
+       The "nets" stanza can now be replaced with an external CSV-format
+         file which is dynamically reloaded as it changes on disk, for
+         constructing complex mappings based on e.g. BGP data.
+       Data from the "nets" stanza or file is now fully and optimally
+         merged with any other data sources for generating optimal
+         edns-client-subnet masks.
+       All database sources (GeoIPv4, GeoIPv6, nets) are now reloaded
+         independently when they change on disk, and the GeoIP loading
+         code has been significantly sped up.
+       All database sources are now optional.  It is possible to operate
+         from just a nets file and no GeoIP database, or pointlessly with
+         no input databases or nets stanza data at all.
+       The auto_dc_coords option allows the omission of datacenters now,
+         with the result being that those datacenters will not be used
+         in city-auto-mode resultsets, but will still be available for
+         use in manual map entries.
+
+   Less-user-visible stuff (builders/packagers/etc):
+     sendmmsg() support on Linux will be enabled against a broader
+       and older set of glibc versions.  Enabling this at runtime
+       still requires the detection of a 3.0 or higher kernel.
+     Daemonization/initscript-related code is much more robust than
+       in previous versions.
+     Distro packagers can use --with-rundir=/run where applicable
+       for the platform in question, instead of the default
+       $localstatedir/run.
+     Libev 4.x is now an external dependency rather than bundled
+       with gdnsd's source code.
+     New optional (but highly recommended) dependency on liburcu,
+       aka userspace-rcu, for significant efficiency improvements.
+     A number of API changes for any external 3rd party plugins,
+       detailed in the gdnsd-plugin-api docs.  Notably, installed
+       headers are now moved from <gdnsd-foo.h> to <gdnsd/foo.h>.
+     Many other less-notable small changes and fixes...
+
 1.7.7 - 2012-01-22
     THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
       HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
