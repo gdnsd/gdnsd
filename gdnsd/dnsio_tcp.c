@@ -340,7 +340,7 @@ int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED) {
 
     if(isv6)
         if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", logf_errno());
+            log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
 
     return sock;
 }
