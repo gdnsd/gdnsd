@@ -221,10 +221,17 @@ bool udp_sock_setup(dns_addr_t *addrconf) {
     addrconf->udp_sock = sock;
 
     if(bind(sock, &asin->sa, asin->len)) {
-        if(addrconf->late_bind_secs && errno == EADDRNOTAVAIL) {
-            addrconf->udp_need_late_bind = 1;
-            log_info("UDP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
-            return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
+        if(errno == EADDRNOTAVAIL) {
+            if(addrconf->autoscan) {
+                log_warn("Could not bind UDP socket %s (%s), configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(asin), logf_errno());
+                addrconf->udp_autoscan_bind_failed = true;
+                return false;
+            }
+            else if(addrconf->late_bind_secs) {
+                addrconf->udp_need_late_bind = true;
+                log_info("UDP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
+                return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
+            }
         }
         log_fatal("Failed to bind() UDP socket to %s: %s", logf_anysin(asin), logf_errno());
     }
@@ -435,6 +442,13 @@ void* dnsio_udp_start(void* addrconf_asvoid) {
             sleep(addrconf->late_bind_secs);
         }
         log_info("Late bind() of UDP socket to %s succeeded, serving requests now", logf_anysin(asin));
+    }
+    else if(addrconf->udp_autoscan_bind_failed) {
+        // already logged this condition back when bind() failed, but it's simpler
+        //  to spawn the thread and do the dnspacket_context_new() here properly and
+        //  then exit the iothread.  The rest of the code will see this as a thread that
+        //  simply never gets requests.
+        pthread_exit(NULL);
     }
 
     const bool need_cmsg = needs_cmsg(&addrconf->addr);

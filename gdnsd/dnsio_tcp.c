@@ -352,11 +352,18 @@ bool tcp_dns_listen_setup(dns_addr_t *addrconf) {
 
     addrconf->tcp_sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout);
     if(bind(addrconf->tcp_sock, &asin->sa, asin->len)) {
-        if(addrconf->late_bind_secs && errno == EADDRNOTAVAIL) {
-            addrconf->tcp_need_late_bind = 1;
-            log_info("TCP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
-            const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
-            return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
+        if(errno == EADDRNOTAVAIL) {
+            if(addrconf->autoscan) {
+                log_warn("Could not bind TCP socket %s (%s), configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(asin), logf_errno());
+                addrconf->tcp_autoscan_bind_failed = true;
+                return false;
+            }
+            else if(addrconf->late_bind_secs) {
+                addrconf->tcp_need_late_bind = true;
+                log_info("TCP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
+                const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
+                return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
+            }
         }
         log_fatal("Failed to bind() TCP socket to %s: %s", logf_anysin(asin), logf_errno());
     }
@@ -407,6 +414,13 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
             log_fatal("Failed to listen(s, %i) on late-bound TCP socket %s: %s", addrconf->tcp_clients_per_socket, logf_anysin(asin), logf_errno());
 
         log_info("Late bind() of TCP socket to %s succeeded, serving requests now", logf_anysin(asin));
+    }
+    else if(addrconf->tcp_autoscan_bind_failed) {
+        // already logged this condition back when bind() failed, but it's simpler
+        //  to spawn the thread and do the dnspacket_context_new() here properly and
+        //  then exit the iothread.  The rest of the code will see this as a thread that
+        //  simply never gets requests.
+        pthread_exit(NULL);
     }
 
     struct ev_io* accept_watcher = thread_ctx->accept_watcher = malloc(sizeof(struct ev_io));

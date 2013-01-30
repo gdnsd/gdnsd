@@ -30,6 +30,9 @@ typedef struct {
     bool     tcp_disabled;
     bool     udp_need_late_bind;
     bool     tcp_need_late_bind;
+    bool     autoscan;
+    bool     udp_autoscan_bind_failed;
+    bool     tcp_autoscan_bind_failed;
     unsigned late_bind_secs;
     unsigned tcp_timeout;
     unsigned tcp_clients_per_socket;

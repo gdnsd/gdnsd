@@ -355,7 +355,8 @@ static void process_listen(const vscf_data_t* listen_opt, const unsigned def_dns
             addrconf->udp_rcvbuf = def_udp_rcvbuf;
             addrconf->udp_sndbuf = def_udp_sndbuf;
             addrconf->late_bind_secs = def_late_bind_secs;
-            dmn_log_info("DNS listener configured by default for %s", logf_anysin(&addrconf->addr));
+            addrconf->autoscan = true;
+            dmn_log_info("DNS listener configured by default interface scanning for %s", logf_anysin(&addrconf->addr));
         }
 
         if(!gconfig.num_dns_addrs)
