@@ -140,20 +140,25 @@ void monio_add_addr(const char* svctype_name, const char* desc, const char* addr
     if(addr_err)
         log_fatal("Could not process monitoring address spec '%s': %s", addr, gai_strerror(addr_err));
 
+    bool is_duplicate = false;
+
     // now check for uniqueness
     for(unsigned i = 0; i < num_mons; i++) {
         mon_smgr_t* that_smgr = mons[i];
         if(addr_eq(&this_smgr->addr, &that_smgr->addr) && this_smgr->svc_type == that_smgr->svc_type) {
-            // We found a duplicate
-            free(this_smgr);
+            // We found a duplicate.  We'll keep this_smgr so that monitor stats output sees
+            //   it normally, but also add it to the list of outputs for the original copy
+            //   and (later) not directly add_monitor() the duplicate.  This de-duplicates
+            //   the actual monitoring traffic and state-tracking, but not the listed outputs
+            //   in e.g. the Web UI.  Note that we always scan for dupes in the same order,
+            //   so all duplicates should get added to the first copy.
             that_smgr->mon_state_ptrs = realloc(
                 that_smgr->mon_state_ptrs,
                 (that_smgr->num_state_ptrs + 1) * sizeof(mon_state_t*)
             );
             that_smgr->mon_state_ptrs[that_smgr->num_state_ptrs++] = mon_state_ptr;
-            if(gconfig.monitor_force_v6_up && that_smgr->addr.sa.sa_family == AF_INET6)
-                stats_own_set(that_smgr->mon_state_ptrs[that_smgr->num_state_ptrs - 1], MON_STATE_UP);
-            return;
+            is_duplicate = true;
+            break;
         }
     }
 
@@ -169,7 +174,7 @@ void monio_add_addr(const char* svctype_name, const char* desc, const char* addr
 
     if(gconfig.monitor_force_v6_up && this_smgr->addr.sa.sa_family == AF_INET6)
         stats_own_set(this_smgr->mon_state_ptrs[0], MON_STATE_UP);
-    else
+    else if(!is_duplicate)
         this_smgr->svc_type->plugin->add_monitor(svctype_name, this_smgr);
 
     mons = realloc(mons, sizeof(mon_smgr_t*) * (num_mons + 1));
