@@ -514,9 +514,8 @@ void conf_load(void) {
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
         CFG_OPT_BOOL(options, zones_rfc1035_strict_startup);
         CFG_OPT_BOOL(options, zones_rfc1035_auto);
-        // it's important that neither of these reload times have a lower
-        //   bound below the 2s mark, as it could cause us to miss fast
-        //   events on filesystems with 1-second mtime resolution.
+        // it's important that auto_interval is never lower than 2s, or it could cause
+        //   us to miss fast events on filesystems with 1-second mtime resolution.
         CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
         CFG_OPT_DBL(options, zones_rfc1035_min_quiesce, 0.0, 5.0);
         CFG_OPT_DBL(options, zones_rfc1035_quiesce, 0.0, 60.0);
