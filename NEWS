@@ -1,5 +1,6 @@
 
-1.8.0 - Not yet released, just working on the text here...
+1.8.0 - Not yet released, just working on the text - See 1.7.8 entry below...
+
     Start of new stable series, 1.8.x will mostly be just bugfixes.
     While the 1.7.x entries below provide a deeper description of
       how we arrived here from the previous 1.6.x stable series, I'll
@@ -99,14 +100,30 @@
        headers are now moved from <gdnsd-foo.h> to <gdnsd/foo.h>.
      Many other less-notable small changes and fixes...
 
+1.7.8 - 2012-01-30
+    THIS IS A RELEASE CANDIDATE! USE AT YOUR OWN RISK!
+    1.6.x is the current stable release, and 1.8.x will be the future
+      stable release containing these changes.
+    Linux inotify() support in the zonefile scanner now no longer depends
+      on glibc 2.13 headers (still requires runtime kernel >= 2.6.36).
+    Failure to bind() to an address picked up by default getifaddrs()
+      interface scanning due to EADDRNOTAVAIL is no longer fatal.
+    The functional de-duplication of monitored resources no longer
+      removes redundant entries from the HTML/CSV outputs.
+    Plugin API version bumped to ensure plugin binaries built during
+      the unstable development period can't be loaded without at least
+      a recompile.
+    Improved UDP buffer size negotation with the kernel, fixes testsuite
+      failure on GNU/kFreeBSD.
+    Testsuite *can* be run as root now.
+    Better configure-time checks for sendmmsg() on Linux
+    Runtime ENOSYS checks for sendmmsg() and inotify_init1() on Linux
+    Removed all accept4() use, none of it was critical enough to
+      warrant more compatibility work.
+    Fail during configure on CPUs that require aligned access
+    Various minor code/doc fixups
+
 1.7.7 - 2012-01-22
-    THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
-      HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
-      stable release, and 1.8.x will be the future stable release
-      containing these changes.
-    That being said, we're pretty much feature complete for 1.8.0 at
-      this point, and this should be considered a release candidate
-      of sorts.
     Testsuite bugfix for hosts without a GeoIP database installed
       in the usual location
     Linux sendmmsg() compatibility stuff, for hosts with 3.x
@@ -211,10 +228,6 @@
     Several bugfixes over 1.7.1
 
 1.7.1 - 2012-09-01
-    THIS IS A DEVELOPMENT PREVIEW RELEASE!  IT WILL ALMOST CERTAINLY
-      HAVE MAJOR BUGS! USE AT YOUR OWN RISK!  1.6.x is the current
-      stable release, and 1.8.x will be the future stable release
-      containing these changes.
     Changes from 1.6.x are fairly dramatic, just covering the
       user-visible highlights here:
     Commandline "-c /etc/gdnsd/config" replaced with "-d /srv/gdnsd"
