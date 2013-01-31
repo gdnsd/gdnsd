@@ -189,7 +189,7 @@ bool udp_sock_setup(dns_addr_t *addrconf) {
                 logf_anysin(asin), logf_errno());
     }
     else {
-        // Enforce a basic minimum SO_SNDBUF in the range of 16K -> 256K depending
+        // Try to enforce a basic minimum SO_SNDBUF in the range of 16K -> 256K depending
         //   on max_response and mmsg config/detect.
         // The minimum (no mmsg, min max_response) would be 16K, and the defaults
         //   would be 64K for non-mmsg and 128K for mmsg cases.
@@ -205,11 +205,20 @@ bool udp_sock_setup(dns_addr_t *addrconf) {
         if(desired_sndbuf > 262144)
             desired_sndbuf = 262144;
 
+        // However, if that doesn't work, we'll negotiate down to a minimum
+        //   of gconfig.max_response.  Any smaller would cause send failures,
+        //   although the user may be able to configure around that by manually
+        //   specifying a smaller gconfig.max_response.
         if(opt_size < desired_sndbuf) {
             opt_size = desired_sndbuf;
-            if(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
-                log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s", opt_size,
-                    logf_anysin(asin), logf_errno());
+            while(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1) {
+                if(opt_size > (int)(gconfig.max_response << 1))
+                    opt_size >>= 1;
+                else if(opt_size > (int)gconfig.max_response)
+                    opt_size = (int)gconfig.max_response;
+                else
+                    log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s.  You may need to reduce the max_response option on this machine to a size it is capable of allocating for UDP buffers", opt_size, logf_anysin(asin), logf_errno());
+            }
         }
     }
 
