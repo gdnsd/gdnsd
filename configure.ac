@@ -68,7 +68,8 @@ AC_CHECK_MEMBERS([struct stat.st_mtimespec.tv_nsec])
 AC_CHECK_MEMBERS([struct stat.st_mtimensec])
 
 dnl *mmsg for Linux
-AC_CHECK_FUNCS([recvmmsg sendmmsg])
+HAS_SENDMMSG=0
+AC_CHECK_FUNCS([sendmmsg],[HAS_SENDMMSG=1])
 
 dnl ======== Begin Network Stuff ==========
 AC_DEFINE_UNQUOTED([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
@@ -376,6 +377,7 @@ dnl Summary output for the user
 
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$USE_LINUX_CAPS" = x1; then CFSUM_CAP=Yes; else CFSUM_CAP=No; fi
+if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
 if test "x$HAVE_QSBR" = x1; then
     CFSUM_QSBR=Yes
@@ -393,6 +395,7 @@ echo "| Configuration Summary:"
 echo "| Developer Build?        $CFSUM_DEV"
 echo "| Userspace-rcu support:  $CFSUM_QSBR"
 echo "| Linux libcap support:   $CFSUM_CAP"
+echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
 echo "| Linux inotify support:  $CFSUM_INOTIFY"
 echo "| Test Port Start:        $CFSUM_TP"
 echo "======================================="
