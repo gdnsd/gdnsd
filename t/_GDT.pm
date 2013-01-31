@@ -143,8 +143,6 @@ else {
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
 
-die "Cannot run testsuite as root" if ! $>;
-
 my $CSV_TEMPLATE = 
     "uptime\r\n"
     . "([0-9]+)\r\n"
