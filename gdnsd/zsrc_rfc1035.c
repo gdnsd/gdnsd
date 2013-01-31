@@ -521,16 +521,6 @@ static ev_timer* reload_timer = NULL;
 
 #if USE_INOTIFY
 
-static void set_inotify(void) {
-    // Technically, it wouldn't be hard to support as low as 2.6.25 if
-    //   we dropped IN_EXCL_UNLINK (merely an optimization) and didn't
-    //   use inotify_init1(), but 2.6.36 seems a reasonably-old target
-    //   for new code at this point in time, esp given we have a generic
-    //   fallback with the scandir()-based model.
-    if((using_inotify = gdnsd_linux_min_version(2, 6, 36)))
-        log_info("rfc1035: will use inotify for zone change detection");
-}
-
 // This is for event debugging only
 #define _maskcat(_x) \
     if(mask & _x) { \
@@ -567,23 +557,35 @@ static const char* logf_inmask(uint32_t mask) {
 F_NONNULL
 static void inot_reader(struct ev_loop* loop, ev_io* w, int revents);
 
-static bool inotify_setup(void) {
+static bool inotify_setup(const bool initial) {
     bool rv = false;
 
-    inot.main_fd = inotify_init1(IN_NONBLOCK);
-    if(inot.main_fd < 0) {
-        log_err("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
-        rv = true;
+    // 2.6.36 is both for IN_EXCL_UNLINK support and bugfixes...
+    if(initial && !gdnsd_linux_min_version(2, 6, 36)) {
+        using_inotify = false;
     }
     else {
-        inot.watch_desc = inotify_add_watch(inot.main_fd, rfc1035_dir, INL_MASK);
-        if(inot.watch_desc < 0) {
-            log_err("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(rfc1035_dir), logf_errno());
-            close(inot.main_fd);
-            rv = true;
+        inot.main_fd = inotify_init1(IN_NONBLOCK);
+        if(inot.main_fd < 0) {
+            if(initial && errno == ENOSYS) {
+                log_info("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
+                using_inotify = false;
+            }
+            else {
+                log_err("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
+                rv = true;
+            }
         }
         else {
-            ev_io_init(inot.io_watcher, inot_reader, inot.main_fd, EV_READ);
+            inot.watch_desc = inotify_add_watch(inot.main_fd, rfc1035_dir, INL_MASK);
+            if(inot.watch_desc < 0) {
+                log_err("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(rfc1035_dir), logf_errno());
+                close(inot.main_fd);
+                rv = true;
+            }
+            else {
+                ev_io_init(inot.io_watcher, inot_reader, inot.main_fd, EV_READ);
+            }
         }
     }
 
@@ -597,7 +599,7 @@ static void inotify_initial_setup(void) {
     memset(&inot, 0, sizeof(inot_data));
     inot.io_watcher = malloc(sizeof(ev_io));
     inot.fallback_watcher = malloc(sizeof(ev_timer));
-    inotify_initial_failure = inotify_setup();
+    inotify_initial_failure = inotify_setup(true);
 }
 
 static void inotify_run(struct ev_loop* loop) {
@@ -624,7 +626,7 @@ static void inotify_fallback_scan(struct ev_loop* loop, ev_timer* rtimer, int re
     dmn_assert(rtimer);
     dmn_assert(revents == EV_TIMER);
 
-    bool setup_failure = inotify_setup();
+    bool setup_failure = inotify_setup(false);
     periodic_scan(loop, rtimer, revents);
     if(!setup_failure) {
         log_warn("rfc1035: inotify() recovered");
@@ -727,12 +729,7 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
 
 #else // no compile-time support for inotify
 
-static void set_inotify(void) { }
-
-static void inotify_initial_setup(void) {
-    dmn_assert(false);
-    log_fatal("rfc1035: inotify code called in non-inotify build???");
-}
+static void inotify_initial_setup(void) { }
 
 static void inotify_initial_run(struct ev_loop* loop V_UNUSED) {
     dmn_assert(false);
@@ -837,11 +834,8 @@ void zsrc_rfc1035_load_zones(void) {
 
     rfc1035_dir = gdnsd_resolve_path_cfg("zones/", NULL);
     set_quiesce();
-    if(gconfig.zones_rfc1035_auto) {
-        set_inotify();
-        if(using_inotify)
-            inotify_initial_setup();
-    }
+    if(gconfig.zones_rfc1035_auto)
+        inotify_initial_setup();
     if(gconfig.zones_rfc1035_strict_startup)
         fail_fatally = true;
     struct ev_loop* temp_load_loop = ev_loop_new(EVFLAG_AUTO);
