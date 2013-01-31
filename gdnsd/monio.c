@@ -18,6 +18,7 @@
  */
 
 #include "monio.h"
+#include "conf.h"
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/log.h"
 
