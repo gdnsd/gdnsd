@@ -68,8 +68,12 @@ AC_CHECK_MEMBERS([struct stat.st_mtimespec.tv_nsec])
 AC_CHECK_MEMBERS([struct stat.st_mtimensec])
 
 dnl *mmsg for Linux
-HAS_SENDMMSG=0
-AC_CHECK_FUNCS([sendmmsg],[HAS_SENDMMSG=1])
+HAS_SENDMMSG=1
+AC_CHECK_DECLS([sendmmsg, recvmmsg],,[HAS_SENDMMSG=0],[[#include <sys/socket.h>]])
+AC_CHECK_FUNCS([sendmmsg recvmmsg],,[HAS_SENDMMSG=0])
+if test $HAS_SENDMMSG -eq 1; then
+    AC_DEFINE([USE_SENDMMSG],[1],[Linux sendmmsg is usable])
+fi
 
 dnl ======== Begin Network Stuff ==========
 AC_DEFINE_UNQUOTED([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
