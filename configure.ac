@@ -76,7 +76,7 @@ if test $HAS_SENDMMSG -eq 1; then
 fi
 
 dnl ======== Begin Network Stuff ==========
-AC_DEFINE_UNQUOTED([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
+AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
 
 dnl Find out if -lsocket -lnsl is needed, and put them
 dnl  in $NETLIBS if so, and use them for these network-related
@@ -310,8 +310,8 @@ if test "x$developer" != xno; then
   elif test "x$ac_cv_prog_cc_g" = xyes; then
     CFLAGS="${CFLAGS} -g"
   fi
-  AC_DEFINE_UNQUOTED([DEBUG_RCU], 1, [liburcu verification checks])
-  AC_DEFINE_UNQUOTED([RCU_DEBUG], 1, [liburcu verification checks])
+  AC_DEFINE([DEBUG_RCU], 1, [liburcu verification checks])
+  AC_DEFINE([RCU_DEBUG], 1, [liburcu verification checks])
 else
   if test "x$ac_cv_c_compiler_gnu" = xyes; then
     CFLAGS="${CFLAGS} ${GCC_WARNFLAGS}"
