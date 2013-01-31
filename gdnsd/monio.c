@@ -18,7 +18,6 @@
  */
 
 #include "monio.h"
-#include "dnsio_tcp.h"
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/log.h"
 

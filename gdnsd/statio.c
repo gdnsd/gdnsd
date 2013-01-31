@@ -458,11 +458,7 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     anysin_t* asin = malloc(sizeof(anysin_t));
     asin->len = ANYSIN_MAXLEN;
 
-#ifdef USE_ACCEPT4
-    const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK);
-#else
     const int sock = accept(io->fd, &asin->sa, &asin->len);
-#endif
 
     if(unlikely(sock == -1)) {
         free(asin);
@@ -488,14 +484,12 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 
     log_debug("HTTP: Received connection from %s", logf_anysin(asin));
 
-#ifndef USE_ACCEPT4
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
         free(asin);
         close(sock);
         log_err("Failed to set O_NONBLOCK on inbound HTTP socket: %s", logf_errno());
         return;
     }
-#endif
 
     ev_io* read_watcher = malloc(sizeof(ev_io));
     ev_io* write_watcher = malloc(sizeof(ev_io));

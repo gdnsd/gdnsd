@@ -23,12 +23,6 @@
 #include "config.h"
 #include "conf.h"
 
-#if HAVE_DECL_SOCK_NONBLOCK && defined HAVE_ACCEPT4
-#define USE_ACCEPT4 1
-#else
-#undef USE_ACCEPT4
-#endif
-
 F_NONNULL
 void* dnsio_tcp_start(void* addrconf_asvoid);
 

@@ -232,11 +232,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     anysin_t* asin = malloc(sizeof(anysin_t));
     asin->len = ANYSIN_MAXLEN;
 
-#ifdef USE_ACCEPT4
-    const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK);
-#else
     const int sock = accept(io->fd, &asin->sa, &asin->len);
-#endif
 
     if(unlikely(sock == -1)) {
         free(asin);
@@ -262,14 +258,12 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 
     log_debug("Received TCP DNS connection from %s", logf_anysin(asin));
 
-#ifndef USE_ACCEPT4
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
         free(asin);
         close(sock);
         log_err("Failed to set O_NONBLOCK on inbound TCP DNS socket: %s", logf_errno());
         return;
     }
-#endif
 
     if((++thread_ctx->num_conn_watchers == thread_ctx->max_clients))
         ev_io_stop(loop, thread_ctx->accept_watcher);

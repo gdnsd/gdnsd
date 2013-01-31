@@ -130,10 +130,6 @@ AC_CHECK_DECLS([IPV6_RECVPKTINFO],,,[
 #include <netinet/ip.h>
 ])
 
-dnl Network stuff
-AC_CHECK_FUNCS([accept4])
-AC_CHECK_DECLS([SOCK_NONBLOCK],,,[[#include <sys/socket.h>]])
-
 dnl restore original LIBS, from before NETLIBS
 LIBS=$XLIBS
 
