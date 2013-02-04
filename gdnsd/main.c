@@ -32,7 +32,7 @@
 #include <pwd.h>
 #include <time.h>
 
-#if USE_LINUX_CAPS
+#ifdef USE_LINUX_CAPS
 #include <sys/capability.h>
 #include <sys/prctl.h>
 #endif
@@ -281,7 +281,7 @@ static void memlock_rlimits(const bool started_as_root) {
 #endif
 
 static void caps_pre_secure(void) {
-#if USE_LINUX_CAPS
+#ifdef USE_LINUX_CAPS
     const cap_value_t pre_caps[] = {
         CAP_NET_BIND_SERVICE,
         CAP_SYS_CHROOT,
@@ -305,7 +305,7 @@ static void caps_pre_secure(void) {
 }
 
 static void caps_post_secure(void) {
-#if USE_LINUX_CAPS
+#ifdef USE_LINUX_CAPS
     const cap_value_t cap_netbind = CAP_NET_BIND_SERVICE;
     cap_t mycaps = cap_init();
     if(cap_set_flag(mycaps, CAP_PERMITTED, 1, &cap_netbind, CAP_SET))

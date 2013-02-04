@@ -49,7 +49,7 @@ static bool fail_fatally = false;
 static double min_quiesce = 1.02;
 static double full_quiesce = 5.0;
 
-#if USE_INOTIFY
+#ifdef USE_INOTIFY
 
 #include <sys/inotify.h>
 
@@ -514,7 +514,7 @@ static void periodic_scan(struct ev_loop* loop, ev_timer* rtimer V_UNUSED, int r
 // ev stuff
 static ev_timer* reload_timer = NULL;
 
-#if USE_INOTIFY
+#ifdef USE_INOTIFY
 
 // This is for event debugging only
 #define _maskcat(_x) \

@@ -223,19 +223,19 @@ if test $KILL_LIBCAP -eq 0; then
     ])
 fi
 
+USE_LINUX_CAPS=0
+CAPLIBS=
 if test $CAP_FUNCS -eq 1 -a $CAP_DECLS -eq 1; then
     USE_LINUX_CAPS=1
     CAPLIBS=$LIBS
+    AC_DEFINE([USE_LINUX_CAPS], [1], [Linux libcap2+prctl Capabilities])
 else
     if test $KILL_LIBCAP -eq 0 -a $IS_LINUX -eq 1; then
       AC_MSG_ERROR([Linux libcap support not found, you may need to install the libcap-devel or libcap-dev package, or explicitly specify --without-libcap (not recommended)])
     fi
-    USE_LINUX_CAPS=0
-    CAPLIBS=
 fi
 
 AC_SUBST([CAPLIBS])
-AC_DEFINE_UNQUOTED([USE_LINUX_CAPS], $USE_LINUX_CAPS, [Use Linux libcap2+prctl Capabilities])
 
 dnl restore original LIBS, from before CAPLIBS
 LIBS=$XLIBS
@@ -249,7 +249,9 @@ dnl   fix that with a manual ifndef for the define and a runtime
 dnl   kernel version check for the support
 USE_INOTIFY=1
 AC_CHECK_FUNCS([inotify_init1],,[USE_INOTIFY=0])
-AC_DEFINE_UNQUOTED([USE_INOTIFY], $USE_INOTIFY, [Use Linux 2.6.36+ inotify support])
+if test $USE_INOTIFY -eq 1; then
+    AC_DEFINE([USE_INOTIFY], [1], [Linux 2.6.36+ inotify support])
+fi
 AM_CONDITIONAL([USE_INOTIFY], [test x$USE_INOTIFY = x1])
 
 dnl Check for perl stuff for doc generation and core regression testsuite
