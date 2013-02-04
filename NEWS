@@ -1,10 +1,8 @@
 
-1.8.0 - Not yet released, just working on the text - See 1.7.8 entry below...
+1.8.0 - 2012-02-04
 
     Start of new stable series, 1.8.x will mostly be just bugfixes.
-    While the 1.7.x entries below provide a deeper description of
-      how we arrived here from the previous 1.6.x stable series, I'll
-      recap the net highlights in this entry:
+    This entry is just a highlight of the changes from 1.6.x -> 1.8.x.
 
    User-visible stuff:
 
@@ -83,9 +81,7 @@
          use in manual map entries.
 
    Less-user-visible stuff (builders/packagers/etc):
-     sendmmsg() support on Linux will be enabled against a broader
-       and older set of glibc versions.  Enabling this at runtime
-       still requires the detection of a 3.0 or higher kernel.
+
      Daemonization/initscript-related code is much more robust than
        in previous versions.
      Distro packagers can use --with-rundir=/run where applicable
@@ -101,9 +97,6 @@
      Many other less-notable small changes and fixes...
 
 1.7.8 - 2012-01-30
-    THIS IS A RELEASE CANDIDATE! USE AT YOUR OWN RISK!
-    1.6.x is the current stable release, and 1.8.x will be the future
-      stable release containing these changes.
     Linux inotify() support in the zonefile scanner now no longer depends
       on glibc 2.13 headers (still requires runtime kernel >= 2.6.36).
     Failure to bind() to an address picked up by default getifaddrs()
