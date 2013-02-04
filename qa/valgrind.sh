@@ -12,6 +12,7 @@ set -x
 set -e
 CFLAGS="-O0" ./configure --enable-developer --prefix=/tmp/_gdnsd_inst --with-rootdir=/tmp/_gdnsd_inst/root
 make clean all
+make check-download
 make install
 TEST_RUNNER="valgrind --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make -C plugins/meta/libgdmaps/t check
 TEST_RUNNER="valgrind --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make installcheck

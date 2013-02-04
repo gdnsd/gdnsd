@@ -22,6 +22,7 @@ make
 
 lcov -c -i -d . -o gdnsd-base.info
 
+make check-download
 make check
 
 lcov -c -d . -o gdnsd-test.info
