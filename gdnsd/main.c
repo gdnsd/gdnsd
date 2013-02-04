@@ -95,11 +95,7 @@ static void hup_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w V_UNUS
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr,
-        PACKAGE_NAME " version " PACKAGE_VERSION
-#ifndef NDEBUG
-        " (developer build)"
-#endif
-        "\n"
+        PACKAGE_NAME " version " PACKAGE_VERSION "\n"
         "Usage: %s [-d <rootdir> ] <action>\n"
         "  -d <rootdir> - Use the given directory as the daemon chroot.  The\n"
         "     special value 'system' uses system default paths with no chroot.\n"
@@ -114,7 +110,33 @@ static void usage(const char* argv0) {
         "  force-reload - Aliases 'restart'\n"
         "  condrestart - Does 'restart' action only if already running\n"
         "  try-restart - Aliases 'condrestart'\n"
-        "  status - Checks the status of the running daemon\n"
+        "  status - Checks the status of the running daemon\n\n"
+        "Optional compile-time features:"
+
+#       ifndef NDEBUG
+            " debug"
+#       endif
+#       ifdef HAVE_QSBR
+            " urcu"
+#       endif
+#       ifdef USE_SENDMMSG
+            " mmsg"
+#       endif
+#       ifdef USE_INOTIFY
+            " inotify"
+#       endif
+#       ifdef USE_LINUX_CAPS
+            " libcap"
+#       endif
+
+#       if !defined NDEBUG \
+        && !defined HAVE_QSBR \
+        && !defined USE_SENDMMSG \
+        && !defined USE_INOTIFY \
+        && !defined USE_LINUX_CAPS
+            " none"
+#       endif
+
         "\nFor updates, bug reports, etc, please visit " PACKAGE_URL "\n",
         argv0, gdnsd_get_def_rootdir()
     );
