@@ -16,14 +16,14 @@ precheck:
 
 # To run just one test subdir: make check TRUN=007plugins/*.t
 check-local: precheck
-	@if test "${TRUN}x" != "x"; then \
+	${AM_V_GEN}if test "${TRUN}x" != "x"; then \
 		TOP_BUILDDIR=$(abs_top_builddir) $(TEXEC) $(srcdir)/${TRUN}; \
 	else \
 		TOP_BUILDDIR=$(abs_top_builddir) $(TEXEC) $(ALLTESTS); \
 	fi
 
 installcheck-local: precheck
-	@if test "${TRUN}x" != "x"; then \
+	${AM_V_GEN}if test "${TRUN}x" != "x"; then \
 		INSTALLCHECK_SBINDIR=$(sbindir) $(TEXEC) $(srcdir)/${TRUN}; \
 	else \
 		INSTALLCHECK_SBINDIR=$(sbindir) $(TEXEC) $(ALLTESTS); \

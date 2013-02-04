@@ -32,6 +32,7 @@
 #include <sys/select.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdlib.h>
 
 #include "dmn.h"
 
@@ -63,31 +64,14 @@ static pid_t check_pidfile(const char* pidfile) {
     if(fcntl(pidfd, F_GETLK, &pidlock_info))
         dmn_log_fatal("bug: fcntl(%s, F_GETLK) failed: %s", pidfile, dmn_strerror(errno));
 
-    pid_t rv = 0;
+    close(pidfd);
 
     if(pidlock_info.l_type == F_UNLCK) {
-        // Backwards-compat check for pre-1.6.8 instances
-        char pidbuf[pblen];
-        const int readrv = read(pidfd, pidbuf, (size_t) 15);
-        if(readrv == -1)
-            dmn_log_fatal("read() from pidfile '%s' failed: %s", pidfile, dmn_strerror(errno));
-
-        if(readrv > 0) {
-            pidbuf[readrv] = '\0';
-            errno = 0;
-            const pid_t pidnum = (pid_t)strtol(pidbuf, NULL, 10);
-            if(!errno && pidnum > 0 && !kill(pidnum, 0)) {
-                dmn_log_info("Found unlocked but seemingly-valid pid for pre-1.6.8 daemon instance...");
-                rv = pidnum;
-            }
-        }
-    }
-    else {
-        rv = pidlock_info.l_pid;
+        dmn_log_debug("Found stale pidfile at %s, ignoring", pidfile);
+        return 0;
     }
 
-    close(pidfd);
-    return rv;
+    return pidlock_info.l_pid;
 }
 
 static bool pidrace_inner(const pid_t pid, const int pidfd) {
@@ -135,17 +119,17 @@ static pid_t startup_pidrace(const char* pidfile, const bool restart) {
         unsigned maxtries = 10;
         while(tries++ <= maxtries) {
             const pid_t old_pid = check_pidfile(pidfile);
-            if(!old_pid && !pidrace_inner(pid, pidfd))
+            if(old_pid && !kill(old_pid, SIGTERM)) {
+                tv.tv_sec = 0;
+                tv.tv_usec = 100000 * tries;
+                select(0, NULL, NULL, NULL, &tv);
+            }
+            if(!pidrace_inner(pid, pidfd))
                 return pid;
-            if(old_pid)
-                kill(old_pid, SIGTERM);
-            tv.tv_sec = 0;
-            tv.tv_usec = 100000 * tries;
-            select(0, NULL, NULL, NULL, &tv);
         }
         dmn_log_fatal("restart: failed, cannot shut down previous instance and acquire pidfile lock");
     }
-    else if(check_pidfile(pidfile) || pidrace_inner(pid, pidfd)) {
+    else if(pidrace_inner(pid, pidfd)) {
         dmn_log_fatal("start: failed, another instance of this daemon is already running");
     }
 
@@ -163,7 +147,7 @@ static void parent_status_wait(const int readpipe) {
     const int readrv = read(readpipe, &statuschar, 1);
     if(readrv == 1 && statuschar == '$')
         exitval = 0;
-    exit(exitval);
+    _exit(exitval);
 }
 
 void dmn_daemonize(const char* pidfile, const bool restart) {
@@ -199,9 +183,11 @@ void dmn_daemonize(const char* pidfile, const bool restart) {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sa.sa_handler = SIG_IGN;
-    if(sigaction(SIGHUP, &sa, NULL) == -1)
+
+    if(sigaction(SIGHUP, &sa, NULL))
         dmn_log_fatal("sigaction to ignore SIGHUP failed: %s", dmn_strerror(errno));
-    if(sigaction(SIGPIPE, &sa, NULL) == -1)
+
+    if(sigaction(SIGPIPE, &sa, NULL))
         dmn_log_fatal("sigaction to ignore SIGPIPE failed: %s", dmn_strerror(errno));
 
     // Fork again.  This time the intermediate parent exits immediately.
@@ -209,12 +195,10 @@ void dmn_daemonize(const char* pidfile, const bool restart) {
     if(second_fork_pid == -1)
         dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
     if(second_fork_pid) // intermediate parent proc
-        exit(0);
+        _exit(0);
 
     // we're now in the final child daemon
 
-    if(chdir("/") == -1)
-        dmn_log_fatal("chdir(/) failed: %s", dmn_strerror(errno));
     umask(022);
 
     const pid_t pid = startup_pidrace(pidfile, restart);
@@ -231,8 +215,6 @@ void dmn_daemonize(const char* pidfile, const bool restart) {
     status_finish_fd = statuspipe[1];
 }
 
-void _dmn_close_alt_stderr(void); // from dmn_log.c, private-ish
-
 void dmn_daemonize_finish(void) {
     dmn_assert(status_finish_fd != -1);
 
@@ -247,7 +229,7 @@ void dmn_daemonize_finish(void) {
     // this shuts off our saved copy of stderr, which
     //  was kept open to inform the outer process/user
     //  of late initialzation failures post-daemonization.
-    _dmn_close_alt_stderr();
+    dmn_log_close_alt_stderr();
 }
 
 pid_t dmn_status(const char* pidfile) { dmn_assert(pidfile); return check_pidfile(pidfile); }
@@ -281,16 +263,26 @@ pid_t dmn_stop(const char* pidfile) {
         return pid;
     }
 
+    dmn_log_info("Daemon instance at pid %li stopped", (long)pid);
     return 0;
 }
 
-void dmn_signal(const char* pidfile, int sig) {
+int dmn_signal(const char* pidfile, int sig) {
     dmn_assert(pidfile);
 
+    int rv = 1; // error
     const pid_t pid = check_pidfile(pidfile);
-    if(!pid)
+    if(!pid) {
         dmn_log_err("Did not find a running daemon to signal!");
-    else if(kill(pid, sig))
+    }
+    else if(kill(pid, sig)) {
         dmn_log_err("Cannot signal daemon at pid %li", (long)pid);
+    }
+    else {
+        dmn_log_info("SIGHUP sent to daemon instance at pid %li", (long)pid);
+        rv = 0; // success
+    }
+
+    return rv;
 }
 

@@ -1,19 +1,32 @@
-AC_INIT([gdnsd],[1.6.9],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/gdnsd])
 AC_PREREQ([2.69])
+AC_INIT([gdnsd],[1.7.8],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/gdnsd])
+AC_CONFIG_SRCDIR([gdnsd/main.c])
 AC_CONFIG_AUX_DIR([acaux])
+AM_INIT_AUTOMAKE([1.11.6 dist-xz no-dist-gzip foreign tar-ustar -Wall])
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([1.12 dist-xz foreign tar-ustar -Wall])
 AM_SILENT_RULES([yes])
 
-dnl These lines pretty much *have* to be in this order, and before
-dnl  anything else that might invoke CC/CPP.  This ensures that
-dnl  we get a C99 CC, a C99 CPP, and a set of #defines to turn
-dnl  on "extended" interfaces in various OS's.
+dnl TODO: when/if a new autoconf release has a C11 macro,
+dnl    prefer that and fall back to requiring C99.
 AC_PROG_CC_C99
 if test "x$ac_cv_prog_cc_c99" = xno; then
     AC_MSG_ERROR([Your compiler lacks sufficient C99 support])
 fi
+dnl AC_PROG_CC_C99 has to come before this or we don't get a C99 CPP
 AC_USE_SYSTEM_EXTENSIONS
+
+dnl This is explcitly checked by CC_C99 above for now, but
+dnl   the C11 standard reversed course and made this an optional
+dnl   feature, so we may as well double-check here for future-proofing
+AC_C_VARARRAYS
+if test "x$ac_cv_c_vararrays" = xno; then
+    AC_MSG_ERROR([Your compiler lacks support for variable arrays])
+fi
+
+AX_CHECK_ALIGNED_ACCESS_REQUIRED
+if test "$ax_cv_have_aligned_access_required" = yes ; then
+    AC_MSG_ERROR([This code is broken on your platform due to unaligned memory access])
+fi
 
 dnl POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
@@ -23,9 +36,6 @@ CC="$PTHREAD_CC"
 
 dnl need to know endian-ness
 AC_C_BIGENDIAN
-
-dnl figure out whether and how to use TLS
-AX_TLS
 
 dnl Apparently libtool+automake need this now...
 AM_PROG_AR
@@ -45,14 +55,6 @@ LIBS=$XLIBS
 dnl include libdmn configure stuff (only sets some config.h stuff)
 m4_include([gdnsd/libgdnsd/libdmn/libdmn.m4])
 
-dnl include libev configure stuff
-XLIBS=$LIBS
-LIBS=""
-m4_include([gdnsd/libgdnsd/libev/libev.m4])
-EVLIBS=$LIBS
-LIBS=$XLIBS
-AC_SUBST([EVLIBS])
-
 dnl explicit check on math lib.  libev also does this, but
 dnl  might not in the future, and we need it directly
 XLIBS=$LIBS
@@ -65,12 +67,21 @@ AC_SUBST([MATH_LIB])
 dnl posix_fadvise to readahead on zonefiles
 AC_CHECK_FUNCS([posix_fadvise])
 
+dnl high-precision mtime from struct stat
+AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])
+AC_CHECK_MEMBERS([struct stat.st_mtimespec.tv_nsec])
+AC_CHECK_MEMBERS([struct stat.st_mtimensec])
+
 dnl *mmsg for Linux
-HAS_SENDMMSG=0
-AC_CHECK_FUNCS([sendmmsg],[HAS_SENDMMSG=1])
+HAS_SENDMMSG=1
+AC_CHECK_DECLS([sendmmsg, recvmmsg],,[HAS_SENDMMSG=0],[[#include <sys/socket.h>]])
+AC_CHECK_FUNCS([sendmmsg recvmmsg],,[HAS_SENDMMSG=0])
+if test $HAS_SENDMMSG -eq 1; then
+    AC_DEFINE([USE_SENDMMSG],[1],[Linux sendmmsg is usable])
+fi
 
 dnl ======== Begin Network Stuff ==========
-AC_DEFINE_UNQUOTED([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
+AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
 
 dnl Find out if -lsocket -lnsl is needed, and put them
 dnl  in $NETLIBS if so, and use them for these network-related
@@ -124,14 +135,53 @@ AC_CHECK_DECLS([IPV6_RECVPKTINFO],,,[
 #include <netinet/ip.h>
 ])
 
-dnl Network stuff
-AC_CHECK_FUNCS([accept4])
-AC_CHECK_DECLS([SOCK_NONBLOCK],,,[[#include <sys/socket.h>]])
-
 dnl restore original LIBS, from before NETLIBS
 LIBS=$XLIBS
 
 dnl ======== End Network Stuff ==========
+
+dnl liburcu-qsbr
+KILL_QSBR=0
+AC_ARG_WITH([urcu],[
+AS_HELP_STRING([--without-urcu],[Explicitly disable userspace-rcu detection])
+],[
+    if test "x$withval" = xno; then
+        KILL_QSBR=1
+    fi
+])
+
+HAVE_QSBR=0
+QSBRLIBS=
+if test $KILL_QSBR -eq 0; then
+    AC_CHECK_HEADER(urcu-qsbr.h,[
+        XLIBS=$LIBS
+        LIBS=""
+        AC_CHECK_LIB([urcu-qsbr],[perror],[
+            HAVE_QSBR=1
+            AC_DEFINE_UNQUOTED([HAVE_QSBR], $HAVE_QSBR, [Use liburcu-qsbr])
+            QSBRLIBS="-lurcu-qsbr"
+        ])
+        LIBS=$XLIBS
+    ])
+fi
+AC_SUBST([QSBRLIBS])
+
+dnl libev
+PKG_CHECK_MODULES([LIBEV],[libev >= 4.0],
+    CPPFLAGS="${CPPFLAGS} ${LIBEV_CFLAGS}"
+,
+    # try manually...
+    XLIBS=$LIBS
+    LIBS=""
+    AC_CHECK_LIB([ev],[ev_break],,AC_MSG_ERROR([libev 4.x library not found!]))
+    AC_CHECK_DECLS([EVBREAK_ALL],,AC_MSG_ERROR([libev 4.x headers not found!]),[
+        #include <ev.h>
+    ])
+    LIBEV_LIBS=$LIBS
+    LIBS=$XLIBS
+)
+AC_SUBST([LIBEV_LIBS])
+
 
 dnl ======== Begin Capabilities Stuff ==========
 
@@ -173,32 +223,36 @@ if test $KILL_LIBCAP -eq 0; then
     ])
 fi
 
+USE_LINUX_CAPS=0
+CAPLIBS=
 if test $CAP_FUNCS -eq 1 -a $CAP_DECLS -eq 1; then
     USE_LINUX_CAPS=1
     CAPLIBS=$LIBS
+    AC_DEFINE([USE_LINUX_CAPS], [1], [Linux libcap2+prctl Capabilities])
 else
     if test $KILL_LIBCAP -eq 0 -a $IS_LINUX -eq 1; then
       AC_MSG_ERROR([Linux libcap support not found, you may need to install the libcap-devel or libcap-dev package, or explicitly specify --without-libcap (not recommended)])
     fi
-    USE_LINUX_CAPS=0
-    CAPLIBS=
 fi
 
 AC_SUBST([CAPLIBS])
-AC_DEFINE_UNQUOTED([USE_LINUX_CAPS], $USE_LINUX_CAPS, [Use Linux libcap2+prctl Capabilities])
 
 dnl restore original LIBS, from before CAPLIBS
 LIBS=$XLIBS
 
 dnl ======== End Capabilities Stuff ==========
 
-dnl --enable-lowmem reduces memory waste for tiny environments where it matters
-LOWMEM=0
-AC_ARG_ENABLE([lowmem], [
-  --enable-lowmem        Reduce memory consumption (for embedded systems)],
-  [if test "x$enable_lowmem" = xyes; then LOWMEM=1; fi])
-AC_DEFINE_UNQUOTED([LOWMEM], $LOWMEM, [Waste less memory for embedded systems])
-AM_CONDITIONAL([LOWMEM], [test x$LOWMEM = x1])
+dnl == inotify stuff ==
+dnl inotify_init1() is Linux 2.6.27+ and glibc 2.9
+dnl We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
+dnl   fix that with a manual ifndef for the define and a runtime
+dnl   kernel version check for the support
+USE_INOTIFY=1
+AC_CHECK_FUNCS([inotify_init1],,[USE_INOTIFY=0])
+if test $USE_INOTIFY -eq 1; then
+    AC_DEFINE([USE_INOTIFY], [1], [Linux 2.6.36+ inotify support])
+fi
+AM_CONDITIONAL([USE_INOTIFY], [test x$USE_INOTIFY = x1])
 
 dnl Check for perl stuff for doc generation and core regression testsuite
 HAVE_TESTSUITE_MODULES=0
@@ -207,7 +261,7 @@ AC_PATH_PROG([PERL],[perl],[$am_aux_dir/noperl])
 AC_PATH_PROG([POD2MAN],[pod2man],[$am_aux_dir/noperl])
 AC_PATH_PROG([POD2TEXT],[pod2text],[$am_aux_dir/noperl])
 AX_PROG_PERL_VERSION([5.8.1],[
-    AX_PROG_PERL_MODULES([Test::More Net::DNS=0.63 LWP=5.805 Socket6 IO::Socket::INET6],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), Net::DNS 0.63+, LWP (aka libwww-perl) 5.805+, Socket6, and IO::Socket::INET6]]))
+    AX_PROG_PERL_MODULES([Test::More Net::DNS=0.63 LWP=5.805 Socket6 IO::Socket::INET6 HTTP::Daemon],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), Net::DNS 0.63+, LWP (aka libwww-perl) 5.805+, Socket6, IO::Socket::INET6, and HTTP::Daemon]]))
 ],[
     AC_MSG_WARN([Cannot "make check" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)])
 ])
@@ -223,7 +277,7 @@ AC_SUBST([RAGEL], [$ac_cv_path_RAGEL])
 AC_MSG_RESULT([$ac_cv_path_RAGEL])
 
 dnl download/unpack for GeoLite data for plugin_geoip tests
-AC_CHECK_PROGS(GEOLITE_DECOMP, [xz gzip], [none])
+AC_CHECK_PROGS(GEOLITE_DECOMP, [xz], [none])
 AC_CHECK_PROGS(GEOLITE_DL, [wget curl], [none])
 
 dnl Allow user to override the port range we use for testing
@@ -245,23 +299,68 @@ AC_ARG_ENABLE([developer],
     [  --enable-developer      Turn on gcc developer warnings, debugging, etc (default=no)],
     [if test "x$enable_developer" = xyes; then developer=yes; fi])
 
-dnl If developer, set -g and a ton of warnings.  Otherwise, set -DNDEBUG
-dnl Other -Wflags that are interesting to check sometimes, w/ latest gcc:
-dnl    -Wfloat-equal -Wpointer-arith -Wwrite-strings -Wlogical-op -Waddress
+dnl normal builds set -DNDEBUG because we make very very heavy
+dnl   use of assertions that really slow stuff down, and also
+dnl   adds "-Wall -W" to CFLAGS if the compiler is gcc.
+dnl --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
+dnl   and also sets "-g" for debug if the compiler supports it,
+dnl   and sets a ton of gcc 4.x extra warnings flags.
+GCC_WARNFLAGS="-Wall -W -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wshadow -Wredundant-decls -Wwrite-strings -Wformat=2"
+GCC_DEV_WARNFLAGS="${GCC_WARNFLAGS} -Wpointer-arith -Wfloat-equal -Wcast-align"
 if test "x$developer" != xno; then
-  if test x"$ac_cv_prog_cc_g" = xyes; then
-    CFLAGS="${CFLAGS} -g -Wall -W -Wshadow"
+  if test "x$ac_cv_c_compiler_gnu" = xyes; then
+    CFLAGS="${CFLAGS} -g ${GCC_DEV_WARNFLAGS}"
+  elif test "x$ac_cv_prog_cc_g" = xyes; then
+    CFLAGS="${CFLAGS} -g"
   fi
-  AC_DEFINE_UNQUOTED([EV_VERIFY], 3, [libev verification checks])
+  AC_DEFINE([DEBUG_RCU], 1, [liburcu verification checks])
+  AC_DEFINE([RCU_DEBUG], 1, [liburcu verification checks])
 else
+  if test "x$ac_cv_c_compiler_gnu" = xyes; then
+    CFLAGS="${CFLAGS} ${GCC_WARNFLAGS}"
+  fi
   CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
-  AC_DEFINE_UNQUOTED([EV_VERIFY], 0, [libev verification checks])
 fi
 
 AC_CHECK_HEADERS([valgrind/memcheck.h])
 
-dnl doublecheck user-supplied srcdir argument
-AC_CONFIG_SRCDIR([gdnsd/main.c])
+dnl A default build of gdnsd uses system paths as specified
+dnl   via the standard --prefix, --sysconfdir, --localstatedir, etc
+dnl   (as well as --with-rundir for e.g. /run).
+dnl The default build *can* be used for chroot operation if gdnsd
+dnl   is supplied a "-d /some/path" argument on every invocation,
+dnl   e.g. by a custom initscript.
+dnl Specifying --with-rootdir=/some/path enables the chroot mode
+dnl   of operation by default with no daemon arguments, using
+dnl   the specified path as the default chroot location.
+rootdir_fail="The --with-rootdir= option must specify an absolute pathname if used";
+AC_ARG_WITH([rootdir],[
+AS_HELP_STRING([--with-rootdir=/some/path],[Enables default chroot operation using the default chroot path specified])
+],[
+  echo "$with_rootdir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rootdir_fail)
+],[
+  with_rootdir="system"
+])
+AC_DEFINE_UNQUOTED([GDNSD_DEF_ROOTDIR],"$with_rootdir",[Default -d argument])
+
+dnl Allow specifying an alternate rundir (default $localstatedir/run) for distros
+dnl   that prefer e.g. /run to /var/run
+rundir_fail="The --with-rundir= option must specify an absolute pathname if used";
+AC_ARG_WITH([rundir],[
+AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specific rundir, e.g. /run, for non-chroot cases])
+],[
+  echo "$with_rundir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rundir_fail)
+  GDNSD_SYSRUNDIR="$with_rundir"
+],[
+  GDNSD_SYSRUNDIR="${localstatedir}/run"
+])
+AC_SUBST([GDNSD_SYSRUNDIR])
+
+dnl clump up all of the libgdnsd libdeps for re-use in LDADD for
+dnl   binaries that link libgdnsd on platforms where libtool's
+dnl   automatic dep resolution is disabled
+LIBGDNSD_LIBS="$QSBRLIBS $MATH_LIB $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
+AC_SUBST([LIBGDNSD_LIBS])
 
 dnl Output generation
 AC_CONFIG_HEADERS([config.h])
@@ -277,23 +376,34 @@ AC_CONFIG_FILES([
   plugins/meta/Makefile
   plugins/meta/libgdmaps/Makefile
   plugins/meta/libgdmaps/t/Makefile
+  plugins/extmon/Makefile
 ])
 AC_OUTPUT
 
 dnl Summary output for the user
 
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
-if test "x$LOWMEM" = x1; then CFSUM_LM=Yes; else CFSUM_LM=No; fi
 if test "x$USE_LINUX_CAPS" = x1; then CFSUM_CAP=Yes; else CFSUM_CAP=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
+if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
+if test "x$HAVE_QSBR" = x1; then
+    CFSUM_QSBR=Yes
+else
+    if test "x$KILL_QSBR" = x1; then
+        CFSUM_QSBR=Disabled
+    else
+        CFSUM_QSBR=No
+    fi
+fi
 CFSUM_TP=$TESTPORT_START
 
 echo "======================================="
 echo "| Configuration Summary:"
 echo "| Developer Build?        $CFSUM_DEV"
-echo "| Low Memory Build?       $CFSUM_LM"
+echo "| Userspace-rcu support:  $CFSUM_QSBR"
 echo "| Linux libcap support:   $CFSUM_CAP"
 echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
+echo "| Linux inotify support:  $CFSUM_INOTIFY"
 echo "| Test Port Start:        $CFSUM_TP"
 echo "======================================="
 

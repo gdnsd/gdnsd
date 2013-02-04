@@ -21,13 +21,5 @@
 #              and monitored failover.
 ### END INIT INFO
 
-# Basic defaults for a single instance with default paths
-exec="/usr/sbin/gdnsd"
-prog="gdnsd"
-config="/etc/gdnsd/config"
-
-# May override exec/config from above:
-[ -e /etc/sysconfig/$prog ] && . /etc/sysconfig/$prog
-
 # gdnsd manages itself and understands the "normal" initscript commands
-exec $exec -c $config $1
+exec /usr/sbin/gdnsd $1

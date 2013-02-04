@@ -1,4 +1,4 @@
-/* Copyright © 2011 Logitech
+/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -21,7 +21,7 @@
 #define GDNSD_PLUGIN_NAME multifo
 
 #include "config.h"
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -34,7 +34,7 @@ static const double DEF_UP_THRESH = 0.5;
 
 typedef struct {
     anysin_t addr;
-    monio_state_t* states;
+    mon_state_t* states;
 } addrstate_t;
 
 typedef struct {
@@ -53,15 +53,15 @@ typedef struct {
 static res_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static monio_list_t monio_list = { 0, NULL };
+static mon_list_t mon_list = { 0, NULL };
 
 /*********************************/
 /* Local, static functions       */
 /*********************************/
 
-static void monio_add(const char* svctype, const char* desc, const char* addr_txt, monio_state_t* state_ptr) {
-    monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
-    monio_info_t* m = &monio_list.info[monio_list.count++];
+static void mon_add(const char* svctype, const char* desc, const char* addr_txt, mon_state_t* state_ptr) {
+    mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
+    mon_info_t* m = &mon_list.info[mon_list.count++];
     m->svctype = strdup(svctype);
     m->desc = desc;
     m->addr = strdup(addr_txt);
@@ -97,7 +97,6 @@ static const vscf_data_t* addrs_hash_from_array(const vscf_data_t* ary, const ch
     }
 
     vscf_hash_inherit(parent, newhash, "up_thresh", false);
-    vscf_hash_inherit(parent, newhash, "service_type", false);
     vscf_hash_inherit(parent, newhash, "service_types", false);
     return newhash;
 }
@@ -116,7 +115,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
     dmn_assert(addr_desc); dmn_assert(addr_data); dmn_assert(aid_asvoid);
 
     addrs_iter_data_t* aid = (addrs_iter_data_t*)aid_asvoid;
-    
+
     const char* resname = aid->resname;
     const char* stanza = aid->stanza;
     const char** svc_names = aid->svc_names;
@@ -137,7 +136,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
     else if(!ipv6 && as->addr.sa.sa_family != AF_INET)
         log_fatal("plugin_multifo: resource %s (%s): address '%s' for '%s' is not IPv4", resname, stanza, addr_txt, addr_desc);
 
-    as->states = malloc(sizeof(monio_state_t) * aset->num_svcs);
+    as->states = malloc(sizeof(mon_state_t) * aset->num_svcs);
 
     for(unsigned i = 0; i < aset->num_svcs; i++) {
         char *complete_desc = malloc(strlen(resname) + 6 + strlen(addr_desc) + 1 + strlen(svc_names[i]) + 1);
@@ -146,7 +145,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
         strcat(complete_desc, addr_desc);
         strcat(complete_desc, "/");
         strcat(complete_desc, svc_names[i]);
-        monio_add(svc_names[i], complete_desc, addr_txt, &as->states[i]);
+        mon_add(svc_names[i], complete_desc, addr_txt, &as->states[i]);
     }
 
     return true;
@@ -165,14 +164,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     unsigned num_addrs = vscf_hash_get_len(cfg);
 
     const char** svc_names;
-    const vscf_data_t* svctype_data = vscf_hash_get_data_byconstkey(cfg, "service_type", true);
     const vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
-    if(svctype_data) {
-        if(svctypes_data)
-            log_fatal("plugin_multifo: resource %s (%s): 'service_type' is a deprecated alias for 'service_types', and you have illegally defined both", resname, stanza);
-        log_warn("plugin_multifo: resource %s (%s): 'service_type' is deprecated, please usse 'service_types' instead", resname, stanza);
-        svctypes_data = svctype_data;
-    }
     if(svctypes_data) {
         num_addrs--;
         aset->num_svcs = vscf_array_get_len(svctypes_data);
@@ -237,7 +229,6 @@ static void config_auto(res_t* res, const char* stanza, const vscf_data_t* auto_
 
     // mark parameters
     vscf_hash_get_data_byconstkey(auto_cfg, "up_thresh", true);
-    vscf_hash_get_data_byconstkey(auto_cfg, "service_type", true);
     vscf_hash_get_data_byconstkey(auto_cfg, "service_types", true);
 
     // clone down to just address-label keys
@@ -280,17 +271,14 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     res_t* res = &resources[rnum];
     res->name = strdup(resname);
 
-    const vscf_data_t* addrs_cfg = NULL;
     const vscf_data_t* addrs_v4_cfg = NULL;
     const vscf_data_t* addrs_v6_cfg = NULL;
 
     if(vscf_is_hash(opts)) {
         // inherit params downhill if applicable
         vscf_hash_bequeath_all(opts, "up_thresh", true, false);
-        vscf_hash_bequeath_all(opts, "service_type", true, false);
         vscf_hash_bequeath_all(opts, "service_types", true, false);
 
-        addrs_cfg = vscf_hash_get_data_byconstkey(opts, "addrs", true);
         addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
         addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
 
@@ -303,16 +291,9 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
             res->aset_v6 = calloc(1, sizeof(addrset_t));
             config_addrs(resname, "addrs_v6", res->aset_v6, true, addrs_v6_cfg);
         }
-
-        if(addrs_cfg) {
-            if(addrs_v4_cfg || addrs_v6_cfg)
-                log_fatal("plugin_multifo: resource '%s': deprecated 'addrs' stanza not compatible with new 'addrs_v4'/'addrs_v6' stanzas", resname);
-            log_warn("plugin_multifo: resource '%s': 'addrs' stanza deprecated, use 'addrs_v4' and/or 'addrs_v6' or move single-family data up a level", resname);
-            config_auto(res, "addrs", addrs_cfg);
-        }
     }
 
-    if(!addrs_cfg && !addrs_v4_cfg && !addrs_v6_cfg)
+    if(!addrs_v4_cfg && !addrs_v6_cfg)
         config_auto(res, "direct", opts);
     else if(vscf_is_hash(opts))
         vscf_hash_iterate(opts, true, bad_res_opt, (void*)resname);
@@ -326,7 +307,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 /* Exported callbacks start here */
 /*********************************/
 
-monio_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
+mon_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
     if(!config)
         log_fatal("multifo plugin requires a 'plugins' configuration stanza");
 
@@ -337,8 +318,6 @@ monio_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
     // inherit params downhill
     if(vscf_hash_bequeath_all(config, "up_thresh", true, false))
         num_resources--;
-    if(vscf_hash_bequeath_all(config, "service_type", true, false))
-        num_resources--;
     if(vscf_hash_bequeath_all(config, "service_types", true, false))
         num_resources--;
 
@@ -346,18 +325,21 @@ monio_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
 
-    return &monio_list;
+    return &mon_list;
 }
 
-unsigned plugin_multifo_map_resource_dyna(const char* resname) {
-    if(!resname)
-        log_fatal("multifo plugin requires a resource name");
+int plugin_multifo_map_resource_dyna(const char* resname) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++)
+            if(!strcmp(resname, resources[i].name))
+                return (int)i;
+        log_err("plugin_multifo: Unknown resource '%s'", resname);
+    }
+    else {
+        log_err("plugin_multifo: resource name required");
+    }
 
-    for(unsigned i = 0; i < num_resources; i++)
-        if(!strcmp(resname, resources[i].name))
-            return i;
-
-    log_fatal("Unknown multifo plugin resource '%s'", resname);
+    return -1;
 }
 
 F_NONNULL
@@ -369,10 +351,10 @@ static bool resolve(const addrset_t* aset, dynaddr_result_t* result, bool* cut_t
     // Add up/danger IPs to result set, signal ttl-cut if any non-up encountered
     for(unsigned i = 0; i < aset->count; i++) {
         const addrstate_t* as = &aset->as[i];
-        const monio_state_uint_t state = gdnsd_monio_min_state(as->states, aset->num_svcs);
-        if(state != MONIO_STATE_UP)
+        const mon_state_uint_t state = gdnsd_mon_get_min_state(as->states, aset->num_svcs);
+        if(state != MON_STATE_UP)
             *cut_ttl_ptr = true;
-        if(state != MONIO_STATE_DOWN)
+        if(state != MON_STATE_DOWN)
             gdnsd_dynaddr_add_result_anysin(result, &as->addr);
     }
 

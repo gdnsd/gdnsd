@@ -1,6 +1,7 @@
 =head1 NAME
 
-gdnsd-plugin-simplefo - gdnsd plugin for simple primary->secondary address failover
+gdnsd-plugin-simplefo - gdnsd plugin for simple primary->secondary address
+failover
 
 =head1 SYNOPSIS
 
@@ -43,45 +44,72 @@ Example zonefile RRs:
 B<gdnsd-plugin-simplefo> is designed to do simple active/passive
 failover between one primary address and one secondary address.
 The status of the addresses are checked with standard gdnsd
-C<service_types> monitoring.
+C<service_types> monitoring.  If you need more than a simple
+two-address failover list, the C<metafo> plugin is more appropriate.
 
 =head1 TOP-LEVEL PLUGIN CONFIG
 
-At the top level of the plugin's configuration stanza, the special parameter C<service_types> is supported. These sets the default per-resource C<service_types> for all resources.  The default default C<service_types> is C<[ default ]>, which does basic HTTP/1.0 polling for 200 OK status from C<http://IPADDR:80/>.
+At the top level of the plugin's configuration stanza, the special
+parameter C<service_types> is supported. These sets the default
+per-resource C<service_types> for all resources.  The default default
+C<service_types> is C<[ default ]>, which does basic HTTP/1.0 polling for
+200 OK status from C<http://IPADDR:80/>.
 
-The rest of the hash entries at the top level are the names of the resources you define.  Each resource gets a configuration hash of its own for containing resource-specific address info.
+The rest of the hash entries at the top level are the names of the
+resources you define.  Each resource gets a configuration hash of its own
+for containing resource-specific address info.
 
 =head1 RESOURCE CONFIG
 
-Within a resource, C<service_types> is again supported, to set the monitored service type(s) for this specific resource.
+Within a resource, C<service_types> is again supported, to set the
+monitored service type(s) for this specific resource.
 
-If C<addrs_v4> is defined, it must be a hash containing two keys: C<primary> and C<secondary>, each of which has an IPv4 string address value.
+If C<addrs_v4> is defined, it must be a hash containing two keys:
+C<primary> and C<secondary>, each of which has an IPv4 string address value.
 
-Similarly, if C<addrs_v6> is defined, it must be a hash containing two keys: C<primary> and C<secondary>, each of which has an IPv6 string address value.
+Similarly, if C<addrs_v6> is defined, it must be a hash containing two
+keys: C<primary> and C<secondary>, each of which has an IPv6 string address
+value.
 
-If neither of those two sub-stanzas is defined, you must define a single pair of C<primary> and C<secondary> addresses for the whole resource.  These can be of either address family, so long as they are both the same family.
+If neither of those two sub-stanzas is defined, you must define a single
+pair of C<primary> and C<secondary> addresses for the whole resource.
+These can be of either address family, so long as they are both the same
+family.
 
-When C<addrs_v4> and/or C<addrs_v6> are used, C<service_types> can also be overridden within each, for different behavior per-address-family (e.g. force one protocol always up/down).
+When C<addrs_v4> and/or C<addrs_v6> are used, C<service_types> can also be
+overridden within each, for different behavior per-address-family (e.g.
+force one protocol always up/down).
 
 =head1 OPERATIONAL MECHANICS
 
-For each address family for which you have supplied data, the following logic is applied independently:
+For each address family for which you have supplied data, the following
+logic is applied independently:
 
 =over 4
 
-=item * First, the worst monitored state of all C<service_types> checks for the primary address is obtained.  If this state is C<UP> or C<DANGER>, the primary address is used.
+=item * First, the worst monitored state of all C<service_types> checks for
+the primary address is obtained.  If this state is C<UP> or C<DANGER>, the
+primary address is used.
 
-=item * If the primary address was C<DOWN>, the secondary address is checked: If the secondary is C<UP> or C<DANGER>, it will be used.  If the secondary is also C<DOWN>, then the primary is used.
+=item * If the primary address was C<DOWN>, the secondary address is
+checked: If the secondary is C<UP> or C<DANGER>, it will be used.  If the
+secondary is also C<DOWN>, then the primary is used.
 
-=item * In any case other than the primary being exactly C<UP>, the response RR-set TTL from the zonefile will be cut in half for both address families.
+=item * In any case other than the primary being exactly C<UP>, the
+response RR-set TTL from the zonefile will be cut in half for both address
+families.
 
 =back
 
-If both C<primary> and C<secondary> were C<DOWN> for B<either> address family, this plugin will signal total resource failure to any upstream module (geoip or metafo).  The cutting of the TTL only happens once for all address RRs, even if both families had a non-C<UP> primary.
+If both C<primary> and C<secondary> were C<DOWN> for B<either> address
+family, this plugin will signal total resource failure to any upstream
+module (geoip or metafo).  The cutting of the TTL only happens once for all
+address RRs, even if both families had a non-C<UP> primary.
 
 =head1 SEE ALSO
 
-L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>, L<gdnsd-plugin-multifo(8)>
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>,
+L<gdnsd-plugin-multifo(8)>
 
 The gdnsd manual.
 

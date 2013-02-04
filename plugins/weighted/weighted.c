@@ -22,7 +22,7 @@
 
 #include "config.h"
 #define GDNSD_PLUGIN_NAME weighted
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 #include <math.h>
 
 // Importantly, 1048575 * 64 * 64 barely fits in uint32_t
@@ -51,7 +51,7 @@
 typedef struct {
     anysin_t addr;
     unsigned weight;
-    monio_state_t* states;
+    mon_state_t* states;
 } addrstate_t;
 
 typedef struct {
@@ -100,7 +100,7 @@ typedef struct {
 static resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static monio_list_t monio_list = { 0, NULL };
+static mon_list_t mon_list = { 0, NULL };
 
 // tracked configured max sizes, for dynamic arrays later
 static unsigned cfg_max_items_per_res = 1;
@@ -123,7 +123,8 @@ static void init_rand(const unsigned tnum) {
 // it's important that the modulo operation happen in 64-bit space,
 //   even though modval and the effective return value are in 32-bit space,
 //   because it vastly reduces the bias in the returned numbers.
-static inline uint64_t get_rand(const unsigned tnum, const uint64_t modval) {
+static uint64_t get_rand(const unsigned tnum, const uint64_t modval) {
+    dmn_assert(modval);
     return gdnsd_rand_get64(per_thread_rstates[tnum]) % modval;
 }
 
@@ -148,7 +149,7 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
 
     res_item->count = 1;
     res_item->as = calloc(res_item->count, sizeof(addrstate_t));
-    res_item->as[0].states = calloc(addrset->num_svcs, sizeof(monio_state_t));
+    res_item->as[0].states = calloc(addrset->num_svcs, sizeof(mon_state_t));
     res_item->as[0].weight = wtemp;
     res_item->max_weight = wtemp;
     res_item->weight = wtemp;
@@ -166,8 +167,8 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
         const unsigned svc_name_len = strlen(addrset->svc_names[i]);
         char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + svc_name_len + 1);
         sprintf(complete_desc, "%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, addrset->svc_names[i]);
-        monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
-        monio_info_t* m = &monio_list.info[monio_list.count++];
+        mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
+        mon_info_t* m = &mon_list.info[mon_list.count++];
         m->svctype = addrset->svc_names[i];
         m->desc = complete_desc;
         m->addr = addr_txt;
@@ -211,7 +212,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
             || lb_weight < 1 || lb_weight > MAX_WEIGHT )
         log_fatal("plugin_weighted: resource '%s', group '%s': values in address group mode must be arrays of [ IPADDR, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, item_name);
 
-    res_item->as[lb_idx].states = calloc(addrset->num_svcs, sizeof(monio_state_t));
+    res_item->as[lb_idx].states = calloc(addrset->num_svcs, sizeof(mon_state_t));
     res_item->as[lb_idx].weight = lb_weight;
 
     const char* addr_txt = vscf_simple_get_data(vscf_array_get_data(lb_data, 0));
@@ -227,8 +228,8 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
         const unsigned svc_name_len = strlen(addrset->svc_names[i]);
         char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + lb_name_len + 1 + svc_name_len + 1);
         sprintf(complete_desc, "%s/%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, lb_name, addrset->svc_names[i]);
-        monio_list.info = realloc(monio_list.info, sizeof(monio_info_t) * (monio_list.count + 1));
-        monio_info_t* m = &monio_list.info[monio_list.count++];
+        mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
+        mon_info_t* m = &mon_list.info[mon_list.count++];
         m->svctype = addrset->svc_names[i];
         m->desc = complete_desc;
         m->addr = addr_txt;
@@ -348,17 +349,10 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
 
     /////// Process the parameters...
 
-    // service_type[s]
-    const vscf_data_t* res_stype_old = vscf_hash_get_data_byconstkey(cfg, "service_type", true);
+    // service_types
     const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
-    if (res_stype_old) {
-        if (res_stypes)
-            log_fatal("plugin_weighted: resource '%s' (%s): 'service_type' is a deprecated alias for 'service_types', and you have defined both", res_name, stanza);
-        log_warn("plugin_weighted: resource '%s' (%s): 'service_type' is deprecated, use 'service_types'", res_name, stanza);
-        res_stypes = res_stype_old;
-    }
     if (res_stypes) {
-        addrset->count--; // minus one for service_type[s] entry
+        addrset->count--; // minus one for service_types entry
         addrset->num_svcs = vscf_array_get_len(res_stypes);
         if(!addrset->num_svcs)
             log_fatal("plugin_weighted: resource '%s' (%s): service_types cannot be an empty array", res_name, stanza);
@@ -511,7 +505,6 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
     dmn_assert(res); dmn_assert(res_cfg); dmn_assert(vscf_is_hash(res_cfg));
 
     // mark all possible parameter-keys
-    vscf_hash_get_data_byconstkey(res_cfg, "service_type", true);
     vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
     vscf_hash_get_data_byconstkey(res_cfg, "multi", true);
     vscf_hash_get_data_byconstkey(res_cfg, "up_thresh", true);
@@ -597,24 +590,20 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
      * OR: auto-detect any of the possibilities at the top level as the only subset
      */
 
-    // grab explicit sub-stanzas
+    // Check for bad old config, so that we error out on it.  If we don't, old "addrs"
+    //   config actually looks like a legitimate grouped configuration, which is silently bad.
     const vscf_data_t* addrs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs", true);
+    if(addrs_cfg)
+        log_fatal("plugin_weighted: resource '%s': key 'addrs' is illegal, choose another name for this item", res_name);
+
+    // grab explicit sub-stanzas
     const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v4", true);
     const vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v6", true);
     const vscf_data_t* cnames_cfg = vscf_hash_get_data_byconstkey(res_cfg, "cnames", true);
 
-    if(addrs_cfg || addrs_v4_cfg) {
-        const char* stanza = "addrs";
-        const char* stanza_v4 = "addrs_v4";
-        if(addrs_cfg) {
-             if(addrs_v4_cfg)
-                 log_fatal("plugin_weighted: resource '%s': 'addrs' is a deprecated alias for 'addrs_v4', but you have defined both", res_name);
-             log_warn("plugin_weighted: resource '%s': 'addrs' is a deprecated alias for 'addrs_v4'", res_name);
-             addrs_v4_cfg = addrs_cfg;
-             stanza_v4 = stanza;
-        }
+    if(addrs_v4_cfg) {
         res->addrs_v4 = calloc(1, sizeof(addrset_t));
-        config_addrset(res_name, stanza_v4, false, res->addrs_v4, addrs_v4_cfg);
+        config_addrset(res_name, "addrs_v4", false, res->addrs_v4, addrs_v4_cfg);
     }
 
     if(addrs_v6_cfg) {
@@ -630,7 +619,6 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
         //   marked so that we don't fail the mixed explicit+direct check at the bottom
         //   of this function.
         if(!addrs_v4_cfg && !addrs_v6_cfg) {
-            vscf_hash_get_data_byconstkey(res_cfg, "service_type", true);
             vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
             vscf_hash_get_data_byconstkey(res_cfg, "multi", true);
             vscf_hash_get_data_byconstkey(res_cfg, "up_thresh", true);
@@ -651,7 +639,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
 
 ////// exported callbacks start here
 
-monio_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
+mon_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
     dmn_assert(config);
     dmn_assert(vscf_is_hash(config));
 
@@ -666,7 +654,7 @@ monio_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
     resources = calloc(num_resources, sizeof(resource_t));
     unsigned idx = 0;
     vscf_hash_iterate(config, true, config_res, &idx);
-    return &monio_list;
+    return &mon_list;
 }
 
 void plugin_weighted_full_config(const unsigned num_threads) {
@@ -674,43 +662,58 @@ void plugin_weighted_full_config(const unsigned num_threads) {
     init_rand_storage(num_threads);
 }
 
-unsigned plugin_weighted_map_resource_dyna(const char* resname) {
-    if (!resname)
-        log_fatal("plugin_weighted: resource name should be present");
-
-    for (unsigned i = 0; i < num_resources; i++)
-        if (!strcmp(resname, resources[i].name)) {
-            if(!resources[i].addrs_v4 && !resources[i].addrs_v6)
-                log_fatal("plugin_weighted: Resource '%s' used in a DYNA RR, but has no address config data", resources[i].name);
-            log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
-            return i;
+int plugin_weighted_map_resource_dyna(const char* resname) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++) {
+            if (!strcmp(resname, resources[i].name)) {
+                if(!resources[i].addrs_v4 && !resources[i].addrs_v6) {
+                    log_err("plugin_weighted: Resource '%s' used in a DYNA RR, but has no address config data", resources[i].name);
+                    return -1;
+                }
+                log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
+                return (int)i;
+            }
         }
+        log_err("plugin_weighted: unknown resource '%s'", resname);
+    }
+    else {
+        log_err("plugin_weighted: resource name required");
+    }
 
-    log_fatal("plugin_weighted: unknown resource '%s'", resname);
+    return -1;
 }
 
-unsigned plugin_weighted_map_resource_dync(const char* resname, const uint8_t* origin) {
-    if (!resname)
-        log_fatal("plugin_weighted: resource name required in zonefile references");
-    for (unsigned i = 0; i < num_resources; i++) {
-        if (!strcmp(resname, resources[i].name)) {
-            cnset_t* cnset = resources[i].cnames;
-            if(!cnset)
-                log_fatal("plugin_weighted: Resource '%s' used in a DYNC RR, but has no cnames config data", resources[i].name);
-            for(unsigned j = 0; j < cnset->count; j++) {
-                const uint8_t* dname = cnset->items[j].cname;
-                if (dname_status(dname) == DNAME_PARTIAL) {
-                    uint8_t dnbuf[256];
-                    dname_copy(dnbuf, dname);
-                    if (dname_cat(dnbuf, origin) != DNAME_VALID)
-                        log_fatal("plugin_weighted: Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), resources[i].name, logf_dname(origin));
+int plugin_weighted_map_resource_dync(const char* resname, const uint8_t* origin) {
+    if(resname) {
+        for(unsigned i = 0; i < num_resources; i++) {
+            if (!strcmp(resname, resources[i].name)) {
+                cnset_t* cnset = resources[i].cnames;
+                if(!cnset) {
+                    log_err("plugin_weighted: Resource '%s' used in a DYNC RR, but has no cnames config data", resources[i].name);
+                    return -1;
                 }
+                for(unsigned j = 0; j < cnset->count; j++) {
+                    const uint8_t* dname = cnset->items[j].cname;
+                    if(dname_status(dname) == DNAME_PARTIAL) {
+                        uint8_t dnbuf[256];
+                        dname_copy(dnbuf, dname);
+                        if(dname_cat(dnbuf, origin) != DNAME_VALID) {
+                            log_err("plugin_weighted: Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), resources[i].name, logf_dname(origin));
+                            return -1;
+                        }
+                    }
+                }
+                log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
+                return (int)i;
             }
-            log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
-            return i;
         }
+        log_err("plugin_weighted: unknown resource '%s'", resname);
     }
-    log_fatal("plugin_weighted: unknown resource '%s'", resname);
+    else {
+        log_err("plugin_weighted: resource name required in zonefile references");
+    }
+
+    return -1;
 }
 
 void plugin_weighted_iothread_init(const unsigned threadnum) { init_rand(threadnum); }
@@ -722,6 +725,7 @@ void plugin_weighted_resolve_dyncname(unsigned threadnum, unsigned resnum, const
     dmn_assert(resource);
     cnset_t* cnset = resource->cnames;
     dmn_assert(cnset);
+    dmn_assert(cnset->weight);
 
     const unsigned item_rand = get_rand(threadnum, cnset->weight);
     unsigned running_total = 0;
@@ -761,11 +765,11 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
         dyn_item_maxs[item_idx] = 0;
         for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
             const addrstate_t* addr = &res_item->as[addr_idx];
-            const monio_state_uint_t addr_state
-                = gdnsd_monio_min_state(addr->states, aset->num_svcs);
-            if(addr_state != MONIO_STATE_UP)
+            const mon_state_uint_t addr_state
+                = gdnsd_mon_get_min_state(addr->states, aset->num_svcs);
+            if(addr_state != MON_STATE_UP)
                 *cut_ttl_ptr = true;
-            if(addr_state != MONIO_STATE_DOWN) {
+            if(addr_state != MON_STATE_DOWN) {
                 dyn_addr_weights[item_idx][addr_idx] = addr->weight;
                 dyn_item_sums[item_idx] += addr->weight;
                 if(addr->weight > dyn_item_maxs[item_idx])
@@ -808,6 +812,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
             const unsigned item_rand = get_rand(threadnum, dyn_items_max);
             const unsigned isum = dyn_item_sums[item_idx];
             if(item_rand < isum) {
+                dmn_assert(isum); // given that they're both uints
                 // Inner decision: choose one addr based on dyn_item->sum
                 const unsigned addr_rand = get_rand(threadnum, isum);
                 unsigned addr_running_total = 0;
@@ -831,6 +836,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
                 const res_aitem_t* chosen = &aset->items[item_idx];
                 // Inner decision: choose multiple addrs based on chosen's dynamic max
                 const unsigned addr_max = dyn_item_maxs[item_idx];
+                dmn_assert(addr_max);
                 for(unsigned addr_idx = 0; addr_idx < chosen->count; addr_idx++) {
                     const unsigned addr_rand = get_rand(threadnum, addr_max);
                     if(addr_rand < dyn_addr_weights[item_idx][addr_idx])

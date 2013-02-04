@@ -19,92 +19,38 @@
 
 #include "config.h"
 
-#include "gdnsd-misc.h"
-#include "gdnsd-misc-priv.h"
-#include "gdnsd-log.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/misc-priv.h"
+#include "gdnsd/log.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <libgen.h>
 #include <limits.h>
 #include <sys/time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <sys/utsname.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
 
 /* misc */
 
-static char* cfdir = NULL;
-
-// Make a copy of inpath that's definitely absolute
-F_MALLOC F_WUNUSED F_NONNULL
-static char* absify(const char* inpath) {
-    dmn_assert(inpath);
-    if(*inpath == '/') return strdup(inpath);
-
-    char* out = malloc(PATH_MAX);
-    if(!getcwd(out, PATH_MAX))
-        log_fatal("getcwd() failed: %s", logf_errno());
-
-    size_t cwdlen = strlen(out);
-    size_t inlen = strlen(inpath);
-    size_t final = cwdlen + inlen + 2;
-
-    if(final >= PATH_MAX)
-        log_fatal("Fully-qualified config pathname exceeds PATH_MAX");
-
-    out = realloc(out, final);
-    out[cwdlen] = '/';
-    memcpy(out + cwdlen + 1, inpath, inlen + 1);
-
+char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
+    dmn_assert(s1); dmn_assert(s2);
+    const unsigned s1_len = strlen(s1);
+    const unsigned s2_len = strlen(s2);
+    char* out = malloc(s1_len + s2_len + 1);
+    char* work = out;
+    memcpy(work, s1, s1_len);
+    work += s1_len;
+    memcpy(work, s2, s2_len);
+    work[s2_len] = 0;
+    if(s2_offs)
+        *s2_offs = work;
     return out;
 }
 
-const char* gdnsd_get_cfdir(void) { return cfdir; }
-
-void gdnsd_set_cfdir(const char* cfg_file) {
-    dmn_assert(!cfdir);
-
-    char* real_config_pathname = absify(cfg_file);
-    char* tmp_cfg_dir = dirname(real_config_pathname);
-    if(!tmp_cfg_dir)
-        log_fatal("gdnsd_set_cfdir(%s): dirname(%s) failed: %s", cfg_file, real_config_pathname, logf_errno());
-    unsigned tmp_cfg_dir_len = strlen(tmp_cfg_dir);
-    cfdir = malloc(tmp_cfg_dir_len + 2);
-    memcpy(cfdir, tmp_cfg_dir, tmp_cfg_dir_len);
-    cfdir[tmp_cfg_dir_len] = '/';
-    cfdir[tmp_cfg_dir_len + 1] = '\0';
-    free(real_config_pathname);
-}
-
-char* gdnsd_make_abs_fn(const char* absdir, const char* fn) {
-    dmn_assert(absdir); dmn_assert(fn);
-    dmn_assert(absdir[0] == '/');
-
-    if(fn[0] == '/')
-        return strdup(fn);
-
-    char* retval;
-
-    const unsigned fn_len = strlen(fn);
-    const unsigned absdir_len = strlen(absdir);
-    if(absdir[absdir_len - 1] == '/') {
-        retval = malloc(absdir_len + fn_len + 1);
-        memcpy(retval, absdir, absdir_len);
-        memcpy(retval + absdir_len, fn, fn_len + 1);
-    }
-    else {
-        retval = malloc(absdir_len + fn_len + 2);
-        memcpy(retval, absdir, absdir_len);
-        retval[absdir_len] = '/';
-        memcpy(retval + absdir_len + 1, fn, fn_len + 1);
-    }
-
-    return retval;
-}
 
 /***************
  * This Public-Domain JLKISS64 PRNG implementation is from:
@@ -137,9 +83,11 @@ struct _gdnsd_rstate_t {
     bool buf32_ok;
 };
 
-uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) { 
+uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) {
+    dmn_assert(rs);
+
     uint64_t t;
- 
+
     rs->x = 1490024343005336237ULL * rs->x + 123456789;
     rs->y ^= rs->y << 21;
     rs->y ^= rs->y >> 17;
@@ -152,6 +100,8 @@ uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) {
 }
 
 uint32_t gdnsd_rand_get32(gdnsd_rstate_t* rs) {
+    dmn_assert(rs);
+
     if(rs->buf32_ok) {
        rs->buf32_ok = false;
        return rs->buf32;
@@ -170,7 +120,10 @@ static gdnsd_rstate_t rand_init_state = { 0, 0, 0, 0, 0, 0, 0, false };
 
 // Try to get 5x uint64_t from /dev/urandom, ensuring
 //   none of them are all-zeros.
+F_NONNULL
 static bool get_urand_data(uint64_t* rdata) {
+    dmn_assert(rdata);
+
     bool rv = false;
     int urfd = open("/dev/urandom", O_RDONLY);
     if(urfd > -1) {
@@ -213,7 +166,7 @@ void gdnsd_rand_meta_init(void) {
         throw_away += (rdata.u32[8] & THROW_MASK);
     }
     else {
-        log_info("Did not get valid PRNG init via /dev/urandom, using iffy sources");
+        log_warn("Did not get valid PRNG init via /dev/urandom, using iffy sources");
         struct timeval t;
         gettimeofday(&t, NULL);
         pid_t pidval = getpid();
@@ -248,3 +201,84 @@ gdnsd_rstate_t* gdnsd_rand_init(void) {
     return newstate;
 }
 
+// fold X.Y.Z to a single uint32_t, same as <linux/version.h>
+F_CONST
+static uint32_t _version_fold(const unsigned x, const unsigned y, const unsigned z) {
+    dmn_assert(x < 65536); dmn_assert(y < 256); dmn_assert(z < 256);
+    return (x << 16) + (y << 8) + z;
+}
+
+bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z) {
+    bool rv = false;
+    struct utsname uts;
+    if(!uname(&uts) && !strcmp("Linux", uts.sysname)) {
+        unsigned sys_x, sys_y, sys_z;
+        if(sscanf(uts.release, "%u.%u.%u", &sys_x, &sys_y, &sys_z) == 3) {
+            const uint32_t vers_have = _version_fold(sys_x, sys_y, sys_z);
+            const uint32_t vers_wanted = _version_fold(x, y, z);
+            if(vers_have >= vers_wanted)
+                rv = true;
+        }
+    }
+    return rv;
+}
+
+// gdnsd_lookup2 is lookup2() by Bob Jenkins,
+//   from http://www.burtleburtle.net/bob/c/lookup2.c,
+//   which is in the public domain.
+// It's just been reformatted/styled to match my code.
+
+#define mix(a,b,c) { \
+    a -= b; a -= c; a ^= (c>>13); \
+    b -= c; b -= a; b ^= (a<<8);  \
+    c -= a; c -= b; c ^= (b>>13); \
+    a -= b; a -= c; a ^= (c>>12); \
+    b -= c; b -= a; b ^= (a<<16); \
+    c -= a; c -= b; c ^= (b>>5);  \
+    a -= b; a -= c; a ^= (c>>3);  \
+    b -= c; b -= a; b ^= (a<<10); \
+    c -= a; c -= b; c ^= (b>>15); \
+}
+
+uint32_t gdnsd_lookup2(const char *k, uint32_t len) {
+    dmn_assert(k || !len);
+
+    const uint32_t orig_len = len;
+
+    uint32_t a = 0x9e3779b9;
+    uint32_t b = 0x9e3779b9;
+    uint32_t c = 0xdeadbeef;
+
+    while(len >= 12) {
+        a += (k[0] + ((uint32_t)k[1]  << 8)
+                   + ((uint32_t)k[2]  << 16)
+                   + ((uint32_t)k[3]  << 24));
+        b += (k[4] + ((uint32_t)k[5]  << 8)
+                   + ((uint32_t)k[6]  << 16)
+                   + ((uint32_t)k[7]  << 24));
+        c += (k[8] + ((uint32_t)k[9]  << 8)
+                   + ((uint32_t)k[10] << 16)
+                   + ((uint32_t)k[11] << 24));
+        mix(a,b,c);
+        k += 12; len -= 12;
+    }
+
+    c += orig_len;
+
+    switch(len) {
+        case 11: c += ((uint32_t)k[10] << 24);
+        case 10: c += ((uint32_t)k[9]  << 16);
+        case 9 : c += ((uint32_t)k[8]  << 8);
+        case 8 : b += ((uint32_t)k[7]  << 24);
+        case 7 : b += ((uint32_t)k[6]  << 16);
+        case 6 : b += ((uint32_t)k[5]  << 8);
+        case 5 : b += k[4];
+        case 4 : a += ((uint32_t)k[3]  << 24);
+        case 3 : a += ((uint32_t)k[2]  << 16);
+        case 2 : a += ((uint32_t)k[1]  << 8);
+        case 1 : a += k[0];
+    }
+
+    mix(a,b,c);
+    return c;
+}

@@ -20,12 +20,12 @@
 // Unit test for gdmaps
 
 #include "config.h"
-#include <gdnsd-log.h>
+#include <gdnsd/log.h>
 #include "gdmaps_test.h"
 
 int main(int argc, char* argv[]) {
     if(argc != 2)
-        log_fatal("config file must be set on commandline");
+        log_fatal("root directory must be set on commandline");
 
     // dcs are 1 == dc02 and 2 == dc01
     gdmaps_t* gdmaps = gdmaps_test_init(argv[1]);

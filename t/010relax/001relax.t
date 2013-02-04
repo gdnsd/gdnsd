@@ -1,6 +1,8 @@
 
 # This tests a zone with all of the constructs
-#  which are only legal with strict_data = false
+#  which used to be only legal with strict_data = false
+# These now universally generate mere warnings, and
+#  there is no strict_data setting.
 
 use _GDT ();
 use FindBin ();

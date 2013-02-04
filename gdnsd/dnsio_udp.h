@@ -17,11 +17,10 @@
  *
  */
 
-#ifndef _GDNSD_DNSIO_UDP_H
-#define _GDNSD_DNSIO_UDP_H
+#ifndef GDNSD_DNSIO_UDP_H
+#define GDNSD_DNSIO_UDP_H
 
 #include "config.h"
-#include "gdnsd.h"
 #include "conf.h"
 
 // retval indicates need for net bind caps, if possible
@@ -31,4 +30,4 @@ bool udp_sock_setup(dns_addr_t *addrconf);
 F_NONNULL F_NORETURN
 void* dnsio_udp_start(void* addrconf_asvoid);
 
-#endif // _GDNSD_DNSIO_UDP_H
+#endif // GDNSD_DNSIO_UDP_H

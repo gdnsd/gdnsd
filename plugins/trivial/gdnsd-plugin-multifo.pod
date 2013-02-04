@@ -1,6 +1,7 @@
 =head1 NAME
 
-gdnsd-plugin-multifo - gdnsd plugin for Multi-address, all-active failover groups
+gdnsd-plugin-multifo - gdnsd plugin for multi-address, all-active failover
+groups
 
 =head1 SYNOPSIS
 
@@ -55,65 +56,110 @@ RR-sets.
 
 =head1 TOP-LEVEL PLUGIN CONFIG
 
-At the top level of the plugin's configuration stanza, two special parameters C<up_thresh> and C<service_types> are supported. These set default per-resource options of the same name for any resources which do not define them explicitly.
+At the top level of the plugin's configuration stanza, two special
+parameters C<up_thresh> and C<service_types> are supported. These set
+default per-resource options of the same name for any resources which do
+not define them explicitly.
 
-The rest of the hash entries at the top level are the names of the resources you define.  Each resource gets a configuration hash of its own for containing resource-specific parameters as well as the actual address data.
+The rest of the hash entries at the top level are the names of the
+resources you define.  Each resource gets a configuration hash of its own
+for containing resource-specific parameters as well as the actual address
+data.
 
 =head1 RESOURCE CONFIG
 
-Within a resource, you have two basic options.
+Within a resource, you have two basic options.  You can either directly
+specify a set of C<label =E<gt> address> pairs which are all the same
+family (IPv4 or IPv6), or you can use the sub-stanzas C<addrs_v4> and/or
+C<addrs_v6> to specify one or both families in the same resource.
 
-1) You can directly specify a set of C<label =E<gt> address> pairs which are all the same family (IPv4 or IPv6).
-2) You can use the sub-stanzas C<addrs_v4> and/or C<addrs_v6> to specify one or both families in the same resource.
-
-The C<up_thresh> and C<service_types> parameters are inherited through every level, and can be overriden at any level (even per-address-family):
+The C<up_thresh> and C<service_types> parameters are inherited through
+every level, and can be overridden at any level (even per-address-family):
 
 =over 4
 
 =item B<up_thresh>
 
-Floating point, default 0.5, range (0.0 - 1.0].  This configures the per-resource C<up_thresh> threshold.  More details in L</UP THRESH> below.
+Floating point, default 0.5, range (0.0 - 1.0].  This configures the
+per-resource C<up_thresh> threshold.  More details in L</UP THRESH> below.
 
 =item B<service_types>
 
-Array of strings, or single string.  Default C<default>.  This sets the monitored service_types for this resource.  If an array of more than one is provided, all will be monitored for each address, and the net monitored state will be the minimum (worst) of the set.  See L<gdnsd.config(8)> for more details on service_types.
+Array of strings, or single string.  Default C<default>.  This sets the
+monitored service_types for this resource.  If an array of more than one is
+provided, all will be monitored for each address, and the net monitored
+state will be the minimum (worst) of the set.  See L<gdnsd.config(8)> for
+more details on service_types.
 
 =back
 
 =head1 SHORTCUT CONFIG
 
-If you have no parameters (service_types, up_thresh) to configure in a given stanza (single-family direct resource config, or addrs_v[46]), and do not care about the descriptive per-address labels used in monitoring, you can replace the hash with an array of addresses.  The labels will be generated for you as a series of integers starting with C<1>.  For example, the following are equivalent:
+If you have no parameters (service_types, up_thresh) to configure in a
+given stanza (single-family direct resource config, or addrs_v[46]), and do
+not care about the descriptive per-address labels used in monitoring, you
+can replace the hash with an array of addresses.  The labels will be
+generated for you as a series of integers starting with C<1>.  For example,
+the following are equivalent:
 
    res1 => { addrs_v4 => [ 192.0.2.1, 192.0.2.2 ] }
    res1 => { addrs_v4 => { 1 => 192.0.2.1, 2 => 192.0.2.2 } }
 
 =head1 OPERATIONAL MECHANICS
 
-All of the addresses for all of the resources are monitored using the per-address-family inherited C<service_types> specified (default would be simple HTTP/1.0 monitoring for C<200 OK> on port 80).  When the core daemon requests a lookup for address records of a given family on one of this plugin's resources, it goes through essentially the following process to determine the set of response addresses for that address family: 1) Add all non-DOWN addresses to the result set.  2) If the set of non-DOWN addresses fail the up_thresh check, add *all* addresses to the result set as a fallback.  3) If any address is in the DOWN or even DANGER state, cut the zonefile-specified TTL in half
+All of the addresses for all of the resources are monitored using the
+per-address-family inherited C<service_types> specified (default would be
+simple HTTP/1.0 monitoring for C<200 OK> on port 80).  When the core daemon
+requests a lookup for address records of a given family on one of this
+plugin's resources, it goes through essentially the following process to
+determine the set of response addresses for that address family: 1) Add all
+non-DOWN addresses to the result set.  2) If the set of non-DOWN addresses
+fail the up_thresh check, add *all* addresses to the result set as a
+fallback.  3) If any address is in the DOWN or even DANGER state, cut the
+zonefile-specified TTL in half
 
-This process is repeated independently for each of the IPv4 and IPv6 address subsets, in the case that a resource has both address families configured (the TTL is only cut in half once of course).  Details on the up_thresh check follow:
+This process is repeated independently for each of the IPv4 and IPv6
+address subsets, in the case that a resource has both address families
+configured (the TTL is only cut in half once of course).  Details on the
+up_thresh check follow:
 
 =head1 UP THRESH
 
-Any non-DOWN address is considered an acceptable result for up_thresh purposes, even ones in the transitional DANGER state.  If there are not "enough" non-DOWN addresses to pass the threshold (per address family), all addresses (of a given address family) will be returned as a fallback.
+Any non-DOWN address is considered an acceptable result for up_thresh
+purposes, even ones in the transitional DANGER state.  If there are not
+"enough" non-DOWN addresses to pass the threshold (per address family), all
+addresses (of a given address family) will be returned as a fallback.
 
-The threshold is implemented mathematically as in the following pseudo-code C<if(non_down E<gt>= ceil(thresh * total)) threshold_passed;>.  For example, if thresh is at the default value of C<0.5>, and there are 3 total IPv4 addresses, then 2 of them must be non-down to pass the threshold.  The net result is that with the default threshold, the plugin will never return an isolated single address from a set of 3.  It will either return all 3, or it will return 2/3 if a single address from the set has failed.
+The threshold is implemented mathematically as in the following pseudo-code
+C<if(non_down E<gt>= ceil(thresh * total)) threshold_passed;>.  For
+example, if thresh is at the default value of C<0.5>, and there are 3 total
+IPv4 addresses, then 2 of them must be non-down to pass the threshold.  The
+net result is that with the default threshold, the plugin will never return
+an isolated single address from a set of 3.  It will either return all 3,
+or it will return 2/3 if a single address from the set has failed.
 
-When the threshold check fails (and all addresses are returned) for either address family, resource-level total failure will also be signaled to any applicable upstream meta-plugins such as metafo or geoip.
+When the threshold check fails (and all addresses are returned) for either
+address family, resource-level total failure will also be signaled to any
+applicable upstream meta-plugins such as metafo or geoip.
 
 General rules for the results of the up_thresh formula:
 
 =over 4
 
-=item * A threshold of 1.0 will only pass if B<all> addresses are not-down.  This is mostly pointless, you might as well not monitor anything and set up these addresses as a static set in a zonefile.
+=item * A threshold of 1.0 will only pass if B<all> addresses are not-down.
+This is mostly pointless, you might as well not monitor anything and set
+up these addresses as a static set in a zonefile.
 
-=item * A threshold of 0.01 will pass even if only one address is alive and return just that one address, even if it's e.g. the only one left out of 40.
+=item * A threshold of 0.01 will pass even if only one address is alive and
+return just that one address, even if it's e.g. the only one left out of 40.
 
-=item * Because a threshold of 0.0 is illegal, if all addresses are down the threshold will always fail, returning all addresses.
+=item * Because a threshold of 0.0 is illegal, if all addresses are down
+the threshold will always fail, returning all addresses.
 
 =back
 
-Intermediate value examples: (threshold: non-down/total required to pass threshold):
+Intermediate value examples: (threshold: non-down/total required to pass
+threshold):
 
 =over 4
 
@@ -139,7 +185,8 @@ Intermediate value examples: (threshold: non-down/total required to pass thresho
 
 =head1 SEE ALSO
 
-L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>, L<gdnsd-plugin-simplefo(8)>
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>,
+L<gdnsd-plugin-simplefo(8)>
 
 The gdnsd manual.
 

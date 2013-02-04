@@ -18,8 +18,9 @@
  */
 
 #include "monio.h"
-#include "dnsio_tcp.h"
-#include "gdnsd-plugapi-priv.h"
+#include "conf.h"
+#include "gdnsd/plugapi-priv.h"
+#include "gdnsd/log.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -47,7 +48,7 @@ struct _service_type_struct {
 
 static int max_stats_len = 0;
 static unsigned int num_mons = 0;
-static monio_smgr_t** mons = NULL;
+static mon_smgr_t** mons = NULL;
 
 // Called once after all resources are monio_add()'d,
 //  from main thread.  mon_loop happens to be the default
@@ -73,7 +74,7 @@ void monio_start(struct ev_loop* mon_loop) {
 }
 
 // We only have to check the address, because the port
-//  is determined by service_type.
+//  is determined by service type.
 static bool addr_eq(const anysin_t* a, const anysin_t* b) {
     if(a->sa.sa_family == b->sa.sa_family) {
         if(a->sa.sa_family == AF_INET) {
@@ -92,27 +93,33 @@ static bool addr_eq(const anysin_t* a, const anysin_t* b) {
 static unsigned num_svc_types = 0;
 static service_type_t* service_types;
 
-// Called for plugins once per monitored service_type+IP combination
+// Called for plugins once per monitored service type+IP combination
 //  immediately after their _load_config() phase (very important)
 //  to request monitoring and initialize various data/state.
-void monio_add_addr(const char* svctype_name, const char* desc, const char* addr, monio_state_t* monio_state_ptr) {
-    monio_state_set(monio_state_ptr, MONIO_STATE_UNINIT);
+void monio_add_addr(const char* svctype_name, const char* desc, const char* addr, mon_state_t* mon_state_ptr) {
 
+    stats_uint_t initial = MON_STATE_UNINIT;
+
+    // The four special service types that do no real monitoring
+    //   and stay stuck on a specific, forced initial state
     if(svctype_name) {
         if(!strcmp(svctype_name, "none"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_UP);
+            initial = MON_STATE_UP;
         else if(!strcmp(svctype_name, "up"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_UP);
+            initial = MON_STATE_UP;
         else if(!strcmp(svctype_name, "danger"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_DANGER);
+            initial = MON_STATE_DANGER;
         else if(!strcmp(svctype_name, "down"))
-            monio_state_set(monio_state_ptr, MONIO_STATE_DOWN);
-
-        if(monio_state_get(monio_state_ptr) != MONIO_STATE_UNINIT)
-            return;
+            initial = MON_STATE_DOWN;
     }
 
-    monio_smgr_t* this_smgr = calloc(1, sizeof(monio_smgr_t));
+    stats_own_set(mon_state_ptr, initial);
+
+    // No actual setup for the forced states
+    if(initial != MON_STATE_UNINIT)
+        return;
+
+    mon_smgr_t* this_smgr = calloc(1, sizeof(mon_smgr_t));
 
     // Set service type
     if(!svctype_name || !strcmp(svctype_name, "default")) {
@@ -126,34 +133,39 @@ void monio_add_addr(const char* svctype_name, const char* desc, const char* addr
             }
         }
         if(!this_smgr->svc_type)
-            log_fatal("Invalid service_type '%s' in monitoring request for '%s'", svctype_name, desc);
+            log_fatal("Invalid service type '%s' in monitoring request for '%s'", svctype_name, desc);
     }
 
     const int addr_err = gdnsd_anysin_getaddrinfo(addr, NULL, &this_smgr->addr);
     if(addr_err)
         log_fatal("Could not process monitoring address spec '%s': %s", addr, gai_strerror(addr_err));
 
+    bool is_duplicate = false;
+
     // now check for uniqueness
     for(unsigned i = 0; i < num_mons; i++) {
-        monio_smgr_t* that_smgr = mons[i];
+        mon_smgr_t* that_smgr = mons[i];
         if(addr_eq(&this_smgr->addr, &that_smgr->addr) && this_smgr->svc_type == that_smgr->svc_type) {
-            // We found a duplicate
-            free(this_smgr);
-            that_smgr->monio_state_ptrs = realloc(
-                that_smgr->monio_state_ptrs,
-                (that_smgr->num_state_ptrs + 1) * sizeof(monio_state_t*)
+            // We found a duplicate.  We'll keep this_smgr so that monitor stats output sees
+            //   it normally, but also add it to the list of outputs for the original copy
+            //   and (later) not directly add_monitor() the duplicate.  This de-duplicates
+            //   the actual monitoring traffic and state-tracking, but not the listed outputs
+            //   in e.g. the Web UI.  Note that we always scan for dupes in the same order,
+            //   so all duplicates should get added to the first copy.
+            that_smgr->mon_state_ptrs = realloc(
+                that_smgr->mon_state_ptrs,
+                (that_smgr->num_state_ptrs + 1) * sizeof(mon_state_t*)
             );
-            that_smgr->monio_state_ptrs[that_smgr->num_state_ptrs++] = monio_state_ptr;
-            if(gconfig.monitor_force_v6_up && that_smgr->addr.sa.sa_family == AF_INET6)
-                monio_state_set(that_smgr->monio_state_ptrs[that_smgr->num_state_ptrs - 1], MONIO_STATE_UP);
-            return;
+            that_smgr->mon_state_ptrs[that_smgr->num_state_ptrs++] = mon_state_ptr;
+            is_duplicate = true;
+            break;
         }
     }
 
     this_smgr->desc = strdup(desc);
     this_smgr->num_state_ptrs = 1;
-    this_smgr->monio_state_ptrs = malloc(sizeof(monio_state_t*));
-    this_smgr->monio_state_ptrs[0] = monio_state_ptr;
+    this_smgr->mon_state_ptrs = malloc(sizeof(mon_state_t*));
+    this_smgr->mon_state_ptrs[0] = mon_state_ptr;
     this_smgr->n_failure = 0;
     this_smgr->n_success = 0;
     this_smgr->up_thresh = this_smgr->svc_type->up_thresh;
@@ -161,11 +173,11 @@ void monio_add_addr(const char* svctype_name, const char* desc, const char* addr
     this_smgr->down_thresh = this_smgr->svc_type->down_thresh;
 
     if(gconfig.monitor_force_v6_up && this_smgr->addr.sa.sa_family == AF_INET6)
-        monio_state_set(this_smgr->monio_state_ptrs[0], MONIO_STATE_UP);
-    else
+        stats_own_set(this_smgr->mon_state_ptrs[0], MON_STATE_UP);
+    else if(!is_duplicate)
         this_smgr->svc_type->plugin->add_monitor(svctype_name, this_smgr);
 
-    mons = realloc(mons, sizeof(monio_smgr_t*) * (num_mons + 1));
+    mons = realloc(mons, sizeof(mon_smgr_t*) * (num_mons + 1));
     mons[num_mons++] = this_smgr;
 }
 
@@ -234,6 +246,9 @@ void monio_add_servicetypes(const vscf_data_t* svctypes_cfg) {
     unsigned timeout = DEF_TIMEOUT;
     def_svc->plugin->add_svctype(def_svc->name, NULL, interval, timeout);
 
+    // if this loop executes at all, svctypes_cfg is defined
+    //   (see if() block at top of func, and definition of num_svc_types)
+    dmn_assert(svctypes_cfg || !num_svc_types);
     for(unsigned i = 0; i < num_svc_types; i++) {
         service_type_t* this_svc = &service_types[i];
         this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
@@ -242,7 +257,7 @@ void monio_add_servicetypes(const vscf_data_t* svctypes_cfg) {
            || !strcmp(this_svc->name, "danger")
            || !strcmp(this_svc->name, "down")
            || !strcmp(this_svc->name, "default"))
-            log_fatal("Explicit service_type name '%s' not allowed", this_svc->name);
+            log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
         const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
         if(!vscf_is_hash(svctype_cfg))
             log_fatal("Definition of service type '%s' must be a hash", this_svc->name);
@@ -331,7 +346,7 @@ unsigned monio_stats_out_html(char* buf) {
     avail -= http_head_len;
 
     for(unsigned i = 0; i < num_mons; i++) {
-        monio_state_uint_t st = monio_state_get(mons[i]->monio_state_ptrs[0]);
+        mon_state_uint_t st = stats_get(mons[i]->mon_state_ptrs[0]);
         int written = snprintf(buf, avail, http_tmpl, mons[i]->desc, state_txt[st], state_txt[st]);
         if(unlikely(written >= avail || avail < (int)http_foot_len))
             log_fatal("BUG: monio stats buf miscalculated");
@@ -361,7 +376,7 @@ unsigned monio_stats_out_csv(char* buf) {
     avail -= csv_head_len;
 
     for(unsigned i = 0; i < num_mons; i++) {
-        monio_state_uint_t st = monio_state_get(mons[i]->monio_state_ptrs[0]);
+        mon_state_uint_t st = stats_get(mons[i]->mon_state_ptrs[0]);
         int written = snprintf(buf, avail, csv_tmpl, mons[i]->desc, state_txt[st]);
         if(unlikely(written >= avail))
             log_fatal("BUG: monio stats buf miscalculated");

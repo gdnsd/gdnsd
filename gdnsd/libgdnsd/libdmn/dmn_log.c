@@ -30,10 +30,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/syscall.h>
-
-#ifndef TLS
 #include <pthread.h>
-#endif
 
 #include "dmn.h"
 
@@ -50,18 +47,27 @@
 //  dmn_log_debug() emits output
 static bool dmn_debug = false;
 
+// whether INFO -level messages get sent to stderr in
+//   non-debug builds.
+static bool send_stderr_info = true;
+
 // Length of the whole format buffer
 #ifndef DMN_FMTBUF_SIZE
 #define DMN_FMTBUF_SIZE 4096U
 #endif
 
+#ifndef NDEBUG
 // Log message prefixes when using stderr
-static const char* pfx_debug = "debug: ";
-static const char* pfx_info = "info: ";
-static const char* pfx_warning = "warning: ";
-static const char* pfx_err = "error: ";
-static const char* pfx_crit = "fatal: ";
-static const char* pfx_unknown = "???: ";
+static const char* pfx_debug = " debug: ";
+static const char* pfx_info = " info: ";
+static const char* pfx_warning = " warning: ";
+static const char* pfx_err = " error: ";
+static const char* pfx_crit = " fatal: ";
+static const char* pfx_unknown = " ???: ";
+#endif
+
+// current openlog() identifier, for stderr copies + syslog
+static char* our_logname = NULL;
 
 /*********************************************************************/
 /*** fmtbuf code *****************************************************/
@@ -72,28 +78,20 @@ typedef struct {
     char buf[DMN_FMTBUF_SIZE];
 } fmtbuf_t;
 
-#ifdef TLS
-static TLS fmtbuf_t* fmtbuf = NULL;
-#else
 static pthread_key_t fmtbuf_key;
 static pthread_once_t fmtbuf_key_once = PTHREAD_ONCE_INIT;
 static void fmtbuf_make_key(void) { pthread_key_create(&fmtbuf_key, NULL); }
-#endif
 
 // Allocate a chunk from the format buffer
 // Allocates the buffer itself on first use per-thread
 char* dmn_fmtbuf_alloc(unsigned size) {
-#ifndef TLS
     fmtbuf_t* fmtbuf;
     pthread_once(&fmtbuf_key_once, fmtbuf_make_key);
-    if((fmtbuf = pthread_getspecific(fmtbuf_key)) == NULL) {
+    fmtbuf = pthread_getspecific(fmtbuf_key);
+    if(!fmtbuf) {
         fmtbuf = calloc(1, sizeof(fmtbuf_t));
         pthread_setspecific(fmtbuf_key, (void*)fmtbuf);
     }
-#else
-    if(!fmtbuf)
-        fmtbuf = calloc(1, sizeof(fmtbuf_t));
-#endif
     if(fmtbuf->used + size > DMN_FMTBUF_SIZE)
         dmn_log_fatal("BUG: format buffer exhausted");
     char* retval = &fmtbuf->buf[fmtbuf->used];
@@ -104,13 +102,10 @@ char* dmn_fmtbuf_alloc(unsigned size) {
 // Reset (free allocations within) the format buffer,
 //  but do not trigger initial allocation in the process
 void dmn_fmtbuf_reset(void) {
-#ifndef TLS
     fmtbuf_t* fmtbuf;
     pthread_once(&fmtbuf_key_once, fmtbuf_make_key);
-    if((fmtbuf = pthread_getspecific(fmtbuf_key)))
-#else
+    fmtbuf = pthread_getspecific(fmtbuf_key);
     if(fmtbuf)
-#endif
         fmtbuf->used = 0;
 }
 
@@ -141,8 +136,8 @@ const char* dmn_strerror(const int errnum) {
 }
 
 static bool dmn_syslog_alive = false;
-void dmn_start_syslog(const char* logname) {
-    openlog(logname, LOG_NDELAY|LOG_PID, LOG_DAEMON);
+void dmn_start_syslog(void) {
+    openlog(our_logname, LOG_NDELAY|LOG_PID, LOG_DAEMON);
     dmn_syslog_alive = true;
 }
 
@@ -152,22 +147,25 @@ void dmn_start_syslog(const char* logname) {
 //   to /dev/null the real stderr, because /dev/null
 //   is gone after chroot...).
 static FILE* alt_stderr = NULL;
-static bool alt_stderr_init = false;
-void dmn_init_log(void) {
+void dmn_init_log(const char* logname, const bool stderr_info) {
+    send_stderr_info = stderr_info;
+    our_logname = strdup(logname);
     alt_stderr = fdopen(dup(fileno(stderr)), "w");
     if(!alt_stderr) {
         perror("Failed to fdopen(dup(fileno(stderr)))");
         abort();
     }
-    if(fcntl(fileno(alt_stderr), F_SETFD, FD_CLOEXEC)) {
-        perror("fcntl(fileno(stderr_copy), F_SETFD, FD_CLOEXEC) failed");
-        abort();
-    }
-
-    alt_stderr_init = true;
 }
 
-void _dmn_close_alt_stderr(void) {
+int dmn_log_get_alt_stderr_fd(void) {
+    return fileno(alt_stderr);
+}
+
+void dmn_log_set_alt_stderr(const int fd) {
+    alt_stderr = fdopen(fd, "w");
+}
+
+void dmn_log_close_alt_stderr(void) {
     fclose(alt_stderr);
     alt_stderr = NULL;
 }
@@ -178,6 +176,8 @@ void _dmn_close_alt_stderr(void) {
 
 void dmn_loggerv(int level, const char* fmt, va_list ap) {
     if(alt_stderr) {
+#ifndef NDEBUG
+
         time_t t = time(NULL);
         struct tm tmp;
         localtime_r(&t, &tmp);
@@ -185,11 +185,11 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
         if(!strftime(tstamp, 10, "%T ", &tmp))
             strcpy(tstamp, "--:--:-- ");
 
-#if defined SYS_gettid && !defined __APPLE__
+#  if defined SYS_gettid && !defined __APPLE__
         pid_t tid = syscall(SYS_gettid);
         char tidbuf[16];
-        snprintf(tidbuf, 16, "[%i] ", tid);
-#endif
+        snprintf(tidbuf, 16, " [%i]", tid);
+#  endif
 
         const char* pfx;
         switch(level) {
@@ -202,9 +202,11 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
         }
         flockfile(alt_stderr);
         fputs_unlocked(tstamp, alt_stderr);
-#if defined SYS_gettid && !defined __APPLE__
+        if(our_logname)
+            fputs_unlocked(our_logname, alt_stderr);
+#  if defined SYS_gettid && !defined __APPLE__
         fputs_unlocked(tidbuf, alt_stderr);
-#endif
+#  endif
         fputs_unlocked(pfx, alt_stderr);
         va_list apcpy;
         va_copy(apcpy, ap);
@@ -213,6 +215,19 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
         putc_unlocked('\n', alt_stderr);
         fflush_unlocked(alt_stderr);
         funlockfile(alt_stderr);
+
+#else // NDEBUG
+        if(level != LOG_INFO || send_stderr_info) {
+            va_list apcpy;
+            va_copy(apcpy, ap);
+            flockfile(alt_stderr);
+            vfprintf(alt_stderr, fmt, apcpy);
+            va_end(apcpy);
+            putc_unlocked('\n', alt_stderr);
+            fflush_unlocked(alt_stderr);
+            funlockfile(alt_stderr);
+        }
+#endif // NDEBUG
     }
 
     if(dmn_syslog_alive)

@@ -1,11 +1,11 @@
 
-AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(srcdir)/.. -DETCDIR=\"$(sysconfdir)\"
+AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(srcdir)/..
 AM_LIBTOOLFLAGS = --silent
 
 noinst_LTLIBRARIES = libgdmaps_test.la
 libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h
 
-LDADD = libgdmaps_test.la ../libgdmaps.la ../../../../gdnsd/libgdnsd/libgdnsd.la
+LDADD = libgdmaps_test.la ../libgdmaps.la ../../../../gdnsd/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 bin_PROGRAMS = gdnsd_geoip_test
 gdnsd_geoip_test_SOURCES = gdnsd_geoip_test.c
@@ -24,10 +24,10 @@ include $(top_srcdir)/docs.am
 # This product includes GeoLite data created by MaxMind, available from http://maxmind.com/
 # These files are subject to MaxMind's GeoLite Open Data license, which is also re-distributed by download
 
-GEOLITE_URL_BASE = http://gdnsd.net/GeoLiteTestData/
-GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat fips_include-20111210
+GEOLITE_URL_BASE = http://downloads.gdnsd.net/GeoLiteTestData/
+GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat regioncodes-20130115.csv
 
-TESTLIST = \
+TESTLIST_NONETS = \
 	t00_v4db \
 	t01_v6db \
 	t02_v4citydb \
@@ -41,15 +41,34 @@ TESTLIST = \
 	t10_def \
 	t11_def2 \
 	t12_defnone \
-	t13_castatdef
+	t13_castatdef \
+	t14_missingcoords \
+	t15_nogeo \
+	t99_loadonly
+
+TESTLIST_NETS = \
+	t16_extnets \
+	t17_extn_empty \
+	t18_extn_all \
+	t19_extn_allg \
+	t20_extn_allgs \
+	t21_extn_subs
+
+TESTLIST = $(TESTLIST_NONETS) $(TESTLIST_NETS)
+
+EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg) $(TESTLIST_NETS:=.nets)
 
 check_PROGRAMS = $(TESTLIST:=.bin)
 
-TESTS_ENVIRONMENT = ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)"
-TESTS = trunner.sh
-EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg)
+test_verbose = $(test_verbose_@AM_V@)
+test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
+test_verbose_0 = @echo TEST $@;
+
+check-local:
+	$(test_verbose)ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)" $(srcdir)/trunner.sh
 
 check-download: tdownload.sh
-	@GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" $(TESTS_ENVIRONMENT) $(srcdir)/tdownload.sh
+	@ABDIR="$(abs_builddir)" GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" GEOLITE_FILES="$(GEOLITE_FILES)" $(srcdir)/tdownload.sh
 
-
+clean-local:
+	rm -rf $(builddir)/testroot

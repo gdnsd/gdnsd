@@ -30,33 +30,32 @@
 #include "dnsio_tcp.h"
 #include "dnspacket.h"
 #include "monio.h"
-#include "pkterr.h"
+#include "gdnsd/log.h"
 
 // Macro to add an offset to a void* portably...
 #define ADDVOID(_vstar,_offs) ((void*)(((char*)(_vstar)) + _offs))
 
 typedef struct {
-    satom_uint_t udp_recvfail;
-    satom_uint_t udp_sendfail;
-    satom_uint_t udp_tc;
-    satom_uint_t udp_edns_big;
-    satom_uint_t udp_edns_tc;
-    satom_uint_t tcp_recvfail;
-    satom_uint_t tcp_recvsize;
-    satom_uint_t tcp_sendfail;
-    satom_uint_t dns_noerror;
-    satom_uint_t dns_refused;
-    satom_uint_t dns_nxdomain;
-    satom_uint_t dns_notimp;
-    satom_uint_t dns_badvers;
-    satom_uint_t dns_formerr;
-    satom_uint_t dns_dropped;
-    satom_uint_t dns_v6;
-    satom_uint_t dns_edns;
-    satom_uint_t dns_edns_clientsub;
-    satom_uint_t udp_reqs;
-    satom_uint_t tcp_reqs;
-} stats_t;
+    stats_uint_t udp_recvfail;
+    stats_uint_t udp_sendfail;
+    stats_uint_t udp_tc;
+    stats_uint_t udp_edns_big;
+    stats_uint_t udp_edns_tc;
+    stats_uint_t tcp_recvfail;
+    stats_uint_t tcp_sendfail;
+    stats_uint_t dns_noerror;
+    stats_uint_t dns_refused;
+    stats_uint_t dns_nxdomain;
+    stats_uint_t dns_notimp;
+    stats_uint_t dns_badvers;
+    stats_uint_t dns_formerr;
+    stats_uint_t dns_dropped;
+    stats_uint_t dns_v6;
+    stats_uint_t dns_edns;
+    stats_uint_t dns_edns_clientsub;
+    stats_uint_t udp_reqs;
+    stats_uint_t tcp_reqs;
+} statio_t;
 
 typedef enum {
     READING_REQ = 0,
@@ -95,7 +94,7 @@ static const char log_dns[] =
 static const char log_udp[] =
     "udp_reqs:%" PRIuPTR " udp_recvfail:%" PRIuPTR " udp_sendfail:%" PRIuPTR " udp_tc:%" PRIuPTR " udp_edns_big:%" PRIuPTR " udp_edns_tc:%" PRIuPTR;
 static const char log_tcp[] =
-    "tcp_reqs:%" PRIuPTR " tcp_recvfail:%" PRIuPTR " tcp_recvsize:%" PRIuPTR " tcp_sendfail:%" PRIuPTR;
+    "tcp_reqs:%" PRIuPTR " tcp_recvfail:%" PRIuPTR " tcp_sendfail:%" PRIuPTR;
 
 static const char http_404_hdr[] =
     "HTTP/1.0 404 Not Found\r\n"
@@ -113,17 +112,17 @@ static const char http_headers[] =
     "Cache-Control: no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0\r\n"
     "Refresh: 60\r\n"
     "Content-type: %s; charset=utf-8\r\n"
-    "Content-length: %li\r\n\r\n";
+    "Content-length: %i\r\n\r\n";
 
 static const char csv_fixed[] =
     "uptime\r\n"
-    "%li\r\n"
+    "%" PRIu64 "\r\n"
     "noerror,refused,nxdomain,notimp,badvers,formerr,dropped,v6,edns,edns_clientsub\r\n"
     "%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR "\r\n"
     "udp_reqs,udp_recvfail,udp_sendfail,udp_tc,udp_edns_big,udp_edns_tc\r\n"
     "%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR "\r\n"
-    "tcp_reqs,tcp_recvfail,tcp_recvsize,tcp_sendfail\r\n"
-    "%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR "\r\n";
+    "tcp_reqs,tcp_recvfail,tcp_sendfail\r\n"
+    "%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR "\r\n";
 
 static const char html_fixed[] =
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n"
@@ -149,8 +148,8 @@ static const char html_fixed[] =
     "<tr><th>udp_reqs</th><th>udp_recvfail</th><th>udp_sendfail</th><th>udp_tc</th><th>udp_edns_big</th><th>udp_edns_tc</th></tr>\r\n"
     "<tr><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td></tr>\r\n"
     "</table><table>\r\n"
-    "<tr><th>tcp_reqs</th><th>tcp_recvfail</th><th>tcp_recvsize</th><th>tcp_sendfail</th></tr>\r\n"
-    "<tr><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td></tr>\r\n"
+    "<tr><th>tcp_reqs</th><th>tcp_recvfail</th><th>tcp_sendfail</th></tr>\r\n"
+    "<tr><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td><td>%" PRIuPTR "</td></tr>\r\n"
     "</table>\r\n";
 
 static const char html_footer[] =
@@ -158,6 +157,7 @@ static const char html_footer[] =
     "</body></html>\r\n";
 
 static time_t start_time;
+static time_t pop_statio_time = 0;
 static ev_timer* log_watcher = NULL;
 static ev_io** accept_watchers;
 static int* lsocks;
@@ -165,70 +165,71 @@ static unsigned num_lsocks;
 static unsigned num_conn_watchers = 0;
 static unsigned data_buffer_size = 0;
 static unsigned hdr_buffer_size = 0;
-static stats_t stats;
-static time_t pop_stats_time = 0;
+static statio_t statio;
 
-static void accumulate_stats(unsigned threadnum) {
+static void accumulate_statio(unsigned threadnum) {
     dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
     dmn_assert(this_stats);
 
-    const satom_uint_t l_noerror   = satom_get(&this_stats->noerror);
-    const satom_uint_t l_refused   = satom_get(&this_stats->refused);
-    const satom_uint_t l_nxdomain  = satom_get(&this_stats->nxdomain);
-    const satom_uint_t l_notimp    = satom_get(&this_stats->notimp);
-    const satom_uint_t l_badvers   = satom_get(&this_stats->badvers);
-    const satom_uint_t l_formerr   = satom_get(&this_stats->formerr);
-    const satom_uint_t l_dropped   = satom_get(&this_stats->dropped);
-    stats.dns_noerror  += l_noerror;
-    stats.dns_refused  += l_refused;
-    stats.dns_nxdomain += l_nxdomain;
-    stats.dns_notimp   += l_notimp;
-    stats.dns_badvers  += l_badvers;
-    stats.dns_formerr  += l_formerr;
-    stats.dns_dropped  += l_dropped;
+    const stats_uint_t l_noerror   = stats_get(&this_stats->noerror);
+    const stats_uint_t l_refused   = stats_get(&this_stats->refused);
+    const stats_uint_t l_nxdomain  = stats_get(&this_stats->nxdomain);
+    const stats_uint_t l_notimp    = stats_get(&this_stats->notimp);
+    const stats_uint_t l_badvers   = stats_get(&this_stats->badvers);
+    const stats_uint_t l_formerr   = stats_get(&this_stats->formerr);
+    const stats_uint_t l_dropped   = stats_get(&this_stats->dropped);
+    statio.dns_noerror  += l_noerror;
+    statio.dns_refused  += l_refused;
+    statio.dns_nxdomain += l_nxdomain;
+    statio.dns_notimp   += l_notimp;
+    statio.dns_badvers  += l_badvers;
+    statio.dns_formerr  += l_formerr;
+    statio.dns_dropped  += l_dropped;
 
-    const satom_uint_t this_reqs = l_noerror + l_refused + l_nxdomain
+    const stats_uint_t this_reqs = l_noerror + l_refused + l_nxdomain
         + l_notimp + l_badvers + l_formerr + l_dropped;
 
     if(this_stats->is_udp) {
-        stats.udp_reqs     += this_reqs;
-        stats.udp_recvfail += satom_get(&this_stats->p.udp.recvfail);
-        stats.udp_sendfail += satom_get(&this_stats->p.udp.sendfail);
-        stats.udp_tc       += satom_get(&this_stats->p.udp.tc);
-        stats.udp_edns_big += satom_get(&this_stats->p.udp.edns_big);
-        stats.udp_edns_tc  += satom_get(&this_stats->p.udp.edns_tc);
+        statio.udp_reqs     += this_reqs;
+        statio.udp_recvfail += stats_get(&this_stats->udp.recvfail);
+        statio.udp_sendfail += stats_get(&this_stats->udp.sendfail);
+        statio.udp_tc       += stats_get(&this_stats->udp.tc);
+        statio.udp_edns_big += stats_get(&this_stats->udp.edns_big);
+        statio.udp_edns_tc  += stats_get(&this_stats->udp.edns_tc);
     }
     else {
-        stats.tcp_reqs     += this_reqs;
-        stats.tcp_recvfail += satom_get(&this_stats->p.tcp.recvfail);
-        stats.tcp_recvsize += satom_get(&this_stats->p.tcp.recvsize);
-        stats.tcp_sendfail += satom_get(&this_stats->p.tcp.sendfail);
+        statio.tcp_reqs     += this_reqs;
+        statio.tcp_recvfail += stats_get(&this_stats->tcp.recvfail);
+        statio.tcp_sendfail += stats_get(&this_stats->tcp.sendfail);
     }
 
-    stats.dns_v6             += satom_get(&this_stats->v6);
-    stats.dns_edns           += satom_get(&this_stats->edns);
-    stats.dns_edns_clientsub += satom_get(&this_stats->edns_clientsub);
+    statio.dns_v6             += stats_get(&this_stats->v6);
+    statio.dns_edns           += stats_get(&this_stats->edns);
+    statio.dns_edns_clientsub += stats_get(&this_stats->edns_clientsub);
 }
 
 static void populate_stats(void) {
     const time_t now = time(NULL);
-    if(gconfig.realtime_stats || now > pop_stats_time) {
-        memset(&stats, 0, sizeof(stats));
+    if(gconfig.realtime_stats || now > pop_statio_time) {
+        memset(&statio, 0, sizeof(statio));
 
         const unsigned nio = gconfig.num_io_threads;
         for(unsigned i = 0; i < nio; i++)
-            accumulate_stats(i);
-        pop_stats_time = now;
+            accumulate_statio(i);
+        pop_statio_time = now;
     }
+    dmn_assert(pop_statio_time >= start_time);
 }
 
 #define IVAL_BUFSZ 16
 static char ival_buf[IVAL_BUFSZ];
-static const char* fmt_ival(const unsigned interval) {
+static const char* fmt_uptime(const time_t now) {
+    dmn_assert(now >= start_time);
+    const uint64_t interval = now - start_time;
     const double dinterval = interval;
 
-    if(interval < 128)           // 2m 8s
-        snprintf(ival_buf, IVAL_BUFSZ, "%u secs", interval);
+    if(interval < 128)      // 2m 8s
+        snprintf(ival_buf, IVAL_BUFSZ, "%u secs", (unsigned)interval);
     else if(interval < 7680)     // 2h 8m
         snprintf(ival_buf, IVAL_BUFSZ, "~ %.1f mins", dinterval / 60.0);
     else if(interval < 180000)   // 50h
@@ -246,17 +247,14 @@ static const char* fmt_ival(const unsigned interval) {
 }
 
 void statio_log_uptime(void) {
-    const time_t now = time(NULL);
-    const unsigned long uptime = now - start_time;
-
-    log_info("Uptime: %s", fmt_ival(uptime));
+    log_info("Uptime: %s", fmt_uptime(time(NULL)));
 }
 
 void statio_log_stats(void) {
     populate_stats();
-    log_info(log_dns, stats.dns_noerror, stats.dns_refused, stats.dns_nxdomain, stats.dns_notimp, stats.dns_badvers, stats.dns_formerr, stats.dns_dropped, stats.dns_v6, stats.dns_edns, stats.dns_edns_clientsub);
-    log_info(log_udp, stats.udp_reqs, stats.udp_recvfail, stats.udp_sendfail, stats.udp_tc, stats.udp_edns_big, stats.udp_edns_tc);
-    log_info(log_tcp, stats.tcp_reqs, stats.tcp_recvfail, stats.tcp_recvsize, stats.tcp_sendfail);
+    log_info(log_dns, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub);
+    log_info(log_udp, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc);
+    log_info(log_tcp, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 }
 
 F_NONNULL
@@ -264,10 +262,12 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs) {
     dmn_assert(outbufs);
     populate_stats();
 
-    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, (long)(pop_stats_time - start_time), stats.dns_noerror, stats.dns_refused, stats.dns_nxdomain, stats.dns_notimp, stats.dns_badvers, stats.dns_formerr, stats.dns_dropped, stats.dns_v6, stats.dns_edns, stats.dns_edns_clientsub, stats.udp_reqs, stats.udp_recvfail, stats.udp_sendfail, stats.udp_tc, stats.udp_edns_big, stats.udp_edns_tc, stats.tcp_reqs, stats.tcp_recvfail, stats.tcp_recvsize, stats.tcp_sendfail);
+    dmn_assert(pop_statio_time >= start_time);
+
+    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, (uint64_t)pop_statio_time - start_time, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
     outbufs[1].iov_len += monio_stats_out_csv(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
-    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "text/plain", (long)outbufs[1].iov_len);
+    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "text/plain", (unsigned)outbufs[1].iov_len);
 }
 
 F_NONNULL
@@ -275,22 +275,20 @@ static void statio_fill_outbuf_html(struct iovec* outbufs) {
     dmn_assert(outbufs);
     populate_stats();
 
-    const unsigned long uptime = pop_stats_time - start_time;
-
     struct tm now_tm;
-    if(!gmtime_r(&pop_stats_time, &now_tm))
+    if(!gmtime_r(&pop_statio_time, &now_tm))
         log_fatal("gmtime_r() failed");
 
     char now_char[26];
     if(!asctime_r(&now_tm, now_char))
         log_fatal("asctime_r() failed");
 
-    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_ival(uptime), stats.dns_noerror, stats.dns_refused, stats.dns_nxdomain, stats.dns_notimp, stats.dns_badvers, stats.dns_formerr, stats.dns_dropped, stats.dns_v6, stats.dns_edns, stats.dns_edns_clientsub, stats.udp_reqs, stats.udp_recvfail, stats.udp_sendfail, stats.udp_tc, stats.udp_edns_big, stats.udp_edns_tc, stats.tcp_reqs, stats.tcp_recvfail, stats.tcp_recvsize, stats.tcp_sendfail);
+    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_uptime(pop_statio_time), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
     outbufs[1].iov_len += monio_stats_out_html(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), html_footer, (sizeof(html_footer)) - 1);
     outbufs[1].iov_len += (sizeof(html_footer)-1);
-    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/xhtml+xml", (long)outbufs[1].iov_len);
+    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/xhtml+xml", (unsigned)outbufs[1].iov_len);
 }
 
 // Could be merged to a single iov, but this keeps things
@@ -351,7 +349,7 @@ static void timeout_cb(struct ev_loop* loop V_UNUSED, ev_timer* t, const int rev
     dmn_assert(revents == EV_TIMER);
 
     http_data_t* tdata = (http_data_t*)t->data;
-    log_pkterr("HTTP connection timed out while %s %s",
+    log_debug("HTTP connection timed out while %s %s",
         tdata->state == READING_REQ
             ? "reading from"
             : tdata->state == WRITING_RES
@@ -382,7 +380,7 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
     const ssize_t written = writev(io->fd, iovs, tdata->iovcnt);
     if(unlikely(written == -1)) {
         if(errno == EAGAIN || errno == EINTR) return;
-        log_pkterr("HTTP send() failed (%s), dropping response to %s", logf_errno(), logf_anysin(tdata->asin));
+        log_debug("HTTP send() failed (%s), dropping response to %s", logf_errno(), logf_anysin(tdata->asin));
         cleanup_conn_watchers(loop, tdata);
         return;
     }
@@ -420,7 +418,7 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
         ssize_t recvlen = recv(io->fd, junk_buffer, JUNK_SIZE, 0);
         if(unlikely(recvlen == -1)) {
             if(errno == EAGAIN || errno == EINTR) return;
-            log_pkterr("HTTP recv() error (lingering) from %s: %s", logf_anysin(tdata->asin), logf_errno());
+            log_debug("HTTP recv() error (lingering) from %s: %s", logf_anysin(tdata->asin), logf_errno());
         }
         if(recvlen < 1) cleanup_conn_watchers(loop, tdata);
         return;
@@ -432,7 +430,7 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
         ssize_t recvlen = recv(io->fd, destination, wanted, 0);
         if(unlikely(recvlen == -1)) {
             if(errno != EAGAIN && errno != EINTR) {
-                log_pkterr("HTTP recv() error from %s: %s", logf_anysin(tdata->asin), logf_errno());
+                log_debug("HTTP recv() error from %s: %s", logf_anysin(tdata->asin), logf_errno());
                 cleanup_conn_watchers(loop, tdata);
             }
             return;
@@ -460,11 +458,7 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     anysin_t* asin = malloc(sizeof(anysin_t));
     asin->len = ANYSIN_MAXLEN;
 
-#ifdef USE_ACCEPT4
-    const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK);
-#else
     const int sock = accept(io->fd, &asin->sa, &asin->len);
-#endif
 
     if(unlikely(sock == -1)) {
         free(asin);
@@ -480,7 +474,7 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
             case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
-                log_pkterr("HTTP: early tcp socket death: %s", logf_errno());
+                log_debug("HTTP: early tcp socket death: %s", logf_errno());
                 break;
             default:
                 log_err("HTTP: accept() error: %s", logf_errno());
@@ -490,14 +484,12 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 
     log_debug("HTTP: Received connection from %s", logf_anysin(asin));
 
-#ifndef USE_ACCEPT4
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
         free(asin);
         close(sock);
         log_err("Failed to set O_NONBLOCK on inbound HTTP socket: %s", logf_errno());
         return;
     }
-#endif
 
     ev_io* read_watcher = malloc(sizeof(ev_io));
     ev_io* write_watcher = malloc(sizeof(ev_io));
@@ -530,7 +522,7 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     ev_timer_start(loop, timeout_watcher);
 
     if((++num_conn_watchers == gconfig.max_http_clients)) {
-        log_pkterr("HTTP connection limit reached");
+        log_warn("Stats HTTP connection limit reached");
         for(unsigned i = 0; i < num_lsocks; i++)
             ev_io_stop(loop, accept_watchers[i]);
     }
@@ -553,13 +545,16 @@ void statio_init(void) {
     hdr_buffer_size =
         (sizeof(http_headers) - 1)      // http_headers format string
         + (21 - 2)                      // "application/xhtml+xml" - "%s"
-        + (20 - 3);                     // 64-bit len - "%li"
+        + (10 - 2);                     // 32-bit len - "%u"
+
+    // stats counters are 32-bit on 32-bit machines, and 64 on 64
+    const unsigned stat_len = sizeof(stats_uint_t) == 8 ? 20 : 10;
 
     data_buffer_size =
         (sizeof(html_fixed) - 1)        // html_fixed format string
         + (25 - 2)                      // max asctime output - 2 for the original %s
-        + (IVAL_BUFSZ - 2)              // max fmt_ival output, again - 2 for %s
-        + (20 * (20 - strlen(PRIuPTR))) // 20 satom stats, up to 20 bytes long each
+        + (IVAL_BUFSZ - 2)              // max fmt_uptime output, again - 2 for %s
+        + (19 * (stat_len - strlen(PRIuPTR))) // 19 stats, up to 20 bytes long each
         + monio_get_max_stats_len()     // whatever monio tells us...
         + (sizeof(html_footer) - 1);    // html_footer fixed string
 

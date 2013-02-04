@@ -20,12 +20,12 @@
 // Unit test for gdmaps
 
 #include "config.h"
-#include <gdnsd-log.h>
+#include <gdnsd/log.h>
 #include "gdmaps_test.h"
 
 int main(int argc, char* argv[]) {
     if(argc != 2)
-        log_fatal("config file must be set on commandline");
+        log_fatal("root directory must be set on commandline");
 
     gdmaps_t* gdmaps = gdmaps_test_init(argv[1]);
     unsigned tnum = 0;
@@ -34,12 +34,14 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "192.0.15.1", "\1\2", 19);
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "79.125.18.68", "\1", 17);
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "69.58.186.119", "\2\1", 16);
+    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "79.125.0.0", "\1", 17); // edge-case, Ireland
+    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "79.124.255.255", "\1\2", 16); // edge-case, Ukraine
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "::69.58.186.119", "\2\1", 112); // v4-compat
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "::FFFF:69.58.186.119", "\2\1", 112); // v4-mapped
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "::FFFF:0:69.58.186.119", "\2\1", 112); // SIIT
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2002:453A:BA77::", "\2\1", 32); // 6to4
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2001::BAC5:4588", "\2\1", 112); // Teredo
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c00::f03c:91ff:fe96:6a4f", "\1\2", 150); // native v6
+    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c00::f03c:91ff:fe96:6a4f", "\1\2", 6); // native v6, defaulted
     gdmaps_destroy(gdmaps);
 }
 

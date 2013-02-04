@@ -1,17 +1,17 @@
 
 =head1 NAME
 
-gdnsd-plugin-geoip - gdnsd meta-plugin for GSLB + failover via MaxMind's GeoIP databases
+gdnsd-plugin-geoip - gdnsd meta-plugin for GSLB + failover via MaxMind's
+GeoIP databases
 
 =head1 SYNOPSIS
 
 Minimal example gdnsd config file using this plugin:
 
-  zones => { example.com => {} }
   plugins => { geoip => {
     maps => {
       my_prod_map => {
-        geoip_db => /var/gdnsd/GeoIPCity.dat,
+        geoip_db => GeoIPCity.dat,
         datacenters => [dc-03, dc-02, dc-01],
         map => {
             EU => {
@@ -22,7 +22,7 @@ Minimal example gdnsd config file using this plugin:
         }
       },
       my_auto_map => {
-        geoip_db => /var/gdnsd/GeoIPCityv6.dat,
+        geoip_db => GeoIPCityv6.dat,
         datacenters => [dc1, dc2],
         auto_dc_coords => {
            dc1 => [ 38.9, -77 ],
@@ -60,94 +60,152 @@ Example zonefile RRs:
 
 B<gdnsd-plugin-geoip> uses MaxMind's GeoIP binary databases to
 map address and CNAME results based on geography and (in the address
-case) monitored service availability.
+case) monitored service availability.  It fully supports both
+IPv6 and the emerging edns-client-subnet standard.
 
-Like the older L<gdnsd-plugin-georeg>, this plugin can operate in
-an automatic distance-based mode (using City-level coordinate
-information rather than an external file and a Region-level db).  It
-can also operate coordinate-free and rely on the user to configure a
-hierarchical map of cascading default user_location-to-datacenter mappings,
-starting at the continent level.  The two modes can also be effectively
-mixed at geographic boundaries.  This avoids the previous complications
-surrounding coordinate math, the F<georeg.locations> file, and lengthy
-manual C<overrides> sections to correct real-world load distribution and
-network topography vs rough geographic guesswork.
+This plugin can operate in an automatic distance-based mode (using
+City-level coordinate information rather than an external file and a
+Region-level db).  It can also operate coordinate-free and rely on the
+user to configure a hierarchical map of cascading default
+user-location-to-datacenter mappings, starting at the continent level.
 
-Other key improvements over L<gdnsd-plugin-georeg>:
+The two modes can also be effectively mixed at geographic boundaries.
 
-=over 4
-
-=item * Supports multiple geographic mappings and datacenter-sets
-
-=item * Full support for IPv4 and IPv6 Country, Region, and City databases
-
-=item * Fully supports IPv6 from every angle
-
-=item * Reloads GeoIP database updates without restarts or query delays
-
-=item * Supports the emerging edns-client-subnet standard very optimally
-
-=item * Does not require libGeoIP as a dependency
-
-=item * Easy to expand for future alternative database format support and methods of geographical mapping without breaking configuration compatibility
-
-=item * Delegates out the per-datacenter work to other various plugins, using the same code as the metafo plugin
-
-=back
-
-The edns-client-subnet optimizations are worth mentioning in particular.  For each C<map> you define (which maps geographic location codes to preference-ordered lists of your datacenter locations), this plugin merges all of the raw GeoIP subnets into the largest possible supernets which contain identical responses in your configuration.  These in turn are used to set larger edns-client-ip scope masks than you'd see simply returning raw GeoIP results.
+For each C<map> you define (which maps geographic location codes to
+preference-ordered lists of your datacenter locations), this plugin merges
+all of the raw GeoIP subnets into the largest possible supernets which
+contain identical responses in your configuration.  These in turn are used
+to set larger edns-client-subnet scope masks than you'd see simply
+returning raw GeoIP results.
 
 =head1 PLUGIN_METAFO
 
-The documentation for L<gdnsd-plugin-metafo(8)> is required reading for understanding the geoip plugin documentation here.  The geoip plugin is an exact superset of the metafo plugin, and re-uses almost all of the metafo plugin's source code.  What plugin_geoip adds on top of the functionality of metafo is the ability to have the order of the datacenter failover list become dynamic per-request based on geographic hints derived from the client's network address, as well as the ability to do geographic selection of DYNC (CNAME) resources.
+The documentation for L<gdnsd-plugin-metafo(8)> is required reading for
+understanding the geoip plugin documentation here.  The geoip plugin is an
+exact superset of the metafo plugin, and re-uses almost all of the metafo
+plugin's source code.  What plugin_geoip adds on top of the functionality
+of metafo is the ability to have the order of the datacenter failover list
+become dynamic per-request based on geographic hints derived from the
+client's network address, as well as the ability to do geographic selection
+of DYNC (CNAME) resources.
+
+=head1 FILE LOCATIONS
+
+The configuration of this plugin can reference several external
+configuration and/or data files.  The location of these files is dependent,
+of course, on whether the daemon is running in chroot or "system paths"
+mode.  In system paths mode, the directory for these files is commonly,
+e.g. F</etc/gdnsd/geoip/> given autoconf $sysconfdir of F</etc>.  In chroot
+mode, the directory would be F</srv/gdnsd/etc/geoip/> given a chroot
+directory of F</srv/gdnsd>.  If any of the pathnames are specified as
+absolute paths, they will be taken literally (although this will still be
+relative to the chroot in the chroot case).
 
 =head1 CONFIGURATION - TOP-LEVEL
 
-The top level of the geoip plugin's configuration (i.e. C<plugins =E<gt> { geoip =E<gt> { ... } }>) supports only two special keys, both of which are required and expanded upon in detail in the next two sections: C<maps>, and C<resources>.  The C<maps> section defines one or more named mappings of location information from GeoIP binary databases to ordered subsets of datacenter names.  The C<resources> section defines one or more named resources, each of which references one of the named maps and resolves datacenter names to specific sets of addresses or CNAMEs.
+The top level of the geoip plugin's configuration (i.e. C<plugins =E<gt> {
+geoip =E<gt> { ... } }>) supports only two special keys, both of which are
+required and expanded upon in detail in the next two sections: C<maps>, and
+C<resources>.  The C<maps> section defines one or more named mappings of
+location information from GeoIP binary databases to ordered subsets of
+datacenter names.  The C<resources> section defines one or more named
+resources, each of which references one of the named maps and resolves
+datacenter names to specific sets of addresses or CNAMEs.
 
-Any other keys present at this level will be inherited down inside of each per-resource hash inside the C<resources> stanza, acting as per-resource defaults for anything not defined explicitly there.
+Any other keys present at this level will be inherited down inside of each
+per-resource hash inside the C<resources> stanza, acting as per-resource
+defaults for anything not defined explicitly there.
 
 =head1 CONFIGURATION - MAPS
 
 The C<maps> stanza supports one special configuration key at the top level:
 
-=head2 C<city_region_names = /path/to/fips_include>
+=head2 C<city_region_names = region_codes.csv>
 
-String, default unset.  GeoIP City databases use FIPS 10-4 codes for the names of Regions outside of the US and Canada.  For example the Geneve region of Switzerland is identified as C<07> in the database.  By default you would have to use these relatively confusing region codes in your hierarchical maps that make use of Region-level information (e.g. C<EU =E<gt> { CH =E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is specified, it points to a text file that maps these FIPS codes to canonical, memorable full names for clearer map configuration (e.g. C<EU =E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.
+String, filename, optional.  GeoIP City databases use FIPS 10-4 codes for
+the names of Regions outside of the US and Canada, and two-letter national
+alpha codes within the US and Canada.  For example the Geneve region of
+Switzerland is identified as C<07> in the database.  By default you would
+have to use these relatively confusing region codes in your hierarchical
+maps that make use of Region-level information (e.g. C<EU =E<gt> { CH
+=E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is
+specified, it points to a text file that maps these FIPS codes to
+canonical, memorable full names for clearer map configuration (e.g. C<EU
+=E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  Note
+that while older versions of this data did not map the US/Canadian
+two-letter alpha codes, newer versions do (e.g. TX -> Texas).
 
-The file format is a simple subset of the CSV format with 3 fields: ISO 3166-1 country code, FIPS 10-4 region code, and the region name in double-quotes.  It is recommended you download this file directly from MaxMind's reference copy in this format.  As of this writing, it is available from them at the following URL: L<http://www.maxmind.com/app/fips_include>
+This setting does not affect the GeoIP C<Region> -format databases, which
+have no region codes outside of the US and Canada, and always need the
+two-letter alpha codes in the map.
+
+The file format is a simple subset of the CSV format with 3 fields: ISO
+3166-1 country code, FIPS 10-4 region code (or two-letter alpha in
+US/Canada), and the region name in double-quotes.  It is recommended you
+download this file directly from MaxMind's reference copy in this format.
+As of this writing, it is available from them at the following URL:
+L<http://dev.maxmind.com/static/maxmind-region-codes.csv>.
 
 =head1 CONFIGURATION - PER-MAP
 
-All other C<maps>-level configuration keys are the names of the maps you choose to define.  A map, conceptually, is a mapping between geography and/or network topology to varying ordered datacenter sub-sets.  The value of each named map must be a hash, and the following configuration keys apply within:
+All other C<maps>-level configuration keys are the names of the maps you
+choose to define.  A map, conceptually, is a mapping between geography
+and/or network topology to varying ordered datacenter sub-sets.  The value
+of each named map must be a hash, and the following configuration keys
+apply within:
 
-=head2 C<geoip_db = /path/to/GeoIP.dat>
+=head2 C<geoip_db = GeoIPv6.dat>
 
-String, pathname, required.  This is the filesystem path to one of the supported MaxMind GeoIP database types.  It will be loaded and converted to an internal representation for this particular map once at startup time, and re-loaded again if it changes during the daemon's lifetime.
+String, filename, optional.  This is the filename of one of the supported
+MaxMind GeoIP database types.  It will be reloaded at runtime (without any
+significant query interruptions) if a change to the database file is
+detected.
 
-In the common case of the gdnsd daemon being started by root and securing itself via C<setuid()>, C<chroot()>, etc, the C<geoip_db> pathname must lie within the daemon's chroot path in order for runtime reloads to work.  If it does not, the plugin will still function correctly in all other respects, but database updates can only be reloaded by restarting the whole daemon.  The default gdnsd chroot path is F</var/gdnsd/>, or something similar depending on the installation prefix (e.g. F</usr/local/var/gdnsd/>).
+=head2 C<geoip_db_v4_overlay = GeoIP.dat>
 
-=head2 C<geoip_db_v4_overlay = /path/to/GeoIP.dat>
+String, pathname, optional.  This specifies an optional IPv4-level GeoIP
+database to overwrite the IPv4 sub-space of the IPv6 data loaded from
+C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be
+defined as a V6-format database.  In all other respects, it is similar to
+C<geoip_db>.
 
-String, pathname, optional.  This specifies an optional IPv4-level GeoIP database to overwrite the IPv4 sub-space of the IPv6 data loaded from C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be a V6-format database.  When runtime reloads are performed, if either database changes, both will be reloaded.
-
-As of this writing, MaxMind doesn't sell a commercial GeoIPv6 database.  What they offer are free IPv6 GeoLite database downloads, which include the IPv4 subset in the less-accurate GeoLite form.  This option allows you to use these GeoLitev6 databases for IPv6 coverage, and then overlay your paid commercial GeoIPv4 data on top for more accurate IPv4 results.
+As of this writing, MaxMind doesn't sell a commercial GeoIPv6 database.
+What they offer are free IPv6 GeoLite database downloads, which include the
+IPv4 subset in the less-accurate GeoLite form.  This option allows you to
+use these GeoLitev6 databases for IPv6 coverage, and then overlay your paid
+commercial GeoIPv4 data on top for more accurate IPv4 results.
 
 =head2 C<datacenters = [ one, two, three, ... ]>
 
-Array of strings, required.  This is the total set of datacenter names used by this map.  You must define at least one datacenter name (although 2 or more would be infinitely more useful).  At this time, there is a maximum limit of 254 datacenter names per map, although this could be raised if anyone requires it.  The order specified here is the fallback default result ordering in various default cases (e.g. if no explicit top-level map default list is given).
+Array of strings, required.  This is the total set of datacenter names used
+by this map.  You must define at least one datacenter name (although 2 or
+more would be infinitely more useful).  At this time, there is a maximum
+limit of 254 datacenter names per map, although this could be raised if
+anyone requires it.  The order specified here is the fallback default
+result ordering in various default cases (e.g. if no explicit top-level map
+default list is given).
 
 =head2 C<city_no_region = true>
 
-Boolean, default C<false>.  If this key is set to C<true> and C<geoip_db> references a City-level database, the Region-level information within it will be completely ignored for mapping purposes.  Your hierarchical map structure will now be C<continent =E<gt> country =E<gt> city> rather than C<continent =E<gt> country =E<gt> region =E<gt> city>.
-
-=head2 C<city_no_city = true>
-
-Boolean, default C<false>.  Very similar to the above, but ignores the final, city-level information instead, leaving you with only the information to map your hierarchy as  C<continent =E<gt> country =E<gt> region>.  If both options were set to C<true>, you would only have the ability to map by C<continent =E<gt> country>, as if it were a Country-level database.
+Boolean, default C<false>.  If this key is set to C<true> and C<geoip_db>
+references a City-level database, the Region-level information within it
+will be completely ignored for mapping purposes.  Your hierarchical map
+structure will now be C<continent =E<gt> country =E<gt> city> rather than
+C<continent =E<gt> country =E<gt> region =E<gt> city>.
 
 =head2 C<nets = { ... }>
 
-Key-value hash, optional.  If specified, the contents should be key-value pairs of C<network/netmask> mapped to a datacenter name (or an array of datacenter names).  This is intended for doing one-off overrides of special networks (to you), such as private space.  Entries specified here will override any GeoIP-based mapping from C<map> below.  Note that this is implemented in a simplistic way which isn't optimized for large sets of C<nets>.  If you really need a giant custom map, consider generating a custom GeoIP.dat instead (there's some related perl code in gdnsd's test suite...).  Example:
+Key-value hash, optional (see below for alternate form).  If specified, the
+contents should be key-value pairs of C<network/netmask> mapped to a
+datacenter name (or an array of datacenter names).  Any
+network-to-datacenter mappings specified here will override mappings
+determined via GeoIP.  Note that it is illegal to specify networks in the
+IPv4-like subspaces of IPv6 other than v4compat, but it is legal to specify
+actual IPv4 networks (which are treated identically to v4compat).  See the
+section on IPv4 Compatible Addresses later in this document for more
+details.  The order of the networks is unimportant; they will always be
+sorted and inserted such that an entry which is a subnet of another entry
+is not obliterated by the parent supernet.
 
     nets => {
         10.0.0.0/8 => [ dc1, dc2 ],
@@ -155,85 +213,233 @@ Key-value hash, optional.  If specified, the contents should be key-value pairs 
         2001:DB8::/32 => [ dc4, dc5, dc6 ],
     }
 
-Note that IPv6 entries in "nets" are illegal unless the C<geoip_db> is also IPv6-enabled.  Regardless of the order specified in the config, the networks in 'nets' will be sorted in an order that prevents larger subnets from obliterating the effects of smaller ones.  Specifically, IPv6 networks will be applied before IPv4 networks, and within each type the networks are sorted by ascending network number.
+=head2 C<nets = nets_file_name>
 
-Also note that you cannot directly specify IPv6 networks within the trivially-translatable v4-compat, v4-mapped, SIIT, Teredo, or 6to4 address spaces here.  Such assignments would be ineffective because the lookup-time code always translates these addresses into a canonical IPv4 address first before traversing the network tree.  For related reasons, IPv6 supernets of these spaces are also not allowed as nets entries.
-
-Always just specify the IPv4 network itself to cover all of these cases.  The following are the IPv4-like IPv6 address spaces referenced above, with "NNNN:NNNN" representing the 32 bits the effective IPv4 address is taken from:
-
-   ::NNNN:NNNN/96        # v4-compat
-   ::FFFF:NNNN:NNNN/96   # v4-mapped
-   ::FFFF:0:NNNN:NNNN/96 # SIIT
-   2001::NNNN:NNNN/32    # Teredo (NNNN:NNNN is xor'd with FFFF:FFFF)
-   2002:NNNN:NNNN::/16   # 6to4
+String pathname, optional.  A variant of the above, but the contents of the
+key-value hash are loaded from the named external file.  This makes life
+easier for external tools and scripts generating large sets of nets entries
+(e.g. from BGP data).  The file will be monitored for changes and reloaded
+at runtime much like the GeoIP databases.
 
 =head2 C<map = { ... }>
 
-Key-value hash, optional.  This is the heart of a named map: the map itself, which maps places to ordered lists of datacenters.
+Key-value hash, optional.  This is the heart of a named map which uses
+GeoIP: the map itself, which maps places to ordered lists of datacenters.
+It requires that C<geoip_db> is also specified, and makes no sense without
+it.
 
-This is a nested key-value hash.  At each level, the keys are location codes (continent, country, region, or city information depending on depth), and the values are either an ordered datacenter array (e.g. C<[ dc03, dc01, dc04 ]>), or a sub-hash containing a deeper level of distinction.  At each layer, a special key named C<default> is available, which sets the default for everything within the current scope.  The top-level default itself defaults to the ordered list from C<datacenters> in the normal case.  If the entire C<map> stanza is missing or empty, you just get the default behavior of C<default>.  A datacenter array can also be empty, which implies that this location is mapped to receive no response data (the server will still respond to the query, and will not issue an NXDOMAIN.  It will simply be a NODATA/NOERROR response like you'd get if there were no records of this type, but could be records of other types for the same name).
+This is a nested key-value hash.  At each level, the keys are location
+codes (continent, country, region, or city information depending on depth),
+and the values are either an ordered datacenter array (e.g. C<[ dc03, dc01,
+dc04 ]>), or a sub-hash containing a deeper level of distinction.  At each
+layer, a special key named C<default> is available, which sets the default
+for everything within the current scope.  The top-level default itself
+defaults to the ordered list from C<datacenters> in the normal case.  If
+the entire C<map> stanza is missing or empty, you just get the default
+behavior of C<default>.  A datacenter array can also be empty, which
+implies that this location is mapped to receive no response data (the
+server will still respond to the query, and will not issue an NXDOMAIN.  It
+will simply be a NODATA/NOERROR response like you'd get if there were no
+records of this type, but could be records of other types for the same
+name).
 
-The meaningful location keys at the top level are continent codes, of which there are primarily seven in MaxMind's databases: C<AF> for Africa, C<AS> for Asia, C<NA> for North America, C<SA> for South America, C<EU> for Europe, C<OC> for Oceania, and C<AN> for Antarctica.  There is also an eighth continent-level code which is, literally, C<-->.  This is a sort of fallback "no information available" continent code, and it contains the special country codes C<A1>, C<A2>, C<O1>, and C<-->, which represent Anonymous Proxies, Satellite Providers, Other, and Unknown, respsectively.
+The meaningful location keys at the top level are continent codes, of which
+there are primarily seven in MaxMind's databases: C<AF> for Africa, C<AS>
+for Asia, C<NA> for North America, C<SA> for South America, C<EU> for
+Europe, C<OC> for Oceania, and C<AN> for Antarctica.  There is also an
+eighth continent-level code which is, literally, C<-->.  This is a sort of
+fallback "no information available" continent code, and it contains the
+special country codes C<A1>, C<A2>, C<O1>, and C<-->, which represent
+Anonymous Proxies, Satellite Providers, Other, and Unknown, respsectively.
 
-The next layer (the sub-hash beneath any continent code) maps ISO-3166-1 2-letter country codes, which as with continents can map directly to datacenters, or to yet another recursive layer.
+The next layer (the sub-hash beneath any continent code) maps ISO-3166-1
+2-letter country codes, which as with continents can map directly to
+datacenters, or to yet another recursive layer.
 
-The next two layers deep are for Region and City level information, only available from the Region and City type databases.  The Region database type only provides region information for the US and Canada, using the standard local 2-letter abbrevations (e.g. AB for Alberta, OK for Oklahama).  The City databases use those same region abbrevations for the US and Canada, but use either FIPS 10-4 2-letter codes or full region names for the rest of the world's regions (as detailed earlier in, and controlled by, the C<city_region_names> option).
+The next two layers deep are for Region and City level information, only
+available from the Region and City type databases.  The Region database
+type only provides region information for the US and Canada, using the
+standard local 2-letter abbrevations (e.g. AB for Alberta, OK for
+Oklahama).  The City databases use those same region abbrevations for the
+US and Canada, but use either FIPS 10-4 2-letter codes or full region names
+for the rest of the world's regions (as detailed earlier in, and controlled
+by, the C<city_region_names> option).
 
-The actual City names at the final layer appear to be encoded using some form of ISO8859-1 and/or CP1252 character set in the databases themselves, and your map entries will have to match byte-for-byte in the case of non-ASCII characters.  May come up with a better solution for this down the road.
+The actual City names at the final layer appear to be encoded using some
+form of ISO8859-1 and/or CP1252 character set in the databases themselves,
+and your map entries will have to match byte-for-byte in the case of
+non-ASCII characters.  May come up with a better solution for this down the
+road.
 
-There is also one other special key (aside from C<default>) available at all levels of the map hierarchy, a boolean named C<skip_level>, default C<false>.  If set within the hierarchical C<map> at any layer, it causes the next layer of detail to be skipped for this portion of the map.  For example, setting this at the very top layer would mean that the top layer would contain country-level codes directly, without an enclosing continent-level hierarchy.  Setting it within a country would mean that city names are used directly within that country, without an intervening layer of region names.  This option is not aware of the C<city_no_region> option, so e.g. setting that option and specifying C<skip_level> at the country-level would result in no further information being available within that country (as C<skip_level> would skip the remaining layer of city data).
+There is also one other special key (aside from C<default>) available at
+all levels of the map hierarchy, a boolean named C<skip_level>, default
+C<false>.  If set within the hierarchical C<map> at any layer, it causes
+the next layer of detail to be skipped for this portion of the map.  For
+example, setting this at the very top layer would mean that the top layer
+would contain country-level codes directly, without an enclosing
+continent-level hierarchy.  Setting it within a country would mean that
+city names are used directly within that country, without an intervening
+layer of region names.  This option is not aware of the C<city_no_region>
+option, so e.g. setting that option and specifying C<skip_level> at the
+country-level would result in no further information being available within
+that country (as C<skip_level> would skip the remaining layer of city data).
 
 =head1 CONFIGURATION - MAPS - CITY AUTO MODE
 
-"City-auto-mode" is a special mode of operation that automatically maps out the world to your datacenters based on coordinate math, so that you don't have to manually construct a complex hierarchical C<map>.  It can still be mixed with C<map> of course, allowing you to use auto-mode for only select geographic areas if you wish (or disabling it for select areas by specifying manual lists).  The key parameter is C<auto_dc_coords>, which enables city-auto-mode.
+"City-auto-mode" is a special mode of operation that automatically maps out
+the world to your datacenters based on coordinate math, so that you don't
+have to manually construct a complex hierarchical C<map>.  It can still be
+mixed with C<map> of course, allowing you to use auto-mode for only select
+geographic areas if you wish (or disabling it for select areas by
+specifying manual lists).  The key parameter is C<auto_dc_coords>, which
+enables city-auto-mode.
 
 =over 4
 
 =item C<auto_dc_coords = { ... }>
 
-Key-value hash, optional.  If this option is specified, the whole map's basic mode of operation changes to "city-auto-mode".  The contents of the hash must be a key for each datacenter named in C<datacenters>, with their values set to an array of C<[lat, lon]> in decimal degree units.  When city-auto-mode is enabled by this, the following configuration-validation changes occur from the default, static-mapping mode: the loaded GeoIP database(s) are required be City-level databases, and the special keyword C<auto> becomes a legal "datacenter list" in the C<map> stanza.
+Key-value hash, optional.  If this option is specified, the whole map's
+basic mode of operation changes to "city-auto-mode".  The contents of the
+hash are a key for each datacenter named in C<datacenters>, with their
+values set to an array of C<[lat, lon]> in decimal degree units.  When
+city-auto-mode is enabled by this, the following configuration-validation
+changes occur from the default, static-mapping mode: the loaded GeoIP
+database(s) are required be City-level databases, and the special keyword
+C<auto> becomes a legal "datacenter list" in the C<map> stanza.
 
-With city-auto-mode enabled, the top-level map C<default> defaults to C<auto>, but can be overriden with a manual list.  For any location that maps to C<auto>, the coordinates specified here in C<auto_dc_coords> will be compared with the coordinates from the City-level database(s) to determine an automatic distance-sorted datacenter list.
+With city-auto-mode enabled, the top-level map C<default> defaults to
+C<auto>, but can be overridden with a manual list.  For any location that
+maps to C<auto>, the coordinates specified here in C<auto_dc_coords> will
+be compared with the coordinates from the City-level database(s) to
+determine an automatic distance-sorted datacenter list.
+
+If you omit one or more defined datacenters from the coordinate list in
+C<auto_dc_coords>, those datacenters will not be used in automatic results,
+but will still be available for manual use via C<map> and/or C<nets>
+entries.
 
 =item C<auto_dc_limit = N>
 
-Unsigned integer, optional, default 3.  When city-auto-mode is in effect, this is the upper length limit for auto-generated lists.  3 is a reasonable default even if you have a considerably longer set of datacenters, as this provides a primary as well as two fallbacks.  Raising this to a large number in the presence of a long datacenter list will cause the set of unique result datacenter lists to increase rapidly, and thus reduce the optimization of the final result database for edns-client-subnet purposes.  It's really not worth raising this value in almost any case, unless you really need to handle more than 3 random datacenters going offline at the same time and still have clients fail elsewhere.  The value zero is treated as unlimited (highly un-recommended).
+Unsigned integer, optional, default 3.  When city-auto-mode is in effect,
+this is the upper length limit for auto-generated lists.  3 is a reasonable
+default even if you have a considerably longer set of datacenters, as this
+provides a primary as well as two fallbacks.  Raising this to a large
+number in the presence of a long datacenter list will cause the set of
+unique result datacenter lists to increase rapidly, and thus reduce the
+optimization of the final result database for edns-client-subnet purposes.
+It's really not worth raising this value in almost any case, unless you
+really need to handle more than 3 random datacenters going offline at the
+same time and still have clients fail elsewhere.  The value zero is treated
+as unlimited (highly un-recommended).
 
 =back
 
-Under city-auto-mode, when the top-level default is (explicitly or implicitly) C<auto>, there is still a fallback static ordering which is the whole ordered C<datacenters> list, which is the normal static default C<default> when not in city-auto-mode.  This fallback is used when no location information is available at all (e.g. IPv6 client vs IPv4 GeoIP DB, Anonymous Proxies, etc).
+Under city-auto-mode, when the top-level default is (explicitly or
+implicitly) C<auto>, there is still a fallback static ordering which is the
+whole ordered C<datacenters> list, which is the normal static default
+C<default> when not in city-auto-mode.  This fallback is used when no
+location information is available at all (e.g. IPv6 client vs IPv4 GeoIP
+DB, Anonymous Proxies, etc).
 
 =head1 MAP TESTING
 
-A binary program C<gdnsd_geoip_test> is included.  This can be used directly from the commandline, parses the relevant bits of your gdnsd config file for geoip map info, and then provides datacenter list results for IP address + map combinations supplied by the user.  Useful for debugging your maps and testing the mapping of client IPs.  It has a separate manpage L<gdnsd_geoip_test(1)>.
+A binary program C<gdnsd_geoip_test> is included.  This can be used
+directly from the commandline, parses the relevant bits of your gdnsd
+config file for geoip map info, and then provides datacenter list results
+for IP address + map combinations supplied by the user.  Useful for
+debugging your maps and testing the mapping of client IPs.  It has a
+separate manpage L<gdnsd_geoip_test(1)>.
 
 =head1 CONFIGURATION - RESOURCES
 
-Resource-level configuration within the C<resources> stanza is nearly identical to the resources configuration of the metafo plugin, with all of the same basic behaviors about synthesizing or directly referencing the configuration of other plugins per-datacenter.  Only the key differences will be covered here:
+Resource-level configuration within the C<resources> stanza is nearly
+identical to the resources configuration of the metafo plugin, with all of
+the same basic behaviors about synthesizing or directly referencing the
+configuration of other plugins per-datacenter.  Only the key differences
+will be covered here:
 
 =over 4
 
-=item * metafo's per-resource C<datacenters> array is replaced with C<map =E<gt> mapname>, which references one of the maps defined in the C<maps> stanza, described in detail earlier.  The set of defined datacenters in the C<dcmap> stanza must match the total set of datacenters defined by the referenced map.
+=item * metafo's per-resource C<datacenters> array is replaced with
+C<map =E<gt> mapname>, which references one of the maps defined in the
+C<maps> stanza, described in detail earlier.  The set of defined
+datacenters in the C<dcmap> stanza must match the total set of datacenters
+defined by the referenced map.
 
-=item * metafo's restriction to just address-based (DYNA) results is lifted.  If the per-resource sub-plugin configurations used by a geoip resource support CNAME (DYNC) results, then that geoip resource will also support DYNC results.  Because there is no DYNC monitoring, only the first datacenter from each datacenter sub-list in the C<map> will be used for the result; there is no failover, only geographic differentiation.
+=item * metafo's restriction to just address-based (DYNA) results is
+lifted.  If the per-resource sub-plugin configurations used by a geoip
+resource support CNAME (DYNC) results, then that geoip resource will also
+support DYNC results.  Because there is no DYNC monitoring, only the first
+datacenter from each datacenter sub-list in the C<map> will be used for the
+result; there is no failover, only geographic differentiation.
 
-=item * For the common case of a single CNAME result per-datacenter, the CNAME data can be supplied directly as the singular string value of each datacenter in the C<dcmap>, without involving a sub-plugin at all.
+=item * For the common case of a single CNAME result per-datacenter, the
+CNAME data can be supplied directly as the singular string value of each
+datacenter in the C<dcmap>, without involving a sub-plugin at all.
 
 =back
 
 =head1 META-PLUGIN INTERACTION
 
-Both of the meta-plugins (C<metafo> and C<geoip>) can reference their own as well as each others' resources by direct reference within a C<dcmap>, so long as a resource does not directly refer to itself.  This allows plugin-layering configurations such as geoip -> metafo -> weighted, or metafo -> geoip -> multifo, or even metafo -> metafo -> simplefo, etc.
+Both of the meta-plugins (C<metafo> and C<geoip>) can reference their own
+as well as each others' resources by direct reference within a C<dcmap>, so
+long as a resource does not directly refer to itself.  This allows
+plugin-layering configurations such as geoip -> metafo -> weighted, or
+metafo -> geoip -> multifo, or even metafo -> metafo -> simplefo, etc.
 
-Bear in mind that once you begin using inter-meta-plugin references, you could create a reference loop.  gdnsd does not currently detect or prevent such loops, and they will cause complete runtime failure when queried, probably by running out of stack space during recursion.
+Bear in mind that once you begin using inter-meta-plugin references, you
+could create a reference loop.  gdnsd does not currently detect or prevent
+such loops, and they will cause complete runtime failure when queried,
+probably by running out of stack space during recursion.
 
-Additionally, C<geoip> can synthesize configuration for C<metafo> resources, but the reverse does not hold; C<metafo> cannot synthesize configuration for C<geoip> resources.
+Additionally, C<geoip> can synthesize configuration for C<metafo>
+resources, but the reverse does not hold; C<metafo> cannot synthesize
+configuration for C<geoip> resources.
+
+=head2 IPv4 Compatible Addresses
+
+This plugin knows of five different relatively-trivial ways to map IPv4
+addresses into the IPv6 address space.  These are shown below, with
+C<NNNN:NNNN> in place of the copied IPv4 address bytes:
+
+   ::NNNN:NNNN/96        # v4compat - canonical form for this plugin
+   ::FFFF:NNNN:NNNN/96   # v4mapped
+   ::FFFF:0:NNNN:NNNN/96 # SIIT
+   2001::NNNN:NNNN/32    # Teredo (NNNN:NNNN is xor'd with FFFF:FFFF)
+   2002:NNNN:NNNN::/16   # 6to4
+
+All of this plugin's internal lookup databases are IPv6 databases, and any
+IPv4-like information is always stored in the v4compat space within these
+databases.  When doing runtime lookups all other v4-like addresses (raw
+IPv4 addresses, v4mapped, SIIT, Teredo, and 6to4) are converted to the
+canonical v4compat IPv6 representation before querying the internal
+databases.  The other representations (v4mapped, SIIT, Teredo, 6to4) are
+Undefined internally, and will never be referenced at lookup-time due to
+the v4compat conversion mentioned earlier.
+
+The C<nets> stanza is not allowed to specify entries in the four undefined
+v4-like IPv6 spaces (those other than v4compat).  Specify those networks as
+normal IPv4 networks or v4compat networks instead.  Legitimate IPv6 C<nets>
+entries which happen to be a supernet of any v4-like spaces will *not*
+undely affect v4-like lookups.  There is no functional difference between
+v4compat and native v4 forms in C<nets>, e.g. C<192.0.2.0/24> and
+C<::C000:0200/120> are completely identical.
+
+GeoIP databases that are natively IPv4-only get all of their data loaded
+into the v4compat space only.  For IPv6 GeoIP databases, by default we load
+the v4compat space directly (which is where MaxMind stores IPv4 data in
+their IPv6 databases), but ignore the v4mapped/SIIT/Teredo/6to4 spaces
+(some of which are empty in MaxMind's databases, and some of which simply
+alias the v4compat space).  When using an IPv6 GeoIP database combined with
+an IPv4 GeoIP overlay (geoip_db_v4_overlay config), the v4compat space of
+the IPv6 database is also ignored on loading, and the direct IPv4 data from
+the IPv4 databasee takes its place.
 
 =head1 ANOTHER CONFIG EXAMPLE
 
-A relatively-maximal example config, showing the interaction of valid C<maps> and C<resources> sections:
+A relatively-maximal example config, showing the interaction of valid
+C<maps> and C<resources> sections:
 
-  zones => { example.com => {} }
   service_types => {
     xmpp_svc => { plugin => "tcp_connect", ... }
     www_svc => { plugin => "http_status", ... }
@@ -241,12 +447,11 @@ A relatively-maximal example config, showing the interaction of valid C<maps> an
   plugins => {
     geoip => {
       maps => {
-        city_region_names => /etc/fips_include,
+        city_region_names => fips_include,
         my_prod_map => {
-          geoip_db => /var/gdnsd/GeoIPCityv6.dat,
-          geoip_db_v4_overlay => /var/gdnsd/GeoIPCity.dat,
+          geoip_db => GeoIPCityv6.dat,
+          geoip_db_v4_overlay => GeoIPCity.dat,
           city_no_region => false, # default
-          city_no_city => false, # default
           datacenters => [us-01, de-01, sg-01],
           map => {
               # Hierarchy is Continent -> Country -> Region -> City
@@ -275,8 +480,8 @@ A relatively-maximal example config, showing the interaction of valid C<maps> an
           }
         }
         my_auto_map => {
-          geoip_db => /var/gdnsd/GeoIPCityv6.dat,
-          geoip_db_v4_overlay => /var/gdnsd/GeoIPCity.dat,
+          geoip_db => GeoIPCityv6.dat,
+          geoip_db_v4_overlay => GeoIPCity.dat,
           datacenters => [us-01, de-01, sg-01],
           auto_dc_coords => {
              us-01 => [ 38.9, -77 ],
@@ -341,7 +546,8 @@ Example zonefile RRs:
 
 =head1 SEE ALSO
 
-L<gdnsd-plugin-metafo(8)>, L<gdnsd_geoip_test(1)>, L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>
+L<gdnsd-plugin-metafo(8)>, L<gdnsd_geoip_test(1)>, L<gdnsd.config(5)>,
+L<gdnsd.zonefile(5)>, L<gdnsd(8)>
 
 The gdnsd manual.
 

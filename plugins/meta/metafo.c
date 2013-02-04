@@ -24,7 +24,7 @@
 
 #define GDNSD_PLUGIN_NAME metafo
 
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 
 typedef struct {
    unsigned num_dcs; // count (e.g. 3)

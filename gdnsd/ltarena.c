@@ -18,132 +18,91 @@
  */
 
 #include "ltarena.h"
-#include "gdnsd-compiler.h"
+#include "gdnsd/compiler.h"
+#include "gdnsd/dname.h"
 
 #include <inttypes.h>
 #include <string.h>
-#include <sys/mman.h>
+#include <stdlib.h>
 
-// ltarena pool sizing/limits/waste:
-//   The arena has a base allocation regardless of how small the
-//     zonefile data is.
-//   The arena is allocated on-demand in terms of fixed number of pools
-//   The size of each pool allocated is at least double the previous
-//     size, up to a certain limit.  That limit also defines the absolute
-//     maximum waste.  Waste is also limited to roughly the total allocated.
-//   The arena has a minimum overall allocation limit.  That is to say,
-//     depending on usage patterns the maximum limit varies, but we know
-//     the limit in the worst (min limit) case.
-//   With --enable-lowmem:
-//     Base allocation: 16K + 256-512B overhead
-//     min allocation limit: ~880MB
-//     max waste limit: ~16MB
-//   Without --enable-lowmem:
-//     Base allocation: 16K + 4-8K overhead
-//     min allocation limit: ~253GB
-//     max waste limit: ~256MB
-#define INIT_POOL_SIZE   (16 * 1024)
-#if LOWMEM
-#  define NUM_POOLS 64
-#  define MAX_POOL_SIZE  (16 * 1024 * 1024)
-#else
-#  define NUM_POOLS 1024
-#  define MAX_POOL_SIZE (256 * 1024 * 1024)
-#endif
+// ltarena: used for dname/label strings only, pooled to
+//   reduce the per-alloc overhead of malloc aligning and
+//   tracking every single one needlessly.
+// Each pool is normally POOL_SIZE, non-growing to preserve
+//   *some* amount of locality-of-reference to the related
+//   objects referencing the strings.
+// We initially reserve room in the ltarena object to track
+//   8 pools, which expands by doubling to support far more
+//   pools than needed by even the largest zones in existence.
+#define POOL_SIZE 512U // *must* be >= (256 + (red_size*2)),
+                       //    && multiple of 4
+#define INIT_POOLS_ALLOC 8U // *must* be 2^n && > 0
 
 // Normally, our pools are initialized to all-zeros for us
-//   by mmap(), and no red zones are employed.  In debug
+//   by calloc(), and no red zones are employed.  In debug
 //   builds, we initialize a whole pool to 0xDEADBEEF,
-//   define a redzone of 2 pointer widths before and after
+//   define a redzone of 4 bytes before and after
 //   each block, and then zero out the valid allocated area
 //   of each block as it's handed out.
 #ifndef NDEBUG
-#  define RED_SIZE (sizeof(uintptr_t) * 2)
+#  define RED_SIZE 4
 #else
 #  define RED_SIZE 0
 #endif
 
-static void** pools;
-
-static uint32_t dnhash_count = 0;
-static uint32_t dnhash_mask = 511; // must be 2^n - 1
-static uint8_t** dnhash;
+// INIT_DNHASH_MASK + 1 is the initial number of slots
+//   in the dnhash table, which grows by doubling every
+//   time the count of stored unique dnames reaches half
+//   the slot count.
+#define INIT_DNHASH_MASK 127U // *must* be 2^n-1 && > 0
 
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 
-#define alloc_mmap(size) \
-    mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
+typedef struct {
+    unsigned count;
+    unsigned mask;
+    const uint8_t** table;
+} dnhash_t;
 
-#define dnhash_alloc(_new_mask) \
-    (uint8_t**)alloc_mmap(((_new_mask) + 1) * sizeof(uint8_t**))
-#define dnhash_unalloc(_x, _old_mask) \
-    munmap((void*)(_x), ((_old_mask) + 1) * sizeof(uint8_t**))
+F_MALLOC F_WUNUSED
+static dnhash_t* dnhash_new(void) {
+    dmn_assert(INIT_DNHASH_MASK);
+    dmn_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK)); // 2^n-1
 
-static void* make_pool(const unsigned bytes) {
-    // basic pool size checks
-    dmn_assert(!(bytes & (bytes - 1))); // power of two
-    dmn_assert(bytes >= INIT_POOL_SIZE);
-    dmn_assert(bytes <= MAX_POOL_SIZE);
-
-    // get mem from mmap, assert pointer-aligned
-    void* p = alloc_mmap(bytes);
-    dmn_assert(!((uintptr_t)p & (sizeof(uintptr_t) - 1)));
-
-    // fill in deadbeef if using redzones
-    if(RED_SIZE) {
-        uint32_t* p32 = (uint32_t*)p;
-        unsigned idx = bytes >> 2;
-        while(idx--)
-            p32[idx] = 0xDEADBEEF;
-    }
-
-    // let valgrind know what's going on, if running
-    //   and we're a debug build
-    NOWARN_VALGRIND_MAKE_MEM_NOACCESS(p, bytes);
-    NOWARN_VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1);
-
-    return p;
+    dnhash_t* rv = malloc(sizeof(dnhash_t));
+    rv->count = 0;
+    rv->mask = INIT_DNHASH_MASK;
+    rv->table = calloc(INIT_DNHASH_MASK + 1U, sizeof(uint8_t**));
+    return rv;
 }
 
-void lta_init(void) {
-    pools = calloc(NUM_POOLS, sizeof(void*));
-    pools[0] = make_pool(INIT_POOL_SIZE);
-    dnhash = dnhash_alloc(dnhash_mask);
+F_NONNULL
+static void dnhash_destroy(dnhash_t* dnhash) {
+    dmn_assert(dnhash);
+    dmn_assert(dnhash->table);
+    dmn_assert(dnhash->mask);
+    free(dnhash->table);
+    free(dnhash);
 }
 
-void lta_close(void) {
-    dnhash_unalloc(dnhash, dnhash_mask);
-    dnhash = NULL;
-}
+// grow a dnhash_t's hashtable size by doubling
+F_NONNULL
+static void dnhash_grow(dnhash_t* dnhash) {
+    dmn_assert(dnhash); dmn_assert(dnhash->count);
+    // assert that dnhash->mask is still 2^n-1 and >0
+    dmn_assert(dnhash->mask); dmn_assert(!((dnhash->mask + 1U) & dnhash->mask));
 
-// This is almost a complete copy of label_djb_hash from ltree.h,
-//  but note that the while loop is on --len instead of len--.  For
-//  full domainnames, we don't want to hash the constant \0 terminator
-//  (hence --len), whereas for labels we do want to use every byte (len--).
-F_PURE
-static uint32_t dname_djb_hash(const uint8_t* input, const uint32_t hash_mask) {
-   dmn_assert(input);
-
-   uint32_t hash = 5381;
-   uint32_t len = *input++;
-   while(--len)
-       hash = (hash * 33) ^ *input++;
-
-   return hash & hash_mask;
-}
-
-static void dnhash_grow(void) {
-    dmn_assert(dnhash); dmn_assert(dnhash_count); dmn_assert(dnhash_mask);
-
-    const uint32_t new_mask = (dnhash_mask << 1) | 1;
-    uint8_t** new_table = dnhash_alloc(new_mask);
-    for(uint32_t i = 0; i <= dnhash_mask; i++) {
-        uint8_t* item = dnhash[i];
+    const uint8_t** old_table = dnhash->table;
+    const unsigned old_mask = dnhash->mask;
+    const unsigned new_mask = (old_mask << 1U) | 1U;
+    const uint8_t** new_table = calloc(new_mask + 1U, sizeof(uint8_t**));
+    for(unsigned i = 0; i <= old_mask; i++) {
+        const uint8_t* item = old_table[i];
         if(item) {
-            uint32_t jmpby = 1;
-            uint32_t new_slot = dname_djb_hash(item, new_mask);
+            unsigned jmpby = 1U;
+            unsigned new_slot = dname_hash(item) & new_mask;
             while(new_table[new_slot]) {
                 new_slot += jmpby++;
                 new_slot &= new_mask;
@@ -152,90 +111,148 @@ static void dnhash_grow(void) {
         }
     }
 
-    dnhash_unalloc(dnhash, dnhash_mask);
-    dnhash = new_table;
-    dnhash_mask = new_mask;
+    free(dnhash->table);
+    dnhash->table = new_table;
+    dnhash->mask = new_mask;
 }
 
-uint8_t* lta_dnamedup_hashed(const uint8_t* dn) {
-    dmn_assert(dn); dmn_assert(dnhash); dmn_assert(dnhash_mask);
 
-    uint32_t jmpby = 1;
-    uint32_t slotnum = dname_djb_hash(dn, dnhash_mask);
-    while(dnhash[slotnum]) {
-        if(!memcmp(dnhash[slotnum], dn, *dn + 1))
-            return dnhash[slotnum];
-        slotnum += jmpby++;
-        slotnum &= dnhash_mask;
+struct _ltarena {
+    void** pools;
+    unsigned pool;
+    unsigned poffs;
+    unsigned palloc;
+    dnhash_t* dnhash;
+};
+
+static void* make_pool(void) {
+    dmn_assert(!(POOL_SIZE & 3U)); // multiple of four
+
+    void* p;
+    if(RED_SIZE) {
+        // malloc + fill in deadbeef if using redzones
+        p = malloc(POOL_SIZE);
+        uint32_t* p32 = (uint32_t*)p;
+        unsigned idx = POOL_SIZE >> 2U;
+        while(idx--)
+            p32[idx] = 0xDEADBEEF;
+    }
+    else {
+        // get mem from calloc
+        p = calloc(1, POOL_SIZE);
     }
 
-    uint8_t* retval = dnhash[slotnum] = lta_malloc_1(*dn + 1);
-    memcpy(retval, dn, *dn + 1);
+    // let valgrind know what's going on, if running
+    //   and we're a debug build
+    NOWARN_VALGRIND_MAKE_MEM_NOACCESS(p, POOL_SIZE);
+    NOWARN_VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1U);
 
-    if(++dnhash_count > (dnhash_mask >> 1))
-        dnhash_grow();
-
-    return retval;
+    return p;
 }
 
-uint8_t* lta_labeldup(const uint8_t* dn) {
-    dmn_assert(dn);
-    uint8_t* retval = lta_malloc_1(*dn + 1);
-    memcpy(retval, dn, *dn + 1);
-    return retval;
+ltarena_t* lta_new(void) {
+    ltarena_t* rv = calloc(1, sizeof(ltarena_t));
+    rv->palloc = INIT_POOLS_ALLOC;
+    rv->pools = malloc(INIT_POOLS_ALLOC * sizeof(void*));
+    rv->pools[0] = make_pool();
+    rv->dnhash = dnhash_new();
+    return rv;
 }
 
-void* lta_malloc(const unsigned size, const unsigned align_bytes) {
-    dmn_assert(size); dmn_assert(align_bytes);
+void lta_close(ltarena_t* lta) {
+    if(lta->dnhash) {
+        dnhash_destroy(lta->dnhash);
+        lta->dnhash = NULL;
+        lta->pools = realloc(lta->pools, (lta->pool + 1) * sizeof(void*));
+    }
+}
 
-    // assert that if alignment is requested, it's for the pointer
-    //   size exactly, since that's our only use case currently
-    dmn_assert(align_bytes == 1 || align_bytes == sizeof(uintptr_t));
+void lta_destroy(ltarena_t* lta) {
+    lta_close(lta);
+    unsigned whichp = lta->pool + 1U;
+    while(whichp--) {
+        NOWARN_VALGRIND_DESTROY_MEMPOOL(lta->pools[whichp]);
+        free(lta->pools[whichp]);
+    }
+    free(lta->pools);
+    free(lta);
+}
 
-    // Current pool number, allocation offset, and allocated size
-    static unsigned pool = 0;
-    static unsigned poffs = 0;
-    static unsigned pool_size = INIT_POOL_SIZE;
+F_MALLOC F_WUNUSED F_NONNULL
+static void* lta_malloc(ltarena_t* lta, const unsigned size) {
+    dmn_assert(lta); dmn_assert(size);
+    dmn_assert(lta->dnhash); // not closed
 
-    // branchless shift of poffs forward for alignment if necessary
-    const unsigned align_mask = align_bytes - 1;
-    poffs += align_mask;
-    poffs &= ~align_mask;
+    // Currently, all allocations obey this assertion.
+    // Only labels + dnames are stored here, which max out at 256
+    dmn_assert(size <= 256);
 
     // the requested size + redzones on either end, giving the total
     //   this allocation will steal from the pool
     const unsigned size_plus_red = size + RED_SIZE + RED_SIZE;
 
-    // Currently, all allocations obey this assertion.  Should stay that way.
-    dmn_assert(size_plus_red <= MAX_POOL_SIZE);
+    // this could be a compile-time check, just stuffing here instead for now
+    dmn_assert(POOL_SIZE >= (256 + RED_SIZE + RED_SIZE));
 
-    // basic sanity assertions on pool sizing
-    dmn_assert(!(pool_size & (pool_size - 1))); // power of two
-    dmn_assert(pool_size >= INIT_POOL_SIZE);
-    dmn_assert(pool_size <= MAX_POOL_SIZE);
+    // This logically follows from the above asserts, but JIC
+    dmn_assert(size_plus_red <= POOL_SIZE);
 
-    // handle pool switch if we're out of room.  We at least
-    //   double the pool size on each switch, and might double
-    //   multiple times if warranted to fit the new object in
-    //   the very next pool.
-    if(unlikely((poffs + size_plus_red > pool_size))) {
-        if(unlikely(++pool == NUM_POOLS))
-            log_fatal("lta_malloc(): ran out of pools, zone data too large!");
-        if(pool_size < MAX_POOL_SIZE)
-            do { pool_size <<= 1; }
-                while(size_plus_red > pool_size);
-        poffs = 0;
-        pools[pool] = make_pool(pool_size);
+    // handle pool switch if we're out of room
+    //   + take care to extend the pools array if necc.
+    if(unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
+        if(unlikely(++lta->pool == lta->palloc)) {
+            lta->palloc <<= 1U;
+            lta->pools = realloc(lta->pools, lta->palloc * sizeof(void*));
+        }
+        lta->pools[lta->pool] = make_pool();
+        lta->poffs = 0;
     }
 
     // assign the space and move our poffs pointer
-    void* rval = (void*)((uintptr_t)pools[pool] + poffs + RED_SIZE);
-    poffs += size_plus_red;
+    void* rval = (void*)((uintptr_t)lta->pools[lta->pool] + lta->poffs + RED_SIZE);
+    lta->poffs += size_plus_red;
 
     // mark the allocation for valgrind and zero it if doing redzone stuff
-    NOWARN_VALGRIND_MEMPOOL_ALLOC(pools[pool], rval, size);
+    NOWARN_VALGRIND_MEMPOOL_ALLOC(lta->pools[lta->pool], rval, size);
     if(RED_SIZE)
         memset(rval, 0, size);
 
     return rval;
+}
+
+uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label) {
+    dmn_assert(lta); dmn_assert(label);
+    const unsigned sz = *label + 1U;
+    uint8_t* rv = lta_malloc(lta, sz);
+    memcpy(rv, label, sz);
+    return rv;
+}
+
+// this mixes internal access to dnhash_t as well, so it's not
+//   properly a just method of ltarena_t in that sense.
+const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
+    dmn_assert(lta); dmn_assert(dname);
+
+    dnhash_t* dnhash = lta->dnhash;
+    dmn_assert(dnhash); // not closed
+
+    const unsigned dnlen = *dname + 1U;
+    const unsigned hmask = dnhash->mask;
+    const uint8_t** table = dnhash->table;
+    uint32_t jmpby = 1U;
+    uint32_t slotnum = dname_hash(dname) & hmask;
+    while(table[slotnum]) {
+        if(!memcmp(table[slotnum], dname, dnlen))
+            return table[slotnum];
+        slotnum += jmpby++;
+        slotnum &= hmask;
+    }
+
+    const uint8_t* retval = table[slotnum] = lta_malloc(lta, dnlen);
+    memcpy((uint8_t*)retval, dname, dnlen);
+
+    if(++dnhash->count > (dnhash->mask >> 1U))
+        dnhash_grow(dnhash);
+
+    return retval;
 }

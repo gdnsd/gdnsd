@@ -21,9 +21,10 @@
 #include "monio.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
-#include "gdnsd-misc.h"
-#include "gdnsd-misc-priv.h"
-#include "gdnsd-plugapi-priv.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/log.h"
+#include "gdnsd/paths.h"
+#include "gdnsd/plugapi-priv.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -40,28 +41,31 @@
 #include <ifaddrs.h>
 #include <netinet/in.h>
 
-static unsigned num_monio_lists = 0;
-static monio_list_t** monio_lists = NULL;
+static unsigned num_mon_lists = 0;
+static mon_list_t** mon_lists = NULL;
 
-static const char def_pidfile[] = VARDIR "/run/" PACKAGE_NAME ".pid";
-static const char def_username[] = PACKAGE_NAME;
-static const char def_chroot_path[] = VARDIR "/" PACKAGE_NAME;
+static const char DEF_USERNAME[] = PACKAGE_NAME;
+
+// just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
+static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00";
+static const unsigned chaos_prefix_len = 10;
+static const char chaos_def[] = "gdnsd";
 
 // Global config, readonly after loaded from conf file
 global_config_t gconfig = {
-    .zones = NULL,
     .dns_addrs = NULL,
     .http_addrs = NULL,
-    .pidfile = def_pidfile,
-    .username = def_username,
-    .chroot_path = def_chroot_path,
+    .username = DEF_USERNAME,
+    .chaos = NULL,
     .include_optional_ns = false,
     .realtime_stats = false,
     .lock_mem = false,
     .disable_text_autosplit = false,
-    .strict_data = true,
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
+    .zones_rfc1035_strict_startup = true,
+    .zones_rfc1035_auto = true,
+    .chaos_len = 0,
      // legal values are -20 to 20, so -21
      //  is really just an indicator that the user
      //  didn't explicitly set it.  The default
@@ -71,19 +75,37 @@ global_config_t gconfig = {
     .log_stats = 3600U,
     .max_http_clients = 128U,
     .http_timeout = 5U,
-    .num_zones = 0U,
     .num_dns_addrs = 0U,
     .num_http_addrs = 0U,
     .max_response = 16384U,
     .max_cname_depth = 16U,
-    .max_addtl_rrsets = 64U
+    .max_addtl_rrsets = 64U,
+    .zones_rfc1035_auto_interval = 31U,
+    .zones_rfc1035_quiesce = 5.0,
+    .zones_rfc1035_min_quiesce = 0.0,
 };
 
-bool skip_plugins_cleanup = false;
+F_NONNULL
+static void set_chaos(const char* data) {
+    dmn_assert(data);
+
+    const unsigned dlen = strlen(data);
+    if(dlen > 254)
+        log_fatal("Option 'chaos_response' must be a string less than 255 characters long");
+
+    const unsigned overall_len = chaos_prefix_len + 3 + dlen;
+    char* combined = malloc(overall_len);
+    memcpy(combined, chaos_prefix, chaos_prefix_len);
+    combined[chaos_prefix_len] = 0;
+    combined[chaos_prefix_len + 1] = dlen + 1;
+    combined[chaos_prefix_len + 2] = dlen;
+    memcpy(combined + chaos_prefix_len + 3, data, dlen);
+    gconfig.chaos = (const uint8_t*)combined;
+    gconfig.chaos_len = overall_len;
+}
 
 static void plugins_cleanup(void) {
-    if(!skip_plugins_cleanup)
-        gdnsd_plugins_action_exit();
+    gdnsd_plugins_action_exit();
 }
 
 // Generic iterator for catching bad config hash keys in various places below
@@ -93,124 +115,11 @@ static bool bad_key(const char* key, unsigned klen V_UNUSED, const vscf_data_t* 
     log_fatal("Invalid %s key '%s'", (const char*)data, key);
 }
 
-static inline void make_addr(const char* lspec_txt, const unsigned def_port, anysin_t* result) {
+static void make_addr(const char* lspec_txt, const unsigned def_port, anysin_t* result) {
     dmn_assert(result);
     const int addr_err = gdnsd_anysin_fromstr(lspec_txt, def_port, result);
     if(addr_err)
         log_fatal("Could not process listen-address spec '%s': %s", lspec_txt, gai_strerror(addr_err));
-}
-
-// for zones_dir, etc
-F_NONNULLX(1)
-static char* make_zones_dir(const char* cfg_dir, const char* opt) {
-    dmn_assert(cfg_dir);
-
-    if(!opt)
-        return strdup(cfg_dir);
-
-    char* absfn = gdnsd_make_abs_fn(cfg_dir, opt);
-    unsigned abs_len = strlen(absfn);
-    if(absfn[abs_len - 1] != '/') {
-        absfn = realloc(absfn, abs_len + 2);
-        absfn[abs_len++] = '/';
-        absfn[abs_len] = '\0';
-    }
-
-    struct stat zdstat;
-    if(stat(absfn, &zdstat))
-        log_fatal("Cannot stat zones directory '%s': %s", absfn, logf_errno());
-    if((zdstat.st_mode & S_IFMT) != S_IFDIR)
-        log_fatal("Zones directory '%s' is not a directory", absfn);
-
-    return absfn;
-}
-
-F_NONNULL
-static bool bad_zattr(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* zname) {
-    dmn_assert(key); dmn_assert(zname);
-    log_fatal("Invalid zone attribute key '%s' for zone '%s'", key, (const char*)zname);
-}
-
-F_NONNULL F_MALLOC F_WUNUSED
-static uint8_t* make_zone_dname(const char* txtname, unsigned txtname_len) {
-    dmn_assert(txtname);
-
-    if(!txtname_len)
-        log_fatal("Empty zone name in config (did you mean ., the root zone?)");
-
-    uint8_t* dname = malloc(256);
-
-    // This will probably crash on well-crafted invalid input in the config file, because
-    //   no parser is pre-checking for escape sequence validity before this.  E.g.:
-    //     zones => { example.co\\ => {} }
-    // ... would decode to a string key with a trailing '\', which in turn will be crashy
-    //   when dname_from_string() tries to decode that dangling escape...
-    // The right fix is to upgrade vscf keys to be able to be native dnames in the same
-    //   sense that simple string values are.  In practice that looks a little hairy to
-    //   implement due to the special nature of keys (iteration callbacks, sorting, etc..).
-    // For that matter all of the data interpretations on simple string values (e.g. integer)
-    //   could be handy for keys in some cases...
-
-    dname_status_t status = dname_from_string(dname, (const uint8_t*)txtname, txtname_len);
-    if(status == DNAME_INVALID)
-        log_fatal("Zone name '%s' is illegal", txtname);
-
-    if(dname_iswild(dname))
-        log_fatal("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
-
-    if(status == DNAME_PARTIAL)
-        dname_terminate(dname);
-
-    return dname;
-}
-
-F_NONNULL
-static bool configure_zone(const char* zname, unsigned znlen, const vscf_data_t* this_zone, void* data) {
-    dmn_assert(zname); dmn_assert(this_zone); dmn_assert(data);
-
-    if(!vscf_is_hash(this_zone))
-        log_fatal("The value of zone '%s' in the configuration must be a hash", zname);
-
-    if(!znlen)
-        log_fatal("Empty zone names are not legal");
-
-    const char* zones_dir = (const char*)data;
-
-    const unsigned zidx = gconfig.num_zones++;
-
-    {
-        char* z = malloc(znlen + 1);
-        memcpy(z, zname, znlen + 1);
-        gconfig.zones[zidx].name = z;
-    }
-    gconfig.zones[zidx].dname = make_zone_dname(zname, znlen);
-    gconfig.zones[zidx].zones_dir = strdup(zones_dir);
-
-    const vscf_data_t* this_zone_file = vscf_hash_get_data_byconstkey(this_zone, "file", true);
-    if(this_zone_file) {
-        if(!vscf_is_simple(this_zone_file))
-            log_fatal("Attribute 'file' for zone '%s' must have a string value", zname);
-        gconfig.zones[zidx].file = gdnsd_make_abs_fn(zones_dir, vscf_simple_get_data(this_zone_file));
-    }
-    else {
-        gconfig.zones[zidx].file = gdnsd_make_abs_fn(zones_dir, zname);
-    }
-
-    const vscf_data_t* this_zone_ttl = vscf_hash_get_data_byconstkey(this_zone, "default_ttl", true);
-    if(this_zone_ttl) {
-        unsigned long zttl;
-        if(!vscf_is_simple(this_zone_ttl) || !vscf_simple_get_as_ulong(this_zone_ttl, &zttl))
-            log_fatal("Attribute 'default_ttl' for zone '%s' must have a simple unsigned integer value", zname);
-        if(zttl > 2147483647)
-            log_fatal("Attribute 'default_ttl' for zone '%s' must be less than 2147483648", zname);
-        gconfig.zones[zidx].def_ttl = zttl;
-    }
-    else {
-        gconfig.zones[zidx].def_ttl = gconfig.zones_default_ttl;
-    }
-
-    vscf_hash_iterate(this_zone, true, bad_zattr, (void*)zname);
-    return true;
 }
 
 F_NONNULLX(1)
@@ -221,24 +130,24 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
     if(!strcmp(name, "georeg"))
-        log_warn("plugin_georeg is DEPRECATED for 1.6.x, please consider migrating to the included plugin_geoip");
+        log_fatal("plugin_georeg is DEAD, use the included plugin_geoip instead");
 
     const plugin_t* plugin = gdnsd_plugin_load(name);
     if(plugin->load_config) {
-        monio_list_t* mlist = plugin->load_config(pconf);
+        mon_list_t* mlist = plugin->load_config(pconf);
         if(mlist) {
             for(unsigned i = 0; i < mlist->count; i++) {
-                monio_info_t* m = &mlist->info[i];
+                mon_info_t* m = &mlist->info[i];
                 if(!m->desc)
-                    log_fatal("Plugin '%s' bug: monio_info_t.desc is required", plugin->name);
+                    log_fatal("Plugin '%s' bug: mon_info_t.desc is required", plugin->name);
                 if(!m->addr)
-                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.addr is required", plugin->name, m->desc);
+                    log_fatal("Plugin '%s' bug: '%s' mon_info_t.addr is required", plugin->name, m->desc);
                 if(!m->state_ptr)
-                    log_fatal("Plugin '%s' bug: '%s' monio_info_t.state_ptr is required", plugin->name, m->desc);
+                    log_fatal("Plugin '%s' bug: '%s' mon_info_t.state_ptr is required", plugin->name, m->desc);
             }
-            const unsigned this_monio_idx = num_monio_lists++;
-            monio_lists = realloc(monio_lists, num_monio_lists * sizeof(monio_list_t*));
-            monio_lists[this_monio_idx] = mlist;
+            const unsigned this_monio_idx = num_mon_lists++;
+            mon_lists = realloc(mon_lists, num_mon_lists * sizeof(mon_list_t*));
+            mon_lists[this_monio_idx] = mlist;
         }
     }
 }
@@ -284,6 +193,20 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
             if(_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
             gconfig._gconf_loc = (unsigned) _val; \
+        } \
+    } while(0)
+
+#define CFG_OPT_DBL(_opt_set, _gconf_loc, _min, _max) \
+    do { \
+        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        if(_opt_setting) { \
+            double _val; \
+            if(!vscf_is_simple(_opt_setting) \
+            || !vscf_simple_get_as_double(_opt_setting, &_val)) \
+                log_fatal("Config option %s: Value must be a valid floating-point number", #_gconf_loc); \
+            if(_val < _min || _val > _max) \
+                log_fatal("Config option %s: Value out of range (%.3g, %.3g)", #_gconf_loc, _min, _max); \
+            gconfig._gconf_loc = _val; \
         } \
     } while(0)
 
@@ -348,56 +271,6 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
             _store_at = vscf_simple_get_data(_opt_setting); \
         } \
     } while(0)
-
-F_NONNULL
-static void add_subzone(zoneinfo_t* z, const uint8_t* child) {
-    dmn_assert(z); dmn_assert(child);
-    log_debug("Adding '%s' as a child zone of zone '%s'", logf_dname(child), logf_dname(z->dname));
-    z->subzones = realloc(z->subzones, sizeof(uint8_t*) * (z->n_subzones + 1));
-    z->subzones[z->n_subzones++] = child;
-}
-
-// Sort the zones array by the zone name length descending
-F_PURE F_NONNULL
-static int zones_cmp(const zoneinfo_t* a, const zoneinfo_t* b) {
-    dmn_assert(a); dmn_assert(b);
-    dmn_assert(a->dname); dmn_assert(b->dname);
-    return dname_cmp(a->dname, b->dname);
-}
-
-// This operates on gconfig.zones, accomplishing two primary tasks:
-//  (1) Catching duplicate zones with a fatal error
-//  (2) Setting up the subzones array for each zone, which is a list
-//    of explicitly-loaded subzones of a given zone.
-static void postproc_zones(void) {
-    // Because these will be frequently referenced
-    zoneinfo_t* zones = gconfig.zones;
-    const unsigned num_zones = gconfig.num_zones;
-
-    // Sort zones by zone name length ascending.
-    // Note that with dname_cmp as the comparator,
-    //  any duplicates would be paired in the list
-    qsort(zones, num_zones, sizeof(zoneinfo_t),
-        (int (*)(const void*, const void*))zones_cmp);
-
-    // Walk down the list from longest to shortest zone name
-    for(int zidx1 = num_zones - 1; zidx1 > 0; zidx1--) {
-
-        // Check next entry for a duplicate
-        const int zidx_next = zidx1 - 1;
-        if(!dname_cmp(zones[zidx_next].dname, zones[zidx1].dname))
-            log_fatal("Zone name duplicated in config: '%s'", logf_dname(zones[zidx1].dname));
-
-        // Walk down remainder of list from longest to shortest zone name
-        for(int zidx2 = zidx_next; zidx2 > -1; zidx2--) {
-            if(dname_isparentof(zones[zidx2].dname, zones[zidx1].dname)) {
-                log_warn("Explicit subzones in separate files are DEPRECATED, and will no longer be supported in 1.7.x and beyond.  $INCLUDE might do what you need.  You have such a case with the zones '%s' and '%s'", logf_dname(zones[zidx2].dname), logf_dname(zones[zidx1].dname));
-                add_subzone(&zones[zidx2], zones[zidx1].dname);
-                break; // a zone can only have one parent zone
-            }
-        }
-    }
-}
 
 static void process_http_listen(const vscf_data_t* http_listen_opt, const unsigned def_http_port) {
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
@@ -465,7 +338,7 @@ static void process_listen(const vscf_data_t* listen_opt, const unsigned def_dns
                 temp_asin.sin6.sin6_port = htons(def_dns_port);
             else
                 temp_asin.sin.sin_port = htons(def_dns_port);
-            
+
             if(dns_addr_is_dupe(&temp_asin))
                 continue;
 
@@ -482,7 +355,8 @@ static void process_listen(const vscf_data_t* listen_opt, const unsigned def_dns
             addrconf->udp_rcvbuf = def_udp_rcvbuf;
             addrconf->udp_sndbuf = def_udp_sndbuf;
             addrconf->late_bind_secs = def_late_bind_secs;
-            dmn_log_info("DNS listener configured by default for %s", logf_anysin(&addrconf->addr));
+            addrconf->autoscan = true;
+            dmn_log_info("DNS listener configured by default interface scanning for %s", logf_anysin(&addrconf->addr));
         }
 
         if(!gconfig.num_dns_addrs)
@@ -555,33 +429,48 @@ static void assign_thread_nums(void) {
     gconfig.num_io_threads = tnum;
 }
 
-void conf_load(const char* cfg_file) {
-    dmn_assert(cfg_file);
-    log_debug("Loading configuration");
+static const vscf_data_t* conf_load_vscf(void) {
+    const vscf_data_t* out = NULL;
 
-    char* vscf_err;
-    const vscf_data_t* cfg_root = vscf_scan_filename(cfg_file, &vscf_err);
-    if(!cfg_root)
-        log_fatal("Configuration load failed: %s", vscf_err);
+    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
+
+    struct stat cfg_stat;
+    if(!stat(cfg_path, &cfg_stat)) {
+        log_debug("Loading configuration from '%s'", cfg_path);
+        char* vscf_err;
+        out = vscf_scan_filename(cfg_path, &vscf_err);
+        if(!out)
+            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
+    }
+    else {
+        log_debug("No config file at '%s', using defaults + zones auto-scan", cfg_path);
+    }
+
+    free(cfg_path);
+    return out;
+}
+
+void conf_load(void) {
+
+    const vscf_data_t* cfg_root = conf_load_vscf();
 
 #ifndef NDEBUG
     // in developer debug builds, exercise clone+destroy
-    const vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
-    vscf_destroy(cfg_root);
-    cfg_root = temp_cfg;
+    if(cfg_root) {
+        const vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
+        vscf_destroy(cfg_root);
+        cfg_root = temp_cfg;
+    }
 #endif
 
-    dmn_assert(vscf_is_hash(cfg_root));
+    dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
 
-    gdnsd_set_cfdir(cfg_file);
+    const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
 
-    const vscf_data_t* options = vscf_hash_get_data_byconstkey(cfg_root, "options", true);
-
-    const char* zdopt = NULL;
-    char* zones_dir = NULL;
     const vscf_data_t* listen_opt = NULL;
     const vscf_data_t* http_listen_opt = NULL;
     const vscf_data_t* psearch_array = NULL;
+    const char* chaos_data = chaos_def;
     unsigned def_dns_port = 53U;
     unsigned def_http_port = 3506U;
     unsigned def_tcp_cps = 128U;
@@ -603,7 +492,6 @@ void conf_load(const char* cfg_file) {
         CFG_OPT_BOOL(options, realtime_stats);
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
-        CFG_OPT_BOOL(options, strict_data);
         CFG_OPT_BOOL(options, edns_client_subnet);
         CFG_OPT_BOOL(options, monitor_force_v6_up);
         CFG_OPT_UINT(options, log_stats, 1LU, 2147483647LU);
@@ -625,18 +513,23 @@ void conf_load(const char* cfg_file) {
         // Nobody should have even the default 16-depth CNAMEs anyways :P
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
-        CFG_OPT_STR(options, pidfile);
+        CFG_OPT_BOOL(options, zones_rfc1035_strict_startup);
+        CFG_OPT_BOOL(options, zones_rfc1035_auto);
+        // it's important that auto_interval is never lower than 2s, or it could cause
+        //   us to miss fast events on filesystems with 1-second mtime resolution.
+        CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
+        CFG_OPT_DBL(options, zones_rfc1035_min_quiesce, 0.0, 5.0);
+        CFG_OPT_DBL(options, zones_rfc1035_quiesce, 0.0, 60.0);
         CFG_OPT_STR(options, username);
-        CFG_OPT_STR(options, chroot_path);
-        CFG_OPT_STR_NOCOPY(options, zones_dir, zdopt);
+        CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
         http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate(options, true, bad_key, (void*)"options");
     }
 
-    // Potentially a subdirectory of cfg_dir
-    zones_dir = make_zones_dir(gdnsd_get_cfdir(), zdopt);
+    // set response string for CHAOS queries
+    set_chaos(chaos_data);
 
     // Set up the http listener data
     process_http_listen(http_listen_opt, def_http_port);
@@ -647,28 +540,10 @@ void conf_load(const char* cfg_file) {
     // Assign globally unique thread numbers for each socket-handling thread
     assign_thread_nums();
 
-    const vscf_data_t* zones = vscf_hash_get_data_byconstkey(cfg_root, "zones", true);
-    if(!zones)
-        log_fatal("No zones specified");
-    if(!vscf_is_hash(zones))
-        log_fatal("Zones value is wrong type (must be hash)");
-
-    unsigned n_zones = vscf_hash_get_len(zones);
-    if(!n_zones)
-        log_fatal("No zones specified");
-
-    // This creates the gconfig.zones array.
-    //   configure_zone increments gconfig.num_zones as it goes.
-    gconfig.zones = calloc(sizeof(zoneinfo_t), n_zones);
-    vscf_hash_iterate(zones, false, configure_zone, (void*)zones_dir);
-    dmn_assert(gconfig.num_zones == n_zones);
-    free(zones_dir);
-
-    postproc_zones();
     gdnsd_plugins_set_search_path(psearch_array);
 
     // Load plugins
-    const vscf_data_t* plugins_hash = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
+    const vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
     if(plugins_hash) {
         if(!vscf_is_hash(plugins_hash))
             log_fatal("Config setting 'plugins' must have a hash value");
@@ -693,13 +568,15 @@ void conf_load(const char* cfg_file) {
     //   might have to be correct unnecessarily, and it also avoids the unnecessary load of http_status
     //   and other work.  A consequence is that the service_types config stanza is not checked for
     //   syntax errors unless monitoring is actually in use.
-    const vscf_data_t* stypes_cfg = vscf_hash_get_data_byconstkey(cfg_root, "service_types", true);
-    if(num_monio_lists)
+    const vscf_data_t* stypes_cfg = cfg_root
+        ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
+        : NULL;
+    if(num_mon_lists)
         monio_add_servicetypes(stypes_cfg);
 
-    // Finally, process the monio_list_t's from plugins *after* servicetypes are available.
+    // Finally, process the mon_list_t's from plugins *after* servicetypes are available.
     // This order of operations wrt loading the plugins stanza, then the servicetypes,
-    //   and then finally doing deferred processing of monio_list_t's from all plugin
+    //   and then finally doing deferred processing of mon_list_t's from all plugin
     //   _load_config()s gaurantees things like having a single plugin take on both roles
     //   actually works, even with autoloaded plugins.
     // Technically, we could even allow autoloading of address/cname-resolving plugins as
@@ -711,11 +588,11 @@ void conf_load(const char* cfg_file) {
     //   are going to need *some* kind of config anyways.
     if(atexit(plugins_cleanup))
         log_fatal("atexit(plugins_cleanup) failed: %s", logf_errno());
-    for(unsigned i = 0; i < num_monio_lists; i++) {
-        monio_list_t* mlist = monio_lists[i];
+    for(unsigned i = 0; i < num_mon_lists; i++) {
+        mon_list_t* mlist = mon_lists[i];
         if(mlist) {
             for(unsigned j = 0; j < mlist->count; j++) {
-                monio_info_t* m = &mlist->info[j];
+                mon_info_t* m = &mlist->info[j];
                 dmn_assert(m->desc && m->addr && m->state_ptr);
                 monio_add_addr(m->svctype, m->desc, m->addr, m->state_ptr);
             }
@@ -723,8 +600,10 @@ void conf_load(const char* cfg_file) {
     }
 
     // Throw an error if there are any other unretrieved root config keys
-    vscf_hash_iterate(cfg_root, true, bad_key, (void*)"top-level config");
-    vscf_destroy(cfg_root);
+    if(cfg_root) {
+        vscf_hash_iterate(cfg_root, true, bad_key, (void*)"top-level config");
+        vscf_destroy(cfg_root);
+    }
 }
 
 bool dns_lsock_init(void) {

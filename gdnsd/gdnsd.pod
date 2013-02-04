@@ -5,49 +5,155 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsd [-c /etc/gdnsd/config ] action
-    -c Use a non-default config file path
+  Usage: gdnsd [-d <rootdir> ] <action>
   Actions:
     checkconf - Checks validity of configuration and zonefiles
     startfg - Start gdnsd in foreground mode with logging to stderr
     start - Start gdnsd as a regular daemon
     stop - Stops a running daemon previously started by 'start'
-    restart - Effectively equivalent to checkconf && stop && start, but faster
-    reload - Aliases 'restart'
+    reload - Send SIGHUP to running daemon for zone data reload
+    restart - Equivalent to checkconf && stop && start, but faster
     force-reload - Aliases 'restart'
     condrestart - Does 'restart' action only if already running
     try-restart - Aliases 'condrestart'
     status - Checks the status of the running daemon
-    lpe_on - Turns on log_packet_errors in the running daemon
-    lpe_off - Turns off log_packet_errors in the running daemon
 
 =head1 DESCRIPTION
 
 B<gdnsd> is very fast, light, and pluggable authoritative DNS daemon.
 
-The only commandline flag is C<-c>, which allows specifying an
-alternate configuration file from the compiled-in default.
+Other than the C<action> argument, the only other argument is C<-d> for
+setting a chroot directory, which is discussed in detail below.  The
+commandline parsing is sensitive to ordering: C<-d> must come before
+the action, if used.
+
+=head1 THE ROOTDIR ARGUMENT
+
+The C<-d E<lt>rootdirE<gt>> argument specifies whether gdnsd will use a
+chroot directory (or not) and the path of that directory.  The special
+value C<system> indicates to *not* use a chroot directory, and use the
+normal system paths defined via autoconf.  The default can be changed
+at build time, and you can see what your build's default is by
+executing e.g. C<gdnsd --help>.  The default default is C<system>.
+
+If a default or commandline-supplied chroot directory is in use, all
+files which gdnsd interacts with at runtime live within that chroot
+directory.
+
+In the chroot case, gdnsd will create the chroot directory and all
+structure within on startup if necessary, but will not create the parent
+of the chroot directory for you.
+
+=head1 BASIC SECURITY
+
+When started as the C<root> user, gdnsd will always attempt to drop
+privileges to another user, and will fail fatally if that does not
+succeed.  The default username for this is C<gdnsd>, but this can
+be overridden in the main config file.
+
+If a chroot directory is in use and gdnsd is started as the C<root>
+user, the daemon will also permanently chroot itself into that
+directory on startup.  If a chroot directory is specified, but the
+daemon is started as a regular user, the daemon will C<chdir> to the
+root directory and use relative paths to mimick the chroot
+functionality.  This can be useful if, for example, you're using
+external software to secure the daemon in some jail-like structure, or
+running tests as a regular user against test data.
+
+=head1 BASIC CONFIGURATION
+
+There is a single primary configuration file. Its pathname is fixed
+at build time for the C<system> case, and fixed relative to the chroot
+directory in the chroot case.  In the C<system> case it will live at
+F<$sysconfdir/gdnsd/config>, where C<$sysconfdir> will typically be
+F</etc> or F</usr/local/etc> depending on autoconf configuration.
+
+In the chroot case the path is C</etc/config> within the chroot
+directory.
+
+Note that the configuration file does not have to exist for successful
+startup.  Without a configuration file, gdnsd will load all of the zones
+in the zones directory and listen on port 53 of all available interfaces
+using default settings.
+
+=head1 ZONE FILES
+
+The zones directory is the subdirectory named C<zones> in the same
+location as the main config file (see above re: chroot -vs- system).
+
+All files in the zones directory are
+considered zone files.  In general there should be exactly one file
+per zone, and the filename should match the zone name.  Filenames
+beginning with C<.> are ignored.  All other files must be regular
+files (as opposed to directories, symlinks, sockets, etc).
+
+The zones directory is handled dynamically.  It can be empty at
+startup, which results in all queries returning C<REFUSED>.  As
+files are added, modified, and deleted in this directory, zone
+data will automatically change at runtime.
+
+In order to better support the special case of RFC 2137 -style
+classless in-addr.arpa delegation zones (which contain forward
+slashes), any C<@> symbol in the filename will be translated
+to a forward slash (C</>) when transforming a filename into
+its corresponding zone name.
+
+For similar reasons, if your server is intended to serve the
+root of the DNS, the filename for the root zone should be
+the special filename F<ROOT_ZONE>, rather than the impossible
+literal filename F<.>.
+
+The standard DNS zone file escape sequences are recognized within
+the filenames (e.g. C<\.> for a dot within a label, or C<\NNN>
+where NNN is a decimal integer in the range 0 - 255), if for some
+reason you need a strange character in your zone name.
+
+Trailing dots on zonefile names are ignored; e.g. F<example.com>
+and F<example.com.> are functionally equivalent.
+
+Duplicate zones (e.g. having both of the above representations of
+C<example.com> present in the zones directory, and/or adding a
+different case-mapping such as F<EXample.Com>) are handled by
+loading both and giving runtime lookup priority to one of the copies
+based on a couple of simple rules: the highest C<serial> wins,
+and if more than one file has the highest serial, the highest
+filesystem C<mtime> value wins.  If the primary copy is later
+removed, any remaining copy of the zone will be promoted for
+runtime lookups according to that same ordering.
+
+Subzones (e.g. having zonefiles for both C<example.com> and
+C<subz.example.com>) are only marginally supported.  The child zone
+will be loaded into memory, but its data won't be available for
+lookup, as it is suppressed by the existence of the parent zone.
+If the parent zone is later removed, the subzone data will become
+available.  Logically, it is not possible for a single server to
+be authoritative for both a subzone and its parent zone at the
+same time, as each "role" (parent and child) requires different
+responses to requests for data within the child zone.  gdnsd
+choses to default to the "parent" role in these conflict cases.
+
+See L<gdnsd.zonefile(5)> for details on the internal syntax of the
+zonefiles themselves.
 
 =head1 ACTIONS
 
-B<gdnsd> acts as its own initscript, internalizing
-daemon management functions.  All valid invocations of the gdnsd
-command include an B<action>, most of which model normal initscript
-actions.
+B<gdnsd> acts as its own initscript, internalizing daemon management
+functions.  All valid invocations of the gdnsd command include an
+B<action>, most of which model normal initscript actions.  You may
+still want a light initscript wrapper to comply with distribution
+standards for e.g. terminal output on success/failure, but it's not
+necessary for basic functionality.
 
 =over 4
 
 =item B<checkconf>
 
-Checks the validity of the configuration file and any referenced
-zonefiles, setting the exit status appropriately (0 for success).
+Checks the validity of the configuration file and zonefiles, setting
+the exit status appropriately (0 for success).
 
-All other actions implicitly do the first half of the C<checkconf>
-work (checking the configfile itself) as they load the configuration
-file anyways (at a minimum, they usually need pidfile information
-from it).  The C<start>, C<startfg>, and C<restart> actions
-implicitly do a full C<checkconf>, since they actually load the zone
-data for runtime use.
+The C<start>, C<startfg>, and all C<restart>-like actions implicitly do
+the same checks as C<checkconf> as they load the configuration for
+runtime use.
 
 =item B<startfg>
 
@@ -65,32 +171,29 @@ Stops the gdnsd daemon previously started by start.
 
 =item B<restart>
 
-This is equivalent to the sequence C<checkconf && stop && start>,
-but faster.  What actually happens behind the scenes is
-a bit more complicated:
+This is equivalent to the sequence C<checkconf && stop && start>, but
+faster.  What actually happens behind the scenes is a bit more
+complicated:
 
-C<restart> is a special case of C<start> which first does
-all of the C<checkconf> actions (bringing all the runtime data
-into memory), then stops the existing daemon, and then finishes
-starting itself (acquiring sockets, dropping privs, spawning
-threads, etc).
+C<restart> is a special case of C<start> which first does all of the
+C<checkconf> actions (bringing all the runtime data into memory), then
+stops the existing daemon, and then finishes starting itself (acquiring
+sockets, dropping privs, spawning threads, etc).
 
-The net result is that this minimizes the pause
-in service availability during the restart (especially if you
-have a large volume of zone data that takes significant time
-to load), and also leaves the original daemon instance untouched
-if the configuration is invalid (you've made an error in your
-new zone data, etc).
+The net result is that this minimizes the pause in service availability
+during the restart (especially if you have a large volume of zone data
+that takes significant time to load), and also leaves the original
+daemon instance untouched if the configuration is invalid (you've made
+an error in your new zone data, etc).
 
 =item B<reload>
 
-Alias for C<restart>.  gdnsd does not have any other way
-to reload configuration, and it's a fairly seamless restart in
-any case.
+Sends C<SIGHUP> to the running daemon, forcing a manual re-check
+of the zones directory for updated files.
 
 =item B<force-reload>
 
-Again, an aliase for C<restart>.
+An alias for C<restart>.
 
 =item B<condrestart>
 
@@ -107,26 +210,7 @@ Alias for C<condrestart>.
 =item B<status>
 
 Checks the status of the running daemon, returning 0 if it
-is running or non-zero if it isn't
-
-=item B<lpe_on>
-
-Turns on log_packet_errors in the running daemon by sending it
-the C<SIGUSR1> signal.
-
-This causes additional syslog messages to be issued for
-per-DNS-request errors, as well as similar pre-request error logging
-for the stats HTTP server, etc.  Normally such errors are only tracked
-in stats counters, as it would be easy to spam someone's syslog files
-by sending malformed packets while log_packet_errors is in effect.
-Mostly useful for debugging issues with specific queries and or
-zone data sets.  One shouldn't leave this on all the time in
-production.
-
-=item B<lpe_off>
-
-Turns off log_packet_errors in the running daemon by sending it
-the C<SIGUSR2> signal.
+is running or non-zero if it isn't.
 
 =back
 
@@ -169,15 +253,11 @@ aborting execution.
 
 Causes the daemon to exit gracefully with accompanying log output.
 
-=item B<SIGUSR1>
+=item B<SIGHUP>
 
-Enables the logging of packet errors.
+Causes the daemon to attempt to load any new changes to the zone data.
 
-=item B<SIGUSR2>
-
-Disables the logging of packet errors.
-
-=item B<SIGHUP>, B<SIGPIPE>
+=item B<SIGPIPE>
 
 Ignored when daemonized.
 
@@ -185,8 +265,8 @@ Ignored when daemonized.
 
 =head1 EXIT STATUS
 
-An exit status of zero indicates success, anything else
-indicates failure.
+An exit status of zero indicates success, anything else indicates
+failure.
 
 =head1 SEE ALSO
 

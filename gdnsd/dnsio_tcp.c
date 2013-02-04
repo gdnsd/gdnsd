@@ -31,7 +31,8 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
-#include "pkterr.h"
+#include "gdnsd/log.h"
+#include "gdnsd/prcu-priv.h"
 
 typedef enum {
     READING_INITIAL = 0,
@@ -88,13 +89,13 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
     dmn_assert(revents == EV_TIMER);
 
     tcpdns_conn_t* tdata = (tcpdns_conn_t*)t->data;
-    log_pkterr("TCP DNS Connection timed out while %s %s",
+    log_debug("TCP DNS Connection timed out while %s %s",
         tdata->state == WRITING ? "writing to" : "reading from", logf_anysin(tdata->asin));
 
     if(tdata->state == WRITING)
-        satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.sendfail);
+        stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
     else
-        satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.recvfail);
+        stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
 
     cleanup_conn_watchers(loop, tdata);
 }
@@ -111,8 +112,8 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     const ssize_t written = send(io->fd, source, wanted, 0);
     if(unlikely(written == -1)) {
         if(errno != EAGAIN) {
-            log_pkterr("TCP DNS send() failed, dropping response to %s: %s", logf_anysin(tdata->asin), logf_errno());
-            satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.sendfail);
+            log_debug("TCP DNS send() failed, dropping response to %s: %s", logf_anysin(tdata->asin), logf_errno());
+            stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
             cleanup_conn_watchers(loop, tdata);
             return;
         }
@@ -165,12 +166,12 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
 #                   endif
                     return;
                 }
-                log_pkterr("TCP DNS recv() from %s: %s", logf_anysin(tdata->asin), logf_errno());
+                log_debug("TCP DNS recv() from %s: %s", logf_anysin(tdata->asin), logf_errno());
             }
             else if(tdata->size_done) {
-                log_pkterr("TCP DNS recv() from %s: Unexpected EOF", logf_anysin(tdata->asin));
+                log_debug("TCP DNS recv() from %s: Unexpected EOF", logf_anysin(tdata->asin));
             }
-            satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.recvfail);
+            stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
         }
         cleanup_conn_watchers(loop, tdata);
         return;
@@ -182,8 +183,8 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
         if(likely(tdata->size_done > 1)) {
             tdata->size = (tdata->buffer[0] << 8) + tdata->buffer[1] + 2;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
-                log_pkterr("Oversized TCP DNS query of length %u from %s", tdata->size, logf_anysin(tdata->asin));
-                satom_inc(&tdata->thread_ctx->pctx->stats->p.tcp.recvsize);
+                log_debug("Oversized TCP DNS query of length %u from %s", tdata->size, logf_anysin(tdata->asin));
+                stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
                 cleanup_conn_watchers(loop, tdata);
                 return;
             }
@@ -231,11 +232,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     anysin_t* asin = malloc(sizeof(anysin_t));
     asin->len = ANYSIN_MAXLEN;
 
-#ifdef USE_ACCEPT4
-    const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK);
-#else
     const int sock = accept(io->fd, &asin->sa, &asin->len);
-#endif
 
     if(unlikely(sock == -1)) {
         free(asin);
@@ -251,7 +248,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
             case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
-                log_pkterr("TCP DNS: early tcp socket death: %s", logf_errno());
+                log_debug("TCP DNS: early tcp socket death: %s", logf_errno());
                 break;
             default:
                 log_err("TCP DNS: accept() failed: %s", logf_errno());
@@ -261,14 +258,12 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 
     log_debug("Received TCP DNS connection from %s", logf_anysin(asin));
 
-#ifndef USE_ACCEPT4
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
         free(asin);
         close(sock);
         log_err("Failed to set O_NONBLOCK on inbound TCP DNS socket: %s", logf_errno());
         return;
     }
-#endif
 
     if((++thread_ctx->num_conn_watchers == thread_ctx->max_clients))
         ev_io_stop(loop, thread_ctx->accept_watcher);
@@ -339,7 +334,7 @@ int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED) {
 
     if(isv6)
         if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", logf_errno());
+            log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
 
     return sock;
 }
@@ -351,11 +346,18 @@ bool tcp_dns_listen_setup(dns_addr_t *addrconf) {
 
     addrconf->tcp_sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout);
     if(bind(addrconf->tcp_sock, &asin->sa, asin->len)) {
-        if(addrconf->late_bind_secs && errno == EADDRNOTAVAIL) {
-            addrconf->tcp_need_late_bind = 1;
-            log_info("TCP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
-            const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
-            return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
+        if(errno == EADDRNOTAVAIL) {
+            if(addrconf->autoscan) {
+                log_warn("Could not bind TCP socket %s (%s), configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(asin), logf_errno());
+                addrconf->tcp_autoscan_bind_failed = true;
+                return false;
+            }
+            else if(addrconf->late_bind_secs) {
+                addrconf->tcp_need_late_bind = true;
+                log_info("TCP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
+                const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
+                return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
+            }
         }
         log_fatal("Failed to bind() TCP socket to %s: %s", logf_anysin(asin), logf_errno());
     }
@@ -364,6 +366,18 @@ bool tcp_dns_listen_setup(dns_addr_t *addrconf) {
         log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_socket, logf_anysin(asin), logf_errno());
 
     return false;
+}
+
+static void thread_clean(void* arg_unused V_UNUSED) {
+    gdnsd_prcu_rdr_thread_end();
+}
+
+static void ztstate_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {
+    gdnsd_prcu_rdr_offline();
+}
+
+static void ztstate_online(struct ev_loop* loop V_UNUSED, ev_check* w V_UNUSED, int revents V_UNUSED) {
+    gdnsd_prcu_rdr_online();
 }
 
 void* dnsio_tcp_start(void* addrconf_asvoid) {
@@ -395,6 +409,13 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
 
         log_info("Late bind() of TCP socket to %s succeeded, serving requests now", logf_anysin(asin));
     }
+    else if(addrconf->tcp_autoscan_bind_failed) {
+        // already logged this condition back when bind() failed, but it's simpler
+        //  to spawn the thread and do the dnspacket_context_new() here properly and
+        //  then exit the iothread.  The rest of the code will see this as a thread that
+        //  simply never gets requests.
+        pthread_exit(NULL);
+    }
 
     struct ev_io* accept_watcher = thread_ctx->accept_watcher = malloc(sizeof(struct ev_io));
     ev_io_init(accept_watcher, accept_handler, addrconf->tcp_sock, EV_READ);
@@ -407,7 +428,19 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
 
     ev_io_start(loop, accept_watcher);
 
+    gdnsd_prcu_rdr_thread_start();
+    pthread_cleanup_push(thread_clean, NULL);
+
+    struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));
+    struct ev_check* check_watcher = malloc(sizeof(struct ev_prepare));
+    ev_prepare_init(prep_watcher, ztstate_offline);
+    ev_check_init(check_watcher, ztstate_online);
+    ev_set_priority(check_watcher, EV_MAXPRI);
+    ev_prepare_start(loop, prep_watcher);
+    ev_check_start(loop, check_watcher);
     ev_run(loop, 0);
+
+    pthread_cleanup_pop(1);
 
     return NULL;
 }

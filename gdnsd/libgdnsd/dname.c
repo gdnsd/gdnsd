@@ -23,11 +23,12 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "gdnsd-dmn.h"
-#include "gdnsd-compiler.h"
-#include "gdnsd-dname.h"
+#include "gdnsd/dmn.h"
+#include "gdnsd/compiler.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/dname.h"
 
-/* The semantics of these functions are described in gdnsd-dname.h ... */
+/* The semantics of these functions are described in gdnsd/dname.h ... */
 
 // Map uppercase ASCII to lowercase while preserving other bytes.
 static const uint8_t lcmap[256] = {
@@ -72,37 +73,52 @@ static const uint8_t lcmap[256] = {
   0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF
 };
 
-static inline void map_lc(uint8_t* data, unsigned len) {
+static void map_lc(uint8_t* data, unsigned len) {
     for(unsigned i = 0; i < len; i++)
         data[i] = lcmap[data[i]];
 }
 
 unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, const unsigned len) {
-    dmn_assert(out); dmn_assert(in || !len);
+    dmn_assert(out); dmn_assert(len);
 
-    uint8_t* out_start = out;
+    uint8_t* optr = out;
     for(unsigned i = 0; i < len; i++) {
         if(likely(in[i] != '\\')) {
-            *out++ = in[i];
+            *optr++ = in[i];
         }
         else {
             i++;
-            dmn_assert(i < len);
+            if(unlikely(i >= len)) { // dangling escape
+                optr = out;
+                break;
+            }
             if(in[i] <= '9' && in[i] >= '0') {
-                dmn_assert(i + 2 < len);
+                if(unlikely( // incomplete numeric escape
+                    ((i + 2) >= len)
+                    || (in[i + 1] > '9')
+                    || (in[i + 1] < '0')
+                    || (in[i + 2] > '9')
+                    || (in[i + 2] < '0')
+                )) {
+                    optr = out;
+                    break;
+                }
                 unsigned x = ((in[i++] - '0') * 100);
                 x += ((in[i++] - '0') * 10);
                 x += (in[i] - '0');
-                dmn_assert(x < 256);
-                *out++ = (uint8_t)x;
+                if(unlikely(x > 255)) { // numeric escape val too large
+                    optr = out;
+                    break;
+                }
+                *optr++ = (uint8_t)x;
             }
             else {
-                *out++ = in[i];
+                *optr++ = in[i];
             }
         }
     }
 
-    return out - out_start;
+    return optr - out;
 }
 
 gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const uint8_t* restrict instr, const unsigned len) {
@@ -188,6 +204,9 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const uint
         // unescape to label_buf
         unsigned llen = gdnsd_dns_unescape(label_buf, label_start, raw_llen);
 
+        // Label invalid (error return from above)
+        if(!llen) return DNAME_INVALID;
+
         // Label too long
         if(llen > 63) return DNAME_INVALID;
 
@@ -244,19 +263,18 @@ gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restr
     dmn_assert(dname_status(dn1) != DNAME_INVALID);
     dmn_assert(dname_status(dn2) != DNAME_INVALID);
 
+    gdnsd_dname_status_t rv = DNAME_INVALID;
     const unsigned dn1_len = *dn1;
     const unsigned dn2_len = *dn2;
     const unsigned final_len = (dn1_len + dn2_len - 1);
 
-    if(final_len > 255)
-        return DNAME_INVALID;
+    if(final_len < 256) {
+        dn1[0] = final_len;
+        memcpy(dn1 + dn1_len, dn2 + 1, dn2_len);
+        rv = (dn1[final_len] == 0) ? DNAME_VALID : DNAME_PARTIAL;
+    }
 
-    memcpy(dn1 + dn1_len, dn2 + 1, dn2_len);
-    dn1[0] = final_len;
-
-    return (dn1[*dn1] == 0)
-        ? DNAME_VALID
-        : DNAME_PARTIAL;
+    return rv;
 }
 
 gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
@@ -347,4 +365,11 @@ bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child) {
     }
 
     return false;
+}
+
+uint32_t gdnsd_dname_hash(const uint8_t *k) {
+    dmn_assert(k);
+
+    const uint32_t len = *k++ - 1;
+    return gdnsd_lookup2((const char*)k, len);
 }

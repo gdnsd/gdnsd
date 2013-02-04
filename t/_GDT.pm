@@ -35,6 +35,7 @@ use Net::DNS::Resolver ();
 use Net::DNS ();
 use LWP::UserAgent ();
 use Test::More ();
+use File::Copy qw//;
 use Socket qw/AF_INET/;
 use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
@@ -62,28 +63,35 @@ my %SIGS;
     }
 }
 
-# Set up per-testfile output directory
+# Set up per-testfile output directory and zones input directory
 our $OUTDIR;
+our $ZONES_IN;
+our $ALTZONES_IN;
 {
     my $tname = $FindBin::Bin;
     $tname =~ s{^.*/}{};
     $tname .= '_' . $FindBin::Script;
     $tname =~ s{\.t$}{};
 
+    $ZONES_IN = $FindBin::Bin . '/zones/';
+    $ALTZONES_IN = $FindBin::Bin . '/altzones/';
     $OUTDIR = $ENV{TESTOUT_DIR} . '/' . $tname;
-    mkdir($OUTDIR) unless -d $OUTDIR;
+    foreach my $d ($OUTDIR, "$OUTDIR/etc", "$OUTDIR/etc/zones") {
+        mkdir $d unless -d $d
+    }
 }
+
+# this makes gdnsd start faster on low-res filesystems,
+#   individual scripts which actually test runtime
+#   zone data changes must disable this for the
+#   tests to work accurately!
+$ENV{GDNSD_TESTSUITE_NO_ZONEFILE_MODS} = 1;
 
 our $TEST_RUNNER = "";
 if($ENV{TEST_RUNNER}) {
     $TEST_RUNNER = $ENV{TEST_RUNNER};
 }
 
-our $PKTERR = 1;
-if($ENV{NO_PKTERR}) {
-    $PKTERR = 0;
-}
-    
 our $TESTPORT_START = $ENV{TESTPORT_START};
 die "Test port start specification is not a number"
     unless looks_like_number($TESTPORT_START);
@@ -112,6 +120,7 @@ our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
 # During installcheck, the default hardcoded plugin path
 #  should work correctly for finding the installed plugins
 our $PLUGIN_PATH;
+our $EXTMON_HELPER_CFG = '';
 if($ENV{INSTALLCHECK_SBINDIR}) {
     $PLUGIN_PATH = "/xxx_does_not_exist";
 }
@@ -129,11 +138,10 @@ else {
         )
         . q{"]};
     closedir($dh);
+    $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$ENV{TOP_BUILDDIR}/plugins/extmon/gdnsd_extmon_helper" }|;
 }
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
-
-die "Cannot run testsuite as root" if ! $>;
 
 my $CSV_TEMPLATE = 
     "uptime\r\n"
@@ -142,8 +150,8 @@ my $CSV_TEMPLATE =
     . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
     . "udp_reqs,udp_recvfail,udp_sendfail,udp_tc,udp_edns_big,udp_edns_tc\r\n"
     . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
-    . "tcp_reqs,tcp_recvfail,tcp_recvsize,tcp_sendfail\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n";
+    . "tcp_reqs,tcp_recvfail,tcp_sendfail\r\n"
+    . "([0-9]+),([0-9]+),([0-9]+)\r\n";
 
 my %stats_accum = (
     noerror      => 0,
@@ -163,7 +171,6 @@ my %stats_accum = (
     udp_edns_tc  => 0,
     tcp_reqs     => 0,
     tcp_recvfail => 0,
-    tcp_recvsize => 0,
     tcp_sendfail => 0,
 );
 
@@ -211,8 +218,7 @@ sub check_stats_inner {
         udp_edns_tc     => $17,
         tcp_reqs        => $18,
         tcp_recvfail    => $19,
-        tcp_recvsize    => $20,
-        tcp_sendfail    => $21,
+        tcp_sendfail    => $20,
     };
 
     ## use Data::Dumper; warn Dumper($csv_vals);
@@ -229,14 +235,16 @@ sub check_stats_inner {
 
 sub check_stats {
     my ($class, %to_check) = @_;
+    my $total_attempts = $TEST_RUNNER ? 30 : 10;
+    my $attempt_delay = $TEST_RUNNER ? 0.5 : 0.1;
     my $err;
     my $attempts = 0;
     while(1) {
         eval { $class->check_stats_inner(%to_check) };
         $err = $@;
         return unless $err;
-        if($err !~ /hard-fail/ && $attempts++ < 10) {
-            select(undef, undef, undef, 0.1 * $attempts);
+        if($err !~ /hard-fail/ && $attempts++ < $total_attempts) {
+            select(undef, undef, undef, $attempt_delay * $attempts);
         }
         else {
             die "Stats check failed: $err";
@@ -244,18 +252,20 @@ sub check_stats {
     }
 }
 
+our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
+our $INOTIFY_ENABLED = 0;
+
 sub spawn_daemon {
     my ($class, $cfgfile, $geoip_data) = @_;
 
-    my (undef, $cfdir, undef) = File::Spec->splitpath($cfgfile);
-    $cfdir =~ s/\/$//;
-
     my $daemon_out = $OUTDIR . '/gdnsd.out';
-    my $cfgout = $OUTDIR . '/gdnsd.conf';
+    my $cfgout = $OUTDIR . '/etc/config';
+    my $zonesout = $OUTDIR . '/etc/zones/';
 
     if($geoip_data) {
         require _FakeGeoIP;
-        my $geoip_out = $OUTDIR . '/FakeGeoIP.dat';
+        mkdir "$OUTDIR/etc/geoip" unless -d "$OUTDIR/etc/geoip";
+        my $geoip_out = $OUTDIR . '/etc/geoip/FakeGeoIP.dat';
         _FakeGeoIP::make_fake_geoip($geoip_out, $geoip_data);
     }
 
@@ -278,16 +288,32 @@ sub spawn_daemon {
         s/\@dns_port\@/$DNS_PORT/g;
         s/\@http_port\@/$HTTP_PORT/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
-        s/\@cfdir\@/$cfdir/g;
         s/\@pluginpath\@/$PLUGIN_PATH/g;
+        s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
         print $out_fh $_;
     }
     close($orig_fh) or die "Cannot close test configfile '$cfgfile': $!";
     close($out_fh) or die "Cannot close test config text output file '$cfgout': $!";
 
+    # Wipe zones, in case of dynamic stuff from earlier run
+    opendir(my $zdh, $zonesout) or die "Cannot open zones output subdirectory: $!";
+    foreach my $zf (grep { !/^\./ } readdir($zdh)) {
+        unlink($zonesout . $zf)
+            or die "Cannot unlink zonefile '$_': $!";
+    }
+    closedir($zdh);
+
+    opendir(my $dh, $ZONES_IN) or die "Cannot open zones subdirectory: $!";
+    my @zfiles_list = grep { !/^\./ && ! -d $_ } readdir($dh);
+    closedir($dh);
+    foreach my $zfile (@zfiles_list) {
+        File::Copy::copy("$ZONES_IN/$zfile", $zonesout)
+            or die "Failed to copy zonefile '$zfile' to test area: $!";
+    }
+
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -c $cfgout startfg}
-        : qq{$GDNSD_BIN -c $cfgout startfg};
+        ? qq{$TEST_RUNNER $GDNSD_BIN -d $OUTDIR startfg}
+        : qq{$GDNSD_BIN -d $OUTDIR startfg};
 
     my $pid = fork();
     die "Fork failed!" if !defined $pid;
@@ -312,25 +338,22 @@ sub spawn_daemon {
     select(undef, undef, undef, $retry_delay);
     while($retry--) {
         if(-f $daemon_out) {
-            open(my $gdout_fh, '<', $daemon_out)
+            open($GDOUT_FH, '<', $daemon_out)
                 or die "Cannot open '$daemon_out' for reading: $!";
             my $is_listening;
-            while(<$gdout_fh>) {
-                $is_listening = 1 if /\Qinfo: DNS listeners started\E$/;
+            while(<$GDOUT_FH>) {
+                $INOTIFY_ENABLED = 1 if /\Qrfc1035: will use inotify for zone change detection\E$/;
+                return $pid if /\QDNS listeners started\E$/;
             }
-            close($gdout_fh)
-                or die "Cannot close '$daemon_out': $!";
-            if($is_listening) {
-                kill($SIGS{USR1}, $pid) if $PKTERR; # enable logging of packet errors
-                return $pid;
-            }
+            close($GDOUT_FH)
+                or die "Cannot close '$daemon_out' for reading: $!";
         }
         select(undef, undef, undef, $retry_delay);
     }
 
-    my $gdout = '';
     open(my $gdout_fh, '<', $daemon_out)
         or die "gdnsd failed to finish starting properly, and no output file could be found";
+    my $gdout = '';
     while(<$gdout_fh>) { $gdout .= $_ }
     close($gdout_fh);
     die "gdnsd failed to finish starting properly.  output (if any):\n" . $gdout;
@@ -351,6 +374,69 @@ sub test_spawn_daemon {
 
     return $pid;
 }
+
+##### START RELOAD STUFF
+
+sub send_sighup_unless_inotify {
+    if(!$INOTIFY_ENABLED) {
+        kill(1, $saved_pid)
+            or die "Cannot send SIGHUP to gdnsd at pid $saved_pid";
+    }
+}
+
+sub test_log_output {
+    my ($class, $texts_in) = @_;
+
+    $texts_in = [ $texts_in ] unless ref $texts_in;
+
+    # convert to hash for deletions...
+    my $i = 0;
+    my $texts = { map { $i++ => $_ } @$texts_in };
+
+    my $ok = 0;
+    # $retry_delay doubles after each wait, and thus
+    #   settings of 0.05 and 9 leads to a total wait
+    #   time of up to 25.55 seconds.
+    my $retry_delay = 0.05;
+    my $retry = $TEST_RUNNER ? 10 : 9;
+    while(scalar(keys %$texts) && $retry--) {
+        while(scalar(keys %$texts) && ($_ = <$GDOUT_FH>)) {
+            foreach my $k (keys %$texts) {
+                my $this_text = $texts->{$k};
+                if($_ =~ /\Q$this_text\E/) {
+                    delete $texts->{$k};
+                    last;
+                }
+            }
+        }
+        select(undef, undef, undef, $retry_delay);
+        $retry_delay *= 2;
+    }
+
+    if(!scalar(keys %$texts)) {
+        Test::More::ok(1);
+    }
+    else {
+        Test::More::ok(0);
+        foreach my $v (values %$texts) {
+            Test::More::diag("Failed to match log output '$v' in a reasonable timeframe");
+        }
+    }
+}
+
+sub insert_altzone {
+    my ($class, $fn, $destfn) = @_;
+    File::Copy::copy("$ALTZONES_IN/$fn", $OUTDIR . "/etc/zones/$destfn")
+        or die "Failed to copy alt zonefile '$fn' to 'etc/zones/$destfn': $!";
+}
+
+sub delete_altzone {
+    my ($class, $fn) = @_;
+    unlink($OUTDIR . "/etc/zones/$fn")
+        or die "Failed to unlink zonefile '$fn': $!";
+}
+
+##### END RELOAD STUFF
 
 my $_resolver;
 my $_resolver6;
@@ -861,7 +947,7 @@ sub test_kill_daemon {
     else {
         eval {
             local $SIG{ALRM} = sub { die "Failed to kill daemon cleanly at pid $pid"; };
-            alarm(5);
+            alarm($TEST_RUNNER ? 30 : 5);
             kill(2, $pid);
             waitpid($pid, 0);
         };

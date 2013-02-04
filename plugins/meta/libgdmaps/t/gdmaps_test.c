@@ -32,33 +32,40 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <gdnsd-dmn.h>
-#include <gdnsd-log.h>
-#include <gdnsd-vscf.h>
-#include <gdnsd-plugapi.h>
-#include <gdnsd-misc.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/plugapi.h>
+#include <gdnsd/misc.h>
 
 // be evil and use the private interface to set the cfdir,
 //   since this is for test mocking and we're part of the main dist
-#include "gdnsd-misc-priv.h"
+#include "gdnsd/paths-priv.h"
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
-F_NONNULL
-static const vscf_data_t* conf_load(const char* cfg_file) {
-    dmn_assert(cfg_file);
+static const vscf_data_t* conf_load_vscf(void) {
+    const vscf_data_t* out = NULL;
 
-    char* vscf_err;
-    const vscf_data_t* cfg_root = vscf_scan_filename(cfg_file, &vscf_err);
-    if(!cfg_root)
-        log_fatal("Configuration load failed: %s", vscf_err);
+    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
 
-    dmn_assert(vscf_is_hash(cfg_root));
-    return cfg_root;
+    struct stat cfg_stat;
+    if(!stat(cfg_path, &cfg_stat)) {
+        log_debug("Loading configuration from '%s'", cfg_path);
+        char* vscf_err;
+        out = vscf_scan_filename(cfg_path, &vscf_err);
+        if(!out)
+            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
+    }
+    else {
+        log_debug("No config file at '%s', using defaults + zones auto-scan", cfg_path);
+    }
+
+    free(cfg_path);
+    return out;
 }
 
-F_NONNULL
 static void conf_options(const vscf_data_t* cfg_root) {
     dmn_assert(cfg_root);
 
@@ -107,6 +114,28 @@ static const vscf_data_t* conf_get_maps(const vscf_data_t* cfg_root) {
 
 //***** Public funcs
 
+void gdmaps_lookup_noop(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt) {
+    dmn_assert(gdmaps);
+    dmn_assert(map_name);
+    dmn_assert(addr_txt);
+
+    log_info("Subtest %u starting", tnum);
+
+    int map_idx = gdmaps_name2idx(gdmaps, map_name);
+    if(map_idx < 0)
+        log_fatal("Subtest %u failed: Map name '%s' not found in configuration", tnum, map_name);
+
+    client_info_t cinfo;
+    cinfo.edns_client_mask = 128U;
+    unsigned scope = 175U;
+
+    const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &cinfo.edns_client);
+    if(addr_err)
+        log_fatal("Subtest %u failed: Cannot parse address '%s': %s", tnum, addr_txt, gai_strerror(addr_err));
+
+    gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope);
+}
+
 void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp) {
     dmn_assert(gdmaps);
     dmn_assert(map_name);
@@ -120,15 +149,13 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
         log_fatal("Subtest %u failed: Map name '%s' not found in configuration", tnum, map_name);
 
     client_info_t cinfo;
-    cinfo.edns_client_mask = 150U;
+    cinfo.edns_client_mask = 128U;
     unsigned scope = 175U;
 
     const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &cinfo.edns_client);
     if(addr_err)
         log_fatal("Subtest %u failed: Cannot parse address '%s': %s", tnum, addr_txt, gai_strerror(addr_err));
 
-    // To void gdmaps fallback pitfalls
-    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(anysin_t));
     const uint8_t* dclist = gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope);
 
     // w/ edns_client_mask set, scope_mask should *always* be set by gdmaps_lookup();
@@ -147,23 +174,20 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
         log_fatal("Subtest %u failed: Wanted scope mask %u, got %u", tnum, scope_cmp, scope);
 }
 
-gdmaps_t* gdmaps_test_init(const char* config_path) {
+gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
 
-    dmn_init_log();
+    dmn_init_log("gdmaps_test", true);
 
-    dmn_assert(config_path);
-
-    const vscf_data_t* cfg_root = conf_load(config_path);
+    gdnsd_set_rootdir(input_rootdir);
+    const vscf_data_t* cfg_root = conf_load_vscf();
     conf_options(cfg_root);
-    gdnsd_set_cfdir(config_path);
 
     const vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* gdmaps = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);
 
-    gdmaps_load_geoip_databases(gdmaps);
-    gdmaps_setup_geoip_watcher_paths(gdmaps);
-    gdmaps_setup_geoip_watchers(gdmaps);
+    gdmaps_load_databases(gdmaps);
+    gdmaps_setup_watchers(gdmaps);
 
     return gdmaps;
 }

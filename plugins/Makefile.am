@@ -1,6 +1,6 @@
 
 # Subdirectories to recurse into
-SUBDIRS = trivial weighted meta
+SUBDIRS = trivial weighted meta extmon
 
 check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C meta check-download

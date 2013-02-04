@@ -24,11 +24,12 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include <gdnsd-dmn.h>
-#include <gdnsd-log.h>
-#include <gdnsd-misc.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
+#include <gdnsd/paths.h>
 
 #include "fips104.h"
+#include "gdmaps.h"
 
 // Data source URL is http://www.maxmind.com/app/fips_include
 // As of this writing (Nov 29, 2011), the file was last updated
@@ -97,7 +98,7 @@ static void fips_parse(fips_t* fips, FILE* file) {
                 log_fatal("plugin_geoip: parse error in FIPS region name data, line %u", line);
             return;
         }
-      
+
         uint32_t key = ((unsigned)ccrr[0])
             + ((unsigned)ccrr[1] << 8U)
             + ((unsigned)ccrr[2] << 16U)
@@ -127,15 +128,13 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 fips_t* fips_init(const char* pathname) {
     dmn_assert(pathname);
 
-    char* path_resolved = gdnsd_make_abs_fn(gdnsd_get_cfdir(), pathname);
-    FILE* file = fopen(path_resolved, "r");
+    FILE* file = fopen(pathname, "r");
     if(!file)
-        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", path_resolved, logf_errno());
+        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", logf_pathname(pathname), logf_errno());
     fips_t* fips = calloc(1, sizeof(fips_t));
     fips_parse(fips, file);
     if(fclose(file))
-        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", path_resolved, logf_errno());
-    free(path_resolved);
+        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", logf_pathname(pathname), logf_errno());
     return fips;
 }
 

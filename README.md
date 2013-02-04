@@ -5,7 +5,7 @@ gdnsd is an Authoritative-only DNS server. The initial g stands for Geographic, 
 
 gdnsd is written in C using libev and pthreads with a focus on high performance, low latency service. It does not offer any form of caching or recursive service, and does not support DNSSEC.  There's a strong focus on making the code efficient, lean, and resilient.  The code has a decent regression testsuite with full branch coverage on the core packet parsing and generation code, and some scripted QA tools for e.g. valgrind validation, clang-analyzer, etc.
 
-The geographically-aware features also support the emerging EDNS Client Subnet draft ( https://datatracker.ietf.org/doc/draft-vandergaast-edns-client-subnet/ , https://afasterinernet.com ) for receiving more-precise network location information from intermediate shared caches.
+The geographically-aware features also support the emerging EDNS Client Subnet draft ( https://datatracker.ietf.org/doc/draft-vandergaast-edns-client-subnet/ , http://afasterinternet.com ) for receiving more-precise network location information from intermediate shared caches.
 
 ## Resources
 
@@ -27,11 +27,7 @@ and installed as manpages and textfiles on installation.
 
 ## Basic Configuration
 
-If all you need to do is serve an authoritative domain or two, all you need is your standard BIND/RFC1035-style zonefiles and a simple, short gdnsd configuration file that looks like this:
-
-    zones = { example.com = {}, example.org = {} }
-
-Name the zonefiles the same as their respective zone names, place them in the same directory as the above configuration file, and invoke "gdnsd -c /path/to/config.file start".
+If all you need to do is serve an authoritative domain or two, all you need is your standard BIND/RFC1035-style zonefiles, with the files named same as their respective zone names and placed in gdnsd's zones directory.
 
 If you need to do trickier things, a world of non-default options are available: check out the Documentation.
 
@@ -55,6 +51,30 @@ My test servers/domains are at: http://gdnsd.net . These tend to run the latest 
 
 The primary target platform is modern x86_64 Linux.  The code also compiles and works fine on MacOS X.  In theory, it should be portable to any reasonably-modern POSIXy platform with a good C99 compiler.  Several releases ago I spent some effort testing that it did in fact compile, pass tests, and operate correctly at runtime on a number of *BSDs, OpenSolaris w/ Sun's compiler, and even an embedded Linux router with a big-endian MIPS CPU.  YMMV on such targets with the modern codebase as I only regularly test Linux and Mac targets, but clean portability patches are always welcome.  There's a FreeBSD port at: http://portsmon.freebsd.org/portoverview.py?category=dns&portname=gdnsd
 
+## Building From Source
+
+In general, this is a standard autoconf-style project: ./configure && make check && sudo make install
+
+If your starting point is a tarball download, the following prerequisites apply:
+
+* A basically functional POSIX build environment with a C99 compiler
+* libev headers and libraries, version 4.x: distro pkg or http://software.schmorp.de/pkg/libev.html
+
+The following are optional, but generally recommended:
+
+* liburcu aka userspace-rcu headers and libraries. Use distro pkg or http://lttng.org/urcu/
+* libcap headers and libraries on Linux hosts (use distro pkg generally)
+
+The following have no real effect on the build or runtime, but are required in order to run the testsuite:
+
+* Perl 5.8.1 or higher
+* Perl modules: Net::DNS 0.63+, LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
+
+If working directly from a git clone rather than a tarball, in addition to all of the above:
+* ./autogen.sh will construct the configure script to get started
+* You may need to install updated autoconf, automake, and libtool packages
+* You will need a working copy of Ragel: http://www.complang.org/ragel/ (or distro package)
+
 ## Release Numbering and Policy
 
 All modern gdnsd release numbers take the form X.Y.Z.  X hasn't been incremented from 1 yet, but I imagine it will take a pretty significant re-design or a huge set of feature changes to warrant it.  Y increments on major feature releases.  Only even-numbered Y's are stable releases, with the odd numbers between reserved for development feature previews of unstable code leading towards the next even-numbered stable series.  New feature series often break backwards compatibility in some way or other. Z increments for minor patches.
@@ -75,27 +95,9 @@ To resolve these issues, I re-wrote the core code in C and added all the basic f
 
 Late in 2009, I started working on a major refactor.  The primary goals here were to move the configuration parsing into the C code like a normal daemon, add a ton of new testsuite coverage (100% branch coverage of the core packet parse/generate code was the goal, which was achieved), and to move the geographic redirection code out to a DSO-based plugin so that other techniques could be experimented on without touching the relatively stable core DNS code.  This effort finally lead to a new stable release series (1.0.x) in April of 2010.
 
-The rest is all relatively well-documented in the ChangeLog.
+The rest is all relatively well-documented in the NEWS file.
 
 ## COPYRIGHT AND LICENSING
-
-Some files within this distribution are externally sourced
-open source software, and are covered by their own seperate
-copyright and license terms.  Notably:
-
- *) All files in the subdirectory gdnsd/libev come from Marc
-Alexander Lehmann's libev distribution, and are covered by his
-separate LICENSE file, which is also included in that directory.
-His license is GPL-compatible (specifically, it is an either/or
-of GPL and other terms).
-
- *) Several autoconf-related files (macros and helper scripts
-and so-on) contain their own embedded copyright and
-GPL-compatible licensing terms.
-
-All actual gdnsd source code is licensed under the terms of the
-GPLv3, and includes an appropriate copyright/licensing block
-near the top of each source file.
 
 gdnsd is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

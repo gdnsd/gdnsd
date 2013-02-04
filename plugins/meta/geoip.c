@@ -24,7 +24,7 @@
 
 #define GDNSD_PLUGIN_NAME geoip
 
-#include <gdnsd-plugin.h>
+#include <gdnsd/plugin.h>
 
 #include "gdmaps.h"
 
@@ -78,17 +78,13 @@ static void top_config_hook(const vscf_data_t* top_config) {
 
 void plugin_geoip_full_config(unsigned num_threads V_UNUSED) {
     dmn_assert(gdmaps);
-    gdmaps_load_geoip_databases(gdmaps);
-}
-
-void plugin_geoip_pre_privdrop(void) {
-    gdmaps_setup_geoip_watcher_paths(gdmaps);
+    gdmaps_load_databases(gdmaps);
 }
 
 void plugin_geoip_pre_run(struct ev_loop* loop V_UNUSED) {
     dmn_assert(loop);
     dmn_assert(gdmaps);
-    gdmaps_setup_geoip_watchers(gdmaps);
+    gdmaps_setup_watchers(gdmaps);
 }
 
 F_NONNULL

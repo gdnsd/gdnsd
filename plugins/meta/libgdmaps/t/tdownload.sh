@@ -5,12 +5,10 @@ set -e
 GENERIC_HELP="You can either fix this and re-run configure, or use other means to obtain and decompress the 5 data files at 'http://gdnsd.net/GeoLiteTestData/', placing them in the build directory '$ABDIR'"
 
 if [ $GEOLITE_DECOMP = "none" ]; then
-    echo "Suitable decompressor (xz or gzip) not found in PATH by configure.  $GENERIC_HELP"
+    echo "xz not found in PATH by configure.  $GENERIC_HELP"
     exit 1
 elif [ $GEOLITE_DECOMP = "xz" ]; then
     compext=.xz
-elif [ $GEOLITE_DECOMP = "gzip" ]; then
-    compext=.gz
 else
     echo "Internal bug!"
     exit 1

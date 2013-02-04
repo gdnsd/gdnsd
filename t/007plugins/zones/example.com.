@@ -8,6 +8,8 @@
 
 @	NS	ns1
 @	NS	f42
+@	NS	ns1.example.net.
+ns1.example.net. DYNA static!bar41
 ns1	A	192.0.2.1
 a	A	192.0.2.2
 
@@ -32,8 +34,8 @@ mfo1	DYNA	multifo!mfo1
 mfo2	DYNA	multifo!mfo2
 mfo3	DYNA	multifo!mfo3
 
-wdep-addrs	DYNA weighted!wdep-addrs
-wdep-cnames	DYNC weighted!wdep-cnames
+wv4	DYNA weighted!wv4
+wcnames	DYNC weighted!wcnames
 weighta		DYNA weighted!weighta
 weighta6	DYNA weighted!weighta6
 weightam	DYNA weighted!weightam

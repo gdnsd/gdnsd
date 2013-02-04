@@ -17,15 +17,17 @@
  *
  */
 
-#ifndef _GDNSD_MONIO_H
-#define _GDNSD_MONIO_H
+#ifndef GDNSD_MONIO_H
+#define GDNSD_MONIO_H
 
 #include "config.h"
-#include "gdnsd.h"
+#include "gdnsd/vscf.h"
+#include "gdnsd/mon.h"
+#include <ev.h>
 
 // conf.c calls this for service_types vscf config and to process plugin monitoring requests
 void monio_add_servicetypes(const vscf_data_t* svctypes_cfg);
-void monio_add_addr(const char* svctype_name, const char* desc, const char* addr, monio_state_t* monio_state_ptr);
+void monio_add_addr(const char* svctype_name, const char* desc, const char* addr, mon_state_t* mon_state_ptr);
 
 // main.c calls this for adding monio events to the main thread's eventloop
 F_NONNULL void monio_start(struct ev_loop* mon_loop);
@@ -35,4 +37,4 @@ unsigned monio_get_max_stats_len(void);
 F_NONNULL unsigned monio_stats_out_csv(char* buf);
 F_NONNULL unsigned monio_stats_out_html(char* buf);
 
-#endif // _GDNSD_MONIO_H
+#endif // GDNSD_MONIO_H

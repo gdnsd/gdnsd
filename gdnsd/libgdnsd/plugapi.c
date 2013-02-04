@@ -19,14 +19,16 @@
 
 #include "config.h"
 
-#include "gdnsd-plugapi.h"
-#include "gdnsd-plugapi-priv.h"
-#include "gdnsd-log.h"
-#include "gdnsd-net.h"
+#include "gdnsd/plugapi.h"
+#include "gdnsd/plugapi-priv.h"
+#include "gdnsd/log.h"
+#include "gdnsd/net.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <dlfcn.h>
+
+#include "cfg-dirs.h"
 
 void gdnsd_dynaddr_add_result_anysin(dynaddr_result_t* result, const anysin_t* asin) {
     dmn_assert(result); dmn_assert(asin);
@@ -61,7 +63,7 @@ void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array) {
         psearch[i] = strdup(vscf_simple_get_data(psd));
     }
 
-    psearch[psearch_count++] = LIBDIR "/" PACKAGE_NAME;
+    psearch[psearch_count++] = GDNSD_LIBDIR;
     psearch[psearch_count] = NULL;
 }
 
@@ -156,22 +158,23 @@ const plugin_t* gdnsd_plugin_load(const char* pname) {
         log_fatal("Plugin '%s' needs to be recompiled (wanted API version %u, got %u)",
             pname, GDNSD_PLUGIN_API_VERSION, this_version);
 
-#   define _PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
-    _PSETFUNC(load_config)
-    _PSETFUNC(map_resource_dyna)
-    _PSETFUNC(map_resource_dync)
-    _PSETFUNC(full_config)
-    _PSETFUNC(pre_privdrop)
-    _PSETFUNC(pre_run)
-    _PSETFUNC(iothread_init)
-    _PSETFUNC(resolve_dynaddr)
-    _PSETFUNC(resolve_dyncname)
-    _PSETFUNC(exit)
-    _PSETFUNC(add_svctype)
-    _PSETFUNC(add_monitor)
-    _PSETFUNC(init_monitors)
-    _PSETFUNC(start_monitors)
-#   undef _PSETFUNC
+#   define PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
+    PSETFUNC(load_config)
+    PSETFUNC(map_resource_dyna)
+    PSETFUNC(map_resource_dync)
+    PSETFUNC(full_config)
+    PSETFUNC(post_daemonize)
+    PSETFUNC(pre_privdrop)
+    PSETFUNC(pre_run)
+    PSETFUNC(iothread_init)
+    PSETFUNC(resolve_dynaddr)
+    PSETFUNC(resolve_dyncname)
+    PSETFUNC(exit)
+    PSETFUNC(add_svctype)
+    PSETFUNC(add_monitor)
+    PSETFUNC(init_monitors)
+    PSETFUNC(start_monitors)
+#   undef PSETFUNC
 
     return plug;
 }
@@ -188,6 +191,12 @@ void gdnsd_plugins_action_full_config(const unsigned num_threads) {
     for(unsigned i = 0; i < num_plugins; i++)
         if(plugins[i]->full_config)
             plugins[i]->full_config(num_threads);
+}
+
+void gdnsd_plugins_action_post_daemonize(void) {
+    for(unsigned i = 0; i < num_plugins; i++)
+        if(plugins[i]->post_daemonize)
+            plugins[i]->post_daemonize();
 }
 
 void gdnsd_plugins_action_pre_privdrop(void) {

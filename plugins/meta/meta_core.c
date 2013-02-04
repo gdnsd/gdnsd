@@ -286,9 +286,11 @@ static void resource_destroy(resource_t* res) {
 }
 
 // NULL-ness of "origin" indicates DYNC vs DYNA lookup here...
-static unsigned map_res(const char* resname, const uint8_t* origin V_UNUSED) {
-    if(!resname)
-        log_fatal("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
+static int map_res(const char* resname, const uint8_t* origin V_UNUSED) {
+    if(!resname) {
+        log_err("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
+        return -1;
+    }
 
     // Handle synthetic resname/dcname resources
     const char* slash = strchr(resname, '/');
@@ -309,8 +311,10 @@ static unsigned map_res(const char* resname, const uint8_t* origin V_UNUSED) {
             if(slash) {
                 dmn_assert(resname_copy); dmn_assert(dcname);
                 fixed_dc_idx = map_get_dcidx(resources[i].map, dcname);
-                if(!fixed_dc_idx)
-                    log_fatal("plugin_" PNSTR ": synthetic resource '%s/%s': datacenter '%s' does not exist for this resource", resname, dcname, dcname);
+                if(!fixed_dc_idx) {
+                    log_err("plugin_" PNSTR ": synthetic resource '%s/%s': datacenter '%s' does not exist for this resource", resname, dcname, dcname);
+                    return -1;
+                }
                 dmn_assert(fixed_dc_idx < 256);
             }
 
@@ -326,20 +330,35 @@ static unsigned map_res(const char* resname, const uint8_t* origin V_UNUSED) {
                         if(dname_status(dname) == DNAME_PARTIAL) {
                             uint8_t dnbuf[256];
                             dname_copy(dnbuf, dname);
-                            if(dname_cat(dnbuf, origin) != DNAME_VALID)
-                                log_fatal("plugin_" PNSTR ": Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), res->name, logf_dname(origin));
+                            if(dname_cat(dnbuf, origin) != DNAME_VALID) {
+                                log_err("plugin_" PNSTR ": Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), res->name, logf_dname(origin));
+                                return -1;
+                            }
                         }
                     }
                     else {
                         if(!this_dc->plugin)
                             this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
-                        if(!this_dc->plugin)
-                            log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
-                        if(!this_dc->plugin->resolve_dyncname)
-                            log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNC resources", res->name, this_dc->dc_name, this_dc->plugin_name);
-                        this_dc->res_num_dync = this_dc->plugin->map_resource_dync
-                            ? this_dc->plugin->map_resource_dync(this_dc->res_name, origin)
-                            : 0;
+                        // XXX shouldn't these basic find/check operations on plugin_name be up at full_config time?
+                        if(!this_dc->plugin) {
+                            log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
+                            return -1;
+                        }
+                        if(!this_dc->plugin->resolve_dyncname) {
+                            log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNC resources", res->name, this_dc->dc_name, this_dc->plugin_name);
+                            return -1;
+                        }
+                        if(this_dc->plugin->map_resource_dync) {
+                            const int resnum = this_dc->plugin->map_resource_dync(this_dc->res_name, origin);
+                            if(resnum < 0) {
+                                log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNC resource name '%s' at origin '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(origin));
+                                return -1;
+                            }
+                            this_dc->res_num_dync = (unsigned)resnum;
+                        }
+                        else {
+                            this_dc->res_num_dync = 0;
+                        }
                     }
                 }
             }
@@ -353,17 +372,32 @@ static unsigned map_res(const char* resname, const uint8_t* origin V_UNUSED) {
                 const unsigned max_dc = fixed_dc_idx ? fixed_dc_idx : res->num_dcs;
                 for(unsigned j = min_dc; j <= max_dc; j++) {
                     dc_t* this_dc = &res->dcs[j];
-                    if(this_dc->dname)
-                        log_fatal("plugin_" PNSTR ": resource '%s': datacenter '%s': DYNC-only (fixed cname), used as DYNA data in a zonefile", res->name, this_dc->dc_name);
+                    if(this_dc->dname) {
+                        log_err("plugin_" PNSTR ": resource '%s': datacenter '%s': DYNC-only (fixed cname), used as DYNA data in a zonefile", res->name, this_dc->dc_name);
+                        return -1;
+                    }
+                    // XXX shouldn't these basic find/check operations on plugin_name be up at full_config time?
                     if(!this_dc->plugin)
                         this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
-                    if(!this_dc->plugin)
-                        log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
-                    if(!this_dc->plugin->resolve_dynaddr)
-                        log_fatal("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNA resources", res->name, this_dc->dc_name, this_dc->plugin_name);
-                    this_dc->res_num_dyna = this_dc->plugin->map_resource_dyna
-                        ? this_dc->plugin->map_resource_dyna(this_dc->res_name)
-                        : 0;
+                    if(!this_dc->plugin) {
+                        log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
+                        return -1;
+                    }
+                    if(!this_dc->plugin->resolve_dynaddr) {
+                        log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNA resources", res->name, this_dc->dc_name, this_dc->plugin_name);
+                        return -1;
+                    }
+                    if(this_dc->plugin->map_resource_dyna) {
+                        const int resnum = this_dc->plugin->map_resource_dyna(this_dc->res_name);
+                        if(resnum < 0) {
+                            log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNA resource name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name);
+                            return -1;
+                        }
+                        this_dc->res_num_dyna = (unsigned)resnum;
+                    }
+                    else {
+                        this_dc->res_num_dyna = 0;
+                    }
                 }
             }
 
@@ -372,16 +406,17 @@ static unsigned map_res(const char* resname, const uint8_t* origin V_UNUSED) {
                 i |= (fixed_dc_idx << DC_SHIFT);
                 free(resname_copy); // free temp copy
             }
-            return i;
+            return (int)i;
         }
     }
 
-    log_fatal("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
+    log_err("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
+    return -1;
 }
 
 /********** Callbacks from gdnsd **************/
 
-monio_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
+mon_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
     if(!config)
         log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
 
@@ -411,12 +446,12 @@ monio_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
     return NULL;
 }
 
-unsigned CB_MAP_A(const char* resname) {
+int CB_MAP_A(const char* resname) {
     return map_res(resname, NULL);
 }
 
 #if DYNC_OK
-unsigned CB_MAP_C(const char* resname, const uint8_t* origin) {
+int CB_MAP_C(const char* resname, const uint8_t* origin) {
     return map_res(resname, origin);
 }
 #endif
@@ -458,7 +493,7 @@ bool CB_RES_A(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t*
             const dc_t* dc = &res->dcs[dcnum];
             success = dc->plugin->resolve_dynaddr(threadnum, dc->res_num_dyna, cinfo, result);
         }
- 
+
         // all datacenters failed, flag failure upstream (if any upstream) and use first dc
         if(!success) {
             memset(result, 0, sizeof(dynaddr_result_t));

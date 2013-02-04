@@ -31,16 +31,19 @@ labels, e.g:
                 /   \
               www   ns1
 
-  The ltree always starts at the root of the DNS, even if the auth data in the
-zonefiles begins at a much lower level.
+  A whole ltree represents a whole zone as a linked tree of per-label nodes
+starting at the root of the zone (the root zone of DNS in the example above).
+The actual root node of the tree has no label, as the labels are only useful
+in seaching the children of a node.  The root node itself is tracked and
+searched through another data structure, the "zones tree" in ztree.h.
 
   Each node in the ltree (ltree_node_t) contains a resizable hash table of
 child nodes, as well as the data for its own local rrsets and a flags field for
-identifying zone roots, delegation points, etc.
+identifying important properties like delegation points.
 
-  The zonefile parser (zscan.c) constructs the label tree by making
-ltree_add_rec_* calls into the ltree.c code.  After all zonefiles have been
-parsed and their raw data added to the ltree, the ltree code does multiple
+  The zonefile parser (zscan.rl) constructs the label tree by making
+ltree_add_rec_* calls into the ltree.c code.  After a zonefile has been
+parsed and its raw data added to its ltree, the ltree code does multiple
 phases of post-processing where it walks the entire tree, doing many data
 validation checks and setting up inter-node references (such as NS->A glue,
 MX->A additionals, etc).
@@ -79,16 +82,20 @@ daemon exit time).
 
 */
 
-#ifndef _GDNSD_LTREE_H
-#define _GDNSD_LTREE_H
+#ifndef GDNSD_LTREE_H
+#define GDNSD_LTREE_H
 
 #include "config.h"
-#include "gdnsd.h"
 #include "dnswire.h"
-#include "zscan.h"
+#include "ltarena.h"
+#include "gdnsd/plugapi.h"
 
 // struct/typedef stuff
 struct _ltree_node_struct;
+typedef struct _ltree_node_struct ltree_node_t;
+
+// depends on ltree_node_t above
+#include "ztree.h"
 
 struct _ltree_rdata_ns_struct;
 struct _ltree_rdata_ptr_struct;
@@ -108,8 +115,6 @@ struct _ltree_rrset_srv_struct;
 struct _ltree_rrset_naptr_struct;
 struct _ltree_rrset_txt_struct;
 struct _ltree_rrset_rfc3597_struct;
-
-typedef struct _ltree_node_struct ltree_node_t;
 
 typedef struct _ltree_rdata_ns_struct ltree_rdata_ns_t;
 typedef struct _ltree_rdata_ptr_struct ltree_rdata_ptr_t;
@@ -139,23 +144,23 @@ typedef struct _ltree_rrset_rfc3597_struct ltree_rrset_rfc3597_t;
 #define AD_GET_PTR(x) ((const ltree_rrset_addr_t*)((uintptr_t)(x) & (~1UL)))
 
 struct _ltree_rdata_ns_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
 };
 
 struct _ltree_rdata_ptr_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
 };
 
 struct _ltree_rdata_mx_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
     uint16_t pref;
 };
 
 struct _ltree_rdata_srv_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
     uint16_t priority;
     uint16_t weight;
@@ -166,7 +171,7 @@ struct _ltree_rdata_srv_struct {
 #define NAPTR_TEXTS_SERVICES 1
 #define NAPTR_TEXTS_REGEXP 2
 struct _ltree_rdata_naptr_struct {
-    uint8_t* dname;
+    const uint8_t* dname;
     ltree_rrset_addr_t* ad;
     uint8_t* texts[3]; // flags, services, regexp
     uint16_t order;
@@ -194,8 +199,8 @@ struct _ltree_rrset_gen_struct {
         struct {
             uint8_t count_v4;
             uint8_t count_v6;
-        } c;
-    } c;
+        };
+    };
 };
 
 struct _ltree_rrset_addr_struct {
@@ -209,28 +214,28 @@ struct _ltree_rrset_addr_struct {
             gdnsd_resolve_dynaddr_cb_t func;
             unsigned resource;
         } dyn;
-    } a;
+    };
     uint16_t limit_v4;
     uint16_t limit_v6;
 };
 
 struct _ltree_rrset_soa_struct {
     ltree_rrset_gen_t gen;
-    uint8_t* email;
-    uint8_t* master;
+    const uint8_t* email;
+    const uint8_t* master;
     uint32_t times[5];
 };
 
 struct _ltree_rrset_cname_struct {
     ltree_rrset_gen_t gen;
     union {
-        uint8_t* dname;
+        const uint8_t* dname;
         struct {
-            uint8_t* origin;
+            const uint8_t* origin;
             gdnsd_resolve_dyncname_cb_t func;
             unsigned resource;
         } dyn;
-    } c;
+    };
 };
 
 struct _ltree_rrset_ns_struct {
@@ -286,32 +291,15 @@ union _ltree_rrset_union {
 };
 
 // For ltree_node_t.flags
-#define LTNFLAG_AUTH  0x1 // if unset, the whole of flags should be zero, and this is a filler
-                          //  node above our authoritative space (e.g. if our only auth domain
-                          //  was "example.com.", the "." and "com." nodes would exist with flags
-                          //  set to zero).
-#define LTNFLAG_ZROOT 0x2 // only if AUTH, and further, AUTH should only be set at or below a ZROOT node.
-#define LTNFLAG_DELEG 0x4 // only if AUTH && !ZROOT, signifies the exact point of delegation.
-                          //  Should only contain NS rrsets and possible glue addr rrsets.
-                          //  There may be glue address nodes underneath, but they just have the
-                          //  AUTH flag, not the DELEG one.
-#define LTNFLAG_GUSED 0x8 // set on AUTH nodes if glue address present and used (should only ever
-                          //  occur at or below a node with the DELEG flag)
-                          // outside of the main tree, in ltree_ooz_glue, this is used to flag used
-                          //  glue even though we're not in auth space
-// To summarize, the valid flag sets in the main tree are:
-//  0 - non-auth node
-//  1 (AUTH) - auth node
-//  3 (AUTH|ZROOT) - zone root
-//  5 (AUTH|DELEG) - delegation point
-//  9 (AUTH|GUSED) - auth node whose address data was used as glue
-//  13 (AUTH|DELEG|GUSED) - delegation point containing address records at the same name
-//       which were actually used as glue (e.g. "subzone NS subzone \n subzone A 192.0.2.1")
-//
-// And for the child nodes of ltree_ooz_glue (it is not a tree, just one layer of nodes with
-//   FQDNs as "labels"), they are:
-//   0 - unused (so far) non-auth glue
-//   8 - used non-auth glue
+#define LTNFLAG_DELEG 0x1 // This is the exact start of a delegated zone.
+                          // These nodes *must* have an NS rrset (that's how they're
+                          //  detected in the first place), and otherwise can only have
+                          //  addr rrsets, and child nodes which contain only addr rrsets
+                          //  (for NS glue)
+#define LTNFLAG_GUSED 0x2 // For nodes at or below DELEG points which contain addresses, this
+                          //  is set when the glue is used, and later checked for "glue unused"
+                          //  warnings.  Also re-used in the same manner for out-of-zone glue,
+                          //  which is stored under a special child node of the zone root.
 
 struct _ltree_node_struct {
     uint32_t flags;
@@ -327,45 +315,53 @@ struct _ltree_node_struct {
     ltree_rrset_t* rrsets;     // The list of rrsets
 };
 
+// ztree/zone code uses these to create and destroy per-zone ltrees:
+F_NONNULL
+void ltree_init_zone(zone_t* zone);
+F_WUNUSED F_NONNULL
+bool ltree_postproc_zone(zone_t* zone);
+F_NONNULL
+void ltree_destroy(ltree_node_t* node);
+
 // Adding data to the ltree (called from parser)
-F_NONNULL
-void ltree_add_rec_soa(const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, unsigned serial, unsigned refresh, unsigned retry, unsigned expire, unsigned ncache);
-F_NONNULLX(1)
-void ltree_add_rec_a(const uint8_t* dname, uint32_t addr, unsigned ttl, unsigned limit_v4, const uint8_t* ooz_zroot);
-F_NONNULLX(1,2)
-void ltree_add_rec_aaaa(const uint8_t* dname, const uint8_t* addr, unsigned ttl, unsigned limit_v6, const uint8_t* ooz_zroot);
-F_NONNULL
-void ltree_add_rec_dynaddr(const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned limit_v4, unsigned limit_v6);
-F_NONNULL
-void ltree_add_rec_cname(const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
-F_NONNULL
-void ltree_add_rec_dyncname(const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, unsigned ttl);
-F_NONNULL
-void ltree_add_rec_ptr(const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
-F_NONNULL
-void ltree_add_rec_ns(const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
-F_NONNULL
-void ltree_add_rec_mx(const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned pref);
-F_NONNULL
-void ltree_add_rec_srv(const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned priority, unsigned weight, unsigned port);
-F_NONNULL
-void ltree_add_rec_naptr(const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned order, unsigned pref, unsigned num_texts, uint8_t** texts);
-F_NONNULL
-void ltree_add_rec_txt(const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
-F_NONNULL
-void ltree_add_rec_spf(const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
-F_NONNULL
-void ltree_add_rec_spftxt(const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
-F_NONNULLX(1)
-void ltree_add_rec_rfc3597(const uint8_t* dname, unsigned rrtype, unsigned ttl, unsigned rdlen, uint8_t* rd);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, unsigned serial, unsigned refresh, unsigned retry, unsigned expire, unsigned ncache);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, unsigned limit_v4, const bool ooz);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, unsigned limit_v6, const bool ooz);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned limit_v4, unsigned limit_v6, const bool ooz);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, unsigned ttl);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned pref);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned priority, unsigned weight, unsigned port);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned order, unsigned pref, unsigned num_texts, uint8_t** texts);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
+F_WUNUSED F_NONNULLX(1)
+bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, unsigned rrtype, unsigned ttl, unsigned rdlen, uint8_t* rd);
 
 // Load zonefiles (called from main, invokes parser)
 void ltree_load_zones(void);
 
 typedef enum {
     DNAME_NOAUTH = 0,
-    DNAME_AUTH,
-    DNAME_DELEG
+    DNAME_AUTH = 1,
+    DNAME_DELEG = 2
 } ltree_dname_status_t;
 
 // This is the global singleton ltree_root
@@ -378,8 +374,8 @@ extern ltree_node_t* ltree_root;
 
 // this variant is for labels encoded as one length-byte followed
 //  by N characters.  Thus the label "www" becomes "\003www" (4 bytes)
-F_PURE F_WUNUSED F_NONNULL F_UNUSED
-static inline uint32_t label_djb_hash(const uint8_t* input, const uint32_t hash_mask) {
+F_UNUSED F_PURE F_WUNUSED F_NONNULL F_UNUSED
+static uint32_t label_djb_hash(const uint8_t* input, const uint32_t hash_mask) {
    dmn_assert(input);
 
    uint32_t hash = 5381;
@@ -390,5 +386,24 @@ static inline uint32_t label_djb_hash(const uint8_t* input, const uint32_t hash_
    return hash & hash_mask;
 }
 
-#undef _RC
-#endif // _GDNSD_LTREE_H
+// "lstack" must be allocated to 127 pointers
+// "dname" must be valid
+// retval is label count (not including zero-width root label)
+F_UNUSED F_WUNUSED F_NONNULL
+static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack) {
+    dmn_assert(dname); dmn_assert(dname_status(dname) == DNAME_VALID);
+    dmn_assert(lstack);
+
+    dname++; // skip overall len byte
+    unsigned lcount = 0;
+    unsigned llen; // current label len
+    while((llen = *dname)) {
+        dmn_assert(lcount < 127);
+        lstack[lcount++] = dname++;
+        dname += llen;
+    }
+
+    return lcount;
+}
+
+#endif // GDNSD_LTREE_H

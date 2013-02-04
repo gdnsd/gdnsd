@@ -17,13 +17,12 @@
  *
  */
 
-#ifndef _GDNSD_DNSPACKET_H
-#define _GDNSD_DNSPACKET_H
+#ifndef GDNSD_DNSPACKET_H
+#define GDNSD_DNSPACKET_H
 
 #include "config.h"
-#include "gdnsd.h"
 #include "ltree.h"
-#include "gdnsd-misc.h"
+#include "gdnsd/misc.h"
 
 #define COMPTARGETS_MAX 256
 
@@ -34,46 +33,45 @@ typedef struct {
   // Per-protocol stats
   union {
     struct { // UDP stats
-      satom_t recvfail;
-      satom_t sendfail;
-      satom_t tc;
-      satom_t edns_big;
-      satom_t edns_tc;
+      stats_t recvfail;
+      stats_t sendfail;
+      stats_t tc;
+      stats_t edns_big;
+      stats_t edns_tc;
     } udp;
     struct { // TCP stats
-      satom_t recvfail;
-      satom_t recvsize;
-      satom_t sendfail;
+      stats_t recvfail;
+      stats_t sendfail;
     } tcp;
-  } p;
+  };
 
   // DNS layer stats, first 6 directly correspond to RCODEs
   // All 7, summed, represent the total count
   //  of requests received by the DNS layer.  Note that
   //  some of the earlier UDP/TCP-specific failures never make it to
   //  to the DNS layer.
-  satom_t noerror;
-  satom_t refused;
-  satom_t nxdomain;
-  satom_t notimp;
-  satom_t badvers;
-  satom_t formerr;
-  satom_t dropped; // no response sent at all, horribly badly formatted
+  stats_t noerror;
+  stats_t refused;
+  stats_t nxdomain;
+  stats_t notimp;
+  stats_t badvers;
+  stats_t formerr;
+  stats_t dropped; // no response sent at all, horribly badly formatted
 
   // Count of requests over IPv6.  The only valid relation to other stats
   // is that you could compare it to the 7-stat sum above for a percentage
-  satom_t v6;
+  stats_t v6;
 
   // Again, could be counted as a percentage of the 7-stat sum above
-  satom_t edns;
+  stats_t edns;
 
   // A percentage of "edns" above:
-  satom_t edns_clientsub;
+  stats_t edns_clientsub;
 } dnspacket_stats_t;
 
 typedef struct {
     const uint8_t* original; // Alias to the original uncompressed dname's data (not the len byte)
-    const uint8_t* comp_ptr; // where compression occured on storage (could be off the end if uncompressed)
+    const uint8_t* comp_ptr; // where compression occurred on storage (could be off the end if uncompressed)
     unsigned int stored_at; // offset this name was first stored to in the packet, possibly partially compressed
 } comptarget_t;
 
@@ -176,4 +174,4 @@ void dnspacket_wait_stats(void);
 
 extern dnspacket_stats_t** dnspacket_stats;
 
-#endif // _GDNSD_DNSPACKET_H
+#endif // GDNSD_DNSPACKET_H

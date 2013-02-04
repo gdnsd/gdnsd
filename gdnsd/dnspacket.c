@@ -26,18 +26,15 @@
 
 #include "conf.h"
 #include "dnswire.h"
-#include "pkterr.h"
-#include "gdnsd-misc.h"
-#include "gdnsd-plugapi-priv.h"
-
-static const uint8_t chaos_fixed[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00\x00\x06\x05gdnsd";
-static const unsigned chaos_fixed_len = sizeof(chaos_fixed) - 1;
+#include "gdnsd/log.h"
+#include "gdnsd/misc.h"
+#include "gdnsd/plugapi-priv.h"
+#include "gdnsd/prcu-priv.h"
+#include "ztree.h"
 
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t stats_init_cond = PTHREAD_COND_INITIALIZER;
 static unsigned stats_initialized = 0;
-
-satom_t log_packet_errors;
 
 dnspacket_stats_t** dnspacket_stats;
 
@@ -94,7 +91,7 @@ dnspacket_context_t* dnspacket_context_new(const unsigned int this_threadnum, co
 }
 
 F_NONNULL
-static inline void reset_context(dnspacket_context_t* c) {
+static void reset_context(dnspacket_context_t* c) {
     dmn_assert(c);
     memset(
         &c->answer_addr_rrset, 0,
@@ -112,19 +109,19 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
     unsigned llen;
     while((llen = *lqname_ptr++ = buf[pos++])) {
         if(unlikely(llen & 0xC0)) {
-            log_pkterr("Label compression detected in question, failing.");
+            log_debug("Label compression detected in question, failing.");
             pos = 0;
             break;
         }
 
         if(unlikely(pos + llen >= len)) {
-            log_pkterr("Query name truncated (runs off end of packet)");
+            log_debug("Query name truncated (runs off end of packet)");
             pos = 0;
             break;
         }
 
         if(unlikely(pos + llen > 254)) {
-            log_pkterr("Query domain name too long");
+            log_debug("Query domain name too long");
             pos = 0;
             break;
         }
@@ -150,7 +147,7 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
             pos += 2;
         }
         else {
-            log_pkterr("Packet length exhausted before parsing question type/class!");
+            log_debug("Packet length exhausted before parsing question type/class!");
             pos = 0;
         }
     }
@@ -167,7 +164,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
 
     do {
         if(opt_len < 4) {
-            log_pkterr("edns_client_subnet data too short (%u bytes)", opt_len);
+            log_debug("edns_client_subnet data too short (%u bytes)", opt_len);
             rv = true;
             break;
         }
@@ -182,14 +179,14 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         //   additional trailing bytes on the end, since it doesn't hurt us.
         // We must have the correct amount at a minimum, though.
         if(opt_len < 4 + addr_bytes) {
-            log_pkterr("edns_client_subnet: addr length %u too short for src_mask of %u", opt_len, src_mask);
+            log_debug("edns_client_subnet: addr length %u too short for src_mask of %u", opt_len, src_mask);
             rv = true;
             break;
         }
 
         if(family == 1) { // IPv4
             if(src_mask > 32) {
-                log_pkterr("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
+                log_debug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
                 rv = true;
                 break;
             }
@@ -198,7 +195,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         }
         else if(family == 2) { // IPv6
             if(src_mask > 128) {
-                log_pkterr("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
+                log_debug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
                 rv = true;
                 break;
             }
@@ -206,7 +203,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
             memcpy(c->client_info.edns_client.sin6.sin6_addr.s6_addr, opt_data, addr_bytes);
         }
         else {
-            log_pkterr("edns_client_subnet has unknown family %u", family);
+            log_debug("edns_client_subnet has unknown family %u", family);
             rv = true;
             break;
         }
@@ -216,7 +213,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         c->client_info.edns_client_mask = src_mask;
     } while(0);
 
-    satom_inc(&c->stats->edns_clientsub);
+    stats_own_inc(&c->stats->edns_clientsub);
     return rv;
 }
 
@@ -244,16 +241,16 @@ static bool handle_edns_options(dnspacket_context_t* c, unsigned rdlen, const ui
     // minimum edns option length is 4 bytes (2 byte option code, 2 byte data len)
     while(rdlen) {
         if(rdlen < 4) {
-            log_pkterr("EDNS option too short");
-            rv = true; // rdlen too short for a valid option...
+            log_debug("EDNS option too short");
+            rv = true;
             break;
         }
         unsigned opt_code = ntohs(*(const uint16_t*)rdata); rdata += 2;
         unsigned opt_dlen = ntohs(*(const uint16_t*)rdata); rdata += 2;
         rdlen -= 4;
         if(opt_dlen > rdlen) {
-            log_pkterr("EDNS option too long");
-            rv = true; // option data runs off the end, FORMERR
+            log_debug("EDNS option too long");
+            rv = true;
             break;
         }
         if(handle_edns_option(c, opt_code, opt_dlen, rdata)) {
@@ -279,12 +276,12 @@ typedef enum {
 } rcode_rv_t;
 
 F_NONNULL
-static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* opt, const anysin_t* asin, const unsigned packet_len, const unsigned offset) {
+static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* opt, const anysin_t* asin V_UNUSED, const unsigned packet_len, const unsigned offset) {
     dmn_assert(c); dmn_assert(opt); dmn_assert(asin);
 
     rcode_rv_t rcode = DECODE_OK;
     c->use_edns = true;            // send OPT RR with response
-    satom_inc(&c->stats->edns);
+    stats_own_inc(&c->stats->edns);
     if(likely(DNS_OPTRR_GET_VERSION(opt) == 0)) {
         if(likely(c->is_udp)) {
             // The "512" here is us not allowing them to specify a size smaller than 512
@@ -297,7 +294,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         unsigned rdlen = htons(opt->rdlen);
         if(rdlen) {
             if(packet_len < offset + sizeof_optrr + rdlen) {
-                log_pkterr("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));
+                log_debug("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));
                 rcode = DECODE_FORMERR;
             }
             else if(handle_edns_options(c, rdlen, opt->rdata)) {
@@ -306,7 +303,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         }
     }
     else {
-        log_pkterr("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", logf_anysin(asin));
+        log_debug("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", logf_anysin(asin));
         rcode = DECODE_BADVERS;
     }
 
@@ -322,7 +319,7 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
     do {
         // 5 is the minimal question length (1 byte root, 2 bytes each type and class)
         if(unlikely(packet_len < (sizeof(wire_dns_header_t) + 5))) {
-            log_pkterr("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
+            log_debug("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
             rcode = DECODE_IGNORE;
         }
 
@@ -342,44 +339,44 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
 */
 
         if(unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
-            log_pkterr("Received request from %s with %hu questions, ignoring", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
+            log_debug("Received request from %s with %hu questions, ignoring", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_QR(hdr))) {
-            log_pkterr("QR bit set in query from %s, ignoring", logf_anysin(asin));
+            log_debug("QR bit set in query from %s, ignoring", logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_TC(hdr))) {
-            log_pkterr("TC bit set in query from %s, ignoring", logf_anysin(asin));
+            log_debug("TC bit set in query from %s, ignoring", logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         unsigned int offset = sizeof(wire_dns_header_t);
         if(unlikely(!(*question_len_ptr = parse_question(c, lqname, &packet[offset], packet_len - offset)))) {
-            log_pkterr("Failed to parse question, ignoring %s", logf_anysin(asin));
+            log_debug("Failed to parse question, ignoring %s", logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(DNSH_GET_OPCODE(hdr)) {
-            log_pkterr("Non-QUERY request (NOTIMP) from %s, opcode is %u", logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
+            log_debug("Non-QUERY request (NOTIMP) from %s, opcode is %u", logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_AXFR)) {
-            log_pkterr("AXFR attempted (NOTIMP) from %s", logf_anysin(asin));
+            log_debug("AXFR attempted (NOTIMP) from %s", logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_IXFR)) {
-            log_pkterr("IXFR attempted (NOTIMP) from %s", logf_anysin(asin));
+            log_debug("IXFR attempted (NOTIMP) from %s", logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
@@ -583,23 +580,21 @@ static unsigned int repeat_name(dnspacket_context_t* c, unsigned int store_at_of
 #define OFFSET_LOOP_START(_total, _limit) \
     {\
         const unsigned _tot = (_total);\
-        if(_tot) {\
-            unsigned _x_count = (_limit);\
-            unsigned i = gdnsd_rand_get32(c->rand_state) % _tot;\
-            while(_x_count--) {\
+        unsigned _x_count = (_limit);\
+        unsigned i = gdnsd_rand_get32(c->rand_state) % _tot;\
+        while(_x_count--) {\
 
-// Your code using "i" as an rrset index goes here
-
+            // Your code using "i" as an rrset index goes here
 #define OFFSET_LOOP_END \
-                if(++i == _tot)\
-                  i = 0;\
-            }\
+            if(++i == _tot)\
+              i = 0;\
         }\
     }
 
 F_NONNULL
 static unsigned int enc_a_static(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_addr_t* rrset, const unsigned int nameptr, const bool is_addtl) {
     dmn_assert(c); dmn_assert(rrset);
+    dmn_assert(rrset->gen.count_v4);
 
     uint8_t* packet = is_addtl ? c->addtl_store : c->packet;
 
@@ -608,7 +603,7 @@ static unsigned int enc_a_static(dnspacket_context_t* c, unsigned int offset, co
     else
         c->ancount += rrset->limit_v4;
 
-    OFFSET_LOOP_START(rrset->gen.c.c.count_v4, rrset->limit_v4)
+    OFFSET_LOOP_START(rrset->gen.count_v4, rrset->limit_v4)
         offset += repeat_name(c, offset, nameptr, is_addtl);
         *((uint32_t*)&packet[offset]) = DNS_RRFIXED_A;
         offset += 4;
@@ -616,7 +611,7 @@ static unsigned int enc_a_static(dnspacket_context_t* c, unsigned int offset, co
         offset += 4;
         *((uint16_t*)&packet[offset]) = htons(4);
         offset += 2;
-        *((uint32_t*)&packet[offset]) = rrset->a.addrs.v4[i];
+        *((uint32_t*)&packet[offset]) = rrset->addrs.v4[i];
         offset += 4;
     OFFSET_LOOP_END
     return offset;
@@ -625,6 +620,7 @@ static unsigned int enc_a_static(dnspacket_context_t* c, unsigned int offset, co
 F_NONNULL
 static unsigned int enc_aaaa_static(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_addr_t* rrset, const unsigned int nameptr, const bool is_addtl) {
     dmn_assert(c); dmn_assert(rrset);
+    dmn_assert(rrset->gen.count_v6);
 
     uint8_t* packet = is_addtl ? c->addtl_store : c->packet;
 
@@ -633,7 +629,7 @@ static unsigned int enc_aaaa_static(dnspacket_context_t* c, unsigned int offset,
     else
         c->ancount += rrset->limit_v6;
 
-    OFFSET_LOOP_START(rrset->gen.c.c.count_v6, rrset->limit_v6)
+    OFFSET_LOOP_START(rrset->gen.count_v6, rrset->limit_v6)
         offset += repeat_name(c, offset, nameptr, is_addtl);
         *((uint32_t*)&packet[offset]) = DNS_RRFIXED_AAAA;
         offset += 4;
@@ -641,7 +637,7 @@ static unsigned int enc_aaaa_static(dnspacket_context_t* c, unsigned int offset,
         offset += 4;
         *((uint16_t*)&packet[offset]) = htons(16);
         offset += 2;
-        memcpy(&packet[offset], rrset->a.addrs.v6 + (i << 4), 16);
+        memcpy(&packet[offset], rrset->addrs.v6 + (i << 4), 16);
         offset += 16;
     OFFSET_LOOP_END
     return offset;
@@ -653,6 +649,7 @@ static unsigned int enc_a_dynamic(dnspacket_context_t* c, unsigned int offset, c
 
     uint8_t* packet = is_addtl ? c->addtl_store : c->packet;
     const dynaddr_result_t* dr = c->dynaddr;
+    dmn_assert(dr->count_v4);
 
     const unsigned limit_v4 = rrset->limit_v4 && rrset->limit_v4 < dr->count_v4
         ? rrset->limit_v4
@@ -683,6 +680,7 @@ static unsigned int enc_aaaa_dynamic(dnspacket_context_t* c, unsigned int offset
 
     uint8_t* packet = is_addtl ? c->addtl_store : c->packet;
     const dynaddr_result_t* dr = c->dynaddr;
+    dmn_assert(dr->count_v6);
 
     const unsigned limit_v6 = rrset->limit_v6 && rrset->limit_v6 < dr->count_v6
         ? rrset->limit_v6
@@ -713,12 +711,12 @@ static unsigned int enc_aaaa_dynamic(dnspacket_context_t* c, unsigned int offset
 // After invoking this function, code can assume c->dynaddr contains proper results
 F_NONNULL
 static void do_dynaddr_callback(dnspacket_context_t* c, const ltree_rrset_addr_t* rrset) {
-    dmn_assert(c); dmn_assert(rrset); dmn_assert(!rrset->gen.c.is_static);
+    dmn_assert(c); dmn_assert(rrset); dmn_assert(!rrset->gen.is_static);
 
     dynaddr_result_t* dr = c->dynaddr;
     memset(dr, 0, sizeof(dynaddr_result_t));
     dr->ttl = ntohl(rrset->gen.ttl);
-    rrset->a.dyn.func(c->threadnum, rrset->a.dyn.resource, &c->client_info, dr);
+    rrset->dyn.func(c->threadnum, rrset->dyn.resource, &c->client_info, dr);
     if(dr->edns_scope_mask > c->edns_client_scope_mask)
         c->edns_client_scope_mask = dr->edns_scope_mask;
 }
@@ -732,14 +730,18 @@ static unsigned int encode_rrs_anyaddr(dnspacket_context_t* c, unsigned int offs
     if(!is_addtl)
         c->answer_addr_rrset = rrset;
 
-    if(rrset->gen.c.is_static) {
-        offset = enc_a_static(c, offset, rrset, nameptr, is_addtl);
-        offset = enc_aaaa_static(c, offset, rrset, nameptr, is_addtl);
+    if(rrset->gen.is_static) {
+        if(rrset->gen.count_v4)
+            offset = enc_a_static(c, offset, rrset, nameptr, is_addtl);
+        if(rrset->gen.count_v6)
+            offset = enc_aaaa_static(c, offset, rrset, nameptr, is_addtl);
     }
     else {
         do_dynaddr_callback(c, rrset);
-        offset = enc_a_dynamic(c, offset, rrset, nameptr, is_addtl);
-        offset = enc_aaaa_dynamic(c, offset, rrset, nameptr, is_addtl);
+        if(c->dynaddr->count_v4)
+            offset = enc_a_dynamic(c, offset, rrset, nameptr, is_addtl);
+        if(c->dynaddr->count_v6)
+            offset = enc_aaaa_dynamic(c, offset, rrset, nameptr, is_addtl);
     }
 
     return offset;
@@ -806,20 +808,22 @@ static unsigned int encode_rrs_a(dnspacket_context_t* c, unsigned int offset, co
     // rrset in the addtl section
     c->answer_addr_rrset = rrset;
 
-    if(rrset->gen.c.is_static) {
-        offset = enc_a_static(c, offset, rrset, c->qname_comp, false);
-        if(rrset->gen.c.c.count_v6) {
+    if(rrset->gen.is_static) {
+        if(rrset->gen.count_v4)
+            offset = enc_a_static(c, offset, rrset, c->qname_comp, false);
+        if(rrset->gen.count_v6) {
             track_addtl_rrset_unwind(c, rrset);
             c->addtl_offset = enc_aaaa_static(c, c->addtl_offset, rrset, c->qname_comp, true);
         }
     }
     else {
         do_dynaddr_callback(c, rrset);
+        if(c->dynaddr->count_v4)
+            offset = enc_a_dynamic(c, offset, rrset, c->qname_comp, false);
         if(c->dynaddr->count_v6) {
             track_addtl_rrset_unwind(c, rrset);
             c->addtl_offset = enc_aaaa_dynamic(c, c->addtl_offset, rrset, c->qname_comp, true);
         }
-        offset = enc_a_dynamic(c, offset, rrset, c->qname_comp, false);
     }
 
     return offset;
@@ -834,20 +838,22 @@ static unsigned int encode_rrs_aaaa(dnspacket_context_t* c, unsigned int offset,
     // rrset in the addtl section
     c->answer_addr_rrset = rrset;
 
-    if(rrset->gen.c.is_static) {
-        offset = enc_aaaa_static(c, offset, rrset, c->qname_comp, false);
-        if(rrset->gen.c.c.count_v4) {
+    if(rrset->gen.is_static) {
+        if(rrset->gen.count_v6)
+            offset = enc_aaaa_static(c, offset, rrset, c->qname_comp, false);
+        if(rrset->gen.count_v4) {
             track_addtl_rrset_unwind(c, rrset);
             c->addtl_offset = enc_a_static(c, c->addtl_offset, rrset, c->qname_comp, true);
         }
     }
     else {
         do_dynaddr_callback(c, rrset);
+        if(c->dynaddr->count_v6)
+            offset = enc_aaaa_dynamic(c, offset, rrset, c->qname_comp, false);
         if(c->dynaddr->count_v4) {
             track_addtl_rrset_unwind(c, rrset);
             c->addtl_offset = enc_a_dynamic(c, c->addtl_offset, rrset, c->qname_comp, true);
         }
-        offset = enc_aaaa_dynamic(c, offset, rrset, c->qname_comp, false);
     }
 
     return offset;
@@ -856,10 +862,11 @@ static unsigned int encode_rrs_aaaa(dnspacket_context_t* c, unsigned int offset,
 F_NONNULL
 static unsigned int encode_rrs_ns(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_ns_t* rrset, const bool answer) {
     dmn_assert(c); dmn_assert(c->packet); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(rrset->gen.count); // we never call encode_rrs_ns without an NS record present
 
     uint8_t* packet = c->packet;
 
-    OFFSET_LOOP_START(rrset->gen.c.count, rrset->gen.c.count)
+    OFFSET_LOOP_START(rrset->gen.count, rrset->gen.count)
         offset += repeat_name(c, offset, c->auth_comp, false);
         *((uint32_t*)&packet[offset]) = DNS_RRFIXED_NS;
         offset += 4;
@@ -880,9 +887,9 @@ static unsigned int encode_rrs_ns(dnspacket_context_t* c, unsigned int offset, c
     OFFSET_LOOP_END
 
     if(answer)
-        c->ancount += rrset->gen.c.count;
+        c->ancount += rrset->gen.count;
     else
-        c->nscount += rrset->gen.c.count;
+        c->nscount += rrset->gen.count;
 
     return offset;
 }
@@ -893,7 +900,9 @@ static unsigned int encode_rrs_ptr(dnspacket_context_t* c, unsigned int offset, 
 
     uint8_t* packet = c->packet;
 
-    OFFSET_LOOP_START(rrset->gen.c.count, rrset->gen.c.count)
+    const unsigned rrct = rrset->gen.count;
+    c->ancount += rrct;
+    for(unsigned i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
         *((uint32_t*)&packet[offset]) = DNS_RRFIXED_PTR; offset += 4;
         *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
@@ -901,8 +910,7 @@ static unsigned int encode_rrs_ptr(dnspacket_context_t* c, unsigned int offset, 
         *((uint16_t*)&packet[offset - 2]) = htons(newlen);
         if(rrset->rdata[i].ad) add_addtl_rrset(c, rrset->rdata[i].ad, offset);
         offset += newlen;
-    OFFSET_LOOP_END
-    c->ancount += rrset->gen.c.count;
+    }
 
     return offset;
 }
@@ -913,7 +921,9 @@ static unsigned int encode_rrs_mx(dnspacket_context_t* c, unsigned int offset, c
 
     uint8_t* packet = c->packet;
 
-    for(unsigned int i = 0; i < rrset->gen.c.count; i++) {
+    const unsigned rrct = rrset->gen.count;
+    c->ancount += rrct;
+    for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
         *((uint32_t*)&packet[offset]) = DNS_RRFIXED_MX; offset += 4;
         *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
@@ -924,7 +934,6 @@ static unsigned int encode_rrs_mx(dnspacket_context_t* c, unsigned int offset, c
         if(rd->ad) add_addtl_rrset(c, rd->ad, offset);
         offset += newlen;
     }
-    c->ancount += rrset->gen.c.count;
 
     return offset;
 }
@@ -935,7 +944,9 @@ static unsigned int encode_rrs_srv(dnspacket_context_t* c, unsigned int offset, 
 
     uint8_t* packet = c->packet;
 
-    for(unsigned int i = 0; i < rrset->gen.c.count; i++) {
+    const unsigned rrct = rrset->gen.count;
+    c->ancount += rrct;
+    for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
         *((uint32_t*)&packet[offset]) = DNS_RRFIXED_SRV; offset += 4;
         *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
@@ -950,8 +961,6 @@ static unsigned int encode_rrs_srv(dnspacket_context_t* c, unsigned int offset, 
         offset += newlen;
     }
 
-    c->ancount += rrset->gen.c.count;
-
     return offset;
 }
 
@@ -961,7 +970,9 @@ static unsigned int encode_rrs_naptr(dnspacket_context_t* c, unsigned int offset
 
     uint8_t* packet = c->packet;
 
-    for(unsigned int i = 0; i < rrset->gen.c.count; i++) {
+    const unsigned rrct = rrset->gen.count;
+    c->ancount += rrct;
+    for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
         *((uint32_t*)&packet[offset]) = DNS_RRFIXED_NAPTR; offset += 4;
         *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
@@ -984,7 +995,6 @@ static unsigned int encode_rrs_naptr(dnspacket_context_t* c, unsigned int offset
         if(rd->ad) add_addtl_rrset(c, rd->ad, offset);
         offset += newlen;
     }
-    c->ancount += rrset->gen.c.count;
 
     return offset;
 }
@@ -997,7 +1007,9 @@ static unsigned int encode_rrs_txt(dnspacket_context_t* c, unsigned int offset, 
 
     const bool is_spf = (c->qtype == DNS_TYPE_SPF);
 
-    for(unsigned int i = 0; i < rrset->gen.c.count; i++) {
+    const unsigned rrct = rrset->gen.count;
+    c->ancount += rrct;
+    for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
         *((uint32_t*)&packet[offset]) = is_spf ? DNS_RRFIXED_SPF : DNS_RRFIXED_TXT;
         offset += 4;
@@ -1017,47 +1029,49 @@ static unsigned int encode_rrs_txt(dnspacket_context_t* c, unsigned int offset, 
         }
         *((uint16_t*)&packet[rdata_offset - 2]) = htons(rdata_len);
     }
-    c->ancount += rrset->gen.c.count;
 
     return offset;
 }
 
-// "answer" here is overloaded from its original meaning.
+// "answer" here is overloaded from its original meaning for the other RRs.
 //   normally it means 'this record's going into the answer section as opposed to auth/additional'
-//   here it means true: 'direct CNAME query, false: chaining through for a non-CNAME query'
+//   here it means true: 'direct CNAME query', false: 'chaining through for a non-CNAME query'
 //    (and in either case, it's going into the answer section)
 F_NONNULL
 static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_cname_t* rd, const bool answer) {
     dmn_assert(c); dmn_assert(c->packet); dmn_assert(offset); dmn_assert(rd);
 
     uint8_t* packet = c->packet;
-  
+
     unsigned int rdata_offset, ttl;
-    uint8_t* dname;
-     
-    if(rd->gen.c.is_static) { 
+    const uint8_t* dname;
+
+    if(rd->gen.is_static) {
         ttl = rd->gen.ttl;
-        dname = rd->c.dname;       
+        dname = rd->dname;
     }
     else {
-        dyncname_result_t ans_dync = {0,0,{0}};
+        dmn_assert(c->dync_count < gconfig.max_cname_depth);
+        dyncname_result_t ans_dync = {0, 0, &c->dync_store[(c->dync_count++ * 256)] };
+        dname = ans_dync.dname;
         ans_dync.ttl = ntohl(rd->gen.ttl);
 
-        rd->c.dyn.func(c->threadnum, rd->c.dyn.resource, rd->c.dyn.origin, &c->client_info, &ans_dync);
+        rd->dyn.func(c->threadnum, rd->dyn.resource, rd->dyn.origin, &c->client_info, &ans_dync);
         if(ans_dync.edns_scope_mask > c->edns_client_scope_mask)
             c->edns_client_scope_mask = ans_dync.edns_scope_mask;
         ttl = htonl(ans_dync.ttl);
 
-        // plugin is responsible for ensuring ans_dync.dname is always valid
-        dname = &c->dync_store[(c->dync_count++ * 256)];
-        gdnsd_dname_copy(dname, ans_dync.dname);
+        // plugin is responsible for ensuring ans_dync.dname contents are valid,
+        //   and not casting away const and overwriting the pointer
+        dmn_assert(dname == ans_dync.dname);
+        dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
     }
- 
+
     // start formulating response
     offset += repeat_name(c, offset, c->qname_comp, false);
     *((uint32_t*)&packet[offset]) = DNS_RRFIXED_CNAME;
     offset += 4;
- 
+
     *((uint32_t*)&packet[offset]) = ttl;
     offset += 6;
 
@@ -1113,7 +1127,9 @@ static unsigned int encode_rrs_rfc3597(dnspacket_context_t* c, unsigned int offs
 
     uint8_t* packet = c->packet;
 
-    for(unsigned int i = 0; i < rrset->gen.c.count; i++) {
+    const unsigned rrct = rrset->gen.count;
+    c->ancount += rrct;
+    for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
         *((uint16_t*)&packet[offset]) = htons(rrset->gen.type); offset += 2;
         *((uint16_t*)&packet[offset]) = htons(DNS_CLASS_IN); offset += 2;
@@ -1122,7 +1138,6 @@ static unsigned int encode_rrs_rfc3597(dnspacket_context_t* c, unsigned int offs
         memcpy(&packet[offset], rrset->rdata[i].rd, rrset->rdata[i].rdlen);
         offset += rrset->rdata[i].rdlen;
     }
-    c->ancount += rrset->gen.c.count;
 
     return offset;
 }
@@ -1187,7 +1202,7 @@ static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, 
 //  of the list because ltree already validated at startup that in all
 //  cases where we call these, the given RRset exists.
 #define MK_RRSET_GET(_typ, _nam, _dtyp) \
-F_NONNULL \
+F_NONNULL F_PURE \
 static const ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _nam (const ltree_node_t* node) {\
     dmn_assert(node);\
     const ltree_rrset_t* rrsets = node->rrsets;\
@@ -1493,96 +1508,6 @@ static unsigned int construct_normal_response(dnspacket_context_t* c, unsigned i
     return offset;
 }
 
-F_NONNULLX(1, 2, 3)
-static ltree_dname_status_t search_ltree(const uint8_t* restrict dname, const ltree_node_t** restrict node_out, const ltree_node_t** restrict auth_out, const ltree_node_t* checkroot, unsigned* auth_depth_out, bool* checkroot_crossed) {
-    dmn_assert(dname); dmn_assert(node_out); dmn_assert(auth_out); dmn_assert(*dname != 0); dmn_assert(*dname != 2);
-
-    dmn_assert( (checkroot && checkroot_crossed && !*checkroot_crossed)
-         || (!checkroot && !checkroot_crossed) );
-
-    // construct label ptr stack
-    const uint8_t* lptr_stack[127];
-    unsigned label_idx = 0;
-
-    {
-        uint8_t llen;
-        ++dname;
-        while((llen = *dname)) {
-            dmn_assert(label_idx < 127);
-            lptr_stack[label_idx++] = dname++;
-            dname += llen;
-        }
-    }
-
-    ltree_dname_status_t rval = DNAME_NOAUTH;
-    *auth_out = NULL;
-    *node_out = NULL;
-
-    const ltree_node_t* current = ltree_root;
-    dmn_assert(current);
-
-    do {
-        top_loop:;
-        if(checkroot && current == checkroot)
-            *checkroot_crossed = true;
-        if(current->flags & (LTNFLAG_ZROOT | LTNFLAG_DELEG)) {
-            unsigned auth_depth = label_idx;
-            unsigned i = label_idx;
-            while(i) {
-                i--;
-                auth_depth += lptr_stack[i][0];
-            }
-
-            *auth_depth_out = auth_depth;
-            if(current->flags & LTNFLAG_ZROOT) {
-                *auth_out = current;
-                *node_out = NULL;
-                rval = DNAME_AUTH;
-            }
-            else {
-                *node_out = current;
-                rval = DNAME_DELEG;
-            }
-        }
-
-        if(!label_idx || !current->child_table) {
-            if(!label_idx && rval == DNAME_AUTH) *node_out = current;
-            return rval;
-        }
-
-        label_idx--;
-        const uint8_t* child_label = lptr_stack[label_idx];
-        const ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
-
-        while(entry) {
-            if(!memcmp(entry->label, child_label, *child_label + 1)) {
-                current = entry;
-                goto top_loop;
-            }
-            entry = entry->next;
-        }
-    } while(0);
-
-    // Getting here means no explicit match or other terminal condition found,
-    //  but we still have a child_table in auth space that might contain a wildcard...
-    if(rval == DNAME_AUTH) {
-        dmn_assert(current->child_table);
-        dmn_assert(current->flags);
-        dmn_assert(*auth_out);
-        const ltree_node_t* entry = current->child_table[label_djb_hash((const uint8_t*)"\001*", current->child_hash_mask)];
-
-        while(entry) {
-            if(entry->label[0] == 1 && entry->label[1] == '*') {
-                *node_out = entry;
-                break;
-            }
-            entry = entry->next;
-        }
-    }
-
-    return rval;
-}
-
 // Find the start of the (uncompressed) auth zone name at auth_depth bytes into the name at qname_offset,
 //  chasing compression pointers as necc.
 // XXX - really, the necessity of this is sort of the last straw on the current scheme involving
@@ -1612,59 +1537,132 @@ static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned 
 }
 
 F_NONNULL
+static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zone_t* zone, const ltree_node_t** node_out, unsigned* auth_deleg_mod) {
+    dmn_assert(dname); dmn_assert(zone); dmn_assert(node_out);
+    dmn_assert(*dname != 0); dmn_assert(*dname != 2); // these are always illegal dnames
+    dmn_assert(dname_isinzone(zone->dname, dname));
+
+    ltree_dname_status_t rval = DNAME_AUTH;
+    ltree_node_t* rv_node = NULL;
+    uint8_t local_dname[256];
+    gdnsd_dname_copy(local_dname, dname);
+    gdnsd_dname_drop_zone(local_dname, zone->dname);
+
+    // construct label ptr stack
+    const uint8_t* lstack[127];
+    unsigned lcount = dname_to_lstack(local_dname, lstack);
+
+    ltree_node_t* current = zone->root;
+    unsigned deleg_mod = 0;
+
+    do {
+        top_loop:;
+        if(current->flags & LTNFLAG_DELEG) {
+            rval = DNAME_DELEG;
+            *auth_deleg_mod -= deleg_mod;
+            rv_node = current;
+            break;
+        }
+
+        if(!lcount || !current->child_table) {
+            if(!lcount) rv_node = current;
+            break;
+        }
+
+        lcount--;
+        const uint8_t* child_label = lstack[lcount];
+        deleg_mod += *child_label;
+        deleg_mod++;
+        ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
+
+        while(entry) {
+            if(!memcmp(entry->label, child_label, *child_label + 1)) {
+                current = entry;
+                goto top_loop;
+            }
+            entry = entry->next;
+        }
+    } while(0);
+
+    //  If in auth space with no match, and we still have a child_table, check for wildcard
+    if(!rv_node && current->child_table) {
+        dmn_assert(rval == DNAME_AUTH);
+        ltree_node_t* entry = current->child_table[label_djb_hash((const uint8_t*)"\001*", current->child_hash_mask)];
+        while(entry) {
+            if(entry->label[0] == '\001' && entry->label[1] == '*') {
+                rv_node = entry;
+                break;
+            }
+            entry = entry->next;
+        }
+    }
+
+    *node_out = rv_node;
+    return rval;
+}
+
+F_NONNULL
 static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname, unsigned int offset) {
     dmn_assert(c); dmn_assert(qname); dmn_assert(offset);
 
     const unsigned first_offset = offset;
     bool via_cname = false;
     unsigned cname_depth = 0;
-    const ltree_node_t* resdom;
-    const ltree_node_t* resauth;
+    const ltree_node_t* resdom = NULL;
+    const ltree_node_t* resauth = NULL;
     wire_dns_header_t* res_hdr = (wire_dns_header_t*)c->packet;
 
-    // In the initial search, it's known that "qname" is in fact the real query name and therefore
-    //  uncompressed, which is what makes the simplistic c->auth_comp calculation possible.
+    ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
-    ltree_dname_status_t status = search_ltree(qname, &resdom, &resauth, NULL, &auth_depth, NULL);
-    c->auth_comp = c->qname_comp + auth_depth;
 
-    // CNAME handling, which fills in 1+ CNAME RRs and then alters status/resdom/via_cname
-    //  for the normal response handling code below.  The explicit check of the first
-    //  rrsets entry works because if CNAME exists at all, by definition it is the only
-    //  type of rrset at this node.
-    while(resdom && resdom->rrsets
-        && resdom->rrsets->gen.type == DNS_TYPE_CNAME && c->qtype != DNS_TYPE_CNAME) {
-        dmn_assert(status == DNAME_AUTH); dmn_assert(resauth);
+    gdnsd_prcu_rdr_lock();
 
-        res_hdr->flags1 |= 4; // AA bit
-        via_cname = true;
+    zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
 
-        if(++cname_depth > gconfig.max_cname_depth) {
-            log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
-            resdom = NULL; // clear resdom to generate NXDOMAIN-style response
-            // wipe any data already added to the packet
-            offset = first_offset;
-            c->ancount = 0;
-            c->cname_ancount = 0;
-            break;
-        }
+    if(query_zone) { // matches auth space somewhere
+        // In the initial search, it's known that "qname" is in fact the real query name and therefore
+        //  uncompressed, which is what makes the simplistic c->auth_comp calculation possible.
+        resauth = query_zone->root;
+        status = search_zone_for_dname(qname, query_zone, &resdom, &auth_depth);
+        c->auth_comp = c->qname_comp + auth_depth;
+        dmn_assert(status == DNAME_AUTH || status == DNAME_DELEG);
 
-        const ltree_rrset_cname_t* cname = &resdom->rrsets->cname;
-        offset = encode_rr_cname(c, offset, cname, false);
-                        
-        bool resauth_crossed = false;
-        const uint8_t* dname = cname->gen.c.is_static ? cname->c.dname : &c->dync_store[(c->dync_count - 1) * 256];
-        status = search_ltree(dname, &resdom, &resauth, resauth, &auth_depth, &resauth_crossed);
-        // encode_rr_cname() above updated c->qname_comp, and now we need to update c->auth_comp
-        //  to match based on search_ltree's auth_depth output, assuming auth or deleg response
-        if(!resauth_crossed) {
-            status = DNAME_NOAUTH;
-            break;
-        }
-        else {
-            c->auth_comp = chase_auth_ptr(c->packet, c->qname_comp, auth_depth);
-        }
-    }
+        // CNAME handling, which fills in 1+ CNAME RRs and then alters status/resdom/via_cname
+        //  for the normal response handling code below.  The explicit check of the first
+        //  rrsets entry works because if CNAME exists at all, by definition it is the only
+        //  type of rrset at this node.
+        while(resdom && resdom->rrsets
+            && resdom->rrsets->gen.type == DNS_TYPE_CNAME && c->qtype != DNS_TYPE_CNAME) {
+            dmn_assert(status == DNAME_AUTH);
+
+            res_hdr->flags1 |= 4; // AA bit
+            via_cname = true;
+
+            if(++cname_depth > gconfig.max_cname_depth) {
+                log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
+                resdom = NULL; // clear resdom to generate NXDOMAIN-style response
+                // wipe any data already added to the packet
+                offset = first_offset;
+                c->ancount = 0;
+                c->cname_ancount = 0;
+                break;
+            }
+
+            const ltree_rrset_cname_t* cname = &resdom->rrsets->cname;
+            offset = encode_rr_cname(c, offset, cname, false);
+
+            const uint8_t* dname = cname->gen.is_static ? cname->dname : &c->dync_store[(c->dync_count - 1) * 256];
+            if(dname_isinzone(query_zone->dname, dname)) {
+                auth_depth = *dname - *query_zone->dname;
+                status = search_zone_for_dname(dname, query_zone, &resdom, &auth_depth);
+                c->auth_comp = chase_auth_ptr(c->packet, c->qname_comp, auth_depth);
+            }
+            else {
+                status = DNAME_NOAUTH;
+                break;
+            }
+        } // end CNAME block
+    } // end if(query_zone) block
 
     if(status == DNAME_AUTH) {
         dmn_assert(resauth);
@@ -1677,7 +1675,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
             dmn_assert(soa);
             res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
             offset = encode_rr_soa(c, offset, soa, false);
-            satom_inc(&c->stats->nxdomain);
+            stats_own_inc(&c->stats->nxdomain);
         }
     }
     else if(status == DNAME_DELEG) {
@@ -1690,9 +1688,11 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         dmn_assert(status == DNAME_NOAUTH);
         if(!via_cname) {
             res_hdr->flags2 = DNS_RCODE_REFUSED;
-            satom_inc(&c->stats->refused);
+            stats_own_inc(&c->stats->refused);
         }
     }
+
+    gdnsd_prcu_rdr_unlock();
 
     return offset;
 }
@@ -1713,10 +1713,10 @@ static unsigned int answer_from_db_outer(dnspacket_context_t* c, uint8_t* qname,
         c->arcount = 0;
         res_hdr->flags1 |= 0x2; // TC bit
         if(c->use_edns) {
-            satom_inc(&c->stats->p.udp.edns_tc);
+            stats_own_inc(&c->stats->udp.edns_tc);
         }
         else {
-            satom_inc(&c->stats->p.udp.tc);
+            stats_own_inc(&c->stats->udp.tc);
         }
         return full_trunc_offset;
     }
@@ -1750,7 +1750,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
 */
 
     if(asin->sa.sa_family == AF_INET6)
-        satom_inc(&c->stats->v6);
+        stats_own_inc(&c->stats->v6);
 
     uint8_t lqname[256];
     unsigned question_len = 0;
@@ -1758,7 +1758,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
     const rcode_rv_t status = decode_query(c, lqname, &question_len, packet_len, asin);
 
     if(status == DECODE_IGNORE) {
-        satom_inc(&c->stats->dropped);
+        stats_own_inc(&c->stats->dropped);
         return 0;
     }
 
@@ -1774,7 +1774,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
     if(status == DECODE_NOTIMP) {
         hdr->qdcount = 0;
         hdr->flags2 = DNS_RCODE_NOTIMP;
-        satom_inc(&c->stats->notimp);
+        stats_own_inc(&c->stats->notimp);
         return res_offset;
     }
 
@@ -1796,21 +1796,21 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         }
         else {
             c->ancount = 1;
-            memcpy(&packet[res_offset], chaos_fixed, chaos_fixed_len);
-            res_offset += chaos_fixed_len;
+            memcpy(&packet[res_offset], gconfig.chaos, gconfig.chaos_len);
+            res_offset += gconfig.chaos_len;
         }
 
-        if(hdr->flags2 == DNS_RCODE_NOERROR) satom_inc(&c->stats->noerror);
+        if(hdr->flags2 == DNS_RCODE_NOERROR) stats_own_inc(&c->stats->noerror);
     }
     else {
         if(status == DECODE_FORMERR) {
             hdr->flags2 = DNS_RCODE_FORMERR;
-            satom_inc(&c->stats->formerr);
+            stats_own_inc(&c->stats->formerr);
         }
         else {
             dmn_assert(status == DECODE_BADVERS);
             hdr->flags2 = DNS_RCODE_NOERROR;
-            satom_inc(&c->stats->badvers);
+            stats_own_inc(&c->stats->badvers);
         }
     }
 
@@ -1855,7 +1855,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         if(likely(c->is_udp)) {
             // We only do one kind of truncation: complete truncation.
             //  therefore if we're returning a >512 packet, it wasn't truncated
-            if(res_offset > 512) satom_inc(&c->stats->p.udp.edns_big);
+            if(res_offset > 512) stats_own_inc(&c->stats->udp.edns_big);
         }
     }
 

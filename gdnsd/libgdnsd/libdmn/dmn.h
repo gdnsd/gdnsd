@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef _DMN_H
-#define _DMN_H
+#ifndef DMN_H
+#define DMN_H
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -81,9 +81,9 @@ pid_t dmn_status(const char* pidfile);
 DMN_F_NONNULL
 pid_t dmn_stop(const char* pidfile);
 
-// Send an aribtrary signal to a running daemon using "pidfile".
+// Send an arbitrary signal to a running daemon using "pidfile".
 DMN_F_NONNULL
-void dmn_signal(const char* pidfile, int sig);
+int dmn_signal(const char* pidfile, int sig);
 
 /***
 **** chroot/privdrop security interfaces
@@ -91,24 +91,23 @@ void dmn_signal(const char* pidfile, int sig);
 
 // Takes a username and a chroot() path, does as much pre-validation
 //  as possible and stores the results for a later call to dmn_secure_me().
-// If chroot_fixup is true, this code will attempt to create any non-existent
-//  chroot_path w/ mode 755, and/or fix an existing chroot_path's ownership
-//  (set to uid/gid 0) and permissions (strip group/other write bits).
-// If chroot_path is NULL, no chroot checking is done here, and no chroot()
-//  is done during the following secure_me() call.
+// If chroot_path is NULL, no chroot() is done during the following secure_me() call.
 DMN_F_NONNULLX(1)
-void dmn_secure_setup(const char* username, const char* chroot_path, const bool chroot_fixup);
+void dmn_secure_setup(const char* username, const char* chroot_path);
 
 // Executes the actual chroot()/chuid()/etc calls based on previous
-//  dmn_secure_setup(), which must be called first.
-void dmn_secure_me(void);
+//  dmn_secure_setup(), which must be called first.  skip_chroot
+//  will skip the chroot() part even if dmn_secure_setup() specified
+//  and validated a chroot path.  So far this is only used in a corner
+//  case for gdnsd_plugin_extmon...
+void dmn_secure_me(const bool skip_chroot);
 
 // This accessor indicates whether dmn_secure_me() has been called or not
 DMN_F_PURE
 bool dmn_is_secured(void);
 
 // This accessor returns the chroot path configured through dmn_secure_setup(),
-//   if that setup has occured yet.  If dmn_secure_setup() was not (yet) called,
+//   if that setup has occurred yet.  If dmn_secure_setup() was not (yet) called,
 //   or was called with chroot_path set to NULL, it returns NULL.  Note that
 //   if this returns a path, dmn_is_secured() tells you whether we've already
 //   chroot'd into that path.
@@ -122,19 +121,32 @@ const char* dmn_get_chroot(void);
 // Get/Set debug flag:
 // When the daemon is built in debug mode (!defined NDEBUG),
 //  *and* this flag is set to true by the daemon,
-//  dmn_log_debug() emits output
+//  dmn_log_debug() emits output.  This is not intended
+//  to be toggled at runtime (especially from threads!),
+//  it is meant to be set once at startup and left alone.
 DMN_F_PURE
 bool dmn_get_debug(void);
 void dmn_set_debug(bool d);
 
 // Call before any log_* calls, right at proc startup...
-void dmn_init_log(void);
+void dmn_init_log(const char* logname, const bool stderr_info);
 
 // Start syslogging log_*() calls (does openlog),
 //   prior to this they go to stderr only (until
 //   it's closed for a daemon).
 DMN_F_NONNULL
-void dmn_start_syslog(const char* logname);
+void dmn_start_syslog(void);
+
+// special API for extmon helper.  Sets up
+//   logging stderr output via an already-open
+//   fd, to be stopped later via dmn_log_close_strerr()
+void dmn_log_set_alt_stderr(const int fd);
+
+// closes stderr logging via alternate descriptor...
+void dmn_log_close_alt_stderr(void);
+
+// get fd number of open alt_stderr, for passing to a child...
+int dmn_log_get_alt_stderr_fd(void);
 
 // This is a syslog()-like interface that will log
 //  to stderr and/or syslog as appropriate depending
@@ -160,8 +172,10 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
     exit(57);\
 } while(0)
 
+// DMN_NO_UNREACH_BUILTIN is to work around gcov coverage testing, which
+//   flags un-taken branches for all of the __builtin_unreachable()
 #ifdef NDEBUG
-#  ifdef DMN_HAVE_UNREACH_BUILTIN
+#  if defined(DMN_HAVE_UNREACH_BUILTIN) && !defined(DMN_NO_UNREACH_BUILTIN)
 #    define dmn_assert(expr) do { if (!(expr)) __builtin_unreachable(); } while (0)
 #  else
 #    define dmn_assert(expr) ((void)(0))
@@ -215,4 +229,4 @@ void dmn_fmtbuf_reset(void);
 //  and POSIX strerror_r() variants.
 const char* dmn_strerror(const int errnum);
 
-#endif // _DMN_H
+#endif // DMN_H

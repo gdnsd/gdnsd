@@ -28,25 +28,18 @@
 #include <stdarg.h>
 #include <pthread.h>
 
-#include "gdnsd-compiler.h"
-#include "gdnsd-net.h"
-#include "gdnsd-log.h"
-#include "gdnsd-satom.h"
-#include "gdnsd-dmn.h"
+#include "gdnsd/compiler.h"
+#include "gdnsd/net.h"
+#include "gdnsd/log.h"
+#include "gdnsd/stats.h"
+#include "gdnsd/dmn.h"
+#include "gdnsd/paths-priv.h"
 
 /* libdmn custom log formatters and the buffer sizes they use:
  *
  * const char* logf_anysin(const anysin_t* asin); // variable...
  * const char* logf_anysin_noport(const anysin_t* asin); // variable...
  * const char* logf_dname(const uint8_t* dname); // 1024
- * const char* logf_lstack(const uint8_t** lstack, const int depth); // 1024
- *
- * This one is also similarly named, but uses no format buffer space:
- *
- * const char* logf_rrtype(const unsigned rrtype); // host order
- *
- * At this time, logf_lstack isn't expected to have any use outside the
- *  core code.
  *
  * Usage example:
  *   anysin_t* saddr = ...;
@@ -56,53 +49,7 @@
  *      logf_errnum(pthread_errno), logf_dname(dname), logf_anysin(saddr));
  */
 
-static const char* dnstype_a = "A";
-static const char* dnstype_ns = "NS";
-static const char* dnstype_cname = "CNAME";
-static const char* dnstype_soa = "SOA";
-static const char* dnstype_ptr = "PTR";
-static const char* dnstype_mx = "MX";
-static const char* dnstype_txt = "TXT";
-static const char* dnstype_aaaa = "AAAA";
-static const char* dnstype_srv = "SRV";
-static const char* dnstype_spf = "SPF";
-static const char* dnstype_any = "ANY";
-static const char* dnstype_unknown = "(unknown)";
 static const char* generic_nullstr = "(null)";
-#define DNS_TYPE_A	1
-#define DNS_TYPE_NS	2
-#define DNS_TYPE_CNAME	5
-#define DNS_TYPE_SOA	6
-#define DNS_TYPE_PTR	12
-#define DNS_TYPE_MX	15
-#define DNS_TYPE_TXT	16
-#define DNS_TYPE_AAAA	28
-#define DNS_TYPE_SRV	33
-#define DNS_TYPE_NAPTR	35
-#define DNS_TYPE_OPT	41
-#define DNS_TYPE_SPF	99
-#define DNS_TYPE_IXFR   251
-#define DNS_TYPE_AXFR   252
-#define DNS_TYPE_ANY    255
-
-const char* gdnsd_logf_rrtype(const unsigned rrtype) {
-    const char* rv;
-    switch(rrtype) {
-        case DNS_TYPE_A: rv = dnstype_a; break;
-        case DNS_TYPE_NS: rv = dnstype_ns; break;
-        case DNS_TYPE_CNAME: rv = dnstype_cname; break;
-        case DNS_TYPE_SOA: rv = dnstype_soa; break;
-        case DNS_TYPE_PTR: rv = dnstype_ptr; break;
-        case DNS_TYPE_MX: rv = dnstype_mx; break;
-        case DNS_TYPE_TXT: rv = dnstype_txt; break;
-        case DNS_TYPE_AAAA: rv = dnstype_aaaa; break;
-        case DNS_TYPE_SRV: rv = dnstype_srv; break;
-        case DNS_TYPE_SPF: rv = dnstype_spf; break;
-        case DNS_TYPE_ANY: rv = dnstype_any; break;
-        default: rv = dnstype_unknown; break;
-    }
-    return rv;
-}
 
 // Note: NI_MAXHOST seems to generally be 1025
 const char* gdnsd_logf_anysin(const anysin_t* asin) {
@@ -153,6 +100,19 @@ const char* gdnsd_logf_anysin_noport(const anysin_t* asin) {
     return buf;
 }
 
+const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
+    anysin_t tempsin;
+    memset(&tempsin, 0, sizeof(anysin_t));
+    tempsin.sin.sin_family = AF_INET6;
+    memcpy(tempsin.sin6.sin6_addr.s6_addr, ipv6, 16);
+    tempsin.len = sizeof(struct sockaddr_in6);
+    return gdnsd_logf_anysin_noport(&tempsin);
+}
+
+const char* gdnsd_logf_in6a(const struct in6_addr* in6a) {
+    return gdnsd_logf_ipv6(in6a->s6_addr);
+}
+
 const char* gdnsd_logf_dname(const uint8_t* dname) {
     if(!dname)
         return generic_nullstr;
@@ -197,31 +157,31 @@ const char* gdnsd_logf_dname(const uint8_t* dname) {
     return dnbuf;
 }
 
-const char* gdnsd_logf_lstack(const uint8_t** lstack, const int depth) {
-    char* dnbuf = dmn_fmtbuf_alloc(1024);
-    char* dnptr = dnbuf;
+const char* gdnsd_logf_pathname(const char* inpath) {
+    char* space = NULL;
 
-    for(unsigned i = depth; i > 0; i--) {
-        const uint8_t llen = *(lstack[i]);
-        for(unsigned j = 1; j <= llen; j++) {
-            unsigned char x = lstack[i][j];
-            if(x > 0x20 && x < 0x7F) {
-                *dnptr++ = x;
-            }
-            else {
-                *dnptr++ = '\\';
-                *dnptr++ = '0' + (x / 100);
-                *dnptr++ = '0' + ((x / 10) % 10);
-                *dnptr++ = '0' + (x % 10);
-            }
+    if(!inpath) {
+        space = dmn_fmtbuf_alloc(7);
+        memcpy(space, "<NULL>", 7); // includes NUL
+    }
+    else {
+        const unsigned inlen = strlen(inpath);
+        const char* rootpath = gdnsd_get_rootdir();
+        if(rootpath) {
+            const unsigned rootlen = strlen(rootpath);
+            const unsigned toalloc = 1 + rootlen + 1 + 1 + inlen + 1;
+            char* space_ptr = space = dmn_fmtbuf_alloc(toalloc);
+            *space_ptr++ = '[';
+            memcpy(space_ptr, rootpath, rootlen); space_ptr += rootlen;
+            *space_ptr++ = ']';
+            *space_ptr++ = '/';
+            memcpy(space_ptr, inpath, inlen + 1); // includes NUL
         }
-        *dnptr++ = '.';
+        else {
+            space = dmn_fmtbuf_alloc(inlen + 1);
+            memcpy(space, inpath, inlen + 1); // includes NUL
+        }
     }
 
-    // root name, didn't write anything above
-    if(dnptr == dnbuf)
-        *dnptr++ = '.';
-
-    *dnptr = '\0';
-    return dnbuf;
+    return space;
 }

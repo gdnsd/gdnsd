@@ -10,23 +10,26 @@
 /stamp-h1
 
 # Distribution tarballs
-/gdnsd-*.tar.*
+/gdnsd-*.tar.xz
 
 # Built, installed binaries
 /gdnsd/gdnsd
+/plugins/extmon/gdnsd_extmon_helper
 /plugins/meta/libgdmaps/t/gdnsd_geoip_test
 
 # Built, distributed C sources (Ragel outputs)
-/gdnsd/zscan.c
-/gdnsd/zscan_lm.c
+/gdnsd/zscan_rfc1035.c
 /gdnsd/libgdnsd/vscf.c
 
-# Copied, renamed, distributed, installed
-/gdnsd/libgdnsd/gdnsd-dmn.h
-/gdnsd/libgdnsd/gdnsd-ev.h
+# Built headers, not distributed
+/cfg-dirs.h
 
-# Testsuite output directories
+# Copied, renamed, distributed, installed
+/gdnsd/libgdnsd/gdnsd/dmn.h
+
+# Testsuite input/output directories
 testout/
+testroot/
 
 # lcov html output from qa/coverage.sh
 /lcovout/
@@ -34,11 +37,12 @@ testout/
 # libgdmaps unit test junk
 /plugins/meta/libgdmaps/t/*.bin
 /plugins/meta/libgdmaps/t/Geo*.dat
-/plugins/meta/libgdmaps/t/fips_include-*
+/plugins/meta/libgdmaps/t/regioncodes-*
 
 # Various tool outputs in all dirs
 Makefile
 Makefile.in
+.dirstamp
 .deps
 .libs
 *.o
@@ -51,6 +55,8 @@ Makefile.in
 *.gcda
 *.gcno
 *.tmp
+*.log
+*.trs
 *~
 
 # generated docs

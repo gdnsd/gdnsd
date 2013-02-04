@@ -30,7 +30,7 @@
 #include "dmn.h"
 
 #define PERMS755 (S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH)
-#define PERMS011 (S_IWGRP|S_IWOTH)
+#define PERMS022 (S_IWGRP|S_IWOTH)
 
 // State storage between secure_setup() and secure_me()
 static uid_t secure_uid = 0;
@@ -40,8 +40,13 @@ static char* secure_chroot = NULL;
 // Status flag for accessor func
 static bool is_secured = false;
 
-void dmn_secure_setup(const char* username, const char* chroot_path, const bool chroot_fixup) {
+void dmn_secure_setup(const char* username, const char* chroot_path) {
     dmn_assert(username);
+
+    // This isn't really a security thing, we'd fail somewhere else along the line anyways,
+    //   it's just a handy error bailout to point out developer bugs in using these interfaces.
+    if(geteuid())
+        dmn_log_fatal("BUG: dmn_secure_*() calls should only be executed when running as root");
 
     // Get the user info, verify they don't have root's uid/gid, store them...
     errno = 0;
@@ -56,65 +61,43 @@ void dmn_secure_setup(const char* username, const char* chroot_path, const bool 
     secure_uid = p->pw_uid;
     secure_gid = p->pw_gid;
 
-    if(!chroot_path)
-        return;
-
-    // Make sure chroot_path exists and has appropriate
-    //  permissions, creating nonrecursively if necessary.
-    struct stat st;
-    if(lstat(chroot_path, &st) == -1) {
-        if(errno == ENOENT) {
-            if(!chroot_fixup)
-                dmn_log_fatal("chroot() path '%s' does not exist", chroot_path);
-            if(mkdir(chroot_path, PERMS755) == -1)
-                dmn_log_fatal("Failed to mkdir(%s, 0755) for chroot() path: %s", chroot_path, dmn_strerror(errno));
-            if(lstat(chroot_path, &st) == -1)
-                dmn_log_fatal("Failed to stat() chroot() path '%s' right after successful mkdir(): %s", chroot_path, dmn_strerror(errno));
-        }
-        else {
-            dmn_log_fatal("Failed to stat() chroot() path '%s': %s", chroot_path, dmn_strerror(errno));
-        }
+    if(chroot_path) {
+        secure_chroot = strdup(chroot_path);
+        struct stat st;
+        if(lstat(secure_chroot, &st))
+            dmn_log_fatal("Cannot lstat(%s): %s", secure_chroot, dmn_strerror(errno));
+        if(!S_ISDIR(st.st_mode))
+            dmn_log_fatal("chroot() path '%s' is not a directory!", secure_chroot);
     }
-
-    if(!S_ISDIR(st.st_mode)) dmn_log_fatal("chroot() path '%s' is not a directory", chroot_path);
-
-    if(st.st_uid != 0 || st.st_gid != 0) {
-        if(!chroot_fixup)
-            dmn_log_fatal("chroot() path '%s' is not owned by the root user/group", chroot_path);
-        if(chown(chroot_path, 0, 0) == -1)
-            dmn_log_fatal("Failed to chown(%s, 0, 0): %s", chroot_path, dmn_strerror(errno));
-    }
-
-    if((st.st_mode & PERMS011)) {
-        if(!chroot_fixup)
-            dmn_log_fatal("chroot() path '%s' is writable", chroot_path);
-        mode_t new_perms = st.st_mode & (~PERMS011);
-        if(chmod(chroot_path, new_perms) == -1) {
-            dmn_log_fatal("Failed to chmod(%s, %o): %s", chroot_path, (unsigned)new_perms, dmn_strerror(errno));
-        }
-    }
-
-    secure_chroot = strdup(chroot_path);
 }
 
-void dmn_secure_me(void) {
+void dmn_secure_me(const bool skip_chroot) {
     if(!secure_uid || !secure_gid)
         dmn_log_fatal("BUG: secure_setup() must be called before secure_me()");
 
-    // On most systems, this seems to get the timezone cached for vsyslog() to use inside chroot()
-    tzset();
-
-    if(secure_chroot) {
-        if(chroot(secure_chroot) == -1) dmn_log_fatal("chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
-        if(chdir("/") == -1) dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
+    // lock self into the chroot directory
+    if(secure_chroot && !skip_chroot) {
+        // On most systems, this seems to get the timezone cached for vsyslog() to use inside chroot()
+        tzset();
+        if(chroot(secure_chroot)) dmn_log_fatal("chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
+        if(chdir("/")) dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", secure_chroot, dmn_strerror(errno));
     }
-    if(setgid(secure_gid) == -1) dmn_log_fatal("setgid(%u) failed: %s", secure_gid, dmn_strerror(errno));
-    if(setuid(secure_uid) == -1) dmn_log_fatal("setuid(%u) failed: %s", secure_uid, dmn_strerror(errno));
 
-    if(secure_chroot)
-        dmn_log_info("Security measures (chroot(%s), setgid(%u), setuid(%u)) completed successfully", secure_chroot, secure_gid, secure_uid);
-    else
-        dmn_log_info("Security measures (setgid(%u), setuid(%u)) completed successfully", secure_gid, secure_uid);
+    // drop privs
+    if(setgid(secure_gid))
+        dmn_log_fatal("setgid(%u) failed: %s", secure_gid, dmn_strerror(errno));
+    if(setuid(secure_uid))
+        dmn_log_fatal("setuid(%u) failed: %s", secure_uid, dmn_strerror(errno));
+
+    // verify that regaining root privs fails, and [e][ug]id values are as expected
+    if(    !setegid(0)
+        || !seteuid(0)
+        || geteuid() != secure_uid
+        || getuid() != secure_uid
+        || getegid() != secure_gid
+        || getgid() != secure_gid
+    )
+        dmn_log_fatal("Platform-specific BUG: setgid() and/or setuid() do not permanently drop privs as expected!");
 
     is_secured = true;
 }

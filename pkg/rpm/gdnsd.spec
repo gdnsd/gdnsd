@@ -1,6 +1,6 @@
 Summary: Authoritative DNS Server
 Name: gdnsd
-Version: 1.6.9
+Version: 1.7.8
 Release: 1%{?dist}
 License: GPLv3+
 Group: System Environment/Daemons
@@ -10,9 +10,15 @@ Requires(pre): /usr/sbin/useradd
 Requires(post): /sbin/chkconfig
 Requires(preun): /sbin/service, /sbin/chkconfig
 Requires(postun): /sbin/service
+Requires: userspace-rcu
+Requires: libev
+Requires: libcap
+BuildRequires: userspace-rcu-devel
+BuildRequires: libev-devel
 BuildRequires: libcap-devel
 BuildRequires: perl(Test::More)
 BuildRequires: perl(Net::DNS)
+BuildRequires: perl(HTTP::Daemon)
 BuildRequires: perl(LWP)
 BuildRequires: perl(Socket6)
 BuildRequires: perl(IO::Socket::INET6)
@@ -27,12 +33,12 @@ good at being a very fast, lean, and resilient authoritative-only
 server for static DNS data.
 
 %package devel
-Summary: Header files and libraries needed for gdnsd plugin development
+Summary: Header files and docs needed for gdnsd plugin development
 Group: Development/Libraries
 Requires: %{name} = %{version}-%{release}
 
 %description devel
-Header files and libraries needed for gdnsd plugin development.
+Header files and docs needed for gdnsd plugin development.
 
 %prep
 %setup -q
@@ -48,13 +54,17 @@ make check
 rm -rf %{buildroot}
 make install DESTDIR=%{buildroot}
 install -D -p -m 0755 pkg/rpm/gdnsd.init %{buildroot}%{_initddir}/gdnsd
+mkdir -p %{buildroot}%{_var}/run/gdnsd
+mkdir -p %{buildroot}%{_sysconfdir}/gdnsd
+mkdir -p %{buildroot}%{_sysconfdir}/gdnsd/zones
+echo '# gdnsd main config file, see gdnsd.config(5) for details' >%{buildroot}%{_sysconfdir}/gdnsd/config
 
 %clean
 rm -rf %{buildroot}
 
 %pre
 if [ $1 -eq 1 ]; then
-    /usr/sbin/useradd -c "gdnsd user" -s /sbin/nologin -r -d %{_var}/gdnsd gdnsd &>/dev/null || :
+    /usr/sbin/useradd -c "gdnsd user" -s /sbin/nologin -r -d %{_var}/run/gdnsd gdnsd &>/dev/null || :
 fi
 
 %post
@@ -75,47 +85,23 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%dir %{_sysconfdir}/gdnsd/
 %{_initddir}/gdnsd
 %dir %{_libdir}/gdnsd/
 %{_libdir}/gdnsd/*.so
 %exclude %{_libdir}/gdnsd/*.la
 %{_bindir}/gdnsd_geoip_test
 %{_sbindir}/gdnsd
+%{_libexecdir}/gdnsd/gdnsd_extmon_helper
+%{_var}/run/gdnsd/
+%{_sysconfdir}/gdnsd/
+%{_sysconfdir}/gdnsd/zones/
+%config %{_sysconfdir}/gdnsd/config
 %doc %{_mandir}/man1/*
 %doc %{_mandir}/man5/*
 %doc %{_mandir}/man8/*
 %doc %{_defaultdocdir}/gdnsd/*
-%dir %{_var}/gdnsd/
 
 %files devel
 %defattr(-,root,root,-)
-%{_includedir}/gdnsd-*.h
+%{_includedir}/gdnsd/*.h
 %doc %{_mandir}/man3/*
-
-%changelog
-* Thu Aug 16 2012 Brandon Black <blblack@gmail.com> 1.6.8-1
-- Update to 1.6.8
-
-* Fri May  4 2012 Brandon Black <blblack@gmail.com> 1.6.7-1
-- Forked from Matthias' work on Fedora RPMs.  My primary
-  target here is Amazon Linux RPMs, but it will probably
-  work for other Redhat-ish distros
-- Updated to 1.6.7
-
-* Tue Mar  6 2012 Matthias Saou <matthias@saou.eu> 1.6.3-1
-- Update to 1.6.3.
-
-* Thu May 19 2011 Matthias Saou <matthias@saou.eu> 1.5.2-1
-- Update to 1.5.2.
-- Add new libpcap-devel BR for the late_bind_secs feature.
-
-* Thu Apr 14 2011 Matthias Saou <matthias@saou.eu> 1.4.4-1
-- Update to 1.4.4.
-
-* Sun Jan 30 2011 Matthias Saou <matthias@saou.eu> 1.4.1-1
-- Update to 1.4.1.
-
-* Mon Jan 10 2011 Matthias Saou <matthias@saou.eu> 1.3.6-1
-- Initial RPM release.
-

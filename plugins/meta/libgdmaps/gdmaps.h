@@ -22,36 +22,31 @@
 
 #include "config.h"
 #include <inttypes.h>
-#include <gdnsd-vscf.h>
-#include <gdnsd-plugapi.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/plugapi.h>
 
 typedef struct _gdmaps_t gdmaps_t;
-typedef void (*gdmaps_iter_dclists_cb_t)(const uint8_t* dclist, void* data);
 
 F_NONNULL
 gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg);
 F_NONNULL
-void gdmaps_load_geoip_databases(gdmaps_t* gdmaps);
-F_NONNULL
+void gdmaps_load_databases(gdmaps_t* gdmaps);
+F_NONNULL F_PURE
 int gdmaps_name2idx(const gdmaps_t* gdmaps, const char* map_name);
-F_NONNULL
+F_NONNULL F_PURE
 const char* gdmaps_idx2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx);
-F_NONNULL
+F_NONNULL F_PURE
 unsigned gdmaps_get_dc_count(const gdmaps_t* gdmaps, const unsigned gdmap_idx);
-F_NONNULL
+F_NONNULL F_PURE
 unsigned gdmaps_dcname2num(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const char* dcname);
-F_NONNULL
+F_NONNULL F_PURE
 const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum);
 F_NONNULL
 const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const uint8_t* dclist);
-F_NONNULLX(1,3)
-void gdmaps_iter_dclists(const gdmaps_t* gdmaps, const unsigned gdmap_idx, gdmaps_iter_dclists_cb_t f, void* data);
 F_NONNULL
 const uint8_t* gdmaps_lookup(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const client_info_t* client, unsigned* scope_mask);
 F_NONNULL
-void gdmaps_setup_geoip_watcher_paths(gdmaps_t* gdmaps);
-F_NONNULL
-void gdmaps_setup_geoip_watchers(gdmaps_t* gdmaps);
+void gdmaps_setup_watchers(gdmaps_t* gdmaps);
 F_NONNULL
 void gdmaps_destroy(gdmaps_t* gdmaps);
 
