@@ -280,7 +280,7 @@ int main(int argc, char** argv) {
     if(emc_read_nbytes(plugin_read_fd, 7, ccount_buf)
         || strncmp((char*)ccount_buf, "CMDS:", 5))
         log_fatal("Failed to read command count from plugin");
-    num_mons = ((unsigned)ccount_buf[5] << 16) + ccount_buf[6];
+    num_mons = ((unsigned)ccount_buf[5] << 8) + ccount_buf[6];
     if(!num_mons)
         log_fatal("Received command count of zero from plugin");
     mons = calloc(num_mons, sizeof(mon_t));
