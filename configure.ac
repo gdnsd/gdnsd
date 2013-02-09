@@ -23,11 +23,6 @@ if test "x$ac_cv_c_vararrays" = xno; then
     AC_MSG_ERROR([Your compiler lacks support for variable arrays])
 fi
 
-AX_CHECK_ALIGNED_ACCESS_REQUIRED
-if test "$ax_cv_have_aligned_access_required" = yes ; then
-    AC_MSG_ERROR([This code is broken on your platform due to unaligned memory access])
-fi
-
 dnl POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
 LIBS="$PTHREAD_LIBS $LIBS"

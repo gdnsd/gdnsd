@@ -222,7 +222,7 @@ static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
         }
         // 6to4
         else if(in[1] == 0x02) {
-            ip_out = ntohl(*((uint32_t*)&in[2]));
+            ip_out = ntohl(gdnsd_get_una32(&in[2]));
             *mask_adj = 16;
         }
     }

@@ -139,10 +139,10 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
         *lqname = pos;
 
         if(likely(pos + 4 <= len)) {
-            c->qtype = ntohs(*(const uint16_t*)&buf[pos]);
+            c->qtype = ntohs(gdnsd_get_una16(&buf[pos]));
             pos += 2;
 
-            if(ntohs(*((const uint16_t*)&buf[pos])) == 3U)
+            if(ntohs(gdnsd_get_una16(&buf[pos])) == 3U)
                c->chaos = true;
             pos += 2;
         }
@@ -169,7 +169,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
             break;
         }
 
-        const unsigned family = ntohs(*(const uint16_t*)opt_data);
+        const unsigned family = ntohs(gdnsd_get_una16(opt_data));
         opt_data += 2;
         const unsigned src_mask = *opt_data;
         opt_data += 2;
@@ -245,8 +245,8 @@ static bool handle_edns_options(dnspacket_context_t* c, unsigned rdlen, const ui
             rv = true;
             break;
         }
-        unsigned opt_code = ntohs(*(const uint16_t*)rdata); rdata += 2;
-        unsigned opt_dlen = ntohs(*(const uint16_t*)rdata); rdata += 2;
+        unsigned opt_code = ntohs(gdnsd_get_una16(rdata)); rdata += 2;
+        unsigned opt_dlen = ntohs(gdnsd_get_una16(rdata)); rdata += 2;
         rdlen -= 4;
         if(opt_dlen > rdlen) {
             log_debug("EDNS option too long");
@@ -537,13 +537,13 @@ static unsigned int repeat_name(dnspacket_context_t* c, unsigned int store_at_of
     if(inpkt[orig_offset]) {
         // if orig is a compression pointer, copy it
         if(inpkt[orig_offset] & 0xC0) {
-            *((uint16_t*)&outpkt[store_at_offset]) = *((const uint16_t*)&inpkt[orig_offset]);
+            gdnsd_put_una16(gdnsd_get_una16(&inpkt[orig_offset]), &outpkt[store_at_offset]);
             rv = 2;
         }
         else {
             if(likely(orig_offset < 16384)) {
                 // compress by pointing at it if in range
-                *((uint16_t*)&outpkt[store_at_offset]) = htons(0xC000 | orig_offset);
+                gdnsd_put_una16(htons(0xC000 | orig_offset), &outpkt[store_at_offset]);
                 rv = 2;
             }
             else {
@@ -605,13 +605,13 @@ static unsigned int enc_a_static(dnspacket_context_t* c, unsigned int offset, co
 
     OFFSET_LOOP_START(rrset->gen.count_v4, rrset->limit_v4)
         offset += repeat_name(c, offset, nameptr, is_addtl);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_A;
+        gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
         offset += 4;
-        *((uint16_t*)&packet[offset]) = htons(4);
+        gdnsd_put_una16(htons(4), &packet[offset]);
         offset += 2;
-        *((uint32_t*)&packet[offset]) = rrset->addrs.v4[i];
+        gdnsd_put_una32(rrset->addrs.v4[i], &packet[offset]);
         offset += 4;
     OFFSET_LOOP_END
     return offset;
@@ -631,11 +631,11 @@ static unsigned int enc_aaaa_static(dnspacket_context_t* c, unsigned int offset,
 
     OFFSET_LOOP_START(rrset->gen.count_v6, rrset->limit_v6)
         offset += repeat_name(c, offset, nameptr, is_addtl);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_AAAA;
+        gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
         offset += 4;
-        *((uint16_t*)&packet[offset]) = htons(16);
+        gdnsd_put_una16(htons(16), &packet[offset]);
         offset += 2;
         memcpy(&packet[offset], rrset->addrs.v6 + (i << 4), 16);
         offset += 16;
@@ -662,13 +662,13 @@ static unsigned int enc_a_dynamic(dnspacket_context_t* c, unsigned int offset, c
 
     OFFSET_LOOP_START(dr->count_v4, limit_v4)
         offset += repeat_name(c, offset, nameptr, is_addtl);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_A;
+        gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
-        *((uint32_t*)&packet[offset]) = htonl(dr->ttl);
+        gdnsd_put_una32(htonl(dr->ttl), &packet[offset]);
         offset += 4;
-        *((uint16_t*)&packet[offset]) = htons(4);
+        gdnsd_put_una16(htons(4), &packet[offset]);
         offset += 2;
-        *((uint32_t*)&packet[offset]) = dr->addrs_v4[i];
+        gdnsd_put_una32(dr->addrs_v4[i], &packet[offset]);
         offset += 4;
     OFFSET_LOOP_END
     return offset;
@@ -693,11 +693,11 @@ static unsigned int enc_aaaa_dynamic(dnspacket_context_t* c, unsigned int offset
 
     OFFSET_LOOP_START(dr->count_v6, limit_v6)
         offset += repeat_name(c, offset, nameptr, is_addtl);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_AAAA;
+        gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
-        *((uint32_t*)&packet[offset]) = htonl(dr->ttl);
+        gdnsd_put_una32(htonl(dr->ttl), &packet[offset]);
         offset += 4;
-        *((uint16_t*)&packet[offset]) = htons(16);
+        gdnsd_put_una16(htons(16), &packet[offset]);
         offset += 2;
         memcpy(&packet[offset], dr->addrs_v6 + (i << 4), 16);
         offset += 16;
@@ -868,12 +868,12 @@ static unsigned int encode_rrs_ns(dnspacket_context_t* c, unsigned int offset, c
 
     OFFSET_LOOP_START(rrset->gen.count, rrset->gen.count)
         offset += repeat_name(c, offset, c->auth_comp, false);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_NS;
+        gdnsd_put_una32(DNS_RRFIXED_NS, &packet[offset]);
         offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
         offset += 6;
         const unsigned int newlen = store_dname(c, offset, rrset->rdata[i].dname, false);
-        *((uint16_t*)&packet[offset - 2]) = htons(newlen);
+        gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
         if(rrset->rdata[i].ad) {
             if(AD_IS_GLUE(rrset->rdata[i].ad)) {
                 c->addtl_has_glue = true;
@@ -904,11 +904,14 @@ static unsigned int encode_rrs_ptr(dnspacket_context_t* c, unsigned int offset, 
     c->ancount += rrct;
     for(unsigned i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_PTR; offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
+        gdnsd_put_una32(DNS_RRFIXED_PTR, &packet[offset]);
+        offset += 4;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
+        offset += 6;
         const unsigned int newlen = store_dname(c, offset, rrset->rdata[i].dname, false);
-        *((uint16_t*)&packet[offset - 2]) = htons(newlen);
-        if(rrset->rdata[i].ad) add_addtl_rrset(c, rrset->rdata[i].ad, offset);
+        gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
+        if(rrset->rdata[i].ad)
+            add_addtl_rrset(c, rrset->rdata[i].ad, offset);
         offset += newlen;
     }
 
@@ -925,13 +928,17 @@ static unsigned int encode_rrs_mx(dnspacket_context_t* c, unsigned int offset, c
     c->ancount += rrct;
     for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_MX; offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
+        gdnsd_put_una32(DNS_RRFIXED_MX, &packet[offset]);
+        offset += 4;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
+        offset += 6;
         const ltree_rdata_mx_t* rd = &rrset->rdata[i];
-        *((uint16_t*)&packet[offset]) = rd->pref; offset += 2;
+        gdnsd_put_una16(rd->pref, &packet[offset]);
+        offset += 2;
         const unsigned int newlen = store_dname(c, offset, rd->dname, false);
-        *((uint16_t*)&packet[offset - 4]) = htons(newlen + 2);
-        if(rd->ad) add_addtl_rrset(c, rd->ad, offset);
+        gdnsd_put_una16(htons(newlen + 2), &packet[offset - 4]);
+        if(rd->ad)
+            add_addtl_rrset(c, rd->ad, offset);
         offset += newlen;
     }
 
@@ -948,16 +955,22 @@ static unsigned int encode_rrs_srv(dnspacket_context_t* c, unsigned int offset, 
     c->ancount += rrct;
     for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_SRV; offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
+        gdnsd_put_una32(DNS_RRFIXED_SRV, &packet[offset]);
+        offset += 4;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
+        offset += 6;
         const ltree_rdata_srv_t* rd = &rrset->rdata[i];
-        *((uint16_t*)&packet[offset]) = rd->priority; offset += 2;
-        *((uint16_t*)&packet[offset]) = rd->weight; offset += 2;
-        *((uint16_t*)&packet[offset]) = rd->port; offset += 2;
+        gdnsd_put_una16(rd->priority, &packet[offset]);
+        offset += 2;
+        gdnsd_put_una16(rd->weight, &packet[offset]);
+        offset += 2;
+        gdnsd_put_una16(rd->port, &packet[offset]);
+        offset += 2;
         // SRV target can't be compressed
         const unsigned int newlen = store_dname_nocomp(c, offset, rd->dname);
-        *((uint16_t*)&packet[offset - 8]) = htons(newlen + 6);
-        if(rd->ad) add_addtl_rrset(c, rd->ad, offset);
+        gdnsd_put_una16(htons(newlen + 6), &packet[offset - 8]);
+        if(rd->ad)
+            add_addtl_rrset(c, rd->ad, offset);
         offset += newlen;
     }
 
@@ -974,12 +987,16 @@ static unsigned int encode_rrs_naptr(dnspacket_context_t* c, unsigned int offset
     c->ancount += rrct;
     for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
-        *((uint32_t*)&packet[offset]) = DNS_RRFIXED_NAPTR; offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 6;
+        gdnsd_put_una32(DNS_RRFIXED_NAPTR, &packet[offset]);
+        offset += 4;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
+        offset += 6;
         const unsigned int rdata_offset = offset;
         const ltree_rdata_naptr_t* rd = &rrset->rdata[i];
-        *((uint16_t*)&packet[offset]) = rd->order; offset += 2;
-        *((uint16_t*)&packet[offset]) = rd->pref; offset += 2;
+        gdnsd_put_una16(rd->order, &packet[offset]);
+        offset += 2;
+        gdnsd_put_una16(rd->pref, &packet[offset]);
+        offset += 2;
 
         // flags, services, regexp
         for(unsigned j = 0; j < 3; j++) {
@@ -991,8 +1008,9 @@ static unsigned int encode_rrs_naptr(dnspacket_context_t* c, unsigned int offset
 
         // NAPTR target can't be compressed
         const unsigned newlen = store_dname_nocomp(c, offset, rd->dname);
-        *((uint16_t*)&packet[rdata_offset - 2]) = htons(offset - rdata_offset + newlen);
-        if(rd->ad) add_addtl_rrset(c, rd->ad, offset);
+        gdnsd_put_una16(htons(offset - rdata_offset + newlen), &packet[rdata_offset - 2]);
+        if(rd->ad)
+            add_addtl_rrset(c, rd->ad, offset);
         offset += newlen;
     }
 
@@ -1011,9 +1029,9 @@ static unsigned int encode_rrs_txt(dnspacket_context_t* c, unsigned int offset, 
     c->ancount += rrct;
     for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
-        *((uint32_t*)&packet[offset]) = is_spf ? DNS_RRFIXED_SPF : DNS_RRFIXED_TXT;
+        gdnsd_put_una32(is_spf ? DNS_RRFIXED_SPF : DNS_RRFIXED_TXT, &packet[offset]);
         offset += 4;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
         offset += 6;
 
         const unsigned int rdata_offset = offset;
@@ -1027,7 +1045,7 @@ static unsigned int encode_rrs_txt(dnspacket_context_t* c, unsigned int offset, 
             offset += oal;
             rdata_len += oal;
         }
-        *((uint16_t*)&packet[rdata_offset - 2]) = htons(rdata_len);
+        gdnsd_put_una16(htons(rdata_len), &packet[rdata_offset - 2]);
     }
 
     return offset;
@@ -1069,17 +1087,17 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
 
     // start formulating response
     offset += repeat_name(c, offset, c->qname_comp, false);
-    *((uint32_t*)&packet[offset]) = DNS_RRFIXED_CNAME;
+    gdnsd_put_una32(DNS_RRFIXED_CNAME, &packet[offset]);
     offset += 4;
 
-    *((uint32_t*)&packet[offset]) = ttl;
+    gdnsd_put_una32(ttl, &packet[offset]);
     offset += 6;
 
     rdata_offset = offset;
     offset += store_dname(c, offset, dname, false);
 
     // set rdata_len
-    *((uint16_t*)&packet[rdata_offset - 2]) = htons(offset - rdata_offset);
+    gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
 
     if(answer) {
         c->ancount++;
@@ -1099,9 +1117,9 @@ static unsigned int encode_rr_soa(dnspacket_context_t* c, unsigned int offset, c
     uint8_t* packet = c->packet;
 
     offset += repeat_name(c, offset, c->auth_comp, false);
-    *((uint32_t*)&packet[offset]) = DNS_RRFIXED_SOA;
+    gdnsd_put_una32(DNS_RRFIXED_SOA, &packet[offset]);
     offset += 4;
-    *((uint32_t*)&packet[offset]) = rdata->gen.ttl;
+    gdnsd_put_una32(rdata->gen.ttl, &packet[offset]);
     offset += 6;
 
     // fill in the rdata
@@ -1112,7 +1130,7 @@ static unsigned int encode_rr_soa(dnspacket_context_t* c, unsigned int offset, c
     offset += 20; // 5x 32-bits
 
     // set rdata_len
-    *((uint16_t*)&packet[rdata_offset - 2]) = htons(offset - rdata_offset);
+    gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
 
     if(answer)
         c->ancount++;
@@ -1131,10 +1149,14 @@ static unsigned int encode_rrs_rfc3597(dnspacket_context_t* c, unsigned int offs
     c->ancount += rrct;
     for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
-        *((uint16_t*)&packet[offset]) = htons(rrset->gen.type); offset += 2;
-        *((uint16_t*)&packet[offset]) = htons(DNS_CLASS_IN); offset += 2;
-        *((uint32_t*)&packet[offset]) = rrset->gen.ttl; offset += 4;
-        *((uint16_t*)&packet[offset]) = htons(rrset->rdata[i].rdlen); offset += 2;
+        gdnsd_put_una16(htons(rrset->gen.type), &packet[offset]);
+        offset += 2;
+        gdnsd_put_una16(htons(DNS_CLASS_IN), &packet[offset]);
+        offset += 2;
+        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
+        offset += 4;
+        gdnsd_put_una32(htons(rrset->rdata[i].rdlen), &packet[offset]);
+        offset += 2;
         memcpy(&packet[offset], rrset->rdata[i].rd, rrset->rdata[i].rdlen);
         offset += rrset->rdata[i].rdlen;
     }
@@ -1522,7 +1544,7 @@ static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned 
     while(auth_depth) {
         unsigned llen = packet[offset];
         if(llen & 0xC0) { // compression pointer
-            offset = ntohs(*(const uint16_t*)(&packet[offset])) & ~0xC000;
+            offset = ntohs(gdnsd_get_una16(&packet[offset])) & ~0xC000;
             dmn_assert(offset < 16384);
         }
         else {
@@ -1767,12 +1789,12 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
     wire_dns_header_t* hdr = (wire_dns_header_t*)packet;
     hdr->flags1 &= 0x79;
     hdr->flags1 |= 0x80;
-    hdr->ancount = 0;
-    hdr->nscount = 0;
-    hdr->arcount = 0;
+    gdnsd_put_una16(0, &hdr->ancount);
+    gdnsd_put_una16(0, &hdr->nscount);
+    gdnsd_put_una16(0, &hdr->arcount);
 
     if(status == DECODE_NOTIMP) {
-        hdr->qdcount = 0;
+        gdnsd_put_una16(0, &hdr->qdcount);
         hdr->flags2 = DNS_RCODE_NOTIMP;
         stats_own_inc(&c->stats->notimp);
         return res_offset;
@@ -1819,21 +1841,21 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         wire_dns_rr_opt_t* opt = (wire_dns_rr_opt_t*)&packet[res_offset];
         res_offset += sizeof_optrr;
 
-        opt->type = htons(DNS_TYPE_OPT);
-        opt->maxsize = htons(DNS_EDNS0_SIZE);
-        opt->extflags = (status == DECODE_BADVERS) ? htonl(0x01000000) : 0;
-        opt->rdlen = 0;
+        gdnsd_put_una16(htons(DNS_TYPE_OPT), &opt->type);
+        gdnsd_put_una16(htons(DNS_EDNS0_SIZE), &opt->maxsize);
+        gdnsd_put_una32((status == DECODE_BADVERS) ? htonl(0x01000000) : 0, &opt->extflags);
+        gdnsd_put_una16(0, &opt->rdlen);
 
         if(c->use_edns_client_subnet) {
-            *(uint16_t*)&packet[res_offset] = htons(EDNS_CLIENTSUB_OPTCODE);
+            gdnsd_put_una16(htons(EDNS_CLIENTSUB_OPTCODE), &packet[res_offset]);
             res_offset += 2;
             const unsigned src_mask = c->client_info.edns_client_mask;
             const unsigned addr_bytes = (src_mask >> 3) + ((src_mask & 7) ? 1 : 0);
-            opt->rdlen = htons(8 + addr_bytes);
-            *(uint16_t*)&packet[res_offset] = htons(4 + addr_bytes); // optlen
+            gdnsd_put_una16(htons(8 + addr_bytes), &opt->rdlen);
+            gdnsd_put_una16(htons(4 + addr_bytes), &packet[res_offset]);
             res_offset += 2;
             if(c->client_info.edns_client.sa.sa_family == AF_INET) {
-                *(uint16_t*)&packet[res_offset] = htons(1); // family IPv4
+                gdnsd_put_una16(htons(1), &packet[res_offset]); // family IPv4
                 res_offset += 2;
                 packet[res_offset++] = src_mask;
                 packet[res_offset++] = c->edns_client_scope_mask;
@@ -1842,7 +1864,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
             }
             else {
                 dmn_assert(c->client_info.edns_client.sa.sa_family == AF_INET6);
-                *(uint16_t*)&packet[res_offset] = htons(2); // family IPv6
+                gdnsd_put_una16(htons(2), &packet[res_offset]); // family IPv6
                 res_offset += 2;
                 packet[res_offset++] = src_mask;
                 packet[res_offset++] = c->edns_client_scope_mask;
@@ -1859,9 +1881,9 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         }
     }
 
-    hdr->ancount = htons(c->cname_ancount + c->ancount);
-    hdr->nscount = htons(c->nscount);
-    hdr->arcount = htons(c->arcount);
+    gdnsd_put_una16(htons(c->cname_ancount + c->ancount), &hdr->ancount);
+    gdnsd_put_una16(htons(c->nscount), &hdr->nscount);
+    gdnsd_put_una16(htons(c->arcount), &hdr->arcount);
 
     return res_offset;
 }

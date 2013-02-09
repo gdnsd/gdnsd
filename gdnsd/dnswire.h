@@ -21,6 +21,7 @@
 #define GDNSD_DNSWIRE_H
 
 #include "config.h"
+#include "gdnsd/compiler.h"
 #include <inttypes.h>
 
 // Our UDP input buffers are shared with output buffer
@@ -77,22 +78,22 @@ typedef struct {
 #define sizeof_optrr 10
 
 /* macros to pull data from wire_dns_header */
-#define DNSH_GET_ID(h)      (ntohs((h)->id))
-#define DNSH_GET_QR(h)      ((h)->flags1 & 0x80)
+#define DNSH_GET_ID(_h)      (ntohs(gdnsd_get_una16(&(_h)->id)))
+#define DNSH_GET_QR(_h)      ((_h)->flags1 & 0x80)
 // technically one must >> 3 to get the real opcode
 //  but we only really care whether it's zero or not
-#define DNSH_GET_OPCODE(h)  ((h)->flags1 & 0x78)
-#define DNSH_GET_AA(h)      ((h)->flags1 & 0x04)
-#define DNSH_GET_TC(h)      ((h)->flags1 & 0x02)
-#define DNSH_GET_RD(h)      ((h)->flags1 & 0x01)
-#define DNSH_GET_RA(h)      ((h)->flags2 & 0x80)
-#define DNSH_GET_AD(h)      ((h)->flags2 & 0x20)
-#define DNSH_GET_CD(h)      ((h)->flags2 & 0x10)
-#define DNSH_GET_RCODE(h)   ((h)->flags2 & 0x0F)
-#define DNSH_GET_QDCOUNT(h) (ntohs((h)->qdcount))
-#define DNSH_GET_ANCOUNT(h) (ntohs((h)->ancount))
-#define DNSH_GET_NSCOUNT(h) (ntohs((h)->nscount))
-#define DNSH_GET_ARCOUNT(h) (ntohs((h)->arcount))
+#define DNSH_GET_OPCODE(_h)  ((_h)->flags1 & 0x78)
+#define DNSH_GET_AA(_h)      ((_h)->flags1 & 0x04)
+#define DNSH_GET_TC(_h)      ((_h)->flags1 & 0x02)
+#define DNSH_GET_RD(_h)      ((_h)->flags1 & 0x01)
+#define DNSH_GET_RA(_h)      ((_h)->flags2 & 0x80)
+#define DNSH_GET_AD(_h)      ((_h)->flags2 & 0x20)
+#define DNSH_GET_CD(_h)      ((_h)->flags2 & 0x10)
+#define DNSH_GET_RCODE(_h)   ((_h)->flags2 & 0x0F)
+#define DNSH_GET_QDCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->qdcount)))
+#define DNSH_GET_ANCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->ancount)))
+#define DNSH_GET_NSCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->nscount)))
+#define DNSH_GET_ARCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->arcount)))
 
 /* DNS Response Codes */
 #define DNS_RCODE_NOERROR 0
@@ -104,10 +105,10 @@ typedef struct {
 #define DNS_EXT_RCODE_BADVERS 1
 
 /* Macros to pull data from wire_dns_rr_opt */
-#define DNS_OPTRR_GET_TYPE(r)     (ntohs(r->type))
-#define DNS_OPTRR_GET_MAXSIZE(r)  (ntohs(r->maxsize))
-#define DNS_OPTRR_GET_EXTRCODE(r) ((uint8_t)(ntohl(r->extflags) >> 24))
-#define DNS_OPTRR_GET_VERSION(r)  ((uint8_t)((ntohl(r->extflags) & 0x00FF0000) >> 16))
+#define DNS_OPTRR_GET_TYPE(_r)     (ntohs(gdnsd_get_una16(&(_r)->type)))
+#define DNS_OPTRR_GET_MAXSIZE(_r)  (ntohs(gdnsd_get_una16(&(_r)->maxsize)))
+#define DNS_OPTRR_GET_EXTRCODE(_r) ((uint8_t)(ntohl(gdnsd_get_una32(&(_r)->extflags)) >> 24))
+#define DNS_OPTRR_GET_VERSION(_r)  ((uint8_t)((ntohl(gdnsd_get_una32(&(_r)->extflags)) & 0x00FF0000) >> 16))
 
 // NOT ASSIGNED BY IANA!:
 #define EDNS_CLIENTSUB_OPTCODE 0x50fa
@@ -135,9 +136,9 @@ typedef struct {
 /* Network-order TYPE+CLASS as a 32-bit uint */
 
 #ifdef WORDS_BIGENDIAN
-#define _mkrrf(T,C) (T<<16)|C
+#define _mkrrf(_t,_c) (((_t)<<16)|(_c))
 #else
-#define _mkrrf(T,C) (T<<8)|(C<<24)
+#define _mkrrf(_t,_c) (((_t)<<8)|((_c)<<24))
 #endif
 
 static const uint32_t DNS_RRFIXED_A     = _mkrrf(DNS_TYPE_A, DNS_CLASS_IN);
