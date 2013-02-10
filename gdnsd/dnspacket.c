@@ -291,7 +291,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
             c->this_max_response = gconfig.max_response - 11;
         }
 
-        uint16_t rdlen = htons(gdnsd_get_una16(&(opt)->rdlen));
+        unsigned rdlen = htons(gdnsd_get_una16(&opt->rdlen));
         if(rdlen) {
             if(packet_len < offset + sizeof_optrr + rdlen) {
                 log_debug("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));

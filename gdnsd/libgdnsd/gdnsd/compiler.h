@@ -72,9 +72,10 @@
 #endif
 
 // Unaligned memory access stuff
-// Note this implicitly relies on GCC-style __packed,
-//   which is probably ok.  Could include future
-//   autoconf checks and/or support for other compilers.
+// Note this implicitly relies on GCC's packed attribute,
+//   which is probably ok, as some other compilers support
+//   it as well.  Could include future autoconf checks
+//   and/or support for other compilers later if warranted.
 #include <inttypes.h>
 struct _gdnsd_una16 { uint16_t x; } __attribute__((__packed__));
 struct _gdnsd_una32 { uint32_t x; } __attribute__((__packed__));
