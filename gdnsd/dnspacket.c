@@ -291,7 +291,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
             c->this_max_response = gconfig.max_response - 11;
         }
 
-        unsigned rdlen = htons(opt->rdlen);
+        uint16_t rdlen = htons(gdnsd_get_una16(&(opt)->rdlen));
         if(rdlen) {
             if(packet_len < offset + sizeof_optrr + rdlen) {
                 log_debug("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));
@@ -504,7 +504,7 @@ static unsigned int store_dname(dnspacket_context_t* c, const unsigned int pkt_d
         const unsigned int final_size = best_matched_at - dn + 2;
         const unsigned int tocopy = final_size - 2;
         memcpy(&packet[pkt_dname_offset], dn, tocopy);
-        *((uint16_t*)&packet[pkt_dname_offset + tocopy]) = htons(0xC000 | best_offset);
+        gdnsd_put_una16(htons(0xC000 | best_offset), &packet[pkt_dname_offset + tocopy]);
         return final_size;
     }
     else {
@@ -1155,7 +1155,7 @@ static unsigned int encode_rrs_rfc3597(dnspacket_context_t* c, unsigned int offs
         offset += 2;
         gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
         offset += 4;
-        gdnsd_put_una32(htons(rrset->rdata[i].rdlen), &packet[offset]);
+        gdnsd_put_una16(htons(rrset->rdata[i].rdlen), &packet[offset]);
         offset += 2;
         memcpy(&packet[offset], rrset->rdata[i].rd, rrset->rdata[i].rdlen);
         offset += rrset->rdata[i].rdlen;
