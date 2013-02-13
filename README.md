@@ -75,11 +75,15 @@ If working directly from a git clone rather than a tarball, in addition to all o
 * You may need to install updated autoconf, automake, and libtool packages
 * You will need a working copy of Ragel: http://www.complang.org/ragel/ (or distro package)
 
-## Release Numbering and Policy
+## Versioning and Public Branches
 
-All modern gdnsd release numbers take the form X.Y.Z.  X hasn't been incremented from 1 yet, but I imagine it will take a pretty significant re-design or a huge set of feature changes to warrant it.  Y increments on major feature releases.  Only even-numbered Y's are stable releases, with the odd numbers between reserved for development feature previews of unstable code leading towards the next even-numbered stable series.  New feature series often break backwards compatibility in some way or other. Z increments for minor patches.
+Starting with version 1.8.0, gdnsd will switch to SemVer as currently documented here: http://semver.org/ .  Any bugfix-only releases after 1.8.0 would be 1.8.x (as before), a release of backwards-compatible feature updates would bump us to 1.9.0, and actual compatibility breakage will require a bump to 2.0.0.
 
-In the stable series, all incremental patches should be bugfix-only with no compatibility issues.  It should always be safe and desirable to upgrade from X.Y.N to X.Y.N+1 for all users of a stable release.  I try really hard to be conservative with code changes to these bugfix-only incremental releases so that there's no reason to fear them or delay deploying them.
+The old policy contributed to very long wait times between feature releases, and almost always lead to backwards-compat breakage for any feature-release update as well.  Hopefully with the new versioning policy we'll see feature releases happen in smaller bites more often, and with better backwards compatibility.  At this time I'm only considering user-level features for SemVer, not the Plugin API, which has always been a bit unstable and semi-private.  The Plugin API will at least be stable for bugfix-only releases, but we may yet break it on minor feature releases for a while longer before it becomes more-stable.  It has its own internal binary versioning to prevent the loading of 3rd-party plugins which need updating.
+
+The "master" branch on github will always represent the numerically-latest public release, as well as bugfix traffic on the latest release.  If there ends up being a reason to, for example, release a 1.8.N bugfix after there's already been a 1.9.x release, a separate public 1.8 branch would be forked from the appropriate point on master's timeline.  Simple bugfix commits can merge directly to master (and wherever else seems appropriate).  Complex bugfix branches could also merge directly to master when complete.  Bugfixes intended for release under multiple concurrent feature-lines (e.g. a bugfix applicable to and destined for 1.10.1, 1.9.4, and 1.8.8) should probably be merged to the newest applicable release branch (master if current), and then older versions can be dealt with via cherry-picking as warranted.
+
+The existing "dev" branch will become the integration point for private/public feature branches destined for the next planned feature-release, and features merged there should be mostly complete other than needing a bit of QA work.  Master commits will be regularly pulled back to dev, but dev will only be pushed back to master when it's time for a feature release.  All actual version-bump work (NEWS file updates, configure.ac version number, etc) will occur in the master branch (or the appropriate past-release-series offshoot), not in dev.  There won't be any official tarball releases directly from dev.
 
 ## Project History
 
