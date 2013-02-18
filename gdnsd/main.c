@@ -129,7 +129,7 @@ static void usage(const char* argv0) {
             " libcap"
 #       endif
 
-#       if !defined NDEBUG \
+#       if  defined NDEBUG \
         && !defined HAVE_QSBR \
         && !defined USE_SENDMMSG \
         && !defined USE_INOTIFY \
