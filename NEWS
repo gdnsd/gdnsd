@@ -1,4 +1,18 @@
 
+1.8.1 - 2012-03-14
+    Bugfix: extmon configurations with more than 255 specific commands
+      should no longer fail on startup.
+    Bugfix: code should now work correctly on targets that do not allow
+      unaligned memory access (e.g. Sparc).  1.8.0 detected this early
+      in the configure process and aborted the build.  Note that the
+      new solution relies on the non-standard gcc "packed" structure
+      attribute, which at least some other useful/compatible compilers
+      support.  Patches welcome if this is an issue on others.
+    A few small doc updates, most notably that our versioning policy
+      going forward will follow http://semver.org/ , at least for
+      user-level changes (not necessarily the plugin API very strictly
+      at this time, due to its documented state of flux).
+
 1.8.0 - 2012-02-04
 
     Start of new stable series, 1.8.x will mostly be just bugfixes.
