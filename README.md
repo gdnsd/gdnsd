@@ -33,13 +33,11 @@ If you need to do trickier things, a world of non-default options are available:
 
 ## The Plugins
 
-A core feature (and the reason for starting this project, although it's more of a niche thing) is that gdnsd has an API for dso-based plugins for pluggable address resolution (conceptually similar to Apache modules) for A, AAAA, and CNAME records.
+A core feature (and the reason for starting this project, although it's more of a niche thing) is that gdnsd has an API for dso-based plugins for pluggable address resolution (conceptually similar to Apache modules) for A, AAAA, and CNAME records.  The same plugin architecture is also used for monitoring plugins with built in anti-flap, which the name resolution plugins can use to make failover decisions.
 
-The core daemon also includes basic HTTP and raw TCP monitoring services with anti-flap that plugins can use to make failover decisions. Sufficient hooks exist to implement your own custom monitoring solution as well. The state of services monitored by this code is also reflected in gdnsd's own HTTP output.
+The core daemon includes monitoring plugins for basic HTTP/1.0, raw TCP, and executing external monitor commands.  Sufficient hooks exist to implement your own custom monitoring solution as well. The state of services monitored by this code is also reflected in gdnsd's own HTTP output.
 
-Included with the gdnsd core are 3 trivial/testing plugins called null, static, reflect. Reflect is useful for real-world debugging (it sends the cache's IP or the edns-client-subnet IP back to the requester as answer data).
-
-Other useful plugins included are simplefo, multifo, and weighted, which do various forms of address failover and weighting.
+On the name resolution side of things, included with the gdnsd core are 3 trivial/testing plugins called null, static, reflect. Reflect is useful for real-world debugging (it sends the cache's IP or the edns-client-subnet IP back to the requester as answer data).  The other useful name-resolution plugins included are simplefo, multifo, and weighted, which do various forms of address failover and weighting.
 
 Finally, there are also two included meta-plugins named metafo and geoip, which do higher-level failover (and geographic mapping) of resources defined in terms of other plugins.
 
@@ -71,6 +69,7 @@ The following have no real effect on the build or runtime, but are required in o
 * Perl modules: Net::DNS 0.63+, LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
 
 If working directly from a git clone rather than a tarball, in addition to all of the above:
+
 * ./autogen.sh will construct the configure script to get started
 * You may need to install updated autoconf, automake, and libtool packages
 * You will need a working copy of Ragel: http://www.complang.org/ragel/ (or distro package)
