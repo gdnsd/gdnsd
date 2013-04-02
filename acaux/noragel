@@ -1,6 +1,6 @@
 #! /bin/sh
 
-echo "No ragel v6.6 or v6.7 was found during the configure process"
+echo "Ragel v6.x was not found during the configure process"
 echo "Ragel is necessary for building from git (as opposed to tarball)"
 echo " and for anytime you want to edit .rl source files."
 echo "Ragel can be obtained from: http://www.complang.org/ragel/"
