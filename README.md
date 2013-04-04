@@ -86,7 +86,7 @@ The existing "dev" branch will become the integration point for private/public f
 
 ## Project History
 
-This project was originally conceived circa early 2007.  I had just begun a new job at Logitech (still my current employer at this time).  We needed some geographic DNS redirection features for the project I was working on and when I surveyed the landscape at the time I didn't find any acceptable options.  The available open source options (e.g. a trivial BIND patch) were insufficient on features, and the commercial options (e.g. F5's hardware solution) were prohibitively expensive for the scale of the project in question.
+This project was originally conceived circa early 2007.  I had just begun a new job at Logitech.  We needed some geographic DNS redirection features for the project I was working on and when I surveyed the landscape at the time I didn't find any acceptable options.  The available open source options (e.g. a trivial BIND patch) were insufficient on features, and the commercial options (e.g. F5's hardware solution) were prohibitively expensive for the scale of the project in question.
 
 The first internal drafts of this daemon were written in pure Perl using the POE framework and Net::DNS for packet-mangling.  It didn't even support full authoritative service, you simply delegated a hostname off to this server (e.g. "www") and it could do geographic redirection of A-records for that one hostname.  It worked reasonably well and was even deployed to production successfully in this form.
 
