@@ -772,7 +772,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
 #ifdef HAVE_POSIX_FADVISE
             posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
 #endif
-            if(fdstat.st_size < bufsize)
+            if(fdstat.st_size < (int)bufsize)
                 bufsize = fdstat.st_size;
         }
         else {
