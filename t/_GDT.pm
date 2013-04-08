@@ -947,11 +947,13 @@ sub test_kill_daemon {
     else {
         eval {
             local $SIG{ALRM} = sub { die "Failed to kill daemon cleanly at pid $pid"; };
-            alarm($TEST_RUNNER ? 30 : 5);
+            alarm($TEST_RUNNER ? 60 : 30);
             kill(2, $pid);
             waitpid($pid, 0);
         };
         if($@) {
+            kill(9, $pid);
+            waitpid($pid, 0);
             Test::More::ok(0);
             Test::More::BAIL_OUT($@);
         }
