@@ -755,6 +755,9 @@ static void initial_run(struct ev_loop* loop) {
 #define O_SYNC 0
 #endif
 
+#define MTMSG1 "rfc1035: high-res mtime test aborted ("
+#define MTMSG2 "). Not functionally critical."
+
 F_UNUSED F_NONNULL
 static uint64_t try_zone_mtime(const char* testfn) {
     uint64_t rv = UINT64_MAX;
@@ -763,19 +766,19 @@ static uint64_t try_zone_mtime(const char* testfn) {
         int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR, 0644);
 
         if(fd < 0) {
-            log_warn("rfc1035: failed to open %s for writing: %s", testfn, logf_errno());
+            log_info(MTMSG1 "failed to open %s for writing: %s" MTMSG2, testfn, logf_errno());
             break;
         }
 
         if(9 != write(fd, "testmtime", 9)) {
-            log_warn("rfc1035: failed to write 9 bytes to %s: %s", testfn, logf_errno());
+            log_info(MTMSG1 "failed to write 9 bytes to %s: %s" MTMSG2, testfn, logf_errno());
             close(fd);
             unlink(testfn);
             break;
         }
 
         if(close(fd)) {
-            log_warn("rfc1035: failed to close %s: %s", testfn, logf_errno());
+            log_info(MTMSG1 "failed to close %s: %s" MTMSG2, testfn, logf_errno());
             unlink(testfn);
             break;
         }
@@ -783,13 +786,13 @@ static uint64_t try_zone_mtime(const char* testfn) {
         struct stat st;
 
         if(lstat(testfn, &st)) {
-            log_warn("rfc1035: failed to lstat %s: %s", testfn, logf_errno());
+            log_info(MTMSG1 "failed to lstat %s: %s" MTMSG2, testfn, logf_errno());
             unlink(testfn);
             break;
         }
 
         if(unlink(testfn)) {
-            log_warn("rfc1035: failed to unlink %s: %s", testfn, logf_errno());
+            log_info(MTMSG1 "failed to unlink %s: %s" MTMSG2, testfn, logf_errno());
             break;
         }
 
@@ -859,6 +862,8 @@ void zsrc_rfc1035_load_zones(void) {
     fail_fatally = false;
     if(dmn_get_debug() && atexit(unload_zones))
         log_fatal("rfc1035: atexit(unload_zones) failed: %s", logf_errno());
+
+    log_info("rfc1035: Loaded %u zonefiles from '%s'", zfhash_count, rfc1035_dir);
 }
 
 // we track the loop here for the async sighup request

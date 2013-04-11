@@ -412,7 +412,6 @@ static void init_config(const bool started_as_root) {
     gdnsd_rand_meta_init();
 
     // Actually load the config
-    log_info("Loading configuration");
     conf_load();
 
     // Set up and validate privdrop info if necc
@@ -422,7 +421,7 @@ static void init_config(const bool started_as_root) {
     // Call plugin full_config actions
     gdnsd_plugins_action_full_config(gconfig.num_io_threads);
 
-    log_info("Loading zone data");
+    log_info("Loading zone data...");
     ztree_init();
     zsrc_djb_load_zones();
     zsrc_rfc1035_load_zones();

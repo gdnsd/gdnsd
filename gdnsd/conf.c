@@ -436,14 +436,14 @@ static const vscf_data_t* conf_load_vscf(void) {
 
     struct stat cfg_stat;
     if(!stat(cfg_path, &cfg_stat)) {
-        log_debug("Loading configuration from '%s'", cfg_path);
+        log_info("Loading configuration from '%s'", cfg_path);
         char* vscf_err;
         out = vscf_scan_filename(cfg_path, &vscf_err);
         if(!out)
-            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
+            log_fatal("Loading configuration from '%s' failed: %s", cfg_path, vscf_err);
     }
     else {
-        log_debug("No config file at '%s', using defaults + zones auto-scan", cfg_path);
+        log_info("No config file at '%s', using defaults", cfg_path);
     }
 
     free(cfg_path);
