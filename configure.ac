@@ -255,7 +255,7 @@ AC_PATH_PROG([PERL],[perl],[$am_aux_dir/noperl])
 AC_PATH_PROG([POD2MAN],[pod2man],[$am_aux_dir/noperl])
 AC_PATH_PROG([POD2TEXT],[pod2text],[$am_aux_dir/noperl])
 AX_PROG_PERL_VERSION([5.8.1],[
-    AX_PROG_PERL_MODULES([Test::More Net::DNS=0.63 LWP=5.805 Socket6 IO::Socket::INET6 HTTP::Daemon],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), Net::DNS 0.63+, LWP (aka libwww-perl) 5.805+, Socket6, IO::Socket::INET6, and HTTP::Daemon]]))
+    AX_PROG_PERL_MODULES([Test::More LWP=5.805 Socket6 IO::Socket::INET6 HTTP::Daemon],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), LWP (aka libwww-perl) 5.805+, Socket6, IO::Socket::INET6, and HTTP::Daemon]]))
 ],[
     AC_MSG_WARN([Cannot "make check" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)])
 ])

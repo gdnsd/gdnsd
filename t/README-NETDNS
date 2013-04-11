@@ -1,0 +1,41 @@
+Located here (within the "Net/" subdirectory) is a copy of Net::DNS frozen at
+  version 0.68, because incompatible changes were introduced upstream in versions
+  0.69 and later.
+
+This copy of 0.68 has a number of trivial, local changes:
+  *) The XS version of dn_expand is not included
+  *) The XS loading code is gone, to not pick up some incompatible copy
+  *) The check for Net::DNS::SEC is removed, as is the (not useful
+     to gdnsd) loading of Net::DNS::Update.
+  *) All docs and other non-functional miscellany removed
+  *) Several sub-modules not used by the testsuite removed to save space,
+     but could be added back later if warranted:
+     Net/DNS/Mailbox.pm
+     Net/DNS/Nameserver.pm
+     Net/DNS/RR/AFSDB.pm
+     Net/DNS/RR/APL/ApItem.pm
+     Net/DNS/RR/APL.pm
+     Net/DNS/RR/CERT.pm
+     Net/DNS/RR/DHCID.pm
+     Net/DNS/RR/DNAME.pm
+     Net/DNS/RR/EID.pm
+     Net/DNS/RR/HINFO.pm
+     Net/DNS/RR/HIP.pm
+     Net/DNS/RR/IPSECKEY.pm
+     Net/DNS/RR/ISDN.pm
+     Net/DNS/RR/KX.pm
+     Net/DNS/RR/LOC.pm
+     Net/DNS/RR/MB.pm
+     Net/DNS/RR/MG.pm
+     Net/DNS/RR/MINFO.pm
+     Net/DNS/RR/MR.pm
+     Net/DNS/RR/NIMLOC.pm
+     Net/DNS/RR/NSAP.pm
+     Net/DNS/RR/NULL.pm
+     Net/DNS/RR/PX.pm
+     Net/DNS/RR/RP.pm
+     Net/DNS/RR/RT.pm
+     Net/DNS/RR/TKEY.pm
+     Net/DNS/RR/TSIG.pm
+     Net/DNS/RR/X25.pm
+     Net/DNS/Update.pm

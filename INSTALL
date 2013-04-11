@@ -45,7 +45,6 @@ generating the documentation.
 The test suite also needs the following non-standard Perl modules (the "aka"
 are what you will sometimes find them as in OS package managers):
   Test::More (aka perl-Test-Simple)
-  Net::DNS (aka perl-Net-DNS)
   LWP (aka perl-libwww-perl)
   Socket6
   IO::Socket::INET6
