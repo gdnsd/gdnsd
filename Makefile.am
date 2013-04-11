@@ -37,6 +37,13 @@ clean-local:
 	@rm -rf $(top_srcdir)/wikidocs
 
 install-exec-hook:
+if HAS_DEF_ROOTDIR
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEF_ROOTDIR)"
+else
+	$(MKDIR_P) "$(DESTDIR)$(sysconfdir)/gdnsd/zones";
+	$(MKDIR_P) "$(DESTDIR)$(sysconfdir)/gdnsd/geoip";
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_SYSRUNDIR)/gdnsd";
+endif
 	@id gdnsd >/dev/null 2>&1; if test $$? -ne 0; then \
 		echo; \
 		echo === READ ME ===; \
