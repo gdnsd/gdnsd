@@ -21,6 +21,7 @@ cfg-dirs.h:	Makefile
 	@echo '#define GDNSD_RUNDIR "$(GDNSD_SYSRUNDIR)/gdnsd"' >>$@
 	@echo '#define GDNSD_LIBDIR "$(libdir)/gdnsd"' >>$@
 	@echo '#define GDNSD_LIBEXECDIR "$(libexecdir)/gdnsd"' >>$@
+	@echo '#define GDNSD_DEF_ROOTDIR "$(GDNSD_DEF_ROOTDIR)"' >>$@
 
 test:	check
 

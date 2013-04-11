@@ -335,7 +335,7 @@ AS_HELP_STRING([--with-rootdir=/some/path],[Enables default chroot operation usi
 ],[
   with_rootdir="system"
 ])
-AC_DEFINE_UNQUOTED([GDNSD_DEF_ROOTDIR],"$with_rootdir",[Default -d argument])
+AC_SUBST([GDNSD_DEF_ROOTDIR])
 
 dnl Allow specifying an alternate rundir (default $localstatedir/run) for distros
 dnl   that prefer e.g. /run to /var/run
