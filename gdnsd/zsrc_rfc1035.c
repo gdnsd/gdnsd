@@ -107,9 +107,9 @@ static bool statcmp_nx(statcmp_t* a) {
 }
 
 // represents a zone file
-// on initial load, update_pending is false, and thus "pending" is irrelevant
+// on initial load, pending_event is NULL, and thus "pending" is irrelevant
 // when change detection sees a statcmp diff between "loaded" and the
-//   filesystem, it's going to set "update_pending" and save the fs info
+//   filesystem, it's going to set pending_event and save the fs info
 //   to "pending", while in many cases a quiescence timer waits for further
 //   updates.
 // when "pending" and the raw FS have stabilized, then the zone is actually
