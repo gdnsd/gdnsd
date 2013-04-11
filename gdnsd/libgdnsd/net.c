@@ -93,12 +93,14 @@ int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, anysin_
     return addr_err;
 }
 
+static const char invalid_addr[] = "!!invalid!!";
+
 int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, anysin_t* result) {
     dmn_assert(addr_port_text); dmn_assert(result);
 
     char* apcopy = strdup(addr_port_text);
 
-    char* addr = apcopy;
+    const char* addr = apcopy;
     char* port = NULL;
     if(addr[0] == '[') {
         char* end_brace = strchr(addr, ']');
@@ -117,6 +119,15 @@ int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, an
             char* check_v6 = strchr(port + 1, ':');
             if(check_v6) {
                 port = NULL;
+            }
+            // If the user's string was ":12345", that's illegal
+            //  by our definition, but some getaddrinfo() implementations
+            //  will interpret the zero-length NUL-terminated address
+            //  string we would otherwise provide as "::1", don't ask
+            //  me why.  So make it *really* invalid to trigger an
+            //  an error later in getaddrinfo()
+            else if(port == addr) {
+                addr = invalid_addr;
             }
             // Else assume IPv4:port
             else {
