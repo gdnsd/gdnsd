@@ -247,7 +247,6 @@ AC_CHECK_FUNCS([inotify_init1],,[USE_INOTIFY=0])
 if test $USE_INOTIFY -eq 1; then
     AC_DEFINE([USE_INOTIFY], [1], [Linux 2.6.36+ inotify support])
 fi
-AM_CONDITIONAL([USE_INOTIFY], [test x$USE_INOTIFY = x1])
 
 dnl Check for perl stuff for doc generation and core regression testsuite
 HAVE_TESTSUITE_MODULES=0
