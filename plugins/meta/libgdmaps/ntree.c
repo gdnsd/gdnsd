@@ -200,31 +200,20 @@ F_NONNULL
 static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
     dmn_assert(in); dmn_assert(mask_adj);
 
-    // easier access to various bits of the ipv6 space
-    uint16_t* in_16 = (uint16_t*)in;
-    uint32_t* in_32 = (uint32_t*)in;
-    uint64_t* in_64 = (uint64_t*)in;
-
     uint32_t ip_out = 0;
 
-    if(!in_64[0] && (
-           in_32[2] == 0xFFFF0000 // v4mapped or SIIT (endianness...)
-        || in_32[2] == 0x0000FFFF // v4mapped or SIIT (endianness...)
-    )) {
-        ip_out = ntohl(in_32[3]);
+    if(!memcmp(in, start_v4mapped, 12)
+        || !memcmp(in, start_siit, 12)) {
+        ip_out = ntohl(gdnsd_get_una32(&in[12]));
         *mask_adj = 96;
     }
-    else if(in[0] == 0x20) {
-        // Teredo
-        if(in[1] == 0x01 && in_16[1] == 0x0000) {
-            ip_out = ntohl(in_32[3] ^ 0xFFFFFFFF);
-            *mask_adj = 96;
-        }
-        // 6to4
-        else if(in[1] == 0x02) {
-            ip_out = ntohl(gdnsd_get_una32(&in[2]));
-            *mask_adj = 16;
-        }
+    else if(!memcmp(in, start_teredo, 4)) {
+        ip_out = ntohl(gdnsd_get_una32(&in[12]) ^ 0xFFFFFFFF);
+        *mask_adj = 96;
+    }
+    else if(!memcmp(in, start_6to4, 2)) {
+        ip_out = ntohl(gdnsd_get_una32(&in[2]));
+        *mask_adj = 16;
     }
 
     return ip_out;
