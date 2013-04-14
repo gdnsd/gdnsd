@@ -1,4 +1,38 @@
 
+1.8.2 - XXX Not Yet Released, waiting on further bugfix traffic...
+
+    Syslog output improvements on startup, to reduce confusion:
+      The location of the config file is always logged
+      Whether the config file was found or not is always logged
+      The location of the rfc1035 zones directory is always logged
+      The count of zonefiles loaded from that directory is always logged
+      The log messages about failures related to ".mtime_test" have
+        been expanded to be clearer about how unimportant this is.
+    If the (existing) IPv6 basic socket test peformed at startup fails,
+      which tends to indicate that IPv6 has been disabled somehow or
+      other on the host as a whole, the default getifaddrs()-based
+      interface scanner will now skip over any detected IPv6 interfaces
+      and log a warning about the condition exactly once.  Previously
+      it would try to bring these up, usually resulting in a fatal error.
+    Illegal (according to the docs and intent) "listen" option
+      strings of the form ":port" were succeeding with some
+      implementations of getaddrinfo(), which would translate
+      the empty address to "::1".  These are now rejected correctly.
+      The correct way to change the default port while still using
+      the default interface scanning is to use the "dns_port" option.
+    Meta-changes (not runtime code):
+      Various build/test deps improved:
+        Ragel dep changed from 6.[67] to 6.x
+        autoconf lowered from 2.69 to 2.68
+        automake lowered from 1.11.6 to 1.11.3
+      Tarballs now include autogen.sh and qa/ from the repo
+      Testsuite made somewhat more resilient against timing
+        failures on very slow or overloaded hosts
+      "make install" now creates various empty subdirectories
+        that might be useful to (or required by) the runtime daemon
+      "make install" warns if the default privdrop user "gdnsd"
+        doesn't yet exist.
+
 1.8.1 - 2012-03-14
     Bugfix: extmon configurations with more than 255 specific commands
       should no longer fail on startup.
