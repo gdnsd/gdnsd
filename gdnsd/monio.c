@@ -312,6 +312,8 @@ static unsigned json_head_len = sizeof(json_head) - 1;
 static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\"\r\n\t\t}";
 static const char json_sep[] = ",\r\n";
 static unsigned json_sep_len = sizeof(json_sep) - 1;
+static const char json_nl[] = "\r\n";
+static unsigned json_nl_len = sizeof(json_nl) - 1;
 static const char json_foot[] = "\r\n\t]\r\n";
 static unsigned json_foot_len = sizeof(json_foot) - 1;
 
@@ -398,10 +400,18 @@ unsigned monio_stats_out_csv(char* buf) {
 unsigned monio_stats_out_json(char* buf) {
     dmn_assert(buf);
 
-    if(!num_mons) return 0;
-    dmn_assert(max_stats_len);
-
     const char* const buf_start = buf;
+
+    if(num_mons == 0 ) {
+        memcpy(buf, json_nl, json_nl_len);
+        buf += json_nl_len;
+        return (buf - buf_start);
+    } else {
+        memcpy(buf, json_sep, json_sep_len);
+        buf += json_sep_len;
+    }
+
+    dmn_assert(max_stats_len);
     int avail = max_stats_len;
 
     memcpy(buf, json_head, json_head_len);

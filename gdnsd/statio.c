@@ -306,7 +306,6 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs) {
 
 F_NONNULL
 static void statio_fill_outbuf_json(struct iovec* outbufs) {
-    static unsigned buflen = 0;
     dmn_assert(outbufs);
     populate_stats();
 
@@ -314,15 +313,7 @@ static void statio_fill_outbuf_json(struct iovec* outbufs) {
 
     outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, json_fixed, (uint64_t)pop_statio_time - start_time, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
-    buflen = monio_stats_out_json(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
-    if( buflen == 0 ) {
-        memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_nl, (sizeof(json_nl)) - 1);
-        outbufs[1].iov_len += (sizeof(json_nl)-1);
-    } else {
-        outbufs[1].iov_len += buflen;
-        memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_more, (sizeof(json_more)) - 1);
-        outbufs[1].iov_len += (sizeof(json_more)-1);
-    }
+    outbufs[1].iov_len += monio_stats_out_json(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_footer, (sizeof(json_footer)) - 1);
     outbufs[1].iov_len += (sizeof(json_footer)-1);
     outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/json", (unsigned)outbufs[1].iov_len);
