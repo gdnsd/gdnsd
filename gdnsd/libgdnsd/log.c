@@ -51,55 +51,6 @@
 
 static const char* generic_nullstr = "(null)";
 
-// Note: NI_MAXHOST seems to generally be 1025
-const char* gdnsd_logf_anysin(const anysin_t* asin) {
-    if(!asin)
-        return generic_nullstr;
-
-    char hostbuf[NI_MAXHOST + 1];
-    char servbuf[NI_MAXSERV + 1];
-
-    hostbuf[0] = servbuf[0] = 0; // JIC getnameinfo leaves them un-init
-    int name_err = getnameinfo(&asin->sa, asin->len, hostbuf, NI_MAXHOST, servbuf, NI_MAXSERV, NI_NUMERICHOST | NI_NUMERICSERV);
-    if(name_err)
-        return gai_strerror(name_err); // This might be confusing...
-
-    const bool isv6 = (asin->sa.sa_family == AF_INET6);
-    const size_t hostbuf_len = strlen(hostbuf);
-    const size_t servbuf_len = strlen(servbuf);
-    const size_t alloc_len = hostbuf_len + servbuf_len + (isv6 ? 2 : 4);
-    char* buf = dmn_fmtbuf_alloc(alloc_len);
-    char* bufptr = buf;
-    if(isv6)
-        *bufptr++ = '[';
-    memcpy(bufptr, hostbuf, hostbuf_len);
-    bufptr += hostbuf_len;
-    if(isv6)
-        *bufptr++ = ']';
-    *bufptr++ = ':';
-    memcpy(bufptr, servbuf, servbuf_len + 1); // include NUL
-
-    return buf;
-}
-
-// Note: NI_MAXHOST seems to generally be 1025
-const char* gdnsd_logf_anysin_noport(const anysin_t* asin) {
-    if(!asin)
-        return generic_nullstr;
-
-    char hostbuf[NI_MAXHOST + 1];
-
-    hostbuf[0] = 0; // JIC getnameinfo leaves them un-init
-    int name_err = getnameinfo(&asin->sa, asin->len, hostbuf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
-    if(name_err)
-        return gai_strerror(name_err); // This might be confusing...
-
-    char* buf = dmn_fmtbuf_alloc(strlen(hostbuf) + 1);
-    strcpy(buf, hostbuf);
-
-    return buf;
-}
-
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
     anysin_t tempsin;
     memset(&tempsin, 0, sizeof(anysin_t));

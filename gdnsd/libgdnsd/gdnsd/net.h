@@ -20,46 +20,16 @@
 #ifndef GDNSD_NET_H
 #define GDNSD_NET_H
 
-// For sockaddr structs
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 #include <stdbool.h>
-
+#include <gdnsd/dmn.h>
 #include <gdnsd/compiler.h>
 
-/* Socket union type */
-// note anonymous union here, which gcc has supported
-//  forever, and is now becoming standard in C11
-typedef struct {
-    union {
-        struct sockaddr_in6 sin6;
-        struct sockaddr_in  sin;
-        struct sockaddr     sa;
-    };
-    socklen_t len;
-} anysin_t;
-
-#define ANYSIN_MAXLEN sizeof(struct sockaddr_in6)
-
-// transforms addr_txt + port_txt -> result using getaddrinfo(), setting result->len
-// input text fields must be numeric, not hostnames or port names.
-// caller must allocate result to sizeof(anysin_t)
-// port can be NULL, in which case the proto-specific port field will be zero
-// retval is retval from getaddrinfo() itself (if non-zero, error occurred and
-//   string representation is available from gai_strerror()).
-// result is unaffected if an error occurs.
-int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, anysin_t* result);
-
-// As above, but for parsing the address and port from a single string of the form addr:port,
-//   where :port is optional, and addr may be surround by [] (to help with ipv6 [::1]:53 issues).
-// Port defaults to unsigned arg "def_port" if not specified in the input string.
-int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, anysin_t* result);
-
-// Check if the sockaddr is the V4 or V6 ANY-address (0.0.0.0, or ::)
-bool gdnsd_anysin_is_anyaddr(const anysin_t* asin);
+// back-compat for moving some network stuff down to libdmn:
+typedef dmn_anysin_t anysin_t;
+#define ANYSIN_MAXLEN DMN_ANYSIN_MAXLEN
+#define gdnsd_anysin_getaddrinfo(__a,__p,__r) dmn_anysin_getaddrinfo((__a),(__p),(__r),true)
+#define gdnsd_anysin_fromstr(__a,__d,__r) dmn_anysin_fromstr((__a),(__d),(__r),true)
+#define gdnsd_anysin_is_anyaddr dmn_anysin_is_anyaddr
 
 // Plugins should use these to get protocol numbers, since
 //  many platforms require filesystem access outside of the

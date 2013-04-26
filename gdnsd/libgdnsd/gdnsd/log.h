@@ -50,8 +50,6 @@
  */
 
 const char* gdnsd_logf_dname(const uint8_t* dname);
-const char* gdnsd_logf_anysin(const anysin_t* asin);
-const char* gdnsd_logf_anysin_noport(const anysin_t* asin);
 
 // For logging pathnames returned by gdnsd/path.h functions,
 //   e.g. gdnsd_resolve_path_cfg() and gdnsd_get_pidpath().
@@ -68,9 +66,11 @@ const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
 
 #define gdnsd_logf_errnum dmn_strerror
 #define gdnsd_logf_errno() dmn_strerror(errno)
+#define gdnsd_logf_anysin dmn_logf_anysin
+#define gdnsd_logf_anysin_noport dmn_logf_anysin_noport
+#define logf_anysin dmn_logf_anysin
+#define logf_anysin_noport dmn_logf_anysin_noport
 #define logf_dname gdnsd_logf_dname
-#define logf_anysin gdnsd_logf_anysin
-#define logf_anysin_noport gdnsd_logf_anysin_noport
 #define logf_errnum dmn_strerror
 #define logf_errno() dmn_strerror(errno)
 #define logf_pathname gdnsd_logf_pathname

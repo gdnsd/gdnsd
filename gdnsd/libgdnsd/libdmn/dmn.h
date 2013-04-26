@@ -27,6 +27,12 @@
 #include <syslog.h>
 #include <sys/types.h>
 
+// For sockaddr structs
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
 // gcc function attributes
 #if defined __GNUC__ && __GNUC__ >= 3 // gcc 3.0+
 #  define DMN_F_PURE          __attribute__((__pure__))
@@ -98,8 +104,7 @@ void dmn_secure_setup(const char* username, const char* chroot_path);
 // Executes the actual chroot()/chuid()/etc calls based on previous
 //  dmn_secure_setup(), which must be called first.  skip_chroot
 //  will skip the chroot() part even if dmn_secure_setup() specified
-//  and validated a chroot path.  So far this is only used in a corner
-//  case for gdnsd_plugin_extmon...
+//  and validated a chroot path.
 void dmn_secure_me(const bool skip_chroot);
 
 // This accessor indicates whether dmn_secure_me() has been called or not
@@ -228,5 +233,49 @@ void dmn_fmtbuf_reset(void);
 //  above and takes care of the difference between the GNU
 //  and POSIX strerror_r() variants.
 const char* dmn_strerror(const int errnum);
+
+// The above as convenient log-formatters using the dmn_logf_ prefix
+#define dmn_logf_errnum dmn_strerror
+#define dmn_logf_errno() dmn_strerror(errno)
+
+/******** network utility stuff ***********/
+
+/* Socket union type */
+// note anonymous union here, which gcc has supported
+//  forever, and is now becoming standard in C11
+typedef struct {
+    union {
+        struct sockaddr_in6 sin6;
+        struct sockaddr_in  sin;
+        struct sockaddr     sa;
+    };
+    socklen_t len;
+} dmn_anysin_t;
+
+#define DMN_ANYSIN_MAXLEN sizeof(struct sockaddr_in6)
+
+// transforms addr_txt + port_txt -> result using getaddrinfo(), setting result->len
+// if "numeric_only" is true:
+//    input text fields must be numeric, not hostnames or port names.
+// if false, hostnames and port names are possible, which may result
+//    in the libc doing DNS lookups and such on your behalf.
+// caller must allocate result to sizeof(anysin_t)
+// port can be NULL, in which case the proto-specific port field will be zero
+// retval is retval from getaddrinfo() itself (if non-zero, error occurred and
+//   string representation is available from gai_strerror()).
+// result is unaffected if an error occurs.
+int dmn_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, dmn_anysin_t* result, bool numeric_only);
+
+// As above, but for parsing the address and port from a single string of the form addr:port,
+//   where :port is optional, and addr may be surround by [] (to help with ipv6 [::1]:53 issues).
+// Port defaults to unsigned arg "def_port" if not specified in the input string.
+int dmn_anysin_fromstr(const char* addr_port_text, const unsigned def_port, dmn_anysin_t* result, bool numeric_only);
+
+// Check if the sockaddr is the V4 or V6 ANY-address (0.0.0.0, or ::)
+bool dmn_anysin_is_anyaddr(const dmn_anysin_t* asin);
+
+// Log-formatters for dmn_anysin_t
+const char* dmn_logf_anysin(const dmn_anysin_t* asin);
+const char* dmn_logf_anysin_noport(const dmn_anysin_t* asin);
 
 #endif // DMN_H

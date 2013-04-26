@@ -6,7 +6,7 @@ xHEADERS_BUILT = gdnsd/dmn.h
 xHEADERS_DIST_NOINST = gdnsd/plugapi-priv.h gdnsd/misc-priv.h gdnsd/net-priv.h gdnsd/prcu-priv.h gdnsd/paths-priv.h
 xHEADERS_DIST = gdnsd/vscf.h gdnsd/dname.h gdnsd/log.h gdnsd/compiler.h gdnsd/mon.h gdnsd/stats.h gdnsd/net.h gdnsd/plugapi.h gdnsd/plugin.h gdnsd/misc.h gdnsd/paths.h
 
-libgdnsd_la_SOURCES = prcu.c dname.c net.c log.c mon.c vscf.c misc.c paths.c plugapi.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
+libgdnsd_la_SOURCES = prcu.c dname.c net.c log.c mon.c vscf.c misc.c paths.c plugapi.c libdmn/dmn_daemon.c libdmn/dmn_log.c libdmn/dmn_secure.c libdmn/dmn_net.c $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
 nodist_libgdnsd_la_SOURCES = $(xHEADERS_BUILT)
 
 libgdnsd_la_LDFLAGS  = -shared -avoid-version
