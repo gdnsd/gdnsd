@@ -20,6 +20,8 @@
       the empty address to "::1".  These are now rejected correctly.
       The correct way to change the default port while still using
       the default interface scanning is to use the "dns_port" option.
+    Fixed a 64-bit unaligned access issue which cropped up in the
+      Debian sparc64 port.
     Meta-changes (not runtime code):
       Various build/test deps improved:
         Ragel dep changed from 6.[67] to 6.x
@@ -28,6 +30,9 @@
       Tarballs now include autogen.sh and qa/ from the repo
       Testsuite made somewhat more resilient against timing
         failures on very slow or overloaded hosts
+      Testsuite now bundles Net::DNS 0.68, and the external
+        dependency is removed.  This solves major compatibility
+        problems with installed later versions of Net::DNS.
       "make install" now creates various empty subdirectories
         that might be useful to (or required by) the runtime daemon
       "make install" warns if the default privdrop user "gdnsd"
