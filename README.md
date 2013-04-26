@@ -66,7 +66,7 @@ The following are optional, but generally recommended:
 The following have no real effect on the build or runtime, but are required in order to run the testsuite:
 
 * Perl 5.8.1 or higher
-* Perl modules: Net::DNS 0.63+, LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
+* Perl modules: LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
 
 If working directly from a git clone rather than a tarball, in addition to all of the above:
 

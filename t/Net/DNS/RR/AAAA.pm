@@ -1,22 +1,16 @@
-
-# Note:
-#  This is a direct copy of Net::DNS::RR::AAAA from Net::DNS 0.66.
-#  We only use this as a drop-in to work around a specific bug
-#   if the testsuite gets run under Net::DNS 0.65.
-
 package Net::DNS::RR::AAAA;
 #
-# $Id: /net-dns/release/0.66/lib/Net/DNS/RR/AAAA.pm 14174 2009-12-28T15:57:43.627650Z olaf  $
+# $Id: AAAA.pm 932 2011-10-26 12:40:48Z willem $
 #
 use strict;
-BEGIN { 
+BEGIN {
     eval { require bytes; }
-} 
+}
 
 use vars qw(@ISA $VERSION);
 
 @ISA     = qw(Net::DNS::RR);
-$VERSION = (qw$LastChangedRevision: 14174 $)[1];
+$VERSION = (qw$LastChangedRevision: 932 $)[1];
 
 sub new {
 	my ($class, $self, $data, $offset) = @_;
@@ -60,7 +54,7 @@ sub _normalize_AAAA{
 	my $self=shift();
 	return $self unless exists $self->{"address"};
 	return $self->{"address"} if $self->{normalized};
-	
+
 	my $string=$self->{"address"};
 	if ($string) {
 		my @addr;
@@ -87,16 +81,16 @@ sub _normalize_AAAA{
 				@addr = ((0) x (8 - @addr), @addr);
 			}
 		}
-		
+
 		$self->{"address"} = sprintf("%x:%x:%x:%x:%x:%x:%x:%x",
 					     map { hex $_ } @addr);
 	}
 	$self->{"normalized"}=1;
 	return $self;
-	 
-	
-	
-	
+
+
+
+
 }
 
 1;
@@ -130,7 +124,7 @@ Section 2.2, Para 1).
 
 =head1 COPYRIGHT
 
-Copyright (c) 1997-2002 Michael Fuhr. 
+Copyright (c) 1997-2002 Michael Fuhr.
 
 Portions Copyright (c) 2002-2004 Chris Reinhardt.
 

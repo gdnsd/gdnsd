@@ -41,19 +41,6 @@ use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
 use Config;
 
-# Hack around a Net::DNS 0.65 bug, so that we can
-#  merely require 0.63 or higher
-if($Net::DNS::VERSION == '0.65') {
-    eval "require Net::DNS::RR; require AAAA66;";
-    die "Failed to load Net::DNS 0.65 hack: $@" if $@;
-    $Net::DNS::RR::_LOADED{'Net::DNS::RR::AAAA'}++;
-}
-
-# Net::DNS 0.68 renamed a public method on us, so...
-require Net::DNS::Header;
-*Net::DNS::Header::data = *Net::DNS::Header::encode
-    unless *Net::DNS::Header::data{CODE};
-
 my %SIGS;
 {
     my $i = 0;

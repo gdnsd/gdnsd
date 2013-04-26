@@ -19,7 +19,6 @@ BuildRequires: userspace-rcu-devel
 BuildRequires: libev-devel
 BuildRequires: libcap-devel
 BuildRequires: perl(Test::More)
-BuildRequires: perl(Net::DNS)
 BuildRequires: perl(HTTP::Daemon)
 BuildRequires: perl(LWP)
 BuildRequires: perl(Socket6)
