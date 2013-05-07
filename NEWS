@@ -1,6 +1,5 @@
 
-1.8.2 - XXX Not Yet Released, waiting on further bugfix traffic...
-
+1.8.2 - 2012-05-06
     Syslog output improvements on startup, to reduce confusion:
       The location of the config file is always logged
       Whether the config file was found or not is always logged
