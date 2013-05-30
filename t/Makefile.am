@@ -1,5 +1,5 @@
 
-EXTRA_DIST = _GDT.pm _FakeGeoIP.pm Net $(srcdir)/[0-9]*/* $(srcdir)/[0-9]*/*/*
+EXTRA_DIST = README-NETDNS _GDT.pm _FakeGeoIP.pm Net $(srcdir)/[0-9]*/* $(srcdir)/[0-9]*/*/*
 TESTOUT_DIR = $(abs_builddir)/testout
 TEXEC = TESTOUT_DIR=$(TESTOUT_DIR) TESTPORT_START=$(TESTPORT_START) $(PERL) -I$(srcdir) -MTest::Harness -e "runtests(@ARGV)"
 ALLTESTS = $(srcdir)/[0-9]*/*.t
