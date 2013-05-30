@@ -1,3 +1,10 @@
+1.8.3 - 2012-05-30
+    Bugfix: bad default rootdir; did not start without explicit "-d".
+      This bug was introduced in 1.8.2, and breaks most normal use-cases,
+      but unfortunately didn't break the testsuite since it always uses -d.
+      If 1.8.2 was failing to start for you and complaining about a failed
+      mkdir(), this was why.
+    Added t/README-NETDNS to the tarballs, was missing due to oversight.
 
 1.8.2 - 2012-05-06
     Syslog output improvements on startup, to reduce confusion:
