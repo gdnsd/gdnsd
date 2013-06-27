@@ -85,22 +85,22 @@ fi
 %files
 %defattr(-,root,root,-)
 %{_initddir}/gdnsd
-%dir %{_libdir}/gdnsd/
-%{_libdir}/gdnsd/*.so
+%{_libdir}/gdnsd/
 %exclude %{_libdir}/gdnsd/*.la
 %{_bindir}/gdnsd_geoip_test
 %{_sbindir}/gdnsd
-%{_libexecdir}/gdnsd/gdnsd_extmon_helper
-%{_var}/run/gdnsd/
-%{_sysconfdir}/gdnsd/
-%{_sysconfdir}/gdnsd/zones/
+%{_libexecdir}/gdnsd/
+%dir %{_var}/run/gdnsd/
+%dir %{_sysconfdir}/gdnsd/
+%dir %{_sysconfdir}/gdnsd/zones/
 %config(noreplace) %{_sysconfdir}/gdnsd/config
 %{_mandir}/man1/*
 %{_mandir}/man5/*
 %{_mandir}/man8/*
-%{_defaultdocdir}/gdnsd/*
+%{_defaultdocdir}/gdnsd/
 
 %files devel
 %defattr(-,root,root,-)
-%{_includedir}/gdnsd/*.h
+%{_includedir}/gdnsd/
 %{_mandir}/man3/*
+
