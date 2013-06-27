@@ -94,7 +94,7 @@ fi
 %{_var}/run/gdnsd/
 %{_sysconfdir}/gdnsd/
 %{_sysconfdir}/gdnsd/zones/
-%config %{_sysconfdir}/gdnsd/config
+%config(noreplace) %{_sysconfdir}/gdnsd/config
 %doc %{_mandir}/man1/*
 %doc %{_mandir}/man5/*
 %doc %{_mandir}/man8/*
