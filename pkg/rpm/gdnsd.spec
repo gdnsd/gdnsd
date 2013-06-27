@@ -95,12 +95,12 @@ fi
 %{_sysconfdir}/gdnsd/
 %{_sysconfdir}/gdnsd/zones/
 %config(noreplace) %{_sysconfdir}/gdnsd/config
-%doc %{_mandir}/man1/*
-%doc %{_mandir}/man5/*
-%doc %{_mandir}/man8/*
-%doc %{_defaultdocdir}/gdnsd/*
+%{_mandir}/man1/*
+%{_mandir}/man5/*
+%{_mandir}/man8/*
+%{_defaultdocdir}/gdnsd/*
 
 %files devel
 %defattr(-,root,root,-)
 %{_includedir}/gdnsd/*.h
-%doc %{_mandir}/man3/*
+%{_mandir}/man3/*
