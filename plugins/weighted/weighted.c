@@ -757,6 +757,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
     unsigned dyn_item_maxs[cfg_max_items_per_res]; // max of dyn_addr_weights[N][]
     // addr cfg weight or 0, depends on status:
     unsigned dyn_addr_weights[cfg_max_items_per_res][cfg_max_addrs_per_group];
+    bool rv = true;
 
     // Get dynamic info about each item
     for(unsigned item_idx = 0; item_idx < aset->count; item_idx++) {
@@ -791,6 +792,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
 
     // if all items looked completely-down, treat them all as completely-up
     if(!dyn_items_sum) {
+        rv = false;
         dyn_items_sum = aset->weight;
         dyn_items_max = aset->max_weight;
         for(unsigned item_idx = 0; item_idx < num_items; item_idx++) {
@@ -847,7 +849,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
         }
     }
 
-    return dyn_items_sum < aset->up_weight ? false : true;
+    return dyn_items_sum < aset->up_weight ? false : rv;
 }
 
 bool plugin_weighted_resolve_dynaddr(unsigned threadnum, unsigned resnum, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {
