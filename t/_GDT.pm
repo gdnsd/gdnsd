@@ -947,10 +947,14 @@ sub test_kill_daemon {
     Test::More::ok(1);
 }
 
-my $EDNS_CLIENTSUB_OPTCODE = 0x50fa;
+my $EDNS_CLIENTSUB_OPTCODE_IANA = 0x0008;
+my $EDNS_CLIENTSUB_OPTCODE_DEPRECATED = 0x50fa;
 sub optrr_clientsub {
     my %args = @_;
     $args{scope_mask} ||= 0;
+    my $which_code = (defined $args{deprecated_clientsub_optcode})
+        ? $EDNS_CLIENTSUB_OPTCODE_DEPRECATED
+        : $EDNS_CLIENTSUB_OPTCODE_IANA;
 
     my %option;
 
@@ -959,11 +963,11 @@ sub optrr_clientsub {
         my $addr_bytes = ($src_mask >> 3) + (($src_mask & 7) ? 1 : 0);
         if(defined $args{addr_v4}) {
             $option{optiondata} = pack('nCCa' . $addr_bytes, 1, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET, $args{addr_v4}));
-            $option{optioncode} = $EDNS_CLIENTSUB_OPTCODE;
+            $option{optioncode} = $which_code;
         }
         else {
             $option{optiondata} = pack('nCCa' . $addr_bytes, 2, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET6, $args{addr_v6}));
-            $option{optioncode} = $EDNS_CLIENTSUB_OPTCODE;
+            $option{optioncode} = $which_code;
         }
     }
 

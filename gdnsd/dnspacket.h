@@ -159,6 +159,11 @@ typedef struct {
     // Client sent EDNS Client Subnet option, and we must respond with one
     bool use_edns_client_subnet;
 
+    // If the above is true, the opcode number used is stored here for use
+    //   in the response (0x50fa for deprecated experimental code, or 0x0008
+    //   for the new IANA code).
+    unsigned clientsub_opt_code;
+
     // If this is true, the query class was CH
     bool chaos;
 } dnspacket_context_t;

@@ -44,9 +44,9 @@ _GDT->test_dns(
 _GDT->test_dns(
     v4_only => 1,
     qname => 'reflect-dns.example.com', qtype => 'A',
-    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24),
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24, deprecated_clientsub_optcode => 1),
     answer => 'reflect-dns.example.com 60 A 127.0.0.1',
-    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24, scope_mask => 24),
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24, scope_mask => 24, deprecated_clientsub_optcode => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -181,7 +181,7 @@ _GDT->test_dns(
 
 # V4 not enough addr bytes for src_mask
 my $optrr_short_v4 = Net::DNS::RR->new(@optrr_base,
-    optioncode => 0x50fa,
+    optioncode => 0x0008,
     optiondata => pack('nCCa3', 1, 32, 0, inet_pton(AF_INET, "0.0.0.0")),
 );
 _GDT->test_dns(
@@ -209,7 +209,7 @@ _GDT->test_dns(
 
 # Bad address family
 my $optrr_badfam = Net::DNS::RR->new(@optrr_base,
-    optioncode => 0x50fa,
+    optioncode => 0x0008,
     optiondata => pack('nCCa16', 3, 128, 0, inet_pton(AF_INET6, "::")),
 );
 _GDT->test_dns(

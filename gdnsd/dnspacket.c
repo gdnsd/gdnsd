@@ -157,7 +157,7 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
 
 // retval: true -> FORMERR, false -> OK
 F_NONNULL
-static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, const uint8_t* opt_data) {
+static bool handle_edns_client_subnet(dnspacket_context_t* c, const unsigned opt_code, unsigned opt_len, const uint8_t* opt_data) {
     dmn_assert(c); dmn_assert(opt_data);
 
     bool rv = false;
@@ -210,6 +210,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
 
         c->this_max_response -= (8 + addr_bytes); // leave room for response option
         c->use_edns_client_subnet = true;
+        c->clientsub_opt_code = opt_code;
         c->client_info.edns_client_mask = src_mask;
     } while(0);
 
@@ -223,8 +224,10 @@ static bool handle_edns_option(dnspacket_context_t* c, unsigned opt_code, unsign
     dmn_assert(c); dmn_assert(opt_data);
 
     bool rv = false;
-    if(opt_code == EDNS_CLIENTSUB_OPTCODE && gconfig.edns_client_subnet)
-         rv = handle_edns_client_subnet(c, opt_len, opt_data);
+    if((opt_code == EDNS_CLIENTSUB_OPTCODE_IANA
+      || opt_code == EDNS_CLIENTSUB_OPTCODE_DEPRECATED)
+      && gconfig.edns_client_subnet)
+        rv = handle_edns_client_subnet(c, opt_code, opt_len, opt_data);
     else
         log_debug("Unknown EDNS option code: %x", opt_code);
 
@@ -1847,7 +1850,8 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         gdnsd_put_una16(0, &opt->rdlen);
 
         if(c->use_edns_client_subnet) {
-            gdnsd_put_una16(htons(EDNS_CLIENTSUB_OPTCODE), &packet[res_offset]);
+            dmn_assert(c->clientsub_opt_code);
+            gdnsd_put_una16(htons(c->clientsub_opt_code), &packet[res_offset]);
             res_offset += 2;
             const unsigned src_mask = c->client_info.edns_client_mask;
             const unsigned addr_bytes = (src_mask >> 3) + ((src_mask & 7) ? 1 : 0);

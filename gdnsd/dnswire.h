@@ -110,8 +110,9 @@ typedef struct {
 #define DNS_OPTRR_GET_EXTRCODE(_r) ((uint8_t)(ntohl(gdnsd_get_una32(&(_r)->extflags)) >> 24))
 #define DNS_OPTRR_GET_VERSION(_r)  ((uint8_t)((ntohl(gdnsd_get_una32(&(_r)->extflags)) & 0x00FF0000) >> 16))
 
-// NOT ASSIGNED BY IANA!:
-#define EDNS_CLIENTSUB_OPTCODE 0x50fa
+// The second one here should be removed, eventually...
+#define EDNS_CLIENTSUB_OPTCODE_IANA 0x0008
+#define EDNS_CLIENTSUB_OPTCODE_DEPRECATED 0x50fa
 
 /* DNS RR Types */
 #define DNS_TYPE_A	1
