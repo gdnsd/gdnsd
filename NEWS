@@ -1,4 +1,4 @@
-1.8.3 - 2012-05-30
+1.8.3 - 2013-05-30
     Bugfix: bad default rootdir; did not start without explicit "-d".
       This bug was introduced in 1.8.2, and breaks most normal use-cases,
       but unfortunately didn't break the testsuite since it always uses -d.
@@ -6,7 +6,7 @@
       mkdir(), this was why.
     Added t/README-NETDNS to the tarballs, was missing due to oversight.
 
-1.8.2 - 2012-05-06
+1.8.2 - 2013-05-06
     Syslog output improvements on startup, to reduce confusion:
       The location of the config file is always logged
       Whether the config file was found or not is always logged
@@ -44,7 +44,7 @@
       "make install" warns if the default privdrop user "gdnsd"
         doesn't yet exist.
 
-1.8.1 - 2012-03-14
+1.8.1 - 2013-03-14
     Bugfix: extmon configurations with more than 255 specific commands
       should no longer fail on startup.
     Bugfix: code should now work correctly on targets that do not allow
@@ -58,7 +58,7 @@
       user-level changes (not necessarily the plugin API very strictly
       at this time, due to its documented state of flux).
 
-1.8.0 - 2012-02-04
+1.8.0 - 2013-02-04
 
     Start of new stable series, 1.8.x will mostly be just bugfixes.
     This entry is just a highlight of the changes from 1.6.x -> 1.8.x.
@@ -155,7 +155,7 @@
        headers are now moved from <gdnsd-foo.h> to <gdnsd/foo.h>.
      Many other less-notable small changes and fixes...
 
-1.7.8 - 2012-01-30
+1.7.8 - 2013-01-30
     Linux inotify() support in the zonefile scanner now no longer depends
       on glibc 2.13 headers (still requires runtime kernel >= 2.6.36).
     Failure to bind() to an address picked up by default getifaddrs()
@@ -175,7 +175,7 @@
     Fail during configure on CPUs that require aligned access
     Various minor code/doc fixups
 
-1.7.7 - 2012-01-22
+1.7.7 - 2013-01-22
     Testsuite bugfix for hosts without a GeoIP database installed
       in the usual location
     Linux sendmmsg() compatibility stuff, for hosts with 3.x
@@ -183,7 +183,7 @@
     RPM specfiles updated
     Various minor code/doc fixups
 
-1.7.6 - 2012-01-17
+1.7.6 - 2013-01-17
     Fix for gdnsd_geoip_test breakage (1.7.5 system paths stuff)
     In system paths mode, we no longer attempt to create a missing
       config dir or subdirectories thereof.  In chroot mode we still
@@ -200,7 +200,7 @@
         databases just by luck and circumstance.
     A few other small bugfixes, docfixes, quality stuff.
 
-1.7.5 - 2012-01-10
+1.7.5 - 2013-01-10
     The forced chroot mode that has been the default for most of
       1.7.x has now been made optional.  The default default
       is now "-d system", which triggers the use of system paths
