@@ -65,7 +65,7 @@ typedef enum {
 
 typedef struct {
     anysin_t* asin;
-    char read_buffer[8];
+    char read_buffer[9];
     struct iovec outbufs[2];
     char* hdr_buf;
     char* data_buf;
@@ -124,6 +124,39 @@ static const char csv_fixed[] =
     "tcp_reqs,tcp_recvfail,tcp_sendfail\r\n"
     "%" PRIuPTR ",%" PRIuPTR ",%" PRIuPTR "\r\n";
 
+static const char json_fixed[] =
+    "{\r\n"
+    "\t\"uptime\": %" PRIu64 ",\r\n"
+    "\t\"stats\": {\r\n"
+    "\t\t\"noerror\": %" PRIuPTR ",\r\n"
+    "\t\t\"refused\": %" PRIuPTR ",\r\n"
+    "\t\t\"nxdomain\": %" PRIuPTR ",\r\n"
+    "\t\t\"notimp\": %" PRIuPTR ",\r\n"
+    "\t\t\"badvers\": %" PRIuPTR ",\r\n"
+    "\t\t\"formerr\": %" PRIuPTR ",\r\n"
+    "\t\t\"dropped\": %" PRIuPTR ",\r\n"
+    "\t\t\"v6\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns_clientsub\": %" PRIuPTR "\r\n"
+    "\t},\r\n"
+    "\t\"udp\": {\r\n"
+    "\t\t\"reqs\": %" PRIuPTR ",\r\n"
+    "\t\t\"recvfail\": %" PRIuPTR ",\r\n"
+    "\t\t\"sendfail\": %" PRIuPTR ",\r\n"
+    "\t\t\"tc\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns_big\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns_tc\": %" PRIuPTR "\r\n"
+    "\t},\r\n"
+    "\t\"tcp\": {\r\n"
+    "\t\t\"reqs\": %" PRIuPTR ",\r\n"
+    "\t\t\"recvfail\": %" PRIuPTR ",\r\n"
+    "\t\t\"sendfail\": %" PRIuPTR "\r\n"
+    "\t}";
+
+static const char json_more[] = ",\r\n";
+static const char json_nl[] = "\r\n";
+static const char json_footer[] = "}\r\n";
+
 static const char html_fixed[] =
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n"
     "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\r\n"
@@ -154,6 +187,7 @@ static const char html_fixed[] =
 
 static const char html_footer[] =
     "<p>For machine-readable CSV output, use <a href='/csv'>/csv</a></p>\r\n"
+    "<p>For machine-readable JSON output, use <a href='/json'>/json</a></p>\r\n"
     "</body></html>\r\n";
 
 static time_t start_time;
@@ -271,6 +305,21 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs) {
 }
 
 F_NONNULL
+static void statio_fill_outbuf_json(struct iovec* outbufs) {
+    dmn_assert(outbufs);
+    populate_stats();
+
+    dmn_assert(pop_statio_time >= start_time);
+
+    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, json_fixed, (uint64_t)pop_statio_time - start_time, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
+
+    outbufs[1].iov_len += monio_stats_out_json(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
+    memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_footer, (sizeof(json_footer)) - 1);
+    outbufs[1].iov_len += (sizeof(json_footer)-1);
+    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/json", (unsigned)outbufs[1].iov_len);
+}
+
+F_NONNULL
 static void statio_fill_outbuf_html(struct iovec* outbufs) {
     dmn_assert(outbufs);
     populate_stats();
@@ -316,6 +365,8 @@ static void process_http_query(char* inbuffer, struct iovec* outbufs) {
         statio_fill_outbuf_html(outbufs);
     else if(!memcmp(inbuffer, "GET /csv", 8))
         statio_fill_outbuf_csv(outbufs);
+    else if(!memcmp(inbuffer, "GET /json", 9))
+        statio_fill_outbuf_json(outbufs);
     else
         statio_fill_outbuf_404(outbufs);
 }
@@ -424,9 +475,9 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
         return;
     }
 
-    if(likely(tdata->read_done < 8)) {
+    if(likely(tdata->read_done < 9)) {
         char* destination = &tdata->read_buffer[tdata->read_done];
-        const size_t wanted = 8 - tdata->read_done;
+        const size_t wanted = 9 - tdata->read_done;
         ssize_t recvlen = recv(io->fd, destination, wanted, 0);
         if(unlikely(recvlen == -1)) {
             if(errno != EAGAIN && errno != EINTR) {
@@ -436,7 +487,7 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
             return;
         }
         tdata->read_done += recvlen;
-        if(tdata->read_done < 8) return;
+        if(tdata->read_done < 9) return;
     }
 
     // We're relying on the OS to buffer the rest of the request while

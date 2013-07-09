@@ -307,6 +307,16 @@ static unsigned csv_head_len = sizeof(csv_head) - 1;
 
 static const char csv_tmpl[] = "%s,%s\r\n";
 
+static const char json_head[] = "\t\"services\": [\r\n";
+static unsigned json_head_len = sizeof(json_head) - 1;
+static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\"\r\n\t\t}";
+static const char json_sep[] = ",\r\n";
+static unsigned json_sep_len = sizeof(json_sep) - 1;
+static const char json_nl[] = "\r\n";
+static unsigned json_nl_len = sizeof(json_nl) - 1;
+static const char json_foot[] = "\r\n\t]\r\n";
+static unsigned json_foot_len = sizeof(json_foot) - 1;
+
 static const char* state_txt[4] = {
     "UNINIT", // should be unused in practice due to startup ordering
     "DOWN",
@@ -383,6 +393,46 @@ unsigned monio_stats_out_csv(char* buf) {
         buf += written;
         avail -= written;
     }
+
+    return (buf - buf_start);
+}
+
+unsigned monio_stats_out_json(char* buf) {
+    dmn_assert(buf);
+
+    const char* const buf_start = buf;
+
+    if(num_mons == 0 ) {
+        memcpy(buf, json_nl, json_nl_len);
+        buf += json_nl_len;
+        return (buf - buf_start);
+    } else {
+        memcpy(buf, json_sep, json_sep_len);
+        buf += json_sep_len;
+    }
+
+    dmn_assert(max_stats_len);
+    int avail = max_stats_len;
+
+    memcpy(buf, json_head, json_head_len);
+    buf += json_head_len;
+    avail -= json_head_len;
+
+    for(unsigned i = 0; i < num_mons; i++) {
+        mon_state_uint_t st = stats_get(mons[i]->mon_state_ptrs[0]);
+        int written = snprintf(buf, avail, json_tmpl, mons[i]->desc, state_txt[st]);
+        if(unlikely(written >= avail || avail < (int)json_foot_len))
+            log_fatal("BUG: monio stats buf miscalculated");
+        buf += written;
+        avail -= written;
+        if( i < num_mons -1 ) {
+            memcpy(buf, json_sep, json_sep_len);
+            buf += json_sep_len;
+        }
+    }
+
+    memcpy(buf, json_foot, json_foot_len);
+    buf += json_foot_len;
 
     return (buf - buf_start);
 }
