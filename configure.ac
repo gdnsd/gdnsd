@@ -1,10 +1,14 @@
-AC_PREREQ([2.68])
-AC_INIT([gdnsd],[1.8.3],[blblack@gmail.com],[gdnsd],[https://github.com/blblack/gdnsd])
+AC_PREREQ([2.63])
+AC_INIT([gdnsd],[1.8.3],[blblack@gmail.com],[gdnsd])
 AC_CONFIG_SRCDIR([gdnsd/main.c])
 AC_CONFIG_AUX_DIR([acaux])
-AM_INIT_AUTOMAKE([1.11.3 dist-xz no-dist-gzip foreign tar-ustar -Wall])
+AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
+
+# For autoconf < 2.63b this has to be manual, but this is the "right" name
+#   to use for the 2.63b+ AC_INIT version of the same
+AC_DEFINE([PACKAGE_URL],["https://github.com/blblack/gdnsd/"],[Package URL])
 
 dnl TODO: when/if a new autoconf release has a C11 macro,
 dnl    prefer that and fall back to requiring C99.
@@ -32,8 +36,9 @@ CC="$PTHREAD_CC"
 dnl need to know endian-ness
 AC_C_BIGENDIAN
 
-dnl Apparently libtool+automake need this now...
-AM_PROG_AR
+dnl Apparently libtool+automake need this now, in newer versions
+dnl   which have it at all
+m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 
 dnl The libtool macros in 2.2.6b - 2.4.2 have a bug that causes
 dnl  them to accidentally add LIBADD_DLOPEN to LIBS permanently,
@@ -41,7 +46,7 @@ dnl  so we workaround that by saving and restoring LIBS
 XLIBS=$LIBS
 AC_DISABLE_STATIC
 LT_INIT([dlopen])
-LT_PREREQ([2.4.2])
+LT_PREREQ([2.2.6])
 LT_LIB_DLLOAD
 AC_SUBST([LIBTOOL_DEPS])
 AC_SUBST([LIBADD_DLOPEN])
