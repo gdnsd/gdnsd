@@ -1,3 +1,14 @@
+1.9.0 - 2013-07-09
+    Added support for the new IANA-assigned edns-client-subnet option
+      code, while keeping backwards compatibility with the deprecated
+      experimental option code as well.
+    JSON output format added to the HTTP stats stuff at /json (Tom Walsh)
+    Autotools dependencies lowered (ac-2.63, am-1.11.1, lt-2.2.6)
+    Bugfixes:
+      Weighted plugin didn't always do whole-datacenter failover correctly
+        when used as a sub-plugin for e.g. metafo/geoip (Alexander Clouter)
+      RPM specfiles updated for various package bugs (Matthias Saou)
+
 1.8.3 - 2013-05-30
     Bugfix: bad default rootdir; did not start without explicit "-d".
       This bug was introduced in 1.8.2, and breaks most normal use-cases,
