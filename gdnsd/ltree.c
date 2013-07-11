@@ -249,9 +249,10 @@ static ltree_rrset_ ## _typ ## _t* ltree_node_add_rrset_ ## _nam (ltree_node_t* 
     ltree_rrset_t** store_at = &node->rrsets;\
     while(*store_at)\
         store_at = &(*store_at)->gen.next;\
-    *store_at = calloc(1, sizeof(ltree_rrset_ ## _typ ## _t));\
+    ltree_rrset_ ## _typ ## _t* nrr = calloc(1, sizeof(ltree_rrset_ ## _typ ## _t));\
+    *store_at = (ltree_rrset_t*)nrr;\
     (*store_at)->gen.type = _dtyp;\
-    return &(*store_at)-> _typ;\
+    return nrr;\
 }
 
 MK_RRSET_ADD(addr, addr, DNS_TYPE_A)
@@ -634,6 +635,9 @@ bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, unsigned num
     }
     tcopy[num_texts] = NULL;
 
+    // clang flags this as a leak if add_rec_spf() succeeds, but
+    //   it really isn't.  The "leak" is consumed permanently by
+    //   add_rec_spf() storage into its rrset.
     if(ltree_add_rec_spf(zone, dname, num_texts, tcopy, ttl)) {
         for(unsigned i = 0; i < num_texts; i++)
             free(tcopy[i]);
@@ -687,9 +691,10 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, u
     ltree_rrset_t** store_at = &node->rrsets;
     while(*store_at)
         store_at = &(*store_at)->gen.next;
-    *store_at = calloc(1, sizeof(ltree_rrset_rfc3597_t));
+    ltree_rrset_rfc3597_t* nrr = calloc(1, sizeof(ltree_rrset_rfc3597_t));
+    *store_at = (ltree_rrset_t*)nrr;
     (*store_at)->gen.type = rrtype;
-    return &(*store_at)->rfc3597;
+    return nrr;
 }
 
 

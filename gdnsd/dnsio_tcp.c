@@ -432,7 +432,7 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
     pthread_cleanup_push(thread_clean, NULL);
 
     struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));
-    struct ev_check* check_watcher = malloc(sizeof(struct ev_prepare));
+    struct ev_check* check_watcher = malloc(sizeof(struct ev_check));
     ev_prepare_init(prep_watcher, ztstate_offline);
     ev_check_init(check_watcher, ztstate_online);
     ev_set_priority(check_watcher, EV_MAXPRI);

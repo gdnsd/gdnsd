@@ -1231,8 +1231,11 @@ F_NONNULL F_PURE \
 static const ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _nam (const ltree_node_t* node) {\
     dmn_assert(node);\
     const ltree_rrset_t* rrsets = node->rrsets;\
-    while(rrsets->gen.type != _dtyp)\
+    dmn_assert(rrsets);\
+    while(rrsets->gen.type != _dtyp) {\
         rrsets = rrsets->gen.next;\
+        dmn_assert(rrsets);\
+    }\
     return &rrsets-> _typ;\
 }
 MK_RRSET_GET(soa, soa, DNS_TYPE_SOA)

@@ -121,7 +121,7 @@ dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigne
     if(nchild) {
         dcmap->num_children = nchild;
         dcmap->child_names = calloc(nchild, sizeof(char*));
-        dcmap->child_dclists = calloc(nchild, sizeof(unsigned));
+        dcmap->child_dclists = calloc(nchild, sizeof(int));
         dcmap->child_dcmaps = calloc(nchild, sizeof(dcmap_t*));
         dcmap_iter_data did = {
             .child_num = 0,
