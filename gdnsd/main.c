@@ -89,6 +89,7 @@ static void hup_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w V_UNUS
 
     log_debug("Received SIGHUP");
     // these functions should log_info() that they're taking SIGHUP actions, as appropriate
+    zsrc_djb_sighup();
     zsrc_rfc1035_sighup();
 }
 
