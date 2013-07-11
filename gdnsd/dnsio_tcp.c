@@ -207,7 +207,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
     }
 
     ev_io_stop(loop, tdata->read_watcher);
-    *(uint16_t*)tdata->buffer = htons(tdata->size);
+    gdnsd_put_una16(htons(tdata->size), tdata->buffer);
     tdata->size += 2;
     tdata->size_done = 0;
     tdata->state = WRITING;
@@ -432,7 +432,7 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
     pthread_cleanup_push(thread_clean, NULL);
 
     struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));
-    struct ev_check* check_watcher = malloc(sizeof(struct ev_prepare));
+    struct ev_check* check_watcher = malloc(sizeof(struct ev_check));
     ev_prepare_init(prep_watcher, ztstate_offline);
     ev_check_init(check_watcher, ztstate_online);
     ev_set_priority(check_watcher, EV_MAXPRI);

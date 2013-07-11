@@ -74,7 +74,7 @@ static dnhash_t* dnhash_new(void) {
     dnhash_t* rv = malloc(sizeof(dnhash_t));
     rv->count = 0;
     rv->mask = INIT_DNHASH_MASK;
-    rv->table = calloc(INIT_DNHASH_MASK + 1U, sizeof(uint8_t**));
+    rv->table = calloc(INIT_DNHASH_MASK + 1U, sizeof(uint8_t*));
     return rv;
 }
 
@@ -97,7 +97,7 @@ static void dnhash_grow(dnhash_t* dnhash) {
     const uint8_t** old_table = dnhash->table;
     const unsigned old_mask = dnhash->mask;
     const unsigned new_mask = (old_mask << 1U) | 1U;
-    const uint8_t** new_table = calloc(new_mask + 1U, sizeof(uint8_t**));
+    const uint8_t** new_table = calloc(new_mask + 1U, sizeof(uint8_t*));
     for(unsigned i = 0; i <= old_mask; i++) {
         const uint8_t* item = old_table[i];
         if(item) {

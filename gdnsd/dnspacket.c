@@ -1190,6 +1190,9 @@ static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, 
             case DNS_TYPE_SOA:
                 offset = encode_rr_soa(c, offset, (const void*)rrset, true);
                 break;
+            case DNS_TYPE_CNAME:
+                offset = encode_rr_cname(c, offset, (const void*)rrset, true);
+                break;
             case DNS_TYPE_NS:
                 offset = encode_rrs_ns(c, offset, (const void*)rrset, true);
                 break;
@@ -1231,8 +1234,11 @@ F_NONNULL F_PURE \
 static const ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _nam (const ltree_node_t* node) {\
     dmn_assert(node);\
     const ltree_rrset_t* rrsets = node->rrsets;\
-    while(rrsets->gen.type != _dtyp)\
+    dmn_assert(rrsets);\
+    while(rrsets->gen.type != _dtyp) {\
         rrsets = rrsets->gen.next;\
+        dmn_assert(rrsets);\
+    }\
     return &rrsets-> _typ;\
 }
 MK_RRSET_GET(soa, soa, DNS_TYPE_SOA)
@@ -1656,8 +1662,12 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
         //  for the normal response handling code below.  The explicit check of the first
         //  rrsets entry works because if CNAME exists at all, by definition it is the only
         //  type of rrset at this node.
-        while(resdom && resdom->rrsets
-            && resdom->rrsets->gen.type == DNS_TYPE_CNAME && c->qtype != DNS_TYPE_CNAME) {
+        while(resdom
+            && resdom->rrsets
+            && resdom->rrsets->gen.type == DNS_TYPE_CNAME
+            && c->qtype != DNS_TYPE_CNAME
+            && c->qtype != DNS_TYPE_ANY) {
+
             dmn_assert(status == DNAME_AUTH);
 
             res_hdr->flags1 |= 4; // AA bit
