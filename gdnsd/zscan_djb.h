@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2013 Timo Teräs <timo.teras@iki.fi>
  *
  * This file is part of gdnsd.
  *
@@ -17,17 +17,22 @@
  *
  */
 
-#ifndef GDNSD_ZSRC_DJB_H
-#define GDNSD_ZSRC_DJB_H
+#ifndef GDNSD_ZSCAN_DJB_H
+#define GDNSD_ZSCAN_DJB_H
 
 #include "config.h"
-#include "ztree.h"
 
-void zsrc_djb_load_zones(void);
+typedef struct _zscan_djb_zonedata {
+    zone_t* zone;
+    int marked;
+    struct _zscan_djb_zonedata* next;
+} zscan_djb_zonedata_t;
 
-F_NONNULL
-void zsrc_djb_runtime_init(struct ev_loop* loop);
+void zscan_djbzone_add(zscan_djb_zonedata_t**, zone_t *zone);
+zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t*, const uint8_t*, int);
+void zscan_djbzone_free(zscan_djb_zonedata_t**);
 
-void zsrc_djb_sighup(void);
+F_WUNUSED F_NONNULL
+bool zscan_djb(const char* djb_path, zscan_djb_zonedata_t** zonedata);
 
-#endif // GDNSD_ZSRC_DJB_H
+#endif // GDNSD_ZSCAN_DJB_H

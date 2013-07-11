@@ -526,9 +526,14 @@ static ztree_t* ztree_clone(const ztree_t* original) {
 
     ztree_t* ztclone = malloc(sizeof(ztree_t));
     ztclone->label = original->label;
-    ztclone->zones = malloc(original->zones_len * sizeof(zone_t*));
-    memcpy(ztclone->zones, original->zones, original->zones_len * sizeof(zone_t*));
-    ztclone->zones_len = original->zones_len;
+    if  (original->zones) {
+        ztclone->zones = malloc(original->zones_len * sizeof(zone_t*));
+        memcpy(ztclone->zones, original->zones, original->zones_len * sizeof(zone_t*));
+        ztclone->zones_len = original->zones_len;
+    } else {
+        ztclone->zones = NULL;
+        ztclone->zones_len = 0;
+    }
     ztchildren_t* old_ztc = original->children;
     if(old_ztc) {
         ztchildren_t* new_ztc = ztclone->children = calloc(1, sizeof(ztchildren_t));

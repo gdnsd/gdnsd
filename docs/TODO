@@ -161,12 +161,12 @@ Other zonefile formats:
 -------------------------
 Load other zonefile (or zone data in general) formats?  The BIND syntax
 sucks, but I'm keeping it as the default, it's too widespread not to.
-However, the zonefile scanner is mostly cleanly separated from the rest
-of the code, and it wouldn't be that hard to add support for more
-formats (djbdns? a SQL connection?).  Update: the core code is
-basically ready for this.  I even created a mostly-empty zsrc_djb.c
-file since that's likely the first/easiest target.  Just needs
-implementation.
+
+Additionally, the djbdns style zone files are also supported.
+
+As the zonefile scanner is mostly cleanly separated from the rest of
+the code, additional zonefile formats (e.g. SQL backend) should not
+be too hard to implement.
 
 Stuff from conversations w/ Paul Dekkers: --------
 
