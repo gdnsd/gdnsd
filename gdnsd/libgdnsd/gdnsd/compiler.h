@@ -71,14 +71,16 @@
 #  define F_WUNUSED
 #endif
 
+// This is a GCC-ism which also seems to be supported
+//    by other common compilers on our platforms.  If it
+//    breaks for you, please file a bug report and we'll
+//    find a way to fix it.
+#define S_PACKED __attribute__((__packed__))
+
 // Unaligned memory access stuff
-// Note this implicitly relies on GCC's packed attribute,
-//   which is probably ok, as some other compilers support
-//   it as well.  Could include future autoconf checks
-//   and/or support for other compilers later if warranted.
 #include <inttypes.h>
-struct _gdnsd_una16 { uint16_t x; } __attribute__((__packed__));
-struct _gdnsd_una32 { uint32_t x; } __attribute__((__packed__));
+struct _gdnsd_una16 { uint16_t x; } S_PACKED;
+struct _gdnsd_una32 { uint32_t x; } S_PACKED;
 #define gdnsd_get_una16(_p) (((const struct _gdnsd_una16*)(_p))->x)
 #define gdnsd_get_una32(_p) (((const struct _gdnsd_una32*)(_p))->x)
 #define gdnsd_put_una16(_v,_p) (((struct _gdnsd_una16*)(_p))->x) = (_v)

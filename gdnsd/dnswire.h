@@ -41,7 +41,7 @@
 /*** Wire formats ***/
 
 /* DNS Header */
-typedef struct {
+typedef struct S_PACKED {
     uint16_t id;
     uint8_t flags1;
     uint8_t flags2;
@@ -51,19 +51,11 @@ typedef struct {
     uint16_t arcount;
 } wire_dns_header_t;
 
-/* DNS RR fixed part (generic) */
-typedef struct {
-    uint16_t type;
-    uint16_t class;
-    uint32_t ttl;
-    // left out rdatalen, but don't forget it in code: uint16_t rdata_len;
-} wire_dns_rr_fixed_t;
-
 /* DNS OPT RR for EDNS0 */
 /* (for basic EDNS0, it's a fixed structure) */
 /* Note the initial one-bye NULL domainname
  * is left out */
-typedef struct {
+typedef struct S_PACKED {
     uint16_t type;
     uint16_t maxsize;
     uint32_t extflags;
@@ -78,7 +70,7 @@ typedef struct {
 #define sizeof_optrr 10
 
 /* macros to pull data from wire_dns_header */
-#define DNSH_GET_ID(_h)      (ntohs(gdnsd_get_una16(&(_h)->id)))
+#define DNSH_GET_ID(_h)      (ntohs((_h)->id))
 #define DNSH_GET_QR(_h)      ((_h)->flags1 & 0x80)
 // technically one must >> 3 to get the real opcode
 //  but we only really care whether it's zero or not
@@ -90,10 +82,10 @@ typedef struct {
 #define DNSH_GET_AD(_h)      ((_h)->flags2 & 0x20)
 #define DNSH_GET_CD(_h)      ((_h)->flags2 & 0x10)
 #define DNSH_GET_RCODE(_h)   ((_h)->flags2 & 0x0F)
-#define DNSH_GET_QDCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->qdcount)))
-#define DNSH_GET_ANCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->ancount)))
-#define DNSH_GET_NSCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->nscount)))
-#define DNSH_GET_ARCOUNT(_h) (ntohs(gdnsd_get_una16(&(_h)->arcount)))
+#define DNSH_GET_QDCOUNT(_h) (ntohs((_h)->qdcount))
+#define DNSH_GET_ANCOUNT(_h) (ntohs((_h)->ancount))
+#define DNSH_GET_NSCOUNT(_h) (ntohs((_h)->nscount))
+#define DNSH_GET_ARCOUNT(_h) (ntohs((_h)->arcount))
 
 /* DNS Response Codes */
 #define DNS_RCODE_NOERROR 0
@@ -105,10 +97,10 @@ typedef struct {
 #define DNS_EXT_RCODE_BADVERS 1
 
 /* Macros to pull data from wire_dns_rr_opt */
-#define DNS_OPTRR_GET_TYPE(_r)     (ntohs(gdnsd_get_una16(&(_r)->type)))
-#define DNS_OPTRR_GET_MAXSIZE(_r)  (ntohs(gdnsd_get_una16(&(_r)->maxsize)))
-#define DNS_OPTRR_GET_EXTRCODE(_r) ((uint8_t)(ntohl(gdnsd_get_una32(&(_r)->extflags)) >> 24))
-#define DNS_OPTRR_GET_VERSION(_r)  ((uint8_t)((ntohl(gdnsd_get_una32(&(_r)->extflags)) & 0x00FF0000) >> 16))
+#define DNS_OPTRR_GET_TYPE(_r)     (ntohs((_r)->type))
+#define DNS_OPTRR_GET_MAXSIZE(_r)  (ntohs((_r)->maxsize))
+#define DNS_OPTRR_GET_EXTRCODE(_r) ((uint8_t)(ntohl((_r)->extflags) >> 24))
+#define DNS_OPTRR_GET_VERSION(_r)  ((uint8_t)((ntohl((_r)->extflags) & 0x00FF0000) >> 16))
 
 // The second one here should be removed, eventually...
 #define EDNS_CLIENTSUB_OPTCODE_IANA 0x0008

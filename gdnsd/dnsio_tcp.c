@@ -207,7 +207,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
     }
 
     ev_io_stop(loop, tdata->read_watcher);
-    *(uint16_t*)tdata->buffer = htons(tdata->size);
+    gdnsd_put_una16(htons(tdata->size), tdata->buffer);
     tdata->size += 2;
     tdata->size_done = 0;
     tdata->state = WRITING;
