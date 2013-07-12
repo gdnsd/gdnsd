@@ -1,0 +1,4 @@
+Zexample.com:a.ns.example.com:hostmaster.example.com::::::86400
+&example.com:192.0.2.1:a.ns.example.com.:86400
+&example.com:192.0.2.2:b.ns.example.com.:86400
+=foo.example.com:192.0.2.100:86400
