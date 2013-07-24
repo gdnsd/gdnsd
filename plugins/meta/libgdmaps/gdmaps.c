@@ -276,9 +276,15 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
     const vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path, &vscf_err);
     nlist_t* new_list = NULL;
     if(nets_cfg) {
-        new_list = nets_make_list(nets_cfg, update_dclists, gdmap->name);
-        if(!new_list)
-            log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed!", gdmap->name, logf_pathname(gdmap->nets_path));
+        if(vscf_is_hash(nets_cfg)) {
+            new_list = nets_make_list(nets_cfg, update_dclists, gdmap->name);
+            if(!new_list)
+                log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed!", gdmap->name, logf_pathname(gdmap->nets_path));
+        }
+        else {
+            dmn_assert(vscf_is_array(nets_cfg));
+            log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed: file cannot be an array of values", gdmap->name, logf_pathname(gdmap->nets_path));
+        }
         vscf_destroy(nets_cfg);
     }
     else {

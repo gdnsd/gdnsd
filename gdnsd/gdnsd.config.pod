@@ -16,6 +16,8 @@ gdnsd.config - gdnsd configuration file
 
   service_types => {
     foosvc => { vhost => www.example.com, url_path => "/checkme" }
+    barsvc => $include{bar-svc.cfg}
+    $include{other-services.cfg}
   }
 
   plugins => {
@@ -800,7 +802,8 @@ In the unquoted form, there are no surrounding quotes, and the allowed
 set of unescaped characters is further restricted.  The following are
 not allowed: C<][}{;#,"=\> (that is, square brackets, curly brackets,
 semicolons, octothorpes, commas, double quotes, equal signs, and
-backslashes).
+backslashes).  Additionally, the first character cannot be a C<$>
+(dollar sign).
 
 Both forms use the same escaping rules, which are the same RFC-standard
 escaping rules used in zone files.  The escapes always start with C<\>.
@@ -832,7 +835,10 @@ strings show different encodings of the same parsed value:
   \\\=\=\=
   \092\=\=\=
 
-The top level of the config file is an implicit hash with no bracing.
+The top level of the config file is an implicit hash with no bracing
+by default, but can also be an array bounded by square brackets.  This
+is not legal for the primary gdnsd configuration file, but could be
+useful in includefiles (see below).
 
 As a general rule, anywhere the higher-level syntax allows an array of
 values, you can substitute a single value.  The code will treat it as
@@ -864,6 +870,70 @@ Example 2 (fat arrows, no commas, some arbitrary quoting):
 Example 3 (compressed and ugly):
 
   options={listen=[192.0.2.1 192.0.2.2]http_listen=127.0.0.1}
+
+=head1 INCLUDING OTHER FILES
+
+vscf now has a mechanism for config includefiles.  The syntax is
+
+  $include{filename}
+
+where C<filename> can use the same kinds of escaping and/or
+double-quoting as normal scalar string data.  Whitespace between
+the filename and the surrounding brackets is optional.  Whitespace
+between C<$include> and the following C<{> is not.  If the filename
+is relative (does not begin with F</>), it is interpreted as
+relative to the directory containing the parent file.  Include files
+can nest other include files to arbitrary depth.
+
+Keep in mind that at the top level of any given vscf file (even
+include files), the file must syntactically be either an implicit
+hash or an explicit, square-bracket-bounded, array.
+
+The include statement can be used in two distinct contexts within
+the syntax structure of a config file:
+
+=over 4
+
+=item B<Value Context>
+
+The include statement can replace any whole value (that is, the right
+hand side of a hash map entry or a member of an array) with its own
+contents, which are either a hash or an array.  Note that there is no
+mechanism for flattening an include-file's array into the parent array
+(the whole included array would be a single array item within the parent
+array).  Examples:
+
+  main config:
+    options => { listen => $include{foo} }
+  foo:
+    [ 127.0.0.1, 127.0.0.2 ]
+
+  main config:
+    plugins => $include{ "bar" }
+  bar:
+    geoip => { ... }
+    extmon => { ... }
+
+=item B<Hash-Merge Context>
+
+The include statement can also appear in a hash where a key would
+normally be expected.  In this case, the included file must be in hash
+(rather than array) form at the top level, and its contents are merged
+into the parent hash.  Example:
+
+  main config:
+    options => { ... },
+    plugins => {
+        extmon => { ... },
+        metafo => { ... },
+        $include{geoip_cfg},
+        simplefo => { ... }
+    }
+  geoip_cfg:
+    geoip => { ... },
+    weighted => { ... }
+
+=back
 
 =head1 SEE ALSO
 

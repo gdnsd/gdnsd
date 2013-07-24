@@ -3,8 +3,5 @@ options => {
   http_listen => @http_lspec@
   dns_port => @dns_port@
   http_port => @http_port@
-  zones_default_ttl = 21600
-  realtime_stats = true
-  max_response = 62464
-  chaos_response = "some random string"
+  $include{cfg-static}
 }
