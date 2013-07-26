@@ -9,7 +9,7 @@ use Test::More tests => 10;
 # slow-start on slow-fs for change detection accuracy
 delete $ENV{GDNSD_TESTSUITE_NO_ZONEFILE_MODS};
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 # example.com exists from the start
 _GDT->test_dns(

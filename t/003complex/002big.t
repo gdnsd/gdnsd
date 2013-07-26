@@ -6,7 +6,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 14;
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 $optrr = Net::DNS::RR->new(
     type => "OPT",

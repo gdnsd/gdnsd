@@ -7,7 +7,7 @@ use File::Spec ();
 use Net::DNS;
 use Test::More tests => 8;
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd006.conf'));
+my $pid = _GDT->test_spawn_daemon('etc006');
 
 _GDT->test_dns(
     qname => 'ns1.example.com', qtype => 'A',

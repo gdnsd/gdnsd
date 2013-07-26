@@ -6,7 +6,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 5;
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 my $chaos1 = Net::DNS::Packet->new();
 $chaos1->push('question', Net::DNS::Question->new('example.com', 'TXT', 'CH'));

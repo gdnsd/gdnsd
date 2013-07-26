@@ -8,7 +8,7 @@ use Test::More tests => 17;
 
 my $standard_soa = 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 {   # more than one question
     my $qpacket = Net::DNS::Packet->new();

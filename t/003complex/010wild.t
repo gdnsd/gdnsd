@@ -8,7 +8,7 @@ use Test::More tests => 9;
 
 my $standard_soa = 'example.org 43200 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120';
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'xxx.example.org', qtype => 'AAAA',

@@ -35,20 +35,16 @@ typedef struct {
     const unsigned     len;
 } vscf_key_t;
 
-// Invokes the scanner, returning the root-level hash on success
+// Invokes the scanner, returning the root-level hash or array on success
 // On error, NULL is returned, and *err is set to a newly allocated
 //  string containing a specific error message.  If you plan to
 //  continue execution you should free this string to avoid leaks.
 F_NONNULL
 const vscf_data_t* vscf_scan_filename(const char* fn, char** err);
-F_NONNULL
-const vscf_data_t* vscf_scan_fd(int fd, const char* desc, char** err);
-F_NONNULL
-const vscf_data_t* vscf_scan_stream(FILE* stream, const char* desc, char** err);
 
 // Destroys (de-allocates) the entire tree of data returned by vscf_scan()
 //  Do not call on sub-elements, only on the value actually returned by vscf_scan().
-F_NONNULL
+// Passing a NULL argument is harmless
 void vscf_destroy(const vscf_data_t* d);
 
 /*

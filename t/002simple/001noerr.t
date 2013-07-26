@@ -21,7 +21,7 @@ my $standard_auth_addtl = [
     'ns4.goober.example.com 86400 A 192.0.2.8',
 ];
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'example.com', qtype => 'SOA',

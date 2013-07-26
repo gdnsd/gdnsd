@@ -63,7 +63,6 @@ my %SIGS;
 
 # Set up per-testfile output directory and zones input directory
 our $OUTDIR;
-our @ETCDIRS = qw/zones djbdns/; # created/populated as required by test data
 our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
 {
     my $tname = $FindBin::Bin;
@@ -245,15 +244,78 @@ sub check_stats {
     }
 }
 
+sub proc_tmpl {
+    my ($inpath, $outpath) = @_;
+
+    open(my $in_fh, '<', $inpath)
+        or die "Cannot open test template '$inpath' for reading: $!";
+    open(my $out_fh, '>', $outpath)
+        or die "Cannot open test template output '$outpath' for writing: $!";
+
+    my $dns_lspec = $HAVE_V6
+        ? qq{[ 127.0.0.1, ::1 ]}
+        : qq{127.0.0.1};
+
+    my $http_lspec = $HAVE_V6
+        ? qq{[ 127.0.0.1, ::1 ]}
+        : qq{127.0.0.1};
+
+    while(<$in_fh>) {
+        s/\@dns_lspec\@/$dns_lspec/g;
+        s/\@http_lspec\@/$http_lspec/g;
+        s/\@dns_port\@/$DNS_PORT/g;
+        s/\@http_port\@/$HTTP_PORT/g;
+        s/\@extra_port\@/$EXTRA_PORT/g;
+        s/\@pluginpath\@/$PLUGIN_PATH/g;
+        s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
+        print $out_fh $_;
+    }
+
+    close($in_fh) or die "Cannot close test template '$inpath': $!";
+    close($out_fh) or die "Cannot close test template output '$outpath': $!";
+}
+
+sub recursive_templated_copy {
+    my ($indir, $outdir) = @_;
+    if(opendir(my $dh, $indir)) {
+        if(!-d $outdir) {
+            mkdir $outdir or die "Cannot create directory $outdir: $!";
+        }
+        my @files_list = grep { !/^\./ && ! -d $_ } readdir($dh);
+        closedir($dh);
+        foreach my $f (@files_list) {
+            my $in_full = "$indir/$f";
+            my $out_full = "$outdir/$f";
+            if(-f $in_full) {
+                if($f =~ /^(.*)\.tmpl$/) {
+                    proc_tmpl($in_full, "$outdir/$1");
+                }
+                else {
+                    File::Copy::copy($in_full, $out_full)
+                        or die "Failed to copy '$in_full' to '$out_full': $!";
+                }
+            }
+            elsif(-d $in_full) {
+                recursive_templated_copy($in_full, $out_full);
+            }
+            else {
+                die "Test data file is not a regular file or directory: '$in_full'";
+            }
+        }
+    }
+}
+
 our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
 our $INOTIFY_ENABLED = 0;
 
 sub spawn_daemon {
-    my ($class, $cfgfile, $geoip_data) = @_;
+    my ($class, $etcsrc, $geoip_data) = @_;
+
+    $etcsrc ||= "etc";
 
     safe_rmtree($OUTDIR);
 
-    foreach my $d ($OUTDIR, "$OUTDIR/etc") {
+    foreach my $d ($OUTDIR, "${OUTDIR}/etc") {
         mkdir $d or die "Cannot create directory $d: $!";
     }
 
@@ -264,46 +326,7 @@ sub spawn_daemon {
         _FakeGeoIP::make_fake_geoip($gdir . "/FakeGeoIP.dat", $geoip_data);
     }
 
-    my $cfgout = $OUTDIR . '/etc/config';
-    open(my $orig_fh, '<', $cfgfile)
-        or die "Cannot open test configfile '$cfgfile' for reading: $!";
-    open(my $out_fh, '>', $cfgout)
-        or die "Cannot open test config text output '$cfgout' for writing: $!";
-
-    my $dns_lspec = $HAVE_V6
-        ? qq{[ 127.0.0.1, ::1 ]}
-        : qq{127.0.0.1};
-
-    my $http_lspec = $HAVE_V6
-        ? qq{[ 127.0.0.1, ::1 ]}
-        : qq{127.0.0.1};
-
-    while(<$orig_fh>) {
-        s/\@dns_lspec\@/$dns_lspec/g;
-        s/\@http_lspec\@/$http_lspec/g;
-        s/\@dns_port\@/$DNS_PORT/g;
-        s/\@http_port\@/$HTTP_PORT/g;
-        s/\@extra_port\@/$EXTRA_PORT/g;
-        s/\@pluginpath\@/$PLUGIN_PATH/g;
-        s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
-        print $out_fh $_;
-    }
-    close($orig_fh) or die "Cannot close test configfile '$cfgfile': $!";
-    close($out_fh) or die "Cannot close test config text output file '$cfgout': $!";
-
-    foreach my $etcdir (@ETCDIRS) {
-        my $indir = $FindBin::Bin . '/' . $etcdir . '/';
-        if(opendir(my $dh, $indir)) {
-            my @files_list = grep { !/^\./ && ! -d $_ } readdir($dh);
-            closedir($dh);
-            my $out_dir = $OUTDIR . '/etc/' . $etcdir . '/';
-            mkdir $out_dir or die "Cannot create directory $out_dir: $!";
-            foreach my $f (@files_list) {
-                File::Copy::copy("$indir/$f", $out_dir)
-                    or die "Failed to copy '$indir/$f' to test area '$out_dir': $!";
-            }
-        }
-    }
+    recursive_templated_copy("${FindBin::Bin}/${etcsrc}", "${OUTDIR}/etc");
 
     my $exec_line = $TEST_RUNNER
         ? qq{$TEST_RUNNER $GDNSD_BIN -d $OUTDIR startfg}

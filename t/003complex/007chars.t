@@ -6,7 +6,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 4;
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 # DNS's case and compression stuff sucks...
 _GDT->test_dns(

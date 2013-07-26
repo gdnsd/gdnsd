@@ -373,10 +373,86 @@ static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end) {
     dmn_assert(scnr);
     dmn_assert(scnr->tstart);
     dmn_assert(end);
-    unsigned rlen = end - scnr->tstart;
+    const unsigned rlen = end - scnr->tstart;
     vscf_simple_t* s = simple_new(scnr->tstart, rlen);
     scnr->tstart = NULL;
     return add_to_cur_container(scnr, (vscf_data_t*)s);
+}
+
+static void val_destroy(vscf_data_t* d);
+
+F_NONNULL
+static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
+    dmn_assert(scnr);
+    dmn_assert(scnr->tstart);
+    dmn_assert(end);
+
+    // raw scanner storage isn't NUL-terminated, so we copy to input_fn to terminate
+    const unsigned infn_len = end - scnr->tstart;
+    char input_fn[infn_len + 1];
+    memcpy(input_fn, scnr->tstart, infn_len);
+    input_fn[infn_len] = '\0';
+    scnr->tstart = NULL;
+
+    dmn_log_debug("found an include statement for '%s' within '%s'!", input_fn, scnr->fn);
+
+    char* final_scan_path = input_fn; // default, take it as it is
+    if(input_fn[0] != '/') { // relative path, make relative to including file if possible
+        const unsigned cur_fn_len = strlen(scnr->fn);
+        char path_temp[cur_fn_len + infn_len + 2]; // slightly oversized, who cares
+
+        // copy outer filename to temp storage
+        memcpy(path_temp, scnr->fn, cur_fn_len);
+        path_temp[cur_fn_len] = '\0';
+
+        // locate final slash to append input_fn after, or use start of string
+        //   This will break on literal slashes in filenames, but I think
+        //   I've made this assumption before and I could kinda care less about
+        //   people who do dumb things like that.
+        char* final_slash = strrchr(path_temp, '/');
+        if(final_slash) {
+            final_slash++;
+            memcpy(final_slash, input_fn, infn_len);
+            final_slash[infn_len] = '\0';
+            final_scan_path = strdup(path_temp);
+        }
+    }
+
+    char* inc_parse_err = NULL;
+    vscf_data_t* inc_data = (vscf_data_t*)vscf_scan_filename(final_scan_path, &inc_parse_err);
+    if(final_scan_path != input_fn)
+        free(final_scan_path);
+
+    if(!inc_data) {
+        dmn_assert(inc_parse_err);
+        parse_error("within included file: %s", inc_parse_err);
+        return false;
+    }
+
+    if(vscf_is_hash(scnr->cont) && !scnr->cur_key) { // this is hash-merge context
+        if(vscf_is_array(inc_data)) {
+            parse_error("Included file '%s' cannot be an array in this context", input_fn);
+            return false;
+        }
+        dmn_assert(vscf_is_hash(inc_data));
+
+        // destructively merge include stuff into parent, stealing values
+        for(unsigned i = 0; i < inc_data->hash.child_count; i++) {
+            vscf_hentry_t* inc_he = inc_data->hash.ordered[i];
+            if(!hash_add_val(inc_he->key, inc_he->klen, (vscf_hash_t*)scnr->cont, inc_he->val)) {
+               parse_error("Include file '%s' has duplicate key '%s' when merging into parent hash", input_fn, inc_he->key);
+               val_destroy(inc_data);
+               return false;
+            }
+            inc_he->val = NULL;
+        }
+        val_destroy(inc_data);
+    }
+    else { // value context
+        add_to_cur_container(scnr, inc_data);
+    }
+
+    return true;
 }
 
 F_NONNULL
@@ -422,20 +498,6 @@ static void simple_destroy(vscf_simple_t* s) {
 }
 
 F_NONNULL
-static void array_destroy(vscf_array_t* a);
-F_NONNULL
-static void hash_destroy(vscf_hash_t* h);
-
-F_NONNULL
-static void val_destroy(vscf_data_t* d) {
-    dmn_assert(d);
-    switch(d->type) {
-        case VSCF_HASH_T:   hash_destroy(&d->hash); break;
-        case VSCF_ARRAY_T:  array_destroy(&d->array); break;
-        case VSCF_SIMPLE_T: simple_destroy(&d->simple); break;
-    }
-}
-
 static void array_destroy(vscf_array_t* a) {
     dmn_assert(a);
     for(unsigned i = 0; i < a->len; i++)
@@ -444,6 +506,7 @@ static void array_destroy(vscf_array_t* a) {
     free(a);
 }
 
+F_NONNULL
 static void hash_destroy(vscf_hash_t* h) {
     dmn_assert(h);
     for(unsigned i = 0; i < h->child_count; i++) {
@@ -455,6 +518,16 @@ static void hash_destroy(vscf_hash_t* h) {
     free(h->children);
     free(h->ordered);
     free(h);
+}
+
+static void val_destroy(vscf_data_t* d) {
+    if(d) {
+        switch(d->type) {
+            case VSCF_HASH_T:   hash_destroy(&d->hash); break;
+            case VSCF_ARRAY_T:  array_destroy(&d->array); break;
+            case VSCF_SIMPLE_T: simple_destroy(&d->simple); break;
+        }
+    }
 }
 
 /************************************/
@@ -506,11 +579,16 @@ static void hash_destroy(vscf_hash_t* h) {
     #  charater-srings
     chr     = [^}{;# \t\r\n,"=\\] - (']'|'[');
 
+    # The set of characters allowed as the *first* character in
+    #  unquoted character-strings ($ is additionally excluded to
+    #  differentiate special keywords)
+    fchr    = chr - '$';
+
     # quoted/unquoted character-strings.  The "$1 %0" construct
     #  here prevents some ambiguities on exiting an unquoted string,
     #  forcing the parser to prefer staying in the string over other
     #  alternatives.
-    unquoted = (chr | escapes)+ $1 %0;
+    unquoted = ((fchr | escapes) (chr | escapes)*) $1 %0;
     quoted   = ('"' ([^"\r\n\\]|escapes|nl)* '"');
 
     # Keys and Values are both character-strings, and either can
@@ -544,17 +622,46 @@ static void hash_destroy(vscf_hash_t* h) {
         fret;
     }
 
+    action top_array {
+        dmn_assert(scnr->cont); // outermost
+        dmn_assert(scnr->cont_stack_top == -1); // outermost
+        dmn_assert(vscf_is_hash(scnr->cont)); // default hash
+        hash_destroy((vscf_hash_t*)scnr->cont);
+        scnr->cont = (vscf_data_t*)array_new();
+    }
+
+    action process_include {
+        if(!scnr_proc_include(scnr, fpc))
+            fbreak;
+    }
+
+    action process_include_q {
+        scnr->tstart++;
+        if(!scnr_proc_include(scnr, fpc - 1))
+            fbreak;
+    }
+
+    # the include statement
+    include_fn = (quoted %process_include_q | unquoted %process_include) >token_start;
+    include_file = '$include{' ws include_fn ws '}';
+
     # Any type of value
-    value = (
+    real_value = (
           simple
         | '[' $open_array
         | '{' $open_hash
     );
 
+    # real values and the $include special value
+    value = real_value | include_file;
+
     # A key => value assignment within a hash.  The "$1 %0"
     #  construct prevents the optional '>' from being considered
     #  a simple RHS string value.
-    assign  = key ws ('=' '>'?) $1 %0 ws value;
+    real_assign  = key ws ('=' '>'?) $1 %0 ws value;
+
+    # assignment or include for hash merging
+    assign = real_assign | include_file;
 
     # Lists of values and assignments with optional trailing commas.
     # These defs include their surrounding whitespace.
@@ -565,14 +672,17 @@ static void hash_destroy(vscf_hash_t* h) {
     array := values ']' $close_array;
     hash  := assigns '}' $close_hash;
 
-    # The top level of the file is an implicit hash with no bracing
-    main  := assigns;
+    # Explicit top-level array
+    top_array = ws ('[' $top_array) values ']' ws;
+
+    # The top level container
+    main := top_array | assigns;
 
     write data;
 }%%
 
-static const vscf_data_t* vscf_scan_fd_or_stream(const int fd, FILE* const stream, const char* desc, char** err) {
-    dmn_assert(err); dmn_assert(*err == NULL);
+static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
+    dmn_assert(fd > -1); dmn_assert(fn); dmn_assert(err); dmn_assert(*err == NULL);
 
     vscf_scnr_t* scnr = calloc(1, sizeof(vscf_scnr_t));
     unsigned buf_size = INIT_BUF_SIZE;
@@ -580,12 +690,13 @@ static const vscf_data_t* vscf_scan_fd_or_stream(const int fd, FILE* const strea
     dmn_assert(buf);
 
     scnr->lcount = 1;
-    scnr->fn = desc ? desc : "";
+    scnr->fn = fn;
     scnr->cont_stack_top = -1;
     scnr->cs = vscf_start;
     scnr->err = err;
 
-    vscf_data_t* root = scnr->cont = (vscf_data_t*)hash_new();
+    // default container is hash, will be replaced if array
+    scnr->cont = (vscf_data_t*)hash_new();
 
     while(!scnr->eof) {
         unsigned have;
@@ -608,28 +719,14 @@ static const vscf_data_t* vscf_scan_fd_or_stream(const int fd, FILE* const strea
         char* read_at = buf + have;
         scnr->p = read_at;
 
-        if(stream) {
-            const int len = fread(read_at, 1, space, stream);
-            scnr->pe = scnr->p + len;
-            if(len < space) {
-                if(ferror(stream) || !feof(stream)) {
-                    set_err(err, "fread() of '%s' failed\n", scnr->fn);
-                    break;
-                }
-                scnr->eof = scnr->pe;
-            }
+        const int len = read(fd, read_at, space);
+        scnr->pe = scnr->p + len;
+        if(len < 0) {
+            set_err(err, "read() of '%s' failed: errno %i\n", scnr->fn, errno);
+            break;
         }
-        else {
-            const int len = read(fd, read_at, space);
-            scnr->pe = scnr->p + len;
-            if(len < 0) {
-                set_err(err, "read() of '%s' failed: errno %i\n", scnr->fn, errno);
-                break;
-            }
-            if(len < space)
-                scnr->eof = scnr->pe;
-
-        }
+        if(len < space)
+            scnr->eof = scnr->pe;
 
         %%{
             prepush {
@@ -669,13 +766,15 @@ static const vscf_data_t* vscf_scan_fd_or_stream(const int fd, FILE* const strea
     const vscf_data_t* retval;
 
     if(*err) {
-        val_destroy(root);
+        if(scnr->cont_stack_top == -1)
+            val_destroy(scnr->cont);
+        else
+            val_destroy(scnr->cont_stack[0]);
         retval = NULL;
     }
     else {
         dmn_assert(scnr->cont_stack_top == -1);
-        dmn_assert(scnr->cont == root);
-        retval = (const vscf_data_t*)root;
+        retval = (const vscf_data_t*)scnr->cont; // outermost container
     }
 
     free(scnr);
@@ -686,36 +785,22 @@ static const vscf_data_t* vscf_scan_fd_or_stream(const int fd, FILE* const strea
 /*** Public API functions ***/
 /****************************/
 
-const vscf_data_t* vscf_scan_fd(int fd, const char* desc, char** err) {
-    dmn_assert(desc); dmn_assert(err);
-    *err = NULL;
-
-    return vscf_scan_fd_or_stream(fd, NULL, desc, err);
-}
-
-const vscf_data_t* vscf_scan_stream(FILE* stream, const char* desc, char** err) {
-    dmn_assert(stream); dmn_assert(desc); dmn_assert(err);
-    *err = NULL;
-
-    return vscf_scan_fd_or_stream(0, stream, desc, err);
-}
-
 const vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
     dmn_assert(fn); dmn_assert(err);
     *err = NULL;
 
     int fd = open(fn, O_RDONLY);
     if(fd < 0) {
-        set_err(err, "Cannot open config file '%s' for reading: errno %i\n", fn, errno);
+        set_err(err, "Cannot open file '%s' for reading: errno %i\n", fn, errno);
         return NULL;
     }
 
-    const vscf_data_t* retval = vscf_scan_fd_or_stream(fd, NULL, fn, err);
+    const vscf_data_t* retval = vscf_scan_fd(fd, fn, err);
     close(fd);
     return retval;
 }
 
-void vscf_destroy(const vscf_data_t* d) { dmn_assert(d); val_destroy((vscf_data_t*)d); }
+void vscf_destroy(const vscf_data_t* d) { val_destroy((vscf_data_t*)d); }
 
 vscf_type_t vscf_get_type(const vscf_data_t* d) { dmn_assert(d); return d->type; }
 bool vscf_is_simple(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_SIMPLE_T; }

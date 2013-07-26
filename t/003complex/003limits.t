@@ -39,7 +39,7 @@ my $max255_txt = '"0123456789012345678901234567890123456789012345678901234567890
 
 
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => $giant_mxname, qtype => 'MX',

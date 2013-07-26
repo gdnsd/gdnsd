@@ -20,7 +20,7 @@ BEGIN { use_ok("Net::DNS::Resolver") or BAIL_OUT("Net::DNS::Resolver broken"); }
 BEGIN { use_ok("LWP::UserAgent") or BAIL_OUT("LWP::UserAgent broken"); }
 BEGIN { use_ok("_GDT") or BAIL_OUT("Test suite broken (no _GDT)"); }
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'ns1.example.com',

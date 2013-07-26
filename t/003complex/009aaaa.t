@@ -19,7 +19,7 @@ $optrr = Net::DNS::RR->new(
 
 my $bigname = q{0.0123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.46glue.example.com};
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'v6basic.example.com', qtype => 'AAAA',

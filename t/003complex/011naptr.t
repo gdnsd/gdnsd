@@ -31,7 +31,7 @@ my $nsa2 = 'nsa.example.com 21600 NAPTR 101 10 "A" "foo" "" nsa.example.com';
 my $nsa3 = 'nsa.example.com 21600 SRV 10 20 30 nsa.example.com';
 my $nsa4 = 'nsa.example.com 21600 A 192.0.2.185';
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'naptr-sx.example.com', qtype => 'NAPTR',
