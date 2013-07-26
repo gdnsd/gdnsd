@@ -4,7 +4,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 3;
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'foo.example.com', qtype => 'A',
