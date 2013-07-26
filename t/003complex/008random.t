@@ -69,7 +69,7 @@ sub get_socket {
 
 srand($rseed);
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 eval {_GDT->check_stats( udp_reqs => 0 )}; ok(!$@) or diag $@;
 
 my $rand_reqs = 0;

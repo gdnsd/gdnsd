@@ -67,7 +67,7 @@ $optrr = Net::DNS::RR->new(
     ednsflags => 0,
 );
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 my $size = _GDT->test_dns(
     resopts => { udppacketsize => 2048 },

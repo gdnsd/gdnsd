@@ -39,7 +39,18 @@ use File::Copy qw//;
 use Socket qw/AF_INET/;
 use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
+use File::Path qw//;
 use Config;
+
+sub safe_rmtree {
+    my $target = shift;
+    if(-e $target) {
+        File::Path::rmtree($target, 0, 1);
+        if(-e $target) {
+            die "Could not rmtree '$target': $!";
+        }
+    }
+}
 
 my %SIGS;
 {
@@ -52,20 +63,14 @@ my %SIGS;
 
 # Set up per-testfile output directory and zones input directory
 our $OUTDIR;
-our $ZONES_IN;
-our $ALTZONES_IN;
+our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
 {
     my $tname = $FindBin::Bin;
     $tname =~ s{^.*/}{};
     $tname .= '_' . $FindBin::Script;
     $tname =~ s{\.t$}{};
 
-    $ZONES_IN = $FindBin::Bin . '/zones/';
-    $ALTZONES_IN = $FindBin::Bin . '/altzones/';
     $OUTDIR = $ENV{TESTOUT_DIR} . '/' . $tname;
-    foreach my $d ($OUTDIR, "$OUTDIR/etc", "$OUTDIR/etc/zones") {
-        mkdir $d unless -d $d
-    }
 }
 
 # this makes gdnsd start faster on low-res filesystems,
@@ -239,27 +244,13 @@ sub check_stats {
     }
 }
 
-our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
-our $INOTIFY_ENABLED = 0;
+sub proc_tmpl {
+    my ($inpath, $outpath) = @_;
 
-sub spawn_daemon {
-    my ($class, $cfgfile, $geoip_data) = @_;
-
-    my $daemon_out = $OUTDIR . '/gdnsd.out';
-    my $cfgout = $OUTDIR . '/etc/config';
-    my $zonesout = $OUTDIR . '/etc/zones/';
-
-    if($geoip_data) {
-        require _FakeGeoIP;
-        mkdir "$OUTDIR/etc/geoip" unless -d "$OUTDIR/etc/geoip";
-        my $geoip_out = $OUTDIR . '/etc/geoip/FakeGeoIP.dat';
-        _FakeGeoIP::make_fake_geoip($geoip_out, $geoip_data);
-    }
-
-    open(my $orig_fh, '<', $cfgfile)
-        or die "Cannot open test configfile '$cfgfile' for reading: $!";
-    open(my $out_fh, '>', $cfgout)
-        or die "Cannot open test config text output '$cfgout' for writing: $!";
+    open(my $in_fh, '<', $inpath)
+        or die "Cannot open test template '$inpath' for reading: $!";
+    open(my $out_fh, '>', $outpath)
+        or die "Cannot open test template output '$outpath' for writing: $!";
 
     my $dns_lspec = $HAVE_V6
         ? qq{[ 127.0.0.1, ::1 ]}
@@ -269,7 +260,7 @@ sub spawn_daemon {
         ? qq{[ 127.0.0.1, ::1 ]}
         : qq{127.0.0.1};
 
-    while(<$orig_fh>) {
+    while(<$in_fh>) {
         s/\@dns_lspec\@/$dns_lspec/g;
         s/\@http_lspec\@/$http_lspec/g;
         s/\@dns_port\@/$DNS_PORT/g;
@@ -279,31 +270,73 @@ sub spawn_daemon {
         s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
         print $out_fh $_;
     }
-    close($orig_fh) or die "Cannot close test configfile '$cfgfile': $!";
-    close($out_fh) or die "Cannot close test config text output file '$cfgout': $!";
 
-    # Wipe zones, in case of dynamic stuff from earlier run
-    opendir(my $zdh, $zonesout) or die "Cannot open zones output subdirectory: $!";
-    foreach my $zf (grep { !/^\./ } readdir($zdh)) {
-        unlink($zonesout . $zf)
-            or die "Cannot unlink zonefile '$_': $!";
-    }
-    closedir($zdh);
+    close($in_fh) or die "Cannot close test template '$inpath': $!";
+    close($out_fh) or die "Cannot close test template output '$outpath': $!";
+}
 
-    opendir(my $dh, $ZONES_IN) or die "Cannot open zones subdirectory: $!";
-    my @zfiles_list = grep { !/^\./ && ! -d $_ } readdir($dh);
-    closedir($dh);
-    foreach my $zfile (@zfiles_list) {
-        File::Copy::copy("$ZONES_IN/$zfile", $zonesout)
-            or die "Failed to copy zonefile '$zfile' to test area: $!";
+sub recursive_templated_copy {
+    my ($indir, $outdir) = @_;
+    if(opendir(my $dh, $indir)) {
+        if(!-d $outdir) {
+            mkdir $outdir or die "Cannot create directory $outdir: $!";
+        }
+        my @files_list = grep { !/^\./ && ! -d $_ } readdir($dh);
+        closedir($dh);
+        foreach my $f (@files_list) {
+            my $in_full = "$indir/$f";
+            my $out_full = "$outdir/$f";
+            if(-f $in_full) {
+                if($f =~ /^(.*)\.tmpl$/) {
+                    proc_tmpl($in_full, "$outdir/$1");
+                }
+                else {
+                    File::Copy::copy($in_full, $out_full)
+                        or die "Failed to copy '$in_full' to '$out_full': $!";
+                }
+            }
+            elsif(-d $in_full) {
+                recursive_templated_copy($in_full, $out_full);
+            }
+            else {
+                die "Test data file is not a regular file or directory: '$in_full'";
+            }
+        }
     }
+}
+
+our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
+our $INOTIFY_ENABLED = 0;
+
+sub spawn_daemon {
+    my ($class, $etcsrc, $geoip_data) = @_;
+
+    $etcsrc ||= "etc";
+
+    safe_rmtree($OUTDIR);
+
+    foreach my $d ($OUTDIR, "${OUTDIR}/etc") {
+        mkdir $d or die "Cannot create directory $d: $!";
+    }
+
+    if($geoip_data) {
+        require _FakeGeoIP;
+        my $gdir = "$OUTDIR/etc/geoip";
+        mkdir $gdir or die "Cannot create directory $gdir: $!";
+        _FakeGeoIP::make_fake_geoip($gdir . "/FakeGeoIP.dat", $geoip_data);
+    }
+
+    recursive_templated_copy("${FindBin::Bin}/${etcsrc}", "${OUTDIR}/etc");
 
     my $exec_line = $TEST_RUNNER
         ? qq{$TEST_RUNNER $GDNSD_BIN -d $OUTDIR startfg}
         : qq{$GDNSD_BIN -d $OUTDIR startfg};
 
+    my $daemon_out = $OUTDIR . '/gdnsd.out';
+
     my $pid = fork();
     die "Fork failed!" if !defined $pid;
+
     if(!$pid) { # child, exec daemon
         open(STDOUT, '>', $daemon_out)
             or die "Cannot open '$daemon_out' for writing as STDOUT: $!";

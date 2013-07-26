@@ -25,7 +25,7 @@ sub make_query {
     );
 }
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 sleep(1);
 my $sock = IO::Socket::INET->new(
     PeerAddr => '127.0.0.1:' . $_GDT::DNS_PORT,

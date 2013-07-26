@@ -9,7 +9,7 @@ use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
 use Test::More tests => 26;
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'example.com', qtype => 'SOA',

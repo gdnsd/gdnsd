@@ -15,11 +15,11 @@ my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1
 #  at various levels, and synthesized subplugin
 #  config versus direct reference.
 
-my @cfgs = (qw/gdnsd.conf gdnsd2.conf/);
+my @etcdirs = (qw/etc etc2/);
 
-foreach my $cfg (@cfgs) { # loop ends at bottom of file
+foreach my $etcdir (@etcdirs) { # loop ends at bottom of file
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, $cfg), q{
+my $pid = _GDT->test_spawn_daemon($etcdir, q{
     0.0.0.0/1 => US
     128.0.0.0/1 => FR
 });

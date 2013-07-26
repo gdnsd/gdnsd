@@ -9,7 +9,7 @@ use Test::More tests => 15;
 
 my $standard_soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 # A noerror response with no data.  "www" is
 #  a leaf node in the database which has data,

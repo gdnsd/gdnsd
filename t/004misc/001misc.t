@@ -824,7 +824,7 @@ my $cname_16 = [
     '0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab.cdef0123456789abcdef0123456789abcdef0123456789abcdef01234567.89abcdef0123456789abcdef0123456789abcdef16.example.com 86400 CNAME sixteen.example.com',
 ];
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 # MX/SRV targets pointed at root of DNS
 _GDT->test_dns(

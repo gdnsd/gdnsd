@@ -6,7 +6,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 5;
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 my $t31337_1 = 'rfc3597.example.com 21600 TYPE31337 \# 10 0123456789ABCDEF0123';
 my $t31337_2 = 'rfc3597.example.com 21600 TYPE31337 \# 10 3210FEDCBA9876543210';

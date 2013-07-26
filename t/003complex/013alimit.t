@@ -48,7 +48,7 @@ my $setlimit_one_AAAA = [
     'setlimit-one.example.com 21600 AAAA ::120',
 ];
 
-my $pid = _GDT->test_spawn_daemon(File::Spec->catfile($FindBin::Bin, 'gdnsd.conf'));
+my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'setlimit.example.com', qtype => 'A',
