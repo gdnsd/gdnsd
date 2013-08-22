@@ -744,8 +744,16 @@ static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err)
             write exec;
         }%%
 
-        if(scnr->cs == vscf_error)
+        if(scnr->cs == vscf_error) {
             parse_error_noargs("Syntax error");
+        }
+        else if(scnr->eof && scnr->cs < vscf_first_final) {
+            if(scnr->eof > buf && *(scnr->eof - 1) != '\n')
+                parse_error_noargs("Trailing incomplete or unparseable record at end of file (missing newline at end of file?)");
+            else
+                parse_error_noargs("Trailing incomplete or unparseable record at end of file");
+        }
+
         if(*err)
             break;
     }
