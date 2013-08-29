@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
     //   if stderr happens to be hooked up to a terminal
     if(argc != 5) {
         fprintf(stderr, "This binary is not for human execution!\n");
-        abort();
+        exit(99);
     }
 
     // open stderr logging connection using passed fd

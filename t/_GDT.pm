@@ -105,9 +105,19 @@ our $HAVE_V6 = 1;
     }
 }
 
+# If user runs testsuite as root, we try to set the privdrop
+#   user to nobody as a more-reliable choice.  Failing that,
+#   hopefully they read the large warning at the start of
+#   the testsuite output...
+our $PRIVDROP_USER = ($> == 0) ? 'nobody' : '';
+
 our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
     ? "$ENV{INSTALLCHECK_SBINDIR}/gdnsd"
     : "$ENV{TOP_BUILDDIR}/gdnsd/gdnsd";
+
+our $EXTMON_BIN = $ENV{INSTALLCHECK_BINDIR}
+    ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_extmon_helper"
+    : "$ENV{TOP_BUILDDIR}/plugins/extmon/gdnsd_extmon_helper";
 
 # During installcheck, the default hardcoded plugin path
 #  should work correctly for finding the installed plugins
@@ -130,7 +140,7 @@ else {
         )
         . q{"]};
     closedir($dh);
-    $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$ENV{TOP_BUILDDIR}/plugins/extmon/gdnsd_extmon_helper" }|;
+    $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$EXTMON_BIN" }|;
 }
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
@@ -260,6 +270,10 @@ sub proc_tmpl {
         ? qq{[ 127.0.0.1, ::1 ]}
         : qq{127.0.0.1};
 
+    if($PRIVDROP_USER) {
+        $dns_lspec .= "\nusername = $PRIVDROP_USER";
+    }
+
     while(<$in_fh>) {
         s/\@dns_lspec\@/$dns_lspec/g;
         s/\@http_lspec\@/$http_lspec/g;
@@ -267,7 +281,14 @@ sub proc_tmpl {
         s/\@http_port\@/$HTTP_PORT/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
         s/\@pluginpath\@/$PLUGIN_PATH/g;
-        s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
+        # if the test used the extmon helper, pre-execute
+        #   it now to do libtool stuff before privdrop, in case
+        #   of testsuite running as root.  Otherwise on first
+        #   execution libtool tries to write to the builddir as
+        #   as the privdrop user.
+        if(s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g && $PRIVDROP_USER) {
+            system("$EXTMON_BIN >/dev/null 2>&1");
+        }
         print $out_fh $_;
     }
 
