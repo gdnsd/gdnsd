@@ -1,0 +1,8 @@
+language: c
+compiler:
+  - gcc
+  - clang
+script: ./autogen.sh && ./configure --disable-silent-rules && make && make test
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq ragel libev-dev libcap-dev liburcu-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl geoip-database

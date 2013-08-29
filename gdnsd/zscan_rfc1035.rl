@@ -686,7 +686,7 @@ static void close_paren(zscan_t* z) {
     statement = rr | cmd;
     main := (statement? ws? ((slc? nl) when !in_paren))*;
 
-    write data nofinal;
+    write data;
 }%%
 
 F_NONNULL
@@ -726,8 +726,15 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
             write exec;
         }%%
 
-        if(cs == zone_error)
-            parse_error_noargs("unparseable");
+        if(cs == zone_error) {
+            parse_error_noargs("General parse error");
+        }
+        else if(eof && cs < zone_first_final) {
+            if(eof > buf && *(eof - 1) != '\n')
+                parse_error_noargs("Trailing incomplete or unparseable record at end of file (missing newline at end of file?)");
+            else
+                parse_error_noargs("Trailing incomplete or unparseable record at end of file");
+        }
     }
 }
 
