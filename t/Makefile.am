@@ -5,6 +5,10 @@ TEXEC = TESTOUT_DIR=$(TESTOUT_DIR) TESTPORT_START=$(TESTPORT_START) $(PERL) -I$(
 ALLTESTS = $(srcdir)/[0-9]*/*.t
 
 precheck:
+	@if test `id -u` == "0"; then \
+		echo "*** WARNING *** Testing (or even building!) as the root user is not wise!"; \
+		echo "*** WARNING *** If you experience any failures, please retry as a non-root user before reporting..."; \
+	fi
 	@if test "x$(HAVE_TESTSUITE_MODULES)" != x1; then \
 		echo "Cannot 'make check' or 'make installcheck' without Net::DNS 0.63+ and LWP 5.805+"; \
 		exit 101; \

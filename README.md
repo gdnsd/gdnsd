@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/bblack/gdnsd.png)](https://travis-ci.org/bblack/gdnsd)
+[![Build Status](https://travis-ci.org/blblack/gdnsd.png)](https://travis-ci.org/blblack/gdnsd)
 
 
 ## Overview
