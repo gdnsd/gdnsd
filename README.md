@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/bblack/gdnsd.png)](https://travis-ci.org/bblack/gdnsd)
+
 
 ## Overview
 
