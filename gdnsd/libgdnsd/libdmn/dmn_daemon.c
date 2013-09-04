@@ -133,6 +133,9 @@ static pid_t startup_pidrace(const char* pidfile, const bool restart) {
         dmn_log_fatal("start: failed, another instance of this daemon is already running");
     }
 
+    // leak of pidfd here is intentional, it stays open/locked for the duration
+    //   of the daemon's execution.  Daemon death by any means unlocks-on-close,
+    //   signalling to other code that this instance is no longer running...
     return pid;
 }
 

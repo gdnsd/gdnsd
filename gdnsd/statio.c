@@ -511,7 +511,7 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 
     const int sock = accept(io->fd, &asin->sa, &asin->len);
 
-    if(unlikely(sock == -1)) {
+    if(unlikely(sock < 0)) {
         free(asin);
         switch(errno) {
             case EAGAIN:

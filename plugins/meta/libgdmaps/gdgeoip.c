@@ -575,6 +575,7 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
     switch(db->type) {
         case GEOIP_COUNTRY_EDITION_V6:
             db->ipv6 = true;
+            // fall-through intentional
         case GEOIP_COUNTRY_EDITION:
             db->base = COUNTRY_BEGIN;
             db->dclist_get_func = country_get_dclist;
@@ -582,6 +583,7 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
 
         case GEOIP_LARGE_COUNTRY_EDITION_V6:
             db->ipv6 = true;
+            // fall-through intentional
         case GEOIP_LARGE_COUNTRY_EDITION:
             db->base = LARGE_COUNTRY_BEGIN;
             db->dclist_get_func = country_get_dclist;
@@ -595,6 +597,7 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
         case GEOIP_CITY_EDITION_REV0_V6:
         case GEOIP_CITY_EDITION_REV1_V6:
             db->ipv6 = true;
+            // fall-through intentional
         case GEOIP_CITY_EDITION_REV0:
         case GEOIP_CITY_EDITION_REV1:
             offset += 4;

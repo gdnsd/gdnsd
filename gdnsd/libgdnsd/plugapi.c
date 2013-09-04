@@ -176,6 +176,8 @@ const plugin_t* gdnsd_plugin_load(const char* pname) {
     PSETFUNC(start_monitors)
 #   undef PSETFUNC
 
+    // leak of dlopen() handle "pptr" here is intentional.  The code has no further
+    //   use for it at this point, and we never dlclose() the plugins...
     return plug;
 }
 
