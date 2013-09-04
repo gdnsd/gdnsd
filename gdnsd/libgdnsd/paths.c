@@ -132,7 +132,7 @@ char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx) {
 
     if(rootdir) { // rooted paths
         if(inpath[0] == '/') {
-            out = malloc(inlen);
+            out = malloc(inlen + 1);
             memcpy(out, inpath + 1, inlen); // includes NUL
         }
         else if(pfx) {
