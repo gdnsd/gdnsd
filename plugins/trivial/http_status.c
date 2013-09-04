@@ -85,7 +85,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
         return;
     }
 
-    dmn_assert(md->sock > -1);
+    dmn_assert(md->sock == -1);
     dmn_assert(!ev_is_active(md->read_watcher));
     dmn_assert(!ev_is_active(md->write_watcher));
     dmn_assert(!ev_is_active(md->timeout_watcher));
