@@ -2,7 +2,7 @@
 
 set -e
 
-GENERIC_HELP="You can either fix this and re-run configure, or use other means to obtain and decompress the 5 data files at 'http://gdnsd.net/GeoLiteTestData/', placing them in the build directory '$ABDIR'"
+GENERIC_HELP="You can either fix this and re-run configure, or use other means to obtain and decompress the 5 data files at 'http://gdnsd.org/GeoLiteTestData/', placing them in the build directory '$ABDIR'"
 
 if [ $GEOLITE_DECOMP = "none" ]; then
     echo "xz not found in PATH by configure.  $GENERIC_HELP"

@@ -15,7 +15,7 @@ include $(top_srcdir)/docs.am
 
 # ----------- testsuite stuff --------------
 
-# I've mirrored these to the gdnsd.net test webservers to be dynamically downloaded for those who
+# I've mirrored these to S3 as "downloads.gdnsd.org" to be dynamically downloaded for those who
 #  bother running make check.  They were pulled on the date indicated in the filename in order
 #  to provide a stable test baseline, and won't be updated unless there's a technical testsuite
 #  reason (database format changes requiring new tests, etc).
@@ -24,7 +24,7 @@ include $(top_srcdir)/docs.am
 # This product includes GeoLite data created by MaxMind, available from http://maxmind.com/
 # These files are subject to MaxMind's GeoLite Open Data license, which is also re-distributed by download
 
-GEOLITE_URL_BASE = http://downloads.gdnsd.net/GeoLiteTestData/
+GEOLITE_URL_BASE = http://downloads.gdnsd.org/GeoLiteTestData/
 GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat regioncodes-20130115.csv
 
 TESTLIST_NONETS = \
