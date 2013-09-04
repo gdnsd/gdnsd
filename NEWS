@@ -1,3 +1,36 @@
+1.10.0 - 2013-09-04
+    Features:
+      The configuration syntax now supports include files.
+    Bugfixes:
+      Responses to type=ANY queries on CNAME RRs were incorrect
+        per the relevant RFCs.  Now they're correct.  I don't
+        believe the broken cases were broken in ways that would
+        matter for most users in production queries, though.
+      When the final line of a zonefile contained a data record
+        with no terminating newline, the unterminated data was
+        silently ignored.  This now produces a proper parse error.
+      Made testsuite more likely to succeed when run as root,
+        which is still a bad idea.  Also warns loudly in an
+        effort to reduce bug reports about testsuite failures
+        when running as root.
+      Several smaller bugfixes - minor code issues never seen in
+        the wild, found via valgrind, clang-analyzer, and/or Coverity.
+    Meta-stuff:
+      Travis (http://travis-ci.org) support added to automatically
+        run the build+test process for incoming pull requests
+        and new pushes to the main branches as well.
+      Started using Coverity's free scan tool for open source
+        projects, which has helped spot additional defects.
+      Moved general info out of README.md and into http://gdnsd.org
+        hosted on github pages or the INSTALL file as appropriate.
+        Tarball downloads are now at http://downloads.gdnsd.org as
+        well, but the old downloads.gdnsd.net URLs will redirect there.
+      Removed the pkg/ subdirectory and RPM specfiles.  I'm not
+        really using or maintaining these personally anymore, and
+        they really don't belong in the upstream source anyways, as
+        there are too many distro/version differences to account for.
+        Leave that stuff to the distro packagers.
+
 1.9.0 - 2013-07-09
     Added support for the new IANA-assigned edns-client-subnet option
       code, while keeping backwards compatibility with the deprecated
