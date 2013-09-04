@@ -323,7 +323,7 @@ F_NONNULL
 static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents V_UNUSED) {
     dmn_assert(loop);
     dmn_assert(timer);
-    dmn_assert(revents = EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
 
     zfile_t* zf = (zfile_t*)timer->data;
     dmn_assert(zf->pending_event == timer);
