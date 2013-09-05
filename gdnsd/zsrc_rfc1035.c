@@ -323,7 +323,7 @@ F_NONNULL
 static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents V_UNUSED) {
     dmn_assert(loop);
     dmn_assert(timer);
-    dmn_assert(revents = EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
 
     zfile_t* zf = (zfile_t*)timer->data;
     dmn_assert(zf->pending_event == timer);
@@ -727,9 +727,18 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
 
         unsigned offset = 0;
         while(offset < (unsigned)bytes) {
-            dmn_assert((bytes - offset) >= sizeof(struct inotify_event));
+            if((bytes - offset) < sizeof(struct inotify_event)) {
+                log_err("rfc1035: inotify sent truncated/garbage data");
+                handle_inotify_failure(loop);
+                return;
+            }
             struct inotify_event* evt = (void*)&evtbuf[offset];
             offset += sizeof(struct inotify_event);
+            if((bytes - offset) < evt->len) {
+                log_err("rfc1035: inotify sent truncated/garbage data");
+                handle_inotify_failure(loop);
+                return;
+            }
             offset += evt->len;
             if(inot_process_event(loop, (evt->len > 0 ? evt->name : NULL), evt->mask))
                 return;

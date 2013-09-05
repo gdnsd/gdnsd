@@ -426,6 +426,7 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
     if(!inc_data) {
         dmn_assert(inc_parse_err);
         parse_error("within included file: %s", inc_parse_err);
+        free(inc_parse_err);
         return false;
     }
 
@@ -767,8 +768,8 @@ static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err)
             parse_error_noargs("Syntax error");
     }
 
-    if(scnr->cont_stack) free(scnr->cont_stack);
-    if(scnr->cs_stack) free(scnr->cs_stack);
+    if(scnr->cs_stack)
+        free(scnr->cs_stack);
     free(buf);
 
     const vscf_data_t* retval;
@@ -784,6 +785,9 @@ static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err)
         dmn_assert(scnr->cont_stack_top == -1);
         retval = (const vscf_data_t*)scnr->cont; // outermost container
     }
+
+    if(scnr->cont_stack)
+        free(scnr->cont_stack);
 
     free(scnr);
     return retval;

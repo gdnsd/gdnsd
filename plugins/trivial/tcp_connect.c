@@ -146,14 +146,14 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     dmn_assert(md->tcp_state == TCP_STATE_CONNECTING);
     dmn_assert(ev_is_active(md->connect_watcher));
     dmn_assert(ev_is_active(md->timeout_watcher));
-    dmn_assert(md->sock != -1);
+    dmn_assert(md->sock > -1);
 
     // nonblocking connect() just finished, need to check status
     bool success = false;
     int sock = md->sock;
     int so_error = 0;
     unsigned int so_error_len = sizeof(so_error);
-    getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
+    (void)getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
     if(unlikely(so_error)) {
         switch(so_error) {
             case EPIPE:
@@ -189,7 +189,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
     tcp_events_t* md = (tcp_events_t*)t->data;
 
     dmn_assert(md);
-    dmn_assert(md->sock != -1);
+    dmn_assert(md->sock > -1);
     dmn_assert(md->tcp_state == TCP_STATE_CONNECTING);
     dmn_assert(ev_is_active(md->connect_watcher));
 

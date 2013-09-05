@@ -1,6 +1,8 @@
 
 =head1 Overview
 
+This document is likely to be out of date in a number of areas...
+
 This manual attempts to cover things that don't logically fit in the
 man pages.  It covers the big-picture items and overall design
 It's a cross between a manual and a design document at the moment,

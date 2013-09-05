@@ -51,7 +51,7 @@ void gdnsd_init_net(void) {
     udp_proto = pe->p_proto;
 
     const int sock = socket(PF_INET6, SOCK_STREAM, tcp_proto);
-    if(sock) {
+    if(sock > -1) {
         close(sock);
         tcp_v6_ok = true;
     }

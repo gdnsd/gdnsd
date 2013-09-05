@@ -6,7 +6,7 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = gdnsd plugins docs t
 
 MISC_DOCS = README.md INSTALL AUTHORS COPYING NEWS
-EXTRA_DIST = autogen.sh qa docs.am pkg
+EXTRA_DIST = autogen.sh qa docs.am
 BUILT_SOURCES = cfg-dirs.h
 CLEANFILES = cfg-dirs.h
 

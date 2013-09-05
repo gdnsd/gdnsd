@@ -96,7 +96,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
         const bool isv6 = md->addr.sa.sa_family == AF_INET6;
 
         const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
-        if(unlikely(sock == -1)) {
+        if(unlikely(sock < 0)) {
             log_err("plugin_http_status: Failed to create monitoring socket: %s", logf_errno());
             break;
         }
@@ -155,14 +155,14 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
     dmn_assert(!ev_is_active(md->read_watcher));
     dmn_assert(ev_is_active(md->write_watcher));
     dmn_assert(ev_is_active(md->timeout_watcher));
-    dmn_assert(md->sock != -1);
+    dmn_assert(md->sock > -1);
 
     int sock = md->sock;
     if(likely(!md->already_connected)) {
         // nonblocking connect() just finished, need to check status
         int so_error = 0;
         unsigned int so_error_len = sizeof(so_error);
-        getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
+        (void)getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
         if(unlikely(so_error)) {
             switch(so_error) {
                 case EPIPE:
@@ -235,7 +235,7 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
     dmn_assert(md->hstate == HTTP_STATE_READING);
     dmn_assert(ev_is_active(md->read_watcher));
     dmn_assert(!ev_is_active(md->write_watcher));
-    dmn_assert(md->sock != -1);
+    dmn_assert(md->sock > -1);
 
     bool final_status = false;
     const int to_recv = 13 - md->done;

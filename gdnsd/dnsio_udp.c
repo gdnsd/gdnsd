@@ -389,9 +389,9 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
                 dmn_assert(sent != 0);
                 dmn_assert(sent <= pkts);
                 if(unlikely(sent < pkts)) {
-                    int sockerr;
-                    socklen_t sock_len;
-                    getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
+                    int sockerr = 0;
+                    socklen_t sock_len = sizeof(sockerr);
+                    (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
                     stats_own_inc(&pctx->stats->udp.sendfail);
                     if(sent < 0) sent = 0;
                     log_err("UDP sendmmsg() of %li bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, logf_anysin(dgptr[sent].msg_hdr.msg_name), logf_errnum(sockerr));
