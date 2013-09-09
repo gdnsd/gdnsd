@@ -21,12 +21,21 @@ if [ $skip_geoip -eq 1 ]; then
 fi
 
 if [ x"$GDMAPS_GEOIP_TEST_LOAD" = x ]; then
+    DEF_GEO_DIR=/usr/share/GeoIP/
+    DEF_GEO_LIST="IP IPv6 IPCity IPCityv6 LiteCity LiteCityv6"
     echo "If you wish to test basic loading success for arbitrary local"
     echo "  GeoIP databases with plugin_geoip, please specify a list of"
     echo "  absolute pathnames in \$GDMAPS_GEOIP_TEST_LOAD"
-    echo "By default, tests will be run against any existing databases"
-    echo "  matching the pathname glob /usr/share/GeoIP/Geo*.dat"
-    GDMAPS_GEOIP_TEST_LOAD="/usr/share/GeoIP/Geo*.dat"
+    echo "By default, tests will be run against all of the following that"
+    echo "  exist and are readable in $DEF_GEO_DIR:"
+    GDMAPS_GEOIP_TEST_LOAD=""
+    shortnames=""
+    for gtype in $DEF_GEO_LIST; do
+        fn=Geo${gtype}.dat
+        shortnames="$shortnames $fn"
+        GDMAPS_GEOIP_TEST_LOAD="$GDMAPS_GEOIP_TEST_LOAD $DEF_GEO_DIR$fn"
+    done
+    echo $shortnames
 fi
 
 for netsfile in $ASDIR/*.nets; do
