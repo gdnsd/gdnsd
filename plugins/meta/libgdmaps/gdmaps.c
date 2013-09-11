@@ -674,36 +674,43 @@ const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, 
 }
 
 // mostly for debugging / error output
-#define DCLIST_LOGF_MAX 512
-static const char dclist_len_err[] = "<dclist too large to format for printing>";
+// Note that this doesn't participate in liburcu stuff, and therefore could crash if it were
+//   running concurrently with an update swap.  It's only used from the testsuite and gdmaps_geoip_test
+//   stuff, though, so that's not important.
 static const char dclist_nodc[] = "<INVALID>";
 const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const uint8_t* dclist) {
     dmn_assert(gdmaps); dmn_assert(dclist);
     dmn_assert(gdmap_idx < gdmaps->count);
 
-    char tbuf[DCLIST_LOGF_MAX];
-    tbuf[0] = '\0';
-    unsigned tbuf_remain = DCLIST_LOGF_MAX - 1;
+    // Save original...
+    const uint8_t* dclist_orig = dclist;
 
+    // Size the output
+    unsigned output_len = 0;
     unsigned dcnum;
     bool first = true;
     while((dcnum = *dclist++)) {
         const char* dcname = gdmaps_dcnum2name(gdmaps, gdmap_idx, dcnum);
-        if(!dcname)
-            dcname = dclist_nodc;
-        unsigned addlen = strlen(dcname);
-        if(!first) addlen += 2;
-        if(addlen > tbuf_remain)
-            return dclist_len_err;
-        if(!first)
-            strcat(tbuf, ", ");
-        strcat(tbuf, dcname);
-        tbuf_remain -= addlen;
+        output_len += strlen(dcname ? dcname : dclist_nodc);
+        if(!first) output_len += 2;
         first = false;
     }
 
-    char* buf = dmn_fmtbuf_alloc(strlen(tbuf) + 1);
-    strcpy(buf, tbuf);
+    // Allocate buffer
+    char* buf = dmn_fmtbuf_alloc(output_len + 1);
+    buf[0] = '\0';
+
+    // Actually write the output
+    first = true;
+    dclist = dclist_orig;
+    while((dcnum = *dclist++)) {
+        const char* dcname = gdmaps_dcnum2name(gdmaps, gdmap_idx, dcnum);
+        if(!first)
+            strcat(buf, ", ");
+        strcat(buf, dcname ? dcname : dclist_nodc);
+        first = false;
+    }
+
     return buf;
 }
 
