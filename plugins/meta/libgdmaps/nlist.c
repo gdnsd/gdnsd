@@ -233,28 +233,18 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge) {
             const bool ab_eq = net_eq(na, nb);
             if(ab_eq || mergeable_nets(na, nb)) {
                 nb->mask = MASK_DELETED;
-                if(ab_eq) {
-                    if(!post_merge && na->dclist != nb->dclist)
-                        log_warn("plugin_geoip: map '%s' nets: Exact duplicate networks with conflicting dclists at %s/%u", nl->map_name, logf_ipv6(na->ipv6), na->mask);
-                }
-                else {
+                if(!ab_eq)
                     na->mask--;
-                }
+                else if(na->dclist != nb->dclist)
+                    log_warn("plugin_geoip: map '%s' nets: Exact duplicate networks with conflicting dclists at %s/%u", nl->map_name, logf_ipv6(na->ipv6), na->mask);
                 newcount--;
                 unsigned upidx = idx + 1;
                 while(upidx < nl->count) {
                     net_t* nc = &nl->nets[upidx];
                     if(nc->mask != MASK_DELETED) {
-                        const bool ac_eq = net_eq(na, nc);
-                        if(ac_eq || mergeable_nets(na, nc)) {
+                        if(mergeable_nets(na, nc)) {
                             nc->mask = MASK_DELETED;
-                            if(ac_eq) {
-                                if(!post_merge && na->dclist != nc->dclist)
-                                    log_warn("plugin_geoip: map '%s' nets: Exact duplicate networks with conflicting dclists at %s/%u", nl->map_name, logf_ipv6(na->ipv6), na->mask);
-                            }
-                            else {
-                                na->mask--;
-                            }
+                            na->mask--;
                             newcount--;
                         }
                         else {
@@ -388,7 +378,7 @@ static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* n
     //   ntree node...
     if(nl < nl_end && net_subnet_of(nl, &tree_net)) {
         // exact match, consume...
-        if(tree_net.mask == nl->mask && !memcmp(tree_net.ipv6, nl->ipv6, 16)) { // exact match on zero
+        if(tree_net.mask == nl->mask) {
             (*nlp)++; // consume *nlp and move to next
             // need to pre-check for a deeper subnet next in the list.
             // We use the consumed entry as the new default and keep recursing
@@ -434,15 +424,14 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
     SETBIT_v6(tree_net.ipv6, tree_net.mask - 1);
     nxt_rec_dir(nl, nl_end, nt, tree_net, nt_idx, true);
 
+    unsigned rv = nt_idx;
+
     // catch missed optimizations during final translation
-    unsigned rv;
     if(unlikely(nt->store[nt_idx].zero == nt->store[nt_idx].one) && likely(nt_idx > 0)) {
         nt->count--; // delete the just-added node
         rv = nt->store[nt_idx].zero;
     }
-    else {
-        rv = nt_idx;
-    }
+
     return rv;
 }
 

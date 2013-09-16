@@ -52,7 +52,9 @@ TESTLIST_NETS = \
 	t18_extn_all \
 	t19_extn_allg \
 	t20_extn_allgs \
-	t21_extn_subs
+	t21_extn_subs \
+	t22_nets_corner \
+	t23_gn_corner
 
 TESTLIST = $(TESTLIST_NONETS) $(TESTLIST_NETS)
 
