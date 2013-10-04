@@ -213,6 +213,14 @@ is not obliterated by the parent supernet.
         2001:DB8::/32 => [ dc4, dc5, dc6 ],
     }
 
+In the case that one entry is a subnet of another with a different result
+dclist, the entries are merged correctly such that the supernet surrounds
+the subnet.  In the case of an exact duplicate entry (or an effective one,
+after merging smaller subnets) with a different dclist, it is arbitrary
+which one "wins" and the condition is warned about.  If you care about
+this case, you should sanitize your nets data beforehand with an external
+tool and/or parse for the warning message in log outputs.
+
 =head2 C<nets = nets_file_name>
 
 String pathname, optional.  A variant of the above, but the contents of the

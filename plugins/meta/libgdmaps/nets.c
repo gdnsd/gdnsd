@@ -150,12 +150,7 @@ nlist_t* nets_make_list(const vscf_data_t* nets_cfg, dclists_t* dclists, const c
         nlist_append(nl, start_siit, 96, NN_UNDEF);
         nlist_append(nl, start_6to4, 16, NN_UNDEF);
         nlist_append(nl, start_teredo, 32, NN_UNDEF);
-
-        if(nlist_finish(nl)) {
-            log_err("plugin_geoip: map '%s': normalization of 'nets' failed (see above)", map_name);
-            nlist_destroy(nl);
-            nl = NULL;
-        }
+        nlist_finish(nl);
     }
 
     return nl;

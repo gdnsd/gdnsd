@@ -601,9 +601,9 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, unsigned num_te
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     INSERT_NEXT_RR(txt, txt, "TXT", 1)
-    const unsigned tsize = (num_texts + 1) * sizeof(uint8_t*);
-    *new_rdata = malloc(tsize);
-    memcpy(*new_rdata, texts, tsize);
+    ltree_rdata_txt_t new_rd = *new_rdata = malloc((num_texts + 1) * sizeof(uint8_t*));
+    for(unsigned i = 0; i <= num_texts; i++)
+        new_rd[i] = texts[i];
     return false;
 }
 
@@ -613,9 +613,9 @@ bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, unsigned num_te
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     INSERT_NEXT_RR(txt, spf, "SPF", 1)
-    const unsigned tsize = (num_texts + 1) * sizeof(uint8_t*);
-    *new_rdata = malloc(tsize);
-    memcpy(*new_rdata, texts, tsize);
+    ltree_rdata_txt_t new_rd = *new_rdata = malloc((num_texts + 1) * sizeof(uint8_t*));
+    for(unsigned i = 0; i <= num_texts; i++)
+        new_rd[i] = texts[i];
     return false;
 }
 
@@ -635,9 +635,6 @@ bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, unsigned num
     }
     tcopy[num_texts] = NULL;
 
-    // clang flags this as a leak if add_rec_spf() succeeds, but
-    //   it really isn't.  The "leak" is consumed permanently by
-    //   add_rec_spf() storage into its rrset.
     if(ltree_add_rec_spf(zone, dname, num_texts, tcopy, ttl)) {
         for(unsigned i = 0; i < num_texts; i++)
             free(tcopy[i]);

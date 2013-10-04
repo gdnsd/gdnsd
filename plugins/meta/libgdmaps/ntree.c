@@ -174,7 +174,7 @@ static inline bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit) {
 //   more confusing and not worth optimizing for.
 F_NONNULL
 static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned* mask_out) {
-    dmn_assert(tree); dmn_assert(ip); dmn_assert(mask_out);
+    dmn_assert(tree); dmn_assert(mask_out);
     dmn_assert(tree->ipv4);
 
     unsigned chkbit = 0;

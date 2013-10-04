@@ -42,6 +42,66 @@ use IO::Socket::INET6 qw//;
 use File::Path qw//;
 use Config;
 
+# The generic rr-matching code assumes "$rr->string eq $rr->string" is sufficient
+#   to detect a test-failure difference between two RRs.  However, the stock ->string
+#   code in Net::DNS::RR::OPT doesn't actually print the RDATA portion of OPT RRs,
+#   which is where the option code + data live for e.g. edns-client-subnet.  Further,
+#   even with ->string fixed, it was discovered that ->new wasn't actually decoding
+#   the option data properly anyways.  Both are hacked below to make our test comparisons
+#   actually detect failures...
+# Arguably we could just patch our local copy directly instead of hacking methods,
+#   but I'd rather keep our copy of Net::DNS relatively clean for now, pending whatever
+#   comes of all that.
+use Net::DNS::RR::OPT;
+{
+    no warnings 'redefine';
+
+    # The only difference here is removal of the buggy 'unpack("n",...)' from
+    #  the decoding of "optiondata"
+    *Net::DNS::RR::OPT::new = sub {
+	    my ($class, $self, $data, $offset) = @_;
+
+	    $self->{"name"} = "" ;   # should allway be "root"
+	    if ($self->{"rdlength"} > 0) {
+		    $self->{"optioncode"}   = unpack("n", substr($$data, $offset, 2));
+		    $self->{"optionlength"} = unpack("n", substr($$data, $offset+2, 2));
+		    $self->{"optiondata"}   = substr($$data, $offset+4, $self->{"optionlength"});
+	    }
+
+	    $self->{"_rcode_flags"}  = pack("N",$self->{"ttl"});
+
+	    $self->{"extendedrcode"} = unpack("C", substr($self->{"_rcode_flags"}, 0, 1));
+	    $self->{"ednsversion"}   = unpack("C", substr($self->{"_rcode_flags"}, 1, 1));
+	    $self->{"ednsflags"}     = unpack("n", substr($self->{"_rcode_flags"}, 2, 2));
+
+	    return bless $self, $class;
+    };
+
+    # This was changed to actually reflect optioncode/data differences in the string output
+    *Net::DNS::RR::OPT::string = sub {
+        my $self = shift;
+        my $basics =
+            "; EDNS Version "     . $self->{"ednsversion"} .
+            "\t UDP Packetsize: " .  $self->{"class"} .
+            "\n; EDNS-RCODE:\t"   . $self->{"extendedrcode"} .
+            " (" . $Net::DNS::RR::OPT::extendedrcodesbyval{ $self->{"extendedrcode"} }. ")" .
+            "\n; EDNS-FLAGS:\t"   . sprintf("0x%04x", $self->{"ednsflags"}) .
+            "\n";
+        # Technically, there can be multiple options, but the rest of Net::DNS::RR:OPT
+        #  just assumes one and ignores any others, and that's all we really need for now anyways
+        my $optdata = "";
+        if($self->{"optioncode"}) {
+            $optdata =
+                "; EDNS Option Code: " . $self->{"optioncode"} .
+                "\n; EDNS Option Len: " . $self->{"optionlength"} .
+                "\n; EDNS Option Hex Data: " . unpack('H*', $self->{"optiondata"}) .
+                "\n";
+        }
+
+        return $basics . $optdata;
+    };
+}
+
 sub safe_rmtree {
     my $target = shift;
     if(-e $target) {

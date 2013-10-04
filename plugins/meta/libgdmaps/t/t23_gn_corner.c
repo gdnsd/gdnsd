@@ -29,14 +29,6 @@ int main(int argc, char* argv[]) {
 
     gdmaps_t* gdmaps = gdmaps_test_init(argv[1]);
     unsigned tnum = 0;
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "192.0.2.1", "\1", 1);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c02:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", "\1", 6);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "1234:000F::", "\2", 17);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "1234:8000::1", "\1", 18);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "1234:CFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", "\2", 19);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "1234:FFFF::1", "\1", 36);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "1234:FFFF:1234:FFFF:FFFF:FFFF:FFFF:FFFF", "\2", 48);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "10.223.128.177", "\2\1", 15);
+    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "79.125.0.0", "\2", 17);
     gdmaps_destroy(gdmaps);
 }
-

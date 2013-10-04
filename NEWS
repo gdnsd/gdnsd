@@ -1,3 +1,25 @@
+1.10.1 - 2013-10-04
+    Bugfixes:
+      A faulty assert() was removed from the plugin_geoip code:
+        This assert failure could be triggered in a debug build
+          of the daemon by a carefully crafted request packet, but a
+          normal cache would never generate such a packet intentionally.
+        No known problems for non-debug builds (which should include all
+          "normal" builds from debs/rpms, etc), but if you're running
+          a debug build on the internet, it can be DoS'd with this.
+      plugin_geoip "nets" data normalization was buggy when presented
+        with certain odd sets of un-normalized networks which had
+        overlapping and/or mergeable subnets in the data.  All known cases
+        are now handled correctly. In the case of a complete conflict
+        (exact same subnet/mask mapped to two different results explicitly),
+        the choice between the two variants is arbitrary and a warning is
+        issued (before, this resulted in load failure).
+      Removed debugging and gdnsd_geoip_test text output length limitations
+        on very long dclists.
+      Fixed a testsuite bug which resulted in a false failure if
+        the system's /usr/share/GeoIP/ contained database
+        formats other Country, Region, and City.
+
 1.10.0 - 2013-09-04
     Features:
       The configuration syntax now supports include files.

@@ -49,7 +49,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
 //   state assert()'d expensively in debug builds.
 // Regardless, storage is also realloc'd down to exact size.
 F_NONNULL
-bool nlist_finish(nlist_t* nl);
+void nlist_finish(nlist_t* nl);
 
 // must pass through _finish() before *any* of the xlate/merge funcs below
 F_NONNULL

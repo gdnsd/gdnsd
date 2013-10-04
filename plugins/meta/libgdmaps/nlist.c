@@ -38,8 +38,7 @@ struct _nlist {
     char* map_name;
     unsigned alloc;
     unsigned count;
-    bool pre_norm;
-    bool finished;
+    bool normalized;
 };
 
 nlist_t* nlist_new(const char* map_name, const bool pre_norm) {
@@ -49,8 +48,7 @@ nlist_t* nlist_new(const char* map_name, const bool pre_norm) {
     nl->map_name = strdup(map_name);
     nl->alloc = NLIST_INITSIZE;
     nl->count = 0;
-    nl->pre_norm = pre_norm;
-    nl->finished = false;
+    nl->normalized = pre_norm;
     return nl;
 }
 
@@ -62,8 +60,7 @@ static nlist_t* nlist_clone(const nlist_t* nl) {
     nlc->map_name = strdup(nl->map_name);
     nlc->alloc = nl->alloc;
     nlc->count = nl->count;
-    nlc->pre_norm = nl->pre_norm;
-    nlc->finished = nl->finished;
+    nlc->normalized = nl->normalized;
     nlc->nets = malloc(sizeof(net_t) * nlc->alloc);
     memcpy(nlc->nets, nl->nets, sizeof(net_t) * nlc->count);
     return nlc;
@@ -150,30 +147,6 @@ static int net_sorter(const void* a_void, const void* b_void) {
     return rv;
 }
 
-// sort and check for dupes
-F_NONNULL
-static bool nlist_normalize1(nlist_t* nl) {
-    dmn_assert(nl);
-
-    if(nl->count) {
-        qsort(nl->nets, nl->count, sizeof(net_t), net_sorter);
-
-        for(unsigned i = 0; i < (nl->count - 1); i++) {
-            net_t* net_a = &nl->nets[i];
-            net_t* net_b = &nl->nets[i + 1];
-            if(net_a->mask == net_b->mask && !memcmp(net_a->ipv6, net_b->ipv6, 16)) {
-               // technically, we could allow this to succeed if dclists are identical,
-               //  but we'd have to delete one and rewrite the list, as we do during n2...
-               log_err("plugin_geoip: map '%s': duplicate network %s/%u",
-                   nl->map_name, logf_ipv6(net_a->ipv6), net_a->mask);
-               return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 F_NONNULL F_PURE
 static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned mask) {
     dmn_assert(v6a); dmn_assert(v6b);
@@ -216,7 +189,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
     // Because this is happening back-to-front after each append, there's
     //   no need to create (or later deal with) holes in the array as we
     //   do during normalize2() for unsorted inputs.
-    if(nl->pre_norm) {
+    if(nl->normalized) {
         assert_clear_mask_bits(this_net->ipv6, mask);
         unsigned idx = nl->count;
         while(--idx > 0) {
@@ -238,22 +211,32 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
     }
 }
 
-// merge adjacent nets with identical dclists recursively...
-F_NONNULL
-static void nlist_normalize2(nlist_t* nl) {
+F_NONNULL F_PURE
+static bool net_eq(const net_t* na, const net_t* nb) {
+    dmn_assert(na); dmn_assert(nb);
+    return na->mask == nb->mask && !memcmp(na->ipv6, nb->ipv6, 16);
+}
+
+// normalize ugly random-ish lists
+static void nlist_normalize(nlist_t* nl, const bool post_merge) {
     dmn_assert(nl);
 
     if(nl->count) {
+        if(!post_merge)
+            qsort(nl->nets, nl->count, sizeof(net_t), net_sorter);
+
         unsigned idx = nl->count;
         unsigned newcount = nl->count;
         while(--idx > 0) {
             net_t* nb = &nl->nets[idx];
             net_t* na = &nl->nets[idx - 1];
-            if(mergeable_nets(na, nb)) {
-                // na should have the differential bit clear
-                //   thanks to pre-sorting, so just needs mask--
+            const bool ab_eq = net_eq(na, nb);
+            if(ab_eq || mergeable_nets(na, nb)) {
                 nb->mask = MASK_DELETED;
-                na->mask--;
+                if(!ab_eq)
+                    na->mask--;
+                else if(na->dclist != nb->dclist)
+                    log_warn("plugin_geoip: map '%s' nets: Exact duplicate networks with conflicting dclists at %s/%u", nl->map_name, logf_ipv6(na->ipv6), na->mask);
                 newcount--;
                 unsigned upidx = idx + 1;
                 while(upidx < nl->count) {
@@ -292,34 +275,26 @@ static void nlist_normalize2(nlist_t* nl) {
             nl->nets = realloc(nl->nets, sizeof(net_t) * nl->alloc);
         }
     }
+
+    nl->normalized = true;
 }
 
 F_NONNULL
-bool nlist_finish(nlist_t* nl) {
+void nlist_finish(nlist_t* nl) {
     dmn_assert(nl);
-
-    bool rv = false;
-    if(nl->pre_norm) {
+    if(nl->normalized) {
 #ifndef NDEBUG
         // assert normalization in debug builds via clone->normalize->compare
         nlist_t* nlc = nlist_clone(nl);
-        dmn_assert(!nlist_normalize1(nlc));
-        nlist_normalize2(nlc);
+        nlist_normalize(nlc, false);
         dmn_assert(nlc->count == nl->count);
         dmn_assert(!memcmp(nlc->nets, nl->nets, sizeof(net_t) * nlc->count));
         nlist_destroy(nlc);
 #endif
-        nl->finished = true;
     }
     else {
-        rv = nlist_normalize1(nl);
-        if(!rv) {
-            nlist_normalize2(nl);
-            nl->finished = true;
-        }
+        nlist_normalize(nl, false);
     }
-
-    return rv;
 }
 
 F_NONNULL F_PURE
@@ -344,8 +319,8 @@ static bool net_subnet_of(const net_t* sub, const net_t* super) {
 F_NONNULL
 static nlist_t* nlist_merge(const nlist_t* nl_a, const nlist_t* nl_b) {
     dmn_assert(nl_a); dmn_assert(nl_b);
-    dmn_assert(nl_a->finished);
-    dmn_assert(nl_b->finished);
+    dmn_assert(nl_a->normalized);
+    dmn_assert(nl_b->normalized);
 
     nlist_t* merged = nlist_new(nl_a->map_name, false);
 
@@ -383,17 +358,7 @@ static nlist_t* nlist_merge(const nlist_t* nl_a, const nlist_t* nl_b) {
         n_a++;
     }
 
-    // custom finisher for merges: assert n1, do actual n2 work
-#ifndef NDEBUG
-    nlist_t* mc = nlist_clone(merged);
-    dmn_assert(!nlist_normalize1(mc));
-    dmn_assert(mc->count == merged->count);
-    dmn_assert(!memcmp(mc->nets, merged->nets, sizeof(net_t) * mc->count));
-    nlist_destroy(mc);
-#endif
-    nlist_normalize2(merged);
-    merged->finished = true;
-
+    nlist_normalize(merged, true);
     return merged;
 }
 
@@ -413,7 +378,7 @@ static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* n
     //   ntree node...
     if(nl < nl_end && net_subnet_of(nl, &tree_net)) {
         // exact match, consume...
-        if(tree_net.mask == nl->mask && !memcmp(tree_net.ipv6, nl->ipv6, 16)) { // exact match on zero
+        if(tree_net.mask == nl->mask) {
             (*nlp)++; // consume *nlp and move to next
             // need to pre-check for a deeper subnet next in the list.
             // We use the consumed entry as the new default and keep recursing
@@ -459,25 +424,20 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
     SETBIT_v6(tree_net.ipv6, tree_net.mask - 1);
     nxt_rec_dir(nl, nl_end, nt, tree_net, nt_idx, true);
 
-    // catch missed optimizations during final translation,
-    //   which should be on the default dclist zero
-    //   due to it being implicit for undefined nets in the list,
-    //   and thus not merged with true list entries...
-    unsigned rv;
+    unsigned rv = nt_idx;
+
+    // catch missed optimizations during final translation
     if(unlikely(nt->store[nt_idx].zero == nt->store[nt_idx].one) && likely(nt_idx > 0)) {
-        dmn_assert(nt->store[nt_idx].zero == NN_SET_DCLIST(0));
         nt->count--; // delete the just-added node
-        rv = NN_SET_DCLIST(0); // retval is now a dclist rather than a node...
+        rv = nt->store[nt_idx].zero;
     }
-    else {
-        rv = nt_idx;
-    }
+
     return rv;
 }
 
 ntree_t* nlist_xlate_tree(const nlist_t* nl) {
     dmn_assert(nl);
-    dmn_assert(nl->finished);
+    dmn_assert(nl->normalized);
 
     ntree_t* nt = ntree_new();
     const net_t* nlnet = &nl->nets[0];

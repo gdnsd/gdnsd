@@ -29,9 +29,9 @@
   fun:dnsio_tcp_start
 }
 {
-  dnsio_udp_pctx
+  dnspacket_context
   Memcheck:Leak
-  fun:calloc
+  ...
   fun:dnspacket_context_new
-  fun:dnsio_udp_start
+  ...
 }

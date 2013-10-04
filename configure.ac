@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([gdnsd],[1.10.0],[blblack@gmail.com],[gdnsd])
+AC_INIT([gdnsd],[1.10.1],[blblack@gmail.com],[gdnsd])
 AC_CONFIG_SRCDIR([gdnsd/main.c])
 AC_CONFIG_AUX_DIR([acaux])
 AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])

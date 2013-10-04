@@ -51,11 +51,6 @@ static bool dmn_debug = false;
 //   non-debug builds.
 static bool send_stderr_info = true;
 
-// Length of the whole format buffer
-#ifndef DMN_FMTBUF_SIZE
-#define DMN_FMTBUF_SIZE 4096U
-#endif
-
 #ifndef NDEBUG
 // Log message prefixes when using stderr
 static const char* pfx_debug = " debug: ";
@@ -73,9 +68,17 @@ static char* our_logname = NULL;
 /*** fmtbuf code *****************************************************/
 /*********************************************************************/
 
+// These define the buffer count, size of first buffer, and shift
+//   value sets how fast the buffer sizes grow
+// At these settings (4, 10, 2), the buffer sizes are:
+//   1024, 4096, 16384, 65536
+#define FMTBUF_CT 4U
+#define FMTBUF_START 10U
+#define FMTBUF_STEP 2U
+
 typedef struct {
-    unsigned used;
-    char buf[DMN_FMTBUF_SIZE];
+    unsigned used[FMTBUF_CT];
+    char* bufs[FMTBUF_CT];
 } fmtbuf_t;
 
 static pthread_key_t fmtbuf_key;
@@ -92,11 +95,23 @@ char* dmn_fmtbuf_alloc(unsigned size) {
         fmtbuf = calloc(1, sizeof(fmtbuf_t));
         pthread_setspecific(fmtbuf_key, (void*)fmtbuf);
     }
-    if(fmtbuf->used + size > DMN_FMTBUF_SIZE)
+
+    char* rv = NULL;
+    unsigned bsize = 1U << FMTBUF_START;
+    for(unsigned i = 0; i < FMTBUF_CT; i++) {
+        if(!fmtbuf->bufs[i])
+            fmtbuf->bufs[i] = malloc(bsize);
+        if((bsize - fmtbuf->used[i]) >= size) {
+            rv = &fmtbuf->bufs[i][fmtbuf->used[i]];
+            fmtbuf->used[i] += size;
+            break;
+        }
+        bsize <<= FMTBUF_STEP;
+    }
+
+    if(!rv)
         dmn_log_fatal("BUG: format buffer exhausted");
-    char* retval = &fmtbuf->buf[fmtbuf->used];
-    fmtbuf->used += size;
-    return retval;
+    return rv;
 }
 
 // Reset (free allocations within) the format buffer,
@@ -106,7 +121,8 @@ void dmn_fmtbuf_reset(void) {
     pthread_once(&fmtbuf_key_once, fmtbuf_make_key);
     fmtbuf = pthread_getspecific(fmtbuf_key);
     if(fmtbuf)
-        fmtbuf->used = 0;
+        for(unsigned i = 0; i < FMTBUF_CT; i++)
+            fmtbuf->used[i] = 0;
 }
 
 /**********************************************************************
