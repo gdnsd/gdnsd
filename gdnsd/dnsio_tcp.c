@@ -32,6 +32,7 @@
 #include "dnswire.h"
 #include "dnspacket.h"
 #include "gdnsd/log.h"
+#include "gdnsd/net.h"
 #include "gdnsd/prcu-priv.h"
 
 typedef enum {
@@ -309,7 +310,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 #define SOL_TCP IPPROTO_TCP
 #endif
 
-int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED) {
+int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED, const bool reuseport) {
 
     dmn_assert(asin);
 
@@ -326,6 +327,12 @@ int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED) {
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", logf_errno());
 
+#ifdef SO_REUSEPORT
+    if(reuseport)
+        if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+            log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
+#endif
+
 #ifdef TCP_DEFER_ACCEPT
     const int opt_timeout = timeout;
     if(setsockopt(sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof opt_timeout) == -1)
@@ -339,21 +346,24 @@ int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED) {
     return sock;
 }
 
-bool tcp_dns_listen_setup(dns_addr_t *addrconf) {
+bool tcp_dns_listen_setup(dns_thread_t* t) {
+    dmn_assert(t);
+
+    const dns_addr_t* addrconf = t->ac;
     dmn_assert(addrconf);
 
     const anysin_t* asin = &addrconf->addr;
 
-    addrconf->tcp_sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout);
-    if(bind(addrconf->tcp_sock, &asin->sa, asin->len)) {
+    t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout, t->ac->tcp_threads > 1);
+    if(bind(t->sock, &asin->sa, asin->len)) {
         if(errno == EADDRNOTAVAIL) {
             if(addrconf->autoscan) {
                 log_warn("Could not bind TCP socket %s (%s), configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(asin), logf_errno());
-                addrconf->tcp_autoscan_bind_failed = true;
+                t->autoscan_bind_failed = true;
                 return false;
             }
             else if(addrconf->late_bind_secs) {
-                addrconf->tcp_need_late_bind = true;
+                t->need_late_bind = true;
                 log_info("TCP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
                 const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
                 return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
@@ -362,8 +372,8 @@ bool tcp_dns_listen_setup(dns_addr_t *addrconf) {
         log_fatal("Failed to bind() TCP socket to %s: %s", logf_anysin(asin), logf_errno());
     }
 
-    if(listen(addrconf->tcp_sock, addrconf->tcp_clients_per_socket) == -1)
-        log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_socket, logf_anysin(asin), logf_errno());
+    if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
+        log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(asin), logf_errno());
 
     return false;
 }
@@ -380,23 +390,24 @@ static void ztstate_online(struct ev_loop* loop V_UNUSED, ev_check* w V_UNUSED, 
     gdnsd_prcu_rdr_online();
 }
 
-void* dnsio_tcp_start(void* addrconf_asvoid) {
-    dmn_assert(addrconf_asvoid);
+void* dnsio_tcp_start(void* thread_asvoid) {
+    dmn_assert(thread_asvoid);
 
-    const dns_addr_t* addrconf = (const dns_addr_t*)addrconf_asvoid;
+    const dns_thread_t* t = (const dns_thread_t*)thread_asvoid;
+    const dns_addr_t* addrconf = t->ac;
 
     tcpdns_thread_t* thread_ctx = malloc(sizeof(tcpdns_thread_t));
-    thread_ctx->pctx = dnspacket_context_new(addrconf->tcp_threadnum, false);
+    thread_ctx->pctx = dnspacket_context_new(t->threadnum, false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
     thread_ctx->num_conn_watchers = 0;
     thread_ctx->timeout = addrconf->tcp_timeout;
-    thread_ctx->max_clients = addrconf->tcp_clients_per_socket;
+    thread_ctx->max_clients = addrconf->tcp_clients_per_thread;
 
-    if(addrconf->tcp_need_late_bind) {
+    if(t->need_late_bind) {
         const anysin_t* asin = &addrconf->addr;
-        while(bind(addrconf->tcp_sock, &asin->sa, asin->len)) {
+        while(bind(t->sock, &asin->sa, asin->len)) {
             if(errno != EADDRNOTAVAIL) {
                 log_err("Failed late bind() of TCP socket to %s: %s.  This listener thread is now shutting down.  Late bind attempts for this socket will no longer be attempted!", logf_anysin(asin), logf_errno());
                 pthread_exit(NULL);
@@ -404,12 +415,12 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
             sleep(addrconf->late_bind_secs);
         }
 
-        if(listen(addrconf->tcp_sock, addrconf->tcp_clients_per_socket) == -1)
-            log_fatal("Failed to listen(s, %i) on late-bound TCP socket %s: %s", addrconf->tcp_clients_per_socket, logf_anysin(asin), logf_errno());
+        if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
+            log_fatal("Failed to listen(s, %i) on late-bound TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(asin), logf_errno());
 
         log_info("Late bind() of TCP socket to %s succeeded, serving requests now", logf_anysin(asin));
     }
-    else if(addrconf->tcp_autoscan_bind_failed) {
+    else if(t->autoscan_bind_failed) {
         // already logged this condition back when bind() failed, but it's simpler
         //  to spawn the thread and do the dnspacket_context_new() here properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
@@ -418,7 +429,7 @@ void* dnsio_tcp_start(void* addrconf_asvoid) {
     }
 
     struct ev_io* accept_watcher = thread_ctx->accept_watcher = malloc(sizeof(struct ev_io));
-    ev_io_init(accept_watcher, accept_handler, addrconf->tcp_sock, EV_READ);
+    ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
     ev_set_priority(accept_watcher, -2);
     accept_watcher->data = thread_ctx;
 
