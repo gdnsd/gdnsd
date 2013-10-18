@@ -66,7 +66,6 @@ global_config_t gconfig = {
     .monitor_force_v6_up = false,
     .zones_rfc1035_strict_startup = true,
     .zones_rfc1035_auto = true,
-    .use_reuseport = false,
     .chaos_len = 0,
      // legal values are -20 to 20, so -21
      //  is really just an indicator that the user
@@ -404,7 +403,7 @@ static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr
                     }
                 }
 
-                if(!gconfig.use_reuseport) {
+                if(!gdnsd_reuseport_ok()) {
                     if(addrconf->udp_threads > 1) {
                         log_warn("DNS listen address '%s': option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", lspec, addrconf->udp_threads);
                         addrconf->udp_threads = 1;
@@ -523,7 +522,6 @@ void conf_load(void) {
         .tcp_threads = 1U,
     };
 
-    bool reuseport_disabled = false;
     bool def_tcp_disabled = false;
     bool debug_tmp = false;
 
@@ -569,10 +567,7 @@ void conf_load(void) {
             }
         }
 
-        CFG_OPT_BOOL_ALTSTORE(options, disable_reuseport, reuseport_disabled);
-        if(!reuseport_disabled && gdnsd_reuseport_ok())
-            gconfig.use_reuseport = true;
-        if(!gconfig.use_reuseport) {
+        if(!gdnsd_reuseport_ok()) {
             if(addr_defs.udp_threads > 1) {
                 log_warn("The global option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", addr_defs.udp_threads);
                 addr_defs.udp_threads = 1;

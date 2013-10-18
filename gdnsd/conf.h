@@ -64,7 +64,6 @@ typedef struct {
     bool     monitor_force_v6_up;
     bool     zones_rfc1035_strict_startup;
     bool     zones_rfc1035_auto;
-    bool     use_reuseport;
     int      priority;
     unsigned chaos_len;
     unsigned zones_default_ttl;
