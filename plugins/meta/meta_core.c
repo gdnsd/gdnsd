@@ -439,6 +439,8 @@ mon_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
         resource_t* res = &resources[i];
         const char* res_name = vscf_hash_get_key_byindex(resources_cfg, i, NULL);
         vscf_data_t* res_cfg = (vscf_data_t*)vscf_hash_get_data_byindex(resources_cfg, i);
+        if(!vscf_is_hash(res_cfg))
+            log_fatal("plugin_" PNSTR ": the value of resource '%s' must be a hash", res_name);
         vscf_hash_inherit_all(config, res_cfg, true);
         make_resource(res, res_name, res_cfg);
     }
