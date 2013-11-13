@@ -54,6 +54,7 @@ static const char chaos_def[] = "gdnsd";
 // Global config, readonly after loaded from conf file
 global_config_t gconfig = {
     .dns_addrs = NULL,
+    .dns_threads = NULL,
     .http_addrs = NULL,
     .username = DEF_USERNAME,
     .chaos = NULL,
@@ -76,6 +77,7 @@ global_config_t gconfig = {
     .max_http_clients = 128U,
     .http_timeout = 5U,
     .num_dns_addrs = 0U,
+    .num_dns_threads = 0U,
     .num_http_addrs = 0U,
     .max_response = 16384U,
     .max_cname_depth = 16U,
@@ -305,11 +307,11 @@ static bool dns_addr_is_dupe(const anysin_t* new_addr) {
     return false;
 }
 
-static void process_listen(const vscf_data_t* listen_opt, const unsigned def_dns_port, const unsigned def_tcp_cps, const unsigned def_tcp_to, const bool def_tcp_disabled, const unsigned def_udp_recv_width, const unsigned def_udp_rcvbuf, const unsigned def_udp_sndbuf, const unsigned def_late_bind_secs) {
-
+static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+    dmn_assert(addr_defs);
     anysin_t temp_asin;
 
-    if(!listen_opt || !vscf_array_get_len(listen_opt)) {
+    if(!listen_opt) {
         const bool has_v6 = gdnsd_tcp_v6_ok();
         bool v6_warned = false;
 
@@ -345,98 +347,126 @@ static void process_listen(const vscf_data_t* listen_opt, const unsigned def_dns
                 continue;
 
             if(temp_asin.sa.sa_family == AF_INET6)
-                temp_asin.sin6.sin6_port = htons(def_dns_port);
+                temp_asin.sin6.sin6_port = htons(addr_defs->dns_port);
             else
-                temp_asin.sin.sin_port = htons(def_dns_port);
+                temp_asin.sin.sin_port = htons(addr_defs->dns_port);
 
             if(dns_addr_is_dupe(&temp_asin))
                 continue;
 
             gconfig.dns_addrs = realloc(gconfig.dns_addrs, (gconfig.num_dns_addrs + 1) * sizeof(dns_addr_t));
             dns_addr_t* addrconf = &gconfig.dns_addrs[gconfig.num_dns_addrs++];
-
-            memset(addrconf, 0, sizeof(dns_addr_t));
+            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
             memcpy(&addrconf->addr, &temp_asin, sizeof(anysin_t));
-
-            addrconf->tcp_clients_per_socket = def_tcp_cps;
-            addrconf->tcp_timeout = def_tcp_to;
-            addrconf->tcp_disabled = def_tcp_disabled;
-            addrconf->udp_recv_width = def_udp_recv_width;
-            addrconf->udp_rcvbuf = def_udp_rcvbuf;
-            addrconf->udp_sndbuf = def_udp_sndbuf;
-            addrconf->late_bind_secs = def_late_bind_secs;
             addrconf->autoscan = true;
-            dmn_log_info("DNS listener configured by default interface scanning for %s", logf_anysin(&addrconf->addr));
         }
-
-        if(!gconfig.num_dns_addrs)
-            dmn_log_fatal("No valid IP interfaces found to listen on!");
 
         freeifaddrs(ifap);
+
+        if(!gconfig.num_dns_addrs)
+            dmn_log_fatal("Default, automatic interface scanning found no valid addresses to listen on (try explicitly configuring your listen addresses?)");
+    }
+    else if(vscf_is_hash(listen_opt)) {
+        gconfig.num_dns_addrs = vscf_hash_get_len(listen_opt);
+        gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+        for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
+            dns_addr_t* addrconf = &gconfig.dns_addrs[i];
+            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
+            const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
+            const vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
+            if(!vscf_is_hash(addr_opts))
+                log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
+
+            CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, late_bind_secs, 300LU, addrconf->late_bind_secs);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_recv_width, 1LU, 32LU, addrconf->udp_recv_width);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
+            CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, udp_threads, 1024LU, addrconf->udp_threads);
+
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_socket, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
+            if(vscf_hash_get_data_byconstkey(addr_opts, "tcp_clients_per_socket", false))
+                log_warn("DNS listen address '%s': option 'tcp_clients_per_socket' is deprecated and is replaced by 'tcp_clients_per_thread'", lspec);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
+            CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, tcp_threads, 1024LU, addrconf->tcp_threads);
+
+            bool tcp_disabled = false;
+            CFG_OPT_BOOL_ALTSTORE(addr_opts, disable_tcp, tcp_disabled);
+            if(vscf_hash_get_data_byconstkey(addr_opts, "disable_tcp", false)) {
+                log_warn("DNS listen address '%s': option 'disable_tcp' is deprecated.  Replace with 'tcp_threads = 0'", lspec);
+                if(tcp_disabled) { // if they set it "true" as opposed to pointlessly "false"
+                    if(vscf_hash_get_data_byconstkey(addr_opts, "tcp_threads", false) && addrconf->tcp_threads > 0)
+                        log_fatal("DNS listen address '%s': option 'disable_tcp' cannot be used in conjunction with a positive 'tcp_threads' value", lspec);
+                    addrconf->tcp_threads = 0;
+                }
+            }
+
+            if(!gdnsd_reuseport_ok()) {
+                if(addrconf->udp_threads > 1) {
+                    log_warn("DNS listen address '%s': option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", lspec, addrconf->udp_threads);
+                    addrconf->udp_threads = 1;
+                }
+                if(addrconf->tcp_threads > 1) {
+                    log_warn("DNS listen address '%s': option 'tcp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", lspec, addrconf->tcp_threads);
+                    addrconf->tcp_threads = 1;
+                }
+            }
+
+            make_addr(lspec, addrconf->dns_port, &addrconf->addr);
+            vscf_hash_iterate(addr_opts, true, bad_key, (void*)"per-address listen option");
+        }
     }
     else {
-        if(vscf_is_hash(listen_opt)) {
-            gconfig.num_dns_addrs = vscf_hash_get_len(listen_opt);
-            gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
-            for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
-                dns_addr_t* addrconf = &gconfig.dns_addrs[i];
-                addrconf->tcp_clients_per_socket = def_tcp_cps;
-                addrconf->tcp_timeout = def_tcp_to;
-                addrconf->tcp_disabled = def_tcp_disabled;
-                addrconf->udp_recv_width = def_udp_recv_width;
-                addrconf->udp_rcvbuf = def_udp_rcvbuf;
-                addrconf->udp_sndbuf = def_udp_sndbuf;
-                const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
-                const vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
-                if(!vscf_is_hash(addr_opts))
-                    log_fatal("per-address options for listen address '%s' must be a hash", lspec);
-
-                CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_socket, 1LU, 65535LU, addrconf->tcp_clients_per_socket);
-                CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
-                CFG_OPT_BOOL_ALTSTORE(addr_opts, disable_tcp, addrconf->tcp_disabled);
-                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_recv_width, 1LU, 32LU, addrconf->udp_recv_width);
-                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
-                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
-                CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, late_bind_secs, 300LU, addrconf->late_bind_secs);
-                make_addr(lspec, def_dns_port, &addrconf->addr);
-                vscf_hash_iterate(addr_opts, true, bad_key, (void*)"per-address listen option");
-                dmn_log_info("DNS listener configured for %s", logf_anysin(&addrconf->addr));
-            }
-        }
-        else {
-            gconfig.num_dns_addrs = vscf_array_get_len(listen_opt);
-            gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
-            for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
-                dns_addr_t* addrconf = &gconfig.dns_addrs[i];
-                addrconf->tcp_clients_per_socket = def_tcp_cps;
-                addrconf->tcp_timeout = def_tcp_to;
-                addrconf->tcp_disabled = def_tcp_disabled;
-                addrconf->udp_recv_width = def_udp_recv_width;
-                addrconf->udp_rcvbuf = def_udp_rcvbuf;
-                addrconf->udp_sndbuf = def_udp_sndbuf;
-                addrconf->late_bind_secs = def_late_bind_secs;
-                const vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
-                if(!vscf_is_simple(lspec))
-                    log_fatal("Config option 'listen': all listen specs must be strings");
-                make_addr(vscf_simple_get_data(lspec), def_dns_port, &addrconf->addr);
-                dmn_log_info("DNS listener configured for %s", logf_anysin(&addrconf->addr));
-            }
+        gconfig.num_dns_addrs = vscf_array_get_len(listen_opt);
+        gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+        for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
+            dns_addr_t* addrconf = &gconfig.dns_addrs[i];
+            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
+            const vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
+            if(!vscf_is_simple(lspec))
+                log_fatal("Config option 'listen': all listen specs must be strings");
+            make_addr(vscf_simple_get_data(lspec), addr_defs->dns_port, &addrconf->addr);
         }
     }
-}
 
-static void assign_thread_nums(void) {
+    if(!gconfig.num_dns_addrs)
+        dmn_log_fatal("DNS listen addresses explicitly configured as an empty set - cannot continue without at least one address!");
+
+    // Now that gconfig.dns_addrs has been completed in one of three ways above,
+    //   use it to populate gconfig.dns_threads....
+    gconfig.num_dns_threads = 0;
+    for(unsigned i = 0; i < gconfig.num_dns_addrs; i++)
+        gconfig.num_dns_threads += (gconfig.dns_addrs[i].udp_threads + gconfig.dns_addrs[i].tcp_threads);
+
+    if(!gconfig.num_dns_threads)
+        dmn_log_fatal("All listen addresses configured for zero UDP and zero TCP threads - cannot continue without at least one listener!");
+
+    gconfig.dns_threads = calloc(gconfig.num_dns_threads, sizeof(dns_thread_t));
+
     unsigned tnum = 0;
-    unsigned addr_ct = gconfig.num_dns_addrs;
+    for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
+        dns_addr_t* a = &gconfig.dns_addrs[i];
+        for(unsigned j = 0; j < a->udp_threads; j++) {
+            dns_thread_t* t = &gconfig.dns_threads[tnum];
+            t->ac = a;
+            t->is_udp = true;
+            t->threadnum = tnum++;
+        }
+        for(unsigned j = 0; j < a->tcp_threads; j++) {
+            dns_thread_t* t = &gconfig.dns_threads[tnum];
+            t->ac = a;
+            t->is_udp = false;
+            t->threadnum = tnum++;
+        }
+        if(!(a->udp_threads + a->tcp_threads))
+            dmn_log_warn("DNS listen address %s explicitly configured with no UDP or TCP threads - nothing is actually listening on this address!",
+                logf_anysin(&a->addr));
+        else
+            dmn_log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
+                a->udp_threads, a->tcp_threads, logf_anysin(&a->addr));
+    }
 
-    for(unsigned i = 0; i < addr_ct; i++)
-        gconfig.dns_addrs[i].udp_threadnum = tnum++;
-
-    for(unsigned i = 0; i < addr_ct; i++)
-        if(!gconfig.dns_addrs[i].tcp_disabled)
-            gconfig.dns_addrs[i].tcp_threadnum = tnum++;
-
-    gconfig.num_io_threads = tnum;
+    dmn_assert(tnum == gconfig.num_dns_threads);
 }
 
 static const vscf_data_t* conf_load_vscf(void) {
@@ -485,14 +515,21 @@ void conf_load(void) {
     const vscf_data_t* http_listen_opt = NULL;
     const vscf_data_t* psearch_array = NULL;
     const char* chaos_data = chaos_def;
-    unsigned def_dns_port = 53U;
     unsigned def_http_port = 3506U;
-    unsigned def_tcp_cps = 128U;
-    unsigned def_tcp_to = 5U;
-    unsigned def_udp_recv_width = 8U;
-    unsigned def_udp_rcvbuf = 0U;
-    unsigned def_udp_sndbuf = 0U;
-    unsigned def_late_bind_secs = 0U;
+
+    dns_addr_t addr_defs = {
+        .autoscan = false,
+        .dns_port = 53U,
+        .late_bind_secs = 0U,
+        .udp_recv_width = 8U,
+        .udp_rcvbuf = 0U,
+        .udp_sndbuf = 0U,
+        .udp_threads = 1U,
+        .tcp_clients_per_thread = 128U,
+        .tcp_timeout = 5U,
+        .tcp_threads = 1U,
+    };
+
     bool def_tcp_disabled = false;
     bool debug_tmp = false;
 
@@ -501,6 +538,7 @@ void conf_load(void) {
             log_fatal("Config key 'options': wrong type (must be hash)");
         CFG_OPT_BOOL_ALTSTORE(options, debug, debug_tmp);
         dmn_set_debug(debug_tmp);
+
         CFG_OPT_INT(options, priority, -20L, 20L);
         CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, realtime_stats);
@@ -511,14 +549,43 @@ void conf_load(void) {
         CFG_OPT_UINT(options, log_stats, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, max_http_clients, 1LU, 65535LU);
         CFG_OPT_UINT(options, http_timeout, 3LU, 60LU);
-        CFG_OPT_UINT_ALTSTORE_0MIN(options, late_bind_secs, 300LU, def_late_bind_secs);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_socket, 1LU, 65535LU, def_tcp_cps);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, def_tcp_to);
+
+        CFG_OPT_UINT_ALTSTORE_0MIN(options, late_bind_secs, 300LU, addr_defs.late_bind_secs);
+        CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
+        CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
+        CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
+        CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, addr_defs.udp_sndbuf);
+        CFG_OPT_UINT_ALTSTORE_0MIN(options, udp_threads, 1024LU, addr_defs.udp_threads);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, addr_defs.tcp_timeout);
+
+        // store deprecated + new names of this option to same spot
+        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_socket, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
+        if(vscf_hash_get_data_byconstkey(options, "tcp_clients_per_socket", false))
+            log_warn("The global option 'tcp_clients_per_socket' is deprecated and is replaced by 'tcp_clients_per_thread'");
+
+        CFG_OPT_UINT_ALTSTORE_0MIN(options, tcp_threads, 1024LU, addr_defs.tcp_threads);
         CFG_OPT_BOOL_ALTSTORE(options, disable_tcp, def_tcp_disabled);
-        CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, def_udp_recv_width);
-        CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, def_udp_rcvbuf);
-        CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, def_udp_sndbuf);
-        CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, def_dns_port);
+        if(vscf_hash_get_data_byconstkey(options, "disable_tcp", false)) {
+            log_warn("The global option 'disable_tcp' is deprecated.  Replace with 'tcp_threads = 0'");
+            if(def_tcp_disabled) { // if they set it "true" as opposed to pointlessly "false"
+                if(vscf_hash_get_data_byconstkey(options, "tcp_threads", false) && addr_defs.tcp_threads > 0)
+                    log_fatal("The deprecated option 'disable_tcp' cannot be used in conjunction with a positive 'tcp_threads' value");
+                addr_defs.tcp_threads = 0;
+            }
+        }
+
+        if(!gdnsd_reuseport_ok()) {
+            if(addr_defs.udp_threads > 1) {
+                log_warn("The global option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", addr_defs.udp_threads);
+                addr_defs.udp_threads = 1;
+            }
+            if(addr_defs.tcp_threads > 1) {
+                log_warn("The global option 'tcp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", addr_defs.tcp_threads);
+                addr_defs.tcp_threads = 1;
+            }
+        }
+
         CFG_OPT_UINT_ALTSTORE(options, http_port, 1LU, 65535LU, def_http_port);
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, max_response, 4096LU, 64000LU);
@@ -548,11 +615,8 @@ void conf_load(void) {
     // Set up the http listener data
     process_http_listen(http_listen_opt, def_http_port);
 
-    // Initial setup of the listener data, modding the per-key num_socks as it goes and referencing them in the dnsaddr_t's
-    process_listen(listen_opt, def_dns_port, def_tcp_cps, def_tcp_to, def_tcp_disabled, def_udp_recv_width, def_udp_rcvbuf, def_udp_sndbuf, def_late_bind_secs);
-
-    // Assign globally unique thread numbers for each socket-handling thread
-    assign_thread_nums();
+    // Initial setup of the listener data
+    process_listen(listen_opt, &addr_defs);
 
     gdnsd_plugins_set_search_path(psearch_array);
 
@@ -622,14 +686,17 @@ void conf_load(void) {
 
 bool dns_lsock_init(void) {
     bool need_caps = false;
-    const unsigned num_addrs = gconfig.num_dns_addrs;
-    for(unsigned i = 0; i < num_addrs; i++) {
-        dns_addr_t* addrconf = &gconfig.dns_addrs[i];
-        if(udp_sock_setup(addrconf))
-            need_caps = true;
-        if(!addrconf->tcp_disabled)
-            if(tcp_dns_listen_setup(addrconf))
+
+    for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
+        dns_thread_t* t = &gconfig.dns_threads[i];
+        if(t->is_udp) {
+            if(udp_sock_setup(t))
                 need_caps = true;
+        }
+        else {
+            if(tcp_dns_listen_setup(t))
+                need_caps = true;
+       }
     }
 
     return need_caps;

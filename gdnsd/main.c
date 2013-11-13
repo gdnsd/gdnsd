@@ -54,21 +54,16 @@
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
 
-static pthread_t* io_threadids = NULL; // TCP/UDP threads
 static pthread_t zone_data_threadid;
 
 static void threads_cleanup(void) {
-    dmn_assert(io_threadids);
-
-    unsigned num_threads = gconfig.num_io_threads;
-
     pthread_cancel(zone_data_threadid);
-    for(unsigned i = 0; i < num_threads; i++)
-        pthread_cancel(io_threadids[i]);
+    for(unsigned i = 0; i < gconfig.num_dns_threads; i++)
+        pthread_cancel(gconfig.dns_threads[i].threadid);
 
     pthread_join(zone_data_threadid, NULL);
-    for(unsigned i = 0; i < num_threads; i++)
-        pthread_join(io_threadids[i], NULL);
+    for(unsigned i = 0; i < gconfig.num_dns_threads; i++)
+        pthread_join(gconfig.dns_threads[i].threadid, NULL);
 }
 
 F_NONNULL
@@ -213,23 +208,16 @@ static void start_threads(void) {
     pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_JOINABLE);
     pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
 
-    unsigned num_addrs = gconfig.num_dns_addrs;
-    io_threadids = calloc(gconfig.num_io_threads, sizeof(pthread_t));
-
-    // Start UDP threads
-    for(uintptr_t i = 0; i < num_addrs; i++) {
-        const dns_addr_t* addrconf = &gconfig.dns_addrs[i];
-        int pthread_err = pthread_create(&io_threadids[addrconf->udp_threadnum], &attribs, &dnsio_udp_start, (void*)addrconf);
-        if(pthread_err) log_fatal("pthread_create() of UDP DNS thread failed: %s", logf_errnum(pthread_err));
-    }
-
-    // Start TCP threads
-    for(uintptr_t i = 0; i < num_addrs; i++) {
-        const dns_addr_t* addrconf = &gconfig.dns_addrs[i];
-        if(!addrconf->tcp_disabled) {
-            int pthread_err = pthread_create(&io_threadids[addrconf->tcp_threadnum], &attribs, &dnsio_tcp_start, (void*)addrconf);
-            if(pthread_err) log_fatal("pthread_create() of TCP DNS thread failed: %s", logf_errnum(pthread_err));
-        }
+    for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
+        int pthread_err;
+        dns_thread_t* t = &gconfig.dns_threads[i];
+        if(t->is_udp)
+            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, (void*)t);
+        else
+            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, (void*)t);
+        if(pthread_err)
+            log_fatal("pthread_create() of DNS thread %u (for %s:%s) failed: %s",
+                i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_errnum(pthread_err));
     }
 
     int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
@@ -420,7 +408,7 @@ static void init_config(const bool started_as_root) {
         dmn_secure_setup(gconfig.username, gdnsd_get_rootdir());
 
     // Call plugin full_config actions
-    gdnsd_plugins_action_full_config(gconfig.num_io_threads);
+    gdnsd_plugins_action_full_config(gconfig.num_dns_threads);
 
     log_info("Loading zone data...");
     ztree_init();

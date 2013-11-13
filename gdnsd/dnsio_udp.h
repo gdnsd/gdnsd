@@ -25,9 +25,9 @@
 
 // retval indicates need for net bind caps, if possible
 F_NONNULL
-bool udp_sock_setup(dns_addr_t *addrconf);
+bool udp_sock_setup(dns_thread_t* t);
 
 F_NONNULL F_NORETURN
-void* dnsio_udp_start(void* addrconf_asvoid);
+void* dnsio_udp_start(void* thread_asvoid);
 
 #endif // GDNSD_DNSIO_UDP_H

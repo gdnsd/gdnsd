@@ -118,15 +118,15 @@ the values are per-address options, as in:
         tcp_timeout = 7
       },
       192.0.2.2:5353 => {
-        disable_tcp = true
+        udp_threads = 5
       },
     }
   }
 
 The per-address options (which are identical to, and locally override,
-the global option of the same name) are C<late_bind_secs>,
-C<tcp_timeout>, C<tcp_clients_per_socket>, C<disable_tcp>,
-C<udp_recv_width>, C<udp_rcvbuf>, C<udp_sndbuf>.
+the global option of the same name) are C<late_bind_secs>, C<tcp_threads>,
+C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>, C<udp_recv_width>,
+C<udp_rcvbuf>, and C<udp_sndbuf>.
 
 If the listen option isn't specified at all (or is specified as an
 empty array), the default behavior is to scan all available IP (v4 and
@@ -176,13 +176,30 @@ arrangements in all cases where necessary.
 This option is also available on a per-listener basis in the listener
 options hash.
 
-=item B<tcp_clients_per_socket>
+=item B<tcp_threads>
+
+Integer, default 1, min 0, max 1024.  This is the number of separate
+TCP listening sockets and corresponding listener threads that will be created
+for each DNS listener address.  On a multi-core host, increasing this
+parameter (up to at most a small multiple of the CPU core count) may
+increase overall performance.  Note that on hosts without SO_REUSEPORT
+support (notably Linux < 3.9, Solaris), any setting greater than 1 will
+be forced to 1 with a warning, as support multiple sockets/threads
+per-address are not supported without SO_REUSEPORT.
+
+=item B<udp_threads>
+
+Exactly like C<tcp_threads>, but for UDP sockets per DNS listening address.
+
+=item B<tcp_clients_per_thread>
 
 Integer, default 128, min 1, max 65535.  This is maximum number of tcp
 DNS connections gdnsd will allow to occur in parallel per listening tcp
 socket.  Once this limit is reached by a given socket, no new
 connections will be allowed to that socket until one of the existing
-ones closes or times out.
+ones closes or times out.  Note that sockets map 1:1 to threads, and thus
+the total client limit for connecting to a given address would be
+C<tcp_clients_per_thread * tcp_threads> for a given address.
 
 =item B<tcp_timeout>
 
@@ -191,12 +208,6 @@ forcibly shut down if they go idle without receiving and responding to
 a valid query for this many seconds.  L<gdnsd(8)> allows multiple
 requests per connection, and this idle timeout applies to the time
 between requests as well.
-
-=item B<disable_tcp>
-
-Boolean, default false.  If set to true, TCP DNS listeners will not be
-started.  It would be wise to be very sure that you don't have any data
-large enough to require TCP fallback before enabling this.
 
 =item B<udp_recv_width>
 

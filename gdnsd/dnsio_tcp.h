@@ -24,17 +24,17 @@
 #include "conf.h"
 
 F_NONNULL
-void* dnsio_tcp_start(void* addrconf_asvoid);
+void* dnsio_tcp_start(void* thread_asvoid);
 
 // Retval is socket. This is common code re-used by the statio listener as well,
 //  the socket is created and set for non-block, TCP_DEFER_ACCEPT if available, IPV6_V6ONLY
 //  if the sockaddr in "asin" is V6, and SO_REUSEADDR.  The socket is fully ready
 //  for bind()+listen() when returned.
 F_NONNULL
-int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED);
+int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED, const bool reuseport);
 
 // retval indicates network bind caps needed for late binding
 F_NONNULL
-bool tcp_dns_listen_setup(dns_addr_t *addrconf);
+bool tcp_dns_listen_setup(dns_thread_t* t);
 
 #endif // GDNSD_DNSIO_TCP_H
