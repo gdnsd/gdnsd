@@ -136,12 +136,16 @@ static void udp_sock_opts_v6(const int sock) {
         log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", logf_errno());
 }
 
-bool udp_sock_setup(dns_addr_t *addrconf) {
+bool udp_sock_setup(dns_thread_t* t) {
+    dmn_assert(t);
+
+    dns_addr_t* addrconf = t->ac;
     dmn_assert(addrconf);
 
     const anysin_t* asin = &addrconf->addr;
 
     // mod udp_recv_width down to 1 when unsupported, makes other logic simpler
+    // XXX fix this so addrconf can be const?????
     if((!has_mmsg() || RUNNING_ON_VALGRIND) && addrconf->udp_recv_width > 1)
         addrconf->udp_recv_width = 1;
 
@@ -154,6 +158,12 @@ bool udp_sock_setup(dns_addr_t *addrconf) {
     const int opt_one = 1;
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", logf_errno());
+
+#ifdef SO_REUSEPORT
+    if(t->ac->udp_threads > 1)
+        if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+            log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
+#endif
 
     int opt_size;
     socklen_t size_size = sizeof(opt_size);
@@ -226,17 +236,17 @@ bool udp_sock_setup(dns_addr_t *addrconf) {
     else
         udp_sock_opts_v4(sock, gdnsd_anysin_is_anyaddr(asin));
 
-    addrconf->udp_sock = sock;
+    t->sock = sock;
 
     if(bind(sock, &asin->sa, asin->len)) {
         if(errno == EADDRNOTAVAIL) {
             if(addrconf->autoscan) {
                 log_warn("Could not bind UDP socket %s (%s), configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(asin), logf_errno());
-                addrconf->udp_autoscan_bind_failed = true;
+                t->autoscan_bind_failed = true;
                 return false;
             }
             else if(addrconf->late_bind_secs) {
-                addrconf->udp_need_late_bind = true;
+                t->need_late_bind = true;
                 log_info("UDP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
                 return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
             }
@@ -432,18 +442,19 @@ static void thread_clean(void* unused_arg V_UNUSED) {
 }
 
 F_NORETURN
-void* dnsio_udp_start(void* addrconf_asvoid) {
-    dmn_assert(addrconf_asvoid);
+void* dnsio_udp_start(void* thread_asvoid) {
+    dmn_assert(thread_asvoid);
 
-    const dns_addr_t* addrconf = (const dns_addr_t*) addrconf_asvoid;
+    const dns_thread_t* t = (const dns_thread_t*) thread_asvoid;
+    const dns_addr_t* addrconf = t->ac;
 
-    dnspacket_context_t* pctx = dnspacket_context_new(addrconf->udp_threadnum, true);
+    dnspacket_context_t* pctx = dnspacket_context_new(t->threadnum, true);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    if(addrconf->udp_need_late_bind) {
+    if(t->need_late_bind) {
         const anysin_t* asin = &addrconf->addr;
-        while(bind(addrconf->udp_sock, &asin->sa, asin->len)) {
+        while(bind(t->sock, &asin->sa, asin->len)) {
             if(errno != EADDRNOTAVAIL) {
                 log_err("Failed late bind() of UDP socket to %s: %s.  This listener thread is now shutting down.  Late bind attempts for this socket will no longer be attempted!", logf_anysin(asin), logf_errno());
                 pthread_exit(NULL);
@@ -452,7 +463,7 @@ void* dnsio_udp_start(void* addrconf_asvoid) {
         }
         log_info("Late bind() of UDP socket to %s succeeded, serving requests now", logf_anysin(asin));
     }
-    else if(addrconf->udp_autoscan_bind_failed) {
+    else if(t->autoscan_bind_failed) {
         // already logged this condition back when bind() failed, but it's simpler
         //  to spawn the thread and do the dnspacket_context_new() here properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
@@ -469,12 +480,12 @@ void* dnsio_udp_start(void* addrconf_asvoid) {
     if(addrconf->udp_recv_width > 1) {
         log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
             addrconf->udp_recv_width, logf_anysin(&addrconf->addr));
-        mainloop_mmsg(addrconf->udp_recv_width, addrconf->udp_sock, pctx, need_cmsg);
+        mainloop_mmsg(addrconf->udp_recv_width, t->sock, pctx, need_cmsg);
     }
     else
 #endif
     {
-        mainloop(addrconf->udp_sock, pctx, need_cmsg);
+        mainloop(t->sock, pctx, need_cmsg);
     }
 
     pthread_cleanup_pop(1);

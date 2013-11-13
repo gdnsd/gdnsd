@@ -247,7 +247,7 @@ static void populate_stats(void) {
     if(gconfig.realtime_stats || now > pop_statio_time) {
         memset(&statio, 0, sizeof(statio));
 
-        const unsigned nio = gconfig.num_io_threads;
+        const unsigned nio = gconfig.num_dns_threads;
         for(unsigned i = 0; i < nio; i++)
             accumulate_statio(i);
         pop_statio_time = now;
@@ -622,7 +622,7 @@ void statio_init(void) {
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         const anysin_t* asin = &gconfig.http_addrs[i];
-        lsocks[i] = tcp_listen_pre_setup(asin, gconfig.http_timeout);
+        lsocks[i] = tcp_listen_pre_setup(asin, gconfig.http_timeout, false);
         if(bind(lsocks[i], &asin->sa, asin->len))
             log_fatal("Failed to bind() stats TCP socket to %s: %s", logf_anysin(asin), logf_errno());
         if(listen(lsocks[i], 128) == -1)

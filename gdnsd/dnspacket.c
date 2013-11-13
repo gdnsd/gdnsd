@@ -41,14 +41,14 @@ dnspacket_stats_t** dnspacket_stats;
 // Allocates the array of pointers to stats structures, one per I/O thread
 // Called from main thread before I/O threads are spawned
 void dnspacket_global_setup(void) {
-    dnspacket_stats = calloc(gconfig.num_io_threads, sizeof(dnspacket_stats_t*));
+    dnspacket_stats = calloc(gconfig.num_dns_threads, sizeof(dnspacket_stats_t*));
 }
 
 // Called from main thread after starting all of the I/O threads,
 //  ensures they all finish allocating their stats and storing the pointers
 //  into dnspacket_stats before allowing the main thread to continue.
 void dnspacket_wait_stats(void) {
-    const unsigned waitfor = gconfig.num_io_threads;
+    const unsigned waitfor = gconfig.num_dns_threads;
     pthread_mutex_lock(&stats_init_mutex);
     while(stats_initialized < waitfor)
         pthread_cond_wait(&stats_init_cond, &stats_init_mutex);

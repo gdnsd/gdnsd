@@ -44,4 +44,8 @@ int gdnsd_getproto_tcp(void);
 F_PURE
 bool gdnsd_tcp_v6_ok(void);
 
+// Whether SO_REUSEPORT seems to be a runtime-valid sockopt
+F_PURE
+bool gdnsd_reuseport_ok(void);
+
 #endif // GDNSD_NET_H

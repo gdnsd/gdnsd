@@ -36,6 +36,7 @@
 static int tcp_proto = 0;
 static int udp_proto = 0;
 static bool tcp_v6_ok = false;
+static bool reuseport_ok = false;
 
 void gdnsd_init_net(void) {
     struct protoent* pe;
@@ -50,13 +51,24 @@ void gdnsd_init_net(void) {
         log_fatal("getprotobyname('udp') failed");
     udp_proto = pe->p_proto;
 
-    const int sock = socket(PF_INET6, SOCK_STREAM, tcp_proto);
-    if(sock > -1) {
-        close(sock);
+    const int sock_v6 = socket(PF_INET6, SOCK_STREAM, tcp_proto);
+    if(sock_v6 > -1) {
+        close(sock_v6);
         tcp_v6_ok = true;
     }
+
+#ifdef SO_REUSEPORT
+    const int sock_rp = socket(PF_INET, SOCK_DGRAM, udp_proto);
+    if(sock_rp > -1) {
+        const int opt_one = 1;
+        if(!setsockopt(sock_rp, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one))
+            reuseport_ok = true;
+        close(sock_rp);
+    }
+#endif
 }
 
 int gdnsd_getproto_udp(void) { return udp_proto; }
 int gdnsd_getproto_tcp(void) { return tcp_proto; }
 bool gdnsd_tcp_v6_ok(void) { return tcp_v6_ok; }
+bool gdnsd_reuseport_ok(void) { return reuseport_ok; }
