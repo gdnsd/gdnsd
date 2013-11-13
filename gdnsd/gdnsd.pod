@@ -5,7 +5,10 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsd [-d <rootdir> ] <action>
+  Usage: gdnsd [-s] [-S] [-d <rootdir> ] <action>
+    -s - Force 'zones_strict_startup = true' for this invocation
+    -S - Force 'zones_strict_data = true' for this invocation
+    -d - [see "THE ROOTDIR ARGUMENT" below]
   Actions:
     checkconf - Checks validity of configuration and zonefiles
     startfg - Start gdnsd in foreground mode with logging to stderr

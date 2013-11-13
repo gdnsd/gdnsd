@@ -256,13 +256,29 @@ connection closes or times out.
 Integer seconds, default 5, min 3, max 60.  HTTP connections will be
 forcibly shut down if they go idle for more than this many seconds.
 
-=item B<zones_rfc1035_strict_startup>
+=item B<zones_strict_data>
+
+Boolean, default C<false>
+
+If false (the default), reporting of many less-serious errors in zone
+data are emitted as mere logged warnings, and the zone data is still
+loaded and served.
+
+If this is set to true, such warnings will be upgraded and treated
+the same as the more-serious class of zone data errors which prevent
+successful loading of zone data.  The consequences of this are variable:
+on initial startup or checkconf, this results in a fatal error (failure
+to start, or non-zero exit code, respectively).  During a runtime
+zone data reload, any existing good copy of the zone would continue
+to be served until the error is corrected in the source.
+
+=item B<zones_strict_startup>
 
 Boolean, default C<true>
 
 If true (the default), on daemon startup (via C<start> or C<restart>)
-if any zonefile fails to parse and load correctly, the daemon will
-abort.  If false, the daemon will simply ignore the failed zonefile and
+if any zone fails to load correctly, the daemon will
+abort.  If false, the daemon will simply ignore the failed zone and
 continue operations.
 
 Runtime reloads via SIGHUP and/or periodic/inotify scanning always
@@ -270,7 +286,7 @@ treat bad zone data non-fatally (leaving any existing good copy intact
 in memory for lookups).
 
 This also affects the C<checkconf> action.  It will only fail in terms
-of exit value on bad zonfiles if this is true (although it will note
+of exit value on bad zonefiles if this is true (although it will note
 any failures to stderr regardless).
 
 =item B<zones_rfc1035_auto>

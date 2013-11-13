@@ -64,7 +64,8 @@ global_config_t gconfig = {
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
-    .zones_rfc1035_strict_startup = true,
+    .zones_strict_data = false,
+    .zones_strict_startup = true,
     .zones_rfc1035_auto = true,
     .chaos_len = 0,
      // legal values are -20 to 20, so -21
@@ -494,7 +495,7 @@ static const vscf_data_t* conf_load_vscf(void) {
     return out;
 }
 
-void conf_load(void) {
+void conf_load(const bool force_zss, const bool force_zsd) {
 
     const vscf_data_t* cfg_root = conf_load_vscf();
 
@@ -594,7 +595,14 @@ void conf_load(void) {
         // Nobody should have even the default 16-depth CNAMEs anyways :P
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
-        CFG_OPT_BOOL(options, zones_rfc1035_strict_startup);
+        CFG_OPT_BOOL(options, zones_strict_data);
+
+        // renamed, back-compat
+        CFG_OPT_BOOL_ALTSTORE(options, zones_rfc1035_strict_startup, gconfig.zones_strict_startup);
+        CFG_OPT_BOOL(options, zones_strict_startup);
+        if(vscf_hash_get_data_byconstkey(options, "zones_rfc1035_strict_startup", false))
+            log_warn("The global option 'zones_rfc1035_strict_startup' is deprecated; it was replaced by 'zones_strict_startup'");
+
         CFG_OPT_BOOL(options, zones_rfc1035_auto);
         // it's important that auto_interval is never lower than 2s, or it could cause
         //   us to miss fast events on filesystems with 1-second mtime resolution.
@@ -608,6 +616,12 @@ void conf_load(void) {
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate(options, true, bad_key, (void*)"options");
     }
+
+    // if cmdline forced, override any default or config setting
+    if(force_zss)
+        gconfig.zones_strict_startup = true;
+    if(force_zsd)
+        gconfig.zones_strict_data = true;
 
     // set response string for CHAOS queries
     set_chaos(chaos_data);
