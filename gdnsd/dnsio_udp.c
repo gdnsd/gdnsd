@@ -35,6 +35,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
+#include "dnsio.h"
 #include "gdnsd/log.h"
 #include "gdnsd/prcu-priv.h"
 
@@ -237,24 +238,7 @@ bool udp_sock_setup(dns_thread_t* t) {
         udp_sock_opts_v4(sock, gdnsd_anysin_is_anyaddr(asin));
 
     t->sock = sock;
-
-    if(bind(sock, &asin->sa, asin->len)) {
-        if(errno == EADDRNOTAVAIL) {
-            if(addrconf->autoscan) {
-                log_warn("Could not bind UDP socket %s (%s), configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(asin), logf_errno());
-                t->autoscan_bind_failed = true;
-                return false;
-            }
-            else if(addrconf->late_bind_secs) {
-                t->need_late_bind = true;
-                log_info("UDP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
-                return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
-            }
-        }
-        log_fatal("Failed to bind() UDP socket to %s: %s", logf_anysin(asin), logf_errno());
-    }
-
-    return false;
+    return dnsio_bind(t);
 }
 
 #ifndef MAP_ANONYMOUS

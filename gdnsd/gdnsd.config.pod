@@ -124,7 +124,7 @@ the values are per-address options, as in:
   }
 
 The per-address options (which are identical to, and locally override,
-the global option of the same name) are C<late_bind_secs>, C<tcp_threads>,
+the global option of the same name) are C<tcp_threads>,
 C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>, C<udp_recv_width>,
 C<udp_rcvbuf>, and C<udp_sndbuf>.
 
@@ -147,34 +147,6 @@ It makes common sense to restrict access to this service via firewall
 rules, as the data served leaks information about the rate and nature
 of your DNS traffic.  This is mostly intended for your own internal
 monitoring purposes.
-
-=item B<late_bind_secs>
-
-Integer, default 0, min 0, max 300.  If set to a non-zero value, if the
-initial C<bind(2)> attempt fails with C<EADDRNOTAVAIL> for a DNS
-listener thread, the error will be non-fatal, and after the rest of the
-daemon is fully running, the given thread will loop on retrying the
-C<bind(2)> until it succeeds or returns an error other than
-C<EADDRNOTAVAIL>, sleeping for the configured number of seconds between
-each attempt.
-
-This can be useful when explicitly configuring the daemon to listen for
-DNS requests on a virtual inferface which is not always present (e.g.
-failover address via heartbeat).  Note that when the daemon is started
-as root, the initial C<bind(2)> attempts are done as the root user, but
-late C<bind(2)> attempts are done after the daemon has dropped root
-privileges, which generally means attempts to bind ports lower than
-1024 will fail.
-
-On Linux systems with libcap installed, the daemon will acquire the
-C<CAP_NET_BIND_SERVICE> capability to work around this problem.  On
-other systems you will have to make other arrangements to grant the
-appropriate privileges to the process.  When the daemon is not started
-as root, of course, it is assumed you have made such external privilege
-arrangements in all cases where necessary.
-
-This option is also available on a per-listener basis in the listener
-options hash.
 
 =item B<tcp_threads>
 

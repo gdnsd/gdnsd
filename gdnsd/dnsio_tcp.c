@@ -31,6 +31,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
+#include "dnsio.h"
 #include "gdnsd/log.h"
 #include "gdnsd/net.h"
 #include "gdnsd/prcu-priv.h"
@@ -355,27 +356,10 @@ bool tcp_dns_listen_setup(dns_thread_t* t) {
     const anysin_t* asin = &addrconf->addr;
 
     t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout, t->ac->tcp_threads > 1);
-    if(bind(t->sock, &asin->sa, asin->len)) {
-        if(errno == EADDRNOTAVAIL) {
-            if(addrconf->autoscan) {
-                log_warn("Could not bind TCP socket %s (%s), configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(asin), logf_errno());
-                t->autoscan_bind_failed = true;
-                return false;
-            }
-            else if(addrconf->late_bind_secs) {
-                t->need_late_bind = true;
-                log_info("TCP DNS socket %s not yet available, will attempt late bind every %u seconds", logf_anysin(asin), addrconf->late_bind_secs);
-                const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
-                return ntohs(isv6 ? asin->sin6.sin6_port : asin->sin.sin_port) < 1024 ? true : false;
-            }
-        }
-        log_fatal("Failed to bind() TCP socket to %s: %s", logf_anysin(asin), logf_errno());
-    }
-
+    const bool need_caps = dnsio_bind(t);
     if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
         log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(asin), logf_errno());
-
-    return false;
+    return need_caps;
 }
 
 static void thread_clean(void* arg_unused V_UNUSED) {
