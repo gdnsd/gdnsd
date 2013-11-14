@@ -128,11 +128,23 @@ the global option of the same name) are C<tcp_threads>,
 C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>, C<udp_recv_width>,
 C<udp_rcvbuf>, and C<udp_sndbuf>.
 
-If the listen option isn't specified at all (or is specified as an
-empty array), the default behavior is to scan all available IP (v4 and
-v6) network interfaces via C<getifaddrs()> and set up a separate
-listener for each address found using the default port option
-C<dns_port>, which defaults to C<53>.
+There are also two special singalur string values: C<any> and C<scan>.
+
+If set to C<any>, the daemon will listen on the C<dns_port> port (default 53)
+on C<0.0.0.0> and C<::> (if IPv6 support is detected).
+
+  options => { listen => any }
+
+If set to C<scan>, scan all available IP (v4 and v6) network interfaces
+via C<getifaddrs()> and set up a separate listener on the C<dns_port>
+port (again, default 53) for each address found.
+
+  options => { listen => scan }
+
+If the listen option isn't specified at all, for historical compatibility reasons
+the current default is C<scan>.  However, this default is expected to change to
+C<any> in a future version, so you should specify C<scan> explicitly if you require
+this behavior.
 
 =item B<http_listen>
 

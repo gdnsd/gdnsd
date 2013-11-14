@@ -308,12 +308,41 @@ static bool dns_addr_is_dupe(const anysin_t* new_addr) {
     return false;
 }
 
-static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+
     dmn_assert(addr_defs);
     anysin_t temp_asin;
 
+    const bool has_v6 = gdnsd_tcp_v6_ok();
+
+    // note this only covers the "scan" and "any" cases.  A single is_simple
+    //   IP address is covered as if it were an array of one at the bottom of the func
+    bool def_warn = true;
+    if(listen_opt && vscf_is_simple(listen_opt)) {
+        const char* simple_str = vscf_simple_get_data(listen_opt);
+        if(!strcmp(simple_str, "any")) {
+            gconfig.num_dns_addrs = has_v6 ? 2 : 1;
+            gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+            dns_addr_t* ac_v4 = &gconfig.dns_addrs[0];
+            memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
+            make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
+            if(has_v6) {
+                dns_addr_t* ac_v6 = &gconfig.dns_addrs[1];
+                memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
+                make_addr("::", addr_defs->dns_port, &ac_v6->addr);
+            }
+            return;
+        }
+        else if(!strcmp(simple_str, "scan")) {
+            def_warn = false;
+            listen_opt = NULL; // fall-through default scanning code below
+        }
+    }
+
     if(!listen_opt) {
-        const bool has_v6 = gdnsd_tcp_v6_ok();
+        if(def_warn)
+            log_warn("The default behavior with no 'listen' option (interface scanning) will change in a future version!  If your configuration relies on interface scanning, please switch to explicitly configuring 'listen = scan' in the config options stanza, which will silence this warning.");
+
         bool v6_warned = false;
 
         struct ifaddrs* ifap;
@@ -432,12 +461,17 @@ static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr
             make_addr(vscf_simple_get_data(lspec), addr_defs->dns_port, &addrconf->addr);
         }
     }
+}
+
+static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+    // this fills in gconfig.dns_addrs raw data
+    fill_dns_addrs(listen_opt, addr_defs);
 
     if(!gconfig.num_dns_addrs)
         dmn_log_fatal("DNS listen addresses explicitly configured as an empty set - cannot continue without at least one address!");
 
-    // Now that gconfig.dns_addrs has been completed in one of three ways above,
-    //   use it to populate gconfig.dns_threads....
+    // use dns_addrs to populate dns_threads....
+
     gconfig.num_dns_threads = 0;
     for(unsigned i = 0; i < gconfig.num_dns_addrs; i++)
         gconfig.num_dns_threads += (gconfig.dns_addrs[i].udp_threads + gconfig.dns_addrs[i].tcp_threads);
