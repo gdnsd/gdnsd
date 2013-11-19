@@ -414,10 +414,10 @@ static void rec_dyna(zscan_t* z) {
 }
 
 F_NONNULL
-static void rec_dyncname(zscan_t* z) {
+static void rec_dync(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_dyncname(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl))
+    if(ltree_add_rec_dync(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl, z->limit_v4, z->limit_v6))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -539,7 +539,7 @@ static void close_paren(zscan_t* z) {
     action rec_spf { rec_spf(z); }
     action rec_spftxt { rec_spftxt(z); }
     action rec_dyna { rec_dyna(z); }
-    action rec_dync { rec_dyncname(z); }
+    action rec_dync { rec_dync(z); }
     action rec_rfc3597 { rec_rfc3597(z); }
 
     action rfc3597_data_setup { rfc3597_data_setup(z); }

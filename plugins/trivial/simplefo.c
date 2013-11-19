@@ -216,7 +216,7 @@ mon_list_t* plugin_simplefo_load_config(const vscf_data_t* config) {
     return &mon_list;
 }
 
-int plugin_simplefo_map_resource_dyna(const char* resname) {
+int plugin_simplefo_map_res(const char* resname, const uint8_t* origin V_UNUSED) {
     if(resname) {
         for(unsigned i = 0; i < num_resources; i++)
             if(!strcmp(resname, resources[i].name))
@@ -239,7 +239,7 @@ int plugin_simplefo_map_resource_dyna(const char* resname) {
 // down down halved pri   yes
 // ----------------------------
 F_NONNULL
-static bool resolve_addr(const addrstate_t* as, dynaddr_result_t* result, bool* cut_ttl_ptr) {
+static bool resolve_addr(const addrstate_t* as, dyn_result_t* result, bool* cut_ttl_ptr) {
     dmn_assert(as); dmn_assert(result); dmn_assert(cut_ttl_ptr);
 
     bool rv = true;
@@ -259,23 +259,25 @@ static bool resolve_addr(const addrstate_t* as, dynaddr_result_t* result, bool* 
             dmn_assert(p_state == MON_STATE_UP);
     }
 
-    gdnsd_dynaddr_add_result_anysin(result, &as->addrs[which]);
+    gdnsd_dyn_add_result_anysin(result, &as->addrs[which]);
     return rv;
 }
 
-bool plugin_simplefo_resolve_dynaddr(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {
+bool plugin_simplefo_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+    dmn_assert(result); dmn_assert(!result->is_cname);
+
     bool rv = true;
     bool cut_ttl = false;
     res_t* res = &resources[resnum];
 
     if(res->addrs_v4) {
         rv &= resolve_addr(res->addrs_v4, result, &cut_ttl);
-        dmn_assert(result->count_v4);
+        dmn_assert(result->a.count_v4);
     }
 
     if(res->addrs_v6) {
         rv &= resolve_addr(res->addrs_v6, result, &cut_ttl);
-        dmn_assert(result->count_v6);
+        dmn_assert(result->a.count_v6);
     }
 
     if(cut_ttl)

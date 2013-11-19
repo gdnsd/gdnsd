@@ -328,7 +328,7 @@ mon_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
     return &mon_list;
 }
 
-int plugin_multifo_map_resource_dyna(const char* resname) {
+int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED) {
     if(resname) {
         for(unsigned i = 0; i < num_resources; i++)
             if(!strcmp(resname, resources[i].name))
@@ -343,7 +343,7 @@ int plugin_multifo_map_resource_dyna(const char* resname) {
 }
 
 F_NONNULL
-static bool resolve(const addrset_t* aset, dynaddr_result_t* result, bool* cut_ttl_ptr, unsigned* resct_ptr) {
+static bool resolve(const addrset_t* aset, dyn_result_t* result, bool* cut_ttl_ptr, unsigned* resct_ptr) {
     dmn_assert(aset); dmn_assert(result); dmn_assert(cut_ttl_ptr); dmn_assert(resct_ptr);
 
     bool rv = true;
@@ -355,7 +355,7 @@ static bool resolve(const addrset_t* aset, dynaddr_result_t* result, bool* cut_t
         if(state != MON_STATE_UP)
             *cut_ttl_ptr = true;
         if(state != MON_STATE_DOWN)
-            gdnsd_dynaddr_add_result_anysin(result, &as->addr);
+            gdnsd_dyn_add_result_anysin(result, &as->addr);
     }
 
     // if up_thresh was not met, signal upstream failure through rv and add all addresses
@@ -363,25 +363,27 @@ static bool resolve(const addrset_t* aset, dynaddr_result_t* result, bool* cut_t
         rv = false;
         *resct_ptr = 0;
         for(unsigned i = 0; i < aset->count; i++)
-            gdnsd_dynaddr_add_result_anysin(result, &aset->as[i].addr);
+            gdnsd_dyn_add_result_anysin(result, &aset->as[i].addr);
     }
 
     return rv;
 }
 
-bool plugin_multifo_resolve_dynaddr(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {
+bool plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+    dmn_assert(result); dmn_assert(!result->is_cname);
+
     bool rv = true;
     bool cut_ttl = false;
     res_t* res = &resources[resnum];
 
     if(res->aset_v4) {
-        rv &= resolve(res->aset_v4, result, &cut_ttl, &result->count_v4);
-        dmn_assert(result->count_v4);
+        rv &= resolve(res->aset_v4, result, &cut_ttl, &result->a.count_v4);
+        dmn_assert(result->a.count_v4);
     }
 
     if(res->aset_v6) {
-        rv &= resolve(res->aset_v6, result, &cut_ttl, &result->count_v6);
-        dmn_assert(result->count_v6);
+        rv &= resolve(res->aset_v6, result, &cut_ttl, &result->a.count_v6);
+        dmn_assert(result->a.count_v6);
     }
 
     // Cut TTL in half if any were in DOWN or DANGER states

@@ -30,16 +30,16 @@
 
 #include "cfg-dirs.h"
 
-void gdnsd_dynaddr_add_result_anysin(dynaddr_result_t* result, const anysin_t* asin) {
-    dmn_assert(result); dmn_assert(asin);
+void gdnsd_dyn_add_result_anysin(dyn_result_t* result, const anysin_t* asin) {
+    dmn_assert(result); dmn_assert(asin); dmn_assert(!result->is_cname);
     if(asin->sa.sa_family == AF_INET6) {
-        dmn_assert(result->count_v6 < 64);
-        memcpy(&result->addrs_v6[result->count_v6++ * 16], asin->sin6.sin6_addr.s6_addr, 16);
+        dmn_assert(result->a.count_v6 < 64);
+        memcpy(&result->a.addrs_v6[result->a.count_v6++ * 16], asin->sin6.sin6_addr.s6_addr, 16);
     }
     else {
         dmn_assert(asin->sa.sa_family == AF_INET);
-        dmn_assert(result->count_v4 < 64);
-        result->addrs_v4[result->count_v4++] = asin->sin.sin_addr.s_addr;
+        dmn_assert(result->a.count_v4 < 64);
+        result->a.addrs_v4[result->a.count_v4++] = asin->sin.sin_addr.s_addr;
     }
 }
 
@@ -160,15 +160,13 @@ const plugin_t* gdnsd_plugin_load(const char* pname) {
 
 #   define PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
     PSETFUNC(load_config)
-    PSETFUNC(map_resource_dyna)
-    PSETFUNC(map_resource_dync)
+    PSETFUNC(map_res)
     PSETFUNC(full_config)
     PSETFUNC(post_daemonize)
     PSETFUNC(pre_privdrop)
     PSETFUNC(pre_run)
     PSETFUNC(iothread_init)
-    PSETFUNC(resolve_dynaddr)
-    PSETFUNC(resolve_dyncname)
+    PSETFUNC(resolve)
     PSETFUNC(exit)
     PSETFUNC(add_svctype)
     PSETFUNC(add_monitor)

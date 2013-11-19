@@ -570,7 +570,7 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
 }
 
 static bool res_mixed_fail(const char* item_name, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* rname_asvoid) {
-    log_fatal("plugin_weighted: resource '%s' seems to have explicit 'addrs', 'addrs_v4', 'addrs_v6', or 'cnames' configuration mixed with direct item config (e.g. '%s'), which is not allowed", (const char*)rname_asvoid, item_name);
+    log_fatal("plugin_weighted: resource '%s' seems to have explicit 'addrs_v4', 'addrs_v6', or 'cnames' configuration mixed with direct item config (e.g. '%s'), which is not allowed", (const char*)rname_asvoid, item_name);
     return false;
 }
 
@@ -581,20 +581,18 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
     if(!vscf_is_hash(res_cfg))
         log_fatal("plugin_weighted: the value of resource '%s' must be a hash", res_name);
 
-    /* Resource config: up to 3 subsets in parallel:
+    /* Resource config:
      * resX => {
      *     addrs_v4 => { ... (IPv4, grouped or not)  }
      *     addrs_v6 => { ... (IPv6, grouped or not)  }
      *     cnames => { ... }
      * }
-     * OR: auto-detect any of the possibilities at the top level as the only subset
+     * OR: auto-detect any one of the three at the top level as the only subset
+     *
+     * Constraints:
+     *    addrs_v[46] can appear alone or together in a single resource
+     *    cnames can only appear alone
      */
-
-    // Check for bad old config, so that we error out on it.  If we don't, old "addrs"
-    //   config actually looks like a legitimate grouped configuration, which is silently bad.
-    const vscf_data_t* addrs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs", true);
-    if(addrs_cfg)
-        log_fatal("plugin_weighted: resource '%s': key 'addrs' is illegal, choose another name for this item", res_name);
 
     // grab explicit sub-stanzas
     const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v4", true);
@@ -613,18 +611,16 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
 
     if(cnames_cfg) {
         if(addrs_v4_cfg || addrs_v6_cfg)
-            log_warn("plugin_weighted: resource '%s': mixing 'cnames' and addrs_v[46] in the same resource is deprecated - please split the cnames part into a separate resource", res_name);
+            log_fatal("plugin_weighted: resource '%s': 'cnames' cannot co-exist alongside 'addrs_v4' and/or 'addrs_v6' in the same resource", res->name);
         res->cnames = calloc(1, sizeof(cnset_t));
         config_cnameset(res_name, "cnames", res->cnames, cnames_cfg);
-        // in the case that 'cnames' is explicitly defined, but addrs_v4/addrs_v6
-        //   are not, we need to get any resource-level inherited address parameters
+        // in the case that 'cnames' is explicitly defined
+        //   we need to get any resource-level inherited address parameters
         //   marked so that we don't fail the mixed explicit+direct check at the bottom
         //   of this function.
-        if(!addrs_v4_cfg && !addrs_v6_cfg) {
-            vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
-            vscf_hash_get_data_byconstkey(res_cfg, "multi", true);
-            vscf_hash_get_data_byconstkey(res_cfg, "up_thresh", true);
-        }
+        vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
+        vscf_hash_get_data_byconstkey(res_cfg, "multi", true);
+        vscf_hash_get_data_byconstkey(res_cfg, "up_thresh", true);
     }
 
     if(!addrs_v4_cfg && !addrs_v6_cfg && !cnames_cfg) {
@@ -664,67 +660,39 @@ void plugin_weighted_full_config(const unsigned num_threads) {
     init_rand_storage(num_threads);
 }
 
-int plugin_weighted_map_resource_dyna(const char* resname) {
-    if(resname) {
-        for(unsigned i = 0; i < num_resources; i++) {
-            if (!strcmp(resname, resources[i].name)) {
-                if(!resources[i].addrs_v4 && !resources[i].addrs_v6) {
-                    log_err("plugin_weighted: Resource '%s' used in a DYNA RR, but has no address config data", resources[i].name);
-                    return -1;
-                }
-                log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
-                return (int)i;
-            }
-        }
-        log_err("plugin_weighted: unknown resource '%s'", resname);
-    }
-    else {
-        log_err("plugin_weighted: resource name required");
-    }
+int plugin_weighted_map_res(const char* resname, const uint8_t* origin) {
+    if(!resname)
+        map_res_err("plugin_weighted: resource name required");
 
-    return -1;
-}
-
-int plugin_weighted_map_resource_dync(const char* resname, const uint8_t* origin) {
-    if(resname) {
-        for(unsigned i = 0; i < num_resources; i++) {
-            if (!strcmp(resname, resources[i].name)) {
-                cnset_t* cnset = resources[i].cnames;
-                if(!cnset) {
-                    log_err("plugin_weighted: Resource '%s' used in a DYNC RR, but has no cnames config data", resources[i].name);
-                    return -1;
-                }
+    for(unsigned i = 0; i < num_resources; i++) {
+        if (!strcmp(resname, resources[i].name)) {
+            cnset_t* cnset = resources[i].cnames;
+            if(cnset) {
+                if(!origin)
+                    map_res_err("plugin_weighted: Resource '%s' used in a DYNA RR, but has CNAME data", resources[i].name);
                 for(unsigned j = 0; j < cnset->count; j++) {
                     const uint8_t* dname = cnset->items[j].cname;
                     if(dname_status(dname) == DNAME_PARTIAL) {
                         uint8_t dnbuf[256];
                         dname_copy(dnbuf, dname);
-                        if(dname_cat(dnbuf, origin) != DNAME_VALID) {
-                            log_err("plugin_weighted: Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), resources[i].name, logf_dname(origin));
-                            return -1;
-                        }
+                        if(dname_cat(dnbuf, origin) != DNAME_VALID)
+                            map_res_err("plugin_weighted: Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), resources[i].name, logf_dname(origin));
                     }
                 }
-                log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
-                return (int)i;
             }
+            log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
+            return (int)i;
         }
-        log_err("plugin_weighted: unknown resource '%s'", resname);
-    }
-    else {
-        log_err("plugin_weighted: resource name required in zonefile references");
     }
 
-    return -1;
+    map_res_err("plugin_weighted: unknown resource '%s'", resname);
 }
 
 void plugin_weighted_iothread_init(const unsigned threadnum) { init_rand(threadnum); }
 
-void plugin_weighted_resolve_dyncname(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyncname_result_t* result) {
-    dmn_assert(origin); dmn_assert(result);
+static bool resolve_cname(const resource_t* resource, const uint8_t* origin, dyn_result_t* result, const unsigned threadnum) {
+    dmn_assert(resource); dmn_assert(origin); dmn_assert(result);
 
-    const resource_t* resource = &resources[resnum];
-    dmn_assert(resource);
     cnset_t* cnset = resource->cnames;
     dmn_assert(cnset);
     dmn_assert(cnset->weight);
@@ -741,15 +709,18 @@ void plugin_weighted_resolve_dyncname(unsigned threadnum, unsigned resnum, const
     }
 
     const uint8_t* dname = cnset->items[chosen].cname;
-    dname_copy(result->dname, dname);
+    result->is_cname = true;
+    dname_copy(result->cname, dname);
     if (dname_status(dname) == DNAME_PARTIAL) {
-        dname_cat(result->dname, origin);
-        dmn_assert(dname_status(result->dname) == DNAME_VALID);
+        dname_cat(result->cname, origin);
+        dmn_assert(dname_status(result->cname) == DNAME_VALID);
     }
+
+    return true;
 }
 
 F_NONNULL
-static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_result_t* result, bool* cut_ttl_ptr) {
+static bool resolve(const unsigned threadnum, const addrset_t* aset, dyn_result_t* result, bool* cut_ttl_ptr) {
     dmn_assert(aset); dmn_assert(result); dmn_assert(cut_ttl_ptr);
 
     const unsigned num_items = aset->count;
@@ -823,7 +794,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
                 for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
                     addr_running_total += dyn_addr_weights[item_idx][addr_idx];
                     if(addr_rand < addr_running_total) {
-                        gdnsd_dynaddr_add_result_anysin(result, &res_item->as[addr_idx].addr);
+                        gdnsd_dyn_add_result_anysin(result, &res_item->as[addr_idx].addr);
                         break;
                     }
                 }
@@ -844,7 +815,7 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
                 for(unsigned addr_idx = 0; addr_idx < chosen->count; addr_idx++) {
                     const unsigned addr_rand = get_rand(threadnum, addr_max);
                     if(addr_rand < dyn_addr_weights[item_idx][addr_idx])
-                        gdnsd_dynaddr_add_result_anysin(result, &chosen->as[addr_idx].addr);
+                        gdnsd_dyn_add_result_anysin(result, &chosen->as[addr_idx].addr);
                 }
                 break;
             }
@@ -854,11 +825,9 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dynaddr_res
     return dyn_items_sum < aset->up_weight ? false : rv;
 }
 
-bool plugin_weighted_resolve_dynaddr(unsigned threadnum, unsigned resnum, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {
-    dmn_assert(result);
-
-    const resource_t* resource = &resources[resnum];
-    dmn_assert(resource);
+F_NONNULL
+static bool resolve_addr(const resource_t* resource, dyn_result_t* result, const unsigned threadnum) {
+    dmn_assert(result); dmn_assert(resource);
     dmn_assert(resource->addrs_v4 || resource->addrs_v6);
 
     bool cut_ttl = false;
@@ -866,16 +835,35 @@ bool plugin_weighted_resolve_dynaddr(unsigned threadnum, unsigned resnum, const 
 
     if(resource->addrs_v4) {
         rv &= resolve(threadnum, resource->addrs_v4, result, &cut_ttl);
-        dmn_assert(result->count_v4);
+        dmn_assert(result->a.count_v4);
     }
 
     if(resource->addrs_v6) {
         rv &= resolve(threadnum, resource->addrs_v6, result, &cut_ttl);
-        dmn_assert(result->count_v6);
+        dmn_assert(result->a.count_v6);
     }
 
     if(cut_ttl)
         result->ttl >>= 1;
+
+    return rv;
+}
+
+bool plugin_weighted_resolve(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+    dmn_assert(result);
+
+    const resource_t* resource = &resources[resnum];
+    dmn_assert(resource);
+
+    bool rv;
+
+    if(resource->cnames) {
+        dmn_assert(origin); // map_res validates this
+        rv = resolve_cname(resource, origin, result, threadnum);
+    }
+    else {
+        rv = resolve_addr(resource, result, threadnum);
+    }
 
     return rv;
 }

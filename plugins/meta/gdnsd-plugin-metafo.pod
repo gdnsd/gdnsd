@@ -17,6 +17,14 @@ Minimal example gdnsd config file using this plugin:
             dc-02 => { lb01 => 192.0.2.2, lb02 => 192.0.2.3 }
             dc-03 => [ 192.0.2.4, 192.0.2.5, 192.0.2.6 ]
           }
+        },
+        prod_foo => {
+          datacenters => [ dc-01, dc-02, dc-03 ]
+          dcmap => {
+            dc-01 => { lb01 => 192.0.1.1, lb02 => 192.0.1.2 }
+            dc-02 => [ 192.0.5.1, 192.0.5.2, 192.0.5.3 ]
+            dc-bk => fallback.static.cname.example.com.
+          }
         }
       }
     }
@@ -26,6 +34,7 @@ Example zonefile RRs:
 
   www      600 DYNA metafo!prod_www
   www-dc01 600 DYNA metafo!prod_www/dc-01
+  foo      700 DYNC metafo!prod_foo
 
 =head1 DESCRIPTION
 
@@ -106,9 +115,13 @@ the C<dcmap>.
 The value of the datacenters within the C<dcmap> section of a resource can
 take several forms.  It is important to understand that for the most part,
 plugin_metafo does not deal with this level of results itself, but instead
-delegates the work at this scope to other plugins.  The most direct and
-obvious way to do this is with a direct reference of the form
-C<%plugin!resource>, as shown here:
+delegates the work at this scope to other plugins.  These sub-plugins, in
+turn, also notify metafo of complete failure at their level, which is the
+information metafo uses to know to fail over to the next datacenter in the
+list.
+
+The most direct and obvious way to do this is with a direct reference of
+the form C<%plugin!resource>, as shown here:
 
   plugins => {
     metafo => {
@@ -175,12 +188,23 @@ Note that these other values (e.g. service_types) would only apply to
 synthesized resources, B<not> to direct-references like C<%multifo!foo>,
 which must be configured entirely separately within that plugin's config.
 
-There are two other possible shortcut values for datacenters: a single
-direct address, or an array of addresses.  If a single IP address or an
-array of IP addresses are specified, plugin_metafo will synthesize a hash
-from them with the plugin forced to C<multifo> (since it cannot know the
-syntax of hashes for all other plugins, which may differ), and give them
-address labels C<1>, C<2>, etc.
+There are three other possible shortcut values for datacenters: a single
+direct address, an array of addresses, or a single CNAME hostname.  If a
+single IP address or an array of IP addresses are specified, plugin_metafo
+will synthesize a hash from them with the plugin forced to C<multifo>
+(since it cannot know the syntax of hashes for all other plugins, which
+may differ), and give them address labels C<1>, C<2>, etc.
+
+If the value for a datacenter is a single CNAME hostname, no sub-plugin
+is used, and that CNAME result is returned directly.  Note that any
+resource with such an entry can only be used with C<DYNC> RRs, and not
+C<DYNA> RRs (as is the case if any subplugin's configuration is capable
+of returning CNAME data).
+
+It is also important to note that, currently, CNAMEs do not have any
+associated status information and never "fail", and therefore it only
+makes sense to use one in the final datacenter of a resource as a
+final fallback when all address-based datacenters are down.
 
 A much more complete example, showing off most of the features above:
 
@@ -201,6 +225,7 @@ A much more complete example, showing off most of the features above:
             dc5 => !bar
             dc6 => 192.0.2.150
             dc7 => [ 192.0.2.180, 192.0.2.181 ]
+            dc8 => last.resort.example.com.
           }
         }
       }

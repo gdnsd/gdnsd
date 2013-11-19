@@ -37,11 +37,16 @@ plugins => {
     }
    }
    map2 => {
-   geoip_db => "FakeGeoIP.dat"
-   datacenters => [ dc1, dc2, dc3 ]
+    geoip_db => "FakeGeoIP.dat"
+    datacenters => [ dc1, dc2, dc3 ]
     map => {
      NA => { US => [ dc2 ] }
     }
+   }
+   map-empty => {
+    geoip_db => "FakeGeoIP.dat"
+    datacenters => [ dc1, dc2 ]
+    map => { NA => { US => [] } }
    }
   }
   plugin => weighted,
@@ -74,6 +79,15 @@ plugins => {
      dc1 => dc1cn
      dc2 => dc2cn-loop
      dc3 => dc3cn
+    }
+   }
+   res44 => {
+    map => map2,
+    plugin => multifo,
+    dcmap => {
+     dc1 => { lb01 => 192.0.2.101, lb02 => 192.0.2.102, lb03 => 192.0.2.103 }
+     dc2 => { lb01 => 192.0.2.111, lb02 => 192.0.2.112, lb03 => 192.0.2.113 }
+     dc3 => { lb01 => 192.0.2.121, lb02 => 192.0.2.122, lb03 => 192.0.2.123 }
     }
    }
    res4 => {
@@ -141,6 +155,13 @@ plugins => {
      dc1 => %metafo!meta1
      dc2 => { lb01 => 192.0.2.92, lb02 => 192.0.2.93 }
      dc3 => { lb01 => 192.0.2.94, lb02 => 192.0.2.95 }
+    }
+   }
+   res-e => {
+    map => map-empty,
+    dcmap => {
+     dc1 => 192.0.2.177,
+     dc2 => 192.0.2.178,
     }
    }
   }

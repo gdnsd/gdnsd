@@ -88,30 +88,6 @@ you want this HTTP-based info, run nginx or lighttpd on your DNS server
 and have it serve gdnsd.html (or your own similar UI code) and the
 ever-changing JSON stats file.
 
-DYNA/DYNC refactor:
---------------------
-It's becoming increasingly apparent that the current design which
-splits dynamic CNAME and A/AAAA into completely separate entities and
-code-paths isn't working out.  It's much easier this way from the
-perspective of the core code for e.g. dnspacket.c and ltree.c, but it's
-very limiting when it comes to plugin features (we really need the
-ability for plugins to mix-and-match, e.g. serve addresses when they're
-up and fallback to CNAME to a static CDN provider when all addrs are
-down as a last resort).
-
-It's also always been a source of extra confusion and bug possibilities
-at the plugin-code layer (getting CNAME-related calls when the plugin
-isn't configured to do CNAME for a given resource, etc...).
-
-Probably need to switch the model to just be a "DYN" record and let
-plugins return either type of response.  Although I see little point
-for other dynamic RRs, at that point we may as well implement them as
-well just for future-proofing (e.g. PTR, NS, MX, etc...).  It shouldn't
-be hard to keep DYNA/DYNC around as deprecated backwards-compat stuff
-at the zonefile level, but doing it at the plugin-API level as well
-would be complicated.  Probably more likely to just break the API
-again, as I've never claimed it was very stable.
-
 Monitoring upgrades:
 ----------------------
 Come up with a derived "monitored weight factor" that scales from 0.0

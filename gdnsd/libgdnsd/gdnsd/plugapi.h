@@ -45,7 +45,7 @@
  *   because libgdnsd is missing symbols it wants to link against that
  *   were dropped in the new API.  This is just to protect other cases).
  ***/
-#define GDNSD_PLUGIN_API_VERSION 12
+#define GDNSD_PLUGIN_API_VERSION 13
 
 /*** Data Types ***/
 
@@ -56,7 +56,7 @@ typedef struct {
     unsigned edns_client_mask; // if zero, edns_client is invalid (was not sent), do not parse it.
 } client_info_t;
 
-// Result structure for dynamic address resolution plugins
+// Result structure for dynamic resolution plugins
 typedef struct {
     uint32_t ttl;             // from zonefile, can modify
     unsigned edns_scope_mask; // inits to zero.
@@ -64,41 +64,34 @@ typedef struct {
                               // If your plugin uses client_info_t.dns_source but ignores (or doesn't use for this
                               //    request) .edns_source, you must set edns_scope_mask = client_info_t.edns_client_mask
                               // If your plugin actually uses client_info_t.edns_client, set as appropriate...
-    unsigned count_v4;
-    unsigned count_v6;
-    uint32_t addrs_v4[64];
-    uint8_t  addrs_v6[64 * 16];
-} dynaddr_result_t;
+    bool     is_cname;        // which of the two below is valid
+    union {
+        uint8_t cname[256];
+        struct {
+            unsigned count_v4;
+            unsigned count_v6;
+            uint32_t addrs_v4[64];
+            uint8_t  addrs_v6[64 * 16];
+        } a;
+    };
+} dyn_result_t;
 
-// Result structure for dynamic cname resolution plugins
-typedef struct {
-    uint32_t ttl;
-    unsigned edns_scope_mask;
-    // dname pointer is already set, it points at the storage
-    //   you should copy your result to.  Do *not* overwrite
-    //   this with a new pointer (the const should make that
-    //   fail anyways).
-    uint8_t* const dname;
-} dyncname_result_t;
-
-// Push an anysin_t onto a dynaddr_result_t.  Handles both families, asserts
-//   overall count limits.
+// Push an anysin_t onto a dyn_result_t.  Handles both families, asserts
+//   overall count limits.  assert !is_cname (set that first!)
 F_NONNULL
-void gdnsd_dynaddr_add_result_anysin(dynaddr_result_t* result, const anysin_t* asin);
+void gdnsd_dyn_add_result_anysin(dyn_result_t* result, const anysin_t* asin);
 
 /**** Typedefs for plugin callbacks ****/
 
 typedef unsigned (*gdnsd_apiv_cb_t)(void);
 typedef mon_list_t* (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
-typedef int (*gdnsd_map_resource_dyna_cb_t)(const char* resname);
-typedef int (*gdnsd_map_resource_dync_cb_t)(const char* resname, const uint8_t* origin);
+typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
 typedef void (*gdnsd_pre_privdrop_cb_t)(void);
 typedef void (*gdnsd_post_daemonize_cb_t)(void);
 typedef void (*gdnsd_pre_run_cb_t)(struct ev_loop* loop);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
-typedef bool (*gdnsd_resolve_dynaddr_cb_t)(unsigned threadnum, unsigned resnum, const client_info_t* cinfo, dynaddr_result_t* result);
-typedef void (*gdnsd_resolve_dyncname_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyncname_result_t* result);
+typedef bool (*gdnsd_resolve_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 typedef void (*gdnsd_exit_cb_t)(void);
 
 /**** New callbacks for monitoring plugins ****/
@@ -114,14 +107,12 @@ typedef struct {
     const char* name;
     gdnsd_load_config_cb_t load_config;
     gdnsd_full_config_cb_t full_config;
-    gdnsd_map_resource_dyna_cb_t map_resource_dyna;
-    gdnsd_map_resource_dync_cb_t map_resource_dync;
+    gdnsd_map_res_cb_t map_res;
     gdnsd_post_daemonize_cb_t post_daemonize;
     gdnsd_pre_privdrop_cb_t pre_privdrop;
     gdnsd_pre_run_cb_t pre_run;
     gdnsd_iothread_init_cb_t iothread_init;
-    gdnsd_resolve_dynaddr_cb_t resolve_dynaddr;
-    gdnsd_resolve_dyncname_cb_t resolve_dyncname;
+    gdnsd_resolve_cb_t resolve;
     gdnsd_exit_cb_t exit;
     gdnsd_add_svctype_cb_t add_svctype;
     gdnsd_add_monitor_cb_t add_monitor;
@@ -133,5 +124,14 @@ typedef struct {
 //   use during full_config() ideally, or later if you must.
 F_NONNULL F_PURE
 const plugin_t* gdnsd_plugin_find(const char* plugin_name);
+
+// convenient macro for logging a config error and returning
+//  the error value -1 in a resolver plugin's map_res() callback
+//  without a bunch of extra clutter and bracing
+#define map_res_err(...) \
+    do {\
+        log_err(__VA_ARGS__);\
+        return -1;\
+    } while(0)
 
 #endif // GDNSD_PLUGINAPI_H

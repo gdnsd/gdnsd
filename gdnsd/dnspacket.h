@@ -126,7 +126,7 @@ typedef struct {
     uint8_t* packet;
 
     // allocated at startup, memset to zero before each callback
-    dynaddr_result_t* dynaddr;
+    dyn_result_t* dyn;
 
 // From this point (answer_addr_rrset) on, all of this gets reset to zero
 //  at the start of each request...
@@ -142,6 +142,12 @@ typedef struct {
     unsigned int nscount;
     unsigned int arcount;
     unsigned int cname_ancount;
+
+    // synthetic rrsets for DYNC (only one can be used at a time)
+    union {
+        ltree_rrset_cname_t dync_cname;
+        ltree_rrset_addr_t dync_addr;
+    };
 
     // EDNS Client Subnet response mask.
     // Not valid/useful unless use_edns_client_subnet is true below.

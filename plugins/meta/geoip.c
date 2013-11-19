@@ -94,11 +94,8 @@ static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t*
 }
 
 #define PNSTR "geoip"
-#define DYNC_OK 1
 #define CB_LOAD_CONFIG plugin_geoip_load_config
-#define CB_MAP_A plugin_geoip_map_resource_dyna
-#define CB_MAP_C plugin_geoip_map_resource_dync
-#define CB_RES_A plugin_geoip_resolve_dynaddr
-#define CB_RES_C plugin_geoip_resolve_dyncname
+#define CB_MAP plugin_geoip_map_res
+#define CB_RES plugin_geoip_resolve
 #define CB_EXIT plugin_geoip_exit
 #include "meta_core.c"

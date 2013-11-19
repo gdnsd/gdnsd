@@ -108,6 +108,7 @@ union  _ltree_rrset_union;
 struct _ltree_rrset_addr_struct;
 struct _ltree_rrset_soa_struct;
 struct _ltree_rrset_cname_struct;
+struct _ltree_rrset_dync_struct;
 struct _ltree_rrset_ns_struct;
 struct _ltree_rrset_ptr_struct;
 struct _ltree_rrset_mx_struct;
@@ -129,6 +130,7 @@ typedef struct _ltree_rrset_gen_struct ltree_rrset_gen_t;
 typedef struct _ltree_rrset_addr_struct ltree_rrset_addr_t;
 typedef struct _ltree_rrset_soa_struct ltree_rrset_soa_t;
 typedef struct _ltree_rrset_cname_struct ltree_rrset_cname_t;
+typedef struct _ltree_rrset_dync_struct ltree_rrset_dync_t;
 typedef struct _ltree_rrset_ns_struct ltree_rrset_ns_t;
 typedef struct _ltree_rrset_ptr_struct ltree_rrset_ptr_t;
 typedef struct _ltree_rrset_mx_struct ltree_rrset_mx_t;
@@ -210,7 +212,7 @@ struct _ltree_rrset_addr_struct {
             uint8_t* v6;
         } addrs;
         struct {
-            gdnsd_resolve_dynaddr_cb_t func;
+            gdnsd_resolve_cb_t func;
             unsigned resource;
         } dyn;
     };
@@ -227,14 +229,16 @@ struct _ltree_rrset_soa_struct {
 
 struct _ltree_rrset_cname_struct {
     ltree_rrset_gen_t gen;
-    union {
-        const uint8_t* dname;
-        struct {
-            const uint8_t* origin;
-            gdnsd_resolve_dyncname_cb_t func;
-            unsigned resource;
-        } dyn;
-    };
+    const uint8_t* dname;
+};
+
+struct _ltree_rrset_dync_struct {
+    ltree_rrset_gen_t gen;
+    const uint8_t* origin;
+    gdnsd_resolve_cb_t func;
+    unsigned resource;
+    uint16_t limit_v4;
+    uint16_t limit_v6;
 };
 
 struct _ltree_rrset_ns_struct {
@@ -280,6 +284,7 @@ union _ltree_rrset_union {
     ltree_rrset_addr_t addr;
     ltree_rrset_soa_t soa;
     ltree_rrset_cname_t cname;
+    ltree_rrset_dync_t dync;
     ltree_rrset_ns_t ns;
     ltree_rrset_ptr_t ptr;
     ltree_rrset_mx_t mx;
@@ -324,35 +329,35 @@ void ltree_destroy(ltree_node_t* node);
 
 // Adding data to the ltree (called from parser)
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, unsigned serial, unsigned refresh, unsigned retry, unsigned expire, unsigned ncache);
+bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, const unsigned ttl, const unsigned serial, const unsigned refresh, const unsigned retry, const unsigned expire, const unsigned ncache);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, unsigned limit_v4, const bool ooz);
+bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, const unsigned ttl, const unsigned limit_v4, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, unsigned limit_v6, const bool ooz);
+bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, const unsigned ttl, const unsigned limit_v6, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned limit_v4, unsigned limit_v6, const bool ooz);
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl, const unsigned limit_v4, const unsigned limit_v6, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, unsigned ttl);
+bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, const unsigned ttl, const unsigned limit_v4, const unsigned limit_v6);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned pref);
+bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl, const unsigned pref);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned priority, unsigned weight, unsigned port);
+bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl, const unsigned priority, const unsigned weight, const unsigned port);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned order, unsigned pref, unsigned num_texts, uint8_t** texts);
+bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl, const unsigned order, const unsigned pref, const unsigned num_texts, uint8_t** texts);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
+bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, const unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
+bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, const unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, unsigned num_texts, uint8_t** texts, unsigned ttl);
+bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, const unsigned ttl);
 F_WUNUSED F_NONNULLX(1)
-bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, unsigned rrtype, unsigned ttl, unsigned rdlen, uint8_t* rd);
+bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, const unsigned ttl, const unsigned rdlen, uint8_t* rd);
 
 // Load zonefiles (called from main, invokes parser)
 void ltree_load_zones(void);

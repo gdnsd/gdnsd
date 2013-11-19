@@ -25,14 +25,12 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     void plugin_foo_iothread_init(unsigned threadnum)
 
     -- runtime stuff (called from iothread context, anytime after iothread_init())
-    bool plugin_foo_resolve_dynaddr(unsigned threadnum, unsigned resnum, const client_info_t* cinfo, dynaddr_result_t* result)
-    void plugin_foo_resolve_dyncname(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyncname_result_t* result)
+    void plugin_foo_resolve(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result)
 
     -- runtime stuff (called from main or zonefile thread, anytime after full_config())
-    --   (you won't get parallel calls to these, and in general they should be readonly
-    --    operations anyways)
-    int plugin_foo_map_resource_dyna(const char* resname)
-    int plugin_foo_map_resource_dync(const char* resname, const uint8_t* origin)
+    --   (you won't get parallel calls to this, and in general it should be a readonly
+    --    operation anyways)
+    int plugin_foo_map_res(const char* resname, const uint8_t* origin)
 
     -- cleanup stuff:
     void plugin_foo_exit(void)
@@ -48,20 +46,21 @@ changes and/or solicit your feedback!).
 
 =head1 OVERVIEW
 
-This file documents version 12 of the gdnsd plugin API.
+This file documents version 13 of the gdnsd plugin API.
 
 L<gdnsd>'s plugin API offers the ability to write plugins that can
 do either (or both) of two roles:
 
-Dynamically generate virtual C<A>, C<AAAA>, and C<CNAME> records
+1) Dynamically generate virtual C<A>, C<AAAA>, and/or C<CNAME> records
 according to whatever logic the plugin author wishes.  The plugin
 can make use of gdnsd's monitoring services for being failover-aware,
 and the actual zonefile records that trigger these lookups are C<DYNA>
-for addresses and C<DYNC> for CNAMEs.
+(for address-only data) and C<DYNC> (for which the plugin can return
+C<CNAME> or address results).
 
-Provide custom protocols and implementations for the back-end of the
+2) Provide custom protocols and implementations for the back-end of the
 monitoring code for use by any plugin.  In this case you mostly just
-implement the protocl check code against a standard libev event loop
+implement the protocol check code against a standard libev event loop
 and use a helper function to report the results of each status check,
 and the core takes care of the rest.
 
@@ -108,7 +107,7 @@ plugin's config hash for users.
 The second part of the configuration is inserting C<DYNA> and/or
 C<DYNC> resource records into zonefiles.  C<DYNA> RRs use a plugin to
 dynamically generate C<A> and/or C<AAAA> RRs, while C<DYNC> RRs use a
-plugin to dynamically generate C<CNAME> RRs.
+plugin to dynamically generate either C<A>/C<AAAA> RRs or C<CNAME> RRs.
 
   www      300 DYNA foo!prod_web
   www.test 300 DYNA foo!test_web
@@ -125,10 +124,8 @@ Typically it will reference a configuration key from the plugin's
 configuration hash as a mapping to a specific set of parameters for the
 plugin, but other uses of this field are possible.
 
-Plugins may implement DYNA, DYNC, or both.  The plugin signals which
-RRs it supports by which runtime resolve callbacks it implements.
-C<plugin_foo_resolve_dynaddr> implies DYNA support, and
-C<plugin_foo_resolv_dyncname> implies DYNC support.
+Plugins may implement just address results, just CNAME results, or
+both.
 
 =head1 USER-LEVEL CONFIGURATION FOR MONITORING
 
@@ -251,34 +248,28 @@ I/O thread context.
 After full_config, the daemon loads and parses all zonefiles,
 constructing the internal runtime DNS database.  During the zonefile
 loading phase, when it encounters C<DYNA> RRs in zonefiles, they will
-trigger the plugin callback C<plugin_foo_map_resource_dyna> once for
-every C<DYNA> RR.  The same occurs with all C<DYNC> RRs and
-C<plugin_foo_map_resource_dync>.  In the C<DYNA> case, you get the
-resource name and are expected to return an integer resource number.
-In the C<DYNC> case, you get both the resource name and an origin
-argument indicating the current C<$ORIGIN> in effect for the RR, and
-again are expected to return an integer resource number which is
-greater than or equal to zero.
-
-The meaning and mapping of these resource numbers is entirely up to the
-plugin.  Any time the given RR is resolved at runtime, the resource
-number you returned here will be passed back to your code for dynamic
-resolution.
+trigger the plugin callback C<plugin_foo_map_res> once for
+every C<DYNA> RR, with a C<NULL> C<origin> argument.  The same occurs
+with all C<DYNC> RRs, and they will get non-C<NULL> C<origin> arguments,
+which indicate the current C<$ORIGIN> in effect for the RR.  It is
+important to note that your plugin should treat it as an error if
+it gets a C<_map_res> call with a C<NULL> C<origin> (DYNA) for a resource
+which is configured to be capable of returning C<CNAME> results.
 
 If your DYNC plugin supports variable origins (e.g. the same resource
 name can be re-used in multiple zonefiles, and prepends some standard
 domainname fragment to origin in effect for the given RR), it is
 important that you validate that you can construct a legal domainname
 (length limits) from the given origin, resource name, and your own
-config at this time.  This validation is the B<only> reason the
-C<origin> parameter is provided for C<plugin_foo_map_resource_dync>.
+config at this time.
 
 Plugins should B<not> return different resource numbers for the same
-resname argument, even in the DYNC case where C<origin> varies.  You
+resname argument regardless of C<origin> value (or lack thereof).  You
 will break things if you do so.
 
 If your map_resource operation fails (e.g. unknown resource name, or
-illegal origin-based CNAME construction), log the error and return -1.
+illegal origin-based C<CNAME> construction, or a NULL origin argument (DYNA)
+for a resource that could return C<CNAME> data), log the error and return -1.
 Do B<not> fail fatally, as these calls happen at runtime during dynamic
 zonefile reloads.
 
@@ -349,14 +340,13 @@ At this point, gdnsd is ready to begin serving DNS queries.  After all
 I/O threads have finished initialization (and thus moved on to already
 serving requests), the primary thread will enter the libev loop
 mentioned above and remain under its control until daemon exit time.
-During this time the only direct callbacks your plugin will receive are
-C<plugin_foo_resolve_dynaddr> and/or C<plugin_foo_resolve_dyncname>.
-They will only be called from I/O thread context.  If you registered
+During this time the only direct callback your plugin will receive
+from I/O thread contexts is C<plugin_foo_resolve>.  If you registered
 any libev watchers during pre_run, you will also receive relevant
 callbacks there in the main thread's execution context.
 
-As a general style rule, the runtime resolver callbacks are not allowed
-to block or fail.  They are expected to respond immediately with valid
+As a general style rule, the runtime resolver callback is not allowed
+to block or fail.  It is expected to respond immediately with valid
 response data.  It is your job as the plugin author to ensure this is
 the case.  That means pre-allocating memory, pre-loading data, and/or
 pre-calculating anything expensive during earlier callbacks.  Worst
@@ -364,10 +354,13 @@ case, you can return meaningless data, e.g. C<0.0.0.0> for C<DYNA> or
 some hostname like C<plugin.is.broken.> for C<DYNC>, but ideally all
 possible error conditions have been checked out beforehand.
 
-C<resolve_dynaddr> is supplied with a resource number, a thread number,
+C<_resolve> is supplied with a resource number, a thread number,
 a result structure your code can use to supply address information to
-the client, and a C<client_info_t> structure giving network information
-about the querying client.
+the client, a C<client_info_t> structure giving network information
+about the querying client, and an C<origin> argument.
+
+The resource number and origin will match with earlier C<map_res>
+calls your plugin received.
 
 The C<client_info_t> structure contains the querying DNS cache's
 address as well as optional edns-client-subnet address+mask
@@ -388,28 +381,18 @@ included in the additional section when appropriate.  In response to a
 direct query for A or AAAA, the daemon returns the queried address RR
 type in the answer section and the other in the additional section.
 
-C<resolve_dyncname> is similar, but also receives an origin argument in
-C<dname> format, and uses a different results structure.  The origin
-argument is always fully qualified, and can be used to construct a
-complete domainname from a user configuration which specifies
-un-terminated short names.  Again, a pre-allocated results structure is
-supplied for your code to fill out.
-
-In both resolve callbacks' result structures, TTLs are pre-set from the
+In the callback result structure C<dyn_result_t>, TTLs are pre-set from the
 effective TTL of the triggering record in the zonefile, but can be
 modified by the plugin (for example, to shorten the TTL during failure
 or near-failure events for a plugin that uses monitoring).
 
-C<resolve_dynaddr> has a boolean return value.  If your plugin makes
-use of some sort of monitoring, and you detected what your plugin would
-call "total failure", (or at least, failure to some threshold limit
-that you consider very bad), you should return C<false>.  If there's no
-monitoring involved, or the monitored status was reasonably ok, return
-C<true>.  The idea here is a higher-level nested plugin will use this
-result to consider your entire resource "dead" for possibly failing
-over to an alternate resource that it knows about.  You should still
-return a valid address set (probably the whole set would be the best
-bet in this scenario, for example).
+The boolean return value of the resolve callback is used for your
+plugin to indicate resource-level failure to higher-level meta-plugins
+such as C<metafo> or C<geoip>.  If your resource is completely "failed",
+fill in the best results you can (perhaps pretend all addresses are up)
+and return C<false>.  If your resource is not failed, return C<true>.
+The higher-level plugin may or may not choose to use your "failed"
+results anyways, depending on the state of other configured resources.
 
 When a signal is sent to stop the daemon, the primary thread's libev
 loop will return and no further watcher callbacks (set up via pre_run()
@@ -422,7 +405,7 @@ from the main thread's context.  You can log any stats output you wish
 here, and/or destruct any resources you wish (no worry about races from
 io thread access, they're all dead now).
 
-The C<map_resource_dyna> amd C<map_resource_dync> callbacks may also be
+The C<map_res> callback may also be
 called at any time during normal runtime as a result of zonefiles being
 dynamically reloaded.  These should be readonly operations so there
 shouldn't be any locking concerns.  It's important that these calls
@@ -430,10 +413,10 @@ never fail fatally.  Simply log an error and return -1.
 
 =head1 THREADING
 
-gdnsd uses POSIX threads.  Only the runtime resolve callbacks (
-C<plugin_foo_resolve_dynaddr> and C<plugin_foo_resolve_dyncname>) need
-to concern themselves with thread safety.  They can and will be called
-from multiple POSIX threads simultaneously for runtime requests.
+gdnsd uses POSIX threads.  Only the runtime resolve callback (
+C<plugin_foo_resolve> needs to to concern itself with thread safety.
+It can and will be called from multiple POSIX threads simultaneously
+for runtime requests.
 
 The simplest (but least-performant) way to ensure thread-safety would
 be to wrap the contents of these functions in a pthread mutex.
@@ -510,161 +493,16 @@ C<GDNSD_PLUGIN_API_VERSION>.  If necessary, you can test this value via
 C<#if> macro logic to use alternate code for different API versions (or
 simply to error out if the API version is too old for your plugin code).
 
-=head1 API CHANGELOG
+=head1 RECENT API CHANGES
 
-Prior to API version 3, there wasn't any good API documentation and no
-known 3rd-party plugins.
-
-=head2 Version 4
-
-The API function gdnsd_mon_add() was removed completely.
-
-The prototype for plugin_foo_load_config() changed: the return value
-(previously void) is now C<mon_list_t*>.  If you were previously using
-gdnsd_mon_add() during plugin_foo_load_config(), you now return that
-data via the return value instead.  If you were not using
-gdnsd_mon_add(), you can simply update the return value type and return
-NULL from this callback now.
-
-Also, while not technically an API change, the configuration file
-format as a whole underwent some changes.  Hash keys and values are now
-separated by C<=E<gt>> or C<=> (rather than C<:> or C<=>), and C<:> is
-now allowed in literal, unquoted keys and values.
-
-=head2 Verion 5
-
-C<plugin_foo_map_resource> was replaced with
-C<plugin_foo_map_resource_dyna>.
-
-Two new callbacks added for C<DYNC> support:
-C<plugin_foo_map_resource_dync> and
-C<plugin_foo_resolve_dyncname>.
-
-All plugin callback hooks are now optional.  Failure to implement
-map_resource callbacks maps all resources to the number zero, failure
-to implement load_config just means any plugin config hash information
-is ignored, etc.  Obviously, a plugin that defines no callbacks would
-be useless.  Similarly, if you don't implement at least one of
-C<plugin_foo_resolve_dynaddr> or C<plugin_foo_resolve_dyncname> your
-plugin will be fairly useless as well.
-
-=head2 Version 9
-
-Note: Versions 6-8 existed in the long-running 1.5.x dev series, but
-never a release build, so the V9 info here summarizes all changes from
-V5 -> V9.
-
-C<plugin_foo_resolve_dyna> and C<plugin_foo_resolve_dyncname> had their
-C<const anysin_t* client> arguments replaced with C<const
-client_info_t* cinfo>.  If you don't wish to deal immediately with the
-new complexities presented by the draft edns-client-subnet information
-in this new structure, you can preserve existing behavior by (a)
-updating your functions' arguments to the new prototype, and (b) adding
-the following near the top: C<const anysin_t* client =
-&cinfo-E<gt>dns_client;>.
-
-Additionally, *if* your plugin makes dynamic decisions based on
-C<cinfo-E<gt>dns_client>, it *needs* to set
-C<result-E<gt>edns_scope_mask = cinfo-E<gt>edns_client_mask;> for
-correct behavior.  Plugins whose responses are static with regard to
-C<cinfo> should not do so, as the result scope mask defaults to the
-appropriate value of C<0>.
-
-Previously an "extern bool dmn_debug" was available to query daemon
-debug status, this has been replaced with a function call C<bool
-dmn_get_debug(void);>.  This means any plugin with C<log_debug()>
-statements loses binary compatibility and needs to be rebuilt, but
-doesn't require a source change.  Other new dmn accessors were also
-added for previously unavailable information regarding
-privdrop/chroot/daemonization status as well.
-
-Added four new plugin callbacks to support pluggable monitoring:
-    void plugin_foo_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
-    void plugin_foo_add_monitor(const char* svc_name, mon_smgr_t* smgr)
-    void plugin_foo_init_monitors(struct ev_loop* mon_loop)
-    void plugin_foo_start_monitors(struct ev_loop* mon_loop)
-
-The internal structure of the data type C<anysin_t> changed.  The old
-typedef was:
-
-    typedef union {
-        struct sockaddr_in6 sin6;
-        struct sockaddr_in  sin;
-        struct sockaddr     sa;
-    } anysin_t;
-
-... and the new one is:
-
-    typedef struct {
-        union {
-            struct sockaddr_in6 sin6;
-            struct sockaddr_in  sin;
-            struct sockaddr     sa;
-        };
-        socklen_t len;
-    } anysin_t;
-
-Direct access to the union members via casting anysin_t to one of the
-sockaddr structs should still technically work, although it would be
-more proper to use the correct member.  If you are creating new
-anysin_t's in your plugin code, you need to set the C<len> member
-correctly.  Generally, this would be the len returned by the library
-call that created the sockaddr struct, e.g.  ai_addrlen in the case of
-C<getaddrinfo()>, and in any case should correspond to the C<sizeof()>
-one of the unioned sockaddr structs.
-
-If passing a blank anysin_t to be filled out by system library code
-(e.g.  as an argument to C<accept()>), the appropriate socklen value is
-defined as C<ANYSIN_MAXLEN>, which is the length of the largest of the
-unioned sockaddr structs.  So set anysin_t.len to that, and pass
-&anysin_t.len as the C<socklen_t*> argument the library call will use
-to fill in the correct value.
-
-Also added new API helper function C<gdnsd_anysin_getaddrinfo()> which
-wraps the common process of converting a numeric string address +
-optional numeric string port into an anysin_t using C<getaddrinfo()>,
-and sets the len field correctly.  C<plugin_foo_resolve_dynaddr()> now
-needs a return value of type C<bool>, was previously C<void>.  Return
-value should indicate whether other code can consider this resource
-effectively-dead for failover purposes.  You should still return some
-valid result-set (common practice would be to return all if
-everything's down, as if nothing in the resource were down).
+This is meant as a guide for authors of any 3rd party plugins trying
+to update for new changes, and generally covers only the most recent
+few sets of such changes.
 
 =head2 Version 11
 
-Note: Version 10 existed in the long-running 1.7.x dev series, but
-never a release build, so the V11 info here summarizes all changes from
-V9 -> V11.
-
-All header files renamed from the form C<gdnsd-X.h> to C<gdnsd/X.h>.
-
-satom/mon stuff:
-The header file gdnsd/satom.h is no longer published, and plugin code
-which directly includes it or uses things only defined there (e.g.
-satom_t and various satom_*() accessors) needs to stop doing so.  It
-was probably never a good idea to expose this or use it in the first
-place.  The replacement is intentionally undocumented for the plugin
-API.
-
-s/monio/mon/ in general on any types/symbols/macros referenced from the
-API include files, to clean up some package-internal naming conflict
-stuff.
-
-gdnsd_mon_min_state() renamed gdnsd_mon_get_min_state(), and is
-now the B<only> documented official interface for resolve plugins
-to fetch monitored states.
-
-gdnsd_mon_state_updater() is now the B<required> interface for
-monitoring plugins to send updates to the core, whereas it was
-merely recommended in the past.
-
-The embedded copy of libev was removed in favor of using an external
-installation as a dependency.  This means you'll need to have your
-own copy of libev's development headers in place to build 3rd-party
-plugins, and they should match the libev version gdnsd was built with.
-
-A few other minor changes require just a recompile, even if none of
-the above applies.
+Baseline for the changes below, was the API for the stable 1.8.x
+release series.
 
 =head2 Version 12
 
@@ -685,6 +523,63 @@ The other change is that the data item returned by vscf_scan_filename()
 can now be a hash or an array, whereas before the syntax of vscf's
 config language only permitted it to be a hash.  Code which expects
 a hash must now explicitly check that the result was not an array.
+
+=head2 Version 13
+
+Unreleased, work-in-progress, will probably be 2.x release series...
+
+The data structures C<dynaddr_result_t> and C<dyncname_result_t> were
+merged and replaced with a single structure C<dyn_result_t>, which
+has direct storage for the C<CNAME> data unioned with the same basic
+address structure that was in C<dynaddr_result_t>.  There's a new flag
+C<is_cname> in the new structure which plugins should set to indicate
+which half of the union results (cname or address) the plugin placed
+results in.
+
+The C<_map_res_dyna()> and C<_map_res_dync()> callbacks were merged
+and renamed to just C<_map_res()>.  The new call has an origin argument
+like the old C<_map_res_dync()>, which will be NULL when called for
+C<DYNA> RRs, and the C<result> argument's type was
+changed from C<dynaddr_result_t*> to C<dyn_result_t*>.
+
+The C<_resolve_dynaddr()> and C<_resolve_dyncname()> callbacks were
+merged and renamed to just C<_resolve()>.  The new call has an origin
+argument like the old C<_resolve_dyncame()>, which will be NULL when
+called for C<DYNA> RRs, and the C<result> argument's type was
+changed from C<dynaddr_result_t*> to C<dyn_result_t*>.
+
+C<gdnsd_dynaddr_add_result_anysin()> was renamed to
+C<gdnsd_dyn_add_result_anysin()>, and the C<result> argument's type was
+changed from C<dynaddr_result_t*> to C<dyn_result_t*>.
+
+=over 4
+
+=item map_res consistency
+
+The C<_map_res()> callback, if implemented, B<must> return a consistent,
+singular resource number for a given resource name, regardless of any
+C<origin> argument or the lack thereof.
+
+=item ignoring origin for address-only data
+
+If a plugin only handles addresses (for this resource, or in the general
+case), it should not fail on C<_map_res()> or C<_resolve()> just because an
+origin is defined, indicating a C<DYNC> RR.  It should instead simply ignore
+any origin argument and act as it always did.
+
+=item map_res DYNA validity checks
+
+If a resource name passed to C<_map_res()> is configured to be capable of
+returning C<CNAME> data and the C<origin> argument is C<NULL> (indicating
+a C<DYNA> RR), the plugin B<must> fail by returning -1.  One of the implications
+of this rule is that for any plugin which is capable of returning C<CNAME> data
+at all, C<_map_res()> B<must> be implemented.  Another implication of this
+(combined with the consistency rule) is that it's no longer legal to structure
+plugin resources such that they have unrelated sets of address and C<CNAME> data
+stored under the same resource name, as the weighted plugin originally did before
+its matching set of changes.
+
+=back
 
 =head1 SEE ALSO
 

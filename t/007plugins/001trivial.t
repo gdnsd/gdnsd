@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 27;
+use Test::More tests => 28;
 
 my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -190,5 +190,11 @@ _GDT->test_dns(
         'mfo3.example.com 43200 AAAA 2001:DB8::AD15:eA5e',
     ],
 );
+
+_GDT->test_dns(
+    qname => 'adyn.example.com', qtype => 'A',
+    answer => 'adyn.example.com 86400 A 192.0.2.41',
+);
+
 
 _GDT->test_kill_daemon($pid);

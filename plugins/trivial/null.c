@@ -23,15 +23,25 @@
 #include <gdnsd/plugin.h>
 #include <string.h>
 
-bool plugin_null_resolve_dynaddr(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {
-    result->count_v4 = 1;
-    result->count_v6 = 1;
-    result->addrs_v4[0] = 0;
-    memset(result->addrs_v6, 0, 16);
-    return true;
+int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UNUSED) {
+    return 0;
 }
-void plugin_null_resolve_dyncname(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyncname_result_t* result) {
-    gdnsd_dname_from_string(result->dname, (const uint8_t*)"invalid.", 8);
+
+bool plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+
+    if(origin) {
+        result->is_cname = true;
+        gdnsd_dname_from_string(result->cname, (const uint8_t*)"invalid.", 8);
+    }
+    else {
+        result->is_cname = false;
+        result->a.count_v4 = 1;
+        result->a.count_v6 = 1;
+        result->a.addrs_v4[0] = 0;
+        memset(result->a.addrs_v6, 0, 16);
+    }
+
+    return true;
 }
 
 // Obviously, we could implement "null" monitoring with simpler code,

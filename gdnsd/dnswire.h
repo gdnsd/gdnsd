@@ -126,6 +126,15 @@ typedef struct S_PACKED {
 #define DNS_CLASS_IN	1
 #define DNS_CLASS_ANY	255
 
+// Our own synthetic 'type' for DYNC
+//   Note that current standards mark
+//   the range 0xFF00 -> 0xFFFF for
+//   "private use".  We never intend
+//   to read this from or write this
+//   to packets on the wire, it's just
+//   for the internal database...
+#define DNS_TYPE_DYNC    0xFF0F
+
 /* Network-order TYPE+CLASS as a 32-bit uint */
 
 #ifdef WORDS_BIGENDIAN

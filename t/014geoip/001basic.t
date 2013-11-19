@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 45 * 2;
+use Test::More tests => 53 * 2;
 
 my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -314,7 +314,7 @@ _GDT->test_dns(
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
-# limited dynamic AAAA
+# limited dynamic AAAA+A
 _GDT->test_dns(
     qname => 'res4.example.com', qtype => 'AAAA',
     answer => [
@@ -325,6 +325,36 @@ _GDT->test_dns(
     limit_v6 => 2,
     stats => [qw/udp_reqs noerror/],
 );
+_GDT->test_dns(
+    qname => 'res44.example.com', qtype => 'A',
+    answer => [
+        'res44.example.com 86400 A 192.0.2.111',
+        'res44.example.com 86400 A 192.0.2.112',
+        'res44.example.com 86400 A 192.0.2.113',
+    ],
+    limit_v4 => 2,
+    stats => [qw/udp_reqs noerror/],
+);
+_GDT->test_dns(
+    qname => 'res4-dync.example.com', qtype => 'AAAA',
+    answer => [
+        'res4-dync.example.com 86400 AAAA 2001:DB8::2:123',
+        'res4-dync.example.com 86400 AAAA 2001:DB8::2:456',
+        'res4-dync.example.com 86400 AAAA 2001:DB8::2:789',
+    ],
+    limit_v6 => 2,
+    stats => [qw/udp_reqs noerror/],
+);
+_GDT->test_dns(
+    qname => 'res44-dync.example.com', qtype => 'A',
+    answer => [
+        'res44-dync.example.com 86400 A 192.0.2.111',
+        'res44-dync.example.com 86400 A 192.0.2.112',
+        'res44-dync.example.com 86400 A 192.0.2.113',
+    ],
+    limit_v4 => 2,
+    stats => [qw/udp_reqs noerror/],
+);
 
 # over-limited dynamic AAAA
 _GDT->test_dns(
@@ -333,6 +363,33 @@ _GDT->test_dns(
         'res4-lots.example.com 86400 AAAA 2001:DB8::2:123',
         'res4-lots.example.com 86400 AAAA 2001:DB8::2:456',
         'res4-lots.example.com 86400 AAAA 2001:DB8::2:789',
+    ],
+    stats => [qw/udp_reqs noerror/],
+);
+_GDT->test_dns(
+    qname => 'res44-lots.example.com', qtype => 'A',
+    answer => [
+        'res44-lots.example.com 86400 A 192.0.2.111',
+        'res44-lots.example.com 86400 A 192.0.2.112',
+        'res44-lots.example.com 86400 A 192.0.2.113',
+    ],
+    stats => [qw/udp_reqs noerror/],
+);
+_GDT->test_dns(
+    qname => 'res4-lots-dync.example.com', qtype => 'AAAA',
+    answer => [
+        'res4-lots-dync.example.com 86400 AAAA 2001:DB8::2:123',
+        'res4-lots-dync.example.com 86400 AAAA 2001:DB8::2:456',
+        'res4-lots-dync.example.com 86400 AAAA 2001:DB8::2:789',
+    ],
+    stats => [qw/udp_reqs noerror/],
+);
+_GDT->test_dns(
+    qname => 'res44-lots-dync.example.com', qtype => 'A',
+    answer => [
+        'res44-lots-dync.example.com 86400 A 192.0.2.111',
+        'res44-lots-dync.example.com 86400 A 192.0.2.112',
+        'res44-lots-dync.example.com 86400 A 192.0.2.113',
     ],
     stats => [qw/udp_reqs noerror/],
 );
@@ -432,6 +489,20 @@ _GDT->test_dns(
     answer => 'metascope.example.com 86400 A 192.0.2.1',
     addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+
+# geoip -> empty addresses, no data (via DYNA then DYNC)
+_GDT->test_dns(
+    qname => 'res-empty-a.example.com', qtype => 'A',
+    answer => [],
+    auth => $soa,
+    stats => [qw/udp_reqs noerror/],
+);
+_GDT->test_dns(
+    qname => 'res-empty-c.example.com', qtype => 'A',
+    answer => [],
+    auth => $soa,
+    stats => [qw/udp_reqs noerror/],
 );
 
 _GDT->test_kill_daemon($pid);

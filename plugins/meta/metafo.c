@@ -113,9 +113,8 @@ static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t*
 }
 
 #define PNSTR "metafo"
-#define DYNC_OK 0
 #define CB_LOAD_CONFIG plugin_metafo_load_config
-#define CB_MAP_A plugin_metafo_map_resource_dyna
-#define CB_RES_A plugin_metafo_resolve_dynaddr
+#define CB_MAP plugin_metafo_map_res
+#define CB_RES plugin_metafo_resolve
 #define CB_EXIT plugin_metafo_exit
 #include "meta_core.c"

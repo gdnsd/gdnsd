@@ -129,10 +129,31 @@ AAAA queries for the given name, and contain A and/or AAAA
 resource records as appropriate.  C<DYNA> cannot co-exist with
 actual static A or AAAA records at the same name.
 
+Example:
+
+  ; asks plugin 'geoip' to provide address data from
+  ;  its resource named 'pubwww' for address queries.
+  ; it does not affect other queries such as MX for
+  ;  the same name.
+  foo DYNA geoip!pubwww
+  foo MX 10 mail
+
 =head2 DYNC
 
-C<DYNC> is C<DYNA>'s counterpart for dynamically-determined CNAME
-records via plugin code.
+C<DYNC> has the same syntax as C<DYNA> above, but different data
+rules.  Plugins results returned via C<DYNC> can be either addresses
+or a C<CNAME> record.  C<DYNC> cannot co-exist with B<any> other
+resource record at the same name, much like normal C<CNAME> RRs.
+This also implies that C<DYNC> cannot be used at the zone root,
+as the zone root requires C<NS> and C<SOA> RRs.
+
+Example:
+
+  ; asks plugin 'geoip' to provide address data or a CNAME
+  ;  (at the plugin's discretion) for its resource named
+  ;  'www'.  No other RRs of any type for name 'foo' are
+  ;  legal alongside this record.
+  foo DYNC geoip!www
 
 =head2 SPF+
 
@@ -141,11 +162,15 @@ data which is duplicated as both TXT and SPF records at the same
 name.  It is always equivalent to removing the C<+>, copying the
 whole record, and changing C<SPF> to C<TXT> in the second copy.
 
+=head2 TXT/SPF data auto-splitting
+
 Our C<TXT> (and SPF, and SPF+) RRs support the auto-splitting
 of long string constants.  Rather than manually breaking the
-data into 255-byte chunks, you can specify a single long chunk
-and have the server break it at 255 byte boundaries automatically.
-(this behavior can be disabled via L<gdnsd.config(5)> as well.)
+data into 255-byte chunks as required by the protocol, you can
+specify a single long chunk and have the server break it at
+255 byte boundaries automatically.  (this behavior can be
+disabled via L<gdnsd.config(5)> as well, which will turn
+oversized chunks into zonefile parsing errors).
 
 =head1 SEE ALSO
 

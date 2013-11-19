@@ -29,8 +29,8 @@ Example plugin config:
         up_thresh => 0.01,
         pubhost01 = [ 192.0.2.1, 44 ]
         pubhost02 = [ 192.0.2.2, 11 ]
-        pubhost02 = [ 192.0.2.3, 11 ]
-        pubhost02 = [ 192.0.2.4, 11 ]
+        pubhost03 = [ 192.0.2.3, 11 ]
+        pubhost04 = [ 192.0.2.4, 11 ]
       }
       cdnwww => {
         service_types = web_check
@@ -75,7 +75,7 @@ Zonefile RRs referencing the above:
 
   www.corp   300 DYNC weighted!corpwww
   www6.front 300 DYNA weighted!frontwww6
-  www        300 DYNA weighted!pubwww
+  www        300 DYNC weighted!pubwww
   cdn        300 DYNA weighted!cdnwww
   mixed-a    300 DYNA weighted!mixed
   cnames     300 DYNC weighted!cn
@@ -135,6 +135,11 @@ per-address-family as well.
 you can configure the top-level of a resource with valid contents for one
 of the stanzas C<addrs_v4>, C<addrs_v6>, or C<cnames>, and the family/type
 will be autodetected, and be the only type available in this resource.
+
+Resources which (implicitly or explicitly) contain weighted lists of CNAMEs
+rather than addresses can only be used with C<DYNC> RRs in zonefiles, whereas
+those that contain only addresses can be used in either C<DYNC> or C<DYNA>
+RRs.
 
 =head1 CONFIGURATION - CNAMES
 
@@ -342,13 +347,12 @@ The gdnsd manual.
 =head1 COPYRIGHT AND LICENSE
 
 Copyright (c) 2012 Anton Tolchanov <me@knyar.net>,
-Brandon L Black <blblack@gmail.com> and Jay Reitz <jreitz@gmail.com>
+Brandon L Black <blblack@gmail.com>, and Jay Reitz <jreitz@gmail.com>
 
 This file is part of gdnsd-plugin-weighted.
 
 gdnsd-plugin-weighted is free software: you can redistribute it and/or
-modify
-it under the terms of the GNU General Public License as published by
+modify it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 

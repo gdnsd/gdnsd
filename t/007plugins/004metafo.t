@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -29,6 +29,11 @@ _GDT->test_dns(
         'meta2.example.com 86400 A 192.0.2.111',
         'meta2.example.com 86400 A 192.0.2.112',
     ],
+);
+
+_GDT->test_dns(
+    qname => 'acfail.example.com', qtype => 'A',
+    answer => 'acfail.example.com 86400 CNAME primary.is.down.example.net.',
 );
 
 _GDT->test_kill_daemon($pid);

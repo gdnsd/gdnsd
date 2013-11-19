@@ -79,72 +79,52 @@ mon_list_t* plugin_static_load_config(const vscf_data_t* config) {
     return NULL;
 }
 
-int plugin_static_map_resource_dyna(const char* resname) {
+int plugin_static_map_res(const char* resname, const uint8_t* origin) {
     if(resname) {
         for(unsigned i = 0; i < num_resources; i++) {
             if(!strcmp(resname, resources[i].name)) {
-                if(!resources[i].is_addr) {
-                    log_err("plugin_static: resource '%s' defined as a CNAME and then used as an address", resources[i].name);
-                    return -1;
-                }
-                return (int)i;
-            }
-        }
-        log_err("plugin_static: Unknown resource '%s'", resname);
-    }
-    else {
-        log_err("plugin_static: resource name required");
-    }
-
-    return -1;
-}
-
-int plugin_static_map_resource_dync(const char* resname, const uint8_t* origin) {
-    if(resname) {
-        for(unsigned i = 0; i < num_resources; i++) {
-            if(!strcmp(resname, resources[i].name)) {
-                if(resources[i].is_addr) {
-                    log_err("plugin_static: resource '%s' defined as an address and then used as a CNAME", resources[i].name);
-                    return -1;
-                }
+                if(resources[i].is_addr)
+                    return (int)i;
+                if(!origin)
+                    map_res_err("plugin_static: CNAME resource '%s' cannot be used for a DYNA record", resources[i].name);
                 if(dname_is_partial(resources[i].dname)) {
                     uint8_t dnbuf[256];
                     dname_copy(dnbuf, resources[i].dname);
                     dname_status_t status = dname_cat(dnbuf, origin);
-                    if(status != DNAME_VALID) {
-                        log_err("plugin_static: CNAME resource '%s' (configured with partial domainname '%s') creates an invalid domainname when used at origin '%s'", resources[i].name, logf_dname(resources[i].dname), logf_dname(origin));
-                        return -1;
-                    }
+                    if(status != DNAME_VALID)
+                        map_res_err("plugin_static: CNAME resource '%s' (configured with partial domainname '%s') creates an invalid domainname when used at origin '%s'", resources[i].name, logf_dname(resources[i].dname), logf_dname(origin));
                 }
                 return (int)i;
             }
         }
-        log_err("plugin_static: Unknown resource '%s'", resname);
+        map_res_err("plugin_static: Unknown resource '%s'", resname);
+    }
+
+    map_res_err("plugin_static: resource name required");
+}
+
+bool plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+    dmn_assert(!result->is_cname);
+
+    // this (DYNA->CNAME) should be caught during map_res
+    //   and cause the zonefile to fail to load
+    if(!origin)
+        dmn_assert(resources[resnum].is_addr);
+
+    if(resources[resnum].is_addr) {
+        result->a.count_v6 = 0;
+        result->a.count_v4 = 1;
+        result->a.addrs_v4[0] = resources[resnum].ipaddr;
     }
     else {
-        log_err("plugin_static: resource name required");
+        dmn_assert(origin);
+        result->is_cname = true;
+        uint8_t* dname = resources[resnum].dname;
+        dname_copy(result->cname, dname);
+        if(dname_is_partial(result->cname))
+            dname_cat(result->cname, origin);
+        dmn_assert(dname_status(result->cname) == DNAME_VALID);
     }
 
-    return -1;
-}
-
-bool plugin_static_resolve_dynaddr(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t* cinfo V_UNUSED, dynaddr_result_t* result) {
-    dmn_assert(resources[resnum].is_addr);
-
-    result->count_v6 = 0;
-    result->count_v4 = 1;
-    result->addrs_v4[0] = resources[resnum].ipaddr;
     return true;
-}
-
-void plugin_static_resolve_dyncname(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyncname_result_t* result) {
-    dmn_assert(!resources[resnum].is_addr);
-
-    result->ttl = 600;
-    uint8_t* dname = resources[resnum].dname;
-
-    dname_copy(result->dname, dname);
-    if(dname_is_partial(result->dname))
-        dname_cat(result->dname, origin);
-    dmn_assert(dname_status(result->dname) == DNAME_VALID);
 }

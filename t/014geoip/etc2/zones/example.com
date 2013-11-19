@@ -35,9 +35,17 @@ dmx	MX	1 res2
 dmx	MX	2 res3
 
 $ADDR_LIMIT_V6 2
+$ADDR_LIMIT_V4 2
 res4	DYNA	geoip!res4
+res4-dync DYNC  geoip!res4
+res44	DYNA	geoip!res44
+res44-dync DYNC  geoip!res44
 $ADDR_LIMIT_V6 100
+$ADDR_LIMIT_V4 100
 res4-lots	DYNA	geoip!res4
+res4-lots-dync	DYNC	geoip!res4
+res44-lots	DYNA	geoip!res44
+res44-lots-dync	DYNC	geoip!res44
 
 res5	DYNC	geoip!res5
 dc2cn-loop CNAME res5
@@ -48,3 +56,6 @@ res8	DYNA	geoip!res8
 res9	DYNA	geoip!res9
 
 metascope DYNA metafo!metascope
+
+res-empty-a DYNA geoip!res-e
+res-empty-c DYNC geoip!res-e

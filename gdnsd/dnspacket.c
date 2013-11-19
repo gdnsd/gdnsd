@@ -85,7 +85,7 @@ dnspacket_context_t* dnspacket_context_new(const unsigned int this_threadnum, co
     retval->comptargets = malloc(COMPTARGETS_MAX * sizeof(comptarget_t));
     retval->dync_store = malloc(gconfig.max_cname_depth * 256);
     retval->addtl_store = malloc(gconfig.max_response);
-    retval->dynaddr = malloc(sizeof(dynaddr_result_t));
+    retval->dyn = malloc(sizeof(dyn_result_t));
 
     return retval;
 }
@@ -651,19 +651,20 @@ static unsigned int enc_a_dynamic(dnspacket_context_t* c, unsigned int offset, c
     dmn_assert(c); dmn_assert(c->packet);
 
     uint8_t* packet = is_addtl ? c->addtl_store : c->packet;
-    const dynaddr_result_t* dr = c->dynaddr;
-    dmn_assert(dr->count_v4);
+    const dyn_result_t* dr = c->dyn;
+    dmn_assert(!dr->is_cname);
+    dmn_assert(dr->a.count_v4);
 
-    const unsigned limit_v4 = rrset->limit_v4 && rrset->limit_v4 < dr->count_v4
+    const unsigned limit_v4 = rrset->limit_v4 && rrset->limit_v4 < dr->a.count_v4
         ? rrset->limit_v4
-        : dr->count_v4;
+        : dr->a.count_v4;
 
     if(is_addtl)
         c->arcount += limit_v4;
     else
         c->ancount += limit_v4;
 
-    OFFSET_LOOP_START(dr->count_v4, limit_v4)
+    OFFSET_LOOP_START(dr->a.count_v4, limit_v4)
         offset += repeat_name(c, offset, nameptr, is_addtl);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
@@ -671,7 +672,7 @@ static unsigned int enc_a_dynamic(dnspacket_context_t* c, unsigned int offset, c
         offset += 4;
         gdnsd_put_una16(htons(4), &packet[offset]);
         offset += 2;
-        gdnsd_put_una32(dr->addrs_v4[i], &packet[offset]);
+        gdnsd_put_una32(dr->a.addrs_v4[i], &packet[offset]);
         offset += 4;
     OFFSET_LOOP_END
     return offset;
@@ -682,19 +683,20 @@ static unsigned int enc_aaaa_dynamic(dnspacket_context_t* c, unsigned int offset
     dmn_assert(c); dmn_assert(c->packet);
 
     uint8_t* packet = is_addtl ? c->addtl_store : c->packet;
-    const dynaddr_result_t* dr = c->dynaddr;
-    dmn_assert(dr->count_v6);
+    const dyn_result_t* dr = c->dyn;
+    dmn_assert(!dr->is_cname);
+    dmn_assert(dr->a.count_v6);
 
-    const unsigned limit_v6 = rrset->limit_v6 && rrset->limit_v6 < dr->count_v6
+    const unsigned limit_v6 = rrset->limit_v6 && rrset->limit_v6 < dr->a.count_v6
         ? rrset->limit_v6
-        : dr->count_v6;
+        : dr->a.count_v6;
 
     if(is_addtl)
         c->arcount += limit_v6;
     else
         c->ancount += limit_v6;
 
-    OFFSET_LOOP_START(dr->count_v6, limit_v6)
+    OFFSET_LOOP_START(dr->a.count_v6, limit_v6)
         offset += repeat_name(c, offset, nameptr, is_addtl);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -702,7 +704,7 @@ static unsigned int enc_aaaa_dynamic(dnspacket_context_t* c, unsigned int offset
         offset += 4;
         gdnsd_put_una16(htons(16), &packet[offset]);
         offset += 2;
-        memcpy(&packet[offset], dr->addrs_v6 + (i << 4), 16);
+        memcpy(&packet[offset], dr->a.addrs_v6 + (i << 4), 16);
         offset += 16;
     OFFSET_LOOP_END
     return offset;
@@ -716,10 +718,11 @@ F_NONNULL
 static void do_dynaddr_callback(dnspacket_context_t* c, const ltree_rrset_addr_t* rrset) {
     dmn_assert(c); dmn_assert(rrset); dmn_assert(!rrset->gen.is_static);
 
-    dynaddr_result_t* dr = c->dynaddr;
-    memset(dr, 0, sizeof(dynaddr_result_t));
+    dyn_result_t* dr = c->dyn;
+    memset(dr, 0, sizeof(dyn_result_t));
     dr->ttl = ntohl(rrset->gen.ttl);
-    rrset->dyn.func(c->threadnum, rrset->dyn.resource, &c->client_info, dr);
+    rrset->dyn.func(c->threadnum, rrset->dyn.resource, NULL, &c->client_info, dr);
+    dmn_assert(!dr->is_cname);
     if(dr->edns_scope_mask > c->edns_client_scope_mask)
         c->edns_client_scope_mask = dr->edns_scope_mask;
 }
@@ -741,9 +744,9 @@ static unsigned int encode_rrs_anyaddr(dnspacket_context_t* c, unsigned int offs
     }
     else {
         do_dynaddr_callback(c, rrset);
-        if(c->dynaddr->count_v4)
+        if(c->dyn->a.count_v4)
             offset = enc_a_dynamic(c, offset, rrset, nameptr, is_addtl);
-        if(c->dynaddr->count_v6)
+        if(c->dyn->a.count_v6)
             offset = enc_aaaa_dynamic(c, offset, rrset, nameptr, is_addtl);
     }
 
@@ -821,9 +824,10 @@ static unsigned int encode_rrs_a(dnspacket_context_t* c, unsigned int offset, co
     }
     else {
         do_dynaddr_callback(c, rrset);
-        if(c->dynaddr->count_v4)
+        dmn_assert(!c->dyn->is_cname);
+        if(c->dyn->a.count_v4)
             offset = enc_a_dynamic(c, offset, rrset, c->qname_comp, false);
-        if(c->dynaddr->count_v6) {
+        if(c->dyn->a.count_v6) {
             track_addtl_rrset_unwind(c, rrset);
             c->addtl_offset = enc_aaaa_dynamic(c, c->addtl_offset, rrset, c->qname_comp, true);
         }
@@ -851,9 +855,10 @@ static unsigned int encode_rrs_aaaa(dnspacket_context_t* c, unsigned int offset,
     }
     else {
         do_dynaddr_callback(c, rrset);
-        if(c->dynaddr->count_v6)
+        dmn_assert(!c->dyn->is_cname);
+        if(c->dyn->a.count_v6)
             offset = enc_aaaa_dynamic(c, offset, rrset, c->qname_comp, false);
-        if(c->dynaddr->count_v4) {
+        if(c->dyn->a.count_v4) {
             track_addtl_rrset_unwind(c, rrset);
             c->addtl_offset = enc_a_dynamic(c, c->addtl_offset, rrset, c->qname_comp, true);
         }
@@ -1062,40 +1067,16 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
 
     uint8_t* packet = c->packet;
 
-    unsigned int rdata_offset, ttl;
-    const uint8_t* dname;
-
-    if(rd->gen.is_static) {
-        ttl = rd->gen.ttl;
-        dname = rd->dname;
-    }
-    else {
-        dmn_assert(c->dync_count < gconfig.max_cname_depth);
-        dyncname_result_t ans_dync = {0, 0, &c->dync_store[(c->dync_count++ * 256)] };
-        dname = ans_dync.dname;
-        ans_dync.ttl = ntohl(rd->gen.ttl);
-
-        rd->dyn.func(c->threadnum, rd->dyn.resource, rd->dyn.origin, &c->client_info, &ans_dync);
-        if(ans_dync.edns_scope_mask > c->edns_client_scope_mask)
-            c->edns_client_scope_mask = ans_dync.edns_scope_mask;
-        ttl = htonl(ans_dync.ttl);
-
-        // plugin is responsible for ensuring ans_dync.dname contents are valid,
-        //   and not casting away const and overwriting the pointer
-        dmn_assert(dname == ans_dync.dname);
-        dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
-    }
-
     // start formulating response
     offset += repeat_name(c, offset, c->qname_comp, false);
     gdnsd_put_una32(DNS_RRFIXED_CNAME, &packet[offset]);
     offset += 4;
 
-    gdnsd_put_una32(ttl, &packet[offset]);
+    gdnsd_put_una32(rd->gen.ttl, &packet[offset]);
     offset += 6;
 
-    rdata_offset = offset;
-    offset += store_dname(c, offset, dname, false);
+    const unsigned int rdata_offset = offset;
+    offset += store_dname(c, offset, rd->dname, false);
 
     // set rdata_len
     gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
@@ -1144,6 +1125,12 @@ static unsigned int encode_rr_soa(dnspacket_context_t* c, unsigned int offset, c
 static unsigned int encode_rrs_rfc3597(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_rfc3597_t* rrset, const bool answer V_UNUSED) {
     dmn_assert(c); dmn_assert(c->packet); dmn_assert(offset); dmn_assert(rrset);
 
+    // assert that DYNC (which is technically in the range
+    //  served exclusively by this function, but which we
+    //  should be translating earlier and never serving on
+    //  the wire) never appears here.
+    dmn_assert(rrset->gen.type != DNS_TYPE_DYNC);
+
     uint8_t* packet = c->packet;
 
     const unsigned rrct = rrset->gen.count;
@@ -1165,21 +1152,21 @@ static unsigned int encode_rrs_rfc3597(dnspacket_context_t* c, unsigned int offs
     return offset;
 }
 
-F_NONNULL
-static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, const ltree_node_t* resdom) {
-    dmn_assert(c); dmn_assert(resdom);
+F_NONNULLX(1)
+static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_t* res_rrsets) {
+    dmn_assert(c);
 
     // Address rrsets have to be processed first outside of the main loop,
     //   so that c->answer_addr_rrset gets set before any other RR-types
     //   try to add duplicate addr records to the addtl section
-    const ltree_rrset_t* rrset = resdom->rrsets;
+    const ltree_rrset_t* rrset = res_rrsets;
     while(rrset) {
         if(rrset->gen.type == DNS_TYPE_A)
             offset = encode_rrs_anyaddr(c, offset, (const void*)rrset, c->qname_comp, false);
         rrset = rrset->gen.next;
     }
 
-    rrset = resdom->rrsets;
+    rrset = res_rrsets;
     while(rrset) {
         switch(rrset->gen.type) {
             case DNS_TYPE_A:
@@ -1214,6 +1201,8 @@ static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, 
                 offset = encode_rrs_txt(c, offset, (const void*)rrset, true);
                 c->qtype = DNS_TYPE_ANY;
                 break;
+            case DNS_TYPE_DYNC:;
+                dmn_assert(0); // DYNC should never make it to here
             default:
                 offset = encode_rrs_rfc3597(c, offset, (const void*)rrset, true);
                 break;
@@ -1504,15 +1493,15 @@ static unsigned int (*encode_funcptrs[256])(dnspacket_context_t*, unsigned int, 
     NULL,                  // 255 - ANY
 };
 
-F_NONNULL
-static unsigned int construct_normal_response(dnspacket_context_t* c, unsigned int offset, const ltree_node_t* resdom, const ltree_node_t* authdom) {
-    dmn_assert(c); dmn_assert(resdom); dmn_assert(authdom);
+F_NONNULLX(1, 4)
+static unsigned int construct_normal_response(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_t* res_rrsets, const ltree_node_t* authdom, const bool res_is_auth) {
+    dmn_assert(c); dmn_assert(authdom);
 
     if(c->qtype == DNS_TYPE_ANY) {
-        offset = encode_rrs_any(c, offset, resdom);
+        offset = encode_rrs_any(c, offset, res_rrsets);
     }
-    else if(resdom->rrsets) {
-        const ltree_rrset_t* node_rrset = resdom->rrsets;
+    else if(res_rrsets) {
+        const ltree_rrset_t* node_rrset = res_rrsets;
         unsigned etype = c->qtype;
         // rrset_addr is stored as type DNS_TYPE_A for both A and AAAA
         if(etype == DNS_TYPE_AAAA) etype = DNS_TYPE_A;
@@ -1531,7 +1520,7 @@ static unsigned int construct_normal_response(dnspacket_context_t* c, unsigned i
     if(!c->ancount)
         offset = encode_rr_soa(c, offset, ltree_node_get_rrset_soa(authdom), false);
     else if(gconfig.include_optional_ns && c->qtype != DNS_TYPE_NS
-        && (c->qtype != DNS_TYPE_ANY || resdom != authdom))
+        && (c->qtype != DNS_TYPE_ANY || !res_is_auth))
             offset = encode_rrs_ns(c, offset, ltree_node_get_rrset_ns(authdom), false);
 
     return offset;
@@ -1630,6 +1619,60 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
     return rval;
 }
 
+// DYNC handling.  This translates a DYNC RR from the ltree into
+//   a new rrset (possibly NULL) via the plugin, using context
+//   storage.
+F_NONNULL
+static const ltree_rrset_t* process_dync(dnspacket_context_t* c, const ltree_rrset_dync_t* rd) {
+    dmn_assert(rd);
+    dmn_assert(!rd->gen.next); // DYNC does not co-exist with other rrsets
+
+    const ltree_rrset_t* rv = NULL;
+
+    dyn_result_t* dr = c->dyn;
+    memset(dr, 0, sizeof(dyn_result_t));
+    dr->ttl = ntohl(rd->gen.ttl);
+    rd->func(c->threadnum, rd->resource, rd->origin, &c->client_info, dr);
+    if(dr->edns_scope_mask > c->edns_client_scope_mask)
+        c->edns_client_scope_mask = dr->edns_scope_mask;
+
+    if(dr->is_cname) {
+        dmn_assert(gdnsd_dname_status(dr->cname) == DNAME_VALID);
+        dmn_assert(c->dync_count < gconfig.max_cname_depth);
+        uint8_t* cn_store = &c->dync_store[c->dync_count++ * 256];
+        dname_copy(cn_store, dr->cname);
+        c->dync_cname.gen.type = DNS_TYPE_CNAME;
+        c->dync_cname.gen.count = 1;
+        c->dync_cname.gen.ttl = htonl(dr->ttl);
+        c->dync_cname.dname = cn_store;
+        rv = (const ltree_rrset_t*)&c->dync_cname;
+    }
+    else if(dr->a.count_v4 + dr->a.count_v6) {
+        // ^ If both counts are zero, must represent this as
+        //  a missing rrset (NULL rv).  An actual rrset with zero
+        //  counts is interpreted as a DYNA entry in the ltree.
+        unsigned lv4 = rd->limit_v4;
+        if(!lv4 || lv4 > dr->a.count_v4)
+            lv4 = dr->a.count_v4;
+
+        unsigned lv6 = rd->limit_v6;
+        if(!lv6 || lv6 > dr->a.count_v6)
+            lv6 = dr->a.count_v6;
+
+        c->dync_addr.gen.type = DNS_TYPE_A;
+        c->dync_addr.gen.ttl = htonl(dr->ttl);
+        c->dync_addr.gen.count_v6 = dr->a.count_v6;
+        c->dync_addr.gen.count_v4 = dr->a.count_v4;
+        c->dync_addr.addrs.v4 = dr->a.addrs_v4;
+        c->dync_addr.addrs.v6 = dr->a.addrs_v6;
+        c->dync_addr.limit_v4 = lv4;
+        c->dync_addr.limit_v6 = lv6;
+        rv = (const ltree_rrset_t*)&c->dync_addr;
+    }
+
+    return rv;
+}
+
 F_NONNULL
 static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname, unsigned int offset) {
     dmn_assert(c); dmn_assert(qname); dmn_assert(offset);
@@ -1639,6 +1682,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
     unsigned cname_depth = 0;
     const ltree_node_t* resdom = NULL;
     const ltree_node_t* resauth = NULL;
+    const ltree_rrset_t* res_rrsets = NULL;
     wire_dns_header_t* res_hdr = (wire_dns_header_t*)c->packet;
 
     ltree_dname_status_t status = DNAME_NOAUTH;
@@ -1649,59 +1693,78 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
     zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
 
     if(query_zone) { // matches auth space somewhere
-        // In the initial search, it's known that "qname" is in fact the real query name and therefore
-        //  uncompressed, which is what makes the simplistic c->auth_comp calculation possible.
         resauth = query_zone->root;
-        status = search_zone_for_dname(qname, query_zone, &resdom, &auth_depth);
-        c->auth_comp = c->qname_comp + auth_depth;
-        dmn_assert(status == DNAME_AUTH || status == DNAME_DELEG);
 
-        // CNAME handling, which fills in 1+ CNAME RRs and then alters status/resdom/via_cname
-        //  for the normal response handling code below.  The explicit check of the first
-        //  rrsets entry works because if CNAME exists at all, by definition it is the only
-        //  type of rrset at this node.
-        while(resdom
-            && resdom->rrsets
-            && resdom->rrsets->gen.type == DNS_TYPE_CNAME
-            && c->qtype != DNS_TYPE_CNAME
-            && c->qtype != DNS_TYPE_ANY) {
+        bool iterating_for_cname = false;
 
-            dmn_assert(status == DNAME_AUTH);
+        do { // This do/while loop handles CNAME chains...
+            status = search_zone_for_dname(qname, query_zone, &resdom, &auth_depth);
+            dmn_assert(status == DNAME_AUTH || status == DNAME_DELEG);
 
-            res_hdr->flags1 |= 4; // AA bit
-            via_cname = true;
-
-            if(++cname_depth > gconfig.max_cname_depth) {
-                log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
-                resdom = NULL; // clear resdom to generate NXDOMAIN-style response
-                // wipe any data already added to the packet
-                offset = first_offset;
-                c->ancount = 0;
-                c->cname_ancount = 0;
-                break;
-            }
-
-            const ltree_rrset_cname_t* cname = &resdom->rrsets->cname;
-            offset = encode_rr_cname(c, offset, cname, false);
-
-            const uint8_t* dname = cname->gen.is_static ? cname->dname : &c->dync_store[(c->dync_count - 1) * 256];
-            if(dname_isinzone(query_zone->dname, dname)) {
-                auth_depth = *dname - *query_zone->dname;
-                status = search_zone_for_dname(dname, query_zone, &resdom, &auth_depth);
-                c->auth_comp = chase_auth_ptr(c->packet, c->qname_comp, auth_depth);
+            if(!iterating_for_cname) {
+                // In the initial search, it's known that "qname" is in fact the real query name and therefore
+                //  uncompressed, which is what makes the simplistic c->auth_comp calculation possible.
+                c->auth_comp = c->qname_comp + auth_depth;
             }
             else {
-                status = DNAME_NOAUTH;
-                break;
+                c->auth_comp = chase_auth_ptr(c->packet, c->qname_comp, auth_depth);
             }
-        } // end CNAME block
+
+            iterating_for_cname = false;
+
+            res_rrsets = resdom ? resdom->rrsets : NULL;
+            if(res_rrsets && res_rrsets->gen.type == DNS_TYPE_DYNC)
+                res_rrsets = process_dync(c, &res_rrsets->dync);
+
+            // Indirect-CNAME-lookup (CNAME data for a non-CNAME(/ANY) query):
+            // Fills in 1+ CNAME RRs and then alters status/resdom/via_cname
+            //  for the normal response handling code below.  The explicit check of the first
+            //  rrsets entry works because if CNAME exists at all, by definition it is the only
+            //  type of rrset at this node.
+            if(res_rrsets && res_rrsets->gen.type == DNS_TYPE_CNAME
+                && c->qtype != DNS_TYPE_CNAME
+                && c->qtype != DNS_TYPE_ANY) {
+
+                dmn_assert(!res_rrsets->gen.next); // CNAME does not co-exist with other rrsets
+                dmn_assert(status == DNAME_AUTH);
+
+                res_hdr->flags1 |= 4; // AA bit
+                via_cname = true;
+
+                if(++cname_depth > gconfig.max_cname_depth) {
+                    log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
+                    // wipe state back to an empty NXDOMAIN response
+                    resdom = NULL;
+                    res_rrsets = NULL;
+                    offset = first_offset;
+                    c->ancount = 0;
+                    c->cname_ancount = 0;
+                    break;
+                }
+
+                const ltree_rrset_cname_t* cname = &res_rrsets->cname;
+                offset = encode_rr_cname(c, offset, cname, false);
+
+                if(dname_isinzone(query_zone->dname, cname->dname)) {
+                    // if the RHS of the CNAME is still in-zone, we're going
+                    //   to reset some initial parameters (qname, auth_depth)
+                    //   and loop back up via the do/while...
+                    qname = cname->dname;
+                    auth_depth = *qname - *query_zone->dname;
+                    iterating_for_cname = true;
+                }
+                else {
+                    status = DNAME_NOAUTH;
+                }
+            } // indirect-CNAME-lookup block
+        } while(iterating_for_cname); // recurse into CNAME chain
     } // end if(query_zone) block
 
     if(status == DNAME_AUTH) {
         dmn_assert(resauth);
         res_hdr->flags1 |= 4; // AA bit
         if(likely(resdom)) {
-            offset = construct_normal_response(c, offset, resdom, resauth);
+            offset = construct_normal_response(c, offset, res_rrsets, resauth, (resdom == resauth));
         }
         else {
             const ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(resauth);

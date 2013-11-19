@@ -112,12 +112,17 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'weightmixc.example.com', qtype => 'A',
-    rep => 10,
-    # CNAME auto-limits to 1 RR
+    rep => 20,
+    wrr_v4 => { 'weightmixc.example.com' => 0 },
+    wrr_v6 => { 'weightmixc.example.com' => 1 },
     answer => [
-        'weightmixc.example.com 86400 CNAME a.example.net',
-        'weightmixc.example.com 86400 CNAME b.example.net',
+        'weightmixc.example.com 43200 A 192.0.2.22',
+        'weightmixc.example.com 43200 A 192.0.2.33',
     ],
+    addtl => [
+        'weightmixc.example.com 43200 AAAA 2001:DB8::2222',
+        'weightmixc.example.com 43200 AAAA 2001:DB8::3333',
+    ]
 );
 
 _GDT->test_dns(

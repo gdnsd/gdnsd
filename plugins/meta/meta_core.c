@@ -47,12 +47,11 @@ static const unsigned DC_MASK       = 0xFF000000U;
 
 typedef struct {
     const plugin_t* plugin;
-    unsigned res_num_dyna;
-    unsigned res_num_dync;
     char* plugin_name;
     char* res_name;
     char* dc_name;
-    uint8_t* dname; // for direct DYNC, and the "invalid" case
+    uint8_t* dname; // for direct CNAME, and the "invalid" case
+    unsigned res_num;
 } dc_t;
 
 typedef struct {
@@ -268,6 +267,28 @@ static void make_resource(resource_t* res, const char* res_name, const vscf_data
     res->dcs = config_res_perdc(res->map, dcs_cfg, res_name);
 }
 
+static bool resolve_dc(const dc_t* dc, unsigned threadnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
+    dmn_assert(dc); dmn_assert(cinfo); dmn_assert(result);
+
+    bool success;
+
+    if(dc->dname) { // direct CNAME
+        dmn_assert(origin); // detected at map_res time
+        success = true;
+        result->is_cname = true;
+        dname_copy(result->cname, dc->dname);
+        if(dname_is_partial(result->cname))
+            dname_cat(result->cname, origin);
+        dmn_assert(dname_status(result->cname) == DNAME_VALID);
+    }
+    else {
+        dmn_assert(dc->plugin && dc->plugin->resolve); // detected at map_res time
+        success = dc->plugin->resolve(threadnum, dc->res_num, origin, cinfo, result);
+    }
+
+    return success;
+}
+
 F_UNUSED F_NONNULL
 static void resource_destroy(resource_t* res) {
     dmn_assert(res);
@@ -283,135 +304,6 @@ static void resource_destroy(resource_t* res) {
         }
         free(res->dcs);
     }
-}
-
-// NULL-ness of "origin" indicates DYNC vs DYNA lookup here...
-static int map_res(const char* resname, const uint8_t* origin V_UNUSED) {
-    if(!resname) {
-        log_err("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
-        return -1;
-    }
-
-    // Handle synthetic resname/dcname resources
-    const char* slash = strchr(resname, '/');
-    char* dcname = NULL;
-    char* resname_copy = NULL;
-    if(slash) {
-        resname_copy = strdup(resname);
-        const unsigned reslen = slash - resname;
-        resname_copy[reslen] = '\0';
-        resname = resname_copy;
-        dcname = resname_copy + reslen + 1;
-    }
-
-    for(unsigned i = 0; i < num_res; i++) {
-        if(!strcmp(resname, resources[i].name)) { // match!
-            const resource_t* res = &resources[i];
-            unsigned fixed_dc_idx = 0;
-            if(slash) {
-                dmn_assert(resname_copy); dmn_assert(dcname);
-                fixed_dc_idx = map_get_dcidx(resources[i].map, dcname);
-                if(!fixed_dc_idx) {
-                    log_err("plugin_" PNSTR ": synthetic resource '%s/%s': datacenter '%s' does not exist for this resource", resname, dcname, dcname);
-                    return -1;
-                }
-                dmn_assert(fixed_dc_idx < 256);
-            }
-
-#if DYNC_OK
-            // DYNC case, check origin + applicable datacenter(s)
-            if(origin) {
-                const unsigned min_dc = fixed_dc_idx ? fixed_dc_idx : 1;
-                const unsigned max_dc = fixed_dc_idx ? fixed_dc_idx : res->num_dcs;
-                for(unsigned j = min_dc; j <= max_dc; j++) {
-                    dc_t* this_dc = &res->dcs[j];
-                    if(this_dc->dname) {
-                        const uint8_t* dname = this_dc->dname;
-                        if(dname_status(dname) == DNAME_PARTIAL) {
-                            uint8_t dnbuf[256];
-                            dname_copy(dnbuf, dname);
-                            if(dname_cat(dnbuf, origin) != DNAME_VALID) {
-                                log_err("plugin_" PNSTR ": Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), res->name, logf_dname(origin));
-                                return -1;
-                            }
-                        }
-                    }
-                    else {
-                        if(!this_dc->plugin)
-                            this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
-                        // XXX shouldn't these basic find/check operations on plugin_name be up at full_config time?
-                        if(!this_dc->plugin) {
-                            log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
-                            return -1;
-                        }
-                        if(!this_dc->plugin->resolve_dyncname) {
-                            log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNC resources", res->name, this_dc->dc_name, this_dc->plugin_name);
-                            return -1;
-                        }
-                        if(this_dc->plugin->map_resource_dync) {
-                            const int resnum = this_dc->plugin->map_resource_dync(this_dc->res_name, origin);
-                            if(resnum < 0) {
-                                log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNC resource name '%s' at origin '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(origin));
-                                return -1;
-                            }
-                            this_dc->res_num_dync = (unsigned)resnum;
-                        }
-                        else {
-                            this_dc->res_num_dync = 0;
-                        }
-                    }
-                }
-            }
-            else {
-#else
-            dmn_assert(!origin);
-            {
-#endif // DYNC_OK
-                // DYNA case, check applicable datacenter(s)
-                const unsigned min_dc = fixed_dc_idx ? fixed_dc_idx : 1;
-                const unsigned max_dc = fixed_dc_idx ? fixed_dc_idx : res->num_dcs;
-                for(unsigned j = min_dc; j <= max_dc; j++) {
-                    dc_t* this_dc = &res->dcs[j];
-                    if(this_dc->dname) {
-                        log_err("plugin_" PNSTR ": resource '%s': datacenter '%s': DYNC-only (fixed cname), used as DYNA data in a zonefile", res->name, this_dc->dc_name);
-                        return -1;
-                    }
-                    // XXX shouldn't these basic find/check operations on plugin_name be up at full_config time?
-                    if(!this_dc->plugin)
-                        this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
-                    if(!this_dc->plugin) {
-                        log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
-                        return -1;
-                    }
-                    if(!this_dc->plugin->resolve_dynaddr) {
-                        log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' does not support DYNA resources", res->name, this_dc->dc_name, this_dc->plugin_name);
-                        return -1;
-                    }
-                    if(this_dc->plugin->map_resource_dyna) {
-                        const int resnum = this_dc->plugin->map_resource_dyna(this_dc->res_name);
-                        if(resnum < 0) {
-                            log_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNA resource name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name);
-                            return -1;
-                        }
-                        this_dc->res_num_dyna = (unsigned)resnum;
-                    }
-                    else {
-                        this_dc->res_num_dyna = 0;
-                    }
-                }
-            }
-
-            // Handle synthetic resname/dcname virtual resnum
-            if(fixed_dc_idx) {
-                i |= (fixed_dc_idx << DC_SHIFT);
-                free(resname_copy); // free temp copy
-            }
-            return (int)i;
-        }
-    }
-
-    log_err("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
-    return -1;
 }
 
 /********** Callbacks from gdnsd **************/
@@ -448,18 +340,83 @@ mon_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
     return NULL;
 }
 
-int CB_MAP_A(const char* resname) {
-    return map_res(resname, NULL);
+int CB_MAP(const char* resname, const uint8_t* origin) {
+    if(!resname)
+        map_res_err("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
+
+    // Handle synthetic resname/dcname resources
+    const char* slash = strchr(resname, '/');
+    char* dcname = NULL;
+    char* resname_copy = NULL;
+    if(slash) {
+        resname_copy = strdup(resname);
+        const unsigned reslen = slash - resname;
+        resname_copy[reslen] = '\0';
+        resname = resname_copy;
+        dcname = resname_copy + reslen + 1;
+    }
+
+    for(unsigned i = 0; i < num_res; i++) {
+        if(!strcmp(resname, resources[i].name)) { // match!
+            const resource_t* res = &resources[i];
+            unsigned fixed_dc_idx = 0;
+            if(slash) {
+                dmn_assert(resname_copy); dmn_assert(dcname);
+                fixed_dc_idx = map_get_dcidx(resources[i].map, dcname);
+                if(!fixed_dc_idx)
+                    map_res_err("plugin_" PNSTR ": synthetic resource '%s/%s': datacenter '%s' does not exist for this resource", resname, dcname, dcname);
+                dmn_assert(fixed_dc_idx < 256);
+            }
+
+            const unsigned min_dc = fixed_dc_idx ? fixed_dc_idx : 1;
+            const unsigned max_dc = fixed_dc_idx ? fixed_dc_idx : res->num_dcs;
+            for(unsigned j = min_dc; j <= max_dc; j++) {
+                dc_t* this_dc = &res->dcs[j];
+                if(this_dc->dname) {
+                    if(!origin)
+                        map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s' is configured as the fixed CNAME '%s', therefore this resource cannot be used in an address-only DYNA RR", res->name, this_dc->dc_name, logf_dname(this_dc->dname));
+                    const uint8_t* dname = this_dc->dname;
+                    if(dname_status(dname) == DNAME_PARTIAL) {
+                        uint8_t dnbuf[256];
+                        dname_copy(dnbuf, dname);
+                        if(dname_cat(dnbuf, origin) != DNAME_VALID)
+                            map_res_err("plugin_" PNSTR ": Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), res->name, logf_dname(origin));
+                    }
+                }
+                else {
+                    if(!this_dc->plugin) {
+                        this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
+                        if(!this_dc->plugin)
+                            map_res_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
+                    }
+
+                    this_dc->res_num = 0;
+                    if(this_dc->plugin->map_res) {
+                        const int resnum = this_dc->plugin->map_res(this_dc->res_name, origin);
+                        if(resnum < 0) {
+                            if(origin)
+                                map_res_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNC resource name '%s' at origin '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(origin));
+                            else
+                                map_res_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNA resource name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name);
+                        }
+                        this_dc->res_num = (unsigned)resnum;
+                    }
+                }
+            }
+
+            // Handle synthetic resname/dcname virtual resnum
+            if(fixed_dc_idx) {
+                i |= (fixed_dc_idx << DC_SHIFT);
+                free(resname_copy); // free temp copy
+            }
+            return (int)i;
+        }
+    }
+
+    map_res_err("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
 }
 
-#if DYNC_OK
-int CB_MAP_C(const char* resname, const uint8_t* origin) {
-    return map_res(resname, origin);
-}
-#endif
-
-F_NONNULL
-bool CB_RES_A(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t* cinfo, dynaddr_result_t* result) {
+bool CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
     dmn_assert(cinfo); dmn_assert(result);
 
     // extract and clear any datacenter index from upper 8 bits
@@ -480,29 +437,25 @@ bool CB_RES_A(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t*
     else
         dclist = map_get_dclist(res->map, cinfo, &scope_mask_out);
 
-    bool rv = true;
+    bool success = false;
 
     // empty dclist -> no results
     unsigned first_dc_num = *dclist;
     if(first_dc_num) {
         // iterate datacenters until we find a success or exhaust the list
-        bool success = false;
         unsigned dcnum;
         while(!success && (dcnum = *dclist++)) {
             dmn_assert(dcnum <= res->num_dcs);
-            memset(result, 0, sizeof(dynaddr_result_t));
+            memset(result, 0, sizeof(dyn_result_t));
             result->ttl = saved_ttl;
-            const dc_t* dc = &res->dcs[dcnum];
-            success = dc->plugin->resolve_dynaddr(threadnum, dc->res_num_dyna, cinfo, result);
+            success = resolve_dc(&res->dcs[dcnum], threadnum, origin, cinfo, result);
         }
 
         // all datacenters failed, flag failure upstream (if any upstream) and use first dc
         if(!success) {
-            memset(result, 0, sizeof(dynaddr_result_t));
+            memset(result, 0, sizeof(dyn_result_t));
             result->ttl = saved_ttl;
-            const dc_t* dc = &res->dcs[first_dc_num];
-            dc->plugin->resolve_dynaddr(threadnum, dc->res_num_dyna, cinfo, result);
-            rv = false;
+            resolve_dc(&res->dcs[dcnum], threadnum, origin, cinfo, result);
         }
     }
 
@@ -512,51 +465,8 @@ bool CB_RES_A(unsigned threadnum V_UNUSED, unsigned resnum, const client_info_t*
     if(scope_mask_out > result->edns_scope_mask)
         result->edns_scope_mask = scope_mask_out;
 
-    return rv;
+    return success;
 }
-
-#if DYNC_OK
-F_NONNULL
-void CB_RES_C(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyncname_result_t* result) {
-    dmn_assert(origin); dmn_assert(cinfo); dmn_assert(result);
-
-    // extract and clear any datacenter index from upper 8 bits
-    //  (used for synthetic resname/dcname resources)
-    const unsigned synth_dc = (resnum & DC_MASK) >> DC_SHIFT;
-    const uint8_t synth_dclist[2] = { synth_dc, 0 };
-    resnum &= RES_MASK;
-
-    const resource_t* res = &resources[resnum];
-
-    unsigned scope_mask_out = 0;
-    const uint8_t* dclist;
-    if(synth_dc)
-        dclist = synth_dclist;
-    else
-        dclist = map_get_dclist(res->map, cinfo, &scope_mask_out);
-
-    // For cnames, only the first datacenter matters
-    const unsigned dcnum = dclist[0];
-    dmn_assert(dcnum <= res->num_dcs);
-    const dc_t* dc = &res->dcs[dcnum];
-    if(dc->dname) {
-        dname_copy(result->dname, dc->dname);
-        if(dname_is_partial(result->dname))
-            dname_cat(result->dname, origin);
-    }
-    else {
-        dmn_assert(dc->plugin);
-        dc->plugin->resolve_dyncname(threadnum, dc->res_num_dync, origin, cinfo, result);
-    }
-    dmn_assert(dname_status(result->dname) == DNAME_VALID);
-
-    // if both our map_get_dclist() and the subplugin tried to set a scope,
-    //   we take the narrower of the two.  If either did not set a scope,
-    //   their respective values will be zero, which also works out fine here.
-    if(scope_mask_out > result->edns_scope_mask)
-        result->edns_scope_mask = scope_mask_out;
-}
-#endif
 
 #ifndef NDEBUG
 // only in debug cases, to make it easier to find leaks...

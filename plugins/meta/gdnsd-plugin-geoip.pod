@@ -12,13 +12,13 @@ Minimal example gdnsd config file using this plugin:
     maps => {
       my_prod_map => {
         geoip_db => GeoIPCity.dat,
-        datacenters => [dc-03, dc-02, dc-01],
+        datacenters => [dc-03, dc-02, dc-01, dc-fail],
         map => {
             EU => {
-                DE => [dc-03, dc-01],
-                CH => [dc-01, dc-03]
+                DE => [dc-03, dc-01, dc-fail],
+                CH => [dc-01, dc-03, dc-fail]
             },
-            NA => { MX => [dc-02] }
+            NA => { MX => [dc-02, dc-fail] }
         }
       },
       my_auto_map => {
@@ -37,7 +37,8 @@ Minimal example gdnsd config file using this plugin:
         dcmap => {
           dc-01 => 192.0.2.1,
           dc-02 => { lb01 => 192.0.2.2, lb02 => 192.0.2.3 },
-          dc-03 => [ 192.0.2.4, 192.0.2.5, 192.0.2.6 ]
+          dc-03 => [ 192.0.2.4, 192.0.2.5, 192.0.2.6 ],
+          dc-fail => last.resort.cname.example.net.
         }
       }
       corp_www => {
@@ -83,11 +84,11 @@ returning raw GeoIP results.
 The documentation for L<gdnsd-plugin-metafo(8)> is required reading for
 understanding the geoip plugin documentation here.  The geoip plugin is an
 exact superset of the metafo plugin, and re-uses almost all of the metafo
-plugin's source code.  What plugin_geoip adds on top of the functionality
+plugin's source code.  Metafo does failover along a single, global, ordered
+list of datacenters.  What plugin_geoip adds on top of the functionality
 of metafo is the ability to have the order of the datacenter failover list
 become dynamic per-request based on geographic hints derived from the
-client's network address, as well as the ability to do geographic selection
-of DYNC (CNAME) resources.
+client's network address.
 
 =head1 FILE LOCATIONS
 
@@ -363,29 +364,12 @@ separate manpage L<gdnsd_geoip_test(1)>.
 Resource-level configuration within the C<resources> stanza is nearly
 identical to the resources configuration of the metafo plugin, with all of
 the same basic behaviors about synthesizing or directly referencing the
-configuration of other plugins per-datacenter.  Only the key differences
-will be covered here:
-
-=over 4
-
-=item * metafo's per-resource C<datacenters> array is replaced with
+configuration of other plugins per-datacenter.  The only real difference
+is that metafo's per-resource C<datacenters> array is replaced with
 C<map =E<gt> mapname>, which references one of the maps defined in the
 C<maps> stanza, described in detail earlier.  The set of defined
 datacenters in the C<dcmap> stanza must match the total set of datacenters
 defined by the referenced map.
-
-=item * metafo's restriction to just address-based (DYNA) results is
-lifted.  If the per-resource sub-plugin configurations used by a geoip
-resource support CNAME (DYNC) results, then that geoip resource will also
-support DYNC results.  Because there is no DYNC monitoring, only the first
-datacenter from each datacenter sub-list in the C<map> will be used for the
-result; there is no failover, only geographic differentiation.
-
-=item * For the common case of a single CNAME result per-datacenter, the
-CNAME data can be supplied directly as the singular string value of each
-datacenter in the C<dcmap>, without involving a sub-plugin at all.
-
-=back
 
 =head1 META-PLUGIN INTERACTION
 
@@ -429,7 +413,7 @@ The C<nets> stanza is not allowed to specify entries in the four undefined
 v4-like IPv6 spaces (those other than v4compat).  Specify those networks as
 normal IPv4 networks or v4compat networks instead.  Legitimate IPv6 C<nets>
 entries which happen to be a supernet of any v4-like spaces will *not*
-undely affect v4-like lookups.  There is no functional difference between
+unduly affect v4-like lookups.  There is no functional difference between
 v4compat and native v4 forms in C<nets>, e.g. C<192.0.2.0/24> and
 C<::C000:0200/120> are completely identical.
 
@@ -551,6 +535,58 @@ Example zonefile RRs:
   app.sg  600 DYNA geoip!prod_app/sg-01
   app.de  600 DYNA geoip!prod_app/de-01
   content 600 DYNC geoip!prod_cdn
+
+=head1 EXAMPLE OF METAFO->GEOIP CITY-AUTO-MODE w/ LAST RESORT CNAME
+
+  plugins => {
+    geoip => {
+      maps => {
+        auto_map => {
+          geoip_db => GeoIPCityv6.dat,
+          datacenters => [dc1, dc2, dc3, dc4],
+          auto_dc_coords => {
+             dc1 => [ 38.9, -77 ],
+             dc2 => [ 50.1, 8.7 ],
+             dc3 => [ 20.2, 88.9 ],
+             dc4 => [ 39.0, -20 ],
+          },
+          # only fail through the nearest 2 before giving up:
+          auto_dc_limit => 2,
+        }
+      },
+      resources => {
+        www_real => {
+          map => my_auto_map,
+          service_types => [ http, xmpp ],
+          dcmap => {
+            dc1 => 192.0.2.100,
+            dc2 => 192.0.2.101,
+            dc3 => 192.0.2.102,
+            dc4 => 192.0.2.103
+          }
+        }
+      }
+    },
+    metafo => {
+      resources => {
+        www => {
+          datacenters => [ real, backup ],
+          dcmap => {
+            real => %geoip!www_real,
+            backup => backup-host.example.net.
+          }
+        }
+      }
+    }
+  }
+
+  And in the zonefile:
+
+  ; This tries through the closest 2/4 datacenters to
+  ;   the client from the geoip map, and if both of
+  ;   those are down it returns a CNAME to backup-host.example.net.
+  ;   for a downtime message or something:
+  www DYNC metafo!www
 
 =head1 SEE ALSO
 
