@@ -300,13 +300,13 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, un
     }
     else {
         if(unlikely(!rrset->gen.is_static))
-            log_zfatal("Name '%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname));
-        if(unlikely(rrset->gen.ttl != htonl(ttl)))
-            log_zwarn("Name '%s': All TTLs for A and/or AAAA records at the same name should agree", logf_dname(dname));
+            log_zfatal("Name '%s%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname), logf_dname(zone->dname));
+        if(unlikely(ntohl(rrset->gen.ttl) != ttl))
+            log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
         if(unlikely(rrset->gen.count_v4 == UINT8_MAX))
-            log_zfatal("Name '%s': Too many RRs of type A", logf_dname(dname));
+            log_zfatal("Name '%s%s': Too many RRs of type A", logf_dname(dname), logf_dname(zone->dname));
         if(unlikely(rrset->gen.count_v4 > 0 && rrset->limit_v4 != limit_v4))
-            log_zwarn("Name '%s': All $ADDR_LIMIT_4 for A-records at the same name should agree", logf_dname(dname));
+            log_zwarn("Name '%s%s': All $ADDR_LIMIT_4 for A-records at the same name should agree", logf_dname(dname), logf_dname(zone->dname));
         rrset->limit_v4 = limit_v4;
         rrset->addrs.v4 = realloc(rrset->addrs.v4, sizeof(uint32_t) * (1 + rrset->gen.count_v4));
         rrset->addrs.v4[rrset->gen.count_v4++] = addr;
@@ -338,13 +338,13 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
     }
     else {
         if(unlikely(!rrset->gen.is_static))
-            log_zfatal("Name '%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname));
-        if(unlikely(rrset->gen.ttl != htonl(ttl)))
-            log_zwarn("Name '%s': All TTLs for A and/or AAAA records at the same name should agree", logf_dname(dname));
+            log_zfatal("Name '%s%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname), logf_dname(zone->dname));
+        if(unlikely(ntohl(rrset->gen.ttl) != ttl))
+            log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
         if(unlikely(rrset->gen.count_v6 == UINT8_MAX))
-            log_zfatal("Name '%s': Too many RRs of type AAAA", logf_dname(dname));
+            log_zfatal("Name '%s%s': Too many RRs of type AAAA", logf_dname(dname), logf_dname(zone->dname));
         if(unlikely(rrset->gen.count_v6 > 0 && rrset->limit_v6 != limit_v6))
-            log_zwarn("Name '%s': All $ADDR_LIMIT_6 for AAAA-records at the same name should agree", logf_dname(dname));
+            log_zwarn("Name '%s%s': All $ADDR_LIMIT_6 for AAAA-records at the same name should agree", logf_dname(dname), logf_dname(zone->dname));
         rrset->limit_v6 = limit_v6;
         rrset->addrs.v6 = realloc(rrset->addrs.v6, 16 * (1 + rrset->gen.count_v6));
         memcpy(rrset->addrs.v6 + (rrset->gen.count_v6++ * 16), addr, 16);
@@ -368,9 +368,9 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8
     ltree_rrset_addr_t* rrset;
     if(unlikely(rrset = ltree_node_get_rrset_addr(node))) {
         if(rrset->gen.is_static)
-            log_zfatal("Name '%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname));
+            log_zfatal("Name '%s%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname), logf_dname(zone->dname));
         else
-            log_zfatal("Name '%s': DYNA defined twice for the same name", logf_dname(dname));
+            log_zfatal("Name '%s%s': DYNA defined twice for the same name", logf_dname(dname), logf_dname(zone->dname));
     }
 
     rrset = ltree_node_add_rrset_addr(node);
@@ -388,13 +388,13 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8
     const plugin_t* const p = gdnsd_plugin_find(plugin_name);
     if(likely(p)) {
         if(unlikely(!p->resolve_dynaddr)) {
-            log_zfatal("Name '%s': DYNA refers to a plugin which does not support dynamic address resolution", logf_dname(dname));
+            log_zfatal("Name '%s%s': DYNA refers to a plugin which does not support dynamic address resolution", logf_dname(dname), logf_dname(zone->dname));
         }
         else {
             if(p->map_resource_dyna) {
                 const int res = p->map_resource_dyna(resource_name);
                 if(res < 0)
-                    log_zfatal("Name '%s': DYNA plugin '%s' rejected resource name '%s'", logf_dname(dname), plugin_name, resource_name);
+                    log_zfatal("Name '%s%s': DYNA plugin '%s' rejected resource name '%s'", logf_dname(dname), logf_dname(zone->dname), plugin_name, resource_name);
                 else
                     rrset->dyn.resource = (unsigned)res;
             }
@@ -406,7 +406,7 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8
         return false;
     }
 
-    log_zfatal("Name '%s': DYNA RR refers to plugin '%s', which is not loaded", logf_dname(dname), plugin_name);
+    log_zfatal("Name '%s%s': DYNA RR refers to plugin '%s', which is not loaded", logf_dname(dname), logf_dname(zone->dname), plugin_name);
 }
 
 bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
@@ -439,7 +439,7 @@ bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint
     const plugin_t* const p = gdnsd_plugin_find(plugin_name);
     if(likely(p)) {
         if(unlikely(!p->resolve_dyncname)) {
-            log_zfatal("Name '%s': DYNC refers to a plugin which does not support dynamic CNAME resolution", logf_dname(dname));
+            log_zfatal("Name '%s%s': DYNC refers to a plugin which does not support dynamic CNAME resolution", logf_dname(dname), logf_dname(zone->dname));
         }
         else {
             if(p->map_resource_dync) {
@@ -447,7 +447,7 @@ bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint
                 //  (which he probably shouldn't, but can't hurt to make life easier)
                 const int res = p->map_resource_dync(resource_name, rrset->dyn.origin);
                 if(res < 0)
-                    log_zfatal("Name '%s': DYNC plugin '%s' rejected resource name '%s' at origin '%s'", logf_dname(dname), plugin_name, resource_name, rrset->dyn.origin);
+                    log_zfatal("Name '%s%s': DYNC plugin '%s' rejected resource name '%s' at origin '%s'", logf_dname(dname), logf_dname(zone->dname), plugin_name, resource_name, rrset->dyn.origin);
                 else
                     rrset->dyn.resource = (unsigned)res;
             }
@@ -459,7 +459,7 @@ bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint
         return false;
     }
 
-    log_zfatal("Name '%s': DYNC refers to plugin '%s', which is not loaded", logf_dname(dname), plugin_name);
+    log_zfatal("Name '%s%s': DYNC refers to plugin '%s', which is not loaded", logf_dname(dname), logf_dname(zone->dname), plugin_name);
 }
 
 // It's like C++ templating, but sadly even uglier ...
@@ -479,10 +479,10 @@ bool ltree_add_rec_dyncname(const zone_t* zone, const uint8_t* dname, const uint
         new_rdata = rrset->rdata = malloc(sizeof(ltree_rdata_ ## _typ ## _t) * _szassume);\
     }\
     else {\
-        if(unlikely(rrset->gen.ttl != htonl(ttl)))\
-            log_zwarn("Name '%s': All TTLs for type %s should match", logf_dname(dname), _pnam);\
+        if(unlikely(ntohl(rrset->gen.ttl) != ttl))\
+            log_zwarn("Name '%s%s': All TTLs for type %s should match (using %u)", logf_dname(dname), logf_dname(zone->dname), _pnam, ntohl(rrset->gen.ttl));\
         if(unlikely(rrset->gen.count == UINT16_MAX))\
-            log_zfatal("Name '%s': Too many RRs of type %s", logf_dname(dname), _pnam);\
+            log_zfatal("Name '%s%s': Too many RRs of type %s", logf_dname(dname), logf_dname(zone->dname), _pnam);\
         if(_szassume == 1 || rrset->gen.count >= _szassume) \
             rrset->rdata = realloc(rrset->rdata, (1 + rrset->gen.count) * sizeof(ltree_rdata_ ## _typ ## _t));\
         new_rdata = &rrset->rdata[rrset->gen.count++];\
@@ -497,7 +497,7 @@ bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* 
     INSERT_NEXT_RR(ptr, ptr, "PTR", 1);
     new_rdata->dname = lta_dnamedup(zone->arena, rhs);
     if(dname_isinzone(zone->dname, rhs))
-        log_zwarn("Name '%s': PTR record points to same-zone name '%s', which is usually a mistake (missing terminal dot?)", logf_dname(dname), logf_dname(rhs));
+        log_zwarn("Name '%s%s': PTR record points to same-zone name '%s', which is usually a mistake (missing terminal dot?)", logf_dname(dname), logf_dname(zone->dname), logf_dname(rhs));
     return false;
 }
 
@@ -511,7 +511,7 @@ bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* r
     if(node->label) {
         node->flags |= LTNFLAG_DELEG;
         if(unlikely(node->label[0] == 1 && node->label[1] == '*'))
-            log_zfatal("Name '%s': Cannot delegate via wildcards", logf_dname(dname));
+            log_zfatal("Name '%s%s': Cannot delegate via wildcards", logf_dname(dname), logf_dname(zone->dname));
     }
 
     INSERT_NEXT_RR(ns, ns, "NS", 2)
@@ -524,7 +524,7 @@ bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* r
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     if(unlikely(pref > 65535U))
-        log_zfatal("Name '%s': MX preference value %u too large", logf_dname(dname), pref);
+        log_zfatal("Name '%s%s': MX preference value %u too large", logf_dname(dname), logf_dname(zone->dname), pref);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -539,11 +539,11 @@ bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* 
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     if(unlikely(priority > 65535U))
-        log_zfatal("Name '%s': SRV priority value %u too large", logf_dname(dname), priority);
+        log_zfatal("Name '%s%s': SRV priority value %u too large", logf_dname(dname), logf_dname(zone->dname), priority);
     if(unlikely(weight > 65535U))
-        log_zfatal("Name '%s': SRV weight value %u too large", logf_dname(dname), weight);
+        log_zfatal("Name '%s%s': SRV weight value %u too large", logf_dname(dname), logf_dname(zone->dname), weight);
     if(unlikely(port > 65535U))
-        log_zfatal("Name '%s': SRV port value %u too large", logf_dname(dname), port);
+        log_zfatal("Name '%s%s': SRV port value %u too large", logf_dname(dname), logf_dname(zone->dname), port);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -568,7 +568,7 @@ bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* 
  *     string, and the "undefined" value for Replacement is the root of DNS ('\0').
  */
 F_NONNULL
-static bool naptr_validate_flags(const uint8_t* dname, const uint8_t* flags) {
+static bool naptr_validate_flags(const uint8_t* zone_dname, const uint8_t* dname, const uint8_t* flags) {
     dmn_assert(dname); dmn_assert(flags);
 
     unsigned len = *flags++;
@@ -578,7 +578,7 @@ static bool naptr_validate_flags(const uint8_t* dname, const uint8_t* flags) {
             || (c > 0x5BU && c < 0x61U) // > 'z' && < 'A'
             || (c > 0x39U && c < 0x41U) // > '9' && < 'a'
             || (c < 0x30U)))            // < '0'
-            log_zwarn("Name '%s': NAPTR has illegal flag char '%c'", logf_dname(dname), c);
+            log_zwarn("Name '%s%s': NAPTR has illegal flag char '%c'", logf_dname(dname), logf_dname(zone_dname), c);
     }
 
     return false;
@@ -588,14 +588,14 @@ bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs); dmn_assert(texts); dmn_assert(num_texts == 3);
 
     if(unlikely(order > 65535U))
-        log_zfatal("Name '%s': NAPTR order value %u too large", logf_dname(dname), order);
+        log_zfatal("Name '%s%s': NAPTR order value %u too large", logf_dname(dname), logf_dname(zone->dname), order);
     if(unlikely(pref > 65535U))
-        log_zfatal("Name '%s': NAPTR preference value %u too large", logf_dname(dname), pref);
-    if(naptr_validate_flags(dname, texts[NAPTR_TEXTS_FLAGS]))
+        log_zfatal("Name '%s%s': NAPTR preference value %u too large", logf_dname(dname), logf_dname(zone->dname), pref);
+    if(naptr_validate_flags(zone->dname, dname, texts[NAPTR_TEXTS_FLAGS]))
         return true;
 
     if(unlikely(rhs[1] != 0 && texts[NAPTR_TEXTS_REGEXP][0]))
-        log_zwarn("Name '%s': NAPTR does not allow defining both Regexp and Replacement in a single RR", logf_dname(dname));
+        log_zwarn("Name '%s%s': NAPTR does not allow defining both Regexp and Replacement in a single RR", logf_dname(dname), logf_dname(zone->dname));
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -726,12 +726,12 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, unsigned rr
       || rrtype == DNS_TYPE_NAPTR
       || rrtype == DNS_TYPE_TXT
       || rrtype == DNS_TYPE_SPF))
-        log_zfatal("Name '%s': RFC3597 TYPE%u not allowed, please use the explicit support built in for this RR type", logf_dname(dname), rrtype);
+        log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed, please use the explicit support built in for this RR type", logf_dname(dname), logf_dname(zone->dname), rrtype);
 
     if(unlikely(rrtype == DNS_TYPE_AXFR
       || rrtype == DNS_TYPE_IXFR
       || rrtype == DNS_TYPE_ANY))
-        log_zfatal("Name '%s': RFC3597 TYPE%u not allowed", logf_dname(dname), rrtype);
+        log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed", logf_dname(dname), logf_dname(zone->dname), rrtype);
 
     ltree_rrset_rfc3597_t* rrset = ltree_node_get_rrset_rfc3597(node, rrtype);
 
@@ -744,10 +744,10 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, unsigned rr
         new_rdata = rrset->rdata = malloc(sizeof(ltree_rdata_rfc3597_t));
     }
     else {
-        if(unlikely(rrset->gen.ttl != htonl(ttl)))
-            log_zwarn("Name '%s': All TTLs for type RFC3597 TYPE%u should match", logf_dname(dname), rrtype);
+        if(unlikely(ntohl(rrset->gen.ttl) != ttl))
+            log_zwarn("Name '%s%s': All TTLs for type RFC3597 TYPE%u should match (using %u)", logf_dname(dname), logf_dname(zone->dname), rrtype, ntohl(rrset->gen.ttl));
         if(unlikely(rrset->gen.count == UINT16_MAX))
-            log_zfatal("Name '%s': Too many RFC3597 RRs of type TYPE%u", logf_dname(dname), rrtype);
+            log_zfatal("Name '%s%s': Too many RFC3597 RRs of type TYPE%u", logf_dname(dname), logf_dname(zone->dname), rrtype);
         rrset->rdata = realloc(rrset->rdata, (1 + rrset->gen.count) * sizeof(ltree_rdata_rfc3597_t));
         new_rdata = &rrset->rdata[rrset->gen.count++];
     }
