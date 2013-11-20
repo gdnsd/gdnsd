@@ -496,7 +496,8 @@ bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* 
 
     INSERT_NEXT_RR(ptr, ptr, "PTR", 1);
     new_rdata->dname = lta_dnamedup(zone->arena, rhs);
-    new_rdata->ad = NULL;
+    if(dname_isinzone(zone->dname, rhs))
+        log_zwarn("Name '%s': PTR record points to same-zone name '%s', which is usually a mistake (missing terminal dot?)", logf_dname(dname), logf_dname(rhs));
     return false;
 }
 
@@ -1007,11 +1008,6 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
         for(unsigned i = 0; i < node_ns->gen.count; i++)
             if(p1_proc_ns(zone, in_deleg, &(node_ns->rdata[i]), lstack, depth))
                 return true;
-
-    if(node_ptr)
-        for(unsigned i = 0; i < node_ptr->gen.count; i++)
-            if(unlikely(!set_valid_addr(node_ptr->rdata[i].dname, zone, &(node_ptr->rdata[i].ad))))
-                log_zwarn("In rrset '%s%s PTR', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_ptr->rdata[i].dname));
 
     if(node_mx)
         for(unsigned i = 0; i < node_mx->gen.count; i++)

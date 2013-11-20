@@ -90,13 +90,11 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => '255.255.255.255.example.com', qtype => 'PTR',
     answer => '255.255.255.255.example.com 21600 PTR foo.example.com',
-    addtl => 'foo.example.com 21600 A 192.0.2.160',
 );
 
 _GDT->test_dns(
     qname => '0.0.0.0.example.com', qtype => 'PTR',
     answer => '0.0.0.0.example.com 21600 PTR foo.example.com',
-    addtl => 'foo.example.com 21600 A 192.0.2.160',
 );
 
 _GDT->test_dns(

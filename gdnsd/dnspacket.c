@@ -913,8 +913,6 @@ static unsigned int encode_rrs_ptr(dnspacket_context_t* c, unsigned int offset, 
         offset += 6;
         const unsigned int newlen = store_dname(c, offset, rrset->rdata[i].dname, false);
         gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
-        if(rrset->rdata[i].ad)
-            add_addtl_rrset(c, rrset->rdata[i].ad, offset);
         offset += newlen;
     }
 

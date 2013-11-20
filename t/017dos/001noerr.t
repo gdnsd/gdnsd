@@ -178,9 +178,8 @@ _GDT->test_dns(
     ],
     auth => $standard_auth,
     addtl => [
-        'foo.example.com 515 A 192.0.2.4',
-        'ns2.example.com 86400 A 192.0.2.6',
         'ns1.example.com 86400 A 192.0.2.5',
+        'ns2.example.com 86400 A 192.0.2.6',
         'ns3.goober.example.com 86400 A 192.0.2.7',
         'ns4.goober.example.com 86400 A 192.0.2.8',
     ]
