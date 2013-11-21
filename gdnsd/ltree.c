@@ -305,9 +305,13 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, un
             log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
         if(unlikely(rrset->gen.count_v4 == UINT8_MAX))
             log_zfatal("Name '%s%s': Too many RRs of type A", logf_dname(dname), logf_dname(zone->dname));
-        if(unlikely(rrset->gen.count_v4 > 0 && rrset->limit_v4 != limit_v4))
-            log_zwarn("Name '%s%s': All $ADDR_LIMIT_4 for A-records at the same name should agree", logf_dname(dname), logf_dname(zone->dname));
-        rrset->limit_v4 = limit_v4;
+        if(rrset->gen.count_v4 > 0) {
+            if(unlikely(rrset->limit_v4 != limit_v4))
+                log_zwarn("Name '%s%s': All $ADDR_LIMIT_4 for A-records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), rrset->limit_v4);
+        }
+        else {
+            rrset->limit_v4 = limit_v4;
+        }
         rrset->addrs.v4 = realloc(rrset->addrs.v4, sizeof(uint32_t) * (1 + rrset->gen.count_v4));
         rrset->addrs.v4[rrset->gen.count_v4++] = addr;
     }
@@ -343,9 +347,13 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
             log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
         if(unlikely(rrset->gen.count_v6 == UINT8_MAX))
             log_zfatal("Name '%s%s': Too many RRs of type AAAA", logf_dname(dname), logf_dname(zone->dname));
-        if(unlikely(rrset->gen.count_v6 > 0 && rrset->limit_v6 != limit_v6))
-            log_zwarn("Name '%s%s': All $ADDR_LIMIT_6 for AAAA-records at the same name should agree", logf_dname(dname), logf_dname(zone->dname));
-        rrset->limit_v6 = limit_v6;
+        if(rrset->gen.count_v6 > 0) {
+            if(unlikely(rrset->limit_v6 != limit_v6))
+                log_zwarn("Name '%s%s': All $ADDR_LIMIT_6 for AAAA-records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), rrset->limit_v6);
+        }
+        else {
+            rrset->limit_v6 = limit_v6;
+        }
         rrset->addrs.v6 = realloc(rrset->addrs.v6, 16 * (1 + rrset->gen.count_v6));
         memcpy(rrset->addrs.v6 + (rrset->gen.count_v6++ * 16), addr, 16);
     }
