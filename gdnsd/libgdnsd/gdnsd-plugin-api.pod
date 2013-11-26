@@ -48,7 +48,7 @@ changes and/or solicit your feedback!).
 
 =head1 OVERVIEW
 
-This file documents version 11 of the gdnsd plugin API.
+This file documents version 12 of the gdnsd plugin API.
 
 L<gdnsd>'s plugin API offers the ability to write plugins that can
 do either (or both) of two roles:
@@ -671,20 +671,20 @@ the above applies.
 This corresponds with the release of 1.10.0
 
 Only the vscf config-file API changed in this version, which only
-  really affects plugins that were loading external vscf
-  configuration files on their own (as opposed to just receiving
-  data from the main config file's plugins stanza).  There aren't
-  any 3rd party plugins doing this that I'm aware of, but it
-  does technically warrant an API compatibility bump.
+really affects plugins that were loading external vscf
+configuration files on their own (as opposed to just receiving
+data from the main config file's plugins stanza).  There aren't
+any 3rd party plugins doing this that I'm aware of, but it
+does technically warrant an API compatibility bump.
 
 The first of the vscf API changes was the removal of the fd
-  and stream input functions vscf_scan_fd() and vscf_scan_stream(),
-  leaving only the vscf_scan_filename() variant.
+and stream input functions vscf_scan_fd() and vscf_scan_stream(),
+leaving only the vscf_scan_filename() variant.
 
 The other change is that the data item returned by vscf_scan_filename()
-  can now be a hash or an array, whereas before the syntax of vscf's
-  config language only permitted it to be a hash.  Code which expects
-  a hash must now explicitly check that the result was not an array.
+can now be a hash or an array, whereas before the syntax of vscf's
+config language only permitted it to be a hash.  Code which expects
+a hash must now explicitly check that the result was not an array.
 
 =head1 SEE ALSO
 
