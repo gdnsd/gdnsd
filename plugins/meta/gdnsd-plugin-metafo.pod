@@ -19,7 +19,7 @@ Minimal example gdnsd config file using this plugin:
           }
         },
         prod_foo => {
-          datacenters => [ dc-01, dc-02, dc-03 ]
+          datacenters => [ dc-01, dc-02, dc-bk ]
           dcmap => {
             dc-01 => { lb01 => 192.0.1.1, lb02 => 192.0.1.2 }
             dc-02 => [ 192.0.5.1, 192.0.5.2, 192.0.5.3 ]
@@ -216,7 +216,7 @@ A much more complete example, showing off most of the features above:
         resA => {
           plugin => multifo # change default for this resource
           service_types => [foo, bar] # services types for synthesized below:
-          datacenters => [ dc1, dc2, dc3, dc4, dc5, dc6, dc7 ],
+          datacenters => [ dc1, dc2, dc3, dc4, dc5, dc6, dc7, dc8 ],
           dcmap => {
             dc1 => { plugin => multifo, lb01 => 192.0.2.1, lb02 => 192.0.2.3 }
             dc2 => { lb01 => 192.0.2.111, lb02 => 192.0.2.113 }
