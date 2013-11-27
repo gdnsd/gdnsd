@@ -612,6 +612,8 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
     }
 
     if(cnames_cfg) {
+        if(addrs_v4_cfg || addrs_v6_cfg)
+            log_warn("plugin_weighted: resource '%s': mixing 'cnames' and addrs_v[46] in the same resource is deprecated - please split the cnames part into a separate resource", res_name);
         res->cnames = calloc(1, sizeof(cnset_t));
         config_cnameset(res_name, "cnames", res->cnames, cnames_cfg);
         // in the case that 'cnames' is explicitly defined, but addrs_v4/addrs_v6
