@@ -153,8 +153,6 @@ static const char json_fixed[] =
     "\t\t\"sendfail\": %" PRIuPTR "\r\n"
     "\t}";
 
-static const char json_more[] = ",\r\n";
-static const char json_nl[] = "\r\n";
 static const char json_footer[] = "}\r\n";
 
 static const char html_fixed[] =
