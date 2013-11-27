@@ -46,3 +46,5 @@ res6	DYNA	geoip!res6
 res7	DYNC	geoip!res7
 res8	DYNA	geoip!res8
 res9	DYNA	geoip!res9
+
+metascope DYNA metafo!metascope
