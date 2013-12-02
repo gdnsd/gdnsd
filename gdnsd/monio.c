@@ -75,19 +75,19 @@ void monio_start(struct ev_loop* mon_loop) {
 
 // We only have to check the address, because the port
 //  is determined by service type.
+F_NONNULL
 static bool addr_eq(const anysin_t* a, const anysin_t* b) {
+    dmn_assert(a); dmn_assert(b);
+    dmn_assert(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
+
+    bool rv = false;
     if(a->sa.sa_family == b->sa.sa_family) {
-        if(a->sa.sa_family == AF_INET) {
-            if(a->sin.sin_addr.s_addr == b->sin.sin_addr.s_addr)
-                 return true;
-        }
-        else {
-            dmn_assert(a->sa.sa_family == AF_INET6);
-            if(!memcmp(a->sin6.sin6_addr.s6_addr, b->sin6.sin6_addr.s6_addr, 16))
-                return true;
-        }
+        if(a->sa.sa_family == AF_INET)
+            rv = (a->sin.sin_addr.s_addr == b->sin.sin_addr.s_addr);
+        else
+            rv = !memcmp(a->sin6.sin6_addr.s6_addr, b->sin6.sin6_addr.s6_addr, 16);
     }
-    return false;
+    return rv;
 }
 
 static unsigned num_svc_types = 0;
