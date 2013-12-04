@@ -61,7 +61,10 @@ Example zonefile RRs:
 B<gdnsd-plugin-geoip> uses MaxMind's GeoIP binary databases to
 map address and CNAME results based on geography and (in the address
 case) monitored service availability.  It fully supports both
-IPv6 and the emerging edns-client-subnet standard.
+IPv6 and the emerging edns-client-subnet standard.  If a request
+contains the edns-client-subnet option with a source netmask greater
+than zero, the edns-client-subnet information will be used instead
+of the source IP of the request (the IP of the querying cache).
 
 This plugin can operate in an automatic distance-based mode (using
 City-level coordinate information rather than an external file and a
@@ -404,7 +407,7 @@ Additionally, C<geoip> can synthesize configuration for C<metafo>
 resources, but the reverse does not hold; C<metafo> cannot synthesize
 configuration for C<geoip> resources.
 
-=head2 IPv4 Compatible Addresses
+=head1 IPv4 Compatible Addresses
 
 This plugin knows of five different relatively-trivial ways to map IPv4
 addresses into the IPv6 address space.  These are shown below, with
