@@ -34,7 +34,7 @@
 
 #include "ztree.h"
 
-// IFF gconfig.zones_rfc1035_strict_startup is true,
+// IFF gconfig.zones_strict_startup is true,
 //   this flag will be temporarily set to true during
 //   the initial scan, then set back to false, making
 //   zonefile parsing errors fatal for the initial scan.
@@ -861,7 +861,7 @@ void zsrc_rfc1035_load_zones(void) {
     set_quiesce();
     if(gconfig.zones_rfc1035_auto)
         inotify_initial_setup(); // no-op if no compile-time support
-    if(gconfig.zones_rfc1035_strict_startup)
+    if(gconfig.zones_strict_startup)
         fail_fatally = true;
     struct ev_loop* temp_load_loop = ev_loop_new(EVFLAG_AUTO);
     scan_dir(temp_load_loop, min_quiesce);

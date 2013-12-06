@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 44 * 2;
+use Test::More tests => 45 * 2;
 
 my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -422,6 +422,15 @@ _GDT->test_dns(
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
     answer => 'res9.example.com 86400 A 192.0.2.142',
     addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+
+# metafo -> geoip without losing edns scope
+_GDT->test_dns(
+    qname => 'metascope.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
+    answer => 'metascope.example.com 86400 A 192.0.2.1',
+    addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 

@@ -389,6 +389,16 @@ sub recursive_templated_copy {
 our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
 our $INOTIFY_ENABLED = 0;
 
+sub daemon_abort {
+    my $log_fn = shift;
+    open(my $gdout_fh, '<', $log_fn)
+        or die "gdnsd failed to finish starting properly, and no output file could be found";
+    my $gdout = '';
+    while(<$gdout_fh>) { $gdout .= $_ }
+    close($gdout_fh);
+    die "gdnsd failed to finish starting properly.  output (if any):\n" . $gdout;
+}
+
 sub spawn_daemon {
     my ($class, $etcsrc, $geoip_data) = @_;
 
@@ -443,8 +453,9 @@ sub spawn_daemon {
                 or die "Cannot open '$daemon_out' for reading: $!";
             my $is_listening;
             while(<$GDOUT_FH>) {
-                $INOTIFY_ENABLED = 1 if /\Qrfc1035: will use inotify for zone change detection\E$/;
-                return $pid if /\QDNS listeners started\E$/;
+                $INOTIFY_ENABLED = 1 if /\brfc1035: will use inotify for zone change detection$/;
+                daemon_abort($daemon_out) if /\bfatal: /; # don't wait around if we see a fatal log entry...
+                return $pid if /\bDNS listeners started$/;
             }
             close($GDOUT_FH)
                 or die "Cannot close '$daemon_out' for reading: $!";
@@ -452,12 +463,7 @@ sub spawn_daemon {
         select(undef, undef, undef, $retry_delay);
     }
 
-    open(my $gdout_fh, '<', $daemon_out)
-        or die "gdnsd failed to finish starting properly, and no output file could be found";
-    my $gdout = '';
-    while(<$gdout_fh>) { $gdout .= $_ }
-    close($gdout_fh);
-    die "gdnsd failed to finish starting properly.  output (if any):\n" . $gdout;
+    daemon_abort($daemon_out);
 }
 
 sub test_spawn_daemon {

@@ -61,6 +61,8 @@ Example plugin config:
             lb02 => [ 2001:db8::ABC, 1 ]
           }
         }
+      }
+      cn => {
         cnames => {
           foo = [ lb01.example.com., 99 ]
           bar = [ lb02.example.com., 15 ]
@@ -76,7 +78,7 @@ Zonefile RRs referencing the above:
   www        300 DYNA weighted!pubwww
   cdn        300 DYNA weighted!cdnwww
   mixed-a    300 DYNA weighted!mixed
-  mixed-c    300 DYNC weighted!mixed
+  cnames     300 DYNC weighted!cn
 
 =head1 DESCRIPTION
 
@@ -121,6 +123,9 @@ There are two basic configuration modes within a resource:
 
 1) Explicit per-family/type sub-stanzas.  In this mode, the resource
 contains one or more of the keys C<addrs_v4>, C<addrs_v6>, and C<cnames>.
+C<addrs_v4> and/or C<addrs_v6> can both be specified in the same resource,
+but C<cnames> cannot co-exist with either of the other two.
+
 The contents of each stanza configure response RRs of the given type for
 this resource, and in the addrs_v4/addrs_v6 cases, the 3 behavioral
 parameters C<service_types>, C<multi>, and C<up_thresh> can be overridden

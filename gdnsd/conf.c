@@ -64,7 +64,8 @@ global_config_t gconfig = {
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
     .monitor_force_v6_up = false,
-    .zones_rfc1035_strict_startup = true,
+    .zones_strict_data = false,
+    .zones_strict_startup = true,
     .zones_rfc1035_auto = true,
     .chaos_len = 0,
      // legal values are -20 to 20, so -21
@@ -307,12 +308,41 @@ static bool dns_addr_is_dupe(const anysin_t* new_addr) {
     return false;
 }
 
-static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+
     dmn_assert(addr_defs);
     anysin_t temp_asin;
 
+    const bool has_v6 = gdnsd_tcp_v6_ok();
+
+    // note this only covers the "scan" and "any" cases.  A single is_simple
+    //   IP address is covered as if it were an array of one at the bottom of the func
+    bool def_warn = true;
+    if(listen_opt && vscf_is_simple(listen_opt)) {
+        const char* simple_str = vscf_simple_get_data(listen_opt);
+        if(!strcmp(simple_str, "any")) {
+            gconfig.num_dns_addrs = has_v6 ? 2 : 1;
+            gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+            dns_addr_t* ac_v4 = &gconfig.dns_addrs[0];
+            memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
+            make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
+            if(has_v6) {
+                dns_addr_t* ac_v6 = &gconfig.dns_addrs[1];
+                memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
+                make_addr("::", addr_defs->dns_port, &ac_v6->addr);
+            }
+            return;
+        }
+        else if(!strcmp(simple_str, "scan")) {
+            def_warn = false;
+            listen_opt = NULL; // fall-through default scanning code below
+        }
+    }
+
     if(!listen_opt) {
-        const bool has_v6 = gdnsd_tcp_v6_ok();
+        if(def_warn)
+            log_warn("The default behavior with no 'listen' option (interface scanning) will change in a future version!  If your configuration relies on interface scanning, please switch to explicitly configuring 'listen = scan' in the config options stanza, which will silence this warning.");
+
         bool v6_warned = false;
 
         struct ifaddrs* ifap;
@@ -378,6 +408,9 @@ static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr
                 log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
 
             CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, late_bind_secs, 300LU, addrconf->late_bind_secs);
+            if(vscf_hash_get_data_byconstkey(addr_opts, "late_bind_secs", false))
+                log_warn("DNS listen address '%s': option 'late_bind_secs' is deprecated, and will be removed in a future version!", lspec);
+
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_recv_width, 1LU, 32LU, addrconf->udp_recv_width);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
@@ -428,12 +461,17 @@ static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr
             make_addr(vscf_simple_get_data(lspec), addr_defs->dns_port, &addrconf->addr);
         }
     }
+}
+
+static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+    // this fills in gconfig.dns_addrs raw data
+    fill_dns_addrs(listen_opt, addr_defs);
 
     if(!gconfig.num_dns_addrs)
         dmn_log_fatal("DNS listen addresses explicitly configured as an empty set - cannot continue without at least one address!");
 
-    // Now that gconfig.dns_addrs has been completed in one of three ways above,
-    //   use it to populate gconfig.dns_threads....
+    // use dns_addrs to populate dns_threads....
+
     gconfig.num_dns_threads = 0;
     for(unsigned i = 0; i < gconfig.num_dns_addrs; i++)
         gconfig.num_dns_threads += (gconfig.dns_addrs[i].udp_threads + gconfig.dns_addrs[i].tcp_threads);
@@ -494,7 +532,7 @@ static const vscf_data_t* conf_load_vscf(void) {
     return out;
 }
 
-void conf_load(void) {
+void conf_load(const bool force_zss, const bool force_zsd) {
 
     const vscf_data_t* cfg_root = conf_load_vscf();
 
@@ -551,6 +589,8 @@ void conf_load(void) {
         CFG_OPT_UINT(options, http_timeout, 3LU, 60LU);
 
         CFG_OPT_UINT_ALTSTORE_0MIN(options, late_bind_secs, 300LU, addr_defs.late_bind_secs);
+        if(addr_defs.late_bind_secs)
+            log_warn("Option 'late_bind_secs' is deprecated, and will be removed in a future version!");
         CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
         CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
@@ -594,7 +634,14 @@ void conf_load(void) {
         // Nobody should have even the default 16-depth CNAMEs anyways :P
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
-        CFG_OPT_BOOL(options, zones_rfc1035_strict_startup);
+        CFG_OPT_BOOL(options, zones_strict_data);
+
+        // renamed, back-compat
+        CFG_OPT_BOOL_ALTSTORE(options, zones_rfc1035_strict_startup, gconfig.zones_strict_startup);
+        CFG_OPT_BOOL(options, zones_strict_startup);
+        if(vscf_hash_get_data_byconstkey(options, "zones_rfc1035_strict_startup", false))
+            log_warn("The global option 'zones_rfc1035_strict_startup' is deprecated; it was replaced by 'zones_strict_startup'");
+
         CFG_OPT_BOOL(options, zones_rfc1035_auto);
         // it's important that auto_interval is never lower than 2s, or it could cause
         //   us to miss fast events on filesystems with 1-second mtime resolution.
@@ -608,6 +655,12 @@ void conf_load(void) {
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate(options, true, bad_key, (void*)"options");
     }
+
+    // if cmdline forced, override any default or config setting
+    if(force_zss)
+        gconfig.zones_strict_startup = true;
+    if(force_zsd)
+        gconfig.zones_strict_data = true;
 
     // set response string for CHAOS queries
     set_chaos(chaos_data);

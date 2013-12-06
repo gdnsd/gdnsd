@@ -158,6 +158,13 @@ plugins => {
      d2 => 192.0.2.143,
      d1 => 192.0.2.142,
     }
+   },
+   metascope => {
+    datacenters => [A, B],
+    dcmap => {
+     A => %geoip!res1,
+     B => 192.0.2.177
+    },
    }
   }
  }

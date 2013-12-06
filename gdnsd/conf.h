@@ -62,7 +62,8 @@ typedef struct {
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
     bool     monitor_force_v6_up;
-    bool     zones_rfc1035_strict_startup;
+    bool     zones_strict_data;
+    bool     zones_strict_startup;
     bool     zones_rfc1035_auto;
     int      priority;
     unsigned chaos_len;
@@ -84,7 +85,7 @@ typedef struct {
 extern global_config_t gconfig;
 
 F_NONNULL
-void conf_load(void);
+void conf_load(const bool force_zss, const bool force_zsd);
 
 // retval indicates we need runtime CAP_NET_BIND_DEVICE
 bool dns_lsock_init(void);

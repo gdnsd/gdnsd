@@ -150,7 +150,6 @@ struct _ltree_rdata_ns_struct {
 
 struct _ltree_rdata_ptr_struct {
     const uint8_t* dname;
-    ltree_rrset_addr_t* ad;
 };
 
 struct _ltree_rdata_mx_struct {
