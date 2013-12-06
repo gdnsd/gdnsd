@@ -1,3 +1,69 @@
+
+1.11.0 - 2013-12-06
+    Bugfixes:-----------
+      fixed edns-client-subnet issue with configurations that
+        enclose a geoip resource within a metafo resource: the
+        metafo plugin would clear the edns scope mask set by
+        the geoip plugin in this case, but no longer does so.
+      fixed a segfault that could occur when parsing an illegal
+        configuration for the metafo and geoip plugins.
+      misc improvements to warning/error outputs
+      misc doc fixups
+    Features/Changes:---
+      New options 'udp_threads' and 'tcp_threads' (global or
+        per-listen-address).  Both default to 1, which is
+        the previous behavior.  If increased, SO_REUSEPORT
+        is set on the affected listening sockets, and multiple
+        sockets are bound to the same address with separate
+        listening threads.  If SO_REUSEPORT is not available
+        (as is the case for Linux kernels < 3.9), the options
+        will be forced down to 1.
+      New option 'zones_strict_data', similar to the old
+        'strict_data' option, upgrades zone data warnings to
+        full errors.  Defaults false.
+      New commandline option '-S' temporarily enables
+        'zones_strict_data' regardless of config-file setting,
+        mostly useful for 'checkconf'
+      New commandline option '-s', as above for 'zones_strict_startup'
+      'listen' option: new values 'any' and 'scan'.  'any' uses
+        the ANY-addresses (IPv4 + v6 as applicable), and 'scan'
+        scans the interface list via getifaddrs() and configures
+        each valid address as a separate listener, which is still
+        the default behavior.  A warning has been added when using
+        the implicit default 'scan' behavior, indicating that the
+        default will change to the 'any' behavior in a future
+        release.
+      PTR records no longer do additional-section processing, as
+        per the RFCs (not that any practical config ever made use
+        of it anyways)
+    Deprecations:-------
+      The use of 'cnames' in the same resource as 'addrs_v[46]'
+        in the 'weighted' plugin is deprecated.  Please migrate
+        away from this by placing the cnames in a separate
+        resource.
+      'late_bind_secs' feature is deprecated, and should be
+        unnecessary now that we fallback to attempting
+        IP_FREEBIND (or the BSD equivalent) on initial bind()
+        failure.
+      'zones_rfc1035_strict_startup' option was renamed to
+        'zones_strict_startup' with deprecated support for
+        the old name.
+      'tcp_clients_per_socket' option was renamed to
+        'tcp_clients_per_thread' with deprecated support
+        for the old name.
+      'tcp_disabled' option deprecated in favor of setting
+        the new 'tcp_threads' option to zero.
+    *** NOTE *** Version 2.0.0 will be coming up soon, it could
+       even potentially be the very next release.  2.0.0 will contain
+       major feature work related to plugins, and (as the bump of
+       the leading version number indicates) it won't be a fully
+       backwards-compatible release.
+     Most things that have become "deprecated" over the past
+       several releases will have their backwards-compatibility
+       removed in 2.0.0, and notably the plugin API will have
+       substantial changes for any 3rd-party plugin code to
+       accomodate.  You have been warned!
+
 1.10.1 - 2013-10-04
     Bugfixes:
       A faulty assert() was removed from the plugin_geoip code:
