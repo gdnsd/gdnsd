@@ -1,4 +1,5 @@
 
+1.11.0 - 2013-12-06
     Bugfixes:-----------
       fixed edns-client-subnet issue with configurations that
         enclose a geoip resource within a metafo resource: the
@@ -52,6 +53,16 @@
         for the old name.
       'tcp_disabled' option deprecated in favor of setting
         the new 'tcp_threads' option to zero.
+    *** NOTE *** Version 2.0.0 will be coming up soon, it could
+       even potentially be the very next release.  2.0.0 will contain
+       major feature work related to plugins, and (as the bump of
+       the leading version number indicates) it won't be a fully
+       backwards-compatible release.
+     Most things that have become "deprecated" over the past
+       several releases will have their backwards-compatibility
+       removed in 2.0.0, and notably the plugin API will have
+       substantial changes for any 3rd-party plugin code to
+       accomodate.  You have been warned!
 
 1.10.1 - 2013-10-04
     Bugfixes:
