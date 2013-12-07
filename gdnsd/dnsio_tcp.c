@@ -311,7 +311,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 #define SOL_TCP IPPROTO_TCP
 #endif
 
-int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED, const bool reuseport) {
+int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED, const bool reuseport V_UNUSED) {
 
     dmn_assert(asin);
 
