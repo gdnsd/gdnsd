@@ -16,3 +16,8 @@ down2	DYNA	simplefo!res_ext_down_dupe
 down	DYNA	simplefo!res_ext_down
 up	DYNA	simplefo!res_ext_up
 timeout	DYNA	simplefo!res_ext_timeout
+
+down-100-5 100/5 DYNA simplefo!res_ext_down
+up-100-5 100/5 DYNA simplefo!res_ext_up
+up-100 100 DYNA simplefo!res_ext_up
+down-21 21 DYNA simplefo!res_ext_down

@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 23;
+use Test::More tests => 24;
 
 my $standard_auth = [
     'example.com 21600 NS ns1.example.com',
@@ -155,6 +155,18 @@ _GDT->test_dns(
     qname => 'max-naptr2.example.com', qtype => 'NAPTR',
     answer => $max_naptr2,
     stats => [qw/udp_reqs udp_tc tcp_reqs noerror noerror/],
+);
+
+_GDT->test_dns(
+    qname => 'five-a.example.com', qtype => 'A',
+    answer => [
+        'five-a.example.com 21600 A 192.0.2.131',
+        'five-a.example.com 21600 A 192.0.2.132',
+        'five-a.example.com 21600 A 192.0.2.133',
+        'five-a.example.com 21600 A 192.0.2.134',
+        'five-a.example.com 21600 A 192.0.2.135',
+    ],
+    stats => [qw/udp_reqs noerror/],
 );
 
 _GDT->test_kill_daemon($pid);

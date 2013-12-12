@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 15;
+use Test::More tests => 16;
 
 my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -102,13 +102,23 @@ _GDT->test_dns(
     ]
 );
 
-########
-#  Below should pass once CNAME "chaining" for dynamic CNAMES has been added to dnspacket
-
+# chain to invalid
 _GDT->test_dns(
     qname => 'f43.example.com', qtype => 'A',
     answer => ['f43.example.com 86400 CNAME cn-x.example.com',
                'cn-x.example.com 86400 CNAME invalid'],
+);
+
+# DYNC -> 5xA + 0xAAAA (exercise dnspacket v4a logic)
+_GDT->test_dns(
+    qname => 'fivec.example.com', qtype => 'A',
+    answer => [
+        'fivec.example.com 86400 A 192.0.2.131',
+        'fivec.example.com 86400 A 192.0.2.132',
+        'fivec.example.com 86400 A 192.0.2.133',
+        'fivec.example.com 86400 A 192.0.2.134',
+        'fivec.example.com 86400 A 192.0.2.135',
+    ],
 );
 
 _GDT->test_kill_daemon($pid);

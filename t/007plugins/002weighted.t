@@ -55,8 +55,8 @@ _GDT->test_dns(
     rep => 20,
     limit_v6 => 1,
     answer => [
-        'weighta6.example.com 43200 AAAA 2001:DB8::1234',
-        'weighta6.example.com 43200 AAAA 2001:DB8::5678',
+        'weighta6.example.com 86400 AAAA 2001:DB8::1234',
+        'weighta6.example.com 86400 AAAA 2001:DB8::5678',
     ],
 );
 
@@ -87,12 +87,12 @@ _GDT->test_dns(
     rep => 100,
     wrr_v4 => { 'weightg.example.com' => { multi => 0, groups => [3, 2] }},
     answer => [
-        'weightg.example.com 43200 A 192.0.2.191',
-        'weightg.example.com 43200 A 192.0.2.192',
-        'weightg.example.com 43200 A 192.0.2.193',
+        'weightg.example.com 86400 A 192.0.2.191',
+        'weightg.example.com 86400 A 192.0.2.192',
+        'weightg.example.com 86400 A 192.0.2.193',
         # -- group break --
-        'weightg.example.com 43200 A 192.0.2.201',
-        'weightg.example.com 43200 A 192.0.2.202',
+        'weightg.example.com 86400 A 192.0.2.201',
+        'weightg.example.com 86400 A 192.0.2.202',
     ],
 );
 
@@ -116,12 +116,12 @@ _GDT->test_dns(
     wrr_v4 => { 'weightmixc.example.com' => 0 },
     wrr_v6 => { 'weightmixc.example.com' => 1 },
     answer => [
-        'weightmixc.example.com 43200 A 192.0.2.22',
-        'weightmixc.example.com 43200 A 192.0.2.33',
+        'weightmixc.example.com 86400 A 192.0.2.22',
+        'weightmixc.example.com 86400 A 192.0.2.33',
     ],
     addtl => [
-        'weightmixc.example.com 43200 AAAA 2001:DB8::2222',
-        'weightmixc.example.com 43200 AAAA 2001:DB8::3333',
+        'weightmixc.example.com 86400 AAAA 2001:DB8::2222',
+        'weightmixc.example.com 86400 AAAA 2001:DB8::3333',
     ]
 );
 
@@ -131,12 +131,12 @@ _GDT->test_dns(
     wrr_v4 => { 'weightmixa.example.com' => 0 },
     wrr_v6 => { 'weightmixa.example.com' => 1 },
     answer => [
-        'weightmixa.example.com 43200 A 192.0.2.22',
-        'weightmixa.example.com 43200 A 192.0.2.33',
+        'weightmixa.example.com 86400 A 192.0.2.22',
+        'weightmixa.example.com 86400 A 192.0.2.33',
     ],
     addtl => [
-        'weightmixa.example.com 43200 AAAA 2001:DB8::2222',
-        'weightmixa.example.com 43200 AAAA 2001:DB8::3333',
+        'weightmixa.example.com 86400 AAAA 2001:DB8::2222',
+        'weightmixa.example.com 86400 AAAA 2001:DB8::3333',
     ]
 );
 

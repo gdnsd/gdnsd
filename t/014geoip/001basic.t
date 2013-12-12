@@ -470,8 +470,8 @@ _GDT->test_dns(
     qname => 'resA.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
     answer => [
-        'resA.example.com 43200 A 192.0.2.90',
-        'resA.example.com 43200 A 192.0.2.91',
+        'resA.example.com 86400 A 192.0.2.90',
+        'resA.example.com 86400 A 192.0.2.91',
     ],
     addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],

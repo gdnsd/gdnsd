@@ -65,6 +65,8 @@ chain4	A 192.0.2.3
 meta1	DYNA metafo!meta1
 meta2	DYNA metafo!meta2
 
+fivec	DYNC multifo!fivec
+
 ; addr-via-DYNC
 adyn DYNC static!bar41
 

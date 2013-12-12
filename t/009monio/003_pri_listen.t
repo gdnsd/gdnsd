@@ -34,18 +34,18 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'dyn.example.com', qtype => 'A',
-    answer => 'dyn.example.com 120 A 127.0.0.1',
+    answer => 'dyn.example.com 100 A 127.0.0.1',
 );
 
 _GDT->test_dns(
     qname => 'mdyn.example.com', qtype => 'A',
-    answer => 'mdyn.example.com 60 A 127.0.0.1',
+    answer => 'mdyn.example.com 100 A 127.0.0.1',
 );
 
 _GDT->test_dns(
     qname => 'addtl.example.com', qtype => 'MX',
     answer => 'addtl.example.com 86400 MX 0 dyn.example.com',
-    addtl => 'dyn.example.com 120 A 127.0.0.1',
+    addtl => 'dyn.example.com 100 A 127.0.0.1',
 );
 
 _GDT->test_dns(

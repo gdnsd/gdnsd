@@ -14,18 +14,27 @@ service_types => {
         cmd => [ "/bin/sh", "-c", "exit 1" ],
         timeout = 1
         interval = 2
+        up_thresh = 20
+        down_thresh = 10
+        ok_thresh = 10
     }
     ext_up => {
         plugin => extmon
         cmd => [ "/bin/sh", "-c", "exit 0" ],
         timeout = 1
         interval = 2
+        up_thresh = 20
+        down_thresh = 10
+        ok_thresh = 10
     }
     ext_timeout => {
         plugin => extmon
         cmd => [ "/bin/sh", "-c", "sleep 2" ],
         timeout = 1
         interval = 2
+        up_thresh = 20
+        down_thresh = 10
+        ok_thresh = 10
     }
 }
 

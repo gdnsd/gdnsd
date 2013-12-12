@@ -78,6 +78,13 @@ submixooz	NS	ns1.example.net.
 submixooz	NS	ns1.submixooz
 ns1.submixooz	A	192.0.2.79
 
+; 5x A + 0x AAAA (for dnspacket v4a logic)
+five-a A 192.0.2.131
+five-a A 192.0.2.132
+five-a A 192.0.2.133
+five-a A 192.0.2.134
+five-a A 192.0.2.135
+
 ; CNAME torture
 ; 4-level to an A record
 ct1	CNAME	ct2
