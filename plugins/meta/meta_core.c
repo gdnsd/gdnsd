@@ -387,17 +387,20 @@ int CB_MAP(const char* resname, const uint8_t* origin) {
                     if(!this_dc->plugin) {
                         this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
                         if(!this_dc->plugin)
-                            map_res_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
+                            map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': invalid plugin name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name);
                     }
+
+                    if(!this_dc->plugin->resolve)
+                        map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': plugin '%s' is not a resolver plugin", res->name, this_dc->dc_name, this_dc->plugin_name);
 
                     this_dc->res_num = 0;
                     if(this_dc->plugin->map_res) {
                         const int resnum = this_dc->plugin->map_res(this_dc->res_name, origin);
                         if(resnum < 0) {
                             if(origin)
-                                map_res_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNC resource name '%s' at origin '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(origin));
+                                map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': plugin '%s' rejected DYNC resource name '%s' at origin '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(origin));
                             else
-                                map_res_err("plugin_" PNSTR ": resource '%s': addrs datacenter '%s': plugin '%s' rejected DYNA resource name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name);
+                                map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': plugin '%s' rejected DYNA resource name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name);
                         }
                         this_dc->res_num = (unsigned)resnum;
                     }
