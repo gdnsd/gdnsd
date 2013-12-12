@@ -458,7 +458,7 @@ bool CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const cl
         if(!success) {
             memset(result, 0, sizeof(dyn_result_t));
             result->ttl = saved_ttl;
-            resolve_dc(&res->dcs[dcnum], threadnum, origin, cinfo, result);
+            resolve_dc(&res->dcs[first_dc_num], threadnum, origin, cinfo, result);
         }
     }
 

@@ -148,6 +148,14 @@ plugins => {
      dc3 => { lb01 => 192.0.2.94, lb02 => 192.0.2.95 }
     }
    }
+   resA => {
+    map => map2,
+    dcmap => {
+      dc1 => { service_types => down, lb01 => 192.0.2.90, lb02 => 192.0.2.91 }
+      dc2 => { service_types => down, lb01 => 192.0.2.92, lb02 => 192.0.2.93 }
+      dc3 => { service_types => down, lb01 => 192.0.2.94, lb02 => 192.0.2.95 }
+    }
+   }
    res-e => {
     map => map-empty,
     dcmap => {

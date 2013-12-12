@@ -148,6 +148,16 @@ plugins => {
       dc3 => [ 192.0.2.94, 192.0.2.95 ]
     }
    }
+   resA => {
+    map => map2,
+    service_types => down,
+    plugin => multifo,
+    dcmap => {
+      dc1 => [ 192.0.2.90, 192.0.2.91 ]
+      dc2 => [ 192.0.2.92, 192.0.2.93 ]
+      dc3 => [ 192.0.2.94, 192.0.2.95 ]
+    }
+   }
    res9 => {
     plugin => multifo,
     map => map2,
