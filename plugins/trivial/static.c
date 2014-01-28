@@ -66,7 +66,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     return true;
 }
 
-mon_list_t* plugin_static_load_config(const vscf_data_t* config) {
+void plugin_static_load_config(const vscf_data_t* config) {
     if(!config)
         log_fatal("static plugin requires a 'plugins' configuration stanza");
     dmn_assert(vscf_get_type(config) == VSCF_HASH_T);
@@ -75,8 +75,6 @@ mon_list_t* plugin_static_load_config(const vscf_data_t* config) {
     resources = malloc(num_resources * sizeof(static_resource_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, false, config_res, &residx);
-
-    return NULL;
 }
 
 int plugin_static_map_res(const char* resname, const uint8_t* origin) {
@@ -103,7 +101,7 @@ int plugin_static_map_res(const char* resname, const uint8_t* origin) {
     map_res_err("plugin_static: resource name required");
 }
 
-bool plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     dmn_assert(!result->is_cname);
 
     // this (DYNA->CNAME) should be caught during map_res
@@ -126,5 +124,5 @@ bool plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED
         dmn_assert(dname_status(result->cname) == DNAME_VALID);
     }
 
-    return true;
+    return GDNSD_STTL_TTL_MASK;
 }

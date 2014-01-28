@@ -34,7 +34,7 @@ static const double DEF_UP_THRESH = 0.5;
 
 typedef struct {
     anysin_t addr;
-    mon_state_t* states;
+    unsigned* indices;
 } addrstate_t;
 
 typedef struct {
@@ -53,20 +53,9 @@ typedef struct {
 static res_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static mon_list_t mon_list = { 0, NULL };
-
 /*********************************/
 /* Local, static functions       */
 /*********************************/
-
-static void mon_add(const char* svctype, const char* desc, const char* addr_txt, mon_state_t* state_ptr) {
-    mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
-    mon_info_t* m = &mon_list.info[mon_list.count++];
-    m->svctype = strdup(svctype);
-    m->desc = desc;
-    m->addr = strdup(addr_txt);
-    m->state_ptr = state_ptr;
-}
 
 F_NONNULL
 static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data) {
@@ -136,16 +125,12 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
     else if(!ipv6 && as->addr.sa.sa_family != AF_INET)
         log_fatal("plugin_multifo: resource %s (%s): address '%s' for '%s' is not IPv4", resname, stanza, addr_txt, addr_desc);
 
-    as->states = malloc(sizeof(mon_state_t) * aset->num_svcs);
+    as->indices = malloc(sizeof(unsigned) * aset->num_svcs);
 
     for(unsigned i = 0; i < aset->num_svcs; i++) {
-        char *complete_desc = malloc(strlen(resname) + 6 + strlen(addr_desc) + 1 + strlen(svc_names[i]) + 1);
-        strcpy(complete_desc, resname);
-        strcat(complete_desc, ipv6 ? "/ipv6/" : "/ipv4/");
-        strcat(complete_desc, addr_desc);
-        strcat(complete_desc, "/");
-        strcat(complete_desc, svc_names[i]);
-        mon_add(svc_names[i], complete_desc, addr_txt, &as->states[i]);
+        char* desc = gdnsd_str_combine_n(6, "multifo/", resname, ipv6 ? "/ipv6/" : "/ipv4/", addr_desc, "/", svc_names[i]);
+        as->indices[i] = gdnsd_mon_addr(desc, svc_names[i], &as->addr);
+        free(desc);
     }
 
     return true;
@@ -307,7 +292,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 /* Exported callbacks start here */
 /*********************************/
 
-mon_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
+void plugin_multifo_load_config(const vscf_data_t* config) {
     if(!config)
         log_fatal("multifo plugin requires a 'plugins' configuration stanza");
 
@@ -324,8 +309,6 @@ mon_list_t* plugin_multifo_load_config(const vscf_data_t* config) {
     resources = calloc(num_resources, sizeof(res_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
-
-    return &mon_list;
 }
 
 int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED) {
@@ -343,52 +326,59 @@ int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED) 
 }
 
 F_NONNULL
-static bool resolve(const addrset_t* aset, dyn_result_t* result, bool* cut_ttl_ptr, unsigned* resct_ptr) {
-    dmn_assert(aset); dmn_assert(result); dmn_assert(cut_ttl_ptr); dmn_assert(resct_ptr);
+static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result, unsigned* resct_ptr) {
+    dmn_assert(aset); dmn_assert(result); dmn_assert(resct_ptr);
 
-    bool rv = true;
+    dmn_assert(aset->count);
 
-    // Add up/danger IPs to result set, signal ttl-cut if any non-up encountered
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK;
     for(unsigned i = 0; i < aset->count; i++) {
         const addrstate_t* as = &aset->as[i];
-        const mon_state_uint_t state = gdnsd_mon_get_min_state(as->states, aset->num_svcs);
-        if(state != MON_STATE_UP)
-            *cut_ttl_ptr = true;
-        if(state != MON_STATE_DOWN)
+        const gdnsd_sttl_t as_sttl = gdnsd_sttl_min(sttl_tbl, as->indices, aset->num_svcs);
+        rv = gdnsd_sttl_min2(rv, as_sttl);
+        if(!(as_sttl & GDNSD_STTL_DOWN))
             gdnsd_dyn_add_result_anysin(result, &as->addr);
     }
 
     // if up_thresh was not met, signal upstream failure through rv and add all addresses
     if(*resct_ptr < aset->up_thresh) {
-        rv = false;
+        rv |= GDNSD_STTL_DOWN;
         *resct_ptr = 0;
         for(unsigned i = 0; i < aset->count; i++)
             gdnsd_dyn_add_result_anysin(result, &aset->as[i].addr);
     }
+    // else force non-down response in retval, even if "rv" currently has the down flag from
+    //   the min/min2 operations on the individual addrs
+    else {
+        rv &= ~GDNSD_STTL_DOWN;
+    }
 
+    assert_valid_sttl(rv);
     return rv;
 }
 
-bool plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     dmn_assert(result); dmn_assert(!result->is_cname);
 
-    bool rv = true;
-    bool cut_ttl = false;
+    const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
+
     res_t* res = &resources[resnum];
 
+    gdnsd_sttl_t rv;
+
+    dmn_assert(res->aset_v4 || res->aset_v6);
+
     if(res->aset_v4) {
-        rv &= resolve(res->aset_v4, result, &cut_ttl, &result->a.count_v4);
-        dmn_assert(result->a.count_v4);
+        rv = resolve(sttl_tbl, res->aset_v4, result, &result->a.count_v4);
+        if(res->aset_v6) {
+            const unsigned v6_rv = resolve(sttl_tbl, res->aset_v6, result, &result->a.count_v6);
+            rv = gdnsd_sttl_min2(rv, v6_rv);
+        }
+    }
+    else if(res->aset_v6) {
+        rv = resolve(sttl_tbl, res->aset_v6, result, &result->a.count_v6);
     }
 
-    if(res->aset_v6) {
-        rv &= resolve(res->aset_v6, result, &cut_ttl, &result->a.count_v6);
-        dmn_assert(result->a.count_v6);
-    }
-
-    // Cut TTL in half if any were in DOWN or DANGER states
-    if(cut_ttl)
-        result->ttl >>= 1;
-
+    assert_valid_sttl(rv);
     return rv;
 }

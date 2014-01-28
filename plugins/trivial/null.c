@@ -27,7 +27,7 @@ int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UN
     return 0;
 }
 
-bool plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
 
     if(origin) {
         result->is_cname = true;
@@ -41,7 +41,7 @@ bool plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, 
         memset(result->a.addrs_v6, 0, 16);
     }
 
-    return true;
+    return GDNSD_STTL_TTL_MASK;
 }
 
 // Obviously, we could implement "null" monitoring with simpler code,
@@ -53,8 +53,8 @@ typedef struct {
 } null_svc_t;
 
 typedef struct {
+    unsigned idx;
     null_svc_t* svc;
-    mon_smgr_t* smgr;
     ev_timer* interval_watcher;
 } null_mon_t;
 
@@ -69,7 +69,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 
     null_mon_t* mon = (null_mon_t*)t->data;
     dmn_assert(mon);
-    gdnsd_mon_state_updater(mon->smgr, false);
+    gdnsd_mon_state_updater(mon->idx, false);
 }
 
 void plugin_null_add_svctype(const char* name, const vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED) {
@@ -80,7 +80,9 @@ void plugin_null_add_svctype(const char* name, const vscf_data_t* svc_cfg V_UNUS
     this_svc->interval = interval;
 }
 
-void plugin_null_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
+void plugin_null_add_monitor(const char* desc V_UNUSED, const char* svc_name, const anysin_t* addr V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+
     null_svc_t* this_svc = NULL;
 
     for(unsigned i = 0; i < num_svcs; i++) {
@@ -94,7 +96,7 @@ void plugin_null_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
     null_mons = realloc(null_mons, sizeof(null_mon_t*) * ++num_mons);
     null_mon_t* this_mon = null_mons[num_mons - 1] = malloc(sizeof(null_mon_t));
     this_mon->svc = this_svc;
-    this_mon->smgr = smgr;
+    this_mon->idx = idx;
     this_mon->interval_watcher = malloc(sizeof(ev_timer));
     ev_timer_init(this_mon->interval_watcher, &null_interval_cb, 0, 0);
     this_mon->interval_watcher->data = this_mon;

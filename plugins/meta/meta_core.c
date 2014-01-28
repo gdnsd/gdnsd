@@ -51,6 +51,8 @@ typedef struct {
     char* res_name;
     char* dc_name;
     uint8_t* dname; // for direct CNAME, and the "invalid" case
+    unsigned dname_idx; // admin state idx for above
+    unsigned dc_mon_idx; // admin state for the datacenter itself, in this resource
     unsigned res_num;
 } dc_t;
 
@@ -63,23 +65,6 @@ typedef struct {
 
 static unsigned num_res;
 static resource_t* resources;
-
-F_NONNULL
-static char* make_synth_resname(const char* resname, const char* dcname) {
-    dmn_assert(resname); dmn_assert(dcname);
-    const unsigned rnlen = strlen(resname);
-    const unsigned dclen = strlen(dcname);
-    const unsigned pnlen = strlen(PNSTR);
-    char* synth_resname = malloc(rnlen + dclen + pnlen + 3);
-    char* srptr = synth_resname;
-    memcpy(srptr, PNSTR, pnlen); srptr += pnlen;
-    *srptr++ = '_';
-    memcpy(srptr, resname, rnlen); srptr += rnlen;
-    *srptr++ = '_';
-    memcpy(srptr, dcname, dclen); srptr += dclen;
-    *srptr++ = '\0';
-    return synth_resname;
-}
 
 // retval is new storage.
 // "plugin", if existed in config, will be marked afterwards
@@ -104,8 +89,9 @@ static char* get_defaulted_plugname(const vscf_data_t* cfg, const char* resname,
 F_NONNULL
 static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_data_t* cfg) {
     dmn_assert(this_dc); dmn_assert(resname); dmn_assert(cfg);
+    dmn_assert(this_dc->dc_name);
 
-    char* child_resname = make_synth_resname(resname, this_dc->dc_name);
+    char* child_resname = gdnsd_str_combine_n(5, PNSTR, "_", resname, "_", this_dc->dc_name);
     this_dc->res_name = child_resname;
 
     // Move up 2 layers: dcX -> dcmap -> resX
@@ -186,13 +172,19 @@ static dc_t* config_res_perdc(const unsigned mapnum, const vscf_data_t* cfg, con
     const unsigned num_dcs = vscf_hash_get_len(cfg);
     dc_t* store = calloc((num_dcs + 1), sizeof(dc_t));
     for(unsigned i = 0; i < num_dcs; i++) {
-        const char* dcname = vscf_hash_get_key_byindex(cfg, i, NULL);
+        unsigned dcname_len;
+        const char* dcname = vscf_hash_get_key_byindex(cfg, i, &dcname_len);
         const unsigned dc_idx = map_get_dcidx(mapnum, dcname);
         if(!dc_idx)
             log_fatal("plugin_" PNSTR ": resource '%s': datacenter name '%s' is not valid", resname, dcname);
         dmn_assert(dc_idx <= num_dcs);
         dc_t* this_dc = &store[dc_idx];
         this_dc->dc_name = strdup(dcname);
+
+        char* dc_mon_desc = gdnsd_str_combine_n(3, PNSTR, "/", dcname);
+        this_dc->dc_mon_idx = gdnsd_mon_admin(dc_mon_desc);
+        free(dc_mon_desc);
+
         const vscf_data_t* plugdata = vscf_hash_get_data_byindex(cfg, i);
         if(vscf_is_simple(plugdata)) {
             const char* textdata = vscf_simple_get_data(plugdata);
@@ -225,6 +217,12 @@ static dc_t* config_res_perdc(const unsigned mapnum, const vscf_data_t* cfg, con
                     if(dnstat == DNAME_VALID)
                         dname = dname_trim(dname);
                     this_dc->dname = dname;
+
+                    // technically, this admin state is redundant with the datacenter-level one,
+                    //   but having two variants may prove useful for regex-based admin state forces...
+                    char* desc = gdnsd_str_combine_n(5, PNSTR, "/", resname, "/", dcname, "/", textdata);
+                    this_dc->dname_idx = gdnsd_mon_admin(desc);
+                    free(desc);
                 }
                 else {
                     inject_child_plugin_config(this_dc, resname, (vscf_data_t*)plugdata);
@@ -267,26 +265,30 @@ static void make_resource(resource_t* res, const char* res_name, const vscf_data
     res->dcs = config_res_perdc(res->map, dcs_cfg, res_name);
 }
 
-static bool resolve_dc(const dc_t* dc, unsigned threadnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
+static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, unsigned threadnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
     dmn_assert(dc); dmn_assert(cinfo); dmn_assert(result);
 
-    bool success;
+    gdnsd_sttl_t rv;
 
     if(dc->dname) { // direct CNAME
         dmn_assert(origin); // detected at map_res time
-        success = true;
         result->is_cname = true;
         dname_copy(result->cname, dc->dname);
         if(dname_is_partial(result->cname))
             dname_cat(result->cname, origin);
         dmn_assert(dname_status(result->cname) == DNAME_VALID);
+        rv = sttl_tbl[dc->dname_idx];
     }
     else {
         dmn_assert(dc->plugin && dc->plugin->resolve); // detected at map_res time
-        success = dc->plugin->resolve(threadnum, dc->res_num, origin, cinfo, result);
+        rv = dc->plugin->resolve(threadnum, dc->res_num, origin, cinfo, result);
     }
 
-    return success;
+    // let forced-down at the dc level override lower-level results
+    // XXX map-level for geoip as well?
+    rv = gdnsd_sttl_min2(rv, sttl_tbl[dc->dc_mon_idx]);
+
+    return rv;
 }
 
 F_UNUSED F_NONNULL
@@ -308,7 +310,7 @@ static void resource_destroy(resource_t* res) {
 
 /********** Callbacks from gdnsd **************/
 
-mon_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
+void CB_LOAD_CONFIG(const vscf_data_t* config) {
     if(!config)
         log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
 
@@ -336,8 +338,6 @@ mon_list_t* CB_LOAD_CONFIG(const vscf_data_t* config) {
         vscf_hash_inherit_all(config, res_cfg, true);
         make_resource(res, res_name, res_cfg);
     }
-
-    return NULL;
 }
 
 int CB_MAP(const char* resname, const uint8_t* origin) {
@@ -419,7 +419,7 @@ int CB_MAP(const char* resname, const uint8_t* origin) {
     map_res_err("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
 }
 
-bool CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
+gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
     dmn_assert(cinfo); dmn_assert(result);
 
     // extract and clear any datacenter index from upper 8 bits
@@ -430,9 +430,6 @@ bool CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const cl
 
     const resource_t* res = &resources[resnum];
 
-    // save ttl across multiple lower-level wipe/recalls
-    unsigned saved_ttl = result->ttl;
-
     unsigned scope_mask_out = 0;
     const uint8_t* dclist;
     if(synth_dc)
@@ -440,25 +437,31 @@ bool CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const cl
     else
         dclist = map_get_dclist(res->map, cinfo, &scope_mask_out);
 
-    bool success = false;
+    const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
+
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK;
 
     // empty dclist -> no results
     unsigned first_dc_num = *dclist;
     if(first_dc_num) {
         // iterate datacenters until we find a success or exhaust the list
         unsigned dcnum;
-        while(!success && (dcnum = *dclist++)) {
+        while((dcnum = *dclist++)) {
             dmn_assert(dcnum <= res->num_dcs);
             memset(result, 0, sizeof(dyn_result_t));
-            result->ttl = saved_ttl;
-            success = resolve_dc(&res->dcs[dcnum], threadnum, origin, cinfo, result);
+            gdnsd_sttl_t this_rv = resolve_dc(sttl_tbl, &res->dcs[dcnum], threadnum, origin, cinfo, result);
+            assert_valid_sttl(this_rv);
+            rv = gdnsd_sttl_min2(rv, this_rv);
+            if(!(this_rv & GDNSD_STTL_DOWN)) {
+                rv &= ~GDNSD_STTL_DOWN;
+                break;
+            }
         }
 
-        // all datacenters failed, flag failure upstream (if any upstream) and use first dc
-        if(!success) {
+        // all datacenters failed, in which case we keep the sttl from above...
+        if(rv & GDNSD_STTL_DOWN) {
             memset(result, 0, sizeof(dyn_result_t));
-            result->ttl = saved_ttl;
-            resolve_dc(&res->dcs[first_dc_num], threadnum, origin, cinfo, result);
+            resolve_dc(sttl_tbl, &res->dcs[first_dc_num], threadnum, origin, cinfo, result);
         }
     }
 
@@ -468,7 +471,8 @@ bool CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const cl
     if(scope_mask_out > result->edns_scope_mask)
         result->edns_scope_mask = scope_mask_out;
 
-    return success;
+    assert_valid_sttl(rv);
+    return rv;
 }
 
 #ifndef NDEBUG

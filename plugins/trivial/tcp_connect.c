@@ -48,12 +48,13 @@ typedef enum {
 } tcp_state_t;
 
 typedef struct {
+    const char* desc;
     tcp_svc_t* tcp_svc;
     ev_io* connect_watcher;
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
-    mon_smgr_t* smgr;
     anysin_t addr;
+    unsigned idx;
     tcp_state_t tcp_state;
     int sock;
 } tcp_events_t;
@@ -84,7 +85,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     dmn_assert(!ev_is_active(md->connect_watcher));
     dmn_assert(!ev_is_active(md->timeout_watcher));
 
-    log_debug("plugin_tcp_connect: Starting state poll of %s", md->smgr->desc);
+    log_debug("plugin_tcp_connect: Starting state poll of %s", md->desc);
 
     const bool isv6 = md->addr.sa.sa_family == AF_INET6;
 
@@ -121,7 +122,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
             case EHOSTDOWN:
             case ENETUNREACH:
                 // fast remote failures, e.g. when remote is local, I hope
-                log_debug("plugin_tcp_connect: State poll of %s failed very quickly", md->smgr->desc);
+                log_debug("plugin_tcp_connect: State poll of %s failed very quickly", md->desc);
                 break;
             default:
                 log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
@@ -132,7 +133,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     }
 
     close(sock);
-    gdnsd_mon_state_updater(md->smgr, success);
+    gdnsd_mon_state_updater(md->idx, success);
 }
 
 F_NONNULL
@@ -162,7 +163,7 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
             case EHOSTUNREACH:
             case EHOSTDOWN:
             case ENETUNREACH:
-                log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->smgr->desc, logf_errnum(so_error));
+                log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->desc, logf_errnum(so_error));
                 break;
             default:
                 log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errnum(so_error));
@@ -178,7 +179,7 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     ev_io_stop(loop, md->connect_watcher);
     ev_timer_stop(loop, md->timeout_watcher);
     md->tcp_state = TCP_STATE_WAITING;
-    gdnsd_mon_state_updater(md->smgr, success);
+    gdnsd_mon_state_updater(md->idx, success);
 }
 
 F_NONNULL
@@ -193,13 +194,13 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
     dmn_assert(md->tcp_state == TCP_STATE_CONNECTING);
     dmn_assert(ev_is_active(md->connect_watcher));
 
-    log_debug("plugin_tcp_connect: State poll of %s timed out", md->smgr->desc);
+    log_debug("plugin_tcp_connect: State poll of %s timed out", md->desc);
     ev_io_stop(loop, md->connect_watcher);
     shutdown(md->sock, SHUT_RDWR);
     close(md->sock);
     md->sock = -1;
     md->tcp_state = TCP_STATE_WAITING;
-    gdnsd_mon_state_updater(md->smgr, false);
+    gdnsd_mon_state_updater(md->idx, false);
 }
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
@@ -236,10 +237,12 @@ void plugin_tcp_connect_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_tcp_connect_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
-    dmn_assert(svc_name); dmn_assert(smgr);
+void plugin_tcp_connect_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
 
     tcp_events_t* this_mon = calloc(1, sizeof(tcp_events_t));
+    this_mon->desc = strdup(desc);
+    this_mon->idx = idx;
 
     for(unsigned i = 0; i < num_tcp_svcs; i++) {
         if(!strcmp(service_types[i].name, svc_name)) {
@@ -250,7 +253,7 @@ void plugin_tcp_connect_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
 
     dmn_assert(this_mon->tcp_svc);
 
-    memcpy(&this_mon->addr, &smgr->addr, sizeof(anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(anysin_t));
     if(this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->tcp_svc->port);
     }
@@ -259,7 +262,6 @@ void plugin_tcp_connect_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
         this_mon->addr.sin6.sin6_port = htons(this_mon->tcp_svc->port);
     }
 
-    this_mon->smgr = smgr;
     this_mon->tcp_state = TCP_STATE_WAITING;
     this_mon->sock = -1;
 

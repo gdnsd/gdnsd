@@ -40,9 +40,11 @@ typedef struct {
 } svc_t;
 
 typedef struct {
+    const char* desc;
     const svc_t* svc;
-    mon_smgr_t* smgr;
     ev_timer* local_timeout;
+    anysin_t addr;
+    unsigned idx;
     bool seen_once;
 } mon_t;
 
@@ -83,7 +85,7 @@ static void total_helper_failure(struct ev_loop* loop) {
     switch(fail_mode) {
         case FAIL_ONCE:
             for(unsigned i = 0; i < num_mons; i++)
-                gdnsd_mon_state_updater(mons[i].smgr, false);
+                gdnsd_mon_state_updater(mons[i].idx, false);
             // fall-through
         case FAIL_STASIS:
             for(unsigned i = 0; i < num_mons; i++)
@@ -160,7 +162,7 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         if(idx >= num_mons)
             log_fatal("plugin_extmon: BUG: got helper result for out of range index %u", idx);
         mon_t* this_mon = &mons[idx];
-        gdnsd_mon_state_updater(this_mon->smgr, !failed); // wants true for success
+        gdnsd_mon_state_updater(this_mon->idx, !failed); // wants true for success
         if(init_phase) {
             ev_timer_stop(loop, this_mon->local_timeout);
             if(!this_mon->seen_once) {
@@ -186,8 +188,8 @@ static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UN
     mon_t* this_mon = w->data;
     dmn_assert(this_mon->local_timeout == w);
 
-    log_info("plugin_extmon: '%s': helper is very late for a status update, locally applying a negative update...", this_mon->smgr->desc);
-    gdnsd_mon_state_updater(this_mon->smgr, false);
+    log_info("plugin_extmon: '%s': helper is very late for a status update, locally applying a negative update...", this_mon->desc);
+    gdnsd_mon_state_updater(this_mon->idx, false);
     if(!init_phase) {
         bump_local_timeout(loop, this_mon);
     }
@@ -207,15 +209,15 @@ static char* num_to_str(const int i) {
 }
 
 F_NONNULL
-static char* get_smgr_addr_str(const mon_smgr_t* smgr) {
-    dmn_assert(smgr);
+static char* get_mon_addr_str(const mon_t* mon) {
+    dmn_assert(mon);
 
     char hostbuf[NI_MAXHOST + 1];
 
     hostbuf[0] = 0; // JIC getnameinfo leaves them un-init
-    int name_err = getnameinfo(&smgr->addr.sa, smgr->addr.len, hostbuf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+    int name_err = getnameinfo(&mon->addr.sa, mon->addr.len, hostbuf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
     if(name_err)
-        log_fatal("plugin_extmon: getnameinfo() failed on address for '%s': %s", smgr->desc, gai_strerror(name_err));
+        log_fatal("plugin_extmon: getnameinfo() failed on address for '%s': %s", mon->desc, gai_strerror(name_err));
 
     return strdup(hostbuf);
 }
@@ -242,7 +244,7 @@ static char* ipaddr_xlate(const char* instr, const char* addrstr, const unsigned
 static void send_cmd(const unsigned idx, const mon_t* mon) {
     char** this_args = malloc(mon->svc->num_args * sizeof(char*));
 
-    char* addrstr = get_smgr_addr_str(mon->smgr);
+    char* addrstr = get_mon_addr_str(mon);
     const unsigned addrstr_len = strlen(addrstr);
     dmn_assert(addrstr_len);
 
@@ -255,12 +257,12 @@ static void send_cmd(const unsigned idx, const mon_t* mon) {
         .interval = mon->svc->interval,
         .num_args = mon->svc->num_args,
         .args = (const char**)this_args,
-        .desc = mon->smgr->desc,
+        .desc = mon->desc,
     };
 
     if(emc_write_command(helper_write_fd, &this_cmd)
         || emc_read_exact(helper_read_fd, "CMD_ACK"))
-        log_fatal("plugin_extmon: failed to write command for '%s' to helper!", mon->smgr->desc);
+        log_fatal("plugin_extmon: failed to write command for '%s' to helper!", mon->desc);
 
     for(unsigned i = 0; i < mon->svc->num_args; i++)
         free(this_args[i]);
@@ -333,7 +335,7 @@ static bool bad_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* 
     log_fatal("plugin_extmon: bad global option '%s'", key);
 }
 
-mon_list_t* plugin_extmon_load_config(const vscf_data_t* config) {
+void plugin_extmon_load_config(const vscf_data_t* config) {
     if(config) {
         const vscf_data_t* helper_path_cfg = vscf_hash_get_data_byconstkey(config, "helper_path", true);
         if(helper_path_cfg) {
@@ -357,8 +359,6 @@ mon_list_t* plugin_extmon_load_config(const vscf_data_t* config) {
         }
         vscf_hash_iterate(config, true, bad_opt, NULL);
     }
-
-    return NULL;
 }
 
 // plugins which don't have a global config stanza (e.g. plugins => { extmon => { ... } }),
@@ -393,13 +393,14 @@ void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     }
 }
 
-void plugin_extmon_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
-    dmn_assert(svc_name);
-    dmn_assert(smgr);
+void plugin_extmon_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
 
     mons = realloc(mons, (num_mons + 1) * sizeof(mon_t));
     mon_t* this_mon = &mons[num_mons++];
-    this_mon->smgr = smgr;
+    this_mon->desc = strdup(desc);
+    this_mon->idx = idx;
+
     this_mon->svc = NULL;
     for(unsigned i = 0; i < num_svcs; i++) {
         if(!strcmp(svcs[i].name, svc_name)) {
@@ -408,6 +409,7 @@ void plugin_extmon_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
         }
     }
     dmn_assert(this_mon->svc);
+    memcpy(&this_mon->addr, addr, sizeof(anysin_t));
     this_mon->local_timeout = NULL;
     this_mon->seen_once = false;
 }

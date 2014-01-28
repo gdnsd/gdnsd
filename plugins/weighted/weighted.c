@@ -51,7 +51,7 @@
 typedef struct {
     anysin_t addr;
     unsigned weight;
-    mon_state_t* states;
+    unsigned* indices;
 } addrstate_t;
 
 typedef struct {
@@ -100,8 +100,6 @@ typedef struct {
 static resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static mon_list_t mon_list = { 0, NULL };
-
 // tracked configured max sizes, for dynamic arrays later
 static unsigned cfg_max_items_per_res = 1;
 static unsigned cfg_max_addrs_per_group = 1;
@@ -135,9 +133,6 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
     dmn_assert(res_name); dmn_assert(stanza); dmn_assert(item_name);
     dmn_assert(res_item); dmn_assert(cfg_data); dmn_assert(addrset);
 
-    const unsigned res_name_len = strlen(res_name);
-    const unsigned item_name_len = strlen(item_name);
-
     long wtemp = 0;
     if(!vscf_is_array(cfg_data)
             || (2 != vscf_array_get_len(cfg_data))
@@ -149,7 +144,7 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
 
     res_item->count = 1;
     res_item->as = calloc(res_item->count, sizeof(addrstate_t));
-    res_item->as[0].states = calloc(addrset->num_svcs, sizeof(mon_state_t));
+    res_item->as[0].indices = malloc(addrset->num_svcs * sizeof(unsigned));
     res_item->as[0].weight = wtemp;
     res_item->max_weight = wtemp;
     res_item->weight = wtemp;
@@ -164,15 +159,9 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
     for(unsigned i = 0; i < addrset->num_svcs; i++) {
-        const unsigned svc_name_len = strlen(addrset->svc_names[i]);
-        char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + svc_name_len + 1);
-        sprintf(complete_desc, "%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, addrset->svc_names[i]);
-        mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
-        mon_info_t* m = &mon_list.info[mon_list.count++];
-        m->svctype = addrset->svc_names[i];
-        m->desc = complete_desc;
-        m->addr = addr_txt;
-        m->state_ptr = &res_item->as[0].states[i];
+        char *desc = gdnsd_str_combine_n(6, "weighted/", res_name, ipv6 ? "/ipv6/" : "/ipv4/", item_name, "/", addrset->svc_names[i]);
+        res_item->as[0].indices[i] = gdnsd_mon_addr(desc, addrset->svc_names[i], &res_item->as[0].addr);
+        free(desc);
     }
     log_debug("plugin_weighted: resource '%s' (%s), item '%s': A '%s' added w/ weight %u", res_name, stanza, item_name, addr_txt, res_item->weight);
 }
@@ -200,8 +189,6 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
     const char* stanza = iaga->stanza;
     const char* item_name = iaga->item_name;
     const bool ipv6 = iaga->ipv6;
-    const unsigned res_name_len = strlen(res_name);
-    const unsigned item_name_len = strlen(item_name);
 
     long lb_weight = 0;
     if(!vscf_is_array(lb_data)
@@ -212,7 +199,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
             || lb_weight < 1 || lb_weight > MAX_WEIGHT )
         log_fatal("plugin_weighted: resource '%s', group '%s': values in address group mode must be arrays of [ IPADDR, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, item_name);
 
-    res_item->as[lb_idx].states = calloc(addrset->num_svcs, sizeof(mon_state_t));
+    res_item->as[lb_idx].indices = malloc(addrset->num_svcs * sizeof(unsigned));
     res_item->as[lb_idx].weight = lb_weight;
 
     const char* addr_txt = vscf_simple_get_data(vscf_array_get_data(lb_data, 0));
@@ -225,15 +212,10 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
     for(unsigned i = 0; i < addrset->num_svcs; i++) {
-        const unsigned svc_name_len = strlen(addrset->svc_names[i]);
-        char *complete_desc = malloc(res_name_len + 1 + 4 + 1 + item_name_len + 1 + lb_name_len + 1 + svc_name_len + 1);
-        sprintf(complete_desc, "%s/%s/%s/%s/%s", res_name, ipv6 ? "ipv6" : "ipv4", item_name, lb_name, addrset->svc_names[i]);
-        mon_list.info = realloc(mon_list.info, sizeof(mon_info_t) * (mon_list.count + 1));
-        mon_info_t* m = &mon_list.info[mon_list.count++];
-        m->svctype = addrset->svc_names[i];
-        m->desc = complete_desc;
-        m->addr = addr_txt;
-        m->state_ptr = &res_item->as[lb_idx].states[i];
+        char* desc = gdnsd_str_combine_n(8, "weighted/", res_name, ipv6 ? "/ipv6/" : "/ipv4/",
+            item_name, "/", lb_name, "/", addrset->svc_names[i]);
+        res_item->as[lb_idx].indices[i] = gdnsd_mon_addr(desc, addrset->svc_names[i], &res_item->as[lb_idx].addr);
+        free(desc);
     }
 
     log_debug("plugin_weighted: resource '%s' (%s), item '%s', address %s added with weight %u", res_name, stanza, item_name, addr_txt, res_item->as[lb_idx].weight);
@@ -637,7 +619,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
 
 ////// exported callbacks start here
 
-mon_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
+void plugin_weighted_load_config(const vscf_data_t* config) {
     dmn_assert(config);
     dmn_assert(vscf_is_hash(config));
 
@@ -652,7 +634,6 @@ mon_list_t* plugin_weighted_load_config(const vscf_data_t* config) {
     resources = calloc(num_resources, sizeof(resource_t));
     unsigned idx = 0;
     vscf_hash_iterate(config, true, config_res, &idx);
-    return &mon_list;
 }
 
 void plugin_weighted_full_config(const unsigned num_threads) {
@@ -690,7 +671,7 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* origin) {
 
 void plugin_weighted_iothread_init(const unsigned threadnum) { init_rand(threadnum); }
 
-static bool resolve_cname(const resource_t* resource, const uint8_t* origin, dyn_result_t* result, const unsigned threadnum) {
+static gdnsd_sttl_t resolve_cname(const resource_t* resource, const uint8_t* origin, dyn_result_t* result, const unsigned threadnum) {
     dmn_assert(resource); dmn_assert(origin); dmn_assert(result);
 
     cnset_t* cnset = resource->cnames;
@@ -716,12 +697,12 @@ static bool resolve_cname(const resource_t* resource, const uint8_t* origin, dyn
         dmn_assert(dname_status(result->cname) == DNAME_VALID);
     }
 
-    return true;
+    return GDNSD_STTL_TTL_MASK;
 }
 
 F_NONNULL
-static bool resolve(const unsigned threadnum, const addrset_t* aset, dyn_result_t* result, bool* cut_ttl_ptr) {
-    dmn_assert(aset); dmn_assert(result); dmn_assert(cut_ttl_ptr);
+static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadnum, const addrset_t* aset, dyn_result_t* result) {
+    dmn_assert(aset); dmn_assert(result);
 
     const unsigned num_items = aset->count;
     unsigned dyn_items_sum = 0; // sum of dyn_item_sums[]
@@ -730,33 +711,32 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dyn_result_
     unsigned dyn_item_maxs[cfg_max_items_per_res]; // max of dyn_addr_weights[N][]
     // addr cfg weight or 0, depends on status:
     unsigned dyn_addr_weights[cfg_max_items_per_res][cfg_max_addrs_per_group];
-    bool rv = true;
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK;
 
     // Get dynamic info about each item
-    for(unsigned item_idx = 0; item_idx < aset->count; item_idx++) {
+    for(unsigned item_idx = 0; item_idx < num_items; item_idx++) {
         const res_aitem_t* res_item = &aset->items[item_idx];
         dyn_item_sums[item_idx] = 0;
         dyn_item_maxs[item_idx] = 0;
         for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
             const addrstate_t* addr = &res_item->as[addr_idx];
-            const mon_state_uint_t addr_state
-                = gdnsd_mon_get_min_state(addr->states, aset->num_svcs);
-            if(addr_state != MON_STATE_UP)
-                *cut_ttl_ptr = true;
-            if(addr_state != MON_STATE_DOWN) {
+            const gdnsd_sttl_t addr_sttl
+                = gdnsd_sttl_min(sttl_tbl, addr->indices, aset->num_svcs);
+            rv = gdnsd_sttl_min2(rv, addr_sttl);
+            if(addr_sttl & GDNSD_STTL_DOWN) {
+                dyn_addr_weights[item_idx][addr_idx] = 0;
+            }
+            else {
                 dyn_addr_weights[item_idx][addr_idx] = addr->weight;
                 dyn_item_sums[item_idx] += addr->weight;
                 if(addr->weight > dyn_item_maxs[item_idx])
                     dyn_item_maxs[item_idx] = addr->weight;
             }
-            else {
-                dyn_addr_weights[item_idx][addr_idx] = 0;
-            }
         }
     }
 
     // summarize dynamic info at the resource level
-    for(unsigned item_idx = 0; item_idx < aset->count; item_idx++) {
+    for(unsigned item_idx = 0; item_idx < num_items; item_idx++) {
         const unsigned isum = dyn_item_sums[item_idx];
         dyn_items_sum += isum;
         if(dyn_items_max < isum)
@@ -764,8 +744,8 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dyn_result_
     }
 
     // if all items looked completely-down, treat them all as completely-up
-    if(!dyn_items_sum) {
-        rv = false;
+    if(dyn_items_sum < aset->up_weight) {
+        rv |= GDNSD_STTL_DOWN;
         dyn_items_sum = aset->weight;
         dyn_items_max = aset->max_weight;
         for(unsigned item_idx = 0; item_idx < num_items; item_idx++) {
@@ -775,6 +755,9 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dyn_result_
             for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++)
                 dyn_addr_weights[item_idx][addr_idx] = res_item->as[addr_idx].weight;
         }
+    }
+    else {
+        rv &= ~GDNSD_STTL_DOWN;
     }
 
     dmn_assert(dyn_items_sum);
@@ -822,40 +805,42 @@ static bool resolve(const unsigned threadnum, const addrset_t* aset, dyn_result_
         }
     }
 
-    return dyn_items_sum < aset->up_weight ? false : rv;
-}
-
-F_NONNULL
-static bool resolve_addr(const resource_t* resource, dyn_result_t* result, const unsigned threadnum) {
-    dmn_assert(result); dmn_assert(resource);
-    dmn_assert(resource->addrs_v4 || resource->addrs_v6);
-
-    bool cut_ttl = false;
-    bool rv = true;
-
-    if(resource->addrs_v4) {
-        rv &= resolve(threadnum, resource->addrs_v4, result, &cut_ttl);
-        dmn_assert(result->a.count_v4);
-    }
-
-    if(resource->addrs_v6) {
-        rv &= resolve(threadnum, resource->addrs_v6, result, &cut_ttl);
-        dmn_assert(result->a.count_v6);
-    }
-
-    if(cut_ttl)
-        result->ttl >>= 1;
-
+    assert_valid_sttl(rv);
     return rv;
 }
 
-bool plugin_weighted_resolve(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+F_NONNULL
+static gdnsd_sttl_t resolve_addr(const resource_t* res, dyn_result_t* result, const unsigned threadnum) {
+    dmn_assert(result); dmn_assert(res);
+
+    const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
+
+    gdnsd_sttl_t rv;
+
+    dmn_assert(res->addrs_v4 || res->addrs_v6);
+
+    if(res->addrs_v4) {
+        rv = resolve(sttl_tbl, threadnum, res->addrs_v4, result);
+        if(res->addrs_v6) {
+            const gdnsd_sttl_t v6_rv = resolve(sttl_tbl, threadnum, res->addrs_v6, result);
+            rv = gdnsd_sttl_min2(rv, v6_rv);
+        }
+    }
+    else if(res->addrs_v6) {
+        rv = resolve(sttl_tbl, threadnum, res->addrs_v6, result);
+    }
+
+    assert_valid_sttl(rv);
+    return rv;
+}
+
+gdnsd_sttl_t plugin_weighted_resolve(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     dmn_assert(result);
 
     const resource_t* resource = &resources[resnum];
     dmn_assert(resource);
 
-    bool rv;
+    gdnsd_sttl_t rv;
 
     if(resource->cnames) {
         dmn_assert(origin); // map_res validates this
@@ -865,5 +850,6 @@ bool plugin_weighted_resolve(unsigned threadnum, unsigned resnum, const uint8_t*
         rv = resolve_addr(resource, result, threadnum);
     }
 
+    assert_valid_sttl(rv);
     return rv;
 }

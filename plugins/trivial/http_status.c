@@ -49,12 +49,13 @@ typedef enum {
 } http_state_t;
 
 typedef struct {
+    const char* desc;
     http_svc_t* http_svc;
     ev_io* read_watcher;
     ev_io* write_watcher;
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
-    mon_smgr_t* smgr;
+    unsigned idx;
     anysin_t addr;
     char res_buf[14];
     int sock;
@@ -90,7 +91,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     dmn_assert(!ev_is_active(md->write_watcher));
     dmn_assert(!ev_is_active(md->timeout_watcher));
 
-    log_debug("plugin_http_status: Starting state poll of %s", md->smgr->desc);
+    log_debug("plugin_http_status: Starting state poll of %s", md->desc);
 
     do {
         const bool isv6 = md->addr.sa.sa_family == AF_INET6;
@@ -138,9 +139,9 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     } while(0);
 
     // This is only reachable via "break"'s above, which indicate an immediate failure
-    log_debug("plugin_http_status: State poll of %s failed very quickly", md->smgr->desc);
+    log_debug("plugin_http_status: State poll of %s failed very quickly", md->desc);
     md->hstate = HTTP_STATE_WAITING;
-    gdnsd_mon_state_updater(md->smgr, false);
+    gdnsd_mon_state_updater(md->idx, false);
 }
 
 F_NONNULL
@@ -176,12 +177,12 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
                     log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errnum(so_error));
             }
 
-            log_debug("plugin_http_status: State poll of %s failed quickly: %s", md->smgr->desc, logf_errnum(so_error));
+            log_debug("plugin_http_status: State poll of %s failed quickly: %s", md->desc, logf_errnum(so_error));
             close(sock); md->sock = -1;
             ev_io_stop(loop, md->write_watcher);
             ev_timer_stop(loop, md->timeout_watcher);
             md->hstate = HTTP_STATE_WAITING;
-            gdnsd_mon_state_updater(md->smgr, false);
+            gdnsd_mon_state_updater(md->idx, false);
             return;
         }
         md->already_connected = true;
@@ -210,7 +211,7 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
         ev_io_stop(loop, md->write_watcher);
         ev_timer_stop(loop, md->timeout_watcher);
         md->hstate = HTTP_STATE_WAITING;
-        gdnsd_mon_state_updater(md->smgr, false);
+        gdnsd_mon_state_updater(md->idx, false);
     }
     if(unlikely(sent != (signed)to_send)) {
         md->done += sent;
@@ -275,14 +276,14 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
     // I don't believe we actually need to read the rest of the response before
     //   shutdown/close in order to avoid bad TCP behavior, but I could be wrong.
 
-    log_debug("plugin_http_status: State poll of %s %s", md->smgr->desc, final_status ? "succeeded" : "failed");
+    log_debug("plugin_http_status: State poll of %s %s", md->desc, final_status ? "succeeded" : "failed");
     shutdown(md->sock, SHUT_RDWR);
     close(md->sock);
     md->sock = -1;
     ev_io_stop(loop, md->read_watcher);
     ev_timer_stop(loop, md->timeout_watcher);
     md->hstate = HTTP_STATE_WAITING;
-    gdnsd_mon_state_updater(md->smgr, final_status);
+    gdnsd_mon_state_updater(md->idx, final_status);
 }
 
 F_NONNULL
@@ -299,14 +300,14 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
      || (md->hstate == HTTP_STATE_WRITING && ev_is_active(md->write_watcher))
     );
 
-    log_debug("plugin_http_status: State poll of %s timed out", md->smgr->desc);
+    log_debug("plugin_http_status: State poll of %s timed out", md->desc);
     if(md->hstate == HTTP_STATE_READING) ev_io_stop(loop, md->read_watcher);
     else if(md->hstate == HTTP_STATE_WRITING) ev_io_stop(loop, md->write_watcher);
     shutdown(md->sock, SHUT_RDWR);
     close(md->sock);
     md->sock = -1;
     md->hstate = HTTP_STATE_WAITING;
-    gdnsd_mon_state_updater(md->smgr, false);
+    gdnsd_mon_state_updater(md->idx, false);
 }
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
@@ -397,10 +398,12 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_http_status_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
-    dmn_assert(svc_name); dmn_assert(smgr);
+void plugin_http_status_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
 
     http_events_t* this_mon = calloc(1, sizeof(http_events_t));
+    this_mon->desc = strdup(desc);
+    this_mon->idx = idx;
 
     for(unsigned i = 0; i < num_http_svcs; i++) {
         if(!strcmp(service_types[i].name, svc_name)) {
@@ -411,7 +414,7 @@ void plugin_http_status_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
 
     dmn_assert(this_mon->http_svc);
 
-    memcpy(&this_mon->addr, &smgr->addr, sizeof(anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(anysin_t));
     if(this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->http_svc->port);
     }
@@ -420,7 +423,6 @@ void plugin_http_status_add_monitor(const char* svc_name, mon_smgr_t* smgr) {
         this_mon->addr.sin6.sin6_port = htons(this_mon->http_svc->port);
     }
 
-    this_mon->smgr = smgr;
     this_mon->hstate = HTTP_STATE_WAITING;
     this_mon->sock = -1;
 

@@ -51,7 +51,7 @@ int plugin_reflect_map_res(const char* resname, const uint8_t* origin V_UNUSED) 
     return -1;
 }
 
-bool plugin_reflect_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result) {
+gdnsd_sttl_t plugin_reflect_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result) {
     dmn_assert(resnum < NUM_RTYPES);
     dmn_assert(!result->is_cname);
     dmn_assert(0 == (result->a.count_v4 + result->a.count_v6));
@@ -93,5 +93,5 @@ bool plugin_reflect_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const 
 
     dmn_assert(result->a.count_v4 + result->a.count_v6);
 
-    return true;
+    return GDNSD_STTL_TTL_MASK;
 }
