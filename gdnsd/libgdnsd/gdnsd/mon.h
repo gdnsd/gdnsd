@@ -20,77 +20,71 @@
 #ifndef GDNSD_MON_H
 #define GDNSD_MON_H
 
-// For stats_t, etc...
-#include <gdnsd/stats.h>
+#include <inttypes.h>
+
+// For anysin stuff
 #include <gdnsd/net.h>
-
-/* mon_state == stats, but these define
- * wrappers may make it easier if we
- * have to move to another mechanism
- * later.
- */
-#define MON_STATE_UNINIT 0
-#define MON_STATE_DOWN   1
-#define MON_STATE_DANGER 2
-#define MON_STATE_UP     3
-typedef stats_t mon_state_t;
-typedef stats_uint_t mon_state_uint_t;
-
-F_NONNULL
-mon_state_uint_t gdnsd_mon_get_min_state(const mon_state_t* states, const unsigned num_states);
-
-// Your plugin owns all of the storage within or pointed to
-//  by mon_list_t, and it must be durable storage
-//  at the time _load_config() returns.  You are free to destroy
-//  it during later callbacks, keeping in mind that the actual
-//  mon_state_t pointed to by mon_info_t.state_ptr must
-//  exist during normal operations for the monitoring code to
-//  send status updates through.  It can only be de-allocated
-//  at plugin _exit() time.
-// It is also permissible for pointers inside of mon_list_t to
-//  directly reference temporary storage from vscf, (e.g. the
-//  "const char*" returned by vscf_simple_get_data()), as the
-//  vscf config tree won't be destroyed until the daemon is
-//  done processing your mon_list_t.
-
-// If svctype_name is NULL, it will be interpreted as "default".
-// Other arguments are required.
-// "desc" is just descriptive, used for stats/log output.
-
-typedef struct {
-    const char* svctype;
-    const char* desc;
-    const char* addr;
-    mon_state_t* state_ptr;
-} mon_info_t;
-
-typedef struct {
-    unsigned count;
-    mon_info_t* info;
-} mon_list_t;
-
-// This is for monitoring plugins rather than resolver plugins.  Most
-//   plugins will want to treat it as mostly opaque other than using
-//   "desc" for log/debug output, and reading "addr" during
-//   the _add_monitor callback (copying it for use in your own data).
-typedef struct _service_type_struct service_type_t;
-typedef struct {
-    anysin_t addr;
-    mon_state_t** mon_state_ptrs;
-    service_type_t* svc_type;
-    const char* desc;
-    unsigned num_state_ptrs;
-    unsigned up_thresh;
-    unsigned ok_thresh;
-    unsigned down_thresh;
-    unsigned n_failure;
-    unsigned n_success;
-} mon_smgr_t;
 
 // Plugins call this helper after every raw state check of a monitored
 //   address, so that it can manage long-term state.
 // latest -> 0 failed, 1 succeeded
 F_NONNULL
-void gdnsd_mon_state_updater(mon_smgr_t* smgr, const bool latest);
+void gdnsd_mon_state_updater(unsigned idx, const bool latest);
+
+// gdnsd_sttl_t
+//  sttl -> state+ttl
+//  high-bit is down flag (1 = down, 0 = up)
+//  next-bit is forced flag (1 = forced, 0 = unforced)
+//    (note that forced means by an administrative action - fixed
+//     default states like servicetype "down" or default-up for CNAME
+//     are not considered "forced")
+//  next 2 bits reserved for future use (set to zero, ignored on read)
+//  remaining 28 bits are unsigned TTL (max value ~8.5 years)
+typedef uint32_t gdnsd_sttl_t;
+
+#define GDNSD_STTL_DOWN          (1U << 31U)
+#define GDNSD_STTL_RESERVED_MASK (7U << 28U)
+#define GDNSD_STTL_TTL_MASK      ((1U << 28U) - 1U)
+
+// the only hard rule on this data type is zero in the reserved bits for now
+#define assert_valid_sttl(_x) dmn_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
+
+// called during load_config to register address healthchecks, returns
+//   an index to check state with...
+unsigned gdnsd_mon_addr(const char* desc, const char* svctype_name, const anysin_t* addr);
+
+// admin-only state registration.  plugin constructs desc
+//   within its own scope, e.g.
+//     "resname/www.foo.com" for a CNAME, or
+//     "resname" for a whole-resource virtual, or
+//     "resname/dcname" for a datacenter virtual.
+unsigned gdnsd_mon_admin(const char* desc);
+
+// State-fetching (one table call per resolve invocation, reused
+//   for as many index fetches as necc)
+const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void);
+
+// Given two sttl values, combine them according to the following rules:
+//   1) result TTL is the lesser of both TTLs
+//   2) if either is down, result is down
+// This is meant to be used to combine parallel results, e.g. two
+//   service checks on the same IP address.
+static inline gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_sttl_t b) {
+    const gdnsd_sttl_t a_ttl = a & GDNSD_STTL_TTL_MASK;
+    const gdnsd_sttl_t b_ttl = b & GDNSD_STTL_TTL_MASK;
+    const gdnsd_sttl_t down = (a | b) & GDNSD_STTL_DOWN;
+    return (a_ttl < b_ttl) ? (down | a_ttl) : (down | b_ttl);
+}
+
+// As above, but generalized to an array of table indices to support merging
+//   several different service_type checks against a single IP for
+//   a single resource.  Note that idx_ary_len==0 is illegal.
+static inline gdnsd_sttl_t gdnsd_sttl_min(const gdnsd_sttl_t* sttl_tbl, const unsigned* idx_ary, const unsigned idx_ary_len) {
+    dmn_assert(idx_ary_len);
+    gdnsd_sttl_t rv = sttl_tbl[idx_ary[0]];
+    for(unsigned i = 1; i < idx_ary_len; i++)
+        rv = gdnsd_sttl_min2(rv, sttl_tbl[idx_ary[i]]);
+    return rv;
+}
 
 #endif // GDNSD_MON_H

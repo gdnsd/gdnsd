@@ -32,7 +32,7 @@
 // For anysin_t
 #include <gdnsd/net.h>
 
-// For mon_list_t
+// For gdnsd_sttl_t
 #include <gdnsd/mon.h>
 
 /***
@@ -58,7 +58,6 @@ typedef struct {
 
 // Result structure for dynamic resolution plugins
 typedef struct {
-    uint32_t ttl;             // from zonefile, can modify
     unsigned edns_scope_mask; // inits to zero.
                               // If your plugin ignores (or ignored in this case) all of client_info_t, leave it zero
                               // If your plugin uses client_info_t.dns_source but ignores (or doesn't use for this
@@ -84,20 +83,20 @@ void gdnsd_dyn_add_result_anysin(dyn_result_t* result, const anysin_t* asin);
 /**** Typedefs for plugin callbacks ****/
 
 typedef unsigned (*gdnsd_apiv_cb_t)(void);
-typedef mon_list_t* (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
+typedef void (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
 typedef void (*gdnsd_pre_privdrop_cb_t)(void);
 typedef void (*gdnsd_post_daemonize_cb_t)(void);
 typedef void (*gdnsd_pre_run_cb_t)(struct ev_loop* loop);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
-typedef bool (*gdnsd_resolve_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
+typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 typedef void (*gdnsd_exit_cb_t)(void);
 
 /**** New callbacks for monitoring plugins ****/
 
 typedef void (*gdnsd_add_svctype_cb_t)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
-typedef void (*gdnsd_add_monitor_cb_t)(const char* svc_name, mon_smgr_t* smgr);
+typedef void (*gdnsd_add_monitor_cb_t)(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx);
 typedef void (*gdnsd_init_monitors_cb_t)(struct ev_loop* mon_loop);
 typedef void (*gdnsd_start_monitors_cb_t)(struct ev_loop* mon_loop);
 

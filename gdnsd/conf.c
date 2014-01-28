@@ -18,13 +18,13 @@
  */
 
 #include "conf.h"
-#include "monio.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 #include "gdnsd/misc.h"
 #include "gdnsd/log.h"
 #include "gdnsd/paths.h"
 #include "gdnsd/plugapi-priv.h"
+#include "gdnsd/mon-priv.h"
 
 #include <unistd.h>
 #include <string.h>
@@ -40,9 +40,6 @@
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
-
-static unsigned num_mon_lists = 0;
-static mon_list_t** mon_lists = NULL;
 
 static const char DEF_USERNAME[] = PACKAGE_NAME;
 
@@ -132,27 +129,12 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
     if(pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
-    if(!strcmp(name, "georeg"))
+    if(!strcmp(name, "georeg")) // XXX kill this when removing deprecated stuff
         log_fatal("plugin_georeg is DEAD, use the included plugin_geoip instead");
 
     const plugin_t* plugin = gdnsd_plugin_load(name);
-    if(plugin->load_config) {
-        mon_list_t* mlist = plugin->load_config(pconf);
-        if(mlist) {
-            for(unsigned i = 0; i < mlist->count; i++) {
-                mon_info_t* m = &mlist->info[i];
-                if(!m->desc)
-                    log_fatal("Plugin '%s' bug: mon_info_t.desc is required", plugin->name);
-                if(!m->addr)
-                    log_fatal("Plugin '%s' bug: '%s' mon_info_t.addr is required", plugin->name, m->desc);
-                if(!m->state_ptr)
-                    log_fatal("Plugin '%s' bug: '%s' mon_info_t.state_ptr is required", plugin->name, m->desc);
-            }
-            const unsigned this_monio_idx = num_mon_lists++;
-            mon_lists = realloc(mon_lists, num_mon_lists * sizeof(mon_list_t*));
-            mon_lists[this_monio_idx] = mlist;
-        }
-    }
+    if(plugin->load_config)
+        plugin->load_config(pconf);
 }
 
 F_NONNULLX(1,3)
@@ -671,6 +653,13 @@ void conf_load(const bool force_zss, const bool force_zsd) {
     // Initial setup of the listener data
     process_listen(listen_opt, &addr_defs);
 
+    const vscf_data_t* stypes_cfg = cfg_root
+        ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
+        : NULL;
+
+    // Phase 1 of service_types config
+    gdnsd_mon_cfg_stypes_p1(stypes_cfg);
+
     gdnsd_plugins_set_search_path(psearch_array);
 
     // Load plugins
@@ -694,41 +683,12 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         vscf_hash_iterate(plugins_hash, true, load_plugin_iter, NULL);
     }
 
-    // Create servicetypes, which may reference already-loaded plugins, or autoload new ones
-    // We only do this if we've actually got resources to monitor, because otherwise plugin_search_path
-    //   might have to be correct unnecessarily, and it also avoids the unnecessary load of http_status
-    //   and other work.  A consequence is that the service_types config stanza is not checked for
-    //   syntax errors unless monitoring is actually in use.
-    const vscf_data_t* stypes_cfg = cfg_root
-        ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
-        : NULL;
-    if(num_mon_lists)
-        monio_add_servicetypes(stypes_cfg);
+    // Phase 2 of service_types config
+    gdnsd_mon_cfg_stypes_p2(stypes_cfg, gconfig.monitor_force_v6_up);
 
-    // Finally, process the mon_list_t's from plugins *after* servicetypes are available.
-    // This order of operations wrt loading the plugins stanza, then the servicetypes,
-    //   and then finally doing deferred processing of mon_list_t's from all plugin
-    //   _load_config()s gaurantees things like having a single plugin take on both roles
-    //   actually works, even with autoloaded plugins.
-    // Technically, we could even allow autoloading of address/cname-resolving plugins as
-    //   as well, assumming they needed no config at the plugin-global level, and it will
-    //   actually happen in the case of an autoloaded dual-purpose module with no global
-    //   plugins-stanza config.  It's not worth trying to explcitily support it in other
-    //   cases though because (a) it will lead to a crash with older address/cname-only
-    //   plugins that don't expect a NULL config argument, and (b) most addr/cname plugins
-    //   are going to need *some* kind of config anyways.
+    // register a hook for plugin cleanup callbacks
     if(atexit(plugins_cleanup))
         log_fatal("atexit(plugins_cleanup) failed: %s", logf_errno());
-    for(unsigned i = 0; i < num_mon_lists; i++) {
-        mon_list_t* mlist = mon_lists[i];
-        if(mlist) {
-            for(unsigned j = 0; j < mlist->count; j++) {
-                mon_info_t* m = &mlist->info[j];
-                dmn_assert(m->desc && m->addr && m->state_ptr);
-                monio_add_addr(m->svctype, m->desc, m->addr, m->state_ptr);
-            }
-        }
-    }
 
     // Throw an error if there are any other unretrieved root config keys
     if(cfg_root) {

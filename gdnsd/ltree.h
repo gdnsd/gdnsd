@@ -190,10 +190,10 @@ struct _ltree_rrset_gen_struct {
     ltree_rrset_t* next;
     uint32_t ttl;
     uint16_t type;
-    // Most rr-types only use "count" below.  For rr-types which
-    //  can resolve via dynamic plugin (addr, cname), a count of
-    //  zero implies dynamic resolution (hence "is_static" for semantic
-    //  clarity).  count_v4/count_v6 is a split count used by addr.
+    // Most rr-types only use "count" below.
+    // For rrset_addr, count_v4/count_v6 are the split
+    //  counts for IPv4/IPv6, and both being zero gives
+    //  !is_static, indicating a DYNA RR for plugin resolution.
     union {
         uint16_t count;
         uint16_t is_static;

@@ -41,7 +41,6 @@
 #include "dnsio_udp.h"
 #include "dnspacket.h"
 #include "statio.h"
-#include "monio.h"
 #include "ztree.h"
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
@@ -50,6 +49,7 @@
 #include "gdnsd/net-priv.h"
 #include "gdnsd/misc-priv.h"
 #include "gdnsd/paths-priv.h"
+#include "gdnsd/mon-priv.h"
 
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
@@ -581,8 +581,8 @@ int main(int argc, char** argv) {
     ev_set_timeout_collect_interval(def_loop, 0.1);
     ev_set_io_collect_interval(def_loop, 0.01);
 
-    // set up monio, which expects an initially empty loop
-    monio_start(def_loop);
+    // set up monitoring, which expects an initially empty loop
+    gdnsd_mon_start(def_loop);
 
     // initialize the libev-based signal handlers
     setup_signals(def_loop);

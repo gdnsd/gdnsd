@@ -29,8 +29,8 @@
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 #include "dnspacket.h"
-#include "monio.h"
 #include "gdnsd/log.h"
+#include "gdnsd/mon-priv.h"
 
 // Macro to add an offset to a void* portably...
 #define ADDVOID(_vstar,_offs) ((void*)(((char*)(_vstar)) + _offs))
@@ -166,7 +166,6 @@ static const char html_fixed[] =
     "th,td { border-width: 2px; border-style: inset }\r\n"
     "th { background: #CCF; font-weight: bold }\r\n"
     "td.UP { background: #AFA }\r\n"
-    "td.DANGER { background: #FC9 }\r\n"
     "td.DOWN { background: #FAA }\r\n"
     "</style></head><body>\r\n"
     "<h2>" PACKAGE_NAME "/" PACKAGE_VERSION "</h2>\r\n"
@@ -298,7 +297,7 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs) {
 
     outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, (uint64_t)pop_statio_time - start_time, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
-    outbufs[1].iov_len += monio_stats_out_csv(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
+    outbufs[1].iov_len += gdnsd_mon_stats_out_csv(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "text/plain", (unsigned)outbufs[1].iov_len);
 }
 
@@ -311,7 +310,7 @@ static void statio_fill_outbuf_json(struct iovec* outbufs) {
 
     outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, json_fixed, (uint64_t)pop_statio_time - start_time, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
-    outbufs[1].iov_len += monio_stats_out_json(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
+    outbufs[1].iov_len += gdnsd_mon_stats_out_json(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_footer, (sizeof(json_footer)) - 1);
     outbufs[1].iov_len += (sizeof(json_footer)-1);
     outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/json", (unsigned)outbufs[1].iov_len);
@@ -332,7 +331,7 @@ static void statio_fill_outbuf_html(struct iovec* outbufs) {
 
     outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_uptime(pop_statio_time), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
-    outbufs[1].iov_len += monio_stats_out_html(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
+    outbufs[1].iov_len += gdnsd_mon_stats_out_html(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), html_footer, (sizeof(html_footer)) - 1);
     outbufs[1].iov_len += (sizeof(html_footer)-1);
     outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/xhtml+xml", (unsigned)outbufs[1].iov_len);
@@ -604,7 +603,7 @@ void statio_init(void) {
         + (25 - 2)                      // max asctime output - 2 for the original %s
         + (IVAL_BUFSZ - 2)              // max fmt_uptime output, again - 2 for %s
         + (19 * (stat_len - strlen(PRIuPTR))) // 19 stats, up to 20 bytes long each
-        + monio_get_max_stats_len()     // whatever monio tells us...
+        + gdnsd_mon_stats_get_max_len() // whatever mon.c tells us...
         + (sizeof(html_footer) - 1);    // html_footer fixed string
 
     // now set up the normal stuff, like libev event watchers

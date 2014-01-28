@@ -77,7 +77,7 @@ F_CONST
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
 
-mon_list_t* SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(const vscf_data_t* config);
+void SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(const vscf_data_t* config);
 int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
 void SYM_FULL_CONFIG(GDNSD_PLUGIN_NAME)(unsigned num_threads);
 void SYM_POST_DAEMON(GDNSD_PLUGIN_NAME)(void);
@@ -86,12 +86,12 @@ F_NONNULL
 void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(struct ev_loop* loop);
 void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(unsigned threadnum);
 F_NONNULLX(4,5)
-bool SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
+gdnsd_sttl_t SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
 F_NONNULLX(1)
 void SYM_ADD_SVC(GDNSD_PLUGIN_NAME)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 F_NONNULL
-void SYM_ADD_MON(GDNSD_PLUGIN_NAME)(const char* svc_name, mon_smgr_t* smgr);
+void SYM_ADD_MON(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx);
 F_NONNULL
 void SYM_INIT_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 F_NONNULL
