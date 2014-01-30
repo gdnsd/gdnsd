@@ -31,6 +31,11 @@
 F_MALLOC F_NONNULLX(1,2) F_WUNUSED
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
 
+// allocate a new string and concatenate all "count" strings
+//   from the args list into it.
+F_MALLOC F_NONNULL F_WUNUSED
+char* gdnsd_str_combine_n(const unsigned count, ...);
+
 // PRNG:
 // gdnsd_rand_init() allocates an opaque PRNG state which can
 //   be later free()'d when no longer required.

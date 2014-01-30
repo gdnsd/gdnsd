@@ -26,6 +26,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdarg.h>
 #include <limits.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
@@ -51,6 +52,39 @@ char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
     return out;
 }
 
+// this isn't meant to be high-speed or elegant, it's just
+//   saving a lot of mundane grunt-code during configuration stuff
+
+typedef struct {
+   const char* ptr;
+   unsigned len;
+} str_with_len_t;
+
+char* gdnsd_str_combine_n(const unsigned count, ...) {
+    str_with_len_t strs[count];
+    unsigned oal = 1; // for terminating NUL
+
+    va_list ap;
+    va_start(ap, count);
+    for(unsigned i = 0; i < count; i++) {
+        const char* s = va_arg(ap, char*);
+        const unsigned l = strlen(s);
+        strs[i].ptr = s;
+        strs[i].len = l;
+        oal += l;
+    }
+    va_end(ap);
+
+    char* out = malloc(oal);
+    char* cur = out;
+    for(unsigned i = 0; i < count; i++) {
+        memcpy(cur, strs[i].ptr, strs[i].len);
+        cur += strs[i].len;
+    }
+    *cur = '\0';
+
+    return out;
+}
 
 /***************
  * This Public-Domain JLKISS64 PRNG implementation is from:
