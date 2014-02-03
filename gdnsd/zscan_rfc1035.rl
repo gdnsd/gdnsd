@@ -75,6 +75,7 @@ typedef struct {
     unsigned def_ttl;
     unsigned uval;
     unsigned ttl;
+    unsigned ttl_min;
     unsigned uv_1;
     unsigned uv_2;
     unsigned uv_3;
@@ -409,7 +410,7 @@ static void rec_spftxt(zscan_t* z) {
 F_NONNULL
 static void rec_dyna(zscan_t* z) {
     dmn_assert(z);
-    if(ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->eml_dname, z->ttl, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
+    if(ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->eml_dname, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -417,7 +418,7 @@ F_NONNULL
 static void rec_dync(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_dync(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl, z->limit_v4, z->limit_v6))
+    if(ltree_add_rec_dync(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -512,8 +513,10 @@ static void close_paren(zscan_t* z) {
     action mult_uval { mult_uval(z, fc); }
 
     action set_ttl     { z->ttl  = z->uval; }
+    action set_ttl_dyn { z->ttl  = z->uv_1; z->ttl_min = z->uv_2 ? z->uv_2 : z->uv_1 >> 1; }
     action set_def_ttl { z->def_ttl = z->uval; }
     action use_def_ttl { z->ttl  = z->def_ttl; }
+    action use_def_ttl_dyn { z->ttl  = z->def_ttl; z->ttl_min = z->def_ttl >> 1; z->uv_2 = 0; }
     action set_uv_1    { z->uv_1 = z->uval; }
     action set_uv_2    { z->uv_2 = z->uval; }
     action set_uv_3    { z->uv_3 = z->uval; }
@@ -618,6 +621,7 @@ static void close_paren(zscan_t* z) {
     uval      = digit+ >token_start %set_uval;
     uval_mult = [MHDWmhdw] @mult_uval;
     ttl       = (uval uval_mult?);
+    ttl_dyn   = (uval uval_mult? %set_uv_1) ('/' uval uval_mult? %set_uv_2)?;
 
     # IPv[46] Addresses.  Note that while they are not very
     #  very precise, anything bad that gets past them will still
@@ -646,6 +650,12 @@ static void close_paren(zscan_t* z) {
         | ('IN'i ws (ttl %set_ttl ws)?)
     )?;
 
+    # Separate version for DYN[AC] to support TTLs of the form max[/min]
+    rr_lhs_dyn = dname_lhs? ws %use_def_ttl_dyn (
+          (ttl_dyn %set_ttl_dyn ws ('IN'i ws)?)
+        | ('IN'i ws (ttl_dyn %set_ttl_dyn ws)?)
+    )?;
+
     # The rest of a resource record: RR-type and RR-type-specific RDATA.
     # The final actions of each match here invoke ltree code to insert
     #  data into the runtime data structures.
@@ -662,16 +672,20 @@ static void close_paren(zscan_t* z) {
         | ('SRV'i   ws uval %set_uv_1 ws uval %set_uv_2
                     ws uval %set_uv_3 ws dname_rhs) %rec_srv
         | ('NAPTR'i ws naptr_rdata) %rec_naptr
-        | ('DYNA'i  ws dyna_rdata) %rec_dyna
-        | ('DYNC'i  ws dyna_rdata) %rec_dync
         | ('SOA'i   ws dname_rhs ws dname_eml ws ttl %set_uv_1
                     ws ttl %set_uv_2 ws ttl %set_uv_3 ws ttl %set_uv_4
                     ws ttl %set_uv_5) %rec_soa
         | ('TYPE'i  rfc3597_rdata) %rec_rfc3597
     );
 
-    # A complete resource record
-    rr = rr_lhs rr_rhs;
+    # Again, separate copy for the DYN[AC] TTL stuff
+    rr_rhs_dyn = (
+          ('DYNA'i  ws dyna_rdata) %rec_dyna
+        | ('DYNC'i  ws dyna_rdata) %rec_dync
+    );
+
+    # A complete resource record, static or dynamic
+    rr = (rr_lhs rr_rhs) | (rr_lhs_dyn rr_rhs_dyn);
 
     # A "command", the $foo directives in zonefiles
     cmd = '$' (

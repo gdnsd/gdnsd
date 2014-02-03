@@ -717,7 +717,7 @@ static unsigned int enc_aaaa_dynamic(dnspacket_context_t* c, unsigned int offset
 //   out c->dyn and cleaning up the ttl + scope_mask issues,
 //   returning the TTL to actually use, in network order.
 F_NONNULLX(1,2)
-static unsigned do_dyn_callback(dnspacket_context_t* c, gdnsd_resolve_cb_t func, const uint8_t* origin, const unsigned res, const unsigned ttl_max_net) {
+static unsigned do_dyn_callback(dnspacket_context_t* c, gdnsd_resolve_cb_t func, const uint8_t* origin, const unsigned res, const unsigned ttl_max_net, const unsigned ttl_min) {
     dmn_assert(c); dmn_assert(func);
 
     dyn_result_t* dr = c->dyn;
@@ -727,9 +727,10 @@ static unsigned do_dyn_callback(dnspacket_context_t* c, gdnsd_resolve_cb_t func,
         c->edns_client_scope_mask = dr->edns_scope_mask;
     assert_valid_sttl(sttl);
     unsigned ttl = sttl & GDNSD_STTL_TTL_MASK;
-    // XXX also clamp low side, needs rfc1035 syntax update for max/min
     if(ttl > ntohl(ttl_max_net))
         ttl = ttl_max_net;
+    else if(ttl < ttl_min)
+        ttl = htonl(ttl_min);
     else
         ttl = htonl(ttl);
     return ttl;
@@ -751,7 +752,7 @@ static unsigned int encode_rrs_anyaddr(dnspacket_context_t* c, unsigned int offs
             offset = enc_aaaa_static(c, offset, rrset, nameptr, is_addtl);
     }
     else {
-        const unsigned ttl = do_dyn_callback(c, rrset->dyn.func, NULL, rrset->dyn.resource, rrset->gen.ttl);
+        const unsigned ttl = do_dyn_callback(c, rrset->dyn.func, NULL, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
         dmn_assert(!c->dyn->is_cname);
         if(c->dyn->a.count_v4)
             offset = enc_a_dynamic(c, offset, rrset, nameptr, is_addtl, ttl);
@@ -832,7 +833,7 @@ static unsigned int encode_rrs_a(dnspacket_context_t* c, unsigned int offset, co
         }
     }
     else {
-        const unsigned ttl = do_dyn_callback(c, rrset->dyn.func, NULL, rrset->dyn.resource, rrset->gen.ttl);
+        const unsigned ttl = do_dyn_callback(c, rrset->dyn.func, NULL, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
         dmn_assert(!c->dyn->is_cname);
         if(c->dyn->a.count_v4)
             offset = enc_a_dynamic(c, offset, rrset, c->qname_comp, false, ttl);
@@ -863,7 +864,7 @@ static unsigned int encode_rrs_aaaa(dnspacket_context_t* c, unsigned int offset,
         }
     }
     else {
-        const unsigned ttl = do_dyn_callback(c, rrset->dyn.func, NULL, rrset->dyn.resource, rrset->gen.ttl);
+        const unsigned ttl = do_dyn_callback(c, rrset->dyn.func, NULL, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
         dmn_assert(!c->dyn->is_cname);
         if(c->dyn->a.count_v6)
             offset = enc_aaaa_dynamic(c, offset, rrset, c->qname_comp, false, ttl);
@@ -1638,7 +1639,7 @@ static const ltree_rrset_t* process_dync(dnspacket_context_t* c, const ltree_rrs
 
     const ltree_rrset_t* rv = NULL;
 
-    const unsigned ttl = do_dyn_callback(c, rd->func, rd->origin, rd->resource, rd->gen.ttl);
+    const unsigned ttl = do_dyn_callback(c, rd->func, rd->origin, rd->resource, rd->gen.ttl, rd->ttl_min);
     dyn_result_t* dr = c->dyn;
 
     if(dr->is_cname) {

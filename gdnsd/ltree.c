@@ -387,7 +387,7 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
     return false;
 }
 
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl, const unsigned limit_v4, const unsigned limit_v6, const bool ooz) {
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const unsigned ttl, const unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6, const bool ooz) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node;
@@ -408,6 +408,7 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8
 
     rrset = ltree_node_add_rrset_addr(node);
     rrset->gen.ttl = htonl(ttl);
+    rrset->dyn.ttl_min = ttl_min;
     rrset->limit_v4 = limit_v4;
     rrset->limit_v6 = limit_v6;
 
@@ -449,13 +450,14 @@ bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t
     return false;
 }
 
-bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, const unsigned ttl, const unsigned limit_v4, const unsigned limit_v6) {
+bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, const unsigned ttl, const unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs); dmn_assert(origin);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
     ltree_rrset_dync_t* rrset = ltree_node_add_rrset_dync(node);
     rrset->origin = lta_dnamedup(zone->arena, origin);
     rrset->gen.ttl = htonl(ttl);
+    rrset->ttl_min = ttl_min;
     rrset->limit_v4 = limit_v4;
     rrset->limit_v6 = limit_v6;
 
