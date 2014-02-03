@@ -36,6 +36,9 @@ CC="$PTHREAD_CC"
 dnl need to know endian-ness
 AC_C_BIGENDIAN
 
+dnl pointer width...
+AC_CHECK_SIZEOF(uintptr_t)
+
 dnl Apparently libtool+automake need this now, in newer versions
 dnl   which have it at all
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])

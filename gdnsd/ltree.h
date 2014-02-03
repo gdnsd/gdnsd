@@ -157,15 +157,15 @@ struct _ltree_rdata_ptr_struct {
 struct _ltree_rdata_mx_struct {
     const uint8_t* dname;
     ltree_rrset_addr_t* ad;
-    uint16_t pref;
+    uint16_t pref; // net-order
 };
 
 struct _ltree_rdata_srv_struct {
     const uint8_t* dname;
     ltree_rrset_addr_t* ad;
-    uint16_t priority;
-    uint16_t weight;
-    uint16_t port;
+    uint16_t priority; // net-order
+    uint16_t weight; // net-order
+    uint16_t port; // net-order
 };
 
 #define NAPTR_TEXTS_FLAGS 0
@@ -175,8 +175,8 @@ struct _ltree_rdata_naptr_struct {
     const uint8_t* dname;
     ltree_rrset_addr_t* ad;
     uint8_t* texts[3]; // flags, services, regexp
-    uint16_t order;
-    uint16_t pref;
+    uint16_t order; // net-order
+    uint16_t pref; // net-order
 };
 
 struct _ltree_rdata_rfc3597_struct {
@@ -188,36 +188,45 @@ struct _ltree_rdata_rfc3597_struct {
 
 struct _ltree_rrset_gen_struct {
     ltree_rrset_t* next;
-    uint32_t ttl;
-    uint16_t type;
-    // Most rr-types only use "count" below.
-    // For rrset_addr, count_v4/count_v6 are the split
-    //  counts for IPv4/IPv6, and both being zero gives
-    //  !is_static, indicating a DYNA RR for plugin resolution.
-    union {
-        uint16_t count;
-        uint16_t is_static;
-        struct {
-            uint8_t count_v4;
-            uint8_t count_v6;
-        };
-    };
+    uint32_t ttl; // net-order
+    uint16_t type; // host-order
+    uint16_t count; // host-order
 };
 
+#if SIZEOF_UINTPTR_T == 8
+#    define LTREE_V4A_SIZE 4
+#else
+#    define LTREE_V4A_SIZE 3
+#endif
+
+// The rules for interpreting the structure:
+//   if(!count_v6 && gen.count < LTREE_V4A_SIZE) {
+//       if(!gen.count)
+//           use .dyn, this is a DYNA
+//       else
+//           use v4a for direct IPv4 address data
+//   }
+//   else {
+//      use addrs.v[46] for address arrays
+//   }
 struct _ltree_rrset_addr_struct {
     ltree_rrset_gen_t gen;
+    uint16_t count_v6;
+    uint16_t limit_v4;
+    uint16_t limit_v6;
+    // 16 "free" bits here
     union {
         struct {
             uint32_t* v4;
             uint8_t* v6;
         } addrs;
+        uint32_t v4a[LTREE_V4A_SIZE];
         struct {
             gdnsd_resolve_cb_t func;
             unsigned resource;
+            uint32_t ttl_min; // host-order!
         } dyn;
     };
-    uint16_t limit_v4;
-    uint16_t limit_v6;
 };
 
 struct _ltree_rrset_soa_struct {

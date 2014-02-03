@@ -295,28 +295,43 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
     ltree_rrset_addr_t* rrset = ltree_node_get_rrset_addr(node);
     if(!rrset) {
         rrset = ltree_node_add_rrset_addr(node);
-        rrset->addrs.v4 = malloc(sizeof(uint32_t));
-        rrset->addrs.v4[0] = addr;
-        rrset->gen.count_v4 = 1;
+        rrset->gen.count = 1;
         rrset->gen.ttl = htonl(ttl);
         rrset->limit_v4 = limit_v4;
+        rrset->v4a[0] = addr;
     }
     else {
-        if(unlikely(!rrset->gen.is_static))
+        if(unlikely(!(rrset->gen.count | rrset->count_v6))) // DYNA here already
             log_zfatal("Name '%s%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname), logf_dname(zone->dname));
         if(unlikely(ntohl(rrset->gen.ttl) != ttl))
             log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
-        if(unlikely(rrset->gen.count_v4 == UINT8_MAX))
+        if(unlikely(rrset->gen.count == UINT16_MAX))
             log_zfatal("Name '%s%s': Too many RRs of type A", logf_dname(dname), logf_dname(zone->dname));
-        if(rrset->gen.count_v4 > 0) {
+        if(rrset->gen.count > 0) {
             if(unlikely(rrset->limit_v4 != limit_v4))
                 log_zwarn("Name '%s%s': All $ADDR_LIMIT_4 for A-records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), rrset->limit_v4);
         }
         else {
             rrset->limit_v4 = limit_v4;
         }
-        rrset->addrs.v4 = realloc(rrset->addrs.v4, sizeof(uint32_t) * (1 + rrset->gen.count_v4));
-        rrset->addrs.v4[rrset->gen.count_v4++] = addr;
+
+        if(!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE) {
+            if(rrset->gen.count == LTREE_V4A_SIZE) { // upgrade to addrs, copy old addrs
+                uint32_t* new_v4 = malloc(sizeof(uint32_t) * (LTREE_V4A_SIZE + 1));
+                memcpy(new_v4, rrset->v4a, sizeof(uint32_t) * LTREE_V4A_SIZE);
+                new_v4[LTREE_V4A_SIZE] = addr;
+                rrset->addrs.v4 = new_v4;
+                rrset->addrs.v6 = NULL;
+                rrset->gen.count = LTREE_V4A_SIZE + 1;
+            }
+            else {
+                rrset->v4a[rrset->gen.count++] = addr;
+            }
+        }
+        else {
+            rrset->addrs.v4 = realloc(rrset->addrs.v4, sizeof(uint32_t) * (1 + rrset->gen.count));
+            rrset->addrs.v4[rrset->gen.count++] = addr;
+        }
     }
 
     return false;
@@ -339,26 +354,34 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
         rrset = ltree_node_add_rrset_addr(node);
         rrset->addrs.v6 = malloc(16);
         memcpy(rrset->addrs.v6, addr, 16);
-        rrset->gen.count_v6 = 1;
+        rrset->count_v6 = 1;
         rrset->gen.ttl = htonl(ttl);
         rrset->limit_v6 = limit_v6;
     }
     else {
-        if(unlikely(!rrset->gen.is_static))
+        if(unlikely(!(rrset->gen.count | rrset->count_v6))) // DYNA here already
             log_zfatal("Name '%s%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname), logf_dname(zone->dname));
         if(unlikely(ntohl(rrset->gen.ttl) != ttl))
             log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
-        if(unlikely(rrset->gen.count_v6 == UINT8_MAX))
+        if(unlikely(rrset->count_v6 == UINT16_MAX))
             log_zfatal("Name '%s%s': Too many RRs of type AAAA", logf_dname(dname), logf_dname(zone->dname));
-        if(rrset->gen.count_v6 > 0) {
+        if(rrset->count_v6 > 0) {
             if(unlikely(rrset->limit_v6 != limit_v6))
                 log_zwarn("Name '%s%s': All $ADDR_LIMIT_6 for AAAA-records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), rrset->limit_v6);
         }
         else {
             rrset->limit_v6 = limit_v6;
         }
-        rrset->addrs.v6 = realloc(rrset->addrs.v6, 16 * (1 + rrset->gen.count_v6));
-        memcpy(rrset->addrs.v6 + (rrset->gen.count_v6++ * 16), addr, 16);
+
+        if(!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE) {
+            // was v4a-style, convert to addrs
+            uint32_t* new_v4 = malloc(sizeof(uint32_t) * rrset->gen.count);
+            memcpy(new_v4, rrset->v4a, sizeof(uint32_t) * rrset->gen.count);
+            rrset->addrs.v4 = new_v4;
+            rrset->addrs.v6 = NULL;
+        }
+        rrset->addrs.v6 = realloc(rrset->addrs.v6, 16 * (1 + rrset->count_v6));
+        memcpy(rrset->addrs.v6 + (rrset->count_v6++ * 16), addr, 16);
     }
 
     return false;
@@ -378,7 +401,7 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8
 
     ltree_rrset_addr_t* rrset;
     if(unlikely(rrset = ltree_node_get_rrset_addr(node))) {
-        if(rrset->gen.is_static)
+        if(rrset->gen.count | rrset->count_v6)
             log_zfatal("Name '%s%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname), logf_dname(zone->dname));
         log_zfatal("Name '%s%s': DYNA defined twice for the same name", logf_dname(dname), logf_dname(zone->dname));
     }
@@ -855,10 +878,10 @@ static bool binstr_hasichr(const uint8_t* bstr, const uint8_t c) {
 //  count, limit limit to the count.  This is done at runtime
 //  for DYNA.
 static void fix_addr_limits(ltree_rrset_addr_t* node_addr) {
-        if(!node_addr->limit_v4 || node_addr->limit_v4 > node_addr->gen.count_v4)
-            node_addr->limit_v4 = node_addr->gen.count_v4;
-        if(!node_addr->limit_v6 || node_addr->limit_v6 > node_addr->gen.count_v6)
-            node_addr->limit_v6 = node_addr->gen.count_v6;
+        if(!node_addr->limit_v4 || node_addr->limit_v4 > node_addr->gen.count)
+            node_addr->limit_v4 = node_addr->gen.count;
+        if(!node_addr->limit_v6 || node_addr->limit_v6 > node_addr->count_v6)
+            node_addr->limit_v6 = node_addr->count_v6;
 }
 
 F_WUNUSED F_NONNULL
@@ -1011,7 +1034,7 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
         return false; // DYNC can't co-exist with others, so we're done here
     }
 
-    if(node_addr && node_addr->gen.is_static)
+    if(node_addr && (node_addr->gen.count | node_addr->count_v6))
         fix_addr_limits(node_addr);
 
     if(node_ns)
@@ -1247,11 +1270,16 @@ void ltree_destroy(ltree_node_t* node) {
         ltree_rrset_t* next = rrset->gen.next;
         switch(rrset->gen.type) {
             case DNS_TYPE_A:
-                if(rrset->gen.is_static) {
+                if(rrset->addr.count_v6) {
+                    dmn_assert(rrset->addr.addrs.v6);
+                    free(rrset->addr.addrs.v6);
                     if(rrset->addr.addrs.v4)
                         free(rrset->addr.addrs.v4);
-                    if(rrset->addr.addrs.v6)
-                        free(rrset->addr.addrs.v6);
+                }
+                else if(rrset->gen.count && rrset->gen.count > LTREE_V4A_SIZE) {
+                    dmn_assert(!rrset->addr.addrs.v6);
+                    dmn_assert(rrset->addr.addrs.v4);
+                    free(rrset->addr.addrs.v4);
                 }
                 break;
 
