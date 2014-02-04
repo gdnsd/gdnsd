@@ -20,10 +20,12 @@
 #include "zscan_rfc1035.h"
 
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <setjmp.h>
+#include <errno.h>
 
 #include "conf.h"
 #include "ltree.h"
@@ -42,15 +44,14 @@
  *  to accommodate that.  There probably wouldn't be any bugs
  *  going down to something reasonable like 4K, but it would
  *  cause parse errors if anyone tried to use longer TXT strings.
- * Another important thing: for integers, we use atoi() directly
+ * Another important thing: for integers, we use strtoul() directly
  *  on the buffer itself.  In the normal case this works because
  *  there is always some non-integer after it in the buffer, which
- *  halts atoi().  The corner case is if the last digit of an
+ *  halts strtoul().  The corner case is if the last digit of an
  *  integer happened to be the last byte of the buffer.  This
  *  is why we allocate one extra buffer byte and set it to zero.
  */
 #define MAX_BUFSIZE 65536
-
 
 #define parse_error(_fmt, ...) \
     do {\
@@ -132,6 +133,15 @@ static void set_ipv6(zscan_t* z, const char* end) {
         memcpy(z->ipv6, v6a.s6_addr, 16);
     else
         parse_error("IPv6 address '%s' invalid", txt);
+}
+
+F_NONNULL
+static void set_uval(zscan_t* z) {
+    errno = 0;
+    z->uval = strtoul(z->tstart, NULL, 10);
+    z->tstart = NULL;
+    if(errno)
+        parse_error("Integer conversion error: %s", logf_errno());
 }
 
 F_NONNULL
@@ -509,7 +519,7 @@ static void close_paren(zscan_t* z) {
 
     action set_ipv4 { set_ipv4(z, fpc); }
     action set_ipv6 { set_ipv6(z, fpc); }
-    action set_uval { z->uval = atoi(z->tstart); z->tstart = NULL; }
+    action set_uval { set_uval(z); }
     action mult_uval { mult_uval(z, fc); }
 
     action set_ttl     { z->ttl  = z->uval; }
