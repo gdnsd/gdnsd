@@ -129,9 +129,6 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
     if(pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
-    if(!strcmp(name, "georeg")) // XXX kill this when removing deprecated stuff
-        log_fatal("plugin_georeg is DEAD, use the included plugin_geoip instead");
-
     const plugin_t* plugin = gdnsd_plugin_load(name);
     if(plugin->load_config)
         plugin->load_config(pconf);
@@ -394,23 +391,9 @@ static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
             CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, udp_threads, 1024LU, addrconf->udp_threads);
 
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_socket, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
-            if(vscf_hash_get_data_byconstkey(addr_opts, "tcp_clients_per_socket", false))
-                log_warn("DNS listen address '%s': option 'tcp_clients_per_socket' is deprecated and is replaced by 'tcp_clients_per_thread'", lspec);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
             CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, tcp_threads, 1024LU, addrconf->tcp_threads);
-
-            bool tcp_disabled = false;
-            CFG_OPT_BOOL_ALTSTORE(addr_opts, disable_tcp, tcp_disabled);
-            if(vscf_hash_get_data_byconstkey(addr_opts, "disable_tcp", false)) {
-                log_warn("DNS listen address '%s': option 'disable_tcp' is deprecated.  Replace with 'tcp_threads = 0'", lspec);
-                if(tcp_disabled) { // if they set it "true" as opposed to pointlessly "false"
-                    if(vscf_hash_get_data_byconstkey(addr_opts, "tcp_threads", false) && addrconf->tcp_threads > 0)
-                        log_fatal("DNS listen address '%s': option 'disable_tcp' cannot be used in conjunction with a positive 'tcp_threads' value", lspec);
-                    addrconf->tcp_threads = 0;
-                }
-            }
 
             if(!gdnsd_reuseport_ok()) {
                 if(addrconf->udp_threads > 1) {
@@ -545,7 +528,6 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         .tcp_threads = 1U,
     };
 
-    bool def_tcp_disabled = false;
     bool debug_tmp = false;
 
     if(options) {
@@ -572,22 +554,8 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         CFG_OPT_UINT_ALTSTORE_0MIN(options, udp_threads, 1024LU, addr_defs.udp_threads);
         CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, addr_defs.tcp_timeout);
 
-        // store deprecated + new names of this option to same spot
-        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_socket, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
         CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
-        if(vscf_hash_get_data_byconstkey(options, "tcp_clients_per_socket", false))
-            log_warn("The global option 'tcp_clients_per_socket' is deprecated and is replaced by 'tcp_clients_per_thread'");
-
         CFG_OPT_UINT_ALTSTORE_0MIN(options, tcp_threads, 1024LU, addr_defs.tcp_threads);
-        CFG_OPT_BOOL_ALTSTORE(options, disable_tcp, def_tcp_disabled);
-        if(vscf_hash_get_data_byconstkey(options, "disable_tcp", false)) {
-            log_warn("The global option 'disable_tcp' is deprecated.  Replace with 'tcp_threads = 0'");
-            if(def_tcp_disabled) { // if they set it "true" as opposed to pointlessly "false"
-                if(vscf_hash_get_data_byconstkey(options, "tcp_threads", false) && addr_defs.tcp_threads > 0)
-                    log_fatal("The deprecated option 'disable_tcp' cannot be used in conjunction with a positive 'tcp_threads' value");
-                addr_defs.tcp_threads = 0;
-            }
-        }
 
         if(!gdnsd_reuseport_ok()) {
             if(addr_defs.udp_threads > 1) {
@@ -609,14 +577,9 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
         CFG_OPT_BOOL(options, zones_strict_data);
-
-        // renamed, back-compat
-        CFG_OPT_BOOL_ALTSTORE(options, zones_rfc1035_strict_startup, gconfig.zones_strict_startup);
         CFG_OPT_BOOL(options, zones_strict_startup);
-        if(vscf_hash_get_data_byconstkey(options, "zones_rfc1035_strict_startup", false))
-            log_warn("The global option 'zones_rfc1035_strict_startup' is deprecated; it was replaced by 'zones_strict_startup'");
-
         CFG_OPT_BOOL(options, zones_rfc1035_auto);
+
         // it's important that auto_interval is never lower than 2s, or it could cause
         //   us to miss fast events on filesystems with 1-second mtime resolution.
         CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
