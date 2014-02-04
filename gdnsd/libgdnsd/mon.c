@@ -259,7 +259,7 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
 
     num_svc_types = num_svc_types_cfg + 3; // "default", "down", "up"
 
-    // The default entry is always the last of the array
+    // the first 3 service types are fixed to default, down, and up
     service_types = malloc(num_svc_types * sizeof(service_type_t));
     service_types[0].name = "default";
     service_types[1].name = "down";
@@ -270,7 +270,7 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
     for(unsigned i = 0; i < num_svc_types_cfg; i++) {
         service_type_t* this_svc = &service_types[i + 3];
         this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
-        if(!strcmp(this_svc->name, "none")
+        if(!strcmp(this_svc->name, "none") // none is an alias for up
            || !strcmp(this_svc->name, "up")
            || !strcmp(this_svc->name, "down")
            || !strcmp(this_svc->name, "default"))

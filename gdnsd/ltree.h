@@ -200,7 +200,7 @@ struct _ltree_rrset_gen_struct {
 #endif
 
 // The rules for interpreting the structure:
-//   if(!count_v6 && gen.count < LTREE_V4A_SIZE) {
+//   if(!count_v6 && gen.count <= LTREE_V4A_SIZE) {
 //       if(!gen.count)
 //           use .dyn, this is a DYNA
 //       else

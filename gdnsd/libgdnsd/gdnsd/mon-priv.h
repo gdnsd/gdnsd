@@ -32,7 +32,7 @@
 //   1) gdnsd_mon_cfg_stypes_p1() -> configures basic list of services
 //        but does not load any plugins
 //   2) load and configure all plugins, which will include callbacks
-//        to gdnsd_mon_add_addr() from the plugin, which will in turn
+//        to gdnsd_mon_addr() from the plugin, which will in turn
 //        reference the service types list from above but not delve
 //        into it deeply.
 //   3) gdnsd_mon_cfg_stypes_p2() -> fully fleshes out the

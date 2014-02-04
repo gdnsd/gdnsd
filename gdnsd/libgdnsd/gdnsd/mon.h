@@ -34,11 +34,8 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest);
 // gdnsd_sttl_t
 //  sttl -> state+ttl
 //  high-bit is down flag (1 = down, 0 = up)
-//  next-bit is forced flag (1 = forced, 0 = unforced)
-//    (note that forced means by an administrative action - fixed
-//     default states like servicetype "down" or default-up for CNAME
-//     are not considered "forced")
-//  next 2 bits reserved for future use (set to zero, ignored on read)
+//  next 3 bits reserved for future use (set to zero, ignored on read)
+//    (may want to expose a forced-flag here later, etc)
 //  remaining 28 bits are unsigned TTL (max value ~8.5 years)
 typedef uint32_t gdnsd_sttl_t;
 
@@ -55,9 +52,9 @@ unsigned gdnsd_mon_addr(const char* desc, const char* svctype_name, const anysin
 
 // admin-only state registration.  plugin constructs desc
 //   within its own scope, e.g.
-//     "resname/www.foo.com" for a CNAME, or
-//     "resname" for a whole-resource virtual, or
-//     "resname/dcname" for a datacenter virtual.
+//     "plugname/resname/www.foo.com" for a CNAME, or
+//     "plugname/resname/dcname" for a datacenter virtual.
+//   it is up to the plugin to ensure uniqueness here...
 unsigned gdnsd_mon_admin(const char* desc);
 
 // State-fetching (one table call per resolve invocation, reused
