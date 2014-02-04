@@ -18,7 +18,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'mixed.example.com', qtype => 'MX',
     answer => 'mixed.example.com 21600 MX 0 maxttl.example.com',
-    addtl => 'maxttl.example.com 2147483647 A 192.0.2.199',
+    addtl => 'maxttl.example.com 3600000 A 192.0.2.199',
 );
 
 _GDT->test_kill_daemon($pid);

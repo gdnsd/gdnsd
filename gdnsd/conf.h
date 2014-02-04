@@ -66,6 +66,9 @@ typedef struct {
     int      priority;
     unsigned chaos_len;
     unsigned zones_default_ttl;
+    unsigned max_ncache_ttl;
+    unsigned max_ttl;
+    unsigned min_ttl;
     unsigned log_stats;
     unsigned max_http_clients;
     unsigned http_timeout;

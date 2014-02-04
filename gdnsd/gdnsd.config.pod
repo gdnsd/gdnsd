@@ -64,6 +64,28 @@ time-to-live for any record in any zonefile.  It can be overridden with
 a more specific default within zone files themselves via the C<$TTL>
 directive (see L<gdnsd.zonefile(5)>).
 
+=item B<max_ttl>
+
+Integer seconds, default 3600000 (~42 days),
+range 3600 - 16777215 (2^28-1, ~194 days).
+This is the global maximum TTL.  Any TTL found in a zone which
+exceeds this value will be clamped to this value with a warning.
+
+=item B<min_ttl>
+
+Integer seconds, default 5, range 1 - 86400 (1 day).
+This is the global minimum TTL.  Any TTL found in a zone which
+is below this value will be clamped to this value with a warning,
+including the minimum TTLs of DYN[AC] records and SOA ncache TTLs.
+This value must be less than or equal to max_ttl.
+
+=item B<max_ncache_ttl>
+
+Integer seconds, default 10800, range 10 - 86400.
+This is the global maximum for the SOA negative-cache TTL field.
+Values above this will be clamped with a warning.  This value
+must be greater than or equal to min_ttl.
+
 =item B<dns_port>
 
 Integer port, 1-65535, default 53.  This is the global default port

@@ -99,12 +99,12 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'minttl.example.com', qtype => 'A',
-    answer => 'minttl.example.com 0 A 192.0.2.199',
+    answer => 'minttl.example.com 5 A 192.0.2.199',
 );
 
 _GDT->test_dns(
     qname => 'maxttl.example.com', qtype => 'A',
-    answer => 'maxttl.example.com 2147483647 A 192.0.2.199',
+    answer => 'maxttl.example.com 3600000 A 192.0.2.199',
 );
 
 _GDT->test_dns(

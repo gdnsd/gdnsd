@@ -11,7 +11,7 @@ use Test::More tests => 10;
 
 my $pid = _GDT->test_spawn_daemon();
 
-my $soa = 'example.com 86400 SOA foo.example.com hostmaster.example.com 1 7200 1800 259200 604800';
+my $soa = 'example.com 86400 SOA foo.example.com hostmaster.example.com 1 7200 1800 259200 10800';
 
 _GDT->test_dns(
     qname => 'abc.example.com', qtype => 'A',

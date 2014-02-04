@@ -71,6 +71,9 @@ global_config_t gconfig = {
      //  behavior is dynamic...
     .priority = -21,
     .zones_default_ttl = 86400U,
+    .max_ncache_ttl = 10800U,
+    .max_ttl = 3600000U,
+    .min_ttl = 5U,
     .log_stats = 3600U,
     .max_http_clients = 128U,
     .http_timeout = 5U,
@@ -570,6 +573,13 @@ void conf_load(const bool force_zss, const bool force_zsd) {
 
         CFG_OPT_UINT_ALTSTORE(options, http_port, 1LU, 65535LU, def_http_port);
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
+        CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
+        CFG_OPT_UINT(options, max_ttl, 3600LU, 16777215LU); // 2^28-1 -> gdnsd_sttl_t compat
+        if(gconfig.max_ttl < gconfig.min_ttl)
+            log_fatal("The global option 'max_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", gconfig.max_ttl, gconfig.min_ttl);
+        CFG_OPT_UINT(options, max_ncache_ttl, 10LU, 86400LU);
+        if(gconfig.max_ncache_ttl < gconfig.min_ttl)
+            log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", gconfig.max_ncache_ttl, gconfig.min_ttl);
         CFG_OPT_UINT(options, max_response, 4096LU, 64000LU);
         // Limit here (24) is critical, to ensure that when encode_rr_cname resets
         //  c->qname_comp in dnspacket.c, c->qname_comp must still be <16K into a packet.
