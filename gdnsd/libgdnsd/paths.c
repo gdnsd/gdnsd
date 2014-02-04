@@ -117,6 +117,7 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
         // build basic/common directory structure if missing
         ensure_dir("etc");
         ensure_dir("etc/zones");
+        ensure_dir("etc/djbdns");
         ensure_dir("etc/geoip");
         ensure_dir("run");
     }
