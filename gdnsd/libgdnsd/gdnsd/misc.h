@@ -38,7 +38,7 @@ F_MALLOC F_NONNULL F_WUNUSED
 char* gdnsd_str_combine_n(const unsigned count, ...);
 
 // set thread name (via pthread_setname_np or similar)
-void gdnsd_thread_setname(pthread_t t, const char* n);
+void gdnsd_thread_setname(const char* n);
 
 // PRNG:
 // gdnsd_rand_init() allocates an opaque PRNG state which can

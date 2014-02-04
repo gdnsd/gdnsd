@@ -35,6 +35,10 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#ifdef HAVE_PTHREAD_NP_H
+#  include <pthread_np.h>
+#endif
+
 /* misc */
 
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
@@ -86,12 +90,16 @@ char* gdnsd_str_combine_n(const unsigned count, ...) {
     return out;
 }
 
-// mostly, this is to avoid a plugin needing the main
-//  config.h, which isn't available outside the tree.
-void gdnsd_thread_setname(pthread_t t, const char* n) {
-#ifdef HAVE_PTHREAD_SETNAME_NP
-    pthread_setname_np(t, n);
-#endif
+void gdnsd_thread_setname(const char* n V_UNUSED) {
+    #if defined HAVE_PTHREAD_SETNAME_NP_2
+        pthread_setname_np(pthread_self(), n);
+    #elif defined HAVE_PTHREAD_SET_NAME_NP_2
+        pthread_set_name_np(pthread_self(), n);
+    #elif defined HAVE_PTHREAD_SETNAME_NP_1
+        pthread_setname_np(n);
+    #elif defined HAVE_PTHREAD_SETNAME_NP_3
+        pthread_setname_np(pthread_self(), n, NULL);
+    #endif
 }
 
 /***************

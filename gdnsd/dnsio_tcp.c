@@ -33,6 +33,7 @@
 #include "dnspacket.h"
 #include "dnsio.h"
 #include "gdnsd/log.h"
+#include "gdnsd/misc.h"
 #include "gdnsd/net.h"
 #include "gdnsd/prcu-priv.h"
 
@@ -376,7 +377,11 @@ static void ztstate_online(struct ev_loop* loop V_UNUSED, ev_check* w V_UNUSED, 
 void* dnsio_tcp_start(void* thread_asvoid) {
     dmn_assert(thread_asvoid);
 
+    gdnsd_thread_setname("gdnsd-io-tcp");
+
     const dns_thread_t* t = (const dns_thread_t*)thread_asvoid;
+    dmn_assert(!t->is_udp);
+
     const dns_addr_t* addrconf = t->ac;
 
     tcpdns_thread_t* thread_ctx = malloc(sizeof(tcpdns_thread_t));

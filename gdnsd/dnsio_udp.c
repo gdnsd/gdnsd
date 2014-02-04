@@ -37,6 +37,7 @@
 #include "dnspacket.h"
 #include "dnsio.h"
 #include "gdnsd/log.h"
+#include "gdnsd/misc.h"
 #include "gdnsd/prcu-priv.h"
 
 #ifndef SOL_IPV6
@@ -429,7 +430,11 @@ F_NORETURN
 void* dnsio_udp_start(void* thread_asvoid) {
     dmn_assert(thread_asvoid);
 
+    gdnsd_thread_setname("gdnsd-io-udp");
+
     const dns_thread_t* t = (const dns_thread_t*) thread_asvoid;
+    dmn_assert(t->is_udp);
+
     const dns_addr_t* addrconf = t->ac;
 
     dnspacket_context_t* pctx = dnspacket_context_new(t->threadnum, true);

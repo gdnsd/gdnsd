@@ -156,6 +156,8 @@ static void setup_signals(struct ev_loop* def_loop) {
 }
 
 static void* zone_data_runtime(void* unused V_UNUSED) {
+    gdnsd_thread_setname("gdnsd-zones");
+
     struct ev_loop* zdata_loop = ev_loop_new(EVFLAG_AUTO);
     if(!zdata_loop)
         log_fatal("Could not initialize the zone data libev loop");
@@ -211,12 +213,10 @@ static void start_threads(void) {
         if(pthread_err)
             log_fatal("pthread_create() of DNS thread %u (for %s:%s) failed: %s",
                 i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_errnum(pthread_err));
-        gdnsd_thread_setname(t->threadid, t->is_udp ? "gdnsd-io-udp" : "gdnsd-io-tcp");
     }
 
     int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
     if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
-    gdnsd_thread_setname(zone_data_threadid, "gdnsd-zones");
 
     // Invoke thread cleanup handlers at exit time
     if(atexit(threads_cleanup))

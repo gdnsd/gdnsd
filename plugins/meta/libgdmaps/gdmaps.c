@@ -729,6 +729,8 @@ void gdmaps_load_databases(gdmaps_t* gdmaps) {
 
 F_NONNULL
 static void* gdmaps_reload_thread(void* arg) {
+    gdnsd_thread_setname("gdnsd-geoip-db");
+
     gdmaps_t* gdmaps = (gdmaps_t*)arg;
     dmn_assert(gdmaps);
 
@@ -758,7 +760,6 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
     int pthread_err;
     if((pthread_err = pthread_create(&gdmaps->reload_tid, &attribs, gdmaps_reload_thread, gdmaps)))
         log_fatal("plugin_geoip: failed to create GeoIP reload thread: %s", logf_errnum(pthread_err));
-    gdnsd_thread_setname(gdmaps->reload_tid, "gdnsd-geoip-db");
 
     gdmaps->reload_thread_spawned = true;
 
