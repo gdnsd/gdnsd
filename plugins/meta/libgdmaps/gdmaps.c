@@ -47,6 +47,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
+#include <gdnsd/misc.h>
 #include "gdnsd/prcu-priv.h"
 
 // When an input file change is detected, we wait this long
@@ -757,6 +758,7 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
     int pthread_err;
     if((pthread_err = pthread_create(&gdmaps->reload_tid, &attribs, gdmaps_reload_thread, gdmaps)))
         log_fatal("plugin_geoip: failed to create GeoIP reload thread: %s", logf_errnum(pthread_err));
+    gdnsd_thread_setname(gdmaps->reload_tid, "gdnsd-geoip-db");
 
     gdmaps->reload_thread_spawned = true;
 

@@ -23,6 +23,7 @@
 #include <gdnsd/compiler.h>
 #include <inttypes.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 // allocate a new string, concatenating s1 + s2.
 // retval is the new string
@@ -35,6 +36,9 @@ char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
 //   from the args list into it.
 F_MALLOC F_NONNULL F_WUNUSED
 char* gdnsd_str_combine_n(const unsigned count, ...);
+
+// set thread name (via pthread_setname_np or similar)
+void gdnsd_thread_setname(pthread_t t, const char* n);
 
 // PRNG:
 // gdnsd_rand_init() allocates an opaque PRNG state which can

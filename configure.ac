@@ -32,6 +32,7 @@ AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
 LIBS="$PTHREAD_LIBS $LIBS"
 CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CC="$PTHREAD_CC"
+AC_CHECK_FUNCS([pthread_setname_np])
 
 dnl need to know endian-ness
 AC_C_BIGENDIAN

@@ -86,6 +86,14 @@ char* gdnsd_str_combine_n(const unsigned count, ...) {
     return out;
 }
 
+// mostly, this is to avoid a plugin needing the main
+//  config.h, which isn't available outside the tree.
+void gdnsd_thread_setname(pthread_t t, const char* n) {
+#ifdef HAVE_PTHREAD_SETNAME_NP
+    pthread_setname_np(t, n);
+#endif
+}
+
 /***************
  * This Public-Domain JLKISS64 PRNG implementation is from:
  * http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
