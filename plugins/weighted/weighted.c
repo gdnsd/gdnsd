@@ -817,8 +817,6 @@ static gdnsd_sttl_t resolve_addr(const resource_t* res, dyn_result_t* result, co
 
     gdnsd_sttl_t rv;
 
-    dmn_assert(res->addrs_v4 || res->addrs_v6);
-
     if(res->addrs_v4) {
         rv = resolve(sttl_tbl, threadnum, res->addrs_v4, result);
         if(res->addrs_v6) {
@@ -826,7 +824,8 @@ static gdnsd_sttl_t resolve_addr(const resource_t* res, dyn_result_t* result, co
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     }
-    else if(res->addrs_v6) {
+    else {
+        dmn_assert(res->addrs_v6);
         rv = resolve(sttl_tbl, threadnum, res->addrs_v6, result);
     }
 

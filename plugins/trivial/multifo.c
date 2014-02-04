@@ -366,8 +366,6 @@ gdnsd_sttl_t plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum
 
     gdnsd_sttl_t rv;
 
-    dmn_assert(res->aset_v4 || res->aset_v6);
-
     if(res->aset_v4) {
         rv = resolve(sttl_tbl, res->aset_v4, result, &result->a.count_v4);
         if(res->aset_v6) {
@@ -375,7 +373,8 @@ gdnsd_sttl_t plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     }
-    else if(res->aset_v6) {
+    else {
+        dmn_assert(res->aset_v6);
         rv = resolve(sttl_tbl, res->aset_v6, result, &result->a.count_v6);
     }
 

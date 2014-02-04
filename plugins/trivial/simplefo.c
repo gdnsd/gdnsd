@@ -264,8 +264,6 @@ gdnsd_sttl_t plugin_simplefo_resolve(unsigned threadnum V_UNUSED, unsigned resnu
 
     gdnsd_sttl_t rv;
 
-    dmn_assert(res->addrs_v4 || res->addrs_v6);
-
     if(res->addrs_v4) {
         rv = resolve_addr(sttl_tbl, res->addrs_v4, result);
         if(res->addrs_v6) {
@@ -273,7 +271,8 @@ gdnsd_sttl_t plugin_simplefo_resolve(unsigned threadnum V_UNUSED, unsigned resnu
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     }
-    else if(res->addrs_v6) {
+    else {
+        dmn_assert(res->addrs_v6);
         rv = resolve_addr(sttl_tbl, res->addrs_v6, result);
     }
 
