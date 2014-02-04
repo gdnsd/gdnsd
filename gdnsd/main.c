@@ -32,11 +32,6 @@
 #include <pwd.h>
 #include <time.h>
 
-#ifdef USE_LINUX_CAPS
-#include <sys/capability.h>
-#include <sys/prctl.h>
-#endif
-
 #include "dnsio_tcp.h"
 #include "dnsio_udp.h"
 #include "dnspacket.h"
@@ -123,15 +118,11 @@ static void usage(const char* argv0) {
 #       ifdef USE_INOTIFY
             " inotify"
 #       endif
-#       ifdef USE_LINUX_CAPS
-            " libcap"
-#       endif
 
 #       if  defined NDEBUG \
         && !defined HAVE_QSBR \
         && !defined USE_SENDMMSG \
-        && !defined USE_INOTIFY \
-        && !defined USE_LINUX_CAPS
+        && !defined USE_INOTIFY
             " none"
 #       endif
 
@@ -292,44 +283,6 @@ static void memlock_rlimits(const bool started_as_root) {
     }
 }
 #endif
-
-static void caps_pre_secure(void) {
-#ifdef USE_LINUX_CAPS
-    const cap_value_t pre_caps[] = {
-        CAP_NET_BIND_SERVICE,
-        CAP_SYS_CHROOT,
-        CAP_SETGID,
-        CAP_SETUID,
-    };
-    dmn_log_debug("Attempting to use Linux capabilities to allow late binding of ports < 1024");
-    cap_t mycaps = cap_init();
-    if(cap_set_flag(mycaps, CAP_PERMITTED, 4, pre_caps, CAP_SET))
-        dmn_log_fatal("cap_set_flag(PERMITTED, pre_caps) failed: %s", logf_errno());
-    if(cap_set_flag(mycaps, CAP_EFFECTIVE, 4, pre_caps, CAP_SET))
-        dmn_log_fatal("cap_set_flag(EFFECTIVE, pre_caps) failed: %s", logf_errno());
-    if(cap_set_proc(mycaps))
-        dmn_log_fatal("cap_set_proc(pre_caps) failed: %s", logf_errno());
-    if(prctl(PR_SET_KEEPCAPS, 1))
-        dmn_log_fatal("prctl(PR_SET_KEEPCAPS, 1) failed: %s", logf_errno());
-    cap_free(mycaps);
-#else
-    dmn_log_warn("Some DNS listeners are configured for and attempting to use late binding (late_bind_secs) on privileged ports (< 1024), the daemon is dropping privs from root to a non-root user, and your build does not have Linux capabilities support.  Unless you have made some OS-specific arrangements to give this process the capability to bind these ports after dropping privileges, most likely the late bind(2) will fail fatally for lack of permissions...");
-#endif
-}
-
-static void caps_post_secure(void) {
-#ifdef USE_LINUX_CAPS
-    const cap_value_t cap_netbind = CAP_NET_BIND_SERVICE;
-    cap_t mycaps = cap_init();
-    if(cap_set_flag(mycaps, CAP_PERMITTED, 1, &cap_netbind, CAP_SET))
-        dmn_log_fatal("cap_set_flag(PERMITTED, NET_BIND) failed: %s", logf_errno());
-    if(cap_set_flag(mycaps, CAP_EFFECTIVE, 1, &cap_netbind, CAP_SET))
-        dmn_log_fatal("cap_set_flag(EFFECTIVE, NET_BIND) failed: %s", logf_errno());
-    if(cap_set_proc(mycaps))
-        dmn_log_fatal("cap_set_proc() (post-setuid) failed: %s", logf_errno());
-    cap_free(mycaps);
-#endif
-}
 
 typedef enum {
     ACT_CHECKCFG   = 0,
@@ -502,7 +455,7 @@ int main(int argc, char** argv) {
     }
 
     // Did we start as root?  This determines whether we try to chroot(),
-    //   how we handle memlock rlimits, capabilities, etc...
+    //   how we handle memlock rlimits, etc...
     const bool started_as_root = !geteuid();
 
     // Initializes basic libgdnsd stuff, loads config file, loads zones,
@@ -560,7 +513,7 @@ int main(int argc, char** argv) {
     dnspacket_global_setup();
 
     // Initialize DNS listening sockets
-    const bool need_caps = dns_lsock_init();
+    dns_lsock_init();
 
     // init the stats summing/output code
     statio_init();
@@ -570,11 +523,8 @@ int main(int argc, char** argv) {
 
     // Now that config is read, we're daemonized, the pidfile is written,
     //  and all listening sockets are open, we can chroot and drop privs
-    if(started_as_root) {
-        if(need_caps) caps_pre_secure();
+    if(started_as_root)
         dmn_secure_me(false);
-        if(need_caps) caps_post_secure();
-    }
 
     // Construct the default loop for the main thread
     struct ev_loop* def_loop = ev_default_loop(EVFLAG_AUTO);

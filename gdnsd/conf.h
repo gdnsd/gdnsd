@@ -30,7 +30,6 @@ typedef struct {
     anysin_t addr;
     bool autoscan;
     unsigned dns_port;
-    unsigned late_bind_secs;
     unsigned udp_recv_width;
     unsigned udp_sndbuf;
     unsigned udp_rcvbuf;
@@ -46,7 +45,6 @@ typedef struct {
     unsigned threadnum;
     int sock;
     bool is_udp;
-    bool need_late_bind;
     bool autoscan_bind_failed;
 } dns_thread_t;
 
@@ -87,8 +85,7 @@ extern global_config_t gconfig;
 F_NONNULL
 void conf_load(const bool force_zss, const bool force_zsd);
 
-// retval indicates we need runtime CAP_NET_BIND_DEVICE
-bool dns_lsock_init(void);
+void dns_lsock_init(void);
 
 // utility function, must be AF_INET or AF_INET6 already,
 //  used by dnsio_udp

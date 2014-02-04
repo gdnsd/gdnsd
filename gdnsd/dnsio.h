@@ -25,8 +25,7 @@
 #include "conf.h"
 #include <stdbool.h>
 
-// retval indicates need for net bind caps, if possible
 F_NONNULL
-bool dnsio_bind(dns_thread_t* t);
+void dnsio_bind(dns_thread_t* t);
 
 #endif // GDNSD_DNSIO

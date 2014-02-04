@@ -33,8 +33,7 @@ void* dnsio_tcp_start(void* thread_asvoid);
 F_NONNULL
 int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED, const bool reuseport);
 
-// retval indicates network bind caps needed for late binding
 F_NONNULL
-bool tcp_dns_listen_setup(dns_thread_t* t);
+void tcp_dns_listen_setup(dns_thread_t* t);
 
 #endif // GDNSD_DNSIO_TCP_H

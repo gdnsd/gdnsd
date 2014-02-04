@@ -185,66 +185,6 @@ PKG_CHECK_MODULES([LIBEV],[libev >= 4.0],
 )
 AC_SUBST([LIBEV_LIBS])
 
-
-dnl ======== Begin Capabilities Stuff ==========
-
-dnl Check libcap on Linux, plus the prctl support for surviving setuid,
-dnl   then use it to check for all the caps bits we need.  If the required
-dnl   bits are not present, and this is a Linux host, fail unless an explicit
-dnl   --without-libcap was specified.
-
-IS_LINUX=0
-case $host_os in
-    *linux*)
-        IS_LINUX=1
-    ;;
-esac
-
-KILL_LIBCAP=0
-if test $IS_LINUX -eq 0; then KILL_LIBCAP=1; fi
-
-AC_ARG_WITH([libcap],[
-AS_HELP_STRING([--without-libcap],[Explicitly disable libcap support on Linux])
-],[
-    if test "x$withval" = xno; then
-        KILL_LIBCAP=1
-    fi
-])
-
-XLIBS=$LIBS
-LIBS=""
-CAP_FUNCS=0
-CAP_DECLS=0
-
-if test $KILL_LIBCAP -eq 0; then
-    AC_SEARCH_LIBS([cap_set_flag], [cap], [], [])
-    AC_CHECK_FUNCS([cap_init cap_free cap_set_flag cap_set_proc prctl],[CAP_FUNCS=1],[])
-    AC_CHECK_DECLS([CAP_NET_BIND_SERVICE, CAP_PERMITTED, CAP_EFFECTIVE, CAP_SET, CAP_SYS_CHROOT, CAP_SETGID, CAP_SETUID, PR_SET_KEEPCAPS],[CAP_DECLS=1],[],[
-    #include <sys/types.h>
-    #include <sys/capability.h>
-    #include <sys/prctl.h>
-    ])
-fi
-
-USE_LINUX_CAPS=0
-CAPLIBS=
-if test $CAP_FUNCS -eq 1 -a $CAP_DECLS -eq 1; then
-    USE_LINUX_CAPS=1
-    CAPLIBS=$LIBS
-    AC_DEFINE([USE_LINUX_CAPS], [1], [Linux libcap2+prctl Capabilities])
-else
-    if test $KILL_LIBCAP -eq 0 -a $IS_LINUX -eq 1; then
-      AC_MSG_ERROR([Linux libcap support not found, you may need to install the libcap-devel or libcap-dev package, or explicitly specify --without-libcap (not recommended)])
-    fi
-fi
-
-AC_SUBST([CAPLIBS])
-
-dnl restore original LIBS, from before CAPLIBS
-LIBS=$XLIBS
-
-dnl ======== End Capabilities Stuff ==========
-
 dnl == inotify stuff ==
 dnl inotify_init1() is Linux 2.6.27+ and glibc 2.9
 dnl We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
@@ -387,7 +327,6 @@ AC_OUTPUT
 dnl Summary output for the user
 
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
-if test "x$USE_LINUX_CAPS" = x1; then CFSUM_CAP=Yes; else CFSUM_CAP=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
 if test "x$HAVE_QSBR" = x1; then
@@ -405,12 +344,7 @@ echo "======================================="
 echo "| Configuration Summary:"
 echo "| Developer Build?        $CFSUM_DEV"
 echo "| Userspace-rcu support:  $CFSUM_QSBR"
-echo "| Linux libcap support:   $CFSUM_CAP"
 echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
 echo "| Linux inotify support:  $CFSUM_INOTIFY"
 echo "| Test Port Start:        $CFSUM_TP"
 echo "======================================="
-
-if test $IS_LINUX -eq 1 -a $KILL_LIBCAP -eq 1; then
-    AC_MSG_WARN([You have explicitly disabled Linux libcap support for Linux.  The "late_bind_secs" feature will not work in many common scenarios.])
-fi

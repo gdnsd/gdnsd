@@ -137,7 +137,7 @@ static void udp_sock_opts_v6(const int sock) {
         log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", logf_errno());
 }
 
-bool udp_sock_setup(dns_thread_t* t) {
+void udp_sock_setup(dns_thread_t* t) {
     dmn_assert(t);
 
     dns_addr_t* addrconf = t->ac;
@@ -238,7 +238,7 @@ bool udp_sock_setup(dns_thread_t* t) {
         udp_sock_opts_v4(sock, gdnsd_anysin_is_anyaddr(asin));
 
     t->sock = sock;
-    return dnsio_bind(t);
+    dnsio_bind(t);
 }
 
 #ifndef MAP_ANONYMOUS
@@ -436,18 +436,7 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    if(t->need_late_bind) {
-        const anysin_t* asin = &addrconf->addr;
-        while(bind(t->sock, &asin->sa, asin->len)) {
-            if(errno != EADDRNOTAVAIL) {
-                log_err("Failed late bind() of UDP socket to %s: %s.  This listener thread is now shutting down.  Late bind attempts for this socket will no longer be attempted!", logf_anysin(asin), logf_errno());
-                pthread_exit(NULL);
-            }
-            sleep(addrconf->late_bind_secs);
-        }
-        log_info("Late bind() of UDP socket to %s succeeded, serving requests now", logf_anysin(asin));
-    }
-    else if(t->autoscan_bind_failed) {
+    if(t->autoscan_bind_failed) {
         // already logged this condition back when bind() failed, but it's simpler
         //  to spawn the thread and do the dnspacket_context_new() here properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that

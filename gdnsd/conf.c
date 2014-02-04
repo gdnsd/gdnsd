@@ -389,10 +389,6 @@ static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr
             if(!vscf_is_hash(addr_opts))
                 log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
 
-            CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, late_bind_secs, 300LU, addrconf->late_bind_secs);
-            if(vscf_hash_get_data_byconstkey(addr_opts, "late_bind_secs", false))
-                log_warn("DNS listen address '%s': option 'late_bind_secs' is deprecated, and will be removed in a future version!", lspec);
-
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_recv_width, 1LU, 32LU, addrconf->udp_recv_width);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
@@ -540,7 +536,6 @@ void conf_load(const bool force_zss, const bool force_zsd) {
     dns_addr_t addr_defs = {
         .autoscan = false,
         .dns_port = 53U,
-        .late_bind_secs = 0U,
         .udp_recv_width = 8U,
         .udp_rcvbuf = 0U,
         .udp_sndbuf = 0U,
@@ -570,9 +565,6 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         CFG_OPT_UINT(options, max_http_clients, 1LU, 65535LU);
         CFG_OPT_UINT(options, http_timeout, 3LU, 60LU);
 
-        CFG_OPT_UINT_ALTSTORE_0MIN(options, late_bind_secs, 300LU, addr_defs.late_bind_secs);
-        if(addr_defs.late_bind_secs)
-            log_warn("Option 'late_bind_secs' is deprecated, and will be removed in a future version!");
         CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
         CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
@@ -697,20 +689,12 @@ void conf_load(const bool force_zss, const bool force_zsd) {
     }
 }
 
-bool dns_lsock_init(void) {
-    bool need_caps = false;
-
+void dns_lsock_init(void) {
     for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
         dns_thread_t* t = &gconfig.dns_threads[i];
-        if(t->is_udp) {
-            if(udp_sock_setup(t))
-                need_caps = true;
-        }
-        else {
-            if(tcp_dns_listen_setup(t))
-                need_caps = true;
-       }
+        if(t->is_udp)
+            udp_sock_setup(t);
+        else
+            tcp_dns_listen_setup(t);
     }
-
-    return need_caps;
 }

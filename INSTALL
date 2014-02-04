@@ -12,7 +12,6 @@ If your starting point is a tarball download, the following prerequisites apply:
 The following are optional, but generally recommended:
 
 * liburcu aka userspace-rcu headers and libraries. Use distro pkg or http://lttng.org/urcu/
-* libcap headers and libraries on Linux hosts (use distro pkg generally)
 
 The following have no real effect on the build or runtime, but are required in order to run the testsuite:
 
@@ -43,9 +42,6 @@ Interesting / Non-standard autoconf options
    on 127.0.0.1, starting with port N.  The default is 12345.  If
    this conflicts with some existing service on your machine, change
    it here.
-
---without-libcap
-  Explicitly disable libcap support on Linux
 
 --without-urcu
   Explicitly disable support for liburcu (falls back to pthread locks)

@@ -347,7 +347,7 @@ int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED, const
     return sock;
 }
 
-bool tcp_dns_listen_setup(dns_thread_t* t) {
+void tcp_dns_listen_setup(dns_thread_t* t) {
     dmn_assert(t);
 
     const dns_addr_t* addrconf = t->ac;
@@ -356,10 +356,9 @@ bool tcp_dns_listen_setup(dns_thread_t* t) {
     const anysin_t* asin = &addrconf->addr;
 
     t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout, t->ac->tcp_threads > 1);
-    const bool need_caps = dnsio_bind(t);
+    dnsio_bind(t);
     if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
         log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(asin), logf_errno());
-    return need_caps;
 }
 
 static void thread_clean(void* arg_unused V_UNUSED) {
@@ -389,22 +388,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     thread_ctx->timeout = addrconf->tcp_timeout;
     thread_ctx->max_clients = addrconf->tcp_clients_per_thread;
 
-    if(t->need_late_bind) {
-        const anysin_t* asin = &addrconf->addr;
-        while(bind(t->sock, &asin->sa, asin->len)) {
-            if(errno != EADDRNOTAVAIL) {
-                log_err("Failed late bind() of TCP socket to %s: %s.  This listener thread is now shutting down.  Late bind attempts for this socket will no longer be attempted!", logf_anysin(asin), logf_errno());
-                pthread_exit(NULL);
-            }
-            sleep(addrconf->late_bind_secs);
-        }
-
-        if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
-            log_fatal("Failed to listen(s, %i) on late-bound TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(asin), logf_errno());
-
-        log_info("Late bind() of TCP socket to %s succeeded, serving requests now", logf_anysin(asin));
-    }
-    else if(t->autoscan_bind_failed) {
+    if(t->autoscan_bind_failed) {
         // already logged this condition back when bind() failed, but it's simpler
         //  to spawn the thread and do the dnspacket_context_new() here properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
