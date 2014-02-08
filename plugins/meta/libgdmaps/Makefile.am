@@ -5,6 +5,7 @@ AM_LIBTOOLFLAGS = --silent
 SUBDIRS = . t
 
 noinst_LTLIBRARIES = libgdmaps.la
+libgdmaps_la_LIBADD = $(MATH_LIB)
 libgdmaps_la_SOURCES = \
 	gdmaps.c \
 	gdmaps.h \

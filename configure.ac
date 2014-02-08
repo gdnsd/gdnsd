@@ -360,7 +360,7 @@ AC_SUBST([GDNSD_SYSRUNDIR])
 dnl clump up all of the libgdnsd libdeps for re-use in LDADD for
 dnl   binaries that link libgdnsd on platforms where libtool's
 dnl   automatic dep resolution is disabled
-LIBGDNSD_LIBS="$QSBRLIBS $MATH_LIB $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
+LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
 AC_SUBST([LIBGDNSD_LIBS])
 
 dnl Output generation
