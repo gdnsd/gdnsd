@@ -1,4 +1,26 @@
 
+1.11.1 - 2014-02-11
+    Bugfix for plugin_geoip's normalization of "nets" input data.
+      This bug affected some forms of un-normalized "nets" inputs,
+      resulting in incorrect responses (or assertfail in debug builds).
+      The replacement code is much simpler and more reliable, but
+      also slower.
+    Build Bugfix: plugins' dependencies on libm were being met
+      indirectly via libgdnsd's library deps in automake/libtool
+      terms.  However, due to platform variances as to which
+      math functions are inlined, combined with the "--as-needed"
+      linker flag, sometimes libm was not linked for libgdnsd,
+      which could result in plugins not finding math symbols.
+      This has caused build problems on at least Ubuntu/i386 and
+      Ubuntu/ppc64el.  The fix moved the libm deps to their
+      proper places in the respective Makefile.am's.
+    The official tarball download URLs are moving back to github
+      at https://github.com/blblack/gdnsd/releases/ .  The old
+      location will continue to host the tarballs that exist
+      there for a while, so as not to disrupt automated things,
+      and this bugfix release will also be published in both
+      places just in case.
+
 1.11.0 - 2013-12-06
     Bugfixes:-----------
       fixed edns-client-subnet issue with configurations that
