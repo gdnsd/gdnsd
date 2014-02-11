@@ -1,1 +1,16 @@
 79.125.0.0/17 => dc02
+
+# Github Issue #62 here as a regression check...
+# What's notable here is that the 8x /17's eventually
+#  become a single /14, which is bigger than the
+#  /16 which sorts above them in the initial sorting.
+# The new multi-pass code shouldn't be affected by this.
+10.108.0.0/16 => dc02
+10.108.0.0/17 => dc02
+10.108.128.0/17 => dc02
+10.109.0.0/17 => dc02
+10.109.128.0/17 => dc02
+10.110.0.0/17 => dc02
+10.110.128.0/17 => dc02
+10.111.0.0/17 => dc02
+10.111.128.0/17 => dc02
