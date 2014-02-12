@@ -25,7 +25,6 @@
 #include <gdnsd/misc.h>
 
 #define NLIST_INITSIZE 64
-#define MASK_DELETED 0xFFFFFFFF
 
 typedef struct {
     uint8_t ipv6[16];
@@ -163,9 +162,14 @@ static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned
 F_NONNULL F_PURE
 static bool mergeable_nets(const net_t* na, const net_t* nb) {
     dmn_assert(na); dmn_assert(nb);
-    return (na->mask == nb->mask
-        && na->dclist == nb->dclist
-        && masked_net_eq(na->ipv6, nb->ipv6, na->mask - 1));
+    bool rv = false;
+    if(na->dclist == nb->dclist) {
+        if(na->mask == nb->mask)
+            rv = masked_net_eq(na->ipv6, nb->ipv6, na->mask - 1);
+        else if(na->mask < nb->mask)
+            rv = masked_net_eq(na->ipv6, nb->ipv6, na->mask);
+    }
+    return rv;
 }
 
 void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist) {
@@ -187,8 +191,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
     //   and we do so by deleting the most-recently added one and decrementing
     //   the subnet mask of the older one.
     // Because this is happening back-to-front after each append, there's
-    //   no need to create (or later deal with) holes in the array as we
-    //   do during normalize2() for unsorted inputs.
+    //   no need to create (or later deal with) holes in the array.
     if(nl->normalized) {
         assert_clear_mask_bits(this_net->ipv6, mask);
         unsigned idx = nl->count;
@@ -196,7 +199,8 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
             net_t* nb = &nl->nets[idx];
             net_t* na = &nl->nets[idx - 1];
             if(mergeable_nets(na, nb)) {
-                na->mask--;
+                if(na->mask == nb->mask)
+                    na->mask--;
                 nl->count--;
             }
             else {
@@ -205,7 +209,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
         }
     }
     // for raw input, just correct any netmask errors as we insert,
-    //   as these will screw up later sorting for normalize1
+    //   as these will screw up later sorting for normalization
     else {
         clear_mask_bits(nl->map_name, this_net->ipv6, mask);
     }
@@ -217,62 +221,72 @@ static bool net_eq(const net_t* na, const net_t* nb) {
     return na->mask == nb->mask && !memcmp(na->ipv6, nb->ipv6, 16);
 }
 
-// normalize ugly random-ish lists
+// do a single pass of forward-normalization
+//   on a sorted nlist, then sort the result.
+static bool nlist_normalize_1pass(nlist_t* nl) {
+    dmn_assert(nl); dmn_assert(nl->count);
+
+    bool rv = false;
+
+    const unsigned oldcount = nl->count;
+    unsigned newcount = nl->count;
+    unsigned i = 0;
+    while(i < oldcount) {
+        net_t* na = &nl->nets[i];
+        unsigned j = i + 1;
+        while(j < oldcount) {
+            net_t* nb = &nl->nets[j];
+            if(net_eq(na, nb)) { // net+mask match, dclist may or may not match
+                if(na->dclist != nb->dclist)
+                    log_warn("plugin_geoip: map '%s' nets: Exact duplicate networks with conflicting dclists at %s/%u", nl->map_name, logf_ipv6(na->ipv6), na->mask);
+            }
+            else if(mergeable_nets(na, nb)) { // dclists match, nets adjacent (masks equal) or subnet-of
+                if(na->mask == nb->mask)
+                    na->mask--;
+            }
+            else {
+                break;
+            }
+            nb->mask = 0xFFFF; // illegally-huge, to sort deletes later
+            memset(nb->ipv6, 0xFF, 16); // all-1's, also for sort...
+            newcount--;
+            j++;
+        }
+        i = j;
+    }
+
+    if(newcount != oldcount) { // merges happened above
+        // the "deleted" entries have all-1's IPs and >legal masks, so they
+        //   sort to the end...
+        qsort(nl->nets, oldcount, sizeof(net_t), net_sorter);
+
+        // reset the count to ignore the deleted entries at the end
+        nl->count = newcount;
+
+        // signal need for another pass
+        rv = true;
+    }
+
+    return rv;
+}
+
 static void nlist_normalize(nlist_t* nl, const bool post_merge) {
     dmn_assert(nl);
 
     if(nl->count) {
+        // initial sort, unless already sorted by the merge process
         if(!post_merge)
             qsort(nl->nets, nl->count, sizeof(net_t), net_sorter);
 
-        unsigned idx = nl->count;
-        unsigned newcount = nl->count;
-        while(--idx > 0) {
-            net_t* nb = &nl->nets[idx];
-            net_t* na = &nl->nets[idx - 1];
-            const bool ab_eq = net_eq(na, nb);
-            if(ab_eq || mergeable_nets(na, nb)) {
-                nb->mask = MASK_DELETED;
-                if(!ab_eq)
-                    na->mask--;
-                else if(na->dclist != nb->dclist)
-                    log_warn("plugin_geoip: map '%s' nets: Exact duplicate networks with conflicting dclists at %s/%u", nl->map_name, logf_ipv6(na->ipv6), na->mask);
-                newcount--;
-                unsigned upidx = idx + 1;
-                while(upidx < nl->count) {
-                    net_t* nc = &nl->nets[upidx];
-                    if(nc->mask != MASK_DELETED) {
-                        if(mergeable_nets(na, nc)) {
-                            nc->mask = MASK_DELETED;
-                            na->mask--;
-                            newcount--;
-                        }
-                        else {
-                            break;
-                        }
-                    }
-                    upidx++;
-                }
-            }
-        }
+        // iterate merge+sort passes until no further merges are found
+        while(nlist_normalize_1pass(nl))
+            ; // empty
 
-        if(newcount != nl->count) { // merges happened
-            net_t* newnets = malloc(sizeof(net_t) * newcount);
-            unsigned newidx = 0;
-            for(unsigned i = 0; i < nl->count; i++) {
-                net_t* n = &nl->nets[i];
-                if(n->mask != MASK_DELETED)
-                    memcpy(&newnets[newidx++], n, sizeof(net_t));
-            }
-            dmn_assert(newidx == newcount);
-            free(nl->nets);
-            nl->nets = newnets;
-            nl->count = newcount;
-            nl->alloc = newcount;
-        }
-        else { // just optimize nets size
+        // optimize storage space
+        if(nl->count != nl->alloc) {
+            dmn_assert(nl->count < nl->alloc);
             nl->alloc = nl->count;
-            nl->nets = realloc(nl->nets, sizeof(net_t) * nl->alloc);
+            nl->nets = realloc(nl->nets, nl->alloc * sizeof(net_t));
         }
     }
 
