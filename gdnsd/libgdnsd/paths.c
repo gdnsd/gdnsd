@@ -21,6 +21,7 @@
 
 #include "gdnsd/paths.h"
 #include "gdnsd/paths-priv.h"
+#include "gdnsd/misc.h"
 #include "gdnsd/log.h"
 
 #include "cfg-dirs.h"
@@ -89,6 +90,27 @@ char* gdnsd_realpath(const char* path_in, const char* desc) {
     return out;
 }
 
+// basic path types
+typedef enum {
+    CFG   = 0,
+    RUN   = 1,
+    STATE = 2,
+} path_typ_t;
+
+// first index is boolean rootdir
+static const char* path_base[2][3] = {
+    [0] = {
+        [CFG]   = GDNSD_ETCDIR,
+        [RUN]   = GDNSD_RUNDIR,
+        [STATE] = GDNSD_STATEDIR,
+    },
+    [1] = {
+        [CFG]   = "etc/",
+        [RUN]   = "run/",
+        [STATE] = "var/",
+    },
+};
+
 void gdnsd_set_rootdir(const char* rootdir_in) {
     dmn_assert(!rootdir);
     dmn_assert(def_rootdir);
@@ -102,7 +124,8 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
         // Not using a root directory, using system paths
         if(chdir("/"))
             log_fatal("Failed to chdir('/'): %s", dmn_strerror(errno));
-        ensure_dir(GDNSD_RUNDIR);
+        ensure_dir(path_base[0][RUN]);
+        ensure_dir(path_base[0][STATE]);
     }
     else {
         // Using a root directory:
@@ -115,85 +138,38 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
         rootdir_len = strlen(rootdir);
 
         // build basic/common directory structure if missing
-        ensure_dir("etc");
+        ensure_dir("etc/");
         ensure_dir("etc/zones");
         ensure_dir("etc/djbdns");
         ensure_dir("etc/geoip");
-        ensure_dir("run");
+        ensure_dir(path_base[1][RUN]);
+        ensure_dir(path_base[1][STATE]);
     }
 }
 
-static const unsigned etc_len = sizeof(GDNSD_ETCDIR) - 1;
-
-char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx) {
+static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx) {
     dmn_assert(inpath);
 
     char* out = NULL;
-    unsigned inlen = strlen(inpath);
 
-    if(rootdir) { // rooted paths
-        if(inpath[0] == '/') {
-            out = malloc(inlen + 1);
-            memcpy(out, inpath + 1, inlen); // includes NUL
-        }
-        else if(pfx) {
-            const unsigned pfxlen = strlen(pfx);
-            char* outptr = out = malloc(4 + pfxlen + 1 + inlen + 1);
-            memcpy(outptr, "etc/", 4); outptr += 4;
-            memcpy(outptr, pfx, pfxlen); outptr += pfxlen;
-            *outptr++ = '/';
-            memcpy(outptr, inpath, inlen + 1); // includes NUL
-        }
-        else {
-            char* outptr = out = malloc(4 + inlen + 1);
-            memcpy(outptr, "etc/", 4); outptr += 4;
-            memcpy(outptr, inpath, inlen + 1); // includes NUL
-        }
-    }
-    else { // system paths
-        if(inpath[0] == '/') {
-            out = malloc(inlen + 1);
-            memcpy(out, inpath, inlen + 1); // includes NUL
-        }
-        else if(pfx) {
-            const unsigned pfxlen = strlen(pfx);
-            char* outptr = out = malloc(etc_len + 1 + pfxlen + 1 + inlen + 1);
-            memcpy(outptr, GDNSD_ETCDIR, etc_len); outptr += etc_len;
-            *outptr++ = '/';
-            memcpy(outptr, pfx, pfxlen); outptr += pfxlen;
-            *outptr++ = '/';
-            memcpy(outptr, inpath, inlen + 1); // includes NUL
-        }
-        else {
-            char* outptr = out = malloc(etc_len + 1 + inlen + 1);
-            memcpy(outptr, GDNSD_ETCDIR, etc_len); outptr += etc_len;
-            *outptr++ = '/';
-            memcpy(outptr, inpath, inlen + 1); // includes NUL
-        }
-    }
+    if(inpath[0] == '/')
+        out = strdup(inpath);
+    else if(pfx)
+        out = gdnsd_str_combine_n(4, path_base[!!rootdir][p], pfx, "/", inpath);
+    else
+        out = gdnsd_str_combine_n(2, path_base[!!rootdir][p], inpath);
 
     return out;
 }
 
-static const char* fixed_rooted_pidpath = "run/gdnsd.pid";
-static const char* pidfile_fixed_str = "/gdnsd.pid";
-static const unsigned pidfile_fixed_len = 11; // includes NUL
-static const unsigned rundir_len = sizeof(GDNSD_RUNDIR) - 1;
+char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx) {
+    return gdnsd_resolve_path(CFG, inpath, pfx);
+}
 
-// get a copy of the full pathname of where the pidfile should reside
-// note in the future we'll probably have to genericize the concept
-//   of gdnsd_resolve_path_cfg() above to the rundir, but this suffices
-//   for now since only the pidfile is there yet.
-char* gdnsd_get_pidpath(void) {
-    char* out;
-    if(rootdir) {
-        out = strdup(fixed_rooted_pidpath);
-    }
-    else {
-        char* outptr = out = malloc(rundir_len + pidfile_fixed_len);
-        memcpy(outptr, GDNSD_RUNDIR, rundir_len); outptr += rundir_len;
-        memcpy(outptr, pidfile_fixed_str, pidfile_fixed_len);
-    }
+char* gdnsd_resolve_path_run(const char* inpath, const char* pfx) {
+    return gdnsd_resolve_path(RUN, inpath, pfx);
+}
 
-    return out;
+char* gdnsd_resolve_path_state(const char* inpath, const char* pfx) {
+    return gdnsd_resolve_path(STATE, inpath, pfx);
 }

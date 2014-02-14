@@ -47,7 +47,4 @@ const char* gdnsd_get_rootdir(void);
 F_PURE
 const char* gdnsd_get_def_rootdir(void);
 
-// get a pathname for pidfile operations
-char* gdnsd_get_pidpath(void);
-
 #endif // GDNSD_PATHS_PRIV_H

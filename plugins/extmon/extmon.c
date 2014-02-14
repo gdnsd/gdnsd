@@ -366,7 +366,7 @@ void plugin_extmon_load_config(const vscf_data_t* config) {
 //  final bit to full_config(), which is always called.
 void plugin_extmon_full_config(unsigned num_threads V_UNUSED) {
     if(!helper_path)
-        helper_path = gdnsd_realpath(GDNSD_LIBEXECDIR "/gdnsd_extmon_helper", "plugin_extmon_helper");
+        helper_path = gdnsd_realpath(GDNSD_LIBEXECDIR "gdnsd_extmon_helper", "gdnsd_extmon_helper");
 }
 
 void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {

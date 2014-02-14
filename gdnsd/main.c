@@ -428,7 +428,7 @@ int main(int argc, char** argv) {
     if(will_daemonize)
         dmn_start_syslog();
 
-    char* pid_path = gdnsd_get_pidpath();
+    char* pid_path = gdnsd_resolve_path_run("gdnsd.pid", NULL);
 
     // Take action
     if(action == ACT_STATUS) {

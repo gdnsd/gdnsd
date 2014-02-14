@@ -23,6 +23,7 @@
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/log.h"
 #include "gdnsd/net.h"
+#include "gdnsd/misc.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -101,22 +102,17 @@ static void* plugin_dlopen(const char* pname) {
     struct stat plugstat;
     const char* try_path;
     const char** psptr = psearch;
-    const unsigned pname_len = strlen(pname);
     while((try_path = *psptr++)) {
-        const unsigned try_len = strlen(try_path);
-        const unsigned pp_len = try_len + 8 + pname_len + 4;
-        char pp[pp_len];
-        memcpy(pp, try_path, try_len);
-        memcpy(pp + try_len, "/plugin_", 8);
-        memcpy(pp + try_len + 8, pname, pname_len);
-        memcpy(pp + try_len + 8 + pname_len, ".so\0", 4);
+        char* pp = gdnsd_str_combine_n(4, try_path, "/plugin_", pname, ".so");
         log_debug("Looking for plugin '%s' at pathname '%s'", pname, pp);
         if(0 == stat(pp, &plugstat) && S_ISREG(plugstat.st_mode)) {
             void* phandle = dlopen(pp, RTLD_NOW | RTLD_LOCAL);
             if(!phandle)
                 log_fatal("Failed to dlopen() the '%s' plugin from path '%s': %s", pname, pp, dlerror());
+            free(pp);
             return phandle;
         }
+        free(pp);
     }
 
     log_fatal("Failed to locate plugin '%s' in the plugin search path", pname);
@@ -128,20 +124,11 @@ F_NONNULL
 static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sym_suffix) {
     dmn_assert(handle); dmn_assert(pname); dmn_assert(sym_suffix);
 
-    // construct the full symbol name plugin_PNAME_SYMSUFFIX\0
-    const unsigned pname_len = strlen(pname);
-    const unsigned suffix_len = strlen(sym_suffix);
-    const unsigned sym_size = 7 + pname_len + 1 + suffix_len + 1;
-    char symname[sym_size];
-    memcpy(symname, "plugin_", 7);
-    memcpy(symname + 7, pname, pname_len);
-    memcpy(symname + 7 + pname_len, "_", 1);
-    memcpy(symname + 7 + pname_len + 1, sym_suffix, suffix_len);
-    memcpy(symname + 7 + pname_len + 1 + suffix_len, "\0", 1);
-
     // If you see an aliasing warning here, it's ok to ignore it
+    char* symname = gdnsd_str_combine_n(4, "plugin_", pname, "_", sym_suffix);
     gen_func_ptr rval;
     *(void**)(&rval) = dlsym(handle, symname);
+    free(symname);
     return rval;
 }
 

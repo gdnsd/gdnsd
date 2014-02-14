@@ -17,10 +17,11 @@ DISTCLEANFILES = config.h.in~ configure.ac~
 MAINTAINERCLEANFILES = *.info gdnsd-*.tar.*
 
 cfg-dirs.h:	Makefile
-	$(AM_V_GEN)echo '#define GDNSD_ETCDIR "$(sysconfdir)/gdnsd"' >$@
-	@echo '#define GDNSD_RUNDIR "$(GDNSD_SYSRUNDIR)/gdnsd"' >>$@
-	@echo '#define GDNSD_LIBDIR "$(libdir)/gdnsd"' >>$@
-	@echo '#define GDNSD_LIBEXECDIR "$(libexecdir)/gdnsd"' >>$@
+	$(AM_V_GEN)echo '#define GDNSD_ETCDIR "$(sysconfdir)/gdnsd/"' >$@
+	@echo '#define GDNSD_RUNDIR "$(GDNSD_SYSRUNDIR)/gdnsd/"' >>$@
+	@echo '#define GDNSD_STATEDIR "$(localstatedir)/lib/gdnsd/"' >>$@
+	@echo '#define GDNSD_LIBDIR "$(libdir)/gdnsd/"' >>$@
+	@echo '#define GDNSD_LIBEXECDIR "$(libexecdir)/gdnsd/"' >>$@
 	@echo '#define GDNSD_DEF_ROOTDIR "$(GDNSD_DEF_ROOTDIR)"' >>$@
 
 test:	check
@@ -40,9 +41,10 @@ install-exec-hook:
 if HAS_DEF_ROOTDIR
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEF_ROOTDIR)"
 else
-	$(MKDIR_P) "$(DESTDIR)$(sysconfdir)/gdnsd/zones";
-	$(MKDIR_P) "$(DESTDIR)$(sysconfdir)/gdnsd/geoip";
-	$(MKDIR_P) "$(DESTDIR)$(GDNSD_SYSRUNDIR)/gdnsd";
+	$(MKDIR_P) "$(DESTDIR)$(sysconfdir)/gdnsd/zones/";
+	$(MKDIR_P) "$(DESTDIR)$(sysconfdir)/gdnsd/geoip/";
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_SYSRUNDIR)/gdnsd/";
+	$(MKDIR_P) "$(DESTDIR)$(localstatedir)/lib/gdnsd/";
 endif
 	@id gdnsd >/dev/null 2>&1; if test $$? -ne 0; then \
 		echo; \

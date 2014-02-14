@@ -49,4 +49,12 @@ char* gdnsd_realpath(const char* path_in, const char* desc);
 F_NONNULLX(1)
 char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx);
 
+// As above for "run" paths (e.g. /var/run/gdnsd, /run/gdnsd, or "/run" in chroot)
+F_NONNULLX(1)
+char* gdnsd_resolve_path_run(const char* inpath, const char* pfx);
+
+// As above for "state" paths (e.g. /var/lib/gdnsd, or "/var" in chroot)
+F_NONNULLX(1)
+char* gdnsd_resolve_path_state(const char* inpath, const char* pfx);
+
 #endif // GDNSD_PATHS_H
