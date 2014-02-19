@@ -599,13 +599,23 @@ void statio_init(void) {
     // stats counters are 32-bit on 32-bit machines, and 64 on 64
     const unsigned stat_len = sizeof(stats_uint_t) == 8 ? 20 : 10;
 
+    // in the other cases, html is obviously-bigger, but if I have
+    //  to count it out to know, may as well automated it...
+    const unsigned fixed = sizeof(html_fixed) > sizeof(json_fixed)
+	? sizeof(html_fixed) - 1
+	: sizeof(json_fixed) - 1;
+
     data_buffer_size =
-        (sizeof(html_fixed) - 1)        // html_fixed format string
-        + (25 - 2)                      // max asctime output - 2 for the original %s
-        + (IVAL_BUFSZ - 2)              // max fmt_uptime output, again - 2 for %s
+        fixed                                 // html_fixed format string
+        + (25 - 2)                            // max asctime output - 2 for the original %s
+        + (IVAL_BUFSZ - 2)                    // max fmt_uptime output, again - 2 for %s
         + (19 * (stat_len - strlen(PRIuPTR))) // 19 stats, up to 20 bytes long each
-        + monio_get_max_stats_len()     // whatever monio tells us...
-        + (sizeof(html_footer) - 1);    // html_footer fixed string
+        + monio_get_max_stats_len()           // whatever monio tells us...
+        + (sizeof(html_footer) - 1);          // html_footer fixed string
+
+    // double it, because it's not that big and this gives us a lot of headroom for
+    //   having made any stupid mistakes in the max len calcuations :P
+    data_buffer_size <<= 1U;
 
     // now set up the normal stuff, like libev event watchers
     if(gconfig.log_stats) {
