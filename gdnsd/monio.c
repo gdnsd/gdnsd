@@ -325,23 +325,25 @@ static const unsigned json_nl_len = sizeof(json_nl) - 1;
 static const char json_foot[] = "\r\n\t]\r\n";
 static const unsigned json_foot_len = sizeof(json_foot) - 1;
 
-// overall length calculations.
-//   Note that *_var_len doesn't include the service name length,
-//     and that 6 is the longest state string (DANGER)
-//   CSV is not included because it is very obviously shorter than
-//     either of these in all possible cases
-static const unsigned html_fixed_len = http_head_len + http_foot_len;
-static const unsigned html_var_len = http_tmpl_len + (6*2);
-static const unsigned json_fixed_len = json_head_len + json_sep_len + json_foot_len;
-static const unsigned json_var_len = json_tmpl_len + 6 + json_sep_len;
-
 // statio calls this at the appropriate time (long after all
 //  basic setup is done, but before monio_start() time).
 // monio's job here is to inform statio of the maximum possible
 //  size of its stats output
 unsigned monio_get_max_stats_len(void) {
+    // overall length calculations.
+    //   Note that *_var_len doesn't include the service name length,
+    //     and that 6 is the longest state string (DANGER)
+    //   CSV is not included because it is very obviously shorter than
+    //     either of these in all possible cases
+
+    const unsigned html_fixed_len = http_head_len + http_foot_len;
+    const unsigned html_var_len = http_tmpl_len + (6*2);
     const unsigned html_len = html_fixed_len + (num_mons * html_var_len);
+
+    const unsigned json_fixed_len = json_head_len + json_sep_len + json_foot_len;
+    const unsigned json_var_len = json_tmpl_len + 6 + json_sep_len;
     const unsigned json_len = json_fixed_len + (num_mons * json_var_len);
+
     max_stats_len = html_len > json_len ? html_len : json_len;
 
     for(unsigned i = 0; i < num_mons; i++)
