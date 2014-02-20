@@ -460,50 +460,64 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest) {
 // stats code from here to the end
 //--------------------------------------------------
 
-static const char http_head[] = "<p><span class='bold big'>Monitored Service States:</span></p><table>\r\n"
-    "<tr><th>Service</th><th>State</th></tr>\r\n";
-static unsigned http_head_len = sizeof(http_head) - 1;
-
-static const char http_tmpl[] = "<tr><td>%s</td><td class='%s'>%s</td></tr>\r\n";
-static unsigned http_tmpl_len = sizeof(http_head) - 7;
-
-static const char http_foot[] = "</table>\r\n";
-static unsigned http_foot_len = sizeof(http_foot) - 1;
-
-static const char csv_head[] = "Service,State\r\n";
-static unsigned csv_head_len = sizeof(csv_head) - 1;
-
-static const char csv_tmpl[] = "%s,%s\r\n";
-
-static const char json_head[] = "\t\"services\": [\r\n";
-static unsigned json_head_len = sizeof(json_head) - 1;
-static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\"\r\n\t\t}";
-static const char json_sep[] = ",\r\n";
-static unsigned json_sep_len = sizeof(json_sep) - 1;
-static const char json_nl[] = "\r\n";
-static unsigned json_nl_len = sizeof(json_nl) - 1;
-static const char json_foot[] = "\r\n\t]\r\n";
-static unsigned json_foot_len = sizeof(json_foot) - 1;
-
 static const char* state_txt[2] = {
     "DOWN",
     "UP",
 };
 
+static const char http_head[] = "<p><span class='bold big'>Monitored Service States:</span></p><table>\r\n"
+    "<tr><th>Service</th><th>State</th></tr>\r\n";
+static const unsigned http_head_len = sizeof(http_head) - 1;
+
+static const char http_tmpl[] = "<tr><td>%s</td><td class='%s'>%s</td></tr>\r\n";
+static const unsigned http_tmpl_len = sizeof(http_head) - 7;
+
+static const char http_foot[] = "</table>\r\n";
+static const unsigned http_foot_len = sizeof(http_foot) - 1;
+
+static const char csv_head[] = "Service,State\r\n";
+static const unsigned csv_head_len = sizeof(csv_head) - 1;
+
+static const char csv_tmpl[] = "%s,%s\r\n";
+
+static const char json_head[] = "\t\"services\": [\r\n";
+static const unsigned json_head_len = sizeof(json_head) - 1;
+static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\"\r\n\t\t}";
+static const unsigned json_tmpl_len = sizeof(json_tmpl) - 5;
+static const char json_sep[] = ",\r\n";
+static const unsigned json_sep_len = sizeof(json_sep) - 1;
+static const char json_nl[] = "\r\n";
+static const unsigned json_nl_len = sizeof(json_nl) - 1;
+static const char json_foot[] = "\r\n\t]\r\n";
+static const unsigned json_foot_len = sizeof(json_foot) - 1;
+
 // statio calls this at the appropriate time (long after all
 //  basic setup is done, but before monio_start() time).
 // monio's job here is to inform statio of the maximum possible
-//  size of its stats output (csv or html, although html is probably
-//  always the larger of the two).
+//  size of its stats output
 unsigned gdnsd_mon_stats_get_max_len(void) {
-    if(!num_smgrs) return max_stats_len = 0;
+    // overall length calculations.
+    //   Note that *_var_len doesn't include the service name length,
+    //     and that 4 is the longest state string (DOWN)
+    //   CSV is not included because it is very obviously shorter than
+    //     either of these in all possible cases
 
-    unsigned retval = http_head_len + http_foot_len
-           + (num_smgrs * (http_tmpl_len + (4*2))); // 6 is len(DOWN)
+    const unsigned html_fixed_len = http_head_len + http_foot_len;
+    const unsigned html_var_len = http_tmpl_len + (4*2);
+    const unsigned html_len = html_fixed_len + (num_smgrs * html_var_len);
+
+    const unsigned json_fixed_len = json_head_len + json_sep_len + json_foot_len;
+    const unsigned json_var_len = json_tmpl_len + 4 + json_sep_len;
+    const unsigned json_len = json_fixed_len + (num_smgrs * json_var_len);
+
+    max_stats_len = html_len > json_len ? html_len : json_len;
+
     for(unsigned i = 0; i < num_smgrs; i++)
-        retval += strlen(smgrs[i].desc);
+        max_stats_len += strlen(smgrs[i].desc);
 
-    return max_stats_len = retval;
+    max_stats_len++; // leave room for trailing pointless sprintf \0, JIC
+
+    return max_stats_len;
 }
 
 // Output our stats in html form to buf, returning
@@ -517,6 +531,8 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
     const char* const buf_start = buf;
     int avail = max_stats_len;
 
+    if(avail <= (int)http_head_len)
+        log_fatal("BUG: monio stats buf miscalculated (html mon head)");
     memcpy(buf, http_head, http_head_len);
     buf += http_head_len;
     avail -= http_head_len;
@@ -524,11 +540,14 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
     for(unsigned i = 0; i < num_smgrs; i++) {
         bool st = !(smgr_sttl[i] & GDNSD_STTL_DOWN);
         int written = snprintf(buf, avail, http_tmpl, smgrs[i].desc, state_txt[st], state_txt[st]);
-        if(unlikely(written >= avail || avail < (int)http_foot_len))
-            log_fatal("BUG: monio stats buf miscalculated");
+        if(unlikely(written >= avail))
+            log_fatal("BUG: monio stats buf miscalculated (html mon data)");
         buf += written;
         avail -= written;
     }
+
+    if(unlikely(avail <= (int)http_foot_len))
+        log_fatal("BUG: monio stats buf miscalculated (html mon foot)");
 
     memcpy(buf, http_foot, http_foot_len);
     buf += http_foot_len;
@@ -547,6 +566,8 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
     const char* const buf_start = buf;
     int avail = max_stats_len;
 
+    if(avail <= (int)csv_head_len)
+        log_fatal("BUG: monio stats buf miscalculated (csv mon head)");
     memcpy(buf, csv_head, csv_head_len);
     buf += csv_head_len;
     avail -= csv_head_len;
@@ -555,7 +576,7 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
         bool st = !(smgr_sttl[i] & GDNSD_STTL_DOWN);
         int written = snprintf(buf, avail, csv_tmpl, smgrs[i].desc, state_txt[st]);
         if(unlikely(written >= avail))
-            log_fatal("BUG: monio stats buf miscalculated");
+            log_fatal("BUG: monio stats buf miscalculated (csv data)");
         buf += written;
         avail -= written;
     }
@@ -566,7 +587,13 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
 unsigned gdnsd_mon_stats_out_json(char* buf) {
     dmn_assert(buf);
 
+    dmn_assert(max_stats_len);
+    int avail = max_stats_len;
+
     const char* const buf_start = buf;
+
+    if(avail <= (int)(json_sep_len + json_head_len))
+        log_fatal("BUG: monio stats buf miscalculated (json mon head)");
 
     if(num_smgrs == 0 ) {
         memcpy(buf, json_nl, json_nl_len);
@@ -575,10 +602,8 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
     } else {
         memcpy(buf, json_sep, json_sep_len);
         buf += json_sep_len;
+        avail -= json_sep_len;
     }
-
-    dmn_assert(max_stats_len);
-    int avail = max_stats_len;
 
     memcpy(buf, json_head, json_head_len);
     buf += json_head_len;
@@ -587,15 +612,21 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
     for(unsigned i = 0; i < num_smgrs; i++) {
         bool st = !(smgr_sttl[i] & GDNSD_STTL_DOWN);
         int written = snprintf(buf, avail, json_tmpl, smgrs[i].desc, state_txt[st]);
-        if(unlikely(written >= avail || avail < (int)json_foot_len))
-            log_fatal("BUG: monio stats buf miscalculated");
+        if(unlikely(written >= avail))
+            log_fatal("BUG: monio stats buf miscalculated (json mon data)");
         buf += written;
         avail -= written;
         if( i < num_smgrs -1 ) {
+            if(unlikely(avail <= (int)json_sep_len))
+                log_fatal("BUG: monio stats buf miscalculated (json mon data-sep)");
             memcpy(buf, json_sep, json_sep_len);
             buf += json_sep_len;
+            avail -= json_sep_len;
         }
     }
+
+    if(unlikely(avail <= (int)json_foot_len))
+        log_fatal("BUG: monio stats buf miscalculated (json mon footer)");
 
     memcpy(buf, json_foot, json_foot_len);
     buf += json_foot_len;

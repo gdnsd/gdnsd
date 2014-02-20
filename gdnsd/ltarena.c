@@ -56,10 +56,6 @@
 //   the slot count.
 #define INIT_DNHASH_MASK 127U // *must* be 2^n-1 && > 0
 
-#ifndef MAP_ANONYMOUS
-#define MAP_ANONYMOUS MAP_ANON
-#endif
-
 typedef struct {
     unsigned count;
     unsigned mask;
