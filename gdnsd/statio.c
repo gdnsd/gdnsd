@@ -72,7 +72,6 @@ typedef struct {
     ev_io* read_watcher;
     ev_io* write_watcher;
     ev_timer* timeout_watcher;
-    unsigned iovcnt;
     unsigned read_done;
     http_state_t state;
 } http_data_t;
@@ -415,43 +414,53 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
     dmn_assert(revents == EV_WRITE);
 
     http_data_t* tdata = (http_data_t*)io->data;
+    struct iovec* iovs = tdata->outbufs;
 
-    dmn_assert(tdata->iovcnt == 1 || tdata->iovcnt == 2);
-    unsigned tosend = tdata->outbufs[0].iov_len;
-    struct iovec* iovs = &tdata->outbufs[0];
-    if(tdata->iovcnt == 2) {
-        tosend += tdata->outbufs[1].iov_len;
+    struct iovec* iovs_writev;
+    unsigned iovcnt_writev;
+    if(iovs[0].iov_len) {
+        iovs_writev = &iovs[0];
+        iovcnt_writev = 2;
     }
     else {
-        iovs = &tdata->outbufs[1];
+        iovs_writev = &iovs[1];
+        iovcnt_writev = 1;
     }
+    const ssize_t write_rv = writev(io->fd, iovs_writev, iovcnt_writev);
 
-    const ssize_t written = writev(io->fd, iovs, tdata->iovcnt);
-    if(unlikely(written == -1)) {
-        if(errno == EAGAIN || errno == EINTR) return;
-        log_debug("HTTP send() failed (%s), dropping response to %s", logf_errno(), logf_anysin(tdata->asin));
-        cleanup_conn_watchers(loop, tdata);
+    if(unlikely(write_rv < 0)) {
+        if(errno != EAGAIN && errno != EINTR) {
+            log_debug("HTTP send() failed (%s), dropping response to %s", logf_errno(), logf_anysin(tdata->asin));
+            cleanup_conn_watchers(loop, tdata);
+        }
         return;
     }
 
-    if(likely(written == (ssize_t)tosend)) {
-        tdata->state = READING_JUNK;
-        ev_io_stop(loop, tdata->write_watcher);
-        ev_io_start(loop, tdata->read_watcher);
-    }
-    else {
-        if(written < (int)tdata->outbufs[0].iov_len) {
-            tdata->outbufs[0].iov_base = &(((char*)tdata->outbufs[0].iov_base)[written]);
-            tdata->outbufs[0].iov_len -= written;
+    unsigned written = write_rv;
+
+    if(iovs[0].iov_len) {
+        if(written >= iovs[0].iov_len) {
+            written -= iovs[0].iov_len;
+            iovs[0].iov_len = 0;
+            // fall through to processing 2nd buffer below
         }
         else {
-            dmn_assert(tdata->iovcnt == 2);
-            unsigned adj = (written - tdata->outbufs[0].iov_len);
-            tdata->outbufs[1].iov_base = &(((char*)tdata->outbufs[0].iov_base)[adj]);
-            tdata->outbufs[1].iov_len -= adj;
-            tdata->iovcnt = 1;
+            iovs[0].iov_base = (char*)iovs[0].iov_base + written;
+            iovs[0].iov_len -= written;
+            return; // we'll send the rest of iovs[0]+iovs[1] on next EV_WRITE
         }
     }
+
+    if(written < iovs[1].iov_len) {
+        iovs[1].iov_base = (char*)iovs[1].iov_base + written;
+        iovs[1].iov_len -= written;
+        return; // we'll send the rest of iovs[1] on next EV_WRITE
+    }
+
+    dmn_assert(written == iovs[1].iov_len);
+    tdata->state = READING_JUNK;
+    ev_io_stop(loop, tdata->write_watcher);
+    ev_io_start(loop, tdata->read_watcher);
 }
 
 F_NONNULL
@@ -473,20 +482,20 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
         return;
     }
 
-    if(likely(tdata->read_done < 9)) {
-        char* destination = &tdata->read_buffer[tdata->read_done];
-        const size_t wanted = 9 - tdata->read_done;
-        ssize_t recvlen = recv(io->fd, destination, wanted, 0);
-        if(unlikely(recvlen == -1)) {
-            if(errno != EAGAIN && errno != EINTR) {
-                log_debug("HTTP recv() error from %s: %s", logf_anysin(tdata->asin), logf_errno());
-                cleanup_conn_watchers(loop, tdata);
-            }
-            return;
+    dmn_assert(tdata->state == READING_REQ);
+    dmn_assert(tdata->read_done < 9);
+    char* destination = &tdata->read_buffer[tdata->read_done];
+    const size_t wanted = 9 - tdata->read_done;
+    ssize_t recvlen = recv(io->fd, destination, wanted, 0);
+    if(unlikely(recvlen == -1)) {
+        if(errno != EAGAIN && errno != EINTR) {
+            log_debug("HTTP recv() error from %s: %s", logf_anysin(tdata->asin), logf_errno());
+            cleanup_conn_watchers(loop, tdata);
         }
-        tdata->read_done += recvlen;
-        if(tdata->read_done < 9) return;
+        return;
     }
+    tdata->read_done += recvlen;
+    if(tdata->read_done < 9) return;
 
     // We're relying on the OS to buffer the rest of the request while
     //  we write the response.  After we're done writing we'll drain
@@ -494,7 +503,6 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
 
     process_http_query(tdata->read_buffer, tdata->outbufs);
     tdata->state = WRITING_RES;
-    tdata->read_done = 0;
     ev_io_stop(loop, tdata->read_watcher);
     ev_io_start(loop, tdata->write_watcher);
 }
@@ -553,7 +561,6 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 
     tdata->hdr_buf = tdata->outbufs[0].iov_base = malloc(hdr_buffer_size);
     tdata->data_buf = tdata->outbufs[1].iov_base = malloc(data_buffer_size);
-    tdata->iovcnt = 2;
 
     read_watcher->data = tdata;
     write_watcher->data = tdata;
