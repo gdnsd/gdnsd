@@ -690,7 +690,7 @@ static gdnsd_sttl_t resolve_cname(const resource_t* resource, const uint8_t* ori
         dmn_assert(dname_status(result->cname) == DNAME_VALID);
     }
 
-    return GDNSD_STTL_TTL_MASK;
+    return GDNSD_STTL_TTL_MAX;
 }
 
 F_NONNULL
@@ -704,7 +704,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
     unsigned dyn_item_maxs[cfg_max_items_per_res]; // max of dyn_addr_weights[N][]
     // addr cfg weight or 0, depends on status:
     unsigned dyn_addr_weights[cfg_max_items_per_res][cfg_max_addrs_per_group];
-    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK;
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
 
     // Get dynamic info about each item
     for(unsigned item_idx = 0; item_idx < num_items; item_idx++) {

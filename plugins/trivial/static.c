@@ -124,7 +124,7 @@ gdnsd_sttl_t plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum 
         dmn_assert(dname_status(result->cname) == DNAME_VALID);
     }
 
-    return GDNSD_STTL_TTL_MASK;
+    return GDNSD_STTL_TTL_MAX;
 }
 
 // plugin_static as a monitoring plugin:
@@ -150,7 +150,7 @@ void plugin_static_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     static_svcs = realloc(static_svcs, sizeof(static_svc_t*) * ++num_svcs);
     static_svc_t* this_svc = static_svcs[num_svcs - 1] = malloc(sizeof(static_svc_t));
     this_svc->name = strdup(name);
-    this_svc->static_sttl = GDNSD_STTL_TTL_MASK;
+    this_svc->static_sttl = GDNSD_STTL_TTL_MAX;
 
     const vscf_data_t* state_data = vscf_hash_get_data_byconstkey(svc_cfg, "state", true);
     if(state_data) {

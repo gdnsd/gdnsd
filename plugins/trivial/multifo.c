@@ -324,7 +324,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
 
     dmn_assert(aset->count);
 
-    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK;
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
     for(unsigned i = 0; i < aset->count; i++) {
         const addrstate_t* as = &aset->as[i];
         const gdnsd_sttl_t as_sttl = gdnsd_sttl_min(sttl_tbl, as->indices, aset->num_svcs);

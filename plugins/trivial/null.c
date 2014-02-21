@@ -41,7 +41,7 @@ gdnsd_sttl_t plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_
         memset(result->a.addrs_v6, 0, 16);
     }
 
-    return GDNSD_STTL_TTL_MASK;
+    return GDNSD_STTL_TTL_MAX;
 }
 
 // Obviously, we could implement "null" monitoring with simpler code,

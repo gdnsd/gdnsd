@@ -437,7 +437,7 @@ gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, 
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
-    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK;
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
 
     // empty dclist -> no results
     unsigned first_dc_num = *dclist;

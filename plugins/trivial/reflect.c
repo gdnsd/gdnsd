@@ -93,5 +93,5 @@ gdnsd_sttl_t plugin_reflect_resolve(unsigned threadnum V_UNUSED, unsigned resnum
 
     dmn_assert(result->a.count_v4 + result->a.count_v6);
 
-    return GDNSD_STTL_TTL_MASK;
+    return GDNSD_STTL_TTL_MAX;
 }

@@ -36,6 +36,8 @@ typedef uint32_t gdnsd_sttl_t;
 #define GDNSD_STTL_DOWN          (1U << 31U)
 #define GDNSD_STTL_RESERVED_MASK (7U << 28U)
 #define GDNSD_STTL_TTL_MASK      ((1U << 28U) - 1U)
+#define GDNSD_STTL_TTL_MAX       ((1U << 28U) - 1U)
+// ^ identical to above, but better semantics when reading code
 
 // the only hard rule on this data type is zero in the reserved bits for now
 #define assert_valid_sttl(_x) dmn_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
@@ -88,7 +90,7 @@ static inline gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_stt
 F_NONNULLX(1)
 static inline gdnsd_sttl_t gdnsd_sttl_min(const gdnsd_sttl_t* sttl_tbl, const unsigned* idx_ary, const unsigned idx_ary_len) {
     dmn_assert(sttl_tbl);
-    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK; // max-ttl+UP
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
     for(unsigned i = 0; i < idx_ary_len; i++)
         rv = gdnsd_sttl_min2(rv, sttl_tbl[idx_ary[i]]);
     return rv;

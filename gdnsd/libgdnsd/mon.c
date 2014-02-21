@@ -199,7 +199,7 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     this_smgr->n_failure = 0;
     this_smgr->n_success = 0;
     this_smgr->forced = false;
-    this_smgr->real_sttl = GDNSD_STTL_TTL_MASK;
+    this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
 
     smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
@@ -217,7 +217,7 @@ unsigned gdnsd_mon_admin(const char* desc) {
     smgr_t* this_smgr = &smgrs[idx];
     memset(this_smgr, 0, sizeof(smgr_t));
     this_smgr->desc = strdup(desc);
-    this_smgr->real_sttl = GDNSD_STTL_TTL_MASK;
+    this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
     smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
     return idx;
 }
@@ -412,8 +412,8 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest) {
         ? smgr->type->up_thresh - smgr->n_success
         : smgr->type->down_thresh - smgr->n_failure;
     gdnsd_sttl_t new_sttl = smgr->type->interval * count_to_change;
-    if(new_sttl > GDNSD_STTL_TTL_MASK)
-        new_sttl = GDNSD_STTL_TTL_MASK;
+    if(new_sttl > GDNSD_STTL_TTL_MAX)
+        new_sttl = GDNSD_STTL_TTL_MAX;
     if(down)
         new_sttl |= GDNSD_STTL_DOWN;
 
