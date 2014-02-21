@@ -175,6 +175,10 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
             return i;
     }
 
+    // for a new stype+addr combo, check that the plugin supports addr monitoring
+    if(this_svc->plugin && !this_svc->plugin->add_monitor)
+        log_fatal("Service type '%s' does not support address monitoring for '%s'", svctype_name, logf_anysin_noport(addr));
+
     // construct desc for this new unique monitor
     char addr_str[INET6_ADDRSTRLEN];
     int name_err = dmn_anysin2str_noport(addr, addr_str);
@@ -263,7 +267,7 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
     num_svc_types = num_svc_types_cfg + 2; // "up", "down"
 
     // the last 2 service types are fixed to up and down
-    service_types = malloc(num_svc_types * sizeof(service_type_t));
+    service_types = calloc(num_svc_types, sizeof(service_type_t));
     service_types[num_svc_types - 2].name = "up";
     service_types[num_svc_types - 1].name = "down";
 
@@ -274,6 +278,18 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
         this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
         if(!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
             log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
+        const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
+        if(!vscf_is_hash(svctype_cfg))
+            log_fatal("Definition of service type '%s' must be a hash", this_svc->name);
+        const vscf_data_t* pname_cfg = vscf_hash_get_data_byconstkey(svctype_cfg, "plugin", true);
+        if(!pname_cfg)
+            log_fatal("Service type '%s': 'plugin' must be defined", this_svc->name);
+        if(!vscf_is_simple(pname_cfg) || !vscf_simple_get_len(pname_cfg))
+            log_fatal("Service type '%s': 'plugin' must be a string", this_svc->name);
+        const char* pname = vscf_simple_get_data(pname_cfg);
+        this_svc->plugin = gdnsd_plugin_find_or_load(pname);
+        if(!this_svc->plugin->add_svctype)
+            log_fatal("Service type '%s' references plugin '%s', which does not support service monitoring (lacks add_svctype func)", this_svc->name, pname);
     }
 }
 
@@ -300,20 +316,10 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
 
         // assert same ordering as _p1
         dmn_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, i, NULL)));
+        dmn_assert(this_svc->plugin);
 
         const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
-        if(!vscf_is_hash(svctype_cfg))
-            log_fatal("Definition of service type '%s' must be a hash", this_svc->name);
-
-        const vscf_data_t* pname_cfg = vscf_hash_get_data_byconstkey(svctype_cfg, "plugin", true);
-        if(!pname_cfg)
-            log_fatal("Service type '%s': 'plugin' must be defined", this_svc->name);
-        if(!vscf_is_simple(pname_cfg) || !vscf_simple_get_len(pname_cfg))
-            log_fatal("Service type '%s': 'plugin' must be a string", this_svc->name);
-        const char* pname = vscf_simple_get_data(pname_cfg);
-        this_svc->plugin = gdnsd_plugin_find_or_load(pname);
-        if(!this_svc->plugin->add_svctype || !this_svc->plugin->add_monitor)
-            log_fatal("Service type '%s' references plugin '%s', which does not support service monitoring (lacks required callbacks)", this_svc->name, pname);
+        dmn_assert(svctype_cfg);
 
         this_svc->up_thresh = DEF_UP_THRESH;
         this_svc->ok_thresh = DEF_OK_THRESH;
@@ -327,6 +333,7 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
         SVC_OPT_UINT(svctype_cfg, this_svc->name, timeout, 1LU, 300LU);
         if((double)this_svc->timeout > (double)this_svc->interval * 0.9)
             log_fatal("Service type '%s': timeout must be less than 90%% of interval)", this_svc->name);
+
         this_svc->plugin->add_svctype(this_svc->name, svctype_cfg, this_svc->interval, this_svc->timeout);
         vscf_hash_iterate(svctype_cfg, true, bad_svc_opt, (void*)this_svc->name);
     }

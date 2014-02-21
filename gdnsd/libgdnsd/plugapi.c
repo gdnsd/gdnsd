@@ -132,7 +132,7 @@ static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sy
     return rval;
 }
 
-const plugin_t* gdnsd_plugin_load(const char* pname) {
+static const plugin_t* gdnsd_plugin_load(const char* pname) {
     dmn_assert(pname); dmn_assert(psearch);
 
     plugin_t* plug = plugin_allocate(pname);

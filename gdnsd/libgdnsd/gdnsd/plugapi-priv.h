@@ -29,9 +29,6 @@
 void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array);
 
 F_NONNULL
-const plugin_t* gdnsd_plugin_load(const char* pname);
-
-F_NONNULL
 const plugin_t* gdnsd_plugin_find_or_load(const char* pname);
 
 // action iterators

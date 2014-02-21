@@ -132,7 +132,7 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
     if(pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
-    const plugin_t* plugin = gdnsd_plugin_load(name);
+    const plugin_t* plugin = gdnsd_plugin_find_or_load(name);
     if(plugin->load_config)
         plugin->load_config(pconf);
 }
@@ -622,10 +622,11 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
         : NULL;
 
+    // setup plugin searching...
+    gdnsd_plugins_set_search_path(psearch_array);
+
     // Phase 1 of service_types config
     gdnsd_mon_cfg_stypes_p1(stypes_cfg);
-
-    gdnsd_plugins_set_search_path(psearch_array);
 
     // Load plugins
     const vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
