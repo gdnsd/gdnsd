@@ -84,12 +84,16 @@ typedef struct {
 typedef struct {
     uint8_t* cname;
     unsigned weight;
+    unsigned* indices;
 } res_citem_t;
 
 typedef struct {
     res_citem_t* items;
+    char** svc_names;
     unsigned count;
     unsigned weight;
+    unsigned up_weight;
+    unsigned num_svcs;
 } cnset_t;
 
 typedef struct {
@@ -436,13 +440,21 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, con
         log_fatal("plugin_weighted: resource '%s' (%s), item '%s': values in cname mode must be arrays of [ CNAME, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, stanza, item_name);
     res_item->weight = wtemp;
 
+    const vscf_data_t* cn = vscf_array_get_data(cfg_data, 0);
+    const char* cname_txt = vscf_simple_get_data(cn);
     uint8_t* dname = malloc(256);
-    dname_status_t dnstat = vscf_simple_get_as_dname(vscf_array_get_data(cfg_data, 0), dname);
+    dname_status_t dnstat = vscf_simple_get_as_dname(cn, dname);
     if(dnstat == DNAME_INVALID)
         log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' is not a legal domainname", res_name, stanza, item_name, vscf_simple_get_data(vscf_array_get_data(cfg_data, 0)));
     if(dnstat == DNAME_VALID)
         dname = dname_trim(dname);
     res_item->cname = dname;
+
+    if(cnset->num_svcs) {
+        res_item->indices = malloc(cnset->num_svcs * sizeof(unsigned));
+        for(unsigned i = 0; i < cnset->num_svcs; i++)
+            res_item->indices[i] = gdnsd_mon_cname(cnset->svc_names[i], cname_txt);
+    }
 
     log_debug("plugin_weighted: resource '%s' (%s), item '%s', CNAME '%s' added with weight %u", res_name, stanza, item_name, logf_dname(dname), res_item->weight);
 
@@ -457,6 +469,43 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
 
     cnset->count = vscf_hash_get_len(cfg);
+
+    // service_types
+    cnset->num_svcs = 0;
+    const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
+    if (res_stypes) {
+        cnset->count--; // minus one for service_types entry
+        cnset->num_svcs = vscf_array_get_len(res_stypes);
+        if(cnset->num_svcs) {
+            cnset->svc_names = malloc(cnset->num_svcs * sizeof(char*));
+            for(unsigned i = 0; i < cnset->num_svcs; i++) {
+                const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
+                if(!vscf_is_simple(this_svc_cfg))
+                    log_fatal("plugin_weighted: resource '%s' (%s): service_types values must be strings", res_name, stanza);
+                cnset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
+            }
+        }
+    }
+    else {
+        cnset->num_svcs = 1;
+        cnset->svc_names = malloc(sizeof(char*));
+        cnset->svc_names[0] = strdup(DEFAULT_SVCNAME);
+    }
+
+    // up threshold as double
+    double up_thresh = 0.5;
+    const vscf_data_t* thresh_cfg = vscf_hash_get_data_byconstkey(cfg, "up_thresh", true);
+    if(thresh_cfg) {
+        cnset->count--; // minus one for up_thresh entry
+        if(!vscf_is_simple(thresh_cfg) || !vscf_simple_get_as_double(thresh_cfg, &up_thresh)
+           || up_thresh <= 0.0 || up_thresh > 1.0)
+            log_fatal("plugin_weighted: resource '%s' (%s): 'up_thresh' must be a floating point value in the range (0.0 - 1.0]", res_name, stanza);
+    }
+
+    // multi option is processed for count-correctness, but ignored (it's not legal
+    //   here, but may be present due to inheritance of defaults!)
+    if(vscf_hash_get_data_byconstkey(cfg, "multi", true))
+        cnset->count--;
 
     if(cnset->count > MAX_ITEMS_PER_SET)
         log_fatal("plugin_weighted: resource '%s' (%s): number of cnames cannot be more than %u", res_name, stanza, MAX_ITEMS_PER_SET);
@@ -480,6 +529,8 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
     }
 
     dmn_assert(cnset->weight);
+
+    cnset->up_weight = ceil(up_thresh * cnset->weight);
 }
 
 F_NONNULL
@@ -529,7 +580,7 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
         if(gdnsd_anysin_getaddrinfo(vscf_simple_get_data(first_ac), NULL, &temp_sin)) {
             // was not a valid address, try cnames mode
             res->cnames = calloc(1, sizeof(cnset_t));
-            config_cnameset(res->name, "direct", res->cnames, res_cfg_noparams);
+            config_cnameset(res->name, "direct", res->cnames, res_cfg);
         }
         else {
             // was a valid address, try addrset mode
@@ -671,24 +722,69 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* origin) {
 
 void plugin_weighted_iothread_init(const unsigned threadnum) { init_rand(threadnum); }
 
-static gdnsd_sttl_t resolve_cname(const resource_t* resource, const uint8_t* origin, dyn_result_t* result, const unsigned threadnum) {
+static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, const uint8_t* origin, dyn_result_t* result, const unsigned threadnum) {
     dmn_assert(resource); dmn_assert(origin); dmn_assert(result);
 
     cnset_t* cnset = resource->cnames;
     dmn_assert(cnset);
     dmn_assert(cnset->weight);
 
-    const unsigned item_rand = get_rand(threadnum, cnset->weight);
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
+
+    // first, iterate the CNAMEs and build an array of
+    //   dynamic weights (0 if down, normal weight if up)
+    //   as well as a sum of all dynamic weights
+    const unsigned ct = cnset->count;
+    unsigned dyn_sum = 0;
+    unsigned dyn_weights[ct];
+    for(unsigned i = 0; i < ct; i++) {
+        const res_citem_t* citem = &cnset->items[i];
+        const gdnsd_sttl_t citem_sttl
+            = gdnsd_sttl_min(sttl_tbl, citem->indices, cnset->num_svcs);
+        rv = gdnsd_sttl_min2(rv, citem_sttl);
+        if(citem_sttl & GDNSD_STTL_DOWN) {
+            dyn_weights[i] = 0;
+        }
+        else {
+            dyn_weights[i] = citem->weight;
+            dyn_sum += citem->weight;
+        }
+    }
+
+    // if the dynamic sum fails the up_thresh check,
+    //   redo the above pretending everything is up,
+    //   but make sure the retval says DOWN to
+    //   upstream callers
+    if(dyn_sum < cnset->up_weight) {
+        rv |= GDNSD_STTL_DOWN;
+        dyn_sum = cnset->weight;
+        for(unsigned i = 0; i < ct; i++) {
+            const res_citem_t* citem = &cnset->items[i];
+            dyn_weights[i] = citem->weight;
+        }
+    }
+    // if up_thresh check passed, clear any DOWN flag
+    //  which came from an individual CNAME into
+    //  our final retval
+    else {
+        rv &= ~GDNSD_STTL_DOWN;
+    }
+
+    dmn_assert(dyn_sum);
+
+    // choose the first item that breaks the random threshold
+    const unsigned item_rand = get_rand(threadnum, dyn_sum);
     unsigned running_total = 0;
     unsigned chosen = 0;
-    for(unsigned j = 0; j < cnset->count; j++) {
-        running_total += cnset->items[j].weight;
+    for(unsigned i = 0; i < ct; i++) {
+        running_total += dyn_weights[i];
         if(item_rand < running_total) {
-            chosen = j;
+            chosen = i;
             break;
         }
     }
 
+    // set the output stuff
     const uint8_t* dname = cnset->items[chosen].cname;
     result->is_cname = true;
     dname_copy(result->cname, dname);
@@ -697,7 +793,7 @@ static gdnsd_sttl_t resolve_cname(const resource_t* resource, const uint8_t* ori
         dmn_assert(dname_status(result->cname) == DNAME_VALID);
     }
 
-    return GDNSD_STTL_TTL_MAX;
+    return rv;
 }
 
 F_NONNULL
@@ -810,10 +906,8 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve_addr(const resource_t* res, dyn_result_t* result, const unsigned threadnum) {
+static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t* res, dyn_result_t* result, const unsigned threadnum) {
     dmn_assert(result); dmn_assert(res);
-
-    const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
     gdnsd_sttl_t rv;
 
@@ -841,12 +935,14 @@ gdnsd_sttl_t plugin_weighted_resolve(unsigned threadnum, unsigned resnum, const 
 
     gdnsd_sttl_t rv;
 
+    const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
+
     if(resource->cnames) {
         dmn_assert(origin); // map_res validates this
-        rv = resolve_cname(resource, origin, result, threadnum);
+        rv = resolve_cname(sttl_tbl, resource, origin, result, threadnum);
     }
     else {
-        rv = resolve_addr(resource, result, threadnum);
+        rv = resolve_addr(sttl_tbl, resource, result, threadnum);
     }
 
     assert_valid_sttl(rv);
