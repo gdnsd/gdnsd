@@ -126,3 +126,66 @@ gdnsd_sttl_t plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum 
 
     return GDNSD_STTL_TTL_MASK;
 }
+
+// plugin_static as a monitoring plugin:
+
+typedef struct {
+    const char* name;
+    gdnsd_sttl_t static_sttl;
+} static_svc_t;
+
+typedef struct {
+    static_svc_t* svc;
+    unsigned idx;
+} static_mon_t;
+
+static unsigned num_svcs = 0;
+static unsigned num_mons = 0;
+static static_svc_t** static_svcs = NULL;
+static static_mon_t** static_mons = NULL;
+
+void plugin_static_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED) {
+    dmn_assert(name); dmn_assert(svc_cfg);
+
+    static_svcs = realloc(static_svcs, sizeof(static_svc_t*) * ++num_svcs);
+    static_svc_t* this_svc = static_svcs[num_svcs - 1] = malloc(sizeof(static_svc_t));
+    this_svc->name = strdup(name);
+    this_svc->static_sttl = GDNSD_STTL_TTL_MASK;
+
+    const vscf_data_t* state_data = vscf_hash_get_data_byconstkey(svc_cfg, "state", true);
+    if(state_data) {
+        if(!vscf_is_simple(state_data))
+            log_fatal("plugin_static: service type '%s': the value of 'state' must be a string!", name);
+        const char* state_txt = vscf_simple_get_data(state_data);
+        if(!strcasecmp(state_txt, "down"))
+            this_svc->static_sttl |= GDNSD_STTL_DOWN;
+        else if(strcasecmp(state_txt, "up"))
+            log_fatal("plugin_static: service type '%s': the value of 'state' must be 'up' or 'down', not '%s'", name, state_txt);
+    }
+}
+
+void plugin_static_add_monitor(const char* desc V_UNUSED, const char* svc_name, const anysin_t* addr V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+
+    static_svc_t* this_svc = NULL;
+
+    for(unsigned i = 0; i < num_svcs; i++) {
+        if(!strcmp(svc_name, static_svcs[i]->name)) {
+            this_svc = static_svcs[i];
+            break;
+        }
+    }
+    dmn_assert(this_svc);
+
+    static_mons = realloc(static_mons, sizeof(static_mon_t*) * ++num_mons);
+    static_mon_t* this_mon = static_mons[num_mons - 1] = malloc(sizeof(static_mon_t));
+    this_mon->svc = this_svc;
+    this_mon->idx = idx;
+}
+
+void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
+    dmn_assert(mon_loop);
+
+    for(unsigned int i = 0; i < num_mons; i++)
+        gdnsd_mon_sttl_updater(static_mons[i]->idx, static_mons[i]->svc->static_sttl);
+}

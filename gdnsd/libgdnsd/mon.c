@@ -110,13 +110,12 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
     // saved for timer usage later
     mon_loop = mloop;
 
-    gdnsd_plugins_action_init_monitors(mloop);
-
     // Run the loop once until all events drain, which will
     // be one full monitoring cycle of each resource (without
     // any artificial delays).
     log_info("Starting initial round of monitoring ...");
     initial_round = true;
+    gdnsd_plugins_action_init_monitors(mloop);
     ev_run(mloop, 0);
     initial_round = false;
     log_info("Initial round of monitoring complete");
@@ -202,10 +201,6 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     this_smgr->forced = false;
     this_smgr->real_sttl = GDNSD_STTL_TTL_MASK;
 
-    // the "down" special gets a different default than the rest
-    if(!strcmp(svctype_name, "down"))
-        this_smgr->real_sttl |= GDNSD_STTL_DOWN;
-
     smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
@@ -252,29 +247,15 @@ static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, const vscf_data
 }
 
 void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
-
-    unsigned num_svc_types_cfg = 0;
-
     if(svctypes_cfg) {
         if(!vscf_is_hash(svctypes_cfg))
             log_fatal("service_types, if defined, must have a hash value");
-        num_svc_types_cfg = vscf_hash_get_len(svctypes_cfg);
-    }
-
-    num_svc_types = num_svc_types_cfg + 2; // "up", "down"
-
-    // the last 2 service types are fixed to up and down
-    service_types = malloc(num_svc_types * sizeof(service_type_t));
-    service_types[num_svc_types - 2].name = "up";
-    service_types[num_svc_types - 1].name = "down";
-
-    // if this loop executes at all, svctypes_cfg is defined
-    //   (see if() block at top of func, and definition of num_svc_types)
-    for(unsigned i = 0; i < num_svc_types_cfg; i++) {
-        service_type_t* this_svc = &service_types[i];
-        this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
-        if(!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
-            log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
+        num_svc_types = vscf_hash_get_len(svctypes_cfg);
+        service_types = malloc(num_svc_types * sizeof(service_type_t));
+        for(unsigned i = 0; i < num_svc_types; i++) {
+            service_type_t* this_svc = &service_types[i];
+            this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
+        }
     }
 }
 
@@ -293,9 +274,10 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
     if(!need_p2)
         return;
 
-    dmn_assert(num_svc_types > 1); // up, down always exist
+    // if need_p2, then a service type must have existed for an smgr to exist...
+    dmn_assert(num_svc_types);
 
-    for(unsigned i = 0; i < (num_svc_types - 2); i++) {
+    for(unsigned i = 0; i < num_svc_types; i++) {
         dmn_assert(svctypes_cfg);
         service_type_t* this_svc = &service_types[i];
 
@@ -332,17 +314,6 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
         vscf_hash_iterate(svctype_cfg, true, bad_svc_opt, (void*)this_svc->name);
     }
 
-    // dummy config for up+down
-    for(unsigned i = (num_svc_types - 2); i < num_svc_types; i++) {
-        service_type_t* this_svc = &service_types[i];
-        this_svc->plugin = NULL;
-        this_svc->up_thresh = DEF_UP_THRESH;
-        this_svc->ok_thresh = DEF_OK_THRESH;
-        this_svc->down_thresh = DEF_DOWN_THRESH;
-        this_svc->interval = DEF_INTERVAL;
-        this_svc->timeout = DEF_TIMEOUT;
-    }
-
     // now that we've solved the chicken-and-egg, finish processing
     //   the monitoring requests resolver plugins asked about earlier
     for(unsigned i = 0; i < num_smgrs; i++) {
@@ -355,6 +326,32 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
             }
         }
     }
+}
+
+F_NONNULL
+static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
+    dmn_assert(smgr); dmn_assert(idx < num_smgrs);
+
+    if(initial_round) {
+        smgr_sttl[idx] = smgr->real_sttl = new_sttl;
+        // table update taken care of in gdnsd_mon_start()
+        //  after all initial monitors complete
+    }
+    else if(new_sttl != smgr->real_sttl) {
+        smgr->real_sttl = new_sttl;
+        if(!smgr->forced && new_sttl != smgr_sttl[idx]) {
+            smgr_sttl[idx] = new_sttl;
+            if(!ev_is_active(sttl_update_timer)) {
+                ev_timer_set(sttl_update_timer, 1.0, 0.0);
+                ev_timer_start(mon_loop, sttl_update_timer);
+            }
+        }
+    }
+}
+
+void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl) {
+    dmn_assert(idx < num_smgrs);
+    raw_sttl_update(&smgrs[idx], idx, new_sttl);
 }
 
 void gdnsd_mon_state_updater(unsigned idx, const bool latest) {
@@ -420,22 +417,7 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest) {
     if(down)
         new_sttl |= GDNSD_STTL_DOWN;
 
-    // propagate any change
-    if(initial_round) {
-        smgr_sttl[idx] = smgr->real_sttl = new_sttl;
-        // table update taken care of in gdnsd_mon_start()
-        //  after all initial monitors complete
-    }
-    else if(new_sttl != smgr->real_sttl) {
-        smgr->real_sttl = new_sttl;
-        if(!smgr->forced && new_sttl != smgr_sttl[idx]) {
-            smgr_sttl[idx] = new_sttl;
-            if(!ev_is_active(sttl_update_timer)) {
-                ev_timer_set(sttl_update_timer, 1.0, 0.0);
-                ev_timer_start(mon_loop, sttl_update_timer);
-            }
-        }
-    }
+    raw_sttl_update(smgr, idx, new_sttl);
 }
 
 //--------------------------------------------------

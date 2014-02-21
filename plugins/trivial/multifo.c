@@ -29,7 +29,6 @@
 #include <netdb.h>
 #include <math.h>
 
-static const char DEFAULT_SVCNAME[] = "up";
 static const double DEF_UP_THRESH = 0.5;
 
 typedef struct {
@@ -125,10 +124,11 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
     else if(!ipv6 && as->addr.sa.sa_family != AF_INET)
         log_fatal("plugin_multifo: resource %s (%s): address '%s' for '%s' is not IPv4", resname, stanza, addr_txt, addr_desc);
 
-    as->indices = malloc(sizeof(unsigned) * aset->num_svcs);
-
-    for(unsigned i = 0; i < aset->num_svcs; i++)
-        as->indices[i] = gdnsd_mon_addr(svc_names[i], &as->addr);
+    if(aset->num_svcs) {
+        as->indices = malloc(sizeof(unsigned) * aset->num_svcs);
+        for(unsigned i = 0; i < aset->num_svcs; i++)
+            as->indices[i] = gdnsd_mon_addr(svc_names[i], &as->addr);
+    }
 
     return true;
 }
@@ -160,13 +160,6 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
                 svc_names[i] = vscf_simple_get_data(svctype_cfg);
             }
         }
-    }
-
-    if(!svc_names) {
-        dmn_assert(!aset->num_svcs);
-        aset->num_svcs = 1;
-        svc_names = malloc(sizeof(char*));
-        svc_names[0] = DEFAULT_SVCNAME;
     }
 
     double up_thresh = DEF_UP_THRESH;

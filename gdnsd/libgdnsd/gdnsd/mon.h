@@ -25,12 +25,6 @@
 // For anysin stuff
 #include <gdnsd/net.h>
 
-// Plugins call this helper after every raw state check of a monitored
-//   address, so that it can manage long-term state.
-// latest -> 0 failed, 1 succeeded
-F_NONNULL
-void gdnsd_mon_state_updater(unsigned idx, const bool latest);
-
 // gdnsd_sttl_t
 //  sttl -> state+ttl
 //  high-bit is down flag (1 = down, 0 = up)
@@ -45,6 +39,19 @@ typedef uint32_t gdnsd_sttl_t;
 
 // the only hard rule on this data type is zero in the reserved bits for now
 #define assert_valid_sttl(_x) dmn_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
+
+// A simple monitoring plugins calls this helper after every raw
+//   state check of a monitored address.  The core tracks long
+//   term state history for anti-flap and calculates TTLs on
+//   the assumption the plugin is using the provided intervals
+//   and has no deeper information than the immediate check result.
+// latest -> 0 failed, 1 succeeded
+void gdnsd_mon_state_updater(unsigned idx, const bool latest);
+
+// A more-advanced monitoring plugin may wish to do its own
+//   anti-flap state-tracking and TTL-calculations, in which
+//   case it can use this interface to provide full, direct updates.
+void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl);
 
 // called during load_config to register address healthchecks, returns
 //   an index to check state with...
@@ -77,12 +84,12 @@ static inline gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_stt
 
 // As above, but generalized to an array of table indices to support merging
 //   several different service_type checks against a single IP for
-//   a single resource.  Note that idx_ary_len==0 is illegal.
-F_NONNULL
+//   a single resource.
+F_NONNULLX(1)
 static inline gdnsd_sttl_t gdnsd_sttl_min(const gdnsd_sttl_t* sttl_tbl, const unsigned* idx_ary, const unsigned idx_ary_len) {
-    dmn_assert(sttl_tbl); dmn_assert(idx_ary); dmn_assert(idx_ary_len);
-    gdnsd_sttl_t rv = sttl_tbl[idx_ary[0]];
-    for(unsigned i = 1; i < idx_ary_len; i++)
+    dmn_assert(sttl_tbl);
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MASK; // max-ttl+UP
+    for(unsigned i = 0; i < idx_ary_len; i++)
         rv = gdnsd_sttl_min2(rv, sttl_tbl[idx_ary[i]]);
     return rv;
 }

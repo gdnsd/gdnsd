@@ -144,7 +144,6 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
 
     res_item->count = 1;
     res_item->as = calloc(res_item->count, sizeof(addrstate_t));
-    res_item->as[0].indices = malloc(addrset->num_svcs * sizeof(unsigned));
     res_item->as[0].weight = wtemp;
     res_item->max_weight = wtemp;
     res_item->weight = wtemp;
@@ -158,8 +157,11 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
     else if(!ipv6 && res_item->as[0].addr.sa.sa_family != AF_INET)
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
-    for(unsigned i = 0; i < addrset->num_svcs; i++)
-        res_item->as[0].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[0].addr);
+    if(addrset->num_svcs) {
+        res_item->as[0].indices = malloc(addrset->num_svcs * sizeof(unsigned));
+        for(unsigned i = 0; i < addrset->num_svcs; i++)
+            res_item->as[0].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[0].addr);
+    }
     log_debug("plugin_weighted: resource '%s' (%s), item '%s': A '%s' added w/ weight %u", res_name, stanza, item_name, addr_txt, res_item->weight);
 }
 
@@ -196,7 +198,6 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
             || lb_weight < 1 || lb_weight > MAX_WEIGHT )
         log_fatal("plugin_weighted: resource '%s', group '%s': values in address group mode must be arrays of [ IPADDR, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, item_name);
 
-    res_item->as[lb_idx].indices = malloc(addrset->num_svcs * sizeof(unsigned));
     res_item->as[lb_idx].weight = lb_weight;
 
     const char* addr_txt = vscf_simple_get_data(vscf_array_get_data(lb_data, 0));
@@ -208,8 +209,11 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
     else if(!ipv6 && res_item->as[lb_idx].addr.sa.sa_family != AF_INET)
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
-    for(unsigned i = 0; i < addrset->num_svcs; i++)
-        res_item->as[lb_idx].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[lb_idx].addr);
+    if(addrset->num_svcs) {
+        res_item->as[lb_idx].indices = malloc(addrset->num_svcs * sizeof(unsigned));
+        for(unsigned i = 0; i < addrset->num_svcs; i++)
+            res_item->as[lb_idx].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[lb_idx].addr);
+    }
 
     log_debug("plugin_weighted: resource '%s' (%s), item '%s', address %s added with weight %u", res_name, stanza, item_name, addr_txt, res_item->as[lb_idx].weight);
 
@@ -339,12 +343,6 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
                 addrset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
             }
         }
-    }
-
-    if(!addrset->num_svcs) {
-        addrset->num_svcs = 1;
-        addrset->svc_names = malloc(sizeof(char*));
-        addrset->svc_names[0] = strdup("up");
     }
 
     // multi option

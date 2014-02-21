@@ -124,4 +124,3 @@ void plugin_null_start_monitors(struct ev_loop* mon_loop) {
         ev_timer_start(mon_loop, ival_watcher);
     }
 }
-
