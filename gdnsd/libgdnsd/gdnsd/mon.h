@@ -48,6 +48,7 @@ typedef uint32_t gdnsd_sttl_t;
 
 // called during load_config to register address healthchecks, returns
 //   an index to check state with...
+F_NONNULL
 unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr);
 
 // admin-only state registration.  plugin constructs desc
@@ -55,6 +56,7 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr);
 //     "plugname/resname/www.foo.com" for a CNAME, or
 //     "plugname/resname/dcname" for a datacenter virtual.
 //   it is up to the plugin to ensure uniqueness here...
+F_NONNULL
 unsigned gdnsd_mon_admin(const char* desc);
 
 // State-fetching (one table call per resolve invocation, reused
@@ -76,8 +78,9 @@ static inline gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_stt
 // As above, but generalized to an array of table indices to support merging
 //   several different service_type checks against a single IP for
 //   a single resource.  Note that idx_ary_len==0 is illegal.
+F_NONNULL
 static inline gdnsd_sttl_t gdnsd_sttl_min(const gdnsd_sttl_t* sttl_tbl, const unsigned* idx_ary, const unsigned idx_ary_len) {
-    dmn_assert(idx_ary_len);
+    dmn_assert(sttl_tbl); dmn_assert(idx_ary); dmn_assert(idx_ary_len);
     gdnsd_sttl_t rv = sttl_tbl[idx_ary[0]];
     for(unsigned i = 1; i < idx_ary_len; i++)
         rv = gdnsd_sttl_min2(rv, sttl_tbl[idx_ary[i]]);

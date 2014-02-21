@@ -325,24 +325,26 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     /////// Process the parameters...
 
     // service_types
+    addrset->num_svcs = 0;
     const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
     if (res_stypes) {
         addrset->count--; // minus one for service_types entry
         addrset->num_svcs = vscf_array_get_len(res_stypes);
-        if(!addrset->num_svcs)
-            log_fatal("plugin_weighted: resource '%s' (%s): service_types cannot be an empty array", res_name, stanza);
-        addrset->svc_names = malloc(addrset->num_svcs * sizeof(char*));
-        for(unsigned i = 0; i < addrset->num_svcs; i++) {
-            const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
-            if(!vscf_is_simple(this_svc_cfg))
-                log_fatal("plugin_weighted: resource '%s' (%s): service_types values must be strings", res_name, stanza);
-            addrset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
+        if(addrset->num_svcs) {
+            addrset->svc_names = malloc(addrset->num_svcs * sizeof(char*));
+            for(unsigned i = 0; i < addrset->num_svcs; i++) {
+                const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
+                if(!vscf_is_simple(this_svc_cfg))
+                    log_fatal("plugin_weighted: resource '%s' (%s): service_types values must be strings", res_name, stanza);
+                addrset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
+            }
         }
     }
-    else {
+
+    if(!addrset->num_svcs) {
         addrset->num_svcs = 1;
         addrset->svc_names = malloc(sizeof(char*));
-        addrset->svc_names[0] = strdup("default");
+        addrset->svc_names[0] = strdup("up");
     }
 
     // multi option

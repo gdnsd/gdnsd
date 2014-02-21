@@ -9,7 +9,7 @@ options => {
 
 plugins => {
  weighted => {
-  service_types => none,
+  service_types => up,
   r6dc3 => {
    lb01 => [192.0.2.131, 20],
    lb03 => [192.0.2.133, 30],
@@ -177,7 +177,7 @@ plugins => {
   }
  }
  multifo => {
-  service_types => none,
+  service_types => up,
   mfor2d1 => { addrs_v4 => { 1 => 192.0.2.10 }, addrs_v6 => { 1 => 2001:DB8::10 } }
  }
  metafo => {

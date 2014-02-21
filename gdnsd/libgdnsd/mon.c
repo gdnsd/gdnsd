@@ -153,19 +153,12 @@ static bool addr_eq(const anysin_t* a, const anysin_t* b) {
 // Called from plugins once per monitored service type+IP combination
 //  to request monitoring and initialize various data/state.
 unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
-    dmn_assert(addr);
+    dmn_assert(svctype_name); dmn_assert(addr);
 
     // first, sort out what svctype_name actually means to us
     service_type_t* this_svc = NULL;
-
-    if(!svctype_name)
-        svctype_name = "default";
-
-    const char* svctype_name_cmp = svctype_name;
-    if(!strcmp(svctype_name_cmp, "none"))
-        svctype_name_cmp = "up";
     for(unsigned i = 0; i < num_svc_types; i++) {
-        if(!strcmp(svctype_name_cmp, service_types[i].name)) {
+        if(!strcmp(svctype_name, service_types[i].name)) {
             this_svc = &service_types[i];
             break;
         }
@@ -192,7 +185,7 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     if(name_err)
         log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
 
-    char* desc = gdnsd_str_combine_n(3, svctype_name_cmp, "/", addr_str);
+    char* desc = gdnsd_str_combine_n(3, svctype_name, "/", addr_str);
 
     // allocate the new smgr/sttl
     const unsigned idx = num_smgrs++;
@@ -268,23 +261,19 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
         num_svc_types_cfg = vscf_hash_get_len(svctypes_cfg);
     }
 
-    num_svc_types = num_svc_types_cfg + 3; // "default", "down", "up"
+    num_svc_types = num_svc_types_cfg + 2; // "up", "down"
 
-    // the first 3 service types are fixed to default, down, and up
+    // the last 2 service types are fixed to up and down
     service_types = malloc(num_svc_types * sizeof(service_type_t));
-    service_types[0].name = "default";
-    service_types[1].name = "down";
-    service_types[2].name = "up";
+    service_types[num_svc_types - 2].name = "up";
+    service_types[num_svc_types - 1].name = "down";
 
     // if this loop executes at all, svctypes_cfg is defined
     //   (see if() block at top of func, and definition of num_svc_types)
     for(unsigned i = 0; i < num_svc_types_cfg; i++) {
-        service_type_t* this_svc = &service_types[i + 3];
+        service_type_t* this_svc = &service_types[i];
         this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
-        if(!strcmp(this_svc->name, "none") // none is an alias for up
-           || !strcmp(this_svc->name, "up")
-           || !strcmp(this_svc->name, "down")
-           || !strcmp(this_svc->name, "default"))
+        if(!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
             log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
     }
 }
@@ -304,57 +293,28 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
     if(!need_p2)
         return;
 
-    dmn_assert(num_svc_types >= 3); // for default, down, up
+    dmn_assert(num_svc_types > 1); // up, down always exist
 
-    const plugin_t* def_plugin = gdnsd_plugin_find_or_load("http_status");
-    dmn_assert(def_plugin);
-    dmn_assert(def_plugin->add_svctype && def_plugin->add_monitor);
-
-    { // set up default
-        service_type_t* def_svc = &service_types[0];
-        def_svc->plugin = def_plugin;
-        def_svc->up_thresh = DEF_UP_THRESH;
-        def_svc->ok_thresh = DEF_OK_THRESH;
-        def_svc->down_thresh = DEF_DOWN_THRESH;
-        def_svc->interval = DEF_INTERVAL;
-        def_svc->timeout = DEF_TIMEOUT;
-        def_svc->plugin->add_svctype(def_svc->name, NULL, def_svc->interval, def_svc->timeout);
-    }
-
-    for(unsigned i = 1; i < 3; i++) { // set up down/up
-        service_type_t* this_svc = &service_types[i];
-        this_svc->plugin = NULL;
-        this_svc->up_thresh = DEF_UP_THRESH;
-        this_svc->ok_thresh = DEF_OK_THRESH;
-        this_svc->down_thresh = DEF_DOWN_THRESH;
-        this_svc->interval = DEF_INTERVAL;
-        this_svc->timeout = DEF_TIMEOUT;
-    }
-
-    for(unsigned i = 3; i < num_svc_types; i++) {
+    for(unsigned i = 0; i < (num_svc_types - 2); i++) {
         dmn_assert(svctypes_cfg);
-        const unsigned cfg_i = i - 3;
         service_type_t* this_svc = &service_types[i];
 
         // assert same ordering as _p1
-        dmn_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, cfg_i, NULL)));
+        dmn_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, i, NULL)));
 
-        const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, cfg_i);
+        const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
         if(!vscf_is_hash(svctype_cfg))
             log_fatal("Definition of service type '%s' must be a hash", this_svc->name);
 
         const vscf_data_t* pname_cfg = vscf_hash_get_data_byconstkey(svctype_cfg, "plugin", true);
-        if(!pname_cfg) {
-            this_svc->plugin = def_plugin;
-        }
-        else {
-            if(!vscf_is_simple(pname_cfg) || !vscf_simple_get_len(pname_cfg))
-                log_fatal("Service type '%s': 'plugin' must be a string", this_svc->name);
-            const char* pname = vscf_simple_get_data(pname_cfg);
-            this_svc->plugin = gdnsd_plugin_find_or_load(pname);
-            if(!this_svc->plugin->add_svctype || !this_svc->plugin->add_monitor)
-                log_fatal("Service type '%s' references plugin '%s', which does not support service monitoring (lacks required callbacks)", this_svc->name, pname);
-        }
+        if(!pname_cfg)
+            log_fatal("Service type '%s': 'plugin' must be defined", this_svc->name);
+        if(!vscf_is_simple(pname_cfg) || !vscf_simple_get_len(pname_cfg))
+            log_fatal("Service type '%s': 'plugin' must be a string", this_svc->name);
+        const char* pname = vscf_simple_get_data(pname_cfg);
+        this_svc->plugin = gdnsd_plugin_find_or_load(pname);
+        if(!this_svc->plugin->add_svctype || !this_svc->plugin->add_monitor)
+            log_fatal("Service type '%s' references plugin '%s', which does not support service monitoring (lacks required callbacks)", this_svc->name, pname);
 
         this_svc->up_thresh = DEF_UP_THRESH;
         this_svc->ok_thresh = DEF_OK_THRESH;
@@ -370,6 +330,17 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
             log_fatal("Service type '%s': timeout must be less than 90%% of interval)", this_svc->name);
         this_svc->plugin->add_svctype(this_svc->name, svctype_cfg, this_svc->interval, this_svc->timeout);
         vscf_hash_iterate(svctype_cfg, true, bad_svc_opt, (void*)this_svc->name);
+    }
+
+    // dummy config for up+down
+    for(unsigned i = (num_svc_types - 2); i < num_svc_types; i++) {
+        service_type_t* this_svc = &service_types[i];
+        this_svc->plugin = NULL;
+        this_svc->up_thresh = DEF_UP_THRESH;
+        this_svc->ok_thresh = DEF_OK_THRESH;
+        this_svc->down_thresh = DEF_DOWN_THRESH;
+        this_svc->interval = DEF_INTERVAL;
+        this_svc->timeout = DEF_TIMEOUT;
     }
 
     // now that we've solved the chicken-and-egg, finish processing

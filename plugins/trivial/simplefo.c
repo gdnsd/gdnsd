@@ -57,7 +57,7 @@ typedef struct {
 static res_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static const char DEFAULT_SVCNAME[] = "default";
+static const char DEFAULT_SVCNAME[] = "up";
 
 /*********************************/
 /* Local, static functions       */
@@ -71,23 +71,25 @@ F_NONNULL
 static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname, const char* stanza, const vscf_data_t* cfg) {
     dmn_assert(as); dmn_assert(resname); dmn_assert(stanza); dmn_assert(cfg); dmn_assert(vscf_is_hash(cfg));
 
-    unsigned num_svcs;
-    const char** svc_names;
+    as->num_svcs = 0;
+    const char** svc_names = NULL;
     const vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
     if(svctypes_data) {
-        as->num_svcs = num_svcs = vscf_array_get_len(svctypes_data);
-        if(!num_svcs)
-            log_fatal("plugin_simplefo: resource %s (%s): service_types cannot be empty", resname, stanza);
-        svc_names = malloc(sizeof(char*) * num_svcs);
-        for(unsigned i = 0; i < num_svcs; i++) {
-            const vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
-            if(!vscf_is_simple(svctype_cfg))
-                log_fatal("plugin_simplefo: resource %s (%s): 'service_types' value(s) must be strings", resname, stanza);
-            svc_names[i] = vscf_simple_get_data(svctype_cfg);
+        as->num_svcs = vscf_array_get_len(svctypes_data);
+        if(as->num_svcs) {
+            svc_names = malloc(sizeof(char*) * as->num_svcs);
+            for(unsigned i = 0; i < as->num_svcs; i++) {
+                const vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
+                if(!vscf_is_simple(svctype_cfg))
+                    log_fatal("plugin_simplefo: resource %s (%s): 'service_types' value(s) must be strings", resname, stanza);
+                svc_names[i] = vscf_simple_get_data(svctype_cfg);
+            }
         }
     }
-    else {
-        as->num_svcs = num_svcs = 1;
+
+    if(!svc_names) {
+        dmn_assert(!as->num_svcs);
+        as->num_svcs = 1;
         svc_names = malloc(sizeof(char*));
         svc_names[0] = DEFAULT_SVCNAME;
     }
@@ -109,8 +111,8 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
         else if(as_af == A_IPv4 && ipv6)
             log_fatal("plugin_simplefo: resource %s (%s): '%s' is not an IPv4 address", resname, stanza, addr_txt);
 
-        as->indices[which] = malloc(sizeof(unsigned) * num_svcs);
-        for(unsigned j = 0; j < num_svcs; j++)
+        as->indices[which] = malloc(sizeof(unsigned) * as->num_svcs);
+        for(unsigned j = 0; j < as->num_svcs; j++)
             as->indices[which][j] = gdnsd_mon_addr(svc_names[j], &as->addrs[which]);
     }
 

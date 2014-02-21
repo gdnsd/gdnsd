@@ -10,6 +10,7 @@ options => {
 
 service_types => {
     www_extraport => {
+        plugin => http_status
         port = @extra_port@
         ok_codes => [ 999, 888, 200 ]
         up_thresh = 15

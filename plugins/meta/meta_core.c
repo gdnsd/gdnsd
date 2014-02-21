@@ -22,8 +22,6 @@
 //   using macro constructs and pre-defined static function
 //   names to differentiate.
 
-static const char DEFAULT_SVCNAME[] = "default";
-
 // forward slashes are not allowed in configured
 //  resource names for this plugin, because that's
 //  used as a delimiter for synthetic resources...

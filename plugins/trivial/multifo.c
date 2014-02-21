@@ -29,7 +29,7 @@
 #include <netdb.h>
 #include <math.h>
 
-static const char DEFAULT_SVCNAME[] = "default";
+static const char DEFAULT_SVCNAME[] = "up";
 static const double DEF_UP_THRESH = 0.5;
 
 typedef struct {
@@ -145,22 +145,25 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
 
     unsigned num_addrs = vscf_hash_get_len(cfg);
 
-    const char** svc_names;
+    aset->num_svcs = 0;
+    const char** svc_names = NULL;
     const vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
     if(svctypes_data) {
         num_addrs--;
         aset->num_svcs = vscf_array_get_len(svctypes_data);
-        if(!aset->num_svcs)
-            log_fatal("plugin_multifo: resource %s (%s): service_types cannot be an empty array (try 'none'?)", resname, stanza);
-        svc_names = malloc(sizeof(char*) * aset->num_svcs);
-        for(unsigned i = 0; i < aset->num_svcs; i++) {
-            const vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
-            if(!vscf_is_simple(svctype_cfg))
-                log_fatal("plugin_multifo: resource %s (%s): 'service_types' values must be strings", resname, stanza);
-            svc_names[i] = vscf_simple_get_data(svctype_cfg);
+        if(aset->num_svcs) {
+            svc_names = malloc(sizeof(char*) * aset->num_svcs);
+            for(unsigned i = 0; i < aset->num_svcs; i++) {
+                const vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
+                if(!vscf_is_simple(svctype_cfg))
+                    log_fatal("plugin_multifo: resource %s (%s): 'service_types' values must be strings", resname, stanza);
+                svc_names[i] = vscf_simple_get_data(svctype_cfg);
+            }
         }
     }
-    else {
+
+    if(!svc_names) {
+        dmn_assert(!aset->num_svcs);
         aset->num_svcs = 1;
         svc_names = malloc(sizeof(char*));
         svc_names[0] = DEFAULT_SVCNAME;
