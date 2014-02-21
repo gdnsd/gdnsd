@@ -8,11 +8,6 @@ options => {
   realtime_stats = true
 }
 
-service_types => {
- down => { plugin => static, state => down },
- up => { plugin => static },
-}
-
 plugins => {
  geoip => {
   maps => {

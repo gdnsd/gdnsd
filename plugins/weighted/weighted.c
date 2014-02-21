@@ -25,6 +25,8 @@
 #include <gdnsd/plugin.h>
 #include <math.h>
 
+static const char DEFAULT_SVCNAME[] = "up";
+
 // Importantly, 1048575 * 64 * 64 barely fits in uint32_t
 #define MAX_ITEMS_PER_SET 64
 #define MAX_ADDRS_PER_GROUP 64
@@ -343,6 +345,11 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
                 addrset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
             }
         }
+    }
+    else {
+        addrset->num_svcs = 1;
+        addrset->svc_names = malloc(sizeof(char*));
+        addrset->svc_names[0] = strdup(DEFAULT_SVCNAME);
     }
 
     // multi option

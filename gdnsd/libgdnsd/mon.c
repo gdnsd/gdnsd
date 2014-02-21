@@ -201,6 +201,10 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     this_smgr->forced = false;
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
 
+    // the "down" special gets a different default than the rest
+    if(!strcmp(svctype_name, "down"))
+        this_smgr->real_sttl |= GDNSD_STTL_DOWN;
+
     smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
@@ -247,15 +251,29 @@ static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, const vscf_data
 }
 
 void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
+
+    unsigned num_svc_types_cfg = 0;
+
     if(svctypes_cfg) {
         if(!vscf_is_hash(svctypes_cfg))
             log_fatal("service_types, if defined, must have a hash value");
-        num_svc_types = vscf_hash_get_len(svctypes_cfg);
-        service_types = malloc(num_svc_types * sizeof(service_type_t));
-        for(unsigned i = 0; i < num_svc_types; i++) {
-            service_type_t* this_svc = &service_types[i];
-            this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
-        }
+        num_svc_types_cfg = vscf_hash_get_len(svctypes_cfg);
+    }
+
+    num_svc_types = num_svc_types_cfg + 2; // "up", "down"
+
+    // the last 2 service types are fixed to up and down
+    service_types = malloc(num_svc_types * sizeof(service_type_t));
+    service_types[num_svc_types - 2].name = "up";
+    service_types[num_svc_types - 1].name = "down";
+
+    // if this loop executes at all, svctypes_cfg is defined
+    //   (see if() block at top of func, and definition of num_svc_types)
+    for(unsigned i = 0; i < num_svc_types_cfg; i++) {
+        service_type_t* this_svc = &service_types[i];
+        this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
+        if(!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
+            log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
     }
 }
 
@@ -274,10 +292,9 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
     if(!need_p2)
         return;
 
-    // if need_p2, then a service type must have existed for an smgr to exist...
-    dmn_assert(num_svc_types);
+    dmn_assert(num_svc_types > 1); // up, down always exist
 
-    for(unsigned i = 0; i < num_svc_types; i++) {
+    for(unsigned i = 0; i < (num_svc_types - 2); i++) {
         dmn_assert(svctypes_cfg);
         service_type_t* this_svc = &service_types[i];
 
@@ -312,6 +329,17 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
             log_fatal("Service type '%s': timeout must be less than 90%% of interval)", this_svc->name);
         this_svc->plugin->add_svctype(this_svc->name, svctype_cfg, this_svc->interval, this_svc->timeout);
         vscf_hash_iterate(svctype_cfg, true, bad_svc_opt, (void*)this_svc->name);
+    }
+
+    // dummy config for up+down
+    for(unsigned i = (num_svc_types - 2); i < num_svc_types; i++) {
+        service_type_t* this_svc = &service_types[i];
+        this_svc->plugin = NULL;
+        this_svc->up_thresh = DEF_UP_THRESH;
+        this_svc->ok_thresh = DEF_OK_THRESH;
+        this_svc->down_thresh = DEF_DOWN_THRESH;
+        this_svc->interval = DEF_INTERVAL;
+        this_svc->timeout = DEF_TIMEOUT;
     }
 
     // now that we've solved the chicken-and-egg, finish processing

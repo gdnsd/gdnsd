@@ -29,6 +29,7 @@
 #include <netdb.h>
 #include <math.h>
 
+static const char DEFAULT_SVCNAME[] = "up";
 static const double DEF_UP_THRESH = 0.5;
 
 typedef struct {
@@ -160,6 +161,11 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
                 svc_names[i] = vscf_simple_get_data(svctype_cfg);
             }
         }
+    }
+    else {
+        aset->num_svcs = 1;
+        svc_names = malloc(sizeof(char*));
+        svc_names[0] = DEFAULT_SVCNAME;
     }
 
     double up_thresh = DEF_UP_THRESH;
