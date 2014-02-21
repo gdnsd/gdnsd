@@ -8,6 +8,7 @@ options => {
 }
 
 service_types => {
+ down86399 => { plugin => static, state => down, ttl => 86399 },
  down => { plugin => static, state => down },
  up => { plugin => static, state => up },
 }

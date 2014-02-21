@@ -152,10 +152,20 @@ void plugin_static_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     this_svc->name = strdup(name);
     this_svc->static_sttl = GDNSD_STTL_TTL_MAX;
 
+    const vscf_data_t* ttl_data = vscf_hash_get_data_byconstkey(svc_cfg, "ttl", true);
+    if(ttl_data) {
+        unsigned long fixed_ttl = 0;
+        if(!vscf_is_simple(ttl_data) || !vscf_simple_get_as_ulong(ttl_data, &fixed_ttl))
+            log_fatal("plugin_static: service type '%s': the value of 'ttl' must be a simple integer!", name);
+        if(fixed_ttl > GDNSD_STTL_TTL_MAX)
+            log_fatal("plugin_static: service type '%s': the value of 'ttl' must be <= %u", name, GDNSD_STTL_TTL_MAX);
+        this_svc->static_sttl = fixed_ttl;
+    }
+
     const vscf_data_t* state_data = vscf_hash_get_data_byconstkey(svc_cfg, "state", true);
     if(state_data) {
         if(!vscf_is_simple(state_data))
-            log_fatal("plugin_static: service type '%s': the value of 'state' must be a string!", name);
+            log_fatal("plugin_static: service type '%s': the value of 'state' must be 'up' or 'down' as a simple string!", name);
         const char* state_txt = vscf_simple_get_data(state_data);
         if(!strcasecmp(state_txt, "down"))
             this_svc->static_sttl |= GDNSD_STTL_DOWN;
