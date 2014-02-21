@@ -43,7 +43,7 @@ typedef struct {
     const char* desc;
     const svc_t* svc;
     ev_timer* local_timeout;
-    anysin_t addr;
+    const char* thing;
     unsigned idx;
     bool seen_once;
 } mon_t;
@@ -208,27 +208,22 @@ static char* num_to_str(const int i) {
     return out;
 }
 
-F_NONNULL
-static char* get_mon_addr_str(const mon_t* mon) {
-    dmn_assert(mon);
-
-    char hostbuf[INET6_ADDRSTRLEN];
-    int name_err = dmn_anysin2str_noport(&mon->addr, hostbuf);
-    if(name_err)
-        log_fatal("plugin_extmon: getnameinfo() failed on address for '%s': %s", mon->desc, gai_strerror(name_err));
-
-    return strdup(hostbuf);
-}
-
 const char IPADDR_SUB[11] = "%%IPADDR%%\0";
 const unsigned IPADDR_LEN = 10;
-static char* ipaddr_xlate(const char* instr, const char* addrstr, const unsigned addrstr_len) {
+const char THING_SUB[11]  = "%%THING%%\0";
+const unsigned THING_LEN  = 9;
+static char* thing_xlate(const char* instr, const char* thing, const unsigned thing_len) {
     char outbuf[1024]; // way more than enough, I'd hope...
     char* out_cur = outbuf;
     while(*instr) {
-        if(!strncmp(instr, IPADDR_SUB, IPADDR_LEN)) {
-            memcpy(out_cur, addrstr, addrstr_len);
-            out_cur += addrstr_len;
+        if(!strncmp(instr, THING_SUB, THING_LEN)) {
+            memcpy(out_cur, thing, thing_len);
+            out_cur += thing_len;
+            instr += THING_LEN;
+        }
+        else if(!strncmp(instr, IPADDR_SUB, IPADDR_LEN)) {
+            memcpy(out_cur, thing, thing_len);
+            out_cur += thing_len;
             instr += IPADDR_LEN;
         }
         else {
@@ -242,12 +237,10 @@ static char* ipaddr_xlate(const char* instr, const char* addrstr, const unsigned
 static void send_cmd(const unsigned idx, const mon_t* mon) {
     char** this_args = malloc(mon->svc->num_args * sizeof(char*));
 
-    char* addrstr = get_mon_addr_str(mon);
-    const unsigned addrstr_len = strlen(addrstr);
-    dmn_assert(addrstr_len);
+    const unsigned thing_len = strlen(mon->thing);
 
     for(unsigned i = 0; i < mon->svc->num_args; i++)
-        this_args[i] = ipaddr_xlate(mon->svc->args[i], addrstr, addrstr_len);
+        this_args[i] = thing_xlate(mon->svc->args[i], mon->thing, thing_len);
 
     extmon_cmd_t this_cmd = {
         .idx = idx,
@@ -265,7 +258,6 @@ static void send_cmd(const unsigned idx, const mon_t* mon) {
     for(unsigned i = 0; i < mon->svc->num_args; i++)
         free(this_args[i]);
     free(this_args);
-    free(addrstr);
 }
 
 static void spawn_helper(void) {
@@ -391,8 +383,8 @@ void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     }
 }
 
-void plugin_extmon_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+static void add_mon_any(const char* desc, const char* svc_name, const char* thing, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(thing);
 
     mons = realloc(mons, (num_mons + 1) * sizeof(mon_t));
     mon_t* this_mon = &mons[num_mons++];
@@ -407,9 +399,24 @@ void plugin_extmon_add_monitor(const char* desc, const char* svc_name, const any
         }
     }
     dmn_assert(this_mon->svc);
-    memcpy(&this_mon->addr, addr, sizeof(anysin_t));
+
+    this_mon->thing = strdup(thing);
     this_mon->local_timeout = NULL;
     this_mon->seen_once = false;
+}
+
+void plugin_extmon_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+    char hostbuf[INET6_ADDRSTRLEN];
+    int name_err = dmn_anysin2str_noport(addr, hostbuf);
+    if(name_err)
+        log_fatal("plugin_extmon: getnameinfo() failed on address for '%s': %s", desc, gai_strerror(name_err));
+    add_mon_any(desc, svc_name, hostbuf, idx);
+}
+
+void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, const char* cname, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname);
+    add_mon_any(desc, svc_name, cname, idx);
 }
 
 void plugin_extmon_post_daemonize(void) {

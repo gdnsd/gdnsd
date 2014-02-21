@@ -80,8 +80,8 @@ void plugin_null_add_svctype(const char* name, const vscf_data_t* svc_cfg V_UNUS
     this_svc->interval = interval;
 }
 
-void plugin_null_add_monitor(const char* desc V_UNUSED, const char* svc_name, const anysin_t* addr V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+static void add_mon_any(const char* svc_name, const unsigned idx) {
+    dmn_assert(svc_name);
 
     null_svc_t* this_svc = NULL;
 
@@ -100,6 +100,16 @@ void plugin_null_add_monitor(const char* desc V_UNUSED, const char* svc_name, co
     this_mon->interval_watcher = malloc(sizeof(ev_timer));
     ev_timer_init(this_mon->interval_watcher, &null_interval_cb, 0, 0);
     this_mon->interval_watcher->data = this_mon;
+}
+
+void plugin_null_add_monitor(const char* desc V_UNUSED, const char* svc_name, const anysin_t* addr V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+    add_mon_any(svc_name, idx);
+}
+
+void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname);
+    add_mon_any(svc_name, idx);
 }
 
 void plugin_null_init_monitors(struct ev_loop* mon_loop) {

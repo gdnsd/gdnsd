@@ -174,8 +174,8 @@ void plugin_static_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     }
 }
 
-void plugin_static_add_monitor(const char* desc V_UNUSED, const char* svc_name, const anysin_t* addr V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+static void add_mon_any(const char* svc_name, const unsigned idx) {
+    dmn_assert(svc_name);
 
     static_svc_t* this_svc = NULL;
 
@@ -191,6 +191,16 @@ void plugin_static_add_monitor(const char* desc V_UNUSED, const char* svc_name, 
     static_mon_t* this_mon = static_mons[num_mons - 1] = malloc(sizeof(static_mon_t));
     this_mon->svc = this_svc;
     this_mon->idx = idx;
+}
+
+void plugin_static_add_monitor(const char* desc V_UNUSED, const char* svc_name, const anysin_t* addr V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+    add_mon_any(svc_name, idx);
+}
+
+void plugin_static_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname);
+    add_mon_any(svc_name, idx);
 }
 
 void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
