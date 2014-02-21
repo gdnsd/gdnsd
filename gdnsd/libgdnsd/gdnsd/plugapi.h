@@ -97,6 +97,7 @@ typedef void (*gdnsd_exit_cb_t)(void);
 
 typedef void (*gdnsd_add_svctype_cb_t)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 typedef void (*gdnsd_add_monitor_cb_t)(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx);
+typedef void (*gdnsd_add_mon_cname_cb_t)(const char* desc, const char* svc_name, const char* cname, const unsigned idx);
 typedef void (*gdnsd_init_monitors_cb_t)(struct ev_loop* mon_loop);
 typedef void (*gdnsd_start_monitors_cb_t)(struct ev_loop* mon_loop);
 
@@ -115,6 +116,7 @@ typedef struct {
     gdnsd_exit_cb_t exit;
     gdnsd_add_svctype_cb_t add_svctype;
     gdnsd_add_monitor_cb_t add_monitor;
+    gdnsd_add_mon_cname_cb_t add_mon_cname;
     gdnsd_init_monitors_cb_t init_monitors;
     gdnsd_start_monitors_cb_t start_monitors;
 } plugin_t;

@@ -42,16 +42,21 @@ typedef struct {
 
 // if type is NULL, there is no real monitoring,
 //   it's only possible to administratively change
-//   the state.  This happens in two cases:
-// 1) "special" service types down/up/none
-// 2) "virtual" resources (CNAMEs and aggregates)
+//   the state.  This means a virtual resource
+//   via mon_add_admin(), and both addr and cname
+//   are invalid.  Otherwise is_cname flags which
+//   member of the union is valid.
 typedef struct {
     const char* desc;
     service_type_t* type;
-    anysin_t addr;
+    union {
+        anysin_t addr;
+        const char* cname;
+    };
     unsigned n_failure;
     unsigned n_success;
     bool forced;
+    bool is_cname;
     gdnsd_sttl_t real_sttl;
 } smgr_t;
 
@@ -149,10 +154,8 @@ static bool addr_eq(const anysin_t* a, const anysin_t* b) {
     return rv;
 }
 
-// Called from plugins once per monitored service type+IP combination
-//  to request monitoring and initialize various data/state.
-unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
-    dmn_assert(svctype_name); dmn_assert(addr);
+static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const char* cname) {
+    dmn_assert(svctype_name); dmn_assert(addr || cname);
 
     // first, sort out what svctype_name actually means to us
     service_type_t* this_svc = NULL;
@@ -164,31 +167,45 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     }
 
     if(!this_svc)
-        log_fatal("Invalid service type '%s' in monitoring request for '%s'", svctype_name, logf_anysin_noport(addr));
+        log_fatal("Invalid service type '%s' in monitoring request for '%s'",
+            svctype_name, addr ? logf_anysin_noport(addr) : cname);
 
     // next, check if this is a duplicate of a request issued earlier
     //   by some other plugin/resource, in which case we can just give
     //   them the existing index
     for(unsigned i = 0; i < num_smgrs; i++) {
         smgr_t* that_smgr = &smgrs[i];
-        if(addr_eq(addr, &that_smgr->addr) && this_svc == that_smgr->type)
+        if(addr && !that_smgr->is_cname && addr_eq(addr, &that_smgr->addr) && this_svc == that_smgr->type)
+            return i;
+        if(cname && that_smgr->is_cname && !strcmp(cname, that_smgr->cname) && this_svc == that_smgr->type)
             return i;
     }
 
+    char* desc;
+
     // for a new stype+addr combo, check that the plugin supports addr monitoring
-    if(this_svc->plugin && !this_svc->plugin->add_monitor)
-        log_fatal("Service type '%s' does not support address monitoring for '%s'", svctype_name, logf_anysin_noport(addr));
+    if(addr) {
+        if(this_svc->plugin && !this_svc->plugin->add_monitor)
+            log_fatal("Service type '%s' does not support address monitoring for '%s'",
+                svctype_name, logf_anysin_noport(addr));
 
-    // construct desc for this new unique monitor
-    char addr_str[INET6_ADDRSTRLEN];
-    int name_err = dmn_anysin2str_noport(addr, addr_str);
-    // this should basically never happen since the same family of functions will
-    //   have already converted it from anysin_t -> text earlier, but if it does,
-    //   we really don't have much we can do about logging it informatively...
-    if(name_err)
-        log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
+        // construct desc for this new unique monitor
+        char addr_str[INET6_ADDRSTRLEN];
+        int name_err = dmn_anysin2str_noport(addr, addr_str);
+        // this should basically never happen since the same family of functions will
+        //   have already converted it from anysin_t -> text earlier, but if it does,
+        //   we really don't have much we can do about logging it informatively...
+        if(name_err)
+            log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
 
-    char* desc = gdnsd_str_combine_n(3, addr_str, "/", svctype_name);
+        desc = gdnsd_str_combine_n(3, addr_str, "/", svctype_name);
+    }
+    else { // cname
+        if(this_svc->plugin && !this_svc->plugin->add_mon_cname)
+            log_fatal("Service type '%s' does not support CNAME monitoring for '%s'",
+                svctype_name, cname);
+        desc = gdnsd_str_combine_n(3, cname, "/", svctype_name);
+    }
 
     // allocate the new smgr/sttl
     const unsigned idx = num_smgrs++;
@@ -197,7 +214,15 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     smgr_sttl_consumer = realloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
 
     smgr_t* this_smgr = &smgrs[idx];
-    memcpy(&this_smgr->addr, addr, sizeof(anysin_t));
+    if(addr) {
+        this_smgr->is_cname = false;
+        memcpy(&this_smgr->addr, addr, sizeof(anysin_t));
+    }
+    else {
+        this_smgr->is_cname = true;
+        this_smgr->cname = strdup(cname);
+    }
+
     this_smgr->type = this_svc;
     this_smgr->desc = desc;
     this_smgr->n_failure = 0;
@@ -214,7 +239,18 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     return idx;
 }
 
-// as above for CNAME/virtual resources that can only have a forced admin state
+// Called from plugins once per monitored service type+IP combination
+//  to request monitoring and initialize various data/state.
+unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
+    return mon_thing(svctype_name, addr, NULL);
+}
+
+// As above for CNAMEs
+unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname) {
+    return mon_thing(svctype_name, NULL, cname);
+}
+
+// .. for virtual entities (e.g. datacenters), which have no service_type
 unsigned gdnsd_mon_admin(const char* desc) {
     dmn_assert(desc);
 
@@ -353,11 +389,17 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
     //   the monitoring requests resolver plugins asked about earlier
     for(unsigned i = 0; i < num_smgrs; i++) {
         smgr_t* this_smgr = &smgrs[i];
-        if(this_smgr->type) { // CNAME/virtual get no service_type at all
+        if(this_smgr->type) { // virtuals (mon_admin) get no service_type at all
             if(this_smgr->type->plugin) { // down/up get no plugin
-                dmn_assert(this_smgr->type->plugin->add_monitor);
-                if(!(force_v6_up && this_smgr->addr.sa.sa_family == AF_INET6))
-                    this_smgr->type->plugin->add_monitor(this_smgr->desc, this_smgr->type->name, &this_smgr->addr, i);
+                if(this_smgr->is_cname) {
+                    dmn_assert(this_smgr->type->plugin->add_mon_cname);
+                    this_smgr->type->plugin->add_mon_cname(this_smgr->desc, this_smgr->type->name, this_smgr->cname, i);
+                }
+                else {
+                    dmn_assert(this_smgr->type->plugin->add_monitor);
+                    if(!(force_v6_up && this_smgr->addr.sa.sa_family == AF_INET6))
+                        this_smgr->type->plugin->add_monitor(this_smgr->desc, this_smgr->type->name, &this_smgr->addr, i);
+                }
             }
         }
     }

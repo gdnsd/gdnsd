@@ -157,6 +157,7 @@ static const plugin_t* gdnsd_plugin_load(const char* pname) {
     PSETFUNC(exit)
     PSETFUNC(add_svctype)
     PSETFUNC(add_monitor)
+    PSETFUNC(add_mon_cname)
     PSETFUNC(init_monitors)
     PSETFUNC(start_monitors)
 #   undef PSETFUNC

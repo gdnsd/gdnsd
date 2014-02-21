@@ -60,9 +60,12 @@ void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl);
 F_NONNULL
 unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr);
 
+// as above for a CNAME
+F_NONNULL
+unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname);
+
 // admin-only state registration.  plugin constructs desc
 //   within its own scope, e.g.
-//     "plugname/resname/www.foo.com" for a CNAME, or
 //     "plugname/resname/dcname" for a datacenter virtual.
 //   it is up to the plugin to ensure uniqueness here...
 F_NONNULL
