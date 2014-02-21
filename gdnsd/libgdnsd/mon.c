@@ -26,6 +26,7 @@
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/prcu-priv.h"
 #include "gdnsd/vscf.h"
+#include "gdnsd/misc.h"
 
 #include <ev.h>
 
@@ -151,8 +152,8 @@ static bool addr_eq(const anysin_t* a, const anysin_t* b) {
 
 // Called from plugins once per monitored service type+IP combination
 //  to request monitoring and initialize various data/state.
-unsigned gdnsd_mon_addr(const char* desc, const char* svctype_name, const anysin_t* addr) {
-    dmn_assert(desc); dmn_assert(addr);
+unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
+    dmn_assert(addr);
 
     // first, sort out what svctype_name actually means to us
     service_type_t* this_svc = NULL;
@@ -169,10 +170,9 @@ unsigned gdnsd_mon_addr(const char* desc, const char* svctype_name, const anysin
             break;
         }
     }
-    if(!this_svc)
-        log_fatal("Invalid service type '%s' in monitoring request for '%s'", svctype_name, desc);
 
-    // from here, this_svc is only NULL if special down/up/none service_type
+    if(!this_svc)
+        log_fatal("Invalid service type '%s' in monitoring request for '%s'", svctype_name, logf_anysin_noport(addr));
 
     // next, check if this is a duplicate of a request issued earlier
     //   by some other plugin/resource, in which case we can just give
@@ -183,6 +183,17 @@ unsigned gdnsd_mon_addr(const char* desc, const char* svctype_name, const anysin
             return i;
     }
 
+    // construct desc for this new unique monitor
+    char addr_str[INET6_ADDRSTRLEN];
+    int name_err = dmn_anysin2str_noport(addr, addr_str);
+    // this should basically never happen since the same family of functions will
+    //   have already converted it from anysin_t -> text earlier, but if it does,
+    //   we really don't have much we can do about logging it informatively...
+    if(name_err)
+        log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
+
+    char* desc = gdnsd_str_combine_n(3, svctype_name_cmp, "/", addr_str);
+
     // allocate the new smgr/sttl
     const unsigned idx = num_smgrs++;
     smgrs = realloc(smgrs, sizeof(smgr_t) * num_smgrs);
@@ -192,7 +203,7 @@ unsigned gdnsd_mon_addr(const char* desc, const char* svctype_name, const anysin
     smgr_t* this_smgr = &smgrs[idx];
     memcpy(&this_smgr->addr, addr, sizeof(anysin_t));
     this_smgr->type = this_svc;
-    this_smgr->desc = strdup(desc);
+    this_smgr->desc = desc;
     this_smgr->n_failure = 0;
     this_smgr->n_success = 0;
     this_smgr->forced = false;

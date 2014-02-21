@@ -127,11 +127,8 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
 
     as->indices = malloc(sizeof(unsigned) * aset->num_svcs);
 
-    for(unsigned i = 0; i < aset->num_svcs; i++) {
-        char* desc = gdnsd_str_combine_n(6, "multifo/", resname, ipv6 ? "/ipv6/" : "/ipv4/", addr_desc, "/", svc_names[i]);
-        as->indices[i] = gdnsd_mon_addr(desc, svc_names[i], &as->addr);
-        free(desc);
-    }
+    for(unsigned i = 0; i < aset->num_svcs; i++)
+        as->indices[i] = gdnsd_mon_addr(svc_names[i], &as->addr);
 
     return true;
 }

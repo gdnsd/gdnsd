@@ -42,11 +42,6 @@ static const char* which_str[2] = {
     "secondary"
 };
 
-static const char* which_str_mon[2] = {
-    "/pri/",
-    "/sec/"
-};
-
 typedef struct {
     anysin_t addrs[2];
     unsigned num_svcs;
@@ -115,12 +110,8 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
             log_fatal("plugin_simplefo: resource %s (%s): '%s' is not an IPv4 address", resname, stanza, addr_txt);
 
         as->indices[which] = malloc(sizeof(unsigned) * num_svcs);
-        for(unsigned j = 0; j < num_svcs; j++) {
-            char* desc = gdnsd_str_combine_n(5, "simplefo/", resname, ipv6 ? "/ipv6" : "/ipv4",
-                which_str_mon[which], svc_names[j]);
-            as->indices[which][j] = gdnsd_mon_addr(desc, svc_names[j], &as->addrs[which]);
-            free(desc);
-        }
+        for(unsigned j = 0; j < num_svcs; j++)
+            as->indices[which][j] = gdnsd_mon_addr(svc_names[j], &as->addrs[which]);
     }
 
     free(svc_names);

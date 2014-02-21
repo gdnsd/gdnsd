@@ -48,7 +48,7 @@ typedef uint32_t gdnsd_sttl_t;
 
 // called during load_config to register address healthchecks, returns
 //   an index to check state with...
-unsigned gdnsd_mon_addr(const char* desc, const char* svctype_name, const anysin_t* addr);
+unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr);
 
 // admin-only state registration.  plugin constructs desc
 //   within its own scope, e.g.

@@ -158,11 +158,8 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
     else if(!ipv6 && res_item->as[0].addr.sa.sa_family != AF_INET)
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
-    for(unsigned i = 0; i < addrset->num_svcs; i++) {
-        char *desc = gdnsd_str_combine_n(6, "weighted/", res_name, ipv6 ? "/ipv6/" : "/ipv4/", item_name, "/", addrset->svc_names[i]);
-        res_item->as[0].indices[i] = gdnsd_mon_addr(desc, addrset->svc_names[i], &res_item->as[0].addr);
-        free(desc);
-    }
+    for(unsigned i = 0; i < addrset->num_svcs; i++)
+        res_item->as[0].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[0].addr);
     log_debug("plugin_weighted: resource '%s' (%s), item '%s': A '%s' added w/ weight %u", res_name, stanza, item_name, addr_txt, res_item->weight);
 }
 
@@ -211,12 +208,8 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
     else if(!ipv6 && res_item->as[lb_idx].addr.sa.sa_family != AF_INET)
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
-    for(unsigned i = 0; i < addrset->num_svcs; i++) {
-        char* desc = gdnsd_str_combine_n(8, "weighted/", res_name, ipv6 ? "/ipv6/" : "/ipv4/",
-            item_name, "/", lb_name, "/", addrset->svc_names[i]);
-        res_item->as[lb_idx].indices[i] = gdnsd_mon_addr(desc, addrset->svc_names[i], &res_item->as[lb_idx].addr);
-        free(desc);
-    }
+    for(unsigned i = 0; i < addrset->num_svcs; i++)
+        res_item->as[lb_idx].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[lb_idx].addr);
 
     log_debug("plugin_weighted: resource '%s' (%s), item '%s', address %s added with weight %u", res_name, stanza, item_name, addr_txt, res_item->as[lb_idx].weight);
 
