@@ -103,7 +103,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
         }
     }
     else {
-        num_svcs = 1;
+        as->num_svcs = num_svcs = 1;
         svc_names = malloc(sizeof(char*));
         svc_names[0] = DEFAULT_SVCNAME;
     }
