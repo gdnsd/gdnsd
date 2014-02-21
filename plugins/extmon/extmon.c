@@ -212,10 +212,8 @@ F_NONNULL
 static char* get_mon_addr_str(const mon_t* mon) {
     dmn_assert(mon);
 
-    char hostbuf[NI_MAXHOST + 1];
-
-    hostbuf[0] = 0; // JIC getnameinfo leaves them un-init
-    int name_err = getnameinfo(&mon->addr.sa, mon->addr.len, hostbuf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+    char hostbuf[INET6_ADDRSTRLEN];
+    int name_err = dmn_anysin2str_noport(&mon->addr, hostbuf);
     if(name_err)
         log_fatal("plugin_extmon: getnameinfo() failed on address for '%s': %s", mon->desc, gai_strerror(name_err));
 

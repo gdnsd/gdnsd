@@ -141,51 +141,72 @@ bool dmn_anysin_is_anyaddr(const dmn_anysin_t* asin) {
 
 static const char* generic_nullstr = "(null)";
 
-// Note: NI_MAXHOST seems to generally be 1025
-const char* dmn_logf_anysin(const dmn_anysin_t* asin) {
-    if(!asin)
-        return generic_nullstr;
+int dmn_anysin2str(const dmn_anysin_t* asin, char* buf) {
+    int name_err = 0;
+    buf[0] = 0;
 
-    char hostbuf[NI_MAXHOST + 1];
-    char servbuf[NI_MAXSERV + 1];
-
+    char hostbuf[INET6_ADDRSTRLEN];
+    char servbuf[6];
     hostbuf[0] = servbuf[0] = 0; // JIC getnameinfo leaves them un-init
-    int name_err = getnameinfo(&asin->sa, asin->len, hostbuf, NI_MAXHOST, servbuf, NI_MAXSERV, NI_NUMERICHOST | NI_NUMERICSERV);
+
+    if(asin) {
+        name_err = getnameinfo(&asin->sa, asin->len, hostbuf, INET6_ADDRSTRLEN, servbuf, 6, NI_NUMERICHOST | NI_NUMERICSERV);
+        if(!name_err) {
+            const bool isv6 = (asin->sa.sa_family == AF_INET6);
+            const unsigned hostbuf_len = strlen(hostbuf);
+            const unsigned servbuf_len = strlen(servbuf);
+            dmn_assert((hostbuf_len + servbuf_len + (isv6 ? 4 : 2)) <= DMN_ANYSIN_MAXSTR);
+            char* bufptr = buf;
+            if(isv6)
+                *bufptr++ = '[';
+            memcpy(bufptr, hostbuf, hostbuf_len);
+            bufptr += hostbuf_len;
+            if(isv6)
+                *bufptr++ = ']';
+            *bufptr++ = ':';
+            memcpy(bufptr, servbuf, servbuf_len + 1); // include NUL
+        }
+    }
+    else {
+        strcpy(buf, generic_nullstr);
+    }
+
+    return name_err;
+}
+
+const char* dmn_logf_anysin(const dmn_anysin_t* asin) {
+    char tmpbuf[DMN_ANYSIN_MAXSTR];
+    int name_err = dmn_anysin2str(asin, tmpbuf);
     if(name_err)
         return gai_strerror(name_err); // This might be confusing...
 
-    const bool isv6 = (asin->sa.sa_family == AF_INET6);
-    const size_t hostbuf_len = strlen(hostbuf);
-    const size_t servbuf_len = strlen(servbuf);
-    const size_t alloc_len = hostbuf_len + servbuf_len + (isv6 ? 2 : 4);
-    char* buf = dmn_fmtbuf_alloc(alloc_len);
-    char* bufptr = buf;
-    if(isv6)
-        *bufptr++ = '[';
-    memcpy(bufptr, hostbuf, hostbuf_len);
-    bufptr += hostbuf_len;
-    if(isv6)
-        *bufptr++ = ']';
-    *bufptr++ = ':';
-    memcpy(bufptr, servbuf, servbuf_len + 1); // include NUL
+    const unsigned copylen = strlen(tmpbuf) + 1;
+    char* buf = dmn_fmtbuf_alloc(copylen);
+    memcpy(buf, tmpbuf, copylen);
 
     return buf;
 }
 
-// Note: NI_MAXHOST seems to generally be 1025
+int dmn_anysin2str_noport(const dmn_anysin_t* asin, char* buf) {
+    int name_err = 0;
+    buf[0] = 0;
+
+    if(asin)
+        name_err = getnameinfo(&asin->sa, asin->len, buf, INET6_ADDRSTRLEN, NULL, 0, NI_NUMERICHOST);
+    else
+        strcpy(buf, generic_nullstr);
+
+    return name_err;
+}
+
 const char* dmn_logf_anysin_noport(const dmn_anysin_t* asin) {
-    if(!asin)
-        return generic_nullstr;
-
-    char hostbuf[NI_MAXHOST + 1];
-
-    hostbuf[0] = 0; // JIC getnameinfo leaves them un-init
-    int name_err = getnameinfo(&asin->sa, asin->len, hostbuf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+    char tmpbuf[INET6_ADDRSTRLEN];
+    int name_err = dmn_anysin2str_noport(asin, tmpbuf);
     if(name_err)
         return gai_strerror(name_err); // This might be confusing...
 
-    char* buf = dmn_fmtbuf_alloc(strlen(hostbuf) + 1);
-    strcpy(buf, hostbuf);
-
+    const unsigned copylen = strlen(tmpbuf) + 1;
+    char* buf = dmn_fmtbuf_alloc(copylen);
+    memcpy(buf, tmpbuf, copylen);
     return buf;
 }

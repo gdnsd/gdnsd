@@ -254,27 +254,53 @@ typedef struct {
 
 #define DMN_ANYSIN_MAXLEN sizeof(struct sockaddr_in6)
 
+// max length of ASCII numeric ipv6 addr, with room for trailing NUL
+#ifndef INET6_ADDRSTRLEN
+#  define INET6_ADDRSTRLEN 46
+#endif
+
+// maximum addr:port ASCII representation from dmn_anysin2str below
+// maximal form is "[...IPv6...]:12345\0"
+#define DMN_ANYSIN_MAXSTR (1 + ((INET6_ADDRSTRLEN) - 1) + 1 + 1 + 5 + 1)
+
 // transforms addr_txt + port_txt -> result using getaddrinfo(), setting result->len
 // if "numeric_only" is true:
 //    input text fields must be numeric, not hostnames or port names.
 // if false, hostnames and port names are possible, which may result
 //    in the libc doing DNS lookups and such on your behalf.
-// caller must allocate result to sizeof(anysin_t)
-// port can be NULL, in which case the proto-specific port field will be zero
+// caller must allocate result to sizeof(dmn_anysin_t)
+// port_txt can be NULL, in which case the proto-specific port field will be zero
 // retval is retval from getaddrinfo() itself (if non-zero, error occurred and
 //   string representation is available from gai_strerror()).
 // result is unaffected if an error occurs.
+DMN_F_NONNULLX(1,3)
 int dmn_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, dmn_anysin_t* result, bool numeric_only);
 
 // As above, but for parsing the address and port from a single string of the form addr:port,
 //   where :port is optional, and addr may be surround by [] (to help with ipv6 [::1]:53 issues).
 // Port defaults to unsigned arg "def_port" if not specified in the input string.
+DMN_F_NONNULLX(1,3)
 int dmn_anysin_fromstr(const char* addr_port_text, const unsigned def_port, dmn_anysin_t* result, bool numeric_only);
 
 // Check if the sockaddr is the V4 or V6 ANY-address (0.0.0.0, or ::)
+DMN_F_NONNULL
 bool dmn_anysin_is_anyaddr(const dmn_anysin_t* asin);
 
-// Log-formatters for dmn_anysin_t
+// convert "asin" to numeric ASCII of the form "ipv4:port" or "[ipv6]:port"
+// NULL input results in the string "(null)"
+// note that buf *must* be pre-allocated to at least DMN_ANYSIN_MAXSTR bytes!
+// return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
+DMN_F_NONNULLX(2)
+int dmn_anysin2str(const dmn_anysin_t* asin, char* buf);
+
+// convert just the address portion to ASCII in "buf"
+// NULL input results in the string "(null)"
+// note that buf *must* be pre-allocated to at least INET6_ADDRSTRLEN bytes!
+// return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
+DMN_F_NONNULLX(2)
+int dmn_anysin2str_noport(const dmn_anysin_t* asin, char* buf);
+
+// Log-formatters for dmn_anysin_t + dmn_log_*(), which use the above...
 const char* dmn_logf_anysin(const dmn_anysin_t* asin);
 const char* dmn_logf_anysin_noport(const dmn_anysin_t* asin);
 

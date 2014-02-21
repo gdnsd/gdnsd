@@ -98,7 +98,7 @@ AC_SUBST([NETLIBS])
 
 dnl sockaddr<->string mapping
 AC_CHECK_FUNCS([inet_pton getifaddrs getaddrinfo getnameinfo],,AC_MSG_ERROR([required network library calls missing]))
-AC_CHECK_DECLS([NI_MAXHOST, NI_MAXSERV, NI_NUMERICHOST, NI_NUMERICSERV],,AC_MSG_ERROR([NI_* decls missing]),[
+AC_CHECK_DECLS([NI_NUMERICHOST, NI_NUMERICSERV],,AC_MSG_ERROR([NI_NUMERIC* decls missing]),[
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
