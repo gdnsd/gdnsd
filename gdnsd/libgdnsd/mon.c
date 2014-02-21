@@ -185,7 +185,7 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
     if(name_err)
         log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
 
-    char* desc = gdnsd_str_combine_n(3, svctype_name, "/", addr_str);
+    char* desc = gdnsd_str_combine_n(3, addr_str, "/", svctype_name);
 
     // allocate the new smgr/sttl
     const unsigned idx = num_smgrs++;
