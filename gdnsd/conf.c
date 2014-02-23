@@ -290,95 +290,97 @@ static bool dns_addr_is_dupe(const anysin_t* new_addr) {
     return false;
 }
 
-static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-
+static void dns_listen_any(const dns_addr_t* addr_defs, const bool has_v6) {
     dmn_assert(addr_defs);
+
+    gconfig.num_dns_addrs = has_v6 ? 2 : 1;
+    gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+    dns_addr_t* ac_v4 = &gconfig.dns_addrs[0];
+    memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
+    make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
+    if(has_v6) {
+        dns_addr_t* ac_v6 = &gconfig.dns_addrs[1];
+        memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
+        make_addr("::", addr_defs->dns_port, &ac_v6->addr);
+    }
+}
+
+static void dns_listen_scan(const dns_addr_t* addr_defs, const bool has_v6) {
+    dmn_assert(addr_defs);
+
     anysin_t temp_asin;
+    bool v6_warned = false;
+
+    struct ifaddrs* ifap;
+    if(getifaddrs(&ifap))
+        dmn_log_fatal("getifaddrs() for 'listen => scan' failed: %s", logf_errno());
+
+    gconfig.num_dns_addrs = 0;
+    for(;ifap;ifap = ifap->ifa_next) {
+        if(!ifap->ifa_addr)
+            continue;
+
+        if(ifap->ifa_addr->sa_family == AF_INET6) {
+            if(!has_v6) {
+                if(!v6_warned) {
+                    dmn_log_info("automatic interface scanning via 'listen => scan' detected one or more IPv6 interfaces, but IPv6 appears to be non-functional on this host in general, so they will be ignored...");
+                    v6_warned = true;
+                }
+                continue;
+            }
+            memcpy(&temp_asin.sin6, ifap->ifa_addr, sizeof(struct sockaddr_in6));
+            temp_asin.len = sizeof(struct sockaddr_in6);
+        }
+        else if(ifap->ifa_addr->sa_family == AF_INET) {
+            memcpy(&temp_asin.sin, ifap->ifa_addr, sizeof(struct sockaddr_in));
+            temp_asin.len = sizeof(struct sockaddr_in);
+        }
+        else { // unknown family...
+            continue;
+        }
+
+        if(gdnsd_anysin_is_anyaddr(&temp_asin))
+            continue;
+
+        if(temp_asin.sa.sa_family == AF_INET6)
+            temp_asin.sin6.sin6_port = htons(addr_defs->dns_port);
+        else
+            temp_asin.sin.sin_port = htons(addr_defs->dns_port);
+
+        if(dns_addr_is_dupe(&temp_asin))
+            continue;
+
+        gconfig.dns_addrs = realloc(gconfig.dns_addrs, (gconfig.num_dns_addrs + 1) * sizeof(dns_addr_t));
+        dns_addr_t* addrconf = &gconfig.dns_addrs[gconfig.num_dns_addrs++];
+        memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
+        memcpy(&addrconf->addr, &temp_asin, sizeof(anysin_t));
+        addrconf->autoscan = true;
+    }
+
+    freeifaddrs(ifap);
+
+    if(!gconfig.num_dns_addrs)
+        dmn_log_fatal("automatic interface scanning via 'listen => scan' found no valid addresses to listen on");
+}
+
+static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+    dmn_assert(addr_defs);
 
     const bool has_v6 = gdnsd_tcp_v6_ok();
 
-    // note this only covers the "scan" and "any" cases.  A single is_simple
-    //   IP address is covered as if it were an array of one at the bottom of the func
-    bool def_warn = true;
-    if(listen_opt && vscf_is_simple(listen_opt)) {
+    if(!listen_opt)
+        return dns_listen_any(addr_defs, has_v6);
+    if(vscf_is_simple(listen_opt)) {
         const char* simple_str = vscf_simple_get_data(listen_opt);
         if(!strcmp(simple_str, "any")) {
-            gconfig.num_dns_addrs = has_v6 ? 2 : 1;
-            gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
-            dns_addr_t* ac_v4 = &gconfig.dns_addrs[0];
-            memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
-            make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
-            if(has_v6) {
-                dns_addr_t* ac_v6 = &gconfig.dns_addrs[1];
-                memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
-                make_addr("::", addr_defs->dns_port, &ac_v6->addr);
-            }
-            return;
+            return dns_listen_any(addr_defs, has_v6);
         }
         else if(!strcmp(simple_str, "scan")) {
-            def_warn = false;
-            listen_opt = NULL; // fall-through default scanning code below
+            return dns_listen_scan(addr_defs, has_v6);
         }
     }
 
-    if(!listen_opt) {
-        if(def_warn)
-            log_warn("The default behavior with no 'listen' option (interface scanning) will change in a future version!  If your configuration relies on interface scanning, please switch to explicitly configuring 'listen = scan' in the config options stanza, which will silence this warning.");
-
-        bool v6_warned = false;
-
-        struct ifaddrs* ifap;
-        if(getifaddrs(&ifap))
-            dmn_log_fatal("getifaddrs() for defaulted DNS listeners failed: %s", logf_errno());
-
-        gconfig.num_dns_addrs = 0;
-        for(;ifap;ifap = ifap->ifa_next) {
-            if(!ifap->ifa_addr)
-                continue;
-
-            if(ifap->ifa_addr->sa_family == AF_INET6) {
-                if(!has_v6) {
-                    if(!v6_warned) {
-                        dmn_log_info("Default interface-scanning (no explicit listen-address config) on this host detected one or more IPv6 interfaces, but IPv6 appears to be non-functional on this host in general, so they will be ignored...");
-                        v6_warned = true;
-                    }
-                    continue;
-                }
-                memcpy(&temp_asin.sin6, ifap->ifa_addr, sizeof(struct sockaddr_in6));
-                temp_asin.len = sizeof(struct sockaddr_in6);
-            }
-            else if(ifap->ifa_addr->sa_family == AF_INET) {
-                memcpy(&temp_asin.sin, ifap->ifa_addr, sizeof(struct sockaddr_in));
-                temp_asin.len = sizeof(struct sockaddr_in);
-            }
-            else { // unknown family...
-                continue;
-            }
-
-            if(gdnsd_anysin_is_anyaddr(&temp_asin))
-                continue;
-
-            if(temp_asin.sa.sa_family == AF_INET6)
-                temp_asin.sin6.sin6_port = htons(addr_defs->dns_port);
-            else
-                temp_asin.sin.sin_port = htons(addr_defs->dns_port);
-
-            if(dns_addr_is_dupe(&temp_asin))
-                continue;
-
-            gconfig.dns_addrs = realloc(gconfig.dns_addrs, (gconfig.num_dns_addrs + 1) * sizeof(dns_addr_t));
-            dns_addr_t* addrconf = &gconfig.dns_addrs[gconfig.num_dns_addrs++];
-            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
-            memcpy(&addrconf->addr, &temp_asin, sizeof(anysin_t));
-            addrconf->autoscan = true;
-        }
-
-        freeifaddrs(ifap);
-
-        if(!gconfig.num_dns_addrs)
-            dmn_log_fatal("Default, automatic interface scanning found no valid addresses to listen on (try explicitly configuring your listen addresses?)");
-    }
-    else if(vscf_is_hash(listen_opt)) {
+    if(vscf_is_hash(listen_opt)) {
         gconfig.num_dns_addrs = vscf_hash_get_len(listen_opt);
         gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
         for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
