@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/blblack/gdnsd.png)](https://travis-ci.org/blblack/gdnsd)
+[![Coverity Scan Build Status](https://scan.coverity.com/projects/760/badge.svg)](https://scan.coverity.com/projects/760)
 
 ## Overview
 
