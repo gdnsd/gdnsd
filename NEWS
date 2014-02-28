@@ -1,4 +1,30 @@
 
+1.11.2 - 2014-02-27
+    Bugfix: HTTP stats output network send code was horribly
+      broken in theory, but the bugs were difficult to hit
+      in practice.  Triggering required the combination of
+      a large-enough set of monitored services and smallish
+      TCP send buffers, such that the data wouldn't be
+      completely sent by the first writev() call.  Was finally
+      noticed by someone monitoring 50+ services on a certain
+      type of VM instance (thanks YTS for the report!)
+    Bugfix: Stats output buffer calculations made more-robust.
+      They were too small in some very corner cases, but I
+      don't believe anyone ever hit this bug; it was found
+      via source analysis.
+    Bugfix: plugin_simplefo now works correctly with no
+      service_types specified (default http checks).  This
+      has been broken for years.  Apparently nobody uses it
+      this way, if at all.
+    *** This is a good time to re-iterate that v2.0.0 is due
+      sometime "soon".  2.x will have some substantial
+      backwards-compatibility breaks with 1.x, especially for
+      any 3rd party plugin.  Anything that currently gives a
+      deprecation notice in 1.x will be removed/changed in 2.x
+      for sure, so look out for those in your log output.  The
+      branch is available as it progresses at:
+             https://github.com/blblack/gdnsd/tree/2.x
+
 1.11.1 - 2014-02-11
     Bugfix for plugin_geoip's normalization of "nets" input data.
       This bug affected some forms of un-normalized "nets" inputs,
