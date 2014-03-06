@@ -33,7 +33,7 @@
 
 typedef struct {
     const char* name;
-    unsigned long* ok_codes;
+    unsigned* ok_codes;
     char* req_data;
     unsigned req_data_len;
     unsigned num_ok_codes;
@@ -263,7 +263,7 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
         md->res_buf[13] = '\0';
         char code_str[4] = { 0 };
         if(1 == sscanf(md->res_buf, "HTTP/1.%*1[01]%*1[ ]%3c%*1[ ]", code_str)) {
-            unsigned long lcode = strtoul(code_str, NULL, 10);
+            unsigned lcode = (unsigned)strtoul(code_str, NULL, 10);
             for(unsigned i = 0; i < md->http_svc->num_ok_codes; i++) {
                 if(lcode == md->http_svc->ok_codes[i]) {
                     final_status = true;
@@ -374,13 +374,15 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
         if(ok_codes_cfg) {
             ok_codes_set = true;
             this_svc->num_ok_codes = vscf_array_get_len(ok_codes_cfg);
-            this_svc->ok_codes = malloc(sizeof(unsigned long) * this_svc->num_ok_codes);
+            this_svc->ok_codes = malloc(sizeof(unsigned) * this_svc->num_ok_codes);
             for(unsigned i = 0; i < this_svc->num_ok_codes; i++) {
                 const vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);
-                if(!vscf_simple_get_as_ulong(code_cfg, &this_svc->ok_codes[i]))
+                unsigned long tmpcode;
+                if(!vscf_simple_get_as_ulong(code_cfg, &tmpcode))
                     log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%s', must be numeric http status code (100-999)", this_svc->name, vscf_simple_get_data(code_cfg));
-                if(this_svc->ok_codes[i] < 100LU || this_svc->ok_codes[i] > 999LU)
-                    log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%lu', must be numeric http status code (100-999)", this_svc->name, this_svc->ok_codes[i]);
+                if(tmpcode < 100LU || tmpcode > 999LU)
+                    log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%lu', must be numeric http status code (100-999)", this_svc->name, tmpcode);
+                this_svc->ok_codes[i] = (unsigned)tmpcode;
             }
         }
     }
@@ -388,7 +390,7 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
     // no config at all, but not the empty array...
     if(!ok_codes_set) {
         this_svc->num_ok_codes = 1;
-        this_svc->ok_codes = malloc(sizeof(unsigned long));
+        this_svc->ok_codes = malloc(sizeof(unsigned));
         this_svc->ok_codes[0] = 200LU;
     }
 
