@@ -37,12 +37,14 @@ static char* djb_dir = NULL;
 static zscan_djb_zonedata_t* active_zonedata = NULL;
 
 static void unload_zones(void) {
-    ztree_txn_start();
-    for (zscan_djb_zonedata_t* cur = active_zonedata; cur; cur = cur->next)
-        ztree_txn_update(cur->zone, NULL);
-    ztree_txn_end();
+    if (active_zonedata) {
+        ztree_txn_start();
+        for (zscan_djb_zonedata_t* cur = active_zonedata; cur; cur = cur->next)
+            ztree_txn_update(cur->zone, NULL);
+        ztree_txn_end();
 
-    zscan_djbzone_free(&active_zonedata);
+        zscan_djbzone_free(&active_zonedata);
+    }
 }
 
 static void zsrc_djb_sync_zones(void) {
