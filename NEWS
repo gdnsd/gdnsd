@@ -38,11 +38,8 @@
       * The zonefile syntax for the TTLs of DYNA and DYNC RRs has changed.
         It now accepts the form MAX[/MIN], where MIN defaults to half
         of MAX.
-      * The previous TTL behavior for DYNA/DYNC has changed substantially.
-        Zonefile entries for DYNA/DYNC have an expanded format for
-        specifying TTLs: the format is MAX[/MIN], where MIN defaults
-        to half of MAX.
-      * Previously the zonefile TTL would be served as-is for 'UP'
+      * The TTL behavior for DYNA/DYNC has changed substantially:
+        Previously the zonefile TTL would be served as-is for 'UP'
         resources, and cut in half for 'DANGER' or 'DOWN' resources.
         Now, an internal TTL is calculated based on the minimum time
         to the next state change between 'UP' and 'DOWN' according to
