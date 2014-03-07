@@ -43,15 +43,25 @@ static const unsigned MAX_RESOURCES = 0x01000000U; // as a count
 static const unsigned RES_MASK      = 0x00FFFFFFU;
 static const unsigned DC_MASK       = 0xFF000000U;
 
+static const char DEFAULT_SVCNAME[] = "up";
+
 typedef struct {
-    const plugin_t* plugin;
-    char* plugin_name;
-    char* res_name;
     char* dc_name;
-    uint8_t* dname; // for direct CNAME, and the "invalid" case
-    unsigned dname_idx; // admin state idx for above
     unsigned dc_mon_idx; // admin state for the datacenter itself, in this resource
-    unsigned res_num;
+    bool is_cname; // which union member below
+    union {
+        struct { // sub-plugin case
+            const plugin_t* plugin;
+            char* plugin_name;
+            char* res_name;
+            unsigned res_num;
+        };
+        struct { // cname case
+            uint8_t* dname;
+            unsigned* indices;
+            unsigned num_svcs;
+        };
+    };
 } dc_t;
 
 typedef struct {
@@ -163,74 +173,98 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
 }
 
 F_NONNULL
-static dc_t* config_res_perdc(const unsigned mapnum, const vscf_data_t* cfg, const char* resname) {
-    dmn_assert(cfg); dmn_assert(resname);
-    dmn_assert(vscf_is_hash(cfg));
+static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, const vscf_data_t* dc_data) {
+    dmn_assert(resname); dmn_assert(this_dc); dmn_assert(dc_name); dmn_assert(dc_data);
 
-    const unsigned num_dcs = vscf_hash_get_len(cfg);
-    dc_t* store = calloc((num_dcs + 1), sizeof(dc_t));
-    for(unsigned i = 0; i < num_dcs; i++) {
-        unsigned dcname_len;
-        const char* dcname = vscf_hash_get_key_byindex(cfg, i, &dcname_len);
-        const unsigned dc_idx = map_get_dcidx(mapnum, dcname);
-        if(!dc_idx)
-            log_fatal("plugin_" PNSTR ": resource '%s': datacenter name '%s' is not valid", resname, dcname);
-        dmn_assert(dc_idx <= num_dcs);
-        dc_t* this_dc = &store[dc_idx];
-        this_dc->dc_name = strdup(dcname);
+    this_dc->dc_name = strdup(dc_name);
 
-        char* dc_mon_desc = gdnsd_str_combine_n(3, PNSTR, "/", dcname);
-        this_dc->dc_mon_idx = gdnsd_mon_admin(dc_mon_desc);
-        free(dc_mon_desc);
+    char* dc_mon_desc = gdnsd_str_combine_n(5, PNSTR, "/", resname, "/", dc_name);
+    this_dc->dc_mon_idx = gdnsd_mon_admin(dc_mon_desc);
+    free(dc_mon_desc);
 
-        const vscf_data_t* plugdata = vscf_hash_get_data_byindex(cfg, i);
-        if(vscf_is_simple(plugdata)) {
-            const char* textdata = vscf_simple_get_data(plugdata);
-            if(*textdata == '%') {
-                char* child_plugname = strdup(textdata + 1);
-                this_dc->plugin_name = child_plugname;
-                char* child_resname = strchr(child_plugname, '!');
-                if(child_resname) {
-                    *child_resname++ = '\0';
-                    this_dc->res_name = strdup(child_resname);
-                }
-                if(!strcmp(this_dc->plugin_name, PNSTR) && !strcmp(this_dc->res_name, resname))
-                    log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
+    if(vscf_is_simple(dc_data)) {
+        const char* textdata = vscf_simple_get_data(dc_data);
+        if(*textdata == '%') {
+            char* child_plugname = strdup(textdata + 1);
+            this_dc->plugin_name = child_plugname;
+            char* child_resname = strchr(child_plugname, '!');
+            if(child_resname) {
+                *child_resname++ = '\0';
+                this_dc->res_name = strdup(child_resname);
             }
-            else if(*textdata == '!') {
-                this_dc->res_name = strdup(textdata + 1);
-                const vscf_data_t* res_cfg = vscf_get_parent(cfg);
-                this_dc->plugin_name = get_defaulted_plugname(res_cfg, resname, dcname);
-                if(!strcmp(this_dc->plugin_name, PNSTR) && !strcmp(this_dc->res_name, resname))
-                    log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
-            }
-            else {
-                anysin_t tempsin;
-                if(gdnsd_anysin_getaddrinfo(textdata, NULL, &tempsin)) {
-                    // failed to parse as address, so set up direct CNAME if possible
-                    uint8_t* dname = malloc(256);
-                    dname_status_t dnstat = vscf_simple_get_as_dname(plugdata, dname);
-                    if(dnstat == DNAME_INVALID)
-                        log_fatal("plugin_" PNSTR ": resource '%s': CNAME for datacenter '%s' is not a legal domainname", resname, dcname);
-                    if(dnstat == DNAME_VALID)
-                        dname = dname_trim(dname);
-                    this_dc->dname = dname;
-
-                    // technically, this admin state is redundant with the datacenter-level one,
-                    //   but having two variants may prove useful for regex-based admin state forces...
-                    char* desc = gdnsd_str_combine_n(5, PNSTR, "/", resname, "/", dcname, "/", textdata);
-                    this_dc->dname_idx = gdnsd_mon_admin(desc);
-                    free(desc);
-                }
-                else {
-                    inject_child_plugin_config(this_dc, resname, (vscf_data_t*)plugdata);
-                }
-            }
+            if(!strcmp(this_dc->plugin_name, PNSTR) && !strcmp(this_dc->res_name, resname))
+                log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
+        }
+        else if(*textdata == '!') {
+            this_dc->res_name = strdup(textdata + 1);
+            this_dc->plugin_name = get_defaulted_plugname(res_cfg, resname, dc_name);
+            if(!strcmp(this_dc->plugin_name, PNSTR) && !strcmp(this_dc->res_name, resname))
+                log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
         }
         else {
-            inject_child_plugin_config(this_dc, resname, (vscf_data_t*)plugdata);
+            anysin_t tempsin;
+            if(gdnsd_anysin_getaddrinfo(textdata, NULL, &tempsin)) {
+                // failed to parse as address, so set up direct CNAME if possible
+                this_dc->is_cname = true;
+                uint8_t* dname = malloc(256);
+                dname_status_t dnstat = vscf_simple_get_as_dname(dc_data, dname);
+                if(dnstat == DNAME_INVALID)
+                    log_fatal("plugin_" PNSTR ": resource '%s': CNAME for datacenter '%s' is not a legal domainname", resname, dc_name);
+                if(dnstat == DNAME_VALID)
+                    dname = dname_trim(dname);
+                this_dc->dname = dname;
+
+                // service_types is already inherited from top-level to res-level, this gets
+                //   it from res-level.  We don't currently allow for a per-dc sevice_types for CNAME,
+                //   although it could be done, probably...
+                const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(res_cfg, "service_types", false);
+                if(res_stypes) {
+                    this_dc->num_svcs = vscf_array_get_len(res_stypes);
+                    if(this_dc->num_svcs) {
+                        this_dc->indices = malloc(sizeof(unsigned) * this_dc->num_svcs);
+                        for(unsigned i = 0; i < this_dc->num_svcs; i++) {
+                            const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
+                            if(!vscf_is_simple(this_svc_cfg))
+                                log_fatal("plugin_" PNSTR ": resource '%s': service_types values must be strings", resname);
+                            this_dc->indices[i] = gdnsd_mon_cname(vscf_simple_get_data(this_svc_cfg), textdata);
+                        }
+                    }
+                }
+                else {
+                    this_dc->num_svcs = 1;
+                    this_dc->indices = malloc(sizeof(unsigned));
+                    this_dc->indices[0] = gdnsd_mon_cname(DEFAULT_SVCNAME, textdata);
+                }
+            }
+            else {
+                inject_child_plugin_config(this_dc, resname, (vscf_data_t*)dc_data);
+            }
         }
     }
+    else {
+        inject_child_plugin_config(this_dc, resname, (vscf_data_t*)dc_data);
+    }
+
+}
+
+F_NONNULL
+static dc_t* config_res_dcmap(const vscf_data_t* res_cfg, const unsigned mapnum, const vscf_data_t* dcmap_cfg, const char* resname) {
+    dmn_assert(dcmap_cfg); dmn_assert(resname);
+    dmn_assert(vscf_is_hash(dcmap_cfg));
+
+    const unsigned num_dcs = vscf_hash_get_len(dcmap_cfg);
+    dc_t* store = calloc((num_dcs + 1), sizeof(dc_t));
+    for(unsigned i = 0; i < num_dcs; i++) {
+        const char* dc_name = vscf_hash_get_key_byindex(dcmap_cfg, i, NULL);
+        const unsigned dc_idx = map_get_dcidx(mapnum, dc_name);
+        if(!dc_idx)
+            log_fatal("plugin_" PNSTR ": resource '%s': datacenter name '%s' is not valid", resname, dc_name);
+        dmn_assert(dc_idx <= num_dcs);
+        dc_t* this_dc = &store[dc_idx];
+        const vscf_data_t* dc_data = vscf_hash_get_data_byindex(dcmap_cfg, i);
+        config_res_perdc(resname, res_cfg, this_dc, dc_name, dc_data);
+    }
+
     return store;
 }
 
@@ -260,7 +294,7 @@ static void make_resource(resource_t* res, const char* res_name, const vscf_data
     if(res->num_dcs != dc_count)
         log_fatal("plugin_" PNSTR ": resource '%s': the dcmap does not match the datacenters list", res_name);
 
-    res->dcs = config_res_perdc(res->map, dcs_cfg, res_name);
+    res->dcs = config_res_dcmap(res_cfg, res->map, dcs_cfg, res_name);
 }
 
 static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, unsigned threadnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
@@ -268,14 +302,15 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, uns
 
     gdnsd_sttl_t rv;
 
-    if(dc->dname) { // direct CNAME
+    if(dc->is_cname) { // direct CNAME
         dmn_assert(origin); // detected at map_res time
+        dmn_assert(dc->dname);
         result->is_cname = true;
         dname_copy(result->cname, dc->dname);
         if(dname_is_partial(result->cname))
             dname_cat(result->cname, origin);
         dmn_assert(dname_status(result->cname) == DNAME_VALID);
-        rv = sttl_tbl[dc->dname_idx];
+        rv = gdnsd_sttl_min(sttl_tbl, dc->indices, dc->num_svcs);
     }
     else {
         dmn_assert(dc->plugin && dc->plugin->resolve); // detected at map_res time
@@ -284,6 +319,7 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, uns
 
     // let forced-down at the dc level override lower-level results
     // XXX map-level for geoip as well?
+    // XXX force-up as well?
     rv = gdnsd_sttl_min2(rv, sttl_tbl[dc->dc_mon_idx]);
 
     return rv;
@@ -296,11 +332,16 @@ static void resource_destroy(resource_t* res) {
     if(res->dcs) {
         for(unsigned i = 1; i <= res->num_dcs; i++) {
             dc_t* dc = &res->dcs[i];
-            free(dc->plugin_name);
-            free(dc->res_name);
             free(dc->dc_name);
-            if(dc->dname)
+            if(dc->is_cname) {
                 free(dc->dname);
+                if(dc->num_svcs)
+                    free(dc->indices);
+            }
+            else {
+                free(dc->plugin_name);
+                free(dc->res_name);
+            }
         }
         free(res->dcs);
     }
@@ -370,7 +411,7 @@ int CB_MAP(const char* resname, const uint8_t* origin) {
             const unsigned max_dc = fixed_dc_idx ? fixed_dc_idx : res->num_dcs;
             for(unsigned j = min_dc; j <= max_dc; j++) {
                 dc_t* this_dc = &res->dcs[j];
-                if(this_dc->dname) {
+                if(this_dc->is_cname) {
                     if(!origin)
                         map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s' is configured as the fixed CNAME '%s', therefore this resource cannot be used in an address-only DYNA RR", res->name, this_dc->dc_name, logf_dname(this_dc->dname));
                     const uint8_t* dname = this_dc->dname;
