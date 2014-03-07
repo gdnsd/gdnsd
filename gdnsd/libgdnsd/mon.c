@@ -51,7 +51,10 @@ typedef struct {
     service_type_t* type;
     union {
         anysin_t addr;
-        const char* cname;
+        struct {
+            const char* cname;    // ascii-form
+            const uint8_t* dname; // dname-form
+        };
     };
     unsigned n_failure;
     unsigned n_success;
@@ -154,8 +157,12 @@ static bool addr_eq(const anysin_t* a, const anysin_t* b) {
     return rv;
 }
 
-static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const char* cname) {
-    dmn_assert(svctype_name); dmn_assert(addr || cname);
+static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const char* cname, const uint8_t* dname) {
+    dmn_assert(svctype_name);
+    if(addr)
+        dmn_assert(!cname && !dname);
+    else
+        dmn_assert(cname && dname);
 
     // first, sort out what svctype_name actually means to us
     service_type_t* this_svc = NULL;
@@ -173,12 +180,19 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
     // next, check if this is a duplicate of a request issued earlier
     //   by some other plugin/resource, in which case we can just give
     //   them the existing index
-    for(unsigned i = 0; i < num_smgrs; i++) {
-        smgr_t* that_smgr = &smgrs[i];
-        if(addr && !that_smgr->is_cname && addr_eq(addr, &that_smgr->addr) && this_svc == that_smgr->type)
-            return i;
-        if(cname && that_smgr->is_cname && !strcmp(cname, that_smgr->cname) && this_svc == that_smgr->type)
-            return i;
+    if(addr) {
+        for(unsigned i = 0; i < num_smgrs; i++) {
+            smgr_t* that_smgr = &smgrs[i];
+            if(!that_smgr->is_cname && addr_eq(addr, &that_smgr->addr) && this_svc == that_smgr->type)
+                return i;
+        }
+    }
+    else {
+        for(unsigned i = 0; i < num_smgrs; i++) {
+            smgr_t* that_smgr = &smgrs[i];
+            if(that_smgr->is_cname && !gdnsd_dname_cmp(dname, that_smgr->dname) && this_svc == that_smgr->type)
+                return i;
+        }
     }
 
     char* desc;
@@ -221,6 +235,7 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
     else {
         this_smgr->is_cname = true;
         this_smgr->cname = strdup(cname);
+        this_smgr->dname = gdnsd_dname_dup(dname, true);
     }
 
     this_smgr->type = this_svc;
@@ -242,12 +257,12 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
 // Called from plugins once per monitored service type+IP combination
 //  to request monitoring and initialize various data/state.
 unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
-    return mon_thing(svctype_name, addr, NULL);
+    return mon_thing(svctype_name, addr, NULL, NULL);
 }
 
 // As above for CNAMEs
-unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname) {
-    return mon_thing(svctype_name, NULL, cname);
+unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname, const uint8_t* dname) {
+    return mon_thing(svctype_name, NULL, cname, dname);
 }
 
 // .. for virtual entities (e.g. datacenters), which have no service_type

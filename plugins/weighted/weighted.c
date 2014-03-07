@@ -453,7 +453,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, con
     if(cnset->num_svcs) {
         res_item->indices = malloc(cnset->num_svcs * sizeof(unsigned));
         for(unsigned i = 0; i < cnset->num_svcs; i++)
-            res_item->indices[i] = gdnsd_mon_cname(cnset->svc_names[i], cname_txt);
+            res_item->indices[i] = gdnsd_mon_cname(cnset->svc_names[i], cname_txt, dname);
     }
 
     log_debug("plugin_weighted: resource '%s' (%s), item '%s', CNAME '%s' added with weight %u", res_name, stanza, item_name, logf_dname(dname), res_item->weight);

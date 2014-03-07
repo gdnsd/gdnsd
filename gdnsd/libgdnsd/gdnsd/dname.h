@@ -240,7 +240,7 @@ static inline void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
 // The second argument "exact" determines whether the new copy will be allocated
 //  to 256 bytes or to the exact amount necessary to hold the data.
 F_WUNUSED F_NONNULL
-static inline uint8_t* gdnsd_dname_dup(uint8_t* dname, bool exact) {
+static inline uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact) {
     dmn_assert(dname); dmn_assert(*dname);
     uint8_t* out = malloc(exact ? (*dname + 1) : 256);
     gdnsd_dname_copy(out, dname);

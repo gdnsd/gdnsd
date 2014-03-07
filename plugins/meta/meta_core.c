@@ -226,14 +226,14 @@ static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc
                             const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                             if(!vscf_is_simple(this_svc_cfg))
                                 log_fatal("plugin_" PNSTR ": resource '%s': service_types values must be strings", resname);
-                            this_dc->indices[i] = gdnsd_mon_cname(vscf_simple_get_data(this_svc_cfg), textdata);
+                            this_dc->indices[i] = gdnsd_mon_cname(vscf_simple_get_data(this_svc_cfg), textdata, dname);
                         }
                     }
                 }
                 else {
                     this_dc->num_svcs = 1;
                     this_dc->indices = malloc(sizeof(unsigned));
-                    this_dc->indices[0] = gdnsd_mon_cname(DEFAULT_SVCNAME, textdata);
+                    this_dc->indices[0] = gdnsd_mon_cname(DEFAULT_SVCNAME, textdata, dname);
                 }
             }
             else {

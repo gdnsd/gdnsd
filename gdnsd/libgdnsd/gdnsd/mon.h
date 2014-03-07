@@ -62,7 +62,7 @@ unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr);
 
 // as above for a CNAME
 F_NONNULL
-unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname);
+unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname, const uint8_t* dname);
 
 // admin-only state registration.  plugin constructs desc
 //   within its own scope, e.g.
