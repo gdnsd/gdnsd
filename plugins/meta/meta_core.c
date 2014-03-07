@@ -287,6 +287,8 @@ static void make_resource(resource_t* res, const char* res_name, const vscf_data
     const vscf_data_t* dcs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "dcmap", true);
     if(!dcs_cfg)
         log_fatal("plugin_" PNSTR ": resource '%s': missing required stanza 'dcmap'", res_name);
+    if(!vscf_is_hash(dcs_cfg))
+        log_fatal("plugin_" PNSTR ": resource '%s': 'dcmap' value must be a hash structure", res_name);
 
     // Get/check datacenter count
     res->num_dcs = vscf_hash_get_len(dcs_cfg);
