@@ -58,7 +58,6 @@ typedef struct {
     };
     unsigned n_failure;
     unsigned n_success;
-    bool forced;
     bool is_cname;
     gdnsd_sttl_t real_sttl;
 } smgr_t;
@@ -242,7 +241,6 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
     this_smgr->desc = desc;
     this_smgr->n_failure = 0;
     this_smgr->n_success = 0;
-    this_smgr->forced = false;
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
 
     // the "down" special gets a different default than the rest
@@ -424,6 +422,11 @@ F_NONNULL
 static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
     dmn_assert(smgr); dmn_assert(idx < num_smgrs);
 
+    // Note that the updater interfaces from monitoring plugins cannot set
+    //  the FORCED bit - only the admin-state interface can do that.
+    assert_valid_sttl(new_sttl);
+    assert(!(new_sttl & GDNSD_STTL_FORCED));
+
     if(initial_round) {
         smgr_sttl[idx] = smgr->real_sttl = new_sttl;
         // table update taken care of in gdnsd_mon_start()
@@ -431,7 +434,7 @@ static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
     }
     else if(new_sttl != smgr->real_sttl) {
         smgr->real_sttl = new_sttl;
-        if(!smgr->forced && new_sttl != smgr_sttl[idx]) {
+        if(new_sttl != smgr_sttl[idx] && !(smgr_sttl[idx] & GDNSD_STTL_FORCED)) {
             smgr_sttl[idx] = new_sttl;
             if(!ev_is_active(sttl_update_timer)) {
                 ev_timer_set(sttl_update_timer, 1.0, 0.0);

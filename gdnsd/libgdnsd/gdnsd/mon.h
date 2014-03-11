@@ -28,13 +28,14 @@
 // gdnsd_sttl_t
 //  sttl -> state+ttl
 //  high-bit is down flag (1 = down, 0 = up)
-//  next 3 bits reserved for future use (set to zero, ignored on read)
-//    (may want to expose a forced-flag here later, etc)
+//  next-bit is forced flag (1 = forced, 0 = unforced)
+//  next 2 bits reserved for future use (set to zero, ignored on read)
 //  remaining 28 bits are unsigned TTL (max value ~8.5 years)
 typedef uint32_t gdnsd_sttl_t;
 
 #define GDNSD_STTL_DOWN          (1U << 31U)
-#define GDNSD_STTL_RESERVED_MASK (7U << 28U)
+#define GDNSD_STTL_FORCED        (1U << 30U)
+#define GDNSD_STTL_RESERVED_MASK (3U << 28U)
 #define GDNSD_STTL_TTL_MASK      ((1U << 28U) - 1U)
 #define GDNSD_STTL_TTL_MAX       ((1U << 28U) - 1U)
 // ^ identical to above, but better semantics when reading code
@@ -53,6 +54,8 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest);
 // A more-advanced monitoring plugin may wish to do its own
 //   anti-flap state-tracking and TTL-calculations, in which
 //   case it can use this interface to provide full, direct updates.
+// NOTE: it is not legal for any monitoring plugin to set the FORCED
+//   bit in "new_sttl" - this is checked as an assertion!
 void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl);
 
 // called during load_config to register address healthchecks, returns
@@ -78,13 +81,18 @@ const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void);
 // Given two sttl values, combine them according to the following rules:
 //   1) result TTL is the lesser of both TTLs
 //   2) if either is down, result is down
+//   3) if either is forced, result is forced
 // This is meant to be used to combine parallel results, e.g. two
 //   service checks on the same IP address.
+// Note that currently, users of this don't actually care about the forced-bit.
+// If they did, we'd probably want a more correct (and expensive) method of
+//   combining the state-bits, such that the output forced-bit is only copied if
+//   the forcing had an effect (e.g. forced-down + unforced-down = unforced-down)
 static inline gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_sttl_t b) {
     const gdnsd_sttl_t a_ttl = a & GDNSD_STTL_TTL_MASK;
     const gdnsd_sttl_t b_ttl = b & GDNSD_STTL_TTL_MASK;
-    const gdnsd_sttl_t down = (a | b) & GDNSD_STTL_DOWN;
-    return (a_ttl < b_ttl) ? (down | a_ttl) : (down | b_ttl);
+    const gdnsd_sttl_t state = (a | b) & (GDNSD_STTL_DOWN | GDNSD_STTL_FORCED);
+    return (a_ttl < b_ttl) ? (state | a_ttl) : (state | b_ttl);
 }
 
 // As above, but generalized to an array of table indices to support merging

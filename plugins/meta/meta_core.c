@@ -319,10 +319,16 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, uns
         rv = dc->plugin->resolve(threadnum, dc->res_num, origin, cinfo, result);
     }
 
-    // let forced-down at the dc level override lower-level results
-    // XXX map-level for geoip as well?
-    // XXX force-up as well?
-    rv = gdnsd_sttl_min2(rv, sttl_tbl[dc->dc_mon_idx]);
+    // XXX map-level state NYI
+    // let forced sttl at the map level override "real" results
+    // if(sttl_tbl[dc->map_mon_idx] & GDNSD_STTL_FORCED)
+    //     rv = sttl_tbl[dc->map_mon_idx];
+
+    // let forced sttl at the dc level override both real results
+    //   and map-level forcing (if both are forced and they differ,
+    //   this is the more-specific of the two...)
+    if(sttl_tbl[dc->dc_mon_idx] & GDNSD_STTL_FORCED)
+        rv = sttl_tbl[dc->dc_mon_idx];
 
     return rv;
 }
