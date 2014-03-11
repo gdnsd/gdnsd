@@ -20,6 +20,8 @@
 #include "config.h"
 #include "dcinfo.h"
 #include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/mon.h>
 #include <math.h>
 
 /***************************************
@@ -51,6 +53,7 @@ struct _dcinfo {
     unsigned auto_limit; // lesser of num_dcs and dc_auto_limit cfg
     char** names;        // #num_dcs, ordered map
     double* coords;      // #(num_dcs * 2, lat then lon, in radians)
+    unsigned* indices;   // mon_admin indices for map-level forced state
 };
 
 // Technically we could/should check for duplicates here.  The plugin will
@@ -71,6 +74,7 @@ dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, 
         log_fatal("plugin_geoip: map '%s': %u datacenters is too many, this code only supports up to 254", map_name, num_dcs);
 
     info->names = malloc(sizeof(char*) * num_dcs);
+    info->indices = malloc(sizeof(unsigned) * num_dcs);
     info->num_dcs = num_dcs;
     for(unsigned i = 0; i < num_dcs; i++) {
         const vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
@@ -79,6 +83,9 @@ dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, 
         info->names[i] = strdup(vscf_simple_get_data(dcname_cfg));
         if(!strcmp(info->names[i], "auto"))
             log_fatal("plugin_geoip: map '%s': datacenter name 'auto' is illegal", map_name);
+        char* map_mon_desc = gdnsd_str_combine_n(4, "geoip/", map_name, "/", info->names[i]);
+        info->indices[i] = gdnsd_mon_admin(map_mon_desc);
+        free(map_mon_desc);
     }
 
     if(dc_auto_cfg) {
@@ -170,6 +177,12 @@ const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum) {
         return NULL;
 
     return info->names[dcnum - 1];
+}
+
+unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum) {
+    dmn_assert(info);
+    dmn_assert(dcnum && dcnum <= info->num_dcs);
+    return info->indices[dcnum - 1];
 }
 
 void dcinfo_destroy(dcinfo_t* info) {

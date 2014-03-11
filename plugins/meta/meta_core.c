@@ -47,6 +47,7 @@ static const char DEFAULT_SVCNAME[] = "up";
 
 typedef struct {
     char* dc_name;
+    unsigned map_mon_idx; // admin state for map-level datacenter, only used by plugin_geoip
     unsigned dc_mon_idx; // admin state for the datacenter itself, in this resource
     bool is_cname; // which union member below
     union {
@@ -261,6 +262,9 @@ static dc_t* config_res_dcmap(const vscf_data_t* res_cfg, const unsigned mapnum,
             log_fatal("plugin_" PNSTR ": resource '%s': datacenter name '%s' is not valid", resname, dc_name);
         dmn_assert(dc_idx <= num_dcs);
         dc_t* this_dc = &store[dc_idx];
+#if META_MAP_ADMIN == 1
+        this_dc->map_mon_idx = map_get_mon_idx(mapnum, dc_idx);
+#endif
         const vscf_data_t* dc_data = vscf_hash_get_data_byindex(dcmap_cfg, i);
         config_res_perdc(resname, res_cfg, this_dc, dc_name, dc_data);
     }
@@ -319,10 +323,11 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, uns
         rv = dc->plugin->resolve(threadnum, dc->res_num, origin, cinfo, result);
     }
 
-    // XXX map-level state NYI
+#if META_MAP_ADMIN == 1
     // let forced sttl at the map level override "real" results
-    // if(sttl_tbl[dc->map_mon_idx] & GDNSD_STTL_FORCED)
-    //     rv = sttl_tbl[dc->map_mon_idx];
+    if(sttl_tbl[dc->map_mon_idx] & GDNSD_STTL_FORCED)
+        rv = sttl_tbl[dc->map_mon_idx];
+#endif
 
     // let forced sttl at the dc level override both real results
     //   and map-level forcing (if both are forced and they differ,

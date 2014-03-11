@@ -93,9 +93,14 @@ static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t*
     return gdmaps_lookup(gdmaps, mapnum, cinfo, scope_out);
 }
 
+static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum) {
+    return gdmaps_map_mon_idx(gdmaps, mapnum, dcnum);
+}
+
 #define PNSTR "geoip"
 #define CB_LOAD_CONFIG plugin_geoip_load_config
 #define CB_MAP plugin_geoip_map_res
 #define CB_RES plugin_geoip_resolve
 #define CB_EXIT plugin_geoip_exit
+#define META_MAP_ADMIN 1
 #include "meta_core.c"

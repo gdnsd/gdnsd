@@ -674,6 +674,12 @@ const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, 
     return dcinfo_num2name(gdmaps->maps[gdmap_idx]->dcinfo, dcnum);
 }
 
+unsigned gdmaps_map_mon_idx(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum) {
+    dmn_assert(gdmaps);
+    dmn_assert(gdmap_idx < gdmaps->count);
+    return dcinfo_map_mon_idx(gdmaps->maps[gdmap_idx]->dcinfo, dcnum);
+}
+
 // mostly for debugging / error output
 // Note that this doesn't participate in liburcu stuff, and therefore could crash if it were
 //   running concurrently with an update swap.  It's only used from the testsuite and gdmaps_geoip_test
