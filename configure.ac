@@ -378,6 +378,7 @@ AC_CONFIG_FILES([
   plugins/meta/libgdmaps/Makefile
   plugins/meta/libgdmaps/t/Makefile
   plugins/extmon/Makefile
+  plugins/extfile/Makefile
 ])
 AC_OUTPUT
 
