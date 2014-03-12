@@ -55,7 +55,7 @@
 #define xSYM_RESOLVE(x)       plugin_ ## x ## _resolve
 #define xSYM_EXIT(x)          plugin_ ## x ## _exit
 #define xSYM_ADD_SVC(x)       plugin_ ## x ## _add_svctype
-#define xSYM_ADD_MON(x)       plugin_ ## x ## _add_monitor
+#define xSYM_ADD_MON_ADDR(x)  plugin_ ## x ## _add_mon_addr
 #define xSYM_ADD_MON_CNAME(x) plugin_ ## x ## _add_mon_cname
 #define xSYM_INIT_MONS(x)     plugin_ ## x ## _init_monitors
 #define xSYM_START_MONS(x)    plugin_ ## x ## _start_monitors
@@ -70,7 +70,7 @@
 #define SYM_RESOLVE(x)        xSYM_RESOLVE(x)
 #define SYM_EXIT(x)           xSYM_EXIT(x)
 #define SYM_ADD_SVC(x)        xSYM_ADD_SVC(x)
-#define SYM_ADD_MON(x)        xSYM_ADD_MON(x)
+#define SYM_ADD_MON_ADDR(x)   xSYM_ADD_MON_ADDR(x)
 #define SYM_ADD_MON_CNAME(x)  xSYM_ADD_MON_CNAME(x)
 #define SYM_INIT_MONS(x)      xSYM_INIT_MONS(x)
 #define SYM_START_MONS(x)     xSYM_START_MONS(x)
@@ -93,7 +93,7 @@ void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
 F_NONNULL
 void SYM_ADD_SVC(GDNSD_PLUGIN_NAME)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 F_NONNULL
-void SYM_ADD_MON(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx);
+void SYM_ADD_MON_ADDR(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const char* cname, const anysin_t* addr, const unsigned idx);
 void SYM_ADD_MON_CNAME(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const char* cname, const unsigned idx);
 F_NONNULL
 void SYM_INIT_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
@@ -111,7 +111,7 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef SYM_RESOLVE
 #undef SYM_EXIT
 #undef SYM_ADD_SVC
-#undef SYM_ADD_MON
+#undef SYM_ADD_MON_ADDR
 #undef SYM_ADD_MON_CNAME
 #undef SYM_INIT_MONS
 #undef SYM_START_MONS
@@ -126,7 +126,7 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef xSYM_RESOLVE
 #undef xSYM_EXIT
 #undef xSYM_ADD_SVC
-#undef xSYM_ADD_MON
+#undef xSYM_ADD_MON_ADDR
 #undef xSYM_ADD_MON_CNAME
 #undef xSYM_INIT_MONS
 #undef xSYM_START_MONS

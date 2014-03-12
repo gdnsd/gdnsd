@@ -25,6 +25,23 @@
 #include <stdbool.h>
 #include <pthread.h>
 
+extern const uint8_t lcmap[256];
+
+// downcase an asciiz string
+F_NONNULL
+static inline void gdnsd_downcase_bytes(uint8_t* bytes, unsigned len) {
+    for(unsigned i = 0; i < len; i++)
+        bytes[i] = lcmap[bytes[i]];
+}
+
+F_NONNULL
+static inline void gdnsd_downcase_str(char* str) {
+    while(*str) {
+        *str = (char)lcmap[(uint8_t)*str];
+        str++;
+    }
+}
+
 // allocate a new string, concatenating s1 + s2.
 // retval is the new string
 // if s2_offs is not NULL, *s2_offs will be set

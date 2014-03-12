@@ -49,12 +49,10 @@ typedef struct {
 typedef struct {
     const char* desc;
     service_type_t* type;
+    char* cname; // normalized text form of addr or dname below
     union {
         anysin_t addr;
-        struct {
-            const char* cname;    // ascii-form
-            const uint8_t* dname; // dname-form
-        };
+        const uint8_t* dname; // dname-form of a CNAME
     };
     unsigned n_failure;
     unsigned n_success;
@@ -194,11 +192,15 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
         }
     }
 
-    char* desc;
+    // allocate the new smgr/sttl
+    const unsigned idx = num_smgrs++;
+    smgrs = realloc(smgrs, sizeof(smgr_t) * num_smgrs);
+    smgr_t* this_smgr = &smgrs[idx];
+    this_smgr->type = this_svc;
 
     // for a new stype+addr combo, check that the plugin supports addr monitoring
     if(addr) {
-        if(this_svc->plugin && !this_svc->plugin->add_monitor)
+        if(this_svc->plugin && !this_svc->plugin->add_mon_addr)
             log_fatal("Service type '%s' does not support address monitoring for '%s'",
                 svctype_name, logf_anysin_noport(addr));
 
@@ -211,34 +213,23 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
         if(name_err)
             log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
 
-        desc = gdnsd_str_combine_n(3, addr_str, "/", svctype_name);
+        this_smgr->desc = gdnsd_str_combine_n(3, addr_str, "/", svctype_name);
+        this_smgr->is_cname = false;
+        this_smgr->cname = strdup(addr_str);
+        gdnsd_downcase_str(this_smgr->cname);
+        memcpy(&this_smgr->addr, addr, sizeof(anysin_t));
     }
     else { // cname
         if(this_svc->plugin && !this_svc->plugin->add_mon_cname)
             log_fatal("Service type '%s' does not support CNAME monitoring for '%s'",
                 svctype_name, cname);
-        desc = gdnsd_str_combine_n(3, cname, "/", svctype_name);
-    }
-
-    // allocate the new smgr/sttl
-    const unsigned idx = num_smgrs++;
-    smgrs = realloc(smgrs, sizeof(smgr_t) * num_smgrs);
-    smgr_sttl = realloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer = realloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
-
-    smgr_t* this_smgr = &smgrs[idx];
-    if(addr) {
-        this_smgr->is_cname = false;
-        memcpy(&this_smgr->addr, addr, sizeof(anysin_t));
-    }
-    else {
+        this_smgr->desc = gdnsd_str_combine_n(3, cname, "/", svctype_name);
         this_smgr->is_cname = true;
         this_smgr->cname = strdup(cname);
+        gdnsd_downcase_str(this_smgr->cname);
         this_smgr->dname = gdnsd_dname_dup(dname, true);
     }
 
-    this_smgr->type = this_svc;
-    this_smgr->desc = desc;
     this_smgr->n_failure = 0;
     this_smgr->n_success = 0;
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
@@ -247,6 +238,8 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
     if(!strcmp(svctype_name, "down"))
         this_smgr->real_sttl |= GDNSD_STTL_DOWN;
 
+    smgr_sttl = realloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgr_sttl_consumer = realloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
     smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
@@ -409,9 +402,9 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
                     this_smgr->type->plugin->add_mon_cname(this_smgr->desc, this_smgr->type->name, this_smgr->cname, i);
                 }
                 else {
-                    dmn_assert(this_smgr->type->plugin->add_monitor);
+                    dmn_assert(this_smgr->type->plugin->add_mon_addr);
                     if(!(force_v6_up && this_smgr->addr.sa.sa_family == AF_INET6))
-                        this_smgr->type->plugin->add_monitor(this_smgr->desc, this_smgr->type->name, &this_smgr->addr, i);
+                        this_smgr->type->plugin->add_mon_addr(this_smgr->desc, this_smgr->type->name, this_smgr->cname, &this_smgr->addr, i);
                 }
             }
         }

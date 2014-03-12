@@ -398,8 +398,8 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_http_status_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const anysin_t* addr, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
 
     http_events_t* this_mon = calloc(1, sizeof(http_events_t));
     this_mon->desc = strdup(desc);

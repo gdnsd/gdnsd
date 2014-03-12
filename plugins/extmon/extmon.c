@@ -405,13 +405,9 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     this_mon->seen_once = false;
 }
 
-void plugin_extmon_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
-    char hostbuf[INET6_ADDRSTRLEN];
-    int name_err = dmn_anysin2str_noport(addr, hostbuf);
-    if(name_err)
-        log_fatal("plugin_extmon: getnameinfo() failed on address for '%s': %s", desc, gai_strerror(name_err));
-    add_mon_any(desc, svc_name, hostbuf, idx);
+void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const anysin_t* addr V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
+    add_mon_any(desc, svc_name, cname, idx);
 }
 
 void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, const char* cname, const unsigned idx) {

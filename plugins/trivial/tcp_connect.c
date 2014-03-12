@@ -235,7 +235,7 @@ void plugin_tcp_connect_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_tcp_connect_add_monitor(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx) {
+void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const anysin_t* addr, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
 
     tcp_events_t* this_mon = calloc(1, sizeof(tcp_events_t));

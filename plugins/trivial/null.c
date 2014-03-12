@@ -102,8 +102,8 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
     this_mon->interval_watcher->data = this_mon;
 }
 
-void plugin_null_add_monitor(const char* desc V_UNUSED, const char* svc_name, const anysin_t* addr V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
+void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const anysin_t* addr V_UNUSED, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
     add_mon_any(svc_name, idx);
 }
 
