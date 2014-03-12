@@ -339,7 +339,7 @@ F_NONNULL
 static void gdmap_kick_tree_update(gdmap_t* gdmap, struct ev_loop* loop) {
     dmn_assert(gdmap); dmn_assert(loop);
 
-    if(!ev_is_active(gdmap->tree_update_timer))
+    if(!ev_is_active(gdmap->tree_update_timer) && !ev_is_pending(gdmap->tree_update_timer))
         log_info("plugin_geoip: map '%s': runtime data changes are pending, waiting for %gs of change quiescence...", gdmap->name, ALL_RELOAD_WAIT);
     else
         log_debug("plugin_geoip: map '%s': Timer for all runtime data re-kicked for %gs due to rapid change...", gdmap->name, ALL_RELOAD_WAIT);
@@ -410,7 +410,7 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
             // Start (or restart) a timer to geoip_reload_timer_cb, so that we
             //  wait for multiple changes to "settle" before re-reading the file
             ev_timer* which_timer = v4o ? gdmap->geoip_v4o_reload_timer : gdmap->geoip_reload_timer;
-            if(!ev_is_active(which_timer))
+            if(!ev_is_active(which_timer) && !ev_is_pending(which_timer))
                 log_info("plugin_geoip: map '%s': Change detected in GeoIP database '%s', waiting for %gs of change quiescence...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
             else
                 log_debug("plugin_geoip: map '%s': Timer for GeoIP database '%s' re-kicked for %gs due to rapid change...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
@@ -433,7 +433,7 @@ static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int reve
 
     if(w->attr.st_nlink) { // file exists
         if(w->attr.st_mtime != w->prev.st_mtime || !w->prev.st_nlink) {
-            if(!ev_is_active(gdmap->nets_reload_timer))
+            if(!ev_is_active(gdmap->nets_reload_timer) && !ev_is_pending(gdmap->nets_reload_timer))
                 log_info("plugin_geoip: map '%s': Change detected in nets file '%s', waiting for %gs of change quiescence...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
             else
                 log_debug("plugin_geoip: map '%s': Timer for nets file '%s' re-kicked for %gs due to rapid change...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);

@@ -82,7 +82,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
     dmn_assert(md->sock == -1);
     dmn_assert(!ev_is_active(md->connect_watcher));
-    dmn_assert(!ev_is_active(md->timeout_watcher));
+    dmn_assert(!ev_is_active(md->timeout_watcher) && !ev_is_pending(md->timeout_watcher));
 
     log_debug("plugin_tcp_connect: Starting state poll of %s", md->smgr->desc);
 
@@ -145,7 +145,7 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     dmn_assert(md);
     dmn_assert(md->tcp_state == TCP_STATE_CONNECTING);
     dmn_assert(ev_is_active(md->connect_watcher));
-    dmn_assert(ev_is_active(md->timeout_watcher));
+    dmn_assert(ev_is_active(md->timeout_watcher) || ev_is_pending(md->timeout_watcher));
     dmn_assert(md->sock > -1);
 
     // nonblocking connect() just finished, need to check status
