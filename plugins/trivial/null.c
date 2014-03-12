@@ -73,7 +73,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 }
 
 void plugin_null_add_svctype(const char* name, const vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED) {
-    dmn_assert(name);
+    dmn_assert(name); dmn_assert(svc_cfg);
     null_svcs = realloc(null_svcs, sizeof(null_svc_t*) * ++num_svcs);
     null_svc_t* this_svc = null_svcs[num_svcs - 1] = malloc(sizeof(null_svc_t));
     this_svc->name = strdup(name);

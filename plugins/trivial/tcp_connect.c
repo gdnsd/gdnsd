@@ -218,7 +218,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
     } while(0)
 
 void plugin_tcp_connect_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
-    dmn_assert(name);
+    dmn_assert(name); dmn_assert(svc_cfg);
 
     service_types = realloc(service_types, (num_tcp_svcs + 1) * sizeof(tcp_svc_t));
     tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
@@ -226,9 +226,7 @@ void plugin_tcp_connect_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->name = strdup(name);
     unsigned port = 0U;
 
-    if(svc_cfg)
-        SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
-
+    SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
     if(!port)
         log_fatal("plugin_tcp_connect: service type '%s' must have a 'port' parameter", name);
 

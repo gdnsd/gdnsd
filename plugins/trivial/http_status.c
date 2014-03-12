@@ -366,28 +366,26 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->ok_codes = NULL;
     bool ok_codes_set = false;
 
-    if(svc_cfg) {
-        SVC_OPT_STR(svc_cfg, name, url_path);
-        SVC_OPT_STR(svc_cfg, name, vhost);
-        SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
-        const vscf_data_t* ok_codes_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "ok_codes", true);
-        if(ok_codes_cfg) {
-            ok_codes_set = true;
-            this_svc->num_ok_codes = vscf_array_get_len(ok_codes_cfg);
-            this_svc->ok_codes = malloc(sizeof(unsigned) * this_svc->num_ok_codes);
-            for(unsigned i = 0; i < this_svc->num_ok_codes; i++) {
-                const vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);
-                unsigned long tmpcode;
-                if(!vscf_simple_get_as_ulong(code_cfg, &tmpcode))
-                    log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%s', must be numeric http status code (100-999)", this_svc->name, vscf_simple_get_data(code_cfg));
-                if(tmpcode < 100LU || tmpcode > 999LU)
-                    log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%lu', must be numeric http status code (100-999)", this_svc->name, tmpcode);
-                this_svc->ok_codes[i] = (unsigned)tmpcode;
-            }
+    SVC_OPT_STR(svc_cfg, name, url_path);
+    SVC_OPT_STR(svc_cfg, name, vhost);
+    SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
+    const vscf_data_t* ok_codes_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "ok_codes", true);
+    if(ok_codes_cfg) {
+        ok_codes_set = true;
+        this_svc->num_ok_codes = vscf_array_get_len(ok_codes_cfg);
+        this_svc->ok_codes = malloc(sizeof(unsigned) * this_svc->num_ok_codes);
+        for(unsigned i = 0; i < this_svc->num_ok_codes; i++) {
+            const vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);
+            unsigned long tmpcode;
+            if(!vscf_simple_get_as_ulong(code_cfg, &tmpcode))
+                log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%s', must be numeric http status code (100-999)", this_svc->name, vscf_simple_get_data(code_cfg));
+            if(tmpcode < 100LU || tmpcode > 999LU)
+                log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%lu', must be numeric http status code (100-999)", this_svc->name, tmpcode);
+            this_svc->ok_codes[i] = (unsigned)tmpcode;
         }
     }
 
-    // no config at all, but not the empty array...
+    // default the ok_codes array to [ 200 ]
     if(!ok_codes_set) {
         this_svc->num_ok_codes = 1;
         this_svc->ok_codes = malloc(sizeof(unsigned));

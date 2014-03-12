@@ -90,7 +90,7 @@ void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(unsigned threadnum);
 F_NONNULLX(4,5)
 gdnsd_sttl_t SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
-F_NONNULLX(1)
+F_NONNULL
 void SYM_ADD_SVC(GDNSD_PLUGIN_NAME)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 F_NONNULL
 void SYM_ADD_MON(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const anysin_t* addr, const unsigned idx);
