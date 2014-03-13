@@ -429,7 +429,7 @@ static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
         smgr->real_sttl = new_sttl;
         if(new_sttl != smgr_sttl[idx] && !(smgr_sttl[idx] & GDNSD_STTL_FORCED)) {
             smgr_sttl[idx] = new_sttl;
-            if(!ev_is_active(sttl_update_timer) && !ev_is_pending(sttl_updater_timer)) {
+            if(!ev_is_active(sttl_update_timer) && !ev_is_pending(sttl_update_timer)) {
                 ev_timer_set(sttl_update_timer, 1.0, 0.0);
                 ev_timer_start(mon_loop, sttl_update_timer);
             }
