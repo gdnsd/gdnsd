@@ -276,6 +276,7 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
     const vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path, &vscf_err);
     nlist_t* new_list = NULL;
     if(nets_cfg) {
+        dmn_assert(!vscf_err);
         if(vscf_is_hash(nets_cfg)) {
             new_list = nets_make_list(nets_cfg, update_dclists, gdmap->name);
             if(!new_list)
@@ -289,6 +290,7 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
     }
     else {
         log_err("plugin_geoip: map '%s': parsing nets file '%s' failed: %s", gdmap->name, logf_pathname(gdmap->nets_path), vscf_err);
+        free(vscf_err);
     }
 
     bool rv = false;
