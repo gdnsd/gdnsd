@@ -67,7 +67,7 @@ directive (see L<gdnsd.zonefile(5)>).
 =item B<max_ttl>
 
 Integer seconds, default 3600000 (~42 days),
-range 3600 - 16777215 (2^28-1, ~194 days).
+range 3600 - 268435455 (2^28-1, ~8.5 years).
 This is the global maximum TTL.  Any TTL found in a zone which
 exceeds this value will be clamped to this value with a warning.
 
