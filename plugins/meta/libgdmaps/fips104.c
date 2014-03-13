@@ -31,9 +31,9 @@
 #include "fips104.h"
 #include "gdmaps.h"
 
-// Data source URL is http://www.maxmind.com/app/fips_include
-// As of this writing (Nov 29, 2011), the file was last updated
-//  on Oct 11, 2011 and has 3980 records totalling ~71KB of data.
+// Data source URL is http://www.maxmind.com/download/geoip/misc/region_codes.csv
+// As of this writing (Mar 13, 2014), the file had a Last-Modified header of
+//  "Thu, 30 Jan 2014 18:27:35 GMT" and was 75728 bytes long with 4066 lines/records.
 
 // I expect the record count to be relatively stable in the long
 //  term, so I'm picking a fixed hash table size that's a bit
