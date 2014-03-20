@@ -30,7 +30,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/syscall.h>
-#include <pthread.h>
 
 #include "dmn.h"
 
@@ -81,20 +80,13 @@ typedef struct {
     char* bufs[FMTBUF_CT];
 } fmtbuf_t;
 
-static pthread_key_t fmtbuf_key;
-static pthread_once_t fmtbuf_key_once = PTHREAD_ONCE_INIT;
-static void fmtbuf_make_key(void) { pthread_key_create(&fmtbuf_key, NULL); }
+static __thread fmtbuf_t* fmtbuf = NULL;
 
 // Allocate a chunk from the format buffer
 // Allocates the buffer itself on first use per-thread
 char* dmn_fmtbuf_alloc(unsigned size) {
-    fmtbuf_t* fmtbuf;
-    pthread_once(&fmtbuf_key_once, fmtbuf_make_key);
-    fmtbuf = pthread_getspecific(fmtbuf_key);
-    if(!fmtbuf) {
+    if(!fmtbuf)
         fmtbuf = calloc(1, sizeof(fmtbuf_t));
-        pthread_setspecific(fmtbuf_key, (void*)fmtbuf);
-    }
 
     char* rv = NULL;
     unsigned bsize = 1U << FMTBUF_START;
@@ -117,9 +109,6 @@ char* dmn_fmtbuf_alloc(unsigned size) {
 // Reset (free allocations within) the format buffer,
 //  but do not trigger initial allocation in the process
 void dmn_fmtbuf_reset(void) {
-    fmtbuf_t* fmtbuf;
-    pthread_once(&fmtbuf_key_once, fmtbuf_make_key);
-    fmtbuf = pthread_getspecific(fmtbuf_key);
     if(fmtbuf)
         for(unsigned i = 0; i < FMTBUF_CT; i++)
             fmtbuf->used[i] = 0;
