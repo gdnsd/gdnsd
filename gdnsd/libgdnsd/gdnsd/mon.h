@@ -43,6 +43,21 @@ static const gdnsd_sttl_t GDNSD_STTL_TTL_MAX       = ((1U << 28U) - 1U);
 // the only hard rule on this data type is zero in the reserved bits for now
 #define assert_valid_sttl(_x) dmn_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
 
+// Parses a string of the form STATE[/TTL], where STATE is UP or DOWN and
+//   the TTL is in the legal range 0 through 2^28-1.  Returns 0 on success.
+// This is exported mostly so that it can be shared with plugin_extfile,
+//   I don't know if anything else will ever use it.
+F_NONNULL
+bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned def_ttl);
+
+// sttl log formatter's output looks like:
+// "DOWN/1234(FORCED)"
+// where (FORCED) is only present on the forced flag,
+//   and the special TTLs 0 and 268435455 are given
+//   as the strings "MIN" and "MAX" for clarity.
+const char* gdnsd_logf_sttl(const gdnsd_sttl_t s);
+#define logf_sttl gdnsd_logf_sttl
+
 // A simple monitoring plugins calls this helper after every raw
 //   state check of a monitored address.  The core tracks long
 //   term state history for anti-flap and calculates TTLs on

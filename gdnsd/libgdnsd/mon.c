@@ -22,12 +22,16 @@
 #include "gdnsd/mon.h"
 #include "gdnsd/mon-priv.h"
 #include "gdnsd/log.h"
+#include "gdnsd/paths.h"
 #include "gdnsd/plugapi.h"
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/prcu-priv.h"
 #include "gdnsd/vscf.h"
 #include "gdnsd/misc.h"
 
+#include <string.h>
+#include <unistd.h>
+#include <fnmatch.h>
 #include <ev.h>
 
 typedef struct {
@@ -43,7 +47,7 @@ typedef struct {
 // if type is NULL, there is no real monitoring,
 //   it's only possible to administratively change
 //   the state.  This means a virtual resource
-//   via mon_add_admin(), and both addr and cname
+//   via mon_add_admin(), and cname/addr/dname
 //   are invalid.  Otherwise is_cname flags which
 //   member of the union is valid.
 typedef struct {
@@ -72,6 +76,10 @@ static smgr_t* smgrs = NULL;
 //   get mutated directly.  The updates flow into
 //   the non-consumer table and the tables are later
 //   prcu swapped (with the old copy updated to new values)
+// There are only ever the two chunks of memory that are
+//   first allocated for these, they just get swapped around
+//   and copied over each other.
+// (see sttl_update_update() below)
 static gdnsd_sttl_t* smgr_sttl = NULL;
 static gdnsd_sttl_t* smgr_sttl_consumer = NULL;
 
@@ -93,13 +101,257 @@ static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w, int re
     dmn_assert(w == sttl_update_timer);
     dmn_assert(revents == EV_TIMER);
 
+    // prcu-swap of the two tables
     gdnsd_sttl_t* saved_old_consumer = smgr_sttl_consumer;
     gdnsd_prcu_upd_lock();
     gdnsd_prcu_upd_assign(smgr_sttl_consumer, smgr_sttl);
     gdnsd_prcu_upd_unlock();
     smgr_sttl = saved_old_consumer;
+
+    // now copy the (new) consumer table back over the old one
+    //   that we're using for future offline updates until the next swap
     memcpy(smgr_sttl, smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
 }
+
+// anything that ends up changing a value in smgr_sttl[] calls
+//   this to push the updates towards visibility to consumers.
+// the timer coalesces rapid-fire updates into at most one table-swap
+//   per second, at the cost of a second of latency on updates.
+static void kick_sttl_update_timer(void) {
+    if(!ev_is_active(sttl_update_timer) && !ev_is_pending(sttl_update_timer)) {
+        ev_timer_set(sttl_update_timer, 1.0, 0.0);
+        ev_timer_start(mon_loop, sttl_update_timer);
+    }
+}
+
+const char* gdnsd_logf_sttl(const gdnsd_sttl_t s) {
+    // the maximal length here is "DOWN/268435455(FORCED)"
+    // the minimal is "UP/1"
+    // 4-22 bytes not counting NUL
+    char tmpbuf[24];
+    int snp_len;
+    const unsigned ttl = s & GDNSD_STTL_TTL_MASK;
+    const char* state = (s & GDNSD_STTL_DOWN) ? "DOWN" : "UP";
+    const char* forced = (s & GDNSD_STTL_FORCED) ? "(FORCED)" : "";
+    if(!ttl || ttl == GDNSD_STTL_TTL_MAX)
+        snp_len = snprintf(tmpbuf, 24, "%s/%s%s", state, ttl ? "MAX" : "MIN", forced);
+    else
+        snp_len = snprintf(tmpbuf, 24, "%s/%u%s", state, ttl, forced);
+
+    dmn_assert(snp_len >= 4 && snp_len <= 22);
+    char* out = dmn_fmtbuf_alloc((unsigned)snp_len + 1);
+    memcpy(out, tmpbuf, snp_len + 1);
+    return out;
+}
+
+//--------------------------------------------------
+// admin state-force stuff
+//--------------------------------------------------
+
+static ev_stat* admin_file_watcher = NULL;
+static ev_timer* admin_quiesce_timer = NULL;
+
+// shared with plugin_extfile!
+bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned def_ttl) {
+    dmn_assert(sttl_str); dmn_assert(sttl_out);
+
+    bool failed = true;
+    gdnsd_sttl_t out = def_ttl;
+    assert_valid_sttl(out);
+
+    const char* ttl_suffix = NULL;
+    if(!strncasecmp(sttl_str, "UP", 2)) {
+        ttl_suffix = sttl_str + 2;
+    }
+    else if(!strncasecmp(sttl_str, "DOWN", 4)) {
+        out |= GDNSD_STTL_DOWN;
+        ttl_suffix = sttl_str + 4;
+    }
+
+    if(ttl_suffix) {
+        char slash = *ttl_suffix++;
+        if(!slash) {
+            failed = false; // no TTL suffix
+            *sttl_out = out;
+        }
+        else if(slash == '/' && *ttl_suffix) {
+            char* endptr = NULL;
+            unsigned long ttl_tmp = strtoul(ttl_suffix, &endptr, 10);
+            if(endptr && !*endptr) { // strtoul finished the string successfully
+                if(ttl_tmp <= GDNSD_STTL_TTL_MAX) {
+                    out = (out & ~GDNSD_STTL_TTL_MASK) | ttl_tmp;
+                    assert_valid_sttl(out);
+                    *sttl_out = out;
+                    failed = false;
+                }
+            }
+        }
+    }
+
+    return failed;
+}
+
+F_NONNULL
+static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdnsd_sttl_t update_val) {
+    dmn_assert(matchme); dmn_assert(updates);
+    assert_valid_sttl(update_val);
+    dmn_assert(update_val & GDNSD_STTL_FORCED);
+
+    bool success = true;
+    bool matched = false;
+
+    for(unsigned i = 0; i < num_smgrs; i++) {
+        smgr_t* smgr = &smgrs[i];
+        int err = fnmatch(matchme, smgr->desc, 0);
+        if(err && err != FNM_NOMATCH) {
+            log_err("admin_state: fnmatch() failed with error code %i: probably glob-parsing error on '%s'", err, matchme);
+            success = false;
+            break;
+        }
+        if(!err) { // matched!
+            matched = true;
+            updates[i] = update_val;
+        }
+    }
+
+    if(success && !matched)
+        log_warn("admin_state: glob '%s' did not match anything!", matchme);
+
+    return success;
+}
+
+static void admin_process_file(const char* pathname) {
+    log_info("admin_state: (re-)loading state file '%s'...", pathname);
+
+    bool success = true;
+
+    char* vscf_err;
+    const vscf_data_t* raw = vscf_scan_filename(pathname, &vscf_err);
+    if(!raw) {
+        dmn_assert(vscf_err);
+        success = false;
+        log_err("admin_state: Loading file '%s' failed: %s", pathname, vscf_err);
+        free(vscf_err);
+    }
+    else {
+        dmn_assert(!vscf_err);
+        if(!vscf_is_hash(raw))
+            log_err("admin_state: top level of file '%s' must be a hash", pathname);
+
+        gdnsd_sttl_t updates[num_smgrs];
+        memset(updates, 0, sizeof(updates));
+
+        const unsigned num_raw = vscf_hash_get_len(raw);
+        for(unsigned i = 0; i < num_raw; i++) {
+            const char* matchme = vscf_hash_get_key_byindex(raw, i, NULL);
+            const vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
+            if(!vscf_is_simple(val)) {
+                log_err("admin_state: value for '%s' must be a simple string!", matchme);
+                success = false;
+                break;
+            }
+            else {
+                gdnsd_sttl_t update_val;
+                if(gdnsd_mon_parse_sttl(vscf_simple_get_data(val), &update_val, GDNSD_STTL_TTL_MAX)) {
+                    log_err("admin_state: value for '%s' must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", matchme, GDNSD_STTL_TTL_MAX);
+                    success = false;
+                    break;
+                }
+                else {
+                    update_val |= GDNSD_STTL_FORCED; // all admin-states are forced
+                    if(!admin_process_entry(matchme, updates, update_val)) {
+                        success = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if(success) {
+            bool affected = false;
+            for(unsigned i = 0; i < num_smgrs; i++) {
+                if(updates[i]) { // some entry wants to affect this slot
+                    if(smgr_sttl[i] != updates[i]) { // new state change
+                        if(smgr_sttl[i] != smgrs[i].real_sttl) // already forced
+                            log_info("admin_state: state of '%s' re-forced from %s to %s, real state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(updates[i]), logf_sttl(smgrs[i].real_sttl));
+                        else
+                            log_info("admin_state: state of '%s' forced from %s to %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(updates[i]));
+                        smgr_sttl[i] = updates[i];
+                        affected = true;
+                    }
+                }
+                else if(smgr_sttl[i] & GDNSD_STTL_FORCED) { // was forced before, isn't now
+                    log_info("admin_state: state of '%s' un-forced from %s to %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(smgrs[i].real_sttl));
+                    smgr_sttl[i] = smgrs[i].real_sttl;
+                    dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
+                    affected = true;
+                }
+            }
+            if(affected && !initial_round)
+                kick_sttl_update_timer();
+        }
+    }
+
+    if(!success)
+        log_err("admin_state: file '%s' had errors; all contents were ignored and any current forced states are unaffected", pathname);
+}
+
+static void admin_deleted_file(const char* pathname) {
+    log_info("admin_state: state file '%s' deleted, clearing any forced states...", pathname);
+    bool affected = false;
+    for(unsigned i = 0; i < num_smgrs; i++) {
+        if(smgr_sttl[i] & GDNSD_STTL_FORCED) {
+            log_info("admin_state: state of '%s' un-forced from %s to %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(smgrs[i].real_sttl));
+            smgr_sttl[i] = smgrs[i].real_sttl;
+            dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
+            affected = true;
+        }
+    }
+    if(affected)
+        kick_sttl_update_timer();
+}
+
+F_NONNULL
+static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    ev_timer_stop(loop, w);
+    if(admin_file_watcher->attr.st_nlink)
+        admin_process_file(admin_file_watcher->path);
+    else
+        admin_deleted_file(admin_file_watcher->path);
+}
+
+F_NONNULL
+static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
+    log_debug("admin_state: ev_stat fired on '%s', triggering quiesce timer...", w->path);
+    ev_timer_again(loop, admin_quiesce_timer);
+}
+
+// Note this invoked *after* the initial round of monitoring,
+//   but before the main loop begins runtime execution.
+static void admin_init(struct ev_loop* mloop) {
+    dmn_assert(mloop);
+
+    char* pathname = gdnsd_resolve_path_state("admin_state", NULL);
+
+    admin_quiesce_timer = malloc(sizeof(ev_stat));
+    ev_timer_init(admin_quiesce_timer, admin_timer_cb, 0.0, 1.02);
+    admin_file_watcher = malloc(sizeof(ev_stat));
+    ev_stat_init(admin_file_watcher, admin_file_cb, pathname, 5.02);
+    ev_stat_start(mloop, admin_file_watcher);
+
+    // ev_stat_start stat()'s the file for ->attr, use that
+    //   to process the file initially if it exists.
+    if(admin_file_watcher->attr.st_nlink)
+        admin_process_file(pathname);
+    else
+        log_info("admin_state: state file '%s' does not yet exist at startup", pathname);
+}
+
+//--------------------------------------------------
+// core monitoring stuff
+//--------------------------------------------------
 
 // Called once after all servicetypes and monitored stuff
 //  have been configured, from main thread.  mloop happens
@@ -122,8 +374,13 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
     initial_round = true;
     gdnsd_plugins_action_init_monitors(mloop);
     ev_run(mloop, 0);
-    initial_round = false;
     log_info("Initial round of monitoring complete");
+
+    // initialize admin_state stuff
+    admin_init(mloop);
+
+    // this flag prevents table update timers for admin_init stuff as well!
+    initial_round = false;
 
     // set up the table-update coalescing timer
     sttl_update_timer = malloc(sizeof(ev_timer));
@@ -134,6 +391,8 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
     //   no confusion.
     sttl_table_update(mloop, sttl_update_timer, EV_TIMER);
 
+    // add real watchers to the monitor loop for runtime
+    //   (the loop itself begins execution later back in main.c)
     gdnsd_plugins_action_start_monitors(mloop);
 }
 
@@ -429,10 +688,7 @@ static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
         smgr->real_sttl = new_sttl;
         if(new_sttl != smgr_sttl[idx] && !(smgr_sttl[idx] & GDNSD_STTL_FORCED)) {
             smgr_sttl[idx] = new_sttl;
-            if(!ev_is_active(sttl_update_timer) && !ev_is_pending(sttl_update_timer)) {
-                ev_timer_set(sttl_update_timer, 1.0, 0.0);
-                ev_timer_start(mon_loop, sttl_update_timer);
-            }
+            kick_sttl_update_timer();
         }
     }
 }
