@@ -480,18 +480,18 @@ static const vscf_data_t* conf_load_vscf(void) {
 
     struct stat cfg_stat;
     if(!stat(cfg_path, &cfg_stat)) {
-        log_info("Loading configuration from '%s'", cfg_path);
+        log_info("Loading configuration from '%s'", logf_pathname(cfg_path));
         char* vscf_err;
         out = vscf_scan_filename(cfg_path, &vscf_err);
         if(!out)
-            log_fatal("Loading configuration from '%s' failed: %s", cfg_path, vscf_err);
+            log_fatal("Loading configuration from '%s' failed: %s", logf_pathname(cfg_path), vscf_err);
         if(!vscf_is_hash(out)) {
             dmn_assert(vscf_is_array(out));
-            log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", cfg_path);
+            log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", logf_pathname(cfg_path));
         }
     }
     else {
-        log_info("No config file at '%s', using defaults", cfg_path);
+        log_info("No config file at '%s', using defaults", logf_pathname(cfg_path));
     }
 
     free(cfg_path);
