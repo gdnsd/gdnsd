@@ -461,7 +461,7 @@ static void unload_zones(void) {
 static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
     DIR* zdhandle = opendir(rfc1035_dir);
     if(!zdhandle) {
-        log_err("rfc1035: Cannot open zones directory '%s': %s", rfc1035_dir, dmn_strerror(errno));
+        log_err("rfc1035: Cannot open zones directory '%s': %s", logf_pathname(rfc1035_dir), dmn_strerror(errno));
     }
     else {
         struct dirent* zfdi;
@@ -469,7 +469,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
             if(likely(zfdi->d_name[0] != '.'))
                 process_zonefile(zfdi->d_name, loop, initial_quiesce_time);
         if(closedir(zdhandle))
-            log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, dmn_strerror(errno));
+            log_err("rfc1035: closedir(%s) failed: %s", logf_pathname(rfc1035_dir), dmn_strerror(errno));
     }
 }
 
@@ -775,19 +775,19 @@ static uint64_t try_zone_mtime(const char* testfn) {
         int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR, 0644);
 
         if(fd < 0) {
-            log_info(MTMSG1 "failed to open %s for writing: %s" MTMSG2, testfn, logf_errno());
+            log_info(MTMSG1 "failed to open %s for writing: %s" MTMSG2, logf_pathname(testfn), logf_errno());
             break;
         }
 
         if(9 != write(fd, "testmtime", 9)) {
-            log_info(MTMSG1 "failed to write 9 bytes to %s: %s" MTMSG2, testfn, logf_errno());
+            log_info(MTMSG1 "failed to write 9 bytes to %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
             close(fd);
             unlink(testfn);
             break;
         }
 
         if(close(fd)) {
-            log_info(MTMSG1 "failed to close %s: %s" MTMSG2, testfn, logf_errno());
+            log_info(MTMSG1 "failed to close %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
             unlink(testfn);
             break;
         }
@@ -795,13 +795,13 @@ static uint64_t try_zone_mtime(const char* testfn) {
         struct stat st;
 
         if(lstat(testfn, &st)) {
-            log_info(MTMSG1 "failed to lstat %s: %s" MTMSG2, testfn, logf_errno());
+            log_info(MTMSG1 "failed to lstat %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
             unlink(testfn);
             break;
         }
 
         if(unlink(testfn)) {
-            log_info(MTMSG1 "failed to unlink %s: %s" MTMSG2, testfn, logf_errno());
+            log_info(MTMSG1 "failed to unlink %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
             break;
         }
 
@@ -872,7 +872,7 @@ void zsrc_rfc1035_load_zones(void) {
     if(dmn_get_debug() && atexit(unload_zones))
         log_fatal("rfc1035: atexit(unload_zones) failed: %s", logf_errno());
 
-    log_info("rfc1035: Loaded %u zonefiles from '%s'", zfhash_count, rfc1035_dir);
+    log_info("rfc1035: Loaded %u zonefiles from '%s'", zfhash_count, logf_pathname(rfc1035_dir));
 }
 
 // we track the loop here for the async sighup request

@@ -52,16 +52,16 @@ static const vscf_data_t* conf_load_vscf(void) {
 
     struct stat cfg_stat;
     if(!stat(cfg_path, &cfg_stat)) {
-        log_debug("Loading configuration from '%s'", cfg_path);
+        log_debug("Loading configuration from '%s'", logf_pathname(cfg_path));
         char* vscf_err;
         out = vscf_scan_filename(cfg_path, &vscf_err);
         if(!out)
-            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
+            log_fatal("Configuration from '%s' failed: %s", logf_pathname(cfg_path), vscf_err);
         if(!vscf_is_hash(out))
-            log_fatal("Configuration from '%s' failed: config was an array!", cfg_path);
+            log_fatal("Configuration from '%s' failed: config was an array!", logf_pathname(cfg_path));
     }
     else {
-        log_debug("No config file at '%s', using defaults + zones auto-scan", cfg_path);
+        log_debug("No config file at '%s', using defaults + zones auto-scan", logf_pathname(cfg_path));
     }
 
     free(cfg_path);
