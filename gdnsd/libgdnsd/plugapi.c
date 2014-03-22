@@ -103,16 +103,20 @@ static void* plugin_dlopen(const char* pname) {
     const char** psptr = psearch;
     const unsigned pname_len = strlen(pname);
     while((try_path = *psptr++)) {
-        char* pp = gdnsd_str_combine_n(4, try_path, "/plugin_", pname, ".so");
+        const unsigned try_len = strlen(try_path);
+        const unsigned pp_len = try_len + 8 + pname_len + 4;
+        char pp[pp_len];
+        memcpy(pp, try_path, try_len);
+        memcpy(pp + try_len, "/plugin_", 8);
+        memcpy(pp + try_len + 8, pname, pname_len);
+        memcpy(pp + try_len + 8 + pname_len, ".so\0", 4);
         log_debug("Looking for plugin '%s' at pathname '%s'", pname, pp);
         if(0 == stat(pp, &plugstat) && S_ISREG(plugstat.st_mode)) {
             void* phandle = dlopen(pp, RTLD_NOW | RTLD_LOCAL);
             if(!phandle)
                 log_fatal("Failed to dlopen() the '%s' plugin from path '%s': %s", pname, pp, dlerror());
-            free(pp);
             return phandle;
         }
-        free(pp);
     }
 
     log_fatal("Failed to locate plugin '%s' in the plugin search path", pname);
