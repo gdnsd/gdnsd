@@ -74,7 +74,7 @@ static void zsrc_djb_sync_zones(void) {
     }
     ztree_txn_end();
 
-    log_info("zsrc_djb: loaded %d zones...", num_zones);
+    log_info("zsrc_djb: loaded %d zones from %s...", num_zones, logf_pathname(djb_dir));
 
     zscan_djbzone_free(&active_zonedata);
     active_zonedata = zonedata;

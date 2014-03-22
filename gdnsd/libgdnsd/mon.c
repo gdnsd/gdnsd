@@ -221,7 +221,7 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
 }
 
 static void admin_process_file(const char* pathname) {
-    log_info("admin_state: (re-)loading state file '%s'...", pathname);
+    log_info("admin_state: (re-)loading state file '%s'...", logf_pathname(pathname));
 
     bool success = true;
 
@@ -230,13 +230,13 @@ static void admin_process_file(const char* pathname) {
     if(!raw) {
         dmn_assert(vscf_err);
         success = false;
-        log_err("admin_state: Loading file '%s' failed: %s", pathname, vscf_err);
+        log_err("admin_state: Loading file '%s' failed: %s", logf_pathname(pathname), vscf_err);
         free(vscf_err);
     }
     else {
         dmn_assert(!vscf_err);
         if(!vscf_is_hash(raw))
-            log_err("admin_state: top level of file '%s' must be a hash", pathname);
+            log_err("admin_state: top level of file '%s' must be a hash", logf_pathname(pathname));
 
         gdnsd_sttl_t updates[num_smgrs];
         memset(updates, 0, sizeof(updates));
@@ -293,11 +293,11 @@ static void admin_process_file(const char* pathname) {
     }
 
     if(!success)
-        log_err("admin_state: file '%s' had errors; all contents were ignored and any current forced states are unaffected", pathname);
+        log_err("admin_state: file '%s' had errors; all contents were ignored and any current forced states are unaffected", logf_pathname(pathname));
 }
 
 static void admin_deleted_file(const char* pathname) {
-    log_info("admin_state: state file '%s' deleted, clearing any forced states...", pathname);
+    log_info("admin_state: state file '%s' deleted, clearing any forced states...", logf_pathname(pathname));
     bool affected = false;
     for(unsigned i = 0; i < num_smgrs; i++) {
         if(smgr_sttl[i] & GDNSD_STTL_FORCED) {
@@ -324,7 +324,7 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 F_NONNULL
 static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
-    log_debug("admin_state: ev_stat fired on '%s', triggering quiesce timer...", w->path);
+    log_debug("admin_state: ev_stat fired on '%s', triggering quiesce timer...", logf_pathname(w->path));
     ev_timer_again(loop, admin_quiesce_timer);
 }
 
@@ -346,7 +346,7 @@ static void admin_init(struct ev_loop* mloop) {
     if(admin_file_watcher->attr.st_nlink)
         admin_process_file(pathname);
     else
-        log_info("admin_state: state file '%s' does not yet exist at startup", pathname);
+        log_info("admin_state: state file '%s' does not yet exist at startup", logf_pathname(pathname));
 }
 
 //--------------------------------------------------
