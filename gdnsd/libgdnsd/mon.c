@@ -94,7 +94,6 @@ static ev_timer* sttl_update_timer = NULL;
 #define DEF_OK_THRESH 10
 #define DEF_DOWN_THRESH 10
 #define DEF_INTERVAL 10
-#define DEF_TIMEOUT 3
 
 static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w, int revents) {
     dmn_assert(loop); dmn_assert(w);
@@ -626,14 +625,14 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
         this_svc->ok_thresh = DEF_OK_THRESH;
         this_svc->down_thresh = DEF_DOWN_THRESH;
         this_svc->interval = DEF_INTERVAL;
-        this_svc->timeout = DEF_TIMEOUT;
         SVC_OPT_UINT(svctype_cfg, this_svc->name, up_thresh, 1LU, 65535LU);
         SVC_OPT_UINT(svctype_cfg, this_svc->name, ok_thresh, 1LU, 65535LU);
         SVC_OPT_UINT(svctype_cfg, this_svc->name, down_thresh, 1LU, 65535LU);
-        SVC_OPT_UINT(svctype_cfg, this_svc->name, interval, 1LU, 3600LU);
+        SVC_OPT_UINT(svctype_cfg, this_svc->name, interval, 2LU, 3600LU);
+        this_svc->timeout = this_svc->interval >> 1U; // default timeout is half of interval
         SVC_OPT_UINT(svctype_cfg, this_svc->name, timeout, 1LU, 300LU);
-        if((double)this_svc->timeout > (double)this_svc->interval * 0.9)
-            log_fatal("Service type '%s': timeout must be less than 90%% of interval)", this_svc->name);
+        if(this_svc->timeout >= this_svc->interval)
+            log_fatal("Service type '%s': timeout must be less than interval)", this_svc->name);
 
         this_svc->plugin->add_svctype(this_svc->name, svctype_cfg, this_svc->interval, this_svc->timeout);
         vscf_hash_iterate(svctype_cfg, true, bad_svc_opt, (void*)this_svc->name);
@@ -647,7 +646,7 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
         this_svc->ok_thresh = DEF_OK_THRESH;
         this_svc->down_thresh = DEF_DOWN_THRESH;
         this_svc->interval = DEF_INTERVAL;
-        this_svc->timeout = DEF_TIMEOUT;
+        this_svc->timeout = 1;
     }
 
     // now that we've solved the chicken-and-egg, finish processing
