@@ -576,7 +576,7 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         CFG_OPT_UINT_ALTSTORE(options, http_port, 1LU, 65535LU, def_http_port);
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
-        CFG_OPT_UINT(options, max_ttl, 3600LU, 268435455LU); // 2^28-1 -> gdnsd_sttl_t compat
+        CFG_OPT_UINT(options, max_ttl, 3600LU, (unsigned long)GDNSD_STTL_TTL_MAX);
         if(gconfig.max_ttl < gconfig.min_ttl)
             log_fatal("The global option 'max_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", gconfig.max_ttl, gconfig.min_ttl);
         CFG_OPT_UINT(options, max_ncache_ttl, 10LU, 86400LU);
