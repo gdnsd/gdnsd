@@ -266,6 +266,8 @@ static void admin_process_file(const char* pathname) {
             }
         }
 
+        vscf_destroy(raw);
+
         if(success) {
             bool affected = false;
             for(unsigned i = 0; i < num_smgrs; i++) {
