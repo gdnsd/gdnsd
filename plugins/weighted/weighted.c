@@ -807,6 +807,11 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
     unsigned dyn_item_maxs[cfg_max_items_per_res]; // max of dyn_addr_weights[N][]
     // addr cfg weight or 0, depends on status:
     unsigned dyn_addr_weights[cfg_max_items_per_res][cfg_max_addrs_per_group];
+
+    // not strictly necessary (we write to every array item we use), but this
+    //   avoids clang-analyzer getting confused and complaining about garbage values :P
+    memset(dyn_addr_weights, 0, sizeof(dyn_addr_weights));
+
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
 
     // Get dynamic info about each item
