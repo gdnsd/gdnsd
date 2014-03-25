@@ -139,6 +139,9 @@ our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
 #   tests to work accurately!
 $ENV{GDNSD_TESTSUITE_NO_ZONEFILE_MODS} = 1;
 
+# generic flag to eliminate various timer delays under testing
+$ENV{GDNSD_TESTSUITE_NODELAY} = 1;
+
 our $TEST_RUNNER = "";
 if($ENV{TEST_RUNNER}) {
     $TEST_RUNNER = $ENV{TEST_RUNNER};

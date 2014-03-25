@@ -86,6 +86,7 @@ static gdnsd_sttl_t* smgr_sttl_consumer = NULL;
 static int max_stats_len = 0;
 
 static bool initial_round = false;
+static bool testsuite_nodelay = false;
 
 static struct ev_loop* mon_loop = NULL;
 static ev_timer* sttl_update_timer = NULL;
@@ -117,7 +118,10 @@ static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w, int re
 // the timer coalesces rapid-fire updates into at most one table-swap
 //   per second, at the cost of a second of latency on updates.
 static void kick_sttl_update_timer(void) {
-    if(!ev_is_active(sttl_update_timer) && !ev_is_pending(sttl_update_timer)) {
+    if(testsuite_nodelay) {
+        sttl_table_update(mon_loop, sttl_update_timer, EV_TIMER);
+    }
+    else if(!ev_is_active(sttl_update_timer) && !ev_is_pending(sttl_update_timer)) {
         ev_timer_set(sttl_update_timer, 1.0, 0.0);
         ev_timer_start(mon_loop, sttl_update_timer);
     }
@@ -325,8 +329,10 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 F_NONNULL
 static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
-    log_debug("admin_state: ev_stat fired on '%s', triggering quiesce timer...", logf_pathname(w->path));
-    ev_timer_again(loop, admin_quiesce_timer);
+    if(testsuite_nodelay)
+        admin_timer_cb(loop, admin_quiesce_timer, EV_TIMER);
+    else
+        ev_timer_again(loop, admin_quiesce_timer);
 }
 
 // Note this invoked *after* the initial round of monitoring,
@@ -364,6 +370,9 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
 
     // Fall out quickly if nothing to monitor
     if(!num_smgrs) return;
+
+    if(getenv("GDNSD_TESTSUITE_NODELAY"))
+        testsuite_nodelay = true;
 
     // saved for timer usage later
     mon_loop = mloop;
