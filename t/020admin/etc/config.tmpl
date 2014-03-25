@@ -1,0 +1,20 @@
+
+options => {
+  listen => @dns_lspec@
+  http_listen => @http_lspec@
+  dns_port => @dns_port@
+  http_port => @http_port@
+  plugin_search_path = @pluginpath@
+  realtime_stats = true
+  debug = true
+}
+
+plugins => {
+  simplefo => {
+    r1 => {
+      service_types = up
+      primary = 127.0.0.1
+      secondary = 192.0.2.1
+    }
+  }
+}
