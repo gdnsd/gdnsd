@@ -190,6 +190,7 @@ void dcinfo_destroy(dcinfo_t* info) {
     for(unsigned i = 0; i < info->num_dcs; i++)
         free(info->names[i]);
     free(info->names);
+    free(info->indices);
     if(info->coords)
         free(info->coords);
     free(info);
