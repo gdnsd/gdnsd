@@ -504,7 +504,7 @@ sub test_log_output {
     # $retry_delay doubles after each wait...
     my $retry_delay = 0.1;
     my $retry = $TEST_RUNNER ? 10 : 9;
-    while(scalar(keys %$texts) && $retry--) {
+    while($retry--) {
         while(scalar(keys %$texts) && ($_ = <$GDOUT_FH>)) {
             foreach my $k (keys %$texts) {
                 my $this_text = $texts->{$k};
@@ -514,8 +514,18 @@ sub test_log_output {
                 }
             }
         }
+        if(scalar(keys %$texts)) {
+            select(undef, undef, undef, $retry_delay);
+            $retry_delay *= 2;
+        }
+        else { last; }
+    }
+
+    # do a final delay under valgrind, because technically it's often
+    #   the case that we still have a prcu swap to do after the log
+    #   message is emitted, before test results are reliable...
+    if($TEST_RUNNER) {
         select(undef, undef, undef, $retry_delay);
-        $retry_delay *= 2;
     }
 
     if(!scalar(keys %$texts)) {
