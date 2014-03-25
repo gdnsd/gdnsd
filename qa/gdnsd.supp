@@ -35,3 +35,13 @@
   fun:dnspacket_context_new
   ...
 }
+
+# This one is a little different.  libev's code
+#  actually does read uninitialized memory here,
+#  but that doesn't logically end up mattering
+#  to what actually happens as a result.
+{
+   ev_stat_uninit
+   Memcheck:Cond
+   fun:stat_timer_cb
+}
