@@ -175,7 +175,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
             if(!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
                 log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val < _min || _val > _max) \
+            if((_min && _val < _min) || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
             gconfig._gconf_loc = (unsigned) _val; \
         } \
@@ -217,22 +217,8 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
             if(!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
                 log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val < _min || _val > _max) \
+            if((_min && _val < _min) || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
-            _store = (unsigned) _val; \
-        } \
-    } while(0)
-
-#define CFG_OPT_UINT_ALTSTORE_0MIN(_opt_set, _gconf_loc, _max, _store) \
-    do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
-            unsigned long _val; \
-            if(!vscf_is_simple(_opt_setting) \
-            || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
-                log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val > _max) \
-                log_fatal("Config option %s: Value out of range (0, %lu)", #_gconf_loc, _max); \
             _store = (unsigned) _val; \
         } \
     } while(0)
@@ -394,11 +380,11 @@ static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_recv_width, 1LU, 32LU, addrconf->udp_recv_width);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
-            CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, udp_threads, 1024LU, addrconf->udp_threads);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_threads, 0LU, 1024LU, addrconf->udp_threads);
 
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
-            CFG_OPT_UINT_ALTSTORE_0MIN(addr_opts, tcp_threads, 1024LU, addrconf->tcp_threads);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_threads, 0LU, 1024LU, addrconf->tcp_threads);
 
             if(!gdnsd_reuseport_ok()) {
                 if(addrconf->udp_threads > 1) {
@@ -556,11 +542,11 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
         CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, addr_defs.udp_sndbuf);
-        CFG_OPT_UINT_ALTSTORE_0MIN(options, udp_threads, 1024LU, addr_defs.udp_threads);
+        CFG_OPT_UINT_ALTSTORE(options, udp_threads, 0LU, 1024LU, addr_defs.udp_threads);
         CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, addr_defs.tcp_timeout);
 
         CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
-        CFG_OPT_UINT_ALTSTORE_0MIN(options, tcp_threads, 1024LU, addr_defs.tcp_threads);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_threads, 0LU, 1024LU, addr_defs.tcp_threads);
 
         if(!gdnsd_reuseport_ok()) {
             if(addr_defs.udp_threads > 1) {
