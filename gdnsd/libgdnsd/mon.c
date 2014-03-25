@@ -342,7 +342,7 @@ static void admin_init(struct ev_loop* mloop) {
 
     char* pathname = gdnsd_resolve_path_state("admin_state", NULL);
 
-    admin_quiesce_timer = malloc(sizeof(ev_stat));
+    admin_quiesce_timer = malloc(sizeof(ev_timer));
     ev_timer_init(admin_quiesce_timer, admin_timer_cb, 0.0, 1.02);
     admin_file_watcher = malloc(sizeof(ev_stat));
     ev_stat_init(admin_file_watcher, admin_file_cb, pathname, 5.02);
