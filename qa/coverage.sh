@@ -17,7 +17,7 @@ rm -f gdnsd-*.info
 rm -rf lcovout
 find . -name "*.gcov" -o -name "*.gcda" -o -name "*.gcno"|xargs rm -f
 
-CFLAGS="-O0 -fprofile-arcs -ftest-coverage" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN" ./configure --disable-developer
+CFLAGS="-O0 -fprofile-arcs -ftest-coverage" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE" ./configure --disable-developer
 make
 
 lcov -c -i -d . -o gdnsd-base.info

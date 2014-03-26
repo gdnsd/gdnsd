@@ -172,10 +172,21 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
 #define dmn_log_info(...) dmn_logger(LOG_INFO,__VA_ARGS__)
 #define dmn_log_warn(...) dmn_logger(LOG_WARNING,__VA_ARGS__)
 #define dmn_log_err(...) dmn_logger(LOG_ERR,__VA_ARGS__)
-#define dmn_log_fatal(...) do {\
-    dmn_logger(LOG_CRIT,__VA_ARGS__);\
-    exit(57);\
-} while(0)
+
+// DMN_NO_FATAL_COVERAGE is to allow coverage testing to skip
+//   over fatal conditions.  If your tests don't cover those
+//   for pragmatic reasons, this considerably reduces line noise.
+// Note that this is only going to work if your tests *never*
+//   exercise a fatal case; it will probably cause random
+//   bugs leading to test failures otherwise.
+#ifdef DMN_NO_FATAL_COVERAGE
+#  define dmn_log_fatal(...) ((void)(0))
+#else
+#  define dmn_log_fatal(...) do {\
+     dmn_logger(LOG_CRIT,__VA_ARGS__);\
+     exit(57);\
+   } while(0)
+#endif
 
 // DMN_NO_UNREACH_BUILTIN is to work around gcov coverage testing, which
 //   flags un-taken branches for all of the __builtin_unreachable()
