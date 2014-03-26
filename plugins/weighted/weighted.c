@@ -73,6 +73,7 @@ typedef struct {
     res_aitem_t* items;
     char** svc_names;
     unsigned count;
+    unsigned max_addrs_pergroup;
     unsigned weight;
     unsigned up_weight;
     unsigned max_weight;
@@ -105,10 +106,6 @@ typedef struct {
 
 static resource_t* resources = NULL;
 static unsigned num_resources = 0;
-
-// tracked configured max sizes, for dynamic arrays later
-static unsigned cfg_max_items_per_res = 1;
-static unsigned cfg_max_addrs_per_group = 1;
 
 // Per-thread PRNGs
 
@@ -240,10 +237,6 @@ static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name,
         log_fatal("plugin_weighted: resource '%s' (%s), group '%s': must contain one or more label => [ IPADDR, WEIGHT ] settings", res_name, stanza, item_name);
     if(num_addrs > MAX_ADDRS_PER_GROUP)
         log_fatal("plugin_weighted: resource '%s' (%s), group '%s': too many addresses (max %u)", res_name, stanza, item_name, MAX_ADDRS_PER_GROUP);
-
-    // track maximum group-size actually configured
-    if(cfg_max_addrs_per_group < num_addrs)
-        cfg_max_addrs_per_group = num_addrs;
 
     res_item->count = num_addrs;
     res_item->as = calloc(num_addrs, sizeof(addrstate_t));
@@ -380,10 +373,6 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     if(!addrset->count)
         log_fatal("plugin_weighted: resource '%s' (%s): empty address-family sets not allowed", res_name, stanza);
 
-    // track maximum res-size actually configured
-    if(cfg_max_items_per_res < addrset->count)
-        cfg_max_items_per_res = addrset->count;
-
     addrset->items = calloc(addrset->count, sizeof(res_aitem_t));
     addrset->gmode = RES_ASET_UNKNOWN;
     addr_iter_data_t aid = {
@@ -399,10 +388,13 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     addrset->max_weight = 0;
     for(unsigned i = 0; i < addrset->count; i++) {
         const unsigned iwt = addrset->items[i].weight;
+        const unsigned num_addrs = addrset->items[i].count;
         dmn_assert(iwt); dmn_assert(addrset->items[i].max_weight);
         addrset->weight += iwt;
         if(addrset->max_weight < iwt)
             addrset->max_weight = iwt;
+        if(addrset->max_addrs_pergroup < num_addrs)
+            addrset->max_addrs_pergroup = num_addrs;
     }
 
     dmn_assert(addrset->weight);
@@ -803,10 +795,10 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
     const unsigned num_items = aset->count;
     unsigned dyn_items_sum = 0; // sum of dyn_item_sums[]
     unsigned dyn_items_max = 0; // max of dyn_item_sums[]
-    unsigned dyn_item_sums[cfg_max_items_per_res]; // sum of dyn_addr_weights[N][]
-    unsigned dyn_item_maxs[cfg_max_items_per_res]; // max of dyn_addr_weights[N][]
+    unsigned dyn_item_sums[num_items]; // sum of dyn_addr_weights[N][]
+    unsigned dyn_item_maxs[num_items]; // max of dyn_addr_weights[N][]
     // addr cfg weight or 0, depends on status:
-    unsigned dyn_addr_weights[cfg_max_items_per_res][cfg_max_addrs_per_group];
+    unsigned dyn_addr_weights[num_items][aset->max_addrs_pergroup];
 
     // not strictly necessary (we write to every array item we use), but this
     //   avoids clang-analyzer getting confused and complaining about garbage values :P
