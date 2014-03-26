@@ -31,17 +31,97 @@
 
 #include "cfg-dirs.h"
 
-void gdnsd_dyn_add_result_anysin(dyn_result_t* result, const anysin_t* asin) {
-    dmn_assert(result); dmn_assert(asin); dmn_assert(!result->is_cname);
+// The default (minimum) values here amount to 240 bytes of address
+//   storage (12*4+12*16), which is less than the minimum allocation
+//   of 256 to store a CNAME, therefore there's no savings trying to
+//   go any smaller.
+static unsigned addrlimit_v4 = 12U;
+static unsigned addrlimit_v6 = 12U;
+static unsigned v6_offset = 12U * 4U;
+
+unsigned gdnsd_result_get_v6_offset(void) { return v6_offset; }
+
+unsigned gdnsd_result_get_alloc(void) {
+    unsigned storage = (addrlimit_v4 * 4U) + (addrlimit_v6 * 16U);
+    if(storage < 256U)
+        storage = 256U; // true minimum set by CNAME storage
+    return sizeof(dyn_result_t) + storage;
+}
+
+void gdnsd_dyn_addr_max(unsigned v4, unsigned v6) {
+    // Note these limits are somewhat arbitrary (with some thought towards 16K-ish limits), but:
+    //   (a) I can't imagine reasonable use-cases hitting them in practice at this time
+    //   (b) There may be other implications for very large values that need to be addressed
+    //     before lifting these limits (e.g. auto-raising max packet size?)
+    if(v4 > 512U)
+        log_fatal("gdnsd cannot cope with plugin configurations which add >512 IPv4 addresses to a single result!");
+    if(v6 > 512U)
+        log_fatal("gdnsd cannot cope with plugin configurations which add >512 IPv6 addresses to a single result!");
+
+    if(v4 > addrlimit_v4) {
+        addrlimit_v4 = v4;
+        v6_offset = v4 * 4U;
+    }
+    if(v6 > addrlimit_v6)
+        addrlimit_v6 = v6;
+}
+
+void gdnsd_result_add_anysin(dyn_result_t* result, const anysin_t* asin) {
+    dmn_assert(result); dmn_assert(asin);
+
+    dmn_assert(!result->is_cname);
     if(asin->sa.sa_family == AF_INET6) {
-        dmn_assert(result->a.count_v6 < 64);
-        memcpy(&result->a.addrs_v6[result->a.count_v6++ * 16], asin->sin6.sin6_addr.s6_addr, 16);
+        dmn_assert(result->count_v6 < addrlimit_v6);
+        memcpy(&result->storage[v6_offset + (result->count_v6++ * 16U)], asin->sin6.sin6_addr.s6_addr, 16);
     }
     else {
         dmn_assert(asin->sa.sa_family == AF_INET);
-        dmn_assert(result->a.count_v4 < 64);
-        result->a.addrs_v4[result->a.count_v4++] = asin->sin.sin_addr.s_addr;
+        dmn_assert(result->count_v4 < addrlimit_v4);
+        result->v4[result->count_v4++] = asin->sin.sin_addr.s_addr;
     }
+}
+
+void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const uint8_t* origin) {
+    dmn_assert(result); dmn_assert(dname); dmn_assert(origin);
+    dmn_assert(dname_status(dname) != DNAME_INVALID);
+    dmn_assert(dname_status(origin) == DNAME_VALID);
+    dmn_assert(!result->is_cname);
+    dmn_assert(!result->count_v4);
+    dmn_assert(!result->count_v6);
+
+    result->is_cname = true;
+    dname_copy(result->storage, dname);
+    if(dname_is_partial(result->storage))
+        dname_cat(result->storage, origin);
+    dmn_assert(dname_status(result->storage) == DNAME_VALID);
+}
+
+void gdnsd_result_wipe(dyn_result_t* result) {
+    dmn_assert(result);
+    result->is_cname = false;
+    result->count_v4 = 0;
+    result->count_v6 = 0;
+}
+
+void gdnsd_result_wipe_v4(dyn_result_t* result) {
+    dmn_assert(result);
+    result->count_v4 = 0;
+}
+
+void gdnsd_result_wipe_v6(dyn_result_t* result) {
+    dmn_assert(result);
+    result->count_v6 = 0;
+}
+
+void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope) {
+    dmn_assert(result);
+    if(scope > result->edns_scope_mask)
+        result->edns_scope_mask = scope;
+}
+
+void gdnsd_result_reset_scope_mask(dyn_result_t* result) {
+    dmn_assert(result);
+    result->edns_scope_mask = 0;
 }
 
 static unsigned num_plugins = 0;

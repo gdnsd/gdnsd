@@ -194,6 +194,7 @@ void plugin_simplefo_load_config(const vscf_data_t* config) {
     resources = calloc(num_resources, sizeof(res_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
+    gdnsd_dyn_addr_max(1, 1); // simplefo only returns one address per family
 }
 
 int plugin_simplefo_map_res(const char* resname, const uint8_t* origin V_UNUSED) {
@@ -245,13 +246,13 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const addrstate_t
         sttl_out = p_sttl;
     }
 
-    gdnsd_dyn_add_result_anysin(result, &as->addrs[which]);
+    gdnsd_result_add_anysin(result, &as->addrs[which]);
     assert_valid_sttl(sttl_out);
     return sttl_out;
 }
 
 gdnsd_sttl_t plugin_simplefo_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-    dmn_assert(result); dmn_assert(!result->is_cname);
+    dmn_assert(result);
 
     res_t* res = &resources[resnum];
 

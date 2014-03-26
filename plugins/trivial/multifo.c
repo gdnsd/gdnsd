@@ -32,6 +32,9 @@
 static const char DEFAULT_SVCNAME[] = "up";
 static const double DEF_UP_THRESH = 0.5;
 
+static unsigned v4_max = 0;
+static unsigned v6_max = 0;
+
 typedef struct {
     anysin_t addr;
     unsigned* indices;
@@ -200,6 +203,15 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
 
     if(destroy_cfg)
         vscf_destroy((vscf_data_t*)cfg);
+
+    if(ipv6) {
+        if(num_addrs > v6_max)
+            v6_max = num_addrs;
+    }
+    else {
+        if(num_addrs > v4_max)
+            v4_max = num_addrs;
+    }
 }
 
 static void config_auto(res_t* res, const char* stanza, const vscf_data_t* auto_cfg) {
@@ -308,6 +320,7 @@ void plugin_multifo_load_config(const vscf_data_t* config) {
     resources = calloc(num_resources, sizeof(res_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
+    gdnsd_dyn_addr_max(v4_max, v6_max);
 }
 
 int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED) {
@@ -325,26 +338,32 @@ int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED) 
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result, unsigned* resct_ptr) {
-    dmn_assert(aset); dmn_assert(result); dmn_assert(resct_ptr);
+static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result, const bool isv6) {
+    dmn_assert(aset); dmn_assert(result);
 
     dmn_assert(aset->count);
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
+    unsigned added = 0;
     for(unsigned i = 0; i < aset->count; i++) {
         const addrstate_t* as = &aset->as[i];
         const gdnsd_sttl_t as_sttl = gdnsd_sttl_min(sttl_tbl, as->indices, aset->num_svcs);
         rv = gdnsd_sttl_min2(rv, as_sttl);
-        if(!(as_sttl & GDNSD_STTL_DOWN))
-            gdnsd_dyn_add_result_anysin(result, &as->addr);
+        if(!(as_sttl & GDNSD_STTL_DOWN)) {
+            gdnsd_result_add_anysin(result, &as->addr);
+            added++;
+        }
     }
 
     // if up_thresh was not met, signal upstream failure through rv and add all addresses
-    if(*resct_ptr < aset->up_thresh) {
+    if(added < aset->up_thresh) {
         rv |= GDNSD_STTL_DOWN;
-        *resct_ptr = 0;
+        if(isv6)
+            gdnsd_result_wipe_v6(result);
+        else
+            gdnsd_result_wipe_v4(result);
         for(unsigned i = 0; i < aset->count; i++)
-            gdnsd_dyn_add_result_anysin(result, &aset->as[i].addr);
+            gdnsd_result_add_anysin(result, &aset->as[i].addr);
     }
     // else force non-down response in retval, even if "rv" currently has the down flag from
     //   the min/min2 operations on the individual addrs
@@ -357,7 +376,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
 }
 
 gdnsd_sttl_t plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-    dmn_assert(result); dmn_assert(!result->is_cname);
+    dmn_assert(result);
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
@@ -366,15 +385,15 @@ gdnsd_sttl_t plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum
     gdnsd_sttl_t rv;
 
     if(res->aset_v4) {
-        rv = resolve(sttl_tbl, res->aset_v4, result, &result->a.count_v4);
+        rv = resolve(sttl_tbl, res->aset_v4, result, false);
         if(res->aset_v6) {
-            const unsigned v6_rv = resolve(sttl_tbl, res->aset_v6, result, &result->a.count_v6);
+            const unsigned v6_rv = resolve(sttl_tbl, res->aset_v6, result, true);
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     }
     else {
         dmn_assert(res->aset_v6);
-        rv = resolve(sttl_tbl, res->aset_v6, result, &result->a.count_v6);
+        rv = resolve(sttl_tbl, res->aset_v6, result, true);
     }
 
     assert_valid_sttl(rv);

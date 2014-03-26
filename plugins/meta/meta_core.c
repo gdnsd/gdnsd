@@ -311,11 +311,7 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, uns
     if(dc->is_cname) { // direct CNAME
         dmn_assert(origin); // detected at map_res time
         dmn_assert(dc->dname);
-        result->is_cname = true;
-        dname_copy(result->cname, dc->dname);
-        if(dname_is_partial(result->cname))
-            dname_cat(result->cname, origin);
-        dmn_assert(dname_status(result->cname) == DNAME_VALID);
+        gdnsd_result_add_cname(result, dc->dname, origin);
         rv = gdnsd_sttl_min(sttl_tbl, dc->indices, dc->num_svcs);
     }
     else {
@@ -500,7 +496,8 @@ gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, 
         unsigned dcnum;
         while((dcnum = *dclist++)) {
             dmn_assert(dcnum <= res->num_dcs);
-            memset(result, 0, sizeof(dyn_result_t));
+            gdnsd_result_wipe(result);
+            gdnsd_result_reset_scope_mask(result);
             gdnsd_sttl_t this_rv = resolve_dc(sttl_tbl, &res->dcs[dcnum], threadnum, origin, cinfo, result);
             assert_valid_sttl(this_rv);
             rv = gdnsd_sttl_min2(rv, this_rv);
@@ -512,16 +509,14 @@ gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, 
 
         // all datacenters failed, in which case we keep the sttl from above...
         if(rv & GDNSD_STTL_DOWN) {
-            memset(result, 0, sizeof(dyn_result_t));
+            gdnsd_result_wipe(result);
+            gdnsd_result_reset_scope_mask(result);
             resolve_dc(sttl_tbl, &res->dcs[first_dc_num], threadnum, origin, cinfo, result);
         }
     }
 
-    // if both our map_get_dclist() and the subplugin tried to set a scope,
-    //   we take the narrower of the two.  If either did not set a scope,
-    //   their respective values will be zero, which also works out fine here.
-    if(scope_mask_out > result->edns_scope_mask)
-        result->edns_scope_mask = scope_mask_out;
+    // This automatically combines in a sane way with any scope set by a subplugin
+    gdnsd_result_add_scope_mask(result, scope_mask_out);
 
     assert_valid_sttl(rv);
     return rv;

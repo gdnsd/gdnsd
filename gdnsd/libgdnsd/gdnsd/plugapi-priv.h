@@ -23,6 +23,32 @@
 #include "gdnsd/plugapi.h"
 #include "gdnsd/vscf.h"
 
+struct dyn_result {
+    unsigned edns_scope_mask; // inits to zero
+                              //   should remain zero for global results
+                              //   should be set to cinfo->edns_client_mask if result depends only on cinfo->dns_source
+                              //   if result uses cinfo->edns_source, set as appropriate...
+    bool     is_cname;        // storage contains a CNAME in dname format, assert count_v[46] == 0
+    unsigned count_v4;        // count of IPv4 in v4[], assert !is_cname
+    unsigned count_v6;        // count of IPv6 starting at &storage[v6_offset], assert !is_cname
+    union {
+        uint32_t v4[0];
+        uint8_t  storage[0];
+    };
+};
+
+// Intended for result consumers (dnspacket.c), only valid
+//   after all resolver plugins are finished configuring,
+//   and is static for the life of the daemon from that
+//   point forward (can be cached locally).
+// Return value is the offset into dyn_result.storage where
+//   IPv6 address data begins
+unsigned gdnsd_result_get_v6_offset(void);
+
+// Same rules as above, returns the memory size that
+//   should be allocated for dyn_result
+unsigned gdnsd_result_get_alloc(void);
+
 // MUST call this before loading plugins below,
 //   array can be NULL for just the default
 //   MUST only call this once per program

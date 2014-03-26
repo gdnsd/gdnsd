@@ -29,8 +29,10 @@
 typedef struct {
     const char* name;
     bool is_addr;
-    uint32_t ipaddr;
-    uint8_t *dname;
+    union {
+        anysin_t addr;
+        uint8_t *dname;
+    };
 } static_resource_t;
 
 static static_resource_t* resources = NULL;
@@ -40,15 +42,13 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     unsigned* residx_ptr = data;
 
     if(vscf_get_type(addr) != VSCF_SIMPLE_T)
-        log_fatal("plugin_static: resource %s: must be an IPv4 address or a domainname in string form", resname);
-
-    struct in_addr a;
+        log_fatal("plugin_static: resource %s: must be an IP address or a domainname in string form", resname);
 
     unsigned res = (*residx_ptr)++;
     resources[res].name = strdup(resname);
 
     const char* addr_txt = vscf_simple_get_data(addr);
-    if(inet_pton(AF_INET, addr_txt, &a) < 1) {
+    if(gdnsd_anysin_fromstr(addr_txt, 0, &resources[res].addr)) {
         // Address-parsing failed, treat as domainname for DYNC
         resources[res].is_addr = false;
         resources[res].dname = malloc(256);
@@ -60,7 +60,6 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     }
     else {
         resources[res].is_addr = true;
-        resources[res].ipaddr = a.s_addr;
     }
 
     return true;
@@ -75,6 +74,7 @@ void plugin_static_load_config(const vscf_data_t* config) {
     resources = malloc(num_resources * sizeof(static_resource_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, false, config_res, &residx);
+    gdnsd_dyn_addr_max(1, 1); // static only ever returns a single IP
 }
 
 int plugin_static_map_res(const char* resname, const uint8_t* origin) {
@@ -102,26 +102,17 @@ int plugin_static_map_res(const char* resname, const uint8_t* origin) {
 }
 
 gdnsd_sttl_t plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-    dmn_assert(!result->is_cname);
-
     // this (DYNA->CNAME) should be caught during map_res
     //   and cause the zonefile to fail to load
     if(!origin)
         dmn_assert(resources[resnum].is_addr);
 
     if(resources[resnum].is_addr) {
-        result->a.count_v6 = 0;
-        result->a.count_v4 = 1;
-        result->a.addrs_v4[0] = resources[resnum].ipaddr;
+        gdnsd_result_add_anysin(result, &resources[resnum].addr);
     }
     else {
         dmn_assert(origin);
-        result->is_cname = true;
-        uint8_t* dname = resources[resnum].dname;
-        dname_copy(result->cname, dname);
-        if(dname_is_partial(result->cname))
-            dname_cat(result->cname, origin);
-        dmn_assert(dname_status(result->cname) == DNAME_VALID);
+        gdnsd_result_add_cname(result, resources[resnum].dname, origin);
     }
 
     return GDNSD_STTL_TTL_MAX;

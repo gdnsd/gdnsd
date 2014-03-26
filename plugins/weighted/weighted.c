@@ -677,6 +677,30 @@ void plugin_weighted_load_config(const vscf_data_t* config) {
     resources = calloc(num_resources, sizeof(resource_t));
     unsigned idx = 0;
     vscf_hash_iterate(config, true, config_res, &idx);
+
+    // find maximum per-address-family address output counts...
+    unsigned max_v4 = 0;
+    unsigned max_v6 = 0;
+    for(unsigned i = 0; i < num_resources; i++) {
+        resource_t* res = &resources[i];
+        if(res->addrs_v4) {
+            addrset_t* aset = res->addrs_v4;
+            const unsigned max = aset->multi
+                ? aset->count
+                : aset->max_addrs_pergroup;
+            if(max > max_v4)
+                max_v4 = max;
+        }
+        if(res->addrs_v6) {
+            addrset_t* aset = res->addrs_v6;
+            const unsigned max = aset->multi
+                ? aset->count
+                : aset->max_addrs_pergroup;
+            if(max > max_v6)
+                max_v6 = max;
+        }
+    }
+    gdnsd_dyn_addr_max(max_v4, max_v6);
 }
 
 void plugin_weighted_full_config(const unsigned num_threads) {
@@ -777,13 +801,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
     }
 
     // set the output stuff
-    const uint8_t* dname = cnset->items[chosen].cname;
-    result->is_cname = true;
-    dname_copy(result->cname, dname);
-    if (dname_status(dname) == DNAME_PARTIAL) {
-        dname_cat(result->cname, origin);
-        dmn_assert(dname_status(result->cname) == DNAME_VALID);
-    }
+    gdnsd_result_add_cname(result, cnset->items[chosen].cname, origin);
 
     return rv;
 }
@@ -870,7 +888,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
                 for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
                     addr_running_total += dyn_addr_weights[item_idx][addr_idx];
                     if(addr_rand < addr_running_total) {
-                        gdnsd_dyn_add_result_anysin(result, &res_item->as[addr_idx].addr);
+                        gdnsd_result_add_anysin(result, &res_item->as[addr_idx].addr);
                         break;
                     }
                 }
@@ -891,7 +909,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
                 for(unsigned addr_idx = 0; addr_idx < chosen->count; addr_idx++) {
                     const unsigned addr_rand = get_rand(threadnum, addr_max);
                     if(addr_rand < dyn_addr_weights[item_idx][addr_idx])
-                        gdnsd_dyn_add_result_anysin(result, &chosen->as[addr_idx].addr);
+                        gdnsd_result_add_anysin(result, &chosen->as[addr_idx].addr);
                 }
                 break;
             }

@@ -47,38 +47,64 @@
  ***/
 #define GDNSD_PLUGIN_API_VERSION 13
 
+// Called by resolver plugins during configuration load callback
+// Indicates the maximum count of each address family that the plugin
+//   will add to result structures at runtime.  A plugin *cannot* exceed
+//   the limits it sets for itself here at startup, and every resolver
+//   plugin that can return addresses *must* call this function!
+void gdnsd_dyn_addr_max(unsigned v4, unsigned v6);
+
 /*** Data Types ***/
 
 // read-only for plugins
 typedef struct {
-    anysin_t dns_source;
-    anysin_t edns_client;
-    unsigned edns_client_mask; // if zero, edns_client is invalid (was not sent), do not parse it.
-} client_info_t;
+    anysin_t dns_source;       // address of last source DNS cache/forwarder
+    anysin_t edns_client;      // edns-client-subnet address portion
+    unsigned edns_client_mask; // edns-client-subnet mask portion
+} client_info_t;               //  ^(if zero, edns_client is invalid (was not sent))
 
-// Result structure for dynamic resolution plugins
-typedef struct {
-    unsigned edns_scope_mask; // inits to zero.
-                              // If your plugin ignores (or ignored in this case) all of client_info_t, leave it zero
-                              // If your plugin uses client_info_t.dns_source but ignores (or doesn't use for this
-                              //    request) .edns_source, you must set edns_scope_mask = client_info_t.edns_client_mask
-                              // If your plugin actually uses client_info_t.edns_client, set as appropriate...
-    bool     is_cname;        // which of the two below is valid
-    union {
-        uint8_t cname[256];
-        struct {
-            unsigned count_v4;
-            unsigned count_v6;
-            uint32_t addrs_v4[64];
-            uint8_t  addrs_v6[64 * 16];
-        } a;
-    };
-} dyn_result_t;
+// Private result structure for dynamic resolution plugins
+// Modified via the functions below...
+struct dyn_result;
+typedef struct dyn_result dyn_result_t;
 
-// Push an anysin_t onto a dyn_result_t.  Handles both families, asserts
-//   overall count limits.  assert !is_cname (set that first!)
+// NOTE the rules for the result-modifying functions below:
+//   A plugin cannot add more addresses of a given family than it indicated
+//     during its call to gdnsd_dyn_addr_max().
+//   A plugin cannot add both addresses and a CNAME to the same result.
+//   A plugin cannot add more than one CNAME to the same result.
+
+// Push an anysin_t (v4 or v6 addr) into dyn_result_t storage.
 F_NONNULL
-void gdnsd_dyn_add_result_anysin(dyn_result_t* result, const anysin_t* asin);
+void gdnsd_result_add_anysin(dyn_result_t* result, const anysin_t* asin);
+
+// Push a CNAME into dyn_result_t storage.
+F_NONNULL
+void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const uint8_t* origin);
+
+// Wipe a result_t's storage completely, removing all addresses or the CNAME stored within
+// (this function is valid at all times, never fails, and resets to the original state)
+// (does not affect scope mask!)
+F_NONNULL
+void gdnsd_result_wipe(dyn_result_t* result);
+
+// Wipe just one address family from a result.  Does not affect the other address family,
+//   and has no effect at all if the result contained a CNAME instead.
+// (does not affect scope mask!)
+F_NONNULL
+void gdnsd_result_wipe_v4(dyn_result_t* result);
+F_NONNULL
+void gdnsd_result_wipe_v6(dyn_result_t* result);
+
+// Resets the edns scope mask to the default value of zero, meaning global (unspecified) scope
+F_NONNULL
+void gdnsd_result_reset_scope_mask(dyn_result_t* result);
+
+// Set the edns scope mask of the result to the minimum scope (numerically-larger) of
+//   the current setting and the new input.  This is correct if more than one independent
+//   calculation of scope applies to the result.
+F_NONNULL
+void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope);
 
 /**** Typedefs for plugin callbacks ****/
 

@@ -23,22 +23,26 @@
 #include <gdnsd/plugin.h>
 #include <string.h>
 
+void plugin_null_load_config(const vscf_data_t* config V_UNUSED) {
+    gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
+}
+
 int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UNUSED) {
     return 0;
 }
 
 gdnsd_sttl_t plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-
     if(origin) {
-        result->is_cname = true;
-        gdnsd_dname_from_string(result->cname, (const uint8_t*)"invalid.", 8);
+        uint8_t cntmp[256];
+        gdnsd_dname_from_string(cntmp, (const uint8_t*)"invalid.", 8);
+        gdnsd_result_add_cname(result, cntmp, origin);
     }
     else {
-        result->is_cname = false;
-        result->a.count_v4 = 1;
-        result->a.count_v6 = 1;
-        result->a.addrs_v4[0] = 0;
-        memset(result->a.addrs_v6, 0, 16);
+        anysin_t tmpsin;
+        gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
+        gdnsd_result_add_anysin(result, &tmpsin);
+        gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
+        gdnsd_result_add_anysin(result, &tmpsin);
     }
 
     return GDNSD_STTL_TTL_MAX;
