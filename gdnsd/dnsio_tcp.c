@@ -357,7 +357,7 @@ bool tcp_dns_listen_setup(dns_thread_t* t) {
 
     t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout, t->ac->tcp_threads > 1);
     const bool need_caps = dnsio_bind(t);
-    if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
+    if(!t->autoscan_bind_failed && listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
         log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(asin), logf_errno());
     return need_caps;
 }
