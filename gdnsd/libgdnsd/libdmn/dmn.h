@@ -58,100 +58,122 @@
 **** Daemonization interfaces
 ***/
 
-// Attempt to daemonize the current process using "pidfile"
-//  as the pidfile pathname.
-// If "restart" is true, attempt unracy shutdown of any previous
-//  instance and take over.
-// You must invoke dmn_daemonize_finish shortly afterwards.  If
-//  you have post-daemonization setup to do which could lead
-//  to early daemon abort, do it between the two.
+// the pcall stuff isn't very well designed yet :P
+typedef void(*dmn_func_vv_t)(void);
 DMN_F_NONNULL
-void dmn_daemonize(const char* pidfile, const bool restart);
+unsigned dmn_add_pcall(dmn_func_vv_t func);
+void dmn_pcall(unsigned id);
 
-// Called after the above.  This releases the original parent
-//   process to exit with value zero (if you just die/abort
-//   without calling this, it will exit non-zero).
-void dmn_daemonize_finish(void);
-
-// Check the status of a daemon using "pidfile".  Return value
-//  of zero means not running, otherwise the return value is
-//  the pid of the running daemon
+// dmn_init1() *must* be called before *any* other libdmn function!
+// debug: if true *and* the code was not compiled with -DNDEBUG,
+//    log_debug() will emit messages.  Otherwise it will not.
+// foreground: if true, the caller has no intention of actually daemonizing
+//    and will stay in the foreground, attached to the terminal.
+// stderr_info: if true, log_info() level messages wll be sent to stderr
+//    when applicable.  Otherwise, only log_warn() and higher are sent
+//    to stderr when applicable.
+// name: the name of your daemon/program.  Will be used for log outputs
+//    and pidfile naming.
+// Immediately after init1(), only the logging APIs (dmn_log_*, dmn_logf_*
+//    dmn_fmtbuf_*) are available.
 DMN_F_NONNULL
-pid_t dmn_status(const char* pidfile);
+void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, const char* name);
 
-// Attempt to stop any running daemon using "pidfile".  This function
-//  will make several attempts (with an increasing delay) to terminate
-//  via SIGTERM before giving up and aborting with an error message.
+// dmn_init2() must be called after dmn_init1() and before dmn_init3().
+// pid_dir: This is the application-specific(!)
+//   directory within which the pidfile exists (or will be created).  This
+//   should not be, for example, "/run" or "/var/run", it should be something
+//   like "/run/somedaemond" or "/var/run/somedaemond".
+//   Must be an absolute path (begins with /).  If NULL, none of the pidfile
+//   -related calls (_stop, _status, _signal) will do anything useful, and
+//   _acquire_pidfile() will be a no-op).
+// chroot: path the daemon will eventually chroot into if we are starting
+//   as root. must be absolute.  Setting this to NULL supresses all chroot behavior.
+// If chroot is non-NULL, pid_dir should be relative to the chroot (in other
+//   words, if chroot is "/srv/foo", pid_dir should be set to "/run" rather than
+//   "/srv/foo/run").
+// When not executing as the root user, if chroot is set it is still used for
+//   any necessary pidfile path prefixing as above, even though no chroot() is
+//   actually performed when the time comes.  This is mostly for convenience.
+// Immediately after dmn_init2() the basic daemon-control APIs
+//   (dmn_status(), dmn_stop(), and dmn_signal()) are now
+//   available for use (in addition to the log APIs allowed
+//   by init1()).
+void dmn_init2(const char* pid_dir, const char* chroot);
+
+// dmn_init3 must be called after dmn_init2() and before dmn_fork().
+// username: optional - if set, the daemon will drop privileges
+//   to the uid/gid of this user during dmn_secure() later.  If
+//   the daemon was not started as root, this option is ignored.
+// restart: if true, this daemon will try to kill any conflicting
+//   instance of itself (same pidfile) before acquiring the pidfile
+//   in dmn_acquire_pidfile() later.
+void dmn_init3(const char* username, const bool restart);
+
+// In !foreground cases, does the whole 9 yards of proper daemonization,
+//   with execution continuing in the final daemonized child.  The original
+//   process that invoked dmn_fork lingers in a private subroutine inside
+//   libdmn as a "helper" until dmn_finish(), thus keeping the terminal
+//   or manager process tied up until it can return a correct exit value,
+//   and helping with any pcall operations as root post-privdrop.
+// In "foreground" cases using privdrop *and* pcalls, this will not do
+//   any real daemonization, but will fork a helper process to retain root
+//   for pcall execution later, which terminates at dmn_finish().
+// In foreground cases with no privdrop (or no pcalls), does basically nothing.
+void dmn_fork(void);
+
+// If we're executing as the root user, this will chroot and/or privdrop
+//   us as indicated by the earlier chroot and username options.
+// If pid_dir doesn't exist and/or isn't owned by username (if defined),
+//   and we're running as root, the pid_dir will be created and/or chowned
+//   as necessary/possible before the loss of privilege to do so here in
+//   this function.
+void dmn_secure(void);
+
+// If the restart parameter was set in init3, this function will first
+//   check for a running daemon via the pidfile lock mechanism and terminate it.
+void dmn_acquire_pidfile(void);
+
+// Finish the daemon startup procedure by signalling the helper process
+//   (if any) to exit with status 0.  If your daemon doesn't make it
+//   far enough to call this, the helper will exit non-zero to indicate
+//   failure to the shell/manager/etc.
+void dmn_finish(void);
+
+// retval == 0 means daemon is not running
+// retval != 0 means daemon is still running (and the pid is the retval)
+pid_t dmn_status(void);
+
+// This can delay up to 15s while waiting for the old daemon to stop.
 // retval == 0 means daemon was not running, or was successfully killed.
 // retval != 0 means daemon is still running (and the pid is the retval)
-DMN_F_NONNULL
-pid_t dmn_stop(const char* pidfile);
+pid_t dmn_stop(void);
 
-// Send an arbitrary signal to a running daemon using "pidfile".
-DMN_F_NONNULL
-int dmn_signal(const char* pidfile, int sig);
-
-/***
-**** chroot/privdrop security interfaces
-***/
-
-// Takes a username and a chroot() path, does as much pre-validation
-//  as possible and stores the results for a later call to dmn_secure_me().
-// If chroot_path is NULL, no chroot() is done during the following secure_me() call.
-DMN_F_NONNULLX(1)
-void dmn_secure_setup(const char* username, const char* chroot_path);
-
-// Executes the actual chroot()/chuid()/etc calls based on previous
-//  dmn_secure_setup(), which must be called first.  skip_chroot
-//  will skip the chroot() part even if dmn_secure_setup() specified
-//  and validated a chroot path.
-void dmn_secure_me(const bool skip_chroot);
-
-// This accessor indicates whether dmn_secure_me() has been called or not
-DMN_F_PURE
-bool dmn_is_secured(void);
-
-// This accessor returns the chroot path configured through dmn_secure_setup(),
-//   if that setup has occurred yet.  If dmn_secure_setup() was not (yet) called,
-//   or was called with chroot_path set to NULL, it returns NULL.  Note that
-//   if this returns a path, dmn_is_secured() tells you whether we've already
-//   chroot'd into that path.
-DMN_F_PURE
-const char* dmn_get_chroot(void);
+// Send an arbitrary signal to the running daemon, retval zero indicates
+//   success, non-zero indicates failure.
+int dmn_signal(int sig);
 
 /***
 **** Logging interfaces
 ***/
 
-// Get/Set debug flag:
-// When the daemon is built in debug mode (!defined NDEBUG),
-//  *and* this flag is set to true by the daemon,
-//  dmn_log_debug() emits output.  This is not intended
-//  to be toggled at runtime (especially from threads!),
-//  it is meant to be set once at startup and left alone.
-DMN_F_PURE
+// This is used "internally" by dmn_log_debug(), but gdnsd has
+//   use-cases for this and the others two getters below for
+//   the special case of plugin_extmon's helper process.
 bool dmn_get_debug(void);
-void dmn_set_debug(bool d);
-
-// Call before any log_* calls, right at proc startup...
-void dmn_init_log(const char* logname, const bool stderr_info);
-
-// Start syslogging log_*() calls (does openlog),
-//   prior to this they go to stderr only (until
-//   it's closed for a daemon).
-DMN_F_NONNULL
-void dmn_start_syslog(void);
+bool dmn_get_foreground(void);
+const char* dmn_get_username(void);
 
 // special API for extmon helper.  Sets up
 //   logging stderr output via an already-open
 //   fd, to be stopped later via dmn_log_close_strerr()
-void dmn_log_set_alt_stderr(const int fd);
+void dmn_log_set_stderr_out(const int fd);
 
 // closes stderr logging via alternate descriptor...
-void dmn_log_close_alt_stderr(void);
+void dmn_log_close_stderr_out(void);
 
-// get fd number of open alt_stderr, for passing to a child...
-int dmn_log_get_alt_stderr_fd(void);
+// get fd number of open stderr_out, for passing to a child...
+int dmn_log_get_stderr_out_fd(void);
 
 // This is a syslog()-like interface that will log
 //  to stderr and/or syslog as appropriate depending

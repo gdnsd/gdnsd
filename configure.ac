@@ -369,6 +369,7 @@ AC_CONFIG_FILES([
   Makefile
   gdnsd/Makefile
   gdnsd/libgdnsd/Makefile
+  gdnsd/libgdnsd/libdmn/Makefile
   t/Makefile
   docs/Makefile
   plugins/Makefile
