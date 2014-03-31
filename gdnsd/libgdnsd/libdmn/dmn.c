@@ -366,7 +366,7 @@ static bool terminate_pid_and_wait(pid_t pid) {
             tv.tv_sec = 0;
             tv.tv_usec = 100000;
             select(0, NULL, NULL, NULL, &tv);
-            if(!kill(pid, 0)) {
+            if(kill(pid, 0)) {
                 still_running = false;
                 break;
             }
