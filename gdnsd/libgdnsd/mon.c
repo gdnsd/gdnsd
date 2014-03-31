@@ -687,7 +687,7 @@ static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
     // Note that the updater interfaces from monitoring plugins cannot set
     //  the FORCED bit - only the admin-state interface can do that.
     assert_valid_sttl(new_sttl);
-    assert(!(new_sttl & GDNSD_STTL_FORCED));
+    dmn_assert(!(new_sttl & GDNSD_STTL_FORCED));
 
     if(initial_round) {
         smgr_sttl[idx] = smgr->real_sttl = new_sttl;
