@@ -352,18 +352,28 @@ const char* dmn_get_username(void) { phase_check(0, 0, 0); return params.usernam
 // Function returns when either the process is dead or
 //  our timeouts all expired.  Total timeout is 15s in 100ms
 //  increments.
-static void terminate_pid_and_wait(pid_t pid) {
+// True retval indicates daemon is still running
+static bool terminate_pid_and_wait(pid_t pid) {
     dmn_assert(pid); // don't try to kill (0, ...)
 
+    bool still_running = false;
+
     if(!kill(pid, SIGTERM)) {
+        still_running = true;
         struct timeval tv;
         unsigned tries = 150;
-        do {
+        while(tries--) {
             tv.tv_sec = 0;
             tv.tv_usec = 100000;
             select(0, NULL, NULL, NULL, &tv);
-        } while(--tries && !kill(pid, 0));
+            if(!kill(pid, 0)) {
+                still_running = false;
+                break;
+            }
+        }
     }
+
+    return still_running;
 }
 
 // the helper process executes here and does not return
@@ -553,9 +563,7 @@ pid_t dmn_stop(void) {
         return 0;
     }
 
-    terminate_pid_and_wait(pid);
-
-    if(!kill(pid, 0)) {
+    if(terminate_pid_and_wait(pid)) {
         dmn_log_err("Cannot stop daemon at pid %li", (long)pid);
         return pid;
     }
@@ -850,7 +858,8 @@ void dmn_acquire_pidfile(void) {
         const pid_t old_pid = dmn_status();
         if(old_pid) {
             dmn_log_info("restart: Stopping previous daemon instance at pid %li...", (long)old_pid);
-            terminate_pid_and_wait(old_pid);
+            if(terminate_pid_and_wait(old_pid))
+                dmn_log_fatal("restart: failed, old daemon at pid %li did not die!", (long)old_pid);
         }
         else {
             dmn_log_info("restart: No previous daemon instance to stop...");
@@ -862,10 +871,7 @@ void dmn_acquire_pidfile(void) {
         // Various failure modes
         if(errno != EAGAIN && errno != EACCES)
             dmn_log_fatal("bug? fcntl(pidfile, F_SETLK) failed: %s", dmn_strerror(errno));
-        if(params.restart)
-            dmn_log_fatal("restart: failed, cannot shut down previous instance and/or acquire pidfile lock (pidfile: %s, pid: %li)", params.pid_file_post_chroot, (long)dmn_status());
-        else
-            dmn_log_fatal("start: failed, another instance of this daemon is already running (pidfile: %s, pid: %li)", params.pid_file_post_chroot, (long)dmn_status());
+        dmn_log_fatal("cannot acquire pidfile lock on pidfile: %s, owned by pid: %li)", params.pid_file_post_chroot, (long)dmn_status());
     }
 
     // Success - assuming writing to our locked pidfile doesn't fail!
