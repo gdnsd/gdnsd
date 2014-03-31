@@ -28,6 +28,7 @@
 
 #include "conf.h"
 #include "ltree.h"
+#include "main.h"
 #include "gdnsd/log.h"
 #include "gdnsd/paths.h"
 
@@ -83,8 +84,7 @@ static void zsrc_djb_sync_zones(void) {
 void zsrc_djb_load_zones(void) {
     djb_dir = gdnsd_resolve_path_cfg("djbdns/", NULL);
     zsrc_djb_sync_zones();
-    if(atexit(unload_zones))
-        log_fatal("zsrc_djb: atexit(unload_zones) failed: %s", logf_errno());
+    gdnsd_atexit_debug(unload_zones);
 }
 
 // called within our thread/loop to take sighup action

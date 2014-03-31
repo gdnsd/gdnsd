@@ -33,6 +33,7 @@
 #include <time.h>
 
 #include "ztree.h"
+#include "main.h"
 
 // IFF gconfig.zones_strict_startup is true,
 //   this flag will be temporarily set to true during
@@ -869,8 +870,7 @@ void zsrc_rfc1035_load_zones(void) {
     ev_loop_destroy(temp_load_loop);
     free(reload_timer);
     fail_fatally = false;
-    if(dmn_get_debug() && atexit(unload_zones))
-        log_fatal("rfc1035: atexit(unload_zones) failed: %s", logf_errno());
+    gdnsd_atexit_debug(unload_zones);
 
     log_info("rfc1035: Loaded %u zonefiles from '%s'", zfhash_count, logf_pathname(rfc1035_dir));
 }

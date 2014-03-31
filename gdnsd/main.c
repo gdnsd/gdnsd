@@ -17,8 +17,7 @@
  *
  */
 
-#include "config.h"
-#include "conf.h"
+#include "main.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -46,6 +45,32 @@
 #include "gdnsd/paths-priv.h"
 #include "gdnsd/mon-priv.h"
 
+// custom atexit-like stuff, only for resource
+//   de-allocation in debug builds to check for leaks
+
+#ifndef NDEBUG
+
+static void (**exitfuncs)(void) = NULL;
+static unsigned exitfuncs_pending = 0;
+
+void gdnsd_atexit_debug(void (*f)(void)) {
+    dmn_assert(f);
+    exitfuncs = realloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(void (*)(void)));
+    exitfuncs[exitfuncs_pending++] = f;
+}
+
+static void atexit_debug_execute(void) {
+    while(exitfuncs_pending--)
+       exitfuncs[exitfuncs_pending]();
+}
+
+#else
+
+void gdnsd_atexit_debug(void (*f)(void) V_UNUSED) { }
+static void atexit_debug_execute(void) { }
+
+#endif
+
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
 
@@ -61,13 +86,16 @@ static void threads_cleanup(void) {
         pthread_join(gconfig.dns_threads[i].threadid, NULL);
 }
 
+static int killed_by = 0;
+
 F_NONNULL
 static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
     dmn_assert(revents == EV_SIGNAL);
     dmn_assert(w->signum == SIGTERM || w->signum == SIGINT);
 
-    log_info("Received terminating signal %i, exiting", w->signum);
+    log_debug("Received terminating signal %i", w->signum);
+    killed_by = w->signum;
     ev_break(loop, EVBREAK_ALL);
 }
 
@@ -219,8 +247,7 @@ static void start_threads(void) {
     if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
 
     // Invoke thread cleanup handlers at exit time
-    if(atexit(threads_cleanup))
-        log_fatal("atexit(threads_cleanup) failed: %s", logf_errno());
+    gdnsd_atexit_debug(threads_cleanup);
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
@@ -570,11 +597,26 @@ int main(int argc, char** argv) {
     // receive a terminating signal.
     ev_run(def_loop, 0);
 
+    // If we get here without a terminating signal, it means we have a bug!
+    dmn_assert(killed_by);
+
+    // Stop the terminal signal handlers
+    ev_signal_stop(def_loop, sig_term);
+    ev_signal_stop(def_loop, sig_int);
+
     // Final stats output on shutdown
+    log_info("Shutdown via signal %i", killed_by);
     log_info("Final stats:");
     statio_log_uptime();
     statio_log_stats();
 
-    // Bye!
-    exit(0);
+    // deallocate resources in debug mode
+    atexit_debug_execute();
+
+    // kill self with same signal, so that our exit status is correct
+    //   for any parent/manager/whatever process that may be watching
+    raise(killed_by);
+
+    // raise should not return
+    dmn_assert(0);
 }

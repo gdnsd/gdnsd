@@ -41,6 +41,8 @@
 #include <ifaddrs.h>
 #include <netinet/in.h>
 
+#include "main.h"
+
 static const char DEF_USERNAME[] = PACKAGE_NAME;
 
 // just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
@@ -641,8 +643,7 @@ void conf_load(const bool force_zss, const bool force_zsd) {
     gdnsd_mon_cfg_stypes_p2(stypes_cfg, gconfig.monitor_force_v6_up);
 
     // register a hook for plugin cleanup callbacks
-    if(atexit(plugins_cleanup))
-        log_fatal("atexit(plugins_cleanup) failed: %s", logf_errno());
+    gdnsd_atexit_debug(plugins_cleanup);
 
     // Throw an error if there are any other unretrieved root config keys
     if(cfg_root) {

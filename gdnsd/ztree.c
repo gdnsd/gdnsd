@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 
+#include "main.h"
 #include "gdnsd/dname.h"
 #include "gdnsd/log.h"
 #include "gdnsd/misc.h"
@@ -290,8 +291,7 @@ static void ztree_leak_warn(ztree_t* node) {
 }
 
 static void ztree_atexit(void) {
-    if(dmn_get_debug())
-        ztree_leak_warn(ztree_root);
+    ztree_leak_warn(ztree_root);
     gdnsd_prcu_destroy_lock();
 }
 
@@ -299,8 +299,7 @@ void ztree_init(void) {
     dmn_assert(!ztree_root);
     gdnsd_prcu_setup_lock();
     ztree_root = calloc(1, sizeof(ztree_t));
-    if(atexit(ztree_atexit))
-        log_fatal("atexit(ztree_atexit) failed: %s", logf_errno());
+    gdnsd_atexit_debug(ztree_atexit);
 }
 
 // insertion sort for mostly-sorted arrays
