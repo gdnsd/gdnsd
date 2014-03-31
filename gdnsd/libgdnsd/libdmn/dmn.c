@@ -35,6 +35,11 @@
 #include <sys/stat.h>
 #include <sys/select.h>
 
+#ifdef USE_SYSTEMD
+#  include <systemd/sd-daemon.h>
+#  include <systemd/sd-login.h>
+#endif
+
 #include "dmn.h"
 
 /***********************************************************
@@ -144,6 +149,7 @@ typedef struct {
     bool  will_privdrop;   // invoked_as_root && non-null username from init3()
     bool  will_chroot;     // invoked_as_root && non-null chroot from init2(), implies will_privdrop
     bool  need_helper;     // depends on foreground, will_privdrop, and pcall registration - set in _fork
+    bool  systemd_booted;  // whether sd_booted() says systemd is up
     uid_t uid;             // uid of username from init3()
     gid_t gid;             // gid of username from init3()
     char* pid_dir_pre_chroot;   // depends on chroot + pid_dir
@@ -163,6 +169,7 @@ static params_t params = {
     .will_privdrop   = false,
     .will_chroot     = false,
     .need_helper     = false,
+    .systemd_booted  = false,
     .uid             = 0,
     .gid             = 0,
     .pid_dir_pre_chroot   = NULL,
@@ -350,9 +357,10 @@ const char* dmn_get_username(void) { phase_check(0, 0, 0); return params.usernam
 //  our timeouts all expired.  Total timeout is 15s in 100ms
 //  increments.
 // True retval indicates daemon is still running
+// It is critical that this function doesn't contain any
+//   faliure-points (dmn_assert or dmn_log_fatal), see
+//   the systemd restart code in _acquire_pidfile().
 static bool terminate_pid_and_wait(pid_t pid) {
-    dmn_assert(pid); // don't try to kill (0, ...)
-
     bool still_running = false;
 
     if(!kill(pid, SIGTERM)) {
@@ -451,6 +459,10 @@ static char* str_combine_n(const unsigned count, ...) {
 void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, const char* name) {
     if(state.phase != PHASE0_UNINIT)
         dmn_log_fatal("BUG: dmn_init1() can only be called once!");
+
+#ifdef USE_SYSTEMD
+    params.systemd_booted = (sd_booted() < 0) ? false : true;
+#endif
 
     // This lets us log to normal stderr for now
     state.stderr_out = stderr;
@@ -781,6 +793,30 @@ void dmn_fork(void) {
 void dmn_secure(void) {
     phase_check(PHASE4_FORKED, PHASE6_PIDLOCKED, 1);
 
+#ifdef USE_SYSTEMD
+    // hack hack hack - when restarting, before losing privileges, we need to
+    //   promote ourselves from control process to main process.
+    // sd_pid_get_unit() seems to return "gdnsd.service" even when we're marked
+    //   as a control process, and setting ourselves back to that manually in sysfs
+    //   seems to promote us from a mere control process and allow us to become the
+    //   next MAINPID.
+    if(params.restart && params.systemd_booted) {
+        char* unit;
+        int gu_rv = sd_pid_get_unit(getpid(), &unit);
+        if(gu_rv >= 0) {
+            char* path = str_combine_n(3, "/sys/fs/cgroup/systemd/system.slice/", unit, "/cgroup.procs");
+            int fd = open(path, O_WRONLY, 0);
+            if(fd < 0)
+                dmn_log_fatal("Cannot open %s: %s", path, dmn_logf_errno());
+            if(dprintf(fd, "%li\n", (long)getpid()) < 2)
+                dmn_log_fatal("dprintf() to %s failed: %s", path, dmn_logf_errno());
+            close(fd);
+            free(path);
+            free(unit);
+        }
+    }
+#endif
+
     if(params.will_chroot) {
         dmn_assert(params.invoked_as_root);
         dmn_assert(params.will_privdrop);
@@ -842,13 +878,39 @@ void dmn_acquire_pidfile(void) {
     if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
         dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file_post_chroot, dmn_strerror(errno));
 
+    // this is only used in the restart case here, but moving it immediately above
+    //   the first sd_notifyf() removes the only realistic failure-points between that
+    //   and killing the old daemon, so that we don't die for a stupid reason
+    //   after stealing another daemon's MAINPID and fail to set it back.
+    const pid_t old_pid = dmn_status();
+    const pid_t pid = getpid();
+
+#ifdef USE_SYSTEMD
+    if(params.systemd_booted) {
+        // control procs don't get $NOTIFY_SOCKET from systemd, but this seems to fix that ...
+        setenv("NOTIFY_SOCKET", "@/org/freedesktop/systemd1/notify", 0);
+
+        // notify systemd of MAINPID.  We could do this much later (e.g. in _finish()), except that
+        //   (a) in the restart case we must do this switch *before* killing old daemon, so there's
+        //       never a time when the MAINPID process goes missing.
+        //   (b) in non-restart cases, no other instance is running, so it doesn't matter if we do
+        //       this early and then die.
+        sd_notifyf(0, "MAINPID=%li", (long)pid);
+    }
+#endif
+
     // if restarting, TERM the old daemon and wait for it to exit for a bit...
     if(params.restart) {
-        const pid_t old_pid = dmn_status();
         if(old_pid) {
             dmn_log_info("restart: Stopping previous daemon instance at pid %li...", (long)old_pid);
-            if(terminate_pid_and_wait(old_pid))
+            if(terminate_pid_and_wait(old_pid)) {
+#ifdef USE_SYSTEMD
+                // put the MAINPID back to the old value before bailing out if old_pid never died
+                if(params.systemd_booted)
+                    sd_notifyf(0, "MAINPID=%li", (long)old_pid);
+#endif
                 dmn_log_fatal("restart: failed, old daemon at pid %li did not die!", (long)old_pid);
+            }
         }
         else {
             dmn_log_info("restart: No previous daemon instance to stop...");
@@ -866,7 +928,7 @@ void dmn_acquire_pidfile(void) {
     // Success - assuming writing to our locked pidfile doesn't fail!
     if(ftruncate(pidfd, 0))
         dmn_log_fatal("truncating pidfile failed: %s", dmn_strerror(errno));
-    if(dprintf(pidfd, "%li\n", (long)getpid()) < 2)
+    if(dprintf(pidfd, "%li\n", (long)pid) < 2)
         dmn_log_fatal("dprintf to pidfile failed: %s", dmn_strerror(errno));
 
     // leak of pidfd here is intentional, it stays open/locked for the duration
