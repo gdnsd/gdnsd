@@ -52,7 +52,7 @@ static const vscf_data_t* conf_load_vscf(void) {
 
     struct stat cfg_stat;
     if(!stat(cfg_path, &cfg_stat)) {
-        log_debug("Loading configuration from '%s'", logf_pathname(cfg_path));
+        log_info("Loading configuration from '%s'", logf_pathname(cfg_path));
         char* vscf_err;
         out = vscf_scan_filename(cfg_path, &vscf_err);
         if(!out)
@@ -61,29 +61,11 @@ static const vscf_data_t* conf_load_vscf(void) {
             log_fatal("Configuration from '%s' failed: config was an array!", logf_pathname(cfg_path));
     }
     else {
-        log_debug("No config file at '%s', using defaults + zones auto-scan", logf_pathname(cfg_path));
+        log_info("No config file at '%s', using defaults + zones auto-scan", logf_pathname(cfg_path));
     }
 
     free(cfg_path);
     return out;
-}
-
-static void conf_options(const vscf_data_t* cfg_root) {
-    dmn_assert(cfg_root);
-
-    // options stanza: set dmn_debug
-    bool debug_tmp = false;
-    const vscf_data_t* options = vscf_hash_get_data_byconstkey(cfg_root, "options", true);
-    if(options) {
-        if(!vscf_is_hash(options))
-            log_fatal("Config stanza 'options' must be a hash");
-        const vscf_data_t* debug_setting = vscf_hash_get_data_byconstkey(options, "debug", false);
-        if(debug_setting
-            && (!vscf_is_simple(debug_setting)
-            || !vscf_simple_get_as_bool(debug_setting, &debug_tmp)))
-                log_fatal("Config option 'debug': value must be 'true' or 'false'");
-    }
-    dmn_set_debug(debug_tmp);
 }
 
 F_NONNULL
@@ -178,12 +160,10 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
 
 gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
 
-    dmn_init_log("gdmaps_test", true);
+    dmn_init1(false, true, true, false, "gdmaps_test");
 
     gdnsd_set_rootdir(input_rootdir);
     const vscf_data_t* cfg_root = conf_load_vscf();
-    conf_options(cfg_root);
-
     const vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* gdmaps = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);

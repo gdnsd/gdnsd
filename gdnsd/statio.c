@@ -26,6 +26,7 @@
 #include <sys/uio.h>
 
 #include "conf.h"
+#include "socks.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 #include "dnspacket.h"
@@ -192,6 +193,7 @@ static ev_timer* log_watcher = NULL;
 static ev_io** accept_watchers;
 static int* lsocks;
 static unsigned num_lsocks;
+static bool* lsocks_bound;
 static unsigned num_conn_watchers = 0;
 static unsigned data_buffer_size = 0;
 static unsigned hdr_buffer_size = 0;
@@ -632,19 +634,30 @@ void statio_init(void) {
 
     num_lsocks = gconfig.num_http_addrs;
     lsocks = malloc(sizeof(int) * num_lsocks);
+    lsocks_bound = calloc(num_lsocks, sizeof(bool));
     accept_watchers = malloc(sizeof(ev_io*) * num_lsocks);
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         const anysin_t* asin = &gconfig.http_addrs[i];
-        lsocks[i] = tcp_listen_pre_setup(asin, gconfig.http_timeout, false);
-        if(bind(lsocks[i], &asin->sa, asin->len))
-            log_fatal("Failed to bind() stats TCP socket to %s: %s", logf_anysin(asin), logf_errno());
-        if(listen(lsocks[i], 128) == -1)
-            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, logf_anysin(asin), logf_errno());
-        accept_watchers[i] = malloc(sizeof(ev_io));
-        ev_io_init(accept_watchers[i], accept_cb, lsocks[i], EV_READ);
-        ev_set_priority(accept_watchers[i], -2);
+        lsocks[i] = tcp_listen_pre_setup(asin, gconfig.http_timeout);
     }
+}
+
+void statio_bind_socks(void) {
+    for(unsigned i = 0; i < num_lsocks; i++)
+        if(!lsocks_bound[i])
+            if(!socks_helper_bind("TCP stats", lsocks[i], &gconfig.http_addrs[i], false))
+                lsocks_bound[i] = true;
+}
+
+bool statio_check_socks(bool soft) {
+    unsigned rv = true;
+    for(unsigned i = 0; i < num_lsocks; i++)
+        if(!socks_sock_is_bound_to(lsocks[i], &gconfig.http_addrs[i]) && !soft)
+            log_fatal("Failed to bind() stats TCP socket to %s", logf_anysin(&gconfig.http_addrs[i]));
+        else
+            rv = false;
+    return rv;
 }
 
 void statio_start(struct ev_loop* statio_loop) {
@@ -653,7 +666,13 @@ void statio_start(struct ev_loop* statio_loop) {
     if(log_watcher)
         ev_timer_start(statio_loop, log_watcher);
 
-    for(unsigned i = 0; i < num_lsocks; i++)
+    for(unsigned i = 0; i < num_lsocks; i++) {
+        if(listen(lsocks[i], 128) == -1)
+            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, logf_anysin(&gconfig.http_addrs[i]), logf_errno());
+        accept_watchers[i] = malloc(sizeof(ev_io));
+        ev_io_init(accept_watchers[i], accept_cb, lsocks[i], EV_READ);
+        ev_set_priority(accept_watchers[i], -2);
         ev_io_start(statio_loop, accept_watchers[i]);
+    }
 }
 

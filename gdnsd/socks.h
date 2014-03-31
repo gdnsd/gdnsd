@@ -1,5 +1,5 @@
 
-/* Copyright © 2013 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2014 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -18,14 +18,25 @@
  *
  */
 
-#ifndef GDNSD_DNSIO
-#define GDNSD_DNSIO
+#ifndef GDNSD_SOCKS
+#define GDNSD_SOCKS
 
 #include "config.h"
 #include "conf.h"
 #include <stdbool.h>
 
 F_NONNULL
-void dnsio_bind(dns_thread_t* t);
+bool socks_helper_bind(const char* desc, const int sock, const anysin_t* asin, bool no_freebind);
 
-#endif // GDNSD_DNSIO
+// helper uses this (when told) to bind all sockets (calls above, indirectly in the statio case)
+void socks_helper_bind_all(void);
+
+F_NONNULL
+bool socks_sock_is_bound_to(int sock, anysin_t* addr);
+
+// daemon uses this to validate work done above
+// if soft: false retval means all succeeded, true retval means one or more failed
+// if !soft: will log_fatal() if any fail
+bool socks_daemon_check_all(bool soft);
+
+#endif // GDNSD_SOCKS

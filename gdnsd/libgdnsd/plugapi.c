@@ -302,4 +302,3 @@ void gdnsd_plugins_action_exit(void) {
         if(plugins[i]->exit)
             plugins[i]->exit();
 }
-

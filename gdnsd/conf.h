@@ -45,7 +45,7 @@ typedef struct {
     unsigned threadnum;
     int sock;
     bool is_udp;
-    bool autoscan_bind_failed;
+    bool bind_success;
 } dns_thread_t;
 
 typedef struct {

@@ -47,4 +47,7 @@ const char* gdnsd_get_rootdir(void);
 F_PURE
 const char* gdnsd_get_def_rootdir(void);
 
+// special-case, get the rundir as libdmn wants to see it
+const char* gdnsd_get_rundir_for_dmn(void);
+
 #endif // GDNSD_PATHS_PRIV_H

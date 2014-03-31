@@ -423,8 +423,8 @@ sub spawn_daemon {
     recursive_templated_copy("${FindBin::Bin}/${etcsrc}", "${OUTDIR}/etc");
 
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -d $OUTDIR startfg}
-        : qq{$GDNSD_BIN -d $OUTDIR startfg};
+        ? qq{$TEST_RUNNER $GDNSD_BIN -Dfd $OUTDIR start}
+        : qq{$GDNSD_BIN -Dfd $OUTDIR start};
 
     my $daemon_out = $OUTDIR . '/gdnsd.out';
 

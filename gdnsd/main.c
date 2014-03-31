@@ -31,6 +31,7 @@
 #include <pwd.h>
 #include <time.h>
 
+#include "socks.h"
 #include "dnsio_tcp.h"
 #include "dnsio_udp.h"
 #include "dnspacket.h"
@@ -115,7 +116,13 @@ F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-        "Usage: %s [-s] [-S] [-d <rootdir>] <action>\n"
+#       ifndef NDEBUG
+        "Usage: %s [-sSD] [-d <rootdir>] <action>\n"
+        "  -D - Enable verbose debug output\n"
+#       else
+        "Usage: %s [-sS] [-d <rootdir>] <action>\n"
+#       endif
+        "  -f - Foreground mode for start/restart-like actions\n"
         "  -s - Force 'zones_strict_startup = true' for this invocation\n"
         "  -S - Force 'zones_strict_data = true' for this invocation\n"
         "  -d <rootdir> - Use the given directory as the daemon chroot.  The\n"
@@ -123,7 +130,6 @@ static void usage(const char* argv0) {
         "     The default for this build is '%s'.  See gdnsd(8) for more info.\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
-        "  startfg - Start " PACKAGE_NAME " in foreground w/ logs to stderr\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
         "  stop - Stops a running daemon previously started by 'start'\n"
         "  reload - Send SIGHUP to running daemon for zone data reload\n"
@@ -135,7 +141,7 @@ static void usage(const char* argv0) {
         "Optional compile-time features:"
 
 #       ifndef NDEBUG
-            " debug"
+            " developer-debug-build"
 #       endif
 #       ifdef HAVE_QSBR
             " urcu"
@@ -315,7 +321,6 @@ static void memlock_rlimits(const bool started_as_root) {
 
 typedef enum {
     ACT_CHECKCFG   = 0,
-    ACT_STARTFG,
     ACT_START,
     ACT_STOP,
     ACT_RELOAD,
@@ -332,17 +337,16 @@ typedef struct {
 
 static actmap_t actionmap[] = {
     { "checkconf",    ACT_CHECKCFG }, // 1
-    { "startfg",      ACT_STARTFG },  // 2
-    { "start",        ACT_START },    // 3
-    { "stop",         ACT_STOP },     // 4
-    { "reload",       ACT_RELOAD },   // 5
-    { "restart",      ACT_RESTART },  // 6
-    { "force-reload", ACT_RESTART },  // 7
-    { "condrestart",  ACT_CRESTART }, // 8
-    { "try-restart",  ACT_CRESTART }, // 9
-    { "status",       ACT_STATUS },   // 10
+    { "start",        ACT_START },    // 2
+    { "stop",         ACT_STOP },     // 3
+    { "reload",       ACT_RELOAD },   // 4
+    { "restart",      ACT_RESTART },  // 5
+    { "force-reload", ACT_RESTART },  // 6
+    { "condrestart",  ACT_CRESTART }, // 7
+    { "try-restart",  ACT_CRESTART }, // 8
+    { "status",       ACT_STATUS },   // 9
 };
-#define ACTIONMAP_COUNT 10
+#define ACTIONMAP_COUNT 9
 
 F_NONNULL F_PURE
 static action_t match_action(const char* arg) {
@@ -359,6 +363,8 @@ typedef struct {
     const char* rootdir;
     bool force_zss;
     bool force_zsd;
+    bool debug;
+    bool foreground;
 } cmdline_opts_t;
 
 F_NONNULL
@@ -366,10 +372,16 @@ static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
     action_t action = ACT_UNDEF;
 
     int optchar;
-    while((optchar = getopt(argc, argv, "d:sS"))) {
+    while((optchar = getopt(argc, argv, "d:DfsS"))) {
         switch(optchar) {
             case 'd':
                 copts->rootdir = optarg;
+                break;
+            case 'D':
+                copts->debug = true;
+                break;
+            case 'f':
+                copts->foreground = true;
                 break;
             case 's':
                 copts->force_zss = true;
@@ -394,29 +406,6 @@ static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
     usage(argv[0]);
 }
 
-static void init_config(const bool started_as_root, const cmdline_opts_t* copts) {
-    // Initialize net stuff in libgdnsd (protoents, tcp_v6_ok)
-    gdnsd_init_net();
-
-    // Init meta-PRNG
-    gdnsd_rand_meta_init();
-
-    // Actually load the config
-    conf_load(copts->force_zss, copts->force_zsd);
-
-    // Set up and validate privdrop info if necc
-    if(started_as_root)
-        dmn_secure_setup(gconfig.username, gdnsd_get_rootdir());
-
-    // Call plugin full_config actions
-    gdnsd_plugins_action_full_config(gconfig.num_dns_threads);
-
-    log_info("Loading zone data...");
-    ztree_init();
-    zsrc_djb_load_zones();
-    zsrc_rfc1035_load_zones();
-}
-
 int main(int argc, char** argv) {
 
     // Parse args, getting the libgdnsd rootdir and
@@ -426,56 +415,51 @@ int main(int argc, char** argv) {
         .rootdir = NULL,
         .force_zss = false,
         .force_zsd = false,
+        .debug = false,
+        .foreground = false,
     };
     action_t action = parse_args(argc, argv, &copts);
 
-    // will we daemonize? startfg doesn't count...
+    // will we daemonize?
     bool will_daemonize = false;
     switch(action) {
         case ACT_START:
         case ACT_RESTART:
         case ACT_CRESTART:
-            will_daemonize = true;
+            will_daemonize = !copts.foreground;
             break;
         default:
             break;
     }
 
-    // Init the log subsystem, which initially only sends
-    //   to stderr.  Second arg is "stderr_info", which controls
-    //   whether info-level messages are sent to stderr or not
-    //   (all are sent regardless in debug builds).
-    dmn_init_log(PACKAGE_NAME, !will_daemonize);
+    // init1 lets us start using dmn log funcs
+    dmn_init1(copts.debug, copts.foreground, !will_daemonize, will_daemonize, PACKAGE_NAME);
 
     // set the rootdir
     gdnsd_set_rootdir(copts.rootdir);
 
-    // Start syslog (in addition to stderr) logging immediately
-    //   in cases leading to daemonized daemon start
-    if(will_daemonize)
-        dmn_start_syslog();
-
-    char* pid_path = gdnsd_resolve_path_run("gdnsd.pid", NULL);
+    // and init2 gets us status/stop/signal
+    dmn_init2(gdnsd_get_rundir_for_dmn(), gdnsd_get_rootdir());
 
     // Take action
     if(action == ACT_STATUS) {
-        const pid_t oldpid = dmn_status(pid_path);
+        const pid_t oldpid = dmn_status();
         if(!oldpid) {
-            log_info("status: not running, based on pidfile '%s'", logf_pathname(pid_path));
+            log_info("status: not running");
             exit(3);
         }
-        log_info("status: running at pid %li in pidfile %s", (long)oldpid, logf_pathname(pid_path));
+        log_info("status: running at pid %li", (long)oldpid);
         exit(0);
     }
     else if(action == ACT_STOP) {
-        exit(dmn_stop(pid_path) ? 1 : 0);
+        exit(dmn_stop() ? 1 : 0);
     }
     else if(action == ACT_RELOAD) {
-        exit(dmn_signal(pid_path, SIGHUP));
+        exit(dmn_signal(SIGHUP));
     }
 
     if(action == ACT_CRESTART) {
-        const pid_t oldpid = dmn_status(pid_path);
+        const pid_t oldpid = dmn_status();
         if(!oldpid) {
             log_info("condrestart: not running, will not restart");
             exit(0);
@@ -483,13 +467,25 @@ int main(int argc, char** argv) {
         action = ACT_RESTART;
     }
 
-    // Did we start as root?  This determines whether we try to chroot(),
-    //   how we handle memlock rlimits, etc...
-    const bool started_as_root = !geteuid();
+    // Initialize net stuff in libgdnsd (protoents, tcp_v6_ok)
+    gdnsd_init_net();
 
-    // Initializes basic libgdnsd stuff, loads config file, loads zones,
-    //   configures plugins all the way through full_config()
-    init_config(started_as_root, &copts);
+    // Init meta-PRNG
+    gdnsd_rand_meta_init();
+
+    // Actually load the config
+    conf_load(copts.force_zss, copts.force_zsd);
+
+    // Set up and validate privdrop info if necc
+    dmn_init3(gconfig.username, (action == ACT_RESTART));
+
+    // Call plugin full_config actions
+    gdnsd_plugins_action_full_config(gconfig.num_dns_threads);
+
+    log_info("Loading zone data...");
+    ztree_init();
+    zsrc_djb_load_zones();
+    zsrc_rfc1035_load_zones();
 
     if(action == ACT_CHECKCFG) {
         log_info("Configuration and zone data loads just fine");
@@ -497,10 +493,11 @@ int main(int argc, char** argv) {
     }
 
     // from here out, all actions are attempting startup...
-    dmn_assert(action == ACT_STARTFG
-            || action == ACT_START
-            || action == ACT_RESTART
-    );
+    dmn_assert(action == ACT_START || action == ACT_RESTART);
+
+    // Did we start as root?  This determines whether we try to chroot(),
+    //   how we handle memlock rlimits, etc...
+    const bool started_as_root = !geteuid();
 
     // Check/set rlimits for mlockall() if necessary and possible
     if(gconfig.lock_mem)
@@ -509,14 +506,18 @@ int main(int argc, char** argv) {
     // Ping the pthreads implementation...
     ping_pthreads();
 
-    // Daemonize if applicable
-    if(action != ACT_STARTFG)
-        dmn_daemonize(pid_path, (action == ACT_RESTART));
+    // Initialize DNS listening sockets, but do not bind() them yet
+    dns_lsock_init();
 
-    // free pid_path, done with it
-    free(pid_path);
+    // init the stats summing/output code + listening sockets (again no bind yet)
+    statio_init();
 
-    // Call plugin pre-privdrop actions
+    // set up our pcall for socket binding later
+    unsigned bind_socks_funcidx = dmn_add_pcall(socks_helper_bind_all);
+
+    dmn_fork();
+
+    // Call plugin post-daemonize actions
     gdnsd_plugins_action_post_daemonize();
 
     // If root, or if user explicitly set a priority...
@@ -541,19 +542,10 @@ int main(int argc, char** argv) {
     // Initialize dnspacket stuff
     dnspacket_global_setup();
 
-    // Initialize DNS listening sockets
-    dns_lsock_init();
-
-    // init the stats summing/output code
-    statio_init();
-
     // Call plugin pre-privdrop actions
     gdnsd_plugins_action_pre_privdrop();
 
-    // Now that config is read, we're daemonized, the pidfile is written,
-    //  and all listening sockets are open, we can chroot and drop privs
-    if(started_as_root)
-        dmn_secure_me(false);
+    dmn_secure();
 
     // Construct the default loop for the main thread
     struct ev_loop* def_loop = ev_default_loop(EVFLAG_AUTO);
@@ -570,27 +562,59 @@ int main(int argc, char** argv) {
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run(def_loop);
 
+    // ask the helper (which is still root) to bind our sockets,
+    //   this blocks until completion.  This uses SO_REUSEPORT
+    //   if available.  If the previous instance also uses SO_REUSEPORT
+    //   (gdnsd 2.x), then we should get success here and overlapping
+    //   sockets before we kill the old daemon.
+    dmn_pcall(bind_socks_funcidx);
+
+    // validate the results of the above, softly
+    bool first_binds_failed = socks_daemon_check_all(true);
+
+    // if the first binds didn't work (probably lack of SO_REUSEPORT,
+    //   either in general or just in the old 1.x daemon we're taking over),
+    //   we have to stop the old daemon before binding again.
+    if(first_binds_failed) {
+        // Kills old daemon on the way, if we're restarting
+        dmn_acquire_pidfile();
+
+        // This re-attempts binding any specific sockets that failed the
+        //   first time around, e.g. in non-SO_REUSEPORT cases where we
+        //   had to wait on daemon death above
+        dmn_pcall(bind_socks_funcidx);
+
+        // hard check this time - this function will fail fatally
+        //   if any sockets can't be acquired.
+        socks_daemon_check_all(false);
+    }
+
     // Start up all of the UDP and TCP threads, each of
     // which has all signals blocked and has its own
     // event loop (libev for TCP, manual blocking loop for UDP)
     // Also starts the zone data reload thread
     start_threads();
 
-    // This waits for all of the stat structures to be allocated
-    //  by the i/o threads before continuing on
-    dnspacket_wait_stats();
-
-    // Start up the statio event watchers in the main loop/thread
-    // Note, this is down here because we depend on
-    //  dnspacket_wait_stats() completion.
+    // actually set up libev hooks + listen on sockets for statio
     statio_start(def_loop);
+
+    // This waits for all of the stat structures to be allocated
+    //  by the i/o threads before continuing on.  They must be ready
+    //  before ev_run() below, because statio event handlers hit them.
+    dnspacket_wait_stats();
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
 
+    // If we succeeded at SO_REUSEPORT takeover earlier on the first
+    //   bind() attempts, we still need to kill the old daemon (if restarting)
+    //   at this point, since we didn't earlier for availability overlap.
+    if(!first_binds_failed)
+        dmn_acquire_pidfile();
+
     // Report success back to whoever invoked "start" or "restart" command...
-    if(action != ACT_STARTFG)
-       dmn_daemonize_finish();
+    //  (or in the foreground case, kill our helper process)
+    dmn_finish();
 
     // Start the primary event loop in this thread, to handle
     // signals and statio stuff.  Should not return until we

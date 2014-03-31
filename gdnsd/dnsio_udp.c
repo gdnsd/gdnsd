@@ -35,7 +35,7 @@
 #include "conf.h"
 #include "dnswire.h"
 #include "dnspacket.h"
-#include "dnsio.h"
+#include "socks.h"
 #include "gdnsd/log.h"
 #include "gdnsd/misc.h"
 #include "gdnsd/prcu-priv.h"
@@ -156,15 +156,16 @@ void udp_sock_setup(dns_thread_t* t) {
 
     const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM, gdnsd_getproto_udp());
     if(sock == -1) log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());
+    if(fcntl(sock, F_SETFD, FD_CLOEXEC))
+        log_fatal("Failed to set FD_CLOEXEC on UDP socket: %s", logf_errno());
 
     const int opt_one = 1;
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", logf_errno());
 
 #ifdef SO_REUSEPORT
-    if(t->ac->udp_threads > 1)
-        if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
-            log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+        log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
 #endif
 
     int opt_size;
@@ -239,7 +240,6 @@ void udp_sock_setup(dns_thread_t* t) {
         udp_sock_opts_v4(sock, gdnsd_anysin_is_anyaddr(asin));
 
     t->sock = sock;
-    dnsio_bind(t);
 }
 
 #ifndef MAP_ANONYMOUS
@@ -441,11 +441,13 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    if(t->autoscan_bind_failed) {
-        // already logged this condition back when bind() failed, but it's simpler
-        //  to spawn the thread and do the dnspacket_context_new() here properly and
+    if(!t->bind_success) {
+        dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
+        log_warn("Could not bind UDP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(&t->ac->addr));
+        //  we come here to  spawn the thread and do the dnspacket_context_new() properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
-        //  simply never gets requests.
+        //  simply never gets requests.  This way we don't have to adjust stats arrays for
+        //  the missing thread, etc.
         pthread_exit(NULL);
     }
 

@@ -521,13 +521,9 @@ void conf_load(const bool force_zss, const bool force_zsd) {
         .tcp_threads = 1U,
     };
 
-    bool debug_tmp = false;
-
     if(options) {
         if(!vscf_is_hash(options))
             log_fatal("Config key 'options': wrong type (must be hash)");
-        CFG_OPT_BOOL_ALTSTORE(options, debug, debug_tmp);
-        dmn_set_debug(debug_tmp);
 
         CFG_OPT_INT(options, priority, -20L, 20L);
         CFG_OPT_BOOL(options, include_optional_ns);

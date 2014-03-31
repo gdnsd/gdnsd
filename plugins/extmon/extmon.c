@@ -275,13 +275,11 @@ static void spawn_helper(void) {
     if(!helper_pid) { // child
         close(writepipe[1]);
         close(readpipe[0]);
-        const char* alt_stderr_fdstr = num_to_str(dmn_log_get_alt_stderr_fd());
+        const char* alt_stderr_fdstr = num_to_str(dmn_log_get_stderr_out_fd());
         const char* child_read_fdstr = num_to_str(writepipe[0]);
         const char* child_write_fdstr = num_to_str(readpipe[1]);
-        if(!geteuid())
-            dmn_secure_me(true); // privdrop w/o chroot
-        execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N",
-            alt_stderr_fdstr, child_read_fdstr, child_write_fdstr, (const char*)NULL);
+        execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N", dmn_get_foreground() ? "F" : "B",
+            dmn_get_username(), alt_stderr_fdstr, child_read_fdstr, child_write_fdstr, (const char*)NULL);
         log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_strerror(errno));
     }
 

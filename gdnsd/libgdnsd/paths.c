@@ -47,7 +47,6 @@ static const char* const def_rootdir = GDNSD_DEF_ROOTDIR;
 
 // "system" (or default unrooted) leaves this as NULL
 static const char* rootdir = NULL;
-static unsigned rootdir_len = 0;
 
 // readonly private interfaces to core code
 const char* gdnsd_get_rootdir(void) { return rootdir; }
@@ -135,7 +134,6 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
         rootdir = gdnsd_realpath(rootdir_setting, "data root");
         if(chdir(rootdir))
             log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_strerror(errno));
-        rootdir_len = strlen(rootdir);
 
         // build basic/common directory structure if missing
         ensure_dir("etc/");
@@ -172,4 +170,8 @@ char* gdnsd_resolve_path_run(const char* inpath, const char* pfx) {
 
 char* gdnsd_resolve_path_state(const char* inpath, const char* pfx) {
     return gdnsd_resolve_path(STATE, inpath, pfx);
+}
+
+const char* gdnsd_get_rundir_for_dmn(void) {
+    return rootdir ? "/run" : path_base[0][RUN];
 }

@@ -31,7 +31,7 @@ void* dnsio_tcp_start(void* thread_asvoid);
 //  if the sockaddr in "asin" is V6, and SO_REUSEADDR.  The socket is fully ready
 //  for bind()+listen() when returned.
 F_NONNULL
-int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED, const bool reuseport);
+int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED);
 
 F_NONNULL
 void tcp_dns_listen_setup(dns_thread_t* t);

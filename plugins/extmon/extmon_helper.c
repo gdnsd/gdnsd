@@ -223,25 +223,30 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
 }
 
 int main(int argc, char** argv) {
-    dmn_init_log("gdnsd_extmon_helper", true);
-
-    // start up syslog IFF it appears the daemon
-    //   was *not* started via "startfg".  Regular
-    //   start/restart would have /dev/null'd the
-    //   standard descriptors before forking us off.
-    if(!isatty(0))
-        dmn_start_syslog();
-
     // Bail out early if we don't have the right argument
     //   count, and try to tell the user not to run us
     //   if stderr happens to be hooked up to a terminal
-    if(argc != 5) {
+    if(argc != 7) {
         fprintf(stderr, "This binary is not for human execution!\n");
         exit(99);
     }
 
+    bool debug = false;
+    if(!strcmp(argv[1], "Y"))
+        debug = true;
+
+    bool startfg = false;
+    if(!strcmp(argv[2], "F"))
+        startfg = true;
+
+    // this is gdnsd's *configured* username, but dmn_secure()
+    //   won't actually use it for privdrop unless we're root
+    const char* username = argv[3];
+
+    dmn_init1(debug, true, startfg, !startfg, "gdnsd_extmon_helper");
+
     // open stderr logging connection using passed fd
-    dmn_log_set_alt_stderr(atoi(argv[2]));
+    dmn_log_set_stderr_out(atoi(argv[4]));
 
     // regardless, we seal off stdin now.  We don't need it,
     //   and this way we don't have to deal with it when
@@ -249,16 +254,15 @@ int main(int argc, char** argv) {
     if(!freopen("/dev/null", "r", stdin))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
 
-    if(!strcmp(argv[1], "Y"))
-        dmn_set_debug(true);
-    else if(!strcmp(argv[1], "N"))
-        dmn_set_debug(false);
-    else
-        log_fatal("Invalid debug argument on cmdline: '%s'!", argv[1]);
+    dmn_init2(NULL, NULL);
+    dmn_init3(username, false);
+    dmn_fork(); // no-op due to init2 args
+    dmn_secure(); // privdrop if root
+    dmn_acquire_pidfile(); // no-op due to init2 args
 
     // these are the main communication pipes to the daemon/plugin
-    plugin_read_fd = atoi(argv[3]);
-    plugin_write_fd = atoi(argv[4]);
+    plugin_read_fd = atoi(argv[5]);
+    plugin_write_fd = atoi(argv[6]);
 
     if(plugin_read_fd < 3 || plugin_read_fd > 1000
         || plugin_write_fd < 3 || plugin_write_fd > 1000)
@@ -355,7 +359,8 @@ int main(int argc, char** argv) {
     log_info("gdnsd_extmon_helper running");
 
     // shut off stderr output from here out...
-    dmn_log_close_alt_stderr();
+    dmn_log_close_stderr_out();
+    dmn_finish();
 
     ev_run(def_loop, 0);
     log_info("gdnsd_extmon_helper terminating");
