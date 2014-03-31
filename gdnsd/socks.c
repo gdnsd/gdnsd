@@ -11,7 +11,7 @@
 #include "gdnsd/log.h"
 #include "statio.h"
 
-bool socks_helper_bind(const char* desc, const int sock, const anysin_t* asin, bool no_freebind) {
+bool socks_helper_bind(const char* desc, const int sock, const anysin_t* asin, bool no_freebind V_UNUSED) {
     dmn_assert(desc); dmn_assert(asin);
 
     if(!bind(sock, &asin->sa, asin->len))
