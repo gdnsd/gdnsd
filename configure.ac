@@ -360,7 +360,7 @@ AC_SUBST([GDNSD_SYSRUNDIR])
 dnl clump up all of the libgdnsd libdeps for re-use in LDADD for
 dnl   binaries that link libgdnsd on platforms where libtool's
 dnl   automatic dep resolution is disabled
-LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
+LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN $SYSD_DAEMON_LIBS $SYSD_LOGIN_LIBS"
 AC_SUBST([LIBGDNSD_LIBS])
 
 dnl Output generation
@@ -388,6 +388,7 @@ dnl Summary output for the user
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
+if test "x$SYSD_DAEMON_LIBS" != x; then CFSUM_SYSD=Yes; else CFSUM_SYSD=No; fi
 if test "x$HAVE_QSBR" = x1; then
     CFSUM_QSBR=Yes
 else
@@ -405,5 +406,6 @@ echo "| Developer Build?        $CFSUM_DEV"
 echo "| Userspace-rcu support:  $CFSUM_QSBR"
 echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
 echo "| Linux inotify support:  $CFSUM_INOTIFY"
+echo "| Linux systemd support:  $CFSUM_SYSD"
 echo "| Test Port Start:        $CFSUM_TP"
 echo "======================================="
