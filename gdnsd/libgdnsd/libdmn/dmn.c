@@ -344,24 +344,20 @@ const char* dmn_get_username(void) { phase_check(PHASE3_INIT3, 0, 0); return par
 ***********************************************************/
 
 // The terminal signal SIGTERM is sent exactly once, then
-//  the status of the daemon is polled repeatedly with timouts.
+//  the status of the daemon is polled repeatedly at 100ms
+//  delay intervals
 // Function returns when either the process is dead or
-//  our timeouts all expired.  Total timeout is 15s in 100ms
-//  increments.
-// True retval indicates daemon is still running
+//  our delays all expired.  Total timeout is 15s.
+// True retval indicates daemon is still running.
 static bool terminate_pid_and_wait(pid_t pid) {
-    dmn_assert(pid); // don't try to kill (0, ...)
-
     bool still_running = false;
 
     if(!kill(pid, SIGTERM)) {
         still_running = true;
-        struct timeval tv;
+        const struct timespec ts = { 0, 100000000 };
         unsigned tries = 150;
         while(tries--) {
-            tv.tv_sec = 0;
-            tv.tv_usec = 100000;
-            select(0, NULL, NULL, NULL, &tv);
+            nanosleep(&ts, NULL);
             if(kill(pid, 0)) {
                 still_running = false;
                 break;
