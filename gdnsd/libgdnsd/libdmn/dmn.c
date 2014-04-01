@@ -71,9 +71,6 @@ static const char PFX_ERR[] = " error: ";
 static const char PFX_CRIT[] = " fatal: ";
 static const char PFX_UNKNOWN[] = " ???: ";
 
-// pidbuf len
-static const size_t PIDBUF_LEN = 22U;
-
 // Max length of an errno string (for our buffer purposes)
 static const size_t DMN_ERRNO_MAXLEN = 256U;
 
@@ -832,14 +829,6 @@ void dmn_acquire_pidfile(void) {
         return;
     }
 
-    pid_t pid = getpid();
-
-    // string copy of pid for writing to pidfile
-    char pidbuf[PIDBUF_LEN];
-    const ssize_t pidlen = snprintf(pidbuf, PIDBUF_LEN, "%li\n", (long)pid);
-    if(pidlen < 2)
-        dmn_log_fatal("snprintf() for pid number failed");
-
     // flock structure for acquiring pidfile lock
     struct flock pidlock_set;
     memset(&pidlock_set, 0, sizeof(struct flock));
@@ -877,8 +866,8 @@ void dmn_acquire_pidfile(void) {
     // Success - assuming writing to our locked pidfile doesn't fail!
     if(ftruncate(pidfd, 0))
         dmn_log_fatal("truncating pidfile failed: %s", dmn_strerror(errno));
-    if(write(pidfd, pidbuf, (size_t) pidlen) != pidlen)
-        dmn_log_fatal("writing to pidfile failed: %s", dmn_strerror(errno));
+    if(dprintf(pidfd, "%li\n", (long)getpid()) < 2)
+        dmn_log_fatal("dprintf to pidfile failed: %s", dmn_strerror(errno));
 
     // leak of pidfd here is intentional, it stays open/locked for the duration
     //   of the daemon's execution.  Daemon death by any means unlocks-on-close,
