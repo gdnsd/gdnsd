@@ -371,6 +371,15 @@ static bool terminate_pid_and_wait(pid_t pid) {
     return still_running;
 }
 
+// create a pipe with FD_CLOEXEC and fatal error-checking built in
+static void pipe_create(int pipefd[2]) {
+    if(pipe(pipefd))
+        dmn_log_fatal("pipe() failed: %s", dmn_logf_errno());
+    if(fcntl(pipefd[PIPE_RD], F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on pipe fd failed: %s", dmn_logf_errno());
+    if(fcntl(pipefd[PIPE_WR], F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on pipe fd failed: %s", dmn_logf_errno());
+}
 // reset pipe fds to -1 on close
 static void close_pipefd(int* fd_p) {
     if(close(*fd_p))
@@ -702,10 +711,8 @@ void dmn_fork(void) {
     // These pipes are used to communicate with the "helper" process,
     //   which is the original parent when daemonizing properly, or
     //   a special forked helper when necessary in the foreground.
-    if(pipe(state.pipe_to_helper))
-        dmn_log_fatal("pipe() failed: %s", dmn_strerror(errno));
-    if(pipe(state.pipe_from_helper))
-        dmn_log_fatal("pipe() failed: %s", dmn_strerror(errno));
+    pipe_create(state.pipe_to_helper);
+    pipe_create(state.pipe_from_helper);
 
     // Fork for the first time...
     const pid_t first_fork_pid = fork();
