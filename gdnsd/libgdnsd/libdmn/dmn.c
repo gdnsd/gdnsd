@@ -620,7 +620,7 @@ void dmn_init3(const char* username, const bool restart) {
     if(params.pid_dir_pre_chroot) {
         struct stat st;
         if(stat(params.pid_dir_pre_chroot, &st)) {
-            if(mkdir(params.pid_dir_pre_chroot, 0755))
+            if(mkdir(params.pid_dir_pre_chroot, PERMS755))
                 dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir_pre_chroot, dmn_strerror(errno));
             if(stat(params.pid_dir_pre_chroot, &st)) // reload st for privdrop below
                 dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir_pre_chroot, dmn_strerror(errno));
@@ -836,7 +836,7 @@ void dmn_acquire_pidfile(void) {
     pidlock_set.l_whence = SEEK_SET;
 
     // get an open write-handle on the pidfile for lock+update
-    int pidfd = open(params.pid_file_post_chroot, O_WRONLY | O_CREAT, 0644);
+    int pidfd = open(params.pid_file_post_chroot, O_WRONLY | O_CREAT, PERMS644);
     if(pidfd == -1)
         dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file_post_chroot, dmn_strerror(errno));
     if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
