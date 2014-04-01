@@ -383,7 +383,7 @@ static void pipe_create(int pipefd[2]) {
 // reset pipe fds to -1 on close
 static void close_pipefd(int* fd_p) {
     if(close(*fd_p))
-        dmn_log_fatal("close() of pipe() fd failed: %s", dmn_strerror(errno));
+        dmn_log_fatal("close() of pipe() fd failed: %s", dmn_logf_errno());
     *fd_p = -1;
 }
 
@@ -508,7 +508,7 @@ void dmn_init2(const char* pid_dir, const char* chroot) {
             dmn_log_fatal("chroot() path must be absolute!");
         struct stat st;
         if(lstat(chroot, &st))
-            dmn_log_fatal("Cannot lstat(%s): %s", chroot, dmn_strerror(errno));
+            dmn_log_fatal("Cannot lstat(%s): %s", chroot, dmn_logf_errno());
         if(!S_ISDIR(st.st_mode))
             dmn_log_fatal("chroot() path '%s' is not a directory!", chroot);
         params.chroot = strdup(chroot);
@@ -546,7 +546,7 @@ pid_t dmn_status(void) {
     const int pidfd = open(pidfile, O_RDONLY);
     if(pidfd == -1) {
         if (errno == ENOENT) return 0;
-        else dmn_log_fatal("open() of pidfile '%s' failed: %s", pidfile, dmn_strerror(errno));
+        else dmn_log_fatal("open() of pidfile '%s' failed: %s", pidfile, dmn_logf_errno());
     }
 
     struct flock pidlock_info;
@@ -556,7 +556,7 @@ pid_t dmn_status(void) {
 
     // should not fail unless something's horribly wrong
     if(fcntl(pidfd, F_GETLK, &pidlock_info))
-        dmn_log_fatal("bug: fcntl(%s, F_GETLK) failed: %s", pidfile, dmn_strerror(errno));
+        dmn_log_fatal("bug: fcntl(%s, F_GETLK) failed: %s", pidfile, dmn_logf_errno());
 
     close(pidfd);
 
@@ -619,7 +619,7 @@ void dmn_init3(const char* username, const bool restart) {
             struct passwd* p = getpwnam(username);
             if(!p) {
                 if(errno)
-                    dmn_log_fatal("getpwnam('%s') failed: %s", username, dmn_strerror(errno));
+                    dmn_log_fatal("getpwnam('%s') failed: %s", username, dmn_logf_errno());
                 else
                     dmn_log_fatal("User '%s' does not exist", username);
             }
@@ -638,23 +638,23 @@ void dmn_init3(const char* username, const bool restart) {
         struct stat st;
         if(stat(params.pid_dir_pre_chroot, &st)) {
             if(mkdir(params.pid_dir_pre_chroot, PERMS755))
-                dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir_pre_chroot, dmn_strerror(errno));
+                dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir_pre_chroot, dmn_logf_errno());
             if(stat(params.pid_dir_pre_chroot, &st)) // reload st for privdrop below
-                dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir_pre_chroot, dmn_strerror(errno));
+                dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir_pre_chroot, dmn_logf_errno());
         }
         else if(!S_ISDIR(st.st_mode)) {
             dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir_pre_chroot);
         }
         else if((st.st_mode & PERMS_MASK) != PERMS755) {
             if(chmod(params.pid_dir_pre_chroot, PERMS755))
-                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir_pre_chroot, PERMS755, dmn_strerror(errno));
+                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir_pre_chroot, PERMS755, dmn_logf_errno());
         }
 
         // directory chown only applies in privdrop case
         if(params.will_privdrop) {
             if(st.st_uid != params.uid || st.st_gid != params.gid)
                 if(chown(params.pid_dir_pre_chroot, params.uid, params.gid))
-                    dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_dir_pre_chroot, params.uid, params.gid, dmn_strerror(errno));
+                    dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_dir_pre_chroot, params.uid, params.gid, dmn_logf_errno());
         }
 
         if(!lstat(params.pid_file_pre_chroot, &st)) {
@@ -662,12 +662,12 @@ void dmn_init3(const char* username, const bool restart) {
                 dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file_pre_chroot);
             if((st.st_mode & PERMS_MASK) != PERMS644)
                 if(chmod(params.pid_file_pre_chroot, PERMS644))
-                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file_pre_chroot, PERMS644, dmn_strerror(errno));
+                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file_pre_chroot, PERMS644, dmn_logf_errno());
             // file chown only if privdrop
             if(params.will_privdrop) {
                 if(st.st_uid != params.uid || st.st_gid != params.gid)
                     if(chown(params.pid_file_pre_chroot, params.uid, params.gid))
-                        dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_file_pre_chroot, params.uid, params.gid, dmn_strerror(errno));
+                        dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_file_pre_chroot, params.uid, params.gid, dmn_logf_errno());
             }
         }
     }
@@ -717,7 +717,7 @@ void dmn_fork(void) {
     // Fork for the first time...
     const pid_t first_fork_pid = fork();
     if(first_fork_pid == -1)
-        dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
+        dmn_log_fatal("fork() failed: %s", dmn_logf_errno());
 
     // The helper process role is the child of the above fork
     //   in the foreground case, but it is the parent
@@ -743,22 +743,22 @@ void dmn_fork(void) {
     }
 
     // setsid() and ignore HUP/PIPE before the second fork
-    if(setsid() == -1) dmn_log_fatal("setsid() failed: %s", dmn_strerror(errno));
+    if(setsid() == -1) dmn_log_fatal("setsid() failed: %s", dmn_logf_errno());
     struct sigaction sa;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
     sa.sa_handler = SIG_IGN;
 
     if(sigaction(SIGHUP, &sa, NULL))
-        dmn_log_fatal("sigaction to ignore SIGHUP failed: %s", dmn_strerror(errno));
+        dmn_log_fatal("sigaction to ignore SIGHUP failed: %s", dmn_logf_errno());
 
     if(sigaction(SIGPIPE, &sa, NULL))
-        dmn_log_fatal("sigaction to ignore SIGPIPE failed: %s", dmn_strerror(errno));
+        dmn_log_fatal("sigaction to ignore SIGPIPE failed: %s", dmn_logf_errno());
 
     // Fork again.  This time the intermediate parent exits immediately.
     const pid_t second_fork_pid = fork();
     if(second_fork_pid == -1)
-        dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
+        dmn_log_fatal("fork() failed: %s", dmn_logf_errno());
     if(second_fork_pid) // intermediate parent proc
         _exit(0);
 
@@ -766,11 +766,11 @@ void dmn_fork(void) {
     umask(022);
 
     if(!freopen("/dev/null", "r", stdin))
-        dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
+        dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_errno());
     if(!freopen("/dev/null", "w", stdout))
-        dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
+        dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_errno());
     if(!freopen("/dev/null", "r+", stderr))
-        dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
+        dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_errno());
     dmn_log_info("Daemonized, final pid is %li", (long)getpid());
 
     state.phase = PHASE4_FORKED;
@@ -789,9 +789,9 @@ void dmn_secure(void) {
         tzset();
         // lock self into the chroot directory
         if(chroot(params.chroot))
-            dmn_log_fatal("chroot(%s) failed: %s", params.chroot, dmn_strerror(errno));
+            dmn_log_fatal("chroot(%s) failed: %s", params.chroot, dmn_logf_errno());
         if(chdir("/"))
-            dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", params.chroot, dmn_strerror(errno));
+            dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", params.chroot, dmn_logf_errno());
     }
 
     if(params.will_privdrop) {
@@ -801,9 +801,9 @@ void dmn_secure(void) {
 
         // drop privs
         if(setgid(params.gid))
-            dmn_log_fatal("setgid(%u) failed: %s", params.gid, dmn_strerror(errno));
+            dmn_log_fatal("setgid(%u) failed: %s", params.gid, dmn_logf_errno());
         if(setuid(params.uid))
-            dmn_log_fatal("setuid(%u) failed: %s", params.uid, dmn_strerror(errno));
+            dmn_log_fatal("setuid(%u) failed: %s", params.uid, dmn_logf_errno());
 
         // verify that regaining root privs fails, and [e][ug]id values are as expected
         if(    !setegid(0)
@@ -836,9 +836,9 @@ void dmn_acquire_pidfile(void) {
     // get an open write-handle on the pidfile for lock+update
     int pidfd = open(params.pid_file_post_chroot, O_WRONLY | O_CREAT, PERMS644);
     if(pidfd == -1)
-        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file_post_chroot, dmn_strerror(errno));
+        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file_post_chroot, dmn_logf_errno());
     if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file_post_chroot, dmn_strerror(errno));
+        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file_post_chroot, dmn_logf_errno());
 
     // if restarting, TERM the old daemon and wait for it to exit for a bit...
     if(params.restart) {
@@ -857,15 +857,15 @@ void dmn_acquire_pidfile(void) {
     if(fcntl(pidfd, F_SETLK, &pidlock_set)) {
         // Various failure modes
         if(errno != EAGAIN && errno != EACCES)
-            dmn_log_fatal("bug? fcntl(pidfile, F_SETLK) failed: %s", dmn_strerror(errno));
+            dmn_log_fatal("bug? fcntl(pidfile, F_SETLK) failed: %s", dmn_logf_errno());
         dmn_log_fatal("cannot acquire pidfile lock on pidfile: %s, owned by pid: %li)", params.pid_file_post_chroot, (long)dmn_status());
     }
 
     // Success - assuming writing to our locked pidfile doesn't fail!
     if(ftruncate(pidfd, 0))
-        dmn_log_fatal("truncating pidfile failed: %s", dmn_strerror(errno));
+        dmn_log_fatal("truncating pidfile failed: %s", dmn_logf_errno());
     if(dprintf(pidfd, "%li\n", (long)getpid()) < 2)
-        dmn_log_fatal("dprintf to pidfile failed: %s", dmn_strerror(errno));
+        dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
 
     // leak of pidfd here is intentional, it stays open/locked for the duration
     //   of the daemon's execution.  Daemon death by any means unlocks-on-close,
@@ -888,9 +888,9 @@ void dmn_pcall(unsigned id) {
 
     uint8_t msg = id + 64U;
     if(1 != write(state.pipe_to_helper[PIPE_WR], (char*)&msg, 1))
-        dmn_log_fatal("Bug? failed to write pcall request for %u to helper! Errno was %s", id, dmn_strerror(errno));
+        dmn_log_fatal("Bug? failed to write pcall request for %u to helper! Errno was %s", id, dmn_logf_errno());
     if(1 != read(state.pipe_from_helper[PIPE_RD], (char*)&msg, 1))
-        dmn_log_fatal("Bug? failed to read pcall return for %u from helper! Errno was %s", id, dmn_strerror(errno));
+        dmn_log_fatal("Bug? failed to read pcall return for %u from helper! Errno was %s", id, dmn_logf_errno());
     if(msg != ((id + 64U) | 128U))
         dmn_log_fatal("Bug? invalid pcall return of '%hhu' for %u from helper!", msg, id);
 }
@@ -907,9 +907,9 @@ void dmn_finish(void) {
         errno = 0;
         uint8_t msg = 0;
         if(1 != write(state.pipe_to_helper[PIPE_WR], &msg, 1))
-            dmn_log_fatal("Bug? failed to notify helper of daemon success! Errno was %s", dmn_strerror(errno));
+            dmn_log_fatal("Bug? failed to notify helper of daemon success! Errno was %s", dmn_logf_errno());
         if(1 != read(state.pipe_from_helper[PIPE_RD], &msg, 1))
-            dmn_log_fatal("Bug? failed to read helper final status! Errno was %s", dmn_strerror(errno));
+            dmn_log_fatal("Bug? failed to read helper final status! Errno was %s", dmn_logf_errno());
         if(msg != 128U)
             dmn_log_fatal("Bug? final message from helper was '%hhu'", msg);
 
