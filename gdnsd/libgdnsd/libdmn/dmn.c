@@ -115,6 +115,9 @@ static const char* phase_actor[] = {
     "dmn_finish()",
 };
 
+// makes sides of int[] from pipe() clearer
+static const unsigned PIPE_RD = 0;
+static const unsigned PIPE_WR = 1;
 
 /***********************************************************
 ***** Static per-thread data *******************************
@@ -180,16 +183,16 @@ static params_t params = {
 typedef struct {
     phase_t phase;
     bool    syslog_alive;
-    int     fd_to_helper;
-    int     fd_from_helper;
+    int     pipe_to_helper[2];
+    int     pipe_from_helper[2];
     FILE*   stderr_out;
 } state_t;
 
 static state_t state = {
     .phase            = PHASE0_UNINIT,
     .syslog_alive     = false,
-    .fd_to_helper     = -1,
-    .fd_from_helper   = -1,
+    .pipe_to_helper   = { -1, -1 },
+    .pipe_from_helper = { -1, -1 },
     .stderr_out       = NULL,
 };
 
@@ -221,8 +224,7 @@ static unsigned num_pcalls = 0;
 ***** Logging **********************************************
 ***********************************************************/
 
-// Allocate a chunk from the format buffer
-// Allocates the buffer itself on first use per-thread
+// Allocate a chunk from the per-thread format buffer
 char* dmn_fmtbuf_alloc(unsigned size) {
     phase_check(0, 0, 0);
     char* rv = NULL;
@@ -345,18 +347,18 @@ void dmn_logger(int level, const char* fmt, ...) {
 
 bool dmn_get_debug(void) { phase_check(0, 0, 0); return params.debug; }
 bool dmn_get_foreground(void) { phase_check(0, 0, 0); return params.foreground; }
-const char* dmn_get_username(void) { phase_check(0, 0, 0); return params.username; }
+const char* dmn_get_username(void) { phase_check(PHASE3_INIT3, 0, 0); return params.username; }
 
 /***********************************************************
 ***** Private subroutines used by daemonization ************
 ***********************************************************/
 
 // The terminal signal SIGTERM is sent exactly once, then
-//  the status of the daemon is polled repeatedly with timouts.
+//  the status of the daemon is polled repeatedly at 100ms
+//  delay intervals
 // Function returns when either the process is dead or
-//  our timeouts all expired.  Total timeout is 15s in 100ms
-//  increments.
-// True retval indicates daemon is still running
+//  our delays all expired.  Total timeout is 15s.
+// True retval indicates daemon is still running.
 // It is critical that this function doesn't contain any
 //   faliure-points (dmn_assert or dmn_log_fatal), see
 //   the systemd restart code in _acquire_pidfile().
@@ -365,12 +367,10 @@ static bool terminate_pid_and_wait(pid_t pid) {
 
     if(!kill(pid, SIGTERM)) {
         still_running = true;
-        struct timeval tv;
+        const struct timespec ts = { 0, 100000000 };
         unsigned tries = 150;
         while(tries--) {
-            tv.tv_sec = 0;
-            tv.tv_usec = 100000;
-            select(0, NULL, NULL, NULL, &tv);
+            nanosleep(&ts, NULL);
             if(kill(pid, 0)) {
                 still_running = false;
                 break;
@@ -381,9 +381,19 @@ static bool terminate_pid_and_wait(pid_t pid) {
     return still_running;
 }
 
+// reset pipe fds to -1 on close
+static void close_pipefd(int* fd_p) {
+    if(close(*fd_p))
+        dmn_log_fatal("close() of pipe() fd failed: %s", dmn_strerror(errno));
+    *fd_p = -1;
+}
+
 // the helper process executes here and does not return
-static void helper_proc(const int readpipe, const int writepipe) {
+static void helper_proc(void) {
     dmn_assert(state.phase == PHASE3_INIT3);
+
+    const int readpipe = state.pipe_to_helper[PIPE_RD];
+    const int writepipe = state.pipe_from_helper[PIPE_WR];
     dmn_assert(readpipe >= 0);
     dmn_assert(writepipe >= 0);
 
@@ -706,55 +716,38 @@ void dmn_fork(void) {
     // These pipes are used to communicate with the "helper" process,
     //   which is the original parent when daemonizing properly, or
     //   a special forked helper when necessary in the foreground.
-    int to_helper[2];
-    int from_helper[2];
-    if(pipe(to_helper))
+    if(pipe(state.pipe_to_helper))
         dmn_log_fatal("pipe() failed: %s", dmn_strerror(errno));
-    if(pipe(from_helper))
+    if(pipe(state.pipe_from_helper))
         dmn_log_fatal("pipe() failed: %s", dmn_strerror(errno));
-    state.fd_to_helper = to_helper[1];
-    state.fd_from_helper = from_helper[0];
 
     // Fork for the first time...
     const pid_t first_fork_pid = fork();
     if(first_fork_pid == -1)
         dmn_log_fatal("fork() failed: %s", dmn_strerror(errno));
 
-    if(params.foreground) {
-        // In the special case of foreground+privdrop+pcalls, the parent/child relationship
-        //  is reversed from normal flow below, and we do not do the rest
-        //  of the daemonization steps.
-        // send the child off to wait for messages in helper_proc()
-        if(!first_fork_pid) { // helper child proc
-            if(close(to_helper[1])) // close write-side
-                dmn_log_fatal("close() of to_helper pipe write-side failed in foreground helper: %s", dmn_strerror(errno));
-            if(close(from_helper[0])) // close read-side
-                dmn_log_fatal("close() of from_helper pipe read-side failed in foreground helper: %s", dmn_strerror(errno));
-            helper_proc(to_helper[0], from_helper[1]);
-            dmn_assert(0); // above never returns control
-        }
-        if(close(to_helper[0])) // close read-side
-            dmn_log_fatal("close() of to_helper pipe write-side failed in foreground daemon: %s", dmn_strerror(errno));
-        if(close(from_helper[1])) // close read-side
-            dmn_log_fatal("close() of from_helper pipe read-side failed in foreground daemon: %s", dmn_strerror(errno));
+    // The helper process role is the child of the above fork
+    //   in the foreground case, but it is the parent
+    //   in the non-foreground case.
+    const bool is_helper = params.foreground
+        ? !first_fork_pid
+        : first_fork_pid;
 
-        state.phase = PHASE4_FORKED;
-        return;
-    }
-
-    if(first_fork_pid) { // original parent proc
-        if(close(to_helper[1])) // close write-side
-            dmn_log_fatal("close() of to_helper pipe write-side failed in foreground helper: %s", dmn_strerror(errno));
-        if(close(from_helper[0])) // close read-side
-            dmn_log_fatal("close() of from_helper pipe read-side failed in foreground helper: %s", dmn_strerror(errno));
-        helper_proc(to_helper[0], from_helper[1]);
+    if(is_helper) {
+        close_pipefd(&state.pipe_to_helper[PIPE_WR]);
+        close_pipefd(&state.pipe_from_helper[PIPE_RD]);
+        helper_proc();
         dmn_assert(0); // above never returns control
     }
 
-    if(close(to_helper[0])) // close read-side
-        dmn_log_fatal("close() of to_helper pipe write-side failed in first child: %s", dmn_strerror(errno));
-    if(close(from_helper[1])) // close read-side
-        dmn_log_fatal("close() of from_helper pipe read-side failed in first child: %s", dmn_strerror(errno));
+    close_pipefd(&state.pipe_to_helper[PIPE_RD]);
+    close_pipefd(&state.pipe_from_helper[PIPE_WR]);
+
+    // foreground case doesn't use the daemonization steps below
+    if(params.foreground) {
+        state.phase = PHASE4_FORKED;
+        return;
+    }
 
     // setsid() and ignore HUP/PIPE before the second fork
     if(setsid() == -1) dmn_log_fatal("setsid() failed: %s", dmn_strerror(errno));
@@ -947,13 +940,13 @@ void dmn_pcall(unsigned id) {
     if(!params.will_privdrop)
         return pcalls[id]();
 
-    dmn_assert(state.fd_to_helper >= 0);
-    dmn_assert(state.fd_from_helper >= 0);
+    dmn_assert(state.pipe_to_helper[PIPE_WR] >= 0);
+    dmn_assert(state.pipe_from_helper[PIPE_RD] >= 0);
 
     uint8_t msg = id + 64U;
-    if(1 != write(state.fd_to_helper, (char*)&msg, 1))
+    if(1 != write(state.pipe_to_helper[PIPE_WR], (char*)&msg, 1))
         dmn_log_fatal("Bug? failed to write pcall request for %u to helper! Errno was %s", id, dmn_strerror(errno));
-    if(1 != read(state.fd_from_helper, (char*)&msg, 1))
+    if(1 != read(state.pipe_from_helper[PIPE_RD], (char*)&msg, 1))
         dmn_log_fatal("Bug? failed to read pcall return for %u from helper! Errno was %s", id, dmn_strerror(errno));
     if(msg != ((id + 64U) | 128U))
         dmn_log_fatal("Bug? invalid pcall return of '%hhu' for %u from helper!", msg, id);
@@ -962,31 +955,33 @@ void dmn_pcall(unsigned id) {
 void dmn_finish(void) {
     phase_check(PHASE6_PIDLOCKED, 0, 1);
 
-    // Again, in this case there's no other process to talk to
-    if(!params.need_helper) {
-        dmn_assert(state.fd_to_helper == -1);
-        dmn_assert(state.fd_from_helper == -1);
-        state.phase = PHASE7_FINISHED;
-        return;
+    if(params.need_helper) { // inform the helper of our success (bidirectional)
+        dmn_assert(state.pipe_to_helper[PIPE_RD] == -1);
+        dmn_assert(state.pipe_to_helper[PIPE_WR] >= 0);
+        dmn_assert(state.pipe_from_helper[PIPE_RD] >= 0);
+        dmn_assert(state.pipe_from_helper[PIPE_WR] == -1);
+
+        errno = 0;
+        uint8_t msg = 0;
+        if(1 != write(state.pipe_to_helper[PIPE_WR], &msg, 1))
+            dmn_log_fatal("Bug? failed to notify helper of daemon success! Errno was %s", dmn_strerror(errno));
+        if(1 != read(state.pipe_from_helper[PIPE_RD], &msg, 1))
+            dmn_log_fatal("Bug? failed to read helper final status! Errno was %s", dmn_strerror(errno));
+        if(msg != 128U)
+            dmn_log_fatal("Bug? final message from helper was '%hhu'", msg);
+
+        close_pipefd(&state.pipe_to_helper[PIPE_WR]);
+        close_pipefd(&state.pipe_from_helper[PIPE_RD]);
     }
 
-    dmn_assert(state.fd_to_helper >= 0);
-    dmn_assert(state.fd_from_helper >= 0);
+    dmn_assert(state.pipe_to_helper[PIPE_RD] == -1);
+    dmn_assert(state.pipe_to_helper[PIPE_WR] == -1);
+    dmn_assert(state.pipe_from_helper[PIPE_RD] == -1);
+    dmn_assert(state.pipe_from_helper[PIPE_WR] == -1);
 
-    // inform the helper of our success, but if for some reason
-    //   it died before we could do so, carry on anyways...
-    errno = 0;
-    uint8_t msg = 0;
-    if(1 != write(state.fd_to_helper, &msg, 1))
-        dmn_log_fatal("Bug? failed to notify helper of daemon success! Errno was %s", dmn_strerror(errno));
-    if(1 != read(state.fd_from_helper, &msg, 1))
-        dmn_log_fatal("Bug? failed to read helper final status! Errno was %s", dmn_strerror(errno));
-    if(msg != 128U)
-        dmn_log_fatal("Bug? final message from helper was '%hhu'", msg);
-    close(state.fd_to_helper);
-    close(state.fd_from_helper);
     if(!params.foreground)
         dmn_log_close_stderr_out();
 
     state.phase = PHASE7_FINISHED;
+    return;
 }
