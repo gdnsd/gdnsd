@@ -214,8 +214,7 @@ static unsigned num_pcalls = 0;
 ***** Logging **********************************************
 ***********************************************************/
 
-// Allocate a chunk from the format buffer
-// Allocates the buffer itself on first use per-thread
+// Allocate a chunk from the per-thread format buffer
 char* dmn_fmtbuf_alloc(unsigned size) {
     phase_check(0, 0, 0);
     char* rv = NULL;
@@ -338,7 +337,7 @@ void dmn_logger(int level, const char* fmt, ...) {
 
 bool dmn_get_debug(void) { phase_check(0, 0, 0); return params.debug; }
 bool dmn_get_foreground(void) { phase_check(0, 0, 0); return params.foreground; }
-const char* dmn_get_username(void) { phase_check(0, 0, 0); return params.username; }
+const char* dmn_get_username(void) { phase_check(PHASE3_INIT3, 0, 0); return params.username; }
 
 /***********************************************************
 ***** Private subroutines used by daemonization ************
@@ -911,8 +910,7 @@ void dmn_finish(void) {
     dmn_assert(state.fd_to_helper >= 0);
     dmn_assert(state.fd_from_helper >= 0);
 
-    // inform the helper of our success, but if for some reason
-    //   it died before we could do so, carry on anyways...
+    // inform the helper of our success (bidirectional)
     errno = 0;
     uint8_t msg = 0;
     if(1 != write(state.fd_to_helper, &msg, 1))
