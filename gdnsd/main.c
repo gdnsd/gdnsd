@@ -75,18 +75,6 @@ static void atexit_debug_execute(void) { }
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
 
-static pthread_t zone_data_threadid;
-
-static void threads_cleanup(void) {
-    pthread_cancel(zone_data_threadid);
-    for(unsigned i = 0; i < gconfig.num_dns_threads; i++)
-        pthread_cancel(gconfig.dns_threads[i].threadid);
-
-    pthread_join(zone_data_threadid, NULL);
-    for(unsigned i = 0; i < gconfig.num_dns_threads; i++)
-        pthread_join(gconfig.dns_threads[i].threadid, NULL);
-}
-
 static int killed_by = 0;
 
 F_NONNULL
@@ -249,11 +237,9 @@ static void start_threads(void) {
                 i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_errnum(pthread_err));
     }
 
+    pthread_t zone_data_threadid;
     int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
     if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
-
-    // Invoke thread cleanup handlers at exit time
-    gdnsd_atexit_debug(threads_cleanup);
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal

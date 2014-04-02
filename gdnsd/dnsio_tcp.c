@@ -358,10 +358,6 @@ void tcp_dns_listen_setup(dns_thread_t* t) {
     t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout);
 }
 
-static void thread_clean(void* arg_unused V_UNUSED) {
-    gdnsd_prcu_rdr_thread_end();
-}
-
 static void ztstate_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {
     gdnsd_prcu_rdr_offline();
 }
@@ -415,7 +411,6 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     ev_io_start(loop, accept_watcher);
 
     gdnsd_prcu_rdr_thread_start();
-    pthread_cleanup_push(thread_clean, NULL);
 
     struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));
     struct ev_check* check_watcher = malloc(sizeof(struct ev_check));
@@ -425,8 +420,6 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     ev_prepare_start(loop, prep_watcher);
     ev_check_start(loop, check_watcher);
     ev_run(loop, 0);
-
-    pthread_cleanup_pop(1);
 
     return NULL;
 }

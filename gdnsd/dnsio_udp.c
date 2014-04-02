@@ -422,10 +422,6 @@ static bool needs_cmsg(const anysin_t* asin) {
         : false;
 }
 
-static void thread_clean(void* unused_arg V_UNUSED) {
-    gdnsd_prcu_rdr_thread_end();
-}
-
 F_NORETURN
 void* dnsio_udp_start(void* thread_asvoid) {
     dmn_assert(thread_asvoid);
@@ -454,7 +450,6 @@ void* dnsio_udp_start(void* thread_asvoid) {
     const bool need_cmsg = needs_cmsg(&addrconf->addr);
 
     gdnsd_prcu_rdr_thread_start();
-    pthread_cleanup_push(thread_clean, NULL);
 
 #ifdef USE_SENDMMSG
     if(addrconf->udp_recv_width > 1) {
@@ -467,6 +462,4 @@ void* dnsio_udp_start(void* thread_asvoid) {
     {
         mainloop(t->sock, pctx, need_cmsg);
     }
-
-    pthread_cleanup_pop(1);
 }
