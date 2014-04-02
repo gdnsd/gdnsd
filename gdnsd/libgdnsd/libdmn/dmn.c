@@ -64,12 +64,12 @@
 ***********************************************************/
 
 // Log message prefixes when using stderr
-static const char PFX_DEBUG[] = " debug: ";
-static const char PFX_INFO[] = " info: ";
-static const char PFX_WARNING[] = " warning: ";
-static const char PFX_ERR[] = " error: ";
-static const char PFX_CRIT[] = " fatal: ";
-static const char PFX_UNKNOWN[] = " ???: ";
+static const char PFX_DEBUG[] = "debug: ";
+static const char PFX_INFO[] = "info: ";
+static const char PFX_WARNING[] = "warning: ";
+static const char PFX_ERR[] = "error: ";
+static const char PFX_CRIT[] = "fatal: ";
+static const char PFX_UNKNOWN[] = "???: ";
 
 // Max length of an errno string (for our buffer purposes)
 static const size_t DMN_ERRNO_MAXLEN = 256U;
