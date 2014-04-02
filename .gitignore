@@ -58,6 +58,7 @@ Makefile.in
 *.log
 *.trs
 *~
+clang_output_*
 
 # generated docs
 *.txt
