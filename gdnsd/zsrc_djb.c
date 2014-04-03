@@ -44,6 +44,9 @@ static void unload_zones(void) {
             ztree_txn_update(cur->zone, NULL);
         ztree_txn_end();
 
+        for (zscan_djb_zonedata_t* cur = active_zonedata; cur; cur = cur->next)
+            zone_delete(cur->zone);
+
         zscan_djbzone_free(&active_zonedata);
     }
 }
@@ -56,24 +59,35 @@ static void zsrc_djb_sync_zones(void) {
         return;
 
     ztree_txn_start();
+
     for (zscan_djb_zonedata_t* cur = zonedata; cur; cur = cur->next) {
         zscan_djb_zonedata_t* old = zscan_djbzone_get(active_zonedata, cur->zone->dname, 1);
         if (old) {
             old->marked = 1;
             ztree_txn_update(old->zone, cur->zone);
-            //ztree_update(old->zone, cur->zone);
         } else {
             ztree_txn_update(NULL, cur->zone);
-            //ztree_update(NULL, cur->zone);
         }
         num_zones++;
     }
-    for (zscan_djb_zonedata_t* cur = active_zonedata; cur; cur = cur->next) {
+
+    for (zscan_djb_zonedata_t* cur = active_zonedata; cur; cur = cur->next)
         if (!cur->marked)
             ztree_txn_update(cur->zone, NULL);
-            //ztree_update(cur->zone, NULL);
-    }
+
     ztree_txn_end();
+
+    // now delete the unused zone_t's that were removed/replaced in the multi-zone
+    //   transaction above.
+    for (zscan_djb_zonedata_t* cur = zonedata; cur; cur = cur->next) {
+        zscan_djb_zonedata_t* old = zscan_djbzone_get(active_zonedata, cur->zone->dname, 1);
+        if (old)
+            zone_delete(old->zone);
+    }
+
+    for (zscan_djb_zonedata_t* cur = active_zonedata; cur; cur = cur->next)
+        if (!cur->marked)
+            zone_delete(cur->zone);
 
     log_info("zsrc_djb: loaded %d zones from %s...", num_zones, logf_pathname(djb_dir));
 
