@@ -557,10 +557,13 @@ static void ztree_destroy_clone(ztree_t* ztclone) {
 
     ztchildren_t* old_ztc = ztclone->children;
     if(old_ztc) {
-        for(unsigned i = 0; i < old_ztc->alloc; i++) {
-            ztree_t* entry = old_ztc->store[i];
-            if(entry) 
-                ztree_destroy_clone(entry);
+        if(old_ztc->alloc) {
+            for(unsigned i = 0; i < old_ztc->alloc; i++) {
+                ztree_t* entry = old_ztc->store[i];
+                if(entry)
+                    ztree_destroy_clone(entry);
+            }
+            free(old_ztc->store);
         }
         free(old_ztc);
     }
