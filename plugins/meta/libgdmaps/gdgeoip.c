@@ -64,6 +64,7 @@
 #define GEOIP_CITY_EDITION_REV0_V6     31
 
 #define NUM_COUNTRIES 256
+#define DEF_COUNTRYID 255 // if overflow
 
 static const char GeoIP_country_continent[NUM_COUNTRIES][3] = { "--",
     "AS","EU","EU","AS","AS","NA","NA","EU","AS","NA",
@@ -190,7 +191,9 @@ static unsigned country_get_dclist(const geoip_db_t* db, const unsigned offset) 
 
     unsigned rv = 0;
     if(db->dcmap) {
-        const unsigned ccid = offset - db->base;
+        unsigned ccid = offset - db->base;
+        if(ccid >= NUM_COUNTRIES)
+            ccid = DEF_COUNTRYID;
         char locstr[7];
 
         locstr[0] = GeoIP_country_continent[ccid][0];
