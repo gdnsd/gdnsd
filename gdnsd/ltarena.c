@@ -232,18 +232,18 @@ const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
     dnhash_t* dnhash = lta->dnhash;
     dmn_assert(dnhash); // not closed
 
-    const unsigned dnlen = *dname + 1U;
     const unsigned hmask = dnhash->mask;
     const uint8_t** table = dnhash->table;
     uint32_t jmpby = 1U;
     uint32_t slotnum = dname_hash(dname) & hmask;
     while(table[slotnum]) {
-        if(!memcmp(table[slotnum], dname, dnlen))
+        if(!gdnsd_dname_cmp(dname, table[slotnum]))
             return table[slotnum];
         slotnum += jmpby++;
         slotnum &= hmask;
     }
 
+    const unsigned dnlen = *dname + 1U;
     const uint8_t* retval = table[slotnum] = lta_malloc(lta, dnlen);
     memcpy((uint8_t*)retval, dname, dnlen);
 

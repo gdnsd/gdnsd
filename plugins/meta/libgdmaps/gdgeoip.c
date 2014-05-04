@@ -63,7 +63,10 @@
 #define GEOIP_CITY_EDITION_REV1_V6     30
 #define GEOIP_CITY_EDITION_REV0_V6     31
 
-static const char GeoIP_country_continent[254][3] = { "--",
+#define NUM_COUNTRIES 256
+#define DEF_COUNTRYID 255 // if overflow
+
+static const char GeoIP_country_continent[NUM_COUNTRIES][3] = { "--",
     "AS","EU","EU","AS","AS","NA","NA","EU","AS","NA",
     "AF","AN","SA","OC","EU","OC","NA","AS","EU","NA",
     "AS","EU","AF","EU","AS","AF","AF","NA","AS","SA",
@@ -89,10 +92,9 @@ static const char GeoIP_country_continent[254][3] = { "--",
     "AF","EU","AF","OC","NA","SA","AS","EU","NA","SA",
     "NA","NA","AS","OC","OC","OC","AS","AF","EU","AF",
     "AF","EU","AF","--","--","--","EU","EU","EU","EU",
-    "NA","NA","NA"
+    "NA","NA","NA","AF","--"
 };
 
-#define NUM_COUNTRIES 254
 static const char GeoIP_country_code[NUM_COUNTRIES][3] = { "--",
     "AP","EU","AD","AE","AF","AG","AI","AL","AM","CW",
     "AO","AQ","AR","AS","AT","AU","AW","AZ","BA","BB",
@@ -119,7 +121,7 @@ static const char GeoIP_country_code[NUM_COUNTRIES][3] = { "--",
     "TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE",
     "VG","VI","VN","VU","WF","WS","YE","YT","RS","ZA",
     "ZM","ME","ZW","A1","A2","O1","AX","GG","IM","JE",
-    "BL","MF","BQ"
+    "BL","MF","BQ","SS","O1"
 };
 
 /*******************************
@@ -189,7 +191,9 @@ static unsigned country_get_dclist(const geoip_db_t* db, const unsigned offset) 
 
     unsigned rv = 0;
     if(db->dcmap) {
-        const unsigned ccid = offset - db->base;
+        unsigned ccid = offset - db->base;
+        if(ccid >= NUM_COUNTRIES)
+            ccid = DEF_COUNTRYID;
         char locstr[7];
 
         locstr[0] = GeoIP_country_continent[ccid][0];

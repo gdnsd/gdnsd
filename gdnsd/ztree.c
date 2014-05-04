@@ -157,14 +157,14 @@ static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label, const
         unsigned slot = label_hash(label) & child_mask;
         if(reader) {
             while((rv = gdnsd_prcu_rdr_deref(children->store[slot]))
-              && memcmp(rv->label, label, *label + 1)) {
+              && gdnsd_label_cmp(label, rv->label)) {
                 slot += jmpby++;
                 slot &= child_mask;
             }
         }
         else {
             while((rv = children->store[slot])
-              && memcmp(rv->label, label, *label + 1)) {
+              && gdnsd_label_cmp(label, rv->label)) {
                 slot += jmpby++;
                 slot &= child_mask;
             }
@@ -257,12 +257,12 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
     unsigned jmpby = 1;
     unsigned slot = label_hash(label) & child_mask;
     while((rv = children->store[slot])
-      && memcmp(rv->label, label, *label + 1)) {
+      && gdnsd_label_cmp(label, rv->label)) {
         slot += jmpby++;
         slot &= child_mask;
     }
 
-    // came to an empty slot with no memcmp match along the way,
+    // came to an empty slot with no match along the way,
     //   so create a new node at this slot...
     if(!rv) {
         rv = calloc(1, sizeof(ztree_t));
