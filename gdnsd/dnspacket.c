@@ -1605,7 +1605,7 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
         ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
 
         while(entry) {
-            if(!memcmp(entry->label, child_label, *child_label + 1)) {
+            if(!gdnsd_label_cmp(entry->label, child_label)) {
                 current = entry;
                 goto top_loop;
             }

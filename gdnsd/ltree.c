@@ -153,7 +153,7 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
         const uint32_t child_hash = label_djb_hash(child_label, child_mask);
         ltree_node_t* child = node->child_table[child_hash];
         while(child) {
-            if(!memcmp(child->label, child_label, *child_label + 1)) {
+            if(!gdnsd_label_cmp(child_label, child->label)) {
                 rv = child;
                 break;
             }
@@ -190,7 +190,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
 
     ltree_node_t* child = node->child_table[child_hash];
     while(child) {
-        if(!memcmp(child->label, child_label, *child_label + 1))
+        if(!gdnsd_label_cmp(child_label, child->label))
             return child;
         child = child->next;
     }
@@ -799,7 +799,7 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
             ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
 
             while(entry) {
-                if(!memcmp(entry->label, child_label, *child_label + 1)) {
+                if(!gdnsd_label_cmp(child_label, entry->label)) {
                     current = entry;
                     goto top_loop;
                 }
@@ -1143,7 +1143,7 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone) {
     if(unlikely(zroot_ns->gen.count < 2))
         log_zwarn("Zone '%s' only has one NS record, this is (probably) bad practice", logf_dname(zone->dname));
     for(unsigned i = 0; i < zroot_ns->gen.count; i++) {
-        if(!memcmp(zroot_ns->rdata[i].dname, zroot_soa->master, *(zroot_soa->master) + 1)) {
+        if(!gdnsd_dname_cmp(zroot_soa->master, zroot_ns->rdata[i].dname)) {
             ok = true;
             break;
         }

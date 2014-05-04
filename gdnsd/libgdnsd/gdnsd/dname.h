@@ -260,10 +260,23 @@ static inline int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2) {
     dmn_assert(dn1); dmn_assert(dn2);
     dmn_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
     dmn_assert(gdnsd_dname_status(dn2) != DNAME_INVALID);
-    const unsigned len_1 = *dn1;
-    int rv = len_1 - *dn2;
+    const int len1 = (int)*dn1++;
+    const int len2 = (int)*dn2++;
+    int rv = len1 - len2;
     if(!rv)
-        rv = memcmp(dn1, dn2, len_1 + 1);
+        rv = memcmp(dn1, dn2, len1);
+    return rv;
+}
+
+// As above but for labels (no dname_status() assertion)
+F_NONNULL F_PURE
+static inline int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2) {
+    dmn_assert(label1); dmn_assert(label2);
+    const int len1 = (int)*label1++;
+    const int len2 = (int)*label2++;
+    int rv = len1 - len2;
+    if(!rv)
+        rv = memcmp(label1, label2, len1);
     return rv;
 }
 

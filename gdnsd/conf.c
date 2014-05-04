@@ -300,10 +300,13 @@ static bool dns_addr_is_dupe(const anysin_t* new_addr) {
     dmn_assert(new_addr);
     dmn_assert(new_addr->sa.sa_family == AF_INET6 || new_addr->sa.sa_family == AF_INET);
 
-    for(unsigned i = 0; i < gconfig.num_dns_addrs; i++)
-        if(gconfig.dns_addrs[i].addr.sa.sa_family == new_addr->sa.sa_family)
+    for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
+        if(gconfig.dns_addrs[i].addr.sa.sa_family == new_addr->sa.sa_family) {
+            dmn_assert(new_addr->len == gconfig.dns_addrs[i].addr.len);
             if(!memcmp(new_addr, &gconfig.dns_addrs[i].addr, new_addr->len))
                 return true;
+        }
+    }
 
     return false;
 }
