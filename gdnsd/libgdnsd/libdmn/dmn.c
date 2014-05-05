@@ -743,7 +743,8 @@ void dmn_fork(void) {
     }
 
     // setsid() and ignore HUP/PIPE before the second fork
-    if(setsid() == -1) dmn_log_fatal("setsid() failed: %s", dmn_logf_errno());
+    if(setsid() == -1)
+        dmn_log_fatal("setsid() failed: %s", dmn_logf_errno());
     struct sigaction sa;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
