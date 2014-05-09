@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <pwd.h>
+#include <grp.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/select.h>
@@ -757,7 +758,8 @@ void dmn_fork(void) {
     }
 
     // setsid() and ignore HUP/PIPE before the second fork
-    if(setsid() == -1) dmn_log_fatal("setsid() failed: %s", dmn_logf_errno());
+    if(setsid() == -1)
+        dmn_log_fatal("setsid() failed: %s", dmn_logf_errno());
     struct sigaction sa;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
@@ -840,6 +842,8 @@ void dmn_secure(void) {
         // drop privs
         if(setgid(params.gid))
             dmn_log_fatal("setgid(%u) failed: %s", params.gid, dmn_logf_errno());
+        if(initgroups(params.username, params.gid))
+            dmn_log_fatal("initgroups(%s,%u) failed: %s", params.username, params.gid, dmn_logf_errno());
         if(setuid(params.uid))
             dmn_log_fatal("setuid(%u) failed: %s", params.uid, dmn_logf_errno());
 

@@ -105,10 +105,10 @@ static void usage(const char* argv0) {
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
 #       ifndef NDEBUG
-        "Usage: %s [-sSD] [-d <rootdir>] <action>\n"
+        "Usage: %s [-fsSD] [-d <rootdir>] <action>\n"
         "  -D - Enable verbose debug output\n"
 #       else
-        "Usage: %s [-sS] [-d <rootdir>] <action>\n"
+        "Usage: %s [-fsS] [-d <rootdir>] <action>\n"
 #       endif
         "  -f - Foreground mode for start/restart-like actions\n"
         "  -s - Force 'zones_strict_startup = true' for this invocation\n"

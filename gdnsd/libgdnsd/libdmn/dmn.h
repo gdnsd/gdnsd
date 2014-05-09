@@ -105,9 +105,9 @@ void dmn_init2(const char* pid_dir, const char* chroot);
 // username: optional - if set, the daemon will drop privileges
 //   to the uid/gid of this user during dmn_secure() later.  If
 //   the daemon was not started as root, this option is ignored.
-// restart: if true, this daemon will try to kill any conflicting
-//   instance of itself (same pidfile) before acquiring the pidfile
-//   in dmn_acquire_pidfile() later.
+// restart: if true, much later in dmn_acquire_pidfile() this
+//   daemon will try to kill any conflicting instance of itself
+//   (same pidfile) before acquiring the pidfile.
 void dmn_init3(const char* username, const bool restart);
 
 // In !foreground cases, does the whole 9 yards of proper daemonization,
@@ -132,6 +132,9 @@ void dmn_secure(void);
 
 // If the restart parameter was set in init3, this function will first
 //   check for a running daemon via the pidfile lock mechanism and terminate it.
+// Regardless, it will then acquire a proper pidfile lock (or die trying).
+// When this returns without dying, the current process is now the official
+//   runtime instance of this daemon for e.g. dmn_status().
 void dmn_acquire_pidfile(void);
 
 // Finish the daemon startup procedure by signalling the helper process
