@@ -2,7 +2,7 @@ AC_PREREQ([2.63])
 AC_INIT([gdnsd],[1.11.2],[blblack@gmail.com],[gdnsd])
 AC_CONFIG_SRCDIR([gdnsd/main.c])
 AC_CONFIG_AUX_DIR([acaux])
-AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wall])
+AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
@@ -369,6 +369,7 @@ AC_CONFIG_FILES([
   Makefile
   gdnsd/Makefile
   gdnsd/libgdnsd/Makefile
+  gdnsd/libgdnsd/libdmn/Makefile
   t/Makefile
   docs/Makefile
   plugins/Makefile
