@@ -93,8 +93,6 @@ typedef struct {
     sigjmp_buf jbuf;
 } zscan_t;
 
-zscan_t zscan = { 0 };
-
 static const uint8_t dname_root[] = {1,0};
 static const uint8_t dname_ns[]   = {4,2,'n','s',255};
 static const uint8_t dname_mx[]   = {4,2,'m','x',255};
@@ -558,7 +556,8 @@ bool zscan_djb(const char* djb_path, zscan_djb_zonedata_t** zonedata)
 {
     dmn_assert(djb_path);
 
-    zscan_t *z = &zscan;
+    zscan_t _z, *z = &_z;
+    memset(z, 0, sizeof(*z));
     z->path = djb_path;
 
     if (zscan_foreach_record(z, create_zones) || zscan_foreach_record(z, load_zones))
@@ -572,9 +571,11 @@ bool zscan_djb(const char* djb_path, zscan_djb_zonedata_t** zonedata)
         log_warn("djb: skipped %d records with TTD or location", z->skipped);
 
     *zonedata = z->zonedata;
+    free(z->line);
     return false;
 
 error:
     zscan_djbzone_free(&z->zonedata);
+    free(z->line);
     return true;
 }
