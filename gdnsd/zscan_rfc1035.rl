@@ -141,7 +141,7 @@ static void set_uval(zscan_t* z) {
     z->uval = strtoul(z->tstart, NULL, 10);
     z->tstart = NULL;
     if(errno)
-        parse_error("Integer conversion error: %s", logf_errno());
+        parse_error("Integer conversion error: %s", dmn_logf_errno());
 }
 
 F_NONNULL
@@ -739,7 +739,7 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
 
         const int len = read(fd, read_at, space);
         if(len < 0)
-            parse_error("read() failed: %s", logf_errno());
+            parse_error("read() failed: %s", dmn_logf_errno());
 
         pe = p + len;
 
@@ -792,7 +792,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
 
     const int fd = open(fn, O_RDONLY);
     if(fd < 0) {
-        log_err("rfc1035: Cannot open file '%s' for reading: %s", logf_pathname(fn), logf_errno());
+        log_err("rfc1035: Cannot open file '%s' for reading: %s", logf_pathname(fn), dmn_logf_errno());
         return true;
     }
 
@@ -825,7 +825,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     bool failed = sij(z, buf, bufsize, fd);
 
     if(close(fd)) {
-        log_err("rfc1035: Cannot close file '%s': %s", logf_pathname(fn), logf_errno());
+        log_err("rfc1035: Cannot close file '%s': %s", logf_pathname(fn), dmn_logf_errno());
         failed = true;
     }
 
