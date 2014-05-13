@@ -17,12 +17,6 @@
   fun:ev_loop_destroy
 }
 {
-  dmn_fmtbuf_alloc
-  Memcheck:Leak
-  ...
-  fun:dmn_fmtbuf_alloc
-}
-{
   dnsio_tcp_tctx
   Memcheck:Leak
   fun:malloc
@@ -33,6 +27,14 @@
   Memcheck:Leak
   ...
   fun:dnspacket_context_new
+}
+
+# also, we don't explicitly terminate threads in the normal case
+{
+  pthreads_unkilled
+  Memcheck:Leak
+  ...
+  fun:pthread_create*
   ...
 }
 
