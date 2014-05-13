@@ -96,7 +96,7 @@ static ev_timer* sttl_update_timer = NULL;
 #define DEF_DOWN_THRESH 10
 #define DEF_INTERVAL 10
 
-static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w, int revents) {
+static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
     dmn_assert(w == sttl_update_timer);
     dmn_assert(revents == EV_TIMER);

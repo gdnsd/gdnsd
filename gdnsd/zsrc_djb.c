@@ -103,7 +103,7 @@ void zsrc_djb_load_zones(void) {
 
 // called within our thread/loop to take sighup action
 F_NONNULL
-static void sighup_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
+static void sighup_cb(struct ev_loop* loop V_UNUSED, ev_async* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
     log_info("zsrc_djb: received SIGHUP notification, scanning for changes...");
     zsrc_djb_sync_zones();

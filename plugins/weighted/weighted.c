@@ -179,7 +179,7 @@ typedef struct {
 } iaga_t;
 
 F_NONNULL
-static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len, const vscf_data_t* lb_data, void* iaga_asvoid) {
+static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len V_UNUSED, const vscf_data_t* lb_data, void* iaga_asvoid) {
     dmn_assert(lb_name); dmn_assert(lb_name_len); dmn_assert(lb_data); dmn_assert(iaga_asvoid);
 
     iaga_t* iaga = (iaga_t*)iaga_asvoid;
