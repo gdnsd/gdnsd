@@ -496,7 +496,7 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
     state.phase = PHASE1_INIT1;
 }
 
-void dmn_init2(const char* pid_dir, const char* chroot) {
+void dmn_init2(const char* pid_dir, const char* chroot_dir) {
     phase_check(PHASE1_INIT1, PHASE3_INIT3, 1);
 
     params.invoked_as_root = !geteuid();
@@ -504,20 +504,20 @@ void dmn_init2(const char* pid_dir, const char* chroot) {
     if(pid_dir && pid_dir[0] != '/')
         dmn_log_fatal("pid directory path must be absolute!");
 
-    if(chroot) {
-        if(chroot[0] != '/')
+    if(chroot_dir) {
+        if(chroot_dir[0] != '/')
             dmn_log_fatal("chroot() path must be absolute!");
         struct stat st;
-        if(lstat(chroot, &st))
-            dmn_log_fatal("Cannot lstat(%s): %s", chroot, dmn_logf_errno());
+        if(lstat(chroot_dir, &st))
+            dmn_log_fatal("Cannot lstat(%s): %s", chroot_dir, dmn_logf_errno());
         if(!S_ISDIR(st.st_mode))
-            dmn_log_fatal("chroot() path '%s' is not a directory!", chroot);
-        params.chroot = strdup(chroot);
+            dmn_log_fatal("chroot() path '%s' is not a directory!", chroot_dir);
+        params.chroot = strdup(chroot_dir);
         if(params.invoked_as_root)
             params.will_chroot = true;
         if(pid_dir) {
-            params.pid_dir_pre_chroot = str_combine_n(2, chroot, pid_dir);
-            params.pid_file_pre_chroot = str_combine_n(5, chroot, pid_dir, "/", params.name, ".pid");
+            params.pid_dir_pre_chroot = str_combine_n(2, chroot_dir, pid_dir);
+            params.pid_file_pre_chroot = str_combine_n(5, chroot_dir, pid_dir, "/", params.name, ".pid");
             if(params.invoked_as_root)
                 params.pid_file_post_chroot = str_combine_n(4, pid_dir, "/", params.name, ".pid");
             else
