@@ -590,6 +590,19 @@ sub delete_altzone {
         or die "Failed to unlink zonefile '$fn': $!";
 }
 
+sub write_statefile {
+    my ($class, $fn, $content) = @_;
+    $fn = $OUTDIR . '/var/' . $fn;
+    my $fn_tmp = "${fn}.tmp";
+    open(my $fd_tmp, ">$fn_tmp")
+        or die "Cannot open state file '$fn_tmp' for writing: $!";
+    print $fd_tmp $content;
+    close($fd_tmp)
+        or die "Cannot close state file '$fn_tmp': $!";
+    rename($fn_tmp, $fn)
+        or die "Cannot rename('$fn_tmp', '$fn'): $!";
+}
+
 ##### END RELOAD STUFF
 
 my $_resolver;
