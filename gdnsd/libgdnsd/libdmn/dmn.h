@@ -132,7 +132,8 @@ void dmn_secure(void);
 
 // If the restart parameter was set in init3, this function will first
 //   check for a running daemon via the pidfile lock mechanism and terminate it.
-// Regardless, it will then acquire a proper pidfile lock (or die trying).
+// Regardless, it will then acquire a proper pidfile lock (or die trying),
+//   if pid_dir was defined back in init3 (otherwise this call is a no-op).
 // When this returns without dying, the current process is now the official
 //   runtime instance of this daemon for e.g. dmn_status().
 void dmn_acquire_pidfile(void);
