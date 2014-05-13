@@ -269,11 +269,8 @@ void dmn_fmtbuf_reset(void);
 //  of the above logging functions.  This is built on dmn_fmtbuf_alloc()
 //  above and takes care of the difference between the GNU
 //  and POSIX strerror_r() variants.
-const char* dmn_strerror(const int errnum);
-
-// The above as convenient log-formatters using the dmn_logf_ prefix
-#define dmn_logf_errnum dmn_strerror
-#define dmn_logf_errno() dmn_strerror(errno)
+const char* dmn_logf_strerror(const int errnum);
+#define dmn_logf_errno() dmn_logf_strerror(errno)
 
 /******** network utility stuff ***********/
 

@@ -55,7 +55,7 @@ typedef struct {
 // per-connection state
 typedef struct {
     tcpdns_thread_t* thread_ctx;
-    anysin_t* asin;
+    dmn_anysin_t* asin;
     uint8_t* buffer;
     ev_io* read_watcher;
     ev_io* write_watcher;
@@ -93,7 +93,7 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
 
     tcpdns_conn_t* tdata = (tcpdns_conn_t*)t->data;
     log_debug("TCP DNS Connection timed out while %s %s",
-        tdata->state == WRITING ? "writing to" : "reading from", logf_anysin(tdata->asin));
+        tdata->state == WRITING ? "writing to" : "reading from", dmn_logf_anysin(tdata->asin));
 
     if(tdata->state == WRITING)
         stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
@@ -115,7 +115,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     const ssize_t written = send(io->fd, source, wanted, 0);
     if(unlikely(written == -1)) {
         if(errno != EAGAIN) {
-            log_debug("TCP DNS send() failed, dropping response to %s: %s", logf_anysin(tdata->asin), logf_errno());
+            log_debug("TCP DNS send() failed, dropping response to %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
             cleanup_conn_watchers(loop, tdata);
             return;
@@ -169,10 +169,10 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
 #                   endif
                     return;
                 }
-                log_debug("TCP DNS recv() from %s: %s", logf_anysin(tdata->asin), logf_errno());
+                log_debug("TCP DNS recv() from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             }
             else if(tdata->size_done) {
-                log_debug("TCP DNS recv() from %s: Unexpected EOF", logf_anysin(tdata->asin));
+                log_debug("TCP DNS recv() from %s: Unexpected EOF", dmn_logf_anysin(tdata->asin));
             }
             stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
         }
@@ -186,7 +186,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
         if(likely(tdata->size_done > 1)) {
             tdata->size = (tdata->buffer[0] << 8) + tdata->buffer[1] + 2;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
-                log_debug("Oversized TCP DNS query of length %u from %s", tdata->size, logf_anysin(tdata->asin));
+                log_debug("Oversized TCP DNS query of length %u from %s", tdata->size, dmn_logf_anysin(tdata->asin));
                 stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
                 cleanup_conn_watchers(loop, tdata);
                 return;
@@ -232,8 +232,8 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 
     tcpdns_thread_t* thread_ctx = (tcpdns_thread_t*)io->data;
 
-    anysin_t* asin = malloc(sizeof(anysin_t));
-    asin->len = ANYSIN_MAXLEN;
+    dmn_anysin_t* asin = malloc(sizeof(dmn_anysin_t));
+    asin->len = DMN_ANYSIN_MAXLEN;
 
     const int sock = accept(io->fd, &asin->sa, &asin->len);
 
@@ -251,20 +251,20 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
             case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
-                log_debug("TCP DNS: early tcp socket death: %s", logf_errno());
+                log_debug("TCP DNS: early tcp socket death: %s", dmn_logf_errno());
                 break;
             default:
-                log_err("TCP DNS: accept() failed: %s", logf_errno());
+                log_err("TCP DNS: accept() failed: %s", dmn_logf_errno());
         }
         return;
     }
 
-    log_debug("Received TCP DNS connection from %s", logf_anysin(asin));
+    log_debug("Received TCP DNS connection from %s", dmn_logf_anysin(asin));
 
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
         free(asin);
         close(sock);
-        log_err("Failed to set O_NONBLOCK on inbound TCP DNS socket: %s", logf_errno());
+        log_err("Failed to set O_NONBLOCK on inbound TCP DNS socket: %s", dmn_logf_errno());
         return;
     }
 
@@ -312,7 +312,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 #define SOL_TCP IPPROTO_TCP
 #endif
 
-int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED) {
+int tcp_listen_pre_setup(const dmn_anysin_t* asin, const int timeout V_UNUSED) {
 
     dmn_assert(asin);
 
@@ -320,31 +320,31 @@ int tcp_listen_pre_setup(const anysin_t* asin, const int timeout V_UNUSED) {
     dmn_assert(isv6 || asin->sa.sa_family == AF_INET);
 
     const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
-    if(sock < 0) log_fatal("Failed to create IPv%c TCP socket: %s", isv6 ? '6' : '4', logf_errno());
+    if(sock < 0) log_fatal("Failed to create IPv%c TCP socket: %s", isv6 ? '6' : '4', dmn_logf_errno());
     if(fcntl(sock, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on TCP socket: %s", logf_errno());
+        log_fatal("Failed to set FD_CLOEXEC on TCP socket: %s", dmn_logf_errno());
 
     if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)
-        log_fatal("Failed to set O_NONBLOCK on TCP socket: %s", logf_errno());
+        log_fatal("Failed to set O_NONBLOCK on TCP socket: %s", dmn_logf_errno());
 
     const int opt_one = 1;
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", logf_errno());
+        log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", dmn_logf_errno());
 
 #ifdef SO_REUSEPORT
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
+        log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", dmn_logf_errno());
 #endif
 
 #ifdef TCP_DEFER_ACCEPT
     const int opt_timeout = timeout;
     if(setsockopt(sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof opt_timeout) == -1)
-        log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", logf_errno());
+        log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", dmn_logf_errno());
 #endif
 
     if(isv6)
         if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
+            log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", dmn_logf_errno());
 
     return sock;
 }
@@ -378,7 +378,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
 
     if(t->bind_success)
         if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
-            log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(&addrconf->addr), logf_errno());
+            log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
 
     tcpdns_thread_t* thread_ctx = malloc(sizeof(tcpdns_thread_t));
     thread_ctx->pctx = dnspacket_context_new(t->threadnum, false);
@@ -391,7 +391,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
 
     if(!t->bind_success) {
         dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
-        log_warn("Could not bind TCP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(&t->ac->addr));
+        log_warn("Could not bind TCP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", dmn_logf_anysin(&t->ac->addr));
         //  we come here to  spawn the thread and do the dnspacket_context_new() properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
         //  simply never gets requests.  This way we don't have to adjust stats arrays for

@@ -66,7 +66,7 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
     const unsigned input_nnets = vscf_hash_get_len(nets_cfg);
 
     for(unsigned i = 0; i < input_nnets; i++) {
-        // convert 192.0.2.0/24 -> anysin_t w/ mask in port field
+        // convert 192.0.2.0/24 -> dmn_anysin_t w/ mask in port field
         char* net_str = strdup(vscf_hash_get_key_byindex(nets_cfg, i, NULL));
         char* mask_str = strchr(net_str, '/');
         if(!mask_str) {
@@ -75,7 +75,7 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
             break;
         }
         *mask_str++ = '\0';
-        anysin_t tempsin;
+        dmn_anysin_t tempsin;
         int addr_err = gdnsd_anysin_getaddrinfo(net_str, mask_str, &tempsin);
         if(addr_err) {
             log_err("plugin_geoip: map '%s': nets entry '%s/%s' does not parse as addr/mask: %s", map_name, net_str, mask_str, gai_strerror(addr_err));

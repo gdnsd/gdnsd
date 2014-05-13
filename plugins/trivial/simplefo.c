@@ -43,7 +43,7 @@ static const char* which_str[2] = {
 };
 
 typedef struct {
-    anysin_t addrs[2];
+    dmn_anysin_t addrs[2];
     unsigned num_svcs;
     unsigned* indices[2];
 } addrstate_t;

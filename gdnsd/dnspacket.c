@@ -278,7 +278,7 @@ typedef enum {
 } rcode_rv_t;
 
 F_NONNULL
-static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* opt, const anysin_t* asin V_UNUSED, const unsigned packet_len, const unsigned offset) {
+static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* opt, const dmn_anysin_t* asin V_UNUSED, const unsigned packet_len, const unsigned offset) {
     dmn_assert(c); dmn_assert(opt); dmn_assert(asin);
 
     rcode_rv_t rcode = DECODE_OK;
@@ -296,7 +296,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         unsigned rdlen = htons(gdnsd_get_una16(&opt->rdlen));
         if(rdlen) {
             if(packet_len < offset + sizeof_optrr + rdlen) {
-                log_debug("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));
+                log_debug("Received EDNS OPT RR with options data longer than packet length from %s", dmn_logf_anysin(asin));
                 rcode = DECODE_FORMERR;
             }
             else if(handle_edns_options(c, rdlen, opt->rdata)) {
@@ -305,7 +305,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         }
     }
     else {
-        log_debug("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", logf_anysin(asin));
+        log_debug("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", dmn_logf_anysin(asin));
         rcode = DECODE_BADVERS;
     }
 
@@ -313,7 +313,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
 }
 
 F_NONNULL
-static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned* question_len_ptr, const unsigned int packet_len, const anysin_t* asin) {
+static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned* question_len_ptr, const unsigned int packet_len, const dmn_anysin_t* asin) {
     dmn_assert(c); dmn_assert(c->packet); dmn_assert(lqname); dmn_assert(question_len_ptr); dmn_assert(asin);
 
     rcode_rv_t rcode = DECODE_OK;
@@ -321,7 +321,7 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
     do {
         // 5 is the minimal question length (1 byte root, 2 bytes each type and class)
         if(unlikely(packet_len < (sizeof(wire_dns_header_t) + 5))) {
-            log_debug("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
+            log_debug("Ignoring short request from %s of length %u", dmn_logf_anysin(asin), packet_len);
             rcode = DECODE_IGNORE;
         }
 
@@ -341,44 +341,44 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
 */
 
         if(unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
-            log_debug("Received request from %s with %hu questions, ignoring", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
+            log_debug("Received request from %s with %hu questions, ignoring", dmn_logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_QR(hdr))) {
-            log_debug("QR bit set in query from %s, ignoring", logf_anysin(asin));
+            log_debug("QR bit set in query from %s, ignoring", dmn_logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_TC(hdr))) {
-            log_debug("TC bit set in query from %s, ignoring", logf_anysin(asin));
+            log_debug("TC bit set in query from %s, ignoring", dmn_logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         unsigned int offset = sizeof(wire_dns_header_t);
         if(unlikely(!(*question_len_ptr = parse_question(c, lqname, &packet[offset], packet_len - offset)))) {
-            log_debug("Failed to parse question, ignoring %s", logf_anysin(asin));
+            log_debug("Failed to parse question, ignoring %s", dmn_logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(DNSH_GET_OPCODE(hdr)) {
-            log_debug("Non-QUERY request (NOTIMP) from %s, opcode is %u", logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
+            log_debug("Non-QUERY request (NOTIMP) from %s, opcode is %u", dmn_logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_AXFR)) {
-            log_debug("AXFR attempted (NOTIMP) from %s", logf_anysin(asin));
+            log_debug("AXFR attempted (NOTIMP) from %s", dmn_logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_IXFR)) {
-            log_debug("IXFR attempted (NOTIMP) from %s", logf_anysin(asin));
+            log_debug("IXFR attempted (NOTIMP) from %s", dmn_logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
@@ -1842,7 +1842,7 @@ static unsigned int answer_from_db_outer(dnspacket_context_t* c, uint8_t* qname,
     return offset;
 }
 
-unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uint8_t* packet, const unsigned int packet_len) {
+unsigned int process_dns_query(dnspacket_context_t* c, const dmn_anysin_t* asin, uint8_t* packet, const unsigned int packet_len) {
     dmn_assert(c && asin && packet);
 
     reset_context(c);
@@ -1853,7 +1853,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         (c->is_udp ? "UDP" : "TCP"),
         (asin->sa.sa_family == AF_INET6) ? 6 : 4,
         packet_len,
-        logf_anysin(asin));
+        dmn_logf_anysin(asin));
 */
 
     if(asin->sa.sa_family == AF_INET6)
@@ -1898,7 +1898,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uin
         c->qname_comp = 0x0C;
 
         if(likely(!c->chaos)) {
-            memcpy(&c->client_info.dns_source, asin, sizeof(anysin_t));
+            memcpy(&c->client_info.dns_source, asin, sizeof(dmn_anysin_t));
             res_offset = answer_from_db_outer(c, lqname, res_offset);
         }
         else {

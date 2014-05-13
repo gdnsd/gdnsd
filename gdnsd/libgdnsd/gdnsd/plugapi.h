@@ -29,7 +29,7 @@
 // For vscf_data_t
 #include <gdnsd/vscf.h>
 
-// For anysin_t
+// For dmn_anysin_t
 #include <gdnsd/net.h>
 
 // For gdnsd_sttl_t
@@ -58,8 +58,8 @@ void gdnsd_dyn_addr_max(unsigned v4, unsigned v6);
 
 // read-only for plugins
 typedef struct {
-    anysin_t dns_source;       // address of last source DNS cache/forwarder
-    anysin_t edns_client;      // edns-client-subnet address portion
+    dmn_anysin_t dns_source;       // address of last source DNS cache/forwarder
+    dmn_anysin_t edns_client;      // edns-client-subnet address portion
     unsigned edns_client_mask; // edns-client-subnet mask portion
 } client_info_t;               //  ^(if zero, edns_client is invalid (was not sent))
 
@@ -74,9 +74,9 @@ typedef struct dyn_result dyn_result_t;
 //   A plugin cannot add both addresses and a CNAME to the same result.
 //   A plugin cannot add more than one CNAME to the same result.
 
-// Push an anysin_t (v4 or v6 addr) into dyn_result_t storage.
+// Push an dmn_anysin_t (v4 or v6 addr) into dyn_result_t storage.
 F_NONNULL
-void gdnsd_result_add_anysin(dyn_result_t* result, const anysin_t* asin);
+void gdnsd_result_add_anysin(dyn_result_t* result, const dmn_anysin_t* asin);
 
 // Push a CNAME into dyn_result_t storage.
 F_NONNULL
@@ -122,7 +122,7 @@ typedef void (*gdnsd_exit_cb_t)(void);
 /**** New callbacks for monitoring plugins ****/
 
 typedef void (*gdnsd_add_svctype_cb_t)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
-typedef void (*gdnsd_add_mon_addr_cb_t)(const char* desc, const char* svc_name, const char* cname, const anysin_t* addr, const unsigned idx);
+typedef void (*gdnsd_add_mon_addr_cb_t)(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr, const unsigned idx);
 typedef void (*gdnsd_add_mon_cname_cb_t)(const char* desc, const char* svc_name, const char* cname, const unsigned idx);
 typedef void (*gdnsd_init_monitors_cb_t)(struct ev_loop* mon_loop);
 typedef void (*gdnsd_start_monitors_cb_t)(struct ev_loop* mon_loop);

@@ -66,7 +66,7 @@ void gdnsd_dyn_addr_max(unsigned v4, unsigned v6) {
         addrlimit_v6 = v6;
 }
 
-void gdnsd_result_add_anysin(dyn_result_t* result, const anysin_t* asin) {
+void gdnsd_result_add_anysin(dyn_result_t* result, const dmn_anysin_t* asin) {
     dmn_assert(result); dmn_assert(asin);
 
     dmn_assert(!result->is_cname);

@@ -249,10 +249,10 @@ void dmn_fmtbuf_reset(void) {
         fmtbuf.used[i] = 0;
 }
 
-// dmn_strerror(), which hides GNU or POSIX strerror_r() thread-safe
+// dmn_logf_strerror(), which hides GNU or POSIX strerror_r() thread-safe
 //  errno->string translation behind a more strerror()-like interface
 //  using dmn_fmtbuf_alloc()
-const char* dmn_strerror(const int errnum) {
+const char* dmn_logf_strerror(const int errnum) {
     phase_check(0, 0, 0);
 
     char tmpbuf[DMN_ERRNO_MAXLEN];

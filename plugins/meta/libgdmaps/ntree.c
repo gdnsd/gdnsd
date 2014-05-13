@@ -87,12 +87,12 @@ F_NONNULL
 static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, const unsigned val, struct in6_addr ipv6) {
     dmn_assert(tree);
     if(NN_IS_DCLIST(val)) {
-        anysin_t tempsin;
+        dmn_anysin_t tempsin;
         memset(&tempsin, 0, sizeof(tempsin));
         tempsin.len = sizeof(struct sockaddr_in6);
         tempsin.sa.sa_family = AF_INET6;
         memcpy(&tempsin.sin6.sin6_addr, &ipv6, sizeof(struct in6_addr));
-        log_debug("%s/%u -> %u", logf_anysin_noport(&tempsin), 128U - bitdepth, NN_GET_DCLIST(val));
+        log_debug("%s/%u -> %u", dmn_logf_anysin_noport(&tempsin), 128U - bitdepth, NN_GET_DCLIST(val));
     }
     else {
         dmn_assert(bitdepth);
@@ -220,7 +220,7 @@ static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
 }
 
 F_NONNULL
-static unsigned ntree_lookup_inner(const ntree_t* tree, const anysin_t* client_addr, unsigned* scope_mask) {
+static unsigned ntree_lookup_inner(const ntree_t* tree, const dmn_anysin_t* client_addr, unsigned* scope_mask) {
     dmn_assert(tree); dmn_assert(client_addr); dmn_assert(scope_mask);
 
     unsigned rv;

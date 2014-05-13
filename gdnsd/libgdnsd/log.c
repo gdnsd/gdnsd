@@ -37,27 +37,27 @@
 
 /* libdmn custom log formatters and the buffer sizes they use:
  *
- * const char* logf_anysin(const anysin_t* asin); // variable...
- * const char* logf_anysin_noport(const anysin_t* asin); // variable...
+ * const char* dmn_logf_anysin(const dmn_anysin_t* asin); // variable...
+ * const char* dmn_logf_anysin_noport(const dmn_anysin_t* asin); // variable...
  * const char* logf_dname(const uint8_t* dname); // 1024
  *
  * Usage example:
- *   anysin_t* saddr = ...;
+ *   dmn_anysin_t* saddr = ...;
  *   uint8_t*  dname = ...;
  *   int pthread_errno = ...;
  *   log_err("pthread error: %s during req for name '%s' from %s",
- *      logf_errnum(pthread_errno), logf_dname(dname), logf_anysin(saddr));
+ *      dmn_logf_strerror(pthread_errno), logf_dname(dname), dmn_logf_anysin(saddr));
  */
 
 static const char* generic_nullstr = "(null)";
 
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
-    anysin_t tempsin;
-    memset(&tempsin, 0, sizeof(anysin_t));
+    dmn_anysin_t tempsin;
+    memset(&tempsin, 0, sizeof(dmn_anysin_t));
     tempsin.sin.sin_family = AF_INET6;
     memcpy(tempsin.sin6.sin6_addr.s6_addr, ipv6, 16);
     tempsin.len = sizeof(struct sockaddr_in6);
-    return gdnsd_logf_anysin_noport(&tempsin);
+    return dmn_logf_anysin_noport(&tempsin);
 }
 
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a) {

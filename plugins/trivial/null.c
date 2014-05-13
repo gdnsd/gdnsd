@@ -38,7 +38,7 @@ gdnsd_sttl_t plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_
         gdnsd_result_add_cname(result, cntmp, origin);
     }
     else {
-        anysin_t tmpsin;
+        dmn_anysin_t tmpsin;
         gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
         gdnsd_result_add_anysin(result, &tmpsin);
         gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
@@ -106,7 +106,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
     this_mon->interval_watcher->data = this_mon;
 }
 
-void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
     add_mon_any(svc_name, idx);
 }

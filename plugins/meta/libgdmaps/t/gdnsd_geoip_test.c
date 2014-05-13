@@ -71,7 +71,7 @@ static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* 
     }
 
     // To void gdmaps fallback pitfalls
-    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(anysin_t));
+    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(dmn_anysin_t));
 
     // w/ edns_client_mask set, scope_mask should *always* be set by gdmaps_lookup();
     // (and regardless, dclist should also always be set and contain something)
@@ -86,14 +86,14 @@ static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* 
     if(scope_mask == 150U) {
         printf(
             "%s => %s => %s\n",
-            map_name, logf_anysin_noport(&cinfo.edns_client),
+            map_name, dmn_logf_anysin_noport(&cinfo.edns_client),
             gdmaps_logf_dclist(gdmaps, map_idx, dclist)
         );
     }
     else {
         printf(
             "%s => %s/%u => %s\n",
-            map_name, logf_anysin_noport(&cinfo.edns_client), scope_mask,
+            map_name, dmn_logf_anysin_noport(&cinfo.edns_client), scope_mask,
             gdmaps_logf_dclist(gdmaps, map_idx, dclist)
         );
     }
@@ -116,7 +116,7 @@ static void do_repl(gdmaps_t* gdmaps) {
         }
         if(!fgets(linebuf, 255, stdin)) {
             if(!feof(stdin))
-                log_err("fgets(stdin) failed: %s", logf_errnum(ferror(stdin)));
+                log_err("fgets(stdin) failed: %s", dmn_logf_strerror(ferror(stdin)));
             if(have_tty)
                 fputs("\n", stdout);
             return;

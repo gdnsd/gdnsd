@@ -120,7 +120,7 @@ static bool bad_key(const char* key, unsigned klen V_UNUSED, const vscf_data_t* 
     log_fatal("Invalid %s key '%s'", (const char*)data, key);
 }
 
-static void make_addr(const char* lspec_txt, const unsigned def_port, anysin_t* result) {
+static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin_t* result) {
     dmn_assert(result);
     const int addr_err = gdnsd_anysin_fromstr(lspec_txt, def_port, result);
     if(addr_err)
@@ -249,13 +249,13 @@ static void process_http_listen(const vscf_data_t* http_listen_opt, const unsign
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
         const bool has_v6 = gdnsd_tcp_v6_ok();
         gconfig.num_http_addrs = has_v6 ? 2 : 1;
-        gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(anysin_t));
+        gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
         make_addr("0.0.0.0", def_http_port, gconfig.http_addrs);
         if(has_v6) make_addr("::", def_http_port, &gconfig.http_addrs[1]);
     }
     else {
         gconfig.num_http_addrs = vscf_array_get_len(http_listen_opt);
-        gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(anysin_t));
+        gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
         for(unsigned i = 0; i < gconfig.num_http_addrs; i++) {
             const vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
             if(!vscf_is_simple(lspec))
@@ -266,7 +266,7 @@ static void process_http_listen(const vscf_data_t* http_listen_opt, const unsign
 }
 
 F_NONNULL
-static bool dns_addr_is_dupe(const anysin_t* new_addr) {
+static bool dns_addr_is_dupe(const dmn_anysin_t* new_addr) {
     dmn_assert(new_addr);
     dmn_assert(new_addr->sa.sa_family == AF_INET6 || new_addr->sa.sa_family == AF_INET);
 
@@ -299,12 +299,12 @@ static void dns_listen_any(const dns_addr_t* addr_defs, const bool has_v6) {
 static void dns_listen_scan(const dns_addr_t* addr_defs, const bool has_v6) {
     dmn_assert(addr_defs);
 
-    anysin_t temp_asin;
+    dmn_anysin_t temp_asin;
     bool v6_warned = false;
 
     struct ifaddrs* ifap;
     if(getifaddrs(&ifap))
-        dmn_log_fatal("getifaddrs() for 'listen => scan' failed: %s", logf_errno());
+        dmn_log_fatal("getifaddrs() for 'listen => scan' failed: %s", dmn_logf_errno());
 
     gconfig.num_dns_addrs = 0;
     for(;ifap;ifap = ifap->ifa_next) {
@@ -330,7 +330,7 @@ static void dns_listen_scan(const dns_addr_t* addr_defs, const bool has_v6) {
             continue;
         }
 
-        if(gdnsd_anysin_is_anyaddr(&temp_asin))
+        if(dmn_anysin_is_anyaddr(&temp_asin))
             continue;
 
         if(temp_asin.sa.sa_family == AF_INET6)
@@ -344,7 +344,7 @@ static void dns_listen_scan(const dns_addr_t* addr_defs, const bool has_v6) {
         gconfig.dns_addrs = realloc(gconfig.dns_addrs, (gconfig.num_dns_addrs + 1) * sizeof(dns_addr_t));
         dns_addr_t* addrconf = &gconfig.dns_addrs[gconfig.num_dns_addrs++];
         memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
-        memcpy(&addrconf->addr, &temp_asin, sizeof(anysin_t));
+        memcpy(&addrconf->addr, &temp_asin, sizeof(dmn_anysin_t));
         addrconf->autoscan = true;
     }
 
@@ -455,10 +455,10 @@ static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr
         }
         if(!(a->udp_threads + a->tcp_threads))
             dmn_log_warn("DNS listen address %s explicitly configured with no UDP or TCP threads - nothing is actually listening on this address!",
-                logf_anysin(&a->addr));
+                dmn_logf_anysin(&a->addr));
         else
             dmn_log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
-                a->udp_threads, a->tcp_threads, logf_anysin(&a->addr));
+                a->udp_threads, a->tcp_threads, dmn_logf_anysin(&a->addr));
     }
 
     dmn_assert(tnum == gconfig.num_dns_threads);

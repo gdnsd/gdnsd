@@ -115,7 +115,7 @@ void plugin_extfile_add_svctype(const char* name, const vscf_data_t* svc_cfg, co
     svc->mons = NULL;
 }
 
-void plugin_extfile_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_extfile_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
 
     extf_svc_t* svc = NULL;

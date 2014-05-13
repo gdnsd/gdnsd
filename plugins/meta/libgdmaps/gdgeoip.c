@@ -478,12 +478,12 @@ static bool geoip_db_close(geoip_db_t* db) {
     if(db->fd != -1) {
         if(db->data) {
             if(-1 == munmap(db->data, db->size)) {
-                log_err("plugin_geoip: munmap() of '%s' failed: %s", logf_pathname(db->pathname), logf_errno());
+                log_err("plugin_geoip: munmap() of '%s' failed: %s", logf_pathname(db->pathname), dmn_logf_errno());
                 rv = true;
             }
         }
         if(close(db->fd) == -1) {
-            log_err("plugin_geoip: close() of '%s' failed: %s", logf_pathname(db->pathname), logf_errno());
+            log_err("plugin_geoip: close() of '%s' failed: %s", logf_pathname(db->pathname), dmn_logf_errno());
             rv = true;
         }
     }
@@ -510,14 +510,14 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
     db->city_no_region = city_no_region;
 
     if((db->fd = open(pathname, O_RDONLY)) == -1) {
-        log_err("plugin_geoip: map '%s': Cannot open '%s' for reading: %s", map_name, logf_pathname(pathname), logf_errno());
+        log_err("plugin_geoip: map '%s': Cannot open '%s' for reading: %s", map_name, logf_pathname(pathname), dmn_logf_errno());
         geoip_db_close(db);
         return NULL;
     }
 
     struct stat db_stat;
     if(fstat(db->fd, &db_stat) == -1) {
-        log_err("plugin_geoip: map '%s': Cannot fstat '%s': %s", map_name, logf_pathname(pathname), logf_errno());
+        log_err("plugin_geoip: map '%s': Cannot fstat '%s': %s", map_name, logf_pathname(pathname), dmn_logf_errno());
         geoip_db_close(db);
         return NULL;
     }
@@ -536,7 +536,7 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
 
     if((db->data = mmap(NULL, db->size, PROT_READ, MAP_SHARED, db->fd, 0)) == MAP_FAILED) {
         db->data = 0;
-        log_err("plugin_geoip: map '%s': Failed to mmap GeoIP DB '%s': %s", map_name, logf_pathname(pathname), logf_errno());
+        log_err("plugin_geoip: map '%s': Failed to mmap GeoIP DB '%s': %s", map_name, logf_pathname(pathname), dmn_logf_errno());
         geoip_db_close(db);
         return NULL;
     }

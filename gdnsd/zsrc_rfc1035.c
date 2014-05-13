@@ -462,7 +462,7 @@ static void unload_zones(void) {
 static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
     DIR* zdhandle = opendir(rfc1035_dir);
     if(!zdhandle) {
-        log_err("rfc1035: Cannot open zones directory '%s': %s", logf_pathname(rfc1035_dir), dmn_strerror(errno));
+        log_err("rfc1035: Cannot open zones directory '%s': %s", logf_pathname(rfc1035_dir), dmn_logf_strerror(errno));
     }
     else {
         struct dirent* zfdi;
@@ -470,7 +470,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
             if(likely(zfdi->d_name[0] != '.'))
                 process_zonefile(zfdi->d_name, loop, initial_quiesce_time);
         if(closedir(zdhandle))
-            log_err("rfc1035: closedir(%s) failed: %s", logf_pathname(rfc1035_dir), dmn_strerror(errno));
+            log_err("rfc1035: closedir(%s) failed: %s", logf_pathname(rfc1035_dir), dmn_logf_strerror(errno));
     }
 }
 
@@ -569,13 +569,13 @@ static bool inotify_setup(const bool initial) {
         if(inot.main_fd < 0) {
             // initial ENOSYS is reported here as well for 2.6.36+ hosts that
             //   don't implement the syscall for whatever architecture.
-            log_err("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
+            log_err("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", dmn_logf_errno());
             rv = true; // failure
         }
         else {
             inot.watch_desc = inotify_add_watch(inot.main_fd, rfc1035_dir, INL_MASK);
             if(inot.watch_desc < 0) {
-                log_err("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(rfc1035_dir), logf_errno());
+                log_err("rfc1035: inotify_add_watch(%s) failed: %s", logf_pathname(rfc1035_dir), dmn_logf_errno());
                 close(inot.main_fd);
                 rv = true; // failure
             }
@@ -718,7 +718,7 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
         if(bytes < 1) {
             if(!bytes || errno != EAGAIN) {
                 if(bytes)
-                    log_err("rfc1035: read() of inotify file descriptor failed: %s", logf_errno());
+                    log_err("rfc1035: read() of inotify file descriptor failed: %s", dmn_logf_errno());
                 else
                     log_err("rfc1035: Got EOF on inotify file descriptor!");
                 handle_inotify_failure(loop);
@@ -776,19 +776,19 @@ static uint64_t try_zone_mtime(const char* testfn) {
         int fd = open(testfn, O_CREAT|O_TRUNC|O_SYNC|O_RDWR, 0644);
 
         if(fd < 0) {
-            log_info(MTMSG1 "failed to open %s for writing: %s" MTMSG2, logf_pathname(testfn), logf_errno());
+            log_info(MTMSG1 "failed to open %s for writing: %s" MTMSG2, logf_pathname(testfn), dmn_logf_errno());
             break;
         }
 
         if(9 != write(fd, "testmtime", 9)) {
-            log_info(MTMSG1 "failed to write 9 bytes to %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
+            log_info(MTMSG1 "failed to write 9 bytes to %s: %s" MTMSG2, logf_pathname(testfn), dmn_logf_errno());
             close(fd);
             unlink(testfn);
             break;
         }
 
         if(close(fd)) {
-            log_info(MTMSG1 "failed to close %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
+            log_info(MTMSG1 "failed to close %s: %s" MTMSG2, logf_pathname(testfn), dmn_logf_errno());
             unlink(testfn);
             break;
         }
@@ -796,13 +796,13 @@ static uint64_t try_zone_mtime(const char* testfn) {
         struct stat st;
 
         if(lstat(testfn, &st)) {
-            log_info(MTMSG1 "failed to lstat %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
+            log_info(MTMSG1 "failed to lstat %s: %s" MTMSG2, logf_pathname(testfn), dmn_logf_errno());
             unlink(testfn);
             break;
         }
 
         if(unlink(testfn)) {
-            log_info(MTMSG1 "failed to unlink %s: %s" MTMSG2, logf_pathname(testfn), logf_errno());
+            log_info(MTMSG1 "failed to unlink %s: %s" MTMSG2, logf_pathname(testfn), dmn_logf_errno());
             break;
         }
 

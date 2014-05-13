@@ -68,7 +68,7 @@ gdnsd_sttl_t plugin_reflect_resolve(unsigned threadnum V_UNUSED, unsigned resnum
         gdnsd_result_add_scope_mask(result, cinfo->edns_client_mask);
     }
     else if(!cinfo->edns_client_mask && resnum == RESPONSE_EDNS) {
-        anysin_t tmpsin;
+        dmn_anysin_t tmpsin;
         gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
         gdnsd_result_add_anysin(result, &tmpsin);
     }

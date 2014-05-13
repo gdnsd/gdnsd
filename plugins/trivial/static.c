@@ -30,7 +30,7 @@ typedef struct {
     const char* name;
     bool is_addr;
     union {
-        anysin_t addr;
+        dmn_anysin_t addr;
         uint8_t *dname;
     };
 } static_resource_t;
@@ -184,7 +184,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
     this_mon->idx = idx;
 }
 
-void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
     add_mon_any(svc_name, idx);
 }

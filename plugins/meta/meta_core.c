@@ -203,7 +203,7 @@ static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc
                 log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
         }
         else {
-            anysin_t tempsin;
+            dmn_anysin_t tempsin;
             if(gdnsd_anysin_getaddrinfo(textdata, NULL, &tempsin)) {
                 // failed to parse as address, so set up direct CNAME if possible
                 this_dc->is_cname = true;

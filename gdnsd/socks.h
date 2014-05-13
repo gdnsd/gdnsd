@@ -26,13 +26,13 @@
 #include <stdbool.h>
 
 F_NONNULL
-bool socks_helper_bind(const char* desc, const int sock, const anysin_t* asin, bool no_freebind);
+bool socks_helper_bind(const char* desc, const int sock, const dmn_anysin_t* asin, bool no_freebind);
 
 // helper uses this (when told) to bind all sockets (calls above, indirectly in the statio case)
 void socks_helper_bind_all(void);
 
 F_NONNULL
-bool socks_sock_is_bound_to(int sock, anysin_t* addr);
+bool socks_sock_is_bound_to(int sock, dmn_anysin_t* addr);
 
 // daemon uses this to validate work done above
 // if soft: false retval means all succeeded, true retval means one or more failed

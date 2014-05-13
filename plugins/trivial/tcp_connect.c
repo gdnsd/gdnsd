@@ -53,7 +53,7 @@ typedef struct {
     ev_io* connect_watcher;
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
-    anysin_t addr;
+    dmn_anysin_t addr;
     unsigned idx;
     tcp_state_t tcp_state;
     int sock;
@@ -91,12 +91,12 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
     const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
     if(unlikely(sock == -1)) {
-        log_err("plugin_tcp_connect: Failed to create monitoring socket: %s", logf_errno());
+        log_err("plugin_tcp_connect: Failed to create monitoring socket: %s", dmn_logf_errno());
         return;
     }
 
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
-        log_err("plugin_tcp_connect: Failed to set O_NONBLOCK on monitoring socket: %s", logf_errno());
+        log_err("plugin_tcp_connect: Failed to set O_NONBLOCK on monitoring socket: %s", dmn_logf_errno());
         close(sock);
         return;
     }
@@ -125,7 +125,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
                 log_debug("plugin_tcp_connect: State poll of %s failed very quickly", md->desc);
                 break;
             default:
-                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
+                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_errno());
         }
     }
     else {
@@ -163,10 +163,10 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
             case EHOSTUNREACH:
             case EHOSTDOWN:
             case ENETUNREACH:
-                log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->desc, logf_errnum(so_error));
+                log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->desc, dmn_logf_strerror(so_error));
                 break;
             default:
-                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errnum(so_error));
+                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_strerror(so_error));
         }
     }
     else {
@@ -235,7 +235,7 @@ void plugin_tcp_connect_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const anysin_t* addr, const unsigned idx) {
+void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
 
     tcp_events_t* this_mon = calloc(1, sizeof(tcp_events_t));
@@ -251,7 +251,7 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
 
     dmn_assert(this_mon->tcp_svc);
 
-    memcpy(&this_mon->addr, addr, sizeof(anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(dmn_anysin_t));
     if(this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->tcp_svc->port);
     }
