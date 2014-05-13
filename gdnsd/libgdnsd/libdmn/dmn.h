@@ -65,8 +65,8 @@ unsigned dmn_add_pcall(dmn_func_vv_t func);
 void dmn_pcall(unsigned id);
 
 // dmn_init1() *must* be called before *any* other libdmn function!
-// debug: if true *and* the code was not compiled with -DNDEBUG,
-//    log_debug() will emit messages.  Otherwise it will not.
+// debug: if false, all potential messages from dmn_log_debug() and
+//    dmn_log_devdebug() will be suppressed.
 // foreground: if true, the caller has no intention of actually daemonizing
 //    and will stay in the foreground, attached to the terminal.
 // stderr_info: if true, log_info() level messages wll be sent to stderr
@@ -199,6 +199,12 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
 #define dmn_log_warn(...) dmn_logger(LOG_WARNING,__VA_ARGS__)
 #define dmn_log_err(...) dmn_logger(LOG_ERR,__VA_ARGS__)
 
+// log_debug() will only be emitted if the runtime debug flag is set
+#define dmn_log_debug(...) do {\
+     if(dmn_get_debug())\
+         dmn_logger(LOG_DEBUG,__VA_ARGS__);\
+     } while(0)
+
 // DMN_NO_FATAL_COVERAGE is to allow coverage testing to skip
 //   over fatal conditions.  If your tests don't cover those
 //   for pragmatic reasons, this considerably reduces line noise.
@@ -216,13 +222,16 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
 
 // DMN_NO_UNREACH_BUILTIN is to work around gcov coverage testing, which
 //   flags un-taken branches for all of the __builtin_unreachable()
+// dmn_log_devdebug() is suppressed at the preprocessor level if -DNDEBUG
+//   is set; use this in performance-critical areas (to avoid the runtime
+//   check of the debug flag) or for spammy messages that only developers need
 #ifdef NDEBUG
 #  if defined(DMN_HAVE_UNREACH_BUILTIN) && !defined(DMN_NO_UNREACH_BUILTIN)
 #    define dmn_assert(expr) do { if (!(expr)) __builtin_unreachable(); } while (0)
 #  else
 #    define dmn_assert(expr) ((void)(0))
 #  endif
-#  define dmn_log_debug(...) ((void)(0))
+#  define dmn_log_devdebug(...) ((void)(0))
 #else
 #  define dmn_assert(expr) do {\
      if(!(expr)) {\
@@ -231,7 +240,7 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
        abort();\
      }\
 } while(0)
-#  define dmn_log_debug(...) do {\
+#  define dmn_log_devdebug(...) do {\
      if(dmn_get_debug())\
          dmn_logger(LOG_DEBUG,__VA_ARGS__);\
      } while(0)

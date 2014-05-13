@@ -36,6 +36,7 @@
 #define log_err dmn_log_err
 #define log_fatal dmn_log_fatal
 #define log_debug dmn_log_debug
+#define log_devdebug dmn_log_devdebug
 
 /* Custom thread-safe %s-formatters for dmn_anysin_t*, errno, etc..
  * Use these *only* in the argument lists of log_foo() calls!

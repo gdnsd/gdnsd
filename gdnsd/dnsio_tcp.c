@@ -92,7 +92,7 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
     dmn_assert(revents == EV_TIMER);
 
     tcpdns_conn_t* tdata = (tcpdns_conn_t*)t->data;
-    log_debug("TCP DNS Connection timed out while %s %s",
+    log_devdebug("TCP DNS Connection timed out while %s %s",
         tdata->state == WRITING ? "writing to" : "reading from", dmn_logf_anysin(tdata->asin));
 
     if(tdata->state == WRITING)
@@ -115,7 +115,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     const ssize_t written = send(io->fd, source, wanted, 0);
     if(unlikely(written == -1)) {
         if(errno != EAGAIN) {
-            log_debug("TCP DNS send() failed, dropping response to %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
+            log_devdebug("TCP DNS send() failed, dropping response to %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
             cleanup_conn_watchers(loop, tdata);
             return;
@@ -169,10 +169,10 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
 #                   endif
                     return;
                 }
-                log_debug("TCP DNS recv() from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
+                log_devdebug("TCP DNS recv() from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             }
             else if(tdata->size_done) {
-                log_debug("TCP DNS recv() from %s: Unexpected EOF", dmn_logf_anysin(tdata->asin));
+                log_devdebug("TCP DNS recv() from %s: Unexpected EOF", dmn_logf_anysin(tdata->asin));
             }
             stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
         }
@@ -186,7 +186,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
         if(likely(tdata->size_done > 1)) {
             tdata->size = (tdata->buffer[0] << 8) + tdata->buffer[1] + 2;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
-                log_debug("Oversized TCP DNS query of length %u from %s", tdata->size, dmn_logf_anysin(tdata->asin));
+                log_devdebug("Oversized TCP DNS query of length %u from %s", tdata->size, dmn_logf_anysin(tdata->asin));
                 stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
                 cleanup_conn_watchers(loop, tdata);
                 return;
@@ -251,7 +251,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
             case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
-                log_debug("TCP DNS: early tcp socket death: %s", dmn_logf_errno());
+                log_devdebug("TCP DNS: early tcp socket death: %s", dmn_logf_errno());
                 break;
             default:
                 log_err("TCP DNS: accept() failed: %s", dmn_logf_errno());
@@ -259,7 +259,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
         return;
     }
 
-    log_debug("Received TCP DNS connection from %s", dmn_logf_anysin(asin));
+    log_devdebug("Received TCP DNS connection from %s", dmn_logf_anysin(asin));
 
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
         free(asin);

@@ -111,19 +111,19 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
     unsigned llen;
     while((llen = *lqname_ptr++ = buf[pos++])) {
         if(unlikely(llen & 0xC0)) {
-            log_debug("Label compression detected in question, failing.");
+            log_devdebug("Label compression detected in question, failing.");
             pos = 0;
             break;
         }
 
         if(unlikely(pos + llen >= len)) {
-            log_debug("Query name truncated (runs off end of packet)");
+            log_devdebug("Query name truncated (runs off end of packet)");
             pos = 0;
             break;
         }
 
         if(unlikely(pos + llen > 254)) {
-            log_debug("Query domain name too long");
+            log_devdebug("Query domain name too long");
             pos = 0;
             break;
         }
@@ -149,7 +149,7 @@ static unsigned int parse_question(dnspacket_context_t* c, uint8_t* lqname, cons
             pos += 2;
         }
         else {
-            log_debug("Packet length exhausted before parsing question type/class!");
+            log_devdebug("Packet length exhausted before parsing question type/class!");
             pos = 0;
         }
     }
@@ -166,7 +166,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
 
     do {
         if(opt_len < 4) {
-            log_debug("edns_client_subnet data too short (%u bytes)", opt_len);
+            log_devdebug("edns_client_subnet data too short (%u bytes)", opt_len);
             rv = true;
             break;
         }
@@ -181,14 +181,14 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         //   additional trailing bytes on the end, since it doesn't hurt us.
         // We must have the correct amount at a minimum, though.
         if(opt_len < 4 + addr_bytes) {
-            log_debug("edns_client_subnet: addr length %u too short for src_mask of %u", opt_len, src_mask);
+            log_devdebug("edns_client_subnet: addr length %u too short for src_mask of %u", opt_len, src_mask);
             rv = true;
             break;
         }
 
         if(family == 1) { // IPv4
             if(src_mask > 32) {
-                log_debug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
+                log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
                 rv = true;
                 break;
             }
@@ -197,7 +197,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
         }
         else if(family == 2) { // IPv6
             if(src_mask > 128) {
-                log_debug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
+                log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
                 rv = true;
                 break;
             }
@@ -205,7 +205,7 @@ static bool handle_edns_client_subnet(dnspacket_context_t* c, unsigned opt_len, 
             memcpy(c->client_info.edns_client.sin6.sin6_addr.s6_addr, opt_data, addr_bytes);
         }
         else {
-            log_debug("edns_client_subnet has unknown family %u", family);
+            log_devdebug("edns_client_subnet has unknown family %u", family);
             rv = true;
             break;
         }
@@ -228,7 +228,7 @@ static bool handle_edns_option(dnspacket_context_t* c, unsigned opt_code, unsign
     if((opt_code == EDNS_CLIENTSUB_OPTCODE) && gconfig.edns_client_subnet)
         rv = handle_edns_client_subnet(c, opt_len, opt_data);
     else
-        log_debug("Unknown EDNS option code: %x", opt_code);
+        log_devdebug("Unknown EDNS option code: %x", opt_code);
 
     return rv;
 }
@@ -243,7 +243,7 @@ static bool handle_edns_options(dnspacket_context_t* c, unsigned rdlen, const ui
     // minimum edns option length is 4 bytes (2 byte option code, 2 byte data len)
     while(rdlen) {
         if(rdlen < 4) {
-            log_debug("EDNS option too short");
+            log_devdebug("EDNS option too short");
             rv = true;
             break;
         }
@@ -251,7 +251,7 @@ static bool handle_edns_options(dnspacket_context_t* c, unsigned rdlen, const ui
         unsigned opt_dlen = ntohs(gdnsd_get_una16(rdata)); rdata += 2;
         rdlen -= 4;
         if(opt_dlen > rdlen) {
-            log_debug("EDNS option too long");
+            log_devdebug("EDNS option too long");
             rv = true;
             break;
         }
@@ -296,7 +296,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         unsigned rdlen = htons(gdnsd_get_una16(&opt->rdlen));
         if(rdlen) {
             if(packet_len < offset + sizeof_optrr + rdlen) {
-                log_debug("Received EDNS OPT RR with options data longer than packet length from %s", dmn_logf_anysin(asin));
+                log_devdebug("Received EDNS OPT RR with options data longer than packet length from %s", dmn_logf_anysin(asin));
                 rcode = DECODE_FORMERR;
             }
             else if(handle_edns_options(c, rdlen, opt->rdata)) {
@@ -305,7 +305,7 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
         }
     }
     else {
-        log_debug("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", dmn_logf_anysin(asin));
+        log_devdebug("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", dmn_logf_anysin(asin));
         rcode = DECODE_BADVERS;
     }
 
@@ -321,7 +321,7 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
     do {
         // 5 is the minimal question length (1 byte root, 2 bytes each type and class)
         if(unlikely(packet_len < (sizeof(wire_dns_header_t) + 5))) {
-            log_debug("Ignoring short request from %s of length %u", dmn_logf_anysin(asin), packet_len);
+            log_devdebug("Ignoring short request from %s of length %u", dmn_logf_anysin(asin), packet_len);
             rcode = DECODE_IGNORE;
         }
 
@@ -329,7 +329,7 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
         const wire_dns_header_t* hdr = (const wire_dns_header_t*)packet;
 
 /*
-    log_debug("Query header details: ID:%hu QR:%i OPCODE:%hhu AA:%i TC:%i RD:%i RA:%i AD:%i CD:%i RCODE:%hhu QDCOUNT:%hu ANCOUNT:%hu NSCOUNT:%hu ARCOUNT:%hu",
+    log_devdebug("Query header details: ID:%hu QR:%i OPCODE:%hhu AA:%i TC:%i RD:%i RA:%i AD:%i CD:%i RCODE:%hhu QDCOUNT:%hu ANCOUNT:%hu NSCOUNT:%hu ARCOUNT:%hu",
         DNSH_GET_ID(hdr), DNSH_GET_QR(hdr) ? 1 : 0,
         (DNSH_GET_OPCODE(hdr) >> 3), DNSH_GET_AA(hdr) ? 1 : 0,
         DNSH_GET_TC(hdr) ? 1 : 0, DNSH_GET_RD(hdr) ? 1 : 0,
@@ -341,44 +341,44 @@ static rcode_rv_t decode_query(dnspacket_context_t* c, uint8_t* lqname, unsigned
 */
 
         if(unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
-            log_debug("Received request from %s with %hu questions, ignoring", dmn_logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
+            log_devdebug("Received request from %s with %hu questions, ignoring", dmn_logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_QR(hdr))) {
-            log_debug("QR bit set in query from %s, ignoring", dmn_logf_anysin(asin));
+            log_devdebug("QR bit set in query from %s, ignoring", dmn_logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(unlikely(DNSH_GET_TC(hdr))) {
-            log_debug("TC bit set in query from %s, ignoring", dmn_logf_anysin(asin));
+            log_devdebug("TC bit set in query from %s, ignoring", dmn_logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         unsigned int offset = sizeof(wire_dns_header_t);
         if(unlikely(!(*question_len_ptr = parse_question(c, lqname, &packet[offset], packet_len - offset)))) {
-            log_debug("Failed to parse question, ignoring %s", dmn_logf_anysin(asin));
+            log_devdebug("Failed to parse question, ignoring %s", dmn_logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
         }
 
         if(DNSH_GET_OPCODE(hdr)) {
-            log_debug("Non-QUERY request (NOTIMP) from %s, opcode is %u", dmn_logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
+            log_devdebug("Non-QUERY request (NOTIMP) from %s, opcode is %u", dmn_logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_AXFR)) {
-            log_debug("AXFR attempted (NOTIMP) from %s", dmn_logf_anysin(asin));
+            log_devdebug("AXFR attempted (NOTIMP) from %s", dmn_logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
 
         if(unlikely(c->qtype == DNS_TYPE_IXFR)) {
-            log_debug("IXFR attempted (NOTIMP) from %s", dmn_logf_anysin(asin));
+            log_devdebug("IXFR attempted (NOTIMP) from %s", dmn_logf_anysin(asin));
             rcode = DECODE_NOTIMP;
             break;
         }
@@ -1849,7 +1849,7 @@ unsigned int process_dns_query(dnspacket_context_t* c, const dmn_anysin_t* asin,
     c->packet = packet;
 
 /*
-    log_debug("Processing %sv%u DNS query of length %u from %s",
+    log_devdebug("Processing %sv%u DNS query of length %u from %s",
         (c->is_udp ? "UDP" : "TCP"),
         (asin->sa.sa_family == AF_INET6) ? 6 : 4,
         packet_len,
