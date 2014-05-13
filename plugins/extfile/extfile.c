@@ -226,6 +226,7 @@ static void process_file(const extf_svc_t* svc) {
         else
             for(unsigned i = 0; i < svc->num_mons; i++)
                 gdnsd_mon_state_updater(svc->mons[i].sidx, !(results[i] & GDNSD_STTL_DOWN));
+        log_debug("plugin_extfile: Service type '%s': loaded new data from file '%s'", svc->name, logf_pathname(svc->path));
     }
     else {
         log_err("plugin_extfile: Service type '%s': file load failed, no updates applied", svc->name);
