@@ -402,7 +402,7 @@ sub daemon_abort {
     die "gdnsd failed to finish starting properly.  output (if any):\n" . $gdout;
 }
 
-sub spawn_daemon {
+sub spawn_daemon_setup {
     my ($class, $etcsrc, $geoip_data) = @_;
 
     $etcsrc ||= "etc";
@@ -421,7 +421,9 @@ sub spawn_daemon {
     }
 
     recursive_templated_copy("${FindBin::Bin}/${etcsrc}", "${OUTDIR}/etc");
+}
 
+sub spawn_daemon_execute {
     my $exec_line = $TEST_RUNNER
         ? qq{$TEST_RUNNER $GDNSD_BIN -Dfd $OUTDIR start}
         : qq{$GDNSD_BIN -Dfd $OUTDIR start};
@@ -476,7 +478,41 @@ sub test_spawn_daemon {
     foreach my $k (keys %stats_accum) { $stats_accum{$k} = 0; }
 
     local $Test::Builder::Level = $Test::Builder::Level + 1;
-    my $pid = eval{$class->spawn_daemon(@_)};
+    my $pid = eval{
+        $class->spawn_daemon_setup(@_);
+        $class->spawn_daemon_execute();
+    };
+    unless(Test::More::ok(!$@ && $pid)) {
+        Test::More::diag("Cannot spawn daemon: $@");
+        Test::More::BAIL_OUT($@);
+    }
+
+    return $pid;
+}
+
+sub test_spawn_daemon_setup {
+    my $class = shift;
+
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    eval{
+        $class->spawn_daemon_setup(@_);
+    };
+    unless(Test::More::ok(!$@)) {
+        Test::More::diag("Cannot setup daemon: $@");
+        Test::More::BAIL_OUT($@);
+    }
+}
+
+sub test_spawn_daemon_execute {
+    my $class = shift;
+
+    # reset stats if daemon run multiple times in one testfile
+    foreach my $k (keys %stats_accum) { $stats_accum{$k} = 0; }
+
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    my $pid = eval{
+        $class->spawn_daemon_execute();
+    };
     unless(Test::More::ok(!$@ && $pid)) {
         Test::More::diag("Cannot spawn daemon: $@");
         Test::More::BAIL_OUT($@);
