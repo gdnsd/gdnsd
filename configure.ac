@@ -10,42 +10,42 @@ AM_SILENT_RULES([yes])
 #   to use for the 2.63b+ AC_INIT version of the same
 AC_DEFINE([PACKAGE_URL],["https://github.com/blblack/gdnsd/"],[Package URL])
 
-dnl TODO: when/if a new autoconf release has a C11 macro,
-dnl    prefer that and fall back to requiring C99.
+# TODO: when/if a new autoconf release has a C11 macro,
+#    prefer that and fall back to requiring C99.
 AC_PROG_CC_C99
 if test "x$ac_cv_prog_cc_c99" = xno; then
     AC_MSG_ERROR([Your compiler lacks sufficient C99 support])
 fi
-dnl AC_PROG_CC_C99 has to come before this or we don't get a C99 CPP
+# AC_PROG_CC_C99 has to come before this or we don't get a C99 CPP
 AC_USE_SYSTEM_EXTENSIONS
 
-dnl This is explcitly checked by CC_C99 above for now, but
-dnl   the C11 standard reversed course and made this an optional
-dnl   feature, so we may as well double-check here for future-proofing
+# This is explcitly checked by CC_C99 above for now, but
+#   the C11 standard reversed course and made this an optional
+#   feature, so we may as well double-check here for future-proofing
 AC_C_VARARRAYS
 if test "x$ac_cv_c_vararrays" = xno; then
     AC_MSG_ERROR([Your compiler lacks support for variable arrays])
 fi
 
-dnl POSIX threads stuff
+# POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
 LIBS="$PTHREAD_LIBS $LIBS"
 CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CC="$PTHREAD_CC"
 
-dnl need to know endian-ness
+# need to know endian-ness
 AC_C_BIGENDIAN
 
-dnl pointer width...
+# pointer width...
 AC_CHECK_SIZEOF(uintptr_t)
 
-dnl Apparently libtool+automake need this now, in newer versions
-dnl   which have it at all
+# Apparently libtool+automake need this now, in newer versions
+#   which have it at all
 m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
 
-dnl The libtool macros in 2.2.6b - 2.4.2 have a bug that causes
-dnl  them to accidentally add LIBADD_DLOPEN to LIBS permanently,
-dnl  so we workaround that by saving and restoring LIBS
+# The libtool macros in 2.2.6b - 2.4.2 have a bug that causes
+#  them to accidentally add LIBADD_DLOPEN to LIBS permanently,
+#  so we workaround that by saving and restoring LIBS
 XLIBS=$LIBS
 AC_DISABLE_STATIC
 LT_INIT([dlopen])
@@ -55,11 +55,11 @@ AC_SUBST([LIBTOOL_DEPS])
 AC_SUBST([LIBADD_DLOPEN])
 LIBS=$XLIBS
 
-dnl include libdmn configure stuff (only sets some config.h stuff)
+# include libdmn configure stuff (only sets some config.h stuff)
 m4_include([gdnsd/libgdnsd/libdmn/libdmn.m4])
 
-dnl explicit check on math lib.  libev also does this, but
-dnl  might not in the future, and we need it directly
+# explicit check on math lib.  libev also does this, but
+#  might not in the future, and we need it directly
 XLIBS=$LIBS
 LIBS=""
 AC_CHECK_LIB(m,ceil)
@@ -67,28 +67,28 @@ MATH_LIB=$LIBS
 LIBS=$XLIBS
 AC_SUBST([MATH_LIB])
 
-dnl posix_fadvise to readahead on zonefiles
+# posix_fadvise to readahead on zonefiles
 AC_CHECK_FUNCS([posix_fadvise])
 
-dnl high-precision mtime from struct stat
+# high-precision mtime from struct stat
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])
 AC_CHECK_MEMBERS([struct stat.st_mtimespec.tv_nsec])
 AC_CHECK_MEMBERS([struct stat.st_mtimensec])
 
-dnl *mmsg for Linux
+# *mmsg for Linux
 HAS_SENDMMSG=1
 AC_CHECK_DECLS([sendmmsg, recvmmsg],,[HAS_SENDMMSG=0],[[#include <sys/socket.h>]])
 AC_CHECK_FUNCS([sendmmsg recvmmsg],,[HAS_SENDMMSG=0])
 if test $HAS_SENDMMSG -eq 1; then
-    AC_DEFINE([USE_SENDMMSG],[1],[Linux sendmmsg is usable])
+    AC_DEFINE([USE_SENDMMSG],1,[Linux sendmmsg is usable])
 fi
 
-dnl ======== Begin Network Stuff ==========
+# ======== Begin Network Stuff ==========
 AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
 
-dnl Find out if -lsocket -lnsl is needed, and put them
-dnl  in $NETLIBS if so, and use them for these network-related
-dnl  feature checks...
+# Find out if -lsocket -lnsl is needed, and put them
+#  in $NETLIBS if so, and use them for these network-related
+#  feature checks...
 XLIBS=$LIBS
 LIBS=""
 AC_SEARCH_LIBS([gethostent],[nsl],[],[],[])
@@ -96,7 +96,7 @@ AC_SEARCH_LIBS([setsockopt],[socket],[],[],[])
 NETLIBS=$LIBS
 AC_SUBST([NETLIBS])
 
-dnl sockaddr<->string mapping
+# sockaddr<->string mapping
 AC_CHECK_FUNCS([inet_pton getifaddrs getaddrinfo getnameinfo],,AC_MSG_ERROR([required network library calls missing]))
 AC_CHECK_DECLS([NI_NUMERICHOST, NI_NUMERICSERV],,AC_MSG_ERROR([NI_NUMERIC* decls missing]),[
 #include <sys/types.h>
@@ -110,8 +110,8 @@ AC_CHECK_DECLS([AF_INET6, PF_INET6, AF_INET, PF_INET, AF_UNSPEC],,AC_MSG_ERROR([
 #include <arpa/inet.h>
 ])
 
-dnl The IPv4 UDP source-addr fixup stuff is optional.  If not present, gdnsd
-dnl  will abort at startup if configured to listen on 0.0.0.0.
+# The IPv4 UDP source-addr fixup stuff is optional.  If not present, gdnsd
+#  will abort at startup if configured to listen on 0.0.0.0.
 AC_CHECK_DECLS([IP_PKTINFO, IP_RECVDSTADDR, IP_SENDSRCADDR],,,[
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -119,12 +119,12 @@ AC_CHECK_DECLS([IP_PKTINFO, IP_RECVDSTADDR, IP_SENDSRCADDR],,,[
 #include <netinet/ip.h>
 ])
 
-dnl Whereas the equivalent IPv6 source-addr/flow/interface stuff is absolutely
-dnl  required even for specific listen-adddreses, because we have to at minimum
-dnl  copy the sending hosts' flow labels.  We allow IPV6_RECVPKTINFO to be optional,
-dnl  but not the corresponding IPV6_PKTINFO (for the MacOS quirk of
-dnl  re-using IPV6_PKTINFO as IPV6_RECVPKTINFO prior to Lion, where we #define
-dnl  the latter to the former).
+# Whereas the equivalent IPv6 source-addr/flow/interface stuff is absolutely
+#  required even for specific listen-adddreses, because we have to at minimum
+#  copy the sending hosts' flow labels.  We allow IPV6_RECVPKTINFO to be optional,
+#  but not the corresponding IPV6_PKTINFO (for the MacOS quirk of
+#  re-using IPV6_PKTINFO as IPV6_RECVPKTINFO prior to Lion, where we #define
+#  the latter to the former).
 AC_CHECK_DECLS([IPV6_PKTINFO],,AC_MSG_ERROR([IPV6_PKTINFO is required]),[
     #include <sys/types.h>
     #include <sys/socket.h>
@@ -138,12 +138,12 @@ AC_CHECK_DECLS([IPV6_RECVPKTINFO],,,[
 #include <netinet/ip.h>
 ])
 
-dnl restore original LIBS, from before NETLIBS
+# restore original LIBS, from before NETLIBS
 LIBS=$XLIBS
 
-dnl ======== End Network Stuff ==========
+# ======== End Network Stuff ==========
 
-dnl liburcu-qsbr
+# liburcu-qsbr
 KILL_QSBR=0
 AC_ARG_WITH([urcu],[
 AS_HELP_STRING([--without-urcu],[Explicitly disable userspace-rcu detection])
@@ -161,7 +161,7 @@ if test $KILL_QSBR -eq 0; then
         LIBS=""
         AC_CHECK_LIB([urcu-qsbr],[perror],[
             HAVE_QSBR=1
-            AC_DEFINE_UNQUOTED([HAVE_QSBR], $HAVE_QSBR, [Use liburcu-qsbr])
+            AC_DEFINE([HAVE_QSBR], 1, [Use liburcu-qsbr])
             QSBRLIBS="-lurcu-qsbr"
         ])
         LIBS=$XLIBS
@@ -169,7 +169,7 @@ if test $KILL_QSBR -eq 0; then
 fi
 AC_SUBST([QSBRLIBS])
 
-dnl libev
+# libev
 PKG_CHECK_MODULES([LIBEV],[libev >= 4.0],
     CPPFLAGS="${CPPFLAGS} ${LIBEV_CFLAGS}"
 ,
@@ -242,18 +242,18 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
 # end pthread_setname stuff
 #---------------------------------------------
 
-dnl == inotify stuff ==
-dnl inotify_init1() is Linux 2.6.27+ and glibc 2.9
-dnl We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
-dnl   fix that with a manual ifndef for the define and a runtime
-dnl   kernel version check for the support
+# == inotify stuff ==
+# inotify_init1() is Linux 2.6.27+ and glibc 2.9
+# We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
+#   fix that with a manual ifndef for the define and a runtime
+#   kernel version check for the support
 USE_INOTIFY=1
 AC_CHECK_FUNCS([inotify_init1],,[USE_INOTIFY=0])
 if test $USE_INOTIFY -eq 1; then
-    AC_DEFINE([USE_INOTIFY], [1], [Linux 2.6.36+ inotify support])
+    AC_DEFINE([USE_INOTIFY], 1, [Linux 2.6.36+ inotify support])
 fi
 
-dnl Check for perl stuff for doc generation and core regression testsuite
+# Check for perl stuff for doc generation and core regression testsuite
 HAVE_TESTSUITE_MODULES=0
 AC_REQUIRE_AUX_FILE([noperl])
 AC_PATH_PROG([PERL],[perl],[$am_aux_dir/noperl])
@@ -266,7 +266,7 @@ AX_PROG_PERL_VERSION([5.8.1],[
 ])
 AC_SUBST([HAVE_TESTSUITE_MODULES])
 
-dnl Find ragel
+# Find ragel
 AC_REQUIRE_AUX_FILE([noragel])
 AC_MSG_CHECKING([for Ragel v6.x]);
 AC_PATH_PROGS_FEATURE_CHECK([RAGEL], [ragel],
@@ -275,11 +275,11 @@ AC_PATH_PROGS_FEATURE_CHECK([RAGEL], [ragel],
 AC_SUBST([RAGEL], [$ac_cv_path_RAGEL])
 AC_MSG_RESULT([$ac_cv_path_RAGEL])
 
-dnl download/unpack for GeoLite data for plugin_geoip tests
+# download/unpack for GeoLite data for plugin_geoip tests
 AC_CHECK_PROGS(GEOLITE_DECOMP, [xz], [none])
 AC_CHECK_PROGS(GEOLITE_DL, [wget curl], [none])
 
-dnl Allow user to override the port range we use for testing
+# Allow user to override the port range we use for testing
 AC_ARG_WITH([testport],[
   --with-testport=N       The testsuite needs a set of 3 IP port numbers
                           to use, starting at "N", that it can bind to
@@ -292,18 +292,18 @@ AC_ARG_WITH([testport],[
 TESTPORT_START=$with_testport
 AC_SUBST([TESTPORT_START])
 
-dnl Check for --enable-developer
+# Check for --enable-developer
 developer=no
 AC_ARG_ENABLE([developer],
     [  --enable-developer      Turn on gcc developer warnings, debugging, etc (default=no)],
     [if test "x$enable_developer" = xyes; then developer=yes; fi])
 
-dnl normal builds set -DNDEBUG because we make very very heavy
-dnl   use of assertions that really slow stuff down, and also
-dnl   adds "-Wall -W" to CFLAGS if the compiler is gcc.
-dnl --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
-dnl   and also sets "-g" for debug if the compiler supports it,
-dnl   and sets a ton of gcc 4.x extra warnings flags.
+# normal builds set -DNDEBUG because we make very very heavy
+#   use of assertions that really slow stuff down, and also
+#   adds "-Wall -W" to CFLAGS if the compiler is gcc.
+# --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
+#   and also sets "-g" for debug if the compiler supports it,
+#   and sets a ton of gcc 4.x extra warnings flags.
 GCC_WARNFLAGS="-Wall -W -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wshadow -Wredundant-decls -Wwrite-strings -Wformat=2"
 GCC_DEV_WARNFLAGS="${GCC_WARNFLAGS} -Wpointer-arith -Wfloat-equal -Wcast-align"
 if test "x$developer" != xno; then
@@ -323,15 +323,15 @@ fi
 
 AC_CHECK_HEADERS([valgrind/memcheck.h])
 
-dnl A default build of gdnsd uses system paths as specified
-dnl   via the standard --prefix, --sysconfdir, --localstatedir, etc
-dnl   (as well as --with-rundir for e.g. /run).
-dnl The default build *can* be used for chroot operation if gdnsd
-dnl   is supplied a "-d /some/path" argument on every invocation,
-dnl   e.g. by a custom initscript.
-dnl Specifying --with-rootdir=/some/path enables the chroot mode
-dnl   of operation by default with no daemon arguments, using
-dnl   the specified path as the default chroot location.
+# A default build of gdnsd uses system paths as specified
+#   via the standard --prefix, --sysconfdir, --localstatedir, etc
+#   (as well as --with-rundir for e.g. /run).
+# The default build *can* be used for chroot operation if gdnsd
+#   is supplied a "-d /some/path" argument on every invocation,
+#   e.g. by a custom initscript.
+# Specifying --with-rootdir=/some/path enables the chroot mode
+#   of operation by default with no daemon arguments, using
+#   the specified path as the default chroot location.
 rootdir_fail="The --with-rootdir= option must specify an absolute pathname if used";
 AC_ARG_WITH([rootdir],[
 AS_HELP_STRING([--with-rootdir=/some/path],[Enables default chroot operation using the default chroot path specified])
@@ -344,8 +344,8 @@ GDNSD_DEF_ROOTDIR=$with_rootdir
 AC_SUBST([GDNSD_DEF_ROOTDIR])
 AM_CONDITIONAL([HAS_DEF_ROOTDIR], [test "x$GDNSD_DEF_ROOTDIR" != xsystem])
 
-dnl Allow specifying an alternate rundir (default $localstatedir/run) for distros
-dnl   that prefer e.g. /run to /var/run
+# Allow specifying an alternate rundir (default $localstatedir/run) for distros
+#   that prefer e.g. /run to /var/run
 rundir_fail="The --with-rundir= option must specify an absolute pathname if used";
 AC_ARG_WITH([rundir],[
 AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specific rundir, e.g. /run, for non-chroot cases])
@@ -357,13 +357,13 @@ AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specif
 ])
 AC_SUBST([GDNSD_SYSRUNDIR])
 
-dnl clump up all of the libgdnsd libdeps for re-use in LDADD for
-dnl   binaries that link libgdnsd on platforms where libtool's
-dnl   automatic dep resolution is disabled
+# clump up all of the libgdnsd libdeps for re-use in LDADD for
+#   binaries that link libgdnsd on platforms where libtool's
+#   automatic dep resolution is disabled
 LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
 AC_SUBST([LIBGDNSD_LIBS])
 
-dnl Output generation
+# Output generation
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
   Makefile
@@ -383,7 +383,7 @@ AC_CONFIG_FILES([
 ])
 AC_OUTPUT
 
-dnl Summary output for the user
+# Summary output for the user
 
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
