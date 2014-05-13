@@ -100,7 +100,7 @@ void plugin_extfile_add_svctype(const char* name, const vscf_data_t* svc_cfg, co
     const vscf_data_t* path_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "file", true);
     if(!path_cfg || !vscf_is_simple(path_cfg))
         log_fatal("plugin_extfile: service_type '%s': the 'file' option is required and must be a string filename", name);
-    svc->path = gdnsd_resolve_path_cfg(vscf_simple_get_data(path_cfg), "extfile");
+    svc->path = gdnsd_resolve_path_state(vscf_simple_get_data(path_cfg), "extfile");
 
     svc->direct = false;
     svc->def_sttl = GDNSD_STTL_TTL_MAX;
