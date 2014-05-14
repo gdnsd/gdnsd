@@ -639,6 +639,8 @@ bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, unsigned num_te
     ltree_rdata_txt_t new_rd = *new_rdata = malloc((num_texts + 1) * sizeof(uint8_t*));
     for(unsigned i = 0; i <= num_texts; i++)
         new_rd[i] = texts[i];
+
+    log_zwarn("Name '%s%s': The SPF RR-type has been deprecated, do not use it", logf_dname(dname), logf_dname(zone->dname));
     return false;
 }
 
