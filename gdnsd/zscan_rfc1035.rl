@@ -717,6 +717,8 @@ F_NONNULL
 static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
     dmn_assert(z);
 
+    (void)zone_en_main; // silence unused var warning from generated code
+
     char* read_at;
 
     const char* pe = NULL;

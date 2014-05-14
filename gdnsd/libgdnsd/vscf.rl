@@ -685,6 +685,8 @@ static void val_destroy(vscf_data_t* d) {
 static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
     dmn_assert(fd > -1); dmn_assert(fn); dmn_assert(err); dmn_assert(*err == NULL);
 
+    (void)vscf_en_main; // silence unused var warning from generated code
+
     vscf_scnr_t* scnr = calloc(1, sizeof(vscf_scnr_t));
     unsigned buf_size = INIT_BUF_SIZE;
     char* buf = malloc(buf_size);
