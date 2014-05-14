@@ -202,7 +202,7 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
     }
 }
 
-/********** TXT/SPF ******************/
+/********** TXT ******************/
 
 F_NONNULL
 static void text_start(zscan_t* z) {
@@ -400,24 +400,6 @@ static void rec_txt(zscan_t* z) {
 }
 
 F_NONNULL
-static void rec_spf(zscan_t* z) {
-    dmn_assert(z);
-    validate_lhs_not_ooz(z);
-    if(ltree_add_rec_spf(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
-        siglongjmp(z->jbuf, 1);
-    texts_cleanup(z);
-}
-
-F_NONNULL
-static void rec_spftxt(zscan_t* z) {
-    dmn_assert(z);
-    validate_lhs_not_ooz(z);
-    if(ltree_add_rec_spftxt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
-        siglongjmp(z->jbuf, 1);
-    texts_cleanup(z);
-}
-
-F_NONNULL
 static void rec_dyna(zscan_t* z) {
     dmn_assert(z);
     if(ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->eml_dname, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
@@ -549,8 +531,6 @@ static void close_paren(zscan_t* z) {
     action rec_srv { rec_srv(z); }
     action rec_naptr { rec_naptr(z); }
     action rec_txt { rec_txt(z); }
-    action rec_spf { rec_spf(z); }
-    action rec_spftxt { rec_spftxt(z); }
     action rec_dyna { rec_dyna(z); }
     action rec_dync { rec_dync(z); }
     action rec_rfc3597 { rec_rfc3597(z); }
@@ -677,8 +657,6 @@ static void close_paren(zscan_t* z) {
         | ('PTR'i   ws dname_rhs) %rec_ptr
         | ('MX'i    ws uval %set_uv_1 ws dname_rhs) %rec_mx
         | ('TXT'i   ws txt_rdata) %rec_txt
-        | ('SPF'i   ws txt_rdata) %rec_spf
-        | ('SPF+'i  ws txt_rdata) %rec_spftxt
         | ('SRV'i   ws uval %set_uv_1 ws uval %set_uv_2
                     ws uval %set_uv_3 ws dname_rhs) %rec_srv
         | ('NAPTR'i ws naptr_rdata) %rec_naptr

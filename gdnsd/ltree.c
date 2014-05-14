@@ -253,7 +253,6 @@ MK_RRSET_GET(mx, mx, DNS_TYPE_MX)
 MK_RRSET_GET(srv, srv, DNS_TYPE_SRV)
 MK_RRSET_GET(naptr, naptr, DNS_TYPE_NAPTR)
 MK_RRSET_GET(txt, txt, DNS_TYPE_TXT)
-MK_RRSET_GET(txt, spf, DNS_TYPE_SPF)
 
 #define MK_RRSET_ADD(_typ, _nam, _dtyp) \
 F_NONNULL \
@@ -278,7 +277,6 @@ MK_RRSET_ADD(mx, mx, DNS_TYPE_MX)
 MK_RRSET_ADD(srv, srv, DNS_TYPE_SRV)
 MK_RRSET_ADD(naptr, naptr, DNS_TYPE_NAPTR)
 MK_RRSET_ADD(txt, txt, DNS_TYPE_TXT)
-MK_RRSET_ADD(txt, spf, DNS_TYPE_SPF)
 
 // standard chunk for clamping TTLs in ltree_add_rec_*
 #define CLAMP_TTL(_t) \
@@ -684,42 +682,6 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
     return false;
 }
 
-bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(texts); dmn_assert(num_texts);
-
-    ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
-
-    INSERT_NEXT_RR(txt, spf, "SPF", 1)
-    ltree_rdata_txt_t new_rd = *new_rdata = malloc((num_texts + 1) * sizeof(uint8_t*));
-    for(unsigned i = 0; i <= num_texts; i++)
-        new_rd[i] = texts[i];
-    return false;
-}
-
-// This handles 'foo SPF+ "v=spf1 ..."' and makes both TXT and SPF recs for it
-bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(texts); dmn_assert(num_texts);
-
-    if(ltree_add_rec_txt(zone, dname, num_texts, texts, ttl))
-        return true;
-
-    // duplicate the raw text storage, so that destruction isn't confusing
-    uint8_t* tcopy[num_texts + 1];
-    for(unsigned i = 0; i < num_texts; i++) {
-        const unsigned tlen = *texts[i] + 1;
-        tcopy[i] = malloc(tlen);
-        memcpy(tcopy[i], texts[i], tlen);
-    }
-    tcopy[num_texts] = NULL;
-
-    if(ltree_add_rec_spf(zone, dname, num_texts, tcopy, ttl)) {
-        for(unsigned i = 0; i < num_texts; i++)
-            free(tcopy[i]);
-        return true;
-    }
-    return false;
-}
-
 bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, const unsigned serial, const unsigned refresh, const unsigned retry, const unsigned expire, unsigned ncache) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(master); dmn_assert(email);
 
@@ -792,8 +754,7 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
       || rrtype == DNS_TYPE_MX
       || rrtype == DNS_TYPE_SRV
       || rrtype == DNS_TYPE_NAPTR
-      || rrtype == DNS_TYPE_TXT
-      || rrtype == DNS_TYPE_SPF))
+      || rrtype == DNS_TYPE_TXT))
         log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed, please use the explicit support built in for this RR type", logf_dname(dname), logf_dname(zone->dname), rrtype);
 
     if(unlikely(rrtype == DNS_TYPE_AXFR
@@ -1023,7 +984,6 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     ltree_rrset_srv_t* node_srv = NULL;
     ltree_rrset_naptr_t* node_naptr = NULL;
     ltree_rrset_txt_t* node_txt = NULL;
-    ltree_rrset_txt_t* node_spf = NULL;
 
     {
         ltree_rrset_t* rrset = node->rrsets;
@@ -1039,7 +999,6 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
                 case DNS_TYPE_SRV:   node_srv   = &rrset->srv; break;
                 case DNS_TYPE_NAPTR: node_naptr = &rrset->naptr; break;
                 case DNS_TYPE_TXT:   node_txt   = &rrset->txt; break;
-                case DNS_TYPE_SPF:   node_spf   = &rrset->txt; break;
                 default:             node_has_rfc3597 = true; break;
             }
             rrset = rrset->gen.next;
@@ -1058,7 +1017,6 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
            || node_srv
            || node_naptr
            || node_txt
-           || node_spf
            || (node_ns && !(node->flags & LTNFLAG_DELEG))
            || node_has_rfc3597))
             log_zfatal("Delegated sub-zone '%s%s' can only have NS and/or address records as appropriate", logf_lstack(lstack, depth, zone->dname));
@@ -1336,7 +1294,6 @@ void ltree_destroy(ltree_node_t* node) {
                 free(rrset->naptr.rdata);
                 break;
             case DNS_TYPE_TXT:
-            case DNS_TYPE_SPF:
                 for(unsigned i = 0; i < rrset->gen.count; i++) {
                     uint8_t** tptr = rrset->txt.rdata[i];
                     uint8_t* t;

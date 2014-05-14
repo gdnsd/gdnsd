@@ -5,7 +5,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 22;
+use Test::More tests => 19;
 
 my $standard_auth = [
     'example.com 86400 NS ns1.example.com',
@@ -55,13 +55,6 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'example.com', qtype => 'NS',
     answer => $standard_auth,
-    addtl => $standard_auth_addtl,
-);
-
-_GDT->test_dns(
-    qname => 'example.com', qtype => 'SPF',
-    answer => 'example.com 86400 SPF "real spf record" "goes here"',
-    auth => $standard_auth,
     addtl => $standard_auth_addtl,
 );
 
@@ -145,20 +138,6 @@ _GDT->test_dns(
 );
 
 _GDT->test_dns(
-    qname => '_spf.example.com', qtype => 'TXT',
-    answer => qq{_spf.example.com 86400 TXT "How convenient"},
-    auth => $standard_auth,
-    addtl => $standard_auth_addtl,
-);
-
-_GDT->test_dns(
-    qname => '_spf.example.com', qtype => 'SPF',
-    answer => qq{_spf.example.com 86400 SPF "How convenient"},
-    auth => $standard_auth,
-    addtl => $standard_auth_addtl,
-);
-
-_GDT->test_dns(
     qname => '_http._tcp.example.com', qtype => 'SRV',
     answer => '_http._tcp.example.com 1209600 SRV 5 500 80 www.example.com',
     auth => $standard_auth,
@@ -193,7 +172,6 @@ _GDT->test_dns(
         'example.com 3600 MX 44 foo.example.com',
         @$standard_auth,
         'example.com 86400 TXT "foo bar baz" "asdf 123 123 foo"',
-        'example.com 86400 SPF "real spf record" "goes here"',
         'example.com 1111 PTR foo.example.org',
     ],
     addtl => [

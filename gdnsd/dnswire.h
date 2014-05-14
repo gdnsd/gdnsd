@@ -116,7 +116,6 @@ typedef struct S_PACKED {
 #define DNS_TYPE_SRV	33
 #define DNS_TYPE_NAPTR	35
 #define DNS_TYPE_OPT	41
-#define DNS_TYPE_SPF	99
 #define DNS_TYPE_IXFR   251
 #define DNS_TYPE_AXFR   252
 #define DNS_TYPE_ANY    255
@@ -152,6 +151,5 @@ static const uint32_t DNS_RRFIXED_AAAA  = _mkrrf(DNS_TYPE_AAAA, DNS_CLASS_IN);
 static const uint32_t DNS_RRFIXED_SRV   = _mkrrf(DNS_TYPE_SRV, DNS_CLASS_IN);
 static const uint32_t DNS_RRFIXED_NAPTR = _mkrrf(DNS_TYPE_NAPTR, DNS_CLASS_IN);
 static const uint32_t DNS_RRFIXED_OPT   = _mkrrf(DNS_TYPE_OPT, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_SPF   = _mkrrf(DNS_TYPE_SPF, DNS_CLASS_IN);
 
 #endif // GDNSD_DNSWIRE_H

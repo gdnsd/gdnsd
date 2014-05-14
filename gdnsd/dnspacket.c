@@ -1039,13 +1039,11 @@ static unsigned int encode_rrs_txt(dnspacket_context_t* c, unsigned int offset, 
 
     uint8_t* packet = c->packet;
 
-    const bool is_spf = (c->qtype == DNS_TYPE_SPF);
-
     const unsigned rrct = rrset->gen.count;
     c->ancount += rrct;
     for(unsigned int i = 0; i < rrct; i++) {
         offset += repeat_name(c, offset, c->qname_comp, false);
-        gdnsd_put_una32(is_spf ? DNS_RRFIXED_SPF : DNS_RRFIXED_TXT, &packet[offset]);
+        gdnsd_put_una32(DNS_RRFIXED_TXT, &packet[offset]);
         offset += 4;
         gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
         offset += 6;
@@ -1206,11 +1204,6 @@ static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, 
             case DNS_TYPE_TXT:
                 offset = encode_rrs_txt(c, offset, (const void*)rrset, true);
                 break;
-            case DNS_TYPE_SPF:;
-                c->qtype = DNS_TYPE_SPF;
-                offset = encode_rrs_txt(c, offset, (const void*)rrset, true);
-                c->qtype = DNS_TYPE_ANY;
-                break;
             case DNS_TYPE_DYNC:;
                 dmn_assert(0); // DYNC should never make it to here
             default:
@@ -1344,7 +1337,7 @@ static unsigned int (*encode_funcptrs[256])(dnspacket_context_t*, unsigned int, 
     EC encode_rrs_rfc3597, // 096
     EC encode_rrs_rfc3597, // 097
     EC encode_rrs_rfc3597, // 098
-    EC encode_rrs_txt,     // 099 - DNS_TYPE_SPF
+    EC encode_rrs_rfc3597, // 099 (SPF, deprecated)
     EC encode_rrs_rfc3597, // 100
     EC encode_rrs_rfc3597, // 101
     EC encode_rrs_rfc3597, // 102

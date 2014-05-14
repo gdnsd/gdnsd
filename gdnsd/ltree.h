@@ -362,10 +362,6 @@ F_WUNUSED F_NONNULL
 bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned num_texts, uint8_t** texts);
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl);
-F_WUNUSED F_NONNULL
-bool ltree_add_rec_spf(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl);
-F_WUNUSED F_NONNULL
-bool ltree_add_rec_spftxt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl);
 F_WUNUSED F_NONNULLX(1)
 bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd);
 

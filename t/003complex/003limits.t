@@ -123,8 +123,8 @@ _GDT->test_dns(
 );
 
 _GDT->test_dns(
-    qname => 'split-txt.example.com', qtype => 'SPF',
-    answer => 'split-txt.example.com 21600 SPF ' . $split_txt,
+    qname => 'split-txt.example.com', qtype => 'TXT',
+    answer => 'split-txt.example.com 21600 TXT ' . $split_txt,
 );
 
 _GDT->test_dns(
