@@ -247,7 +247,7 @@ static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
 
 F_NONNULL
 static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
     extf_svc_t* svc = (extf_svc_t*)w->data;
     dmn_assert(svc);
     dmn_assert(svc->direct);
