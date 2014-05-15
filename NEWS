@@ -1,3 +1,42 @@
+1.11.3 - 2014-05-14
+    Important code fixes: ----------------------------------
+      GeoIP country code support for South Sudan
+        (SS) added, to support newer upstream GeoIP data.
+      GeoIP country code routines updated to handle
+        unknown country codes more gracefully.
+
+    Trivial code fixes: ------------------------------------
+      Avoid listening on a random pointless socket
+        when bind() fails on an address from interface scan.
+      Improved pathname formatting in various error
+        and warning log outputs.
+      Fixed two small leaks on failed reloads of plugin_geoip
+        'nets' database files.
+      Fixed another small leak on bad resource values
+        for geoip/metafo RR's in failed zonefiles.
+      Fixed some bad libev state assertions related to
+        timers, which may have caused racy failures in rare
+        cases in debug builds.
+      Fixed a crash-on-startup when loading certain forms of
+        invalid configuration input to the meta-plugins.
+
+    Build process fixes: -----------------------------------
+      autoconf detection of pthreads flags on newer
+        versions of clang improved.
+      automake use of objects in subdirectories has
+        been removed, hopefully increasing compatibility.
+      directory creation during "make install" cleaned up
+
+    New deprecations: -------------------------------------
+      The SPF RR-type has been deprecated and will generate
+        a warning on zonefile loading.
+
+    *** This really will be the very last release of 1.x
+        before 2.0.0, barring the necessity of serious
+        bugfixes in the 1.x code.  Please pay attention
+        to the deprecation warnings in your log output;
+        all of those things will become real issues when
+        you upgrade to 2.x.
 
 1.11.2 - 2014-02-27
     Bugfix: HTTP stats output network send code was horribly
