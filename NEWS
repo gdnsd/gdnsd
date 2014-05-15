@@ -1,69 +1,128 @@
-2.x - In Progress ....
-    General Features:
-      * experimental support for djbdns zonefiles
-      * Static A and AAAA rr-sets are no longer limited to 256 RRs each
-      * The default 'listen' setting is now 'any', which listens on
-        the IPv4 and IPv6 (if available) ANY-addresses 0.0.0.0 and
-        [::].  The previous interface-scanning mode can be enabled
-        via 'listen = scan'.
-      * New TTL-related options: max_ttl, min_ttl, and max_ncache_ttl
-        cause clamping (and warning) of zone TTL values.  There is
-        a hard maximum on max_ttl of 268435455 (2^28-1, ~8.5 years).
-    Service Monitoring:
-      * CNAMEs can now be monitored entities in the general sense.
-      * plugin_static now also acts as a monitoring plugin.  It sets a
-        fixed up/down value and optionally a fixed internal TTL value.
-      * The extmon, static, and null plugins support the monitoring
-        of CNAME resources.
-      * The metafo, geoip, and weighted plugins make use of CNAME
-        monitoring for their CNAME-based resources.
-      * Monitored service states are now labeled with just their
-        service_type and address (or CNAME), but not the plugin
-        and/or resource name which (first) configured them.
-      * The special service_type 'none' as an alias for 'up' no
-        longer exists, please use 'up' instead.
-      * The special service_type 'default' (which used plugin_http)
-        no longer exists.  The new default is 'up'.
-      * Empty service_types ('service_types = []') is now legal,
-        and suppresses the use of the default 'up' service_type.
-      * The 'DANGER' state no longer exists in the built-in monitoring
-        system.  A resource is either 'UP' or 'DOWN' at any given
-        time.  The monitoring algorithms and thresholds haven't
-        changed; 'DANGER' just isn't exposed as a separate state
-        from 'UP'.
-    Dynamic address resolution:
-      * The 'DYNC' rr-type can now dynamically return address or
-        CNAME data at the plugin's discretion.
-      * The zonefile syntax for the TTLs of DYNA and DYNC RRs has changed.
-        It now accepts the form MAX[/MIN], where MIN defaults to half
-        of MAX.
-      * The TTL behavior for DYNA/DYNC has changed substantially:
-        Previously the zonefile TTL would be served as-is for 'UP'
-        resources, and cut in half for 'DANGER' or 'DOWN' resources.
-        Now, an internal TTL is calculated based on the minimum time
-        to the next state change between 'UP' and 'DOWN' according to
-        the normal monitoring intervals and anti-flap code.  The internal
-        TTL could also be forced to a very large value in the case that
-        the resource is known to be in a fixed state administratively.
-        This internal TTL is then clamped to the maximum and minimum
-        TTL values from the relevant zonefile RR.
-      * In cases where multiple monitored resources participate in a
-        plugin's decision and/or response (e.g. multifo), the internal
-        TTL will generally be the minimum of all involved internal
-        monitoring TTLs.
-    Trivial, previously-deprecated things:
-      * The weighted plugin no longer allows 'cnames' alongside
-        'addrs_v4' or 'addrs_v6' in the same resource.
-      * The 'late_bind_secs' option and its associated build/run-time
-        dependencies on libcap were removed.
-      * The 'tcp_clients_per_socket' option is removed. Use
-        'tcp_clients_per_thread' instead.
-      * The 'disble_tcp' option is removed. Use 'tcp_threads = 0' instead.
-      * The 'zones_rfc1035_strict_startup' option is removed.  Use
-        'zones_strict_startup' instead.
-      * Support for the old, experimental edns-client-subnet option code
-        0x50fa has been removed; gdnsd now only supports the official,
-        IANA-assigned option code 0x0008.
+2.0.0 - Date TBD XXX
+  *** General feature changes:
+    * Static address RR-sets in zonefiles are no longer limited
+      to 256 RRs per-family
+    * Dynamic address RR-sets from plugins are no longer limited
+      to 64 RRs per-family.
+    * The default 'listen' setting is now 'any', which listens on
+      the IPv4 and IPv6 (if available) ANY-addresses 0.0.0.0 and
+      [::].  The previous interface-scanning mode can be enabled
+      via 'listen = scan'.
+    * New TTL-related options: max_ttl, min_ttl, and max_ncache_ttl
+      cause clamping (and warning) of zone TTL values.  There is
+      a hard maximum on max_ttl of 268435455 (2^28-1, ~8.5 years).
+    * The timeout parameter of a service_type now defaults to
+      half of the specified interval.
+    * New service_types plugin "extfile" - allows for the consumption
+      of outside monitoring data via disk file in vscf format.
+    * Experimental support for djbdns zonefiles
+
+  *** Dynamic address resolution changes:
+    * The 'DYNC' rr-type can now dynamically return address or
+      CNAME data at the plugin's discretion.
+    * The zonefile syntax for the TTLs of DYNA and DYNC RRs has changed.
+      It now accepts the form MAX[/MIN], where MIN defaults to half
+      of MAX.
+    * The TTL behavior for DYNA/DYNC has changed substantially:
+      Previously the zonefile TTL would be served as-is for 'UP'
+      resources, and cut in half for 'DANGER' or 'DOWN' resources.
+      Now, an internal TTL is calculated based on the minimum time
+      to the next state change between 'UP' and 'DOWN' according to
+      the normal monitoring intervals and anti-flap code.
+      This internal TTL is then clamped to the maximum and minimum
+      TTL values from the relevant zonefile RR.
+    * In cases where multiple monitored resources participate in a
+      plugin's decision and/or response (e.g. multifo), the internal
+      TTL will generally be the minimum of all involved internal
+      monitoring TTLs.
+
+  *** Service monitoring changes:
+    * CNAMEs can now be monitored entities in the general sense.
+    * plugin_static now also acts as a monitoring plugin.  It sets a
+      fixed up/down value and optionally a fixed internal TTL value.
+    * The extmon, static, and null plugins support the monitoring
+      of CNAME resources.
+    * The metafo, geoip, and weighted plugins make use of CNAME
+      monitoring for their CNAME-based resources.
+    * Monitored service states are now labeled with just their
+      service_type and address (or CNAME), but not the plugin
+      and/or resource name which (first) configured them.
+    * Empty service_types ('service_types = []') is now legal,
+      and suppresses the use of the default 'up' service_type.
+    * The 'DANGER' state no longer exists in the built-in monitoring
+      system.  A resource is either 'UP' or 'DOWN' at any given
+      time.  The monitoring algorithms and thresholds haven't
+      changed; 'DANGER' just isn't exposed as a separate state
+      from 'UP'.
+
+  *** Administrative state-forcing:
+    * All monitored entities can be administratively forced
+      UP or DOWN (optionally, with a specific monitored TTL) at
+      runtime.
+    * Additionally, plugins can register virtual entities which
+      have no separate real monitoring, but can be administratively
+      forced into a non-default state.
+    * The current virtual entities in use are the datacenters of
+      plugin_metafo and plugin_geoip.  In the plugin_geoip case,
+      there are two levels of state-forcing for datacenters: at
+      the per-resource level or the map level.  The more-specific
+      per-resource level state takes precedence over the map-
+      level state, and both override any state from lower-level
+      monitored (or forced) resources within a datacenter.
+    * The mechanism for forcing state is via writing to a file
+      named e.g. /var/lib/gdnsd/admin_state in vscf format
+      with lines like "192.0.2.*/http => DOWN/300", or
+      "geoip/map3/dc-us => UP".  As shown in the first example,
+      glob patterns are allowed for matching entity names.
+
+  *** Daemonization changes:
+    * debug-mode is now enabled on the commandline via "-D",
+      and even production builds now produce some level of
+      debug log output.
+    * "startfg" has been replaced with the flag "-f", which can
+      be used with any of the start or restart -like actions
+      to remain in the foreground.
+    * initgroups() is now called during privdrop operations,
+      allowing the daemon to have the secondary group permissions
+      assigned to its user in /etc/group or equivalent.
+    * Foreground daemons participate fully in all other aspects
+      of daemonization (e.g. privdrop, chroot, and pidfile locking)
+    * It is possible to properly restart a daemon instance from
+      background to foreground and back again; meaning "-f restart"
+      can take over from a regular daemon into the foreground,
+      and then a regular "restart" in another terminal can replace
+      the foreground daemon with a new background one.
+    * Restarts are now even more seamless than they were before.
+      All expensive operations are completed before attempting to
+      kill the previous daemon instance (even monitor initialization),
+      leaving only the timing gap of waiting for the old daemon to
+      exit in response to its death signal before binding the
+      listening sockets in the new daemon, however:
+    * In cases where SO_REUSEPORT works, the new daemon's listeners
+      will be bound just *before* sending that death signal to reduce
+      lost requests even further.  Note that you'll probably
+      still lose a handful of requests that were in the old daemon's
+      socket buffers at the time of its death.
+
+  *** Trivial, previously-deprecated incompatibilities:
+    * The weighted plugin no longer allows 'cnames' alongside
+      'addrs_v4' or 'addrs_v6' in the same resource.
+    * The 'late_bind_secs' option and its associated build/run-time
+      dependencies on libcap were removed.
+    * The 'tcp_clients_per_socket' option is removed. Use
+      'tcp_clients_per_thread' instead.
+    * The 'disble_tcp' option is removed. Use 'tcp_threads = 0' instead.
+    * The 'zones_rfc1035_strict_startup' option is removed.  Use
+      'zones_strict_startup' instead.
+    * The special service_type 'none' as an alias for 'up' no
+      longer exists.  Use 'up' instead.
+    * The special service_type 'danger' no longer exists.
+    * The special service_type 'default' (which used plugin_http)
+      no longer exists.  The new default is 'up'.
+    * Direct support for the SPF RR-type (99) has been removed.
+    * Support for the old, experimental edns-client-subnet option code
+      0x50fa has been removed; gdnsd now only supports the official,
+      IANA-assigned option code 0x0008.
 
 1.11.3 - 2014-05-14
     Important code fixes: ----------------------------------
