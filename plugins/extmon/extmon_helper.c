@@ -325,8 +325,6 @@ int main(int argc, char** argv) {
     // Construct the default loop for the main thread
     struct ev_loop* def_loop = ev_default_loop(EVFLAG_AUTO);
     if(!def_loop) log_fatal("Could not initialize the default libev loop");
-    ev_set_timeout_collect_interval(def_loop, 0.1);
-    ev_set_io_collect_interval(def_loop, 0.01);
 
     // set up primary read/write watchers on the pipe to the daemon's plugin
     plugin_read_watcher = malloc(sizeof(ev_io));

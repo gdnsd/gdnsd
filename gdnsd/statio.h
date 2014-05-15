@@ -25,9 +25,6 @@
 #include <stdbool.h>
 #include <ev.h>
 
-void statio_log_stats(void);
-void statio_log_uptime(void);
-
 void statio_init(void);
 void statio_bind_socks(void);
 bool statio_check_socks(bool soft);

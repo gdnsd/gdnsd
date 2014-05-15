@@ -406,7 +406,6 @@ void* dnsio_tcp_start(void* thread_asvoid) {
 
     struct ev_loop* loop = ev_loop_new(EVFLAG_AUTO);
     if(!loop) log_fatal("ev_loop_new() failed");
-    ev_set_timeout_collect_interval(loop, 0.1);
 
     ev_io_start(loop, accept_watcher);
 

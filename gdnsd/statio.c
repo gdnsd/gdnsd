@@ -278,11 +278,7 @@ static const char* fmt_uptime(const time_t now) {
     return ival_buf;
 }
 
-void statio_log_uptime(void) {
-    log_info("Uptime: %s", fmt_uptime(time(NULL)));
-}
-
-void statio_log_stats(void) {
+static void statio_log_stats(void) {
     populate_stats();
     log_info(log_dns, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub);
     log_info(log_udp, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc);

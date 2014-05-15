@@ -743,9 +743,6 @@ static void* gdmaps_reload_thread(void* arg) {
     dmn_assert(gdmaps);
 
     gdmaps->reload_loop = ev_loop_new(EVFLAG_AUTO);
-    ev_set_timeout_collect_interval(gdmaps->reload_loop, 0.5);
-    ev_set_io_collect_interval(gdmaps->reload_loop, 0.5);
-
     for(unsigned i = 0; i < gdmaps->count; i++)
         gdmap_setup_watchers(gdmaps->maps[i], gdmaps->reload_loop);
 

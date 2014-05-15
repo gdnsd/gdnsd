@@ -75,31 +75,6 @@ static void atexit_debug_execute(void) { }
 F_NONNULL
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, dmn_logf_errno()); }
 
-static int killed_by = 0;
-
-F_NONNULL
-static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
-    dmn_assert(revents == EV_SIGNAL);
-    dmn_assert(w->signum == SIGTERM || w->signum == SIGINT);
-
-    log_debug("Received terminating signal %i", w->signum);
-    killed_by = w->signum;
-    ev_break(loop, EVBREAK_ALL);
-}
-
-F_NONNULL
-static void hup_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w V_UNUSED, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
-    dmn_assert(revents == EV_SIGNAL);
-    dmn_assert(w->signum == SIGHUP);
-
-    log_debug("Received SIGHUP");
-    // these functions should log_info() that they're taking SIGHUP actions, as appropriate
-    zsrc_djb_sighup();
-    zsrc_rfc1035_sighup();
-}
-
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr,
@@ -150,45 +125,36 @@ static void usage(const char* argv0) {
     exit(2);
 }
 
-static ev_signal* sig_int;
-static ev_signal* sig_term;
-static ev_signal* sig_hup;
+static struct ev_loop* mon_loop = NULL;
 
-// Set up our terminal signal handlers via libev
-F_NONNULL
-static void setup_signals(struct ev_loop* def_loop) {
-    dmn_assert(def_loop);
-
-    sig_int = malloc(sizeof(ev_signal));
-    sig_term = malloc(sizeof(ev_signal));
-    sig_hup = malloc(sizeof(ev_signal));
-
-    // Set up the signal callback handlers via libev
-    //  and start the signal watchers in the default loop
-    ev_signal_init(sig_int, terminal_signal, SIGINT);
-    ev_signal_start(def_loop, sig_int);
-    ev_signal_init(sig_term, terminal_signal, SIGTERM);
-    ev_signal_start(def_loop, sig_term);
-    ev_signal_init(sig_hup, hup_signal, SIGHUP);
-    ev_signal_start(def_loop, sig_hup);
-}
-
+// thread entry point for zone data reloader thread
 static void* zone_data_runtime(void* unused V_UNUSED) {
     gdnsd_thread_setname("gdnsd-zones");
 
     struct ev_loop* zdata_loop = ev_loop_new(EVFLAG_AUTO);
     if(!zdata_loop)
         log_fatal("Could not initialize the zone data libev loop");
-    // nothing happens faster than 10ms here...
-    ev_set_timeout_collect_interval(zdata_loop, 0.01);
-    ev_set_io_collect_interval(zdata_loop, 0.01);
 
     zsrc_djb_runtime_init(zdata_loop);
     zsrc_rfc1035_runtime_init(zdata_loop);
 
     ev_run(zdata_loop, 0);
-    ev_loop_destroy(zdata_loop);
 
+    dmn_assert(0); // should never be reached as loop never terminates
+    ev_loop_destroy(zdata_loop);
+    return NULL;
+}
+
+// thread entry point for monitoring (+statio) thread
+static void* mon_runtime(void* unused V_UNUSED) {
+    gdnsd_thread_setname("gdnsd-mon");
+
+    // mon_start already queued up its events in mon_loop earlier...
+    statio_start(mon_loop);
+    ev_run(mon_loop, 0);
+
+    dmn_assert(0); // should never be reached as loop never terminates
+    ev_loop_destroy(mon_loop);
     return NULL;
 }
 
@@ -218,11 +184,12 @@ static void start_threads(void) {
     // system scope scheduling, joinable threads
     pthread_attr_t attribs;
     pthread_attr_init(&attribs);
-    pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_DETACHED);
     pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
 
+    int pthread_err;
+
     for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
-        int pthread_err;
         dns_thread_t* t = &gconfig.dns_threads[i];
         if(t->is_udp)
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, (void*)t);
@@ -234,8 +201,20 @@ static void start_threads(void) {
     }
 
     pthread_t zone_data_threadid;
-    int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
-    if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", dmn_logf_strerror(pthread_err));
+    pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
+    if(pthread_err)
+        log_fatal("pthread_create() of zone data thread failed: %s", dmn_logf_strerror(pthread_err));
+
+    // This waits for all of the stat structures to be allocated
+    //  by the i/o threads before continuing on.  They must be ready
+    //  before the monitoring thread starts below, as it will read
+    //  those stat structures
+    dnspacket_wait_stats();
+
+    pthread_t mon_threadid;
+    pthread_err = pthread_create(&mon_threadid, &attribs, &mon_runtime, NULL);
+    if(pthread_err)
+        log_fatal("pthread_create() of monitoring thread failed: %s", dmn_logf_strerror(pthread_err));
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
@@ -529,20 +508,17 @@ int main(int argc, char** argv) {
 
     dmn_secure();
 
-    // Construct the default loop for the main thread
-    struct ev_loop* def_loop = ev_default_loop(EVFLAG_AUTO);
-    if(!def_loop) log_fatal("Could not initialize the default libev loop");
-    ev_set_timeout_collect_interval(def_loop, 0.1);
-    ev_set_io_collect_interval(def_loop, 0.01);
+    // Construct the monitoring loop, for monitors + statio,
+    //   which will be executed in another thread for runtime
+    mon_loop = ev_loop_new(EVFLAG_AUTO);
+    if(!mon_loop)
+        log_fatal("Could not initialize the mon libev loop");
 
     // set up monitoring, which expects an initially empty loop
-    gdnsd_mon_start(def_loop);
-
-    // initialize the libev-based signal handlers
-    setup_signals(def_loop);
+    gdnsd_mon_start(mon_loop);
 
     // Call plugin pre-run actions
-    gdnsd_plugins_action_pre_run(def_loop);
+    gdnsd_plugins_action_pre_run();
 
     // ask the helper (which is still root) to bind our sockets,
     //   this blocks until completion.  This uses SO_REUSEPORT
@@ -575,15 +551,8 @@ int main(int argc, char** argv) {
     // which has all signals blocked and has its own
     // event loop (libev for TCP, manual blocking loop for UDP)
     // Also starts the zone data reload thread
+    // and the statio+monitoring thread
     start_threads();
-
-    // actually set up libev hooks + listen on sockets for statio
-    statio_start(def_loop);
-
-    // This waits for all of the stat structures to be allocated
-    //  by the i/o threads before continuing on.  They must be ready
-    //  before ev_run() below, because statio event handlers hit them.
-    dnspacket_wait_stats();
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
@@ -594,30 +563,57 @@ int main(int argc, char** argv) {
     if(!first_binds_failed)
         dmn_acquire_pidfile();
 
+    // The signals we'll listen for in sigwaitinfo()
+    sigset_t mainthread_sigs;
+    sigemptyset(&mainthread_sigs);
+    sigaddset(&mainthread_sigs, SIGINT);
+    sigaddset(&mainthread_sigs, SIGTERM);
+    sigaddset(&mainthread_sigs, SIGHUP);
+
+    // Block all signals before entering sigwaitinfo() loop
+    sigset_t sigmask_all, sigmask_prev;
+    sigfillset(&sigmask_all);
+    pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev);
+
     // Report success back to whoever invoked "start" or "restart" command...
     //  (or in the foreground case, kill our helper process)
+    // we do this under blocking so that there's no racing with someone
+    //  expecting correct signal actions after the starter exits
     dmn_finish();
 
-    // Start the primary event loop in this thread, to handle
-    // signals and statio stuff.  Should not return until we
-    // receive a terminating signal.
-    ev_run(def_loop, 0);
-
-    // If we get here without a terminating signal, it means we have a bug!
-    dmn_assert(killed_by);
-
-    // Stop the terminal signal handlers
-    ev_signal_stop(def_loop, sig_term);
-    ev_signal_stop(def_loop, sig_int);
-
-    // Final stats output on shutdown
-    log_info("Shutdown via signal %i", killed_by);
-    log_info("Final stats:");
-    statio_log_uptime();
-    statio_log_stats();
+    int killed_by = 0;
+    while(!killed_by) {
+        siginfo_t rcvd_info;
+        int rcvd_sig = sigwaitinfo(&mainthread_sigs, &rcvd_info);
+        switch(rcvd_sig) {
+            case -1:
+                if(errno != EINTR && errno != EAGAIN)
+                    log_fatal("sigwaitinfo() failed with error %s", dmn_logf_errno());
+                break;
+            case SIGTERM:
+                log_info("Received TERM signal (from pid %li with uid %u), exiting...", (long)rcvd_info.si_pid, (unsigned)rcvd_info.si_uid);
+                killed_by = SIGTERM;
+                break;
+            case SIGINT:
+                log_info("Received INT signal (from pid %li with uid %u), exiting...", (long)rcvd_info.si_pid, (unsigned)rcvd_info.si_uid);
+                killed_by = SIGINT;
+                break;
+            case SIGHUP:
+                log_info("Received HUP signal (from pid %li with uid %u)", (long)rcvd_info.si_pid, (unsigned)rcvd_info.si_uid);
+                zsrc_djb_sighup();
+                zsrc_rfc1035_sighup();
+                break;
+            default:
+                dmn_assert(0);
+                break;
+        }
+    }
 
     // deallocate resources in debug mode
     atexit_debug_execute();
+
+    // Restore normal signal mask
+    pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL);
 
     // kill self with same signal, so that our exit status is correct
     //   for any parent/manager/whatever process that may be watching
