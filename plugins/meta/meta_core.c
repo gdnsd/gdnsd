@@ -287,31 +287,15 @@ static void resource_destroy(resource_t* res) {
     }
 }
 
-// NULL-ness of "origin" indicates DYNC vs DYNA lookup here...
-static int map_res(const char* resname, const uint8_t* origin V_UNUSED) {
-    if(!resname) {
-        log_err("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
-        return -1;
-    }
-
-    // Handle synthetic resname/dcname resources
-    const char* slash = strchr(resname, '/');
-    char* dcname = NULL;
-    char* resname_copy = NULL;
-    if(slash) {
-        resname_copy = strdup(resname);
-        const unsigned reslen = slash - resname;
-        resname_copy[reslen] = '\0';
-        resname = resname_copy;
-        dcname = resname_copy + reslen + 1;
-    }
+F_NONNULLX(1)
+static int map_res_inner(const char* resname, const uint8_t* origin V_UNUSED, const char* dcname) {
+    dmn_assert(resname);
 
     for(unsigned i = 0; i < num_res; i++) {
         if(!strcmp(resname, resources[i].name)) { // match!
             const resource_t* res = &resources[i];
             unsigned fixed_dc_idx = 0;
-            if(slash) {
-                dmn_assert(resname_copy); dmn_assert(dcname);
+            if(dcname) { // synthetic /dcname resource
                 fixed_dc_idx = map_get_dcidx(resources[i].map, dcname);
                 if(!fixed_dc_idx) {
                     log_err("plugin_" PNSTR ": synthetic resource '%s/%s': datacenter '%s' does not exist for this resource", resname, dcname, dcname);
@@ -404,16 +388,40 @@ static int map_res(const char* resname, const uint8_t* origin V_UNUSED) {
             }
 
             // Handle synthetic resname/dcname virtual resnum
-            if(fixed_dc_idx) {
+            if(fixed_dc_idx)
                 i |= (fixed_dc_idx << DC_SHIFT);
-                free(resname_copy); // free temp copy
-            }
             return (int)i;
         }
     }
 
     log_err("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
     return -1;
+}
+
+// NULL-ness of "origin" indicates DYNC vs DYNA lookup here...
+static int map_res(const char* resname, const uint8_t* origin) {
+    int rv = -1;
+
+    if(!resname) {
+        log_err("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
+    }
+    else {
+        const char* slash = strchr(resname, '/');
+        if(slash) {
+            // Handle synthetic resname/dcname resources
+            char* resname_copy = strdup(resname);
+            const unsigned reslen = slash - resname;
+            resname_copy[reslen] = '\0';
+            char* dcname = resname_copy + reslen + 1;
+            rv = map_res_inner(resname_copy, origin, dcname);
+            free(resname_copy);
+        }
+        else {
+            rv = map_res_inner(resname, origin, NULL);
+        }
+    }
+
+    return rv;
 }
 
 /********** Callbacks from gdnsd **************/
