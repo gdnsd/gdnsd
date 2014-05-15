@@ -60,7 +60,6 @@ static int helper_write_fd = -1;
 static int helper_read_fd = -1;
 
 static ev_io* helper_read_watcher = NULL;
-static ev_child* helper_child_watcher = NULL;
 
 // whether we're in the init phase or runtime phase,
 //   and how many distinct mon_t have been updated
@@ -80,8 +79,8 @@ typedef enum {
 
 static fail_t fail_mode = FAIL_ONCE;
 
+static const char fail_msg[] = "plugin_extmon: Cannot continue monitoring, child process gdnsd_extmon_helper failed!";
 static void total_helper_failure(struct ev_loop* loop) {
-    log_err("plugin_extmon: Cannot continue monitoring!");
     switch(fail_mode) {
         case FAIL_ONCE:
             for(unsigned i = 0; i < num_mons; i++)
@@ -90,40 +89,17 @@ static void total_helper_failure(struct ev_loop* loop) {
         case FAIL_STASIS:
             for(unsigned i = 0; i < num_mons; i++)
                 ev_timer_stop(loop, mons[i].local_timeout);
+            log_err(fail_msg);
             break;
         case FAIL_DIE:
-            log_fatal("plugin_extmon: gdnsd_extmon_helper died");
+            log_fatal(fail_msg);
             break;
         default:
             dmn_assert(0);
     }
     close(helper_read_fd);
     ev_io_stop(loop, helper_read_watcher);
-    if(ev_is_active(helper_child_watcher))
-        kill(helper_pid, SIGKILL);
     total_helper_failure_flag = true;
-}
-
-static void helper_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_CHILD);
-
-    if(init_phase)
-        ev_ref(loop);
-    ev_child_stop(loop, w); // always single-shot
-
-    int status = w->rstatus;
-    if(WIFEXITED(status)) {
-        if(!WEXITSTATUS(status))
-           dmn_log_info("gdnsd_extmon_helper terminated normally...");
-        else
-           dmn_log_warn("gdnsd_extmon_helper terminated abnormally with exit code %u...", WEXITSTATUS(status));
-    }
-    else {
-        if(WIFSIGNALED(status))
-            dmn_log_warn("gdnsd_extmon_helper terminated by signal %u", WTERMSIG(status));
-        else
-            dmn_log_warn("gdnsd_extmon_helper terminated abnormally...");
-    }
 }
 
 // common code to bump the local_timeout timer for (interval+timeout)*2,
@@ -425,11 +401,6 @@ void plugin_extmon_init_monitors(struct ev_loop* mon_loop) {
         ev_io_init(helper_read_watcher, helper_read_cb, helper_read_fd, EV_READ);
         ev_set_priority(helper_read_watcher, 2);
         ev_io_start(mon_loop, helper_read_watcher);
-        helper_child_watcher = malloc(sizeof(ev_child));
-        ev_child_init(helper_child_watcher, helper_child_cb, helper_pid, 0);
-        ev_set_priority(helper_child_watcher, 2);
-        ev_child_start(mon_loop, helper_child_watcher);
-        ev_unref(mon_loop); // don't let child watcher hold things up
         for(unsigned i = 0; i < num_mons; i++) {
             mon_t* this_mon = &mons[i];
             this_mon->local_timeout = malloc(sizeof(ev_timer));
@@ -445,7 +416,6 @@ void plugin_extmon_start_monitors(struct ev_loop* mon_loop) {
     if(num_mons && !total_helper_failure_flag) {
         init_phase = false;
         ev_io_start(mon_loop, helper_read_watcher);
-        ev_ref(mon_loop); // restore ref for child_watcher
         for(unsigned i = 0; i < num_mons; i++)
             bump_local_timeout(mon_loop, &mons[i]);
     }

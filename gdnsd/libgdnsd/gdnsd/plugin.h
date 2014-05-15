@@ -85,7 +85,7 @@ void SYM_FULL_CONFIG(GDNSD_PLUGIN_NAME)(unsigned num_threads);
 void SYM_POST_DAEMON(GDNSD_PLUGIN_NAME)(void);
 void SYM_PRE_PRIVDROP(GDNSD_PLUGIN_NAME)(void);
 F_NONNULL
-void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(struct ev_loop* loop);
+void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(void);
 void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(unsigned threadnum);
 F_NONNULLX(4,5)
 gdnsd_sttl_t SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
