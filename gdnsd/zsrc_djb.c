@@ -55,7 +55,7 @@ static void zsrc_djb_sync_zones(void) {
     zscan_djb_zonedata_t* zonedata;
     int num_zones = 0;
 
-    if (zscan_djb(djb_dir, &zonedata))
+    if (zscan_djb(djb_dir, &zonedata) || (!active_zonedata && !zonedata))
         return;
 
     ztree_txn_start();
