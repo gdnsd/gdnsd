@@ -789,19 +789,13 @@ void dmn_fork(void) {
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_errno());
     dmn_log_info("Daemonized, final pid is %li", (long)getpid());
 
-    state.phase = PHASE4_FORKED;
-}
-
-void dmn_secure(void) {
-    phase_check(PHASE4_FORKED, PHASE6_PIDLOCKED, 1);
-
 #ifdef USE_SYSTEMD
     // hack hack hack - when restarting, before losing privileges, we need to
     //   promote ourselves from control process to main process.
     // sd_pid_get_unit() seems to return "gdnsd.service" even when we're marked
     //   as a control process, and setting ourselves back to that manually in sysfs
     //   seems to promote us from a mere control process and allow us to become the
-    //   next MAINPID.
+    //   next MAINPID.  This must happen before we fork persistent children as well.
     if(params.restart && params.systemd_booted) {
         char* unit;
         int gu_rv = sd_pid_get_unit(getpid(), &unit);
@@ -818,6 +812,12 @@ void dmn_secure(void) {
         }
     }
 #endif
+
+    state.phase = PHASE4_FORKED;
+}
+
+void dmn_secure(void) {
+    phase_check(PHASE4_FORKED, PHASE6_PIDLOCKED, 1);
 
     if(params.will_chroot) {
         dmn_assert(params.invoked_as_root);
