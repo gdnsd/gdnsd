@@ -563,17 +563,16 @@ int main(int argc, char** argv) {
     if(!first_binds_failed)
         dmn_acquire_pidfile();
 
-    // The signals we'll listen for in sigwaitinfo()
+    // The signals we'll listen for below
     sigset_t mainthread_sigs;
     sigemptyset(&mainthread_sigs);
     sigaddset(&mainthread_sigs, SIGINT);
     sigaddset(&mainthread_sigs, SIGTERM);
     sigaddset(&mainthread_sigs, SIGHUP);
 
-    // Block all signals before entering sigwaitinfo() loop
-    sigset_t sigmask_all, sigmask_prev;
-    sigfillset(&sigmask_all);
-    pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev);
+    // Block the relevant signals before entering the sigwaitinfo() loop
+    sigset_t sigmask_prev;
+    pthread_sigmask(SIG_BLOCK, &mainthread_sigs, &sigmask_prev);
 
     // Report success back to whoever invoked "start" or "restart" command...
     //  (or in the foreground case, kill our helper process)
