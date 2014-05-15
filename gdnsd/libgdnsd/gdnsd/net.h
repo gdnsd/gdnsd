@@ -24,12 +24,9 @@
 #include <gdnsd/dmn.h>
 #include <gdnsd/compiler.h>
 
-// back-compat for moving some network stuff down to libdmn:
-typedef dmn_anysin_t anysin_t;
-#define ANYSIN_MAXLEN DMN_ANYSIN_MAXLEN
+// We always use numeric_only=true in gdnsd
 #define gdnsd_anysin_getaddrinfo(__a,__p,__r) dmn_anysin_getaddrinfo((__a),(__p),(__r),true)
 #define gdnsd_anysin_fromstr(__a,__d,__r) dmn_anysin_fromstr((__a),(__d),(__r),true)
-#define gdnsd_anysin_is_anyaddr dmn_anysin_is_anyaddr
 
 // Plugins should use these to get protocol numbers, since
 //  many platforms require filesystem access outside of the

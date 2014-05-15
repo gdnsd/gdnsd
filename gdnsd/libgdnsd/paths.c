@@ -57,7 +57,7 @@ static void ensure_dir(const char* dpath) {
     struct stat st;
     if(lstat(dpath, &st)) {
         if(mkdir(dpath, 0755))
-            log_fatal("mkdir(%s) failed: %s", logf_pathname(dpath), dmn_strerror(errno));
+            log_fatal("mkdir(%s) failed: %s", logf_pathname(dpath), dmn_logf_strerror(errno));
         log_info("Created directory %s", logf_pathname(dpath));
     }
     else if(!S_ISDIR(st.st_mode)) {
@@ -72,7 +72,7 @@ static void ensure_rootdir(const char* rpath) {
     struct stat st;
     if(stat(rpath, &st)) {
         if(mkdir(rpath, 0755))
-            log_fatal("mkdir(%s) failed: %s", rpath, dmn_strerror(errno));
+            log_fatal("mkdir(%s) failed: %s", rpath, dmn_logf_strerror(errno));
     }
     else if(!S_ISDIR(st.st_mode)) {
         log_fatal("'%s' is not a directory (but should be)!", rpath);
@@ -83,7 +83,7 @@ char* gdnsd_realpath(const char* path_in, const char* desc) {
     char* out = realpath(path_in, NULL);
     if(!out)
         log_fatal("Cleanup/validation of %s pathname '%s' failed: %s",
-            desc, path_in, dmn_strerror(errno));
+            desc, path_in, dmn_logf_strerror(errno));
     if(strcmp(path_in, out))
         log_info("%s path '%s' cleaned up as '%s'", desc, path_in, out);
     return out;
@@ -122,7 +122,7 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
     if(!strcmp(rootdir_setting, "system")) {
         // Not using a root directory, using system paths
         if(chdir("/"))
-            log_fatal("Failed to chdir('/'): %s", dmn_strerror(errno));
+            log_fatal("Failed to chdir('/'): %s", dmn_logf_strerror(errno));
         ensure_dir(path_base[0][RUN]);
         ensure_dir(path_base[0][STATE]);
     }
@@ -133,7 +133,7 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
         ensure_rootdir(rootdir_setting);
         rootdir = gdnsd_realpath(rootdir_setting, "data root");
         if(chdir(rootdir))
-            log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_strerror(errno));
+            log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_logf_strerror(errno));
 
         // build basic/common directory structure if missing
         ensure_dir("etc/");

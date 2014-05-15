@@ -100,7 +100,7 @@ void plugin_extfile_add_svctype(const char* name, const vscf_data_t* svc_cfg, co
     const vscf_data_t* path_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "file", true);
     if(!path_cfg || !vscf_is_simple(path_cfg))
         log_fatal("plugin_extfile: service_type '%s': the 'file' option is required and must be a string filename", name);
-    svc->path = gdnsd_resolve_path_cfg(vscf_simple_get_data(path_cfg), "extfile");
+    svc->path = gdnsd_resolve_path_state(vscf_simple_get_data(path_cfg), "extfile");
 
     svc->direct = false;
     svc->def_sttl = GDNSD_STTL_TTL_MAX;
@@ -115,7 +115,7 @@ void plugin_extfile_add_svctype(const char* name, const vscf_data_t* svc_cfg, co
     svc->mons = NULL;
 }
 
-void plugin_extfile_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_extfile_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
 
     extf_svc_t* svc = NULL;
@@ -226,6 +226,7 @@ static void process_file(const extf_svc_t* svc) {
         else
             for(unsigned i = 0; i < svc->num_mons; i++)
                 gdnsd_mon_state_updater(svc->mons[i].sidx, !(results[i] & GDNSD_STTL_DOWN));
+        log_debug("plugin_extfile: Service type '%s': loaded new data from file '%s'", svc->name, logf_pathname(svc->path));
     }
     else {
         log_err("plugin_extfile: Service type '%s': file load failed, no updates applied", svc->name);
@@ -246,7 +247,7 @@ static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
 
 F_NONNULL
 static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
     extf_svc_t* svc = (extf_svc_t*)w->data;
     dmn_assert(svc);
     dmn_assert(svc->direct);
@@ -260,12 +261,13 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
         // in the direct case, interval is the ev_stat time hint, and all ev_stat
         //   hits (re-)kick a 1.02s stat()-settling timer, which processes the file
         //   when it expires.
-        svc->file_watcher = malloc(sizeof(ev_stat));
-        ev_stat_init(svc->file_watcher, file_cb, svc->path, svc->interval);
-        svc->file_watcher->data = svc;
         svc->time_watcher = malloc(sizeof(ev_timer));
         ev_timer_init(svc->time_watcher, timer_cb, 0.0, 1.02);
         svc->time_watcher->data = svc;
+        svc->file_watcher = malloc(sizeof(ev_stat));
+        ev_stat_init(svc->file_watcher, file_cb, svc->path, svc->interval);
+        svc->file_watcher->data = svc;
+        ev_stat_start(mon_loop, svc->file_watcher);
     }
     else {
         // in the monitor case, interval is a fixed repeating timer that processes
@@ -273,6 +275,7 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
         svc->time_watcher = malloc(sizeof(ev_timer));
         ev_timer_init(svc->time_watcher, timer_cb, svc->interval, svc->interval);
         svc->time_watcher->data = svc;
+        ev_timer_start(mon_loop, svc->time_watcher);
     }
 }
 

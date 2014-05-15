@@ -51,7 +51,7 @@ static const char DEFAULT_SVCNAME[] = "up";
 */
 
 typedef struct {
-    anysin_t addr;
+    dmn_anysin_t addr;
     unsigned weight;
     unsigned* indices;
 } addrstate_t;
@@ -179,7 +179,7 @@ typedef struct {
 } iaga_t;
 
 F_NONNULL
-static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len, const vscf_data_t* lb_data, void* iaga_asvoid) {
+static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len V_UNUSED, const vscf_data_t* lb_data, void* iaga_asvoid) {
     dmn_assert(lb_name); dmn_assert(lb_name_len); dmn_assert(lb_data); dmn_assert(iaga_asvoid);
 
     iaga_t* iaga = (iaga_t*)iaga_asvoid;
@@ -550,7 +550,7 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
         if(!vscf_is_array(lb_cfg) || !vscf_array_get_len(lb_cfg) || !vscf_is_simple(vscf_array_get_data(lb_cfg, 0)))
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': item '%s': value must be an array of [ IP, weight ]", res->name, first_name, lb_name);
         const char* first_addr_txt = vscf_simple_get_data(vscf_array_get_data(lb_cfg, 0));
-        anysin_t temp_sin;
+        dmn_anysin_t temp_sin;
         int addr_err = gdnsd_anysin_getaddrinfo(first_addr_txt, NULL, &temp_sin);
         if(addr_err)
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': item '%s': could not parse '%s' as an IP address: %s", res->name, first_name, lb_name, first_addr_txt, gai_strerror(addr_err));
@@ -568,7 +568,7 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
         const vscf_data_t* first_ac = vscf_array_get_data(first_cfg, 0);
         if(!first_ac || !vscf_is_simple(first_ac))
             log_fatal("plugin_weighted: resource '%s' (direct): item '%s': first element of array should be an IP address or CNAME string", res->name, first_name);
-        anysin_t temp_sin;
+        dmn_anysin_t temp_sin;
         if(gdnsd_anysin_getaddrinfo(vscf_simple_get_data(first_ac), NULL, &temp_sin)) {
             // was not a valid address, try cnames mode
             res->cnames = calloc(1, sizeof(cnset_t));

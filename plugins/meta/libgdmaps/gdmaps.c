@@ -767,7 +767,7 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
 
     int pthread_err;
     if((pthread_err = pthread_create(&gdmaps->reload_tid, &attribs, gdmaps_reload_thread, gdmaps)))
-        log_fatal("plugin_geoip: failed to create GeoIP reload thread: %s", logf_errnum(pthread_err));
+        log_fatal("plugin_geoip: failed to create GeoIP reload thread: %s", dmn_logf_strerror(pthread_err));
 
     gdmaps->reload_thread_spawned = true;
 

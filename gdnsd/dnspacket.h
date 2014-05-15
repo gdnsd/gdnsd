@@ -171,7 +171,7 @@ typedef struct {
 } dnspacket_context_t;
 
 F_NONNULL
-unsigned int process_dns_query(dnspacket_context_t* c, const anysin_t* asin, uint8_t* packet, const unsigned int packet_len);
+unsigned int process_dns_query(dnspacket_context_t* c, const dmn_anysin_t* asin, uint8_t* packet, const unsigned int packet_len);
 
 F_MALLOC F_WUNUSED
 dnspacket_context_t* dnspacket_context_new(const unsigned int this_threadnum, const bool is_udp);

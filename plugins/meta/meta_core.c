@@ -203,7 +203,7 @@ static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc
                 log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
         }
         else {
-            anysin_t tempsin;
+            dmn_anysin_t tempsin;
             if(gdnsd_anysin_getaddrinfo(textdata, NULL, &tempsin)) {
                 // failed to parse as address, so set up direct CNAME if possible
                 this_dc->is_cname = true;
@@ -356,60 +356,15 @@ static void resource_destroy(resource_t* res) {
     }
 }
 
-/********** Callbacks from gdnsd **************/
-
-void CB_LOAD_CONFIG(const vscf_data_t* config) {
-    if(!config)
-        log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
-
-    dmn_assert(vscf_is_hash(config));
-
-    top_config_hook(config);
-    const vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
-    if(!resources_cfg)
-        log_fatal("plugin_" PNSTR ": config has no 'resources' stanza");
-    if(!vscf_is_hash(resources_cfg))
-        log_fatal("plugin_" PNSTR ": 'resources' stanza must be a hash");
-
-    num_res = vscf_hash_get_len(resources_cfg);
-    if(num_res > MAX_RESOURCES)
-        log_fatal("plugin_" PNSTR ": Maximum number of resources (%u) exceeded", MAX_RESOURCES);
-
-    resources = calloc(num_res, sizeof(resource_t));
-
-    for(unsigned i = 0; i < num_res; i++) {
-        resource_t* res = &resources[i];
-        const char* res_name = vscf_hash_get_key_byindex(resources_cfg, i, NULL);
-        vscf_data_t* res_cfg = (vscf_data_t*)vscf_hash_get_data_byindex(resources_cfg, i);
-        if(!vscf_is_hash(res_cfg))
-            log_fatal("plugin_" PNSTR ": the value of resource '%s' must be a hash", res_name);
-        vscf_hash_inherit_all(config, res_cfg, true);
-        make_resource(res, res_name, res_cfg);
-    }
-}
-
-int CB_MAP(const char* resname, const uint8_t* origin) {
-    if(!resname)
-        map_res_err("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
-
-    // Handle synthetic resname/dcname resources
-    const char* slash = strchr(resname, '/');
-    char* dcname = NULL;
-    char* resname_copy = NULL;
-    if(slash) {
-        resname_copy = strdup(resname);
-        const unsigned reslen = slash - resname;
-        resname_copy[reslen] = '\0';
-        resname = resname_copy;
-        dcname = resname_copy + reslen + 1;
-    }
+F_NONNULLX(1)
+static int map_res_inner(const char* resname, const uint8_t* origin, const char* dcname) {
+    dmn_assert(resname);
 
     for(unsigned i = 0; i < num_res; i++) {
         if(!strcmp(resname, resources[i].name)) { // match!
             const resource_t* res = &resources[i];
             unsigned fixed_dc_idx = 0;
-            if(slash) {
-                dmn_assert(resname_copy); dmn_assert(dcname);
+            if(dcname) { // synthetic /dcname resource
                 fixed_dc_idx = map_get_dcidx(resources[i].map, dcname);
                 if(!fixed_dc_idx)
                     map_res_err("plugin_" PNSTR ": synthetic resource '%s/%s': datacenter '%s' does not exist for this resource", resname, dcname, dcname);
@@ -456,15 +411,71 @@ int CB_MAP(const char* resname, const uint8_t* origin) {
             }
 
             // Handle synthetic resname/dcname virtual resnum
-            if(fixed_dc_idx) {
+            if(fixed_dc_idx)
                 i |= (fixed_dc_idx << DC_SHIFT);
-                free(resname_copy); // free temp copy
-            }
             return (int)i;
         }
     }
 
     map_res_err("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
+}
+
+
+/********** Callbacks from gdnsd **************/
+
+void CB_LOAD_CONFIG(const vscf_data_t* config) {
+    if(!config)
+        log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
+
+    dmn_assert(vscf_is_hash(config));
+
+    top_config_hook(config);
+    const vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
+    if(!resources_cfg)
+        log_fatal("plugin_" PNSTR ": config has no 'resources' stanza");
+    if(!vscf_is_hash(resources_cfg))
+        log_fatal("plugin_" PNSTR ": 'resources' stanza must be a hash");
+
+    num_res = vscf_hash_get_len(resources_cfg);
+    if(num_res > MAX_RESOURCES)
+        log_fatal("plugin_" PNSTR ": Maximum number of resources (%u) exceeded", MAX_RESOURCES);
+
+    resources = calloc(num_res, sizeof(resource_t));
+
+    for(unsigned i = 0; i < num_res; i++) {
+        resource_t* res = &resources[i];
+        const char* res_name = vscf_hash_get_key_byindex(resources_cfg, i, NULL);
+        vscf_data_t* res_cfg = (vscf_data_t*)vscf_hash_get_data_byindex(resources_cfg, i);
+        if(!vscf_is_hash(res_cfg))
+            log_fatal("plugin_" PNSTR ": the value of resource '%s' must be a hash", res_name);
+        vscf_hash_inherit_all(config, res_cfg, true);
+        make_resource(res, res_name, res_cfg);
+    }
+}
+
+int CB_MAP(const char* resname, const uint8_t* origin) {
+    int rv = -1;
+
+    if(!resname) {
+        log_err("plugin_" PNSTR ": a resource name is required for plugin zonefile records");
+    }
+    else {
+        const char* slash = strchr(resname, '/');
+        if(slash) {
+            // Handle synthetic resname/dcname resources
+            char* resname_copy = strdup(resname);
+            const unsigned reslen = slash - resname;
+            resname_copy[reslen] = '\0';
+            char* dcname = resname_copy + reslen + 1;
+            rv = map_res_inner(resname_copy, origin, dcname);
+            free(resname_copy);
+        }
+        else {
+            rv = map_res_inner(resname, origin, NULL);
+        }
+    }
+
+    return rv;
 }
 
 gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {

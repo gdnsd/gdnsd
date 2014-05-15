@@ -93,8 +93,6 @@ typedef struct {
     sigjmp_buf jbuf;
 } zscan_t;
 
-zscan_t zscan = { 0 };
-
 static const uint8_t dname_root[] = {1,0};
 static const uint8_t dname_ns[]   = {4,2,'n','s',255};
 static const uint8_t dname_mx[]   = {4,2,'m','x',255};
@@ -468,7 +466,7 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
 
     z->file = fopen(z->full_fn, "rt");
     if(z->file == NULL)
-        parse_error("Cannot open zone file '%s' for reading: %s", logf_pathname(z->full_fn), logf_errno());
+        parse_error("Cannot open zone file '%s' for reading: %s", logf_pathname(z->full_fn), dmn_logf_errno());
 
     while ((len = getline(&z->line, &z->allocated, z->file)) != -1) {
         z->lcount++;
@@ -511,7 +509,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
 
     dir = opendir(z->path);
     if (dir == NULL) {
-        log_err("djb: cannot open directory '%s': %s", logf_pathname(z->path), logf_errno());
+        log_err("djb: cannot open directory '%s': %s", logf_pathname(z->path), dmn_logf_errno());
         return true;
     }
 
@@ -522,7 +520,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
         struct stat st;
         z->full_fn = gdnsd_str_combine(z->path, e->d_name, &z->fn);
         if (stat(z->full_fn, &st)) {
-            log_err("djb: cannot stat file '%s': %s", logf_pathname(z->full_fn), logf_errno());
+            log_err("djb: cannot stat file '%s': %s", logf_pathname(z->full_fn), dmn_logf_errno());
             parse_abort();
         }
         if((st.st_mode & S_IFMT) != S_IFREG) {
@@ -558,7 +556,8 @@ bool zscan_djb(const char* djb_path, zscan_djb_zonedata_t** zonedata)
 {
     dmn_assert(djb_path);
 
-    zscan_t *z = &zscan;
+    zscan_t _z, *z = &_z;
+    memset(z, 0, sizeof(*z));
     z->path = djb_path;
 
     if (zscan_foreach_record(z, create_zones) || zscan_foreach_record(z, load_zones))
@@ -572,9 +571,11 @@ bool zscan_djb(const char* djb_path, zscan_djb_zonedata_t** zonedata)
         log_warn("djb: skipped %d records with TTD or location", z->skipped);
 
     *zonedata = z->zonedata;
+    free(z->line);
     return false;
 
 error:
     zscan_djbzone_free(&z->zonedata);
+    free(z->line);
     return true;
 }

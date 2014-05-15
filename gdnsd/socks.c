@@ -11,7 +11,7 @@
 #include "gdnsd/log.h"
 #include "statio.h"
 
-bool socks_helper_bind(const char* desc, const int sock, const anysin_t* asin, bool no_freebind V_UNUSED) {
+bool socks_helper_bind(const char* desc, const int sock, const dmn_anysin_t* asin, bool no_freebind V_UNUSED) {
     dmn_assert(desc); dmn_assert(asin);
 
     if(!bind(sock, &asin->sa, asin->len))
@@ -23,7 +23,7 @@ bool socks_helper_bind(const char* desc, const int sock, const anysin_t* asin, b
         //   support for freebind/bindany, try to use that (and warn) before
         //   falling through to various failure modes
 #if defined IP_FREEBIND || (defined IP_BINDANY && defined IPV6_BINDANY) || defined SO_BINDANY
-        if(!no_freebind && !gdnsd_anysin_is_anyaddr(asin)) {
+        if(!no_freebind && !dmn_anysin_is_anyaddr(asin)) {
 # if defined IP_FREEBIND
             // Linux
             const int bindlev = IPPROTO_IP;
@@ -43,11 +43,11 @@ bool socks_helper_bind(const char* desc, const int sock, const anysin_t* asin, b
 # endif
             const int opt_one = 1;
             if(setsockopt(sock, bindlev, bindopt, &opt_one, sizeof opt_one) == -1) {
-                log_warn("Failed to set %s on %s socket %s: %s", bindtxt, desc, logf_anysin(asin), logf_errno());
+                log_warn("Failed to set %s on %s socket %s: %s", bindtxt, desc, dmn_logf_anysin(asin), dmn_logf_errno());
             }
             else {
                 if(!bind(sock, &asin->sa, asin->len)) {
-                    log_warn("%s socket %s bound via %s, address may not (yet!) exist on the host", desc, logf_anysin(asin), bindtxt);
+                    log_warn("%s socket %s bound via %s, address may not (yet!) exist on the host", desc, dmn_logf_anysin(asin), bindtxt);
                     return false;
                 }
             }
@@ -69,12 +69,12 @@ void socks_helper_bind_all(void) {
     statio_bind_socks();
 }
 
-bool socks_sock_is_bound_to(int sock, anysin_t* addr) {
+bool socks_sock_is_bound_to(int sock, dmn_anysin_t* addr) {
     bool rv = false;
 
-    anysin_t bound_to = { .len = DMN_ANYSIN_MAXLEN };
+    dmn_anysin_t bound_to = { .len = DMN_ANYSIN_MAXLEN };
     if(getsockname(sock, &bound_to.sa, &bound_to.len))
-        log_fatal("getsockname() failed: %s", logf_errno());
+        log_fatal("getsockname() failed: %s", dmn_logf_errno());
     if(addr->sa.sa_family == bound_to.sa.sa_family) {
         if(addr->sa.sa_family == AF_INET) {
             if(addr->sin.sin_addr.s_addr == bound_to.sin.sin_addr.s_addr
@@ -100,7 +100,7 @@ bool socks_daemon_check_all(bool soft) {
         if(!t->bind_success) {
             if(!socks_sock_is_bound_to(t->sock, &t->ac->addr)) {
                 if(!t->ac->autoscan && !soft)
-                    log_fatal("Failed to bind() %s DNS socket to %s", ptxt, logf_anysin(&t->ac->addr));
+                    log_fatal("Failed to bind() %s DNS socket to %s", ptxt, dmn_logf_anysin(&t->ac->addr));
                 rv = true;
             }
             else {

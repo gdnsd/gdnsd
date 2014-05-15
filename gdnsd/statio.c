@@ -65,7 +65,7 @@ typedef enum {
 } http_state_t;
 
 typedef struct {
-    anysin_t* asin;
+    dmn_anysin_t* asin;
     char read_buffer[9];
     struct iovec outbufs[2];
     char* hdr_buf;
@@ -404,7 +404,7 @@ static void timeout_cb(struct ev_loop* loop V_UNUSED, ev_timer* t, const int rev
             : tdata->state == WRITING_RES
                 ? "writing to"
                 : "lingering with",
-        logf_anysin(tdata->asin));
+        dmn_logf_anysin(tdata->asin));
 
     cleanup_conn_watchers(loop, tdata);
 }
@@ -431,7 +431,7 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
 
     if(unlikely(write_rv < 0)) {
         if(errno != EAGAIN && errno != EINTR) {
-            log_debug("HTTP send() failed (%s), dropping response to %s", logf_errno(), logf_anysin(tdata->asin));
+            log_debug("HTTP send() failed (%s), dropping response to %s", dmn_logf_errno(), dmn_logf_anysin(tdata->asin));
             cleanup_conn_watchers(loop, tdata);
         }
         return;
@@ -477,7 +477,7 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
         ssize_t recvlen = recv(io->fd, junk_buffer, JUNK_SIZE, 0);
         if(unlikely(recvlen == -1)) {
             if(errno == EAGAIN || errno == EINTR) return;
-            log_debug("HTTP recv() error (lingering) from %s: %s", logf_anysin(tdata->asin), logf_errno());
+            log_debug("HTTP recv() error (lingering) from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
         }
         if(recvlen < 1) cleanup_conn_watchers(loop, tdata);
         return;
@@ -490,7 +490,7 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
     ssize_t recvlen = recv(io->fd, destination, wanted, 0);
     if(unlikely(recvlen == -1)) {
         if(errno != EAGAIN && errno != EINTR) {
-            log_debug("HTTP recv() error from %s: %s", logf_anysin(tdata->asin), logf_errno());
+            log_debug("HTTP recv() error from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             cleanup_conn_watchers(loop, tdata);
         }
         return;
@@ -513,8 +513,8 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
-    anysin_t* asin = malloc(sizeof(anysin_t));
-    asin->len = ANYSIN_MAXLEN;
+    dmn_anysin_t* asin = malloc(sizeof(dmn_anysin_t));
+    asin->len = DMN_ANYSIN_MAXLEN;
 
     const int sock = accept(io->fd, &asin->sa, &asin->len);
 
@@ -532,20 +532,20 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
             case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
-                log_debug("HTTP: early tcp socket death: %s", logf_errno());
+                log_debug("HTTP: early tcp socket death: %s", dmn_logf_errno());
                 break;
             default:
-                log_err("HTTP: accept() error: %s", logf_errno());
+                log_err("HTTP: accept() error: %s", dmn_logf_errno());
         }
         return;
     }
 
-    log_debug("HTTP: Received connection from %s", logf_anysin(asin));
+    log_debug("HTTP: Received connection from %s", dmn_logf_anysin(asin));
 
     if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
         free(asin);
         close(sock);
-        log_err("Failed to set O_NONBLOCK on inbound HTTP socket: %s", logf_errno());
+        log_err("Failed to set O_NONBLOCK on inbound HTTP socket: %s", dmn_logf_errno());
         return;
     }
 
@@ -638,7 +638,7 @@ void statio_init(void) {
     accept_watchers = malloc(sizeof(ev_io*) * num_lsocks);
 
     for(unsigned i = 0; i < num_lsocks; i++) {
-        const anysin_t* asin = &gconfig.http_addrs[i];
+        const dmn_anysin_t* asin = &gconfig.http_addrs[i];
         lsocks[i] = tcp_listen_pre_setup(asin, gconfig.http_timeout);
     }
 }
@@ -654,7 +654,7 @@ bool statio_check_socks(bool soft) {
     unsigned rv = true;
     for(unsigned i = 0; i < num_lsocks; i++)
         if(!socks_sock_is_bound_to(lsocks[i], &gconfig.http_addrs[i]) && !soft)
-            log_fatal("Failed to bind() stats TCP socket to %s", logf_anysin(&gconfig.http_addrs[i]));
+            log_fatal("Failed to bind() stats TCP socket to %s", dmn_logf_anysin(&gconfig.http_addrs[i]));
         else
             rv = false;
     return rv;
@@ -668,7 +668,7 @@ void statio_start(struct ev_loop* statio_loop) {
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         if(listen(lsocks[i], 128) == -1)
-            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, logf_anysin(&gconfig.http_addrs[i]), logf_errno());
+            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, dmn_logf_anysin(&gconfig.http_addrs[i]), dmn_logf_errno());
         accept_watchers[i] = malloc(sizeof(ev_io));
         ev_io_init(accept_watchers[i], accept_cb, lsocks[i], EV_READ);
         ev_set_priority(accept_watchers[i], -2);

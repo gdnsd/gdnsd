@@ -73,7 +73,7 @@ static void atexit_debug_execute(void) { }
 #endif
 
 F_NONNULL
-static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
+static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, dmn_logf_errno()); }
 
 static int killed_by = 0;
 
@@ -104,12 +104,8 @@ F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-#       ifndef NDEBUG
         "Usage: %s [-fsSD] [-d <rootdir>] <action>\n"
         "  -D - Enable verbose debug output\n"
-#       else
-        "Usage: %s [-fsS] [-d <rootdir>] <action>\n"
-#       endif
         "  -f - Foreground mode for start/restart-like actions\n"
         "  -s - Force 'zones_strict_startup = true' for this invocation\n"
         "  -S - Force 'zones_strict_data = true' for this invocation\n"
@@ -207,7 +203,7 @@ static void ping_pthreads(void) {
     int pthread_err = pthread_create(&threadid, NULL, &dummy_thread, NULL);
     if(pthread_err)
         log_fatal("pthread_create() of dummy thread failed: %s",
-            logf_errnum(pthread_err));
+            dmn_logf_strerror(pthread_err));
     pthread_cancel(threadid);
     pthread_join(threadid, NULL);
 }
@@ -234,12 +230,12 @@ static void start_threads(void) {
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, (void*)t);
         if(pthread_err)
             log_fatal("pthread_create() of DNS thread %u (for %s:%s) failed: %s",
-                i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_errnum(pthread_err));
+                i, t->is_udp ? "UDP" : "TCP", dmn_logf_anysin(&t->ac->addr), dmn_logf_strerror(pthread_err));
     }
 
     pthread_t zone_data_threadid;
     int pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
-    if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", logf_errnum(pthread_err));
+    if(pthread_err) log_fatal("pthread_create() of zone data thread failed: %s", dmn_logf_strerror(pthread_err));
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
@@ -251,7 +247,7 @@ static void memlock_rlimits(const bool started_as_root) {
 #ifdef RLIMIT_MEMLOCK
     struct rlimit rlim;
     if(getrlimit(RLIMIT_MEMLOCK, &rlim))
-        log_fatal("getrlimit(RLIMIT_MEMLOCK) failed: %s", logf_errno());
+        log_fatal("getrlimit(RLIMIT_MEMLOCK) failed: %s", dmn_logf_errno());
 
     if(rlim.rlim_cur != RLIM_INFINITY) {
         if(!started_as_root) {
@@ -260,7 +256,7 @@ static void memlock_rlimits(const bool started_as_root) {
                 rlim.rlim_cur = rlim.rlim_max;
                 if(setrlimit(RLIMIT_MEMLOCK, &rlim))
                     log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = max) "
-                        "failed: %s", logf_errno());
+                        "failed: %s", dmn_logf_errno());
             }
 
             if(rlim.rlim_cur < 1048576)
@@ -294,12 +290,12 @@ static void memlock_rlimits(const bool started_as_root) {
             rlim.rlim_max = RLIM_INFINITY;
             if(setrlimit(RLIMIT_MEMLOCK, &rlim))
                 log_fatal("setrlimit(RLIMIT_MEMLOCK, max = INF) "
-                    "failed: %s", logf_errno());
+                    "failed: %s", dmn_logf_errno());
 
             rlim.rlim_cur = RLIM_INFINITY;
             if(setrlimit(RLIMIT_MEMLOCK, &rlim))
                 log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = INF, "
-                    "max = INF) failed: %s", logf_errno());
+                    "max = INF) failed: %s", dmn_logf_errno());
         }
     }
 }
@@ -512,7 +508,7 @@ int main(int argc, char** argv) {
         if(started_as_root && gconfig.priority == -21)
             gconfig.priority = -11;
         if(setpriority(PRIO_PROCESS, getpid(), gconfig.priority))
-            log_warn("setpriority(%i) failed: %s", gconfig.priority, logf_errno());
+            log_warn("setpriority(%i) failed: %s", gconfig.priority, dmn_logf_errno());
     }
 
     // Lock whole daemon into memory, including
@@ -520,7 +516,7 @@ int main(int argc, char** argv) {
     if(gconfig.lock_mem)
         if(mlockall(MCL_CURRENT | MCL_FUTURE))
             log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)",
-                logf_errno());
+                dmn_logf_errno());
 
     // Set up libev error callback
     ev_set_syserr_cb(&syserr_for_ev);

@@ -27,7 +27,7 @@
 #include <pthread.h>
 
 typedef struct {
-    anysin_t addr;
+    dmn_anysin_t addr;
     bool autoscan;
     unsigned dns_port;
     unsigned udp_recv_width;
@@ -51,7 +51,7 @@ typedef struct {
 typedef struct {
     dns_addr_t*    dns_addrs;
     dns_thread_t*  dns_threads;
-    anysin_t*      http_addrs;
+    dmn_anysin_t*      http_addrs;
     const char*    username;
     const uint8_t* chaos;
     bool     include_optional_ns;
@@ -93,6 +93,6 @@ void dns_lsock_init(void);
 // utility function, must be AF_INET or AF_INET6 already,
 //  used by dnsio_udp
 F_NONNULL F_PURE
-bool is_any_addr(const anysin_t* asin);
+bool is_any_addr(const dmn_anysin_t* asin);
 
 #endif // GDNSD_CONF_H

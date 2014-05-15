@@ -55,7 +55,7 @@ typedef struct {
     service_type_t* type;
     char* cname; // normalized text form of addr or dname below
     union {
-        anysin_t addr;
+        dmn_anysin_t addr;
         const uint8_t* dname; // dname-form of a CNAME
     };
     unsigned n_failure;
@@ -96,7 +96,7 @@ static ev_timer* sttl_update_timer = NULL;
 #define DEF_DOWN_THRESH 10
 #define DEF_INTERVAL 10
 
-static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w, int revents) {
+static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
     dmn_assert(w == sttl_update_timer);
     dmn_assert(revents == EV_TIMER);
@@ -409,7 +409,7 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
 // We only have to check the address, because the port
 //  is determined by service type.
 F_NONNULL
-static bool addr_eq(const anysin_t* a, const anysin_t* b) {
+static bool addr_eq(const dmn_anysin_t* a, const dmn_anysin_t* b) {
     dmn_assert(a); dmn_assert(b);
     dmn_assert(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
 
@@ -423,7 +423,7 @@ static bool addr_eq(const anysin_t* a, const anysin_t* b) {
     return rv;
 }
 
-static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const char* cname, const uint8_t* dname) {
+static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, const char* cname, const uint8_t* dname) {
     dmn_assert(svctype_name);
     if(addr)
         dmn_assert(!cname && !dname);
@@ -441,7 +441,7 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
 
     if(!this_svc)
         log_fatal("Invalid service type '%s' in monitoring request for '%s'",
-            svctype_name, addr ? logf_anysin_noport(addr) : cname);
+            svctype_name, addr ? dmn_logf_anysin_noport(addr) : cname);
 
     // next, check if this is a duplicate of a request issued earlier
     //   by some other plugin/resource, in which case we can just give
@@ -471,13 +471,13 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
     if(addr) {
         if(this_svc->plugin && !this_svc->plugin->add_mon_addr)
             log_fatal("Service type '%s' does not support address monitoring for '%s'",
-                svctype_name, logf_anysin_noport(addr));
+                svctype_name, dmn_logf_anysin_noport(addr));
 
         // construct desc for this new unique monitor
         char addr_str[INET6_ADDRSTRLEN];
         int name_err = dmn_anysin2str_noport(addr, addr_str);
         // this should basically never happen since the same family of functions will
-        //   have already converted it from anysin_t -> text earlier, but if it does,
+        //   have already converted it from dmn_anysin_t -> text earlier, but if it does,
         //   we really don't have much we can do about logging it informatively...
         if(name_err)
             log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
@@ -486,7 +486,7 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
         this_smgr->is_cname = false;
         this_smgr->cname = strdup(addr_str);
         gdnsd_downcase_str(this_smgr->cname);
-        memcpy(&this_smgr->addr, addr, sizeof(anysin_t));
+        memcpy(&this_smgr->addr, addr, sizeof(dmn_anysin_t));
     }
     else { // cname
         if(this_svc->plugin && !this_svc->plugin->add_mon_cname)
@@ -516,7 +516,7 @@ static unsigned mon_thing(const char* svctype_name, const anysin_t* addr, const 
 
 // Called from plugins once per monitored service type+IP combination
 //  to request monitoring and initialize various data/state.
-unsigned gdnsd_mon_addr(const char* svctype_name, const anysin_t* addr) {
+unsigned gdnsd_mon_addr(const char* svctype_name, const dmn_anysin_t* addr) {
     return mon_thing(svctype_name, addr, NULL, NULL);
 }
 

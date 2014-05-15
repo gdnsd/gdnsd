@@ -36,7 +36,7 @@ static unsigned v4_max = 0;
 static unsigned v6_max = 0;
 
 typedef struct {
-    anysin_t addr;
+    dmn_anysin_t addr;
     unsigned* indices;
 } addrstate_t;
 
@@ -238,7 +238,7 @@ static void config_auto(res_t* res, const char* stanza, const vscf_data_t* auto_
     if(!vscf_is_simple(first_cfg))
         log_fatal("plugin_multifo: resource '%s' (%s): The value of '%s' must be an IP address in string form", res->name, stanza, first_name);
     const char* addr_txt = vscf_simple_get_data(first_cfg);
-    anysin_t temp_asin;
+    dmn_anysin_t temp_asin;
     const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &temp_asin);
     if(addr_err)
         log_fatal("plugin_multifo: resource %s (%s): failed to parse address '%s' for '%s': %s", res->name, stanza, addr_txt, first_name, gai_strerror(addr_err));

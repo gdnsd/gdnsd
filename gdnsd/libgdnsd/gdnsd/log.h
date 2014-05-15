@@ -30,25 +30,24 @@
 #include <syslog.h>
 #include <gdnsd/dmn.h>
 
-#define gdnsd_logger dmn_logger
-#define gdnsd_loggerv dmn_loggerv
+// shortcut defines for basic log levels
 #define log_info dmn_log_info
 #define log_warn dmn_log_warn
 #define log_err dmn_log_err
 #define log_fatal dmn_log_fatal
 #define log_debug dmn_log_debug
+#define log_devdebug dmn_log_devdebug
 
-/* Custom thread-safe %s-formatters for anysin_t*, errno, etc..
+/* Custom thread-safe %s-formatters for dmn_anysin_t*, errno, etc..
  * Use these *only* in the argument lists of log_foo() calls!
  *
  * e.g.:
  *
- * anysin_t* asin = ...;
+ * dmn_anysin_t* asin = ...;
  * int pthread_error = ...;
  * log_err("pthread error: %s, regular errno: %s, sockaddr: %s",
- *     logf_errnum(pthread_error), logf_errno(), logf_anysin(asin));
+ *     dmn_logf_strerror(pthread_error), dmn_logf_errno(), dmn_logf_anysin(asin));
  */
-
 const char* gdnsd_logf_dname(const uint8_t* dname);
 
 // For logging pathnames returned by gdnsd/path.h functions,
@@ -64,15 +63,8 @@ const char* gdnsd_logf_ipv6(const uint8_t* ipv6);
 // standard "struct in6_addr" (basically the same thing...)
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
 
-#define gdnsd_logf_errnum dmn_strerror
-#define gdnsd_logf_errno() dmn_strerror(errno)
-#define gdnsd_logf_anysin dmn_logf_anysin
-#define gdnsd_logf_anysin_noport dmn_logf_anysin_noport
-#define logf_anysin dmn_logf_anysin
-#define logf_anysin_noport dmn_logf_anysin_noport
+// shortcuts for the above
 #define logf_dname gdnsd_logf_dname
-#define logf_errnum dmn_strerror
-#define logf_errno() dmn_strerror(errno)
 #define logf_pathname gdnsd_logf_pathname
 #define logf_ipv6 gdnsd_logf_ipv6
 #define logf_in6a gdnsd_logf_in6a

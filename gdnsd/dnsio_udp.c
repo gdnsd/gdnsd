@@ -58,24 +58,24 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr) {
 #if defined IP_MTU_DISCOVER && defined IP_PMTUDISC_DONT
     const int mtu_type = IP_PMTUDISC_DONT;
     if(setsockopt(sock, SOL_IP, IP_MTU_DISCOVER, &mtu_type, sizeof (mtu_type)) == -1)
-        log_fatal("Failed to disable Path MTU Discovery for UDP socket: %s", logf_errno());
+        log_fatal("Failed to disable Path MTU Discovery for UDP socket: %s", dmn_logf_errno());
 #elif defined IP_DONTFRAG
     const int opt_zero = 0;
     if(setsockopt(sock, SOL_IP, IP_DONTFRAG, &opt_zero, sizeof (opt_zero)) == -1)
-        log_fatal("Failed to disable DF bit for UDP socket: %s", logf_errno());
+        log_fatal("Failed to disable DF bit for UDP socket: %s", dmn_logf_errno());
 #endif
 
     // This is just a latency hack, it's not necessary for correct operation
 #if defined IP_TOS && defined IPTOS_LOWDELAY
     const int opt_tos = IPTOS_LOWDELAY;
     if(setsockopt(sock, SOL_IP, IP_TOS, &opt_tos, sizeof opt_tos) == -1)
-        log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", logf_errno());
+        log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", dmn_logf_errno());
 #endif
 
     if(any_addr) {
 #if HAVE_DECL_IP_PKTINFO
         if(setsockopt(sock, SOL_IP, IP_PKTINFO, &opt_one, sizeof opt_one) == -1)
-            log_fatal("Failed to set IP_PKTINFO on UDP socket: %s", logf_errno());
+            log_fatal("Failed to set IP_PKTINFO on UDP socket: %s", dmn_logf_errno());
 #elif HAVE_DECL_IP_RECVDSTADDR && HAVE_DECL_IP_SENDSRCADDR
         // we don't use SENDSRCADDR directly, but it seems most smart implementors
         //  define it as an alias to RECVDSTADDR.  Importantly: MacOS, which does
@@ -84,7 +84,7 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr) {
 #    error Your platform violates some gdnsd assumptions (IP_RECVDSTADDR != IP_SENDSRCADDR)
 #  endif
         if(setsockopt(sock, SOL_IP, IP_RECVDSTADDR, &opt_one, sizeof opt_one) == -1)
-            log_fatal("Failed to set IP_RECVDSTADDR on UDP socket: %s", logf_errno());
+            log_fatal("Failed to set IP_RECVDSTADDR on UDP socket: %s", dmn_logf_errno());
 #else
         log_fatal("IPv4 any-address '0.0.0.0' not supported for DNS listening on your platform (no IP_PKTINFO or IP_RECVDSTADDR+IP_SENDSRCADDR)");
 #endif
@@ -109,23 +109,23 @@ static void udp_sock_opts_v6(const int sock) {
 
 #if defined IPV6_USE_MIN_MTU
     if(setsockopt(sock, SOL_IPV6, IPV6_USE_MIN_MTU, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set IPV6_USE_MIN_MTU on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set IPV6_USE_MIN_MTU on UDP socket: %s", dmn_logf_errno());
 #elif defined IPV6_MTU
 #    ifndef IPV6_MIN_MTU
 #      define IPV6_MIN_MTU 1280
 #    endif
     const int min_mtu = IPV6_MIN_MTU;
     if(setsockopt(sock, SOL_IPV6, IPV6_MTU, &min_mtu, sizeof min_mtu) == -1)
-        log_fatal("Failed to set IPV6_MTU on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set IPV6_MTU on UDP socket: %s", dmn_logf_errno());
 #endif
 
     if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", dmn_logf_errno());
 
 #if defined IPV6_TCLASS && defined IPTOS_LOWDELAY
     const int opt_tos = IPTOS_LOWDELAY;
     if(setsockopt(sock, SOL_IPV6, IPV6_TCLASS, &opt_tos, sizeof opt_tos) == -1)
-        log_fatal("Failed to set IPTOS_LOWDELAY on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set IPTOS_LOWDELAY on UDP socket: %s", dmn_logf_errno());
 #endif
 
 // this hack is just for MacOS prior to Lion, which finally
@@ -135,7 +135,7 @@ static void udp_sock_opts_v6(const int sock) {
 #endif
 
     if(setsockopt(sock, SOL_IPV6, IPV6_RECVPKTINFO, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", dmn_logf_errno());
 }
 
 void udp_sock_setup(dns_thread_t* t) {
@@ -144,7 +144,7 @@ void udp_sock_setup(dns_thread_t* t) {
     dns_addr_t* addrconf = t->ac;
     dmn_assert(addrconf);
 
-    const anysin_t* asin = &addrconf->addr;
+    const dmn_anysin_t* asin = &addrconf->addr;
 
     // mod udp_recv_width down to 1 when unsupported, makes other logic simpler
     // XXX fix this so addrconf can be const?????
@@ -155,17 +155,17 @@ void udp_sock_setup(dns_thread_t* t) {
     dmn_assert(isv6 || asin->sa.sa_family == AF_INET);
 
     const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM, gdnsd_getproto_udp());
-    if(sock == -1) log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());
+    if(sock == -1) log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', dmn_logf_errno());
     if(fcntl(sock, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set FD_CLOEXEC on UDP socket: %s", dmn_logf_errno());
 
     const int opt_one = 1;
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", dmn_logf_errno());
 
 #ifdef SO_REUSEPORT
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", dmn_logf_errno());
 #endif
 
     int opt_size;
@@ -175,14 +175,14 @@ void udp_sock_setup(dns_thread_t* t) {
         opt_size = addrconf->udp_rcvbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_RCVBUF to %u for UDP socket %s: %s", opt_size,
-                logf_anysin(asin), logf_errno());
+                dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {
         // Enforce a basic minimum SO_RCVBUF of (8 * DNS_RECV_SIZE) (10K), multiplied
         //   by udp_recv_width when recvmmsg() is actually in use.
 
         if(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, &size_size) == -1)
-            log_fatal("Failed to get SO_RCVBUF on UDP socket: %s", logf_errno());
+            log_fatal("Failed to get SO_RCVBUF on UDP socket: %s", dmn_logf_errno());
 
         int min_rcv = DNS_RECV_SIZE * 8 * addrconf->udp_recv_width;
 
@@ -190,7 +190,7 @@ void udp_sock_setup(dns_thread_t* t) {
             opt_size = min_rcv;
             if(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
                 log_fatal("Failed to set SO_RCVBUF to %u for UDP socket %s: %s", opt_size,
-                    logf_anysin(asin), logf_errno());
+                    dmn_logf_anysin(asin), dmn_logf_errno());
         }
     }
 
@@ -198,7 +198,7 @@ void udp_sock_setup(dns_thread_t* t) {
         opt_size = addrconf->udp_sndbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s", opt_size,
-                logf_anysin(asin), logf_errno());
+                dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {
         // Try to enforce a basic minimum SO_SNDBUF in the range of 16K -> 256K depending
@@ -206,7 +206,7 @@ void udp_sock_setup(dns_thread_t* t) {
         // The minimum (no mmsg, min max_response) would be 16K, and the defaults
         //   would be 64K for non-mmsg and 128K for mmsg cases.
         if(getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, &size_size) == -1)
-            log_fatal("Failed to get SO_SNDBUF on UDP socket: %s", logf_errno());
+            log_fatal("Failed to get SO_SNDBUF on UDP socket: %s", dmn_logf_errno());
 
         int desired_sndbuf;
         if(addrconf->udp_recv_width > 4)
@@ -229,7 +229,7 @@ void udp_sock_setup(dns_thread_t* t) {
                 else if(opt_size > (int)gconfig.max_response)
                     opt_size = (int)gconfig.max_response;
                 else
-                    log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s.  You may need to reduce the max_response option on this machine to a size it is capable of allocating for UDP buffers", opt_size, logf_anysin(asin), logf_errno());
+                    log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s.  You may need to reduce the max_response option on this machine to a size it is capable of allocating for UDP buffers", opt_size, dmn_logf_anysin(asin), dmn_logf_errno());
             }
         }
     }
@@ -237,7 +237,7 @@ void udp_sock_setup(dns_thread_t* t) {
     if(isv6)
         udp_sock_opts_v6(sock);
     else
-        udp_sock_opts_v4(sock, gdnsd_anysin_is_anyaddr(asin));
+        udp_sock_opts_v4(sock, dmn_anysin_is_anyaddr(asin));
 
     t->sock = sock;
 }
@@ -255,7 +255,7 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
 
-    anysin_t asin;
+    dmn_anysin_t asin;
     struct iovec iov = {
         .iov_base = mmap(NULL, gconfig.max_response, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0),
         .iov_len  = 0
@@ -272,7 +272,7 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
     while(1) {
         iov.iov_len = DNS_RECV_SIZE;
         msg_hdr.msg_controllen = cmsg_size;
-        msg_hdr.msg_namelen    = ANYSIN_MAXLEN;
+        msg_hdr.msg_namelen    = DMN_ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
         gdnsd_prcu_rdr_offline();
         const int buf_in_len = recvmsg(fd, &msg_hdr, 0);
@@ -284,13 +284,13 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
                 const int sent = sendmsg(fd, &msg_hdr, 0);
                 if(unlikely(sent < 0)) {
                     stats_own_inc(&pctx->stats->udp.sendfail);
-                    log_err("UDP sendmsg() of %li bytes failed with retval %i for client %s: %s", (long)iov.iov_len, sent, logf_anysin(&asin), logf_errno());
+                    log_err("UDP sendmsg() of %li bytes failed with retval %i for client %s: %s", (long)iov.iov_len, sent, dmn_logf_anysin(&asin), dmn_logf_errno());
                 }
             }
         }
         else {
             stats_own_inc(&pctx->stats->udp.recvfail);
-            log_err("UDP recvmsg() error: %s", logf_errno());
+            log_err("UDP recvmsg() error: %s", dmn_logf_errno());
         }
     }
 }
@@ -323,7 +323,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
     struct iovec iov[width][1];
     struct mmsghdr dgrams[width];
     char cmsg_buf[width][cmsg_size];
-    anysin_t asin[width];
+    dmn_anysin_t asin[width];
 
     /* Set up packet buffers */
     uint8_t* pbuf = mmap(NULL, max_rounded * width, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -339,7 +339,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
             dgrams[i].msg_hdr.msg_iov        = iov[i];
             dgrams[i].msg_hdr.msg_iovlen     = 1;
             dgrams[i].msg_hdr.msg_name       = &asin[i].sa;
-            dgrams[i].msg_hdr.msg_namelen    = ANYSIN_MAXLEN;
+            dgrams[i].msg_hdr.msg_namelen    = DMN_ANYSIN_MAXLEN;
             dgrams[i].msg_hdr.msg_control    = use_cmsg ? cmsg_buf[i] : NULL;
             dgrams[i].msg_hdr.msg_controllen = cmsg_size;
             dgrams[i].msg_hdr.msg_flags      = 0;
@@ -389,7 +389,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
                     (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
                     stats_own_inc(&pctx->stats->udp.sendfail);
                     if(sent < 0) sent = 0;
-                    log_err("UDP sendmmsg() of %li bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, logf_anysin(dgptr[sent].msg_hdr.msg_name), logf_errnum(sockerr));
+                    log_err("UDP sendmmsg() of %li bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, dmn_logf_anysin(dgptr[sent].msg_hdr.msg_name), dmn_logf_strerror(sockerr));
                     dgptr += sent; // skip past the successes
                     dgptr++; // skip the failed one too
                     pkts--; // drop one count for the failed message
@@ -399,7 +399,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
         }
         else {
             stats_own_inc(&pctx->stats->udp.recvfail);
-            log_err("UDP recvmmsg() error: %s", logf_errno());
+            log_err("UDP recvmmsg() error: %s", dmn_logf_errno());
         }
     }
 }
@@ -414,10 +414,10 @@ static bool has_mmsg(void) { return false; }
 //  to copy the flow label correctly, if not the interface + source addr),
 //  as well as the IPv4 any-address (for correct source address).
 F_NONNULL F_PURE
-static bool needs_cmsg(const anysin_t* asin) {
+static bool needs_cmsg(const dmn_anysin_t* asin) {
     dmn_assert(asin);
     dmn_assert(asin->sa.sa_family == AF_INET6 || asin->sa.sa_family == AF_INET);
-    return (asin->sa.sa_family == AF_INET6 || gdnsd_anysin_is_anyaddr(asin))
+    return (asin->sa.sa_family == AF_INET6 || dmn_anysin_is_anyaddr(asin))
         ? true
         : false;
 }
@@ -439,7 +439,7 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     if(!t->bind_success) {
         dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
-        log_warn("Could not bind UDP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(&t->ac->addr));
+        log_warn("Could not bind UDP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", dmn_logf_anysin(&t->ac->addr));
         //  we come here to  spawn the thread and do the dnspacket_context_new() properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
         //  simply never gets requests.  This way we don't have to adjust stats arrays for
@@ -454,7 +454,7 @@ void* dnsio_udp_start(void* thread_asvoid) {
 #ifdef USE_SENDMMSG
     if(addrconf->udp_recv_width > 1) {
         log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
-            addrconf->udp_recv_width, logf_anysin(&addrconf->addr));
+            addrconf->udp_recv_width, dmn_logf_anysin(&addrconf->addr));
         mainloop_mmsg(addrconf->udp_recv_width, t->sock, pctx, need_cmsg);
     }
     else

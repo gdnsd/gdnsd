@@ -47,7 +47,7 @@ static unsigned num_mons = 0;
 static mon_t* mons = NULL;
 
 F_NONNULL
-static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, logf_errno()); }
+static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, dmn_logf_errno()); }
 
 static int plugin_read_fd = -1;
 static int plugin_write_fd = -1;
@@ -175,14 +175,14 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
 
     this_mon->cmd_pid = fork();
     if(this_mon->cmd_pid == -1)
-        log_fatal("fork() failed: %s", dmn_strerror(errno));
+        log_fatal("fork() failed: %s", dmn_logf_strerror(errno));
 
     if(!this_mon->cmd_pid) { // child
         // technically, we could go ahead and close off stdout/stderr
         //   here for the "startfg" case, but why bother?  If the user
         //   is debugging via startfg they might want to see this crap anyways.
         execv(this_mon->cmd->args[0], (char* const *)this_mon->cmd->args);
-        log_fatal("execv(%s, ...) failed: %s", this_mon->cmd->args[0], dmn_strerror(errno));
+        log_fatal("execv(%s, ...) failed: %s", this_mon->cmd->args[0], dmn_logf_strerror(errno));
     }
 
     this_mon->result_pending = true;
@@ -252,7 +252,7 @@ int main(int argc, char** argv) {
     //   and this way we don't have to deal with it when
     //   execv()-ing child commands later.
     if(!freopen("/dev/null", "r", stdin))
-        dmn_log_fatal("Cannot open /dev/null: %s", dmn_strerror(errno));
+        dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_strerror(errno));
 
     dmn_init2(NULL, NULL);
     dmn_init3(username, false);
@@ -271,9 +271,9 @@ int main(int argc, char** argv) {
     // CLOEXEC the direct lines to the main plugin/daemon,
     //   so that child scripts can't screw with them.
     if(fcntl(plugin_read_fd, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on plugin read fd: %s", dmn_strerror(errno));
+        log_fatal("Failed to set FD_CLOEXEC on plugin read fd: %s", dmn_logf_strerror(errno));
     if(fcntl(plugin_write_fd, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on plugin write fd: %s", dmn_strerror(errno));
+        log_fatal("Failed to set FD_CLOEXEC on plugin write fd: %s", dmn_logf_strerror(errno));
 
     if(emc_read_exact(plugin_read_fd, "HELO"))
         log_fatal("Failed to read HELO from plugin");
@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
     // done with the serial setup, close the readpipe and go nonblocking on write for eventloop...
     close(plugin_read_fd);
     if(unlikely(fcntl(plugin_write_fd, F_SETFL, (fcntl(plugin_write_fd, F_GETFL, 0)) | O_NONBLOCK) == -1))
-        log_fatal("Failed to set O_NONBLOCK on pipe: %s", logf_errno());
+        log_fatal("Failed to set O_NONBLOCK on pipe: %s", dmn_logf_errno());
 
     // init results-sending queue
     sendq_init();

@@ -56,7 +56,7 @@ typedef struct {
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
     unsigned idx;
-    anysin_t addr;
+    dmn_anysin_t addr;
     char res_buf[14];
     int sock;
     http_state_t hstate;
@@ -98,12 +98,12 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
         const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
         if(unlikely(sock < 0)) {
-            log_err("plugin_http_status: Failed to create monitoring socket: %s", logf_errno());
+            log_err("plugin_http_status: Failed to create monitoring socket: %s", dmn_logf_errno());
             break;
         }
 
         if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
-            log_err("plugin_http_status: Failed to set O_NONBLOCK on monitoring socket: %s", logf_errno());
+            log_err("plugin_http_status: Failed to set O_NONBLOCK on monitoring socket: %s", dmn_logf_errno());
             close(sock);
             break;
         }
@@ -121,7 +121,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
                     case ENETUNREACH:
                         break;
                     default:
-                        log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
+                        log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_errno());
                 }
                 close(sock);
                 break;
@@ -174,10 +174,10 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
                 case ENETUNREACH:
                     break;
                 default:
-                    log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errnum(so_error));
+                    log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_strerror(so_error));
             }
 
-            log_debug("plugin_http_status: State poll of %s failed quickly: %s", md->desc, logf_errnum(so_error));
+            log_debug("plugin_http_status: State poll of %s failed quickly: %s", md->desc, dmn_logf_strerror(so_error));
             close(sock); md->sock = -1;
             ev_io_stop(loop, md->write_watcher);
             ev_timer_stop(loop, md->timeout_watcher);
@@ -203,7 +203,7 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
             case EPIPE:
                 break;
             default:
-                log_err("plugin_http_status: write() to monitoring socket failed, possible local problem: %s", logf_errno());
+                log_err("plugin_http_status: write() to monitoring socket failed, possible local problem: %s", dmn_logf_errno());
         }
         shutdown(sock, SHUT_RDWR);
         close(sock);
@@ -252,7 +252,7 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
             case EPIPE:
                 break;
             default:
-                log_err("plugin_http_status: read() from monitoring socket failed, possible local problem: %s", logf_errno());
+                log_err("plugin_http_status: read() from monitoring socket failed, possible local problem: %s", dmn_logf_errno());
         }
     }
     else if(recvd < to_recv) {
@@ -398,7 +398,7 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
     this_svc->interval = interval;
 }
 
-void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const anysin_t* addr, const unsigned idx) {
+void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
 
     http_events_t* this_mon = calloc(1, sizeof(http_events_t));
@@ -414,7 +414,7 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
 
     dmn_assert(this_mon->http_svc);
 
-    memcpy(&this_mon->addr, addr, sizeof(anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(dmn_anysin_t));
     if(this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->http_svc->port);
     }

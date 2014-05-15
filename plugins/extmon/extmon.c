@@ -145,7 +145,7 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
                 if(errno == EAGAIN || errno == EINTR)
                     return;
                 else
-                    log_err("plugin_extmon: pipe read() failed: %s", dmn_strerror(errno));
+                    log_err("plugin_extmon: pipe read() failed: %s", dmn_logf_strerror(errno));
             }
             else if(rv != 0) {
                 log_err("plugin_extmon: BUG: short pipe read for mon results");
@@ -264,13 +264,13 @@ static void spawn_helper(void) {
     int writepipe[2];
     int readpipe[2];
     if(pipe(writepipe))
-        log_fatal("plugin_extmon: pipe() failed: %s", dmn_strerror(errno));
+        log_fatal("plugin_extmon: pipe() failed: %s", dmn_logf_strerror(errno));
     if(pipe(readpipe))
-        log_fatal("plugin_extmon: pipe() failed: %s", dmn_strerror(errno));
+        log_fatal("plugin_extmon: pipe() failed: %s", dmn_logf_strerror(errno));
 
     helper_pid = fork();
     if(helper_pid == -1)
-        log_fatal("plugin_extmon: fork() failed: %s", dmn_strerror(errno));
+        log_fatal("plugin_extmon: fork() failed: %s", dmn_logf_strerror(errno));
 
     if(!helper_pid) { // child
         close(writepipe[1]);
@@ -280,7 +280,7 @@ static void spawn_helper(void) {
         const char* child_write_fdstr = num_to_str(readpipe[1]);
         execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N", dmn_get_foreground() ? "F" : "B",
             dmn_get_username(), alt_stderr_fdstr, child_read_fdstr, child_write_fdstr, (const char*)NULL);
-        log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_strerror(errno));
+        log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_logf_strerror(errno));
     }
 
     // parent;
@@ -316,7 +316,7 @@ static void spawn_helper(void) {
     // done sending stuff, close writepipe and go nonblock on read side for eventloop
     close(helper_write_fd);
     if(unlikely(fcntl(helper_read_fd, F_SETFL, (fcntl(helper_read_fd, F_GETFL, 0)) | O_NONBLOCK) == -1))
-        log_fatal("plugin_extmon: Failed to set O_NONBLOCK on pipe: %s", logf_errno());
+        log_fatal("plugin_extmon: Failed to set O_NONBLOCK on pipe: %s", dmn_logf_errno());
 }
 
 static bool bad_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data V_UNUSED) {
@@ -403,7 +403,7 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     this_mon->seen_once = false;
 }
 
-void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
     dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
     add_mon_any(desc, svc_name, cname, idx);
 }
