@@ -81,8 +81,7 @@ void plugin_geoip_full_config(unsigned num_threads V_UNUSED) {
     gdmaps_load_databases(gdmaps);
 }
 
-void plugin_geoip_pre_run(struct ev_loop* loop V_UNUSED) {
-    dmn_assert(loop);
+void plugin_geoip_pre_run(void) {
     dmn_assert(gdmaps);
     gdmaps_setup_watchers(gdmaps);
 }

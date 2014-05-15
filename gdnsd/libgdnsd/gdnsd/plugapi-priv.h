@@ -66,7 +66,7 @@ void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop);
 F_NONNULL
 void gdnsd_plugins_action_start_monitors(struct ev_loop* mon_loop);
 F_NONNULL
-void gdnsd_plugins_action_pre_run(struct ev_loop* loop);
+void gdnsd_plugins_action_pre_run(void);
 void gdnsd_plugins_action_iothread_init(const unsigned threadnum);
 void gdnsd_plugins_action_exit(void);
 

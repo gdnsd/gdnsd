@@ -285,10 +285,10 @@ void gdnsd_plugins_action_start_monitors(struct ev_loop* mon_loop) {
             plugins[i]->start_monitors(mon_loop);
 }
 
-void gdnsd_plugins_action_pre_run(struct ev_loop* loop) {
+void gdnsd_plugins_action_pre_run(void) {
     for(unsigned i = 0; i < num_plugins; i++)
         if(plugins[i]->pre_run)
-            plugins[i]->pre_run(loop);
+            plugins[i]->pre_run();
 }
 
 void gdnsd_plugins_action_iothread_init(const unsigned threadnum) {

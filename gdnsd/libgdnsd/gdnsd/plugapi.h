@@ -114,7 +114,7 @@ typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
 typedef void (*gdnsd_pre_privdrop_cb_t)(void);
 typedef void (*gdnsd_post_daemonize_cb_t)(void);
-typedef void (*gdnsd_pre_run_cb_t)(struct ev_loop* loop);
+typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
 typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 typedef void (*gdnsd_exit_cb_t)(void);
