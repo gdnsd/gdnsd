@@ -31,8 +31,8 @@
 //  Min MTU) via EDNS0.
 // We use this size as our recvmsg() limit as well,
 //  discarding anything larger to save ourselves
-//  processing it.  Really, we could even advertise
-//  512 here since, we don't support anything
+//  processing it.  Really we could even advertise
+//  512 here since we don't support anything
 //  that warrants larger input sizes, but this is
 //  reasonable.
 #define DNS_EDNS0_SIZE 1280U
