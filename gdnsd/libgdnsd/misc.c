@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <time.h>
 #include <sys/time.h>
 #include <sys/utsname.h>
 #include <stdio.h>
@@ -265,9 +266,10 @@ void gdnsd_rand_meta_init(void) {
         struct timeval t;
         gettimeofday(&t, NULL);
         pid_t pidval = getpid();
+        long clockval = clock();
         rand_init_state.x = 123456789123ULL ^ t.tv_sec;
         rand_init_state.y = 987654321987ULL ^ t.tv_usec;
-        rand_init_state.z1 = 43219876 ^ pidval;
+        rand_init_state.z1 = 43219876 ^ clockval;
         rand_init_state.c1 = 6543217;
         rand_init_state.z2 = 21987643;
         rand_init_state.c2 = 1732654 ^ pidval;
