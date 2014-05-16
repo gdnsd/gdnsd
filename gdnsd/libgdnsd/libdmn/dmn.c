@@ -153,7 +153,7 @@ typedef struct {
     bool  will_privdrop;   // invoked_as_root && non-null username from init3()
     bool  will_chroot;     // invoked_as_root && non-null chroot from init2(), implies will_privdrop
     bool  need_helper;     // depends on foreground, will_privdrop, and pcall registration - set in _fork
-    bool  systemd_booted;  // whether sd_booted() says systemd is up
+    bool  use_systemd;     // sd_booted() && !isatty(stdin) && !foreground (we think systemd ran us directly)
     uid_t uid;             // uid of username from init3()
     gid_t gid;             // gid of username from init3()
     char* pid_dir_pre_chroot;   // depends on chroot + pid_dir
@@ -173,7 +173,7 @@ static params_t params = {
     .will_privdrop   = false,
     .will_chroot     = false,
     .need_helper     = false,
-    .systemd_booted  = false,
+    .use_systemd     = false,
     .uid             = 0,
     .gid             = 0,
     .pid_dir_pre_chroot   = NULL,
@@ -481,7 +481,11 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
         dmn_log_fatal("BUG: dmn_init1() can only be called once!");
 
 #ifdef USE_SYSTEMD
-    params.systemd_booted = (sd_booted() < 0) ? false : true;
+    bool sdbooted = (sd_booted() < 0) ? false : true;
+    params.use_systemd = sdbooted && !isatty(fileno(stdin)) && !foreground;
+    // HACK: control procs don't get $NOTIFY_SOCKET from systemd, but this seems to fix that ...
+    if(params.use_systemd)
+        setenv("NOTIFY_SOCKET", "@/org/freedesktop/systemd1/notify", 0);
 #endif
 
     // This lets us log to normal stderr for now
@@ -796,7 +800,7 @@ void dmn_fork(void) {
     //   as a control process, and setting ourselves back to that manually in sysfs
     //   seems to promote us from a mere control process and allow us to become the
     //   next MAINPID.  This must happen before we fork persistent children as well.
-    if(params.restart && params.systemd_booted) {
+    if(params.restart && params.use_systemd) {
         char* unit;
         int gu_rv = sd_pid_get_unit(getpid(), &unit);
         if(gu_rv >= 0) {
@@ -889,35 +893,35 @@ void dmn_acquire_pidfile(void) {
     const pid_t old_pid = dmn_status();
     const pid_t pid = getpid();
 
-#ifdef USE_SYSTEMD
-    if(params.systemd_booted) {
-        // control procs don't get $NOTIFY_SOCKET from systemd, but this seems to fix that ...
-        setenv("NOTIFY_SOCKET", "@/org/freedesktop/systemd1/notify", 0);
-
-        // notify systemd of MAINPID.  We could do this much later (e.g. in _finish()), except that
-        //   (a) in the restart case we must do this switch *before* killing old daemon, so there's
-        //       never a time when the MAINPID process goes missing.
-        //   (b) in non-restart cases, no other instance is running, so it doesn't matter if we do
-        //       this early and then die.
-        sd_notifyf(0, "MAINPID=%li", (long)pid);
+    bool really_restart = false;
+    if(old_pid) {
+        if(!params.restart)
+            dmn_log_fatal("start: another daemon instance is already running at pid %li!", (long)old_pid);
+        else
+            really_restart = true;
     }
-#endif
+    else if(params.restart) {
+        dmn_log_info("restart: No previous daemon instance to stop...");
+    }
 
     // if restarting, TERM the old daemon and wait for it to exit for a bit...
-    if(params.restart) {
-        if(old_pid) {
-            dmn_log_info("restart: Stopping previous daemon instance at pid %li...", (long)old_pid);
-            if(terminate_pid_and_wait(old_pid)) {
+    if(really_restart) {
 #ifdef USE_SYSTEMD
-                // put the MAINPID back to the old value before bailing out if old_pid never died
-                if(params.systemd_booted)
-                    sd_notifyf(0, "MAINPID=%li", (long)old_pid);
+        // notify systemd of new MAINPID *before* killing old daemon, or systemd will kill everything
+        if(params.use_systemd)
+            sd_notifyf(0, "MAINPID=%li", (long)pid);
 #endif
-                dmn_log_fatal("restart: failed, old daemon at pid %li did not die!", (long)old_pid);
-            }
-        }
-        else {
-            dmn_log_info("restart: No previous daemon instance to stop...");
+        dmn_log_info("restart: Stopping previous daemon instance at pid %li...", (long)old_pid);
+        if(terminate_pid_and_wait(old_pid)) {
+#ifdef USE_SYSTEMD
+            // put the MAINPID back to the old value before bailing out if old_pid never died
+            //  (this is a little racy, in that it could have been replaced by a separate
+            //  successful restarter right after we gave up waiting, but hopefully systemd
+            //  doesn't launch multiple concurrent ExecReloads)
+            if(params.use_systemd)
+                sd_notifyf(0, "MAINPID=%li", (long)old_pid);
+#endif
+            dmn_log_fatal("restart: failed, old daemon at pid %li did not die!", (long)old_pid);
         }
     }
 
@@ -934,6 +938,12 @@ void dmn_acquire_pidfile(void) {
         dmn_log_fatal("truncating pidfile failed: %s", dmn_logf_errno());
     if(dprintf(pidfd, "%li\n", (long)pid) < 2)
         dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
+
+#ifdef USE_SYSTEMD
+    // in non-restart cases, notify *after* acquiring the pidfile lock
+    if(!really_restart)
+        sd_notifyf(0, "MAINPID=%li", (long)pid);
+#endif
 
     // leak of pidfd here is intentional, it stays open/locked for the duration
     //   of the daemon's execution.  Daemon death by any means unlocks-on-close,
