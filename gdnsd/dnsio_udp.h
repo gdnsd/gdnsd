@@ -23,7 +23,6 @@
 #include "config.h"
 #include "conf.h"
 
-// retval indicates need for net bind caps, if possible
 F_NONNULL
 void udp_sock_setup(dns_thread_t* t);
 

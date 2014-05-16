@@ -119,11 +119,12 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
 
     dmn_assert(rootdir_setting);
 
+    // libdmn takes care of the mkdir/perms on the rundir for the pidfile,
+    //   which is why there's no ensure_dir() for it below
     if(!strcmp(rootdir_setting, "system")) {
         // Not using a root directory, using system paths
         if(chdir("/"))
             log_fatal("Failed to chdir('/'): %s", dmn_logf_strerror(errno));
-        ensure_dir(path_base[0][RUN]);
         ensure_dir(path_base[0][STATE]);
     }
     else {
@@ -140,7 +141,6 @@ void gdnsd_set_rootdir(const char* rootdir_in) {
         ensure_dir("etc/zones");
         ensure_dir("etc/djbdns");
         ensure_dir("etc/geoip");
-        ensure_dir(path_base[1][RUN]);
         ensure_dir(path_base[1][STATE]);
     }
 }

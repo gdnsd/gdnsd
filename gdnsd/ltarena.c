@@ -36,7 +36,7 @@
 //   pools than needed by even the largest zones in existence.
 #define POOL_SIZE 512U // *must* be >= (256 + (red_size*2)),
                        //    && multiple of 4
-#define INIT_POOLS_ALLOC 8U // *must* be 2^n && > 0
+#define INIT_POOLS_ALLOC 4U // *must* be 2^n && > 0
 
 // Normally, our pools are initialized to all-zeros for us
 //   by calloc(), and no red zones are employed.  In debug
@@ -54,7 +54,7 @@
 //   in the dnhash table, which grows by doubling every
 //   time the count of stored unique dnames reaches half
 //   the slot count.
-#define INIT_DNHASH_MASK 127U // *must* be 2^n-1 && > 0
+#define INIT_DNHASH_MASK 31U // *must* be 2^n-1 && > 0
 
 typedef struct {
     unsigned count;

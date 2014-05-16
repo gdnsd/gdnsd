@@ -90,9 +90,4 @@ void conf_load(const bool force_zss, const bool force_zsd);
 
 void dns_lsock_init(void);
 
-// utility function, must be AF_INET or AF_INET6 already,
-//  used by dnsio_udp
-F_NONNULL F_PURE
-bool is_any_addr(const dmn_anysin_t* asin);
-
 #endif // GDNSD_CONF_H

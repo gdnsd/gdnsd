@@ -37,7 +37,7 @@
 
 /***
  * Plugin API version, bumped on any change that's not backwards-compat.
- * This is hardcoded as a the return value of plugin_foo_get_api_version()
+ * This is hardcoded as the return value of plugin_foo_get_api_version()
  *   in gdnsd/plugin.h, and also compiled into the gdnsd code.  The two
  *   values are compared at plugin load time to ensure that plugin code
  *   which doesn't match the API of the gdnsd binary is not allowed.

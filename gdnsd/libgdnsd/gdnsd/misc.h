@@ -27,13 +27,14 @@
 
 extern const uint8_t lcmap[256];
 
-// downcase an asciiz string
+// downcase an array of bytes of known length
 F_NONNULL
 static inline void gdnsd_downcase_bytes(uint8_t* bytes, unsigned len) {
     for(unsigned i = 0; i < len; i++)
         bytes[i] = lcmap[bytes[i]];
 }
 
+// downcase an asciiz string
 F_NONNULL
 static inline void gdnsd_downcase_str(char* str) {
     while(*str) {

@@ -256,9 +256,9 @@ int main(int argc, char** argv) {
 
     dmn_init2(NULL, NULL);
     dmn_init3(username, false);
-    dmn_fork(); // no-op due to init2 args
+    dmn_fork(); // no-op due to "foreground" in dmn_init1()
     dmn_secure(); // privdrop if root
-    dmn_acquire_pidfile(); // no-op due to init2 args
+    dmn_acquire_pidfile(); // no-op due to lack of pid dir in dmn_init2()
 
     // these are the main communication pipes to the daemon/plugin
     plugin_read_fd = atoi(argv[5]);
