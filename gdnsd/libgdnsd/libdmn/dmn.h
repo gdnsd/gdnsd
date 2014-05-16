@@ -35,7 +35,6 @@
 
 // gcc function attributes
 #if defined __GNUC__ && __GNUC__ >= 3 // gcc 3.0+
-#  define DMN_F_PURE          __attribute__((__pure__))
 #  define DMN_F_PRINTF(X,Y)   __attribute__((__format__(__printf__, X, Y)))
 #  if __GNUC__ > 3 || __GNUC_MINOR__ > 2 // gcc 3.3+
 #    define DMN_F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
@@ -48,7 +47,6 @@
 #    define DMN_HAVE_UNREACH_BUILTIN 1
 #  endif
 #else
-#  define DMN_F_PURE
 #  define DMN_F_PRINTF(X,Y)
 #  define DMN_F_NONNULLX(...)
 #  define DMN_F_NONNULL
