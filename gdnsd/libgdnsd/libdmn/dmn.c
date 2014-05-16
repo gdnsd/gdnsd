@@ -76,8 +76,8 @@ static const char PFX_UNKNOWN[] = "???: ";
 static const size_t DMN_ERRNO_MAXLEN = 256U;
 
 // Standard file-permissions constants
-static const mode_t PERMS755   = (S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH);
-static const mode_t PERMS644   = (S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+static const mode_t PERMS750   = (S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP);
+static const mode_t PERMS640   = (S_IRUSR|S_IWUSR|S_IRGRP);
 static const mode_t PERMS_MASK = (S_IRWXU|S_IRWXG|S_IRWXO);
 
 // These are phases used to enforce a strict ordering
@@ -638,7 +638,7 @@ void dmn_init3(const char* username, const bool restart) {
     if(params.pid_dir_pre_chroot) {
         struct stat st;
         if(stat(params.pid_dir_pre_chroot, &st)) {
-            if(mkdir(params.pid_dir_pre_chroot, PERMS755))
+            if(mkdir(params.pid_dir_pre_chroot, PERMS750))
                 dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir_pre_chroot, dmn_logf_errno());
             if(stat(params.pid_dir_pre_chroot, &st)) // reload st for privdrop below
                 dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir_pre_chroot, dmn_logf_errno());
@@ -646,9 +646,9 @@ void dmn_init3(const char* username, const bool restart) {
         else if(!S_ISDIR(st.st_mode)) {
             dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir_pre_chroot);
         }
-        else if((st.st_mode & PERMS_MASK) != PERMS755) {
-            if(chmod(params.pid_dir_pre_chroot, PERMS755))
-                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir_pre_chroot, PERMS755, dmn_logf_errno());
+        else if((st.st_mode & PERMS_MASK) != PERMS750) {
+            if(chmod(params.pid_dir_pre_chroot, PERMS750))
+                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir_pre_chroot, PERMS750, dmn_logf_errno());
         }
 
         // directory chown only applies in privdrop case
@@ -661,9 +661,9 @@ void dmn_init3(const char* username, const bool restart) {
         if(!lstat(params.pid_file_pre_chroot, &st)) {
             if(!S_ISREG(st.st_mode))
                 dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file_pre_chroot);
-            if((st.st_mode & PERMS_MASK) != PERMS644)
-                if(chmod(params.pid_file_pre_chroot, PERMS644))
-                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file_pre_chroot, PERMS644, dmn_logf_errno());
+            if((st.st_mode & PERMS_MASK) != PERMS640)
+                if(chmod(params.pid_file_pre_chroot, PERMS640))
+                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file_pre_chroot, PERMS640, dmn_logf_errno());
             // file chown only if privdrop
             if(params.will_privdrop) {
                 if(st.st_uid != params.uid || st.st_gid != params.gid)
@@ -838,7 +838,7 @@ void dmn_acquire_pidfile(void) {
     pidlock_set.l_whence = SEEK_SET;
 
     // get an open write-handle on the pidfile for lock+update
-    int pidfd = open(params.pid_file_post_chroot, O_WRONLY | O_CREAT, PERMS644);
+    int pidfd = open(params.pid_file_post_chroot, O_WRONLY | O_CREAT, PERMS640);
     if(pidfd == -1)
         dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file_post_chroot, dmn_logf_errno());
     if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
