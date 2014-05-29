@@ -570,7 +570,7 @@ int main(int argc, char** argv) {
     sigaddset(&mainthread_sigs, SIGTERM);
     sigaddset(&mainthread_sigs, SIGHUP);
 
-    // Block the relevant signals before entering the sigwaitinfo() loop
+    // Block the relevant signals before entering the sigwait() loop
     sigset_t sigmask_prev;
     pthread_sigmask(SIG_BLOCK, &mainthread_sigs, &sigmask_prev);
 
@@ -582,23 +582,25 @@ int main(int argc, char** argv) {
 
     int killed_by = 0;
     while(!killed_by) {
-        siginfo_t rcvd_info;
-        int rcvd_sig = sigwaitinfo(&mainthread_sigs, &rcvd_info);
+        int rcvd_sig = 0;
+        int sw_rv;
+        if((sw_rv = sigwait(&mainthread_sigs, &rcvd_sig))) {
+            if(sw_rv != EINTR && sw_rv != EAGAIN)
+                log_fatal("sigwait() failed with error %s", dmn_logf_strerror(sw_rv));
+            continue;
+        }
+
         switch(rcvd_sig) {
-            case -1:
-                if(errno != EINTR && errno != EAGAIN)
-                    log_fatal("sigwaitinfo() failed with error %s", dmn_logf_errno());
-                break;
             case SIGTERM:
-                log_info("Received TERM signal (from pid %li with uid %u), exiting...", (long)rcvd_info.si_pid, (unsigned)rcvd_info.si_uid);
+                log_info("Received TERM signal, exiting...");
                 killed_by = SIGTERM;
                 break;
             case SIGINT:
-                log_info("Received INT signal (from pid %li with uid %u), exiting...", (long)rcvd_info.si_pid, (unsigned)rcvd_info.si_uid);
+                log_info("Received INT signal, exiting...");
                 killed_by = SIGINT;
                 break;
             case SIGHUP:
-                log_info("Received HUP signal (from pid %li with uid %u)", (long)rcvd_info.si_pid, (unsigned)rcvd_info.si_uid);
+                log_info("Received HUP signal");
                 zsrc_djb_sighup();
                 zsrc_rfc1035_sighup();
                 break;
