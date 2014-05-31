@@ -10,7 +10,7 @@ Example plugin config:
   plugins => {
     weighted => {
       multi = false # default
-      service_types = none
+      service_types = up
       up_thresh => 0.5 # default
       corpwww => {
         lb01 = [ lb01.example.com., 99 ]
@@ -179,7 +179,7 @@ is an array of C<[ IPADDR, WEIGHT ]>.
 
 When answering a query in this case, first the weights are converted to
 dynamic weights.  The dynamic weight of an address is its configured weight
-if the monitored state is C<UP> or C<DANGER>, or zero if the monitored
+if the monitored state is C<UP>, or zero if the monitored
 state is C<DOWN>.  The dynamic weights are summed to produce a dynamic
 weight total, and then a single address to respond with is chosen from the
 set, with each address having the odds C<addr_dynamic_weight /

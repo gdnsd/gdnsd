@@ -115,7 +115,7 @@ plugin's resources, it goes through essentially the following process to
 determine the set of response addresses for that address family: 1) Add all
 non-DOWN addresses to the result set.  2) If the set of non-DOWN addresses
 fail the up_thresh check, add *all* addresses to the result set as a
-fallback.  3) If any address is in the DOWN or even DANGER state, cut the
+fallback.  3) If any address is in the DOWN state, cut the
 zonefile-specified TTL in half
 
 This process is repeated independently for each of the IPv4 and IPv6
@@ -125,10 +125,8 @@ up_thresh check follow:
 
 =head1 UP THRESH
 
-Any non-DOWN address is considered an acceptable result for up_thresh
-purposes, even ones in the transitional DANGER state.  If there are not
-"enough" non-DOWN addresses to pass the threshold (per address family), all
-addresses (of a given address family) will be returned as a fallback.
+If there are not enough UP addresses to pass the threshold (per address family),
+all addresses (of a given address family) will be returned as a fallback.
 
 The threshold is implemented mathematically as in the following pseudo-code
 C<if(non_down E<gt>= ceil(thresh * total)) threshold_passed;>.  For

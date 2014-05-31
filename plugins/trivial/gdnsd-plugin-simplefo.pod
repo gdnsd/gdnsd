@@ -88,11 +88,11 @@ logic is applied independently:
 =over 4
 
 =item * First, the worst monitored state of all C<service_types> checks for
-the primary address is obtained.  If this state is C<UP> or C<DANGER>, the
+the primary address is obtained.  If this state is C<UP>, the
 primary address is used.
 
 =item * If the primary address was C<DOWN>, the secondary address is
-checked: If the secondary is C<UP> or C<DANGER>, it will be used.  If the
+checked: If the secondary is C<UP>, it will be used.  If the
 secondary is also C<DOWN>, then the primary is used.
 
 =item * In any case other than the primary being exactly C<UP>, the

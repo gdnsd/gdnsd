@@ -37,28 +37,29 @@ example.com:
   ns1.subz	A	192.0.2.5
   ns2.subz	A	192.0.2.6
 
-  www	3600	DYNA	some_plugin!resource_name
+  www	600/10	DYNA	some_plugin!resource_name
   alias		CNAME	www
 
   _http._tcp	1800	SRV	5 500 80 www
 
   foo		TXT	"blah blah" "blah"
-  _spf 		SPF+	"v=spf1 ..."
+  _spf 		TXT	"v=spf1 ..."
 
 =head1 DESCRIPTION
 
-This is the zonefile syntax for L<gdnsd(8)>.  The syntax is
+This is the primary zonefile syntax for L<gdnsd(8)>.  The syntax is
 designed to be as close as possible to the standard zonefile
 syntax from RFC 1035 (which is the "standard" format one
-typically sees with traditional BIND servers).
+typically sees with traditional BIND servers).  This document will
+just cover a few important highlights and/or deviations from the norm.
 
-This document will just cover a few important highlights
-and/or deviations.
+There is also experimental support for djbdns-format zonefiles,
+documented separately in L<gdnsd.djbzones(5)>.
 
 =head1 DIRECTIVES
 
 The standard C<$TTL> and C<$ORIGIN> directives
-are supported with their normal syntax.
+are supported with their normal syntax and semantics.
 
 C<$TTL> changes the default TTL of any records coming after it,
 and can occur multiple times.  Note that in the absence of a
@@ -80,23 +81,30 @@ limits the total number of C<A> records to include in the server's
 responses for any given C<A> rrset (whether static or dynamic).
 The default limit is zero, which is interpreted as no limit.
 Setting the limit via this directive affects all rrsets until
-the value is changed again by another directive.
+the value is changed again by another directive.  gdnsd always
+rotates the RRs of an address RR-set in a round-robin fashion,
+and this rotation occurs before the limit is applied, allowing
+a small pseudo-random subset of a larger list to be delivered
+via this mechanism.
 
 C<$ADDR_LIMIT_V6> same as above, but for IPv6 C<AAAA> rrsets.
 
-The RFC-standard C<$INCLUDE> directive is not supported.  It
-greatly complicates the detection of zone update transactions.
-Most legitimate uses of C<$INCLUDE> to reduce redundancy
+The RFC-standard C<$INCLUDE> directive is not supported because
+it would greatly complicate the detection of zone update
+transactions with our current filesystem-based change detection
+scheme.  Most legitimate uses of C<$INCLUDE> to reduce redundancy
 should be replaced with a zonefile-generating script instead,
 perhaps using a template system.
 
-BIND's C<$GENERATE> extension is not supported at this time.
+BIND's C<$GENERATE> extension is not supported at this time, but
+there's no fundamental reason it couldn't be added at a later
+date.
 
 =head1 SUPPORTED RESOURCE RECORD TYPES
 
 L<gdnsd(8)> supports the following standard RR types with their
 standard RDATA formats: SOA, A, AAAA, NS, PTR, CNAME, MX, SRV,
-TXT, SPF, and NAPTR.  All RRs must be in class C<IN>, which
+TXT, and NAPTR.  All RRs must be in class C<IN>, which
 is the implicit default.
 
 It also supports the generic format for unknown RR types documented
@@ -112,8 +120,8 @@ RFC 3597 format for types gdnsd explicitly supports (all of
 which predate 3597 anyways), and that even in the RFC 3597 case
 we still only allow class C<IN> RRs.
 
-Additionally, gdnsd supports three special-case, non-standard
-virtual resource record types:
+Additionally, gdnsd supports two special-case, non-standard
+virtual resource record types DYNA and DYNC:
 
 =head2 DYNA
 
@@ -121,20 +129,21 @@ C<DYNA> is for dynamically-determined address records (both A
 and AAAA) via plugin code.  The right-hand-side of a C<DYNA>
 RR is a plugin name and a resource name separated by an exclamation
 mark.  The named plugin will be fed the resource name and
-the DNS client's IP address, and it is up to the plugin code
-which addresses of which types to return in the response.
+the DNS client's IP address and/or edns-client-subnet information,
+and it is up to the plugin code which addresses of which types
+to return in the response.
 
-The dynamic plugin response will be generated in answer to A or
-AAAA queries for the given name, and contain A and/or AAAA
-resource records as appropriate.  C<DYNA> cannot co-exist with
-actual static A or AAAA records at the same name.
+The dynamic plugin lookup for C<DYNA> will be used anywhere that
+regular C<A> and/or C<AAAA> records would be used.  This includes
+not only direct responses to C<A> and C<AAAA> queries, but also
+things like Additional-section RRs and C<ANY>-query output.
+C<DYNA> cannot co-exist with actual static A or AAAA records
+at the same name, but can co-exist with any other RR-type.
 
 Example:
 
   ; asks plugin 'geoip' to provide address data from
   ;  its resource named 'pubwww' for address queries.
-  ; it does not affect other queries such as MX for
-  ;  the same name.
   foo DYNA geoip!pubwww
   foo MX 10 mail
 
@@ -145,7 +154,10 @@ rules.  Plugins results returned via C<DYNC> can be either addresses
 or a C<CNAME> record.  C<DYNC> cannot co-exist with B<any> other
 resource record at the same name, much like normal C<CNAME> RRs.
 This also implies that C<DYNC> cannot be used at the zone root,
-as the zone root requires C<NS> and C<SOA> RRs.
+as the zone root requires C<NS> and C<SOA> RRs.  While C<DYNC>
+responses are included in C<ANY> queries for the given name,
+they are B<not> used in Additional-section processing, even
+when the plugin responds with address records rather than C<CNAME>.
 
 Example:
 
@@ -155,16 +167,40 @@ Example:
   ;  legal alongside this record.
   foo DYNC geoip!www
 
-=head2 SPF+
+=head2 DYNA/DYNC TTLs
 
-C<SPF+> is simply shorthand for specifying a single set of text
-data which is duplicated as both TXT and SPF records at the same
-name.  It is always equivalent to removing the C<+>, copying the
-whole record, and changing C<SPF> to C<TXT> in the second copy.
+C<DYNA> and C<DYNC> TTL fields have a syntax extension and slightly
+different meanings than the TTL field of a traditional, fixed RR.
+The format for DYNA/DYNC TTLs is C<MAX[/MIN]>, with C<MIN> defaulting
+to half of C<MAX> if not specified explicitly.
 
-=head2 TXT/SPF data auto-splitting
+Based on the configuration and state of the underlying monitored services,
+(see "service_types" in L<gdnsd.config(8)>), gdnsd knows the minimum time
+to the next possible state-change which could affect a given C<DYNA> or
+C<DYNC> result.  For example, given the configuration and state, it may
+be known that in order for a currently C<DOWN> address to transition to
+the C<UP> state (and thus change the answer to a given query) would require
+7 more successful monitoring checks in a row at 8-second intervals, and
+therefore cannot happen in less than 56 seconds.  In this case 56 seconds
+would be the internally-calculated TTL.
 
-Our C<TXT> (and SPF, and SPF+) RRs support the auto-splitting
+In cases where multiple monitored resources factor into a plugin's
+decision and/or response (e.g. multifo), the calculated TTL will generally
+be the minimum of all involved internal monitoring TTLs.  This calculated
+TTL is then clamped to the C<MAX> and C<MIN> limits from the zonefile.
+
+Examples:
+
+    ; Explicit range of 30 - 300:
+    www 300/30 DYNC weighted!foo
+    ; Implicit range of 150 - 300:
+    www 300 DYNA metafo!myservice
+    ; Avoid all TTL-mangling and use a fixed value of 10 minutes:
+    www 600/600 DYNA geoip!foo-dist
+
+=head2 TXT data auto-splitting
+
+gdnsd's C<TXT> RRs support the auto-splitting
 of long string constants.  Rather than manually breaking the
 data into 255-byte chunks as required by the protocol, you can
 specify a single long chunk and have the server break it at
@@ -174,7 +210,7 @@ oversized chunks into zonefile parsing errors).
 
 =head1 SEE ALSO
 
-L<gdnsd(8)>, L<gdnsd.config(5)>
+L<gdnsd(8)>, L<gdnsd.config(5)>, L<gdnsd.djbzones(5)>
 
 The gdnsd manual.
 

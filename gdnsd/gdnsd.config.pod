@@ -70,6 +70,10 @@ Integer seconds, default 3600000 (~42 days),
 range 3600 - 268435455 (2^28-1, ~8.5 years).
 This is the global maximum TTL.  Any TTL found in a zone which
 exceeds this value will be clamped to this value with a warning.
+Note that the default maximum value is what the Internet's root
+nameservers currently use for A-record TTLs, and those are arguably
+the most stable records in the whole system.  It's hard to imagine
+good reasons to raise this value in practice.
 
 =item B<min_ttl>
 
@@ -153,7 +157,8 @@ C<udp_rcvbuf>, and C<udp_sndbuf>.
 There are also two special singalur string values: C<any> and C<scan>.
 
 If set to C<any>, the daemon will listen on the C<dns_port> port (default 53)
-on C<0.0.0.0> and C<::> (if IPv6 support is detected).
+on C<0.0.0.0> and C<::> (if IPv6 support is detected).  This is the default
+if no C<listen> option is provided.
 
   options => { listen => any }
 
@@ -162,11 +167,6 @@ via C<getifaddrs()> and set up a separate listener on the C<dns_port>
 port (again, default 53) for each address found.
 
   options => { listen => scan }
-
-If the listen option isn't specified at all, for historical compatibility reasons
-the current default is C<scan>.  However, this default is expected to change to
-C<any> in a future version, so you should specify C<scan> explicitly if you require
-this behavior.
 
 =item B<http_listen>
 
@@ -396,8 +396,7 @@ C<-11>.
 
 =item B<disable_text_autosplit>
 
-Boolean, default false.  On the wire, C<TXT> (and C<SPF>, which are
-identical in wire-format other than the RR-type) records are encoded as
+Boolean, default false.  On the wire, C<TXT> records are encoded as
 discrete chunks of up to 255 characters per chunk.  The relevant RFCs
 state that multiple chunks should be treated by clients as if they are
 concatenated.  That is to say, it should make no difference to a client
@@ -414,7 +413,7 @@ merge them into larger chunks where possible.
 
 If you set this option to true, the auto-splitting behavior is
 disabled, and any single character string specified in a zonefile as
-part of a C<TXT> or C<SPF> record which is larger than 255 bytes will
+part of a C<TXT> record which is larger than 255 bytes will
 be considered a syntax error.
 
 =item B<include_optional_ns>
@@ -571,17 +570,17 @@ you are not using such a plugin, you can safely ignore this section and
 omit it from your configuration.
 
 The service_types hash contains generic definitions for how to monitor
-the given types of service.  Each service type uses a protocol-specific
-plugin, and the default is the included plugin C<http_status>, which
-checks HTTP status code responses.
+a given types of service, independently of any specific address or
+hostname for that service.
 
-The other included monitoring plugins are C<tcp_connect> (documented
-below alongside C<http_status>, just checks TCP), and C<extmon>, which
-executes external monitoring commands/scripts and has its own
-documentation at L<gdnsd-plugin-extmon(8)>.
+There are two trivial service_types internally defined as the names
+C<up> and C<down>, which do no actual monitoring and simply set the
+monitored state permanently C<UP> or C<DOWN>.  C<up> is the default
+service_type when no service_type is specified.
 
-There are several generic parameters related to timing and anti-flap,
-as well as plugin-specific parameters that vary per plugin.
+Within the definition of a service_type there are several generic
+parameters related to timing and anti-flap, as well as plugin-specific
+parameters that vary per plugin.
 
 A service type does not, however, specify a name or address for a
 specific instance of a service.  Those would occur on a per-address
@@ -589,31 +588,15 @@ basis in a resolving plugin's configuration down in the C<plugins>
 stanza, and the plugin's configuration would then reference a named
 service type to be used when monitoring said address.
 
-A service monitored through these mechanisms can be in one of three
-states at runtime: C<UP>, C<DANGER>, or C<DOWN>.  The UP state means
-that all is perfectly well.  The DANGER state means that some isolated
-failures have been seen in the recent past (perhaps even just one), but
-that gdnsd has not yet seen a consistent enough pattern of failure to
-declare the service dead.  The DOWN state, obviously, means that gdnsd
-does consider the service dead.  These states are presented to the
-plugin that requested the monitoring.  It is up to the plugin to
-determine how this affects DNS responses.
+A service monitored through these mechanisms is always in either the
+C<UP> or C<DOWN> state at runtime from a monitoring perspective.  The
+C<UP> state is maintained in the face of intermittent or isolated failures
+until the anti-flap thresholds are crossed and the state moves to
+C<DOWN>.
 
 Any services monitored for plugins are also have their state reported
 alongside the standard gdnsd statistics report, served by the built-in
 HTTP server (default port is 3506).
-
-There are five built-in service types that can't be overridden:
-
-One built-in service type is implicitly named C<default>.  It uses the
-default C<http_status> plugin and is defined to all of the default
-parameters shown below.
-
-The other four are named C<none>, C<up>, C<danger>, and C<down>.
-
-These do no actual monitoring, and simply force the state of resources
-using these service_types to a fixed state.  C<none> is just an alias
-for C<up>.
 
 The following are the generic parameters for all service_types:
 
@@ -622,42 +605,62 @@ The following are the generic parameters for all service_types:
 =item B<up_thresh>
 
 Integer, default 20, min 1, max 255.  Number of monitoring requests
-which must succeed with no intervening failures to transition a given
-IP for this resource from the DOWN state to the UP state.
+which must succeed in a row without any failures to transition
+a given resource from the C<DOWN> state to the C<UP> state.
 
 =item B<ok_thresh>
 
-Integer, default 10, min 1, max 255.  Number of monitoring requests
-which must succeed with no intervening failures to transition a given
-IP for this resource from the DANGER state to the UP state.
+Integer, default 10, min 1, max 255.  See below.
 
 =item B<down_thresh>
 
-Integer, default 10, min 1, max 255.  Number of monitoring requests
-which must fail, regardless of any intervening successes, to transition
-a given IP for this resource from the DANGER state to the DOWN state.
+Integer, default 10, min 1, max 255.  The C<ok_thresh> and C<down_thresh>
+parameters control the transition from the C<UP> state to the C<DOWN>
+state while trying to prevent flappy behavior.  Their behavior is best
+described in terms of an internal failure counter for a resource
+which is currently in the C<UP> state.  The failure counter starts
+at zero on state transition into the C<UP> state.
+
+Every state poll that results in a failed response, even if other
+successful responses are interleaved between them, increments the
+failure counter.  If the failure counter reaches C<down_thresh>
+the resource is transitioned to the C<DOWN> state.  However, if
+C<ok_thresh> successes occur in a row with no failures between them,
+the failure counter is reset back to zero.
+
+So with the default values, the expected behavior is that if an C<UP>
+resource experiences 10 (possibly isolated or intermittent)
+monitor-polling failures over B<any> length of time, without a
+string of 10 successes in a row somewhere within the sequence to
+reset the counter, it will transition to the C<DOWN> state.
+Once C<DOWN>, it will require 20 successes in a row before
+transitioning back to the C<UP> state.
 
 =item B<interval>
 
 Integer seconds, default 10, min 1, max 255.  Number of seconds between
-successive monitoring requests to a given IP address for this resource.
+successive monitoring requests for a given resource.
 
 =item B<timeout>
 
 Integer seconds, default 3, min 1, max 255.  Maximum time the
 monitoring code will wait for a successful response before giving up
-and considering the request to be a failure.  Must be less than 90% of
-B<interval>.
+and considering the request to be a failure.  Defaults to half of the
+C<interval>, and must be less than C<interval>.
 
 =item B<plugin>
 
-String, default "http_status".  This indicates which protocol-specific
-plugin to use to execute the monitoring requests.  Any parameters other
-than the generic ones listed here are consumed by the plugin.
+String, required.  This indicates which specific plugin to use to execute
+the monitoring requests.  Any parameters other than the generic ones listed
+here are consumed by the plugin.
 
 =back
 
-The C<tcp_connect> plugin has just one plugin-specific parameter:
+There are four service_type plugins included with gdnsd:
+
+C<tcp_connect> checks basic TCP connectivity to a given address.
+At this time, it only supports the monitoring of address (as opposed to
+CNAME) resources.  It has just one plugin-specific parameter:
 
 =over 4
 
@@ -669,8 +672,9 @@ specified.
 
 =back
 
-The following are the plugin-specific parameters for the default
-monitoring plugin C<http_status>:
+C<http_status> performs an HTTP request to a given address (as with
+C<tcp_connect>, CNAMEs are not yet supported), and has the following
+plugin-specific parameters:
 
 =over 4
 
@@ -681,7 +685,7 @@ host to check this service type.
 
 =item B<url_path>
 
-String, default C</>.  This is the URL that should be used when
+String, default C</>.  This is the URL path that should be used when
 checking this service type.
 
 =item B<vhost>
@@ -696,6 +700,15 @@ Array of 3-digit HTTP status codes, default C<[ 200 ]>.  This defines
 the HTTP status codes in responses that will be accepted as successful.
 
 =back
+
+C<extmon> periodically executes external commandline programs to poll
+for the status of a given address or CNAME, and is documented separately
+in L<gdnsd-plugin-extmon(8)>.
+
+C<extfile> periodically reads the contents of a file (in the same basic
+C<vscf> syntax as the main config file) to pick up status values set
+there by some other program for address or CNAME resources, and is also
+documented separately in L<gdnsd-plugin-extfile(8)>.
 
 =head1 PLUGINS
 
@@ -792,6 +805,14 @@ demonstrating the service_types described earlier:
       bar = 192.0.2.123
       somehost = somehost.example.net.
     },
+    multifo => {
+      web-lb =>
+        service_types => [ corpwww_type, xmpp ],
+        lb01 => 192.0.2.200,
+        lb02 => 192.0.2.201,
+        lb03 => 192.0.2.202,
+      }
+    }
   }
 
 And then in your example.com zonefile, you could have (among your other
@@ -802,6 +823,7 @@ RRs):
   reflect-both 10 DYNA reflect!both
   pointless 42 DYNA static!foo
   acname 400 DYNC static!somehost
+  www 300/45 DYNA multifo!web-lb
 
 =head1 LOW-LEVEL SYNTAX
 
@@ -973,7 +995,8 @@ into the parent hash.  Example:
 L<gdnsd(8)>, L<gdnsd.zonefile(5)>, L<gdnsd-plugin-simplefo(8)>,
 L<gdnsd-plugin-multifo(8)>, L<gdnsd-plugin-weighted(8)>,
 L<gdnsd-plugin-metafo(8)>, L<gdnsd-plugin-geoip(8)>,
-L<gdnsd-plugin-extmon(8)>, L<gdnsd-plugin-api(3)>
+L<gdnsd-plugin-extmon(8)>, L<gdnsd-plugin-extfile(8)>
+L<gdnsd-plugin-api(3)>
 
 The gdnsd manual.
 

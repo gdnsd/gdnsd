@@ -126,7 +126,7 @@ should dwarf TCP ones anyways, and this keeps things simpler.
 Each of the TCP DNS threads listens on one socket, and uses a libev
 event loop to handle many connections in parallel.  They do allocate
 heap dynamically at runtime, and you can limit the count of parallel
-requests per thread with "tcp_clients_per_socket" (default 128).  libev
+requests per thread with "tcp_clients_per_thread" (default 128).  libev
 priorities are used to prioritize finishing current requests over
 accepting new ones when both events are available in the same loop
 wakeup, so this should help keep the parallelism number lower in

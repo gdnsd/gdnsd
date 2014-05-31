@@ -40,8 +40,8 @@
     * CNAMEs can now be monitored entities in the general sense.
     * plugin_static now also acts as a monitoring plugin.  It sets a
       fixed up/down value and optionally a fixed internal TTL value.
-    * The extmon, static, and null plugins support the monitoring
-      of CNAME resources.
+    * The extmon, extfile, static, and null plugins support the
+      monitoring of CNAME resources.
     * The metafo, geoip, and weighted plugins make use of CNAME
       monitoring for their CNAME-based resources.
     * Monitored service states are now labeled with just their
@@ -54,6 +54,11 @@
       time.  The monitoring algorithms and thresholds haven't
       changed; 'DANGER' just isn't exposed as a separate state
       from 'UP'.
+    * The special service_type 'danger' no longer exists.
+    * The special service_type 'none' as an alias for 'up' no
+      longer exists.  Use 'up' instead.
+    * The special default service_type 'default' (which used
+      plugin_http) no longer exists.  The new default is 'up'.
 
   *** Administrative state-forcing:
     * All monitored entities can be administratively forced
@@ -114,11 +119,6 @@
     * The 'disble_tcp' option is removed. Use 'tcp_threads = 0' instead.
     * The 'zones_rfc1035_strict_startup' option is removed.  Use
       'zones_strict_startup' instead.
-    * The special service_type 'none' as an alias for 'up' no
-      longer exists.  Use 'up' instead.
-    * The special service_type 'danger' no longer exists.
-    * The special service_type 'default' (which used plugin_http)
-      no longer exists.  The new default is 'up'.
     * Direct support for the SPF RR-type (99) has been removed.
     * Support for the old, experimental edns-client-subnet option code
       0x50fa has been removed; gdnsd now only supports the official,
