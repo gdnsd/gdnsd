@@ -23,6 +23,7 @@
 #include "gdnsd/paths-priv.h"
 #include "extmon_comms.h"
 #include <gdnsd/plugin.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -247,6 +248,12 @@ static void spawn_helper(void) {
     helper_pid = fork();
     if(helper_pid == -1)
         log_fatal("plugin_extmon: fork() failed: %s", dmn_logf_strerror(errno));
+
+    // unconditionally unset these for the helper child to ensure nothing can get
+    //  screwy on systemd-based systems...
+    unsetenv("WATCHDOG_PID");
+    unsetenv("WATCHDOG_USEC");
+    unsetenv("NOTIFY_SOCKET");
 
     if(!helper_pid) { // child
         close(writepipe[1]);
