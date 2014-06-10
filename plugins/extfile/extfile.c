@@ -148,23 +148,23 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, const vscf
 
     bool success = false;
     if(!vscf_is_simple(val)) {
-        log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' must be a simple string!", svc->name, matchme, logf_pathname(svc->path));
+        log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' must be a simple string!", svc->name, matchme, svc->path);
     }
     else {
         gdnsd_sttl_t result;
         const unsigned def_ttl = svc->def_sttl & GDNSD_STTL_TTL_MASK;
         if(gdnsd_mon_parse_sttl(vscf_simple_get_data(val), &result, def_ttl)) {
-            log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", svc->name, matchme, logf_pathname(svc->path), GDNSD_STTL_TTL_MAX);
+            log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", svc->name, matchme, svc->path, GDNSD_STTL_TTL_MAX);
         }
         else {
             if(!svc->direct && ((result & GDNSD_STTL_TTL_MASK) != def_ttl))
-                log_warn("plugin_extfile: Service type '%s': TTL value for '%s' in file '%s' ignored in 'monitor' mode", svc->name, matchme, logf_pathname(svc->path));
+                log_warn("plugin_extfile: Service type '%s': TTL value for '%s' in file '%s' ignored in 'monitor' mode", svc->name, matchme, svc->path);
             const extf_mon_t findme = { matchme, 0, 0 };
             const extf_mon_t* found = bsearch(&findme, svc->mons, svc->num_mons, sizeof(extf_mon_t), moncmp);
             if(found)
                 results[found->midx] = result;
             else
-                log_warn("plugin_extfile: Service type '%s': entry '%s' in file '%s' did not match any configured resource!", svc->name, matchme, logf_pathname(svc->path));
+                log_warn("plugin_extfile: Service type '%s': entry '%s' in file '%s' did not match any configured resource!", svc->name, matchme, svc->path);
             success = true;
         }
     }
@@ -180,14 +180,14 @@ static void process_file(const extf_svc_t* svc) {
     const vscf_data_t* raw = vscf_scan_filename(svc->path, &vscf_err);
     if(!raw) {
         dmn_assert(vscf_err);
-        log_err("plugin_extfile: Service type '%s': loading file '%s' failed: %s", svc->name, logf_pathname(svc->path), vscf_err);
+        log_err("plugin_extfile: Service type '%s': loading file '%s' failed: %s", svc->name, svc->path, vscf_err);
         free(vscf_err);
         return;
     }
     else {
         dmn_assert(!vscf_err);
         if(!vscf_is_hash(raw)) {
-            log_err("plugin_extfile: Service type '%s': top level of file '%s' must be a hash", svc->name, logf_pathname(svc->path));
+            log_err("plugin_extfile: Service type '%s': top level of file '%s' must be a hash", svc->name, svc->path);
             return;
         }
     }
@@ -226,7 +226,7 @@ static void process_file(const extf_svc_t* svc) {
         else
             for(unsigned i = 0; i < svc->num_mons; i++)
                 gdnsd_mon_state_updater(svc->mons[i].sidx, !(results[i] & GDNSD_STTL_DOWN));
-        log_debug("plugin_extfile: Service type '%s': loaded new data from file '%s'", svc->name, logf_pathname(svc->path));
+        log_debug("plugin_extfile: Service type '%s': loaded new data from file '%s'", svc->name, svc->path);
     }
     else {
         log_err("plugin_extfile: Service type '%s': file load failed, no updates applied", svc->name);

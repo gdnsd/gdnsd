@@ -333,17 +333,24 @@ sub proc_tmpl {
         ? qq{[ 127.0.0.1, ::1 ]}
         : qq{127.0.0.1};
 
+    my $std_opts = qq{
+        listen => $dns_lspec
+        http_listen => $http_lspec
+        dns_port => $DNS_PORT
+        http_port => $HTTP_PORT
+        plugin_search_path = $PLUGIN_PATH
+        run_dir = $OUTDIR/run/gdnsd
+        state_dir = $OUTDIR/var/lib/gdnsd
+        realtime_stats = true
+    };
+
     if($PRIVDROP_USER) {
-        $dns_lspec .= "\nusername = $PRIVDROP_USER";
+        $std_opts .= qq{username = $PRIVDROP_USER\n};
     }
 
     while(<$in_fh>) {
-        s/\@dns_lspec\@/$dns_lspec/g;
-        s/\@http_lspec\@/$http_lspec/g;
-        s/\@dns_port\@/$DNS_PORT/g;
-        s/\@http_port\@/$HTTP_PORT/g;
+        s/\@std_testsuite_options\@/$std_opts/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
-        s/\@pluginpath\@/$PLUGIN_PATH/g;
         # if the test used the extmon helper, pre-execute
         #   it now to do libtool stuff before privdrop, in case
         #   of testsuite running as root.  Otherwise on first
@@ -409,7 +416,7 @@ sub spawn_daemon_setup {
 
     safe_rmtree($OUTDIR);
 
-    foreach my $d ($OUTDIR, "${OUTDIR}/etc") {
+    foreach my $d ($OUTDIR, "${OUTDIR}/etc", "${OUTDIR}/run", "${OUTDIR}/var", "${OUTDIR}/var/lib") {
         mkdir $d or die "Cannot create directory $d: $!";
     }
 
@@ -425,8 +432,8 @@ sub spawn_daemon_setup {
 
 sub spawn_daemon_execute {
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -Dfd $OUTDIR start}
-        : qq{$GDNSD_BIN -Dfd $OUTDIR start};
+        ? qq{$TEST_RUNNER $GDNSD_BIN -Dfc $OUTDIR/etc/config start}
+        : qq{$GDNSD_BIN -Dfc $OUTDIR/etc/config start};
 
     my $daemon_out = $OUTDIR . '/gdnsd.out';
 
@@ -592,7 +599,7 @@ sub delete_altzone {
 
 sub write_statefile {
     my ($class, $fn, $content) = @_;
-    $fn = $OUTDIR . '/var/' . $fn;
+    $fn = $OUTDIR . '/var/lib/gdnsd/' . $fn;
     my $fn_tmp = "${fn}.tmp";
     open(my $fd_tmp, ">$fn_tmp")
         or die "Cannot open state file '$fn_tmp' for writing: $!";

@@ -254,7 +254,7 @@ int main(int argc, char** argv) {
     if(!freopen("/dev/null", "r", stdin))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_strerror(errno));
 
-    dmn_init2(NULL, NULL);
+    dmn_init2(NULL);
     dmn_init3(username, false);
     dmn_fork(); // no-op due to "foreground" in dmn_init1()
     dmn_secure(); // privdrop if root

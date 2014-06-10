@@ -28,9 +28,7 @@
 #define gdnsd_anysin_getaddrinfo(__a,__p,__r) dmn_anysin_getaddrinfo((__a),(__p),(__r),true)
 #define gdnsd_anysin_fromstr(__a,__d,__r) dmn_anysin_fromstr((__a),(__d),(__r),true)
 
-// Plugins should use these to get protocol numbers, since
-//  many platforms require filesystem access outside of the
-//  runtime chroot() for them.
+// Plugins should use these to get protocol numbers
 F_PURE
 int gdnsd_getproto_udp(void);
 F_PURE

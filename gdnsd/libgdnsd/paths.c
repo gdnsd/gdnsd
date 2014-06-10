@@ -24,8 +24,6 @@
 #include "gdnsd/misc.h"
 #include "gdnsd/log.h"
 
-#include "cfg-dirs.h"
-
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -40,128 +38,93 @@
 #include <fcntl.h>
 #include <pthread.h>
 
-/* misc */
+#include "cfg-dirs.h"
 
-// this will be "system" or an absolute directory
-static const char* const def_rootdir = GDNSD_DEF_ROOTDIR;
+/* paths */
 
-// "system" (or default unrooted) leaves this as NULL
-static const char* rootdir = NULL;
+const char* gdnsd_get_default_config_file(void) { return GDNSD_DEF_CONFIG; }
 
-// readonly private interfaces to core code
-const char* gdnsd_get_rootdir(void) { return rootdir; }
-const char* gdnsd_get_def_rootdir(void) { return def_rootdir; }
-
-// this is for use after basic rootdir setting and chdir...
-static void ensure_dir(const char* dpath) {
+F_NONNULL
+static char* gdnsd_realdir(const char* dpath, const char* desc, const bool create, mode_t def_mode) {
     struct stat st;
-    if(lstat(dpath, &st)) {
-        if(mkdir(dpath, 0755))
-            log_fatal("mkdir(%s) failed: %s", logf_pathname(dpath), dmn_logf_strerror(errno));
-        log_info("Created directory %s", logf_pathname(dpath));
+    if(stat(dpath, &st)) {
+        if(create) {
+            if(mkdir(dpath, def_mode))
+                log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, dmn_logf_strerror(errno));
+            log_info("Created %s directory %s", desc, dpath);
+        }
+        else {
+            log_fatal("%s directory %s does not exist!", desc, dpath);
+        }
     }
     else if(!S_ISDIR(st.st_mode)) {
-        log_fatal("'%s' is not a directory (but should be)!", logf_pathname(dpath));
+        log_fatal("%s directory '%s' is not a directory (but should be)!", desc, dpath);
     }
-}
 
-// as above for the initial rootdir check itself, note the use
-//   of stat() rather than lstat() (so that a symlink to a directory
-//   will work (which realpath will clean up afterwards)).
-static void ensure_rootdir(const char* rpath) {
-    struct stat st;
-    if(stat(rpath, &st)) {
-        if(mkdir(rpath, 0755))
-            log_fatal("mkdir(%s) failed: %s", rpath, dmn_logf_strerror(errno));
-    }
-    else if(!S_ISDIR(st.st_mode)) {
-        log_fatal("'%s' is not a directory (but should be)!", rpath);
-    }
-}
-
-char* gdnsd_realpath(const char* path_in, const char* desc) {
-    char* out = realpath(path_in, NULL);
+    char* out = realpath(dpath, NULL);
     if(!out)
-        log_fatal("Cleanup/validation of %s pathname '%s' failed: %s",
-            desc, path_in, dmn_logf_strerror(errno));
-    if(strcmp(path_in, out))
-        log_info("%s path '%s' cleaned up as '%s'", desc, path_in, out);
+        log_fatal("Validation of %s directory '%s' failed: %s",
+            desc, dpath, dmn_logf_strerror(errno));
+    if(strcmp(dpath, out))
+        log_info("%s directory '%s' cleaned up as '%s'", desc, dpath, out);
     return out;
 }
 
-// basic path types
 typedef enum {
-    CFG   = 0,
-    RUN   = 1,
-    STATE = 2,
+    RUN     = 0,
+    STATE   = 1,
+    CFG     = 2,
+    LIBEXEC = 3,
 } path_typ_t;
 
-// first index is boolean rootdir
-static const char* path_base[2][3] = {
-    [0] = {
-        [CFG]   = GDNSD_ETCDIR,
-        [RUN]   = GDNSD_RUNDIR,
-        [STATE] = GDNSD_STATEDIR,
-    },
-    [1] = {
-        [CFG]   = "etc/",
-        [RUN]   = "run/",
-        [STATE] = "var/",
-    },
-};
+static const char* gdnsd_dirs[4] = { NULL, NULL, NULL, NULL };
 
-void gdnsd_set_rootdir(const char* rootdir_in) {
-    dmn_assert(!rootdir);
-    dmn_assert(def_rootdir);
+void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file) {
+    if(!run_dir)
+        run_dir = strdup(GDNSD_RUNDIR);
+    gdnsd_dirs[RUN] = gdnsd_realdir(run_dir, "run", true, 0750);
 
-    const char* rootdir_setting
-        = rootdir_in ? rootdir_in : def_rootdir;
+    if(!state_dir)
+        state_dir = strdup(GDNSD_STATEDIR);
+    gdnsd_dirs[STATE] = gdnsd_realdir(state_dir, "state", true, 0755);
 
-    dmn_assert(rootdir_setting);
-
-    // libdmn takes care of the mkdir/perms on the rundir for the pidfile,
-    //   which is why there's no ensure_dir() for it below
-    if(!strcmp(rootdir_setting, "system")) {
-        // Not using a root directory, using system paths
-        if(chdir("/"))
-            log_fatal("Failed to chdir('/'): %s", dmn_logf_strerror(errno));
-        ensure_dir(path_base[0][STATE]);
+    if(!config_dir) {
+        if(!config_file)
+            config_file = strdup(GDNSD_DEF_CONFIG);
+        char* cfg_file_copy = strdup(config_file);
+        gdnsd_dirs[CFG] = gdnsd_realdir(dirname(cfg_file_copy), "config", false, 0);
+        free(cfg_file_copy);
     }
     else {
-        // Using a root directory:
-        // realpath() wants an extant file to reference,
-        //  so we have to do our stat/mkdir on the original first
-        ensure_rootdir(rootdir_setting);
-        rootdir = gdnsd_realpath(rootdir_setting, "data root");
-        if(chdir(rootdir))
-            log_fatal("Failed to chdir('%s'): %s", rootdir, dmn_logf_strerror(errno));
-
-        // build basic/common directory structure if missing
-        ensure_dir("etc/");
-        ensure_dir("etc/zones");
-        ensure_dir("etc/djbdns");
-        ensure_dir("etc/geoip");
-        ensure_dir(path_base[1][STATE]);
+        gdnsd_dirs[CFG] = gdnsd_realdir(config_dir, "config", false, 0);
     }
+
+    // This is just fixed at compiletime, period
+    gdnsd_dirs[LIBEXEC] = strdup(GDNSD_LIBEXECDIR);
 }
 
 static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx) {
-    dmn_assert(inpath);
+    dmn_assert(gdnsd_dirs[p]);
 
     char* out = NULL;
 
-    if(inpath[0] == '/')
+    if(inpath && inpath[0] == '/') {
         out = strdup(inpath);
-    else if(pfx)
-        out = gdnsd_str_combine_n(4, path_base[!!rootdir][p], pfx, "/", inpath);
-    else
-        out = gdnsd_str_combine_n(2, path_base[!!rootdir][p], inpath);
+    }
+    else if(pfx) {
+        if(inpath)
+            out = gdnsd_str_combine_n(5, gdnsd_dirs[p], "/", pfx, "/", inpath);
+        else
+            out = gdnsd_str_combine_n(3, gdnsd_dirs[p], "/", pfx);
+    }
+    else {
+        if(inpath)
+            out = gdnsd_str_combine_n(3, gdnsd_dirs[p], "/", inpath);
+        else
+            out = strdup(gdnsd_dirs[p]);
+    }
 
     return out;
-}
-
-char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx) {
-    return gdnsd_resolve_path(CFG, inpath, pfx);
 }
 
 char* gdnsd_resolve_path_run(const char* inpath, const char* pfx) {
@@ -172,6 +135,10 @@ char* gdnsd_resolve_path_state(const char* inpath, const char* pfx) {
     return gdnsd_resolve_path(STATE, inpath, pfx);
 }
 
-const char* gdnsd_get_rundir_for_dmn(void) {
-    return rootdir ? "/run" : path_base[0][RUN];
+char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx) {
+    return gdnsd_resolve_path(CFG, inpath, pfx);
+}
+
+char* gdnsd_resolve_path_libexec(const char* inpath, const char* pfx) {
+    return gdnsd_resolve_path(LIBEXEC, inpath, pfx);
 }

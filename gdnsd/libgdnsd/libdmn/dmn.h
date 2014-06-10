@@ -85,19 +85,11 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
 //   Must be an absolute path (begins with /).  If NULL, none of the pidfile
 //   -related calls (_stop, _status, _signal) will do anything useful, and
 //   _acquire_pidfile() will be a no-op).
-// chroot: path the daemon will eventually chroot into if we are starting
-//   as root. must be absolute.  Setting this to NULL supresses all chroot behavior.
-// If chroot is non-NULL, pid_dir should be relative to the chroot (in other
-//   words, if chroot is "/srv/foo", pid_dir should be set to "/run" rather than
-//   "/srv/foo/run").
-// When not executing as the root user, if chroot is set it is still used for
-//   any necessary pidfile path prefixing as above, even though no chroot() is
-//   actually performed when the time comes.  This is mostly for convenience.
 // Immediately after dmn_init2() the basic daemon-control APIs
 //   (dmn_status(), dmn_stop(), and dmn_signal()) are now
 //   available for use (in addition to the log APIs allowed
 //   by init1()).
-void dmn_init2(const char* pid_dir, const char* chroot);
+void dmn_init2(const char* pid_dir);
 
 // dmn_init3 must be called after dmn_init2() and before dmn_fork().
 // username: optional - if set, the daemon will drop privileges
@@ -120,8 +112,8 @@ void dmn_init3(const char* username, const bool restart);
 // In foreground cases with no privdrop (or no pcalls), does basically nothing.
 void dmn_fork(void);
 
-// If we're executing as the root user, this will chroot and/or privdrop
-//   us as indicated by the earlier chroot and username options.
+// If we're executing as the root user, this will privdrop
+//   us as indicated by the earlier username option to init3.
 // If pid_dir doesn't exist and/or isn't owned by username (if defined),
 //   and we're running as root, the pid_dir will be created and/or chowned
 //   as necessary/possible before the loss of privilege to do so here in

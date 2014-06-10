@@ -130,11 +130,11 @@ fips_t* fips_init(const char* pathname) {
 
     FILE* file = fopen(pathname, "r");
     if(!file)
-        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", logf_pathname(pathname), dmn_logf_errno());
+        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", pathname, dmn_logf_errno());
     fips_t* fips = calloc(1, sizeof(fips_t));
     fips_parse(fips, file);
     if(fclose(file))
-        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", logf_pathname(pathname), dmn_logf_errno());
+        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", pathname, dmn_logf_errno());
     return fips;
 }
 

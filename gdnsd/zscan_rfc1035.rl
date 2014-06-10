@@ -772,7 +772,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
 
     const int fd = open(fn, O_RDONLY);
     if(fd < 0) {
-        log_err("rfc1035: Cannot open file '%s' for reading: %s", logf_pathname(fn), dmn_logf_errno());
+        log_err("rfc1035: Cannot open file '%s' for reading: %s", fn, dmn_logf_errno());
         return true;
     }
 
@@ -787,7 +787,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
                 bufsize = fdstat.st_size;
         }
         else {
-            log_warn("rfc1035: fstat(%s) failed for advice, not critical...", logf_pathname(fn));
+            log_warn("rfc1035: fstat(%s) failed for advice, not critical...", fn);
         }
     }
 
@@ -805,7 +805,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     bool failed = sij(z, buf, bufsize, fd);
 
     if(close(fd)) {
-        log_err("rfc1035: Cannot close file '%s': %s", logf_pathname(fn), dmn_logf_errno());
+        log_err("rfc1035: Cannot close file '%s': %s", fn, dmn_logf_errno());
         failed = true;
     }
 

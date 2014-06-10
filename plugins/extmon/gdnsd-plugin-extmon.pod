@@ -110,16 +110,19 @@ for failure.
 
 =head1 EXECUTION ENVIRONMENT
 
-The plugin launches a helper binary F<gdnsd_extmon_helper> before
-the main daemon does its C<chroot()> call, and this helper does
+The plugin launches a helper binary F<gdnsd_extmon_helper>
+during daemon startup, and this helper does
 the actual runtime command executions.  It manages the timeouts
 and intervals and feeds results back to the plugin over a pipe.  This
 communication is one-way at runtime (no daemon -> helper traffic)
 for security reasons (to help ensure that a compromised daemon can't
-easily leverage the helper to escape chroot).
+easily leverage the helper to muck with the execution of the external
+commands).  This separation also prevents a class of functional and
+security bugs related to mixing runtime pthreads with routine forking
+to exec the child processes.
 
-The executed scripts will run outside of the daemon's chroot,
-but with the same userid the daemon normally drops privileges to.
+The executed scripts will run with the same userid the daemon normally
+drops privileges to.
 The stdout, stdin, and stderr descriptors will usually be
 set to F</dev/null>.  stdout and stderr may be open to the current
 tty if the main daemon was started in foreground debugging mode

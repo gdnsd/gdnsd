@@ -51,7 +51,7 @@ typedef struct {
 typedef struct {
     dns_addr_t*    dns_addrs;
     dns_thread_t*  dns_threads;
-    dmn_anysin_t*      http_addrs;
+    dmn_anysin_t*  http_addrs;
     const char*    username;
     const uint8_t* chaos;
     bool     include_optional_ns;
@@ -85,8 +85,7 @@ typedef struct {
 
 extern global_config_t gconfig;
 
-F_NONNULL
-void conf_load(const bool force_zss, const bool force_zsd);
+void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd, const bool dirs_only);
 
 void dns_lsock_init(void);
 

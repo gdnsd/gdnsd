@@ -5,14 +5,15 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsd [-s] [-S] [-d <rootdir> ] <action>
+  Usage: gdnsd [-fsSD] [-c /path/to/configfile] <action>
+    -D - Enable verbose debug output
+    -f - Foreground mode for start/restart-like actions
     -s - Force 'zones_strict_startup = true' for this invocation
     -S - Force 'zones_strict_data = true' for this invocation
-    -d - [see "THE ROOTDIR ARGUMENT" below]
+    -c - Main config file, defaults to e.g. /etc/gdnsd/config
   Actions:
-    checkconf - Checks validity of configuration and zonefiles
-    startfg - Start gdnsd in foreground mode with logging to stderr
-    start - Start gdnsd as a regular daemon
+    checkconf - Checks validity of config and zone files
+    start - Start " PACKAGE_NAME " as a regular daemon
     stop - Stops a running daemon previously started by 'start'
     reload - Send SIGHUP to running daemon for zone data reload
     restart - Equivalent to checkconf && stop && start, but faster
@@ -25,28 +26,6 @@ gdnsd - An authoritative DNS daemon
 
 B<gdnsd> is very fast, light, and pluggable authoritative DNS daemon.
 
-Other than the C<action> argument, the only other argument is C<-d> for
-setting a chroot directory, which is discussed in detail below.  The
-commandline parsing is sensitive to ordering: C<-d> must come before
-the action, if used.
-
-=head1 THE ROOTDIR ARGUMENT
-
-The C<-d E<lt>rootdirE<gt>> argument specifies whether gdnsd will use a
-chroot directory (or not) and the path of that directory.  The special
-value C<system> indicates to *not* use a chroot directory, and use the
-normal system paths defined via autoconf.  The default can be changed
-at build time, and you can see what your build's default is by
-executing e.g. C<gdnsd --help>.  The default default is C<system>.
-
-If a default or commandline-supplied chroot directory is in use, all
-files which gdnsd interacts with at runtime live within that chroot
-directory.
-
-In the chroot case, gdnsd will create the chroot directory and all
-structure within on startup if necessary, but will not create the parent
-of the chroot directory for you.
-
 =head1 BASIC SECURITY
 
 When started as the C<root> user, gdnsd will always attempt to drop
@@ -54,25 +33,11 @@ privileges to another user, and will fail fatally if that does not
 succeed.  The default username for this is C<gdnsd>, but this can
 be overridden in the main config file.
 
-If a chroot directory is in use and gdnsd is started as the C<root>
-user, the daemon will also permanently chroot itself into that
-directory on startup.  If a chroot directory is specified, but the
-daemon is started as a regular user, the daemon will C<chdir> to the
-root directory and use relative paths to mimick the chroot
-functionality.  This can be useful if, for example, you're using
-external software to secure the daemon in some jail-like structure, or
-running tests as a regular user against test data.
-
 =head1 BASIC CONFIGURATION
 
-There is a single primary configuration file. Its pathname is fixed
-at build time for the C<system> case, and fixed relative to the chroot
-directory in the chroot case.  In the C<system> case it will live at
-F<$sysconfdir/gdnsd/config>, where C<$sysconfdir> will typically be
-F</etc> or F</usr/local/etc> depending on autoconf configuration.
-
-In the chroot case the path is C</etc/config> within the chroot
-directory.
+There is a single primary configuration file. The default location is
+a compile-time constant, usually C<${sysconfdir}/gdnsd/config>, where
+C<$sysconfidir> is generally e.g. F</etc>.
 
 Note that the configuration file does not have to exist for successful
 startup.  Without a configuration file, gdnsd will load all of the zones
@@ -82,7 +47,7 @@ using default settings.
 =head1 ZONE FILES
 
 The zones directory is the subdirectory named C<zones> in the same
-location as the main config file (see above re: chroot -vs- system).
+location as the main config file.
 
 All files in the zones directory are
 considered zone files.  In general there should be exactly one file
@@ -221,28 +186,6 @@ Any other commandline option will be treated as invalid,
 which will result in displaying a short help text to F<STDERR>
 and exiting with a non-zero exit status.  This includes
 things like the ubiquitous B<--help> and B<--version>.
-
-=head1 ENVIRONMENT VARIABLES
-
-=over 4
-
-=item B<TZ>
-
-On most systems tested, gdnsd's current solution for getting
-syslog timestamps correct while under C<chroot()> seems to
-work fine, as it does C<tzset()> before C<chroot()>, and so
-no special setting of the C<TZ> environment variable is required.
-
-On some older/stranger systems, the syslog messages will revert
-to UTC timestamps after C<chroot()>.  The workaround for these
-systems is to either set the C<TZ> environment variable in gdnsd's
-initscript to a value like C</etc/localtime>, which will make
-glibc cache the timezone correctly, or to copy all of the relevant
-timezone files into the chroot directory (F</etc/localtime> and
-perhaps all of F</usr/share/zoneinfo>).  Or whatever your platform
-may require.  Patches welcome.
-
-=back
 
 =head1 SIGNALS
 

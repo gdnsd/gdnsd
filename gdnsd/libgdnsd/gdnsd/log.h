@@ -50,13 +50,6 @@
  */
 const char* gdnsd_logf_dname(const uint8_t* dname);
 
-// For logging pathnames returned by gdnsd/path.h functions,
-//   e.g. gdnsd_resolve_path_cfg() and gdnsd_get_pidpath().
-// In the system-paths case it will return normal pathnames.
-// In the rooted case it will return things like:
-//    "[/srv/gdnsd]/etc/geoip/GeoIPRegion.dat"
-const char* gdnsd_logf_pathname(const char* path);
-
 // "ipv6" must be allocated for 16 bytes, containing
 //   a network-order address
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6);
@@ -65,7 +58,6 @@ const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
 
 // shortcuts for the above
 #define logf_dname gdnsd_logf_dname
-#define logf_pathname gdnsd_logf_pathname
 #define logf_ipv6 gdnsd_logf_ipv6
 #define logf_in6a gdnsd_logf_in6a
 

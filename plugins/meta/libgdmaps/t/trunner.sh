@@ -56,9 +56,9 @@ for tnam in $TLIST; do
         rm -f $TODIR/etc/config >/dev/null 2>&1
         cp $ASDIR/$tnam.cfg $TODIR/etc/config >/dev/null 2>&1
         if [ "x$TEST_RUNNER" != "x" ]; then
-            $TEST_RUNNER $ABDIR/.libs/$tnam.bin $TODIR >$TOFILE 2>&1
+            $TEST_RUNNER $ABDIR/.libs/$tnam.bin $TODIR/etc/config >$TOFILE 2>&1
         else
-            $ABDIR/$tnam.bin $TODIR >$TOFILE 2>&1
+            $ABDIR/$tnam.bin $TODIR/etc/config >$TOFILE 2>&1
         fi
         rv=$?
         if [ $rv -ne 0 ]; then
@@ -79,9 +79,9 @@ for testdb in $GDMAPS_GEOIP_TEST_LOAD; do
         rm -f $TODIR/etc/geoip/loadonly.dat
         ln -s $testdb $TODIR/etc/geoip/loadonly.dat
         if [ "x$TEST_RUNNER" != "x" ]; then
-            $TEST_RUNNER $ABDIR/.libs/$tnam.bin $TODIR >$TOFILE 2>&1
+            $TEST_RUNNER $ABDIR/.libs/$tnam.bin $TODIR/etc/config >$TOFILE 2>&1
         else
-            $ABDIR/$tnam.bin $TODIR >$TOFILE 2>&1
+            $ABDIR/$tnam.bin $TODIR/etc/config >$TOFILE 2>&1
         fi
         rv=$?
         if [ $rv -ne 0 ]; then

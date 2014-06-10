@@ -107,32 +107,3 @@ const char* gdnsd_logf_dname(const uint8_t* dname) {
     *dnptr = '\0';
     return dnbuf;
 }
-
-const char* gdnsd_logf_pathname(const char* inpath) {
-    char* space = NULL;
-
-    if(!inpath) {
-        space = dmn_fmtbuf_alloc(7);
-        memcpy(space, "<NULL>", 7); // includes NUL
-    }
-    else {
-        const unsigned inlen = strlen(inpath);
-        const char* rootpath = gdnsd_get_rootdir();
-        if(rootpath) {
-            const unsigned rootlen = strlen(rootpath);
-            const unsigned toalloc = 1 + rootlen + 1 + 1 + inlen + 1;
-            char* space_ptr = space = dmn_fmtbuf_alloc(toalloc);
-            *space_ptr++ = '[';
-            memcpy(space_ptr, rootpath, rootlen); space_ptr += rootlen;
-            *space_ptr++ = ']';
-            *space_ptr++ = '/';
-            memcpy(space_ptr, inpath, inlen + 1); // includes NUL
-        }
-        else {
-            space = dmn_fmtbuf_alloc(inlen + 1);
-            memcpy(space, inpath, inlen + 1); // includes NUL
-        }
-    }
-
-    return space;
-}

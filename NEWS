@@ -81,6 +81,11 @@
       glob patterns are allowed for matching entity names.
 
   *** Daemonization changes:
+    * The argument "-d <rootdir>" has been replaced by "-c <cfgfile>"
+    * Direct, inbuilt support for chroot() has been removed.  There
+      are much better security container options out there today that
+      can be configured externally to wrap gdnsd and/or limit its
+      privileges.  Use them!
     * debug-mode is now enabled on the commandline via "-D",
       and even production builds now produce some level of
       debug log output.

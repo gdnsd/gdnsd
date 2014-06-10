@@ -146,19 +146,16 @@ typedef struct {
     bool  restart;
     char* name;
     char* username;
-    char* chroot;
 
     // calculated/inferred/discovered
-    bool  invoked_as_root; // !geteuid() during init2()
+    bool  invoked_as_root; // !geteuid() during init1()
     bool  will_privdrop;   // invoked_as_root && non-null username from init3()
-    bool  will_chroot;     // invoked_as_root && non-null chroot from init2(), implies will_privdrop
     bool  need_helper;     // depends on foreground, will_privdrop, and pcall registration - set in _fork
     bool  use_systemd;     // sd_booted() && !isatty(stdin) && !foreground (we think systemd ran us directly)
     uid_t uid;             // uid of username from init3()
     gid_t gid;             // gid of username from init3()
-    char* pid_dir_pre_chroot;   // depends on chroot + pid_dir
-    char* pid_file_pre_chroot;  // depends on chroot + pid_dir + name
-    char* pid_file_post_chroot; // depends on chroot + pid_dir + name
+    char* pid_dir;         // from init2()
+    char* pid_file;        // depends on pid_dir + name
 } params_t;
 
 static params_t params = {
@@ -168,17 +165,14 @@ static params_t params = {
     .restart         = false,
     .name            = NULL,
     .username        = NULL,
-    .chroot          = NULL,
     .invoked_as_root = false,
     .will_privdrop   = false,
-    .will_chroot     = false,
     .need_helper     = false,
     .use_systemd     = false,
     .uid             = 0,
     .gid             = 0,
-    .pid_dir_pre_chroot   = NULL,
-    .pid_file_pre_chroot  = NULL,
-    .pid_file_post_chroot = NULL,
+    .pid_dir         = NULL,
+    .pid_file        = NULL,
 };
 
 typedef struct {
@@ -511,42 +505,19 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
         state.syslog_alive = true;
     }
 
+    params.invoked_as_root = !geteuid();
+
     state.phase = PHASE1_INIT1;
 }
 
-void dmn_init2(const char* pid_dir, const char* chroot_dir) {
+void dmn_init2(const char* pid_dir) {
     phase_check(PHASE1_INIT1, PHASE3_INIT3, 1);
 
-    params.invoked_as_root = !geteuid();
-
-    if(pid_dir && pid_dir[0] != '/')
-        dmn_log_fatal("pid directory path must be absolute!");
-
-    if(chroot_dir) {
-        if(chroot_dir[0] != '/')
-            dmn_log_fatal("chroot() path must be absolute!");
-        struct stat st;
-        if(lstat(chroot_dir, &st))
-            dmn_log_fatal("Cannot lstat(%s): %s", chroot_dir, dmn_logf_errno());
-        if(!S_ISDIR(st.st_mode))
-            dmn_log_fatal("chroot() path '%s' is not a directory!", chroot_dir);
-        params.chroot = strdup(chroot_dir);
-        if(params.invoked_as_root)
-            params.will_chroot = true;
-        if(pid_dir) {
-            params.pid_dir_pre_chroot = str_combine_n(2, chroot_dir, pid_dir);
-            params.pid_file_pre_chroot = str_combine_n(5, chroot_dir, pid_dir, "/", params.name, ".pid");
-            if(params.invoked_as_root)
-                params.pid_file_post_chroot = str_combine_n(4, pid_dir, "/", params.name, ".pid");
-            else
-                params.pid_file_post_chroot = params.pid_file_pre_chroot;
-        }
-    }
-    else if(pid_dir) {
-        params.pid_dir_pre_chroot = strdup(pid_dir);
-        params.pid_file_pre_chroot
-            = params.pid_file_post_chroot
-                = str_combine_n(4, pid_dir, "/", params.name, ".pid");
+    if(pid_dir) {
+        if(pid_dir[0] != '/')
+            dmn_log_fatal("pid directory path must be absolute!");
+        params.pid_dir = strdup(pid_dir);
+        params.pid_file = str_combine_n(4, pid_dir, "/", params.name, ".pid");
     }
 
     state.phase = PHASE2_INIT2;
@@ -555,17 +526,13 @@ void dmn_init2(const char* pid_dir, const char* chroot_dir) {
 pid_t dmn_status(void) {
     phase_check(PHASE2_INIT2, PHASE6_PIDLOCKED, 0);
 
-    const char* pidfile = state.phase < PHASE5_SECURED
-        ? params.pid_file_pre_chroot
-        : params.pid_file_post_chroot;
-
-    if(!pidfile)
+    if(!params.pid_file)
         return 0;
 
-    const int pidfd = open(pidfile, O_RDONLY);
+    const int pidfd = open(params.pid_file, O_RDONLY);
     if(pidfd == -1) {
         if (errno == ENOENT) return 0;
-        else dmn_log_fatal("open() of pidfile '%s' failed: %s", pidfile, dmn_logf_errno());
+        else dmn_log_fatal("open() of pidfile '%s' failed: %s", params.pid_file, dmn_logf_errno());
     }
 
     struct flock pidlock_info;
@@ -575,12 +542,12 @@ pid_t dmn_status(void) {
 
     // should not fail unless something's horribly wrong
     if(fcntl(pidfd, F_GETLK, &pidlock_info))
-        dmn_log_fatal("bug: fcntl(%s, F_GETLK) failed: %s", pidfile, dmn_logf_errno());
+        dmn_log_fatal("bug: fcntl(%s, F_GETLK) failed: %s", params.pid_file, dmn_logf_errno());
 
     close(pidfd);
 
     if(pidlock_info.l_type == F_UNLCK) {
-        dmn_log_debug("Found stale pidfile at %s, ignoring", pidfile);
+        dmn_log_debug("Found stale pidfile at %s, ignoring", params.pid_file);
         return 0;
     }
 
@@ -648,45 +615,44 @@ void dmn_init3(const char* username, const bool restart) {
             params.gid = p->pw_gid;
             params.will_privdrop = true;
         }
-        else if(params.will_chroot) {
-            dmn_log_fatal("must set privdrop username if using chroot");
-        }
     }
 
-    if(params.pid_dir_pre_chroot) {
+    if(params.pid_dir) {
         struct stat st;
-        if(stat(params.pid_dir_pre_chroot, &st)) {
-            if(mkdir(params.pid_dir_pre_chroot, PERMS750))
-                dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir_pre_chroot, dmn_logf_errno());
-            if(stat(params.pid_dir_pre_chroot, &st)) // reload st for privdrop below
-                dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir_pre_chroot, dmn_logf_errno());
+        if(stat(params.pid_dir, &st)) {
+            if(mkdir(params.pid_dir, PERMS750))
+                dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir, dmn_logf_errno());
+            if(stat(params.pid_dir, &st)) // reload st for privdrop below
+                dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir, dmn_logf_errno());
         }
         else if(!S_ISDIR(st.st_mode)) {
-            dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir_pre_chroot);
+            dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir);
         }
         else if((st.st_mode & PERMS_MASK) != PERMS750) {
-            if(chmod(params.pid_dir_pre_chroot, PERMS750))
-                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir_pre_chroot, PERMS750, dmn_logf_errno());
+            if(chmod(params.pid_dir, PERMS750))
+                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir, PERMS750, dmn_logf_errno());
         }
 
         // directory chown only applies in privdrop case
         if(params.will_privdrop) {
             if(st.st_uid != params.uid || st.st_gid != params.gid)
-                if(chown(params.pid_dir_pre_chroot, params.uid, params.gid))
-                    dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_dir_pre_chroot, params.uid, params.gid, dmn_logf_errno());
+                if(chown(params.pid_dir, params.uid, params.gid))
+                    dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_dir, params.uid, params.gid, dmn_logf_errno());
         }
 
-        if(!lstat(params.pid_file_pre_chroot, &st)) {
+        dmn_assert(params.pid_file);
+
+        if(!lstat(params.pid_file, &st)) {
             if(!S_ISREG(st.st_mode))
-                dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file_pre_chroot);
+                dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file);
             if((st.st_mode & PERMS_MASK) != PERMS640)
-                if(chmod(params.pid_file_pre_chroot, PERMS640))
-                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file_pre_chroot, PERMS640, dmn_logf_errno());
+                if(chmod(params.pid_file, PERMS640))
+                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file, PERMS640, dmn_logf_errno());
             // file chown only if privdrop
             if(params.will_privdrop) {
                 if(st.st_uid != params.uid || st.st_gid != params.gid)
-                    if(chown(params.pid_file_pre_chroot, params.uid, params.gid))
-                        dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_file_pre_chroot, params.uid, params.gid, dmn_logf_errno());
+                    if(chown(params.pid_file, params.uid, params.gid))
+                        dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_file, params.uid, params.gid, dmn_logf_errno());
             }
         }
     }
@@ -823,20 +789,8 @@ void dmn_fork(void) {
 void dmn_secure(void) {
     phase_check(PHASE4_FORKED, PHASE6_PIDLOCKED, 1);
 
-    if(params.will_chroot) {
-        dmn_assert(params.invoked_as_root);
-        dmn_assert(params.will_privdrop);
-        dmn_assert(params.chroot);
-        dmn_assert(params.chroot[0] == '/');
-
-        // On most systems, this seems to get the timezone cached for vsyslog() to use inside chroot()
-        tzset();
-        // lock self into the chroot directory
-        if(chroot(params.chroot))
-            dmn_log_fatal("chroot(%s) failed: %s", params.chroot, dmn_logf_errno());
-        if(chdir("/"))
-            dmn_log_fatal("chdir(/) inside chroot(%s) failed: %s", params.chroot, dmn_logf_errno());
-    }
+    if(chdir("/"))
+        dmn_log_fatal("chdir(/) failed: %s", dmn_logf_errno());
 
     if(params.will_privdrop) {
         dmn_assert(params.invoked_as_root);
@@ -868,7 +822,7 @@ void dmn_secure(void) {
 void dmn_acquire_pidfile(void) {
     phase_check(PHASE5_SECURED, PHASE7_FINISHED, 1);
 
-    if(!params.pid_file_post_chroot) {
+    if(!params.pid_file) {
         state.phase = PHASE6_PIDLOCKED;
         return;
     }
@@ -880,11 +834,11 @@ void dmn_acquire_pidfile(void) {
     pidlock_set.l_whence = SEEK_SET;
 
     // get an open write-handle on the pidfile for lock+update
-    int pidfd = open(params.pid_file_post_chroot, O_WRONLY | O_CREAT, PERMS640);
+    int pidfd = open(params.pid_file, O_WRONLY | O_CREAT, PERMS640);
     if(pidfd == -1)
-        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file_post_chroot, dmn_logf_errno());
+        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file, dmn_logf_errno());
     if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file_post_chroot, dmn_logf_errno());
+        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file, dmn_logf_errno());
 
     // this is only used in the restart case here, but moving it immediately above
     //   the first sd_notifyf() removes the only realistic failure-points between that
@@ -930,7 +884,7 @@ void dmn_acquire_pidfile(void) {
         // Various failure modes
         if(errno != EAGAIN && errno != EACCES)
             dmn_log_fatal("bug? fcntl(pidfile, F_SETLK) failed: %s", dmn_logf_errno());
-        dmn_log_fatal("cannot acquire pidfile lock on pidfile: %s, owned by pid: %li)", params.pid_file_post_chroot, (long)dmn_status());
+        dmn_log_fatal("cannot acquire pidfile lock on pidfile: %s, owned by pid: %li)", params.pid_file, (long)dmn_status());
     }
 
     // Success - assuming writing to our locked pidfile doesn't fail!

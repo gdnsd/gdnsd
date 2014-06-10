@@ -49,9 +49,3 @@ Interesting / Non-standard autoconf options
 --with-rundir=/some/where
   Set an alternate system-level rundir, e.g. in situations where a Linux
   distro wants to use "/run" in place of "/var/run".
-
---with-rootdir=/some/where
-  Defaults this build to chroot-mode execution using the specified default
-  chroot path.  The normal default is to use $PREFIX-based paths (-d system).
-  Regardless of this setting, the commandline "-d" argument can change the
-  behavior and/or path at runtime.

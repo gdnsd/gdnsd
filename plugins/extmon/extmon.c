@@ -20,7 +20,7 @@
 #define GDNSD_PLUGIN_NAME extmon
 
 #include "config.h"
-#include "cfg-dirs.h" // XXX this wouldn't work for a 3rd party... fix that?
+#include "gdnsd/paths-priv.h"
 #include "extmon_comms.h"
 #include <gdnsd/plugin.h>
 #include <unistd.h>
@@ -305,7 +305,7 @@ void plugin_extmon_load_config(const vscf_data_t* config) {
         if(helper_path_cfg) {
             if(!vscf_is_simple(helper_path_cfg))
                 log_fatal("plugin_extmon: config option 'helper_path' must be a simple string");
-            helper_path = gdnsd_realpath(vscf_simple_get_data(helper_path_cfg), "plugin_extmon helper");
+            helper_path = gdnsd_resolve_path_libexec(vscf_simple_get_data(helper_path_cfg), NULL);
         }
         const vscf_data_t* fail_cfg = vscf_hash_get_data_byconstkey(config, "helper_failure_action", true);
         if(fail_cfg) {
@@ -330,7 +330,7 @@ void plugin_extmon_load_config(const vscf_data_t* config) {
 //  final bit to full_config(), which is always called.
 void plugin_extmon_full_config(unsigned num_threads V_UNUSED) {
     if(!helper_path)
-        helper_path = gdnsd_realpath(GDNSD_LIBEXECDIR "gdnsd_extmon_helper", "gdnsd_extmon_helper");
+        helper_path = gdnsd_resolve_path_libexec("gdnsd_extmon_helper", NULL);
 }
 
 void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {

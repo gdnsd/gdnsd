@@ -23,6 +23,7 @@
 #include "gdnsd/misc.h"
 #include "gdnsd/log.h"
 #include "gdnsd/paths.h"
+#include "gdnsd/paths-priv.h"
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/mon-priv.h"
 
@@ -464,34 +465,33 @@ static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr
     dmn_assert(tnum == gconfig.num_dns_threads);
 }
 
-static const vscf_data_t* conf_load_vscf(void) {
+static const vscf_data_t* conf_load_vscf(const char* cfg_file) {
     const vscf_data_t* out = NULL;
 
-    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
-
     struct stat cfg_stat;
-    if(!stat(cfg_path, &cfg_stat)) {
-        log_info("Loading configuration from '%s'", logf_pathname(cfg_path));
+    if(!stat(cfg_file, &cfg_stat)) {
+        log_info("Loading configuration from '%s'", cfg_file);
         char* vscf_err;
-        out = vscf_scan_filename(cfg_path, &vscf_err);
+        out = vscf_scan_filename(cfg_file, &vscf_err);
         if(!out)
-            log_fatal("Loading configuration from '%s' failed: %s", logf_pathname(cfg_path), vscf_err);
+            log_fatal("Loading configuration from '%s' failed: %s", cfg_file, vscf_err);
         if(!vscf_is_hash(out)) {
             dmn_assert(vscf_is_array(out));
-            log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", logf_pathname(cfg_path));
+            log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", cfg_file);
         }
     }
     else {
-        log_info("No config file at '%s', using defaults", logf_pathname(cfg_path));
+        log_info("No config file at '%s', using defaults", cfg_file);
     }
 
-    free(cfg_path);
     return out;
 }
 
-void conf_load(const bool force_zss, const bool force_zsd) {
+void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd, const bool dirs_only) {
 
-    const vscf_data_t* cfg_root = conf_load_vscf();
+    if(!cfg_file)
+        cfg_file = gdnsd_get_default_config_file();
+    const vscf_data_t* cfg_root = conf_load_vscf(cfg_file);
 
 #ifndef NDEBUG
     // in developer debug builds, exercise clone+destroy
@@ -505,6 +505,30 @@ void conf_load(const bool force_zss, const bool force_zsd) {
     dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
 
     const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
+
+    // daemon actions only need the rundir, so we process dirs first and bail
+    //   early in those cases without doing the rest of the complex stuff
+    {
+        const char* cfg_run_dir = NULL;
+        const char* cfg_state_dir = NULL;
+        const char* cfg_config_dir = NULL;
+        if(options) {
+            if(!vscf_is_hash(options))
+                log_fatal("Config key 'options': wrong type (must be hash)");
+            CFG_OPT_STR_NOCOPY(options, run_dir, cfg_run_dir);
+            CFG_OPT_STR_NOCOPY(options, state_dir, cfg_state_dir);
+            CFG_OPT_STR_NOCOPY(options, config_dir, cfg_config_dir);
+        }
+
+        gdnsd_set_dirs(cfg_run_dir, cfg_state_dir, cfg_config_dir, cfg_file);
+    }
+
+    // fast-path exit for dirs_only case
+    if(dirs_only) {
+        if(cfg_root)
+            vscf_destroy(cfg_root);
+        return;
+    }
 
     const vscf_data_t* listen_opt = NULL;
     const vscf_data_t* http_listen_opt = NULL;
@@ -525,9 +549,6 @@ void conf_load(const bool force_zss, const bool force_zsd) {
     };
 
     if(options) {
-        if(!vscf_is_hash(options))
-            log_fatal("Config key 'options': wrong type (must be hash)");
-
         CFG_OPT_INT(options, priority, -20L, 20L);
         CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, realtime_stats);

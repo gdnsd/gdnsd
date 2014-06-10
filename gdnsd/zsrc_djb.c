@@ -89,7 +89,7 @@ static void zsrc_djb_sync_zones(void) {
         if (!cur->marked)
             zone_delete(cur->zone);
 
-    log_info("zsrc_djb: loaded %d zones from %s...", num_zones, logf_pathname(djb_dir));
+    log_info("zsrc_djb: loaded %d zones from %s...", num_zones, djb_dir);
 
     zscan_djbzone_free(&active_zonedata);
     active_zonedata = zonedata;
