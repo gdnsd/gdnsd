@@ -22,7 +22,7 @@
 /gdnsd/libgdnsd/vscf.c
 
 # Built headers, not distributed
-/cfg-dirs.h
+/gdnsd/libgdnsd/cfg-dirs.h
 
 # Copied, renamed, distributed, installed
 /gdnsd/libgdnsd/gdnsd/dmn.h

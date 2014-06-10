@@ -323,32 +323,11 @@ fi
 
 AC_CHECK_HEADERS([valgrind/memcheck.h])
 
-# A default build of gdnsd uses system paths as specified
-#   via the standard --prefix, --sysconfdir, --localstatedir, etc
-#   (as well as --with-rundir for e.g. /run).
-# The default build *can* be used for chroot operation if gdnsd
-#   is supplied a "-d /some/path" argument on every invocation,
-#   e.g. by a custom initscript.
-# Specifying --with-rootdir=/some/path enables the chroot mode
-#   of operation by default with no daemon arguments, using
-#   the specified path as the default chroot location.
-rootdir_fail="The --with-rootdir= option must specify an absolute pathname if used";
-AC_ARG_WITH([rootdir],[
-AS_HELP_STRING([--with-rootdir=/some/path],[Enables default chroot operation using the default chroot path specified])
-],[
-  echo "$with_rootdir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rootdir_fail)
-],[
-  with_rootdir="system"
-])
-GDNSD_DEF_ROOTDIR=$with_rootdir
-AC_SUBST([GDNSD_DEF_ROOTDIR])
-AM_CONDITIONAL([HAS_DEF_ROOTDIR], [test "x$GDNSD_DEF_ROOTDIR" != xsystem])
-
 # Allow specifying an alternate rundir (default $localstatedir/run) for distros
 #   that prefer e.g. /run to /var/run
 rundir_fail="The --with-rundir= option must specify an absolute pathname if used";
 AC_ARG_WITH([rundir],[
-AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specific rundir, e.g. /run, for non-chroot cases])
+AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specific rundir, e.g. /run])
 ],[
   echo "$with_rundir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rundir_fail)
   GDNSD_SYSRUNDIR="$with_rundir"

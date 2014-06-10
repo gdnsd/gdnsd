@@ -18,9 +18,15 @@ libgdnsd_la_pkgincludedir = $(pkgincludedir)
 dist_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_DIST)
 nodist_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_BUILT)
 
-BUILT_SOURCES = $(xHEADERS_BUILT)
+cfg-dirs.h:	Makefile
+	$(AM_V_GEN)echo '#define GDNSD_DEF_CONFIG "$(sysconfdir)/gdnsd/config"' >$@
+	@echo '#define GDNSD_RUNDIR "$(GDNSD_SYSRUNDIR)/gdnsd"' >>$@
+	@echo '#define GDNSD_STATEDIR "$(localstatedir)/lib/gdnsd"' >>$@
+	@echo '#define GDNSD_LIBDIR "$(libdir)/gdnsd"' >>$@
+	@echo '#define GDNSD_LIBEXECDIR "$(libexecdir)/gdnsd"' >>$@
 
-CLEANFILES = $(builddir)/gdnsd/dmn.h
+BUILT_SOURCES = $(xHEADERS_BUILT) cfg-dirs.h
+CLEANFILES = $(builddir)/gdnsd/dmn.h cfg-dirs.h
 MAINTAINERCLEANFILES = $(srcdir)/vscf.c
 
 vscf.c:		vscf.rl

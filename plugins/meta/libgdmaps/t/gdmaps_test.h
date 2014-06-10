@@ -27,8 +27,8 @@
 
 #include "gdmaps.h"
 
-// init gdmaps_t based on user-supplied rootdir (or default if NULL)
-gdmaps_t* gdmaps_test_init(const char* input_rootdir);
+// init gdmaps_t based on user-supplied configfile
+gdmaps_t* gdmaps_test_init(const char* input_cfgfile);
 
 // A complete results-checker.  It will terminate with stderr output if
 //  the data comparison (or any earlier part of the operation) fails.

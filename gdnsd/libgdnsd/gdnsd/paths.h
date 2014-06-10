@@ -22,39 +22,29 @@
 
 #include <gdnsd/compiler.h>
 
-// cleanup path_in via realpath() (symlink / relative eliminated),
-//  returning a newly allocated string.  path_in must actually
-//  exist to succeed.
-// "desc" will be used to log errors or to log_info() the path translation.
-F_NONNULL
-char* gdnsd_realpath(const char* path_in, const char* desc);
-
 // given a configfile name and an optional path prefix, return
 //  a pathname usable for e.g. open()/stat() within the gdnsd
 //  config directory.
 // When given an absolute path, the prefix is ignored and
-//  absolute reference is given (within root context in rooted case).
-// (Keep in mind the daemon is always chdir() to the specified
-//  rootdir even before chroot(), or to '/' if using system paths).
+//  absolute reference is given.
 // Examples:
+//    gdnsd_resolve_path_cfg(NULL, NULL);
+//        -> /etc/gdnsd
 //    gdnsd_resolve_path_cfg("config", NULL);
-//        unrooted -> /etc/gdnsd/config
-//        rooted -> etc/config
+//        -> /etc/gdnsd/config
 //    gdnsd_resolve_path_cfg("GeoIPRegion.dat", "geoip");
-//        unrooted -> /etc/gdnsd/geoip/GeoIPRegion.dat
-//        rooted -> etc/geoip/GeoIPRegion.dat
-//    gdnsd_resolve_path_cfg("/var/lib/maxmind/GeoIPRegion.dat", "geoip");
-//        unrooted -> /var/lib/maxmind/GeoIPRegion.dat
-//        rooted -> var/lib/maxmind/GeoIPRegion.dat
-F_NONNULLX(1)
+//        -> /etc/gdnsd/geoip/GeoIPRegion.dat
+//    gdnsd_resolve_path_cfg("/usr/share/maxmind/GeoIPRegion.dat", "geoip");
+//        -> /usr/share/maxmind/GeoIPRegion.dat
 char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx);
 
-// As above for "run" paths (e.g. /var/run/gdnsd, /run/gdnsd, or "/run" in chroot)
-F_NONNULLX(1)
+// As above for "run" paths (e.g. /var/run/gdnsd or /run/gdnsd)
 char* gdnsd_resolve_path_run(const char* inpath, const char* pfx);
 
-// As above for "state" paths (e.g. /var/lib/gdnsd, or "/var" in chroot)
-F_NONNULLX(1)
+// As above for "state" paths (e.g. /var/lib/gdnsd)
 char* gdnsd_resolve_path_state(const char* inpath, const char* pfx);
+
+// As above for "libexec" paths (e.g. /usr/libexec/gdnsd/)
+char* gdnsd_resolve_path_libexec(const char* inpath, const char* pfx);
 
 #endif // GDNSD_PATHS_H

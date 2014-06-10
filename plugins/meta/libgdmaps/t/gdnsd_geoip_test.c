@@ -39,8 +39,8 @@
 #include "gdmaps_test.h"
 
 static void usage(const char* argv0) {
-    fprintf(stderr, "\nUsage: %s [-d <rootdir> ] [map_name addr]\n"
-        "  -d\t\tgdnsd rootdir, see main gdnsd(8) manpage for details\n"
+    fprintf(stderr, "\nUsage: %s [-c /config/file ] [map_name addr]\n"
+        "  -c\t\tgdnsd configfile, see main gdnsd(8) manpage for details\n"
         "  map_name\tMapping name from geoip plugin config\n"
         "  addr\t\tClient IP address to map.\n\n",
         argv0);
@@ -132,24 +132,24 @@ static void do_repl(gdmaps_t* gdmaps) {
 }
 
 int main(int argc, char* argv[]) {
-    const char* input_rootdir = NULL;
+    const char* input_cfgfile = NULL;
     const char* map_name = NULL;
     const char* ip_arg = NULL;
 
     switch(argc) {
-        // gdnsd_geoip_test -d x map_name ip
+        // gdnsd_geoip_test -c x map_name ip
         case 5:
-            if(strcmp(argv[1], "-d")) usage(argv[0]);
-            input_rootdir = argv[2];
+            if(strcmp(argv[1], "-c")) usage(argv[0]);
+            input_cfgfile = argv[2];
             map_name = argv[3];
             ip_arg = argv[4];
             break;
         // gdnsd_geoip_test map_name ip
         //   -or-
-        // gdnsd_geoip_test -d x
+        // gdnsd_geoip_test -c x
         case 3:
-            if(!strcmp(argv[1], "-d")) {
-                input_rootdir = argv[2];
+            if(!strcmp(argv[1], "-c")) {
+                input_cfgfile = argv[2];
             }
             else {
                 map_name = argv[1];
@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
             usage(argv[0]);
     }
 
-    gdmaps_t* gdmaps = gdmaps_test_init(input_rootdir);
+    gdmaps_t* gdmaps = gdmaps_test_init(input_cfgfile);
 
     if(map_name) {
         dmn_assert(ip_arg);

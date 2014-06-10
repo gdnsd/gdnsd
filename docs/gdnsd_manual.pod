@@ -1,7 +1,7 @@
 
 =head1 Overview
 
-This document is likely to be out of date in a number of areas...
+This document is very outdated!
 
 This manual attempts to cover things that don't logically fit in the
 man pages.  It covers the big-picture items and overall design
@@ -305,17 +305,24 @@ client.
 
 Perhaps more importantly, gdnsd doesn't trust itself to be root on your
 machine.  Any time gdnsd is started as root, it will drop privileges to
-those of the user named C<gdnsd> (configurable).  It will optionally
-also chroot into a chroot directory specified via the C<-d> argument
-(or defaulted at build time), but the default default is to use system
-pathnames and not do chroot.
+those of the user named C<gdnsd> (configurable).
 
 If any security-related operation fails, the daemon will fail to start
 itself and abort with a log message indicating the problem.
 
-While this doesn't erase other security concerns, it certainly helps in
-minimizing the potential impact of any future remote exploit that may be
-discovered in the gdnsd code.
+The code used to directly support C<chroot()>.  This was removed during
+the development cycle leading to version 2.0.  The rationales for removal
+included: C<chroot()> wasn't the best tool to begin with (it doesn't limit
+as many things as we'd like).  Direct C<chroot()> support added complexities
+in many areas of the code and documentation.  Systems (especially auth DNS
+servers) tend to be special-purpose rather than shared these days.  Also,
+C<chroot()> is largely supplanted by much better mechanisms on most target
+hosts which should be configured externally (e.g. FreeBSD jails, systemd
+service options, AppArmor, SELinux, LXC containers, actual VMs, etc).  For
+that matter, a distribution packager or system admin can still do basic
+chroot through their init scripts/system, and probably set it up better
+with regard to mounting special directories to make library calls work
+right, etc.
 
 If your host supports randomized address layout for executables (-fPIE
 in gcc terms), gdnsd can be built as such for additional security.

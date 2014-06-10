@@ -23,31 +23,16 @@
 #include "gdnsd/compiler.h"
 #include "gdnsd/paths.h"
 
-// Called by core daemon only, once at startup.
-//   It cleans up "rootdir_in" via realpath(), verifies
-//   existence, and does a chdir() into it.
-// From here forward, the data root dir paths
-//   are used as relative paths, e.g. "etc/config",
-//   "etc/geoip/GeoIPRegion.dat", etc...
-// (Unless the default or argument is "system", in
-//   which case we set up for unrooted execution
-//   with system default paths from autoconf)
-void gdnsd_set_rootdir(const char* rootdir_in);
+// Return the compiled-in default config file pathname
+const char* gdnsd_get_default_config_file(void);
 
-// Returns the realpath()-cleaned actual rootdir
-//   determined and used above.  Almost none of the
-//   code should actually need this, except the
-//   security code for chroot().
-F_PURE
-const char* gdnsd_get_rootdir(void);
-
-// this returns the compiled default (a path
-//   for chroot default, or "system", never NULL),
-//   to help with the usage() output...
-F_PURE
-const char* gdnsd_get_def_rootdir(void);
-
-// special-case, get the rundir as libdmn wants to see it
-const char* gdnsd_get_rundir_for_dmn(void);
+// Set any explicitly-configured directories to non-default
+//   values.  Only supply explicit overrides!
+// The state/run dirs will get compiled-in defaults if NULL.
+// The internal config dir behavior has 3 basic cases:
+//   1) if config_dir, use that.
+//   2) else if config_file, use dirname(config_file)
+//   3) else use dirname(gdnsd_get_default_config_file())
+void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file);
 
 #endif // GDNSD_PATHS_PRIV_H

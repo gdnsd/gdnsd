@@ -79,14 +79,12 @@ F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-        "Usage: %s [-fsSD] [-d <rootdir>] <action>\n"
+        "Usage: %s [-fsSD] [-c /path/to/configfile] <action>\n"
         "  -D - Enable verbose debug output\n"
         "  -f - Foreground mode for start/restart-like actions\n"
         "  -s - Force 'zones_strict_startup = true' for this invocation\n"
         "  -S - Force 'zones_strict_data = true' for this invocation\n"
-        "  -d <rootdir> - Use the given directory as the daemon chroot.  The\n"
-        "     special value 'system' uses system default paths with no chroot.\n"
-        "     The default for this build is '%s'.  See gdnsd(8) for more info.\n"
+        "  -c - Main config file, default '%s'\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
@@ -120,7 +118,7 @@ static void usage(const char* argv0) {
 #       endif
 
         "\nFor updates, bug reports, etc, please visit " PACKAGE_URL "\n",
-        argv0, gdnsd_get_def_rootdir()
+        argv0, gdnsd_get_default_config_file()
     );
     exit(2);
 }
@@ -156,22 +154,6 @@ static void* mon_runtime(void* unused V_UNUSED) {
     dmn_assert(0); // should never be reached as loop never terminates
     ev_loop_destroy(mon_loop);
     return NULL;
-}
-
-// I know this looks stupid, but on Linux/glibc this forces
-//  gcc_s to be loaded before chroot(), avoiding an otherwise
-//  very late failure at shutdown time of pthread_cancel().
-// In general it's not a bad idea to cycle the pthreads
-//  interface for bugs/crashes before daemonization anyways.
-static void* dummy_thread(void* x) { return x; }
-static void ping_pthreads(void) {
-    pthread_t threadid;
-    int pthread_err = pthread_create(&threadid, NULL, &dummy_thread, NULL);
-    if(pthread_err)
-        log_fatal("pthread_create() of dummy thread failed: %s",
-            dmn_logf_strerror(pthread_err));
-    pthread_cancel(threadid);
-    pthread_join(threadid, NULL);
 }
 
 static void start_threads(void) {
@@ -263,9 +245,8 @@ static void memlock_rlimits(const bool started_as_root) {
             //  daemonization in an unfortunately rather common case.
             // Another option would be to offer a configfile parameter
             //  for the rlimit value in this case.
-            // If the daemon gets compromised, even with privdrop
-            //  and chroot in place, memlock is probably the least
-            //  of your worries anyways.
+            // If the daemon gets compromised, even with privdrop,
+            //  memlock is probably the least of your worries anyways.
             rlim.rlim_max = RLIM_INFINITY;
             if(setrlimit(RLIMIT_MEMLOCK, &rlim))
                 log_fatal("setrlimit(RLIMIT_MEMLOCK, max = INF) "
@@ -321,7 +302,7 @@ static action_t match_action(const char* arg) {
 }
 
 typedef struct {
-    const char* rootdir;
+    const char* cfg_file;
     bool force_zss;
     bool force_zsd;
     bool debug;
@@ -333,10 +314,10 @@ static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
     action_t action = ACT_UNDEF;
 
     int optchar;
-    while((optchar = getopt(argc, argv, "d:DfsS"))) {
+    while((optchar = getopt(argc, argv, "c:DfsS"))) {
         switch(optchar) {
-            case 'd':
-                copts->rootdir = optarg;
+            case 'c':
+                copts->cfg_file = optarg;
                 break;
             case 'D':
                 copts->debug = true;
@@ -369,11 +350,11 @@ static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
 
 int main(int argc, char** argv) {
 
-    // Parse args, getting the libgdnsd rootdir and
+    // Parse args, getting the config path
     //   returning the action.  Exits on cmdline errors,
     //   does not use libdmn assert/log stuff.
     cmdline_opts_t copts = {
-        .rootdir = NULL,
+        .cfg_file = NULL,
         .force_zss = false,
         .force_zsd = false,
         .debug = false,
@@ -393,14 +374,27 @@ int main(int argc, char** argv) {
             break;
     }
 
-    // init1 lets us start using dmn log funcs
+    // init1 lets us start using dmn log funcs for config errors, etc
     dmn_init1(copts.debug, copts.foreground, !will_daemonize, will_daemonize, PACKAGE_NAME);
 
-    // set the rootdir
-    gdnsd_set_rootdir(copts.rootdir);
+    // Initialize net stuff in libgdnsd (protoents, tcp_v6_ok) - needed for config load
+    gdnsd_init_net();
 
-    // and init2 gets us status/stop/signal
-    dmn_init2(gdnsd_get_rundir_for_dmn(), gdnsd_get_rootdir());
+    // Init meta-PRNG - needed for config load
+    gdnsd_rand_meta_init();
+
+    // For simple pidfile operations, we only need to load enough of
+    //   the config to find the right pidfile path...
+    bool cfg_dirs_only = false;
+    if(action == ACT_STATUS || action == ACT_STOP || action == ACT_RELOAD)
+        cfg_dirs_only = true;
+
+    // Load config, which if !rundir_only does a ton of complicated things
+    //   like loading and configuring plugins as well
+    conf_load(copts.cfg_file, copts.force_zss, copts.force_zsd, cfg_dirs_only);
+
+    // init2() lets us do daemon actions
+    dmn_init2(gdnsd_resolve_path_run(NULL, NULL));
 
     // Take action
     if(action == ACT_STATUS) {
@@ -428,15 +422,6 @@ int main(int argc, char** argv) {
         action = ACT_RESTART;
     }
 
-    // Initialize net stuff in libgdnsd (protoents, tcp_v6_ok)
-    gdnsd_init_net();
-
-    // Init meta-PRNG
-    gdnsd_rand_meta_init();
-
-    // Actually load the config
-    conf_load(copts.force_zss, copts.force_zsd);
-
     // Set up and validate privdrop info if necc
     dmn_init3(gconfig.username, (action == ACT_RESTART));
 
@@ -456,16 +441,12 @@ int main(int argc, char** argv) {
     // from here out, all actions are attempting startup...
     dmn_assert(action == ACT_START || action == ACT_RESTART);
 
-    // Did we start as root?  This determines whether we try to chroot(),
-    //   how we handle memlock rlimits, etc...
+    // Did we start as root?  This determines how we handle memlock/setpriority
     const bool started_as_root = !geteuid();
 
     // Check/set rlimits for mlockall() if necessary and possible
     if(gconfig.lock_mem)
         memlock_rlimits(started_as_root);
-
-    // Ping the pthreads implementation...
-    ping_pthreads();
 
     // Initialize DNS listening sockets, but do not bind() them yet
     dns_lsock_init();
@@ -497,16 +478,17 @@ int main(int argc, char** argv) {
             log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)",
                 dmn_logf_errno());
 
-    // Set up libev error callback
-    ev_set_syserr_cb(&syserr_for_ev);
-
     // Initialize dnspacket stuff
     dnspacket_global_setup();
 
     // Call plugin pre-privdrop actions
     gdnsd_plugins_action_pre_privdrop();
 
+    // drop privs if started as root
     dmn_secure();
+
+    // Set up libev error callback
+    ev_set_syserr_cb(&syserr_for_ev);
 
     // Construct the monitoring loop, for monitors + statio,
     //   which will be executed in another thread for runtime

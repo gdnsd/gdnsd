@@ -224,7 +224,7 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
 }
 
 static void admin_process_file(const char* pathname) {
-    log_info("admin_state: (re-)loading state file '%s'...", logf_pathname(pathname));
+    log_info("admin_state: (re-)loading state file '%s'...", pathname);
 
     bool success = true;
 
@@ -233,13 +233,13 @@ static void admin_process_file(const char* pathname) {
     if(!raw) {
         dmn_assert(vscf_err);
         success = false;
-        log_err("admin_state: Loading file '%s' failed: %s", logf_pathname(pathname), vscf_err);
+        log_err("admin_state: Loading file '%s' failed: %s", pathname, vscf_err);
         free(vscf_err);
     }
     else {
         dmn_assert(!vscf_err);
         if(!vscf_is_hash(raw))
-            log_err("admin_state: top level of file '%s' must be a hash", logf_pathname(pathname));
+            log_err("admin_state: top level of file '%s' must be a hash", pathname);
 
         gdnsd_sttl_t updates[num_smgrs];
         memset(updates, 0, sizeof(updates));
@@ -298,11 +298,11 @@ static void admin_process_file(const char* pathname) {
     }
 
     if(!success)
-        log_err("admin_state: file '%s' had errors; all contents were ignored and any current forced states are unaffected", logf_pathname(pathname));
+        log_err("admin_state: file '%s' had errors; all contents were ignored and any current forced states are unaffected", pathname);
 }
 
 static void admin_deleted_file(const char* pathname) {
-    log_info("admin_state: state file '%s' deleted, clearing any forced states...", logf_pathname(pathname));
+    log_info("admin_state: state file '%s' deleted, clearing any forced states...", pathname);
     bool affected = false;
     for(unsigned i = 0; i < num_smgrs; i++) {
         if(smgr_sttl[i] & GDNSD_STTL_FORCED) {
@@ -353,7 +353,7 @@ static void admin_init(struct ev_loop* mloop) {
     if(admin_file_watcher->attr.st_nlink)
         admin_process_file(pathname);
     else
-        log_info("admin_state: state file '%s' does not yet exist at startup", logf_pathname(pathname));
+        log_info("admin_state: state file '%s' does not yet exist at startup", pathname);
 }
 
 //--------------------------------------------------

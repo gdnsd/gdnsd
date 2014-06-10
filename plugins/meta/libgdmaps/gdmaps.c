@@ -241,7 +241,7 @@ static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_l
     bool rv = false;
 
     if(!new_list) {
-        log_err("plugin_geoip: map '%s': (Re-)loading geoip database '%s' failed!", gdmap->name, logf_pathname(path));
+        log_err("plugin_geoip: map '%s': (Re-)loading geoip database '%s' failed!", gdmap->name, path);
         if(!gdmap->dclists_pend)
             dclists_destroy(update_dclists, KILL_NEW_LISTS);
         rv = true;
@@ -281,16 +281,16 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
         if(vscf_is_hash(nets_cfg)) {
             new_list = nets_make_list(nets_cfg, update_dclists, gdmap->name);
             if(!new_list)
-                log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed!", gdmap->name, logf_pathname(gdmap->nets_path));
+                log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed!", gdmap->name, gdmap->nets_path);
         }
         else {
             dmn_assert(vscf_is_array(nets_cfg));
-            log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed: file cannot be an array of values", gdmap->name, logf_pathname(gdmap->nets_path));
+            log_err("plugin_geoip: map '%s': (Re-)loading nets file '%s' failed: file cannot be an array of values", gdmap->name, gdmap->nets_path);
         }
         vscf_destroy(nets_cfg);
     }
     else {
-        log_err("plugin_geoip: map '%s': parsing nets file '%s' failed: %s", gdmap->name, logf_pathname(gdmap->nets_path), vscf_err);
+        log_err("plugin_geoip: map '%s': parsing nets file '%s' failed: %s", gdmap->name, gdmap->nets_path, vscf_err);
         free(vscf_err);
     }
 
@@ -414,14 +414,14 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
             //  wait for multiple changes to "settle" before re-reading the file
             ev_timer* which_timer = v4o ? gdmap->geoip_v4o_reload_timer : gdmap->geoip_reload_timer;
             if(!ev_is_active(which_timer) && !ev_is_pending(which_timer))
-                log_info("plugin_geoip: map '%s': Change detected in GeoIP database '%s', waiting for %gs of change quiescence...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
+                log_info("plugin_geoip: map '%s': Change detected in GeoIP database '%s', waiting for %gs of change quiescence...", gdmap->name, w->path, STAT_RELOAD_WAIT);
             else
-                log_debug("plugin_geoip: map '%s': Timer for GeoIP database '%s' re-kicked for %gs due to rapid change...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
+                log_debug("plugin_geoip: map '%s': Timer for GeoIP database '%s' re-kicked for %gs due to rapid change...", gdmap->name, w->path, STAT_RELOAD_WAIT);
             ev_timer_again(loop, which_timer);
         }
     }
     else {
-        log_warn("plugin_geoip: map '%s': GeoIP database '%s' disappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, logf_pathname(w->path));
+        log_warn("plugin_geoip: map '%s': GeoIP database '%s' disappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, w->path);
     }
 }
 
@@ -437,14 +437,14 @@ static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int reve
     if(w->attr.st_nlink) { // file exists
         if(w->attr.st_mtime != w->prev.st_mtime || !w->prev.st_nlink) {
             if(!ev_is_active(gdmap->nets_reload_timer) && !ev_is_pending(gdmap->nets_reload_timer))
-                log_info("plugin_geoip: map '%s': Change detected in nets file '%s', waiting for %gs of change quiescence...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
+                log_info("plugin_geoip: map '%s': Change detected in nets file '%s', waiting for %gs of change quiescence...", gdmap->name, w->path, STAT_RELOAD_WAIT);
             else
-                log_debug("plugin_geoip: map '%s': Timer for nets file '%s' re-kicked for %gs due to rapid change...", gdmap->name, logf_pathname(w->path), STAT_RELOAD_WAIT);
+                log_debug("plugin_geoip: map '%s': Timer for nets file '%s' re-kicked for %gs due to rapid change...", gdmap->name, w->path, STAT_RELOAD_WAIT);
             ev_timer_again(loop, gdmap->nets_reload_timer);
         }
     }
     else {
-        log_warn("plugin_geoip: map '%s': nets file '%s' disappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, logf_pathname(w->path));
+        log_warn("plugin_geoip: map '%s': nets file '%s' disappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, w->path);
     }
 }
 

@@ -38,33 +38,33 @@
 #include <gdnsd/plugapi.h>
 #include <gdnsd/misc.h>
 
-// be evil and use the private interface to set the cfdir,
-//   since this is for test mocking and we're part of the main dist
 #include "gdnsd/paths-priv.h"
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
-static const vscf_data_t* conf_load_vscf(void) {
+static const vscf_data_t* conf_load_vscf(const char* cfg_path) {
     const vscf_data_t* out = NULL;
 
-    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
+    gdnsd_set_dirs(NULL, NULL, NULL, cfg_path);
 
     struct stat cfg_stat;
+    if(!cfg_path)
+        cfg_path = gdnsd_get_default_config_file();
+
     if(!stat(cfg_path, &cfg_stat)) {
-        log_info("Loading configuration from '%s'", logf_pathname(cfg_path));
+        log_info("Loading configuration from '%s'", cfg_path);
         char* vscf_err;
         out = vscf_scan_filename(cfg_path, &vscf_err);
         if(!out)
-            log_fatal("Configuration from '%s' failed: %s", logf_pathname(cfg_path), vscf_err);
+            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
         if(!vscf_is_hash(out))
-            log_fatal("Configuration from '%s' failed: config was an array!", logf_pathname(cfg_path));
+            log_fatal("Configuration from '%s' failed: config was an array!", cfg_path);
     }
     else {
-        log_info("No config file at '%s', using defaults + zones auto-scan", logf_pathname(cfg_path));
+        log_info("No config file at '%s', using defaults + zones auto-scan", cfg_path);
     }
 
-    free(cfg_path);
     return out;
 }
 
@@ -158,12 +158,11 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
         log_fatal("Subtest %u failed: Wanted scope mask %u, got %u", tnum, scope_cmp, scope);
 }
 
-gdmaps_t* gdmaps_test_init(const char* input_rootdir) {
+gdmaps_t* gdmaps_test_init(const char* input_cfgfile) {
 
     dmn_init1(false, true, true, false, "gdmaps_test");
 
-    gdnsd_set_rootdir(input_rootdir);
-    const vscf_data_t* cfg_root = conf_load_vscf();
+    const vscf_data_t* cfg_root = conf_load_vscf(input_cfgfile);
     const vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* gdmaps = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);

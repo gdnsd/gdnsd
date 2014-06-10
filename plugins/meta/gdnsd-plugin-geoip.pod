@@ -96,14 +96,10 @@ client's network address.
 =head1 FILE LOCATIONS
 
 The configuration of this plugin can reference several external
-configuration and/or data files.  The location of these files is dependent,
-of course, on whether the daemon is running in chroot or "system paths"
-mode.  In system paths mode, the directory for these files is commonly,
-e.g. F</etc/gdnsd/geoip/> given autoconf $sysconfdir of F</etc>.  In chroot
-mode, the directory would be F</srv/gdnsd/etc/geoip/> given a chroot
-directory of F</srv/gdnsd>.  If any of the pathnames are specified as
-absolute paths, they will be taken literally (although this will still be
-relative to the chroot in the chroot case).
+configuration and/or data files  The directory for these files is commonly
+e.g. F</etc/gdnsd/geoip/> given autoconf $sysconfdir of F</etc>.
+If any of the pathnames are specified as absolute paths, they will be taken
+literally.
 
 =head1 CONFIGURATION - TOP-LEVEL
 
