@@ -72,32 +72,20 @@ static unsigned init_phase_count = 0;
 //   (which is in turn signalled by pipe close)
 static bool total_helper_failure_flag = false;
 
-typedef enum {
-    FAIL_STASIS,
-    FAIL_ONCE,
-    FAIL_DIE,
-} fail_t;
-
-static fail_t fail_mode = FAIL_ONCE;
+// behavior on helper failure
+static bool die_on_helper_failure = false;
 
 static const char fail_msg[] = "plugin_extmon: Cannot continue monitoring, child process gdnsd_extmon_helper failed!";
 static void total_helper_failure(struct ev_loop* loop) {
-    switch(fail_mode) {
-        case FAIL_ONCE:
-            for(unsigned i = 0; i < num_mons; i++)
-                gdnsd_mon_state_updater(mons[i].idx, false);
-            // fall-through
-        case FAIL_STASIS:
-            for(unsigned i = 0; i < num_mons; i++)
-                ev_timer_stop(loop, mons[i].local_timeout);
-            log_err(fail_msg);
-            break;
-        case FAIL_DIE:
-            log_fatal(fail_msg);
-            break;
-        default:
-            dmn_assert(0);
-    }
+    dmn_assert(loop);
+
+    for(unsigned i = 0; i < num_mons; i++)
+        ev_timer_stop(loop, mons[i].local_timeout);
+
+    if(die_on_helper_failure)
+        log_fatal(fail_msg);
+
+    log_err(fail_msg);
     close(helper_read_fd);
     ev_io_stop(loop, helper_read_watcher);
     total_helper_failure_flag = true;
@@ -319,13 +307,11 @@ void plugin_extmon_load_config(const vscf_data_t* config) {
                 log_fatal("plugin_extmon: config option 'helper_failure_action' must be a simple string");
             const char* fail_str = vscf_simple_get_data(fail_cfg);
             if(!strcmp(fail_str, "stasis"))
-                fail_mode = FAIL_STASIS;
-            else if(!strcmp(fail_str, "fail_once"))
-                fail_mode = FAIL_ONCE;
+                die_on_helper_failure = false;
             else if(!strcmp(fail_str, "kill_daemon"))
-                fail_mode = FAIL_DIE;
+                die_on_helper_failure = true;
             else
-                log_fatal("plugin_extmon: config option 'helper_failure_action' must be one of 'stasis', 'fail_once', or 'kill_daemon' (you provided '%s')", fail_str);
+                log_fatal("plugin_extmon: config option 'helper_failure_action' must be one of 'stasis' or 'kill_daemon' (you provided '%s')", fail_str);
         }
         vscf_hash_iterate(config, true, bad_opt, NULL);
     }

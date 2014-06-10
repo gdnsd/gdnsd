@@ -54,6 +54,10 @@
       time.  The monitoring algorithms and thresholds haven't
       changed; 'DANGER' just isn't exposed as a separate state
       from 'UP'.
+    * plugin_extmon: the value 'fail_once' for the option
+      'helper_failure_action' no longer exists, as it no longer
+      makes sense without a visible DANGER state.  The new default
+      is 'stasis'.
     * The special service_type 'danger' no longer exists.
     * The special service_type 'none' as an alias for 'up' no
       longer exists.  Use 'up' instead.
