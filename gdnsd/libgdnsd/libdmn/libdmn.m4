@@ -18,7 +18,6 @@ AC_ARG_WITH([systemd],[
 ],[
     if test "x$withval" = xyes; then
         USE_SYSTEMD=1
-        AC_DEFINE([USE_SYSTEMD],[1],[Use systemd])
     fi
 ])
 
@@ -28,7 +27,6 @@ AC_ARG_WITH([systemd-hax],[
     if test "x$withval" = xyes; then
         USE_SYSTEMD_HAX=1
         USE_SYSTEMD=1
-        AC_DEFINE([USE_SYSTEMD_HAX],[1],[Use systemd hacks for fast-restart via systemctl reload])
     fi
 ])
 
@@ -36,9 +34,11 @@ PKG_PROG_PKG_CONFIG()
 if test x"$USE_SYSTEMD" = x1; then
     PKG_CHECK_MODULES([SYSD_DAEMON],[libsystemd-daemon])
     PKG_CHECK_MODULES([SYSD_JOURNAL],[libsystemd-journal])
+    AC_DEFINE([USE_SYSTEMD],[1],[Use systemd])
 fi
 if test x"$USE_SYSTEMD_HAX" = x1; then
     PKG_CHECK_MODULES([SYSD_LOGIN],[libsystemd-login])
+    AC_DEFINE([USE_SYSTEMD_HAX],[1],[Use systemd hacks for fast-restart via systemctl reload])
 fi
 
 AC_SUBST([SYSD_DAEMON_CFLAGS])
