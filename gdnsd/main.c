@@ -46,6 +46,32 @@
 #include "gdnsd/paths-priv.h"
 #include "gdnsd/mon-priv.h"
 
+// ev loop used for monitoring, statio, and watchdog
+// (all of which shared a thread as well)
+static struct ev_loop* mon_loop = NULL;
+
+// Watchdog stuff
+static ev_timer* watchdog_timer = NULL;
+
+static void watchdog_cb(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) {
+    dmn_assert(loop == mon_loop);
+    dmn_assert(w == watchdog_timer);
+    dmn_assert(revents == EV_TIMER);
+    dmn_wdog_ping();
+}
+
+static void watchdog_start(struct ev_loop* loop) {
+    dmn_assert(loop == mon_loop);
+    unsigned msec = dmn_wdog_get_msec();
+    if(msec) {
+        double sec_dbl = ((double)msec) / 1000.0;
+        watchdog_timer = malloc(sizeof(ev_timer));
+        ev_timer_init(watchdog_timer, watchdog_cb, 0., sec_dbl);
+        ev_timer_start(loop, watchdog_timer);
+        log_info("watchdog starting, will ping every ~ %.3f seconds", sec_dbl);
+    }
+}
+
 // custom atexit-like stuff, only for resource
 //   de-allocation in debug builds to check for leaks
 
@@ -128,8 +154,6 @@ static void usage(const char* argv0) {
     );
     exit(2);
 }
-
-static struct ev_loop* mon_loop = NULL;
 
 // thread entry point for zone data reloader thread
 static void* zone_data_runtime(void* unused V_UNUSED) {
@@ -534,6 +558,10 @@ int main(int argc, char** argv) {
         //   if any sockets can't be acquired.
         socks_daemon_check_all(false);
     }
+
+    // Start the ev_timer for the watchdog, if applicable,
+    //   which will run in the monitoring thread/loop.
+    watchdog_start(mon_loop);
 
     // Start up all of the UDP and TCP threads, each of
     // which has all signals blocked and has its own

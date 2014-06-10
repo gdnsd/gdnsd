@@ -31,13 +31,17 @@ Interesting / Non-standard autoconf options
 --with-systemd
   Turns on compile-time support for running as a systemd service.
   You want this iff your Linux distribution uses systemd.  Turns
-  on sd_notify() of the MAINPID during startup.
+  on sd_notify() of the MAINPID during startup, logging exclusively
+  via sd_journal_printv(), and watchdog pings if configured in
+  the service file (only if we appear to actually be started by
+  systemd at runtime).
+
   Note that currently there is no support for gdnsd's standard fast,
   overlapped restart behavior under systemd, as systemd has no
   apparent capability to handle this concept.  "systemctl restart"
   will result in a full shutdown and then a full startup, sequentially,
   and a systemd-started gdnsd can't be fast-restarted from outside
-  of systemctl, either.
+  of systemctl, either, but:
 
 --with-systemd-hax
   Implies --with-systemd.  Turns on some hacky, unclean code to

@@ -148,6 +148,18 @@ pid_t dmn_stop(void);
 int dmn_signal(int sig);
 
 /***
+**** Watchdog interfaces:
+**** Basically, iff dmn_wdog_get_msec() returns a non-zero value
+****   (when called during startup, after init1()),
+****   the daemon should call dmn_wdog_ping() at approximate
+****   intervals of that many milliseconds during runtime.
+**** For now this only wraps systemd's watchdog mechanism,
+****   but could be extended to other stuff in the future.
+***/
+unsigned dmn_wdog_get_msec(void);
+void dmn_wdog_ping(void);
+
+/***
 **** Logging interfaces
 ***/
 

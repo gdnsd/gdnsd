@@ -155,14 +155,15 @@ typedef struct {
     char* username;
 
     // calculated/inferred/discovered
-    bool  invoked_as_root; // !geteuid() during init1()
-    bool  will_privdrop;   // invoked_as_root && non-null username from init3()
-    bool  need_helper;     // depends on foreground, will_privdrop, and pcall registration - set in _fork
-    bool  use_systemd;     // sd_booted() && !isatty(stdin) && !foreground (we think systemd ran us directly)
-    uid_t uid;             // uid of username from init3()
-    gid_t gid;             // gid of username from init3()
-    char* pid_dir;         // from init2()
-    char* pid_file;        // depends on pid_dir + name
+    bool     invoked_as_root; // !geteuid() during init1()
+    bool     will_privdrop;   // invoked_as_root && non-null username from init3()
+    bool     need_helper;     // depends on foreground, will_privdrop, and pcall registration - set in _fork
+    bool     use_systemd;     // sd_booted() && !isatty(stdin) && !foreground (we think systemd ran us directly)
+    uid_t    uid;             // uid of username from init3()
+    gid_t    gid;             // gid of username from init3()
+    char*    pid_dir;         // from init2()
+    char*    pid_file;        // depends on pid_dir + name
+    unsigned wdog_msec;       // watchdog milliseconds, system-dependent (systemd), set in init1
 } params_t;
 
 static params_t params = {
@@ -180,6 +181,7 @@ static params_t params = {
     .gid             = 0,
     .pid_dir         = NULL,
     .pid_file        = NULL,
+    .wdog_msec       = 0,
 };
 
 typedef struct {
@@ -471,6 +473,22 @@ static char* str_combine_n(const unsigned count, ...) {
 }
 
 /***********************************************************
+***** Watchdog interface ***********************************
+***********************************************************/
+
+unsigned dmn_wdog_get_msec(void) {
+    phase_check(0, 0, 0);
+    return params.wdog_msec;
+}
+
+void dmn_wdog_ping(void) {
+    phase_check(0, 0, 0);
+#ifdef USE_SYSTEMD
+    sd_notify(0, "WATCHDOG=1");
+#endif
+}
+
+/***********************************************************
 ***** Daemonization ****************************************
 ***********************************************************/
 
@@ -489,16 +507,20 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
         setenv("NOTIFY_SOCKET", "@/org/freedesktop/systemd1/notify", 0);
 #endif
 
-    if(state.phase != PHASE0_UNINIT)
-        dmn_log_fatal("BUG: dmn_init1() can only be called once!");
-
-    if(!name)
-        dmn_log_fatal("BUG: dmn_init1(): argument 'name' is *required*");
-
     params.debug = debug;
     params.foreground = foreground;
     params.stderr_info = stderr_info;
     params.name = strdup(name);
+
+    // set phase early so that dmn_log calls work!
+    const phase_t prev_phase = state.phase;
+    state.phase = PHASE1_INIT1;
+
+    if(prev_phase != PHASE0_UNINIT)
+        dmn_log_fatal("BUG: dmn_init1() can only be called once!");
+
+    if(!name)
+        dmn_log_fatal("BUG: dmn_init1(): argument 'name' is *required*");
 
     if(!params.use_systemd) {
         if(!params.foreground) {
@@ -514,9 +536,25 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
         }
     }
 
-    params.invoked_as_root = !geteuid();
+#ifdef USE_SYSTEMD
+    if(params.use_systemd) {
+        uint64_t usec;
+        int we_rv = sd_watchdog_enabled(1, &usec);
+        if(we_rv > 0) {
+            dmn_assert(usec);
+            params.wdog_msec = (usec >> 1) / 1000; // halve the time and truncate to ms
+            if(params.wdog_msec < 10) // sub-10ms watchdog times are probably dangerous
+                params.wdog_msec = 10;
+            if(params.wdog_msec > 3600000) // >1hr also seems silly
+                params.wdog_msec = 3600000;
+        }
+        else if(we_rv < 0) {
+                log_err("sd_watchdog_enabled() failed: %s", dmn_logf_errnum(-we_rv));
+        }
+    }
+#endif // USE_SYSTEMD
 
-    state.phase = PHASE1_INIT1;
+    params.invoked_as_root = !geteuid();
 }
 
 void dmn_init2(const char* pid_dir) {
