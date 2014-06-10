@@ -424,7 +424,9 @@ int main(int argc, char** argv) {
     conf_load(copts.cfg_file, copts.force_zss, copts.force_zsd, cfg_dirs_only);
 
     // init2() lets us do daemon actions
-    dmn_init2(gdnsd_resolve_path_run(NULL, NULL));
+    char* rundir = gdnsd_resolve_path_run(NULL, NULL);
+    dmn_init2(rundir);
+    free(rundir);
 
     // Take action
     if(action == ACT_STATUS) {
