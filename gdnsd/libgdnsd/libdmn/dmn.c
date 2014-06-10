@@ -501,7 +501,7 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
     // This lets us log to normal stderr for now
     state.stderr_out = params.use_systemd ? NULL : stderr;
 
-#ifdef USE_SYSTEMD_RELOAD_HAX
+#ifdef USE_SYSTEMD_HAX
     // HACK: control procs don't get $NOTIFY_SOCKET from systemd, but this seems to fix that ...
     if(params.use_systemd)
         setenv("NOTIFY_SOCKET", "@/org/freedesktop/systemd1/notify", 0);
@@ -549,7 +549,7 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
                 params.wdog_msec = 3600000;
         }
         else if(we_rv < 0) {
-                log_err("sd_watchdog_enabled() failed: %s", dmn_logf_errnum(-we_rv));
+            log_err("sd_watchdog_enabled() failed: %s", dmn_logf_errnum(-we_rv));
         }
     }
 #endif // USE_SYSTEMD
@@ -806,7 +806,7 @@ void dmn_fork(void) {
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_errno());
     dmn_log_info("Daemonized, final pid is %li", (long)getpid());
 
-#ifdef USE_SYSTEMD_RELOAD_HAX
+#ifdef USE_SYSTEMD_HAX
     // hack hack hack - when restarting, before losing privileges, we need to
     //   promote ourselves from control process to main process.
     // sd_pid_get_unit() seems to return "gdnsd.service" even when we're marked
@@ -907,14 +907,14 @@ void dmn_acquire_pidfile(void) {
 
     // if restarting, TERM the old daemon and wait for it to exit for a bit...
     if(really_restart) {
-#ifdef USE_SYSTEMD_RELOAD_HAX
+#ifdef USE_SYSTEMD_HAX
         // notify systemd of new MAINPID *before* killing old daemon, or systemd will kill everything
         if(params.use_systemd)
             sd_notifyf(0, "MAINPID=%li", (long)pid);
 #endif
         dmn_log_info("restart: Stopping previous daemon instance at pid %li...", (long)old_pid);
         if(terminate_pid_and_wait(old_pid)) {
-#ifdef USE_SYSTEMD_RELOAD_HAX
+#ifdef USE_SYSTEMD_HAX
             // put the MAINPID back to the old value before bailing out if old_pid never died
             //  (this is a little racy, in that it could have been replaced by a separate
             //  successful restarter right after we gave up waiting, but hopefully systemd
@@ -940,8 +940,8 @@ void dmn_acquire_pidfile(void) {
     if(dprintf(pidfd, "%li\n", (long)pid) < 2)
         dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
 
-#ifdef USE_SYSTEMD_RELOAD_HAX
-    // in restart cases w/ RELOAD_HAX, only notify-after-lock if we didn't already earlier for restart
+#ifdef USE_SYSTEMD_HAX
+    // in restart cases w/ HAX, only notify-after-lock if we didn't already earlier for restart
     if(!really_restart)
 #endif
 #ifdef USE_SYSTEMD
