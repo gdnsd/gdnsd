@@ -79,18 +79,25 @@ typedef enum {
 
 static const char* gdnsd_dirs[4] = { NULL, NULL, NULL, NULL };
 
-void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file) {
+void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file, const bool runtime_dirs) {
     if(!run_dir)
-        run_dir = strdup(GDNSD_RUNDIR);
-    gdnsd_dirs[RUN] = gdnsd_realdir(run_dir, "run", true, 0750);
+        run_dir = GDNSD_RUNDIR;
 
     if(!state_dir)
-        state_dir = strdup(GDNSD_STATEDIR);
-    gdnsd_dirs[STATE] = gdnsd_realdir(state_dir, "state", true, 0755);
+        state_dir = GDNSD_STATEDIR;
+
+    if(runtime_dirs) {
+        gdnsd_dirs[RUN] = gdnsd_realdir(run_dir, "run", true, 0750);
+        gdnsd_dirs[STATE] = gdnsd_realdir(state_dir, "state", true, 0755);
+    }
+    else {
+        gdnsd_dirs[RUN] = strdup(run_dir);
+        gdnsd_dirs[STATE] = strdup(state_dir);
+    }
 
     if(!config_dir) {
         if(!config_file)
-            config_file = strdup(GDNSD_DEF_CONFIG);
+            config_file = GDNSD_DEF_CONFIG;
         char* cfg_file_copy = strdup(config_file);
         gdnsd_dirs[CFG] = gdnsd_realdir(dirname(cfg_file_copy), "config", false, 0);
         free(cfg_file_copy);
@@ -100,7 +107,7 @@ void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* conf
     }
 
     // This is just fixed at compiletime, period
-    gdnsd_dirs[LIBEXEC] = strdup(GDNSD_LIBEXECDIR);
+    gdnsd_dirs[LIBEXEC] = GDNSD_LIBEXECDIR;
 }
 
 static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx) {

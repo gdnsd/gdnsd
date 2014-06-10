@@ -46,7 +46,7 @@
 static const vscf_data_t* conf_load_vscf(const char* cfg_path) {
     const vscf_data_t* out = NULL;
 
-    gdnsd_set_dirs(NULL, NULL, NULL, cfg_path);
+    gdnsd_set_dirs(NULL, NULL, NULL, cfg_path, false);
 
     struct stat cfg_stat;
     if(!cfg_path)

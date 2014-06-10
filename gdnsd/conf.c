@@ -520,7 +520,7 @@ void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd,
             CFG_OPT_STR_NOCOPY(options, config_dir, cfg_config_dir);
         }
 
-        gdnsd_set_dirs(cfg_run_dir, cfg_state_dir, cfg_config_dir, cfg_file);
+        gdnsd_set_dirs(cfg_run_dir, cfg_state_dir, cfg_config_dir, cfg_file, true);
     }
 
     // fast-path exit for dirs_only case
