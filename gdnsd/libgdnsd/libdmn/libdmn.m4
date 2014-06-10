@@ -47,3 +47,15 @@ AC_SUBST([SYSD_JOURNAL_CFLAGS])
 AC_SUBST([SYSD_JOURNAL_LIBS])
 AC_SUBST([SYSD_LOGIN_CFLAGS])
 AC_SUBST([SYSD_LOGIN_LIBS])
+
+# Manually check for systemd 209+ sd_watchdog_enabled ...
+if test x"$USE_SYSTEMD" = x1; then
+    XLIBS=$LIBS
+    XCPPFLAGS=$CPPFLAGS
+    LIBS="$LIBS $SYSD_DAEMON_LIBS"
+    CPPFLAGS="$CPPFLAGS $SYSD_DAEMON_CFLAGS"
+    AC_CHECK_FUNCS([sd_watchdog_enabled])
+    AC_CHECK_DECLS([sd_watchdog_enabled],,,[#include <systemd/sd-daemon.h>])
+    CPPFLAGS=$XCPPFLAGS
+    LIBS=$XLIBS
+fi

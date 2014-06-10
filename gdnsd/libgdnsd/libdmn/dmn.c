@@ -536,7 +536,7 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
         }
     }
 
-#ifdef USE_SYSTEMD
+#if defined USE_SYSTEMD && HAVE_DECL_SD_WATCHDOG_ENABLED && defined HAVE_SD_WATCHDOG_ENABLED
     if(params.use_systemd) {
         uint64_t usec;
         int we_rv = sd_watchdog_enabled(1, &usec);

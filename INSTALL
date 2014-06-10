@@ -30,11 +30,13 @@ Interesting / Non-standard autoconf options
 
 --with-systemd
   Turns on compile-time support for running as a systemd service.
-  You want this iff your Linux distribution uses systemd.  Turns
-  on sd_notify() of the MAINPID during startup, logging exclusively
-  via sd_journal_printv(), and watchdog pings if configured in
-  the service file (only if we appear to actually be started by
-  systemd at runtime).
+  You want this iff your Linux distribution uses systemd.  If systemd
+  is detected at runtime (that is, systemd is booted and it appears
+  the gdnsd invocation in question is being executed as part of a
+  systemd service), gdnsd will use systemd APIs as appropriate.
+  Notably this includes sd_notify() of MAINPID when starting a new
+  daemon, logging via sd_journal_printv(), and watchdog support
+  (if systemd version is >= 209 and configured in the unit file).
 
   Note that currently there is no support for gdnsd's standard fast,
   overlapped restart behavior under systemd, as systemd has no
