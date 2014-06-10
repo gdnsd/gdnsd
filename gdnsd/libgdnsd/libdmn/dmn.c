@@ -549,7 +549,7 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
                 params.wdog_msec = 3600000;
         }
         else if(we_rv < 0) {
-            log_err("sd_watchdog_enabled() failed: %s", dmn_logf_errnum(-we_rv));
+            dmn_log_err("sd_watchdog_enabled() failed: %s", dmn_logf_strerror(-we_rv));
         }
     }
 #endif // USE_SYSTEMD
