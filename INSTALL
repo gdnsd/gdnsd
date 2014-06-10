@@ -28,6 +28,26 @@ If working directly from a git clone rather than a tarball, in addition to all o
 Interesting / Non-standard autoconf options
 ===========================================
 
+--with-systemd
+  Turns on compile-time support for running as a systemd service.
+  You want this iff your Linux distribution uses systemd.  Turns
+  on sd_notify() of the MAINPID during startup.
+  Note that currently there is no support for gdnsd's standard fast,
+  overlapped restart behavior under systemd, as systemd has no
+  apparent capability to handle this concept.  "systemctl restart"
+  will result in a full shutdown and then a full startup, sequentially,
+  and a systemd-started gdnsd can't be fast-restarted from outside
+  of systemctl, either.
+
+--with-systemd-hax
+  Implies --with-systemd.  Turns on some hacky, unclean code to
+  get the standard "fast, overlapped restart" behavior of gdnsd
+  to work via systemd's ExecReload (thus requiring you to send
+  real SIGHUP from outside of systemctl to replace the missing
+  true reload command).  It's very likely that these hacks
+  will become broken in future systemd versions (or are already
+  broken on a distro I didn't test!)
+
 --enable-developer
   Builds a debugging build (-g) with a lot of extra gcc warnings
     flags, a large suite of assert()ions, and extra

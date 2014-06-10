@@ -109,11 +109,17 @@ static void usage(const char* argv0) {
 #       ifdef USE_INOTIFY
             " inotify"
 #       endif
+#       ifdef USE_SYSTEMD_HAX
+            " systemd-hacks"
+#       elif defined USE_SYSTEMD
+            " systemd"
+#       endif
 
 #       if  defined NDEBUG \
         && !defined HAVE_QSBR \
         && !defined USE_SENDMMSG \
-        && !defined USE_INOTIFY
+        && !defined USE_INOTIFY \
+        && !defined USE_SYSTEMD
             " none"
 #       endif
 
