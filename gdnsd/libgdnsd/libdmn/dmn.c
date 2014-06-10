@@ -1013,8 +1013,8 @@ void dmn_finish(void) {
     dmn_assert(state.pipe_from_helper[PIPE_WR] == -1);
 
     if(!params.foreground && state.stderr_out) {
-        state.stderr_out = NULL;
         fclose(state.stderr_out);
+        state.stderr_out = NULL;
     }
 
     state.phase = PHASE7_FINISHED;
