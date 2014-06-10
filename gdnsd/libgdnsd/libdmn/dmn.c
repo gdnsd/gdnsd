@@ -33,8 +33,8 @@
 #include <pwd.h>
 #include <grp.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
-#include <sys/select.h>
 
 #ifdef USE_SYSTEMD
    // because we funnel through a function here, the location
@@ -399,8 +399,15 @@ static void close_pipefd(int* fd_p) {
 }
 
 // the helper process executes here and does not return
-static void helper_proc(void) {
+static void helper_proc(const pid_t middle_pid) {
     dmn_assert(state.phase == PHASE3_INIT3);
+
+    // if middle_pid is set, we're doing a full
+    //   fork->setsid->fork, and middle_pid is
+    //   the pid of the middle process.  Clean it
+    //   up with waitpid before continuing.
+    if(middle_pid)
+        waitpid(middle_pid, NULL, 0);
 
     const int readpipe = state.pipe_to_helper[PIPE_RD];
     const int writepipe = state.pipe_from_helper[PIPE_WR];
@@ -761,7 +768,7 @@ void dmn_fork(void) {
     if(is_helper) {
         close_pipefd(&state.pipe_to_helper[PIPE_WR]);
         close_pipefd(&state.pipe_from_helper[PIPE_RD]);
-        helper_proc();
+        helper_proc(first_fork_pid);
         dmn_assert(0); // above never returns control
     }
 
