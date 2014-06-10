@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
     // Bail out early if we don't have the right argument
     //   count, and try to tell the user not to run us
     //   if stderr happens to be hooked up to a terminal
-    if(argc != 7) {
+    if(argc != 6) {
         fprintf(stderr, "This binary is not for human execution!\n");
         exit(99);
     }
@@ -245,9 +245,6 @@ int main(int argc, char** argv) {
 
     dmn_init1(debug, true, startfg, !startfg, "gdnsd_extmon_helper");
 
-    // open stderr logging connection using passed fd
-    dmn_log_set_stderr_out(atoi(argv[4]));
-
     // regardless, we seal off stdin now.  We don't need it,
     //   and this way we don't have to deal with it when
     //   execv()-ing child commands later.
@@ -261,8 +258,8 @@ int main(int argc, char** argv) {
     dmn_acquire_pidfile(); // no-op due to lack of pid dir in dmn_init2()
 
     // these are the main communication pipes to the daemon/plugin
-    plugin_read_fd = atoi(argv[5]);
-    plugin_write_fd = atoi(argv[6]);
+    plugin_read_fd = atoi(argv[4]);
+    plugin_write_fd = atoi(argv[5]);
 
     if(plugin_read_fd < 3 || plugin_read_fd > 1000
         || plugin_write_fd < 3 || plugin_write_fd > 1000)
@@ -356,8 +353,6 @@ int main(int argc, char** argv) {
 
     log_info("gdnsd_extmon_helper running");
 
-    // shut off stderr output from here out...
-    dmn_log_close_stderr_out();
     dmn_finish();
 
     ev_run(def_loop, 0);

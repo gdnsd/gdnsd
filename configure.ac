@@ -339,7 +339,7 @@ AC_SUBST([GDNSD_SYSRUNDIR])
 # clump up all of the libgdnsd libdeps for re-use in LDADD for
 #   binaries that link libgdnsd on platforms where libtool's
 #   automatic dep resolution is disabled
-LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN $SYSD_DAEMON_LIBS $SYSD_LOGIN_LIBS"
+LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN $SYSD_DAEMON_LIBS $SYSD_JOURNAL_LIBS $SYSD_LOGIN_LIBS"
 AC_SUBST([LIBGDNSD_LIBS])
 
 # Output generation

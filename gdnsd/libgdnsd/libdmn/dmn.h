@@ -158,20 +158,9 @@ bool dmn_get_debug(void);
 bool dmn_get_foreground(void);
 const char* dmn_get_username(void);
 
-// special API for extmon helper.  Sets up
-//   logging stderr output via an already-open
-//   fd, to be stopped later via dmn_log_close_strerr()
-void dmn_log_set_stderr_out(const int fd);
-
-// closes stderr logging via alternate descriptor...
-void dmn_log_close_stderr_out(void);
-
-// get fd number of open stderr_out, for passing to a child...
-int dmn_log_get_stderr_out_fd(void);
-
 // This is a syslog()-like interface that will log
-//  to stderr and/or syslog as appropriate depending
-//  on daemon lifecycle, and is thread-safe.
+//  to stderr and/or syslog (or sd_journal) as appropriate
+//  depending on daemon lifecycle, and is thread-safe.
 DMN_F_NONNULLX(2) DMN_F_PRINTF(2,3)
 void dmn_logger(int level, const char* fmt, ...);
 

@@ -37,7 +37,11 @@
 #include <sys/select.h>
 
 #ifdef USE_SYSTEMD
+   // because we funnel through a function here, the location
+   // info would be useless repetitive line noise.
+#  define SD_JOURNAL_SUPPRESS_LOCATION 1
 #  include <systemd/sd-daemon.h>
+#  include <systemd/sd-journal.h>
 #endif
 
 #ifdef USE_SYSTEMD_HAX
@@ -211,7 +215,7 @@ static unsigned num_pcalls = 0;
         static unsigned _call_count = 0; \
         if(++_call_count > 1) \
             dmn_log_fatal("BUG: %s can only be called once and was already called!", __func__); \
-    }\
+    } \
     if(_after && state.phase < _after) \
         dmn_log_fatal("BUG: %s must be called after %s", __func__, phase_actor[_after]); \
     if(_before && state.phase >= _before) \
@@ -283,52 +287,49 @@ const char* dmn_logf_strerror(const int errnum) {
     return buf;
 }
 
-int dmn_log_get_stderr_out_fd(void) {
-    phase_check(0, 0, 0);
-    return fileno(state.stderr_out);
-}
-
-void dmn_log_set_stderr_out(const int fd) {
-    phase_check(0, 0, 0);
-    state.stderr_out = fdopen(fd, "w");
-}
-
-void dmn_log_close_stderr_out(void) {
-    phase_check(0, 0, 0);
-    fclose(state.stderr_out);
-    state.stderr_out = NULL;
-}
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-nonliteral"
 
 void dmn_loggerv(int level, const char* fmt, va_list ap) {
     phase_check(0, 0, 0);
 
-    if(state.stderr_out && (level != LOG_INFO || params.stderr_info)) {
-        const char* pfx;
-        switch(level) {
-            case LOG_DEBUG: pfx = PFX_DEBUG; break;
-            case LOG_INFO: pfx = PFX_INFO; break;
-            case LOG_WARNING: pfx = PFX_WARNING; break;
-            case LOG_ERR: pfx = PFX_ERR; break;
-            case LOG_CRIT: pfx = PFX_CRIT; break;
-            default: pfx = PFX_UNKNOWN; break;
+#ifdef USE_SYSTEMD
+    if(params.use_systemd) {
+        sd_journal_printv(level, fmt, ap);
+    }
+    else {
+#endif
+
+        if(state.stderr_out && (level != LOG_INFO || params.stderr_info)) {
+            const char* pfx;
+            switch(level) {
+                case LOG_DEBUG: pfx = PFX_DEBUG; break;
+                case LOG_INFO: pfx = PFX_INFO; break;
+                case LOG_WARNING: pfx = PFX_WARNING; break;
+                case LOG_ERR: pfx = PFX_ERR; break;
+                case LOG_CRIT: pfx = PFX_CRIT; break;
+                default: pfx = PFX_UNKNOWN; break;
+            }
+
+            va_list apcpy;
+            va_copy(apcpy, ap);
+            flockfile(state.stderr_out);
+            fputs_unlocked(pfx, state.stderr_out);
+            vfprintf(state.stderr_out, fmt, apcpy);
+            va_end(apcpy);
+            putc_unlocked('\n', state.stderr_out);
+            fflush_unlocked(state.stderr_out);
+            funlockfile(state.stderr_out);
         }
 
-        va_list apcpy;
-        va_copy(apcpy, ap);
-        flockfile(state.stderr_out);
-        fputs_unlocked(pfx, state.stderr_out);
-        vfprintf(state.stderr_out, fmt, apcpy);
-        va_end(apcpy);
-        putc_unlocked('\n', state.stderr_out);
-        fflush_unlocked(state.stderr_out);
-        funlockfile(state.stderr_out);
-    }
+#ifndef USE_SYSTEMD
+        if(state.syslog_alive)
+            vsyslog(level, fmt, ap);
+#endif
 
-    if(state.syslog_alive)
-        vsyslog(level, fmt, ap);
+#ifdef USE_SYSTEMD
+    }
+#endif
 
     dmn_fmtbuf_reset();
 }
@@ -474,13 +475,13 @@ static char* str_combine_n(const unsigned count, ...) {
 ***********************************************************/
 
 void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, const char* name) {
-    if(state.phase != PHASE0_UNINIT)
-        dmn_log_fatal("BUG: dmn_init1() can only be called once!");
-
 #ifdef USE_SYSTEMD
     bool sdbooted = (sd_booted() < 0) ? false : true;
     params.use_systemd = sdbooted && !isatty(fileno(stdin)) && !foreground;
 #endif
+
+    // This lets us log to normal stderr for now
+    state.stderr_out = params.use_systemd ? NULL : stderr;
 
 #ifdef USE_SYSTEMD_RELOAD_HAX
     // HACK: control procs don't get $NOTIFY_SOCKET from systemd, but this seems to fix that ...
@@ -488,8 +489,8 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
         setenv("NOTIFY_SOCKET", "@/org/freedesktop/systemd1/notify", 0);
 #endif
 
-    // This lets us log to normal stderr for now
-    state.stderr_out = stderr;
+    if(state.phase != PHASE0_UNINIT)
+        dmn_log_fatal("BUG: dmn_init1() can only be called once!");
 
     if(!name)
         dmn_log_fatal("BUG: dmn_init1(): argument 'name' is *required*");
@@ -499,16 +500,18 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
     params.stderr_info = stderr_info;
     params.name = strdup(name);
 
-    if(!params.foreground) {
-        FILE* stderr_copy = fdopen(dup(fileno(stderr)), "w");
-        if(!stderr_copy)
-            dmn_log_fatal("Failed to fdopen(dup(fileno(stderr))): %s", dmn_logf_errno());
-        state.stderr_out = stderr_copy;
-    }
+    if(!params.use_systemd) {
+        if(!params.foreground) {
+            FILE* stderr_copy = fdopen(dup(fileno(stderr)), "w");
+            if(!stderr_copy)
+                dmn_log_fatal("Failed to fdopen(dup(fileno(stderr))): %s", dmn_logf_errno());
+            state.stderr_out = stderr_copy;
+        }
 
-    if(use_syslog) {
-        openlog(params.name, LOG_NDELAY|LOG_PID, LOG_DAEMON);
-        state.syslog_alive = true;
+        if(use_syslog) {
+            openlog(params.name, LOG_NDELAY|LOG_PID, LOG_DAEMON);
+            state.syslog_alive = true;
+        }
     }
 
     params.invoked_as_root = !geteuid();
@@ -964,8 +967,10 @@ void dmn_finish(void) {
     dmn_assert(state.pipe_from_helper[PIPE_RD] == -1);
     dmn_assert(state.pipe_from_helper[PIPE_WR] == -1);
 
-    if(!params.foreground)
-        dmn_log_close_stderr_out();
+    if(!params.foreground && state.stderr_out) {
+        state.stderr_out = NULL;
+        fclose(state.stderr_out);
+    }
 
     state.phase = PHASE7_FINISHED;
     return;
