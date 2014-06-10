@@ -92,7 +92,7 @@ Monitoring upgrades:
 ----------------------
 Come up with a derived "monitored weight factor" that scales from 0.0
 -> 1.0 based on recent monitor history (1.0 being UP, 0.0 being DOWN,
-and the middle values representing various DANGER cases), and then
+and the middle values representing various transitional cases), and then
 provide some way to hook that to plugins so that they could optionally
 use it to scale configured, static weightings?
 

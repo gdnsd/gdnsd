@@ -73,12 +73,7 @@ no further updates.  The downside is that unless someone notices
 the syslog message, this failure mode is hard to notice.
 
 If set to C<fail_once> (the default), a single artificial monitoring
-failure is triggered for each resource.  This will transition
-steady-state C<UP> resources to C<DANGER> (and could trigger
-C<DOWN> on resources that had already been in C<DANGER> for
-several updates), making the failure condition a little
-more obvious while not generally affecting users too much
-(other than reduced TTLs for plugins that do that on C<DANGER>).
+failure is triggered for each resource.
 
 If set to C<kill_daemon>, the whole gdnsd daemon will fail fatally.
 
