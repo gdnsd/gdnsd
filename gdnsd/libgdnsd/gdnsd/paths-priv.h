@@ -22,6 +22,7 @@
 
 #include "gdnsd/compiler.h"
 #include "gdnsd/paths.h"
+#include <stdbool.h>
 
 // Return the compiled-in default config file pathname
 const char* gdnsd_get_default_config_file(void);
@@ -33,6 +34,9 @@ const char* gdnsd_get_default_config_file(void);
 //   1) if config_dir, use that.
 //   2) else if config_file, use dirname(config_file)
 //   3) else use dirname(gdnsd_get_default_config_file())
-void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file);
+// if runtime_dirs is false, the state/run dirs will not
+//   be checked for existence or created.  Useful for
+//   uses outside of gdnsd itself (e.g. testsuite binaries)
+void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file, const bool runtime_dirs);
 
 #endif // GDNSD_PATHS_PRIV_H
