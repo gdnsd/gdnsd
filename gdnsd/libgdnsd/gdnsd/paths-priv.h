@@ -36,7 +36,8 @@ const char* gdnsd_get_default_config_file(void);
 //   3) else use dirname(gdnsd_get_default_config_file())
 // if runtime_dirs is false, the state/run dirs will not
 //   be checked for existence or created.  Useful for
-//   uses outside of gdnsd itself (e.g. testsuite binaries)
+//   uses outside of gdnsd itself (e.g. testsuite binaries),
+//   as well as stop/status/reload/checkconf actions.
 void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file, const bool runtime_dirs);
 
 #endif // GDNSD_PATHS_PRIV_H

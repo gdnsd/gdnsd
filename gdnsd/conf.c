@@ -487,7 +487,7 @@ static const vscf_data_t* conf_load_vscf(const char* cfg_file) {
     return out;
 }
 
-void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd, const bool dirs_only) {
+void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd, const conf_mode_t cmode) {
 
     if(!cfg_file)
         cfg_file = gdnsd_get_default_config_file();
@@ -520,15 +520,15 @@ void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd,
             CFG_OPT_STR_NOCOPY(options, config_dir, cfg_config_dir);
         }
 
-        gdnsd_set_dirs(cfg_run_dir, cfg_state_dir, cfg_config_dir, cfg_file, true);
+        // only ask set_dirs to create run/state dirs if we're starting, as opposed
+        // to stop/statusreload (CONF_SIMPLE_ACTION) or checkconf (CONF_CHECK)
+        gdnsd_set_dirs(cfg_run_dir, cfg_state_dir, cfg_config_dir, cfg_file, cmode == CONF_START);
     }
 
-    // fast-path exit for dirs_only case
-    if(dirs_only) {
-        if(cfg_root)
-            vscf_destroy(cfg_root);
+    // fast-path exit for simple actions like stop/status/reload, only
+    //   needs run_dir configuration and nothing more
+    if(cmode == CONF_SIMPLE_ACTION)
         return;
-    }
 
     const vscf_data_t* listen_opt = NULL;
     const vscf_data_t* http_listen_opt = NULL;

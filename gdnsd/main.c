@@ -392,15 +392,28 @@ int main(int argc, char** argv) {
     };
     action_t action = parse_args(argc, argv, &copts);
 
-    // will we daemonize?
-    bool will_daemonize = false;
+    // basic action-based parameters
+    bool will_daemonize;
+    conf_mode_t cmode;
     switch(action) {
+        case ACT_STATUS: // fall-through
+        case ACT_RELOAD: // fall-through
+        case ACT_STOP:
+            cmode = CONF_SIMPLE_ACTION;
+            will_daemonize = false;
+            break;
+        case ACT_CHECKCFG:
+            cmode = CONF_CHECK;
+            will_daemonize = false;
+            break;
         case ACT_START:
         case ACT_RESTART:
         case ACT_CRESTART:
+            cmode = CONF_START;
             will_daemonize = !copts.foreground;
             break;
         default:
+            dmn_assert(0);
             break;
     }
 
@@ -413,15 +426,8 @@ int main(int argc, char** argv) {
     // Init meta-PRNG - needed for config load
     gdnsd_rand_meta_init();
 
-    // For simple pidfile operations, we only need to load enough of
-    //   the config to find the right pidfile path...
-    bool cfg_dirs_only = false;
-    if(action == ACT_STATUS || action == ACT_STOP || action == ACT_RELOAD)
-        cfg_dirs_only = true;
-
-    // Load config, which if !rundir_only does a ton of complicated things
-    //   like loading and configuring plugins as well
-    conf_load(copts.cfg_file, copts.force_zss, copts.force_zsd, cfg_dirs_only);
+    // Load config file
+    conf_load(copts.cfg_file, copts.force_zss, copts.force_zsd, cmode);
 
     // init2() lets us do daemon actions
     char* rundir = gdnsd_resolve_path_run(NULL, NULL);
