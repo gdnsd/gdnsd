@@ -6,6 +6,3 @@ pkglib_LTLIBRARIES = plugin_weighted.la
 plugin_weighted_la_SOURCES  = weighted.c
 plugin_weighted_la_LDFLAGS  = -avoid-version -module
 plugin_weighted_la_LIBADD   = $(MATH_LIB)
-
-PODS_8 = gdnsd-plugin-weighted.pod
-include $(top_srcdir)/docs.am

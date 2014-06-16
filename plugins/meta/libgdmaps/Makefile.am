@@ -28,5 +28,3 @@ libgdmaps_la_SOURCES = \
 
 check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C t check-download
-
-include $(top_srcdir)/docs.am

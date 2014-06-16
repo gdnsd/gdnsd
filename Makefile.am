@@ -5,8 +5,8 @@ ACLOCAL_AMFLAGS = -I m4
 # Subdirectories to recurse into
 SUBDIRS = gdnsd plugins docs t
 
-MISC_DOCS = README.md INSTALL AUTHORS COPYING NEWS
-EXTRA_DIST = qa docs.am
+dist_doc_DATA = README.md INSTALL AUTHORS COPYING NEWS
+EXTRA_DIST = qa
 
 # Some junk autotools doesn't seem to clean on its own
 DISTCLEANFILES = config.h.in~ configure.ac~
@@ -24,6 +24,9 @@ all-local: libtool
 check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
 
+wikidocs:
+	@$(MAKE) $(AM_MAKEFLAGS) -C docs wikidocs
+
 clean-local:
 	@rm -rf $(top_srcdir)/wikidocs
 
@@ -39,5 +42,3 @@ install-exec-hook:
 		echo The default user \"gdnsd\" \(for privdrop when executed as root\) does not seem to exist yet!; \
 		echo; \
 	fi
-
-include $(top_srcdir)/docs.am

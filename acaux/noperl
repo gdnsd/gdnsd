@@ -1,6 +1,0 @@
-#! /bin/sh
-
-echo "Could not find perl interpreter and/or POD tools (pod2man, pod2text, etc)"
-echo "This means you can't (re-)generate the documentation or run the test suite"
-echo "You could fix this and re-rerun configure to re-detect"
-exit 99

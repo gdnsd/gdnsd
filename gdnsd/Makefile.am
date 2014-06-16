@@ -12,7 +12,3 @@ zscan_rfc1035.c:	zscan_rfc1035.rl
 
 MAINTAINERCLEANFILES = $(srcdir)/zscan_rfc1035.c
 EXTRA_DIST = $(srcdir)/zscan_rfc1035.rl
-
-PODS_5 = gdnsd.config.pod gdnsd.zonefile.pod gdnsd.djbzones.pod
-PODS_8 = gdnsd.pod
-include $(top_srcdir)/docs.am

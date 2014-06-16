@@ -10,9 +10,6 @@ LDADD = libgdmaps_test.la ../libgdmaps.la ../../../../gdnsd/libgdnsd/libgdnsd.la
 bin_PROGRAMS = gdnsd_geoip_test
 gdnsd_geoip_test_SOURCES = gdnsd_geoip_test.c
 
-PODS_1 = gdnsd_geoip_test.pod
-include $(top_srcdir)/docs.am
-
 # ----------- testsuite stuff --------------
 
 # I've mirrored these to S3 as "downloads.gdnsd.org" to be dynamically downloaded for those who

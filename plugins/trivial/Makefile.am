@@ -13,6 +13,3 @@ plugin_multifo_la_SOURCES = multifo.c
 plugin_multifo_la_LIBADD = $(MATH_LIB)
 plugin_http_status_la_SOURCES = http_status.c
 plugin_tcp_connect_la_SOURCES = tcp_connect.c
-
-PODS_8 = gdnsd-plugin-simplefo.pod gdnsd-plugin-multifo.pod
-include $(top_srcdir)/docs.am

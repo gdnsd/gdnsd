@@ -61,6 +61,5 @@ Makefile.in
 clang_output_*
 
 # generated docs
-*.txt
 *.[0-9]
 /wikidocs/

@@ -37,6 +37,3 @@ gdnsd/dmn.h:	libdmn/dmn.h
 	$(AM_V_GEN)cp $(srcdir)/libdmn/dmn.h $(builddir)/gdnsd/dmn.h
 
 EXTRA_DIST = $(srcdir)/vscf.rl
-
-PODS_3 = gdnsd-plugin-api.pod
-include $(top_srcdir)/docs.am

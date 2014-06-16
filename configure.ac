@@ -252,16 +252,22 @@ if test $USE_INOTIFY -eq 1; then
     AC_DEFINE([USE_INOTIFY], 1, [Linux 2.6.36+ inotify support])
 fi
 
-# Check for perl stuff for doc generation and core regression testsuite
+# Basic perl+pod2man for doc generation
 HAVE_TESTSUITE_MODULES=0
-AC_REQUIRE_AUX_FILE([noperl])
-AC_PATH_PROG([PERL],[perl],[$am_aux_dir/noperl])
-AC_PATH_PROG([POD2MAN],[pod2man],[$am_aux_dir/noperl])
-AC_PATH_PROG([POD2TEXT],[pod2text],[$am_aux_dir/noperl])
+AC_PATH_PROG([PERL],[perl],[missing])
+if test x"$PERL" = xmissing; then
+    AC_MSG_ERROR([Cannot find required perl binary])
+fi
+AC_PATH_PROG([POD2MAN],[pod2man],[missing])
+if test x"$POD2MAN" = xmissing; then
+    AC_MSG_ERROR([Cannot find required pod2man binary (perl podlater)])
+fi
+
+# Perl 5.8.1 + various modules for the testsuite
 AX_PROG_PERL_VERSION([5.8.1],[
     AX_PROG_PERL_MODULES([Test::More LWP=5.805 Socket6 IO::Socket::INET6 HTTP::Daemon],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), LWP (aka libwww-perl) 5.805+, Socket6, IO::Socket::INET6, and HTTP::Daemon]]))
 ],[
-    AC_MSG_WARN([Cannot "make check" or (re-)generate documentation without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)])
+    AC_MSG_WARN([Cannot "make check" without perl 5.8.1+ (neither of which are strictly necessary to build and install from a tarball)])
 ])
 AC_SUBST([HAVE_TESTSUITE_MODULES])
 
