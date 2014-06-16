@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
     // Bail out early if we don't have the right argument
     //   count, and try to tell the user not to run us
     //   if stderr happens to be hooked up to a terminal
-    if(argc != 6) {
+    if(argc != 5) {
         fprintf(stderr, "This binary is not for human execution!\n");
         exit(99);
     }
@@ -239,10 +239,6 @@ int main(int argc, char** argv) {
     if(!strcmp(argv[2], "F"))
         startfg = true;
 
-    // this is gdnsd's *configured* username, but dmn_secure()
-    //   won't actually use it for privdrop unless we're root
-    const char* username = argv[3];
-
     dmn_init1(debug, true, startfg, !startfg, "gdnsd_extmon_helper");
 
     // regardless, we seal off stdin now.  We don't need it,
@@ -251,15 +247,9 @@ int main(int argc, char** argv) {
     if(!freopen("/dev/null", "r", stdin))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_strerror(errno));
 
-    dmn_init2(NULL);
-    dmn_init3(username, false);
-    dmn_fork(); // no-op due to "foreground" in dmn_init1()
-    dmn_secure(); // privdrop if root
-    dmn_acquire_pidfile(); // no-op due to lack of pid dir in dmn_init2()
-
     // these are the main communication pipes to the daemon/plugin
-    plugin_read_fd = atoi(argv[4]);
-    plugin_write_fd = atoi(argv[5]);
+    plugin_read_fd = atoi(argv[3]);
+    plugin_write_fd = atoi(argv[4]);
 
     if(plugin_read_fd < 3 || plugin_read_fd > 1000
         || plugin_write_fd < 3 || plugin_write_fd > 1000)
@@ -352,9 +342,6 @@ int main(int argc, char** argv) {
     }
 
     log_info("gdnsd_extmon_helper running");
-
-    dmn_finish();
-
     ev_run(def_loop, 0);
     log_info("gdnsd_extmon_helper terminating");
 

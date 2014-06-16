@@ -249,7 +249,7 @@ static void spawn_helper(void) {
         const char* child_read_fdstr = num_to_str(writepipe[0]);
         const char* child_write_fdstr = num_to_str(readpipe[1]);
         execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N", dmn_get_foreground() ? "F" : "B",
-            dmn_get_username(), child_read_fdstr, child_write_fdstr, (const char*)NULL);
+            child_read_fdstr, child_write_fdstr, (const char*)NULL);
         log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_logf_strerror(errno));
     }
 
@@ -381,7 +381,7 @@ void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, const c
     add_mon_any(desc, svc_name, cname, idx);
 }
 
-void plugin_extmon_post_daemonize(void) {
+void plugin_extmon_post_privdrop(void) {
     dmn_assert(helper_path);
     if(num_mons)
         spawn_helper();
