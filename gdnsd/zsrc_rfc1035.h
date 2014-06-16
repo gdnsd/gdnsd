@@ -23,8 +23,9 @@
 #include "config.h"
 #include "gdnsd/compiler.h"
 #include <ev.h>
+#include <stdbool.h>
 
-void zsrc_rfc1035_load_zones(void);
+void zsrc_rfc1035_load_zones(const bool check_only);
 
 F_NONNULL
 void zsrc_rfc1035_runtime_init(struct ev_loop* loop);

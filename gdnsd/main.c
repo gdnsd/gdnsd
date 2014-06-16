@@ -468,8 +468,8 @@ int main(int argc, char** argv) {
 
     log_info("Loading zone data...");
     ztree_init();
-    zsrc_djb_load_zones();
-    zsrc_rfc1035_load_zones();
+    zsrc_djb_load_zones(action == ACT_CHECKCFG);
+    zsrc_rfc1035_load_zones(action == ACT_CHECKCFG);
 
     if(action == ACT_CHECKCFG) {
         log_info("Configuration and zone data loads just fine");

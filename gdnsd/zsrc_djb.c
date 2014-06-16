@@ -95,7 +95,9 @@ static void zsrc_djb_sync_zones(void) {
     active_zonedata = zonedata;
 }
 
-void zsrc_djb_load_zones(void) {
+// XXX check_only could be used to optimize for the checkconf case,
+//   so long as the optimization doesn't change the validity of the check.
+void zsrc_djb_load_zones(const bool check_only V_UNUSED) {
     djb_dir = gdnsd_resolve_path_cfg("djbdns/", NULL);
     zsrc_djb_sync_zones();
     gdnsd_atexit_debug(unload_zones);

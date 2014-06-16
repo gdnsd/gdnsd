@@ -855,11 +855,17 @@ static void set_quiesce(void) {
 /*** Public interfaces ***/
 /*************************/
 
-void zsrc_rfc1035_load_zones(void) {
+void zsrc_rfc1035_load_zones(const bool check_only) {
     dmn_assert(!rfc1035_dir);
 
     rfc1035_dir = gdnsd_resolve_path_cfg("zones/", NULL);
-    set_quiesce();
+    // if doing a one-shot check, set timers to zero to avoid
+    //  delays (and avoid the test-writes to .mtime_test)
+    if(check_only)
+        min_quiesce = full_quiesce = 0.0;
+    else
+        set_quiesce();
+
     if(gconfig.zones_rfc1035_auto)
         inotify_initial_setup(); // no-op if no compile-time support
     if(gconfig.zones_strict_startup)
