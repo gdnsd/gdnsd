@@ -668,46 +668,6 @@ void dmn_init3(const char* username, const bool restart) {
         }
     }
 
-    if(params.pid_dir) {
-        struct stat st;
-        if(stat(params.pid_dir, &st)) {
-            if(mkdir(params.pid_dir, PERMS750))
-                dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir, dmn_logf_errno());
-            if(stat(params.pid_dir, &st)) // reload st for privdrop below
-                dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir, dmn_logf_errno());
-        }
-        else if(!S_ISDIR(st.st_mode)) {
-            dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir);
-        }
-        else if((st.st_mode & PERMS_MASK) != PERMS750) {
-            if(chmod(params.pid_dir, PERMS750))
-                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir, PERMS750, dmn_logf_errno());
-        }
-
-        // directory chown only applies in privdrop case
-        if(params.will_privdrop) {
-            if(st.st_uid != params.uid || st.st_gid != params.gid)
-                if(chown(params.pid_dir, params.uid, params.gid))
-                    dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_dir, params.uid, params.gid, dmn_logf_errno());
-        }
-
-        dmn_assert(params.pid_file);
-
-        if(!lstat(params.pid_file, &st)) {
-            if(!S_ISREG(st.st_mode))
-                dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file);
-            if((st.st_mode & PERMS_MASK) != PERMS640)
-                if(chmod(params.pid_file, PERMS640))
-                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file, PERMS640, dmn_logf_errno());
-            // file chown only if privdrop
-            if(params.will_privdrop) {
-                if(st.st_uid != params.uid || st.st_gid != params.gid)
-                    if(chown(params.pid_file, params.uid, params.gid))
-                        dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_file, params.uid, params.gid, dmn_logf_errno());
-            }
-        }
-    }
-
     state.phase = PHASE3_INIT3;
 }
 
@@ -842,6 +802,47 @@ void dmn_secure(void) {
 
     if(chdir("/"))
         dmn_log_fatal("chdir(/) failed: %s", dmn_logf_errno());
+
+    // Validate/correct pid_dir + pid_file on-disk...
+    if(params.pid_dir) {
+        struct stat st;
+        if(stat(params.pid_dir, &st)) {
+            if(mkdir(params.pid_dir, PERMS750))
+                dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir, dmn_logf_errno());
+            if(stat(params.pid_dir, &st)) // reload st for privdrop below
+                dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir, dmn_logf_errno());
+        }
+        else if(!S_ISDIR(st.st_mode)) {
+            dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir);
+        }
+        else if((st.st_mode & PERMS_MASK) != PERMS750) {
+            if(chmod(params.pid_dir, PERMS750))
+                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir, PERMS750, dmn_logf_errno());
+        }
+
+        // directory chown only applies in privdrop case
+        if(params.will_privdrop) {
+            if(st.st_uid != params.uid || st.st_gid != params.gid)
+                if(chown(params.pid_dir, params.uid, params.gid))
+                    dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_dir, params.uid, params.gid, dmn_logf_errno());
+        }
+
+        dmn_assert(params.pid_file);
+
+        if(!lstat(params.pid_file, &st)) {
+            if(!S_ISREG(st.st_mode))
+                dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file);
+            if((st.st_mode & PERMS_MASK) != PERMS640)
+                if(chmod(params.pid_file, PERMS640))
+                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file, PERMS640, dmn_logf_errno());
+            // file chown only if privdrop
+            if(params.will_privdrop) {
+                if(st.st_uid != params.uid || st.st_gid != params.gid)
+                    if(chown(params.pid_file, params.uid, params.gid))
+                        dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_file, params.uid, params.gid, dmn_logf_errno());
+            }
+        }
+    }
 
     if(params.will_privdrop) {
         dmn_assert(params.invoked_as_root);
