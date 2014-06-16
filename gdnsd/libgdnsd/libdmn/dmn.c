@@ -649,11 +649,9 @@ void dmn_init3(const char* username, const bool restart) {
 
     params.restart = restart;
 
-    if(username)
+    if(username && params.invoked_as_root) {
         params.username = strdup(username);
-
-    if(params.invoked_as_root) {
-        if(username) {
+        if(params.invoked_as_root) {
             errno = 0;
             struct passwd* p = getpwnam(username);
             if(!p) {
@@ -847,6 +845,7 @@ void dmn_secure(void) {
 
     if(params.will_privdrop) {
         dmn_assert(params.invoked_as_root);
+        dmn_assert(params.username);
         dmn_assert(params.uid);
         dmn_assert(params.gid);
 
