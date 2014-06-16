@@ -168,7 +168,6 @@ void dmn_wdog_ping(void);
 //   the special case of plugin_extmon's helper process.
 bool dmn_get_debug(void);
 bool dmn_get_foreground(void);
-const char* dmn_get_username(void);
 
 // This is a syslog()-like interface that will log
 //  to stderr and/or syslog (or sd_journal) as appropriate

@@ -348,7 +348,6 @@ void dmn_logger(int level, const char* fmt, ...) {
 
 bool dmn_get_debug(void) { phase_check(0, 0, 0); return params.debug; }
 bool dmn_get_foreground(void) { phase_check(0, 0, 0); return params.foreground; }
-const char* dmn_get_username(void) { phase_check(PHASE3_INIT3, 0, 0); return params.username; }
 
 /***********************************************************
 ***** Private subroutines used by daemonization ************
