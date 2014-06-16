@@ -47,15 +47,19 @@ const char* gdnsd_get_default_config_file(void) { return GDNSD_DEF_CONFIG; }
 F_NONNULL
 static char* gdnsd_realdir(const char* dpath, const char* desc, const bool create, mode_t def_mode) {
     struct stat st;
-    if(stat(dpath, &st)) {
-        if(create) {
-            if(mkdir(dpath, def_mode))
-                log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, dmn_logf_strerror(errno));
-            log_info("Created %s directory %s", desc, dpath);
-        }
-        else {
-            log_fatal("%s directory %s does not exist!", desc, dpath);
-        }
+    int stat_rv = stat(dpath, &st);
+
+    // if we can't create, we can't always realpath either, just check for non-dir existing
+    if(!create) {
+       if(!stat_rv && !S_ISDIR(st.st_mode))
+           log_fatal("%s directory '%s' is not a directory (but should be)!", desc, dpath);
+       return strdup(dpath);
+    }
+
+    if(stat_rv) {
+        if(mkdir(dpath, def_mode))
+            log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, dmn_logf_strerror(errno));
+        log_info("Created %s directory %s", desc, dpath);
     }
     else if(!S_ISDIR(st.st_mode)) {
         log_fatal("%s directory '%s' is not a directory (but should be)!", desc, dpath);
