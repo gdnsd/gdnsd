@@ -525,6 +525,9 @@ int main(int argc, char** argv) {
     // drop privs if started as root
     dmn_secure();
 
+    // Call plugin pre-privdrop actions
+    gdnsd_plugins_action_post_privdrop();
+
     // Set up libev error callback
     ev_set_syserr_cb(&syserr_for_ev);
 

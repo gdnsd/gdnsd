@@ -50,6 +50,7 @@
 #define xSYM_FULL_CONFIG(x)   plugin_ ## x ## _full_config
 #define xSYM_POST_DAEMON(x)   plugin_ ## x ## _post_daemonize
 #define xSYM_PRE_PRIVDROP(x)  plugin_ ## x ## _pre_privdrop
+#define xSYM_POST_PRIVDROP(x) plugin_ ## x ## _post_privdrop
 #define xSYM_PRE_RUN(x)       plugin_ ## x ## _pre_run
 #define xSYM_IOTH_INIT(x)     plugin_ ## x ## _iothread_init
 #define xSYM_RESOLVE(x)       plugin_ ## x ## _resolve
@@ -65,6 +66,7 @@
 #define SYM_FULL_CONFIG(x)    xSYM_FULL_CONFIG(x)
 #define SYM_POST_DAEMON(x)    xSYM_POST_DAEMON(x)
 #define SYM_PRE_PRIVDROP(x)   xSYM_PRE_PRIVDROP(x)
+#define SYM_POST_PRIVDROP(x)  xSYM_POST_PRIVDROP(x)
 #define SYM_PRE_RUN(x)        xSYM_PRE_RUN(x)
 #define SYM_IOTH_INIT(x)      xSYM_IOTH_INIT(x)
 #define SYM_RESOLVE(x)        xSYM_RESOLVE(x)
@@ -84,6 +86,7 @@ int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
 void SYM_FULL_CONFIG(GDNSD_PLUGIN_NAME)(unsigned num_threads);
 void SYM_POST_DAEMON(GDNSD_PLUGIN_NAME)(void);
 void SYM_PRE_PRIVDROP(GDNSD_PLUGIN_NAME)(void);
+void SYM_POST_PRIVDROP(GDNSD_PLUGIN_NAME)(void);
 F_NONNULL
 void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(void);
 void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(unsigned threadnum);
@@ -106,6 +109,7 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef SYM_FULL_CONFIG
 #undef SYM_POST_DAEMON
 #undef SYM_PRE_PRIVDROP
+#undef SYM_POST_PRIVDROP
 #undef SYM_PRE_RUN
 #undef SYM_IOTH_INIT
 #undef SYM_RESOLVE
@@ -121,6 +125,7 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef xSYM_FULL_CONFIG
 #undef xSYM_POST_DAEMON
 #undef xSYM_PRE_PRIVDROP
+#undef xSYM_POST_PRIVDROP
 #undef xSYM_PRE_RUN
 #undef xSYM_IOTH_INIT
 #undef xSYM_RESOLVE

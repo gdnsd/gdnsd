@@ -112,8 +112,9 @@ typedef unsigned (*gdnsd_apiv_cb_t)(void);
 typedef void (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
-typedef void (*gdnsd_pre_privdrop_cb_t)(void);
 typedef void (*gdnsd_post_daemonize_cb_t)(void);
+typedef void (*gdnsd_pre_privdrop_cb_t)(void);
+typedef void (*gdnsd_post_privdrop_cb_t)(void);
 typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
 typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
@@ -136,6 +137,7 @@ typedef struct {
     gdnsd_map_res_cb_t map_res;
     gdnsd_post_daemonize_cb_t post_daemonize;
     gdnsd_pre_privdrop_cb_t pre_privdrop;
+    gdnsd_post_privdrop_cb_t post_privdrop;
     gdnsd_pre_run_cb_t pre_run;
     gdnsd_iothread_init_cb_t iothread_init;
     gdnsd_resolve_cb_t resolve;

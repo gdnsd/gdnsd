@@ -61,6 +61,7 @@ const plugin_t* gdnsd_plugin_find_or_load(const char* pname);
 void gdnsd_plugins_action_full_config(const unsigned num_threads);
 void gdnsd_plugins_action_post_daemonize(void);
 void gdnsd_plugins_action_pre_privdrop(void);
+void gdnsd_plugins_action_post_privdrop(void);
 F_NONNULL
 void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop);
 F_NONNULL

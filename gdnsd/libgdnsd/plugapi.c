@@ -231,6 +231,7 @@ static const plugin_t* gdnsd_plugin_load(const char* pname) {
     PSETFUNC(full_config)
     PSETFUNC(post_daemonize)
     PSETFUNC(pre_privdrop)
+    PSETFUNC(post_privdrop)
     PSETFUNC(pre_run)
     PSETFUNC(iothread_init)
     PSETFUNC(resolve)
@@ -271,6 +272,12 @@ void gdnsd_plugins_action_pre_privdrop(void) {
     for(unsigned i = 0; i < num_plugins; i++)
         if(plugins[i]->pre_privdrop)
             plugins[i]->pre_privdrop();
+}
+
+void gdnsd_plugins_action_post_privdrop(void) {
+    for(unsigned i = 0; i < num_plugins; i++)
+        if(plugins[i]->post_privdrop)
+            plugins[i]->post_privdrop();
 }
 
 void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop) {
