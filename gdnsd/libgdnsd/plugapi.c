@@ -144,7 +144,7 @@ void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array) {
         psearch[i] = strdup(vscf_simple_get_data(psd));
     }
 
-    psearch[psearch_count++] = GDNSD_LIBDIR;
+    psearch[psearch_count++] = GDNSD_DEFPATH_LIB;
     psearch[psearch_count] = NULL;
 }
 

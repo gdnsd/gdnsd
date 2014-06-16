@@ -330,11 +330,21 @@ AC_ARG_WITH([rundir],[
 AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specific rundir, e.g. /run])
 ],[
   echo "$with_rundir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rundir_fail)
-  GDNSD_SYSRUNDIR="$with_rundir"
+  GDNSD_DEFPATH_RUN="${with_rundir}/${PACKAGE_NAME}"
 ],[
-  GDNSD_SYSRUNDIR="${localstatedir}/run"
+  GDNSD_DEFPATH_RUN="${localstatedir}/run/${PACKAGE_NAME}"
 ])
-AC_SUBST([GDNSD_SYSRUNDIR])
+GDNSD_DEFPATH_CONFIG_DIR="${sysconfdir}/${PACKAGE_NAME}"
+GDNSD_DEFPATH_CONFIG_FILE="${sysconfdir}/${PACKAGE_NAME}/config"
+GDNSD_DEFPATH_STATE="${localstatedir}/lib/${PACKAGE_NAME}"
+GDNSD_DEFPATH_LIB="${libdir}/${PACKAGE_NAME}"
+GDNSD_DEFPATH_LIBEXEC="${libexecdir}/${PACKAGE_NAME}"
+AC_SUBST([GDNSD_DEFPATH_RUN])
+AC_SUBST([GDNSD_DEFPATH_CONFIG_DIR])
+AC_SUBST([GDNSD_DEFPATH_CONFIG_FILE])
+AC_SUBST([GDNSD_DEFPATH_STATE])
+AC_SUBST([GDNSD_DEFPATH_LIB])
+AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
 
 # clump up all of the libgdnsd libdeps for re-use in LDADD for
 #   binaries that link libgdnsd on platforms where libtool's

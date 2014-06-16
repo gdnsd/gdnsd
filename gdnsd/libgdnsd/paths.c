@@ -42,7 +42,7 @@
 
 /* paths */
 
-const char* gdnsd_get_default_config_file(void) { return GDNSD_DEF_CONFIG; }
+const char* gdnsd_get_default_config_file(void) { return GDNSD_DEFPATH_CONFIG_FILE; }
 
 F_NONNULL
 static char* gdnsd_realdir(const char* dpath, const char* desc, const bool create, mode_t def_mode) {
@@ -85,10 +85,10 @@ static const char* gdnsd_dirs[4] = { NULL, NULL, NULL, NULL };
 
 void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file, const bool runtime_dirs) {
     if(!run_dir)
-        run_dir = GDNSD_RUNDIR;
+        run_dir = GDNSD_DEFPATH_RUN;
 
     if(!state_dir)
-        state_dir = GDNSD_STATEDIR;
+        state_dir = GDNSD_DEFPATH_STATE;
 
     if(runtime_dirs) {
         gdnsd_dirs[RUN] = gdnsd_realdir(run_dir, "run", true, 0750);
@@ -101,7 +101,7 @@ void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* conf
 
     if(!config_dir) {
         if(!config_file)
-            config_file = GDNSD_DEF_CONFIG;
+            config_file = GDNSD_DEFPATH_CONFIG_FILE;
         char* cfg_file_copy = strdup(config_file);
         gdnsd_dirs[CFG] = gdnsd_realdir(dirname(cfg_file_copy), "config", false, 0);
         free(cfg_file_copy);
@@ -111,7 +111,7 @@ void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* conf
     }
 
     // This is just fixed at compiletime, period
-    gdnsd_dirs[LIBEXEC] = GDNSD_LIBEXECDIR;
+    gdnsd_dirs[LIBEXEC] = GDNSD_DEFPATH_LIBEXEC;
 }
 
 static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx) {
