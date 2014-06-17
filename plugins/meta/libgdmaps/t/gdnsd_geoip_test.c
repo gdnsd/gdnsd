@@ -34,16 +34,17 @@
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/plugapi.h>
+#include "gdnsd/paths-priv.h"
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
 static void usage(const char* argv0) {
-    fprintf(stderr, "\nUsage: %s [-c /config/dir ] [map_name addr]\n"
+    fprintf(stderr, "\nUsage: %s [-c %s] [map_name addr]\n"
         "  -c\t\tgdnsd config dir, see main gdnsd(8) manpage for details\n"
         "  map_name\tMapping name from geoip plugin config\n"
         "  addr\t\tClient IP address to map.\n\n",
-        argv0);
+        argv0, gdnsd_get_default_config_dir());
     exit(1);
 }
 
