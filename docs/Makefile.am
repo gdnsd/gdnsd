@@ -18,8 +18,7 @@ PODS_8 = \
 
 # This translates default path variables in the pod sources
 MAN_SED = $(SED) \
-	-e 's|@GDNSD_DEFPATH_CONFIG_FILE[@]|$(GDNSD_DEFPATH_CONFIG_FILE)|g' \
-	-e 's|@GDNSD_DEFPATH_CONFIG_DIR[@]|$(GDNSD_DEFPATH_CONFIG_DIR)|g' \
+	-e 's|@GDNSD_DEFPATH_CONFIG[@]|$(GDNSD_DEFPATH_CONFIG)|g' \
 	-e 's|@GDNSD_DEFPATH_STATE[@]|$(GDNSD_DEFPATH_STATE)|g' \
 	-e 's|@GDNSD_DEFPATH_RUN[@]|$(GDNSD_DEFPATH_RUN)|g' \
 	-e 's|@GDNSD_DEFPATH_LIB[@]|$(GDNSD_DEFPATH_LIB)|g' \

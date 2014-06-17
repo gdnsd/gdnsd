@@ -42,7 +42,7 @@
 
 /* paths */
 
-const char* gdnsd_get_default_config_file(void) { return GDNSD_DEFPATH_CONFIG_FILE; }
+const char* gdnsd_get_default_config_dir(void) { return GDNSD_DEFPATH_CONFIG; }
 
 F_NONNULL
 static char* gdnsd_realdir(const char* dpath, const char* desc, const bool create, mode_t def_mode) {
@@ -83,31 +83,27 @@ typedef enum {
 
 static const char* gdnsd_dirs[4] = { NULL, NULL, NULL, NULL };
 
-void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file, const bool runtime_dirs) {
+void gdnsd_set_config_dir(const char* config_dir) {
+    if(!config_dir)
+        config_dir = GDNSD_DEFPATH_CONFIG;
+
+    gdnsd_dirs[CFG] = gdnsd_realdir(config_dir, "config", false, 0);
+}
+
+void gdnsd_set_runtime_dirs(const char* run_dir, const char* state_dir, const bool check_create) {
     if(!run_dir)
         run_dir = GDNSD_DEFPATH_RUN;
 
     if(!state_dir)
         state_dir = GDNSD_DEFPATH_STATE;
 
-    if(runtime_dirs) {
+    if(check_create) {
         gdnsd_dirs[RUN] = gdnsd_realdir(run_dir, "run", true, 0750);
         gdnsd_dirs[STATE] = gdnsd_realdir(state_dir, "state", true, 0755);
     }
     else {
         gdnsd_dirs[RUN] = strdup(run_dir);
         gdnsd_dirs[STATE] = strdup(state_dir);
-    }
-
-    if(!config_dir) {
-        if(!config_file)
-            config_file = GDNSD_DEFPATH_CONFIG_FILE;
-        char* cfg_file_copy = strdup(config_file);
-        gdnsd_dirs[CFG] = gdnsd_realdir(dirname(cfg_file_copy), "config", false, 0);
-        free(cfg_file_copy);
-    }
-    else {
-        gdnsd_dirs[CFG] = gdnsd_realdir(config_dir, "config", false, 0);
     }
 
     // This is just fixed at compiletime, period

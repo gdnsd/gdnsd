@@ -105,12 +105,12 @@ F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-        "Usage: %s [-fsSD] [-c /path/to/configfile] <action>\n"
+        "Usage: %s [-fsSD] [-c %s] <action>\n"
         "  -D - Enable verbose debug output\n"
         "  -f - Foreground mode for start/restart-like actions\n"
         "  -s - Force 'zones_strict_startup = true' for this invocation\n"
         "  -S - Force 'zones_strict_data = true' for this invocation\n"
-        "  -c - Main config file, default '%s'\n"
+        "  -c - Configuration directory\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
@@ -150,7 +150,7 @@ static void usage(const char* argv0) {
 #       endif
 
         "\nFor updates, bug reports, etc, please visit " PACKAGE_URL "\n",
-        argv0, gdnsd_get_default_config_file()
+        argv0, gdnsd_get_default_config_dir()
     );
     exit(2);
 }
@@ -332,7 +332,7 @@ static action_t match_action(const char* arg) {
 }
 
 typedef struct {
-    const char* cfg_file;
+    const char* cfg_dir;
     bool force_zss;
     bool force_zsd;
     bool debug;
@@ -347,7 +347,7 @@ static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
     while((optchar = getopt(argc, argv, "c:DfsS"))) {
         switch(optchar) {
             case 'c':
-                copts->cfg_file = optarg;
+                copts->cfg_dir = optarg;
                 break;
             case 'D':
                 copts->debug = true;
@@ -384,7 +384,7 @@ int main(int argc, char** argv) {
     //   returning the action.  Exits on cmdline errors,
     //   does not use libdmn assert/log stuff.
     cmdline_opts_t copts = {
-        .cfg_file = NULL,
+        .cfg_dir = NULL,
         .force_zss = false,
         .force_zsd = false,
         .debug = false,
@@ -427,7 +427,7 @@ int main(int argc, char** argv) {
     gdnsd_rand_meta_init();
 
     // Load config file
-    conf_load(copts.cfg_file, copts.force_zss, copts.force_zsd, cmode);
+    conf_load(copts.cfg_dir, copts.force_zss, copts.force_zsd, cmode);
 
     // init2() lets us do daemon actions
     char* rundir = gdnsd_resolve_path_run(NULL, NULL);

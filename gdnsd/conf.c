@@ -487,11 +487,12 @@ static const vscf_data_t* conf_load_vscf(const char* cfg_file) {
     return out;
 }
 
-void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd, const conf_mode_t cmode) {
+void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, const conf_mode_t cmode) {
 
-    if(!cfg_file)
-        cfg_file = gdnsd_get_default_config_file();
+    gdnsd_set_config_dir(cfg_dir);
+    char* cfg_file = gdnsd_resolve_path_cfg("config", NULL);
     const vscf_data_t* cfg_root = conf_load_vscf(cfg_file);
+    free(cfg_file);
 
 #ifndef NDEBUG
     // in developer debug builds, exercise clone+destroy
@@ -511,18 +512,16 @@ void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd,
     {
         const char* cfg_run_dir = NULL;
         const char* cfg_state_dir = NULL;
-        const char* cfg_config_dir = NULL;
         if(options) {
             if(!vscf_is_hash(options))
                 log_fatal("Config key 'options': wrong type (must be hash)");
             CFG_OPT_STR_NOCOPY(options, run_dir, cfg_run_dir);
             CFG_OPT_STR_NOCOPY(options, state_dir, cfg_state_dir);
-            CFG_OPT_STR_NOCOPY(options, config_dir, cfg_config_dir);
         }
 
-        // only ask set_dirs to create run/state dirs if we're starting, as opposed
+        // only ask set_dirs to check/create run/state dirs if we're starting, as opposed
         // to stop/statusreload (CONF_SIMPLE_ACTION) or checkconf (CONF_CHECK)
-        gdnsd_set_dirs(cfg_run_dir, cfg_state_dir, cfg_config_dir, cfg_file, cmode == CONF_START);
+        gdnsd_set_runtime_dirs(cfg_run_dir, cfg_state_dir, cmode == CONF_START);
     }
 
     // fast-path exit for simple actions like stop/status/reload, only

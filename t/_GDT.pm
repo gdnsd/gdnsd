@@ -432,8 +432,8 @@ sub spawn_daemon_setup {
 
 sub spawn_daemon_execute {
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -Dfc $OUTDIR/etc/config start}
-        : qq{$GDNSD_BIN -Dfc $OUTDIR/etc/config start};
+        ? qq{$TEST_RUNNER $GDNSD_BIN -Dfc $OUTDIR/etc start}
+        : qq{$GDNSD_BIN -Dfc $OUTDIR/etc start};
 
     my $daemon_out = $OUTDIR . '/gdnsd.out';
 

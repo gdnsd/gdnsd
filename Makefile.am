@@ -31,9 +31,9 @@ clean-local:
 	@rm -rf $(top_srcdir)/wikidocs
 
 install-exec-hook:
-	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG_DIR)/zones";
-	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG_DIR)/djbdns";
-	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG_DIR)/geoip";
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG)/zones";
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG)/djbdns";
+	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG)/geoip";
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_RUN)";
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_STATE)";
 	@id gdnsd >/dev/null 2>&1; if test $$? -ne 0; then \

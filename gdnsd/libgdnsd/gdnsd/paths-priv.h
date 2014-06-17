@@ -24,20 +24,19 @@
 #include "gdnsd/paths.h"
 #include <stdbool.h>
 
-// Return the compiled-in default config file pathname
-const char* gdnsd_get_default_config_file(void);
+// Mostly for help output
+const char* gdnsd_get_default_config_dir(void);
+
+// Set config dir (e.g. from cmdnline), or pass NULL to use default
+void gdnsd_set_config_dir(const char* config_dir);
 
 // Set any explicitly-configured directories to non-default
-//   values.  Only supply explicit overrides!
-// The state/run dirs will get compiled-in defaults if NULL.
-// The internal config dir behavior has 3 basic cases:
-//   1) if config_dir, use that.
-//   2) else if config_file, use dirname(config_file)
-//   3) else use dirname(gdnsd_get_default_config_file())
-// if runtime_dirs is false, the state/run dirs will not
+//   values.  Only supply explicit overrides!  Everything
+//   gets compiled-in defaults if NULL.
+// if check_create is false, the state/run dirs will not
 //   be checked for existence or created.  Useful for
 //   uses outside of gdnsd itself (e.g. testsuite binaries),
 //   as well as stop/status/reload/checkconf actions.
-void gdnsd_set_dirs(const char* run_dir, const char* state_dir, const char* config_dir, const char* config_file, const bool runtime_dirs);
+void gdnsd_set_runtime_dirs(const char* run_dir, const char* state_dir, const bool check_create);
 
 #endif // GDNSD_PATHS_PRIV_H

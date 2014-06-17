@@ -43,15 +43,13 @@
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
-static const vscf_data_t* conf_load_vscf(const char* cfg_path) {
+static const vscf_data_t* conf_load_vscf(const char* cfg_dir) {
     const vscf_data_t* out = NULL;
 
-    gdnsd_set_dirs(NULL, NULL, NULL, cfg_path, false);
+    gdnsd_set_config_dir(cfg_dir);
+    char*cfg_path = gdnsd_resolve_path_cfg("config", NULL);
 
     struct stat cfg_stat;
-    if(!cfg_path)
-        cfg_path = gdnsd_get_default_config_file();
-
     if(!stat(cfg_path, &cfg_stat)) {
         log_info("Loading configuration from '%s'", cfg_path);
         char* vscf_err;
@@ -65,6 +63,7 @@ static const vscf_data_t* conf_load_vscf(const char* cfg_path) {
         log_info("No config file at '%s', using defaults + zones auto-scan", cfg_path);
     }
 
+    free(cfg_path);
     return out;
 }
 
@@ -158,11 +157,11 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
         log_fatal("Subtest %u failed: Wanted scope mask %u, got %u", tnum, scope_cmp, scope);
 }
 
-gdmaps_t* gdmaps_test_init(const char* input_cfgfile) {
+gdmaps_t* gdmaps_test_init(const char* input_cfgdir) {
 
     dmn_init1(false, true, true, false, "gdmaps_test");
 
-    const vscf_data_t* cfg_root = conf_load_vscf(input_cfgfile);
+    const vscf_data_t* cfg_root = conf_load_vscf(input_cfgdir);
     const vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* gdmaps = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);

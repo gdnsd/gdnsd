@@ -19,7 +19,7 @@ dist_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_DIST)
 nodist_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_BUILT)
 
 cfg-dirs.h:	Makefile
-	$(AM_V_GEN)echo '#define GDNSD_DEFPATH_CONFIG_FILE "$(GDNSD_DEFPATH_CONFIG_FILE)"' >$@
+	$(AM_V_GEN)echo '#define GDNSD_DEFPATH_CONFIG "$(GDNSD_DEFPATH_CONFIG)"' >$@
 	@echo '#define GDNSD_DEFPATH_RUN "$(GDNSD_DEFPATH_RUN)"' >>$@
 	@echo '#define GDNSD_DEFPATH_STATE "$(GDNSD_DEFPATH_STATE)"' >>$@
 	@echo '#define GDNSD_DEFPATH_LIB "$(GDNSD_DEFPATH_LIB)"' >>$@

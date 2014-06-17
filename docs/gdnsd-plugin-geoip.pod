@@ -98,10 +98,8 @@ client's network address.
 The configuration of this plugin can reference several external
 configuration and/or data files.  By default, all files referenced in
 this plugin's configuration are loaded from the F<geoip> subdirectory
-of the direcotry containing the main daemon's configuration file.
-The default would be F<@GDNSD_DEFPATH_CONFIG_DIR@/geoip> if using the
-default config file path of F<@GDNSD_DEFPATH_CONFIG_FILE@>.  You can
-load from other locations by specifying absolute file paths.
+of the daemon's configuration directory (default F<@GDNSD_DEFPATH_CONFIG@>).
+You can load from other locations by specifying absolute file paths.
 
 =head1 CONFIGURATION - TOP-LEVEL
 
