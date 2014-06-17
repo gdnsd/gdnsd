@@ -145,9 +145,8 @@ LIBS=$XLIBS
 
 # liburcu-qsbr
 KILL_QSBR=0
-AC_ARG_WITH([urcu],[
-AS_HELP_STRING([--without-urcu],[Explicitly disable userspace-rcu detection])
-],[
+AC_ARG_WITH([urcu],[AS_HELP_STRING([--without-urcu],
+    [Explicitly disable userspace-rcu detection])],[
     if test "x$withval" = xno; then
         KILL_QSBR=1
     fi
@@ -280,11 +279,8 @@ AC_CHECK_PROGS(GEOLITE_DECOMP, [xz], [none])
 AC_CHECK_PROGS(GEOLITE_DL, [wget curl], [none])
 
 # Allow user to override the port range we use for testing
-AC_ARG_WITH([testport],[
-  --with-testport=N       The testsuite needs a set of 3 IP port numbers
-                          to use, starting at "N", that it can bind to
-                          on "127.0.0.1".  If the default value of "12345"
-                          does not work for you, change it here.],
+AC_ARG_WITH([testport],[AS_HELP_STRING([--with-testport=N],
+    [The testsuite needs a set of 3 IP port numbers to use, starting at "N", that it can bind to on "127.0.0.1".  If the default value of "12345" does not work for you, change it here.])],
     [],
     [with_testport=12345]
 )
@@ -326,9 +322,8 @@ AC_CHECK_HEADERS([valgrind/memcheck.h])
 # Allow specifying an alternate rundir (default $localstatedir/run) for distros
 #   that prefer e.g. /run to /var/run
 rundir_fail="The --with-rundir= option must specify an absolute pathname if used";
-AC_ARG_WITH([rundir],[
-AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],[Specify alternate ditro-specific rundir, e.g. /run])
-],[
+AC_ARG_WITH([rundir],[AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],
+    [Specify alternate ditro-specific rundir, e.g. /run])],[
   echo "$with_rundir" | $GREP '^/' >/dev/null || AC_MSG_ERROR($rundir_fail)
   GDNSD_DEFPATH_RUN="${with_rundir}/${PACKAGE_NAME}"
 ],[

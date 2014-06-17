@@ -13,17 +13,15 @@ AC_CHECK_DECLS([fflush_unlocked],,,[#include <stdio.h>])
 USE_SYSTEMD=0
 USE_SYSTEMD_HAX=0
 
-AC_ARG_WITH([systemd],[
-    AS_HELP_STRING([--with-systemd],[Enable systemd usage])
-],[
+AC_ARG_WITH([systemd],[AS_HELP_STRING([--with-systemd],
+    [Enable systemd usage])],[
     if test "x$withval" = xyes; then
         USE_SYSTEMD=1
     fi
 ])
 
-AC_ARG_WITH([systemd-hax],[
-    AS_HELP_STRING([--with-systemd-hax],[Enable systemd hacks for fast-restart via systemctl reload])
-],[
+AC_ARG_WITH([systemd-hax],[AS_HELP_STRING([--with-systemd-hax],
+    [Enable systemd hacks for fast-restart via systemctl reload])],[
     if test "x$withval" = xyes; then
         USE_SYSTEMD_HAX=1
         USE_SYSTEMD=1
