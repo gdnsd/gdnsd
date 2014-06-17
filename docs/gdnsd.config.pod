@@ -514,13 +514,6 @@ case, all of this applies only within a single zone.  The gdnsd code
 never crosses the boundary between two distinct local zonefiles when
 processing queries.
 
-=item B<debug>
-
-Boolean, default false.  If (and only if) gdnsd was built in debug mode
-(--enable-developer, which slows things down with a ton of assertion
-checks among other things), setting this option to C<true> will cause
-additional debugging output to syslog/stderr.
-
 =item B<edns_client_subnet>
 
 Boolean, default true.  Enables support for the edns-client-subnet

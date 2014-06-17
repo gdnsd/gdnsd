@@ -36,13 +36,142 @@ be overridden in the main config file.
 =head1 BASIC CONFIGURATION
 
 The primary configuration file is the file named F<config> in the
-configuration directory. The default configuration directory is
-F<@GDNSD_DEFPATH_CONFIG@>.
+configuration directory.
 
 Note that the configuration file does not have to exist for successful
 startup.  Without a configuration file, gdnsd will load all of the zones
 in the zones directory and listen on port 53 of all available interfaces
 using default settings.
+
+=head1 COMMANDLINE OPTION FLAGS
+
+=head1 B<-c>
+
+Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.
+
+=head1 B<-f>
+
+Sets foreground mode for start/restart -like actions.  The daemon will
+remain attached to the controlling terminal and will not fork-and-terminate
+to free up the invoking shell.  It will, however, participate in pidfile
+locking with other (e.g. background) instances of itself using the same
+configuration.
+
+=head1 B<-s>
+
+Forces the C<zones_strict_startup> configuration option to true for
+this invocation, regardless of the setting in the config file.  This is
+mostly useful for validation during the C<checkconf> option.
+
+=head1 B<-S>
+
+Forces the C<zones_strict_data> configuration option to true for
+this invocation, regardless of the setting in the config file.  This is
+mostly useful for validation during the C<checkconf> option.
+
+=head1 B<-D>
+
+Enables additional debugging output to syslog and/or the terminal,
+as appropriate.
+
+=head1 ACTIONS
+
+B<gdnsd> acts as its own initscript, internalizing daemon management
+functions.  All valid invocations of the gdnsd command include an
+B<action>, most of which model normal initscript actions.  You may
+still want a light initscript wrapper to comply with distribution
+standards for e.g. terminal output on success/failure, setting
+up resource and security limits, etc, but it's not necessary for
+basic functionality.
+
+=over 4
+
+=item B<checkconf>
+
+Checks the validity of the configuration file and zonefiles, setting
+the exit status appropriately (0 for success).
+
+The C<start>, C<startfg>, and all C<restart>-like actions implicitly do
+the same checks as C<checkconf> as they load the configuration for
+runtime use.
+
+=item B<startfg>
+
+Starts gdnsd in foreground mode, with all of the logging that would
+normally go to syslog appearing instead on stderr.  Useful for
+debugging and testing.
+
+=item B<start>
+
+Starts gdnsd as a regular background daemon.
+
+=item B<stop>
+
+Stops the gdnsd daemon previously started by start.
+
+=item B<restart>
+
+This is equivalent to the sequence C<checkconf && stop && start>.  What
+actually happens behind the scenes is a bit more complicated, with the
+goal of making restarts as seamless and downtime-free as possible.
+
+C<restart> is a special case of C<start> which first completely starts
+itself (including the acquisition of listening sockets, if possible, see
+below) and is ready to answer requests *before* it stops the previous
+instance of the daemon.  This eliminates any stop -> start delays from
+expensive startup steps like parsing large numbers of zonefiles and/or
+polling for initial monitoring results on a large number of resources.
+
+On platforms where C<SO_REUSEPORT> works correctly, the new daemon
+uses this option (as did the old) to start its listening sockets in
+parallel with those of the previous daemon just before sending the
+termination signal to it, to eliminate any window of true unavailability.
+However, keep in mind that a handful of requests will still be lost:
+those which were already in the local socket buffers for the old instance
+when it exited.
+
+If C<SO_REUSEPORT> isn't supported or doesn't work properly, the daemon
+will re-attempt its socket acquisition after the short delay of waiting
+for the previous daemon's pid to exit.  The delay should normally be
+fairly constant (does not scale up with zones/configuration) and minimal
+in these cases, on the order of <1s.
+
+C<SO_REUSEPORT> became available in Linux kernels starting with kernel
+version 3.9.  BSDs have had it for much longer.
+
+=item B<reload>
+
+Sends C<SIGHUP> to the running daemon, forcing a manual re-check
+of the zones directory for updated files.
+
+=item B<force-reload>
+
+An alias for C<restart>.
+
+=item B<condrestart>
+
+This is basically "restart only if already running".
+
+Performs the same actions as C<restart>, but aborts early
+(with a successful exit value) if the daemon was not already
+running.
+
+=item B<try-restart>
+
+Alias for C<condrestart>.
+
+=item B<status>
+
+Checks the status of the running daemon, returning 0 if it
+is running or non-zero if it isn't.
+
+=back
+
+Any other commandline option will be treated as invalid,
+which will result in displaying a short help text to F<STDERR>
+and exiting with a non-zero exit status.  This includes
+things like the ubiquitous B<--help> and B<--version>.
+
 
 =head1 ZONE FILES
 
@@ -103,89 +232,46 @@ choses to default to the "parent" role in these conflict cases.
 See L<gdnsd.zonefile(5)> for details on the internal syntax of the
 zonefiles themselves.
 
-=head1 ACTIONS
+=head1 FILES
 
-B<gdnsd> acts as its own initscript, internalizing daemon management
-functions.  All valid invocations of the gdnsd command include an
-B<action>, most of which model normal initscript actions.  You may
-still want a light initscript wrapper to comply with distribution
-standards for e.g. terminal output on success/failure, but it's not
-necessary for basic functionality.
+Important file/directory paths for the core daemon code:
 
 =over 4
 
-=item B<checkconf>
+=item F<@GDNSD_DEFPATH_CONFIG@>
 
-Checks the validity of the configuration file and zonefiles, setting
-the exit status appropriately (0 for success).
+Default configuration directory, unless overriden via C<-c>.  The
+primary configuration file is always the file F<config> in the
+configuration directory.
 
-The C<start>, C<startfg>, and all C<restart>-like actions implicitly do
-the same checks as C<checkconf> as they load the configuration for
-runtime use.
+=item F<@GDNSD_DEFPATH_RUN@>
 
-=item B<startfg>
+Default run_dir.  The daemon will store a pidfile here (which is
+not intended for reliable text-based consumption by third parties).
+See the entry for C<run_dir> in the L<gdnsd.config(5)> manpage
+for more information about this directory.
 
-Starts gdnsd in foreground mode, with all of the logging that would
-normally go to syslog appearing instead on stderr.  Useful for
-debugging and testing.
+=item F<@GDNSD_DEFPATH_STATE@>
 
-=item B<start>
+Default state_dir.  The F<admin_state> file is read from this directory
+for administrative state-overrides on monitored resouces (etc).  See
+the entry for C<state_dir> in the L<gdnsd.config(5)> manpage for more
+information about this directory.
 
-Starts gdnsd as a regular background daemon.
+=item F<@GDNSD_DEFPATH_LIB@>
 
-=item B<stop>
+This is the default path that plugin shared libraries are loaded from.
+Other directories can be prepended to the search path via the configuration
+option C<plugin_search_path>, documented in L<gdnsd.config(5)>.
 
-Stops the gdnsd daemon previously started by start.
+=item F<@GDNSD_DEFPATH_LIBEXEC@>
 
-=item B<restart>
-
-This is equivalent to the sequence C<checkconf && stop && start>, but
-faster.  What actually happens behind the scenes is a bit more
-complicated:
-
-C<restart> is a special case of C<start> which first does all of the
-C<checkconf> actions (bringing all the runtime data into memory), then
-stops the existing daemon, and then finishes starting itself (acquiring
-sockets, dropping privs, spawning threads, etc).
-
-The net result is that this minimizes the pause in service availability
-during the restart (especially if you have a large volume of zone data
-that takes significant time to load), and also leaves the original
-daemon instance untouched if the configuration is invalid (you've made
-an error in your new zone data, etc).
-
-=item B<reload>
-
-Sends C<SIGHUP> to the running daemon, forcing a manual re-check
-of the zones directory for updated files.
-
-=item B<force-reload>
-
-An alias for C<restart>.
-
-=item B<condrestart>
-
-This is basically "restart only if already running".
-
-Performs the same actions as C<restart>, but aborts early
-(with a successful exit value) if the daemon was not already
-running.
-
-=item B<try-restart>
-
-Alias for C<condrestart>.
-
-=item B<status>
-
-Checks the status of the running daemon, returning 0 if it
-is running or non-zero if it isn't.
+This is the default path for daemon-private executables that users should
+not run.  The only current case is F<gdnsd_extmon_helper> for C<plugin_extmon>,
+and the path for this can be overridden in that plugin's configuration,
+documented in L<gdnsd-plugin-extmon(8)>.
 
 =back
-
-Any other commandline option will be treated as invalid,
-which will result in displaying a short help text to F<STDERR>
-and exiting with a non-zero exit status.  This includes
-things like the ubiquitous B<--help> and B<--version>.
 
 =head1 SIGNALS
 

@@ -85,7 +85,15 @@
       glob patterns are allowed for matching entity names.
 
   *** Daemonization changes:
-    * The argument "-d <rootdir>" has been replaced by "-c <cfgfile>"
+    * The argument "-d <rootdir>" has been replaced by "-c <cfgdir>",
+      e.g. "gdnsd -c /etc/gdnsd start", with a default of
+      ${sysconfdir}/gdnsd.
+    * Two new configuration options for run_dir and state_dir to
+      override the autoconf-based defaults of e.g. [/var]/run/gdnsd
+      and /var/lib/gdnsd, respectively.  It's probably better to
+      change these via ./configure args in the normal case; this
+      is mostly for testsuite-like stuff or multiple instances on
+      a single machine.
     * Direct, inbuilt support for chroot() has been removed.  There
       are much better security container options out there today that
       can be configured externally to wrap gdnsd and/or limit its
