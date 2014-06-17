@@ -564,6 +564,33 @@ version reporting, which responds to "version.bind" queries in the
 C<CH> class, and is what a client will see if they use such a query
 against a gdnsd server.
 
+=item B<run_dir>
+
+String, defaults to F<@GDNSD_DEFPATH_RUN@>.  This is the directory
+which the daemon owns as its run directory.  It will create this
+directory and/or modify the permissions and ownership of it
+on startup.  If it does not exist and cannot be created, or the
+permissions and ownership cannot be set to acceptable values, the
+daemon will not start.
+
+The contents of this directory are private to the daemon and
+shouldn't be interfered with.  This can live on a filesystem that's
+volatile across reboots, and doesn't require much disk space.
+
+=item B<state_dir>
+
+String, defaults to F<@GDNSD_DEFPATH_STATE@>.  This is the directory
+which the daemon owns as its state directory.  It will create this
+directory and/or modify the permissions and ownership of it
+on startup.  If it does not exist and cannot be created, or the
+permissions and ownership cannot be set to acceptable values, the
+daemon will not start.
+
+The contents of this directory belong to the system administrator
+and are used to communicate persistent, stateful information to
+the daemon.  This should live on a filesystem which is preserved
+across reboots.
+
 =back
 
 =head1 SERVICE_TYPES
