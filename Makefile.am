@@ -6,7 +6,7 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = gdnsd plugins docs t
 
 MISC_DOCS = README.md INSTALL AUTHORS COPYING NEWS
-EXTRA_DIST = autogen.sh qa docs.am
+EXTRA_DIST = qa docs.am
 
 # Some junk autotools doesn't seem to clean on its own
 DISTCLEANFILES = config.h.in~ configure.ac~

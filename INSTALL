@@ -20,10 +20,10 @@ The following have no real effect on the build or runtime, but are required in o
 
 If working directly from a git clone rather than a tarball, in addition to all of the above:
 
-* ./autogen.sh will construct the configure script to get started
-* You may need to install updated autoconf, automake, and libtool packages
-* You will need a working copy of Ragel: http://www.complang.org/ragel/ (or distro package)
+* You may need to install autoconf (2.63+), automake(1.11.1+), and libtool(2.2.6+) packages
+* You will need a working copy of Ragel 6.x: http://www.complang.org/ragel/ (or distro package)
 * Use "git clean -dfx" to reset to a truly clean state (could wipe local edits!)
+* Start with "autoreconf -vi", then ./configure ...
 
 Interesting / Non-standard autoconf options
 ===========================================
