@@ -10,7 +10,7 @@ gdnsd - An authoritative DNS daemon
     -f - Foreground mode for start/restart-like actions
     -s - Force 'zones_strict_startup = true' for this invocation
     -S - Force 'zones_strict_data = true' for this invocation
-    -c - Main config file, defaults to e.g. /etc/gdnsd/config
+    -c - Main config file, default '@GDNSD_DEFPATH_CONFIG_FILE@'
   Actions:
     checkconf - Checks validity of config and zone files
     start - Start " PACKAGE_NAME " as a regular daemon
@@ -36,8 +36,7 @@ be overridden in the main config file.
 =head1 BASIC CONFIGURATION
 
 There is a single primary configuration file. The default location is
-a compile-time constant, usually C<${sysconfdir}/gdnsd/config>, where
-C<$sysconfidir> is generally e.g. F</etc>.
+F<@GDNSD_DEFPATH_CONFIG_FILE@>.
 
 Note that the configuration file does not have to exist for successful
 startup.  Without a configuration file, gdnsd will load all of the zones
@@ -47,10 +46,10 @@ using default settings.
 =head1 ZONE FILES
 
 The zones directory is the subdirectory named C<zones> in the same
-location as the main config file.
+directory as the current main config file.
 
-All files in the zones directory are
-considered zone files.  In general there should be exactly one file
+All files in the zones directory are considered zone files.
+In general there should be exactly one file
 per zone, and the filename should match the zone name.  Filenames
 beginning with C<.> are ignored.  All other files must be regular
 files (as opposed to directories, symlinks, sockets, etc).

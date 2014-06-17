@@ -27,7 +27,7 @@ Example plugin config:
 
   # optional, if installed path confuses the daemon...
   plugins => {
-    extmon => { helper_path => "/usr/libexec/gdnsd/gdnsd_extmon_helper" }
+    extmon => { helper_path => "@GDNSD_DEFPATH_LIBEXEC@/gdnsd_extmon_helper" }
   }
 
 =head1 DESCRIPTION
@@ -47,14 +47,15 @@ C<plugins =E<gt> { extmon =E<gt> { ... } }>.
 String pathname, optional.
 
 Normally, this plugin will successfully locate its helper
-binary F<gdnsd_extmon_helper> in the installation C<$libexec/gdnsd>
-directory for gdnsd.  If for some reason it can't do so,
-e.g. due to a relocated installation, you can set an explicit
-full pathname to the helper here.  Note that in this case
-you're probably also having to set the daemon-global config
-option C<plugin_search_path> as well, since locating plugin
-objects uses similar mechanisms to find the installation
-F<$libdir/gdnsd> path.
+binary F<gdnsd_extmon_helper> in the installation libexec
+directory at F<@GDNSD_DEFPATH_LIBEXEC@/gdnsd_extmon_helper>.
+If for some reason it can't do so, e.g. due to a relocated
+installation, you can set an explicit full pathname to the
+helper here.  Note that in this case you're probably also
+having to set the daemon-global config option
+C<plugin_search_path> as well, since locating plugin
+objects uses similar mechanisms to find the installation's
+plugin library path (default F<@GDNSD_DEFPATH_LIB@>) as well.
 
 =item B<helper_failure_action>
 

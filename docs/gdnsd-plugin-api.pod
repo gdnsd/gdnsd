@@ -94,7 +94,7 @@ plugins named C<foo> and C<bar>, the plugins hash might look like this:
 
 Note that a short-form plugin name (e.g. C<foo>) maps to a shared
 library named F<plugin_foo.so>.  Plugins will be loaded from the
-directory F<$PREFIX/lib/gdnsd/> by default, but this path can be
+directory F<@GDNSD_DEFPATH_LIB@> by default, but this path can be
 overridden in the C<options> section of the gdnsd configuration.
 
 The basic syntactic structure of your plugin's config hash follows the

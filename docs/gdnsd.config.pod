@@ -27,7 +27,9 @@ gdnsd.config - gdnsd configuration file
 =head1 DESCRIPTION
 
 This man page describes the syntax of the primary gdnsd
-configuration file.
+configuration file.  The default path for the config file
+is F<@GDNSD_DEFPATH_CONFIG_FILE@>, but this can be overridden
+by the C<-c> commandline option.
 
 The lower-level syntax and structure of the configuration
 language is described in detail at the end of this document,
@@ -434,7 +436,7 @@ RRsets in the answer section.
 =item B<plugin_search_path>
 
 A single string or an array of strings, default empty.  Normally the
-daemon searches for plugins in the fixed path C<$PREFIX/lib/gdnsd>,
+daemon searches for plugins in the fixed path C<@GDNSD_DEFPATH_LIB@>,
 using filenames of the form C<plugin_${name}.so>.  If you define this
 parameter, all paths in this list will be searched in the given order
 for plugins *before* trying the default, fixed search path.
