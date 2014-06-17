@@ -30,7 +30,7 @@ This man page describes the syntax of the primary gdnsd
 configuration file.  The primary config file is always the
 the file named F<config> in the configuration directory.
 The default configuration directory is F<@GDNSD_DEFPATH_CONFIG@>,
-but this can be overridden by the C<-d> commandline option.
+but this can be overridden by the C<-c> commandline option.
 
 The lower-level syntax and structure of the configuration
 language is described in detail at the end of this document,

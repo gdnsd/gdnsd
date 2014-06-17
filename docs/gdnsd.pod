@@ -10,7 +10,7 @@ gdnsd - An authoritative DNS daemon
     -f - Foreground mode for start/restart-like actions
     -s - Force 'zones_strict_startup = true' for this invocation
     -S - Force 'zones_strict_data = true' for this invocation
-    -d - Configuration directory
+    -c - Configuration directory
   Actions:
     checkconf - Checks validity of config and zone files
     start - Start " PACKAGE_NAME " as a regular daemon
