@@ -52,8 +52,8 @@ two-address failover list, the C<metafo> plugin is more appropriate.
 At the top level of the plugin's configuration stanza, the special
 parameter C<service_types> is supported. These sets the default
 per-resource C<service_types> for all resources.  The default default
-C<service_types> is C<[ default ]>, which does basic HTTP/1.0 polling for
-200 OK status from C<http://IPADDR:80/>.
+C<service_types> is C<[ up ]>, which simply sets them all C<UP>
+statically.
 
 The rest of the hash entries at the top level are the names of the
 resources you define.  Each resource gets a configuration hash of its own

@@ -189,7 +189,7 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
 #define dmn_log_warn(...) dmn_logger(LOG_WARNING,__VA_ARGS__)
 #define dmn_log_err(...) dmn_logger(LOG_ERR,__VA_ARGS__)
 
-// log_debug() will only be emitted if the runtime debug flag is set
+// log_debug() messages will only be emitted if the runtime debug flag is set
 #define dmn_log_debug(...) do {\
      if(dmn_get_debug())\
          dmn_logger(LOG_DEBUG,__VA_ARGS__);\
@@ -285,6 +285,7 @@ typedef struct {
     socklen_t len;
 } dmn_anysin_t;
 
+// This is a maximum for the value of dmn_anysin_t.len
 #define DMN_ANYSIN_MAXLEN sizeof(struct sockaddr_in6)
 
 // max length of ASCII numeric ipv6 addr, with room for trailing NUL

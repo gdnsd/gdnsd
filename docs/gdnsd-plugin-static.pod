@@ -1,0 +1,79 @@
+
+=head1 NAME
+
+gdnsd-plugin-static - gdnsd static plugin
+
+=head1 SYNOPSIS
+
+Example static resources config for resolution:
+
+  plugins => {
+    static => {
+      foo => 192.0.2.1
+      bar => 2001:db8::1
+      baz => something.example.com.
+    }
+  }
+
+Example static service_types config for monitoring:
+
+  service_types => {
+    my_static_mon => {
+      plugin => static,
+      ttl => 123,
+      state => UP,
+      # ... other generic service_type params (ignored)
+    }
+  }
+
+Zonefile RRs using static plugin resolution
+
+  foo 300 DYNA static!foo
+  bar 300 DYNC static!bar
+  baz 300 DYNC static!baz
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-static> is a combined monitoring and resolution
+plugin that returns static data.  It is generally useless in
+real scenarios, and mostly serves only as an example/test plugin.
+
+For resolution, the configuration is a simple key/value hash
+where the keys are resource names and the values can be a single
+IP address (v4 or v6) or a domainname.  The domainname form can
+only be used with C<DYNC>, while the address form can be used with
+either C<DYNA> or C<DYNC>.
+
+For monitoring configuration as a service_type, the only two useful
+parameters are C<ttl> and C<state>, which set a fixed TTL and state
+for this static monitor result.  The other standard monitoring
+parameters (e.g. interval, timeout) are ignored, as static sets its
+states once at startup and never runs again.
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2014 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see
+<http://www.gnu.org/licenses/>.
+
+=cut

@@ -9,11 +9,17 @@ PODS_5 = \
 	gdnsd.djbzones.pod
 PODS_8 = \
 	gdnsd.pod \
+	gdnsd-plugin-extfile.pod \
 	gdnsd-plugin-extmon.pod \
-	gdnsd-plugin-metafo.pod \
 	gdnsd-plugin-geoip.pod \
-	gdnsd-plugin-simplefo.pod \
+	gdnsd-plugin-http_status.pod \
+	gdnsd-plugin-metafo.pod \
 	gdnsd-plugin-multifo.pod \
+	gdnsd-plugin-null.pod \
+	gdnsd-plugin-reflect.pod \
+	gdnsd-plugin-simplefo.pod \
+	gdnsd-plugin-static.pod \
+	gdnsd-plugin-tcp_connect.pod \
 	gdnsd-plugin-weighted.pod
 
 # This translates default path variables in the pod sources

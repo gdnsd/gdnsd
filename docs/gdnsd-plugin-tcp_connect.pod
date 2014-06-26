@@ -1,0 +1,66 @@
+
+=head1 NAME
+
+gdnsd-plugin-tcp_connect - gdnsd TCP monitoring plugin
+
+=head1 SYNOPSIS
+
+Example tcp_connect service_types config:
+
+  service_types => {
+    tcp9000 => {
+      plugin => tcp_connect,
+      port => 9000, # required
+      up_thresh => 20,
+      ok_thresh => 10,
+      down_thresh => 10,
+      interval => 10,
+      timeout => 3,
+    }
+  }
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-tcp_connect> is a monitoring plugin that
+checks basic TCP connectivity to a given port.
+It establishes a basic TCP connection and then immediately
+closes without sending or receiving any data on each
+monitoring check.
+
+=head1 PARAMETERS
+
+=over 4
+
+=item port
+
+The numeric port number to connect on, required.
+
+=back
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2014 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see
+<http://www.gnu.org/licenses/>.
+
+=cut

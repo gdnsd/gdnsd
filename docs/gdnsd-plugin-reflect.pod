@@ -1,0 +1,90 @@
+
+=head1 NAME
+
+gdnsd-plugin-reflect - gdnsd cache reflector plugin
+
+=head1 SYNOPSIS
+
+Zonefile RRs using reflect resolution
+
+  reflect      10 DYNA reflect
+  reflect-dns  10 DYNA reflect!dns
+  reflect-edns 10 DYNA reflect!edns
+  reflect-both 10 DYNA reflect!both
+  reflect-best 10 DYNA reflect!best
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-reflect> is a resolution plugin that
+acts as a live debugging tool.  It reflects a view
+of the client's network address back in the response
+in the form of C<A> or C<AAAA> RRs.  It can be
+used with both C<DYNA> and C<DYNC> RRs, and will return
+address data in both cases.
+
+The plugin can operate in one of four modes named
+C<dns>, C<edns>, C<both>, and C<best>, which can
+be selected by using the mode name as a resource name
+in the zonefile, as shown in the example above.  The
+default mode is C<best>.  The modes operate as follows:
+
+=over 4
+
+=item dns
+
+In the C<dns> mode, the address in the response is
+always the source IP address of the request as seen
+by gdnsd.  Note that this is generally the public
+address of a central cache/resolver server rather
+than the end-user client itself.
+
+=item edns
+
+In the C<edns> mode, the address in the response is
+the address sent by the client in the C<edns-client-subnet>
+option.  If the client did not send such an option,
+the IPv4 address C<0.0.0.0> is returned.
+
+=item both
+
+In the C<both> mode, both of the above results
+are returned in the same response, but there is no
+artificial C<0.0.0.0> added if no C<edns-client-subnet>
+option was available.
+
+=item best
+
+In the C<best> (default) mode, if the C<edns-client-subnet>
+option was specified its data is returned as in the
+C<edns> case, otherwise the source IP address is returned
+as in the C<dns> case.
+
+=back
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2014 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see
+<http://www.gnu.org/licenses/>.
+
+=cut

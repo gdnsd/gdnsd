@@ -16,6 +16,8 @@
     * New service_types plugin "extfile" - allows for the consumption
       of outside monitoring data via disk file in vscf format.
     * Experimental support for djbdns zonefiles
+    * IPv6 runtime support is now a requirement, and the related
+      option monitor_force_v6_up was removed.
 
   *** Dynamic address resolution changes:
     * The 'DYNC' rr-type can now dynamically return address or
@@ -38,6 +40,11 @@
 
   *** Service monitoring changes:
     * CNAMEs can now be monitored entities in the general sense.
+      Note that this does not imply resolving external CNAMEs
+      for direct service checks, at least not with any current
+      plugins.  It just means things like extmon/extfile can
+      provide custom monitor feedback, and they can be administrated
+      through the admin_state interface described below.
     * plugin_static now also acts as a monitoring plugin.  It sets a
       fixed up/down value and optionally a fixed internal TTL value.
     * The extmon, extfile, static, and null plugins support the
@@ -108,7 +115,7 @@
       allowing the daemon to have the secondary group permissions
       assigned to its user in /etc/group or equivalent.
     * Foreground daemons participate fully in all other aspects
-      of daemonization (e.g. privdrop, chroot, and pidfile locking)
+      of daemonization (e.g. privdrop and pidfile locking)
     * It is possible to properly restart a daemon instance from
       background to foreground and back again; meaning "-f restart"
       can take over from a regular daemon into the foreground,
@@ -140,6 +147,9 @@
     * Support for the old, experimental edns-client-subnet option code
       0x50fa has been removed; gdnsd now only supports the official,
       IANA-assigned option code 0x0008.
+
+  *** New deprecations:
+    * plugin_extmon: %%IPADDR%% deprecated, replacement is %%ITEM%%
 
 1.11.4 - 2014-07-18
     Major bugfix: The SOA record returned in the auth section of

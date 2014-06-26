@@ -15,7 +15,7 @@ gdnsd.config - gdnsd configuration file
   # shell-style comment
 
   service_types => {
-    foosvc => { vhost => www.example.com, url_path => "/checkme" }
+    foosvc => { plugin => http_status, vhost => www.example.com, url_path => "/checkme" }
     barsvc => $include{bar-svc.cfg}
     $include{other-services.cfg}
   }
@@ -46,7 +46,7 @@ only 3 legal keys: B<options>, B<service_types>, and B<plugins>.
 Any of them which are present must have a Hash as their value.
 
 All of them are optional, as is the configuration file itself.
-if you're happy with an all-default configuration, you can
+If you're happy with an all-default configuration, you can
 simply not have a config file at all.
 
 =head1 OPTIONS HASH
@@ -157,7 +157,7 @@ the global option of the same name) are C<tcp_threads>,
 C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>, C<udp_recv_width>,
 C<udp_rcvbuf>, and C<udp_sndbuf>.
 
-There are also two special singalur string values: C<any> and C<scan>.
+There are also two special singular string values: C<any> and C<scan>.
 
 If set to C<any>, the daemon will listen on the C<dns_port> port (default 53)
 on C<0.0.0.0> and C<::>.  This is the default if no C<listen> option is provided.
@@ -174,9 +174,9 @@ port (again, default 53) for each address found.
 
 Basically like B<listen> above, but used for the HTTP listener (serving
 stats information), and defaulting to port 3506.  The hash form isn't
-supported as there are no per-address options.  Also, the default
-addresses are the IPv4 and IPv6 any-addresses (C<0.0.0.0> and C<::>),
-rather than the iterated per-interface addresses that the DNS listener uses.
+supported as there are no per-address options, and the any/all options
+don't exist here.  The default is to listen on the IPv4 and IPv6
+any-addresses (C<0.0.0.0> and C<::>).
 
 It makes common sense to restrict access to this service via firewall
 rules, as the data served leaks information about the rate and nature
@@ -202,11 +202,11 @@ Exactly like C<tcp_threads>, but for UDP sockets per DNS listening address.
 
 Integer, default 128, min 1, max 65535.  This is maximum number of tcp
 DNS connections gdnsd will allow to occur in parallel per listening tcp
-socket.  Once this limit is reached by a given socket, no new
-connections will be allowed to that socket until one of the existing
-ones closes or times out.  Note that sockets map 1:1 to threads, and thus
-the total client limit for connecting to a given address would be
-C<tcp_clients_per_thread * tcp_threads> for a given address.
+thread.  Once this limit is reached by a given thread, no new
+connections will be allowed to that thread until one of the existing
+ones closes or times out.  Note that sockets map 1:m to threads, and thus
+the total client limit for connecting to a given socket address would be
+C<tcp_clients_per_thread * tcp_threads>.
 
 =item B<tcp_timeout>
 
@@ -240,7 +240,7 @@ back to the same code as other platforms that don't support it.
 
 Integer, min 4096, max 1048576.  If set, this value will be used to set
 the C<SO_RCVBUF> socket option on the UDP listening socket(s).  Most
-users do not need to tune this value.  If left unset, the code only
+users do not need to tune this value.  If left unset, the code
 takes a somewhat heuristic approach, trying to raise the value only if
 the OS-supplied default seems too low, and multiplying it a bit in the
 case of C<udp_recv_width> > 1.
@@ -274,10 +274,10 @@ loaded and served.
 If this is set to true, such warnings will be upgraded and treated
 the same as the more-serious class of zone data errors which prevent
 successful loading of zone data.  The consequences of this are variable:
-on initial startup or checkconf, this results in a fatal error (failure
-to start, or non-zero exit code, respectively).  During a runtime
-zone data reload, any existing good copy of the zone would continue
-to be served until the error is corrected in the source.
+on initial startup or checkconf, this results in a failed zonefile, which
+may either be ignored or abort execution, depending on C<zones_strict_startup>
+below.  During a runtime zone data reload, any existing good copy of the zone
+would continue to be served until the error is corrected in the source.
 
 =item B<zones_strict_startup>
 
@@ -534,7 +534,7 @@ Relevant links documenting edns-client-subnet:
 L<http://www.afasterinternet.com/>
 L<http://tools.ietf.org/html/draft-vandergaast-edns-client-subnet-00>
 
-=item C<chaos_response>
+=item B<chaos_response>
 
 String, default "gdnsd".  When gdnsd receives any query with the class
 C<CH> ("Chaos"), as opposed to the normal C<IN> ("Internet"), it will
@@ -604,7 +604,7 @@ C<UP> state is maintained in the face of intermittent or isolated failures
 until the anti-flap thresholds are crossed and the state moves to
 C<DOWN>.
 
-Any services monitored for plugins are also have their state reported
+Any services monitored for plugins also have their state reported
 alongside the standard gdnsd statistics report, served by the built-in
 HTTP server (default port is 3506).
 
@@ -653,7 +653,7 @@ successive monitoring requests for a given resource.
 
 =item B<timeout>
 
-Integer seconds, default 3, min 1, max 255.  Maximum time the
+Integer seconds, default interval/2, min 1, max 255.  Maximum time the
 monitoring code will wait for a successful response before giving up
 and considering the request to be a failure.  Defaults to half of the
 C<interval>, and must be less than C<interval>.
@@ -666,59 +666,43 @@ here are consumed by the plugin.
 
 =back
 
-There are four service_type plugins included with gdnsd:
-
-C<tcp_connect> checks basic TCP connectivity to a given address.
-At this time, it only supports the monitoring of address (as opposed to
-CNAME) resources.  It has just one plugin-specific parameter:
-
-=over 4
-
-=item B<port>
-
-Integer, required.  This is the port number to contact on the remote
-host to check this service type.  It has no default and must be
-specified.
-
-=back
-
-C<http_status> performs an HTTP request to a given address (as with
-C<tcp_connect>, CNAMEs are not yet supported), and has the following
-plugin-specific parameters:
+There are six monitoring plugins included with gdnsd that can be used
+in a service_types definition, each of which may have additional,
+plugin-specific configuration options in addition to the generic ones
+above.  Each of these is documented in detail in its own manpage
+e.g. C<gdnsd-plugin-FOO>:
 
 =over 4
 
-=item B<port>
+=item B<tcp_connect>
 
-Integer, default 80.  This is the port number to contact on the remote
-host to check this service type.
+Checks TCP basic connectivity on a given port
 
-=item B<url_path>
+=item B<http_status>
 
-String, default C</>.  This is the URL path that should be used when
-checking this service type.
+Checks HTTP connectivity, with options for the port, URL, and vhost
+to use in the request, and the acceptable HTTP status codes in
+the response.
 
-=item B<vhost>
+=item B<extmon>
 
-Hostname, no default.  If defined, the HTTP/1.0 monitoring request will
-include this as a C<Host:> header in the monitoring request.  If not
-defined, no C<Host:> header will be sent.
+Periodically executes a custom external commandline program
+to poll for the status of a resource.
 
-=item B<ok_codes>
+=item B<extfile>
 
-Array of 3-digit HTTP status codes, default C<[ 200 ]>.  This defines
-the HTTP status codes in responses that will be accepted as successful.
+Reads the contents of a file on disk to import state monitoring data
+from another source.
+
+=item B<static>
+
+Configures a static monitoring result, mostly for testing / example code.
+
+=item B<null>
+
+Configures an always-down static result, mostly for testing / example code.
 
 =back
-
-C<extmon> periodically executes external commandline programs to poll
-for the status of a given address or CNAME, and is documented separately
-in L<gdnsd-plugin-extmon(8)>.
-
-C<extfile> periodically reads the contents of a file (in the same basic
-C<vscf> syntax as the main config file) to pick up status values set
-there by some other program for address or CNAME resources, and is also
-documented separately in L<gdnsd-plugin-extfile(8)>.
 
 =head1 PLUGINS
 
@@ -732,41 +716,16 @@ the supplied hash of configuration data is legal or not.
 Monitoring-only plugins can also be given plugin-global level
 configuration here if the plugin author deemed it necessary.
 
-gdnsd ships with 3 very trivial dynamic resolution plugins named
-C<null>, C<static>, and C<reflect>.
-
-C<null> simply returns all-zeros addresses for DYNA records, and
-C<invalid.> as the RHS of DYNC records.  It does not pay attention to
-any plugin-specific configuration.
-
-The C<static> plugin can be configured with a map of resource names to
-IPv4 addresses or CNAME hostnames, and it will do the obvious: map
-those resource names statically for use in either DYNA or DYNC zonefile
-records.
-
-C<reflect> is primarily for real-world testing and debugging.  It
-attempts to reflect back to the query originator an address answer
-showing the server's view of where the client is located on the
-network.  Currently in the common case this will be the address of the
-intermediate cache server which communicated directly with gdnsd.
-However, if the query contains the draft edns-client-subnet option, the
-response can reflect that as well.
-
-It accepts 4 fixed resource names at the zonefile level: C<dns>,
-C<edns>, C<best>, and C<both>.  C<dns> means to ignore
-edns-client-subnet and always return the cache's address.  C<edns>
-means to ignore the cache's address and always return
-edns-client-subnet information, (or C<0.0.0.0> if not available).
-C<best> will return the edns-client-subnet information if available, or
-the cache's address if not.  C<both> returns both addresses if
-edns-client-subnet is available, or just the cache otherwise.  The
-default behavior is C<best>.
-
-gdnsd also includes five other plugins that are more production-useful,
+gdnsd ships with eight different monitoring plugins,
 all of which have their own separate manpage documentation (e.g. C<man
 gdnsd-plugin-FOO>):
 
 =over 4
+
+=item B<reflect>
+
+Reflects DNS client source IP and/or edns-client-subnet information
+back to the requestor as address data for debugging.
 
 =item B<simplefo>
 
@@ -793,6 +752,16 @@ different datacenter address(-group) preference/failover orderings for
 different clients based on approximate geographic location.  Supports
 geographically-differentiated CNAME resolution as well.
 
+=item B<null>
+
+Returns all-zeros addresses or the CNAME C<invalid.> - mostly for
+testing and as simple example code.
+
+=item B<static>
+
+Configures static mappings of resources names to IP addresses or
+CNAMEs - mostly for testing and as simple example code.
+
 =back
 
 A configuration example showing the trivial plugins, as well as
@@ -800,6 +769,7 @@ demonstrating the service_types described earlier:
 
   service_types => {
     corpwww_type => {
+      plugin => http_status
       vhost => www.corp.example.com
       url_path => /check_me
       down_thresh => 5
@@ -945,7 +915,7 @@ vscf now has a mechanism for config includefiles.  The syntax is
 where C<filename> can use the same kinds of escaping and/or
 double-quoting as normal scalar string data.  Whitespace between
 the filename and the surrounding brackets is optional.  Whitespace
-between C<$include> and the following C<{> is not.  If the filename
+between C<$include> and the following C<{> is not allowed.  If the filename
 is relative (does not begin with F</>), it is interpreted as
 relative to the directory containing the parent file.  Include files
 can nest other include files to arbitrary depth.
@@ -984,7 +954,8 @@ array).  Examples:
 The include statement can also appear in a hash where a key would
 normally be expected.  In this case, the included file must be in hash
 (rather than array) form at the top level, and its contents are merged
-into the parent hash.  Example:
+into the parent hash.  The merge is shallow, and conflicting keys are
+not allowed. Example:
 
   main config:
     options => { ... },

@@ -11,7 +11,7 @@ Example plugin config:
     pingit => {
       plugin => "extmon",
       timeout => 5,
-      cmd => ["/bin/ping", "-w", "2", "-c", "2", "%%IPADDR%%"]
+      cmd => ["/bin/ping", "-w", "2", "-c", "2", "%%ITEM%%"]
     },
     svc_alwaysok => {
       plugin => "extmon",
@@ -96,7 +96,7 @@ The array is passed directly to C<execv()> for execution (with re-use of
 the first element as the pathname to execute).  If you need to use shell
 facilities, start the argument list with e.g. C<"/bin/sh", "-c", ...>.
 
-All argument strings are searched for the magic string C<%%IPADDR%%> (which
+All argument strings are searched for the magic string C<%%ITEM%%> (which
 can appear multiple times per argument).  Everywhere this magic string is
 found, the IP address of the resource being monitored will be substituted
 in its place.

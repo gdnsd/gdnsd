@@ -33,7 +33,7 @@ Minimal example gdnsd config file using this plugin:
     resources => {
       prod_www => {
         map => my_prod_map
-        service_types => default
+        service_types => up
         dcmap => {
           dc-01 => 192.0.2.1,
           dc-02 => { lb01 => 192.0.2.2, lb02 => 192.0.2.3 },

@@ -1,0 +1,199 @@
+
+=head1 NAME
+
+gdnsd-plugin-extfile - gdnsd plugin for importing monitor data via file
+
+=head1 SYNOPSIS
+
+Example service_types config:
+
+  service_types => {
+    ext1 => {
+      plugin => "extfile",
+      file => "/var/tmp/ext1data", # required
+      direct => true, # default false
+      def_down => false, # default false
+      def_ttl => 600, # default max (limited by zonefile RRs)
+    }
+    ext2 => {
+      plugin => "extfile",
+      file => "ext2data", # def dir: @GDNSD_DEFPATH_STATE@/extfile/
+    },
+  }
+
+Example plugin config using these service_types:
+
+  plugins => {
+    multifo => {
+      www1 => {
+        service_types => ext2,
+        lb01 => 192.0.2.200,
+        lb02 => 192.0.2.201,
+        lb03 => 192.0.2.202,
+      }
+      www2 => {
+        service_types => [ ext1, http_status ],
+        lb01 => 192.0.2.203,
+        lb02 => 192.0.2.204,
+        lb03 => 192.0.2.205,
+      }
+    },
+    weighted => {
+      wwwcn => {
+        service_types => ext1,
+        lb01 = [ lb01.example.com., 99 ],
+        lb02 = [ lb02.example.com., 15 ],
+        lb03 = [ lb03, 1 ],
+      }
+      wwwz => {
+        service_types => ext1,
+        lb01 => [ 192.0.2.203, 10 ],
+        lb02 => [ 192.0.2.204, 15 ],
+        lb03 => [ 192.0.2.205, 20 ],
+      }
+    }
+  }
+
+Example extfile data defining the resource + service_types specified above:
+
+  /var/tmp/ext1data:
+    192.0.2.203 => UP/300
+    192.0.2.204 => DOWN/242
+    192.0.2.205 => DOWN/102
+    lb01.example.com. => UP/60
+    lb02.example.com. => UP/30
+    lb03 => UP/45
+
+  @GDNSD_DEFPATH_STATE@/extfile/ext2data:
+    192.0.2.200 => DOWN
+    192.0.2.201 => UP
+    192.0.2.202 => UP
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-extfile> is a monitor plugin that imports
+monitor results from an external file (which is probably
+populated by some script/tool from some other monitoring
+software).
+
+=head1 MODES
+
+An extfile service_type can operate in one of two basic
+modes:
+
+=over 4
+
+=item Monitor Mode (default)
+
+In monitor mode, the standard parameter C<interval> is used
+as a repeating timer.  At each interval, the file is loaded
+for state updates (but any direct TTL values in the file are
+ignored).
+
+The updates from the file are fed into the standard core
+monitoring system by the same mechanisms as normal monitoring
+plugins (e.g. http_status).  This means they will be subject
+to the standard anti-flap measures via the standard threshold
+parameters (C<up_thresh>, C<down_thresh>, C<ok_thresh>)
+before affecting the final status seen by resolution plugins.
+
+This mode is appropriate if the updates being processed are
+relatively-raw updates from individual monitor checks.
+
+=item Direct Mode
+
+In direct mode, the standard parameter C<interval> is used
+only as a B<hint> to the filesystem-watching code to try
+to check for updates no less often than the supplied interval.
+However in many cases (especially e.g. Linux with C<inotify()>
+support) updates to the file may be picked up much sooner, perhaps
+nearly instantly.
+
+There will be a short (~1 second) settling delay after detecting
+any update in order to coalesce any rapid-fire updates into a
+single transaction.
+
+The results contained in the file (state and/or TTL per-resoruce)
+are applied directly as final monitoring results and made immediately
+available to resolution plugins for decision-making.
+
+This mode is appropriate if the updates are from processed monitoring
+results that have already been through e.g. anti-flap measures
+before reaching gdnsd.
+
+=back
+
+=head1 FILE FORMAT
+
+The file is formatted using the same C<vscf> language that's used
+for the main config file and the geoip nets databases.  The expected
+data format is a simple key-value hash at the top level, where the
+keys are the monitored IP address or CNAME values from the monitor
+plugins and the values are of the form form C<state[/ttl]>, where
+state is either C<UP> or C<DOWN> and the optional ttl is an integer
+ttl value.  TTL values are only used for C<direct>-mode service_types;
+the TTL is calculated in the normal fashion basic on intervals and
+thresholds for C<monitor>-mode.
+
+=head1 CONFIGURATION - PER-SERVICE-TYPE
+
+The universal, plugin-neutral service_type parameters all apply
+in their usual sense: C<up_thresh>, C<ok_thresh>, C<down_thresh>,
+and C<interval> (keeping in mind the notes above about how
+each mode uses C<interval>).  C<timeout> is ignored.
+extfile-specific parameters:
+
+=over 4
+
+=item B<direct>
+
+Boolean, default false.  Sets the monitoring mode to
+C<direct> if true, otherwise mode defaults to C<monitor>.
+
+=item B<file>
+
+String filename, required.  This sets the name of the file
+to load results from.
+
+=item B<def_ttl>
+
+Integer TTL, default is max (which will be limited by zonefile
+RR TTL values).  In C<direct> mode this will be set as the monitored
+TTL if no optional TTL is supplied in the file data for a given
+resource.  It is ignored in C<monitor> mode.
+
+=item B<def_down>
+
+Boolean, default false.  This sets the default disposition of
+configured resources which are missing from the file data (which
+will generate warnings).  If true, these resources behave as if
+the file data marked them C<DOWN>, otherwise they default to C<UP>.
+
+=back
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

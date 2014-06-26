@@ -247,7 +247,7 @@ A much more complete example, showing off most of the features above:
   }
 
 Note in the example above that C<%multifo!bar> and C<%simplefo!foo> would
-have had their default C<service_types = default> rather than the one
+have had their default C<service_types = up> rather than the one
 specified at the metafo level, because they were not synthesized.  It would
 be up to you to keep all of the service_types in sync when using direct
 references.

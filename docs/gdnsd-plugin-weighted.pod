@@ -94,13 +94,10 @@ C<up_thresh>, and C<multi>.  These only affect the behavior of address
 of these keys are inherited and override-able at the per-resource and
 per-address-family levels.
 
-The top-level default C<service_types> is C<default>, which is a built-in
+The top-level default C<service_types> is C<up>, which is a built-in
 service type provided by gdnsd.  For more information about
 configuring non-default service type's, see the main L<gdnsd.config(5)>
-documentation.  The default polls the C</> URL at each IP address
-on port 80 for a "200 OK" response every 10 seconds, and has
-some anti-flap parameters that stabilize the state against isolated,
-intermittent failures.
+documentation.
 
 C<multi> is a boolean that can be C<true> or C<false>, and defaults to
 C<false>.  C<multi> controls the behavior of the algorithm

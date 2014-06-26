@@ -10,7 +10,7 @@ Example plugin config:
   plugins => {
     multifo => {
       up_thresh => 0.3
-      service_types => default,
+      service_types => up,
       v4www => {
         lb01 => 192.0.2.200,
         lb02 => 192.0.2.201,
@@ -25,7 +25,7 @@ Example plugin config:
       }
       pubwww => {
         up_thresh => 0.5
-        service_types => [ corpwww_type, default ],
+        service_types => corpwww_type
         addrs_v4 => [ 192.0.2.100, 192.0.2.101, 192.0.2.102 ]
         addrs_v6 => {
           service_types => [ up ],
@@ -109,7 +109,7 @@ the following are equivalent:
 
 All of the addresses for all of the resources are monitored using the
 per-address-family inherited C<service_types> specified (default would be
-simple HTTP/1.0 monitoring for C<200 OK> on port 80).  When the core daemon
+the static virtual monitor C<up>).  When the core daemon
 requests a lookup for address records of a given family on one of this
 plugin's resources, it goes through essentially the following process to
 determine the set of response addresses for that address family: 1) Add all

@@ -187,6 +187,7 @@ static char* thing_xlate(const char* instr, const char* thing, const unsigned th
             instr += ITEM_LEN;
         }
         else if(!strncmp(instr, IPADDR_SUB, IPADDR_LEN)) {
+            log_warn("plugin_extmon: command substition '%%IPADDR%%' is deprecated in favor of '%%ITEM%%'");
             memcpy(out_cur, thing, thing_len);
             out_cur += thing_len;
             instr += IPADDR_LEN;

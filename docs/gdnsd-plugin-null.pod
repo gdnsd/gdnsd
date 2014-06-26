@@ -1,0 +1,66 @@
+
+=head1 NAME
+
+gdnsd-plugin-null - gdnsd null plugin
+
+=head1 SYNOPSIS
+
+Example null service_types config:
+
+  service_types => {
+    my_null_mon => {
+      plugin => null,
+      # ... other generic service_type params
+    }
+  }
+
+Zonefile RRs using null resolution
+
+  foo 300 DYNA null
+  bar 300 DYNC null!whatever
+
+=head1 DESCRIPTION
+
+B<gdnsd-plugin-null> exists mostly as an example of the minimum
+possible plugin of both types.  It is simultaneously both a
+monitoring plugin and a resolution plugin.
+
+When used as a resolution plugin in C<DNYA> or C<DYNC> RRs, it
+ignores any resource name provided.  With C<DYNA> it always
+returns the IPv4 address C<0.0.0.0> and the IPv6 address C<::>.
+With C<DYNC> it always returns a CNAME to to the domainname
+C<invalid.>
+
+When used as a monitoring plugin by defining a service_type as
+shown in the example above it emulates the behavior of a real
+monitoring plugin (updating at correct intervals, etc) but
+sends a C<DOWN> result at every monitoring check interval without
+actually checking anything.
+
+=head1 SEE ALSO
+
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd(8)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2014 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see
+<http://www.gnu.org/licenses/>.
+
+=cut
