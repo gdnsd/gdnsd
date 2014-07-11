@@ -63,7 +63,6 @@ global_config_t gconfig = {
     .lock_mem = false,
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
-    .monitor_force_v6_up = false,
     .zones_strict_data = false,
     .zones_strict_startup = true,
     .zones_rfc1035_auto = true,
@@ -248,11 +247,10 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 static void process_http_listen(const vscf_data_t* http_listen_opt, const unsigned def_http_port) {
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
-        const bool has_v6 = gdnsd_tcp_v6_ok();
-        gconfig.num_http_addrs = has_v6 ? 2 : 1;
+        gconfig.num_http_addrs = 2;
         gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
         make_addr("0.0.0.0", def_http_port, gconfig.http_addrs);
-        if(has_v6) make_addr("::", def_http_port, &gconfig.http_addrs[1]);
+        make_addr("::", def_http_port, &gconfig.http_addrs[1]);
     }
     else {
         gconfig.num_http_addrs = vscf_array_get_len(http_listen_opt);
@@ -282,26 +280,23 @@ static bool dns_addr_is_dupe(const dmn_anysin_t* new_addr) {
     return false;
 }
 
-static void dns_listen_any(const dns_addr_t* addr_defs, const bool has_v6) {
+static void dns_listen_any(const dns_addr_t* addr_defs) {
     dmn_assert(addr_defs);
 
-    gconfig.num_dns_addrs = has_v6 ? 2 : 1;
+    gconfig.num_dns_addrs = 2;
     gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
     dns_addr_t* ac_v4 = &gconfig.dns_addrs[0];
     memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
     make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
-    if(has_v6) {
-        dns_addr_t* ac_v6 = &gconfig.dns_addrs[1];
-        memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
-        make_addr("::", addr_defs->dns_port, &ac_v6->addr);
-    }
+    dns_addr_t* ac_v6 = &gconfig.dns_addrs[1];
+    memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
+    make_addr("::", addr_defs->dns_port, &ac_v6->addr);
 }
 
-static void dns_listen_scan(const dns_addr_t* addr_defs, const bool has_v6) {
+static void dns_listen_scan(const dns_addr_t* addr_defs) {
     dmn_assert(addr_defs);
 
     dmn_anysin_t temp_asin;
-    bool v6_warned = false;
 
     struct ifaddrs* ifap;
     if(getifaddrs(&ifap))
@@ -313,13 +308,6 @@ static void dns_listen_scan(const dns_addr_t* addr_defs, const bool has_v6) {
             continue;
 
         if(ifap->ifa_addr->sa_family == AF_INET6) {
-            if(!has_v6) {
-                if(!v6_warned) {
-                    dmn_log_info("automatic interface scanning via 'listen => scan' detected one or more IPv6 interfaces, but IPv6 appears to be non-functional on this host in general, so they will be ignored...");
-                    v6_warned = true;
-                }
-                continue;
-            }
             memcpy(&temp_asin.sin6, ifap->ifa_addr, sizeof(struct sockaddr_in6));
             temp_asin.len = sizeof(struct sockaddr_in6);
         }
@@ -358,17 +346,15 @@ static void dns_listen_scan(const dns_addr_t* addr_defs, const bool has_v6) {
 static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
     dmn_assert(addr_defs);
 
-    const bool has_v6 = gdnsd_tcp_v6_ok();
-
     if(!listen_opt)
-        return dns_listen_any(addr_defs, has_v6);
+        return dns_listen_any(addr_defs);
     if(vscf_is_simple(listen_opt)) {
         const char* simple_str = vscf_simple_get_data(listen_opt);
         if(!strcmp(simple_str, "any")) {
-            return dns_listen_any(addr_defs, has_v6);
+            return dns_listen_any(addr_defs);
         }
         else if(!strcmp(simple_str, "scan")) {
-            return dns_listen_scan(addr_defs, has_v6);
+            return dns_listen_scan(addr_defs);
         }
     }
 
@@ -554,7 +540,6 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
-        CFG_OPT_BOOL(options, monitor_force_v6_up);
         CFG_OPT_UINT(options, log_stats, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, max_http_clients, 1LU, 65535LU);
         CFG_OPT_UINT(options, http_timeout, 3LU, 60LU);
@@ -659,7 +644,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     }
 
     // Phase 2 of service_types config
-    gdnsd_mon_cfg_stypes_p2(stypes_cfg, gconfig.monitor_force_v6_up);
+    gdnsd_mon_cfg_stypes_p2(stypes_cfg);
 
     // register a hook for plugin cleanup callbacks
     gdnsd_atexit_debug(plugins_cleanup);

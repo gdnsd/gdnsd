@@ -59,7 +59,6 @@ typedef struct {
     bool     lock_mem;
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
-    bool     monitor_force_v6_up;
     bool     zones_strict_data;
     bool     zones_strict_startup;
     bool     zones_rfc1035_auto;

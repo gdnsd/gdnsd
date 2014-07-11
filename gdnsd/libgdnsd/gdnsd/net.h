@@ -34,11 +34,6 @@ int gdnsd_getproto_udp(void);
 F_PURE
 int gdnsd_getproto_tcp(void);
 
-// Whether IPv6 TCP sockets can be instantiated at all (good check
-//   for runtime IPv6 support in the kernel)
-F_PURE
-bool gdnsd_tcp_v6_ok(void);
-
 // Whether SO_REUSEPORT seems to be a runtime-valid sockopt
 F_PURE
 bool gdnsd_reuseport_ok(void);

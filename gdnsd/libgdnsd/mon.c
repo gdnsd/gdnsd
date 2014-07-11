@@ -604,7 +604,7 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
     }
 }
 
-void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v6_up) {
+void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg) {
 
     // If no plugins actually used any plugin-monitored services, there's
     //   no point in setting up the remainder of this.  At the very least
@@ -672,8 +672,7 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v
                 }
                 else {
                     dmn_assert(this_smgr->type->plugin->add_mon_addr);
-                    if(!(force_v6_up && this_smgr->addr.sa.sa_family == AF_INET6))
-                        this_smgr->type->plugin->add_mon_addr(this_smgr->desc, this_smgr->type->name, this_smgr->cname, &this_smgr->addr, i);
+                    this_smgr->type->plugin->add_mon_addr(this_smgr->desc, this_smgr->type->name, this_smgr->cname, &this_smgr->addr, i);
                 }
             }
         }

@@ -42,7 +42,7 @@
 //        the way through from resolver->monitoring plugins via
 //        callbacks
 void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg);
-void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg, const bool force_v6_up);
+void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg);
 
 // main.c calls this for adding monio events to the main thread's eventloop
 F_NONNULL

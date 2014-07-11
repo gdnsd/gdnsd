@@ -420,7 +420,7 @@ int main(int argc, char** argv) {
     // init1 lets us start using dmn log funcs for config errors, etc
     dmn_init1(copts.debug, copts.foreground, !will_daemonize, will_daemonize, PACKAGE_NAME);
 
-    // Initialize net stuff in libgdnsd (protoents, tcp_v6_ok) - needed for config load
+    // Initialize net stuff in libgdnsd - needed for config load
     gdnsd_init_net();
 
     // Init meta-PRNG - needed for config load

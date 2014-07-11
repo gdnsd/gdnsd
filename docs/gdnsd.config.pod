@@ -160,8 +160,7 @@ C<udp_rcvbuf>, and C<udp_sndbuf>.
 There are also two special singalur string values: C<any> and C<scan>.
 
 If set to C<any>, the daemon will listen on the C<dns_port> port (default 53)
-on C<0.0.0.0> and C<::> (if IPv6 support is detected).  This is the default
-if no C<listen> option is provided.
+on C<0.0.0.0> and C<::>.  This is the default if no C<listen> option is provided.
 
   options => { listen => any }
 
@@ -176,9 +175,8 @@ port (again, default 53) for each address found.
 Basically like B<listen> above, but used for the HTTP listener (serving
 stats information), and defaulting to port 3506.  The hash form isn't
 supported as there are no per-address options.  Also, the default
-addresses are the IPv4 and IPv6 (if supported) any-addresses
-(C<0.0.0.0> and C<::>), rather than the iterated per-interface
-addresses that the DNS listener uses.
+addresses are the IPv4 and IPv6 any-addresses (C<0.0.0.0> and C<::>),
+rather than the iterated per-interface addresses that the DNS listener uses.
 
 It makes common sense to restrict access to this service via firewall
 rules, as the data served leaks information about the rate and nature
@@ -535,17 +533,6 @@ Relevant links documenting edns-client-subnet:
 
 L<http://www.afasterinternet.com/>
 L<http://tools.ietf.org/html/draft-vandergaast-edns-client-subnet-00>
-
-=item B<monitor_force_v6_up>
-
-Boolean, default false.  Forces all monitored resources with IPv6
-addresses permanently to the UP state, and does not actually send them
-monitoring requests.  Useful if some of your DNS servers don't have
-working or reliable IPv6 routing, which would otherwise fail IPv6 polls
-and force the related addresses to be marked DOWN.  A better
-alternative would be to only host DNS for v6-capable services on
-v6-capable DNS hosts, or install a Tunnelbroker/Sixxs/Teredo/Miredo/etc
-tunnel to get v6 routability.
 
 =item C<chaos_response>
 
