@@ -1,3 +1,23 @@
+1.11.4 - 2014-07-18
+    Major bugfix: The SOA record returned in the auth section of
+      negative responses (NXDOMAIN and NODATA) had an incorrect TTL.
+        RFC 2308 says that auth servers should set the SOA record's
+      own TTL to the minimum of the real SOA TTL and the SOA
+      "minimum" field (aka ncache field), but gdnsd was simply using
+      the real SOA TTL and assuming caches looked at the
+      minimum/ncache field directly (which they do not).
+        The fallout is that if you specified a minimum/ncache
+      value of 3H but the TTL of the SOA record itself
+      was 24H, your negative answers to caches would indicate
+      that the answer should be cached for 24H.  Luckily
+      many caches limit ncache durations (e.g. BIND9 defaults to
+      a limit of 3H), mitigating the issue somewhat, but
+      it's still a pretty big deal.
+
+    Bugfix: plugin_geoip was not correctly runtime-reloading
+      geoip databases from geoip_db_v4_overlay due to a simple
+      code error, which is now fixed.
+
 1.11.3 - 2014-05-14
     Important code fixes: ----------------------------------
       GeoIP country code support for South Sudan
