@@ -6,13 +6,13 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 15;
 
-my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
 my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'example.com', qtype => 'SOA',
-    answer => $soa,
+    answer => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
 );
 
 # null dynamic CNAME plugin
@@ -46,7 +46,7 @@ _GDT->test_dns(
     qname => 'tomissing.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
     answer => 'tomissing.example.com 600 CNAME missing.example.com',
-    auth => $soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -55,7 +55,7 @@ _GDT->test_dns(
     qname => 'tomissing2.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
     answer => 'tomissing2.example.com 600 CNAME missing.deeper.example.com',
-    auth => $soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -64,7 +64,7 @@ _GDT->test_dns(
     qname => 'tomissing3.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
     answer => 'tomissing3.example.com 600 CNAME missing.deeper.yet.example.com',
-    auth => $soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -73,7 +73,7 @@ _GDT->test_dns(
     qname => 'test.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
     answer => 'test.example.com 600 CNAME simple.test.example.com',
-    auth => $soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 

@@ -7,7 +7,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 15;
 
-my $standard_soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
 my $pid = _GDT->test_spawn_daemon();
 
@@ -16,7 +16,7 @@ my $pid = _GDT->test_spawn_daemon();
 #  but not NS data.
 _GDT->test_dns(
     qname => 'www.example.com', qtype => 'NS',
-    auth => $standard_soa,
+    auth => $neg_soa,
 );
 
 # Noerror but no data, as in the first test, but these
@@ -24,47 +24,47 @@ _GDT->test_dns(
 #  has data, but they have no data at all).
 _GDT->test_dns(
     qname => 'goober.example.com', qtype => 'A',
-    auth => $standard_soa,
+    auth => $neg_soa,
 );
 
 _GDT->test_dns(
     qname => 'y.z.example.com', qtype => 'A',
-    auth => $standard_soa,
+    auth => $neg_soa,
 );
 
 # several nxdomains
 _GDT->test_dns(
     qname => 'foo.www.example.com', qtype => 'NS',
     header => { rcode => 'NXDOMAIN' },
-    auth => $standard_soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 
 _GDT->test_dns(
     qname => 'foo.bar.www.example.com', qtype => 'NS',
     header => { rcode => 'NXDOMAIN' },
-    auth => $standard_soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 
 _GDT->test_dns(
     qname => 'nxd.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => $standard_soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 
 _GDT->test_dns(
     qname => 'z.nxd.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => $standard_soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 
 _GDT->test_dns(
     qname => 'x.y.z.nxd.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => $standard_soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 

@@ -24,7 +24,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'foo.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'com 43200 SOA ns1.com hostmaster.com 1 7200 1800 259200 900',
+    auth => 'com 900 SOA ns1.com hostmaster.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 

@@ -6,7 +6,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 45 * 2;
 
-my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
 # We re-run the same suite of tests against
 #  multiple config files with identical meaning,
@@ -111,14 +111,14 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res2.example.com', qtype => 'A',
     answer => [],
-    auth => $soa,
+    auth => $neg_soa,
     addtl => 'res2.example.com 86400 AAAA 2001:DB8::11',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
-    answer => [], auth => $soa,
+    answer => [], auth => $neg_soa,
     addtl => [
         'res2.example.com 86400 AAAA 2001:DB8::11',
         _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
@@ -157,14 +157,14 @@ _GDT->test_dns(
 #res2/dc2
 _GDT->test_dns(
     qname => 'res2dc2.example.com', qtype => 'A',
-    answer => [], auth => $soa,
+    answer => [], auth => $neg_soa,
     addtl => 'res2dc2.example.com 86400 AAAA 2001:DB8::11',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res2dc2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
-    answer => [], auth => $soa,
+    answer => [], auth => $neg_soa,
     addtl => [
         'res2dc2.example.com 86400 AAAA 2001:DB8::11',
         _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
@@ -190,7 +190,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     answer => 'res3.example.com 86400 CNAME dc2cn.example.com',
-    auth => $soa, 
+    auth => $neg_soa,
     addtl => 'dc2cn.example.com 86400 AAAA 2001:DB8::101',
     stats => [qw/udp_reqs noerror/],
 );
@@ -198,7 +198,7 @@ _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
     answer => 'res3.example.com 86400 CNAME dc2cn.example.com',
-    auth => $soa, 
+    auth => $neg_soa,
     addtl => [
         'dc2cn.example.com 86400 AAAA 2001:DB8::101',
         _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
@@ -242,7 +242,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res3dc2.example.com', qtype => 'A',
     answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.com',
-    auth => $soa, 
+    auth => $neg_soa,
     addtl => 'dc2cn.example.com 86400 AAAA 2001:DB8::101',
     stats => [qw/udp_reqs noerror/],
 );
@@ -250,7 +250,7 @@ _GDT->test_dns(
     qname => 'res3dc2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
     answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.com',
-    auth => $soa, 
+    auth => $neg_soa,
     addtl => [
         'dc2cn.example.com 86400 AAAA 2001:DB8::101',
         _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 0),
@@ -342,7 +342,7 @@ _GDT->test_dns(
     qname => 'res5.example.com', qtype => 'AAAA',
     header => { rcode => 'NXDOMAIN' },
     answer => [],
-    auth => $soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 

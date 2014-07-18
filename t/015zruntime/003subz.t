@@ -25,7 +25,7 @@ _GDT->test_log_output('Zone s1.example.com. was added as a hidden subzone of ext
 _GDT->test_dns(
     qname => 'ns1.s1.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -37,7 +37,7 @@ _GDT->test_log_output('Zone s3.s2.example.com. was added as a hidden subzone of 
 _GDT->test_dns(
     qname => 'ns1.s3.s2.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -49,7 +49,7 @@ _GDT->test_log_output('Zone s2.example.com. was added as a hidden subzone of ext
 _GDT->test_dns(
     qname => 'ns1.s2.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -83,7 +83,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'ns1.s3.s2.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 's2.example.com 86400 SOA ns1.s2.example.com hostmaster.s2.example.com 1 7200 1800 259200 900',
+    auth => 's2.example.com 900 SOA ns1.s2.example.com hostmaster.s2.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -106,19 +106,19 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'ns1.s1.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 _GDT->test_dns(
     qname => 'ns1.s2.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 _GDT->test_dns(
     qname => 'ns1.s3.s2.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 

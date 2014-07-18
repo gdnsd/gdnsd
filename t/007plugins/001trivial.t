@@ -6,13 +6,13 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 27;
 
-my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
 my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'example.com', qtype => 'SOA',
-    answer => $soa,
+    answer => 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
 );
 
 _GDT->test_dns(
@@ -24,7 +24,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     v6_only => 1,
     qname => 'r.example.com', qtype => 'A',
-    auth  => $soa,
+    auth  => $neg_soa,
     addtl => 'r.example.com 86400 AAAA ::1',
 );
 
@@ -37,7 +37,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     v4_only => 1,
     qname => 'r.example.com', qtype => 'AAAA',
-    auth  => $soa,
+    auth  => $neg_soa,
     addtl => 'r.example.com 86400 A 127.0.0.1',
 );
 
@@ -125,7 +125,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'sfo3.example.com', qtype => 'A',
-    auth => $soa,
+    auth => $neg_soa,
     addtl => 'sfo3.example.com 86400 AAAA 2001:DB8::DEAD',
 );
 
@@ -176,7 +176,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'mfo2.example.com', qtype => 'AAAA',
-    auth => $soa,
+    auth => $neg_soa,
     addtl => [
         'mfo2.example.com 86400 A 192.0.2.111',
         'mfo2.example.com 86400 A 192.0.2.112',

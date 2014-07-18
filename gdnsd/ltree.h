@@ -223,6 +223,7 @@ struct _ltree_rrset_soa_struct {
     const uint8_t* email;
     const uint8_t* master;
     uint32_t times[5];
+    uint32_t neg_ttl; // cache of htons(min(ntohs(gen.ttl), ntohs(times[4])))
 };
 
 struct _ltree_rrset_cname_struct {

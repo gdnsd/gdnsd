@@ -689,6 +689,7 @@ bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* 
     soa->times[2] = htonl(retry);
     soa->times[3] = htonl(expire);
     soa->times[4] = htonl(ncache);
+    soa->neg_ttl = htonl(ttl < ncache ? ttl : ncache);
 
     return false;
 }
