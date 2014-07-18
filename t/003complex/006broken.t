@@ -6,7 +6,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 17;
 
-my $standard_soa = 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
 my $pid = _GDT->test_spawn_daemon();
 
@@ -67,13 +67,13 @@ my $pid = _GDT->test_spawn_daemon();
 # for, or even functions to encode data for.
 _GDT->test_dns(
     qname => 'foo.example.com', qtype => 'KEY',
-    auth => $standard_soa,
+    auth => $neg_soa,
 );
 
 # As above, but the code is >255
 _GDT->test_dns(
     qname => 'foo.example.com', qtype => "TYPE300",
-    auth => $standard_soa,
+    auth => $neg_soa,
 );
 
 my @edns_base = (

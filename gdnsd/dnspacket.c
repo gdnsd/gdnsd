@@ -1101,7 +1101,7 @@ static unsigned int encode_rr_cname(dnspacket_context_t* c, unsigned int offset,
 }
 
 F_NONNULL
-static unsigned int encode_rr_soa(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_soa_t* rdata, const bool answer) {
+static unsigned int encode_rr_soa_common(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_soa_t* rdata, const bool answer, const bool negative) {
     dmn_assert(c); dmn_assert(c->packet); dmn_assert(offset); dmn_assert(rdata);
 
     uint8_t* packet = c->packet;
@@ -1109,7 +1109,7 @@ static unsigned int encode_rr_soa(dnspacket_context_t* c, unsigned int offset, c
     offset += repeat_name(c, offset, c->auth_comp, false);
     gdnsd_put_una32(DNS_RRFIXED_SOA, &packet[offset]);
     offset += 4;
-    gdnsd_put_una32(rdata->gen.ttl, &packet[offset]);
+    gdnsd_put_una32(negative ? rdata->neg_ttl : rdata->gen.ttl, &packet[offset]);
     offset += 6;
 
     // fill in the rdata
@@ -1128,6 +1128,16 @@ static unsigned int encode_rr_soa(dnspacket_context_t* c, unsigned int offset, c
         c->nscount++;
 
     return offset;
+}
+
+F_NONNULL
+static unsigned int encode_rr_soa(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_soa_t* rdata, const bool answer) {
+    return encode_rr_soa_common(c, offset, rdata, answer, false);
+}
+
+F_NONNULL
+static unsigned int encode_rr_soa_negative(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_soa_t* rdata) {
+    return encode_rr_soa_common(c, offset, rdata, false, true);
 }
 
 static unsigned int encode_rrs_rfc3597(dnspacket_context_t* c, unsigned int offset, const ltree_rrset_rfc3597_t* rrset, const bool answer V_UNUSED) {
@@ -1521,7 +1531,7 @@ static unsigned int construct_normal_response(dnspacket_context_t* c, unsigned i
     }
 
     if(!c->ancount)
-        offset = encode_rr_soa(c, offset, ltree_node_get_rrset_soa(authdom), false);
+        offset = encode_rr_soa_negative(c, offset, ltree_node_get_rrset_soa(authdom));
     else if(gconfig.include_optional_ns && c->qtype != DNS_TYPE_NS
         && (c->qtype != DNS_TYPE_ANY || !res_is_auth))
             offset = encode_rrs_ns(c, offset, ltree_node_get_rrset_ns(authdom), false);
@@ -1774,7 +1784,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
             const ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(resauth);
             dmn_assert(soa);
             res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
-            offset = encode_rr_soa(c, offset, soa, false);
+            offset = encode_rr_soa_negative(c, offset, soa);
             stats_own_inc(&c->stats->nxdomain);
         }
     }

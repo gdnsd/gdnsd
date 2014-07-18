@@ -262,20 +262,20 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'x.y.z.example.com', qtype => 'A',
-    auth => 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
 );
 
 _GDT->test_dns(
     qname => 'foo.y.z.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 
 _GDT->test_dns(
     qname => 'foo.x.y.z.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 
@@ -322,7 +322,7 @@ _GDT->test_dns(
 );
 _GDT->test_dns(
     qname => 'unused.glue.example.net.example.org', qtype => 'A',
-    auth => 'example.org 43200 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120',
+    auth => 'example.org 120 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120',
     addtl => 'unused.glue.example.net.example.org 43201 AAAA 0:0:0:0:0:0:0:1' # from wildcard...
 );
 

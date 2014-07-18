@@ -11,7 +11,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 17;
 
-my $standard_soa = 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
 my $pid = _GDT->test_spawn_daemon();
 
@@ -19,7 +19,7 @@ _GDT->test_dns(
     qname => 'cn-nx.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
     answer => 'cn-nx.example.com 21600 CNAME nx.example.com',
-    auth => $standard_soa,
+    auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],
 );
 

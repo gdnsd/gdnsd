@@ -6,7 +6,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 19;
 
-my $soa_auth = 'example.com 21600 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
 $optrr = Net::DNS::RR->new(
     type => "OPT",
@@ -28,18 +28,18 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'v6basic.example.com', qtype => 'MX',
-    auth => $soa_auth
+    auth => $neg_soa
 );
 
 _GDT->test_dns(
     qname => 'v6basic.example.com', qtype => 'A',
-    auth => $soa_auth,
+    auth => $neg_soa,
     addtl => 'v6basic.example.com 1234 AAAA 1234:5678:90AB:CDEF:FDEC:BA09:8765:4321',
 );
 
 _GDT->test_dns(
     qname => 'ns1.example.com', qtype => 'AAAA',
-    auth => $soa_auth,
+    auth => $neg_soa,
     addtl => 'ns1.example.com 21600 A 192.0.2.1',
 );
 
