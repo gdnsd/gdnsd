@@ -374,7 +374,7 @@ static void gdmap_geoip_v4o_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_
     dmn_assert(gdmap);
     dmn_assert(gdmap->geoip_v4o_path);
 
-    ev_timer_stop(loop, gdmap->geoip_reload_timer);
+    ev_timer_stop(loop, gdmap->geoip_v4o_reload_timer);
 
     if(!gdmap_update_geoip(gdmap, gdmap->geoip_v4o_path, &gdmap->geoip_v4o_list, V4O_SECONDARY)) {
         dmn_assert(gdmap->dclists_pend);
