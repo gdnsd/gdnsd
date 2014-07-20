@@ -3,7 +3,7 @@
  * Based on other gdnsd plugins by Brandon L Black <blblack@gmail.com>
  * and Jay Reitz <jreitz@gmail.com>
  *
- * This file is part of gdnsd-plugin-weighted.
+ * This file is part of gdnsd.
  *
  * gdnsd-plugin-weighted is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

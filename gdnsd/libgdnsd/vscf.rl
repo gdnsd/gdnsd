@@ -1,6 +1,6 @@
 /* Copyright © 2012 Brandon L Black <blblack@gmail.com>
  *
- * This file is part of vscf.
+ * This file is part of gdnsd.
  *
  * vscf is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
