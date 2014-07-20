@@ -1,4 +1,3 @@
-
 AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(srcdir)/libgdmaps
 AM_LIBTOOLFLAGS = --silent
 

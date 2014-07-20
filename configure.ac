@@ -361,13 +361,13 @@ AC_CONFIG_FILES([
   t/Makefile
   docs/Makefile
   plugins/Makefile
-  plugins/trivial/Makefile
-  plugins/weighted/Makefile
+  plugins/extfile/Makefile
+  plugins/extmon/Makefile
   plugins/meta/Makefile
   plugins/meta/libgdmaps/Makefile
   plugins/meta/libgdmaps/t/Makefile
-  plugins/extmon/Makefile
-  plugins/extfile/Makefile
+  plugins/weighted/Makefile
+  plugins/trivial/Makefile
 ])
 AC_OUTPUT
 
