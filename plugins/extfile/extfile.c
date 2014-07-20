@@ -115,8 +115,8 @@ void plugin_extfile_add_svctype(const char* name, const vscf_data_t* svc_cfg, co
     svc->mons = NULL;
 }
 
-void plugin_extfile_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
+void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname, const unsigned idx) {
+    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname);
 
     extf_svc_t* svc = NULL;
     for(unsigned i = 0; i < num_svcs; i++) {
@@ -135,6 +135,10 @@ void plugin_extfile_add_mon_addr(const char* desc V_UNUSED, const char* svc_name
     mon->midx = svc->num_mons++;
 }
 
+void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
+    plugin_extfile_add_mon_cname(desc, svc_name, cname, idx);
+}
+
 static int moncmp(const void* x, const void* y) {
     dmn_assert(x); dmn_assert(y);
     const extf_mon_t* xm = (const extf_mon_t*)x;
@@ -148,13 +152,13 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, const vscf
 
     bool success = false;
     if(!vscf_is_simple(val)) {
-        log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' must be a simple string!", svc->name, matchme, svc->path);
+        log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' ignored, must be a simple string!", svc->name, matchme, svc->path);
     }
     else {
         gdnsd_sttl_t result;
         const unsigned def_ttl = svc->def_sttl & GDNSD_STTL_TTL_MASK;
         if(gdnsd_mon_parse_sttl(vscf_simple_get_data(val), &result, def_ttl)) {
-            log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", svc->name, matchme, svc->path, GDNSD_STTL_TTL_MAX);
+            log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' ignored, must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", svc->name, matchme, svc->path, GDNSD_STTL_TTL_MAX);
         }
         else {
             if(!svc->direct && ((result & GDNSD_STTL_TTL_MASK) != def_ttl))
@@ -164,7 +168,7 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, const vscf
             if(found)
                 results[found->midx] = result;
             else
-                log_warn("plugin_extfile: Service type '%s': entry '%s' in file '%s' did not match any configured resource!", svc->name, matchme, svc->path);
+                log_warn("plugin_extfile: Service type '%s': entry '%s' in file '%s' ignored, did not match any configured resource!", svc->name, matchme, svc->path);
             success = true;
         }
     }
