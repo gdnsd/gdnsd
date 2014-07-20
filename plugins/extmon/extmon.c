@@ -173,10 +173,10 @@ static char* num_to_str(const int i) {
     return out;
 }
 
-const char IPADDR_SUB[11] = "%%IPADDR%%\0";
-const unsigned IPADDR_LEN = 10;
-const char ITEM_SUB[11]  = "%%ITEM%%\0";
-const unsigned ITEM_LEN  = 8;
+static const char IPADDR_SUB[11] = "%%IPADDR%%\0";
+static const unsigned IPADDR_LEN = 10;
+static const char ITEM_SUB[11]  = "%%ITEM%%\0";
+static const unsigned ITEM_LEN  = 8;
 static char* thing_xlate(const char* instr, const char* thing, const unsigned thing_len) {
     char outbuf[1024]; // way more than enough, I'd hope...
     char* out_cur = outbuf;
