@@ -11,8 +11,8 @@ xHEADERS_DIST = gdnsd/vscf.h gdnsd/dname.h gdnsd/log.h gdnsd/compiler.h gdnsd/mo
 libgdnsd_la_SOURCES = prcu.c dname.c net.c log.c mon.c vscf.c misc.c paths.c plugapi.c $(xHEADERS_DIST) $(xHEADERS_DIST_NOINST)
 nodist_libgdnsd_la_SOURCES = $(xHEADERS_BUILT)
 
-libgdnsd_la_LDFLAGS  = -shared -avoid-version
-libgdnsd_la_LIBADD   = $(LIBGDNSD_LIBS) libdmn/libdmn.la
+libgdnsd_la_LDFLAGS = -shared -avoid-version -export-symbols-regex '^(gdnsd|vscf|dmn)_'
+libgdnsd_la_LIBADD  = $(LIBGDNSD_LIBS) libdmn/libdmn.la
 
 libgdnsd_la_pkgincludedir = $(pkgincludedir)
 dist_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_DIST)
