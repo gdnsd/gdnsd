@@ -63,10 +63,9 @@ Example plugin config:
         }
       }
       cn => {
-        cnames => {
-          foo = [ lb01.example.com., 99 ]
-          bar = [ lb02.example.com., 15 ]
-        }
+        service_types = my_cn_check
+        foo = [ lb01.example.com., 99 ]
+        bar = [ lb02.example.com., 15 ]
       }
     }
   }
@@ -89,13 +88,13 @@ based on dynamic-weighted probabilities.
 =head1 CONFIGURATION - TOP LEVEL
 
 At the top level, there are three special parameter keys: C<service_types>,
-C<up_thresh>, and C<multi>.  These only affect the behavior of address
-(C<DYNA>) lookups.  They are ignored for CNAME (C<DYNC>) lookups.  All
-of these keys are inherited and override-able at the per-resource and
-per-address-family levels.
+C<up_thresh>, and C<multi>.  C<multi> is ignored for CNAME-based
+resources.  All of these keys are inherited and
+override-able at the per-resource and per-address-family levels.
 
-The top-level default C<service_types> is C<up>, which is a built-in
-service type provided by gdnsd.  For more information about
+C<service_types> sets how the applicable addresses or CNAMEs are
+monitored.  The top-level default C<service_types> is C<up>, which is a
+built-in service type provided by gdnsd.  For more information about
 configuring non-default service type's, see the main L<gdnsd.config(5)>
 documentation.
 
@@ -118,22 +117,22 @@ may be specified to override their settings per-resource.
 
 There are two basic configuration modes within a resource:
 
-1) Explicit per-family/type sub-stanzas.  In this mode, the resource
-contains one or more of the keys C<addrs_v4>, C<addrs_v6>, and C<cnames>.
-C<addrs_v4> and/or C<addrs_v6> can both be specified in the same resource,
-but C<cnames> cannot co-exist with either of the other two.
+1) Explicit per-family address sub-stanzas.  In this mode, the resource
+contains one or more of the keys C<addrs_v4> and C<addrs_v6>.  Usually
+one would use both together, as it's simpler to use the second option
+when configuring a single address family.
 
-The contents of each stanza configure response RRs of the given type for
-this resource, and in the addrs_v4/addrs_v6 cases, the 3 behavioral
-parameters C<service_types>, C<multi>, and C<up_thresh> can be overridden
-per-address-family as well.
+The contents of each stanza configure response RRs of the given address
+type for this resource, and the 3 behavioral parameters C<service_types>,
+C<multi>, and C<up_thresh> can be overridden per-address-family as well.
 
-2) Automatic top-level detection of just one family/type.  In this mode,
-you can configure the top-level of a resource with valid contents for one
-of the stanzas C<addrs_v4>, C<addrs_v6>, or C<cnames>, and the family/type
-will be autodetected, and be the only type available in this resource.
+2) Automatic top-level detection of just one address family or CNAMEs.
+In this mode, you can configure the top-level of a resource with direct
+entries, so long as they are matching set of a single type: all IPv4
+addresses, all IPv6 address, or all CNAMEs, and the type will be
+auto-detected.
 
-Resources which (implicitly or explicitly) contain weighted lists of CNAMEs
+Resources which contain weighted lists of CNAMEs
 rather than addresses can only be used with C<DYNC> RRs in zonefiles, whereas
 those that contain only addresses can be used in either C<DYNC> or C<DYNA>
 RRs.
@@ -142,15 +141,17 @@ RRs.
 
 When configuring cnames, the value of each item should be
 C<[ CNAME, WEIGHT ]>, and the resource will be useful for C<DYNC> zonefile
-records, resolving to a weighted CNAME record in responses.  The weighting
-decision will return a single CNAME answer, with the probability of each
-choice being C<weight / total_weight>.
+records, resolving to a weighted CNAME record in responses.  The selection
+algorithm based on weights and monitoring results is as documented below
+for addresses in the B<THE UNGROUPED SINGLE CASE>, since groups of
+CNAMEs cannot be configured, and the C<multi> option is not valid for them.
 
 If the CNAMEs are not fully-qualified (do not end in "."), the current
 C<$ORIGIN> value for the zonefile RR being queried will be appended to
 complete the name, much as you would expect if the same not-fully-qualified
 name were substituted into the zonefiles everywhere the relevant DYNC record
-exists.
+exists.  Monitoring will be based on the originally-configured CNAME text
+exactly as it was entered (including the terminal dot or the lack thereof).
 
 =head1 CONFIGURATION - ADDRESSES
 
@@ -343,7 +344,7 @@ The gdnsd manual.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2012 Anton Tolchanov <me@knyar.net>,
+Copyright (c) 2014 Anton Tolchanov <me@knyar.net>,
 Brandon L Black <blblack@gmail.com>, and Jay Reitz <jreitz@gmail.com>
 
 This file is part of gdnsd.

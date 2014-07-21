@@ -738,19 +738,20 @@ All-active failover of monitored round-robin address groups
 =item B<weighted>
 
 Weighted-round-robin responses with a variety of behavioral flavors,
-for both monitored addresses and CNAMEs
+for both monitored addresses and CNAMEs.
 
 =item B<metafo>
 
 Static-ordered address(-group) meta-failover between 'datacenters',
-which are resources defined in terms of other plugins
+which are resources defined in terms of other plugins.  Supports
+both address and CNAME data.
 
 =item B<geoip>
 
 Combines metafo's functionality with MaxMind GeoIP databases to select
 different datacenter address(-group) preference/failover orderings for
 different clients based on approximate geographic location.  Supports
-geographically-differentiated CNAME resolution as well.
+both address and CNAME data.
 
 =item B<null>
 

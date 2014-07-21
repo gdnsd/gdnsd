@@ -1,7 +1,5 @@
-/* Copyright © 2011 Anton Tolchanov <anton.tolchanov@gmail.com>
- *
- * Based on other gdnsd plugins by Brandon L Black <blblack@gmail.com>
- * and Jay Reitz <jreitz@gmail.com>
+/* Copyright © 2014 Anton Tolchanov <anton.tolchanov@gmail.com>,
+ * Brandon L Black <blblack@gmail.com>, and Jay Reitz <jreitz@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -610,19 +608,16 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
      * resX => {
      *     addrs_v4 => { ... (IPv4, grouped or not)  }
      *     addrs_v6 => { ... (IPv6, grouped or not)  }
-     *     cnames => { ... }
      * }
-     * OR: auto-detect any one of the three at the top level as the only subset
-     *
-     * Constraints:
-     *    addrs_v[46] can appear alone or together in a single resource
-     *    cnames can only appear alone
+     * OR: auto-detect a set of all-IPv4, all-IPv6, or all-CNAMEs
      */
 
     // grab explicit sub-stanzas
     const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v4", true);
     const vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v6", true);
     const vscf_data_t* cnames_cfg = vscf_hash_get_data_byconstkey(res_cfg, "cnames", true);
+    if(cnames_cfg)
+        log_fatal("plugin_weighted: resource '%s': the pointless singleton 'cnames' substanza is no longer supported; move the data up a level without it", res_name);
 
     if(addrs_v4_cfg) {
         res->addrs_v4 = calloc(1, sizeof(addrset_t));
@@ -634,21 +629,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
         config_addrset(res_name, "addrs_v6", true, res->addrs_v6, addrs_v6_cfg);
     }
 
-    if(cnames_cfg) {
-        if(addrs_v4_cfg || addrs_v6_cfg)
-            log_fatal("plugin_weighted: resource '%s': 'cnames' cannot co-exist alongside 'addrs_v4' and/or 'addrs_v6' in the same resource", res->name);
-        res->cnames = calloc(1, sizeof(cnset_t));
-        config_cnameset(res_name, "cnames", res->cnames, cnames_cfg);
-        // in the case that 'cnames' is explicitly defined
-        //   we need to get any resource-level inherited address parameters
-        //   marked so that we don't fail the mixed explicit+direct check at the bottom
-        //   of this function.
-        vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
-        vscf_hash_get_data_byconstkey(res_cfg, "multi", true);
-        vscf_hash_get_data_byconstkey(res_cfg, "up_thresh", true);
-    }
-
-    if(!addrs_v4_cfg && !addrs_v6_cfg && !cnames_cfg) {
+    if(!addrs_v4_cfg && !addrs_v6_cfg) {
         config_auto(res, res_cfg);
     }
     else {
