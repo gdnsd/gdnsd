@@ -60,8 +60,8 @@ Example zonefile RRs:
 =head1 DESCRIPTION
 
 B<gdnsd-plugin-geoip> uses MaxMind's GeoIP binary databases to
-map address and CNAME results based on geography and (in the address
-case) monitored service availability.  It fully supports both
+map address and CNAME results based on geography and
+monitored service availability.  It fully supports both
 IPv6 and the emerging edns-client-subnet standard.  If a request
 contains the edns-client-subnet option with a source netmask greater
 than zero, the edns-client-subnet information will be used instead

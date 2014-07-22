@@ -98,8 +98,8 @@ facilities, start the argument list with e.g. C<"/bin/sh", "-c", ...>.
 
 All argument strings are searched for the magic string C<%%ITEM%%> (which
 can appear multiple times per argument).  Everywhere this magic string is
-found, the IP address of the resource being monitored will be substituted
-in its place.
+found, the IP address or CNAME text of the resource being monitored will
+be substituted in its place.
 
 The command must exit with an exit value of zero for success or non-zero
 for failure.
@@ -121,6 +121,7 @@ to exec the child processes.
 
 The executed scripts will run with the same userid the daemon normally
 drops privileges to.
+
 The stdout, stdin, and stderr descriptors will usually be
 set to F</dev/null>.  stdout and stderr may be open to the current
 tty if the main daemon was started in foreground debugging mode

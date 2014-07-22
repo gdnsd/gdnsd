@@ -676,31 +676,35 @@ e.g. C<gdnsd-plugin-FOO>:
 
 =item B<tcp_connect>
 
-Checks TCP basic connectivity on a given port
+Checks TCP basic connectivity on a given port.  Only supports
+address resources, not CNAMEs.
 
 =item B<http_status>
 
 Checks HTTP connectivity, with options for the port, URL, and vhost
 to use in the request, and the acceptable HTTP status codes in
-the response.
+the response.  Only supports address resources, not CNAMEs.
 
 =item B<extmon>
 
 Periodically executes a custom external commandline program
-to poll for the status of a resource.
+to poll for the status of a resource.  Supports both address
+and CNAME resources.
 
 =item B<extfile>
 
 Reads the contents of a file on disk to import state monitoring data
-from another source.
+from another source.  Supports both address and CNAME resources.
 
 =item B<static>
 
 Configures a static monitoring result, mostly for testing / example code.
+Supports both address and CNAME resources.
 
 =item B<null>
 
 Configures an always-down static result, mostly for testing / example code.
+Supports both address and CNAME resources.
 
 =back
 
