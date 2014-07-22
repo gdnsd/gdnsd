@@ -49,14 +49,10 @@ static char* gdnsd_realdir(const char* dpath, const char* desc, const bool creat
     struct stat st;
     int stat_rv = stat(dpath, &st);
 
-    // if we can't create, we can't always realpath either, just check for non-dir existing
-    if(!create) {
-       if(!stat_rv && !S_ISDIR(st.st_mode))
-           log_fatal("%s directory '%s' is not a directory (but should be)!", desc, dpath);
-       return strdup(dpath);
-    }
-
     if(stat_rv) {
+        // if we can't create and doesn't exist, let the error fall through to whoever uses it...
+        if(!create)
+            return strdup(dpath);
         if(mkdir(dpath, def_mode))
             log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, dmn_logf_strerror(errno));
         log_info("Created %s directory %s", desc, dpath);
