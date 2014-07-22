@@ -42,8 +42,8 @@ Note that the configuration file does not have to exist for successful
 startup.  Without a configuration file, gdnsd will load all of the zones
 in the zones directory and listen on port 53 of C<0.0.0.0> and C<::>
 using default settings.  It will also, by default, automatically process
-changes (add/delete/update) to the zonefiles present in the zones directory,
-which defaults to the F<zones/> subdirectory of the configuration
+changes (add/delete/update) to the set of zonefiles present in the zones
+directory, which defaults to the F<zones/> subdirectory of the configuration
 directory (C<@GDNSD_DEFPATH_CONFIG@/zones/>).
 
 =head1 COMMANDLINE OPTION FLAGS

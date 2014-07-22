@@ -113,7 +113,7 @@ There will be a short (~1 second) settling delay after detecting
 any update in order to coalesce any rapid-fire updates into a
 single transaction.
 
-The results contained in the file (state and/or TTL per-resoruce)
+The results contained in the file (state and/or TTL per-resource)
 are applied directly as final monitoring results and made immediately
 available to resolution plugins for decision-making.
 
@@ -132,7 +132,7 @@ keys are the monitored IP address or CNAME values from the monitor
 plugins and the values are of the form form C<state[/ttl]>, where
 state is either C<UP> or C<DOWN> and the optional ttl is an integer
 ttl value.  TTL values are only used for C<direct>-mode service_types;
-the TTL is calculated in the normal fashion basic on intervals and
+the TTL is calculated in the normal fashion based on intervals and
 thresholds for C<monitor>-mode.
 
 =head1 CONFIGURATION - PER-SERVICE-TYPE
@@ -153,7 +153,8 @@ C<direct> if true, otherwise mode defaults to C<monitor>.
 =item B<file>
 
 String filename, required.  This sets the name of the file
-to load results from.
+to load results from.  If the pathname is not absolute, it
+will be considered relative to F<@GDNSD_DEFPATH_STATE@/extfile/>.
 
 =item B<def_ttl>
 
