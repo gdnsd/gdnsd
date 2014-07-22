@@ -173,24 +173,14 @@ static char* num_to_str(const int i) {
     return out;
 }
 
-static const char IPADDR_SUB[11] = "%%IPADDR%%\0";
-static const unsigned IPADDR_LEN = 10;
-static const char ITEM_SUB[11]  = "%%ITEM%%\0";
-static const unsigned ITEM_LEN  = 8;
 static char* thing_xlate(const char* instr, const char* thing, const unsigned thing_len) {
     char outbuf[1024]; // way more than enough, I'd hope...
     char* out_cur = outbuf;
     while(*instr) {
-        if(!strncmp(instr, ITEM_SUB, ITEM_LEN)) {
+        if(!strncmp(instr, "%%ITEM%%", 8)) {
             memcpy(out_cur, thing, thing_len);
             out_cur += thing_len;
-            instr += ITEM_LEN;
-        }
-        else if(!strncmp(instr, IPADDR_SUB, IPADDR_LEN)) {
-            log_warn("plugin_extmon: command substition '%%IPADDR%%' is deprecated in favor of '%%ITEM%%'");
-            memcpy(out_cur, thing, thing_len);
-            out_cur += thing_len;
-            instr += IPADDR_LEN;
+            instr += 8;
         }
         else {
             *out_cur++ = *instr++;

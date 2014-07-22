@@ -135,10 +135,7 @@
 
   *** Trivial, previously-deprecated incompatibilities:
     * The weighted plugin no longer allows 'cnames' alongside
-      'addrs_v4' or 'addrs_v6' in the same resource.  Additionally
-      the pointless 'cnames' singleton substanza is no longer
-      supported; just place the entries directly in the top level
-      of the resource.
+      'addrs_v4' or 'addrs_v6' in the same resource.
     * The 'late_bind_secs' option and its associated build/run-time
       dependencies on libcap were removed.
     * The 'tcp_clients_per_socket' option is removed. Use
@@ -151,8 +148,11 @@
       0x50fa has been removed; gdnsd now only supports the official,
       IANA-assigned option code 0x0008.
 
-  *** New deprecations:
-    * plugin_extmon: %%IPADDR%% deprecated, replacement is %%ITEM%%
+  *** Other misc incompatibilities
+    * plugin_extmon: %%IPADDR%% replaced by %%ITEM%%
+    * plugin_weighted: the pointless 'cnames' singleton substanza is
+      no longer supported; just place the entries directly in the
+      top level of the resource.
 
 1.11.4 - 2014-07-18
     Major bugfix: The SOA record returned in the auth section of
