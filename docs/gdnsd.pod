@@ -175,21 +175,33 @@ which will result in displaying a short help text to F<STDERR>
 and exiting with a non-zero exit status.  This includes
 things like the ubiquitous B<--help> and B<--version>.
 
-=head1 ZONE FILES
+=head1 ZONE FILES - RFC1035
 
-The zones directory is the subdirectory named C<zones> in the
-configuration directory.
+The directory for standard RFC1035 zone files (the default
+zone data backend) is the subdirectory named C<zones> in the
+configuration directory, so the default would be
+F<@GDNSD_DEFPATH_CONFIG@/zones/>.
+
+RFC1035 zone files are the traditional zone file format that
+one typically uses with e.g. BIND.  For more information on
+the internal format and processing of these files, see
+L<gdnsd.zonefile(5)>.  This section is about how the directory
+itself is managed.
 
 All files in the zones directory are considered zone files.
-In general there should be exactly one file
-per zone, and the filename should match the zone name.  Filenames
-beginning with C<.> are ignored.  All other files must be regular
-files (as opposed to directories, symlinks, sockets, etc).
+In general there should be exactly one file per zone, and the
+filename should match the zone name.  Filenames beginning with
+C<.> are ignored.  All zone file must be regular files
+(as opposed to directories, symlinks, sockets, etc).
 
-The zones directory is handled dynamically.  It can be empty at
-startup, which results in all queries returning C<REFUSED>.  As
-files are added, modified, and deleted in this directory, zone
-data will automatically change at runtime.
+By default, the zones directory is handled dynamically: as files
+are added, modified, and deleted in this directory, zone data will
+automatically update at runtime.  This feature can be disabled
+(such that an explicit SIGHUP or C<gdnsd reload> is required to
+re-scan for changes) in the config file via the directive
+C<zones_rfc1035_auto> (see L<gdnsd.config(5)>).  It is legal for
+the directory to be empty at startup, which results in all queries
+returning C<REFUSED>.
 
 In order to better support the special case of RFC 2137 -style
 classless in-addr.arpa delegation zones (which contain forward
@@ -200,7 +212,10 @@ its corresponding zone name.
 For similar reasons, if your server is intended to serve the
 root of the DNS, the filename for the root zone should be
 the special filename F<ROOT_ZONE>, rather than the impossible
-literal filename F<.>.
+literal filename F<.>.  Because authoritative servers cannot
+serve two domains which have a parent<->child relationship
+correctly, a root server cannot serve any other zone, so this
+would be the sole zonefile.
 
 The standard DNS zone file escape sequences are recognized within
 the filenames (e.g. C<\.> for a dot within a label, or C<\NNN>
@@ -231,8 +246,17 @@ same time, as each "role" (parent and child) requires different
 responses to requests for data within the child zone.  gdnsd
 choses to default to the "parent" role in these conflict cases.
 
-See L<gdnsd.zonefile(5)> for details on the internal syntax of the
-zonefiles themselves.
+=head1 ZONE FILES - DJBDNS
+
+There is now experimental support for djbdns-format zonefiles
+in the F<djbdns> subdirectory of the config directory
+(default F<@GDNSD_DEFPATH_CONFIG@/djbdns/>.  For more information
+see L<gdnsd.djbdns(5)>.
+
+If the same zone is specified via more than one zone data backend
+(e.g. rfc1035 + djbdns), the same rules shown in the above section
+apply: both will be loaded and managed, but only one will be used
+for queries at any given time (based on mtime/serial).
 
 =head1 FILES
 
@@ -304,7 +328,7 @@ failure.
 
 =head1 SEE ALSO
 
-L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd.djbdns(5)>
 
 The gdnsd manual.
 

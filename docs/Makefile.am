@@ -6,7 +6,7 @@ PODS_3 = gdnsd-plugin-api.pod
 PODS_5 = \
 	gdnsd.config.pod \
 	gdnsd.zonefile.pod \
-	gdnsd.djbzones.pod
+	gdnsd.djbdns.pod
 PODS_8 = \
 	gdnsd.pod \
 	gdnsd-plugin-extfile.pod \

@@ -53,9 +53,6 @@ syntax from RFC 1035 (which is the "standard" format one
 typically sees with traditional BIND servers).  This document will
 just cover a few important highlights and/or deviations from the norm.
 
-There is also experimental support for djbdns-format zonefiles,
-documented separately in L<gdnsd.djbzones(5)>.
-
 =head1 DIRECTIVES
 
 The standard C<$TTL> and C<$ORIGIN> directives
@@ -210,7 +207,7 @@ oversized chunks into zonefile parsing errors).
 
 =head1 SEE ALSO
 
-L<gdnsd(8)>, L<gdnsd.config(5)>, L<gdnsd.djbzones(5)>
+L<gdnsd(8)>, L<gdnsd.config(5)>
 
 The gdnsd manual.
 
