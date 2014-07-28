@@ -284,9 +284,9 @@ for more information about this directory.
 =item F<@GDNSD_DEFPATH_STATE@>
 
 Default state_dir.  The F<admin_state> file is read from this directory
-for administrative state-overrides on monitored resouces (etc).  See
-the entry for C<state_dir> in the L<gdnsd.config(5)> manpage for more
-information about this directory.
+for administrative state-overrides on monitored resouces, see below
+in the FILES section.  See the entry for C<state_dir> in the
+L<gdnsd.config(5)> manpage for more information about this directory.
 
 =item F<@GDNSD_DEFPATH_LIB@>
 
@@ -302,6 +302,70 @@ extmon plugin and the path for this can be overridden in that plugin's
 configuration, documented in L<gdnsd-plugin-extmon(8)>.
 
 =back
+
+=head1 ADMIN STATE FILE - F<@GDNSD_DEFPATH_STATE@/admin_state>
+
+This file is the input for administrative state overrides affecting plugin
+resolution decisions.  The intent of this file is to allow explicit, human
+administrative decisions to temporarily override the states affecting plugin
+decision-making on issues of failover and/or geographic distribution.  A
+non-existent file is treated the same as an empty file.  The file is watched
+at runtime for changes, and any overriden state found is applied quickly.
+The file is expected to persist reboots and daemon restarts in order to
+preserve the administrator's intent through these events.
+
+A basic understanding of how both monitoring and resolution plugins in gdnsd
+work is assumed (see L<gdnsd.config(5)>).  This file is parsed as a vscf hash
+data structure (again, see L<gdnsd.config(5)> for deeper details of that format).
+The keys are the names of monitored or virtual resources, and the values are
+forced state values (optionally with monitored-TTL values as well).  Keys
+can also be wildcards using the shell glob syntax which affect multiple
+resources.
+
+For normal monitored resources, the typical form of a key would be
+C<THING/service_type>, where C<THING> is the monitored address or CNAME value
+and C<service_type> is the service_type configured to monitor that address
+or CNAME value by one or more resolver plugins.  The value portion takes
+the form of C<STATE[/TTL]>, where C<STATE> is C<UP> or C<DOWN> and the TTL
+portion is an optional override of the monitored TTL.
+
+The order of the lines in the file is important; they are processed and applied
+in-order such that later lines can override the actions of earlier lines.  This
+is especially handy for making exceptions to glob-matches.
+
+Example:
+
+    @GDNSD_DEFPATH_STATE@/admin_state:
+        2001:db8::2:123/my_http_check => DOWN # down a specific res+stype
+        foo.example.com./extmon_ping => UP # up a specific res+stype
+        192.0.2.1/* => DOWN # down all service_types for this address
+        */xmpp => UP/30 # up all resources monitored by xmpp w/ TTL 30 ...
+        192.0.2.2/xmpp => DOWN # ... except this one
+
+Some resolution plugins can also register virtual resources (which are not
+monitored by any C<service_type>) solely for the purpose of administrative
+override of decision-making.  Currently the geoip and metafo plugins do this
+for their C<datacenters>, and the keys they create take the form of
+C<plugin_name/resname/dcname> to force a datacenter's state at the
+per-resource level.  The geoip plugin also supports keys of the form
+C<plugin_name/mapname/dcname> to force a datacenter's state
+at the per-map level.  These forcings override the aggregate state passed
+up to geoip/metafo from per-datacenter plugins (e.g. multifo or weighted
+monitoring several addresses in a datacenter), and in the geoip case
+the more-specific per-resource forced state will override any per-map
+forced state.
+
+Example:
+
+    @GDNSD_DEFPATH_STATE@/admin_state:
+        geoip/map3/dc-us => DOWN # down dc-us in geoip map3
+        */dc-jp => DOWN # down all datacenters named dc-jp for geoip and metafo
+        metafo/res_www/dc-jp => UP # exception to above
+
+All of the available monitored and virtual keys that can be matched in this
+file are listed in the daemon's HTML, CSV, and JSON -format outputs from
+the built-in status http server (default port 3506), as are their current
+monitors and admin_state-forced states.
 
 =head1 SIGNALS
 
