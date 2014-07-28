@@ -48,11 +48,13 @@ directory (C<@GDNSD_DEFPATH_CONFIG@/zones/>).
 
 =head1 COMMANDLINE OPTION FLAGS
 
-=head1 B<-c>
+=over 4
+
+=item B<-c>
 
 Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.
 
-=head1 B<-f>
+=item B<-f>
 
 Sets foreground mode for start/restart -like actions.  The daemon will
 remain attached to the controlling terminal and will not fork-and-terminate
@@ -60,22 +62,24 @@ to free up the invoking shell.  It will, however, participate in pidfile
 locking with other (e.g. background) instances of itself using the same
 configuration.
 
-=head1 B<-s>
+=item B<-s>
 
 Forces the C<zones_strict_startup> configuration option to true for
 this invocation, regardless of the setting in the config file.  This is
 mostly useful for validation during the C<checkconf> option.
 
-=head1 B<-S>
+=item B<-S>
 
 Forces the C<zones_strict_data> configuration option to true for
 this invocation, regardless of the setting in the config file.  This is
 mostly useful for validation during the C<checkconf> option.
 
-=head1 B<-D>
+=item B<-D>
 
 Enables additional debugging output to syslog and/or the terminal,
 as appropriate.
+
+=back
 
 =head1 ACTIONS
 
@@ -258,9 +262,9 @@ If the same zone is specified via more than one zone data backend
 apply: both will be loaded and managed, but only one will be used
 for queries at any given time (based on mtime/serial).
 
-=head1 FILES
+=head1 DIRECTORIES
 
-Important file/directory paths for the core daemon code:
+Important directory paths for the core daemon code:
 
 =over 4
 
