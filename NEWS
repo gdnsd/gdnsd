@@ -18,6 +18,8 @@
     * Experimental support for djbdns zonefiles
     * IPv6 runtime support is now a requirement, and the related
       option monitor_force_v6_up was removed.
+    * Output data from the stats http listener has changed, please
+      update any parsers.
 
   *** Dynamic address resolution changes:
     * The 'DYNC' rr-type can now dynamically return address or

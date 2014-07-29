@@ -128,20 +128,19 @@ static void kick_sttl_update_timer(void) {
 }
 
 const char* gdnsd_logf_sttl(const gdnsd_sttl_t s) {
-    // the maximal length here is "DOWN/268435455(FORCED)"
+    // the maximal length here is "DOWN/268435455"
     // the minimal is "UP/1"
-    // 4-22 bytes not counting NUL
-    char tmpbuf[24];
+    // 4-14 bytes not counting NUL
+    char tmpbuf[15];
     int snp_len;
     const unsigned ttl = s & GDNSD_STTL_TTL_MASK;
     const char* state = (s & GDNSD_STTL_DOWN) ? "DOWN" : "UP";
-    const char* forced = (s & GDNSD_STTL_FORCED) ? "(FORCED)" : "";
     if(!ttl || ttl == GDNSD_STTL_TTL_MAX)
-        snp_len = snprintf(tmpbuf, 24, "%s/%s%s", state, ttl ? "MAX" : "MIN", forced);
+        snp_len = snprintf(tmpbuf, 15, "%s/%s", state, ttl ? "MAX" : "MIN");
     else
-        snp_len = snprintf(tmpbuf, 24, "%s/%u%s", state, ttl, forced);
+        snp_len = snprintf(tmpbuf, 15, "%s/%u", state, ttl);
 
-    dmn_assert(snp_len >= 4 && snp_len <= 22);
+    dmn_assert(snp_len >= 4 && snp_len <= 14);
     char* out = dmn_fmtbuf_alloc((unsigned)snp_len + 1);
     memcpy(out, tmpbuf, snp_len + 1);
     return out;
@@ -278,15 +277,15 @@ static void admin_process_file(const char* pathname) {
                 if(updates[i]) { // some entry wants to affect this slot
                     if(smgr_sttl[i] != updates[i]) { // new state change
                         if(smgr_sttl[i] != smgrs[i].real_sttl) // already forced
-                            log_info("admin_state: state of '%s' re-forced from %s to %s, real state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(updates[i]), logf_sttl(smgrs[i].real_sttl));
+                            log_info("admin_state: state of '%s' re-forced from %s to %s, real state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(updates[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
                         else
-                            log_info("admin_state: state of '%s' forced from %s to %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(updates[i]));
+                            log_info("admin_state: state of '%s' forced to %s, real state is %s", smgrs[i].desc, logf_sttl(updates[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
                         smgr_sttl[i] = updates[i];
                         affected = true;
                     }
                 }
                 else if(smgr_sttl[i] & GDNSD_STTL_FORCED) { // was forced before, isn't now
-                    log_info("admin_state: state of '%s' un-forced from %s to %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(smgrs[i].real_sttl));
+                    log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
                     smgr_sttl[i] = smgrs[i].real_sttl;
                     dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
                     affected = true;
@@ -306,7 +305,7 @@ static void admin_deleted_file(const char* pathname) {
     bool affected = false;
     for(unsigned i = 0; i < num_smgrs; i++) {
         if(smgr_sttl[i] & GDNSD_STTL_FORCED) {
-            log_info("admin_state: state of '%s' un-forced from %s to %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(smgrs[i].real_sttl));
+            log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
             smgr_sttl[i] = smgrs[i].real_sttl;
             dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
             affected = true;
@@ -777,41 +776,25 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest) {
 // stats code from here to the end
 //--------------------------------------------------
 
-static const char* state_txt[2] = {
-    "DOWN",
-    "UP",
-};
-
-static const char* state_txt_html_forced[2][2] = {
-    {
-        "DOWN (DOWN)", // 11 bytes is longest state-txt
-        "DOWN (UP)",
-    },
-    {
-        "UP (DOWN)",
-        "UP (UP)",
-    }
-};
-
 static const char http_head[] = "<p><span class='bold big'>Monitored Service States:</span></p><table>\r\n"
-    "<tr><th>Service</th><th>State</th></tr>\r\n";
+    "<tr><th>Service</th><th>State</th><th>Real State</th></tr>\r\n";
 static const unsigned http_head_len = sizeof(http_head) - 1;
 
-static const char http_tmpl[] = "<tr><td>%s</td><td class='%s'>%s</td></tr>\r\n";
-static const unsigned http_tmpl_len = sizeof(http_head) - 7; // 3x%s
+static const char http_tmpl[] = "<tr><td>%s</td><td class='%s'>%s</td><td class='%s'>%s</td></tr>\r\n";
+static const unsigned http_tmpl_len = sizeof(http_head) - 11; // 5x%s
 
 static const char http_foot[] = "</table>\r\n";
 static const unsigned http_foot_len = sizeof(http_foot) - 1;
 
-static const char csv_head[] = "Service,State,TrueState,Forced\r\n";
+static const char csv_head[] = "Service,State,RealState\r\n";
 static const unsigned csv_head_len = sizeof(csv_head) - 1;
 
-static const char csv_tmpl[] = "%s,%s,%s,%s\r\n";
+static const char csv_tmpl[] = "%s,%s,%s\r\n";
 
 static const char json_head[] = "\t\"services\": [\r\n";
 static const unsigned json_head_len = sizeof(json_head) - 1;
-static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\"\r\n\t\t\t\"true_state\": \"%s\"\r\n\t\t\t\"forced\": \"%s\"\r\n\t\t}";
-static const unsigned json_tmpl_len = sizeof(json_tmpl) - 9; // 4x%s
+static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\"\r\n\t\t\t\"real_state\": \"%s\"\r\n\t\t}";
+static const unsigned json_tmpl_len = sizeof(json_tmpl) - 7; // 3x%s
 static const char json_sep[] = ",\r\n";
 static const unsigned json_sep_len = sizeof(json_sep) - 1;
 static const char json_nl[] = "\r\n";
@@ -826,17 +809,16 @@ static const unsigned json_foot_len = sizeof(json_foot) - 1;
 unsigned gdnsd_mon_stats_get_max_len(void) {
     // overall length calculations.
     //   Note that *_var_len doesn't include the service name length,
-    //     and that 4 is the longest state_txt string "DOWN" and
-    //     11 is the longest state_txt_html_forced string "DOWN (DOWN)"
+    //     and that 5 is the longest state_txt string "DOWN!"
     //   CSV is not included because it is very obviously shorter than
     //     either of these in all possible cases
 
     const unsigned html_fixed_len = http_head_len + http_foot_len;
-    const unsigned html_var_len = http_tmpl_len + 4 + 11;
+    const unsigned html_var_len = http_tmpl_len + (5 * 4);
     const unsigned html_len = html_fixed_len + (num_smgrs * html_var_len);
 
     const unsigned json_fixed_len = json_head_len + json_sep_len + json_foot_len;
-    const unsigned json_var_len = json_tmpl_len + 4 + 4 + 5 + json_sep_len;
+    const unsigned json_var_len = json_tmpl_len + (5 * 2) + json_sep_len;
     const unsigned json_len = json_fixed_len + (num_smgrs * json_var_len);
 
     max_stats_len = html_len > json_len ? html_len : json_len;
@@ -847,6 +829,84 @@ unsigned gdnsd_mon_stats_get_max_len(void) {
     max_stats_len++; // leave room for trailing pointless sprintf \0, JIC
 
     return max_stats_len;
+}
+
+// !!type -> forced -> down
+static const char* state_str_map[2][2][2] = {
+    { // !type
+        { // !forced
+            "NA", // up
+            "NA", // down
+        },
+        { // forced
+            "UP!",   // up
+            "DOWN!", // down
+        },
+    },
+    { // has type
+        { // !forced
+            "UP",   // up
+            "DOWN", // down
+        },
+        { // forced
+            "UP!",   // up
+            "DOWN!", // down
+        },
+    },
+};
+
+// !!type -> forced -> down
+static const char* class_str_map[2][2][2] = {
+    { // !type
+        [0] = { // !forced
+            "UP", // up
+            "DOWN", // down
+        },
+        [1] = { // forced
+            "FORCE",   // up
+            "FORCE", // down
+        },
+    },
+    { // has type
+        { // !forced
+            "UP",   // up
+            "DOWN", // down
+        },
+        { // forced
+            "FORCE",   // up
+            "FORCE", // down
+        },
+    },
+};
+
+F_NONNULL
+static void get_state_texts(const unsigned i, const char** cur_state_out, const char** real_state_out) {
+    dmn_assert(cur_state_out); dmn_assert(real_state_out);
+    dmn_assert(i < num_smgrs);
+
+    *cur_state_out = state_str_map
+        [!!smgrs[i].type]
+        [!!(smgr_sttl[i] & GDNSD_STTL_FORCED)]
+        [!!(smgr_sttl[i] & GDNSD_STTL_DOWN)];
+    *real_state_out = state_str_map
+        [!!smgrs[i].type]
+        [!!(smgrs[i].real_sttl & GDNSD_STTL_FORCED)]
+        [!!(smgrs[i].real_sttl & GDNSD_STTL_DOWN)];
+}
+
+F_NONNULL
+static void get_class_texts(const unsigned i, const char** cur_class_out, const char** real_class_out) {
+    dmn_assert(cur_class_out); dmn_assert(real_class_out);
+    dmn_assert(i < num_smgrs);
+
+    *cur_class_out = class_str_map
+        [!!smgrs[i].type]
+        [!!(smgr_sttl[i] & GDNSD_STTL_FORCED)]
+        [!!(smgr_sttl[i] & GDNSD_STTL_DOWN)];
+    *real_class_out = class_str_map
+        [!!smgrs[i].type]
+        [!!(smgrs[i].real_sttl & GDNSD_STTL_FORCED)]
+        [!!(smgrs[i].real_sttl & GDNSD_STTL_DOWN)];
 }
 
 // Output our stats in html form to buf, returning
@@ -867,13 +927,13 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
     avail -= http_head_len;
 
     for(unsigned i = 0; i < num_smgrs; i++) {
-        const bool forced = !!(smgr_sttl[i] & GDNSD_STTL_FORCED);
-        const bool cur_st = !(smgr_sttl[i] & GDNSD_STTL_DOWN);
-        const bool real_st = !(smgrs[i].real_sttl & GDNSD_STTL_DOWN);
-        const char* full_st = forced
-            ? state_txt_html_forced[cur_st][real_st]
-            : state_txt[cur_st];
-        int written = snprintf(buf, avail, http_tmpl, smgrs[i].desc, state_txt[cur_st], full_st);
+        const char* cur_st;
+        const char* real_st;
+        const char* cur_class;
+        const char* real_class;
+        get_state_texts(i, &cur_st, &real_st);
+        get_class_texts(i, &cur_class, &real_class);
+        int written = snprintf(buf, avail, http_tmpl, smgrs[i].desc, cur_class, cur_st, real_class, real_st);
         if(unlikely(written >= avail))
             log_fatal("BUG: monio stats buf miscalculated (html mon data)");
         buf += written;
@@ -907,10 +967,10 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
     avail -= csv_head_len;
 
     for(unsigned i = 0; i < num_smgrs; i++) {
-        const bool forced = !!(smgr_sttl[i] & GDNSD_STTL_FORCED);
-        const bool cur_st = !(smgr_sttl[i] & GDNSD_STTL_DOWN);
-        const bool real_st = !(smgrs[i].real_sttl & GDNSD_STTL_DOWN);
-        int written = snprintf(buf, avail, csv_tmpl, smgrs[i].desc, state_txt[cur_st], state_txt[real_st], forced ? "true" : "false");
+        const char* cur_st;
+        const char* real_st;
+        get_state_texts(i, &cur_st, &real_st);
+        int written = snprintf(buf, avail, csv_tmpl, smgrs[i].desc, cur_st, real_st);
         if(unlikely(written >= avail))
             log_fatal("BUG: monio stats buf miscalculated (csv data)");
         buf += written;
@@ -946,10 +1006,10 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
     avail -= json_head_len;
 
     for(unsigned i = 0; i < num_smgrs; i++) {
-        const bool forced = !!(smgr_sttl[i] & GDNSD_STTL_FORCED);
-        const bool cur_st = !(smgr_sttl[i] & GDNSD_STTL_DOWN);
-        const bool real_st = !(smgrs[i].real_sttl & GDNSD_STTL_DOWN);
-        int written = snprintf(buf, avail, json_tmpl, smgrs[i].desc, state_txt[cur_st], state_txt[real_st], forced ? "true" : "false");
+        const char* cur_st;
+        const char* real_st;
+        get_state_texts(i, &cur_st, &real_st);
+        int written = snprintf(buf, avail, json_tmpl, smgrs[i].desc, cur_st, real_st);
         if(unlikely(written >= avail))
             log_fatal("BUG: monio stats buf miscalculated (json mon data)");
         buf += written;

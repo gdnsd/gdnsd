@@ -167,6 +167,7 @@ static const char html_fixed[] =
     "th { background: #CCF; font-weight: bold }\r\n"
     "td.UP { background: #AFA }\r\n"
     "td.DOWN { background: #FAA }\r\n"
+    "td.FORCE { background: #FA0 }\r\n"
     "</style></head><body>\r\n"
     "<h2>" PACKAGE_NAME "/" PACKAGE_VERSION "</h2>\r\n"
     "<p class='big'><span class='bold'>Current Time:</span> %s UTC</p>\r\n"
