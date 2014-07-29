@@ -45,6 +45,10 @@
 #  endif
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4) // gcc 4.5+
 #    define DMN_HAVE_UNREACH_BUILTIN 1
+#  elif defined __clang__ // clang needs a separate check for unreach
+#    if __has_builtin(__unreach_builtin)
+#      define DMN_HAVE_UNREACH_BUILTIN 1
+#    endif
 #  endif
 #else
 #  define DMN_F_PRINTF(X,Y)
