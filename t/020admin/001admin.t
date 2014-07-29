@@ -16,7 +16,7 @@ _GDT->write_statefile('admin_state', qq{
     127.*/up => DOWN/33\n
 });
 
-_GDT->test_log_output(q{admin_state: state of '127.0.0.1/up' forced from UP/MAX to DOWN/33(FORCED)});
+_GDT->test_log_output(q{admin_state: state of '127.0.0.1/up' forced to DOWN/33, real state is UP/MAX});
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
