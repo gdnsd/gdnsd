@@ -247,8 +247,10 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
             case ENONET:
 #endif
             case ENETDOWN:
-            case EPROTO:
-            case EHOSTDOWN:
+#ifdef EPROTO
+	    case EPROTO:
+#endif
+	    case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
                 log_devdebug("TCP DNS: early tcp socket death: %s", dmn_logf_errno());
