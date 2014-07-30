@@ -527,8 +527,10 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
             case ENONET:
 #endif
             case ENETDOWN:
-            case EPROTO:
-            case EHOSTDOWN:
+#ifdef EPROTO
+	    case EPROTO:
+#endif
+	    case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
                 log_debug("HTTP: early tcp socket death: %s", logf_errno());
