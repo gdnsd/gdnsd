@@ -201,11 +201,6 @@ resource with such an entry can only be used with C<DYNC> RRs, and not
 C<DYNA> RRs (as is the case if any subplugin's configuration is capable
 of returning CNAME data).
 
-It is also important to note that, currently, CNAMEs do not have any
-associated status information and never "fail", and therefore it only
-makes sense to use one in the final datacenter of a resource as a
-final fallback when all address-based datacenters are down.
-
 A much more complete example, showing off most of the features above:
 
   plugins => {

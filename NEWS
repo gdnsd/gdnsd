@@ -11,6 +11,9 @@
     * New TTL-related options: max_ttl, min_ttl, and max_ncache_ttl
       cause clamping (and warning) of zone TTL values.  There is
       a hard maximum on max_ttl of 268435455 (2^28-1, ~8.5 years).
+    * New config option 'max_edns_response' to cap edns0 response
+      sizes to a value smaller than that advertised by clients,
+      defaults to 1280.
     * The timeout parameter of a service_type now defaults to
       half of the specified interval.
     * New service_types plugin "extfile" - allows for the consumption
@@ -154,6 +157,9 @@
     * plugin_weighted: the pointless 'cnames' singleton substanza is
       no longer supported; just place the entries directly in the
       top level of the resource.
+    * The Plugin API has changed substantially; any third-party
+      plugins will need substantial source-level updates.  See the
+      gdnsd-plugin-api docs.
 
   *** Build changes
     * libcap is no longer used on Linux
