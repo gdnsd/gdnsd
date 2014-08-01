@@ -27,7 +27,7 @@
 // Mostly for help output
 const char* gdnsd_get_default_config_dir(void);
 
-// Set config dir (e.g. from cmdnline), or pass NULL to use default
+// Set config dir (e.g. from cmdline), or pass NULL to use default
 void gdnsd_set_config_dir(const char* config_dir);
 
 // Set any explicitly-configured directories to non-default
