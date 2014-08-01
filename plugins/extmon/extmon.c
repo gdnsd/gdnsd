@@ -20,7 +20,6 @@
 #define GDNSD_PLUGIN_NAME extmon
 
 #include "config.h"
-#include "gdnsd/paths-priv.h"
 #include "extmon_comms.h"
 #include <gdnsd/plugin.h>
 #include <stdlib.h>
