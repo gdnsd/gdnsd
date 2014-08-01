@@ -138,8 +138,7 @@
   *** Trivial, previously-deprecated incompatibilities:
     * The weighted plugin no longer allows 'cnames' alongside
       'addrs_v4' or 'addrs_v6' in the same resource.
-    * The 'late_bind_secs' option and its associated build/run-time
-      dependencies on libcap were removed.
+    * The 'late_bind_secs' option was removed.
     * The 'tcp_clients_per_socket' option is removed. Use
       'tcp_clients_per_thread' instead.
     * The 'disble_tcp' option is removed. Use 'tcp_threads = 0' instead.
@@ -155,6 +154,13 @@
     * plugin_weighted: the pointless 'cnames' singleton substanza is
       no longer supported; just place the entries directly in the
       top level of the resource.
+
+  *** Build changes
+    * libcap is no longer used on Linux
+    * --without-libap doesn't exist anymore
+    * --with-rootdir doesn't exist anymore
+    * Perl 5.8.1+ and "perldoc" is required for building
+    * Preliminary systemd support via --with-systemd
 
 1.11.4 - 2014-07-18
     Major bugfix: The SOA record returned in the auth section of
