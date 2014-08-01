@@ -737,6 +737,7 @@ void gdmaps_load_databases(gdmaps_t* gdmaps) {
 
 F_NONNULL
 static void* gdmaps_reload_thread(void* arg) {
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     gdnsd_thread_setname("gdnsd-geoip-db");
 
     gdmaps_t* gdmaps = (gdmaps_t*)arg;
@@ -774,10 +775,16 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
 
 void gdmaps_destroy(gdmaps_t* gdmaps) {
     dmn_assert(gdmaps);
+    // The update lock here is to make sure we don't
+    //   cancel the reload thread while it's holding
+    //   the pthread lock (in the non-urcu case where
+    //   we've fallen back to pthread rwlock emulation)
+    gdnsd_prcu_upd_lock();
     if(gdmaps->reload_thread_spawned) {
         pthread_cancel(gdmaps->reload_tid);
         pthread_join(gdmaps->reload_tid, NULL);
     }
+    gdnsd_prcu_upd_unlock();
     if(gdmaps->reload_loop)
         ev_loop_destroy(gdmaps->reload_loop);
     for(unsigned i = 0; i < gdmaps->count; i++)
