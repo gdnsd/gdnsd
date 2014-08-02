@@ -226,6 +226,9 @@ static void parse_txt(field_t *f) {
     unsigned int i;
     unsigned int j;
 
+    if (f->len < 2)
+      return;
+
     j = 0;
     i = 0;
     while (i < f->len) {
