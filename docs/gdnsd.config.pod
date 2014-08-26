@@ -456,7 +456,7 @@ determinental to performance on SMP machines.
 
 =item B<max_response>
 
-Integer, default 16384, min 4096, max 62464.  This number is used to
+Integer, default 16384, min 4096, max 64000.  This number is used to
 size the per-I/O-thread buffers that we construct response packets in.
 For any sane, normal use of the DNS, the default value is far more than
 enough.  For embedded or other low memory hosts, you might even
@@ -483,7 +483,7 @@ length.
 
 =item B<max_edns_response>
 
-Integer, default 1280, min 512, max 32768.  This is the maximum size
+Integer, default 1280, min 512, max 64000.  This is the maximum size
 of a UDP edns response to a client, acting as a cap on the edns
 buffer size advertised by the client in its request.  The default value
 1280 was chosen as it's very likely that such a size will traverse
