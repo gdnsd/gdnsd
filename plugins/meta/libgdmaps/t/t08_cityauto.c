@@ -33,6 +33,5 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "137.138.144.168", "\2\1\3", 16); // Geneva
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "69.58.186.119", "\1\2\3", 16); // US East Coast
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "117.53.170.202", "\3\1\2", 20); // Australia
-    gdmaps_destroy(gdmaps);
 }
 

@@ -558,50 +558,6 @@ static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, 
     return dclist_u8;
 }
 
-// In practice, the real plugin running in a daemon doesn't bother destroying
-//  gdmap_t's, so there is no race here on pthread_cancel() of i/o
-//  thread doing rdlock lookups and lock destruction here.
-F_NONNULL
-static void gdmap_destroy(gdmap_t* gdmap) {
-    dmn_assert(gdmap);
-
-    if(gdmap->tree)
-        ntree_destroy(gdmap->tree);
-    if(gdmap->nets_list)
-        nlist_destroy(gdmap->nets_list);
-    if(gdmap->geoip_list)
-        nlist_destroy(gdmap->geoip_list);
-    if(gdmap->geoip_v4o_list)
-        nlist_destroy(gdmap->geoip_v4o_list);
-    if(gdmap->nets_path)
-        free(gdmap->nets_path);
-    if(gdmap->geoip_v4o_path)
-        free(gdmap->geoip_v4o_path);
-    if(gdmap->geoip_path)
-        free(gdmap->geoip_path);
-    if(gdmap->nets_stat_watcher)
-        free(gdmap->nets_stat_watcher);
-    if(gdmap->geoip_v4o_stat_watcher)
-        free(gdmap->geoip_v4o_stat_watcher);
-    if(gdmap->geoip_stat_watcher)
-        free(gdmap->geoip_stat_watcher);
-    if(gdmap->nets_reload_timer)
-        free(gdmap->nets_reload_timer);
-    if(gdmap->geoip_v4o_reload_timer)
-        free(gdmap->geoip_v4o_reload_timer);
-    if(gdmap->geoip_reload_timer)
-        free(gdmap->geoip_reload_timer);
-    if(gdmap->tree_update_timer)
-        free(gdmap->tree_update_timer);
-    if(gdmap->dclists)
-        dclists_destroy(gdmap->dclists, KILL_ALL_LISTS);
-    dcinfo_destroy(gdmap->dcinfo);
-    if(gdmap->dcmap)
-        dcmap_destroy(gdmap->dcmap);
-    free(gdmap->name);
-    free(gdmap);
-}
-
 /***************************************
  * gdmaps_t and related methods
  **************************************/
@@ -771,26 +727,4 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
 
     pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL);
     pthread_attr_destroy(&attribs);
-}
-
-void gdmaps_destroy(gdmaps_t* gdmaps) {
-    dmn_assert(gdmaps);
-    // The update lock here is to make sure we don't
-    //   cancel the reload thread while it's holding
-    //   the pthread lock (in the non-urcu case where
-    //   we've fallen back to pthread rwlock emulation)
-    gdnsd_prcu_upd_lock();
-    if(gdmaps->reload_thread_spawned) {
-        pthread_cancel(gdmaps->reload_tid);
-        pthread_join(gdmaps->reload_tid, NULL);
-    }
-    gdnsd_prcu_upd_unlock();
-    if(gdmaps->reload_loop)
-        ev_loop_destroy(gdmaps->reload_loop);
-    for(unsigned i = 0; i < gdmaps->count; i++)
-        gdmap_destroy(gdmaps->maps[i]);
-    free(gdmaps->maps);
-    if(gdmaps->fips)
-        fips_destroy(gdmaps->fips);
-    free(gdmaps);
 }

@@ -55,12 +55,6 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
     return gdmaps_dcname2num(gdmaps, mapnum, dcname);
 }
 
-F_UNUSED
-static void maps_destroy(void) {
-    gdmaps_destroy(gdmaps);
-    gdmaps = NULL;
-}
-
 F_NONNULL
 static void top_config_hook(const vscf_data_t* top_config) {
     dmn_assert(top_config); dmn_assert(vscf_is_hash(top_config));
@@ -100,6 +94,5 @@ static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum) {
 #define CB_LOAD_CONFIG plugin_geoip_load_config
 #define CB_MAP plugin_geoip_map_res
 #define CB_RES plugin_geoip_resolve
-#define CB_EXIT plugin_geoip_exit
 #define META_MAP_ADMIN 1
 #include "meta_core.c"

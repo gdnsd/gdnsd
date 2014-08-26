@@ -42,6 +42,5 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2002:453A:BA77::", "\2\1", 32); // 6to4
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2001::BAC5:4588", "\2\1", 112); // Teredo
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c00::f03c:91ff:fe96:6a4f", "\1\2", 6); // native v6, defaulted
-    gdmaps_destroy(gdmaps);
 }
 

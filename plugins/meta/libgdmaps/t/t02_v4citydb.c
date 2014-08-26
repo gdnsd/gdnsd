@@ -40,6 +40,5 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c00::f03c:91ff:fe96:6a4f", "\1\2", 6); // native v6, no data..
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "137.138.144.168", "\2", 16); // City, Geneva
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "::FFFF:137.138.144.168", "\2", 112); // City, Geneva
-    gdmaps_destroy(gdmaps);
 }
 

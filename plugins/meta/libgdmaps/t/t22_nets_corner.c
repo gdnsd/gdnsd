@@ -33,5 +33,4 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "10.0.0.0", "\1", 9);
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "10.128.0.1", "\2", 10);
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "FFFF:FFFF::1", "\2", 127);
-    gdmaps_destroy(gdmaps);
 }

@@ -49,7 +49,5 @@ F_NONNULL
 const uint8_t* gdmaps_lookup(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const client_info_t* client, unsigned* scope_mask);
 F_NONNULL
 void gdmaps_setup_watchers(gdmaps_t* gdmaps);
-F_NONNULL
-void gdmaps_destroy(gdmaps_t* gdmaps);
 
 #endif // GDMAPS_H

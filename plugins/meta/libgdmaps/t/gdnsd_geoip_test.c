@@ -174,6 +174,6 @@ int main(int argc, char* argv[]) {
         do_repl(gdmaps);
     }
 
-    gdmaps_destroy(gdmaps);
+    return 0;
 }
 

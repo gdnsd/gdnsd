@@ -532,13 +532,3 @@ gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, 
     assert_valid_sttl(rv);
     return rv;
 }
-
-#ifndef NDEBUG
-// only in debug cases, to make it easier to find leaks...
-void CB_EXIT(void) {
-    for(unsigned i = 0; i < num_res; i++)
-        resource_destroy(&resources[i]);
-    free(resources);
-    maps_destroy();
-}
-#endif

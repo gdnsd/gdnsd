@@ -116,6 +116,5 @@ static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t*
 #define CB_LOAD_CONFIG plugin_metafo_load_config
 #define CB_MAP plugin_metafo_map_res
 #define CB_RES plugin_metafo_resolve
-#define CB_EXIT plugin_metafo_exit
 #define META_MAP_ADMIN 0
 #include "meta_core.c"
