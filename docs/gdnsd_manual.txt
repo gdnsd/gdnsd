@@ -1,7 +1,5 @@
 Overview
 
-    This document is very outdated!
-
     This manual attempts to cover things that don't logically fit in the man
     pages. It covers the big-picture items and overall design It's a cross
     between a manual and a design document at the moment, although perhaps
@@ -13,51 +11,35 @@ Overview
 
 Portability Testing
 
-    This was done during the run-up to 1.2.0, and hasn't been re-tested by
-    me since. There's a good chance that some platforms have become broken
-    since this, especially ones with non-gcc-compatible compilers.
+    Portability data and testing is somewhat out of date at this time.
 
-    I've personally run through the process of, basically: "./configure &&
-    make check && sudo make install && make installcheck" on the following
-    platforms with the following compilers. On all of them, I've also
-    manually started the daemon as root and seen it produce correct syslog
-    output, appear to secure itself, answer a few manual queries, etc.
+    Modern Linux/x86-64 is the primary development and deployment platform,
+    and of course the x86 architecture there generally receives extensive
+    testing as well.
 
-    Of course most platforms required some prep work to get the testsuite
-    dependencies installed, but it wasn't too hard on any of them.
+    Compatibility with the open source *BSD distributions is important,
+    and bug reports are welcome for any breakage there.  Unfortunately
+    the author doesn't use these regularly, so portability mistakes may
+    creep in that need reporting.  In the case of FreeBSD there is a
+    working port available, and I believe people have successfully built
+    and run the code on NetBSD and OpenBSD in the recent past as well.
 
-      x86_64:
-        Linux - Fedora 12: gcc 4.4.3
-        Linux - Fedora 13: gcc 4.4.4
-        Linux - Debian Etch: gcc 4.1.2
-        MacOS X Snow Leopard: gcc 4.2.1, llvm-gcc 4.2.1, clang 1.0.2
+    Through the official Debian build system for the gdnsd package there,
+    gdnsd gets some testing on exotic CPU architectures, and generally
+    shouldn't have issues with any of the well-supported Debian target
+    architectures.
 
-      x86:
-        Linux - Fedora 13: gcc 4.4.4
-        FreeBSD 8.0: gcc 4.2.1
-        FreeBSD 7.2: gcc 4.2.1
-        FreeBSD 6.4: gcc 3.4.6
-        OpenBSD 4.4: gcc 3.3.5
-        MacOS X Snow Leopard: gcc 4.0.1
-        OpenSolaris 2009.06: gcc 3.4.3, gcc 4.3.2, Sun Studio C Compiler
+    I do some development on Macs, so portability to reasonably-recent
+    releases of MacOS X is usually good, but optimization on this platform
+    for production use isn't a priority.
 
-      mips32r2 (Big Endian) (Atheros 9132 - Buffalo WZR-HP-G300NH Router):
-        Linux - OpenWRT Backfire: gcc 4.3.3 + uClibc 0.9.30.1
-          (cross compiled from x86_64 build host using OpenWRT's toolchain)
-          (also, I wasn't able to run the testsuite here (vendor perl
-          broken), but I did do some simple manual testing)
+    In the past I've successfully tested portability to other relatively
+    exotic-yet-POSIXy targets like Linux/mips32r2 and OpenSolaris (with
+    Sun's compiler), but those results are very outdated at this time.
 
-    I think this covers a fair swath of the field of modern-ish POSIXy
-    systems. The Linux and Mac tests were on real hosts, and the rest were
-    done in VMWare using standard images found via Google. Given what I've
-    seen so far, I expect there will be more minor issues when people try
-    gdnsd on platforms other than those listed. Please send bug reports, I
-    doubt the issues will be hard to solve at this point. And if you try a
-    significant variation from the above and it works without a hitch,
-    please let me know so I can add it to the list of tested systems.
-
-    Most current development/testing is done on latest available releases of
-    MacOS X, Fedora Linux, and/or Ubuntu Linux.
+    I take absolutely no interest in portability to Microsoft platforms,
+    and would probably reject pull requests for it if they add significant
+    noise and/or complexity to the codebase.  It's simply not worth it.
 
 Overall Design
 
@@ -73,61 +55,54 @@ Overall Design
   Threading
 
     The gdnsd daemon uses pthreads to maximize performance and efficiency,
-    but they don't contend with each other on locks at runtime, and no more
+    but they don't contend with each other on locks at runtime (assuming
+    gdnsd is compiled with userspace-rcu support), and no more
     than one thread writes to any shared memory location. Thread-local
     writable memory is malloc()'d within the writing thread and the address
     is private to the thread.
 
-    The "main" thread handles pretty much everything but the actual
-    processing of DNS requests. It handles monitoring I/O in the case of
-    plugins using the built-in monitoring, the http server that serves stats
-    data over port 3506 (reconfigurable), and the signal handlers for daemon
-    shutdown and toggling runtime logging of packet errors.
+    There are 3 singleton threads in gdnsd that handle specific functional
+    roles: main, zone data, and monitoring.
 
-    Currently all of the lengthy startup operations that precede serving DNS
-    requests, such as the parsing of zonefiles and the post-processing of
-    zone data, occur serially in the main thread as well. In the future we
-    may spawn some short-lived worker threads to speed this up, but
-    ultimately they would be joined at a synchronization point before
-    spawning the threads that serve DNS requests in the long term.
+    The "main" thread is the original thread of execution in the daemon.
+    While it handles a great deal of diverse things during the startup
+    process, at runtime it does absolutely nothing but watch for external
+    signals via sigwait() (such as TERM, INT, HUP) and act on them.  It
+    is the only thread that runs with signals unblocked.
 
-    There are N threads dedicated to handling UDP DNS requests, one per
-    listening socket. These UDP threads do nothing but sit in a tight
-    blocking loop on the listening socket until they are terminated. They
-    run with all signals blocked, and they make no expensive system calls
-    (other than necessary socket read/write traffic) or heap allocations at
-    runtime. All necessary heap data/buffers are pre-allocated before these
-    threads begin serving requests.
+    The "zone data" thread handles the runtime-reloading of zone data
+    from providers.  Depending on the provider and coniguration, these
+    could be automatic and/or triggered on SIGHUP.  When not actively
+    checking for new zone data and/or reloading it, this thread should
+    mostly be idle.
 
-    The scaling of UDP DNS was looked into extensively on Linux. Adding more
-    threads per socket never works as the socket itself is a serial, locked
-    resource for the operating system and our DNS code is way faster than
-    the socket operations themselves.
+    The "monitoring" thread handles all monitoring duties for the monitoring
+    plugin system.  Currently it also handles inbound traffic to the
+    built-in pseudo-HTTP service to serve stats data.
 
-    To scale out over multiple cores, if you find that your network
-    interface(s) can pump more data than gdnsd can handle in a single
-    socket/thread, your best scaling option is to have gdnsd listen on
-    several independent sockets (port numbers and/or IPs). Then either use a
-    hardware loadbalancer or Linux's own ipvsadm software to balance the
-    client requests across the several sockets. With ipvsadm you can do it
-    all in software on the same machine gdnsd is running on, with the
-    inbound port 53 traffic spread across N local ports gdnsd is listening
-    on.
+    Aside from these 3 singleton threads, a single thread is spawned
+    for every configured DNS listening socket.  If the options
+    'udp_threads' or 'tcp_threads' are set to values greater than one,
+    multiple sockets are created at the same socket address via
+    SO_REUSEPORT and a separate thread attaches to each.
 
-    Few people will face these scaling limits in practice, and the few that
-    do shouldn't have any problem figuring out ipvsadm, etc.
+    The TCP DNS threads use a libev event loop to handle traffic for
+    all connections on the given socket.  The UDP DNS threads use a tight
+    loop over the raw send and receive calls for the given socket.
 
-    TCP DNS is threaded and scaled in the same manner. It could have been
-    done differently, but in any sane DNS configuration UDP scaling issues
-    should dwarf TCP ones anyways, and this keeps things simpler.
+    All of the code executed in the UDP threads at runtime is carefully
+    crafted to avoid all syscalls (other than the necessary send/recv
+    ones) and other expensive or potentially-blocking operations (e.g.
+    locks and dynamic memory allocation).  These threads should never
+    block on anything other than their send/recv calls, and should execute
+    at most 2 syscalls per request (significantly less under heavy traffic
+    loads if Linux sendmmsg() support is compiled in and detected at
+    runtime).
 
-    Each of the TCP DNS threads listens on one socket, and uses a libev
-    event loop to handle many connections in parallel. They do allocate heap
-    dynamically at runtime, and you can limit the count of parallel requests
-    per thread with "tcp_clients_per_thread" (default 128). libev priorities
-    are used to prioritize finishing current requests over accepting new
-    ones when both events are available in the same loop wakeup, so this
-    should help keep the parallelism number lower in general.
+    The TCP code shares the efficient core DNS parsing and response
+    code of the UDP threads, but it does use dynamic memory allocation
+    and a plethora of per-request syscalls (some via the eventloop library)
+    at the TCP connection-handling layer.
 
   Statistics
 
@@ -153,6 +128,10 @@ Overall Design
         Request had an EDNS OPT RR with a version higher than zero, which
         this daemon does not support (at the time of this writing, such a
         version doesn't even exist).
+
+    formerr
+        Request was badly-formatted, but was sane enough that we did send
+        a response with the rcode FORMERR.
 
     dropped
         Request was so horribly malformed that we didn't even bother to
@@ -227,7 +206,7 @@ Overall Design
     These statistics are tracked in per-thread structures. The actual data
     slots are uintptr_t, which helps with rollover on 64-bit machines.
 
-    The main thread reports the statistics in two different ways. The first
+    The monitoring thread reports the statistics in two different ways. The first
     is via syslog every log_stats seconds (default 3600), as well as always
     at exit time. The other is via an embedded HTTP server which listens by
     default on port 3506. The HTTP server can give the data in both html
@@ -290,14 +269,9 @@ Security
     scripts/system, and probably set it up better with regard to mounting
     special directories to make library calls work right, etc.
 
-    If your host supports randomized address layout for executables (-fPIE
-    in gcc terms), gdnsd can be built as such for additional security. This
-    is not the default, but you can simply add it to your CFLAGS when
-    building.
-
 Copyright and License
 
-    Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
+    Copyright (c) 2014 Brandon L Black <blblack@gmail.com>
 
     This file is part of gdnsd.
 

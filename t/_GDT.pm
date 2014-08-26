@@ -231,6 +231,7 @@ my %stats_accum = (
     edns_clientsub => 0,
     udp_reqs     => 0,
     udp_sendfail => 0,
+    udp_recvfail => 0,
     udp_tc       => 0,
     udp_edns_big => 0,
     udp_edns_tc  => 0,
