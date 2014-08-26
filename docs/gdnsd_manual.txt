@@ -71,7 +71,7 @@ Overall Design
     is the only thread that runs with signals unblocked.
 
     The "zone data" thread handles the runtime-reloading of zone data
-    from providers.  Depending on the provider and coniguration, these
+    from providers.  Depending on the provider and configuration, these
     could be automatic and/or triggered on SIGHUP.  When not actively
     checking for new zone data and/or reloading it, this thread should
     mostly be idle.
@@ -181,13 +181,13 @@ Overall Design
         with the TC bit set.
 
     udp_edns_big
-        Subset of udp_edns where the response was greater than 512 bytes (in
+        EDNS responses where the response was greater than 512 bytes (in
         other words, EDNS actually did something for you size-wise)
 
     udp_edns_tc
-        Subset of udp_edns where the response was truncated and the TC bit
+        EDNS responses where the response was truncated and the TC bit
         set, meaning that the client's specified edns buffer size was too
-        small for the data requested.
+        small for the data requested in spite of EDNS.
 
     The TCP threads also count this stuff:
 
