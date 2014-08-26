@@ -38,6 +38,7 @@ testroot/
 /plugins/meta/libgdmaps/t/*.bin
 /plugins/meta/libgdmaps/t/Geo*.dat
 /plugins/meta/libgdmaps/t/regioncodes-*
+/plugins/meta/libgdmaps/t/LICENSE.txt
 
 # Various tool outputs in all dirs
 Makefile
