@@ -266,9 +266,6 @@ static bool handle_edns_options(dnspacket_context_t* c, unsigned rdlen, const ui
     return rv;
 }
 
-F_CONST static inline unsigned max_unsigned(const unsigned int a, const unsigned int b) { return a > b ? a : b; }
-F_CONST static inline unsigned min_unsigned(const unsigned int a, const unsigned int b) { return a < b ? a : b; }
-
 typedef enum {
     DECODE_IGNORE  = -4, // totally invalid packet (len < header len or unparseable question, and we do not respond)
     DECODE_FORMERR = -3, // slightly better but still invalid input, we return FORMERR
@@ -286,12 +283,21 @@ static rcode_rv_t parse_optrr(dnspacket_context_t* c, const wire_dns_rr_opt_t* o
     stats_own_inc(&c->stats->edns);
     if(likely(DNS_OPTRR_GET_VERSION(opt) == 0)) {
         if(likely(c->is_udp)) {
-            // The "512" here is us not allowing them to specify a size smaller than 512
-            c->this_max_response = min_unsigned(max_unsigned(DNS_OPTRR_GET_MAXSIZE(opt), 512U), gconfig.max_response) - 11;
+            unsigned client_req = DNS_OPTRR_GET_MAXSIZE(opt);
+            if(client_req < 512U)
+                client_req = 512U;
+            c->this_max_response = client_req < gconfig.max_edns_response
+                ? client_req
+                : gconfig.max_edns_response;
         }
-        else {
-            c->this_max_response = gconfig.max_response - 11;
+        else { // TCP
+            c->this_max_response = gconfig.max_response;
         }
+
+        // ensure nothing goes wrong with implied limits above
+        dmn_assert(c->this_max_response <= gconfig.max_response);
+        // leave room for basic OPT RR (edns-client-subnet room is addressed elsewhere)
+        c->this_max_response -= 11;
 
         unsigned rdlen = htons(gdnsd_get_una16(&opt->rdlen));
         if(rdlen) {

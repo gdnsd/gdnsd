@@ -481,6 +481,21 @@ affect the sizing as well.  Also keep in mind that wildcards and
 delegations can match any child name, including ones of maximal overall
 length.
 
+=item B<max_edns_response>
+
+Integer, default 1280, min 512, max 32768.  This is the maximum size
+of a UDP edns response to a client, acting as a cap on the edns
+buffer size advertised by the client in its request.  The default value
+1280 was chosen as it's very likely that such a size will traverse
+the public Internet un-fragmented (it is the IPv6 Minimum MTU value
+for similar reasons), and most reasonable DNS datasets result in
+responses significantly smaller than this.  The option obviously has
+no pragmatic effect if you do not have large response datasets in your
+zones in the first place.
+
+This value will be capped at the configured (or default) value of
+C<max_response> with a warning if configured above that value.
+
 =item B<max_addtl_rrsets>
 
 Integer, default 64, min 16, max 256.  This is the maximum number of RR

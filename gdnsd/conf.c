@@ -79,6 +79,7 @@ global_config_t gconfig = {
     .log_stats = 3600U,
     .max_http_clients = 128U,
     .http_timeout = 5U,
+    .max_edns_response = 1280U,
     .num_dns_addrs = 0U,
     .num_dns_threads = 0U,
     .num_http_addrs = 0U,
@@ -575,6 +576,11 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         if(gconfig.max_ncache_ttl < gconfig.min_ttl)
             log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", gconfig.max_ncache_ttl, gconfig.min_ttl);
         CFG_OPT_UINT(options, max_response, 4096LU, 64000LU);
+        CFG_OPT_UINT(options, max_edns_response, 512U, 32768U);
+        if(gconfig.max_edns_response > gconfig.max_response) {
+            log_warn("The global option 'max_edns_response' was reduced from %u to the max_response size of %u", gconfig.max_edns_response, gconfig.max_response);
+            gconfig.max_edns_response = gconfig.max_response;
+        }
         // Limit here (24) is critical, to ensure that when encode_rr_cname resets
         //  c->qname_comp in dnspacket.c, c->qname_comp must still be <16K into a packet.
         // Nobody should have even the default 16-depth CNAMEs anyways :P

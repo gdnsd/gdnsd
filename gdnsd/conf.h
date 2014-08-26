@@ -75,6 +75,7 @@ typedef struct {
     unsigned num_dns_addrs;
     unsigned num_dns_threads;
     unsigned max_response;
+    unsigned max_edns_response;
     unsigned max_cname_depth;
     unsigned max_addtl_rrsets;
     unsigned zones_rfc1035_auto_interval;
