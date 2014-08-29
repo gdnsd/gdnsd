@@ -164,8 +164,9 @@ void udp_sock_setup(dns_thread_t* t) {
         log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", dmn_logf_errno());
 
 #ifdef SO_REUSEPORT
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", dmn_logf_errno());
+    if(gdnsd_reuseport_ok())
+        if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+            log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", dmn_logf_errno());
 #endif
 
     int opt_size;

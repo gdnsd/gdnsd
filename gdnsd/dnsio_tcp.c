@@ -334,8 +334,9 @@ int tcp_listen_pre_setup(const dmn_anysin_t* asin, const int timeout V_UNUSED) {
         log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", dmn_logf_errno());
 
 #ifdef SO_REUSEPORT
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", dmn_logf_errno());
+    if(gdnsd_reuseport_ok())
+        if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+            log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", dmn_logf_errno());
 #endif
 
 #ifdef TCP_DEFER_ACCEPT
