@@ -599,21 +599,22 @@ The following are the generic parameters for all service_types:
 
 =item B<up_thresh>
 
-Integer, default 20, min 1, max 255.  Number of monitoring requests
+Integer, default 20, min 1, max 65535.  Number of monitoring requests
 which must succeed with no intervening failures to transition a given
 IP for this resource from the DOWN state to the UP state.
 
 =item B<ok_thresh>
 
-Integer, default 10, min 1, max 255.  Number of monitoring requests
+Integer, default 10, min 1, max 65535.  Number of monitoring requests
 which must succeed with no intervening failures to transition a given
 IP for this resource from the DANGER state to the UP state.
 
 =item B<down_thresh>
 
-Integer, default 10, min 1, max 255.  Number of monitoring requests
+Integer, default 10, min 2, max 65535.  Number of monitoring requests
 which must fail, regardless of any intervening successes, to transition
-a given IP for this resource from the DANGER state to the DOWN state.
+a given IP for this resource from the DANGER state to the DOWN state
+(this includes the initial failure that moves from UP to DANGER).
 
 =item B<interval>
 

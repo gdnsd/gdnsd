@@ -41,9 +41,9 @@
 struct _service_type_struct {
     const char* name;
     const plugin_t* plugin;
-    unsigned up_thresh;   // Def: 20 Range: 1-uintmax
-    unsigned ok_thresh;   // Def: 10 Range: 1-uintmax
-    unsigned down_thresh; // Def: 10 Range: 1-uintmax
+    unsigned up_thresh;   // Def: 20 Range: 1-65535
+    unsigned ok_thresh;   // Def: 10 Range: 1-65535
+    unsigned down_thresh; // Def: 10 Range: 2-65535
 };
 
 static int max_stats_len = 0;
@@ -282,7 +282,7 @@ void monio_add_servicetypes(const vscf_data_t* svctypes_cfg) {
         timeout = DEF_TIMEOUT;
         SVC_OPT_UINT(svctype_cfg, this_svc->name, up_thresh, 1LU, 65535LU);
         SVC_OPT_UINT(svctype_cfg, this_svc->name, ok_thresh, 1LU, 65535LU);
-        SVC_OPT_UINT(svctype_cfg, this_svc->name, down_thresh, 1LU, 65535LU);
+        SVC_OPT_UINT(svctype_cfg, this_svc->name, down_thresh, 2LU, 65535LU);
         SVC_OPT_D_UINT(svctype_cfg, this_svc->name, interval, 1LU, 3600LU);
         SVC_OPT_D_UINT(svctype_cfg, this_svc->name, timeout, 1LU, 300LU);
         if((double)timeout > (double)interval * 0.9)
