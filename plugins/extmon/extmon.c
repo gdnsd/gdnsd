@@ -37,6 +37,7 @@ typedef struct {
     unsigned num_args;
     unsigned timeout;
     unsigned interval;
+    bool direct;
 } svc_t;
 
 typedef struct {
@@ -126,7 +127,15 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         if(idx >= num_mons)
             log_fatal("plugin_extmon: BUG: got helper result for out of range index %u", idx);
         mon_t* this_mon = &mons[idx];
-        gdnsd_mon_state_updater(this_mon->idx, !failed); // wants true for success
+        if(this_mon->svc->direct) {
+            gdnsd_sttl_t new_sttl = GDNSD_STTL_TTL_MAX;
+            if(failed)
+                 new_sttl |= GDNSD_STTL_DOWN;
+            gdnsd_mon_sttl_updater(this_mon->idx, new_sttl);
+        }
+        else {
+            gdnsd_mon_state_updater(this_mon->idx, !failed); // wants true for success
+        }
         if(init_phase) {
             ev_timer_stop(loop, this_mon->local_timeout);
             if(!this_mon->seen_once) {
@@ -337,6 +346,11 @@ void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
             log_fatal("plugin_extmon: service_type '%s': option 'cmd': all elements must be simple strings", name);
         this_svc->args[i] = strdup(vscf_simple_get_data(arg_cfg));
     }
+
+    this_svc->direct = false;
+    const vscf_data_t* direct_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "direct", true);
+    if(direct_cfg && !vscf_simple_get_as_bool(direct_cfg, &this_svc->direct))
+        log_fatal("plugin_extmon: service type '%s': option 'direct' must have the value 'true' or 'false'", name);
 }
 
 static void add_mon_any(const char* desc, const char* svc_name, const char* thing, const unsigned idx) {

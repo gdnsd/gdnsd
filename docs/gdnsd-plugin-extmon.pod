@@ -16,6 +16,7 @@ Example plugin config:
     svc_alwaysok => {
       plugin => "extmon",
       timeout => 1,
+      direct => true,
       cmd => ["/bin/sh", "-c", "exit 0"]
     },
     svc_alwaysfail_via_timeout => {
@@ -103,6 +104,24 @@ be substituted in its place.
 
 The command must exit with an exit value of zero for success or non-zero
 for failure.
+
+=item B<direct>
+
+Boolean, default false.
+
+Normally extmon's results are processed by the same anti-flap state machine
+used for traditional monitors like the HTTP and TCP monitoring plugins.  This
+means the results are subject to the various thresholds (C<ok_thresh>, C<up_thresh>,
+C<down_thresh>) and it may take some time for a new persistent state to actually
+affect resolution.
+
+If C<direct> is set to C<true>, the results of extmon's monitoring are applied
+directly and immediately as the final state of the monitored resources after
+every monitoring check.  If your command flaps back and forther between success
+and failure on every run, so will the internal state and so will the resulting
+changes in resolution.  Useful if extmon is actually gathering state from an
+external complex monitoring environment that has already taken care of things
+like anti-flap measures.
 
 =back
 
