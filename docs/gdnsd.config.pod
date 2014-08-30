@@ -629,17 +629,17 @@ The following are the generic parameters for all service_types:
 
 =item B<up_thresh>
 
-Integer, default 20, min 1, max 255.  Number of monitoring requests
+Integer, default 20, min 1, max 65535.  Number of monitoring requests
 which must succeed in a row without any failures to transition
 a given resource from the C<DOWN> state to the C<UP> state.
 
 =item B<ok_thresh>
 
-Integer, default 10, min 1, max 255.  See below.
+Integer, default 10, min 1, max 65535.  See below.
 
 =item B<down_thresh>
 
-Integer, default 10, min 1, max 255.  The C<ok_thresh> and C<down_thresh>
+Integer, default 10, min 1, max 65535.  The C<ok_thresh> and C<down_thresh>
 parameters control the transition from the C<UP> state to the C<DOWN>
 state while trying to prevent flappy behavior.  Their behavior is best
 described in terms of an internal failure counter for a resource
