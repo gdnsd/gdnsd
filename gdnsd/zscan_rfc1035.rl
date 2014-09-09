@@ -140,7 +140,7 @@ static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin) {
         parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zone->dname));
 }
 
-F_NONNULL F_PURE
+F_NONNULL
 static void validate_lhs_not_ooz(zscan_t* z) {
     dmn_assert(z);
     if(z->lhs_is_ooz)
