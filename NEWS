@@ -168,6 +168,28 @@
     * Perl 5.8.1+ and "perldoc" is required for building
     * Preliminary systemd support via --with-systemd
 
+1.11.5 - 2014-09-10
+    Bugfixes:
+      Remove F_PURE from rfc1035 out-of-zone check
+        This was causing out-of-zone data checks during
+        the loading of rfc1035 zonefiles to be skipped
+        sometimes, depending on compiler/optimizations.
+      Change down_thresh min value from 1 to 2.
+        The value "1" leads to buggy behavior, and was
+        never intended to be possible in the state
+        machine's design.
+      Only use EPROTO if it's available.
+        Build-time bugfix for OpenBSD support.
+      Fix Linux version detection for initial 3.x kernels
+        Runtime checks of the Linux kernel version
+        for feature support were failing on 3.x.0 kernel
+        versions which do not include the ".0" in the
+        version string.
+    Deprecations:
+      extmon: add %%ITEM%%, deprecate %%IPADDR%%
+      plugin_weighted: deprecate "cnames" stanza
+        (both of these are to smooth out the 2.x transition)
+
 1.11.4 - 2014-07-18
     Major bugfix: The SOA record returned in the auth section of
       negative responses (NXDOMAIN and NODATA) had an incorrect TTL.
