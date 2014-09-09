@@ -4,7 +4,7 @@
 use _GDT ();
 use FindBin ();
 use File::Spec ();
-use Test::More tests => 10;
+use Test::More tests => 12;
 
 # slow-start on slow-fs for change detection accuracy
 delete $ENV{GDNSD_TESTSUITE_NO_ZONEFILE_MODS};
@@ -45,6 +45,16 @@ _GDT->test_dns(
 
 # create example.org with bad data, sighup?, wait on log message, query it
 _GDT->insert_altzone('example.org-bad', 'example.org');
+_GDT->send_sighup_unless_inotify();
+_GDT->test_log_output('rfc1035: Zone example.org.: Zonefile parse error');
+# this time runtime keeps the last-valid data
+_GDT->test_dns(
+    qname => 'ns1.example.org', qtype => 'A',
+    answer => 'ns1.example.org 86400 A 192.0.2.3',
+);
+
+# create example.org with bad data, sighup?, wait on log message, query it
+_GDT->insert_altzone('example.org-ooz', 'example.org');
 _GDT->send_sighup_unless_inotify();
 _GDT->test_log_output('rfc1035: Zone example.org.: Zonefile parse error');
 # this time runtime keeps the last-valid data
