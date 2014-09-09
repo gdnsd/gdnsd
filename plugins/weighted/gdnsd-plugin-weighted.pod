@@ -63,10 +63,8 @@ Example plugin config:
         }
       }
       cn => {
-        cnames => {
-          foo = [ lb01.example.com., 99 ]
-          bar = [ lb02.example.com., 15 ]
-        }
+        foo = [ lb01.example.com., 99 ]
+        bar = [ lb02.example.com., 15 ]
       }
     }
   }
@@ -121,20 +119,25 @@ may be specified to override their settings per-resource.
 
 There are two basic configuration modes within a resource:
 
-1) Explicit per-family/type sub-stanzas.  In this mode, the resource
-contains one or more of the keys C<addrs_v4>, C<addrs_v6>, and C<cnames>.
-C<addrs_v4> and/or C<addrs_v6> can both be specified in the same resource,
-but C<cnames> cannot co-exist with either of the other two.
+1) Explicit per-family address sub-stanzas.  In this mode, the resource
+contains one or more of the keys C<addrs_v4> and C<addrs_v6>.  Usually
+one would use both together, as it's simpler to use the second option
+when configuring a single address family.
 
-The contents of each stanza configure response RRs of the given type for
-this resource, and in the addrs_v4/addrs_v6 cases, the 3 behavioral
-parameters C<service_types>, C<multi>, and C<up_thresh> can be overridden
-per-address-family as well.
+The contents of each stanza configure response RRs of the given address
+type for this resource, and the 3 behavioral parameters C<service_types>,
+C<multi>, and C<up_thresh> can be overridden per-address-family as well.
 
-2) Automatic top-level detection of just one family/type.  In this mode,
-you can configure the top-level of a resource with valid contents for one
-of the stanzas C<addrs_v4>, C<addrs_v6>, or C<cnames>, and the family/type
-will be autodetected, and be the only type available in this resource.
+2) Automatic top-level detection of just one address family or CNAMEs.
+In this mode, you can configure the top-level of a resource with direct
+entries, so long as they are matching set of a single type: all IPv4
+addresses, all IPv6 address, or all CNAMEs, and the type will be
+auto-detected.
+
+Resources which contain weighted lists of CNAMEs
+rather than addresses can only be used with C<DYNC> RRs in zonefiles, whereas
+those that contain only addresses can be used in C<DYNA>
+RRs.
 
 =head1 CONFIGURATION - CNAMES
 
