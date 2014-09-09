@@ -222,14 +222,22 @@ static char* get_smgr_addr_str(const mon_smgr_t* smgr) {
 
 const char IPADDR_SUB[11] = "%%IPADDR%%\0";
 const unsigned IPADDR_LEN = 10;
+const char ITEM_SUB[11] = "%%ITEM%%\0";
+const unsigned ITEM_LEN = 8;
 static char* ipaddr_xlate(const char* instr, const char* addrstr, const unsigned addrstr_len) {
     char outbuf[1024]; // way more than enough, I'd hope...
     char* out_cur = outbuf;
     while(*instr) {
-        if(!strncmp(instr, IPADDR_SUB, IPADDR_LEN)) {
+        if(!strncmp(instr, ITEM_SUB, ITEM_LEN)) {
+            memcpy(out_cur, addrstr, addrstr_len);
+            out_cur += addrstr_len;
+            instr += ITEM_LEN;
+        }
+        else if(!strncmp(instr, IPADDR_SUB, IPADDR_LEN)) {
             memcpy(out_cur, addrstr, addrstr_len);
             out_cur += addrstr_len;
             instr += IPADDR_LEN;
+            log_warn("plugin_extmon: %%%%IPADDR%%%% is deprecated, please replace it with %%%%ITEM%%%%");
         }
         else {
             *out_cur++ = *instr++;
