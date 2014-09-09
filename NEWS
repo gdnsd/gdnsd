@@ -147,23 +147,23 @@
     * The 'disble_tcp' option is removed. Use 'tcp_threads = 0' instead.
     * The 'zones_rfc1035_strict_startup' option is removed.  Use
       'zones_strict_startup' instead.
-    * Direct support for the SPF RR-type (99) has been removed.
-    * Support for the old, experimental edns-client-subnet option code
-      0x50fa has been removed; gdnsd now only supports the official,
-      IANA-assigned option code 0x0008.
-
-  *** Other misc incompatibilities
     * plugin_extmon: %%IPADDR%% replaced by %%ITEM%%
     * plugin_weighted: the pointless 'cnames' singleton substanza is
       no longer supported; just place the entries directly in the
       top level of the resource.
-    * The Plugin API has changed substantially; any third-party
+    * Direct support for the SPF RR-type (99) has been removed.
+
+  *** Other misc incompatibilities
+    * The plugin API has changed substantially; any third-party
       plugins will need substantial source-level updates.  See the
       gdnsd-plugin-api docs.
+    * Support for the old, experimental edns-client-subnet option code
+      0x50fa has been removed; gdnsd now only supports the official,
+      IANA-assigned option code 0x0008.
 
   *** Build changes
     * libcap is no longer used on Linux
-    * --without-libap doesn't exist anymore
+    * --without-libcap doesn't exist anymore
     * --with-rootdir doesn't exist anymore
     * Perl 5.8.1+ and "perldoc" is required for building
     * Preliminary systemd support via --with-systemd
