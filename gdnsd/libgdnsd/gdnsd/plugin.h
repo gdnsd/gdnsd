@@ -47,7 +47,6 @@
 #define xSYM_GET_APIV(x)      plugin_ ## x ## _get_api_version
 #define xSYM_LOAD_CONFIG(x)   plugin_ ## x ## _load_config
 #define xSYM_MAP_RES(x)       plugin_ ## x ## _map_res
-#define xSYM_FULL_CONFIG(x)   plugin_ ## x ## _full_config
 #define xSYM_PRE_RUN(x)       plugin_ ## x ## _pre_run
 #define xSYM_IOTH_INIT(x)     plugin_ ## x ## _iothread_init
 #define xSYM_RESOLVE(x)       plugin_ ## x ## _resolve
@@ -60,7 +59,6 @@
 #define SYM_GET_APIV(x)       xSYM_GET_APIV(x)
 #define SYM_LOAD_CONFIG(x)    xSYM_LOAD_CONFIG(x)
 #define SYM_MAP_RES(x)        xSYM_MAP_RES(x)
-#define SYM_FULL_CONFIG(x)    xSYM_FULL_CONFIG(x)
 #define SYM_PRE_RUN(x)        xSYM_PRE_RUN(x)
 #define SYM_IOTH_INIT(x)      xSYM_IOTH_INIT(x)
 #define SYM_RESOLVE(x)        xSYM_RESOLVE(x)
@@ -75,9 +73,8 @@ F_CONST
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
 
-void SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(const vscf_data_t* config);
+void SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(const vscf_data_t* config, const unsigned num_threads);
 int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
-void SYM_FULL_CONFIG(GDNSD_PLUGIN_NAME)(unsigned num_threads);
 F_NONNULL
 void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(void);
 void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(unsigned threadnum);
@@ -97,7 +94,6 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef SYM_APIV
 #undef SYM_LOAD_CONFIG
 #undef SYM_MAP_RES
-#undef SYM_FULL_CONFIG
 #undef SYM_PRE_RUN
 #undef SYM_IOTH_INIT
 #undef SYM_RESOLVE
@@ -110,7 +106,6 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef xSYM_APIV
 #undef xSYM_LOAD_CONFIG
 #undef xSYM_MAP_RES
-#undef xSYM_FULL_CONFIG
 #undef xSYM_PRE_RUN
 #undef xSYM_IOTH_INIT
 #undef xSYM_RESOLVE

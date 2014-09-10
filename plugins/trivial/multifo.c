@@ -303,7 +303,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 /* Exported callbacks start here */
 /*********************************/
 
-void plugin_multifo_load_config(const vscf_data_t* config) {
+void plugin_multifo_load_config(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("multifo plugin requires a 'plugins' configuration stanza");
 

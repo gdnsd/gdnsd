@@ -148,12 +148,12 @@ void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array) {
     psearch[psearch_count] = NULL;
 }
 
-const plugin_t* gdnsd_plugin_find(const char* pname) {
+plugin_t* gdnsd_plugin_find(const char* pname) {
     dmn_assert(pname);
 
     const unsigned nplug = num_plugins;
     for(unsigned i = 0; i < nplug; i++) {
-        const plugin_t* const p = plugins[i];
+        plugin_t* p = plugins[i];
         if(!strcmp(pname, p->name))
             return p;
     }
@@ -171,6 +171,7 @@ static plugin_t* plugin_allocate(const char* pname) {
     plugins = realloc(plugins, num_plugins * sizeof(plugin_t*));
     plugin_t* rv = plugins[this_idx] = calloc(1, sizeof(plugin_t));
     rv->name = strdup(pname);
+    rv->config_loaded = false;
 
     return rv;
 }
@@ -212,7 +213,7 @@ static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sy
     return rval;
 }
 
-static const plugin_t* gdnsd_plugin_load(const char* pname) {
+static plugin_t* gdnsd_plugin_load(const char* pname) {
     dmn_assert(pname); dmn_assert(psearch);
 
     plugin_t* plug = plugin_allocate(pname);
@@ -228,7 +229,6 @@ static const plugin_t* gdnsd_plugin_load(const char* pname) {
 #   define PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
     PSETFUNC(load_config)
     PSETFUNC(map_res)
-    PSETFUNC(full_config)
     PSETFUNC(pre_run)
     PSETFUNC(iothread_init)
     PSETFUNC(resolve)
@@ -245,18 +245,21 @@ static const plugin_t* gdnsd_plugin_load(const char* pname) {
     return plug;
 }
 
-const plugin_t* gdnsd_plugin_find_or_load(const char* pname) {
+plugin_t* gdnsd_plugin_find_or_load(const char* pname) {
     dmn_assert(pname);
-    const plugin_t* const p = gdnsd_plugin_find(pname);
+    plugin_t* p = gdnsd_plugin_find(pname);
     return p ? p : gdnsd_plugin_load(pname);
 }
 
 // The action iterators...
 
-void gdnsd_plugins_action_full_config(const unsigned num_threads) {
-    for(unsigned i = 0; i < num_plugins; i++)
-        if(plugins[i]->full_config)
-            plugins[i]->full_config(num_threads);
+void gdnsd_plugins_configure_all(const unsigned num_threads) {
+    for(unsigned i = 0; i < num_plugins; i++) {
+        if(plugins[i]->load_config && !plugins[i]->config_loaded) {
+            plugins[i]->load_config(NULL, num_threads);
+            plugins[i]->config_loaded = true;
+        }
+    }
 }
 
 void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop) {

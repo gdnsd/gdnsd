@@ -643,7 +643,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
 
 ////// exported callbacks start here
 
-void plugin_weighted_load_config(const vscf_data_t* config) {
+void plugin_weighted_load_config(const vscf_data_t* config, const unsigned num_threads) {
     dmn_assert(config);
     dmn_assert(vscf_is_hash(config));
 
@@ -682,10 +682,6 @@ void plugin_weighted_load_config(const vscf_data_t* config) {
         }
     }
     gdnsd_dyn_addr_max(max_v4, max_v6);
-}
-
-void plugin_weighted_full_config(const unsigned num_threads) {
-    dmn_assert(num_threads);
     init_rand_storage(num_threads);
 }
 

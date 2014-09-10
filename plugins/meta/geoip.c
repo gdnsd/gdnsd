@@ -70,7 +70,7 @@ static void top_config_hook(const vscf_data_t* top_config) {
     gdmaps = gdmaps_new(maps);
 }
 
-void plugin_geoip_full_config(unsigned num_threads V_UNUSED) {
+static void bottom_config_hook(void) {
     dmn_assert(gdmaps);
     gdmaps_load_databases(gdmaps);
 }

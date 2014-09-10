@@ -106,6 +106,8 @@ static void top_config_hook(const vscf_data_t* top_config V_UNUSED) {
     dmn_assert(top_config); dmn_assert(vscf_is_hash(top_config));
 }
 
+static void bottom_config_hook(void) { }
+
 F_NONNULL
 static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo V_UNUSED, unsigned* scope_out V_UNUSED) {
     dmn_assert(mapnum < num_dclists); dmn_assert(cinfo); dmn_assert(scope_out);

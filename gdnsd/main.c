@@ -463,9 +463,6 @@ int main(int argc, char** argv) {
     // Set up and validate privdrop info if necc
     dmn_init3(gconfig.username, (action == ACT_RESTART));
 
-    // Call plugin full_config actions
-    gdnsd_plugins_action_full_config(gconfig.num_dns_threads);
-
     log_info("Loading zone data...");
     ztree_init();
     zsrc_djb_load_zones(action == ACT_CHECKCFG);

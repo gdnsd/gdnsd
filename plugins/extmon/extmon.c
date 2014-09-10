@@ -292,7 +292,7 @@ static bool bad_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* 
     log_fatal("plugin_extmon: bad global option '%s'", key);
 }
 
-void plugin_extmon_load_config(const vscf_data_t* config) {
+void plugin_extmon_load_config(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(config) {
         const vscf_data_t* helper_path_cfg = vscf_hash_get_data_byconstkey(config, "helper_path", true);
         if(helper_path_cfg) {
@@ -314,12 +314,8 @@ void plugin_extmon_load_config(const vscf_data_t* config) {
         }
         vscf_hash_iterate(config, true, bad_opt, NULL);
     }
-}
 
-// plugins which don't have a global config stanza (e.g. plugins => { extmon => { ... } }),
-//  which is common for monitoring-only, do not get a load_config() call.  So move this
-//  final bit to full_config(), which is always called.
-void plugin_extmon_full_config(unsigned num_threads V_UNUSED) {
+    // need to at least resolve this to a default, even in the absence of config
     if(!helper_path)
         helper_path = gdnsd_resolve_path_libexec("gdnsd_extmon_helper", NULL);
 }

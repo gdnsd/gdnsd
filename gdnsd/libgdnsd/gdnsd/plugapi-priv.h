@@ -55,10 +55,13 @@ unsigned gdnsd_result_get_alloc(void);
 void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array);
 
 F_NONNULL
-const plugin_t* gdnsd_plugin_find_or_load(const char* pname);
+plugin_t* gdnsd_plugin_find_or_load(const char* pname);
+
+// call _load_config() for all plugins which are loaded but have not
+//   yet had that callback called
+void gdnsd_plugins_configure_all(const unsigned num_threads);
 
 // action iterators
-void gdnsd_plugins_action_full_config(const unsigned num_threads);
 F_NONNULL
 void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop);
 F_NONNULL

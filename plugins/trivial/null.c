@@ -23,7 +23,7 @@
 #include <gdnsd/plugin.h>
 #include <string.h>
 
-void plugin_null_load_config(const vscf_data_t* config V_UNUSED) {
+void plugin_null_load_config(const vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED) {
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
 }
 

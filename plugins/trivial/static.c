@@ -65,7 +65,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     return true;
 }
 
-void plugin_static_load_config(const vscf_data_t* config) {
+void plugin_static_load_config(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("static plugin requires a 'plugins' configuration stanza");
     dmn_assert(vscf_get_type(config) == VSCF_HASH_T);

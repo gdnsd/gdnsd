@@ -109,9 +109,8 @@ void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope);
 /**** Typedefs for plugin callbacks ****/
 
 typedef unsigned (*gdnsd_apiv_cb_t)(void);
-typedef void (*gdnsd_load_config_cb_t)(const vscf_data_t* pc);
+typedef void (*gdnsd_load_config_cb_t)(const vscf_data_t* pc, const unsigned num_threads);
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
-typedef void (*gdnsd_full_config_cb_t)(unsigned num_threads);
 typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
 typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
@@ -126,11 +125,11 @@ typedef void (*gdnsd_init_monitors_cb_t)(struct ev_loop* mon_loop);
 typedef void (*gdnsd_start_monitors_cb_t)(struct ev_loop* mon_loop);
 
 // This is the data type for a plugin itself, holding function
-//  pointers for all of the possibly documented callbacks
+//  pointers for all of the possibly-documented callbacks
 typedef struct {
     const char* name;
+    bool config_loaded;
     gdnsd_load_config_cb_t load_config;
-    gdnsd_full_config_cb_t full_config;
     gdnsd_map_res_cb_t map_res;
     gdnsd_pre_run_cb_t pre_run;
     gdnsd_iothread_init_cb_t iothread_init;
@@ -144,9 +143,9 @@ typedef struct {
 } plugin_t;
 
 // Find a(nother) plugin by name.  Not valid at load_config() time,
-//   use during full_config() ideally, or later if you must.
+//   use later.
 F_NONNULL F_PURE
-const plugin_t* gdnsd_plugin_find(const char* plugin_name);
+plugin_t* gdnsd_plugin_find(const char* plugin_name);
 
 // convenient macro for logging a config error and returning
 //  the error value -1 in a resolver plugin's map_res() callback

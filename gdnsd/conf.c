@@ -135,9 +135,11 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
     if(pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
-    const plugin_t* plugin = gdnsd_plugin_find_or_load(name);
-    if(plugin->load_config)
-        plugin->load_config(pconf);
+    plugin_t* plugin = gdnsd_plugin_find_or_load(name);
+    if(plugin->load_config) {
+        plugin->load_config(pconf, gconfig.num_dns_threads);
+        plugin->config_loaded = true;
+    }
 }
 
 F_NONNULLX(1,3)
@@ -648,6 +650,14 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
             plugin_load_and_configure("metafo", metaplug);
         vscf_hash_iterate(plugins_hash, true, load_plugin_iter, NULL);
     }
+
+    // Any plugins loaded via the plugins hash above will already have had load_config() called
+    //   on them.  This calls it (with a NULL config hash argument) for any plugins that were
+    //   loaded only via service_types (in gdnsd_mon_cfg_stypes_p1() above) without an explicit config.
+    // Because of the possibility of mixed plugins and the configuration ordering above for
+    //    meta-plugins, this must happen at this sequential point (after plugins_hash processing,
+    //    but before stypes_p2())
+    gdnsd_plugins_configure_all(gconfig.num_dns_threads);
 
     // Phase 2 of service_types config
     gdnsd_mon_cfg_stypes_p2(stypes_cfg);

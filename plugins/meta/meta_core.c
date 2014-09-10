@@ -423,13 +423,14 @@ static int map_res_inner(const char* resname, const uint8_t* origin, const char*
 
 /********** Callbacks from gdnsd **************/
 
-void CB_LOAD_CONFIG(const vscf_data_t* config) {
+void CB_LOAD_CONFIG(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
 
     dmn_assert(vscf_is_hash(config));
 
     top_config_hook(config);
+
     const vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
     if(!resources_cfg)
         log_fatal("plugin_" PNSTR ": config has no 'resources' stanza");
@@ -451,6 +452,8 @@ void CB_LOAD_CONFIG(const vscf_data_t* config) {
         vscf_hash_inherit_all(config, res_cfg, true);
         make_resource(res, res_name, res_cfg);
     }
+
+    bottom_config_hook();
 }
 
 int CB_MAP(const char* resname, const uint8_t* origin) {
