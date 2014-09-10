@@ -385,14 +385,10 @@ void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, const c
     add_mon_any(desc, svc_name, cname, idx);
 }
 
-void plugin_extmon_post_privdrop(void) {
-    dmn_assert(helper_path);
-    if(num_mons)
-        spawn_helper();
-}
-
 void plugin_extmon_init_monitors(struct ev_loop* mon_loop) {
+    dmn_assert(helper_path);
     if(num_mons) {
+        spawn_helper();
         helper_read_watcher = malloc(sizeof(ev_io));
         ev_io_init(helper_read_watcher, helper_read_cb, helper_read_fd, EV_READ);
         ev_set_priority(helper_read_watcher, 2);

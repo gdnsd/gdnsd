@@ -497,9 +497,6 @@ int main(int argc, char** argv) {
 
     dmn_fork();
 
-    // Call plugin post-daemonize actions
-    gdnsd_plugins_action_post_daemonize();
-
     // If root, or if user explicitly set a priority...
     if(started_as_root || gconfig.priority != -21) {
         // If root and no explicit value, use -11
@@ -519,14 +516,8 @@ int main(int argc, char** argv) {
     // Initialize dnspacket stuff
     dnspacket_global_setup();
 
-    // Call plugin pre-privdrop actions
-    gdnsd_plugins_action_pre_privdrop();
-
     // drop privs if started as root
     dmn_secure();
-
-    // Call plugin pre-privdrop actions
-    gdnsd_plugins_action_post_privdrop();
 
     // Set up libev error callback
     ev_set_syserr_cb(&syserr_for_ev);
