@@ -1,4 +1,9 @@
-2.0.0 - Date TBD XXX
+2.0.0-beta - 2014-09-10
+  *** This is a beta release to get more people to try it in
+      tarball form prior to the official 2.0.0 release.
+      Please do not release stable distro packages based on this
+      release!
+
   *** General feature changes:
     * Static address RR-sets in zonefiles are no longer limited
       to 256 RRs per-family
