@@ -7,6 +7,6 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-scan-build ./configure --enable-developer
+CFLAGS="-std=gnu99" scan-build ./configure --enable-developer
 make clean
 scan-build make
