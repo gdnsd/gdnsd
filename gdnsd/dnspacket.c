@@ -1699,7 +1699,6 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
 
     const unsigned first_offset = offset;
     bool via_cname = false;
-    unsigned cname_depth = 0;
     const ltree_node_t* resdom = NULL;
     const ltree_node_t* resauth = NULL;
     const ltree_rrset_t* res_rrsets = NULL;
@@ -1715,6 +1714,7 @@ static unsigned int answer_from_db(dnspacket_context_t* c, const uint8_t* qname,
     if(query_zone) { // matches auth space somewhere
         resauth = query_zone->root;
 
+        unsigned cname_depth = 0;
         bool iterating_for_cname = false;
 
         do { // This do/while loop handles CNAME chains...

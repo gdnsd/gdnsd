@@ -953,6 +953,7 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
 
     // use target_addr found via either path above
     if(target_addr) {
+        dmn_assert(ns_target);
         this_ns->ad = target_addr;
         // treat as glue if NS for delegation, and addr is in delegation or ooz
         if(ns_status != DNAME_AUTH) {

@@ -73,9 +73,8 @@ const char* gdnsd_logf_dname(const uint8_t* dname) {
 
     dname++; // skip initial OAL byte
 
-    unsigned llen;
     while(1) {
-        llen = *dname++;
+        unsigned llen = *dname++;
 
         // Handle terminal cases
         if(llen == 255)

@@ -61,19 +61,6 @@ typedef struct {
 } field_t;
 
 typedef struct {
-    uint8_t ns[256];
-    uint8_t email[256];
-    unsigned ttl;
-    unsigned serial;
-    unsigned refresh;
-    unsigned retry;
-    unsigned expire;
-    unsigned cache;
-
-    unsigned mtime;
-} soa_info_t;
-
-typedef struct {
     /* variables preserved across files */
     uint64_t mtime;
     zscan_djb_zonedata_t* zonedata;
@@ -222,7 +209,6 @@ static unsigned parse_int(zscan_t *z, field_t *f) {
 
 F_NONNULL
 static void parse_txt(field_t *f) {
-    char ch;
     unsigned int i;
     unsigned int j;
 
@@ -232,7 +218,7 @@ static void parse_txt(field_t *f) {
     j = 0;
     i = 0;
     while (i < f->len) {
-        ch = f->ptr[i++];
+        char ch = f->ptr[i++];
         if (ch == '\\') {
             if (i >= f->len) break;
             ch = f->ptr[i++];

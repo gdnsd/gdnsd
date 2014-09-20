@@ -414,11 +414,10 @@ static void helper_proc(const pid_t middle_pid) {
     dmn_assert(writepipe >= 0);
 
     int exitval = 1;
-    uint8_t msg;
-    int readrv;
-    int writerv;
 
     do {
+        uint8_t msg;
+        int readrv;
         do {
             errno = 0;
             readrv = read(readpipe, (char*)&msg, 1);
@@ -436,7 +435,7 @@ static void helper_proc(const pid_t middle_pid) {
             break;
         errno = 0;
         msg |= 128U; // set high-bit for response
-        writerv = write(writepipe, (char*)&msg, 1);
+        int writerv = write(writepipe, (char*)&msg, 1);
         if(errno || writerv != 1)
             break;
     } while(1);

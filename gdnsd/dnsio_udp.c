@@ -300,8 +300,7 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
 
 // check for linux 3.0+ for sendmmsg() (implies recvmmsg w/ MSG_WAITFORONE)
 static bool has_mmsg(void) {
-    bool rv = false;
-    rv = gdnsd_linux_min_version(3, 0, 0);
+    bool rv = gdnsd_linux_min_version(3, 0, 0);
     if(rv) {
         /* this causes no harm and exits immediately */
         sendmmsg(-1, 0, 0, 0);
