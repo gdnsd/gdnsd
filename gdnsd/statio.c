@@ -323,9 +323,9 @@ static void statio_fill_outbuf_html(struct iovec* outbufs) {
     if(!gmtime_r(&pop_statio_time, &now_tm))
         log_fatal("gmtime_r() failed");
 
-    char now_char[26];
-    if(!asctime_r(&now_tm, now_char))
-        log_fatal("asctime_r() failed");
+    char now_char[64];
+    if(!strftime(now_char, 63, "%a %b %e %T %Y", &now_tm))
+        log_fatal("strftime() failed");
 
     outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_uptime(pop_statio_time), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
@@ -614,7 +614,7 @@ void statio_init(void) {
 
     data_buffer_size =
         fixed                                 // html_fixed format string
-        + (25 - 2)                            // max asctime output - 2 for the original %s
+        + (63 - 2)                            // max strftime output - 2 for the original %s
         + (IVAL_BUFSZ - 2)                    // max fmt_uptime output, again - 2 for %s
         + (19 * (stat_len - strlen(PRIuPTR))) // 19 stats, up to 20 bytes long each
         + gdnsd_mon_stats_get_max_len()       // whatever mon.c tells us...
