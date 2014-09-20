@@ -465,10 +465,16 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
         log_err("rfc1035: Cannot open zones directory '%s': %s", rfc1035_dir, dmn_logf_strerror(errno));
     }
     else {
-        struct dirent* zfdi;
-        while((zfdi = readdir(zdhandle)))
-            if(likely(zfdi->d_name[0] != '.'))
-                process_zonefile(zfdi->d_name, loop, initial_quiesce_time);
+        const size_t bufsz = gdnsd_dirent_bufsize(zdhandle, rfc1035_dir);
+        struct dirent* buf = malloc(bufsz);
+        struct dirent* result = NULL;
+        do {
+            if(unlikely(readdir_r(zdhandle, buf, &result)))
+                log_fatal("rfc1035: readdir_r(%s) failed: %s", rfc1035_dir, dmn_logf_errno());
+            if(likely(result && result->d_name[0] != '.'))
+                process_zonefile(result->d_name, loop, initial_quiesce_time);
+        } while(result);
+        free(buf);
         if(closedir(zdhandle))
             log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, dmn_logf_strerror(errno));
     }

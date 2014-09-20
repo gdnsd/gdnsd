@@ -34,6 +34,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <stddef.h>
+#include <dirent.h>
 #include <pthread.h>
 
 #ifdef HAVE_PTHREAD_NP_H
@@ -384,4 +387,19 @@ uint32_t gdnsd_lookup2(const char *k, uint32_t len) {
 
     mix(a,b,c);
     return c;
+}
+
+size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {
+    dmn_assert(d); dmn_assert(dirname);
+    errno = 0;
+    long name_max = fpathconf(dirfd(d), _PC_NAME_MAX);
+    if(name_max < 0)
+        log_fatal("fpathconf(%s, _PC_NAME_MAX) failed: %s",
+            dirname, dmn_logf_errno());
+    if(name_max < NAME_MAX)
+        name_max = NAME_MAX;
+    const size_t name_end = offsetof(struct dirent, d_name) + name_max + 1;
+    return name_end > sizeof(struct dirent)
+        ? name_end
+        : sizeof(struct dirent);
 }

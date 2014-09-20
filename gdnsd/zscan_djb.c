@@ -493,7 +493,6 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
 
 static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
     DIR *dir;
-    struct dirent *e;
     bool failed = false;
 
     dir = opendir(z->path);
@@ -502,8 +501,16 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
         return true;
     }
 
-    while ((e = readdir(dir)) != NULL) {
-        if (e->d_name[0] == '.')
+    const size_t bufsz = gdnsd_dirent_bufsize(dir, z->path);
+    struct dirent* buf = malloc(bufsz);
+
+    while(1) {
+        struct dirent* e = NULL;
+        if(unlikely(readdir_r(dir, buf, &e)))
+            log_fatal("djb: readdir_r(%s) failed: %s", z->path, dmn_logf_errno());
+        if(!e)
+            break;
+        if(e->d_name[0] == '.')
             continue;
 
         struct stat st;
@@ -535,6 +542,8 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
         if (failed)
             break;
     }
+
+    free(buf);
     closedir(dir);
 
     return failed;

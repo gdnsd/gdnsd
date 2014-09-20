@@ -24,6 +24,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <dirent.h>
 
 extern const uint8_t gdnsd_lcmap[256];
 
@@ -93,5 +94,10 @@ bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned 
 
 // Jenkins lookup2
 uint32_t gdnsd_lookup2(const char *k, uint32_t len);
+
+// Get system/filesystem-specific dirent buffer size for readdir_r() safely
+//   (dirname is just for error output)
+F_NONNULL
+size_t gdnsd_dirent_bufsize(DIR* d V_UNUSED, const char* dirname);
 
 #endif // GDNSD_MISC_H
