@@ -288,8 +288,8 @@ static void memlock_rlimits(const bool started_as_root) {
                     "max = INF) failed: %s", dmn_logf_errno());
         }
     }
-}
 #endif
+}
 
 typedef enum {
     ACT_CHECKCFG   = 0,
