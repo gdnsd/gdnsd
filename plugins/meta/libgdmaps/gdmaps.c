@@ -353,7 +353,7 @@ F_NONNULL
 static void gdmap_geoip_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
-    gdmap_t* gdmap = (gdmap_t*)w->data;
+    gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
     dmn_assert(gdmap->geoip_path);
     const bool v4o = !!gdmap->geoip_v4o_path;
@@ -370,7 +370,7 @@ F_NONNULL
 static void gdmap_geoip_v4o_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
-    gdmap_t* gdmap = (gdmap_t*)w->data;
+    gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
     dmn_assert(gdmap->geoip_v4o_path);
 
@@ -386,7 +386,7 @@ F_NONNULL
 static void gdmap_nets_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
-    gdmap_t* gdmap = (gdmap_t*)w->data;
+    gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
     dmn_assert(gdmap->nets_path);
 
@@ -402,7 +402,7 @@ F_NONNULL
 static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
 
-    gdmap_t* gdmap = (gdmap_t*)w->data;
+    gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
 
     const bool v4o = gdmap->geoip_v4o_path == w->path;
@@ -429,7 +429,7 @@ F_NONNULL
 static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
 
-    gdmap_t* gdmap = (gdmap_t*)w->data;
+    gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
     dmn_assert(gdmap->nets_path);
     dmn_assert(gdmap->nets_path == w->path);
@@ -452,7 +452,7 @@ F_NONNULL
 static void gdmap_tree_update_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
-    gdmap_t* gdmap = (gdmap_t*)w->data;
+    gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
     ev_timer_stop(loop, gdmap->tree_update_timer);
     gdmap_tree_update(gdmap);
@@ -696,7 +696,7 @@ static void* gdmaps_reload_thread(void* arg) {
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     gdnsd_thread_setname("gdnsd-geoip-db");
 
-    gdmaps_t* gdmaps = (gdmaps_t*)arg;
+    gdmaps_t* gdmaps = arg;
     dmn_assert(gdmaps);
 
     gdmaps->reload_loop = ev_loop_new(EVFLAG_AUTO);

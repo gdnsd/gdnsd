@@ -420,7 +420,7 @@ static void helper_proc(const pid_t middle_pid) {
         int readrv;
         do {
             errno = 0;
-            readrv = read(readpipe, (char*)&msg, 1);
+            readrv = read(readpipe, &msg, 1);
         } while(errno == EAGAIN);
 
         if(errno || readrv != 1)
@@ -435,7 +435,7 @@ static void helper_proc(const pid_t middle_pid) {
             break;
         errno = 0;
         msg |= 128U; // set high-bit for response
-        int writerv = write(writepipe, (char*)&msg, 1);
+        int writerv = write(writepipe, &msg, 1);
         if(errno || writerv != 1)
             break;
     } while(1);
@@ -975,9 +975,9 @@ void dmn_pcall(unsigned id) {
     dmn_assert(state.pipe_from_helper[PIPE_RD] >= 0);
 
     uint8_t msg = id + 64U;
-    if(1 != write(state.pipe_to_helper[PIPE_WR], (char*)&msg, 1))
+    if(1 != write(state.pipe_to_helper[PIPE_WR], &msg, 1))
         dmn_log_fatal("Bug? failed to write pcall request for %u to helper! Errno was %s", id, dmn_logf_errno());
-    if(1 != read(state.pipe_from_helper[PIPE_RD], (char*)&msg, 1))
+    if(1 != read(state.pipe_from_helper[PIPE_RD], &msg, 1))
         dmn_log_fatal("Bug? failed to read pcall return for %u from helper! Errno was %s", id, dmn_logf_errno());
     if(msg != ((id + 64U) | 128U))
         dmn_log_fatal("Bug? invalid pcall return of '%hhu' for %u from helper!", msg, id);

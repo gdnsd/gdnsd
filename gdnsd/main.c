@@ -204,9 +204,9 @@ static void start_threads(void) {
     for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
         dns_thread_t* t = &gconfig.dns_threads[i];
         if(t->is_udp)
-            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, (void*)t);
+            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, t);
         else
-            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, (void*)t);
+            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, t);
         if(pthread_err)
             log_fatal("pthread_create() of DNS thread %u (for %s:%s) failed: %s",
                 i, t->is_udp ? "UDP" : "TCP", dmn_logf_anysin(&t->ac->addr), dmn_logf_strerror(pthread_err));
@@ -250,16 +250,18 @@ static void memlock_rlimits(const bool started_as_root) {
                         "failed: %s", dmn_logf_errno());
             }
 
+            unsigned long long rc_printable = rlim.rlim_cur;
+
             if(rlim.rlim_cur < 1048576)
                 log_fatal("Not started as root, lock_mem was set, "
                     "and the rlimit for locked memory is unreasonably "
-                    "low (%li bytes), failing", (long)rlim.rlim_cur);
+                    "low (%llu bytes), failing", rc_printable);
 
-            log_info("The rlimit for locked memory is %li MB, and the "
+            log_info("The rlimit for locked memory is %llu MB, and the "
                 "daemon can't do anything about that since it wasn't "
                 "started as root.  This may or may not be too small at "
                 "runtime, leading to failure.  You have been warned.",
-                (long)(rlim.rlim_cur >> 20));
+                (rc_printable >> 20));
         }
         else {
             // Luckily, root can do as he pleases with the ulimits, but

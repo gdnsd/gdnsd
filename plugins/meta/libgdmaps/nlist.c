@@ -138,8 +138,8 @@ static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned 
 F_NONNULL F_PURE
 static int net_sorter(const void* a_void, const void* b_void) {
     dmn_assert(a_void); dmn_assert(b_void);
-    const net_t* a = (const net_t*)a_void;
-    const net_t* b = (const net_t*)b_void;
+    const net_t* a = a_void;
+    const net_t* b = b_void;
     int rv = memcmp(a->ipv6, b->ipv6, 16);
     if(!rv)
         rv = a->mask - b->mask;

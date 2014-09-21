@@ -326,7 +326,7 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents V_U
     dmn_assert(timer);
     dmn_assert(revents == EV_TIMER);
 
-    zfile_t* zf = (zfile_t*)timer->data;
+    zfile_t* zf = timer->data;
     dmn_assert(zf->pending_event == timer);
 
     // check lstat() again for a new change during quiesce period

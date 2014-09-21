@@ -257,8 +257,9 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
 
     dmn_anysin_t asin;
+    void* buf = mmap(NULL, gconfig.max_response, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     struct iovec iov = {
-        .iov_base = mmap(NULL, gconfig.max_response, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0),
+        .iov_base = buf,
         .iov_len  = 0
     };
     struct msghdr msg_hdr;
@@ -280,12 +281,12 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
         gdnsd_prcu_rdr_online();
         if(likely(buf_in_len >= 0)) {
             asin.len = msg_hdr.msg_namelen;
-            iov.iov_len = process_dns_query(pctx, &asin, (void*)iov.iov_base, buf_in_len);
+            iov.iov_len = process_dns_query(pctx, &asin, buf, buf_in_len);
             if(likely(iov.iov_len)) {
                 const int sent = sendmsg(fd, &msg_hdr, 0);
                 if(unlikely(sent < 0)) {
                     stats_own_inc(&pctx->stats->udp.sendfail);
-                    log_err("UDP sendmsg() of %li bytes failed with retval %i for client %s: %s", (long)iov.iov_len, sent, dmn_logf_anysin(&asin), dmn_logf_errno());
+                    log_err("UDP sendmsg() of %zu bytes failed with retval %i for client %s: %s", iov.iov_len, sent, dmn_logf_anysin(&asin), dmn_logf_errno());
                 }
             }
         }
@@ -389,7 +390,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
                     (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
                     stats_own_inc(&pctx->stats->udp.sendfail);
                     if(sent < 0) sent = 0;
-                    log_err("UDP sendmmsg() of %li bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, dmn_logf_anysin(dgptr[sent].msg_hdr.msg_name), dmn_logf_strerror(sockerr));
+                    log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, dmn_logf_anysin(dgptr[sent].msg_hdr.msg_name), dmn_logf_strerror(sockerr));
                     dgptr += sent; // skip past the successes
                     dgptr++; // skip the failed one too
                     pkts--; // drop one count for the failed message
@@ -428,7 +429,7 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     gdnsd_thread_setname("gdnsd-io-udp");
 
-    const dns_thread_t* t = (const dns_thread_t*) thread_asvoid;
+    const dns_thread_t* t = thread_asvoid;
     dmn_assert(t->is_udp);
 
     const dns_addr_t* addrconf = t->ac;

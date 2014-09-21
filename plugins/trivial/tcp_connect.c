@@ -69,7 +69,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
-    tcp_events_t* md = (tcp_events_t*)t->data;
+    tcp_events_t* md = t->data;
 
     dmn_assert(md);
 
@@ -141,7 +141,7 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
-    tcp_events_t* md = (tcp_events_t*)io->data;
+    tcp_events_t* md = io->data;
 
     dmn_assert(md);
     dmn_assert(md->tcp_state == TCP_STATE_CONNECTING);
@@ -187,7 +187,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
-    tcp_events_t* md = (tcp_events_t*)t->data;
+    tcp_events_t* md = t->data;
 
     dmn_assert(md);
     dmn_assert(md->sock > -1);

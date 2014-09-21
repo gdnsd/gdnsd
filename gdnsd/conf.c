@@ -100,13 +100,13 @@ static void set_chaos(const char* data) {
         log_fatal("Option 'chaos_response' must be a string less than 255 characters long");
 
     const unsigned overall_len = chaos_prefix_len + 3 + dlen;
-    char* combined = malloc(overall_len);
+    uint8_t* combined = malloc(overall_len);
     memcpy(combined, chaos_prefix, chaos_prefix_len);
     combined[chaos_prefix_len] = 0;
     combined[chaos_prefix_len + 1] = dlen + 1;
     combined[chaos_prefix_len + 2] = dlen;
     memcpy(combined + chaos_prefix_len + 3, data, dlen);
-    gconfig.chaos = (const uint8_t*)combined;
+    gconfig.chaos = combined;
     gconfig.chaos_len = overall_len;
 }
 
@@ -118,7 +118,8 @@ static void plugins_cleanup(void) {
 F_NONNULL
 static bool bad_key(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data) {
     dmn_assert(data); dmn_assert(key);
-    log_fatal("Invalid %s key '%s'", (const char*)data, key);
+    const char* cfg = data;
+    log_fatal("Invalid %s key '%s'", cfg, key);
 }
 
 static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin_t* result) {

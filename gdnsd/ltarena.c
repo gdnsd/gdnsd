@@ -114,7 +114,7 @@ static void dnhash_grow(dnhash_t* dnhash) {
 
 
 struct _ltarena {
-    void** pools;
+    uint8_t** pools;
     unsigned pool;
     unsigned poffs;
     unsigned palloc;
@@ -128,7 +128,7 @@ static void* make_pool(void) {
     if(RED_SIZE) {
         // malloc + fill in deadbeef if using redzones
         p = malloc(POOL_SIZE);
-        uint32_t* p32 = (uint32_t*)p;
+        uint32_t* p32 = p;
         unsigned idx = POOL_SIZE >> 2U;
         while(idx--)
             p32[idx] = 0xDEADBEEF;
@@ -149,7 +149,7 @@ static void* make_pool(void) {
 ltarena_t* lta_new(void) {
     ltarena_t* rv = calloc(1, sizeof(ltarena_t));
     rv->palloc = INIT_POOLS_ALLOC;
-    rv->pools = malloc(INIT_POOLS_ALLOC * sizeof(void*));
+    rv->pools = malloc(INIT_POOLS_ALLOC * sizeof(uint8_t*));
     rv->pools[0] = make_pool();
     rv->dnhash = dnhash_new();
     return rv;
@@ -159,7 +159,7 @@ void lta_close(ltarena_t* lta) {
     if(lta->dnhash) {
         dnhash_destroy(lta->dnhash);
         lta->dnhash = NULL;
-        lta->pools = realloc(lta->pools, (lta->pool + 1) * sizeof(void*));
+        lta->pools = realloc(lta->pools, (lta->pool + 1) * sizeof(uint8_t*));
     }
 }
 
@@ -175,7 +175,7 @@ void lta_destroy(ltarena_t* lta) {
 }
 
 F_MALLOC F_WUNUSED F_NONNULL
-static void* lta_malloc(ltarena_t* lta, const unsigned size) {
+static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
     dmn_assert(lta); dmn_assert(size);
     dmn_assert(lta->dnhash); // not closed
 
@@ -198,14 +198,14 @@ static void* lta_malloc(ltarena_t* lta, const unsigned size) {
     if(unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
         if(unlikely(++lta->pool == lta->palloc)) {
             lta->palloc <<= 1U;
-            lta->pools = realloc(lta->pools, lta->palloc * sizeof(void*));
+            lta->pools = realloc(lta->pools, lta->palloc * sizeof(uint8_t*));
         }
         lta->pools[lta->pool] = make_pool();
         lta->poffs = 0;
     }
 
     // assign the space and move our poffs pointer
-    void* rval = (void*)((uintptr_t)lta->pools[lta->pool] + lta->poffs + RED_SIZE);
+    uint8_t* rval = &lta->pools[lta->pool][lta->poffs + RED_SIZE];
     lta->poffs += size_plus_red;
 
     // mark the allocation for valgrind and zero it if doing redzone stuff
@@ -244,8 +244,9 @@ const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
     }
 
     const unsigned dnlen = *dname + 1U;
-    const uint8_t* retval = table[slotnum] = lta_malloc(lta, dnlen);
-    memcpy((uint8_t*)retval, dname, dnlen);
+    uint8_t* retval = lta_malloc(lta, dnlen);
+    table[slotnum] = retval;
+    memcpy(retval, dname, dnlen);
 
     if(++dnhash->count > (dnhash->mask >> 1U))
         dnhash_grow(dnhash);

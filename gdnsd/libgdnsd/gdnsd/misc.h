@@ -26,20 +26,20 @@
 #include <pthread.h>
 #include <dirent.h>
 
-extern const uint8_t gdnsd_lcmap[256];
+extern const char gdnsd_lcmap[256];
 
 // downcase an array of bytes of known length
 F_NONNULL
-static inline void gdnsd_downcase_bytes(uint8_t* bytes, unsigned len) {
+static inline void gdnsd_downcase_bytes(char* bytes, unsigned len) {
     for(unsigned i = 0; i < len; i++)
-        bytes[i] = gdnsd_lcmap[bytes[i]];
+        bytes[i] = gdnsd_lcmap[(uint8_t)bytes[i]];
 }
 
 // downcase an asciiz string
 F_NONNULL
 static inline void gdnsd_downcase_str(char* str) {
     while(*str) {
-        *str = (char)gdnsd_lcmap[(uint8_t)*str];
+        *str = gdnsd_lcmap[(uint8_t)*str];
         str++;
     }
 }

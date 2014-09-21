@@ -165,7 +165,7 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
     dname_status_t status;
 
     if(len) {
-        status = dname_from_string(dname, (const uint8_t*)z->tstart, len);
+        status = dname_from_string(dname, z->tstart, len);
     }
     else {
         dmn_assert(lhs);
@@ -215,11 +215,11 @@ F_NONNULL
 static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
     dmn_assert(z);
 
-    uint8_t text_temp[len + 1];
+    char text_temp[len + 1];
     text_temp[0] = 0;
     unsigned newlen = len;
     if(len)
-        newlen = dns_unescape(text_temp, (const uint8_t*)z->tstart, len);
+        newlen = dns_unescape(text_temp, z->tstart, len);
 
     dmn_assert(newlen <= len);
 
@@ -229,7 +229,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
         if(newlen > 65500) parse_error_noargs("Text chunk too long (>65500 unescaped)");
         unsigned remainder = newlen % 255;
         unsigned num_whole_chunks = (newlen - remainder) / 255;
-        const uint8_t* zptr = text_temp;
+        const char* zptr = text_temp;
         const unsigned new_alloc = 1 + z->num_texts + num_whole_chunks + (remainder ? 1 : 0);
         z->texts = realloc(z->texts, new_alloc * sizeof(uint8_t*));
         for(unsigned i = 0; i < num_whole_chunks; i++) {

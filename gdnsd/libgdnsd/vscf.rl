@@ -334,7 +334,7 @@ static unsigned unescape_string(char** outp, const char* in, unsigned len) {
     char* out = malloc(len + 1);
     unsigned newlen = len;
     if(len)
-        newlen = dns_unescape((uint8_t*)out, (const uint8_t*)in, len);
+        newlen = dns_unescape(out, in, len);
     out = realloc(out, newlen + 1); // downsize
     out[newlen] = 0;
     *outp = out;
@@ -1014,7 +1014,7 @@ bool vscf_simple_get_as_bool(const vscf_data_t* d, bool* out) {
 dname_status_t vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
     dmn_assert(dname);
-    return dname_from_string(dname, (const uint8_t*)d->simple.rval, d->simple.rlen);
+    return dname_from_string(dname, d->simple.rval, d->simple.rlen);
 }
 
 vscf_data_t* vscf_hash_new(void) { return (vscf_data_t*)hash_new(); }

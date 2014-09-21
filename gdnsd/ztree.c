@@ -75,7 +75,7 @@ zone_t* zone_new(const char* zname, const char* source) {
 
     // Convert to terminated-dname format and check for problems
     uint8_t dname[256];
-    dname_status_t status = dname_from_string(dname, (const uint8_t*)zname, strlen(zname));
+    dname_status_t status = dname_from_string(dname, zname, strlen(zname));
 
     if(status == DNAME_INVALID) {
         log_err("Zone name '%s' is illegal", zname);

@@ -141,8 +141,8 @@ void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, const c
 
 static int moncmp(const void* x, const void* y) {
     dmn_assert(x); dmn_assert(y);
-    const extf_mon_t* xm = (const extf_mon_t*)x;
-    const extf_mon_t* ym = (const extf_mon_t*)y;
+    const extf_mon_t* xm = x;
+    const extf_mon_t* ym = y;
     return strcmp(xm->name, ym->name);
 }
 
@@ -241,7 +241,7 @@ F_NONNULL
 static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
 
-    extf_svc_t* svc = (extf_svc_t*)w->data;
+    extf_svc_t* svc = w->data;
     dmn_assert(svc);
 
     if(svc->direct)
@@ -252,7 +252,7 @@ static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
 F_NONNULL
 static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
-    extf_svc_t* svc = (extf_svc_t*)w->data;
+    extf_svc_t* svc = w->data;
     dmn_assert(svc);
     dmn_assert(svc->direct);
     ev_timer_again(loop, svc->time_watcher);

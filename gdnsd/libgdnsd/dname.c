@@ -30,10 +30,10 @@
 
 /* The semantics of these functions are described in gdnsd/dname.h ... */
 
-unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, const unsigned len) {
+unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const unsigned len) {
     dmn_assert(out); dmn_assert(len);
 
-    uint8_t* optr = out;
+    char* optr = out;
     for(unsigned i = 0; i < len; i++) {
         if(likely(in[i] != '\\')) {
             *optr++ = in[i];
@@ -62,7 +62,7 @@ unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, c
                     optr = out;
                     break;
                 }
-                *optr++ = (uint8_t)x;
+                *optr++ = x;
             }
             else {
                 *optr++ = in[i];
@@ -73,12 +73,12 @@ unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, c
     return optr - out;
 }
 
-gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const uint8_t* restrict instr, const unsigned len) {
+gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len) {
     dmn_assert(dname); dmn_assert(instr || !len);
 
     // A label can be at most 63 bytes after unescaping,
     //  which means up to 252 bytes while escaped...
-    uint8_t label_buf[252];
+    char label_buf[252];
 
     // If string len is >1004, it cannot possibly decode legally.
     if(len > 1004)
@@ -99,9 +99,9 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const uint
         return DNAME_PARTIAL;
     }
 
-    const uint8_t* label_start = instr;
-    const uint8_t* instr_cursor = instr;
-    const uint8_t* instr_last = instr + len - 1;
+    const char* label_start = instr;
+    const char* instr_cursor = instr;
+    const char* instr_last = instr + len - 1;
 
     // escape_next is tracking for escaped dots "\.", and
     //  escaped slashes "\\" in the simplest reasonable manner, so that

@@ -394,7 +394,7 @@ static void timeout_cb(struct ev_loop* loop V_UNUSED, ev_timer* t, const int rev
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
-    http_data_t* tdata = (http_data_t*)t->data;
+    http_data_t* tdata = t->data;
     log_debug("HTTP connection timed out while %s %s",
         tdata->state == READING_REQ
             ? "reading from"
@@ -411,7 +411,7 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
-    http_data_t* tdata = (http_data_t*)io->data;
+    http_data_t* tdata = io->data;
     struct iovec* iovs = tdata->outbufs;
 
     struct iovec* iovs_writev;
@@ -465,7 +465,7 @@ F_NONNULL
 static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
-    http_data_t* tdata = (http_data_t*)io->data;
+    http_data_t* tdata = io->data;
 
     dmn_assert(tdata);
     dmn_assert(tdata->state != WRITING_RES);

@@ -34,7 +34,7 @@ int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UN
 gdnsd_sttl_t plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     if(origin) {
         uint8_t cntmp[256];
-        gdnsd_dname_from_string(cntmp, (const uint8_t*)"invalid.", 8);
+        gdnsd_dname_from_string(cntmp, "invalid.", 8);
         gdnsd_result_add_cname(result, cntmp, origin);
     }
     else {
@@ -71,7 +71,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
-    null_mon_t* mon = (null_mon_t*)t->data;
+    null_mon_t* mon = t->data;
     dmn_assert(mon);
     gdnsd_mon_state_updater(mon->idx, false);
 }

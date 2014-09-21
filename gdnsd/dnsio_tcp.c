@@ -91,7 +91,7 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
     dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
-    tcpdns_conn_t* tdata = (tcpdns_conn_t*)t->data;
+    tcpdns_conn_t* tdata = t->data;
     log_devdebug("TCP DNS Connection timed out while %s %s",
         tdata->state == WRITING ? "writing to" : "reading from", dmn_logf_anysin(tdata->asin));
 
@@ -108,7 +108,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
-    tcpdns_conn_t* tdata = (tcpdns_conn_t*)io->data;
+    tcpdns_conn_t* tdata = io->data;
     const size_t wanted = tdata->size - tdata->size_done;
     const uint8_t* source = tdata->buffer + tdata->size_done;
 
@@ -149,7 +149,7 @@ F_NONNULL
 static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
-    tcpdns_conn_t* tdata = (tcpdns_conn_t*)io->data;
+    tcpdns_conn_t* tdata = io->data;
 
     dmn_assert(tdata);
     dmn_assert(tdata->state == READING_INITIAL || tdata->state == READING_MORE);
@@ -230,7 +230,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
-    tcpdns_thread_t* thread_ctx = (tcpdns_thread_t*)io->data;
+    tcpdns_thread_t* thread_ctx = io->data;
 
     dmn_anysin_t* asin = malloc(sizeof(dmn_anysin_t));
     asin->len = DMN_ANYSIN_MAXLEN;
@@ -374,7 +374,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
 
     gdnsd_thread_setname("gdnsd-io-tcp");
 
-    const dns_thread_t* t = (const dns_thread_t*)thread_asvoid;
+    const dns_thread_t* t = thread_asvoid;
     dmn_assert(!t->is_udp);
 
     const dns_addr_t* addrconf = t->ac;

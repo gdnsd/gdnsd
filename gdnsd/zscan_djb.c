@@ -128,7 +128,7 @@ void zscan_djbzone_free(zscan_djb_zonedata_t** zd) {
 
 F_NONNULL
 static uint8_t *parse_dname(zscan_t *z, uint8_t *dname, field_t *f) {
-    dname_status_t status = dname_from_string(dname, (const uint8_t*) f->ptr, f->len);
+    dname_status_t status = dname_from_string(dname, f->ptr, f->len);
 
     switch(status) {
         case DNAME_INVALID:
@@ -160,7 +160,7 @@ static uint8_t *expand_dname(zscan_t *z, uint8_t *dname, field_t *f, const uint8
 
     /* construct dname of form <fieldname>.<subzone>.<zone>
      * e.g. ns1.ns.example.com */
-    dname_from_string(dname, (const uint8_t*) f->ptr, f->len);
+    dname_from_string(dname, f->ptr, f->len);
     dname_cat(dname, subzone);
     switch (dname_cat(dname, zone)) {
         case DNAME_VALID:

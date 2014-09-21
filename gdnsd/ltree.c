@@ -832,7 +832,8 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
 
         //  If in auth space with no match, and we still have a child_table, check for wildcard
         if(!rv_node && rval == DNAME_AUTH && current->child_table) {
-            ltree_node_t* entry = current->child_table[label_djb_hash((const uint8_t*)"\001*", current->child_hash_mask)];
+            static const uint8_t label_wild[2] =  { '\001', '*' };
+            ltree_node_t* entry = current->child_table[label_djb_hash(label_wild, current->child_hash_mask)];
             while(entry) {
                 if(entry->label[0] == '\001' && entry->label[1] == '*') {
                     rv_node = entry;

@@ -164,7 +164,7 @@ typedef enum {
 //   the error indication by returning a zero length
 // Note the use of "restrict": out and in cannot overlap
 F_NONNULL
-unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, const unsigned len);
+unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const unsigned len);
 
 // Parse a uint8_t* human-readable string into a dname.  len is the length of the input.
 // Escapes will be unescaped and any uppercase ASCII characters will be normalized to lowercase.
@@ -173,7 +173,7 @@ unsigned gdnsd_dns_unescape(uint8_t* restrict out, const uint8_t* restrict in, c
 //  result.  Any less could result in random crashy bugs.
 // Note the use of "restrict": dname and instr cannot overlap
 F_NONNULL
-gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const uint8_t* restrict instr, const unsigned len);
+gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len);
 
 // Parse a raw domainname from a DNS packet (no initial len byte), creating a "dname"
 //  with an initial len byte.  You must allocate the storage for dname (to 256 bytes).
