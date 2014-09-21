@@ -334,7 +334,7 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         if (field[4].len == 2 && memcmp(field[4].ptr, "~~", 2) == 0) {
             /* FIXME: check ooz is right */
             /* FIXME: new arg ttl_min set to half of ttl, could use explicit param in data file */
-            if (ltree_add_rec_dynaddr(zone, dname, (const uint8_t *) field[1].ptr, ttl, ttl >> 1, 0, 0, 0))
+            if (ltree_add_rec_dynaddr(zone, dname, field[1].ptr, ttl, ttl >> 1, 0, 0, 0))
                 parse_abort();
         } else {
             LOCCHECK(4);
@@ -353,7 +353,7 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         ttl = parse_ttl(z, &field[2], TTL_POSITIVE);
         if (field[4].len == 2 && memcmp(field[4].ptr, "~~", 2) == 0) {
             /* FIXME: ttl_min as above */
-            if (ltree_add_rec_dync(zone, dname, (const uint8_t *) field[1].ptr, dname_root, ttl, ttl >> 1, 0, 0))
+            if (ltree_add_rec_dync(zone, dname, field[1].ptr, dname_root, ttl, ttl >> 1, 0, 0))
                 parse_abort();
         } else {
             LOCCHECK(4);

@@ -92,7 +92,10 @@ typedef struct {
     uint8_t  origin[256];
     uint8_t  lhs_dname[256];
     uint8_t  rhs_dname[256];
-    uint8_t  eml_dname[256];
+    union {
+        uint8_t eml_dname[256];
+        char    rhs_dyn[256];
+    };
     uint8_t** texts;
     sigjmp_buf jbuf;
 } zscan_t;
@@ -304,8 +307,8 @@ static void set_dyna(zscan_t* z, const char* fpc) {
     unsigned dlen = fpc - z->tstart;
     if(dlen > 255)
         parse_error_noargs("DYNA/DYNC plugin!resource string cannot exceed 255 chars");
-    memcpy(z->eml_dname, z->tstart, dlen);
-    z->eml_dname[dlen] = 0;
+    memcpy(z->rhs_dyn, z->tstart, dlen);
+    z->rhs_dyn[dlen] = 0;
     z->tstart = NULL;
 }
 
@@ -402,7 +405,7 @@ static void rec_txt(zscan_t* z) {
 F_NONNULL
 static void rec_dyna(zscan_t* z) {
     dmn_assert(z);
-    if(ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->eml_dname, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
+    if(ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -410,7 +413,7 @@ F_NONNULL
 static void rec_dync(zscan_t* z) {
     dmn_assert(z);
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_dync(z->zone, z->lhs_dname, z->eml_dname, z->origin, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
+    if(ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->origin, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -518,7 +521,6 @@ static void close_paren(zscan_t* z) {
     action set_limit_v4 { set_limit_v4(z); }
     action set_limit_v6 { set_limit_v6(z); }
 
-    # We re-use eml_dname to store dyna strings
     action set_dyna { set_dyna(z, fpc); }
 
     action rec_soa { rec_soa(z); }

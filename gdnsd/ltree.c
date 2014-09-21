@@ -398,7 +398,7 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
     return false;
 }
 
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6, const bool ooz) {
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6, const bool ooz) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
 
     ltree_node_t* node;
@@ -433,7 +433,7 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const uint8
     rrset->limit_v4 = limit_v4;
     rrset->limit_v6 = limit_v6;
 
-    const unsigned rhs_size = strlen((const char*)rhs) + 1;
+    const unsigned rhs_size = strlen(rhs) + 1;
     char plugin_name[rhs_size];
     memcpy(plugin_name, rhs, rhs_size);
     char* resource_name;
@@ -473,7 +473,7 @@ bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t
     return false;
 }
 
-bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, const uint8_t* origin, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6) {
+bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, const uint8_t* origin, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs); dmn_assert(origin);
 
     CLAMP_TTL("DYNC")
@@ -494,7 +494,7 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const uint8_t*
     rrset->limit_v4 = limit_v4;
     rrset->limit_v6 = limit_v6;
 
-    const unsigned rhs_size = strlen((const char*)rhs) + 1;
+    const unsigned rhs_size = strlen(rhs) + 1;
     char plugin_name[rhs_size];
     memcpy(plugin_name, rhs, rhs_size);
     char* resource_name;

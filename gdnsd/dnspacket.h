@@ -144,11 +144,8 @@ typedef struct {
     unsigned int arcount;
     unsigned int cname_ancount;
 
-    // synthetic rrsets for DYNC (only one can be used at a time)
-    union {
-        ltree_rrset_cname_t dync_cname;
-        ltree_rrset_addr_t dync_addr;
-    };
+    // synthetic rrsets for DYNC
+    ltree_rrset_t dync_synth_rrset;
 
     // EDNS Client Subnet response mask.
     // Not valid/useful unless use_edns_client_subnet is true below.

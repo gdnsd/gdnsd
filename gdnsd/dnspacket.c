@@ -1186,7 +1186,7 @@ static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, 
     const ltree_rrset_t* rrset = res_rrsets;
     while(rrset) {
         if(rrset->gen.type == DNS_TYPE_A)
-            offset = encode_rrs_anyaddr(c, offset, (const void*)rrset, c->qname_comp, false);
+            offset = encode_rrs_anyaddr(c, offset, &rrset->addr, c->qname_comp, false);
         rrset = rrset->gen.next;
     }
 
@@ -1197,33 +1197,33 @@ static unsigned int encode_rrs_any(dnspacket_context_t* c, unsigned int offset, 
                 // handled above
                 break;
             case DNS_TYPE_SOA:
-                offset = encode_rr_soa(c, offset, (const void*)rrset, true);
+                offset = encode_rr_soa(c, offset, &rrset->soa, true);
                 break;
             case DNS_TYPE_CNAME:
-                offset = encode_rr_cname(c, offset, (const void*)rrset, true);
+                offset = encode_rr_cname(c, offset, &rrset->cname, true);
                 break;
             case DNS_TYPE_NS:
-                offset = encode_rrs_ns(c, offset, (const void*)rrset, true);
+                offset = encode_rrs_ns(c, offset, &rrset->ns, true);
                 break;
             case DNS_TYPE_PTR:
-                offset = encode_rrs_ptr(c, offset, (const void*)rrset, true);
+                offset = encode_rrs_ptr(c, offset, &rrset->ptr, true);
                 break;
             case DNS_TYPE_MX:
-                offset = encode_rrs_mx(c, offset, (const void*)rrset, true);
+                offset = encode_rrs_mx(c, offset, &rrset->mx, true);
                 break;
             case DNS_TYPE_SRV:
-                offset = encode_rrs_srv(c, offset, (const void*)rrset, true);
+                offset = encode_rrs_srv(c, offset, &rrset->srv, true);
                 break;
             case DNS_TYPE_NAPTR:
-                offset = encode_rrs_naptr(c, offset, (const void*)rrset, true);
+                offset = encode_rrs_naptr(c, offset, &rrset->naptr, true);
                 break;
             case DNS_TYPE_TXT:
-                offset = encode_rrs_txt(c, offset, (const void*)rrset, true);
+                offset = encode_rrs_txt(c, offset, &rrset->txt, true);
                 break;
             case DNS_TYPE_DYNC:;
                 dmn_assert(0); // DYNC should never make it to here
             default:
-                offset = encode_rrs_rfc3597(c, offset, (const void*)rrset, true);
+                offset = encode_rrs_rfc3597(c, offset, &rrset->rfc3597, true);
                 break;
         }
         rrset = rrset->gen.next;
@@ -1527,9 +1527,9 @@ static unsigned int construct_normal_response(dnspacket_context_t* c, unsigned i
         while(node_rrset) {
             if(node_rrset->gen.type == etype) {
                 if(unlikely(etype & 0xFF00))
-                    offset = encode_rrs_rfc3597(c, offset, (const void*)node_rrset, true);
+                    offset = encode_rrs_rfc3597(c, offset, &node_rrset->rfc3597, true);
                 else
-                    offset = encode_funcptrs[c->qtype](c, offset, (const void*)node_rrset, true);
+                    offset = encode_funcptrs[c->qtype](c, offset, node_rrset, true);
                 break;
             }
             node_rrset = node_rrset->gen.next;
@@ -1647,8 +1647,6 @@ static const ltree_rrset_t* process_dync(dnspacket_context_t* c, const ltree_rrs
     dmn_assert(rd);
     dmn_assert(!rd->gen.next); // DYNC does not co-exist with other rrsets
 
-    const ltree_rrset_t* rv = NULL;
-
     const unsigned ttl = do_dyn_callback(c, rd->func, rd->origin, rd->resource, rd->gen.ttl, rd->ttl_min);
     dyn_result_t* dr = c->dyn;
 
@@ -1657,11 +1655,10 @@ static const ltree_rrset_t* process_dync(dnspacket_context_t* c, const ltree_rrs
         dmn_assert(c->dync_count < gconfig.max_cname_depth);
         uint8_t* cn_store = &c->dync_store[c->dync_count++ * 256];
         dname_copy(cn_store, dr->storage);
-        c->dync_cname.gen.type = DNS_TYPE_CNAME;
-        c->dync_cname.gen.count = 1;
-        c->dync_cname.gen.ttl = ttl;
-        c->dync_cname.dname = cn_store;
-        rv = (const ltree_rrset_t*)&c->dync_cname;
+        c->dync_synth_rrset.gen.type = DNS_TYPE_CNAME;
+        c->dync_synth_rrset.gen.count = 1;
+        c->dync_synth_rrset.gen.ttl = ttl;
+        c->dync_synth_rrset.cname.dname = cn_store;
     }
     else if(dr->count_v4 + dr->count_v6) {
         // ^ If both counts are zero, must represent this as
@@ -1675,23 +1672,22 @@ static const ltree_rrset_t* process_dync(dnspacket_context_t* c, const ltree_rrs
         if(!lv6 || lv6 > dr->count_v6)
             lv6 = dr->count_v6;
 
-        c->dync_addr.gen.type = DNS_TYPE_A;
-        c->dync_addr.gen.ttl = ttl;
-        c->dync_addr.count_v6 = dr->count_v6;
-        c->dync_addr.gen.count = dr->count_v4;
+        c->dync_synth_rrset.gen.type = DNS_TYPE_A;
+        c->dync_synth_rrset.gen.ttl = ttl;
+        c->dync_synth_rrset.addr.count_v6 = dr->count_v6;
+        c->dync_synth_rrset.gen.count = dr->count_v4;
         if(!dr->count_v6 && dr->count_v4 <= LTREE_V4A_SIZE) {
-            memcpy(c->dync_addr.v4a, dr->v4, sizeof(uint32_t) * dr->count_v4);
+            memcpy(c->dync_synth_rrset.addr.v4a, dr->v4, sizeof(uint32_t) * dr->count_v4);
         }
         else {
-            c->dync_addr.addrs.v4 = dr->v4;
-            c->dync_addr.addrs.v6 = &dr->storage[result_v6_offset];
+            c->dync_synth_rrset.addr.addrs.v4 = dr->v4;
+            c->dync_synth_rrset.addr.addrs.v6 = &dr->storage[result_v6_offset];
         }
-        c->dync_addr.limit_v4 = lv4;
-        c->dync_addr.limit_v6 = lv6;
-        rv = (const ltree_rrset_t*)&c->dync_addr;
+        c->dync_synth_rrset.addr.limit_v4 = lv4;
+        c->dync_synth_rrset.addr.limit_v6 = lv6;
     }
 
-    return rv;
+    return &c->dync_synth_rrset;
 }
 
 F_NONNULL
