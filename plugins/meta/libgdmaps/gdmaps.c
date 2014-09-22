@@ -92,14 +92,15 @@ typedef struct {
 } gdmap_t;
 
 F_NONNULL
-static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, const vscf_data_t* val V_UNUSED, void* data) {
-    dmn_assert(key); dmn_assert(data);
-    log_fatal("plugin_geoip: map '%s': invalid config key '%s'", (const char*)data, key);
+static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* val V_UNUSED, const void* mapname_asvoid) {
+    dmn_assert(key); dmn_assert(val); dmn_assert(mapname_asvoid);
+    const char* mapname = mapname_asvoid;
+    log_fatal("plugin_geoip: map '%s': invalid config key '%s'", mapname, key);
     return false;
 }
 
 F_NONNULLX(1,2)
-static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fips_t* fips) {
+static gdmap_t* gdmap_new(const char* name, vscf_data_t* map_cfg, const fips_t* fips) {
     dmn_assert(name); dmn_assert(map_cfg);
 
     // basics
@@ -110,17 +111,17 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
         log_fatal("plugin_geoip: value for map '%s' must be a hash", name);
 
     // datacenters config
-    const vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(map_cfg, "datacenters", true);
+    vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(map_cfg, "datacenters", true);
     if(!dc_cfg)
         log_fatal("plugin_geoip: map '%s': missing required 'datacenters' array", name);
-    const vscf_data_t* dc_auto_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_coords", true);
-    const vscf_data_t* dc_auto_limit_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_limit", true);
+    vscf_data_t* dc_auto_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_coords", true);
+    vscf_data_t* dc_auto_limit_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_limit", true);
     gdmap->city_auto_mode = dc_auto_cfg ? true : false;
     gdmap->dcinfo = dcinfo_new(dc_cfg, dc_auto_cfg, dc_auto_limit_cfg, name);
     gdmap->dclists_pend = dclists_new(gdmap->dcinfo);
 
     // geoip_db config
-    const vscf_data_t* gdb_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db", true);
+    vscf_data_t* gdb_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db", true);
     if(gdb_cfg) {
         if(!vscf_is_simple(gdb_cfg) || !vscf_simple_get_len(gdb_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip_db' must have a non-empty string value", name);
@@ -128,7 +129,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     }
 
     // geoip_db_v4_overlay config
-    const vscf_data_t* gdb_v4o_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db_v4_overlay", true);
+    vscf_data_t* gdb_v4o_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db_v4_overlay", true);
     if(gdb_v4o_cfg) {
         if(!gdb_cfg)
             log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' requires an IPv6 'geoip_db'", name);
@@ -138,7 +139,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     }
 
     // map config
-    const vscf_data_t* map_map = vscf_hash_get_data_byconstkey(map_cfg, "map", true);
+    vscf_data_t* map_map = vscf_hash_get_data_byconstkey(map_cfg, "map", true);
     if(map_map) {
         if(!vscf_is_hash(map_map))
             log_fatal("plugin_geoip: map '%s': 'map' stanza must be a hash", name);
@@ -148,7 +149,7 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
     }
 
     // nets config
-    const vscf_data_t* nets_cfg = vscf_hash_get_data_byconstkey(map_cfg, "nets", true);
+    vscf_data_t* nets_cfg = vscf_hash_get_data_byconstkey(map_cfg, "nets", true);
     if(!nets_cfg || vscf_is_hash(nets_cfg)) {
         // statically-defined hash or empty, load now, leave path undefined
         gdmap->nets_list = nets_make_list(nets_cfg, gdmap->dclists_pend, name);
@@ -165,14 +166,14 @@ static gdmap_t* gdmap_new(const char* name, const vscf_data_t* map_cfg, const fi
 
     // optional GeoIPCity behavior flags
     gdmap->city_no_region = false;
-    const vscf_data_t* cnr_cfg = vscf_hash_get_data_byconstkey(map_cfg, "city_no_region", true);
+    vscf_data_t* cnr_cfg = vscf_hash_get_data_byconstkey(map_cfg, "city_no_region", true);
     if(cnr_cfg) {
         if(!vscf_is_simple(cnr_cfg) || !vscf_simple_get_as_bool(cnr_cfg, &gdmap->city_no_region))
             log_fatal("plugin_geoip: map '%s': 'city_no_region' must be a boolean value ('true' or 'false')", name);
     }
 
     // check for invalid keys
-    vscf_hash_iterate(map_cfg, true, _gdmap_badkey, (void*)name);
+    vscf_hash_iterate_const(map_cfg, true, _gdmap_badkey, name);
 
     return gdmap;
 }
@@ -274,7 +275,7 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
 
 
     char* vscf_err;
-    const vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path, &vscf_err);
+    vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path, &vscf_err);
     nlist_t* new_list = NULL;
     if(nets_cfg) {
         dmn_assert(!vscf_err);
@@ -572,7 +573,7 @@ struct _gdmaps_t {
 };
 
 F_NONNULL
-static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, const vscf_data_t* val, void* data) {
+static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data) {
     dmn_assert(key); dmn_assert(val); dmn_assert(data);
     gdmaps_t* gdmaps = data;
     gdmaps->maps = realloc(gdmaps->maps, sizeof(gdmap_t*) * (gdmaps->count + 1));
@@ -580,13 +581,13 @@ static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, const vscf
     return true;
 }
 
-gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg) {
+gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg) {
     dmn_assert(maps_cfg);
     dmn_assert(vscf_is_hash(maps_cfg));
 
     gdmaps_t* gdmaps = calloc(1, sizeof(gdmaps_t));
 
-    const vscf_data_t* crn_cfg = vscf_hash_get_data_byconstkey(maps_cfg, "city_region_names", true);
+    vscf_data_t* crn_cfg = vscf_hash_get_data_byconstkey(maps_cfg, "city_region_names", true);
     if(crn_cfg) {
         if(!vscf_is_simple(crn_cfg))
             log_fatal("plugin_geoip: 'city_region_names' must be a filename as a simple string value");

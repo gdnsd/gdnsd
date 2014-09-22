@@ -228,7 +228,7 @@ static void admin_process_file(const char* pathname) {
     bool success = true;
 
     char* vscf_err;
-    const vscf_data_t* raw = vscf_scan_filename(pathname, &vscf_err);
+    vscf_data_t* raw = vscf_scan_filename(pathname, &vscf_err);
     if(!raw) {
         dmn_assert(vscf_err);
         success = false;
@@ -246,7 +246,7 @@ static void admin_process_file(const char* pathname) {
         const unsigned num_raw = vscf_hash_get_len(raw);
         for(unsigned i = 0; i < num_raw; i++) {
             const char* matchme = vscf_hash_get_key_byindex(raw, i, NULL);
-            const vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
+            vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
             if(!vscf_is_simple(val)) {
                 log_err("admin_state: value for '%s' must be a simple string!", matchme);
                 success = false;
@@ -546,7 +546,7 @@ const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void) {
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
     do { \
-        const vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
+        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
         if(_data) { \
             unsigned long _val; \
             if(!vscf_is_simple(_data) \
@@ -559,12 +559,13 @@ const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void) {
     } while(0)
 
 F_NONNULL
-static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data) {
-    dmn_assert(key); dmn_assert(data);
-    log_fatal("Service type '%s', bad option '%s'", (const char*)data, key);
+static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* svcname_asvoid) {
+    dmn_assert(key); dmn_assert(d); dmn_assert(svcname_asvoid);
+    const char* svcname = svcname_asvoid;
+    log_fatal("Service type '%s', bad option '%s'", svcname, key);
 }
 
-void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
+void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg) {
 
     unsigned num_svc_types_cfg = 0;
 
@@ -588,10 +589,10 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
         this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
         if(!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
             log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
-        const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
+        vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
         if(!vscf_is_hash(svctype_cfg))
             log_fatal("Definition of service type '%s' must be a hash", this_svc->name);
-        const vscf_data_t* pname_cfg = vscf_hash_get_data_byconstkey(svctype_cfg, "plugin", true);
+        vscf_data_t* pname_cfg = vscf_hash_get_data_byconstkey(svctype_cfg, "plugin", true);
         if(!pname_cfg)
             log_fatal("Service type '%s': 'plugin' must be defined", this_svc->name);
         if(!vscf_is_simple(pname_cfg) || !vscf_simple_get_len(pname_cfg))
@@ -603,7 +604,7 @@ void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg) {
     }
 }
 
-void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg) {
+void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg) {
 
     // If no plugins actually used any plugin-monitored services, there's
     //   no point in setting up the remainder of this.  At the very least
@@ -628,7 +629,7 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg) {
         dmn_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, i, NULL)));
         dmn_assert(this_svc->plugin);
 
-        const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
+        vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
         dmn_assert(svctype_cfg);
 
         this_svc->up_thresh = DEF_UP_THRESH;
@@ -645,7 +646,7 @@ void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg) {
             log_fatal("Service type '%s': timeout must be less than interval)", this_svc->name);
 
         this_svc->plugin->add_svctype(this_svc->name, svctype_cfg, this_svc->interval, this_svc->timeout);
-        vscf_hash_iterate(svctype_cfg, true, bad_svc_opt, (void*)this_svc->name);
+        vscf_hash_iterate_const(svctype_cfg, true, bad_svc_opt, this_svc->name);
     }
 
     // dummy config for up+down

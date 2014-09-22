@@ -78,11 +78,11 @@ static resource_t* resources;
 // retval is new storage.
 // "plugin", if existed in config, will be marked afterwards
 F_NONNULL
-static char* get_defaulted_plugname(const vscf_data_t* cfg, const char* resname, const char* dcname) {
+static char* get_defaulted_plugname(vscf_data_t* cfg, const char* resname, const char* dcname) {
     dmn_assert(cfg);
 
     char* rv;
-    const vscf_data_t* plugname_data = vscf_hash_get_data_byconstkey(cfg, "plugin", true);
+    vscf_data_t* plugname_data = vscf_hash_get_data_byconstkey(cfg, "plugin", true);
     if(plugname_data) {
         if(!vscf_is_simple(plugname_data))
             log_fatal("plugin_" PNSTR ": resource '%s': datacenter '%s': value of 'plugin' must be a string", resname, dcname);
@@ -104,9 +104,9 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
     this_dc->res_name = child_resname;
 
     // Move up 2 layers: dcX -> dcmap -> resX
-    vscf_data_t* res_cfg = (vscf_data_t*)cfg;
+    vscf_data_t* res_cfg = cfg;
     for(unsigned i = 0; i < 2; i++) {
-        res_cfg = (vscf_data_t*)vscf_get_parent(res_cfg);
+        res_cfg = vscf_get_parent(res_cfg);
         dmn_assert(res_cfg);
     }
 
@@ -114,7 +114,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
     //   resX -> resources -> metafo|geoip -> plugins
     vscf_data_t* plugins_top = res_cfg;
     for(unsigned i = 0; i < 3; i++) {
-        plugins_top = (vscf_data_t*)vscf_get_parent(plugins_top);
+        plugins_top = vscf_get_parent(plugins_top);
         dmn_assert(plugins_top);
     }
 
@@ -126,7 +126,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
         vscf_hash_add_val("plugin", 6, newhash, plugname_cfg);
         const unsigned alen = vscf_array_get_len(cfg);
         for(unsigned i = 0; i < alen; i++) {
-            const vscf_data_t* this_addr_cfg = vscf_array_get_data(cfg, i);
+            vscf_data_t* this_addr_cfg = vscf_array_get_data(cfg, i);
             if(!vscf_is_simple(this_addr_cfg))
                 log_fatal("plugin_" PNSTR ": resource '%s': datacenter '%s': if defined as an array, array values must all be address strings", resname, this_dc->dc_name);
             const unsigned lnum = i + 1;
@@ -146,7 +146,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
         log_fatal("plugin_" PNSTR ": resource '%s': datacenter '%s': plugin_" PNSTR " cannot synthesize config for itself...", resname, this_dc->dc_name);
 
     // Create top-level plugins => { foo => {} } if necc
-    vscf_data_t* plug_cfg = (vscf_data_t*)vscf_hash_get_data_bystringkey(plugins_top, this_dc->plugin_name, false);
+    vscf_data_t* plug_cfg = vscf_hash_get_data_bystringkey(plugins_top, this_dc->plugin_name, false);
     if(!plug_cfg) {
         plug_cfg = vscf_hash_new();
         vscf_hash_add_val(this_dc->plugin_name, strlen(this_dc->plugin_name), plugins_top, plug_cfg);
@@ -154,7 +154,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
 
     // special-case for geoip -> metafo synthesis, use resources sub-stanza
     if(!strcmp(this_dc->plugin_name, "metafo")) {
-        vscf_data_t* synth_res_cfg = (vscf_data_t*)vscf_hash_get_data_byconstkey(plug_cfg, "resources", false);
+        vscf_data_t* synth_res_cfg = vscf_hash_get_data_byconstkey(plug_cfg, "resources", false);
         if(!synth_res_cfg) {
             synth_res_cfg = vscf_hash_new();
             vscf_hash_add_val("resources", strlen("resources"), plug_cfg, synth_res_cfg);
@@ -174,7 +174,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
 }
 
 F_NONNULL
-static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, const vscf_data_t* dc_data) {
+static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, vscf_data_t* dc_data) {
     dmn_assert(resname); dmn_assert(this_dc); dmn_assert(dc_name); dmn_assert(dc_data);
 
     this_dc->dc_name = strdup(dc_name);
@@ -218,13 +218,13 @@ static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc
                 // service_types is already inherited from top-level to res-level, this gets
                 //   it from res-level.  We don't currently allow for a per-dc sevice_types for CNAME,
                 //   although it could be done, probably...
-                const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(res_cfg, "service_types", false);
+                vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(res_cfg, "service_types", false);
                 if(res_stypes) {
                     this_dc->num_svcs = vscf_array_get_len(res_stypes);
                     if(this_dc->num_svcs) {
                         this_dc->indices = malloc(sizeof(unsigned) * this_dc->num_svcs);
                         for(unsigned i = 0; i < this_dc->num_svcs; i++) {
-                            const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
+                            vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                             if(!vscf_is_simple(this_svc_cfg))
                                 log_fatal("plugin_" PNSTR ": resource '%s': service_types values must be strings", resname);
                             this_dc->indices[i] = gdnsd_mon_cname(vscf_simple_get_data(this_svc_cfg), textdata, dname);
@@ -238,18 +238,18 @@ static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc
                 }
             }
             else {
-                inject_child_plugin_config(this_dc, resname, (vscf_data_t*)dc_data);
+                inject_child_plugin_config(this_dc, resname, dc_data);
             }
         }
     }
     else {
-        inject_child_plugin_config(this_dc, resname, (vscf_data_t*)dc_data);
+        inject_child_plugin_config(this_dc, resname, dc_data);
     }
 
 }
 
 F_NONNULL
-static dc_t* config_res_dcmap(const vscf_data_t* res_cfg, const unsigned mapnum, const vscf_data_t* dcmap_cfg, const char* resname) {
+static dc_t* config_res_dcmap(vscf_data_t* res_cfg, const unsigned mapnum, vscf_data_t* dcmap_cfg, const char* resname) {
     dmn_assert(dcmap_cfg); dmn_assert(resname);
     dmn_assert(vscf_is_hash(dcmap_cfg));
 
@@ -265,7 +265,7 @@ static dc_t* config_res_dcmap(const vscf_data_t* res_cfg, const unsigned mapnum,
 #if META_MAP_ADMIN == 1
         this_dc->map_mon_idx = map_get_mon_idx(mapnum, dc_idx);
 #endif
-        const vscf_data_t* dc_data = vscf_hash_get_data_byindex(dcmap_cfg, i);
+        vscf_data_t* dc_data = vscf_hash_get_data_byindex(dcmap_cfg, i);
         config_res_perdc(resname, res_cfg, this_dc, dc_name, dc_data);
     }
 
@@ -273,7 +273,7 @@ static dc_t* config_res_dcmap(const vscf_data_t* res_cfg, const unsigned mapnum,
 }
 
 F_NONNULL
-static void make_resource(resource_t* res, const char* res_name, const vscf_data_t* res_cfg) {
+static void make_resource(resource_t* res, const char* res_name, vscf_data_t* res_cfg) {
     dmn_assert(res);
     dmn_assert(res_name);
     dmn_assert(res_cfg);
@@ -288,7 +288,7 @@ static void make_resource(resource_t* res, const char* res_name, const vscf_data
     dmn_assert(dc_count); // empty lists not allowed!
 
     // the core item: dcmap (dc -> result map)
-    const vscf_data_t* dcs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "dcmap", true);
+    vscf_data_t* dcs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "dcmap", true);
     if(!dcs_cfg)
         log_fatal("plugin_" PNSTR ": resource '%s': missing required stanza 'dcmap'", res_name);
     if(!vscf_is_hash(dcs_cfg))
@@ -423,7 +423,7 @@ static int map_res_inner(const char* resname, const uint8_t* origin, const char*
 
 /********** Callbacks from gdnsd **************/
 
-void CB_LOAD_CONFIG(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
+void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
 
@@ -431,7 +431,7 @@ void CB_LOAD_CONFIG(const vscf_data_t* config, const unsigned num_threads V_UNUS
 
     top_config_hook(config);
 
-    const vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
+    vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
     if(!resources_cfg)
         log_fatal("plugin_" PNSTR ": config has no 'resources' stanza");
     if(!vscf_is_hash(resources_cfg))
@@ -446,7 +446,7 @@ void CB_LOAD_CONFIG(const vscf_data_t* config, const unsigned num_threads V_UNUS
     for(unsigned i = 0; i < num_res; i++) {
         resource_t* res = &resources[i];
         const char* res_name = vscf_hash_get_key_byindex(resources_cfg, i, NULL);
-        vscf_data_t* res_cfg = (vscf_data_t*)vscf_hash_get_data_byindex(resources_cfg, i);
+        vscf_data_t* res_cfg = vscf_hash_get_data_byindex(resources_cfg, i);
         if(!vscf_is_hash(res_cfg))
             log_fatal("plugin_" PNSTR ": the value of resource '%s' must be a hash", res_name);
         vscf_hash_inherit_all(config, res_cfg, true);

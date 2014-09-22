@@ -23,7 +23,7 @@
 #include <gdnsd/plugin.h>
 #include <string.h>
 
-void plugin_null_load_config(const vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED) {
+void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED) {
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
 }
 
@@ -76,7 +76,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
     gdnsd_mon_state_updater(mon->idx, false);
 }
 
-void plugin_null_add_svctype(const char* name, const vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED) {
+void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED) {
     dmn_assert(name); dmn_assert(svc_cfg);
     null_svcs = realloc(null_svcs, sizeof(null_svc_t*) * ++num_svcs);
     null_svc_t* this_svc = null_svcs[num_svcs - 1] = malloc(sizeof(null_svc_t));

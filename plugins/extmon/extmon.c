@@ -288,19 +288,19 @@ static void spawn_helper(void) {
         log_fatal("plugin_extmon: Failed to set O_NONBLOCK on pipe: %s", dmn_logf_errno());
 }
 
-static bool bad_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data V_UNUSED) {
+static bool bad_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, void* data V_UNUSED) {
     log_fatal("plugin_extmon: bad global option '%s'", key);
 }
 
-void plugin_extmon_load_config(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
+void plugin_extmon_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(config) {
-        const vscf_data_t* helper_path_cfg = vscf_hash_get_data_byconstkey(config, "helper_path", true);
+        vscf_data_t* helper_path_cfg = vscf_hash_get_data_byconstkey(config, "helper_path", true);
         if(helper_path_cfg) {
             if(!vscf_is_simple(helper_path_cfg))
                 log_fatal("plugin_extmon: config option 'helper_path' must be a simple string");
             helper_path = gdnsd_resolve_path_libexec(vscf_simple_get_data(helper_path_cfg), NULL);
         }
-        const vscf_data_t* fail_cfg = vscf_hash_get_data_byconstkey(config, "helper_failure_action", true);
+        vscf_data_t* fail_cfg = vscf_hash_get_data_byconstkey(config, "helper_failure_action", true);
         if(fail_cfg) {
             if(!vscf_is_simple(fail_cfg))
                 log_fatal("plugin_extmon: config option 'helper_failure_action' must be a simple string");
@@ -320,7 +320,7 @@ void plugin_extmon_load_config(const vscf_data_t* config, const unsigned num_thr
         helper_path = gdnsd_resolve_path_libexec("gdnsd_extmon_helper", NULL);
 }
 
-void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
+void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
     dmn_assert(name); dmn_assert(svc_cfg);
 
     svcs = realloc(svcs, (num_svcs + 1) * sizeof(svc_t));
@@ -329,7 +329,7 @@ void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     this_svc->timeout = timeout;
     this_svc->interval = interval;
 
-    const vscf_data_t* args_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "cmd", true);
+    vscf_data_t* args_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "cmd", true);
     if(!args_cfg)
         log_fatal("plugin_extmon: service_type '%s': option 'cmd' must be defined!", name);
     this_svc->num_args = vscf_array_get_len(args_cfg);
@@ -337,14 +337,14 @@ void plugin_extmon_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
         log_fatal("plugin_extmon: service_type '%s': option 'cmd' cannot be an empty array", name);
     this_svc->args = malloc(this_svc->num_args * sizeof(const char*));
     for(unsigned i = 0; i < this_svc->num_args; i++) {
-        const vscf_data_t* arg_cfg = vscf_array_get_data(args_cfg, i);
+        vscf_data_t* arg_cfg = vscf_array_get_data(args_cfg, i);
         if(!vscf_is_simple(arg_cfg))
             log_fatal("plugin_extmon: service_type '%s': option 'cmd': all elements must be simple strings", name);
         this_svc->args[i] = strdup(vscf_simple_get_data(arg_cfg));
     }
 
     this_svc->direct = false;
-    const vscf_data_t* direct_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "direct", true);
+    vscf_data_t* direct_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "direct", true);
     if(direct_cfg && !vscf_simple_get_as_bool(direct_cfg, &this_svc->direct))
         log_fatal("plugin_extmon: service type '%s': option 'direct' must have the value 'true' or 'false'", name);
 }

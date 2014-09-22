@@ -52,7 +52,7 @@ unsigned gdnsd_result_get_alloc(void);
 // MUST call this before loading plugins below,
 //   array can be NULL for just the default
 //   MUST only call this once per program
-void gdnsd_plugins_set_search_path(const vscf_data_t* psearch_array);
+void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array);
 
 F_NONNULL
 plugin_t* gdnsd_plugin_find_or_load(const char* pname);

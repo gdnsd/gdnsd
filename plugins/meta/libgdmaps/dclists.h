@@ -45,9 +45,9 @@ const uint8_t* dclists_get_list(const dclists_t* lists, const unsigned idx);
 F_NONNULL
 void dclists_replace_list0(dclists_t* lists, uint8_t* newlist);
 F_NONNULL
-int dclists_xlate_vscf(dclists_t* lists, const vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto);
+int dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto);
 F_NONNULL
-int dclists_find_or_add_vscf(dclists_t* lists, const vscf_data_t* vscf_list, const char* map_name, const bool allow_auto);
+int dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto);
 F_NONNULL
 unsigned dclists_city_auto_map(dclists_t* lists, const char* map_name, const unsigned raw_lat, const unsigned raw_lon);
 F_NONNULL

@@ -61,7 +61,7 @@ struct _dcinfo {
 //  names go into a hash requiring uniqueness, and the count is required
 //  to match (ditto for auto_dc_coords never succeeding with dupes in the
 //  datacenters list).
-dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, const vscf_data_t* dc_auto_limit_cfg, const char* map_name) {
+dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name) {
     dmn_assert(dc_cfg); dmn_assert(map_name);
 
     dcinfo_t* info = malloc(sizeof(dcinfo_t));
@@ -77,7 +77,7 @@ dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, 
     info->indices = malloc(sizeof(unsigned) * num_dcs);
     info->num_dcs = num_dcs;
     for(unsigned i = 0; i < num_dcs; i++) {
-        const vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
+        vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
         if(!dcname_cfg || !vscf_is_simple(dcname_cfg))
             log_fatal("plugin_geoip: map '%s': 'datacenters' must be an array of one or more strings", map_name);
         info->names[i] = strdup(vscf_simple_get_data(dcname_cfg));
@@ -106,9 +106,9 @@ dcinfo_t* dcinfo_new(const vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, 
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' not matched from 'datacenters' list", map_name, dcname);
             if(!isnan(info->coords[(dcidx*2)]))
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' defined twice", map_name, dcname);
-            const vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
-            const vscf_data_t* lat_cfg;
-            const vscf_data_t* lon_cfg;
+            vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
+            vscf_data_t* lat_cfg;
+            vscf_data_t* lon_cfg;
             double lat, lon;
             if(
                 !vscf_is_array(coord_cfg) || vscf_array_get_len(coord_cfg) != 2

@@ -43,11 +43,11 @@
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
-static const vscf_data_t* conf_load_vscf(const char* cfg_dir) {
-    const vscf_data_t* out = NULL;
+static vscf_data_t* conf_load_vscf(const char* cfg_dir) {
+    vscf_data_t* out = NULL;
 
     gdnsd_set_config_dir(cfg_dir);
-    char*cfg_path = gdnsd_resolve_path_cfg("config", NULL);
+    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
 
     struct stat cfg_stat;
     if(!stat(cfg_path, &cfg_stat)) {
@@ -68,25 +68,25 @@ static const vscf_data_t* conf_load_vscf(const char* cfg_dir) {
 }
 
 F_NONNULL
-static const vscf_data_t* conf_get_maps(const vscf_data_t* cfg_root) {
+static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root) {
     dmn_assert(cfg_root);
 
     // plugins stanza
-    const vscf_data_t* plugins = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
+    vscf_data_t* plugins = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
     if(!plugins)
         log_fatal("Config file has no plugins stanza");
     if(!vscf_is_hash(plugins))
         log_fatal("Config stanza 'plugins' must be a hash");
 
     // plugins->geoip stanza
-    const vscf_data_t* geoip = vscf_hash_get_data_byconstkey(plugins, "geoip", true);
+    vscf_data_t* geoip = vscf_hash_get_data_byconstkey(plugins, "geoip", true);
     if(!geoip)
         log_fatal("Config file has no geoip plugin config");
     if(!vscf_is_hash(geoip))
         log_fatal("Plugin config for 'geoip' must be a hash");
 
     // plugins->geoip->maps stanza
-    const vscf_data_t* maps = vscf_hash_get_data_byconstkey(geoip, "maps", true);
+    vscf_data_t* maps = vscf_hash_get_data_byconstkey(geoip, "maps", true);
     if(!maps)
         log_fatal("Config file has no geoip maps defined");
     if(!vscf_is_hash(maps))
@@ -161,8 +161,8 @@ gdmaps_t* gdmaps_test_init(const char* input_cfgdir) {
 
     dmn_init1(false, true, true, false, "gdmaps_test");
 
-    const vscf_data_t* cfg_root = conf_load_vscf(input_cfgdir);
-    const vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
+    vscf_data_t* cfg_root = conf_load_vscf(input_cfgdir);
+    vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* gdmaps = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);
 

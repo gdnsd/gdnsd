@@ -205,7 +205,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
     do { \
-        const vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
+        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
         if(_data) { \
             unsigned long _val; \
             if(!vscf_is_simple(_data) \
@@ -217,7 +217,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
         } \
     } while(0)
 
-void plugin_tcp_connect_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
+void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
     dmn_assert(name); dmn_assert(svc_cfg);
 
     service_types = realloc(service_types, (num_tcp_svcs + 1) * sizeof(tcp_svc_t));

@@ -116,10 +116,10 @@ static void plugins_cleanup(void) {
 
 // Generic iterator for catching bad config hash keys in various places below
 F_NONNULL
-static bool bad_key(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data) {
-    dmn_assert(data); dmn_assert(key);
-    const char* cfg = data;
-    log_fatal("Invalid %s key '%s'", cfg, key);
+static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* which_asvoid) {
+    dmn_assert(key); dmn_assert(d); dmn_assert(which_asvoid);
+    const char* which = which_asvoid;
+    log_fatal("Invalid %s key '%s'", which, key);
 }
 
 static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin_t* result) {
@@ -130,7 +130,7 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin
 }
 
 F_NONNULLX(1)
-static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf) {
+static void plugin_load_and_configure(const char* name, vscf_data_t* pconf) {
     dmn_assert(name);
 
     if(pconf && !vscf_is_hash(pconf))
@@ -144,7 +144,7 @@ static void plugin_load_and_configure(const char* name, const vscf_data_t* pconf
 }
 
 F_NONNULLX(1,3)
-static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const vscf_data_t* pconf, void* data V_UNUSED) {
+static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, void* data V_UNUSED) {
     dmn_assert(name); dmn_assert(pconf);
     plugin_load_and_configure(name, pconf);
     return true;
@@ -155,7 +155,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_BOOL(_opt_set, _gconf_loc) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             if(!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_bool(_opt_setting, &gconfig._gconf_loc)) \
@@ -165,7 +165,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_BOOL_ALTSTORE(_opt_set, _gconf_loc, _store) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             if(!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_bool(_opt_setting, &_store)) \
@@ -175,7 +175,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_UINT(_opt_set, _gconf_loc, _min, _max) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             unsigned long _val; \
             if(!vscf_is_simple(_opt_setting) \
@@ -189,7 +189,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_DBL(_opt_set, _gconf_loc, _min, _max) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             double _val; \
             if(!vscf_is_simple(_opt_setting) \
@@ -203,7 +203,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_INT(_opt_set, _gconf_loc, _min, _max) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             long _val; \
             if(!vscf_is_simple(_opt_setting) \
@@ -217,7 +217,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_UINT_ALTSTORE(_opt_set, _gconf_loc, _min, _max, _store) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             unsigned long _val; \
             if(!vscf_is_simple(_opt_setting) \
@@ -231,7 +231,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_UINT_ALTSTORE_NOMIN(_opt_set, _gconf_loc, _max, _store) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             unsigned long _val; \
             if(!vscf_is_simple(_opt_setting) \
@@ -245,7 +245,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_STR(_opt_set, _gconf_loc) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             if(!vscf_is_simple(_opt_setting)) \
                 log_fatal("Config option %s: Wrong type (should be string)", #_gconf_loc); \
@@ -255,7 +255,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
 
 #define CFG_OPT_STR_NOCOPY(_opt_set, _name, _store_at) \
     do { \
-        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_name, true); \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_name, true); \
         if(_opt_setting) { \
             if(!vscf_is_simple(_opt_setting)) \
                 log_fatal("Config option %s: Wrong type (should be string)", #_name); \
@@ -263,7 +263,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, const 
         } \
     } while(0)
 
-static void process_http_listen(const vscf_data_t* http_listen_opt, const unsigned def_http_port) {
+static void process_http_listen(vscf_data_t* http_listen_opt, const unsigned def_http_port) {
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
         gconfig.num_http_addrs = 2;
         gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
@@ -274,7 +274,7 @@ static void process_http_listen(const vscf_data_t* http_listen_opt, const unsign
         gconfig.num_http_addrs = vscf_array_get_len(http_listen_opt);
         gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
         for(unsigned i = 0; i < gconfig.num_http_addrs; i++) {
-            const vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
+            vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
             if(!vscf_is_simple(lspec))
                 log_fatal("Config option 'http_listen': all listen specs must be strings");
             make_addr(vscf_simple_get_data(lspec), def_http_port, &gconfig.http_addrs[i]);
@@ -361,7 +361,7 @@ static void dns_listen_scan(const dns_addr_t* addr_defs) {
         dmn_log_fatal("automatic interface scanning via 'listen => scan' found no valid addresses to listen on");
 }
 
-static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+static void fill_dns_addrs(vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
     dmn_assert(addr_defs);
 
     if(!listen_opt)
@@ -383,7 +383,7 @@ static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr
             dns_addr_t* addrconf = &gconfig.dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
             const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
-            const vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
+            vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
             if(!vscf_is_hash(addr_opts))
                 log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
 
@@ -408,7 +408,7 @@ static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr
             }
 
             make_addr(lspec, addrconf->dns_port, &addrconf->addr);
-            vscf_hash_iterate(addr_opts, true, bad_key, (void*)"per-address listen option");
+            vscf_hash_iterate_const(addr_opts, true, bad_key, "per-address listen option");
         }
     }
     else {
@@ -417,7 +417,7 @@ static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr
         for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
             dns_addr_t* addrconf = &gconfig.dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
-            const vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
+            vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
             if(!vscf_is_simple(lspec))
                 log_fatal("Config option 'listen': all listen specs must be strings");
             make_addr(vscf_simple_get_data(lspec), addr_defs->dns_port, &addrconf->addr);
@@ -425,7 +425,7 @@ static void fill_dns_addrs(const vscf_data_t* listen_opt, const dns_addr_t* addr
     }
 }
 
-static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+static void process_listen(vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
     // this fills in gconfig.dns_addrs raw data
     fill_dns_addrs(listen_opt, addr_defs);
 
@@ -469,8 +469,8 @@ static void process_listen(const vscf_data_t* listen_opt, const dns_addr_t* addr
     dmn_assert(tnum == gconfig.num_dns_threads);
 }
 
-static const vscf_data_t* conf_load_vscf(const char* cfg_file) {
-    const vscf_data_t* out = NULL;
+static vscf_data_t* conf_load_vscf(const char* cfg_file) {
+    vscf_data_t* out = NULL;
 
     struct stat cfg_stat;
     if(!stat(cfg_file, &cfg_stat)) {
@@ -495,13 +495,13 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
 
     gdnsd_set_config_dir(cfg_dir);
     char* cfg_file = gdnsd_resolve_path_cfg("config", NULL);
-    const vscf_data_t* cfg_root = conf_load_vscf(cfg_file);
+    vscf_data_t* cfg_root = conf_load_vscf(cfg_file);
     free(cfg_file);
 
 #ifndef NDEBUG
     // in developer debug builds, exercise clone+destroy
     if(cfg_root) {
-        const vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
+        vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
         vscf_destroy(cfg_root);
         cfg_root = temp_cfg;
     }
@@ -509,7 +509,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
 
     dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
 
-    const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
+    vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
 
     // daemon actions only need the rundir, so we process dirs first and bail
     //   early in those cases without doing the rest of the complex stuff
@@ -533,9 +533,9 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     if(cmode == CONF_SIMPLE_ACTION)
         return;
 
-    const vscf_data_t* listen_opt = NULL;
-    const vscf_data_t* http_listen_opt = NULL;
-    const vscf_data_t* psearch_array = NULL;
+    vscf_data_t* listen_opt = NULL;
+    vscf_data_t* http_listen_opt = NULL;
+    vscf_data_t* psearch_array = NULL;
     const char* chaos_data = chaos_def;
     unsigned def_http_port = 3506U;
 
@@ -617,7 +617,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
         http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
-        vscf_hash_iterate(options, true, bad_key, (void*)"options");
+        vscf_hash_iterate_const(options, true, bad_key, "options");
     }
 
     // if cmdline forced, override any default or config setting
@@ -635,7 +635,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     // Initial setup of the listener data
     process_listen(listen_opt, &addr_defs);
 
-    const vscf_data_t* stypes_cfg = cfg_root
+    vscf_data_t* stypes_cfg = cfg_root
         ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
         : NULL;
 
@@ -646,7 +646,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     gdnsd_mon_cfg_stypes_p1(stypes_cfg);
 
     // Load plugins
-    const vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
+    vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
     if(plugins_hash) {
         if(!vscf_is_hash(plugins_hash))
             log_fatal("Config setting 'plugins' must have a hash value");
@@ -654,13 +654,13 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         //   it always gets loaded before others.  This is because it can create
         //   resource config for other plugins.  This is a poor way to do it, but I imagine
         //   the list of meta-plugins will remain short and in-tree.
-        const vscf_data_t* geoplug = vscf_hash_get_data_byconstkey(plugins_hash, "geoip", true);
+        vscf_data_t* geoplug = vscf_hash_get_data_byconstkey(plugins_hash, "geoip", true);
         if(geoplug)
             plugin_load_and_configure("geoip", geoplug);
         // ditto for "metafo"
         // Technically, geoip->metafo synthesis will work, but not metafo->geoip synthesis.
         // Both can reference each other directly (%plugin!resource)
-        const vscf_data_t* metaplug = vscf_hash_get_data_byconstkey(plugins_hash, "metafo", true);
+        vscf_data_t* metaplug = vscf_hash_get_data_byconstkey(plugins_hash, "metafo", true);
         if(metaplug)
             plugin_load_and_configure("metafo", metaplug);
         vscf_hash_iterate(plugins_hash, true, load_plugin_iter, NULL);
@@ -682,7 +682,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
 
     // Throw an error if there are any other unretrieved root config keys
     if(cfg_root) {
-        vscf_hash_iterate(cfg_root, true, bad_key, (void*)"top-level config");
+        vscf_hash_iterate_const(cfg_root, true, bad_key, "top-level config");
         vscf_destroy(cfg_root);
     }
 }

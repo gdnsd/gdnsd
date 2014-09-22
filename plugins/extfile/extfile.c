@@ -65,7 +65,7 @@ static extf_svc_t* service_types = NULL;
 
 #define SVC_OPT_UINT(_hash, _typnam, _nam, _loc, _min, _max) \
     do { \
-        const vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_nam, true); \
+        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_nam, true); \
         if(_data) { \
             unsigned long _val; \
             if(!vscf_is_simple(_data) \
@@ -79,7 +79,7 @@ static extf_svc_t* service_types = NULL;
 
 #define SVC_OPT_BOOL(_hash, _typnam, _nam, _loc) \
     do { \
-        const vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_nam, true); \
+        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_nam, true); \
         if(_data) { \
             if(!vscf_is_simple(_data) \
             || !vscf_simple_get_as_bool(_data, &_loc)) \
@@ -87,7 +87,7 @@ static extf_svc_t* service_types = NULL;
         } \
     } while(0)
 
-void plugin_extfile_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
+void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
     dmn_assert(name); dmn_assert(svc_cfg);
 
     service_types = realloc(service_types, (num_svcs + 1) * sizeof(extf_svc_t));
@@ -97,7 +97,7 @@ void plugin_extfile_add_svctype(const char* name, const vscf_data_t* svc_cfg, co
     svc->timeout = timeout;
     svc->interval = interval;
 
-    const vscf_data_t* path_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "file", true);
+    vscf_data_t* path_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "file", true);
     if(!path_cfg || !vscf_is_simple(path_cfg))
         log_fatal("plugin_extfile: service_type '%s': the 'file' option is required and must be a string filename", name);
     svc->path = gdnsd_resolve_path_state(vscf_simple_get_data(path_cfg), "extfile");
@@ -147,7 +147,7 @@ static int moncmp(const void* x, const void* y) {
 }
 
 F_NONNULL
-static bool process_entry(const extf_svc_t* svc, const char* matchme, const vscf_data_t* val, gdnsd_sttl_t* results) {
+static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_t* val, gdnsd_sttl_t* results) {
     dmn_assert(svc); dmn_assert(matchme); dmn_assert(val); dmn_assert(results);
 
     bool success = false;
@@ -181,7 +181,7 @@ static void process_file(const extf_svc_t* svc) {
     dmn_assert(svc);
 
     char* vscf_err;
-    const vscf_data_t* raw = vscf_scan_filename(svc->path, &vscf_err);
+    vscf_data_t* raw = vscf_scan_filename(svc->path, &vscf_err);
     if(!raw) {
         dmn_assert(vscf_err);
         log_err("plugin_extfile: Service type '%s': loading file '%s' failed: %s", svc->name, svc->path, vscf_err);
@@ -207,7 +207,7 @@ static void process_file(const extf_svc_t* svc) {
     bool success = true;
     for(unsigned i = 0; i < num_raw; i++) {
         const char* matchme = vscf_hash_get_key_byindex(raw, i, NULL);
-        const vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
+        vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
         if(!process_entry(svc, matchme, val, results)) {
             success = false;
             break;

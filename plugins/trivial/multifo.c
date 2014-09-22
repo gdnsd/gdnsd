@@ -61,25 +61,26 @@ static unsigned num_resources = 0;
 /*********************************/
 
 F_NONNULL
-static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data) {
-    dmn_assert(key); dmn_assert(d); dmn_assert(data);
-    log_fatal("plugin_multifo: resource '%s': bad option '%s'", (const char*)data, key);
+static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* resname_asvoid) {
+    dmn_assert(key); dmn_assert(d); dmn_assert(resname_asvoid);
+    const char* resname = resname_asvoid;
+    log_fatal("plugin_multifo: resource '%s': bad option '%s'", resname, key);
 }
 
 // given an array (or actually, even a single value), construct
 //  an addrs_vN hash inheriting params from the parent as usual.
 // also works for direct config, even though some of the work is redundant.
 F_NONNULL
-static const vscf_data_t* addrs_hash_from_array(const vscf_data_t* ary, const char* resname, const char* stanza) {
+static vscf_data_t* addrs_hash_from_array(vscf_data_t* ary, const char* resname, const char* stanza) {
     dmn_assert(ary); dmn_assert(!vscf_is_hash(ary));
 
-    const vscf_data_t* parent = vscf_get_parent(ary);
+    vscf_data_t* parent = vscf_get_parent(ary);
     dmn_assert(vscf_is_hash(parent));
 
     vscf_data_t* newhash = vscf_hash_new();
     const unsigned alen = vscf_array_get_len(ary);
     for(unsigned i = 0; i < alen; i++) {
-        const vscf_data_t* this_addr_cfg = vscf_array_get_data(ary, i);
+        vscf_data_t* this_addr_cfg = vscf_array_get_data(ary, i);
         if(!vscf_is_simple(this_addr_cfg))
             log_fatal("plugin_multifo: resource '%s' (%s): if defined as an array, array values must all be address strings", resname, stanza);
         const unsigned lnum = i + 1;
@@ -103,10 +104,10 @@ typedef struct {
 } addrs_iter_data_t;
 
 F_NONNULL
-static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf_data_t* addr_data, void* aid_asvoid) {
+static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, vscf_data_t* addr_data, void* aid_asvoid) {
     dmn_assert(addr_desc); dmn_assert(addr_data); dmn_assert(aid_asvoid);
 
-    addrs_iter_data_t* aid = (addrs_iter_data_t*)aid_asvoid;
+    addrs_iter_data_t* aid = aid_asvoid;
 
     const char* resname = aid->resname;
     const char* stanza = aid->stanza;
@@ -138,7 +139,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, const vscf
 }
 
 F_NONNULL
-static void config_addrs(const char* resname, const char* stanza, addrset_t* aset, const bool ipv6, const vscf_data_t* cfg) {
+static void config_addrs(const char* resname, const char* stanza, addrset_t* aset, const bool ipv6, vscf_data_t* cfg) {
     dmn_assert(resname); dmn_assert(aset); dmn_assert(cfg);
 
     bool destroy_cfg = false;
@@ -151,14 +152,14 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
 
     aset->num_svcs = 0;
     const char** svc_names = NULL;
-    const vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
+    vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
     if(svctypes_data) {
         num_addrs--;
         aset->num_svcs = vscf_array_get_len(svctypes_data);
         if(aset->num_svcs) {
             svc_names = malloc(sizeof(char*) * aset->num_svcs);
             for(unsigned i = 0; i < aset->num_svcs; i++) {
-                const vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
+                vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
                 if(!vscf_is_simple(svctype_cfg))
                     log_fatal("plugin_multifo: resource %s (%s): 'service_types' values must be strings", resname, stanza);
                 svc_names[i] = vscf_simple_get_data(svctype_cfg);
@@ -172,7 +173,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     }
 
     double up_thresh = DEF_UP_THRESH;
-    const vscf_data_t* up_thresh_cfg = vscf_hash_get_data_byconstkey(cfg, "up_thresh", true);
+    vscf_data_t* up_thresh_cfg = vscf_hash_get_data_byconstkey(cfg, "up_thresh", true);
     if(up_thresh_cfg) {
         num_addrs--;
         if(!vscf_is_simple(up_thresh_cfg) || !vscf_simple_get_as_double(up_thresh_cfg, &up_thresh)
@@ -202,7 +203,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     free(svc_names);
 
     if(destroy_cfg)
-        vscf_destroy((vscf_data_t*)cfg);
+        vscf_destroy(cfg);
 
     if(ipv6) {
         if(num_addrs > v6_max)
@@ -214,7 +215,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     }
 }
 
-static void config_auto(res_t* res, const char* stanza, const vscf_data_t* auto_cfg) {
+static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg) {
     dmn_assert(res); dmn_assert(stanza); dmn_assert(auto_cfg);
 
     bool destroy_cfg = false;
@@ -234,7 +235,7 @@ static void config_auto(res_t* res, const char* stanza, const vscf_data_t* auto_
         log_fatal("plugin_multifo: resource '%s' (%s): no addresses defined!", res->name, stanza);
 
     const char* first_name = vscf_hash_get_key_byindex(auto_cfg_noparams, 0, NULL);
-    const vscf_data_t* first_cfg = vscf_hash_get_data_byindex(auto_cfg_noparams, 0);
+    vscf_data_t* first_cfg = vscf_hash_get_data_byindex(auto_cfg_noparams, 0);
     if(!vscf_is_simple(first_cfg))
         log_fatal("plugin_multifo: resource '%s' (%s): The value of '%s' must be an IP address in string form", res->name, stanza, first_name);
     const char* addr_txt = vscf_simple_get_data(first_cfg);
@@ -255,11 +256,11 @@ static void config_auto(res_t* res, const char* stanza, const vscf_data_t* auto_
 
     vscf_destroy(auto_cfg_noparams);
     if(destroy_cfg)
-        vscf_destroy((vscf_data_t*)auto_cfg);
+        vscf_destroy(auto_cfg);
 }
 
 F_NONNULL
-static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const vscf_data_t* opts, void* data) {
+static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_data_t* opts, void* data) {
     dmn_assert(resname); dmn_assert(opts); dmn_assert(data);
 
     unsigned* residx_ptr = data;
@@ -267,8 +268,8 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     res_t* res = &resources[rnum];
     res->name = strdup(resname);
 
-    const vscf_data_t* addrs_v4_cfg = NULL;
-    const vscf_data_t* addrs_v6_cfg = NULL;
+    vscf_data_t* addrs_v4_cfg = NULL;
+    vscf_data_t* addrs_v6_cfg = NULL;
 
     if(vscf_is_hash(opts)) {
         // inherit params downhill if applicable
@@ -292,7 +293,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     if(!addrs_v4_cfg && !addrs_v6_cfg)
         config_auto(res, "direct", opts);
     else if(vscf_is_hash(opts))
-        vscf_hash_iterate(opts, true, bad_res_opt, (void*)resname);
+        vscf_hash_iterate_const(opts, true, bad_res_opt, resname);
     else
         log_fatal("plugin_multifo: resource '%s': an empty array is not a valid resource config", resname);
 
@@ -303,7 +304,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 /* Exported callbacks start here */
 /*********************************/
 
-void plugin_multifo_load_config(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
+void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("multifo plugin requires a 'plugins' configuration stanza");
 

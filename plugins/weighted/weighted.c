@@ -130,7 +130,7 @@ static uint64_t get_rand(const unsigned tnum, const uint64_t modval) {
 // Main config code starts here
 
 F_NONNULL
-static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, const vscf_data_t* cfg_data, addrset_t* addrset) {
+static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, addrset_t* addrset) {
     dmn_assert(res_name); dmn_assert(stanza); dmn_assert(item_name);
     dmn_assert(res_item); dmn_assert(cfg_data); dmn_assert(addrset);
 
@@ -177,10 +177,10 @@ typedef struct {
 } iaga_t;
 
 F_NONNULL
-static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len V_UNUSED, const vscf_data_t* lb_data, void* iaga_asvoid) {
+static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len V_UNUSED, vscf_data_t* lb_data, void* iaga_asvoid) {
     dmn_assert(lb_name); dmn_assert(lb_name_len); dmn_assert(lb_data); dmn_assert(iaga_asvoid);
 
-    iaga_t* iaga = (iaga_t*)iaga_asvoid;
+    iaga_t* iaga = iaga_asvoid;
 
     addrset_t* addrset = iaga->addrset;
     res_aitem_t* res_item = iaga->res_item;
@@ -222,7 +222,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
 }
 
 F_NONNULL
-static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, const vscf_data_t* cfg_data, addrset_t* addrset) {
+static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, addrset_t* addrset) {
     dmn_assert(res_name); dmn_assert(stanza); dmn_assert(item_name);
     dmn_assert(res_item); dmn_assert(cfg_data); dmn_assert(addrset);
 
@@ -271,10 +271,10 @@ typedef struct {
     bool ipv6;
 } addr_iter_data_t;
 
-static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, const vscf_data_t* cfg_data, void* aid_asvoid) {
+static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* cfg_data, void* aid_asvoid) {
 
     // pull a bunch of data from addr_iter_data_t...
-    addr_iter_data_t* addr_iter_data = (addr_iter_data_t*)aid_asvoid;
+    addr_iter_data_t* addr_iter_data = aid_asvoid;
     const unsigned item_idx = addr_iter_data->item_idx++;
     addrset_t* addrset = addr_iter_data->addrset;
     const char* res_name = addr_iter_data->res_name;
@@ -307,18 +307,18 @@ static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, c
 }
 
 F_NONNULL
-static void config_addrset(const char* res_name, const char* stanza, const bool ipv6, addrset_t* addrset, const vscf_data_t* cfg) {
+static void config_addrset(const char* res_name, const char* stanza, const bool ipv6, addrset_t* addrset, vscf_data_t* cfg) {
     dmn_assert(res_name); dmn_assert(stanza); dmn_assert(addrset); dmn_assert(cfg);
 
     if(!vscf_is_hash(cfg))
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
 
-    const vscf_data_t* parent = vscf_get_parent(cfg);
+    vscf_data_t* parent = vscf_get_parent(cfg);
 
     // inherit down the applicable res-level parameters
-    vscf_hash_inherit(parent, (vscf_data_t*)cfg, "service_types", true);
-    vscf_hash_inherit(parent, (vscf_data_t*)cfg, "multi", true);
-    vscf_hash_inherit(parent, (vscf_data_t*)cfg, "up_thresh", true);
+    vscf_hash_inherit(parent, cfg, "service_types", true);
+    vscf_hash_inherit(parent, cfg, "multi", true);
+    vscf_hash_inherit(parent, cfg, "up_thresh", true);
 
     // Get a starting assumption of our item count
     addrset->count = vscf_hash_get_len(cfg);
@@ -327,14 +327,14 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
 
     // service_types
     addrset->num_svcs = 0;
-    const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
+    vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
     if (res_stypes) {
         addrset->count--; // minus one for service_types entry
         addrset->num_svcs = vscf_array_get_len(res_stypes);
         if(addrset->num_svcs) {
             addrset->svc_names = malloc(addrset->num_svcs * sizeof(char*));
             for(unsigned i = 0; i < addrset->num_svcs; i++) {
-                const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
+                vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if(!vscf_is_simple(this_svc_cfg))
                     log_fatal("plugin_weighted: resource '%s' (%s): service_types values must be strings", res_name, stanza);
                 addrset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
@@ -349,7 +349,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
 
     // multi option
     addrset->multi = false;
-    const vscf_data_t* multi_cfg = vscf_hash_get_data_byconstkey(cfg, "multi", true);
+    vscf_data_t* multi_cfg = vscf_hash_get_data_byconstkey(cfg, "multi", true);
     if(multi_cfg) {
         addrset->count--; // minus one for multi entry
         if(!vscf_is_simple(multi_cfg) || !vscf_simple_get_as_bool(multi_cfg, &addrset->multi))
@@ -358,7 +358,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
 
     // up threshold as double
     double up_thresh = 0.5;
-    const vscf_data_t* thresh_cfg = vscf_hash_get_data_byconstkey(cfg, "up_thresh", true);
+    vscf_data_t* thresh_cfg = vscf_hash_get_data_byconstkey(cfg, "up_thresh", true);
     if(thresh_cfg) {
         addrset->count--; // minus one for up_thresh entry
         if(!vscf_is_simple(thresh_cfg) || !vscf_simple_get_as_double(thresh_cfg, &up_thresh)
@@ -410,9 +410,9 @@ typedef struct {
 } cname_iter_data_t;
 
 F_NONNULL
-static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, const vscf_data_t* cfg_data, void* cid_asvoid) {
+static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* cfg_data, void* cid_asvoid) {
     dmn_assert(item_name); dmn_assert(cfg_data); dmn_assert(cid_asvoid);
-    cname_iter_data_t* cid = (cname_iter_data_t*)cid_asvoid;
+    cname_iter_data_t* cid = cid_asvoid;
 
     cnset_t* cnset = cid->cnset;
     const char* res_name = cid->res_name;
@@ -430,7 +430,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, con
         log_fatal("plugin_weighted: resource '%s' (%s), item '%s': values in cname mode must be arrays of [ CNAME, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, stanza, item_name);
     res_item->weight = wtemp;
 
-    const vscf_data_t* cn = vscf_array_get_data(cfg_data, 0);
+    vscf_data_t* cn = vscf_array_get_data(cfg_data, 0);
     const char* cname_txt = vscf_simple_get_data(cn);
     uint8_t* dname = malloc(256);
     dname_status_t dnstat = vscf_simple_get_as_dname(cn, dname);
@@ -452,7 +452,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, con
 }
 
 F_NONNULL
-static void config_cnameset(const char* res_name, const char* stanza, cnset_t* cnset, const vscf_data_t* cfg) {
+static void config_cnameset(const char* res_name, const char* stanza, cnset_t* cnset, vscf_data_t* cfg) {
     dmn_assert(res_name); dmn_assert(stanza); dmn_assert(cnset); dmn_assert(cfg);
 
     if(!vscf_is_hash(cfg))
@@ -462,14 +462,14 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
 
     // service_types
     cnset->num_svcs = 0;
-    const vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
+    vscf_data_t* res_stypes = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
     if (res_stypes) {
         cnset->count--; // minus one for service_types entry
         cnset->num_svcs = vscf_array_get_len(res_stypes);
         if(cnset->num_svcs) {
             cnset->svc_names = malloc(cnset->num_svcs * sizeof(char*));
             for(unsigned i = 0; i < cnset->num_svcs; i++) {
-                const vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
+                vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if(!vscf_is_simple(this_svc_cfg))
                     log_fatal("plugin_weighted: resource '%s' (%s): service_types values must be strings", res_name, stanza);
                 cnset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
@@ -484,7 +484,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
 
     // up threshold as double
     double up_thresh = 0.5;
-    const vscf_data_t* thresh_cfg = vscf_hash_get_data_byconstkey(cfg, "up_thresh", true);
+    vscf_data_t* thresh_cfg = vscf_hash_get_data_byconstkey(cfg, "up_thresh", true);
     if(thresh_cfg) {
         cnset->count--; // minus one for up_thresh entry
         if(!vscf_is_simple(thresh_cfg) || !vscf_simple_get_as_double(thresh_cfg, &up_thresh)
@@ -524,7 +524,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
 }
 
 F_NONNULL
-static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
+static void config_auto(resource_t* res, vscf_data_t* res_cfg) {
     dmn_assert(res); dmn_assert(res_cfg); dmn_assert(vscf_is_hash(res_cfg));
 
     // mark all possible parameter-keys
@@ -539,12 +539,12 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
         log_fatal("plugin_weighted: resource '%s' (direct) contains no weighted items", res->name);
 
     const char* first_name = vscf_hash_get_key_byindex(res_cfg_noparams, 0, NULL);
-    const vscf_data_t* first_cfg = vscf_hash_get_data_byindex(res_cfg_noparams, 0);
+    vscf_data_t* first_cfg = vscf_hash_get_data_byindex(res_cfg_noparams, 0);
     if(vscf_is_hash(first_cfg)) { // grouped address mode...
         if(!vscf_hash_get_len(first_cfg))
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': contains no addresses", res->name, first_name);
         const char* lb_name = vscf_hash_get_key_byindex(first_cfg, 0, NULL);
-        const vscf_data_t* lb_cfg = vscf_hash_get_data_byindex(first_cfg, 0);
+        vscf_data_t* lb_cfg = vscf_hash_get_data_byindex(first_cfg, 0);
         if(!vscf_is_array(lb_cfg) || !vscf_array_get_len(lb_cfg) || !vscf_is_simple(vscf_array_get_data(lb_cfg, 0)))
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': item '%s': value must be an array of [ IP, weight ]", res->name, first_name, lb_name);
         const char* first_addr_txt = vscf_simple_get_data(vscf_array_get_data(lb_cfg, 0));
@@ -563,7 +563,7 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
         }
     }
     else if(vscf_is_array(first_cfg)) { // ungrouped address, or cnames
-        const vscf_data_t* first_ac = vscf_array_get_data(first_cfg, 0);
+        vscf_data_t* first_ac = vscf_array_get_data(first_cfg, 0);
         if(!first_ac || !vscf_is_simple(first_ac))
             log_fatal("plugin_weighted: resource '%s' (direct): item '%s': first element of array should be an IP address or CNAME string", res->name, first_name);
         dmn_anysin_t temp_sin;
@@ -592,13 +592,16 @@ static void config_auto(resource_t* res, const vscf_data_t* res_cfg) {
     vscf_destroy(res_cfg_noparams);
 }
 
-static bool res_mixed_fail(const char* item_name, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* rname_asvoid) {
-    log_fatal("plugin_weighted: resource '%s' seems to have explicit 'addrs_v4', 'addrs_v6', or 'cnames' configuration mixed with direct item config (e.g. '%s'), which is not allowed", (const char*)rname_asvoid, item_name);
+F_NONNULL
+static bool res_mixed_fail(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* rname_asvoid) {
+    dmn_assert(item_name); dmn_assert(d); dmn_assert(rname_asvoid);
+    const char* rname = rname_asvoid;
+    log_fatal("plugin_weighted: resource '%s' seems to have explicit 'addrs_v4', 'addrs_v6', or 'cnames' configuration mixed with direct item config (e.g. '%s'), which is not allowed", rname, item_name);
     return false;
 }
 
-static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_data_t* res_cfg, void* idx_asvoid) {
-    unsigned* idx_ptr = (unsigned*) idx_asvoid;
+static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t* res_cfg, void* idx_asvoid) {
+    unsigned* idx_ptr = idx_asvoid;
     resource_t* res = &resources[(*idx_ptr)++];
     res->name = strdup(res_name);
     if(!vscf_is_hash(res_cfg))
@@ -613,9 +616,9 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
      */
 
     // grab explicit sub-stanzas
-    const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v4", true);
-    const vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v6", true);
-    const vscf_data_t* cnames_cfg = vscf_hash_get_data_byconstkey(res_cfg, "cnames", true);
+    vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v4", true);
+    vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v6", true);
+    vscf_data_t* cnames_cfg = vscf_hash_get_data_byconstkey(res_cfg, "cnames", true);
     if(cnames_cfg)
         log_fatal("plugin_weighted: resource '%s': the pointless singleton 'cnames' substanza is no longer supported; move the data up a level without it", res_name);
 
@@ -635,7 +638,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
     else {
        // if unmarked keys remain in res_cfg (explicit sets would have marked params),
        //    fail due to mixed direct cfg + sub-stanzas.
-       vscf_hash_iterate(res_cfg, true, res_mixed_fail, (void*)res_name);
+       vscf_hash_iterate_const(res_cfg, true, res_mixed_fail, res_name);
     }
 
     return true;
@@ -643,7 +646,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, const vscf_
 
 ////// exported callbacks start here
 
-void plugin_weighted_load_config(const vscf_data_t* config, const unsigned num_threads) {
+void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads) {
     dmn_assert(config);
     dmn_assert(vscf_is_hash(config));
 

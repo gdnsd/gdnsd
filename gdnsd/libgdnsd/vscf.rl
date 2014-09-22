@@ -419,7 +419,7 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
     }
 
     char* inc_parse_err = NULL;
-    vscf_data_t* inc_data = (vscf_data_t*)vscf_scan_filename(final_scan_path, &inc_parse_err);
+    vscf_data_t* inc_data = vscf_scan_filename(final_scan_path, &inc_parse_err);
     if(final_scan_path != input_fn)
         free(final_scan_path);
 
@@ -682,7 +682,7 @@ static void val_destroy(vscf_data_t* d) {
     write data;
 }%%
 
-static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
+static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
     dmn_assert(fd > -1); dmn_assert(fn); dmn_assert(err); dmn_assert(*err == NULL);
 
     (void)vscf_en_main; // silence unused var warning from generated code
@@ -774,7 +774,7 @@ static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err)
         free(scnr->cs_stack);
     free(buf);
 
-    const vscf_data_t* retval;
+    vscf_data_t* retval;
 
     if(*err) {
         if(scnr->cont_stack_top == -1)
@@ -785,7 +785,7 @@ static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err)
     }
     else {
         dmn_assert(scnr->cont_stack_top == -1);
-        retval = (const vscf_data_t*)scnr->cont; // outermost container
+        retval = scnr->cont; // outermost container
     }
 
     if(scnr->cont_stack)
@@ -799,7 +799,7 @@ static const vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err)
 /*** Public API functions ***/
 /****************************/
 
-const vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
+vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
     dmn_assert(fn); dmn_assert(err);
     *err = NULL;
 
@@ -809,19 +809,19 @@ const vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
         return NULL;
     }
 
-    const vscf_data_t* retval = vscf_scan_fd(fd, fn, err);
+    vscf_data_t* retval = vscf_scan_fd(fd, fn, err);
     close(fd);
     return retval;
 }
 
-void vscf_destroy(const vscf_data_t* d) { val_destroy((vscf_data_t*)d); }
+void vscf_destroy(vscf_data_t* d) { val_destroy(d); }
 
 vscf_type_t vscf_get_type(const vscf_data_t* d) { dmn_assert(d); return d->type; }
 bool vscf_is_simple(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_SIMPLE_T; }
 bool vscf_is_array(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_ARRAY_T; }
 bool vscf_is_hash(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_HASH_T; }
 bool vscf_is_root(const vscf_data_t* d) { dmn_assert(d); return d->parent == NULL; }
-const vscf_data_t* vscf_get_parent(const vscf_data_t* d) { dmn_assert(d); return d->parent; }
+vscf_data_t* vscf_get_parent(const vscf_data_t* d) { dmn_assert(d); return d->parent; }
 
 unsigned vscf_simple_get_len(const vscf_data_t* d) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
@@ -842,7 +842,7 @@ unsigned vscf_array_get_len(const vscf_data_t* d) {
     return d->array.len;
 }
 
-const vscf_data_t* vscf_array_get_data(const vscf_data_t* d, unsigned idx) {
+vscf_data_t* vscf_array_get_data(vscf_data_t* d, unsigned idx) {
     dmn_assert(d);
     if(d->type != VSCF_ARRAY_T) {
         if(idx) return NULL;
@@ -857,7 +857,7 @@ unsigned vscf_hash_get_len(const vscf_data_t* d) {
     return d->hash.child_count;
 }
 
-const vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, unsigned klen, bool set_mark) {
+vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, unsigned klen, bool set_mark) {
     dmn_assert(d); dmn_assert(vscf_is_hash(d));
     dmn_assert(key);
     if(d->hash.child_count) {
@@ -885,10 +885,10 @@ const char* vscf_hash_get_key_byindex(const vscf_data_t* d, unsigned idx, unsign
     return rv;
 }
 
-const vscf_data_t* vscf_hash_get_data_byindex(const vscf_data_t* d, unsigned idx) {
+vscf_data_t* vscf_hash_get_data_byindex(const vscf_data_t* d, unsigned idx) {
     dmn_assert(d); dmn_assert(vscf_is_hash(d));
     if(idx >= d->hash.child_count) return NULL;
-    const vscf_data_t* rv = d->hash.ordered[idx]->val;
+    vscf_data_t* rv = d->hash.ordered[idx]->val;
     dmn_assert(rv);
     return rv;
 }
@@ -911,6 +911,17 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
 }
 
 void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb_t f, void* data) {
+    dmn_assert(d); dmn_assert(vscf_is_hash(d));
+    dmn_assert(f);
+    for(unsigned i = 0; i < d->hash.child_count; i++) {
+        const vscf_hentry_t* hentry = d->hash.ordered[i];
+        if(!ignore_mark || !hentry->marked)
+            if(!f(hentry->key, hentry->klen, hentry->val, data))
+                return;
+    }
+}
+
+void vscf_hash_iterate_const(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_const_cb_t f, const void* data) {
     dmn_assert(d); dmn_assert(vscf_is_hash(d));
     dmn_assert(f);
     for(unsigned i = 0; i < d->hash.child_count; i++) {
@@ -1069,7 +1080,7 @@ bool vscf_hash_bequeath_all(const vscf_data_t* src, const char* k, const bool ma
     if(src_val) {
         const unsigned src_len = vscf_hash_get_len(src);
         for(unsigned i = 0; i < src_len; i++) {
-            vscf_data_t* child_val = (vscf_data_t*)vscf_hash_get_data_byindex(src, i);
+            vscf_data_t* child_val = vscf_hash_get_data_byindex(src, i);
             if(vscf_is_hash(child_val) && (!skip_marked || !src->hash.ordered[i]->marked))
                 if(!vscf_hash_get_data_bystringkey(child_val, k, false))
                     vscf_hash_add_val(k, strlen(k), child_val, vscf_clone(src_val, false));

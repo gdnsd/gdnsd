@@ -141,13 +141,13 @@ void dclists_replace_list0(dclists_t* lists, uint8_t* newlist) {
 
 // We should probably check for dupes in these map dclists, but really the fallout
 //  is just some redundant lookup work if the user screws that up.
-int dclists_xlate_vscf(dclists_t* lists, const vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto) {
+int dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto) {
     dmn_assert(lists); dmn_assert(vscf_list); dmn_assert(lists); dmn_assert(newlist); dmn_assert(map_name);
 
     const unsigned count = vscf_array_get_len(vscf_list);
 
     for(unsigned i = 0; i < count; i++) {
-        const vscf_data_t* dcname_cfg = vscf_array_get_data(vscf_list, i);
+        vscf_data_t* dcname_cfg = vscf_array_get_data(vscf_list, i);
         if(!dcname_cfg || !vscf_is_simple(dcname_cfg))
             log_fatal("plugin_geoip: map '%s': datacenter lists must be an array of one or more datacenter name strings", map_name);
         const char* dcname = vscf_simple_get_data(dcname_cfg);
@@ -163,7 +163,7 @@ int dclists_xlate_vscf(dclists_t* lists, const vscf_data_t* vscf_list, const cha
     return 0;
 }
 
-int dclists_find_or_add_vscf(dclists_t* lists, const vscf_data_t* vscf_list, const char* map_name, const bool allow_auto) {
+int dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto) {
     dmn_assert(lists); dmn_assert(vscf_list); dmn_assert(lists); dmn_assert(map_name);
     uint8_t newlist[256];
     int status = dclists_xlate_vscf(lists,vscf_list,map_name,newlist,allow_auto);

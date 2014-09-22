@@ -31,11 +31,11 @@
 static gdmaps_t* gdmaps;
 
 F_NONNULL
-static unsigned res_get_mapnum(const vscf_data_t* res_cfg, const char* res_name) {
+static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name) {
     dmn_assert(res_cfg); dmn_assert(res_name);
 
     // Get 'map' name, convert to gdmaps index
-    const vscf_data_t* map_cfg = vscf_hash_get_data_byconstkey(res_cfg, "map", true);
+    vscf_data_t* map_cfg = vscf_hash_get_data_byconstkey(res_cfg, "map", true);
     if(!map_cfg)
         log_fatal("plugin_geoip: resource '%s': required key 'map' is missing", res_name);
     if(!vscf_is_simple(map_cfg))
@@ -56,10 +56,10 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
 }
 
 F_NONNULL
-static void top_config_hook(const vscf_data_t* top_config) {
+static void top_config_hook(vscf_data_t* top_config) {
     dmn_assert(top_config); dmn_assert(vscf_is_hash(top_config));
 
-    const vscf_data_t* maps = vscf_hash_get_data_byconstkey(top_config, "maps", true);
+    vscf_data_t* maps = vscf_hash_get_data_byconstkey(top_config, "maps", true);
     if(!maps)
         log_fatal("plugin_geoip: config has no 'maps' stanza");
     if(!vscf_is_hash(maps))

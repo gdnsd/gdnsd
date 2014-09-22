@@ -54,7 +54,7 @@ typedef struct {
 } dcmap_iter_data;
 
 F_NONNULL
-static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, const vscf_data_t* val, void* data) {
+static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data) {
     dmn_assert(key); dmn_assert(val); dmn_assert(data);
 
     dcmap_iter_data* did = data;
@@ -76,14 +76,14 @@ static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, const vscf_
     return true;
 }
 
-dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto) {
+dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto) {
     dmn_assert(map_cfg); dmn_assert(dclists); dmn_assert(map_name);
     dmn_assert(vscf_is_hash(map_cfg));
 
     dcmap_t* dcmap = calloc(1, sizeof(dcmap_t));
     unsigned nchild = vscf_hash_get_len(map_cfg);
 
-    const vscf_data_t* def_cfg = vscf_hash_get_data_byconstkey(map_cfg, "default", true);
+    vscf_data_t* def_cfg = vscf_hash_get_data_byconstkey(map_cfg, "default", true);
     if(def_cfg) {
         if(!true_depth) {
             uint8_t newlist[256];
@@ -111,7 +111,7 @@ dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigne
         }
     }
 
-    const vscf_data_t* skip_cfg = vscf_hash_get_data_byconstkey(map_cfg, "skip_level", true);
+    vscf_data_t* skip_cfg = vscf_hash_get_data_byconstkey(map_cfg, "skip_level", true);
     if(skip_cfg) {
         if(!vscf_is_simple(skip_cfg) || !vscf_simple_get_as_bool(skip_cfg, &dcmap->skip_level))
             log_fatal("plugin_geoip: map '%s': 'skip_level' must be a boolean value ('true' or 'false')", map_name);

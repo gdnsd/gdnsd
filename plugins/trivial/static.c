@@ -38,7 +38,7 @@ typedef struct {
 static static_resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
-static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const vscf_data_t* addr, void* data) {
+static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_data_t* addr, void* data) {
     unsigned* residx_ptr = data;
 
     if(vscf_get_type(addr) != VSCF_SIMPLE_T)
@@ -65,7 +65,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     return true;
 }
 
-void plugin_static_load_config(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
+void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("static plugin requires a 'plugins' configuration stanza");
     dmn_assert(vscf_get_type(config) == VSCF_HASH_T);
@@ -135,7 +135,7 @@ static unsigned num_mons = 0;
 static static_svc_t** static_svcs = NULL;
 static static_mon_t** static_mons = NULL;
 
-void plugin_static_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED) {
+void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED) {
     dmn_assert(name); dmn_assert(svc_cfg);
 
     static_svcs = realloc(static_svcs, sizeof(static_svc_t*) * ++num_svcs);
@@ -143,7 +143,7 @@ void plugin_static_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
     this_svc->name = strdup(name);
     this_svc->static_sttl = GDNSD_STTL_TTL_MAX;
 
-    const vscf_data_t* ttl_data = vscf_hash_get_data_byconstkey(svc_cfg, "ttl", true);
+    vscf_data_t* ttl_data = vscf_hash_get_data_byconstkey(svc_cfg, "ttl", true);
     if(ttl_data) {
         unsigned long fixed_ttl = 0;
         if(!vscf_is_simple(ttl_data) || !vscf_simple_get_as_ulong(ttl_data, &fixed_ttl))
@@ -153,7 +153,7 @@ void plugin_static_add_svctype(const char* name, const vscf_data_t* svc_cfg, con
         this_svc->static_sttl = fixed_ttl;
     }
 
-    const vscf_data_t* state_data = vscf_hash_get_data_byconstkey(svc_cfg, "state", true);
+    vscf_data_t* state_data = vscf_hash_get_data_byconstkey(svc_cfg, "state", true);
     if(state_data) {
         if(!vscf_is_simple(state_data))
             log_fatal("plugin_static: service type '%s': the value of 'state' must be 'up' or 'down' as a simple string!", name);

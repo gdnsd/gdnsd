@@ -109,7 +109,7 @@ void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope);
 /**** Typedefs for plugin callbacks ****/
 
 typedef unsigned (*gdnsd_apiv_cb_t)(void);
-typedef void (*gdnsd_load_config_cb_t)(const vscf_data_t* pc, const unsigned num_threads);
+typedef void (*gdnsd_load_config_cb_t)(vscf_data_t* pc, const unsigned num_threads);
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
@@ -118,7 +118,7 @@ typedef void (*gdnsd_exit_cb_t)(void);
 
 /**** New callbacks for monitoring plugins ****/
 
-typedef void (*gdnsd_add_svctype_cb_t)(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
+typedef void (*gdnsd_add_svctype_cb_t)(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 typedef void (*gdnsd_add_mon_addr_cb_t)(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr, const unsigned idx);
 typedef void (*gdnsd_add_mon_cname_cb_t)(const char* desc, const char* svc_name, const char* cname, const unsigned idx);
 typedef void (*gdnsd_init_monitors_cb_t)(struct ev_loop* mon_loop);

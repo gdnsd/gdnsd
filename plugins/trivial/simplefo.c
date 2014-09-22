@@ -63,23 +63,26 @@ static const char DEFAULT_SVCNAME[] = "up";
 /* Local, static functions       */
 /*********************************/
 
-static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, const vscf_data_t* d V_UNUSED, void* data) {
-    log_fatal("plugin_simplefo: resource '%s': bad option '%s'", (const char*)data, key);
+F_NONNULL
+static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* resname_asvoid) {
+    dmn_assert(key); dmn_assert(d); dmn_assert(resname_asvoid);
+    const char* resname = resname_asvoid;
+    log_fatal("plugin_simplefo: resource '%s': bad option '%s'", resname, key);
 }
 
 F_NONNULL
-static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname, const char* stanza, const vscf_data_t* cfg) {
+static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname, const char* stanza, vscf_data_t* cfg) {
     dmn_assert(as); dmn_assert(resname); dmn_assert(stanza); dmn_assert(cfg); dmn_assert(vscf_is_hash(cfg));
 
     unsigned num_svcs = 0;
     const char** svc_names = NULL;
-    const vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
+    vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
     if(svctypes_data) {
         num_svcs = vscf_array_get_len(svctypes_data);
         if(num_svcs) {
             svc_names = malloc(sizeof(char*) * num_svcs);
             for(unsigned i = 0; i < num_svcs; i++) {
-                const vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
+                vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
                 if(!vscf_is_simple(svctype_cfg))
                     log_fatal("plugin_simplefo: resource %s (%s): 'service_types' value(s) must be strings", resname, stanza);
                 svc_names[i] = vscf_simple_get_data(svctype_cfg);
@@ -97,7 +100,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
     res_which_t both[2] = { A_PRI, A_SEC };
     for(unsigned i = 0; i < 2; i++) {
         res_which_t which = both[i];
-        const vscf_data_t* addrcfg = vscf_hash_get_data_bystringkey(cfg, which_str[which], true);
+        vscf_data_t* addrcfg = vscf_hash_get_data_bystringkey(cfg, which_str[which], true);
         if(!addrcfg || VSCF_SIMPLE_T != vscf_get_type(addrcfg))
             log_fatal("plugin_simplefo: resource %s (%s): '%s' must be defined as an IP address string", resname, stanza, which_str[which]);
         const char* addr_txt = vscf_simple_get_data(addrcfg);
@@ -126,12 +129,12 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
         return as->addrs[A_PRI].sa.sa_family == AF_INET6 ? A_IPv6 : A_IPv4;
     }
 
-    vscf_hash_iterate(cfg, true, bad_res_opt, (void*)resname);
+    vscf_hash_iterate_const(cfg, true, bad_res_opt, resname);
 
     return as_af;
 }
 
-static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const vscf_data_t* opts, void* data) {
+static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_data_t* opts, void* data) {
     unsigned* residx_ptr = data;
     unsigned rnum = (*residx_ptr)++;
     res_t* res = &resources[rnum];
@@ -142,8 +145,8 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 
     vscf_hash_bequeath_all(opts, "service_types", true, false);
 
-    const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
-    const vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
+    vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
+    vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
     if(!addrs_v4_cfg && !addrs_v6_cfg) {
         addrstate_t* as = malloc(sizeof(addrstate_t));
         as_af_t which = config_addrs(as, A_AUTO, resname, "direct", opts);
@@ -171,7 +174,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
     }
 
 
-    vscf_hash_iterate(opts, true, bad_res_opt, (void*)resname);
+    vscf_hash_iterate_const(opts, true, bad_res_opt, resname);
     return true;
 }
 
@@ -179,7 +182,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, const
 /* Exported callbacks start here */
 /*********************************/
 
-void plugin_simplefo_load_config(const vscf_data_t* config, const unsigned num_threads V_UNUSED) {
+void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("simplefo plugin requires a 'plugins' configuration stanza");
 

@@ -40,12 +40,12 @@ typedef struct {
 //  string containing a specific error message.  If you plan to
 //  continue execution you should free this string to avoid leaks.
 F_NONNULL
-const vscf_data_t* vscf_scan_filename(const char* fn, char** err);
+vscf_data_t* vscf_scan_filename(const char* fn, char** err);
 
 // Destroys (de-allocates) the entire tree of data returned by vscf_scan()
 //  Do not call on sub-elements, only on the value actually returned by vscf_scan().
 // Passing a NULL argument is harmless
-void vscf_destroy(const vscf_data_t* d);
+void vscf_destroy(vscf_data_t* d);
 
 /*
  * These are the data types vscf_get_type (below) can return.
@@ -86,7 +86,7 @@ bool vscf_is_root(const vscf_data_t* d);
 /* Returns the containing parent array or hash, or NULL if
    called on the root of the configuration */
 F_NONNULL F_PURE
-const vscf_data_t* vscf_get_parent(const vscf_data_t* d);
+vscf_data_t* vscf_get_parent(const vscf_data_t* d);
 
 /*** Various type-specific accessor functions: ***/
 
@@ -125,7 +125,7 @@ unsigned vscf_array_get_len(const vscf_data_t* d);
 
 // Get a member of an array.  idx must be less than the length returned above.
 F_NONNULL F_PURE
-const vscf_data_t* vscf_array_get_data(const vscf_data_t* d, unsigned idx);
+vscf_data_t* vscf_array_get_data(vscf_data_t* d, unsigned idx);
 
 // Get the count of keys in the hash
 F_NONNULL F_PURE
@@ -139,7 +139,7 @@ unsigned vscf_hash_get_len(const vscf_data_t* d);
 //  and evaluates its key argument twice.
 // set_mark will mark any entries successfully retrieved, which affects, _iterate below.
 F_NONNULL
-const vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, unsigned klen, bool set_mark);
+vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, unsigned klen, bool set_mark);
 #define vscf_hash_get_data_byconstkey(_d, _key, _sm) \
     vscf_hash_get_data_bykey((_d), (_key), (sizeof(_key) - 1), (_sm))
 #define vscf_hash_get_data_bystringkey(_d, _key, _sm) \
@@ -149,7 +149,7 @@ const vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* ke
 F_NONNULLX(1)
 const char* vscf_hash_get_key_byindex(const vscf_data_t* d, unsigned idx, unsigned* klen_ptr);
 F_NONNULL F_PURE
-const vscf_data_t* vscf_hash_get_data_byindex(const vscf_data_t* d, unsigned idx);
+vscf_data_t* vscf_hash_get_data_byindex(const vscf_data_t* d, unsigned idx);
 
 // Get the ordered index number for a given key
 //  using a non-existent key will return -1
@@ -170,9 +170,14 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
  *  you can _get_item them all, and then run _iterate with a callback that generates an "illegal key"
  *  error.
  */
-typedef bool (*vscf_hash_iter_cb_t)(const char* key, unsigned klen, const vscf_data_t* d, void* data);
+typedef bool (*vscf_hash_iter_cb_t)(const char* key, unsigned klen, vscf_data_t* d, void* data);
 F_NONNULLX(1,3)
 void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb_t f, void* data);
+
+// As above with a "const void*" for the data argument, to avoid dangerous const-casting
+typedef bool (*vscf_hash_iter_const_cb_t)(const char* key, unsigned klen, vscf_data_t* d, const void* data);
+F_NONNULLX(1,3)
+void vscf_hash_iterate_const(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_const_cb_t f, const void* data);
 
 // Re-sort hash keys from default order (order defined in config file) to an arbitrary
 //  order of your choosing, using a qsort()-like compare callback.  Calls to vscf_hash_iterate

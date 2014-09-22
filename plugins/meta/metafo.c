@@ -37,11 +37,11 @@ static unsigned num_dclists = 0;
 static dclist_t** dclists = NULL; // one per resource in metafo case
 
 F_NONNULL
-static unsigned res_get_mapnum(const vscf_data_t* res_cfg, const char* res_name) {
+static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name) {
     dmn_assert(res_cfg); dmn_assert(res_name);
 
     // Get 'dclist' name, convert, store, return 0-based dclist index
-    const vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(res_cfg, "datacenters", true);
+    vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(res_cfg, "datacenters", true);
     if(!dc_cfg)
         log_fatal("plugin_metafo: resource '%s': required key 'datacenters' is missing", res_name);
     dclist_t* dcl = malloc(sizeof(dclist_t));
@@ -52,7 +52,7 @@ static unsigned res_get_mapnum(const vscf_data_t* res_cfg, const char* res_name)
     dcl->dc_names = malloc((dcl->num_dcs + 1) * sizeof(char*));
     dcl->dc_names[0] = NULL; // index zero is invalid
     for(unsigned i = 0; i < dcl->num_dcs; i++) {
-        const vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
+        vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
         if(!dcname_cfg || !vscf_is_simple(dcname_cfg))
             log_fatal("plugin_metafo: resource '%s': 'datacenters' must be an array of one or more datacenter name strings", res_name);
         const unsigned dcidx = i + 1;
@@ -102,7 +102,7 @@ static void maps_destroy(void) {
 }
 
 F_NONNULL
-static void top_config_hook(const vscf_data_t* top_config V_UNUSED) {
+static void top_config_hook(vscf_data_t* top_config V_UNUSED) {
     dmn_assert(top_config); dmn_assert(vscf_is_hash(top_config));
 }
 

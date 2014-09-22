@@ -312,7 +312,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
     do { \
-        const vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
+        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
         if(_data) { \
             unsigned long _val; \
             if(!vscf_is_simple(_data) \
@@ -326,7 +326,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 
 #define SVC_OPT_STR(_hash, _typnam, _loc) \
     do { \
-        const vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
+        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
         if(_data) { \
             if(!vscf_is_simple(_data)) \
                 log_fatal("plugin_http_status: Service type '%s': option %s: Wrong type (should be string)", _typnam, #_loc); \
@@ -350,7 +350,7 @@ static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost
     }
 }
 
-void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
+void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
     dmn_assert(name);
 
     // defaults
@@ -369,13 +369,13 @@ void plugin_http_status_add_svctype(const char* name, const vscf_data_t* svc_cfg
     SVC_OPT_STR(svc_cfg, name, url_path);
     SVC_OPT_STR(svc_cfg, name, vhost);
     SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
-    const vscf_data_t* ok_codes_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "ok_codes", true);
+    vscf_data_t* ok_codes_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "ok_codes", true);
     if(ok_codes_cfg) {
         ok_codes_set = true;
         this_svc->num_ok_codes = vscf_array_get_len(ok_codes_cfg);
         this_svc->ok_codes = malloc(sizeof(unsigned) * this_svc->num_ok_codes);
         for(unsigned i = 0; i < this_svc->num_ok_codes; i++) {
-            const vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);
+            vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);
             unsigned long tmpcode;
             if(!vscf_simple_get_as_ulong(code_cfg, &tmpcode))
                 log_fatal("plugin_http_status: service type '%s': illegal ok_codes value '%s', must be numeric http status code (100-999)", this_svc->name, vscf_simple_get_data(code_cfg));
