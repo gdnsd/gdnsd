@@ -193,6 +193,9 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
     if(unlikely(sent == -1)) {
         switch(errno) {
             case EAGAIN:
+#if EWOULDBLOCK != EAGAIN
+            case EWOULDBLOCK:
+#endif
             case EINTR:
                 return;
             case ENOTCONN:
@@ -244,6 +247,9 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
     if(unlikely(recvd == -1)) {
         switch(errno) {
             case EAGAIN:
+#if EWOULDBLOCK != EAGAIN
+            case EWOULDBLOCK:
+#endif
             case EINTR:
                 return;
             case ETIMEDOUT:

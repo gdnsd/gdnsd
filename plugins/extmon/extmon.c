@@ -107,7 +107,7 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         int rv = read(helper_read_fd, &data, 4);
         if(rv != 4) {
             if(rv < 0) {
-                if(errno == EAGAIN || errno == EINTR)
+                if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
                     return;
                 else
                     log_err("plugin_extmon: pipe read() failed: %s", dmn_logf_strerror(errno));

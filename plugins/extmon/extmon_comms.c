@@ -37,7 +37,7 @@ bool emc_write_string(const int fd, const char* str, const unsigned len) {
                 rv = true;
                 break;
             }
-            else if(errno != EAGAIN && errno != EINTR) {
+            else if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
                 log_debug("plugin_extmon: emc_write_string(%s) failed: %s", str, dmn_logf_strerror(errno));
                 rv = true;
                 break;
@@ -61,7 +61,7 @@ bool emc_read_nbytes(const int fd, const unsigned len, uint8_t* out) {
                 rv = true;
                 break;
             }
-            else if(errno != EAGAIN && errno != EINTR) {
+            else if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
                 log_debug("plugin_extmon: emc_read_nbytes() failed: %s", dmn_logf_strerror(errno));
                 rv = true;
                 break;

@@ -427,7 +427,7 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
     const ssize_t write_rv = writev(io->fd, iovs_writev, iovcnt_writev);
 
     if(unlikely(write_rv < 0)) {
-        if(errno != EAGAIN && errno != EINTR) {
+        if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
             log_debug("HTTP send() failed (%s), dropping response to %s", dmn_logf_errno(), dmn_logf_anysin(tdata->asin));
             cleanup_conn_watchers(loop, tdata);
         }
@@ -473,7 +473,8 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
     if(tdata->state == READING_JUNK) {
         ssize_t recvlen = recv(io->fd, junk_buffer, JUNK_SIZE, 0);
         if(unlikely(recvlen == -1)) {
-            if(errno == EAGAIN || errno == EINTR) return;
+            if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+                return;
             log_debug("HTTP recv() error (lingering) from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
         }
         if(recvlen < 1) cleanup_conn_watchers(loop, tdata);
@@ -486,7 +487,7 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
     const size_t wanted = 9 - tdata->read_done;
     ssize_t recvlen = recv(io->fd, destination, wanted, 0);
     if(unlikely(recvlen == -1)) {
-        if(errno != EAGAIN && errno != EINTR) {
+        if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
             log_debug("HTTP recv() error from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             cleanup_conn_watchers(loop, tdata);
         }
@@ -519,6 +520,9 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
         free(asin);
         switch(errno) {
             case EAGAIN:
+#if EWOULDBLOCK != EAGAIN
+            case EWOULDBLOCK:
+#endif
             case EINTR:
                 break;
 #ifdef ENONET

@@ -722,7 +722,7 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
     while(1) {
         int bytes = read(w->fd, evtbuf, inotify_bufsize);
         if(bytes < 1) {
-            if(!bytes || errno != EAGAIN) {
+            if(!bytes || (errno != EAGAIN && errno != EWOULDBLOCK)) {
                 if(bytes)
                     log_err("rfc1035: read() of inotify file descriptor failed: %s", dmn_logf_errno());
                 else

@@ -200,7 +200,7 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
         int rv = write(plugin_write_fd, &data, 4);
         if(rv != 4) {
             if(rv < 0) {
-                if(errno == EAGAIN)
+                if(errno == EAGAIN || errno == EWOULDBLOCK)
                     return; // pipe full, wait for more libev notification of write-ready
                 else if(errno == EINTR)
                     continue; // try this write again immediately

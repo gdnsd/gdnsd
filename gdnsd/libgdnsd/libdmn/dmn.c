@@ -421,7 +421,7 @@ static void helper_proc(const pid_t middle_pid) {
         do {
             errno = 0;
             readrv = read(readpipe, &msg, 1);
-        } while(errno == EAGAIN);
+        } while(errno == EAGAIN || errno == EWOULDBLOCK);
 
         if(errno || readrv != 1)
             break; // pipe close or other error

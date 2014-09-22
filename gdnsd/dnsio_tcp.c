@@ -114,7 +114,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
 
     const ssize_t written = send(io->fd, source, wanted, 0);
     if(unlikely(written == -1)) {
-        if(errno != EAGAIN) {
+        if(errno != EAGAIN && errno != EWOULDBLOCK) {
             log_devdebug("TCP DNS send() failed, dropping response to %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
             cleanup_conn_watchers(loop, tdata);
@@ -163,7 +163,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
     if(pktlen < 1) {
         if(unlikely(pktlen == -1 || tdata->size_done)) {
             if(pktlen == -1) {
-                if(errno == EAGAIN) {
+                if(errno == EAGAIN || errno == EWOULDBLOCK) {
 #                   ifdef TCP_DEFER_ACCEPT
                         ev_io_start(loop, tdata->read_watcher);
 #                   endif
@@ -241,6 +241,9 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
         free(asin);
         switch(errno) {
             case EAGAIN:
+#if EWOULDBLOCK != EAGAIN
+            case EWOULDBLOCK:
+#endif
             case EINTR:
                 break;
 #ifdef ENONET
