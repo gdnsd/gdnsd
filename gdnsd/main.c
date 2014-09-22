@@ -601,11 +601,8 @@ int main(int argc, char** argv) {
     while(!killed_by) {
         int rcvd_sig = 0;
         int sw_rv;
-        if((sw_rv = sigwait(&mainthread_sigs, &rcvd_sig))) {
-            if(sw_rv != EINTR && sw_rv != EAGAIN)
-                log_fatal("sigwait() failed with error %s", dmn_logf_strerror(sw_rv));
-            continue;
-        }
+        if((sw_rv = sigwait(&mainthread_sigs, &rcvd_sig)))
+            log_fatal("sigwait() failed with error %s", dmn_logf_strerror(sw_rv));
 
         switch(rcvd_sig) {
             case SIGTERM:
