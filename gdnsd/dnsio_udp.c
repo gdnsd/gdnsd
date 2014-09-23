@@ -279,7 +279,14 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
         gdnsd_prcu_rdr_offline();
         const int buf_in_len = recvmsg(fd, &msg_hdr, 0);
         gdnsd_prcu_rdr_online();
-        if(likely(buf_in_len >= 0)) {
+        if(unlikely((asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
+            || (asin.sa.sa_family == AF_INET6 && !asin.sin6.sin6_port)
+            || buf_in_len < 0)) {
+                if(buf_in_len < 0)
+                    log_err("UDP recvmsg() error: %s", dmn_logf_errno());
+                stats_own_inc(&pctx->stats->udp.recvfail);
+        }
+        else {
             asin.len = msg_hdr.msg_namelen;
             iov.iov_len = process_dns_query(pctx, &asin, buf, buf_in_len);
             if(likely(iov.iov_len)) {
@@ -289,10 +296,6 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
                     log_err("UDP sendmsg() of %zu bytes failed with retval %i for client %s: %s", iov.iov_len, sent, dmn_logf_anysin(&asin), dmn_logf_errno());
                 }
             }
-        }
-        else {
-            stats_own_inc(&pctx->stats->udp.recvfail);
-            log_err("UDP recvmsg() error: %s", dmn_logf_errno());
         }
     }
 }
@@ -352,8 +355,15 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
         dmn_assert(pkts <= (int)width);
         if(likely(pkts > 0)) {
             for(int i = 0; i < pkts; i++) {
-                asin[i].len = dgrams[i].msg_hdr.msg_namelen;
-                iov[i][0].iov_len = process_dns_query(pctx, &asin[i], buf[i], dgrams[i].msg_len);
+                if(unlikely((asin[i].sa.sa_family == AF_INET && !asin[i].sin.sin_port)
+                    || (asin[i].sa.sa_family == AF_INET6 && !asin[i].sin6.sin6_port))) {
+                        stats_own_inc(&pctx->stats->udp.recvfail);
+                        iov[i][0].iov_len = 0; // skip send, still need memmove below
+                }
+                else {
+                    asin[i].len = dgrams[i].msg_hdr.msg_namelen;
+                    iov[i][0].iov_len = process_dns_query(pctx, &asin[i], buf[i], dgrams[i].msg_len);
+                }
             }
 
             /* This block adjusts the array of mmsg entries to account for skips where
