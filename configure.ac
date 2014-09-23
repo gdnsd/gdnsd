@@ -374,7 +374,6 @@ if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
 if test "x$USE_SYSTEMD" = x1; then CFSUM_SYSD=Yes; else CFSUM_SYSD=No; fi
-if test "x$USE_SYSTEMD_HAX" = x1; then CFSUM_SYSD_HAX=Yes; else CFSUM_SYSD_HAX=No; fi
 if test "x$HAVE_QSBR" = x1; then
     CFSUM_QSBR=Yes
 else
@@ -393,6 +392,5 @@ echo "| Userspace-rcu support:      $CFSUM_QSBR"
 echo "| Linux sendmmsg support:     $CFSUM_SENDMMSG"
 echo "| Linux inotify support:      $CFSUM_INOTIFY"
 echo "| Linux systemd support:      $CFSUM_SYSD"
-echo "| Linux systemd reload hacks: $CFSUM_SYSD_HAX"
 echo "| Test Port Start:            $CFSUM_TP"
 echo "======================================="

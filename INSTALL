@@ -42,16 +42,7 @@ Interesting / Non-standard autoconf options
   apparent capability to handle this concept.  "systemctl restart"
   will result in a full shutdown and then a full startup, sequentially,
   and a systemd-started gdnsd can't be fast-restarted from outside
-  of systemctl, either, but:
-
---with-systemd-hax
-  Implies --with-systemd.  Turns on some hacky, unclean code to
-  get the standard "fast, overlapped restart" behavior of gdnsd
-  to work via systemd's ExecReload (thus requiring you to send
-  real SIGHUP from outside of systemctl to replace the missing
-  true reload command).  It's very likely that these hacks
-  will become broken in future systemd versions (or are already
-  broken on a distro I didn't test!)
+  of systemctl.
 
 --enable-developer
   Builds a debugging build (-g) with a lot of extra gcc warnings

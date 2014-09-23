@@ -11,19 +11,10 @@ AC_CHECK_DECLS([fflush_unlocked],,,[#include <stdio.h>])
 # systemd must be enabled explicitly!
 
 USE_SYSTEMD=0
-USE_SYSTEMD_HAX=0
 
 AC_ARG_WITH([systemd],[AS_HELP_STRING([--with-systemd],
     [Enable systemd usage])],[
     if test "x$withval" = xyes; then
-        USE_SYSTEMD=1
-    fi
-])
-
-AC_ARG_WITH([systemd-hax],[AS_HELP_STRING([--with-systemd-hax],
-    [Enable systemd hacks for fast-restart via systemctl reload])],[
-    if test "x$withval" = xyes; then
-        USE_SYSTEMD_HAX=1
         USE_SYSTEMD=1
     fi
 ])
@@ -33,10 +24,6 @@ if test x"$USE_SYSTEMD" = x1; then
     PKG_CHECK_MODULES([SYSD_DAEMON],[libsystemd-daemon])
     PKG_CHECK_MODULES([SYSD_JOURNAL],[libsystemd-journal])
     AC_DEFINE([USE_SYSTEMD],[1],[Use systemd])
-fi
-if test x"$USE_SYSTEMD_HAX" = x1; then
-    PKG_CHECK_MODULES([SYSD_LOGIN],[libsystemd-login])
-    AC_DEFINE([USE_SYSTEMD_HAX],[1],[Use systemd hacks for fast-restart via systemctl reload])
 fi
 
 AC_SUBST([SYSD_DAEMON_CFLAGS])

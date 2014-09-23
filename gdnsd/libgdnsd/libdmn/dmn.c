@@ -44,10 +44,6 @@
 #  include <systemd/sd-journal.h>
 #endif
 
-#ifdef USE_SYSTEMD_HAX
-#  include <systemd/sd-login.h>
-#endif
-
 #include "dmn.h"
 
 /***********************************************************
@@ -506,12 +502,6 @@ void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, c
     // This lets us log to normal stderr for now
     state.stderr_out = params.use_systemd ? NULL : stderr;
 
-#ifdef USE_SYSTEMD_HAX
-    // HACK: control procs don't get $NOTIFY_SOCKET from systemd, but this seems to fix that ...
-    if(params.use_systemd)
-        setenv("NOTIFY_SOCKET", "@/org/freedesktop/systemd1/notify", 0);
-#endif
-
     params.debug = debug;
     params.foreground = foreground;
     params.stderr_info = stderr_info;
@@ -769,30 +759,6 @@ void dmn_fork(void) {
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_errno());
     dmn_log_info("Daemonized, final pid is %li", (long)getpid());
 
-#ifdef USE_SYSTEMD_HAX
-    // hack hack hack - when restarting, before losing privileges, we need to
-    //   promote ourselves from control process to main process.
-    // sd_pid_get_unit() seems to return "gdnsd.service" even when we're marked
-    //   as a control process, and setting ourselves back to that manually in sysfs
-    //   seems to promote us from a mere control process and allow us to become the
-    //   next MAINPID.  This must happen before we fork persistent children as well.
-    if(params.restart && params.use_systemd) {
-        char* unit;
-        int gu_rv = sd_pid_get_unit(getpid(), &unit);
-        if(gu_rv >= 0) {
-            char* path = str_combine_n(3, "/sys/fs/cgroup/systemd/system.slice/", unit, "/cgroup.procs");
-            int fd = open(path, O_WRONLY, 0);
-            if(fd < 0)
-                dmn_log_fatal("Cannot open %s: %s", path, dmn_logf_errno());
-            if(dprintf(fd, "%li\n", (long)getpid()) < 2)
-                dmn_log_fatal("dprintf() to %s failed: %s", path, dmn_logf_errno());
-            close(fd);
-            free(path);
-            free(unit);
-        }
-    }
-#endif
-
     state.phase = PHASE4_FORKED;
 }
 
@@ -912,23 +878,9 @@ void dmn_acquire_pidfile(void) {
 
     // if restarting, TERM the old daemon and wait for it to exit for a bit...
     if(really_restart) {
-#ifdef USE_SYSTEMD_HAX
-        // notify systemd of new MAINPID *before* killing old daemon, or systemd will kill everything
-        if(params.use_systemd)
-            sd_notifyf(0, "MAINPID=%li", (long)pid);
-#endif
         dmn_log_info("restart: Stopping previous daemon instance at pid %li...", (long)old_pid);
-        if(terminate_pid_and_wait(old_pid)) {
-#ifdef USE_SYSTEMD_HAX
-            // put the MAINPID back to the old value before bailing out if old_pid never died
-            //  (this is a little racy, in that it could have been replaced by a separate
-            //  successful restarter right after we gave up waiting, but hopefully systemd
-            //  doesn't launch multiple concurrent ExecReloads)
-            if(params.use_systemd)
-                sd_notifyf(0, "MAINPID=%li", (long)old_pid);
-#endif
+        if(terminate_pid_and_wait(old_pid))
             dmn_log_fatal("restart: failed, old daemon at pid %li did not die!", (long)old_pid);
-        }
     }
 
     // Attempt lock
@@ -945,14 +897,10 @@ void dmn_acquire_pidfile(void) {
     if(dprintf(pidfd, "%li\n", (long)pid) < 2)
         dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
 
-#ifdef USE_SYSTEMD_HAX
-    // in restart cases w/ HAX, only notify-after-lock if we didn't already earlier for restart
-    if(!really_restart)
-#endif
 #ifdef USE_SYSTEMD
-        // notify *after* acquiring the pidfile lock
-        if(params.use_systemd)
-            sd_notifyf(0, "MAINPID=%li", (long)pid);
+    // notify *after* acquiring the pidfile lock
+    if(params.use_systemd)
+        sd_notifyf(0, "MAINPID=%li", (long)pid);
 #endif
 
     // leak of pidfd here is intentional, it stays open/locked for the duration

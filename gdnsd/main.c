@@ -135,9 +135,7 @@ static void usage(const char* argv0) {
 #       ifdef USE_INOTIFY
             " inotify"
 #       endif
-#       ifdef USE_SYSTEMD_HAX
-            " systemd-hacks"
-#       elif defined USE_SYSTEMD
+#       ifdef USE_SYSTEMD
             " systemd"
 #       endif
 
