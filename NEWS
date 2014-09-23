@@ -1,3 +1,18 @@
+2.0.0 - ??? - Not yet released
+    * The signal for zone reloads is now SIGUSR1, not SIGHUP.
+      "gdnsd reload" still works as before and uses the new signal.
+      SIGHUP may be repurposed in a future version for a restart-like
+      mechanism that re-parses the whole configuration.
+    * The hacky support for attempting fast reloads under systemd
+      has been removed completely.  It's not worth the pain, and
+      better ideas are coming in the long run.
+    * UDP requests with a source port of zero will now count
+      as UDP "recvfail" in stats and will not be processed for reply.
+      Previously we tried to reply to these and ended up failing
+      the related sendmsg call and incrementing "sendfail".
+    * Please read the 2.0.0-beta news below for everything
+      else that's changed since 1.x.
+
 2.0.0-beta - 2014-09-10
   *** This is a beta release to get more people to try it in
       tarball form prior to the official 2.0.0 release.
