@@ -30,6 +30,7 @@
 
 #define gdnsd_prcu_rdr_thread_start() rcu_register_thread()
 #define gdnsd_prcu_rdr_online() rcu_thread_online()
+#define gdnsd_prcu_rdr_quiesce() rcu_quiescent_state()
 #define gdnsd_prcu_rdr_lock() rcu_read_lock()
 #define gdnsd_prcu_rdr_deref(s) rcu_dereference((s))
 #define gdnsd_prcu_rdr_unlock() rcu_read_unlock()
@@ -50,6 +51,7 @@ extern pthread_rwlock_t gdnsd_prcu_rwlock;
 
 #define gdnsd_prcu_rdr_thread_start() do { } while(0)
 #define gdnsd_prcu_rdr_online() do { } while(0)
+#define gdnsd_prcu_rdr_quiesce() do { } while(0)
 #define gdnsd_prcu_rdr_lock() pthread_rwlock_rdlock(&gdnsd_prcu_rwlock)
 #define gdnsd_prcu_rdr_deref(s) (s)
 #define gdnsd_prcu_rdr_unlock() pthread_rwlock_unlock(&gdnsd_prcu_rwlock)

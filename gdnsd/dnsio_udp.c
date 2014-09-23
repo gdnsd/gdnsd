@@ -31,6 +31,8 @@
 #include <netinet/udp.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <sys/time.h>
+#include <time.h>
 
 #include "conf.h"
 #include "dnswire.h"
@@ -47,6 +49,14 @@
 #ifndef SOL_IP
 #define SOL_IP IPPROTO_IP
 #endif
+
+// RCU perf magic value:
+// This is the longest time for which we'll delay writers
+//   in rcu_synchronize() (e.g. geoip/zonefile data reloaders
+//   waiting to reclaim dead data) in the worst case.  The
+//   current value is ~47ms and is unlikely to fall into strange
+//   multiplicative patterns of coincidence.
+#define PRCU_DELAY_US 47317
 
 static bool has_mmsg(void);
 
@@ -271,14 +281,41 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
     msg_hdr.msg_iovlen     = 1;
     msg_hdr.msg_control    = use_cmsg ? cmsg_buf : NULL;
 
+#ifdef HAVE_QSBR
+    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
+    const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+    bool is_online = true;
+#endif
+
+    int buf_in_len;
     while(1) {
         iov.iov_len = DNS_RECV_SIZE;
         msg_hdr.msg_controllen = cmsg_size;
         msg_hdr.msg_namelen    = DMN_ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
-        gdnsd_prcu_rdr_offline();
-        const int buf_in_len = recvmsg(fd, &msg_hdr, 0);
-        gdnsd_prcu_rdr_online();
+
+#ifdef HAVE_QSBR
+        if(is_online) {
+            gdnsd_prcu_rdr_quiesce();
+            buf_in_len = recvmsg(fd, &msg_hdr, 0);
+            if(buf_in_len < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                gdnsd_prcu_rdr_offline();
+                is_online = false;
+                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
+                continue;
+            }
+        }
+        else {
+            buf_in_len = recvmsg(fd, &msg_hdr, 0);
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+            is_online = true;
+            gdnsd_prcu_rdr_online();
+        }
+#else
+        buf_in_len = recvmsg(fd, &msg_hdr, 0);
+#endif
+
         if(unlikely((asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
             || (asin.sa.sa_family == AF_INET6 && !asin.sin6.sin6_port)
             || buf_in_len < 0)) {
@@ -335,6 +372,15 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
     for (unsigned i = 0; i < width; i++)
         iov[i][0].iov_base = buf[i] = pbuf + (i * max_rounded);
 
+#ifdef HAVE_QSBR
+    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
+    const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+    bool is_online = true;
+#endif
+
+    int pkts;
+
     while(1) {
         /* Set up msg_hdr stuff: moving initialization inside of the loop was
              necessitated by the memmove() below */
@@ -349,9 +395,28 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
             dgrams[i].msg_hdr.msg_flags      = 0;
         }
 
-        gdnsd_prcu_rdr_offline();
-        int pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
-        gdnsd_prcu_rdr_online();
+#ifdef HAVE_QSBR
+        if(is_online) {
+            gdnsd_prcu_rdr_quiesce();
+            pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+            if(pkts < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                gdnsd_prcu_rdr_offline();
+                is_online = false;
+                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
+                continue;
+            }
+        }
+        else {
+            pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+            is_online = true;
+            gdnsd_prcu_rdr_online();
+        }
+#else
+        pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+#endif
+
+        dmn_assert(pkts != 0);
         dmn_assert(pkts <= (int)width);
         if(likely(pkts > 0)) {
             for(int i = 0; i < pkts; i++) {
