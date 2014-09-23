@@ -375,9 +375,6 @@ typedef enum {
     DNAME_DELEG = 2
 } ltree_dname_status_t;
 
-// This is the global singleton ltree_root
-extern ltree_node_t* ltree_root;
-
 /********************************************************************
  * This is the excellent fast string hash algorithm DJB came up
  * with.  He uses it in his cdb database.  http://cr.yp.to
