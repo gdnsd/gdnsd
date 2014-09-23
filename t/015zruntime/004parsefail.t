@@ -24,9 +24,9 @@ _GDT->test_dns(
     stats => [qw/udp_reqs refused/],
 );
 
-# create example.org with bad data, sighup?, wait on log message, query it
+# create example.org with bad data, sigusr1?, wait on log message, query it
 _GDT->insert_altzone('example.org-bad', 'example.org');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('rfc1035: Zone example.org.: Zonefile parse error');
 _GDT->test_dns(
     qname => 'example.org', qtype => 'A',
@@ -34,18 +34,18 @@ _GDT->test_dns(
     stats => [qw/udp_reqs refused/],
 );
 
-## create example.org, sighup?, wait on log message, query it
+## create example.org, sigusr1?, wait on log message, query it
 _GDT->insert_altzone('example.org', 'example.org');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.org.: source rfc1035:example.org with serial 1 loaded as authoritative');
 _GDT->test_dns(
     qname => 'ns1.example.org', qtype => 'A',
     answer => 'ns1.example.org 86400 A 192.0.2.3',
 );
 
-# create example.org with bad data, sighup?, wait on log message, query it
+# create example.org with bad data, sigusr1?, wait on log message, query it
 _GDT->insert_altzone('example.org-bad', 'example.org');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('rfc1035: Zone example.org.: Zonefile parse error');
 # this time runtime keeps the last-valid data
 _GDT->test_dns(
@@ -53,9 +53,9 @@ _GDT->test_dns(
     answer => 'ns1.example.org 86400 A 192.0.2.3',
 );
 
-# create example.org with bad data, sighup?, wait on log message, query it
+# create example.org with bad data, sigusr1?, wait on log message, query it
 _GDT->insert_altzone('example.org-ooz', 'example.org');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('rfc1035: Zone example.org.: Zonefile parse error');
 # this time runtime keeps the last-valid data
 _GDT->test_dns(

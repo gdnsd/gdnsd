@@ -115,7 +115,7 @@ static void usage(const char* argv0) {
         "  checkconf - Checks validity of config and zone files\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
         "  stop - Stops a running daemon previously started by 'start'\n"
-        "  reload - Send SIGHUP to running daemon for zone data reload\n"
+        "  reload - Send SIGUSR1 to running daemon for zone data reload\n"
         "  restart - Equivalent to checkconf && stop && start, but faster\n"
         "  force-reload - Aliases 'restart'\n"
         "  condrestart - Does 'restart' action only if already running\n"
@@ -448,7 +448,7 @@ int main(int argc, char** argv) {
         exit(dmn_stop() ? 1 : 0);
     }
     else if(action == ACT_RELOAD) {
-        exit(dmn_signal(SIGHUP));
+        exit(dmn_signal(SIGUSR1));
     }
 
     if(action == ACT_CRESTART) {
@@ -583,7 +583,7 @@ int main(int argc, char** argv) {
     sigemptyset(&mainthread_sigs);
     sigaddset(&mainthread_sigs, SIGINT);
     sigaddset(&mainthread_sigs, SIGTERM);
-    sigaddset(&mainthread_sigs, SIGHUP);
+    sigaddset(&mainthread_sigs, SIGUSR1);
 
     // Block the relevant signals before entering the sigwait() loop
     sigset_t sigmask_prev;
@@ -611,10 +611,10 @@ int main(int argc, char** argv) {
                 log_info("Received INT signal, exiting...");
                 killed_by = SIGINT;
                 break;
-            case SIGHUP:
-                log_info("Received HUP signal");
-                zsrc_djb_sighup();
-                zsrc_rfc1035_sighup();
+            case SIGUSR1:
+                log_info("Received USR1 signal");
+                zsrc_djb_sigusr1();
+                zsrc_rfc1035_sigusr1();
                 break;
             default:
                 dmn_assert(0);

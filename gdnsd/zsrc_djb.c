@@ -33,7 +33,7 @@
 #include "gdnsd/paths.h"
 
 static struct ev_loop* zones_loop = NULL;
-static ev_async* sighup_waker = NULL;
+static ev_async* sigusr1_waker = NULL;
 static char* djb_dir = NULL;
 static zscan_djb_zonedata_t* active_zonedata = NULL;
 
@@ -103,25 +103,25 @@ void zsrc_djb_load_zones(const bool check_only V_UNUSED) {
     gdnsd_atexit_debug(unload_zones);
 }
 
-// called within our thread/loop to take sighup action
+// called within our thread/loop to take sigusr1 action
 F_NONNULL
-static void sighup_cb(struct ev_loop* loop V_UNUSED, ev_async* w V_UNUSED, int revents V_UNUSED) {
+static void sigusr1_cb(struct ev_loop* loop V_UNUSED, ev_async* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
-    log_info("zsrc_djb: received SIGHUP notification, scanning for changes...");
+    log_info("zsrc_djb: received SIGUSR1 notification, scanning for changes...");
     zsrc_djb_sync_zones();
 }
 
 // called from main thread to feed ev_async
-void zsrc_djb_sighup(void) {
-    dmn_assert(zones_loop); dmn_assert(sighup_waker);
-    ev_async_send(zones_loop, sighup_waker);
+void zsrc_djb_sigusr1(void) {
+    dmn_assert(zones_loop); dmn_assert(sigusr1_waker);
+    ev_async_send(zones_loop, sigusr1_waker);
 }
 
 void zsrc_djb_runtime_init(struct ev_loop* loop) {
     dmn_assert(loop);
 
     zones_loop = loop;
-    sighup_waker = malloc(sizeof(ev_async));
-    ev_async_init(sighup_waker, sighup_cb);
-    ev_async_start(loop, sighup_waker);
+    sigusr1_waker = malloc(sizeof(ev_async));
+    ev_async_init(sigusr1_waker, sigusr1_cb);
+    ev_async_start(loop, sigusr1_waker);
 }

@@ -19,7 +19,7 @@ _GDT->test_dns(
 
 # insert 3rd variant of example.com as EXAMPLE.COM
 _GDT->insert_altzone('example.com-3', '\069xample.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: source rfc1035:\069xample.com with serial 3 loaded as authoritative (supercedes extant source rfc1035:example.com with serial 1)');
 _GDT->test_dns(
     qname => 'ns1.example.com', qtype => 'A',
@@ -29,7 +29,7 @@ _GDT->test_dns(
 # insert 2rd variant of example.com as Example.Com
 #  (since serial is lower, will have no effect on query...)
 _GDT->insert_altzone('example.com-2', 'example.\067om');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: source rfc1035:example.\067om with serial 2 loaded (but is hidden by extant source rfc1035:\069xample.com with serial 3)');
 _GDT->test_dns(
     qname => 'ns1.example.com', qtype => 'A',
@@ -38,7 +38,7 @@ _GDT->test_dns(
 
 # Delete #3, exposing #2
 _GDT->delete_altzone('\069xample.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: authoritative source rfc1035:\069xample.com with serial 3 removed (extant source rfc1035:example.\067om with serial 2 promoted to authoritative)');
 _GDT->test_dns(
     qname => 'ns1.example.com', qtype => 'A',
@@ -47,7 +47,7 @@ _GDT->test_dns(
 
 # Delete #2, exposing #1
 _GDT->delete_altzone('example.\067om');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: authoritative source rfc1035:example.\067om with serial 2 removed (extant source rfc1035:example.com with serial 1 promoted to authoritative)');
 _GDT->test_dns(
     qname => 'ns1.example.com', qtype => 'A',
@@ -56,7 +56,7 @@ _GDT->test_dns(
 
 # Delete #1, nothing left
 _GDT->delete_altzone('example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: authoritative source rfc1035:example.com with serial 1 removed (zone no longer exists)');
 _GDT->test_dns(
     qname => 'example.com', qtype => 'A',

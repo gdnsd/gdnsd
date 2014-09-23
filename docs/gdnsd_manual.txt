@@ -67,12 +67,12 @@ Overall Design
     The "main" thread is the original thread of execution in the daemon.
     While it handles a great deal of diverse things during the startup
     process, at runtime it does absolutely nothing but watch for external
-    signals via sigwait() (such as TERM, INT, HUP) and act on them.  It
+    signals via sigwait() (such as TERM, INT, USR1) and act on them.  It
     is the only thread that runs with signals unblocked.
 
     The "zone data" thread handles the runtime-reloading of zone data
     from providers.  Depending on the provider and configuration, these
-    could be automatic and/or triggered on SIGHUP.  When not actively
+    could be automatic and/or triggered on SIGUSR1.  When not actively
     checking for new zone data and/or reloading it, this thread should
     mostly be idle.
 

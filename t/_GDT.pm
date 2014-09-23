@@ -531,10 +531,10 @@ sub test_spawn_daemon_execute {
 
 ##### START RELOAD STUFF
 
-sub send_sighup_unless_inotify {
+sub send_sigusr1_unless_inotify {
     if(!$INOTIFY_ENABLED) {
-        kill(1, $saved_pid)
-            or die "Cannot send SIGHUP to gdnsd at pid $saved_pid";
+        kill('SIGUSR1', $saved_pid)
+            or die "Cannot send SIGUSR1 to gdnsd at pid $saved_pid";
     }
 }
 
@@ -1123,11 +1123,11 @@ sub test_kill_daemon {
         eval {
             local $SIG{ALRM} = sub { die "Failed to kill daemon cleanly at pid $pid"; };
             alarm($TEST_RUNNER ? 60 : 30);
-            kill(2, $pid);
+            kill('SIGTERM', $pid);
             waitpid($pid, 0);
         };
         if($@) {
-            kill(9, $pid);
+            kill('SIGKILL', $pid);
             waitpid($pid, 0);
             Test::More::ok(0);
             Test::More::BAIL_OUT($@);
@@ -1168,5 +1168,5 @@ sub optrr_clientsub {
     );
 }
 
-END { kill(9, $saved_pid) if $saved_pid; }
+END { kill('SIGKILL', $saved_pid) if $saved_pid; }
 1;

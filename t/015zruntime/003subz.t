@@ -19,7 +19,7 @@ _GDT->test_dns(
 
 # add (hidden) subzone s1
 _GDT->insert_altzone('s1.example.com', 's1.example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone s1.example.com.: source rfc1035:s1.example.com with serial 1 loaded as authoritative');
 _GDT->test_log_output('Zone s1.example.com. was added as a hidden subzone of extant parent example.com.');
 _GDT->test_dns(
@@ -31,7 +31,7 @@ _GDT->test_dns(
 
 # add (hidden) subzone s3.s2
 _GDT->insert_altzone('s3.s2.example.com', 's3.s2.example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone s3.s2.example.com.: source rfc1035:s3.s2.example.com with serial 1 loaded as authoritative');
 _GDT->test_log_output('Zone s3.s2.example.com. was added as a hidden subzone of extant parent example.com.');
 _GDT->test_dns(
@@ -43,7 +43,7 @@ _GDT->test_dns(
 
 # add (hidden) subzone s2
 _GDT->insert_altzone('s2.example.com', 's2.example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone s2.example.com.: source rfc1035:s2.example.com with serial 1 loaded as authoritative');
 _GDT->test_log_output('Zone s2.example.com. was added as a hidden subzone of extant parent example.com.');
 _GDT->test_dns(
@@ -55,7 +55,7 @@ _GDT->test_dns(
 
 # drop original example.com
 _GDT->delete_altzone('example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: authoritative source rfc1035:example.com with serial 1 removed (zone no longer exists)');
 _GDT->test_log_output([
     'Zone s2.example.com.: subzone unhidden due to removal of parent zone example.com.',
@@ -89,7 +89,7 @@ _GDT->test_dns(
 
 # put example.com back in place, re-hide...
 _GDT->insert_altzone('example.com', 'example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: source rfc1035:example.com with serial 1 loaded as authoritative');
 _GDT->test_log_output([
     'Zone s1.example.com.: is now a hidden subzone of new parent zone example.com.',
@@ -124,12 +124,12 @@ _GDT->test_dns(
 
 # now drop s2
 _GDT->delete_altzone('s2.example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone s2.example.com.: authoritative source rfc1035:s2.example.com with serial 1 removed (zone no longer exists)');
 
 # drop example.com again
 _GDT->delete_altzone('example.com');
-_GDT->send_sighup_unless_inotify();
+_GDT->send_sigusr1_unless_inotify();
 _GDT->test_log_output('Zone example.com.: authoritative source rfc1035:example.com with serial 1 removed (zone no longer exists)');
 _GDT->test_log_output([
     'Zone s3.s2.example.com.: subzone unhidden due to removal of parent zone example.com.',

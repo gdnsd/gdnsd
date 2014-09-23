@@ -31,7 +31,7 @@ multiple zones (identified by C<Z> records).
 At this time, unlike the RFC1035 zone data backend, the djbdns
 backend does not support automatic reloading of updates based on
 filesystem notification.  It only explicitly reloads any
-changed data on C<SIGHUP> / C<gdnsd reload>.
+changed data on C<SIGUSR1> / C<gdnsd reload>.
 
 =head1 SUPPORTED RECORD TYPES
 

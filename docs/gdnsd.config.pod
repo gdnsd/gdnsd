@@ -288,7 +288,7 @@ if any zone fails to load correctly, the daemon will
 abort.  If false, the daemon will simply ignore the failed zone and
 continue operations.
 
-Runtime reloads via SIGHUP and/or periodic/inotify scanning always
+Runtime reloads via SIGUSR1 and/or periodic/inotify scanning always
 treat bad zone data non-fatally (leaving any existing good copy intact
 in memory for lookups).
 
@@ -314,8 +314,8 @@ kernel version of 2.6.36 or higher to enable this feature.
 
 Regardless of whether this setting is true or false, you can always
 manually trigger a rescan of the zones directory for new data by
-sending the daemon a C<SIGHUP> (or executing the "reload" command /
-initscript action, which sends SIGHUP for you).
+sending the daemon a C<SIGUSR1> (or executing the "reload" command /
+initscript action, which sends SIGUSR1 for you).
 
 =item B<zones_rfc1035_auto_interval>
 
@@ -357,7 +357,7 @@ This timer is related to the above, but is used in cases where we're
 not only worried about filesystem-level timestamp accuracy, but also
 waiting for additional intentional actions by scripts, programs, or
 users which might be actively modifying a zonefile.  It applies to all
-changes detected via SIGHUP or periodic automatic scanning, and to
+changes detected via SIGUSR1 or periodic automatic scanning, and to
 C<inotify()> events which do not indicate atomic operations (e.g.
 create/write/close, rather than move/delete.  In other words,
 someone/something is actually overwriting the data in-place or using an

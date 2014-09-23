@@ -887,31 +887,31 @@ void zsrc_rfc1035_load_zones(const bool check_only) {
     log_info("rfc1035: Loaded %u zonefiles from '%s'", zfhash_count, rfc1035_dir);
 }
 
-// we track the loop here for the async sighup request
+// we track the loop here for the async sigusr1 request
 static struct ev_loop* zones_loop = NULL;
-static ev_async* sighup_waker = NULL;
+static ev_async* sigusr1_waker = NULL;
 
-// called within our thread/loop to take sighup action
+// called within our thread/loop to take sigusr1 action
 F_NONNULL
-static void sighup_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
+static void sigusr1_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w);
-    log_info("rfc1035: received SIGHUP notification, scanning for changes...");
+    log_info("rfc1035: received SIGUSR1 notification, scanning for changes...");
     do_scandir(loop);
 }
 
 // called from main thread to feed ev_async
-void zsrc_rfc1035_sighup(void) {
-    dmn_assert(zones_loop); dmn_assert(sighup_waker);
-    ev_async_send(zones_loop, sighup_waker);
+void zsrc_rfc1035_sigusr1(void) {
+    dmn_assert(zones_loop); dmn_assert(sigusr1_waker);
+    ev_async_send(zones_loop, sigusr1_waker);
 }
 
 void zsrc_rfc1035_runtime_init(struct ev_loop* loop) {
     dmn_assert(loop);
 
     zones_loop = loop;
-    sighup_waker = malloc(sizeof(ev_async));
-    ev_async_init(sighup_waker, sighup_cb);
-    ev_async_start(loop, sighup_waker);
+    sigusr1_waker = malloc(sizeof(ev_async));
+    ev_async_init(sigusr1_waker, sigusr1_cb);
+    ev_async_start(loop, sigusr1_waker);
 
     if(gconfig.zones_rfc1035_auto)
         initial_run(zones_loop);
