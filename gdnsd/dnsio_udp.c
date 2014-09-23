@@ -318,7 +318,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
 
     // gconfig.max_response, rounded up to the next nearest multiple of the page size
     const long pgsz = sysconf(_SC_PAGESIZE);
-    const unsigned max_rounded = gconfig.max_response - (gconfig.max_response % pgsz) + pgsz;
+    const unsigned max_rounded = ((gconfig.max_response + pgsz - 1) / pgsz) * pgsz;
 
     uint8_t* buf[width];
     struct iovec iov[width][1];
