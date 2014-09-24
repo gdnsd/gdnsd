@@ -314,8 +314,8 @@ kernel version of 2.6.36 or higher to enable this feature.
 
 Regardless of whether this setting is true or false, you can always
 manually trigger a rescan of the zones directory for new data by
-sending the daemon a C<SIGUSR1> (or executing the "reload" command /
-initscript action, which sends SIGUSR1 for you).
+sending the daemon a C<SIGUSR1> (or executing the "reload-zones"
+command, which sends SIGUSR1 for you).
 
 =item B<zones_rfc1035_auto_interval>
 

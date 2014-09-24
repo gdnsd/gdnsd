@@ -15,9 +15,8 @@ gdnsd - An authoritative DNS daemon
     checkconf - Checks validity of config and zone files
     start - Start as a regular daemon
     stop - Stops a running daemon previously started by 'start'
-    reload - Send SIGUSR1 to running daemon for zone data reload
+    reload-zones - Send SIGUSR1 to running daemon for zone data reload
     restart - Equivalent to checkconf && stop && start, but faster
-    force-reload - Aliases 'restart'
     condrestart - Does 'restart' action only if already running
     try-restart - Aliases 'condrestart'
     status - Checks the status of the running daemon
@@ -146,14 +145,10 @@ in these cases, on the order of <1s.
 C<SO_REUSEPORT> became available in Linux kernels starting with kernel
 version 3.9.  BSDs have had it for much longer.
 
-=item B<reload>
+=item B<reload-zones>
 
 Sends C<SIGUSR1> to the running daemon, forcing a manual re-check
 of the zones directory for updated files.
-
-=item B<force-reload>
-
-An alias for C<restart>.
 
 =item B<condrestart>
 
@@ -201,7 +196,7 @@ C<.> are ignored.  All zone file must be regular files
 By default, the zones directory is handled dynamically: as files
 are added, modified, and deleted in this directory, zone data will
 automatically update at runtime.  This feature can be disabled
-(such that an explicit SIGUSR1 or C<gdnsd reload> is required to
+(such that an explicit SIGUSR1 or C<gdnsd reload-zones> is required to
 re-scan for changes) in the config file via the directive
 C<zones_rfc1035_auto> (see L<gdnsd.config(5)>).  It is legal for
 the directory to be empty at startup, which results in all queries

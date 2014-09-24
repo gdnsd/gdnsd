@@ -524,11 +524,11 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         }
 
         // only ask set_dirs to check/create run/state dirs if we're starting, as opposed
-        // to stop/statusreload (CONF_SIMPLE_ACTION) or checkconf (CONF_CHECK)
+        // to stop/status/reload-zones (CONF_SIMPLE_ACTION) or checkconf (CONF_CHECK)
         gdnsd_set_runtime_dirs(cfg_run_dir, cfg_state_dir, cmode == CONF_START);
     }
 
-    // fast-path exit for simple actions like stop/status/reload, only
+    // fast-path exit for simple actions like stop/status/reload-zones, only
     //   needs run_dir configuration and nothing more
     if(cmode == CONF_SIMPLE_ACTION)
         return;

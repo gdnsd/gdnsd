@@ -36,7 +36,7 @@ void gdnsd_set_config_dir(const char* config_dir);
 // if check_create is false, the state/run dirs will not
 //   be checked for existence or created.  Useful for
 //   uses outside of gdnsd itself (e.g. testsuite binaries),
-//   as well as stop/status/reload/checkconf actions.
+//   as well as stop/status/reload-zones/checkconf actions.
 void gdnsd_set_runtime_dirs(const char* run_dir, const char* state_dir, const bool check_create);
 
 #endif // GDNSD_PATHS_PRIV_H

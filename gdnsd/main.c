@@ -115,9 +115,8 @@ static void usage(const char* argv0) {
         "  checkconf - Checks validity of config and zone files\n"
         "  start - Start " PACKAGE_NAME " as a regular daemon\n"
         "  stop - Stops a running daemon previously started by 'start'\n"
-        "  reload - Send SIGUSR1 to running daemon for zone data reload\n"
+        "  reload-zones - Send SIGUSR1 to running daemon for zone data reload\n"
         "  restart - Equivalent to checkconf && stop && start, but faster\n"
-        "  force-reload - Aliases 'restart'\n"
         "  condrestart - Does 'restart' action only if already running\n"
         "  try-restart - Aliases 'condrestart'\n"
         "  status - Checks the status of the running daemon\n\n"
@@ -295,7 +294,7 @@ typedef enum {
     ACT_CHECKCFG   = 0,
     ACT_START,
     ACT_STOP,
-    ACT_RELOAD,
+    ACT_RELOADZ,
     ACT_RESTART,
     ACT_CRESTART, // downgrades to ACT_RESTART after checking...
     ACT_STATUS,
@@ -308,24 +307,22 @@ typedef struct {
 } actmap_t;
 
 static actmap_t actionmap[] = {
-    { "checkconf",    ACT_CHECKCFG }, // 1
-    { "start",        ACT_START },    // 2
-    { "stop",         ACT_STOP },     // 3
-    { "reload",       ACT_RELOAD },   // 4
-    { "restart",      ACT_RESTART },  // 5
-    { "force-reload", ACT_RESTART },  // 6
-    { "condrestart",  ACT_CRESTART }, // 7
-    { "try-restart",  ACT_CRESTART }, // 8
-    { "status",       ACT_STATUS },   // 9
+    { "checkconf",    ACT_CHECKCFG },
+    { "start",        ACT_START },
+    { "stop",         ACT_STOP },
+    { "reload-zones", ACT_RELOADZ },
+    { "restart",      ACT_RESTART },
+    { "condrestart",  ACT_CRESTART },
+    { "try-restart",  ACT_CRESTART },
+    { "status",       ACT_STATUS },
 };
-#define ACTIONMAP_COUNT 9
 
 F_NONNULL F_PURE
 static action_t match_action(const char* arg) {
     dmn_assert(arg);
 
     unsigned i;
-    for(i = 0; i < ACTIONMAP_COUNT; i++)
+    for(i = 0; i < (sizeof actionmap / sizeof actionmap[0]); i++)
         if(!strcasecmp(actionmap[i].cmdstring, arg))
             return actionmap[i].action;
     return ACT_UNDEF;
@@ -397,7 +394,7 @@ int main(int argc, char** argv) {
     conf_mode_t cmode;
     switch(action) {
         case ACT_STATUS: // fall-through
-        case ACT_RELOAD: // fall-through
+        case ACT_RELOADZ: // fall-through
         case ACT_STOP:
             cmode = CONF_SIMPLE_ACTION;
             will_daemonize = false;
@@ -447,7 +444,7 @@ int main(int argc, char** argv) {
     else if(action == ACT_STOP) {
         exit(dmn_stop() ? 1 : 0);
     }
-    else if(action == ACT_RELOAD) {
+    else if(action == ACT_RELOADZ) {
         exit(dmn_signal(SIGUSR1));
     }
 

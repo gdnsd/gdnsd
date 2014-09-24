@@ -86,7 +86,7 @@ typedef struct {
 extern global_config_t gconfig;
 
 typedef enum {
-    CONF_SIMPLE_ACTION = 0, // only picks up directory settings for e.g. reload/status/stop
+    CONF_SIMPLE_ACTION = 0, // only picks up directory settings for e.g. reload-zones/status/stop
     CONF_CHECK = 1,         // full config for checking only (do not write to disk)
     CONF_START = 2,         // full config + necessary writes for startup (e.g. create run/state dirs)
 } conf_mode_t;
