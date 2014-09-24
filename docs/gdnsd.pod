@@ -97,19 +97,17 @@ basic functionality.
 Checks the validity of the configuration file and zonefiles, setting
 the exit status appropriately (0 for success).
 
-The C<start>, C<startfg>, and all C<restart>-like actions implicitly do
+The C<start>, and all C<restart>-like actions implicitly do
 the same checks as C<checkconf> as they load the configuration for
 runtime use.
-
-=item B<startfg>
-
-Starts gdnsd in foreground mode, with all of the logging that would
-normally go to syslog appearing instead on stderr.  Useful for
-debugging and testing.
 
 =item B<start>
 
 Starts gdnsd as a regular background daemon.
+
+With the C<-f> option, starts gdnsd in the foreground with logs
+mirrored to both stderr and syslog.  Useful for debugging and
+testing.
 
 =item B<stop>
 

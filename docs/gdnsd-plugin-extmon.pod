@@ -144,7 +144,7 @@ drops privileges to.
 The stdout, stdin, and stderr descriptors will usually be
 set to F</dev/null>.  stdout and stderr may be open to the current
 tty if the main daemon was started in foreground debugging mode
-via C<startfg>.
+via C<-f start>.
 
 =head1 SEE ALSO
 
