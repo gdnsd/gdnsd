@@ -168,8 +168,11 @@
       socket buffers at the time of its death.
 
   *** Trivial, previously-deprecated incompatibilities:
-    * The weighted plugin no longer allows 'cnames' alongside
+    * plugin_weighted: no longer allows 'cnames' alongside
       'addrs_v4' or 'addrs_v6' in the same resource.
+    * plugin_weighted: the pointless 'cnames' singleton substanza is
+      no longer supported; just place the entries directly in the
+      top level of the resource.
     * The 'late_bind_secs' option was removed.
     * The 'tcp_clients_per_socket' option is removed. Use
       'tcp_clients_per_thread' instead.
@@ -177,9 +180,6 @@
     * The 'zones_rfc1035_strict_startup' option is removed.  Use
       'zones_strict_startup' instead.
     * plugin_extmon: %%IPADDR%% replaced by %%ITEM%%
-    * plugin_weighted: the pointless 'cnames' singleton substanza is
-      no longer supported; just place the entries directly in the
-      top level of the resource.
     * Direct support for the SPF RR-type (99) has been removed.
 
   *** Other misc incompatibilities
