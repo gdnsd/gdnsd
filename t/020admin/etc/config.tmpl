@@ -10,5 +10,22 @@ plugins => {
       primary = 127.0.0.1
       secondary = 192.0.2.1
     }
+    r2 => {
+      service_types = up
+      primary = 127.2.2.2
+      secondary = 192.0.2.2
+    }
+  }
+  metafo => {
+    service_types => up
+    resources => {
+      m1 => {
+        datacenters => [ dc1, dc2 ]
+        dcmap => {
+          dc1 => m1cname
+          dc2 => %simplefo!r1
+        }
+      }
+    }
   }
 }

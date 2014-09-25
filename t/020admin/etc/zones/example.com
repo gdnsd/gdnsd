@@ -13,3 +13,6 @@ ns2		A	192.0.2.254
 
 $TTL 42
 r1	DYNA	simplefo!r1
+r2	DYNA	simplefo!r2
+m1	DYNC	metafo!m1
+m1cname	A	192.0.2.42
