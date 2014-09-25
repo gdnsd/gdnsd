@@ -4,7 +4,7 @@ use _GDT ();
 use FindBin ();
 use File::Spec ();
 use Scalar::Util ();
-use Test::More tests => 12;
+use Test::More tests => 13;
 
 my $_id = 5555;
 sub make_query {
@@ -109,14 +109,28 @@ eval {_GDT->check_stats(
 )};
 ok(!$@) or diag $@;
 
-# IXFR
-my $test7 = make_query("\x07example\x03com\x00", 0, 251);
-send($sock, $test7, 0);
+# A valid question with a very small EDNS size in OPT
+my $test6b = make_query("\x03ggg\x00", 1);
+$test6b .= "\x00\x00\x29\x00\x01\x00\x00\x00\x00\x00\x00";
+send($sock, $test6b, 0);
 eval {_GDT->check_stats(
     udp_reqs => 8,
     noerror => 1,
     dropped => 5,
-    refused => 1,
+    refused => 2,
+    edns => 1,
+)};
+ok(!$@) or diag $@;
+
+# IXFR
+my $test7 = make_query("\x07example\x03com\x00", 0, 251);
+send($sock, $test7, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 9,
+    noerror => 1,
+    dropped => 5,
+    refused => 2,
+    edns => 1,
     notimp => 1,
 )};
 ok(!$@) or diag $@;
@@ -142,10 +156,11 @@ eval {_GDT->query_server(
 ok(!$@) or diag $@;
 
 eval {_GDT->check_stats(
-    udp_reqs => 9,
+    udp_reqs => 10,
     noerror => 2,
     dropped => 5,
-    refused => 1,
+    refused => 2,
+    edns => 1,
     notimp => 1,
 )};
 ok(!$@) or diag $@;
