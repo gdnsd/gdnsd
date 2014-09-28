@@ -303,7 +303,7 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
     res->dcs = config_res_dcmap(res_cfg, res->map, dcs_cfg, res_name);
 }
 
-static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, unsigned threadnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
+static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
     dmn_assert(dc); dmn_assert(cinfo); dmn_assert(result);
 
     gdnsd_sttl_t rv;
@@ -316,7 +316,7 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, uns
     }
     else {
         dmn_assert(dc->plugin && dc->plugin->resolve); // detected at map_res time
-        rv = dc->plugin->resolve(threadnum, dc->res_num, origin, cinfo, result);
+        rv = dc->plugin->resolve(dc->res_num, origin, cinfo, result);
     }
 
 #if META_MAP_ADMIN == 1
@@ -481,7 +481,7 @@ int CB_MAP(const char* resname, const uint8_t* origin) {
     return rv;
 }
 
-gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
+gdnsd_sttl_t CB_RES(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
     dmn_assert(cinfo); dmn_assert(result);
 
     // extract and clear any datacenter index from upper 8 bits
@@ -512,7 +512,7 @@ gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, 
             dmn_assert(dcnum <= res->num_dcs);
             gdnsd_result_wipe(result);
             gdnsd_result_reset_scope_mask(result);
-            gdnsd_sttl_t this_rv = resolve_dc(sttl_tbl, &res->dcs[dcnum], threadnum, origin, cinfo, result);
+            gdnsd_sttl_t this_rv = resolve_dc(sttl_tbl, &res->dcs[dcnum], origin, cinfo, result);
             assert_valid_sttl(this_rv);
             rv = gdnsd_sttl_min2(rv, this_rv);
             if(!(this_rv & GDNSD_STTL_DOWN)) {
@@ -525,7 +525,7 @@ gdnsd_sttl_t CB_RES(unsigned threadnum, unsigned resnum, const uint8_t* origin, 
         if(rv & GDNSD_STTL_DOWN) {
             gdnsd_result_wipe(result);
             gdnsd_result_reset_scope_mask(result);
-            resolve_dc(sttl_tbl, &res->dcs[first_dc_num], threadnum, origin, cinfo, result);
+            resolve_dc(sttl_tbl, &res->dcs[first_dc_num], origin, cinfo, result);
         }
     }
 

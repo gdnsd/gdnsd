@@ -910,7 +910,7 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t*
     return rv;
 }
 
-gdnsd_sttl_t plugin_weighted_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     dmn_assert(result);
 
     const resource_t* resource = &resources[resnum];

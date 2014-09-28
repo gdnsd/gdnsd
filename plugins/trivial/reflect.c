@@ -55,7 +55,7 @@ int plugin_reflect_map_res(const char* resname, const uint8_t* origin V_UNUSED) 
     return -1;
 }
 
-gdnsd_sttl_t plugin_reflect_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result) {
+gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result) {
     dmn_assert(resnum < NUM_RTYPES);
 
     if(resnum == RESPONSE_BOTH || resnum == RESPONSE_DNS || (resnum == RESPONSE_BEST && !cinfo->edns_client_mask)) {

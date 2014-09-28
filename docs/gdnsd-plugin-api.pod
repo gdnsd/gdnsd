@@ -30,7 +30,7 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     [R ] int plugin_foo_map_res(const char* resname, const uint8_t* origin)
 
     -- runtime stuff (called from iothread context, anytime after iothread_init())
-    [R ] gdnsd_sttl_t plugin_foo_resolve(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result)
+    [R ] gdnsd_sttl_t plugin_foo_resolve(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result)
 
     -- cleanup stuff:
     [RM] void plugin_foo_exit(void)
@@ -314,7 +314,7 @@ case, you can return meaningless data, e.g. C<0.0.0.0> for C<DYNA> or
 some hostname like C<plugin.is.broken.> for C<DYNC>, but ideally all
 possible error conditions have been checked out beforehand.
 
-C<_resolve> is supplied with a resource number, a thread number,
+C<_resolve> is supplied with a resource number,
 a result structure your code can use to supply address information to
 the client, a C<client_info_t> structure giving network information
 about the querying client, and an C<origin> argument.
@@ -512,7 +512,10 @@ The C<_resolve_dynaddr()> and C<_resolve_dyncname()> callbacks were
 merged and renamed to just C<_resolve()>.  The new call has an origin
 argument like the old C<_resolve_dyncame()>, which will be NULL when
 called for C<DYNA> RRs, and the C<result> argument's type was
-changed from C<dynaddr_result_t*> to C<dyn_result_t*>.
+changed from C<dynaddr_result_t*> to C<dyn_result_t*>.  The new call
+also lacks the C<threadnum> argument, as any plugin which needs this
+information can work around it via the C<_iothread_init()> callback
+and/or thread-local storage.
 
 C<gdnsd_dynaddr_add_result_anysin()> was renamed to
 C<gdnsd_dyn_add_result_anysin()>, and the C<result> argument's type was

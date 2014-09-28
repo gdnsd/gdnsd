@@ -86,9 +86,6 @@ typedef struct {
 //  one of these for each thread that might call
 //  into process_dns_query().
 typedef struct {
-    // The globally unique thread number for this context
-    unsigned threadnum;
-
     // whether the thread using this context is a udp or tcp thread
     bool is_udp;
 

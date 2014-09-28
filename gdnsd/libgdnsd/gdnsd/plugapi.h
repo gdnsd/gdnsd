@@ -113,7 +113,7 @@ typedef void (*gdnsd_load_config_cb_t)(vscf_data_t* pc, const unsigned num_threa
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(unsigned threadnum);
-typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
+typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 typedef void (*gdnsd_exit_cb_t)(void);
 
 /**** New callbacks for monitoring plugins ****/

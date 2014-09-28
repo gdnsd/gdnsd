@@ -60,7 +60,7 @@ void dnspacket_wait_stats(void) {
 // Called (indirectly via dnspacket_context_new) by each I/O thread to init
 //  its own stats structure, signals the above.  Also invokes the plugins'
 //  iothread_init callbacks.
-static dnspacket_stats_t* dnspacket_init_stats(unsigned int this_threadnum, const bool is_udp) {
+static dnspacket_stats_t* dnspacket_init_stats(const unsigned int this_threadnum, const bool is_udp) {
     pthread_mutex_lock(&stats_init_mutex);
     dnspacket_stats_t* retval = dnspacket_stats[this_threadnum]
         = calloc(1, sizeof(dnspacket_stats_t));
@@ -82,7 +82,6 @@ dnspacket_context_t* dnspacket_context_new(const unsigned int this_threadnum, co
     retval->rand_state = gdnsd_rand_init();
     retval->stats = dnspacket_init_stats(this_threadnum, is_udp);
     retval->is_udp = is_udp;
-    retval->threadnum = this_threadnum;
     retval->addtl_rrsets = malloc(gconfig.max_addtl_rrsets * sizeof(addtl_rrset_t));
     retval->comptargets = malloc(COMPTARGETS_MAX * sizeof(comptarget_t));
     retval->dync_store = malloc(gconfig.max_cname_depth * 256);
@@ -728,7 +727,7 @@ static unsigned do_dyn_callback(dnspacket_context_t* c, gdnsd_resolve_cb_t func,
 
     dyn_result_t* dr = c->dyn;
     memset(dr, 0, sizeof(dyn_result_t));
-    const gdnsd_sttl_t sttl = func(c->threadnum, res, origin, &c->client_info, dr);
+    const gdnsd_sttl_t sttl = func(res, origin, &c->client_info, dr);
     if(dr->edns_scope_mask > c->edns_client_scope_mask)
         c->edns_client_scope_mask = dr->edns_scope_mask;
     assert_valid_sttl(sttl);

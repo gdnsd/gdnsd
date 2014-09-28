@@ -376,7 +376,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     return rv;
 }
 
-gdnsd_sttl_t plugin_multifo_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     dmn_assert(result);
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();

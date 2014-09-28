@@ -31,7 +31,7 @@ int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UN
     return 0;
 }
 
-gdnsd_sttl_t plugin_null_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     if(origin) {
         uint8_t cntmp[256];
         gdnsd_dname_from_string(cntmp, "invalid.", 8);

@@ -101,7 +101,7 @@ int plugin_static_map_res(const char* resname, const uint8_t* origin) {
     map_res_err("plugin_static: resource name required");
 }
 
-gdnsd_sttl_t plugin_static_resolve(unsigned threadnum V_UNUSED, unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     // this (DYNA->CNAME) should be caught during map_res
     //   and cause the zonefile to fail to load
     if(!origin)
