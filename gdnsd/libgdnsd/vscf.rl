@@ -106,8 +106,8 @@ typedef struct {
     int           cont_stack_top;
     int           cs;
     int           top;
-    unsigned      cont_stack_alloc;
-    unsigned      cs_stack_alloc;
+    int           cont_stack_alloc;
+    int           cs_stack_alloc;
     unsigned      lcount;
     unsigned      cur_klen;
     vscf_data_t*  cont;
@@ -469,7 +469,7 @@ static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
     dmn_assert(scnr); dmn_assert(c);
     dmn_assert(scnr->cont);
 
-    if(++scnr->cont_stack_top == (signed)scnr->cont_stack_alloc)
+    if(++scnr->cont_stack_top == scnr->cont_stack_alloc)
         scnr->cont_stack = realloc(scnr->cont_stack, ++scnr->cont_stack_alloc * sizeof(vscf_data_t*));
 
     if(!add_to_cur_container(scnr, c))
@@ -733,7 +733,7 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
 
         %%{
             prepush {
-                if(scnr->top == (signed)scnr->cs_stack_alloc)
+                if(scnr->top == scnr->cs_stack_alloc)
                     scnr->cs_stack
                         = realloc(scnr->cs_stack,
                             ++scnr->cs_stack_alloc * sizeof(int));

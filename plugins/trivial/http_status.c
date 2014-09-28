@@ -188,8 +188,11 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
         md->already_connected = true;
     }
 
-    const unsigned to_send = md->http_svc->req_data_len - md->done;
-    const int sent = send(sock, md->http_svc->req_data + md->done, md->http_svc->req_data_len, 0);
+    dmn_assert(md->done < md->http_svc->req_data_len);
+    const int to_send = md->http_svc->req_data_len - md->done;
+    dmn_assert(to_send > 0);
+
+    const int sent = send(sock, md->http_svc->req_data + md->done, to_send, 0);
     if(unlikely(sent == -1)) {
         switch(errno) {
             case EAGAIN:
@@ -216,7 +219,10 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
         md->hstate = HTTP_STATE_WAITING;
         gdnsd_mon_state_updater(md->idx, false);
     }
-    if(unlikely(sent != (signed)to_send)) {
+
+    dmn_assert(sent <= to_send);
+
+    if(unlikely(sent != to_send)) {
         md->done += sent;
         return;
     }
