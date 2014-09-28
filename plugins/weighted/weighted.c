@@ -106,25 +106,14 @@ static resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
 // Per-thread PRNGs
-
-static unsigned iothread_count;
-static gdnsd_rstate_t** per_thread_rstates;
-
-static void init_rand_storage(const unsigned num_threads) {
-    iothread_count = num_threads;
-    per_thread_rstates = malloc(num_threads * sizeof(gdnsd_rstate_t*));
-}
-
-static void init_rand(const unsigned tnum) {
-    per_thread_rstates[tnum] = gdnsd_rand_init();
-}
-
 // it's important that the modulo operation happen in 64-bit space,
 //   even though modval and the effective return value are in 32-bit space,
 //   because it vastly reduces the bias in the returned numbers.
-static uint64_t get_rand(const unsigned tnum, const uint64_t modval) {
-    dmn_assert(modval);
-    return gdnsd_rand_get64(per_thread_rstates[tnum]) % modval;
+static __thread gdnsd_rstate_t* rstate = NULL;
+static void init_rand(void) { rstate = gdnsd_rand_init(); }
+static uint64_t get_rand(const uint64_t modval) {
+    dmn_assert(modval); dmn_assert(rstate);
+    return gdnsd_rand_get64(rstate) % modval;
 }
 
 // Main config code starts here
@@ -646,7 +635,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
 
 ////// exported callbacks start here
 
-void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads) {
+void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     dmn_assert(config);
     dmn_assert(vscf_is_hash(config));
 
@@ -685,7 +674,6 @@ void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads
         }
     }
     gdnsd_dyn_addr_max(max_v4, max_v6);
-    init_rand_storage(num_threads);
 }
 
 int plugin_weighted_map_res(const char* resname, const uint8_t* origin) {
@@ -716,9 +704,9 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* origin) {
     map_res_err("plugin_weighted: unknown resource '%s'", resname);
 }
 
-void plugin_weighted_iothread_init(const unsigned threadnum) { init_rand(threadnum); }
+void plugin_weighted_iothread_init(const unsigned threadnum V_UNUSED) { init_rand(); }
 
-static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, const uint8_t* origin, dyn_result_t* result, const unsigned threadnum) {
+static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, const uint8_t* origin, dyn_result_t* result) {
     dmn_assert(resource); dmn_assert(origin); dmn_assert(result);
 
     cnset_t* cnset = resource->cnames;
@@ -769,7 +757,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
     dmn_assert(dyn_sum);
 
     // choose the first item that breaks the random threshold
-    const unsigned item_rand = get_rand(threadnum, dyn_sum);
+    const unsigned item_rand = get_rand(dyn_sum);
     unsigned running_total = 0;
     unsigned chosen = 0;
     for(unsigned i = 0; i < ct; i++) {
@@ -787,7 +775,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadnum, const addrset_t* aset, dyn_result_t* result) {
+static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result) {
     dmn_assert(aset); dmn_assert(result);
 
     const unsigned num_items = aset->count;
@@ -858,12 +846,12 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
         // Outer decision: choose multiple items based on dyn_items_max
         for(unsigned item_idx = 0; item_idx < num_items; item_idx++) {
             const res_aitem_t* res_item = &aset->items[item_idx];
-            const unsigned item_rand = get_rand(threadnum, dyn_items_max);
+            const unsigned item_rand = get_rand(dyn_items_max);
             const unsigned isum = dyn_item_sums[item_idx];
             if(item_rand < isum) {
                 dmn_assert(isum); // given that they're both uints
                 // Inner decision: choose one addr based on dyn_item->sum
-                const unsigned addr_rand = get_rand(threadnum, isum);
+                const unsigned addr_rand = get_rand(isum);
                 unsigned addr_running_total = 0;
                 for(unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
                     addr_running_total += dyn_addr_weights[item_idx][addr_idx];
@@ -877,7 +865,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
     }
     else {
         // Outer decision: choose one item based on dyn_items_sum
-        const unsigned item_rand = get_rand(threadnum, dyn_items_sum);
+        const unsigned item_rand = get_rand(dyn_items_sum);
         unsigned item_running_total = 0;
         for(unsigned item_idx = 0; item_idx < num_items; item_idx++) {
             item_running_total += dyn_item_sums[item_idx];
@@ -887,7 +875,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
                 const unsigned addr_max = dyn_item_maxs[item_idx];
                 dmn_assert(addr_max);
                 for(unsigned addr_idx = 0; addr_idx < chosen->count; addr_idx++) {
-                    const unsigned addr_rand = get_rand(threadnum, addr_max);
+                    const unsigned addr_rand = get_rand(addr_max);
                     if(addr_rand < dyn_addr_weights[item_idx][addr_idx])
                         gdnsd_result_add_anysin(result, &chosen->as[addr_idx].addr);
                 }
@@ -901,28 +889,28 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const unsigned threadn
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t* res, dyn_result_t* result, const unsigned threadnum) {
+static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t* res, dyn_result_t* result) {
     dmn_assert(result); dmn_assert(res);
 
     gdnsd_sttl_t rv;
 
     if(res->addrs_v4) {
-        rv = resolve(sttl_tbl, threadnum, res->addrs_v4, result);
+        rv = resolve(sttl_tbl, res->addrs_v4, result);
         if(res->addrs_v6) {
-            const gdnsd_sttl_t v6_rv = resolve(sttl_tbl, threadnum, res->addrs_v6, result);
+            const gdnsd_sttl_t v6_rv = resolve(sttl_tbl, res->addrs_v6, result);
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     }
     else {
         dmn_assert(res->addrs_v6);
-        rv = resolve(sttl_tbl, threadnum, res->addrs_v6, result);
+        rv = resolve(sttl_tbl, res->addrs_v6, result);
     }
 
     assert_valid_sttl(rv);
     return rv;
 }
 
-gdnsd_sttl_t plugin_weighted_resolve(unsigned threadnum, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
+gdnsd_sttl_t plugin_weighted_resolve(unsigned threadnum V_UNUSED, unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
     dmn_assert(result);
 
     const resource_t* resource = &resources[resnum];
@@ -934,10 +922,10 @@ gdnsd_sttl_t plugin_weighted_resolve(unsigned threadnum, unsigned resnum, const 
 
     if(resource->cnames) {
         dmn_assert(origin); // map_res validates this
-        rv = resolve_cname(sttl_tbl, resource, origin, result, threadnum);
+        rv = resolve_cname(sttl_tbl, resource, origin, result);
     }
     else {
-        rv = resolve_addr(sttl_tbl, resource, result, threadnum);
+        rv = resolve_addr(sttl_tbl, resource, result);
     }
 
     assert_valid_sttl(rv);
