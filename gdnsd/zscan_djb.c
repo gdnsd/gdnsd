@@ -209,8 +209,8 @@ static unsigned parse_int(zscan_t *z, field_t *f) {
 
 F_NONNULL
 static void parse_txt(field_t *f) {
-    unsigned int i;
-    unsigned int j;
+    unsigned i;
+    unsigned j;
 
     if (f->len < 2)
       return;

@@ -52,7 +52,7 @@ typedef struct {
 static unsigned num_svcs = 0;
 static svc_t* svcs = NULL;
 
-static unsigned int num_mons = 0;
+static unsigned num_mons = 0;
 static mon_t* mons = NULL;
 
 static const char* helper_path = NULL;

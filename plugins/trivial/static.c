@@ -197,6 +197,6 @@ void plugin_static_add_mon_cname(const char* desc V_UNUSED, const char* svc_name
 void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
     dmn_assert(mon_loop);
 
-    for(unsigned int i = 0; i < num_mons; i++)
+    for(unsigned i = 0; i < num_mons; i++)
         gdnsd_mon_sttl_updater(static_mons[i]->idx, static_mons[i]->svc->static_sttl);
 }

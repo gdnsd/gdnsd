@@ -119,7 +119,7 @@ void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, 
 void plugin_null_init_monitors(struct ev_loop* mon_loop) {
     dmn_assert(mon_loop);
 
-    for(unsigned int i = 0; i < num_mons; i++) {
+    for(unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = null_mons[i]->interval_watcher;
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
@@ -129,7 +129,7 @@ void plugin_null_init_monitors(struct ev_loop* mon_loop) {
 void plugin_null_start_monitors(struct ev_loop* mon_loop) {
     dmn_assert(mon_loop);
 
-    for(unsigned int i = 0; i < num_mons; i++) {
+    for(unsigned i = 0; i < num_mons; i++) {
         null_mon_t* mon = null_mons[i];
         const unsigned ival = mon->svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);

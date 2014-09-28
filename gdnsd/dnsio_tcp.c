@@ -49,7 +49,7 @@ typedef struct {
     unsigned timeout;
     unsigned max_clients;
     ev_io* accept_watcher;
-    unsigned int num_conn_watchers;
+    unsigned num_conn_watchers;
 } tcpdns_thread_t;
 
 // per-connection state

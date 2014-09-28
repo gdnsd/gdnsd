@@ -60,7 +60,7 @@ typedef struct {
 } tcp_events_t;
 
 static unsigned num_tcp_svcs = 0;
-static unsigned int num_mons = 0;
+static unsigned num_mons = 0;
 static tcp_svc_t* service_types = NULL;
 static tcp_events_t** mons = NULL;
 
@@ -153,7 +153,7 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     bool success = false;
     int sock = md->sock;
     int so_error = 0;
-    unsigned int so_error_len = sizeof(so_error);
+    unsigned so_error_len = sizeof(so_error);
     (void)getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
     if(unlikely(so_error)) {
         switch(so_error) {
@@ -282,7 +282,7 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
 void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
     dmn_assert(mon_loop);
 
-    for(unsigned int i = 0; i < num_mons; i++) {
+    for(unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = mons[i]->interval_watcher;
         dmn_assert(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
@@ -293,7 +293,7 @@ void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
 void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop) {
     dmn_assert(mon_loop);
 
-    for(unsigned int i = 0; i < num_mons; i++) {
+    for(unsigned i = 0; i < num_mons; i++) {
         tcp_events_t* mon = mons[i];
         dmn_assert(mon->sock == -1);
         const unsigned ival = mon->tcp_svc->interval;

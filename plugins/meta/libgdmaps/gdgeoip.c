@@ -270,7 +270,7 @@ static unsigned region_get_dclist(const geoip_db_t* db, const unsigned offset) {
 }
 
 F_NONNULL
-static unsigned city_get_dclist(const geoip_db_t* db, unsigned int offs) {
+static unsigned city_get_dclist(const geoip_db_t* db, unsigned offs) {
     dmn_assert(db); dmn_assert(offs >= db->base);
 
     char locstr[256];

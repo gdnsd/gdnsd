@@ -286,14 +286,14 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
 void plugin_extfile_start_monitors(struct ev_loop* mon_loop) {
     dmn_assert(mon_loop);
 
-    for(unsigned int i = 0; i < num_svcs; i++)
+    for(unsigned i = 0; i < num_svcs; i++)
         start_svc(&service_types[i], mon_loop);
 }
 
 void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
     dmn_assert(mon_loop);
 
-    for(unsigned int i = 0; i < num_svcs; i++) {
+    for(unsigned i = 0; i < num_svcs; i++) {
         extf_svc_t* svc = &service_types[i];
         // qsort() sets up for the bsearch() in process_file at runtime
         qsort(svc->mons, svc->num_mons, sizeof(extf_mon_t), moncmp);
