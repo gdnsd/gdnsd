@@ -188,9 +188,9 @@ struct _ltree_rdata_rfc3597_struct {
 
 struct _ltree_rrset_gen_struct {
     ltree_rrset_t* next;
-    uint32_t ttl; // net-order
     uint16_t type; // host-order
     uint16_t count; // host-order
+    uint32_t ttl; // net-order
 };
 
 #if SIZEOF_UINTPTR_T == 8
