@@ -54,7 +54,6 @@ typedef struct {
 
 // per-connection state
 typedef struct {
-    tcpdns_thread_t* thread_ctx;
     dmn_anysin_t* asin;
     uint8_t* buffer;
     ev_io* read_watcher;
@@ -64,6 +63,8 @@ typedef struct {
     unsigned size_done;
     tcpdns_state_t state;
 } tcpdns_conn_t;
+
+static __thread tcpdns_thread_t* ctx = NULL;
 
 F_NONNULL
 static void cleanup_conn_watchers(struct ev_loop* loop, tcpdns_conn_t* tdata) {
@@ -80,8 +81,8 @@ static void cleanup_conn_watchers(struct ev_loop* loop, tcpdns_conn_t* tdata) {
     if(tdata->write_watcher) free(tdata->write_watcher);
     free(tdata->asin);
 
-    if((tdata->thread_ctx->num_conn_watchers-- == tdata->thread_ctx->max_clients))
-        ev_io_start(loop, tdata->thread_ctx->accept_watcher);
+    if(ctx->num_conn_watchers-- == ctx->max_clients)
+        ev_io_start(loop, ctx->accept_watcher);
 
     free(tdata);
 }
@@ -96,9 +97,9 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
         tdata->state == WRITING ? "writing to" : "reading from", dmn_logf_anysin(tdata->asin));
 
     if(tdata->state == WRITING)
-        stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
+        stats_own_inc(&ctx->pctx->stats->tcp.sendfail);
     else
-        stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
+        stats_own_inc(&ctx->pctx->stats->tcp.recvfail);
 
     cleanup_conn_watchers(loop, tdata);
 }
@@ -116,7 +117,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     if(unlikely(written == -1)) {
         if(errno != EAGAIN && errno != EWOULDBLOCK) {
             log_devdebug("TCP DNS send() failed, dropping response to %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
-            stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.sendfail);
+            stats_own_inc(&ctx->pctx->stats->tcp.sendfail);
             cleanup_conn_watchers(loop, tdata);
             return;
         }
@@ -174,7 +175,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
             else if(tdata->size_done) {
                 log_devdebug("TCP DNS recv() from %s: Unexpected EOF", dmn_logf_anysin(tdata->asin));
             }
-            stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
+            stats_own_inc(&ctx->pctx->stats->tcp.recvfail);
         }
         cleanup_conn_watchers(loop, tdata);
         return;
@@ -187,7 +188,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
             tdata->size = (tdata->buffer[0] << 8) + tdata->buffer[1] + 2;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
                 log_devdebug("Oversized TCP DNS query of length %u from %s", tdata->size, dmn_logf_anysin(tdata->asin));
-                stats_own_inc(&tdata->thread_ctx->pctx->stats->tcp.recvfail);
+                stats_own_inc(&ctx->pctx->stats->tcp.recvfail);
                 cleanup_conn_watchers(loop, tdata);
                 return;
             }
@@ -203,7 +204,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
     }
 
     //  Process the query and start the writer
-    tdata->size = process_dns_query(tdata->thread_ctx->pctx, tdata->asin, &tdata->buffer[2], tdata->size - 2);
+    tdata->size = process_dns_query(tctx->pctx, tdata->asin, &tdata->buffer[2], tdata->size - 2);
     if(!tdata->size) {
         cleanup_conn_watchers(loop, tdata);
         return;
@@ -229,8 +230,6 @@ F_NONNULL
 static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
-
-    tcpdns_thread_t* thread_ctx = io->data;
 
     dmn_anysin_t* asin = malloc(sizeof(dmn_anysin_t));
     asin->len = DMN_ANYSIN_MAXLEN;
@@ -273,12 +272,11 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
         return;
     }
 
-    if((++thread_ctx->num_conn_watchers == thread_ctx->max_clients))
-        ev_io_stop(loop, thread_ctx->accept_watcher);
+    if(++ctx->num_conn_watchers == ctx->max_clients)
+        ev_io_stop(loop, ctx->accept_watcher);
 
     tcpdns_conn_t* tdata = calloc(1, sizeof(tcpdns_conn_t));
     tdata->buffer = malloc(gconfig.max_response + 2);
-    tdata->thread_ctx = thread_ctx;
     tdata->state = READING_INITIAL;
     tdata->asin = asin;
 
@@ -291,7 +289,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     ev_timer* timeout_watcher = malloc(sizeof(ev_timer));
     timeout_watcher->data = tdata;
     tdata->timeout_watcher = timeout_watcher;
-    ev_timer_init(timeout_watcher, tcp_timeout_handler, 0, thread_ctx->timeout);
+    ev_timer_init(timeout_watcher, tcp_timeout_handler, 0, ctx->timeout);
     ev_set_priority(timeout_watcher, -1);
     ev_timer_again(loop, timeout_watcher);
 
@@ -386,14 +384,14 @@ void* dnsio_tcp_start(void* thread_asvoid) {
         if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
             log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
 
-    tcpdns_thread_t* thread_ctx = malloc(sizeof(tcpdns_thread_t));
-    thread_ctx->pctx = dnspacket_context_new(t->threadnum, false);
+    ctx = malloc(sizeof(tcpdns_thread_t));
+    ctx->pctx = dnspacket_context_new(t->threadnum, false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    thread_ctx->num_conn_watchers = 0;
-    thread_ctx->timeout = addrconf->tcp_timeout;
-    thread_ctx->max_clients = addrconf->tcp_clients_per_thread;
+    ctx->num_conn_watchers = 0;
+    ctx->timeout = addrconf->tcp_timeout;
+    ctx->max_clients = addrconf->tcp_clients_per_thread;
 
     if(!t->bind_success) {
         dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
@@ -405,10 +403,9 @@ void* dnsio_tcp_start(void* thread_asvoid) {
         pthread_exit(NULL);
     }
 
-    struct ev_io* accept_watcher = thread_ctx->accept_watcher = malloc(sizeof(struct ev_io));
+    struct ev_io* accept_watcher = ctx->accept_watcher = malloc(sizeof(struct ev_io));
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
     ev_set_priority(accept_watcher, -2);
-    accept_watcher->data = thread_ctx;
 
     struct ev_loop* loop = ev_loop_new(EVFLAG_AUTO);
     if(!loop) log_fatal("ev_loop_new() failed");
@@ -428,4 +425,3 @@ void* dnsio_tcp_start(void* thread_asvoid) {
 
     return NULL;
 }
-
