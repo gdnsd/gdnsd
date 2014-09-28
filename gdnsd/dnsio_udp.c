@@ -261,8 +261,8 @@ void udp_sock_setup(dns_thread_t* t) {
 #define CMSG_BUFSIZE 256
 
 F_NORETURN F_NONNULL
-static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cmsg) {
-    dmn_assert(pctx);
+static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg) {
+    dmn_assert(stats);
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
 
@@ -321,15 +321,15 @@ static void mainloop(const int fd, dnspacket_context_t* pctx, const bool use_cms
             || buf_in_len < 0)) {
                 if(buf_in_len < 0)
                     log_err("UDP recvmsg() error: %s", dmn_logf_errno());
-                stats_own_inc(&pctx->stats->udp.recvfail);
+                stats_own_inc(&stats->udp.recvfail);
         }
         else {
             asin.len = msg_hdr.msg_namelen;
-            iov.iov_len = process_dns_query(pctx, &asin, buf, buf_in_len);
+            iov.iov_len = process_dns_query(&asin, buf, buf_in_len);
             if(likely(iov.iov_len)) {
                 const int sent = sendmsg(fd, &msg_hdr, 0);
                 if(unlikely(sent < 0)) {
-                    stats_own_inc(&pctx->stats->udp.sendfail);
+                    stats_own_inc(&stats->udp.sendfail);
                     log_err("UDP sendmsg() of %zu bytes failed with retval %i for client %s: %s", iov.iov_len, sent, dmn_logf_anysin(&asin), dmn_logf_errno());
                 }
             }
@@ -351,8 +351,8 @@ static bool has_mmsg(void) {
 }
 
 F_NORETURN F_NONNULL
-static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_t* pctx, const bool use_cmsg) {
-    dmn_assert(pctx);
+static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t* stats, const bool use_cmsg) {
+    dmn_assert(stats);
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
 
@@ -422,12 +422,12 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
             for(int i = 0; i < pkts; i++) {
                 if(unlikely((asin[i].sa.sa_family == AF_INET && !asin[i].sin.sin_port)
                     || (asin[i].sa.sa_family == AF_INET6 && !asin[i].sin6.sin6_port))) {
-                        stats_own_inc(&pctx->stats->udp.recvfail);
+                        stats_own_inc(&stats->udp.recvfail);
                         iov[i][0].iov_len = 0; // skip send, still need memmove below
                 }
                 else {
                     asin[i].len = dgrams[i].msg_hdr.msg_namelen;
-                    iov[i][0].iov_len = process_dns_query(pctx, &asin[i], buf[i], dgrams[i].msg_len);
+                    iov[i][0].iov_len = process_dns_query(&asin[i], buf[i], dgrams[i].msg_len);
                 }
             }
 
@@ -463,7 +463,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
                     int sockerr = 0;
                     socklen_t sock_len = sizeof(sockerr);
                     (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
-                    stats_own_inc(&pctx->stats->udp.sendfail);
+                    stats_own_inc(&stats->udp.sendfail);
                     if(sent < 0) sent = 0;
                     log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, dmn_logf_anysin(dgptr[sent].msg_hdr.msg_name), dmn_logf_strerror(sockerr));
                     dgptr += sent; // skip past the successes
@@ -474,7 +474,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_context_
             }
         }
         else {
-            stats_own_inc(&pctx->stats->udp.recvfail);
+            stats_own_inc(&stats->udp.recvfail);
             log_err("UDP recvmmsg() error: %s", dmn_logf_errno());
         }
     }
@@ -509,14 +509,14 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     const dns_addr_t* addrconf = t->ac;
 
-    dnspacket_context_t* pctx = dnspacket_context_new(t->threadnum, true);
+    dnspacket_stats_t* stats = dnspacket_init(t->threadnum, true);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
     if(!t->bind_success) {
         dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
         log_warn("Could not bind UDP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", dmn_logf_anysin(&t->ac->addr));
-        //  we come here to  spawn the thread and do the dnspacket_context_new() properly and
+        //  we come here to  spawn the thread and do the dnspacket_context_setup() properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
         //  simply never gets requests.  This way we don't have to adjust stats arrays for
         //  the missing thread, etc.
@@ -531,11 +531,11 @@ void* dnsio_udp_start(void* thread_asvoid) {
     if(addrconf->udp_recv_width > 1) {
         log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
             addrconf->udp_recv_width, dmn_logf_anysin(&addrconf->addr));
-        mainloop_mmsg(addrconf->udp_recv_width, t->sock, pctx, need_cmsg);
+        mainloop_mmsg(addrconf->udp_recv_width, t->sock, stats, need_cmsg);
     }
     else
 #endif
     {
-        mainloop(t->sock, pctx, need_cmsg);
+        mainloop(t->sock, stats, need_cmsg);
     }
 }

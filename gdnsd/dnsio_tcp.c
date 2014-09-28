@@ -45,7 +45,7 @@ typedef enum {
 
 // per-thread state
 typedef struct {
-    dnspacket_context_t* pctx;
+    dnspacket_stats_t* stats;
     unsigned timeout;
     unsigned max_clients;
     ev_io* accept_watcher;
@@ -97,9 +97,9 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
         tdata->state == WRITING ? "writing to" : "reading from", dmn_logf_anysin(tdata->asin));
 
     if(tdata->state == WRITING)
-        stats_own_inc(&ctx->pctx->stats->tcp.sendfail);
+        stats_own_inc(&ctx->stats->tcp.sendfail);
     else
-        stats_own_inc(&ctx->pctx->stats->tcp.recvfail);
+        stats_own_inc(&ctx->stats->tcp.recvfail);
 
     cleanup_conn_watchers(loop, tdata);
 }
@@ -117,7 +117,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     if(unlikely(written == -1)) {
         if(errno != EAGAIN && errno != EWOULDBLOCK) {
             log_devdebug("TCP DNS send() failed, dropping response to %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
-            stats_own_inc(&ctx->pctx->stats->tcp.sendfail);
+            stats_own_inc(&ctx->stats->tcp.sendfail);
             cleanup_conn_watchers(loop, tdata);
             return;
         }
@@ -175,7 +175,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
             else if(tdata->size_done) {
                 log_devdebug("TCP DNS recv() from %s: Unexpected EOF", dmn_logf_anysin(tdata->asin));
             }
-            stats_own_inc(&ctx->pctx->stats->tcp.recvfail);
+            stats_own_inc(&ctx->stats->tcp.recvfail);
         }
         cleanup_conn_watchers(loop, tdata);
         return;
@@ -188,7 +188,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
             tdata->size = (tdata->buffer[0] << 8) + tdata->buffer[1] + 2;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
                 log_devdebug("Oversized TCP DNS query of length %u from %s", tdata->size, dmn_logf_anysin(tdata->asin));
-                stats_own_inc(&ctx->pctx->stats->tcp.recvfail);
+                stats_own_inc(&ctx->stats->tcp.recvfail);
                 cleanup_conn_watchers(loop, tdata);
                 return;
             }
@@ -204,7 +204,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
     }
 
     //  Process the query and start the writer
-    tdata->size = process_dns_query(tctx->pctx, tdata->asin, &tdata->buffer[2], tdata->size - 2);
+    tdata->size = process_dns_query(tdata->asin, &tdata->buffer[2], tdata->size - 2);
     if(!tdata->size) {
         cleanup_conn_watchers(loop, tdata);
         return;
@@ -385,7 +385,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
             log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
 
     ctx = malloc(sizeof(tcpdns_thread_t));
-    ctx->pctx = dnspacket_context_new(t->threadnum, false);
+    ctx->stats = dnspacket_init(t->threadnum, false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -396,7 +396,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     if(!t->bind_success) {
         dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
         log_warn("Could not bind TCP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", dmn_logf_anysin(&t->ac->addr));
-        //  we come here to  spawn the thread and do the dnspacket_context_new() properly and
+        //  we come here to  spawn the thread and do the dnspacket_context_setup() properly and
         //  then exit the iothread.  The rest of the code will see this as a thread that
         //  simply never gets requests.  This way we don't have to adjust stats arrays for
         //  the missing thread, etc.
