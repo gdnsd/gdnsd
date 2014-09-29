@@ -46,7 +46,7 @@ changes and/or solicit your feedback!).
 
 =head1 OVERVIEW
 
-This file documents version 14 of the gdnsd plugin API.
+This file documents version 15 of the gdnsd plugin API.
 
 L<gdnsd>'s plugin API offers the ability to write plugins that can
 do either (or both) of two roles:
@@ -487,15 +487,16 @@ its matching set of changes.
 
 =head1 RECENT API CHANGES
 
-=head2 Version 14
+=head2 Version 15
 
 This corresponds with the release of 2.0.0
 
 The changes below are versus Version 12 (final gdnsd 1.x API version).
-The changes from Version 12 were rather sweeping.  This tries to cover
-the largest notable changes in the key callbacks, but likely doesn't note
-them all.  When in doubt, look at the source of the core plugins distributed
-with the main source for guidance.
+Versions 13 and 14 only existed in development releases and were moving
+targets.  The changes from Version 12 were rather sweeping.  This tries to
+cover the largest notable changes in the key callbacks, but likely doesn't
+note them all.  When in doubt, look at the source of the core plugins
+distributed with the main source for guidance.
 
 The data structures C<dynaddr_result_t> and C<dyncname_result_t> were
 merged and replaced with a single structure C<dyn_result_t>, which
@@ -535,6 +536,10 @@ The callbacks C<_post_daemonize()>, C<_pre_privdrop()>, C<_post_privdrop()>,
 and C<_full_config()> were removed.  With the current structure, code that logically
 fit in these can be placed elsewhere (e.g. C<_start_monitors()>, C<_pre_run()>, or
 C<_load_config()> as appropriate).
+
+The type C<vscf_data_t*> in callback arguments used to be C<const>, and now it is
+not.  Similar changes occured in many places in the vscf API in general.  Just remove
+const from your plugin's local vscf pointers and recompile.
 
 =head1 SEE ALSO
 
