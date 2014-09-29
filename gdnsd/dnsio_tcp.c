@@ -50,6 +50,7 @@ typedef struct {
     unsigned max_clients;
     ev_io* accept_watcher;
     unsigned num_conn_watchers;
+    bool prcu_online;
 } tcpdns_thread_t;
 
 // per-connection state
@@ -204,6 +205,10 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
     }
 
     //  Process the query and start the writer
+    if(!ctx->prcu_online) {
+        ctx->prcu_online = true;
+        gdnsd_prcu_rdr_online();
+    }
     tdata->size = process_dns_query(tdata->asin, &tdata->buffer[2], tdata->size - 2);
     if(!tdata->size) {
         cleanup_conn_watchers(loop, tdata);
@@ -362,12 +367,11 @@ void tcp_dns_listen_setup(dns_thread_t* t) {
     t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout);
 }
 
-static void ztstate_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {
-    gdnsd_prcu_rdr_offline();
-}
-
-static void ztstate_online(struct ev_loop* loop V_UNUSED, ev_check* w V_UNUSED, int revents V_UNUSED) {
-    gdnsd_prcu_rdr_online();
+static void prcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {
+    if(ctx->prcu_online) {
+        ctx->prcu_online = false;
+        gdnsd_prcu_rdr_offline();
+    }
 }
 
 void* dnsio_tcp_start(void* thread_asvoid) {
@@ -413,14 +417,11 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     ev_io_start(loop, accept_watcher);
 
     gdnsd_prcu_rdr_thread_start();
+    ctx->prcu_online = true;
 
     struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));
-    struct ev_check* check_watcher = malloc(sizeof(struct ev_check));
-    ev_prepare_init(prep_watcher, ztstate_offline);
-    ev_check_init(check_watcher, ztstate_online);
-    ev_set_priority(check_watcher, EV_MAXPRI);
+    ev_prepare_init(prep_watcher, prcu_offline);
     ev_prepare_start(loop, prep_watcher);
-    ev_check_start(loop, check_watcher);
     ev_run(loop, 0);
 
     return NULL;
