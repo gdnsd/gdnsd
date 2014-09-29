@@ -497,7 +497,10 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
 
     dir = opendir(z->path);
     if (dir == NULL) {
-        log_err("djb: cannot open directory '%s': %s", z->path, dmn_logf_errno());
+        if(errno == ENOENT)
+            log_debug("djb: directory '%s' does not exist", z->path);
+        else
+            log_err("djb: cannot open directory '%s': %s", z->path, dmn_logf_errno());
         return true;
     }
 
