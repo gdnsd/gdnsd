@@ -14,7 +14,7 @@ $optrr = Net::DNS::RR->new(
     type => "OPT",
     ednsversion => 0,
     name => "",
-    class => 1280,
+    class => 1024,
     extendedrcode => 0,
     ednsflags => 0,
 );

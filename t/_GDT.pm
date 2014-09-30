@@ -1161,7 +1161,7 @@ sub optrr_clientsub {
         type => "OPT",
         ednsversion => 0,
         name => "",
-        class => 1280,
+        class => 1024,
         extendedrcode => 0,
         ednsflags => 0,
         %option,
