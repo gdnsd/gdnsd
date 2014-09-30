@@ -19,6 +19,7 @@
       Previously we tried to reply to these and ended up failing
       the related sendmsg call and incrementing "sendfail".
     * Default 'max_edns_response' raised from 1280 to 1410.
+    * UDP socket buffer default negotiation improvements
 
   *** Please read the 2.0.0-beta news below for everything
       else that's changed since 1.x.

@@ -27,15 +27,17 @@
 // Our UDP input buffers are shared with output buffer
 //  space, and the output buffer size in turn has
 //  a minimum size of 4K, default 16K.
-// However, we only advertise a buffer size of 1280 (IPv6
-//  Min MTU) via EDNS0.
+// However, we only advertise a buffer size of 1024,
+//  to be absolutely sure that even in the face of
+//  an IPv6 min-MTU link and lots of extra headers
+//  and whatnot, it will always be a single fragment.
 // We use this size as our recvmsg() limit as well,
 //  discarding anything larger to save ourselves
 //  processing it.  Really we could even advertise
 //  512 here since we don't support anything
 //  that warrants larger input sizes, but this is
 //  reasonable.
-#define DNS_EDNS0_SIZE 1280U
+#define DNS_EDNS0_SIZE 1024U
 #define DNS_RECV_SIZE DNS_EDNS0_SIZE
 
 /*** Wire formats ***/

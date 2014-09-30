@@ -148,6 +148,49 @@ static void udp_sock_opts_v6(const int sock) {
         log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", dmn_logf_errno());
 }
 
+F_NONNULL
+static void negotiate_udp_buffer(int sock, int which, const int pktsize, const unsigned width, const dmn_anysin_t* asin) {
+        dmn_assert(sock > -1);
+        dmn_assert(which == SO_SNDBUF || which == SO_RCVBUF);
+        dmn_assert(pktsize >= 512);
+        dmn_assert(width > 0);
+        dmn_assert(asin);
+
+        // Our default desired buffer.  This is based on enough room for
+        //   recv_width * 8 packets.  recv_width is counted as "4" if less than 4
+        //   (including the non-sendmmsg() case).
+        const int desired_buf = pktsize * 8 * ((width < 4) ? 4 : width);
+
+        // Bare minimum buffer we'll accept: the greater of 16K or pktsize
+        const int min_buf = (pktsize < 16384) ? 16384 : pktsize;
+
+        // For log messages below
+        const char* which_str = (which == SO_SNDBUF) ? "SO_SNDBUF" : "SO_RCVBUF";
+
+        // Negotiate with the kernel: if it reports <desired, try to set desired,
+        //   cutting in half on failure so long as we stay above the min, and then
+        //   eventually trying the exact minimum.  If we can't set the min, fail fatally.
+        int opt_size;
+        socklen_t size_size = sizeof(opt_size);
+        if(getsockopt(sock, SOL_SOCKET, which, &opt_size, &size_size) == -1)
+            log_fatal("Failed to get %s on UDP socket: %s", which_str, dmn_logf_errno());
+        if(opt_size < desired_buf) {
+            opt_size = desired_buf;
+            while(setsockopt(sock, SOL_SOCKET, which, &opt_size, sizeof(opt_size)) == -1) {
+                if(opt_size > (min_buf << 1))
+                    opt_size >>= 1;
+                else if(opt_size > min_buf)
+                    opt_size = min_buf;
+                else
+                    log_fatal("Failed to set %s to %u for UDP socket %s: %s.  You may need to reduce the max_edns_response and/or udp_recv_width, or specify workable buffer sizes explicitly in the config", which_str, opt_size, dmn_logf_anysin(asin), dmn_logf_errno());
+            }
+        }
+
+        // If we had to endure some reductions above, complain about it
+        if(opt_size < desired_buf)
+            log_info("UDP socket %s: %s: wanted %i, got %i", dmn_logf_anysin(asin), which_str, desired_buf, opt_size);
+}
+
 void udp_sock_setup(dns_thread_t* t) {
     dmn_assert(t);
 
@@ -179,70 +222,24 @@ void udp_sock_setup(dns_thread_t* t) {
             log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", dmn_logf_errno());
 #endif
 
-    int opt_size;
-    socklen_t size_size = sizeof(opt_size);
-
     if(addrconf->udp_rcvbuf) {
-        opt_size = addrconf->udp_rcvbuf;
+        int opt_size = addrconf->udp_rcvbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_RCVBUF to %u for UDP socket %s: %s", opt_size,
                 dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {
-        // Enforce a basic minimum SO_RCVBUF of (8 * DNS_RECV_SIZE) (10K), multiplied
-        //   by udp_recv_width when recvmmsg() is actually in use.
-
-        if(getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, &size_size) == -1)
-            log_fatal("Failed to get SO_RCVBUF on UDP socket: %s", dmn_logf_errno());
-
-        int min_rcv = DNS_RECV_SIZE * 8 * addrconf->udp_recv_width;
-
-        if(opt_size < min_rcv) {
-            opt_size = min_rcv;
-            if(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
-                log_fatal("Failed to set SO_RCVBUF to %u for UDP socket %s: %s", opt_size,
-                    dmn_logf_anysin(asin), dmn_logf_errno());
-        }
+        negotiate_udp_buffer(sock, SO_RCVBUF, DNS_RECV_SIZE, addrconf->udp_recv_width, asin);
     }
 
     if(addrconf->udp_sndbuf) {
-        opt_size = addrconf->udp_sndbuf;
+        int opt_size = addrconf->udp_sndbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s", opt_size,
                 dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {
-        // Try to enforce a basic minimum SO_SNDBUF in the range of 16K -> 256K depending
-        //   on max_response and mmsg config/detect.
-        // The minimum (no mmsg, min max_response) would be 16K, and the defaults
-        //   would be 64K for non-mmsg and 128K for mmsg cases.
-        if(getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, &size_size) == -1)
-            log_fatal("Failed to get SO_SNDBUF on UDP socket: %s", dmn_logf_errno());
-
-        int desired_sndbuf;
-        if(addrconf->udp_recv_width > 4)
-            desired_sndbuf = gconfig.max_response * addrconf->udp_recv_width;
-        else
-            desired_sndbuf = gconfig.max_response * 4;
-
-        if(desired_sndbuf > 262144)
-            desired_sndbuf = 262144;
-
-        // However, if that doesn't work, we'll negotiate down to a minimum
-        //   of gconfig.max_response.  Any smaller would cause send failures,
-        //   although the user may be able to configure around that by manually
-        //   specifying a smaller gconfig.max_response.
-        if(opt_size < desired_sndbuf) {
-            opt_size = desired_sndbuf;
-            while(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1) {
-                if(opt_size > (int)(gconfig.max_response << 1))
-                    opt_size >>= 1;
-                else if(opt_size > (int)gconfig.max_response)
-                    opt_size = (int)gconfig.max_response;
-                else
-                    log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s.  You may need to reduce the max_response option on this machine to a size it is capable of allocating for UDP buffers", opt_size, dmn_logf_anysin(asin), dmn_logf_errno());
-            }
-        }
+        negotiate_udp_buffer(sock, SO_SNDBUF, gconfig.max_edns_response, addrconf->udp_recv_width, asin);
     }
 
     if(isv6)
