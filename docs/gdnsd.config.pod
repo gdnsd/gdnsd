@@ -483,15 +483,17 @@ length.
 
 =item B<max_edns_response>
 
-Integer, default 1280, min 512, max 64000.  This is the maximum size
+Integer, default 1410, min 512, max 64000.  This is the maximum size
 of a UDP edns response to a client, acting as a cap on the edns
-buffer size advertised by the client in its request.  The default value
-1280 was chosen as it's very likely that such a size will traverse
-the public Internet un-fragmented (it is the IPv6 Minimum MTU value
-for similar reasons), and most reasonable DNS datasets result in
-responses significantly smaller than this.  The option obviously has
-no pragmatic effect if you do not have large response datasets in your
-zones in the first place.
+buffer size advertised by the client in its request.
+
+The default of 1410 is the largest size suggested in RFC 6891 when
+falling back from the inability to deliver 4K-sized packets, and it
+seems very likely to be a successful size for unfragmented delivery
+on most networks today even given IPv6 and some reasonable tunneling.
+
+The option obviously has no pragmatic effect if you do not have
+large response datasets in your zones in the first place.
 
 This value will be capped at the configured (or default) value of
 C<max_response> with a warning if configured above that value.
