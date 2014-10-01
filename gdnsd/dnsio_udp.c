@@ -360,10 +360,8 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t*
     dmn_anysin_t asin[width];
 
     /* Set up packet buffers */
-    void* pbuf = gdnsd_xpmalign(pgsz, max_rounded * width);
-    uint8_t* pbuf_asu8 = pbuf;
     for(unsigned i = 0; i < width; i++)
-        iov[i][0].iov_base = buf[i] = &pbuf_asu8[i * max_rounded];
+        iov[i][0].iov_base = buf[i] = gdnsd_xpmalign(pgsz, max_rounded);
 
 #ifdef HAVE_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
