@@ -25,6 +25,7 @@
 
 // Include all of the libgdnsd stuff for convenience
 #include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/net.h>

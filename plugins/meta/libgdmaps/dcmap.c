@@ -24,6 +24,7 @@
 #include "dcmap.h"
 #include "gdgeoip.h"
 
+#include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <stdbool.h>
 
@@ -80,7 +81,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
     dmn_assert(map_cfg); dmn_assert(dclists); dmn_assert(map_name);
     dmn_assert(vscf_is_hash(map_cfg));
 
-    dcmap_t* dcmap = calloc(1, sizeof(dcmap_t));
+    dcmap_t* dcmap = xcalloc(1, sizeof(dcmap_t));
     unsigned nchild = vscf_hash_get_len(map_cfg);
 
     vscf_data_t* def_cfg = vscf_hash_get_data_byconstkey(map_cfg, "default", true);
@@ -120,9 +121,9 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
 
     if(nchild) {
         dcmap->num_children = nchild;
-        dcmap->child_names = calloc(nchild, sizeof(char*));
-        dcmap->child_dclists = calloc(nchild, sizeof(int));
-        dcmap->child_dcmaps = calloc(nchild, sizeof(dcmap_t*));
+        dcmap->child_names = xcalloc(nchild, sizeof(char*));
+        dcmap->child_dclists = xcalloc(nchild, sizeof(int));
+        dcmap->child_dcmaps = xcalloc(nchild, sizeof(dcmap_t*));
         dcmap_iter_data did = {
             .child_num = 0,
             .dcmap = dcmap,

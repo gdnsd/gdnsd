@@ -18,6 +18,7 @@
  */
 
 #include "zsrc_rfc1035.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/misc.h"
 #include "gdnsd/log.h"
 #include "gdnsd/paths.h"
@@ -176,13 +177,13 @@ static void zfhash_grow(void) {
         dmn_assert(!zfhash);
         dmn_assert(!zfhash_count);
         zfhash_alloc = 16;
-        zfhash = calloc(16, sizeof(zfile_t*));
+        zfhash = xcalloc(16, sizeof(zfile_t*));
         return;
     }
 
     const unsigned new_alloc = zfhash_alloc << 1; // double
     const unsigned new_hash_mask = new_alloc - 1;
-    zfile_t** new_hash = calloc(new_alloc, sizeof(zfile_t*));
+    zfile_t** new_hash = xcalloc(new_alloc, sizeof(zfile_t*));
 
     for(unsigned i = 0; i < zfhash_alloc; i++) {
         zfile_t* zf = zfhash[i];
@@ -277,7 +278,7 @@ static char* make_zone_name(const char* zf_name) {
         log_err("rfc1035: Zone file name '%s' is illegal", zf_name);
     }
     else {
-        out = malloc(zf_name_len + 1);
+        out = xmalloc(zf_name_len + 1);
         // check for root zone...
         if(unlikely(zf_name_len == 9 && !strncmp(zf_name, "ROOT_ZONE", 9))) {
             out[0] = '.';
@@ -401,7 +402,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
 
     if(!statcmp_nx(&newstat) && !current_zft) {
         // file was found, but previously unknown to the zfhash
-        current_zft = calloc(1, sizeof(zfile_t));
+        current_zft = xcalloc(1, sizeof(zfile_t));
         current_zft->full_fn = full_fn;
         current_zft->fn = fn;
         current_zft->hash = gdnsd_lookup2(fn, strlen(fn));
@@ -440,7 +441,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
             else
                 log_debug("rfc1035: New change detected for stable zonefile '%s', delaying %.3g secs for further changes...", current_zft->fn, initial_quiesce_time);
             memcpy(&current_zft->pending, &newstat, sizeof(statcmp_t));
-            current_zft->pending_event = malloc(sizeof(ev_timer));
+            current_zft->pending_event = xmalloc(sizeof(ev_timer));
             ev_timer_init(current_zft->pending_event, quiesce_check, initial_quiesce_time, 0.);
             current_zft->pending_event->data = current_zft;
             ev_timer_start(loop, current_zft->pending_event);
@@ -466,7 +467,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
     }
     else {
         const size_t bufsz = gdnsd_dirent_bufsize(zdhandle, rfc1035_dir);
-        struct dirent* buf = malloc(bufsz);
+        struct dirent* buf = xmalloc(bufsz);
         struct dirent* result = NULL;
         do {
             if(unlikely(readdir_r(zdhandle, buf, &result)))
@@ -608,8 +609,8 @@ static bool inotify_initial_failure = true;
 static void inotify_initial_setup(void) {
     // Set up the actual inotify bits...
     memset(&inot, 0, sizeof(inot_data));
-    inot.io_watcher = malloc(sizeof(ev_io));
-    inot.fallback_watcher = malloc(sizeof(ev_timer));
+    inot.io_watcher = xmalloc(sizeof(ev_io));
+    inot.fallback_watcher = xmalloc(sizeof(ev_timer));
     inotify_initial_failure = inotify_setup(true);
     if(inotify_initial_failure)
         log_info("rfc1035: disabling inotify-based zonefile change detection on this host permanently (initial failure)");
@@ -625,7 +626,7 @@ static void initial_run(struct ev_loop* loop) {
         ev_io_start(loop, inot.io_watcher);
     }
     else {
-        reload_timer = calloc(1, sizeof(ev_timer));
+        reload_timer = xcalloc(1, sizeof(ev_timer));
         ev_timer_init(reload_timer, periodic_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
         ev_timer_start(loop, reload_timer);
     }
@@ -760,7 +761,7 @@ static void inotify_initial_setup(void) { }
 F_NONNULL
 static void initial_run(struct ev_loop* loop) {
     dmn_assert(loop);
-    reload_timer = calloc(1, sizeof(ev_timer));
+    reload_timer = xcalloc(1, sizeof(ev_timer));
     ev_timer_init(reload_timer, periodic_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
     ev_timer_start(loop, reload_timer);
 }
@@ -909,7 +910,7 @@ void zsrc_rfc1035_runtime_init(struct ev_loop* loop) {
     dmn_assert(loop);
 
     zones_loop = loop;
-    sigusr1_waker = malloc(sizeof(ev_async));
+    sigusr1_waker = xmalloc(sizeof(ev_async));
     ev_async_init(sigusr1_waker, sigusr1_cb);
     ev_async_start(loop, sigusr1_waker);
 

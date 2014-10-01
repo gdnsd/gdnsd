@@ -21,6 +21,7 @@
 #include "nlist.h"
 #include <string.h>
 #include <stdlib.h>
+#include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 
@@ -42,8 +43,8 @@ struct _nlist {
 
 nlist_t* nlist_new(const char* map_name, const bool pre_norm) {
     dmn_assert(map_name);
-    nlist_t* nl = malloc(sizeof(nlist_t));
-    nl->nets = malloc(sizeof(net_t) * NLIST_INITSIZE);
+    nlist_t* nl = xmalloc(sizeof(nlist_t));
+    nl->nets = xmalloc(sizeof(net_t) * NLIST_INITSIZE);
     nl->map_name = strdup(map_name);
     nl->alloc = NLIST_INITSIZE;
     nl->count = 0;
@@ -55,12 +56,12 @@ nlist_t* nlist_new(const char* map_name, const bool pre_norm) {
 F_UNUSED F_NONNULL
 static nlist_t* nlist_clone(const nlist_t* nl) {
     dmn_assert(nl);
-    nlist_t* nlc = malloc(sizeof(nlist_t));
+    nlist_t* nlc = xmalloc(sizeof(nlist_t));
     nlc->map_name = strdup(nl->map_name);
     nlc->alloc = nl->alloc;
     nlc->count = nl->count;
     nlc->normalized = nl->normalized;
-    nlc->nets = malloc(sizeof(net_t) * nlc->alloc);
+    nlc->nets = xmalloc(sizeof(net_t) * nlc->alloc);
     memcpy(nlc->nets, nl->nets, sizeof(net_t) * nlc->count);
     return nlc;
 }
@@ -177,7 +178,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
 
     if(unlikely(nl->count == nl->alloc)) {
         nl->alloc <<= 1U;
-        nl->nets = realloc(nl->nets, sizeof(net_t) * nl->alloc);
+        nl->nets = xrealloc(nl->nets, sizeof(net_t) * nl->alloc);
     }
     net_t* this_net = &nl->nets[nl->count++];
     memcpy(this_net->ipv6, ipv6, 16U);
@@ -286,7 +287,7 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge) {
         if(nl->count != nl->alloc) {
             dmn_assert(nl->count < nl->alloc);
             nl->alloc = nl->count;
-            nl->nets = realloc(nl->nets, nl->alloc * sizeof(net_t));
+            nl->nets = xrealloc(nl->nets, nl->alloc * sizeof(net_t));
         }
     }
 

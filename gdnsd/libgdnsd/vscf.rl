@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 
+#include <gdnsd/alloc.h>
 #include "gdnsd/dmn.h"
 #include "gdnsd/vscf.h"
 
@@ -43,7 +44,7 @@
 #define set_err(_epp, _fmt, ...) do { \
     dmn_assert(_epp); \
     if(!*_epp) { \
-        *_epp = malloc(256); \
+        *_epp = xmalloc(256); \
         snprintf(*_epp, 256, _fmt, __VA_ARGS__); \
     } \
 } while(0)
@@ -149,7 +150,7 @@ static unsigned djb_hash(const char* k, unsigned klen, const unsigned hash_mask)
 }
 
 static vscf_hash_t* hash_new(void) {
-    vscf_hash_t* h = calloc(1, sizeof(vscf_hash_t));
+    vscf_hash_t* h = xcalloc(1, sizeof(vscf_hash_t));
     h->type = VSCF_HASH_T;
     return h;
 }
@@ -160,7 +161,7 @@ static void hash_grow(vscf_hash_t* h) {
 
     const unsigned old_hash_mask = count2mask(h->child_count);
     const unsigned new_hash_mask = (old_hash_mask << 1) | 1;
-    vscf_hentry_t** new_table = calloc(new_hash_mask + 1, sizeof(vscf_hentry_t*));
+    vscf_hentry_t** new_table = xcalloc(new_hash_mask + 1, sizeof(vscf_hentry_t*));
     for(unsigned i = 0; i <= old_hash_mask; i++) {
         vscf_hentry_t* entry = h->children[i];
         while(entry) {
@@ -185,7 +186,7 @@ static void hash_grow(vscf_hash_t* h) {
     free(h->children);
 
     h->children = new_table;
-    h->ordered = realloc(h->ordered, (new_hash_mask + 1) * sizeof(vscf_hentry_t*));
+    h->ordered = xrealloc(h->ordered, (new_hash_mask + 1) * sizeof(vscf_hentry_t*));
 }
 
 F_NONNULL
@@ -194,8 +195,8 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
     v->parent = (vscf_data_t*)h;
 
     if(!h->children) {
-        h->children = calloc(2, sizeof(vscf_hentry_t*));
-        h->ordered = malloc(2 * sizeof(vscf_hentry_t*));
+        h->children = xcalloc(2, sizeof(vscf_hentry_t*));
+        h->ordered = xmalloc(2 * sizeof(vscf_hentry_t*));
     }
 
     const unsigned child_mask = count2mask(h->child_count);
@@ -210,9 +211,9 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
         store_at = &((*store_at)->next);
     }
 
-    vscf_hentry_t* new_hentry = *store_at = calloc(1, sizeof(vscf_hentry_t));
+    vscf_hentry_t* new_hentry = *store_at = xcalloc(1, sizeof(vscf_hentry_t));
     new_hentry->klen = klen;
-    new_hentry->key = malloc(klen + 1);
+    new_hentry->key = xmalloc(klen + 1);
     memcpy(new_hentry->key, key, klen + 1);
     new_hentry->index = h->child_count;
     new_hentry->val = v;
@@ -245,7 +246,7 @@ static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v)
 }
 
 static vscf_array_t* array_new(void) {
-    vscf_array_t* a = calloc(1, sizeof(vscf_array_t));
+    vscf_array_t* a = xcalloc(1, sizeof(vscf_array_t));
     a->type   = VSCF_ARRAY_T;
     return a;
 }
@@ -255,15 +256,15 @@ static void array_add_val(vscf_array_t* a, vscf_data_t* v) {
     dmn_assert(a); dmn_assert(v);
     v->parent = (vscf_data_t*)a;
     unsigned idx = a->len++;
-    a->vals = realloc(a->vals, a->len * sizeof(vscf_data_t*));
+    a->vals = xrealloc(a->vals, a->len * sizeof(vscf_data_t*));
     a->vals[idx] = v;
 }
 
 F_NONNULL
 static vscf_simple_t* simple_new(const char* rval, const unsigned rlen) {
     dmn_assert(rval);
-    vscf_simple_t* s = calloc(1, sizeof(vscf_simple_t));
-    char* storage = malloc(rlen);
+    vscf_simple_t* s = xcalloc(1, sizeof(vscf_simple_t));
+    char* storage = xmalloc(rlen);
     memcpy(storage, rval, rlen);
     s->type   = VSCF_SIMPLE_T;
     s->rlen   = rlen;
@@ -331,11 +332,11 @@ F_NONNULL
 static unsigned unescape_string(char** outp, const char* in, unsigned len) {
     dmn_assert(outp);
     dmn_assert(in);
-    char* out = malloc(len + 1);
+    char* out = xmalloc(len + 1);
     unsigned newlen = len;
     if(len)
         newlen = dns_unescape(out, in, len);
-    out = realloc(out, newlen + 1); // downsize
+    out = xrealloc(out, newlen + 1); // downsize
     out[newlen] = 0;
     *outp = out;
     return newlen;
@@ -470,7 +471,7 @@ static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
     dmn_assert(scnr->cont);
 
     if(++scnr->cont_stack_top == scnr->cont_stack_alloc)
-        scnr->cont_stack = realloc(scnr->cont_stack, ++scnr->cont_stack_alloc * sizeof(vscf_data_t*));
+        scnr->cont_stack = xrealloc(scnr->cont_stack, ++scnr->cont_stack_alloc * sizeof(vscf_data_t*));
 
     if(!add_to_cur_container(scnr, c))
         return false;
@@ -687,9 +688,9 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
 
     (void)vscf_en_main; // silence unused var warning from generated code
 
-    vscf_scnr_t* scnr = calloc(1, sizeof(vscf_scnr_t));
+    vscf_scnr_t* scnr = xcalloc(1, sizeof(vscf_scnr_t));
     unsigned buf_size = INIT_BUF_SIZE;
-    char* buf = malloc(buf_size);
+    char* buf = xmalloc(buf_size);
     dmn_assert(buf);
 
     scnr->lcount = 1;
@@ -709,7 +710,7 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
             have = scnr->pe - scnr->tstart;
             if(scnr->tstart == buf) {
                 buf_size *= 2;
-                buf = realloc(buf, buf_size);
+                buf = xrealloc(buf, buf_size);
                 dmn_assert(buf);
             }
             else {
@@ -735,7 +736,7 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
             prepush {
                 if(scnr->top == scnr->cs_stack_alloc)
                     scnr->cs_stack
-                        = realloc(scnr->cs_stack,
+                        = xrealloc(scnr->cs_stack,
                             ++scnr->cs_stack_alloc * sizeof(int));
             }
             variable stack scnr->cs_stack;

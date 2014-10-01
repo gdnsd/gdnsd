@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include <gdnsd/alloc.h>
 #include "gdnsd/misc.h"
 #include "gdnsd/misc-priv.h"
 #include "gdnsd/log.h"
@@ -94,7 +95,7 @@ char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
     dmn_assert(s1); dmn_assert(s2);
     const unsigned s1_len = strlen(s1);
     const unsigned s2_len = strlen(s2);
-    char* out = malloc(s1_len + s2_len + 1);
+    char* out = xmalloc(s1_len + s2_len + 1);
     char* work = out;
     memcpy(work, s1, s1_len);
     work += s1_len;
@@ -128,7 +129,7 @@ char* gdnsd_str_combine_n(const unsigned count, ...) {
     }
     va_end(ap);
 
-    char* out = malloc(oal);
+    char* out = xmalloc(oal);
     char* cur = out;
     for(unsigned i = 0; i < count; i++) {
         memcpy(cur, strs[i].ptr, strs[i].len);
@@ -284,7 +285,7 @@ void gdnsd_rand_meta_init(void) {
 
 gdnsd_rstate_t* gdnsd_rand_init(void) {
     unsigned throw_away;
-    gdnsd_rstate_t* newstate = calloc(1, sizeof(gdnsd_rstate_t));
+    gdnsd_rstate_t* newstate = xcalloc(1, sizeof(gdnsd_rstate_t));
     pthread_mutex_lock(&rand_init_lock);
     newstate->x = gdnsd_rand_get64(&rand_init_state);
     newstate->y = gdnsd_rand_get64(&rand_init_state);

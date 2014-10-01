@@ -133,7 +133,7 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': values in addrs mode must be arrays of [ IPADDR, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, stanza, item_name);
 
     res_item->count = 1;
-    res_item->as = calloc(res_item->count, sizeof(addrstate_t));
+    res_item->as = xcalloc(res_item->count, sizeof(addrstate_t));
     res_item->as[0].weight = wtemp;
     res_item->max_weight = wtemp;
     res_item->weight = wtemp;
@@ -148,7 +148,7 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
     if(addrset->num_svcs) {
-        res_item->as[0].indices = malloc(addrset->num_svcs * sizeof(unsigned));
+        res_item->as[0].indices = xmalloc(addrset->num_svcs * sizeof(unsigned));
         for(unsigned i = 0; i < addrset->num_svcs; i++)
             res_item->as[0].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[0].addr);
     }
@@ -200,7 +200,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
     if(addrset->num_svcs) {
-        res_item->as[lb_idx].indices = malloc(addrset->num_svcs * sizeof(unsigned));
+        res_item->as[lb_idx].indices = xmalloc(addrset->num_svcs * sizeof(unsigned));
         for(unsigned i = 0; i < addrset->num_svcs; i++)
             res_item->as[lb_idx].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[lb_idx].addr);
     }
@@ -226,7 +226,7 @@ static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name,
         log_fatal("plugin_weighted: resource '%s' (%s), group '%s': too many addresses (max %u)", res_name, stanza, item_name, MAX_ADDRS_PER_GROUP);
 
     res_item->count = num_addrs;
-    res_item->as = calloc(num_addrs, sizeof(addrstate_t));
+    res_item->as = xcalloc(num_addrs, sizeof(addrstate_t));
 
     iaga_t iaga = {
         .addrset = addrset,
@@ -321,7 +321,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
         addrset->count--; // minus one for service_types entry
         addrset->num_svcs = vscf_array_get_len(res_stypes);
         if(addrset->num_svcs) {
-            addrset->svc_names = malloc(addrset->num_svcs * sizeof(char*));
+            addrset->svc_names = xmalloc(addrset->num_svcs * sizeof(char*));
             for(unsigned i = 0; i < addrset->num_svcs; i++) {
                 vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if(!vscf_is_simple(this_svc_cfg))
@@ -332,7 +332,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     }
     else {
         addrset->num_svcs = 1;
-        addrset->svc_names = malloc(sizeof(char*));
+        addrset->svc_names = xmalloc(sizeof(char*));
         addrset->svc_names[0] = strdup(DEFAULT_SVCNAME);
     }
 
@@ -360,7 +360,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     if(!addrset->count)
         log_fatal("plugin_weighted: resource '%s' (%s): empty address-family sets not allowed", res_name, stanza);
 
-    addrset->items = calloc(addrset->count, sizeof(res_aitem_t));
+    addrset->items = xcalloc(addrset->count, sizeof(res_aitem_t));
     addrset->gmode = RES_ASET_UNKNOWN;
     addr_iter_data_t aid = {
         .item_idx = 0,
@@ -421,7 +421,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
 
     vscf_data_t* cn = vscf_array_get_data(cfg_data, 0);
     const char* cname_txt = vscf_simple_get_data(cn);
-    uint8_t* dname = malloc(256);
+    uint8_t* dname = xmalloc(256);
     dname_status_t dnstat = vscf_simple_get_as_dname(cn, dname);
     if(dnstat == DNAME_INVALID)
         log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' is not a legal domainname", res_name, stanza, item_name, vscf_simple_get_data(vscf_array_get_data(cfg_data, 0)));
@@ -430,7 +430,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
     res_item->cname = dname;
 
     if(cnset->num_svcs) {
-        res_item->indices = malloc(cnset->num_svcs * sizeof(unsigned));
+        res_item->indices = xmalloc(cnset->num_svcs * sizeof(unsigned));
         for(unsigned i = 0; i < cnset->num_svcs; i++)
             res_item->indices[i] = gdnsd_mon_cname(cnset->svc_names[i], cname_txt, dname);
     }
@@ -456,7 +456,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
         cnset->count--; // minus one for service_types entry
         cnset->num_svcs = vscf_array_get_len(res_stypes);
         if(cnset->num_svcs) {
-            cnset->svc_names = malloc(cnset->num_svcs * sizeof(char*));
+            cnset->svc_names = xmalloc(cnset->num_svcs * sizeof(char*));
             for(unsigned i = 0; i < cnset->num_svcs; i++) {
                 vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if(!vscf_is_simple(this_svc_cfg))
@@ -467,7 +467,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
     }
     else {
         cnset->num_svcs = 1;
-        cnset->svc_names = malloc(sizeof(char*));
+        cnset->svc_names = xmalloc(sizeof(char*));
         cnset->svc_names[0] = strdup(DEFAULT_SVCNAME);
     }
 
@@ -491,7 +491,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
     if(!cnset->count)
         log_fatal("plugin_weighted: resource '%s' (%s): empty cname sets not allowed", res_name, stanza);
 
-    cnset->items = calloc(cnset->count, sizeof(res_citem_t));
+    cnset->items = xcalloc(cnset->count, sizeof(res_citem_t));
     cname_iter_data_t cid = {
         .cnset = cnset,
         .res_name = res_name,
@@ -542,12 +542,12 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg) {
         if(addr_err)
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': item '%s': could not parse '%s' as an IP address: %s", res->name, first_name, lb_name, first_addr_txt, gai_strerror(addr_err));
         if(temp_sin.sa.sa_family == AF_INET6) {
-            res->addrs_v6 = calloc(1, sizeof(addrset_t));
+            res->addrs_v6 = xcalloc(1, sizeof(addrset_t));
             config_addrset(res->name, "direct", true, res->addrs_v6, res_cfg);
         }
         else {
             dmn_assert(temp_sin.sa.sa_family == AF_INET);
-            res->addrs_v4 = calloc(1, sizeof(addrset_t));
+            res->addrs_v4 = xcalloc(1, sizeof(addrset_t));
             config_addrset(res->name, "direct", false, res->addrs_v4, res_cfg);
         }
     }
@@ -558,18 +558,18 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg) {
         dmn_anysin_t temp_sin;
         if(gdnsd_anysin_getaddrinfo(vscf_simple_get_data(first_ac), NULL, &temp_sin)) {
             // was not a valid address, try cnames mode
-            res->cnames = calloc(1, sizeof(cnset_t));
+            res->cnames = xcalloc(1, sizeof(cnset_t));
             config_cnameset(res->name, "direct", res->cnames, res_cfg);
         }
         else {
             // was a valid address, try addrset mode
             if(temp_sin.sa.sa_family == AF_INET6) {
-                res->addrs_v6 = calloc(1, sizeof(addrset_t));
+                res->addrs_v6 = xcalloc(1, sizeof(addrset_t));
                 config_addrset(res->name, "direct", true, res->addrs_v6, res_cfg);
             }
             else {
                 dmn_assert(temp_sin.sa.sa_family == AF_INET);
-                res->addrs_v4 = calloc(1, sizeof(addrset_t));
+                res->addrs_v4 = xcalloc(1, sizeof(addrset_t));
                 config_addrset(res->name, "direct", false, res->addrs_v4, res_cfg);
             }
         }
@@ -612,12 +612,12 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
         log_fatal("plugin_weighted: resource '%s': the pointless singleton 'cnames' substanza is no longer supported; move the data up a level without it", res_name);
 
     if(addrs_v4_cfg) {
-        res->addrs_v4 = calloc(1, sizeof(addrset_t));
+        res->addrs_v4 = xcalloc(1, sizeof(addrset_t));
         config_addrset(res_name, "addrs_v4", false, res->addrs_v4, addrs_v4_cfg);
     }
 
     if(addrs_v6_cfg) {
-        res->addrs_v6 = calloc(1, sizeof(addrset_t));
+        res->addrs_v6 = xcalloc(1, sizeof(addrset_t));
         config_addrset(res_name, "addrs_v6", true, res->addrs_v6, addrs_v6_cfg);
     }
 
@@ -647,7 +647,7 @@ void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads
     if(vscf_hash_bequeath_all(config, "up_thresh", true, false))
         num_resources--; // don't count up_thresh
 
-    resources = calloc(num_resources, sizeof(resource_t));
+    resources = xcalloc(num_resources, sizeof(resource_t));
     unsigned idx = 0;
     vscf_hash_iterate(config, true, config_res, &idx);
 

@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "ntree.h"
+#include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 
 // Initial node allocation count,
@@ -26,8 +27,8 @@
 static const unsigned NT_SIZE_INIT = 128;
 
 ntree_t* ntree_new(void) {
-    ntree_t* newtree = malloc(sizeof(ntree_t));
-    newtree->store = malloc(NT_SIZE_INIT * sizeof(nnode_t));
+    ntree_t* newtree = xmalloc(sizeof(ntree_t));
+    newtree->store = xmalloc(NT_SIZE_INIT * sizeof(nnode_t));
     newtree->count = 0;
     newtree->alloc = NT_SIZE_INIT; // set to zero on fixation
     return newtree;
@@ -44,7 +45,7 @@ unsigned ntree_add_node(ntree_t* tree) {
     dmn_assert(tree->alloc);
     if(tree->count == tree->alloc) {
         tree->alloc <<= 1;
-        tree->store = realloc(tree->store, tree->alloc * sizeof(nnode_t));
+        tree->store = xrealloc(tree->store, tree->alloc * sizeof(nnode_t));
     }
     const unsigned rv = tree->count;
     dmn_assert(rv < (1U << 24));
@@ -74,7 +75,7 @@ static unsigned ntree_find_v4root(const ntree_t* tree) {
 void ntree_finish(ntree_t* tree) {
     dmn_assert(tree);
     tree->alloc = 0; // flag fixed, will fail asserts on add_node, etc now
-    tree->store = realloc(tree->store, tree->count * sizeof(nnode_t));
+    tree->store = xrealloc(tree->store, tree->count * sizeof(nnode_t));
     tree->ipv4 = ntree_find_v4root(tree);
 }
 

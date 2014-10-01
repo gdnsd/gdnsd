@@ -32,6 +32,7 @@
 #include "dnswire.h"
 #include "dnspacket.h"
 #include "socks.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/log.h"
 #include "gdnsd/misc.h"
 #include "gdnsd/net.h"
@@ -138,7 +139,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
 
     // Setup/Start write watcher if necc
     if(!tdata->write_watcher) {
-        ev_io* write_watcher = malloc(sizeof(ev_io));
+        ev_io* write_watcher = xmalloc(sizeof(ev_io));
         tdata->write_watcher = write_watcher;
         write_watcher->data = tdata;
         ev_io_init(write_watcher, tcp_write_handler, io->fd, EV_WRITE);
@@ -236,7 +237,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
-    dmn_anysin_t* asin = malloc(sizeof(dmn_anysin_t));
+    dmn_anysin_t* asin = xmalloc(sizeof(dmn_anysin_t));
     asin->len = DMN_ANYSIN_MAXLEN;
 
     const int sock = accept(io->fd, &asin->sa, &asin->len);
@@ -280,18 +281,18 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     if(++ctx->num_conn_watchers == ctx->max_clients)
         ev_io_stop(loop, ctx->accept_watcher);
 
-    tcpdns_conn_t* tdata = calloc(1, sizeof(tcpdns_conn_t));
-    tdata->buffer = malloc(gconfig.max_response + 2);
+    tcpdns_conn_t* tdata = xcalloc(1, sizeof(tcpdns_conn_t));
+    tdata->buffer = xmalloc(gconfig.max_response + 2);
     tdata->state = READING_INITIAL;
     tdata->asin = asin;
 
-    ev_io* read_watcher = malloc(sizeof(ev_io));
+    ev_io* read_watcher = xmalloc(sizeof(ev_io));
     tdata->read_watcher = read_watcher;
     read_watcher->data = tdata;
     ev_io_init(read_watcher, tcp_read_handler, sock, EV_READ);
     ev_set_priority(read_watcher, 0);
 
-    ev_timer* timeout_watcher = malloc(sizeof(ev_timer));
+    ev_timer* timeout_watcher = xmalloc(sizeof(ev_timer));
     timeout_watcher->data = tdata;
     tdata->timeout_watcher = timeout_watcher;
     ev_timer_init(timeout_watcher, tcp_timeout_handler, 0, ctx->timeout);
@@ -388,7 +389,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
         if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
             log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
 
-    ctx = malloc(sizeof(tcpdns_thread_t));
+    ctx = xmalloc(sizeof(tcpdns_thread_t));
     ctx->stats = dnspacket_init(t->threadnum, false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -407,7 +408,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
         pthread_exit(NULL);
     }
 
-    struct ev_io* accept_watcher = ctx->accept_watcher = malloc(sizeof(struct ev_io));
+    struct ev_io* accept_watcher = ctx->accept_watcher = xmalloc(sizeof(struct ev_io));
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
     ev_set_priority(accept_watcher, -2);
 
@@ -419,7 +420,7 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     gdnsd_prcu_rdr_thread_start();
     ctx->prcu_online = true;
 
-    struct ev_prepare* prep_watcher = malloc(sizeof(struct ev_prepare));
+    struct ev_prepare* prep_watcher = xmalloc(sizeof(struct ev_prepare));
     ev_prepare_init(prep_watcher, prcu_offline);
     ev_prepare_start(loop, prep_watcher);
     ev_run(loop, 0);

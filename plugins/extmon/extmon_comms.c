@@ -18,6 +18,7 @@
  */
 
 #include "config.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/compiler.h"
 #include "gdnsd/log.h"
 #include "extmon_comms.h"
@@ -84,7 +85,7 @@ bool emc_read_exact(const int fd, const char* str) {
 bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
     unsigned alloc = 256;
     unsigned len = 0;
-    char* buf = malloc(alloc);
+    char* buf = xmalloc(alloc);
 
     // 4 byte prefix "CMD:"
     memcpy(buf, "CMD:", 4);
@@ -105,7 +106,7 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
         const unsigned arg_len = strlen(cmd->args[i]) + 1;
         while((len + arg_len + 16) > alloc) {
             alloc *= 2;
-            buf = realloc(buf, alloc);
+            buf = xrealloc(buf, alloc);
         }
         memcpy(&buf[len], cmd->args[i], arg_len);
         len += arg_len;
@@ -115,7 +116,7 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
     const unsigned desc_len = strlen(cmd->desc) + 1;
     while((len + desc_len + 16) > alloc) {
         alloc *= 2;
-        buf = realloc(buf, alloc);
+        buf = xrealloc(buf, alloc);
     }
     memcpy(&buf[len], cmd->desc, desc_len);
     len += desc_len;
@@ -154,7 +155,7 @@ extmon_cmd_t* emc_read_command(const int fd) {
             goto out_error;
         }
 
-        cmd = malloc(sizeof(extmon_cmd_t));
+        cmd = xmalloc(sizeof(extmon_cmd_t));
         cmd->idx = ((unsigned)fixed_part[4] << 8) + fixed_part[5];
         cmd->timeout = fixed_part[6];
         cmd->interval = fixed_part[7];
@@ -182,12 +183,12 @@ extmon_cmd_t* emc_read_command(const int fd) {
             goto out_error;
         }
 
-        cmd->args = malloc((n_args + 1) * sizeof(char*));
+        cmd->args = xmalloc((n_args + 1) * sizeof(char*));
         const uint8_t* current = &var_part[1];
         unsigned len_remain = var_len - 1;
         for(cmd->num_args = 0; cmd->num_args < n_args; cmd->num_args++) {
             const unsigned cmdlen = strnlen((const char*)current, len_remain) + 1;
-            cmd->args[cmd->num_args] = malloc(cmdlen);
+            cmd->args[cmd->num_args] = xmalloc(cmdlen);
             if(!nul_within_n_bytes(current, len_remain)) {
                 log_debug("emc_read_command(): argument runs off end of buffer");
                 goto out_error;

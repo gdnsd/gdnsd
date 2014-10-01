@@ -90,7 +90,7 @@ static extf_svc_t* service_types = NULL;
 void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
     dmn_assert(name); dmn_assert(svc_cfg);
 
-    service_types = realloc(service_types, (num_svcs + 1) * sizeof(extf_svc_t));
+    service_types = xrealloc(service_types, (num_svcs + 1) * sizeof(extf_svc_t));
     extf_svc_t* svc = &service_types[num_svcs++];
 
     svc->name = strdup(name);
@@ -128,7 +128,7 @@ void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_nam
 
     dmn_assert(svc);
 
-    svc->mons = realloc(svc->mons, (svc->num_mons + 1) * sizeof(extf_mon_t));
+    svc->mons = xrealloc(svc->mons, (svc->num_mons + 1) * sizeof(extf_mon_t));
     extf_mon_t* mon = &svc->mons[svc->num_mons];
     mon->name = strdup(cname);
     mon->sidx = idx;
@@ -265,10 +265,10 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
         // in the direct case, interval is the ev_stat time hint, and all ev_stat
         //   hits (re-)kick a 1.02s stat()-settling timer, which processes the file
         //   when it expires.
-        svc->time_watcher = malloc(sizeof(ev_timer));
+        svc->time_watcher = xmalloc(sizeof(ev_timer));
         ev_timer_init(svc->time_watcher, timer_cb, 0.0, 1.02);
         svc->time_watcher->data = svc;
-        svc->file_watcher = malloc(sizeof(ev_stat));
+        svc->file_watcher = xmalloc(sizeof(ev_stat));
         ev_stat_init(svc->file_watcher, file_cb, svc->path, svc->interval);
         svc->file_watcher->data = svc;
         ev_stat_start(mon_loop, svc->file_watcher);
@@ -276,7 +276,7 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
     else {
         // in the monitor case, interval is a fixed repeating timer that processes
         //   the file on every expiry.
-        svc->time_watcher = malloc(sizeof(ev_timer));
+        svc->time_watcher = xmalloc(sizeof(ev_timer));
         ev_timer_init(svc->time_watcher, timer_cb, svc->interval, svc->interval);
         svc->time_watcher->data = svc;
         ev_timer_start(mon_loop, svc->time_watcher);

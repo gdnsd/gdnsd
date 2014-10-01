@@ -26,6 +26,7 @@
 
 #include "conf.h"
 #include "dnswire.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/log.h"
 #include "gdnsd/misc.h"
 #include "gdnsd/plugapi-priv.h"
@@ -134,7 +135,7 @@ dnspacket_stats_t** dnspacket_stats;
 // Allocates the array of pointers to stats structures, one per I/O thread
 // Called from main thread before I/O threads are spawned.
 void dnspacket_global_setup(void) {
-    dnspacket_stats = calloc(gconfig.num_dns_threads, sizeof(dnspacket_stats_t*));
+    dnspacket_stats = xcalloc(gconfig.num_dns_threads, sizeof(dnspacket_stats_t*));
     result_v6_offset = gdnsd_result_get_v6_offset();
 }
 
@@ -150,15 +151,15 @@ void dnspacket_wait_stats(void) {
 }
 
 static void dnspacket_ctx_init(const bool is_udp) {
-    ctx = calloc(1, sizeof(dnspacket_context_t));
+    ctx = xcalloc(1, sizeof(dnspacket_context_t));
 
     ctx->rand_state = gdnsd_rand_init();
     ctx->is_udp = is_udp;
-    ctx->addtl_rrsets = malloc(gconfig.max_addtl_rrsets * sizeof(addtl_rrset_t));
-    ctx->comptargets = malloc(COMPTARGETS_MAX * sizeof(comptarget_t));
-    ctx->dync_store = malloc(gconfig.max_cname_depth * 256);
-    ctx->addtl_store = malloc(gconfig.max_response);
-    ctx->dyn = malloc(gdnsd_result_get_alloc());
+    ctx->addtl_rrsets = xmalloc(gconfig.max_addtl_rrsets * sizeof(addtl_rrset_t));
+    ctx->comptargets = xmalloc(COMPTARGETS_MAX * sizeof(comptarget_t));
+    ctx->dync_store = xmalloc(gconfig.max_cname_depth * 256);
+    ctx->addtl_store = xmalloc(gconfig.max_response);
+    ctx->dyn = xmalloc(gdnsd_result_get_alloc());
 }
 
 // dnspacket_ctx_init() doesn't actually need to be protected by the mutex, but
@@ -168,7 +169,7 @@ dnspacket_stats_t* dnspacket_init(const unsigned this_threadnum, const bool is_u
     pthread_mutex_lock(&stats_init_mutex);
 
     dnspacket_ctx_init(is_udp);
-    stats = dnspacket_stats[this_threadnum] = calloc(1, sizeof(dnspacket_stats_t));
+    stats = dnspacket_stats[this_threadnum] = xcalloc(1, sizeof(dnspacket_stats_t));
     stats->is_udp = is_udp;
     gdnsd_plugins_action_iothread_init(this_threadnum);
     stats_initialized++;

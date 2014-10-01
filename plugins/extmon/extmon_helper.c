@@ -18,6 +18,7 @@
  */
 
 #include "config.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/compiler.h"
 #include "gdnsd/log.h"
 
@@ -68,7 +69,7 @@ unsigned sendq_head = 0;
 // must be power of 2!
 #define SENDQ_INITSIZE 16
 static void sendq_init(void) {
-    sendq = malloc(SENDQ_INITSIZE * sizeof(uint32_t));
+    sendq = xmalloc(SENDQ_INITSIZE * sizeof(uint32_t));
     sendq_alloc = SENDQ_INITSIZE;
 }
 
@@ -82,7 +83,7 @@ static void sendq_enq(uint32_t new_data) {
         // buffer too small, upsize first (we never downsize)
         const unsigned old_mask = sendq_alloc - 1;
         sendq_alloc <<= 1;
-        uint32_t* newq = malloc(sendq_alloc * sizeof(uint32_t));
+        uint32_t* newq = xmalloc(sendq_alloc * sizeof(uint32_t));
         for(unsigned i = 0; i < sendq_len; i++)
             newq[i] = sendq[(sendq_head + i) & old_mask];
         newq[sendq_len] = new_data;
@@ -274,7 +275,7 @@ int main(int argc, char** argv) {
     num_mons = ((unsigned)ccount_buf[5] << 8) + ccount_buf[6];
     if(!num_mons)
         log_fatal("Received command count of zero from plugin");
-    mons = calloc(num_mons, sizeof(mon_t));
+    mons = xcalloc(num_mons, sizeof(mon_t));
 
     if(emc_write_string(plugin_write_fd, "CMDS_ACK", 8))
         log_fatal("Failed to write CMDS_ACK to plugin");
@@ -314,8 +315,8 @@ int main(int argc, char** argv) {
     if(!def_loop) log_fatal("Could not initialize the default libev loop");
 
     // set up primary read/write watchers on the pipe to the daemon's plugin
-    plugin_read_watcher = malloc(sizeof(ev_io));
-    plugin_write_watcher = malloc(sizeof(ev_io));
+    plugin_read_watcher = xmalloc(sizeof(ev_io));
+    plugin_write_watcher = xmalloc(sizeof(ev_io));
     ev_io_init(plugin_write_watcher, plugin_write_cb, plugin_write_fd, EV_WRITE);
     ev_set_priority(plugin_write_watcher, 1);
 
@@ -323,7 +324,7 @@ int main(int argc, char** argv) {
     //   for the daemon's monitoring init cycle, then repeating every interval.
     for(unsigned i = 0; i < num_mons; i++) {
         mon_t* this_mon = &mons[i];
-        this_mon->interval_timer = malloc(sizeof(ev_timer));
+        this_mon->interval_timer = xmalloc(sizeof(ev_timer));
         ev_timer_init(this_mon->interval_timer, mon_interval_cb, 0., this_mon->cmd->interval);
         this_mon->interval_timer->data = this_mon;
         ev_set_priority(this_mon->interval_timer, 0);
@@ -331,12 +332,12 @@ int main(int argc, char** argv) {
 
         // initialize the other watchers in the mon_t here as well,
         //   but do not start them (the interval callback starts them each interval)
-        this_mon->cmd_timeout = malloc(sizeof(ev_timer));
+        this_mon->cmd_timeout = xmalloc(sizeof(ev_timer));
         ev_timer_init(this_mon->cmd_timeout, mon_timeout_cb, 0, 0);
         ev_set_priority(this_mon->cmd_timeout, -1);
         this_mon->cmd_timeout->data = this_mon;
 
-        this_mon->child_watcher = malloc(sizeof(ev_child));
+        this_mon->child_watcher = xmalloc(sizeof(ev_child));
         ev_child_init(this_mon->child_watcher, mon_child_cb, 0, 0);
         this_mon->child_watcher->data = this_mon;
     }

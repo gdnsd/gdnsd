@@ -51,7 +51,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     if(gdnsd_anysin_fromstr(addr_txt, 0, &resources[res].addr)) {
         // Address-parsing failed, treat as domainname for DYNC
         resources[res].is_addr = false;
-        resources[res].dname = malloc(256);
+        resources[res].dname = xmalloc(256);
         dname_status_t status = vscf_simple_get_as_dname(addr, resources[res].dname);
         if(status == DNAME_INVALID)
             log_fatal("plugin_static: resource %s: must be an IPv4 address or a domainname in string form", resname);
@@ -71,7 +71,7 @@ void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V
     dmn_assert(vscf_get_type(config) == VSCF_HASH_T);
 
     num_resources = vscf_hash_get_len(config);
-    resources = malloc(num_resources * sizeof(static_resource_t));
+    resources = xmalloc(num_resources * sizeof(static_resource_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, false, config_res, &residx);
     gdnsd_dyn_addr_max(1, 1); // static only ever returns a single IP
@@ -138,8 +138,8 @@ static static_mon_t** static_mons = NULL;
 void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED) {
     dmn_assert(name); dmn_assert(svc_cfg);
 
-    static_svcs = realloc(static_svcs, sizeof(static_svc_t*) * ++num_svcs);
-    static_svc_t* this_svc = static_svcs[num_svcs - 1] = malloc(sizeof(static_svc_t));
+    static_svcs = xrealloc(static_svcs, sizeof(static_svc_t*) * ++num_svcs);
+    static_svc_t* this_svc = static_svcs[num_svcs - 1] = xmalloc(sizeof(static_svc_t));
     this_svc->name = strdup(name);
     this_svc->static_sttl = GDNSD_STTL_TTL_MAX;
 
@@ -178,8 +178,8 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
     }
     dmn_assert(this_svc);
 
-    static_mons = realloc(static_mons, sizeof(static_mon_t*) * ++num_mons);
-    static_mon_t* this_mon = static_mons[num_mons - 1] = malloc(sizeof(static_mon_t));
+    static_mons = xrealloc(static_mons, sizeof(static_mon_t*) * ++num_mons);
+    static_mon_t* this_mon = static_mons[num_mons - 1] = xmalloc(sizeof(static_mon_t));
     this_mon->svc = this_svc;
     this_mon->idx = idx;
 }

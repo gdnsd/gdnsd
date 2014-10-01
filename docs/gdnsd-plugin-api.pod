@@ -291,7 +291,7 @@ such thread, the callback C<plugin_foo_iothread_init> will be called
 from within each I/O thread with the global thread number as the only
 argument (0 through num_threads-1, where num_threads was provided to
 you back at C<plugin_foo_load_config()> time).  This would be the ideal
-time to malloc() writable per-thread data structures from within the
+time to xmalloc() writable per-thread data structures from within the
 threads themselves, so that a thread-aware malloc can avoid false sharing.
 
 =head2 RUNTIME

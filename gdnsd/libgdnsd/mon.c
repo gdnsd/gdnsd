@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include <gdnsd/alloc.h>
 #include "gdnsd/mon.h"
 #include "gdnsd/mon-priv.h"
 #include "gdnsd/log.h"
@@ -341,9 +342,9 @@ static void admin_init(struct ev_loop* mloop) {
 
     char* pathname = gdnsd_resolve_path_state("admin_state", NULL);
 
-    admin_quiesce_timer = malloc(sizeof(ev_timer));
+    admin_quiesce_timer = xmalloc(sizeof(ev_timer));
     ev_timer_init(admin_quiesce_timer, admin_timer_cb, 0.0, 1.02);
-    admin_file_watcher = malloc(sizeof(ev_stat));
+    admin_file_watcher = xmalloc(sizeof(ev_stat));
     ev_stat_init(admin_file_watcher, admin_file_cb, pathname, 5.02);
     ev_stat_start(mloop, admin_file_watcher);
 
@@ -392,7 +393,7 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
     initial_round = false;
 
     // set up the table-update coalescing timer
-    sttl_update_timer = malloc(sizeof(ev_timer));
+    sttl_update_timer = xmalloc(sizeof(ev_timer));
     ev_timer_init(sttl_update_timer, sttl_table_update, 1.0, 0.0);
 
     // trigger it once manually to invoke prcu stuff
@@ -462,7 +463,7 @@ static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, co
 
     // allocate the new smgr/sttl
     const unsigned idx = num_smgrs++;
-    smgrs = realloc(smgrs, sizeof(smgr_t) * num_smgrs);
+    smgrs = xrealloc(smgrs, sizeof(smgr_t) * num_smgrs);
     smgr_t* this_smgr = &smgrs[idx];
     this_smgr->type = this_svc;
 
@@ -506,8 +507,8 @@ static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, co
     if(!strcmp(svctype_name, "down"))
         this_smgr->real_sttl |= GDNSD_STTL_DOWN;
 
-    smgr_sttl = realloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer = realloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgr_sttl = xrealloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgr_sttl_consumer = xrealloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
     smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
@@ -529,9 +530,9 @@ unsigned gdnsd_mon_admin(const char* desc) {
     dmn_assert(desc);
 
     const unsigned idx = num_smgrs++;
-    smgrs = realloc(smgrs, sizeof(smgr_t) * num_smgrs);
-    smgr_sttl = realloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer = realloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgrs = xrealloc(smgrs, sizeof(smgr_t) * num_smgrs);
+    smgr_sttl = xrealloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgr_sttl_consumer = xrealloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
     smgr_t* this_smgr = &smgrs[idx];
     memset(this_smgr, 0, sizeof(smgr_t));
     this_smgr->desc = strdup(desc);
@@ -578,7 +579,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg) {
     num_svc_types = num_svc_types_cfg + 2; // "up", "down"
 
     // the last 2 service types are fixed to up and down
-    service_types = calloc(num_svc_types, sizeof(service_type_t));
+    service_types = xcalloc(num_svc_types, sizeof(service_type_t));
     service_types[num_svc_types - 2].name = "up";
     service_types[num_svc_types - 1].name = "down";
 

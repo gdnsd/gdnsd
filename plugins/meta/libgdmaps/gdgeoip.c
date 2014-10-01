@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+#include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
@@ -403,7 +404,7 @@ static unsigned get_dclist_cached(geoip_db_t* db, const unsigned offset) {
     }
 
     unsigned dclist = db->dclist_get_func(db, offset);
-    db->offset_cache[ndx] = realloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
+    db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
     dmn_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
@@ -499,7 +500,7 @@ F_NONNULLX(1,2,3)
 static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const fips_t* fips, const gdgeoip_v4o_t v4o_flag, const bool city_auto_mode, const bool city_no_region) {
     dmn_assert(pathname); dmn_assert(map_name); dmn_assert(dclists);
 
-    geoip_db_t* db = calloc(1, sizeof(geoip_db_t));
+    geoip_db_t* db = xcalloc(1, sizeof(geoip_db_t));
     db->fd = -1;
     db->pathname = pathname;
     db->map_name = map_name;

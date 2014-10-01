@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include <gdnsd/alloc.h>
 #include "gdnsd/plugapi.h"
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/log.h"
@@ -136,7 +137,7 @@ void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array) {
         ? vscf_array_get_len(psearch_array)
         : 0;
 
-    psearch = malloc((psearch_count + 2) * sizeof(const char*));
+    psearch = xmalloc((psearch_count + 2) * sizeof(const char*));
     for(int i = 0; i < psearch_count; i++) {
         vscf_data_t* psd = vscf_array_get_data(psearch_array, i);
         if(!vscf_is_simple(psd))
@@ -168,8 +169,8 @@ static plugin_t* plugin_allocate(const char* pname) {
 
     const unsigned this_idx = num_plugins++;
     log_debug("Assigning slot #%u to plugin '%s'", this_idx, pname);
-    plugins = realloc(plugins, num_plugins * sizeof(plugin_t*));
-    plugin_t* rv = plugins[this_idx] = calloc(1, sizeof(plugin_t));
+    plugins = xrealloc(plugins, num_plugins * sizeof(plugin_t*));
+    plugin_t* rv = plugins[this_idx] = xcalloc(1, sizeof(plugin_t));
     rv->name = strdup(pname);
     rv->config_loaded = false;
 

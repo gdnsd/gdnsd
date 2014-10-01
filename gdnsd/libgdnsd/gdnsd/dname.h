@@ -26,6 +26,7 @@
 #include <stdbool.h>
 
 #include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
 
 /*
@@ -128,7 +129,7 @@
  *  data to the core code, but are useful during intermediate stages
  *  of construction.
  * The maximum required storage size is 256 bytes for a maximally long
- *  name.  e.g. ("uint8_t dname[256];" or "uint8_t* dname = malloc(256);").
+ *  name.  e.g. ("uint8_t dname[256];" or "uint8_t* dname = xmalloc(256);").
  * As a general rule, all generic dname storage a plugin creates should
  *  be allocated for the full 256 bytes if you are going to construct
  *  them using the helper functions here.  However, keep in mind that
@@ -218,12 +219,12 @@ static inline bool gdnsd_dname_is_partial(const uint8_t* dname) {
 }
 
 // Trim a dname's storage to the minimum required size.  Assumes storage was
-//  originally allocated with malloc() or equivalent.  Note that after trimming
+//  originally allocated with xmalloc() or equivalent.  Note that after trimming
 //  you cannot perform operations like dname_cat() on this directly.
 F_WUNUSED F_NONNULL
 static inline uint8_t* gdnsd_dname_trim(uint8_t* dname) {
     dmn_assert(dname); dmn_assert(*dname);
-    return realloc(dname, *dname + 1);
+    return xrealloc(dname, *dname + 1);
 }
 
 // Copy "source" dname to the storage at dest, which must be allocated
@@ -236,13 +237,13 @@ static inline void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
     memcpy(dest, source, len + 1U);
 }
 
-// Allocate new storage (via malloc()), clone the input dname into it, and return.
+// Allocate new storage (via xmalloc()), clone the input dname into it, and return.
 // The second argument "exact" determines whether the new copy will be allocated
 //  to 256 bytes or to the exact amount necessary to hold the data.
 F_WUNUSED F_NONNULL
 static inline uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact) {
     dmn_assert(dname); dmn_assert(*dname);
-    uint8_t* out = malloc(exact ? (*dname + 1) : 256);
+    uint8_t* out = xmalloc(exact ? (*dname + 1) : 256);
     gdnsd_dname_copy(out, dname);
     return out;
 }

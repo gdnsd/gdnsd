@@ -30,6 +30,7 @@
 #include "conf.h"
 #include "ltree.h"
 #include "ltarena.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/log.h"
 #include "gdnsd/misc.h"
 
@@ -234,23 +235,23 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
         unsigned num_whole_chunks = (newlen - remainder) / 255;
         const char* zptr = text_temp;
         const unsigned new_alloc = 1 + z->num_texts + num_whole_chunks + (remainder ? 1 : 0);
-        z->texts = realloc(z->texts, new_alloc * sizeof(uint8_t*));
+        z->texts = xrealloc(z->texts, new_alloc * sizeof(uint8_t*));
         for(unsigned i = 0; i < num_whole_chunks; i++) {
-            uint8_t* chunk = z->texts[z->num_texts++] = malloc(256);
+            uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(256);
             *chunk++ = 255;
             memcpy(chunk, zptr, 255);
             zptr += 255;
         }
         if(remainder) {
-            uint8_t* chunk = z->texts[z->num_texts++] = malloc(remainder + 1);
+            uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(remainder + 1);
             *chunk++ = remainder;
             memcpy(chunk, zptr, remainder);
         }
         z->texts[z->num_texts] = NULL;
     }
     else {
-        z->texts = realloc(z->texts, (z->num_texts + 2) * sizeof(uint8_t*));
-        uint8_t* chunk = z->texts[z->num_texts++] = malloc(newlen + 1);
+        z->texts = xrealloc(z->texts, (z->num_texts + 2) * sizeof(uint8_t*));
+        uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(newlen + 1);
         *chunk++ = newlen;
         memcpy(chunk, text_temp, newlen);
         z->texts[z->num_texts] = NULL;
@@ -433,7 +434,7 @@ static void rfc3597_data_setup(zscan_t* z) {
     dmn_assert(z);
     z->rfc3597_data_len = z->uval;
     z->rfc3597_data_written = 0;
-    z->rfc3597_data = malloc(z->uval);
+    z->rfc3597_data = xmalloc(z->uval);
 }
 
 F_NONNULL
@@ -793,14 +794,14 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
         }
     }
 
-    zscan_t* z = calloc(1, sizeof(zscan_t));
+    zscan_t* z = xcalloc(1, sizeof(zscan_t));
     z->lcount = 1;
     z->def_ttl = gconfig.zones_default_ttl;
     z->zone = zone;
     dname_copy(z->origin, zone->dname);
     z->lhs_dname[0] = 1; // set lhs to relative origin initially
 
-    char* buf = malloc(bufsize + 1);
+    char* buf = xmalloc(bufsize + 1);
     buf[bufsize] = 0;
 
     sij_func_t sij = &_scan_isolate_jmp;

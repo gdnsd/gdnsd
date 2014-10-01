@@ -30,6 +30,7 @@
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 #include "dnspacket.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/log.h"
 #include "gdnsd/mon-priv.h"
 
@@ -511,7 +512,7 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
-    dmn_anysin_t* asin = malloc(sizeof(dmn_anysin_t));
+    dmn_anysin_t* asin = xmalloc(sizeof(dmn_anysin_t));
     asin->len = DMN_ANYSIN_MAXLEN;
 
     const int sock = accept(io->fd, &asin->sa, &asin->len);
@@ -552,19 +553,19 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
         return;
     }
 
-    ev_io* read_watcher = malloc(sizeof(ev_io));
-    ev_io* write_watcher = malloc(sizeof(ev_io));
-    ev_timer* timeout_watcher = malloc(sizeof(ev_timer));
+    ev_io* read_watcher = xmalloc(sizeof(ev_io));
+    ev_io* write_watcher = xmalloc(sizeof(ev_io));
+    ev_timer* timeout_watcher = xmalloc(sizeof(ev_timer));
 
-    http_data_t* tdata = calloc(1, sizeof(http_data_t));
+    http_data_t* tdata = xcalloc(1, sizeof(http_data_t));
     tdata->state = READING_REQ;
     tdata->asin = asin;
     tdata->read_watcher = read_watcher;
     tdata->write_watcher = write_watcher;
     tdata->timeout_watcher = timeout_watcher;
 
-    tdata->hdr_buf = tdata->outbufs[0].iov_base = malloc(hdr_buffer_size);
-    tdata->data_buf = tdata->outbufs[1].iov_base = malloc(data_buffer_size);
+    tdata->hdr_buf = tdata->outbufs[0].iov_base = xmalloc(hdr_buffer_size);
+    tdata->data_buf = tdata->outbufs[1].iov_base = xmalloc(data_buffer_size);
 
     read_watcher->data = tdata;
     write_watcher->data = tdata;
@@ -599,7 +600,7 @@ void statio_init(void) {
     start_time = time(NULL);
 
     // the junk buffer
-    junk_buffer = malloc(JUNK_SIZE);
+    junk_buffer = xmalloc(JUNK_SIZE);
 
     // The largest our output sizes can possibly be:
     hdr_buffer_size =
@@ -630,15 +631,15 @@ void statio_init(void) {
 
     // now set up the normal stuff, like libev event watchers
     if(gconfig.log_stats) {
-        log_watcher = malloc(sizeof(ev_timer));
+        log_watcher = xmalloc(sizeof(ev_timer));
         ev_timer_init(log_watcher, log_watcher_cb, gconfig.log_stats, gconfig.log_stats);
         ev_set_priority(log_watcher, -2);
     }
 
     num_lsocks = gconfig.num_http_addrs;
-    lsocks = malloc(sizeof(int) * num_lsocks);
-    lsocks_bound = calloc(num_lsocks, sizeof(bool));
-    accept_watchers = malloc(sizeof(ev_io*) * num_lsocks);
+    lsocks = xmalloc(sizeof(int) * num_lsocks);
+    lsocks_bound = xcalloc(num_lsocks, sizeof(bool));
+    accept_watchers = xmalloc(sizeof(ev_io*) * num_lsocks);
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         const dmn_anysin_t* asin = &gconfig.http_addrs[i];
@@ -672,7 +673,7 @@ void statio_start(struct ev_loop* statio_loop) {
     for(unsigned i = 0; i < num_lsocks; i++) {
         if(listen(lsocks[i], 128) == -1)
             log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, dmn_logf_anysin(&gconfig.http_addrs[i]), dmn_logf_errno());
-        accept_watchers[i] = malloc(sizeof(ev_io));
+        accept_watchers[i] = xmalloc(sizeof(ev_io));
         ev_io_init(accept_watchers[i], accept_cb, lsocks[i], EV_READ);
         ev_set_priority(accept_watchers[i], -2);
         ev_io_start(statio_loop, accept_watchers[i]);

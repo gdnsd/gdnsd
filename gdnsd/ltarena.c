@@ -18,6 +18,7 @@
  */
 
 #include "ltarena.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/compiler.h"
 #include "gdnsd/dname.h"
 
@@ -39,7 +40,7 @@
 #define INIT_POOLS_ALLOC 4U // *must* be 2^n && > 0
 
 // Normally, our pools are initialized to all-zeros for us
-//   by calloc(), and no red zones are employed.  In debug
+//   by xcalloc(), and no red zones are employed.  In debug
 //   builds, we initialize a whole pool to 0xDEADBEEF,
 //   define a redzone of 4 bytes before and after
 //   each block, and then zero out the valid allocated area
@@ -67,10 +68,10 @@ static dnhash_t* dnhash_new(void) {
     dmn_assert(INIT_DNHASH_MASK);
     dmn_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK)); // 2^n-1
 
-    dnhash_t* rv = malloc(sizeof(dnhash_t));
+    dnhash_t* rv = xmalloc(sizeof(dnhash_t));
     rv->count = 0;
     rv->mask = INIT_DNHASH_MASK;
-    rv->table = calloc(INIT_DNHASH_MASK + 1U, sizeof(uint8_t*));
+    rv->table = xcalloc(INIT_DNHASH_MASK + 1U, sizeof(uint8_t*));
     return rv;
 }
 
@@ -93,7 +94,7 @@ static void dnhash_grow(dnhash_t* dnhash) {
     const uint8_t** old_table = dnhash->table;
     const unsigned old_mask = dnhash->mask;
     const unsigned new_mask = (old_mask << 1U) | 1U;
-    const uint8_t** new_table = calloc(new_mask + 1U, sizeof(uint8_t*));
+    const uint8_t** new_table = xcalloc(new_mask + 1U, sizeof(uint8_t*));
     for(unsigned i = 0; i <= old_mask; i++) {
         const uint8_t* item = old_table[i];
         if(item) {
@@ -127,7 +128,7 @@ static void* make_pool(void) {
     void* p;
     if(RED_SIZE) {
         // malloc + fill in deadbeef if using redzones
-        p = malloc(POOL_SIZE);
+        p = xmalloc(POOL_SIZE);
         uint32_t* p32 = p;
         unsigned idx = POOL_SIZE >> 2U;
         while(idx--)
@@ -135,7 +136,7 @@ static void* make_pool(void) {
     }
     else {
         // get mem from calloc
-        p = calloc(1, POOL_SIZE);
+        p = xcalloc(1, POOL_SIZE);
     }
 
     // let valgrind know what's going on, if running
@@ -147,9 +148,9 @@ static void* make_pool(void) {
 }
 
 ltarena_t* lta_new(void) {
-    ltarena_t* rv = calloc(1, sizeof(ltarena_t));
+    ltarena_t* rv = xcalloc(1, sizeof(ltarena_t));
     rv->palloc = INIT_POOLS_ALLOC;
-    rv->pools = malloc(INIT_POOLS_ALLOC * sizeof(uint8_t*));
+    rv->pools = xmalloc(INIT_POOLS_ALLOC * sizeof(uint8_t*));
     rv->pools[0] = make_pool();
     rv->dnhash = dnhash_new();
     return rv;
@@ -159,7 +160,7 @@ void lta_close(ltarena_t* lta) {
     if(lta->dnhash) {
         dnhash_destroy(lta->dnhash);
         lta->dnhash = NULL;
-        lta->pools = realloc(lta->pools, (lta->pool + 1) * sizeof(uint8_t*));
+        lta->pools = xrealloc(lta->pools, (lta->pool + 1) * sizeof(uint8_t*));
     }
 }
 
@@ -198,7 +199,7 @@ static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
     if(unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
         if(unlikely(++lta->pool == lta->palloc)) {
             lta->palloc <<= 1U;
-            lta->pools = realloc(lta->pools, lta->palloc * sizeof(uint8_t*));
+            lta->pools = xrealloc(lta->pools, lta->palloc * sizeof(uint8_t*));
         }
         lta->pools[lta->pool] = make_pool();
         lta->poffs = 0;

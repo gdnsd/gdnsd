@@ -20,6 +20,7 @@
 #include "conf.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/misc.h"
 #include "gdnsd/log.h"
 #include "gdnsd/paths.h"
@@ -100,7 +101,7 @@ static void set_chaos(const char* data) {
         log_fatal("Option 'chaos_response' must be a string less than 255 characters long");
 
     const unsigned overall_len = chaos_prefix_len + 3 + dlen;
-    uint8_t* combined = malloc(overall_len);
+    uint8_t* combined = xmalloc(overall_len);
     memcpy(combined, chaos_prefix, chaos_prefix_len);
     combined[chaos_prefix_len] = 0;
     combined[chaos_prefix_len + 1] = dlen + 1;
@@ -266,13 +267,13 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
 static void process_http_listen(vscf_data_t* http_listen_opt, const unsigned def_http_port) {
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
         gconfig.num_http_addrs = 2;
-        gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
+        gconfig.http_addrs = xcalloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
         make_addr("0.0.0.0", def_http_port, gconfig.http_addrs);
         make_addr("::", def_http_port, &gconfig.http_addrs[1]);
     }
     else {
         gconfig.num_http_addrs = vscf_array_get_len(http_listen_opt);
-        gconfig.http_addrs = calloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
+        gconfig.http_addrs = xcalloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
         for(unsigned i = 0; i < gconfig.num_http_addrs; i++) {
             vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
             if(!vscf_is_simple(lspec))
@@ -302,7 +303,7 @@ static void dns_listen_any(const dns_addr_t* addr_defs) {
     dmn_assert(addr_defs);
 
     gconfig.num_dns_addrs = 2;
-    gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+    gconfig.dns_addrs = xcalloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
     dns_addr_t* ac_v4 = &gconfig.dns_addrs[0];
     memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
     make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
@@ -348,7 +349,7 @@ static void dns_listen_scan(const dns_addr_t* addr_defs) {
         if(dns_addr_is_dupe(&temp_asin))
             continue;
 
-        gconfig.dns_addrs = realloc(gconfig.dns_addrs, (gconfig.num_dns_addrs + 1) * sizeof(dns_addr_t));
+        gconfig.dns_addrs = xrealloc(gconfig.dns_addrs, (gconfig.num_dns_addrs + 1) * sizeof(dns_addr_t));
         dns_addr_t* addrconf = &gconfig.dns_addrs[gconfig.num_dns_addrs++];
         memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
         memcpy(&addrconf->addr, &temp_asin, sizeof(dmn_anysin_t));
@@ -378,7 +379,7 @@ static void fill_dns_addrs(vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
 
     if(vscf_is_hash(listen_opt)) {
         gconfig.num_dns_addrs = vscf_hash_get_len(listen_opt);
-        gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+        gconfig.dns_addrs = xcalloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
         for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
             dns_addr_t* addrconf = &gconfig.dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
@@ -413,7 +414,7 @@ static void fill_dns_addrs(vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
     }
     else {
         gconfig.num_dns_addrs = vscf_array_get_len(listen_opt);
-        gconfig.dns_addrs = calloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
+        gconfig.dns_addrs = xcalloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
         for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
             dns_addr_t* addrconf = &gconfig.dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
@@ -441,7 +442,7 @@ static void process_listen(vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
     if(!gconfig.num_dns_threads)
         dmn_log_fatal("All listen addresses configured for zero UDP and zero TCP threads - cannot continue without at least one listener!");
 
-    gconfig.dns_threads = calloc(gconfig.num_dns_threads, sizeof(dns_thread_t));
+    gconfig.dns_threads = xcalloc(gconfig.num_dns_threads, sizeof(dns_thread_t));
 
     unsigned tnum = 0;
     for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {

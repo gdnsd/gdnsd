@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 #include "main.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/dname.h"
 #include "gdnsd/log.h"
 #include "gdnsd/misc.h"
@@ -90,7 +91,7 @@ zone_t* zone_new(const char* zname, const char* source) {
     if(status == DNAME_PARTIAL)
         dname_terminate(dname);
 
-    zone_t* z = calloc(1, sizeof(zone_t));
+    zone_t* z = xcalloc(1, sizeof(zone_t));
     z->arena = lta_new();
     z->dname = lta_dnamedup(z->arena, dname);
     z->hash = dname_hash(z->dname);
@@ -209,8 +210,8 @@ static void ztree_node_check_grow(ztree_t* node) {
 
     ztchildren_t* old_children = node->children;
     if(!old_children) {
-        ztchildren_t* children = calloc(1, sizeof(ztchildren_t));
-        children->store = calloc(16, sizeof(ztree_t*));
+        ztchildren_t* children = xcalloc(1, sizeof(ztchildren_t));
+        children->store = xcalloc(16, sizeof(ztree_t*));
         children->alloc = 16;
         gdnsd_prcu_upd_assign(node->children, children);
     }
@@ -218,8 +219,8 @@ static void ztree_node_check_grow(ztree_t* node) {
     else if(old_children->count >= (old_children->alloc >> 2)) {
         const unsigned new_alloc = old_children->alloc << 1; // double
         const unsigned new_hash_mask = new_alloc - 1;
-        ztchildren_t* new_children = calloc(1, sizeof(ztchildren_t));
-        new_children->store = calloc(new_alloc, sizeof(ztree_t*));
+        ztchildren_t* new_children = xcalloc(1, sizeof(ztchildren_t));
+        new_children->store = xcalloc(new_alloc, sizeof(ztree_t*));
         new_children->alloc = new_alloc;
         for(unsigned i = 0; i < old_children->alloc; i++) {
             ztree_t* entry = old_children->store[i];
@@ -266,8 +267,8 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
     // came to an empty slot with no match along the way,
     //   so create a new node at this slot...
     if(!rv) {
-        rv = calloc(1, sizeof(ztree_t));
-        rv->label = malloc(*label + 1);
+        rv = xcalloc(1, sizeof(ztree_t));
+        rv->label = xmalloc(*label + 1);
         memcpy(rv->label, label, *label + 1);
         gdnsd_prcu_upd_assign(children->store[slot], rv);
         children->count++;
@@ -298,7 +299,7 @@ static void ztree_atexit(void) {
 void ztree_init(void) {
     dmn_assert(!ztree_root);
     gdnsd_prcu_setup_lock();
-    ztree_root = calloc(1, sizeof(ztree_t));
+    ztree_root = xcalloc(1, sizeof(ztree_t));
     gdnsd_atexit_debug(ztree_atexit);
 }
 
@@ -385,7 +386,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
         const zone_t* old_head = NULL;
         old_list = this_zt->zones;
         if(!this_zt->zones) {
-            new_list = malloc(sizeof(zone_t*));
+            new_list = xmalloc(sizeof(zone_t*));
             new_list[0] = z_new;
             this_zt->zones_len = 1;
         }
@@ -394,7 +395,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             old_head = old_list[0];
             const unsigned old_len = this_zt->zones_len;
             old_list = this_zt->zones;
-            new_list = malloc((old_len + 1) * sizeof(zone_t*));
+            new_list = xmalloc((old_len + 1) * sizeof(zone_t*));
             memcpy(new_list, old_list, old_len * sizeof(zone_t*));
             new_list[old_len] = z_new;
             zones_sort(new_list, old_len + 1);
@@ -442,7 +443,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             }
             else {
                 const zone_t* old_head = old_list[0];
-                new_list = malloc((old_len - 1) * sizeof(zone_t*));
+                new_list = xmalloc((old_len - 1) * sizeof(zone_t*));
                 unsigned i,j;
                 for(i = 0, j = 0; j < old_len; i++, j++) {
                     if(old_list[j] == z_old)
@@ -471,7 +472,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             log_debug("ztree_update: updating data for zone %s from src %s", logf_dname(z_old->dname), z_old->src);
             // replace old with new in new_list
             const zone_t* old_head = old_list[0];
-            new_list = malloc(old_len * sizeof(zone_t*));
+            new_list = xmalloc(old_len * sizeof(zone_t*));
             memcpy(new_list, old_list, old_len * sizeof(zone_t*));
             for(unsigned i = 0; i < old_len; i++)
                 if(new_list[i] == z_old)
@@ -523,10 +524,10 @@ F_NONNULL
 static ztree_t* ztree_clone(const ztree_t* original) {
     dmn_assert(original);
 
-    ztree_t* ztclone = malloc(sizeof(ztree_t));
+    ztree_t* ztclone = xmalloc(sizeof(ztree_t));
     ztclone->label = original->label;
     if  (original->zones) {
-        ztclone->zones = malloc(original->zones_len * sizeof(zone_t*));
+        ztclone->zones = xmalloc(original->zones_len * sizeof(zone_t*));
         memcpy(ztclone->zones, original->zones, original->zones_len * sizeof(zone_t*));
         ztclone->zones_len = original->zones_len;
     } else {
@@ -535,10 +536,10 @@ static ztree_t* ztree_clone(const ztree_t* original) {
     }
     ztchildren_t* old_ztc = original->children;
     if(old_ztc) {
-        ztchildren_t* new_ztc = ztclone->children = calloc(1, sizeof(ztchildren_t));
+        ztchildren_t* new_ztc = ztclone->children = xcalloc(1, sizeof(ztchildren_t));
         new_ztc->alloc = old_ztc->alloc;
         new_ztc->count = old_ztc->count;
-        new_ztc->store = calloc(new_ztc->alloc, sizeof(ztree_t*));
+        new_ztc->store = xcalloc(new_ztc->alloc, sizeof(ztree_t*));
         for(unsigned i = 0; i < new_ztc->alloc; i++) {
             ztree_t* entry = old_ztc->store[i];
             if(entry)

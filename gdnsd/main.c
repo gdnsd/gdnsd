@@ -39,6 +39,7 @@
 #include "ztree.h"
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/log.h"
 #include "gdnsd/plugapi-priv.h"
 #include "gdnsd/net-priv.h"
@@ -65,7 +66,7 @@ static void watchdog_start(struct ev_loop* loop) {
     unsigned msec = dmn_wdog_get_msec();
     if(msec) {
         double sec_dbl = ((double)msec) / 1000.0;
-        watchdog_timer = malloc(sizeof(ev_timer));
+        watchdog_timer = xmalloc(sizeof(ev_timer));
         ev_timer_init(watchdog_timer, watchdog_cb, 0., sec_dbl);
         ev_timer_start(loop, watchdog_timer);
         log_info("watchdog starting, will ping every ~ %.3f seconds", sec_dbl);
@@ -82,7 +83,7 @@ static unsigned exitfuncs_pending = 0;
 
 void gdnsd_atexit_debug(void (*f)(void)) {
     dmn_assert(f);
-    exitfuncs = realloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(void (*)(void)));
+    exitfuncs = xrealloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(void (*)(void)));
     exitfuncs[exitfuncs_pending++] = f;
 }
 

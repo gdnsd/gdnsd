@@ -19,6 +19,7 @@
 
 #include "config.h"
 #include "dcinfo.h"
+#include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/mon.h>
@@ -64,7 +65,7 @@ struct _dcinfo {
 dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name) {
     dmn_assert(dc_cfg); dmn_assert(map_name);
 
-    dcinfo_t* info = malloc(sizeof(dcinfo_t));
+    dcinfo_t* info = xmalloc(sizeof(dcinfo_t));
 
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
     unsigned num_auto = num_dcs;
@@ -73,8 +74,8 @@ dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t*
     if(num_dcs > 254)
         log_fatal("plugin_geoip: map '%s': %u datacenters is too many, this code only supports up to 254", map_name, num_dcs);
 
-    info->names = malloc(sizeof(char*) * num_dcs);
-    info->indices = malloc(sizeof(unsigned) * num_dcs);
+    info->names = xmalloc(sizeof(char*) * num_dcs);
+    info->indices = xmalloc(sizeof(unsigned) * num_dcs);
     info->num_dcs = num_dcs;
     for(unsigned i = 0; i < num_dcs; i++) {
         vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
@@ -92,7 +93,7 @@ dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t*
         if(!vscf_is_hash(dc_auto_cfg))
             log_fatal("plugin_geoip: map '%s': auto_dc_coords must be a key-value hash", map_name);
         num_auto = vscf_hash_get_len(dc_auto_cfg);
-        info->coords = malloc(num_dcs * 2 * sizeof(double));
+        info->coords = xmalloc(num_dcs * 2 * sizeof(double));
         for(unsigned i = 0; i < 2*num_dcs; i++)
             info->coords[i] = NAN;
         for(unsigned i = 0; i < num_auto; i++) {

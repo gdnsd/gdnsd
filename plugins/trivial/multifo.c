@@ -130,7 +130,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, vscf_data_
         log_fatal("plugin_multifo: resource %s (%s): address '%s' for '%s' is not IPv4", resname, stanza, addr_txt, addr_desc);
 
     if(aset->num_svcs) {
-        as->indices = malloc(sizeof(unsigned) * aset->num_svcs);
+        as->indices = xmalloc(sizeof(unsigned) * aset->num_svcs);
         for(unsigned i = 0; i < aset->num_svcs; i++)
             as->indices[i] = gdnsd_mon_addr(svc_names[i], &as->addr);
     }
@@ -157,7 +157,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
         num_addrs--;
         aset->num_svcs = vscf_array_get_len(svctypes_data);
         if(aset->num_svcs) {
-            svc_names = malloc(sizeof(char*) * aset->num_svcs);
+            svc_names = xmalloc(sizeof(char*) * aset->num_svcs);
             for(unsigned i = 0; i < aset->num_svcs; i++) {
                 vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
                 if(!vscf_is_simple(svctype_cfg))
@@ -168,7 +168,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     }
     else {
         aset->num_svcs = 1;
-        svc_names = malloc(sizeof(char*));
+        svc_names = xmalloc(sizeof(char*));
         svc_names[0] = DEFAULT_SVCNAME;
     }
 
@@ -187,7 +187,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
         log_fatal("plugin_multifo: resource %s (%s): too many IPv%c addresses (limit 64)", resname, stanza, ipv6 ? '6' : '4');
 
     aset->count = num_addrs;
-    aset->as = calloc(num_addrs, sizeof(addrstate_t));
+    aset->as = xcalloc(num_addrs, sizeof(addrstate_t));
     aset->up_thresh = ceil(up_thresh * aset->count);
 
     addrs_iter_data_t aid = {
@@ -245,12 +245,12 @@ static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg) {
         log_fatal("plugin_multifo: resource %s (%s): failed to parse address '%s' for '%s': %s", res->name, stanza, addr_txt, first_name, gai_strerror(addr_err));
 
     if(temp_asin.sa.sa_family == AF_INET6) {
-        res->aset_v6 = calloc(1, sizeof(addrset_t));
+        res->aset_v6 = xcalloc(1, sizeof(addrset_t));
         config_addrs(res->name, stanza, res->aset_v6, true, auto_cfg);
     }
     else {
         dmn_assert(temp_asin.sa.sa_family == AF_INET);
-        res->aset_v4 = calloc(1, sizeof(addrset_t));
+        res->aset_v4 = xcalloc(1, sizeof(addrset_t));
         config_addrs(res->name, stanza, res->aset_v4, false, auto_cfg);
     }
 
@@ -280,12 +280,12 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
 
         if(addrs_v4_cfg) {
-            res->aset_v4 = calloc(1, sizeof(addrset_t));
+            res->aset_v4 = xcalloc(1, sizeof(addrset_t));
             config_addrs(resname, "addrs_v4", res->aset_v4, false, addrs_v4_cfg);
         }
 
         if(addrs_v6_cfg) {
-            res->aset_v6 = calloc(1, sizeof(addrset_t));
+            res->aset_v6 = xcalloc(1, sizeof(addrset_t));
             config_addrs(resname, "addrs_v6", res->aset_v6, true, addrs_v6_cfg);
         }
     }
@@ -318,7 +318,7 @@ void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads 
     if(vscf_hash_bequeath_all(config, "service_types", true, false))
         num_resources--;
 
-    resources = calloc(num_resources, sizeof(res_t));
+    resources = xcalloc(num_resources, sizeof(res_t));
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
     gdnsd_dyn_addr_max(v4_max, v6_max);

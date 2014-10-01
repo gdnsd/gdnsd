@@ -29,6 +29,7 @@
 #include "conf.h"
 #include "ltree.h"
 #include "main.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/log.h"
 #include "gdnsd/paths.h"
 
@@ -121,7 +122,7 @@ void zsrc_djb_runtime_init(struct ev_loop* loop) {
     dmn_assert(loop);
 
     zones_loop = loop;
-    sigusr1_waker = malloc(sizeof(ev_async));
+    sigusr1_waker = xmalloc(sizeof(ev_async));
     ev_async_init(sigusr1_waker, sigusr1_cb);
     ev_async_start(loop, sigusr1_waker);
 }

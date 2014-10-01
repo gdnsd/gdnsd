@@ -30,6 +30,7 @@
 #include "conf.h"
 #include "ztree.h"
 #include "zscan_djb.h"
+#include <gdnsd/alloc.h>
 #include "gdnsd/log.h"
 #include "gdnsd/misc.h"
 
@@ -86,7 +87,7 @@ static const uint8_t dname_mx[]   = {4,2,'m','x',255};
 static const uint8_t dname_srv[]  = {5,3,'s','r','v',255};
 
 void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t *zone) {
-    zscan_djb_zonedata_t* nzd = malloc(sizeof(zscan_djb_zonedata_t));
+    zscan_djb_zonedata_t* nzd = xmalloc(sizeof(zscan_djb_zonedata_t));
     nzd->zone = zone;
     nzd->marked = 0;
     nzd->next = *zd;
@@ -376,10 +377,10 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         if(bytes > 65500)
             parse_error_noargs("Text chunk too long (>65500 unescaped)");
 
-        z->texts = realloc(z->texts, sizeof(uint8_t *) * (chunks + 1));
+        z->texts = xrealloc(z->texts, sizeof(uint8_t *) * (chunks + 1));
         for (i = 0; i < chunks; i++) {
             int s = (bytes > 255 ? 255 : bytes);
-            z->texts[i] = malloc(s + 1);
+            z->texts[i] = xmalloc(s + 1);
             z->texts[i][0] = s;
             memcpy(&z->texts[i][1], src, s);
             bytes -= s;
@@ -418,9 +419,9 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         if (field[3].len > 255 || field[4].len > 255 || field[5].len > 255)
             parse_error_noargs("NAPTR label cannot exceed 255 chars");
 
-        z->texts = realloc(z->texts, 4 * sizeof(uint8_t *));
+        z->texts = xrealloc(z->texts, 4 * sizeof(uint8_t *));
         for (i = 0; i < 3; i++) {
-            z->texts[i] = malloc(field[3+i].len + 1);
+            z->texts[i] = xmalloc(field[3+i].len + 1);
             z->texts[i][0] = field[3+i].len;
             memcpy(&z->texts[i][1], field[3+i].ptr, field[3+i].len);
         }
@@ -505,7 +506,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
     }
 
     const size_t bufsz = gdnsd_dirent_bufsize(dir, z->path);
-    struct dirent* buf = malloc(bufsz);
+    struct dirent* buf = xmalloc(bufsz);
 
     while(1) {
         struct dirent* e = NULL;
