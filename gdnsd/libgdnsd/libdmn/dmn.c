@@ -231,8 +231,11 @@ char* dmn_fmtbuf_alloc(unsigned size) {
 
     unsigned bsize = 1U << FMTBUF_START;
     for(unsigned i = 0; i < FMTBUF_CT; i++) {
-        if(!fmtbuf.bufs[i])
+        if(!fmtbuf.bufs[i]) {
             fmtbuf.bufs[i] = malloc(bsize);
+            if(!fmtbuf.bufs[i])
+                dmn_log_fatal("memory allocation failure!");
+        }
         if((bsize - fmtbuf.used[i]) >= size) {
             rv = &fmtbuf.bufs[i][fmtbuf.used[i]];
             fmtbuf.used[i] += size;
@@ -463,6 +466,8 @@ static char* str_combine_n(const unsigned count, ...) {
     va_end(ap);
 
     char* out = malloc(oal);
+    if(!out)
+        dmn_log_fatal("memory allocation failure!");
     char* cur = out;
     for(unsigned i = 0; i < count; i++) {
         memcpy(cur, strs[i].ptr, strs[i].len);
@@ -668,6 +673,8 @@ unsigned dmn_add_pcall(dmn_func_vv_t func) {
     if(idx >= 64)
         dmn_log_fatal("Too many pcalls registered (64+)!");
     pcalls = realloc(pcalls, sizeof(dmn_func_vv_t) * (++num_pcalls));
+    if(!pcalls)
+        dmn_log_fatal("memory allocation failure!");
     pcalls[idx] = func;
     return idx;
 }
