@@ -21,7 +21,7 @@
 #define GDNSD_ZSRC_RFC1035_H
 
 #include "config.h"
-#include "gdnsd/compiler.h"
+#include <gdnsd/compiler.h>
 #include <ev.h>
 #include <stdbool.h>
 

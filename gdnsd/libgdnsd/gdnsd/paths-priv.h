@@ -20,8 +20,8 @@
 #ifndef GDNSD_PATHS_PRIV_H
 #define GDNSD_PATHS_PRIV_H
 
-#include "gdnsd/compiler.h"
-#include "gdnsd/paths.h"
+#include <gdnsd/compiler.h>
+#include <gdnsd/paths.h>
 #include <stdbool.h>
 
 // Mostly for help output

@@ -23,10 +23,10 @@
 
 #include "main.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/dname.h"
-#include "gdnsd/log.h"
-#include "gdnsd/misc.h"
-#include "gdnsd/prcu-priv.h"
+#include <gdnsd/dname.h>
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/prcu-priv.h>
 
 // The tree data structure that will hold the zone_t's
 struct _ztree_struct;

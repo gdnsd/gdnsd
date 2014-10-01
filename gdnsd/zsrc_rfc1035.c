@@ -19,9 +19,9 @@
 
 #include "zsrc_rfc1035.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/misc.h"
-#include "gdnsd/log.h"
-#include "gdnsd/paths.h"
+#include <gdnsd/misc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/paths.h>
 #include "zscan_rfc1035.h"
 #include "conf.h"
 

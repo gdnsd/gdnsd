@@ -21,12 +21,12 @@
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/misc.h"
-#include "gdnsd/log.h"
-#include "gdnsd/paths.h"
-#include "gdnsd/paths-priv.h"
-#include "gdnsd/plugapi-priv.h"
-#include "gdnsd/mon-priv.h"
+#include <gdnsd/misc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/paths.h>
+#include <gdnsd/paths-priv.h>
+#include <gdnsd/plugapi-priv.h>
+#include <gdnsd/mon-priv.h>
 
 #include <unistd.h>
 #include <string.h>

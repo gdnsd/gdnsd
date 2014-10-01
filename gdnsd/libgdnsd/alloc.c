@@ -21,8 +21,8 @@
 
 #include <stdlib.h>
 
-#include "gdnsd/alloc.h"
-#include "gdnsd/log.h"
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
 
 void* gdnsd_xmalloc(size_t size) {
     dmn_assert(size);

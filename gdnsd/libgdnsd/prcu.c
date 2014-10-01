@@ -19,8 +19,8 @@
 
 #include "config.h"
 
-#include "gdnsd/prcu-priv.h"
-#include "gdnsd/log.h"
+#include <gdnsd/prcu-priv.h>
+#include <gdnsd/log.h>
 
 #ifndef HAVE_QSBR
 

@@ -38,7 +38,7 @@
 #include <gdnsd/plugapi.h>
 #include <gdnsd/misc.h>
 
-#include "gdnsd/paths-priv.h"
+#include <gdnsd/paths-priv.h>
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"

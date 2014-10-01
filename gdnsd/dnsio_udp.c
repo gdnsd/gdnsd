@@ -38,9 +38,9 @@
 #include "dnswire.h"
 #include "dnspacket.h"
 #include "socks.h"
-#include "gdnsd/log.h"
-#include "gdnsd/misc.h"
-#include "gdnsd/prcu-priv.h"
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/prcu-priv.h>
 
 #ifndef SOL_IPV6
 #define SOL_IPV6 IPPROTO_IPV6

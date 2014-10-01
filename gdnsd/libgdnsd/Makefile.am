@@ -1,6 +1,6 @@
-
 pkglib_LTLIBRARIES = libgdnsd.la
 AM_LIBTOOLFLAGS = --silent
+AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd
 
 SUBDIRS = libdmn
 

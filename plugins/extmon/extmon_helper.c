@@ -19,8 +19,8 @@
 
 #include "config.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/compiler.h"
-#include "gdnsd/log.h"
+#include <gdnsd/compiler.h>
+#include <gdnsd/log.h>
 
 #include "extmon_comms.h"
 

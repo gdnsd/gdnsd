@@ -31,8 +31,8 @@
 #include "ltree.h"
 #include "ltarena.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/log.h"
-#include "gdnsd/misc.h"
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
 
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN 46

@@ -19,8 +19,8 @@
 
 #include "ltarena.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/compiler.h"
-#include "gdnsd/dname.h"
+#include <gdnsd/compiler.h>
+#include <gdnsd/dname.h>
 
 #include <inttypes.h>
 #include <string.h>

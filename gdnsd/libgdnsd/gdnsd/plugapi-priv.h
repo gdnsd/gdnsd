@@ -20,8 +20,8 @@
 #ifndef GDNSD_PLUGAPI_PRIV_H
 #define GDNSD_PLUGAPI_PRIV_H
 
-#include "gdnsd/plugapi.h"
-#include "gdnsd/vscf.h"
+#include <gdnsd/plugapi.h>
+#include <gdnsd/vscf.h>
 
 struct dyn_result {
     unsigned edns_scope_mask; // inits to zero

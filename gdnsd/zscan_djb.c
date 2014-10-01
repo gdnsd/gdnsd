@@ -31,8 +31,8 @@
 #include "ztree.h"
 #include "zscan_djb.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/log.h"
-#include "gdnsd/misc.h"
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
 
 #define TTL_NS 259200
 #define TTL_POSITIVE 86400

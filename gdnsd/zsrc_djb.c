@@ -30,8 +30,8 @@
 #include "ltree.h"
 #include "main.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/log.h"
-#include "gdnsd/paths.h"
+#include <gdnsd/log.h>
+#include <gdnsd/paths.h>
 
 static struct ev_loop* zones_loop = NULL;
 static ev_async* sigusr1_waker = NULL;

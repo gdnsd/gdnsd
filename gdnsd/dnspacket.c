@@ -27,10 +27,10 @@
 #include "conf.h"
 #include "dnswire.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/log.h"
-#include "gdnsd/misc.h"
-#include "gdnsd/plugapi-priv.h"
-#include "gdnsd/prcu-priv.h"
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/plugapi-priv.h>
+#include <gdnsd/prcu-priv.h>
 #include "ztree.h"
 
 typedef struct {

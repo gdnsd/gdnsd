@@ -20,8 +20,8 @@
 #ifndef GDNSD_MON_PRIV_H
 #define GDNSD_MON_PRIV_H
 
-#include "gdnsd/mon.h"
-#include "gdnsd/vscf.h"
+#include <gdnsd/mon.h>
+#include <gdnsd/vscf.h>
 #include <ev.h>
 
 // conf.c calls these.  the order of execution is important due

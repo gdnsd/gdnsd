@@ -88,7 +88,7 @@ daemon exit time).
 #include "config.h"
 #include "dnswire.h"
 #include "ltarena.h"
-#include "gdnsd/plugapi.h"
+#include <gdnsd/plugapi.h>
 
 // struct/typedef stuff
 struct _ltree_node_struct;

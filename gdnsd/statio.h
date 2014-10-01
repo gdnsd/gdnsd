@@ -21,7 +21,7 @@
 #define GDSND_STATIO_H
 
 #include "config.h"
-#include "gdnsd/compiler.h"
+#include <gdnsd/compiler.h>
 #include <stdbool.h>
 #include <ev.h>
 

@@ -19,10 +19,10 @@
 
 #include "config.h"
 
-#include "gdnsd/paths.h"
-#include "gdnsd/paths-priv.h"
-#include "gdnsd/misc.h"
-#include "gdnsd/log.h"
+#include <gdnsd/paths.h>
+#include <gdnsd/paths-priv.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/log.h>
 
 #include <string.h>
 #include <stdlib.h>

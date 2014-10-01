@@ -28,12 +28,12 @@
 #include <stdarg.h>
 #include <pthread.h>
 
-#include "gdnsd/compiler.h"
-#include "gdnsd/net.h"
-#include "gdnsd/log.h"
-#include "gdnsd/stats.h"
-#include "gdnsd/dmn.h"
-#include "gdnsd/paths-priv.h"
+#include <gdnsd/compiler.h>
+#include <gdnsd/net.h>
+#include <gdnsd/log.h>
+#include <gdnsd/stats.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/paths-priv.h>
 
 /* libdmn custom log formatters and the buffer sizes they use:
  *

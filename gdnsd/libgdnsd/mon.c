@@ -20,15 +20,15 @@
 #include "config.h"
 
 #include <gdnsd/alloc.h>
-#include "gdnsd/mon.h"
-#include "gdnsd/mon-priv.h"
-#include "gdnsd/log.h"
-#include "gdnsd/paths.h"
-#include "gdnsd/plugapi.h"
-#include "gdnsd/plugapi-priv.h"
-#include "gdnsd/prcu-priv.h"
-#include "gdnsd/vscf.h"
-#include "gdnsd/misc.h"
+#include <gdnsd/mon.h>
+#include <gdnsd/mon-priv.h>
+#include <gdnsd/log.h>
+#include <gdnsd/paths.h>
+#include <gdnsd/plugapi.h>
+#include <gdnsd/plugapi-priv.h>
+#include <gdnsd/prcu-priv.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/misc.h>
 
 #include <string.h>
 #include <unistd.h>

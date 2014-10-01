@@ -20,8 +20,8 @@
 #ifndef GDNSD_MISC_PRIV_H
 #define GDNSD_MISC_PRIV_H
 
-#include "gdnsd/compiler.h"
-#include "gdnsd/misc.h"
+#include <gdnsd/compiler.h>
+#include <gdnsd/misc.h>
 
 // Globally initialize meta-prng at daemon startup
 void gdnsd_rand_meta_init(void);

@@ -33,10 +33,10 @@
 #include "dnspacket.h"
 #include "socks.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/log.h"
-#include "gdnsd/misc.h"
-#include "gdnsd/net.h"
-#include "gdnsd/prcu-priv.h"
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/net.h>
+#include <gdnsd/prcu-priv.h>
 
 typedef enum {
     READING_INITIAL = 0,

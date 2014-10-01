@@ -40,12 +40,12 @@
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
 #include <gdnsd/alloc.h>
-#include "gdnsd/log.h"
-#include "gdnsd/plugapi-priv.h"
-#include "gdnsd/net-priv.h"
-#include "gdnsd/misc-priv.h"
-#include "gdnsd/paths-priv.h"
-#include "gdnsd/mon-priv.h"
+#include <gdnsd/log.h>
+#include <gdnsd/plugapi-priv.h>
+#include <gdnsd/net-priv.h>
+#include <gdnsd/misc-priv.h>
+#include <gdnsd/paths-priv.h>
+#include <gdnsd/mon-priv.h>
 
 // ev loop used for monitoring, statio, and watchdog
 // (all of which shared a thread as well)

@@ -28,8 +28,8 @@
 #include <inttypes.h>
 
 #include <gdnsd/alloc.h>
-#include "gdnsd/dmn.h"
-#include "gdnsd/vscf.h"
+#include <gdnsd/dmn.h>
+#include <gdnsd/vscf.h>
 
 /*
  * The initial size of the read()/fread() buffer.  Note that

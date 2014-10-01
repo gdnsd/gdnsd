@@ -8,7 +8,7 @@
 #include <netinet/tcp.h>
 
 #include "conf.h"
-#include "gdnsd/log.h"
+#include <gdnsd/log.h>
 #include "statio.h"
 
 bool socks_helper_bind(const char* desc, const int sock, const dmn_anysin_t* asin, bool no_freebind V_UNUSED) {

@@ -22,8 +22,8 @@
 
 #include "config.h"
 #include "ltree.h"
-#include "gdnsd/misc.h"
-#include "gdnsd/stats.h"
+#include <gdnsd/misc.h>
+#include <gdnsd/stats.h>
 
 #define COMPTARGETS_MAX 256
 

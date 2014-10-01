@@ -21,7 +21,7 @@
 #define GDNSD_DNSWIRE_H
 
 #include "config.h"
-#include "gdnsd/compiler.h"
+#include <gdnsd/compiler.h>
 #include <inttypes.h>
 
 // Our UDP input buffers are shared with output buffer
