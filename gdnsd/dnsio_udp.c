@@ -21,6 +21,7 @@
 
 #include <netdb.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/uio.h>
@@ -30,7 +31,6 @@
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <pthread.h>
-#include <sys/mman.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -262,9 +262,12 @@ static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg
     dmn_assert(stats);
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
+    const long pgsz = sysconf(_SC_PAGESIZE);
+    const unsigned max_rounded = ((gconfig.max_response + pgsz - 1) / pgsz) * pgsz;
 
     dmn_anysin_t asin;
-    void* buf = mmap(NULL, gconfig.max_response, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    void* buf;
+    posix_memalign(&buf, max_rounded, pgsz);
     struct iovec iov = {
         .iov_base = buf,
         .iov_len  = 0
@@ -364,10 +367,11 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t*
     dmn_anysin_t asin[width];
 
     /* Set up packet buffers */
-    uint8_t* pbuf = mmap(NULL, max_rounded * width, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-
-    for (unsigned i = 0; i < width; i++)
-        iov[i][0].iov_base = buf[i] = pbuf + (i * max_rounded);
+    void* pbuf;
+    posix_memalign(&pbuf, max_rounded * width, pgsz);
+    uint8_t* pbuf_asu8 = pbuf;
+    for(unsigned i = 0; i < width; i++)
+        iov[i][0].iov_base = buf[i] = &pbuf_asu8[i * max_rounded];
 
 #ifdef HAVE_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
