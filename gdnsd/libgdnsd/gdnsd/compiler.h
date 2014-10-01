@@ -26,8 +26,9 @@
 #  if __GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4)
 #    error Your GCC is way too old (< 3.4)...
 #  endif
-#  define likely(x)       __builtin_expect(!!(x), 1)
-#  define unlikely(x)     __builtin_expect(!!(x), 0)
+#  define HAVE_BUILTIN_CLZ 1
+#  define likely(_x)      __builtin_expect(!!(_x), 1)
+#  define unlikely(_x)    __builtin_expect(!!(_x), 0)
 #  define V_UNUSED        __attribute__((__unused__))
 #  define F_UNUSED        __attribute__((__unused__))
 #  define F_CONST         __attribute__((__const__))
@@ -38,10 +39,21 @@
 #  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
 #  define F_NONNULL       __attribute__((__nonnull__))
 #  define F_WUNUSED       __attribute__((__warn_unused_result__))
-#  define HAVE_BUILTIN_CLZ 1
+#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
+#    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
+#  else
+#    define F_ALLOCSZ(...)
+#  endif
+#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
+#    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
+#    define F_RETNN         __attribute__((__returns_nonnull__))
+#  else
+#    define F_ALLOCAL(_x)
+#    define F_RETNN
+#  endif
 #else // Other C99+ compilers...
-#  define likely(x)       (!!(x))
-#  define unlikely(x)     (!!(x))
+#  define likely(_x)      (!!(_x))
+#  define unlikely(_x)    (!!(_x))
 #  define V_UNUSED
 #  define F_UNUSED
 #  define F_CONST
@@ -56,6 +68,9 @@
 #  define F_NONNULLX(...)
 #  define F_NONNULL
 #  define F_WUNUSED
+#  define F_ALLOCSZ(...)
+#  define F_ALLOCAL(_x)
+#  define F_RETNN
 #endif
 
 // This is a GCC-ism which also seems to be supported
