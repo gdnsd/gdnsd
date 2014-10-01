@@ -261,7 +261,7 @@ static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg
 
     dmn_anysin_t asin;
     void* buf;
-    posix_memalign(&buf, max_rounded, pgsz);
+    posix_memalign(&buf, pgsz, max_rounded);
     struct iovec iov = {
         .iov_base = buf,
         .iov_len  = 0
@@ -362,7 +362,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t*
 
     /* Set up packet buffers */
     void* pbuf;
-    posix_memalign(&pbuf, max_rounded * width, pgsz);
+    posix_memalign(&pbuf, pgsz, max_rounded * width);
     uint8_t* pbuf_asu8 = pbuf;
     for(unsigned i = 0; i < width; i++)
         iov[i][0].iov_base = buf[i] = &pbuf_asu8[i * max_rounded];
