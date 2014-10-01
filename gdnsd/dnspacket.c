@@ -415,6 +415,7 @@ static rcode_rv_t decode_query(uint8_t* lqname, unsigned* question_len_ptr, cons
         if(unlikely(packet_len < (sizeof(wire_dns_header_t) + 5))) {
             log_devdebug("Ignoring short request from %s of length %u", dmn_logf_anysin(asin), packet_len);
             rcode = DECODE_IGNORE;
+            break;
         }
 
         uint8_t* packet = ctx->packet;
