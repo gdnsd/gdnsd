@@ -138,12 +138,6 @@ static void udp_sock_opts_v6(const int sock) {
         log_fatal("Failed to set IPTOS_LOWDELAY on UDP socket: %s", dmn_logf_errno());
 #endif
 
-// this hack is just for MacOS prior to Lion, which finally
-//   implements better IPv6 support, but only with a special #define in config.h...
-#ifndef IPV6_RECVPKTINFO
-# define IPV6_RECVPKTINFO IPV6_PKTINFO
-#endif
-
     if(setsockopt(sock, SOL_IPV6, IPV6_RECVPKTINFO, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", dmn_logf_errno());
 }
