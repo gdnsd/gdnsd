@@ -1,4 +1,4 @@
-2.0.0 - ??? - Not yet released
+2.0.0 - 2014-10-02
   *** Commandline / Signal changes:
     * The signal for zone data reloads is now SIGUSR1, not SIGHUP.
     * The action "reload" has been renamed to "reload-zones",
@@ -20,6 +20,7 @@
       the related sendmsg call and incrementing "sendfail".
     * Default 'max_edns_response' raised from 1280 to 1410.
     * UDP socket buffer default negotiation improvements
+    * Various perf tweaks and code cleanups
 
   *** Please read the 2.0.0-beta news below for everything
       else that's changed since 1.x.
