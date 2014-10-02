@@ -267,7 +267,7 @@ static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg
     };
     struct msghdr msg_hdr;
     char cmsg_buf[cmsg_size];
-
+    memset(cmsg_buf, 0, sizeof(cmsg_buf));
     memset(&msg_hdr, 0, sizeof(struct msghdr));
     msg_hdr.msg_name       = &asin.sa;
     msg_hdr.msg_iov        = &iov;
@@ -360,6 +360,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t*
     dmn_anysin_t asin[width];
 
     /* Set up packet buffers */
+    memset(cmsg_buf, 0, sizeof(cmsg_buf));
     for(unsigned i = 0; i < width; i++)
         iov[i][0].iov_base = buf[i] = gdnsd_xpmalign(pgsz, max_rounded);
 
