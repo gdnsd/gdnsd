@@ -317,9 +317,9 @@ bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned 
         uint32_t vers_have = _version_fold(0, 0, 0);
 
         unsigned sys_x, sys_y, sys_z;
-        if(sscanf(uts.release, "%u.%u.%u", &sys_x, &sys_y, &sys_z) == 3) {
+        if(sscanf(uts.release, "%5u.%3u.%3u", &sys_x, &sys_y, &sys_z) == 3) {
             vers_have = _version_fold(sys_x, sys_y, sys_z);
-        } else if(sscanf(uts.release, "%u.%u", &sys_x, &sys_y) == 2) {
+        } else if(sscanf(uts.release, "%5u.%3u", &sys_x, &sys_y) == 2) {
             /* no patch version number, e.g. 3.2 */
             vers_have = _version_fold(sys_x, sys_y, 0);
         }
