@@ -795,7 +795,7 @@ static const char csv_tmpl[] = "%s,%s,%s\r\n";
 
 static const char json_head[] = "\t\"services\": [\r\n";
 static const unsigned json_head_len = sizeof(json_head) - 1;
-static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\"\r\n\t\t\t\"real_state\": \"%s\"\r\n\t\t}";
+static const char json_tmpl[] = "\t\t{\r\n\t\t\t\"service\": \"%s\",\r\n\t\t\t\"state\": \"%s\",\r\n\t\t\t\"real_state\": \"%s\"\r\n\t\t}";
 static const unsigned json_tmpl_len = sizeof(json_tmpl) - 7; // 3x%s
 static const char json_sep[] = ",\r\n";
 static const unsigned json_sep_len = sizeof(json_sep) - 1;
