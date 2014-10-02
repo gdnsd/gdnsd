@@ -256,7 +256,9 @@ static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg
     dmn_assert(stats);
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
-    const long pgsz = sysconf(_SC_PAGESIZE);
+    long pgsz = sysconf(_SC_PAGESIZE);
+    if(pgsz < 1024) // if sysconf() error or ridiculous value, use 1K
+        pgsz = 1024;
     const unsigned max_rounded = ((gconfig.max_response + pgsz - 1) / pgsz) * pgsz;
 
     dmn_anysin_t asin;
@@ -350,7 +352,9 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t*
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
 
     // gconfig.max_response, rounded up to the next nearest multiple of the page size
-    const long pgsz = sysconf(_SC_PAGESIZE);
+    long pgsz = sysconf(_SC_PAGESIZE);
+    if(pgsz < 1024) // if sysconf() error or ridiculous value, use 1K
+        pgsz = 1024;
     const unsigned max_rounded = ((gconfig.max_response + pgsz - 1) / pgsz) * pgsz;
 
     uint8_t* buf[width];
