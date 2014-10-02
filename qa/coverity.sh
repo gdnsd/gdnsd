@@ -17,4 +17,4 @@ cov-build --dir cov-int make
 tar -czf gdnsd.tgz cov-int
 
 GDNSD_VERS=`git describe`
-echo "UPLOAD COMMAND: curl --form project=gdnsd --form token=7LBiBEF25lA9S58F8E9ZCQ --form email=blblack@gmail.com --form file=@gdnsd.tgz --form version=$GDNSD_VERS --form description=$GDNSD_VERS http://scan5.coverity.com/cgi-bin/upload.py"
+echo "UPLOAD COMMAND: curl --form project=gdnsd --form token=7LBiBEF25lA9S58F8E9ZCQ --form email=blblack@gmail.com --form file=@gdnsd.tgz --form version=$GDNSD_VERS --form description=$GDNSD_VERS https://scan.coverity.com/builds?project=gdnsd"
