@@ -279,7 +279,8 @@ static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg
 #ifdef HAVE_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
     const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+    if(unlikely(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short))))
+        log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", dmn_logf_errno());
     bool is_online = true;
 #endif
 
@@ -371,7 +372,8 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t*
 #ifdef HAVE_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
     const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+    if(unlikely(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short))))
+        log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", dmn_logf_errno());
     bool is_online = true;
 #endif
 
