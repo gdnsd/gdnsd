@@ -64,5 +64,5 @@ wikidocs:
 	@for podsrc in $(ALL_PODS); do \
 		wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.pod/'`; \
 		echo Copying $$podsrc to $(WIKI_DIR)/$$wikifn ...; \
-		cp $$podsrc $(WIKI_DIR)/$$wikifn; \
+		$(MAN_SED) <$$podsrc >$(WIKI_DIR)/$$wikifn; \
 	done
