@@ -236,18 +236,12 @@ static void spawn_helper(void) {
     if(helper_pid == -1)
         log_fatal("plugin_extmon: fork() failed: %s", dmn_logf_strerror(errno));
 
-    // unconditionally unset these for the helper child to ensure nothing can get
-    //  screwy on systemd-based systems...
-    unsetenv("WATCHDOG_PID");
-    unsetenv("WATCHDOG_USEC");
-    unsetenv("NOTIFY_SOCKET");
-
     if(!helper_pid) { // child
         close(writepipe[1]);
         close(readpipe[0]);
         const char* child_read_fdstr = num_to_str(writepipe[0]);
         const char* child_write_fdstr = num_to_str(readpipe[1]);
-        execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N", dmn_get_foreground() ? "F" : "B",
+        execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N", dmn_get_syslog_alive() ? "S" : "X",
             child_read_fdstr, child_write_fdstr, (const char*)NULL);
         log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_logf_strerror(errno));
     }

@@ -159,7 +159,7 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
 
 gdmaps_t* gdmaps_test_init(const char* input_cfgdir) {
 
-    dmn_init1(false, true, true, false, "gdmaps_test");
+    dmn_init1(false, true, false, "gdmaps_test");
 
     vscf_data_t* cfg_root = conf_load_vscf(input_cfgdir);
     vscf_data_t* maps_cfg = conf_get_maps(cfg_root);

@@ -69,17 +69,15 @@ void dmn_pcall(unsigned id);
 // dmn_init1() *must* be called before *any* other libdmn function!
 // debug: if false, all potential messages from dmn_log_debug() and
 //    dmn_log_devdebug() will be suppressed.
-// foreground: if true, the caller has no intention of actually daemonizing
-//    and will stay in the foreground, attached to the terminal.
-// stderr_info: if true, log_info() level messages wll be sent to stderr
-//    when applicable.  Otherwise, only log_warn() and higher are sent
-//    to stderr when applicable.
+// foreground: if true, we won't actually do fork/setsid-type daemonization,
+//    but will still go through all the other motions.
+// use_syslog: whether to log to syslog at all (false for test/cmdline stuff)
 // name: the name of your daemon/program.  Will be used for log outputs
 //    and pidfile naming.
 // Immediately after init1(), only the logging APIs (dmn_log_*, dmn_logf_*
 //    dmn_fmtbuf_*) are available.
 DMN_F_NONNULL
-void dmn_init1(bool debug, bool foreground, bool stderr_info, bool use_syslog, const char* name);
+void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name);
 
 // dmn_init2() must be called after dmn_init1() and before dmn_init3().
 // pid_dir: This is the application-specific(!)
@@ -152,29 +150,17 @@ pid_t dmn_stop(void);
 int dmn_signal(int sig);
 
 /***
-**** Watchdog interfaces:
-**** Basically, iff dmn_wdog_get_msec() returns a non-zero value
-****   (when called during startup, after init1()),
-****   the daemon should call dmn_wdog_ping() at approximate
-****   intervals of that many milliseconds during runtime.
-**** For now this only wraps systemd's watchdog mechanism,
-****   but could be extended to other stuff in the future.
-***/
-unsigned dmn_wdog_get_msec(void);
-void dmn_wdog_ping(void);
-
-/***
 **** Logging interfaces
 ***/
 
-// This is used "internally" by dmn_log_debug(), but gdnsd has
-//   use-cases for this and the others two getters below for
-//   the special case of plugin_extmon's helper process.
+// This is used "internally" by dmn_log_debug(), but gdnsd also
+//   uses this for the special case of plugin_extmon's helper process.
 bool dmn_get_debug(void);
-bool dmn_get_foreground(void);
+// again, special for plugin_extmon...
+bool dmn_get_syslog_alive(void);
 
 // This is a syslog()-like interface that will log
-//  to stderr and/or syslog (or sd_journal) as appropriate
+//  to stderr and/or syslog as appropriate
 //  depending on daemon lifecycle, and is thread-safe.
 DMN_F_NONNULLX(2) DMN_F_PRINTF(2,3)
 void dmn_logger(int level, const char* fmt, ...);

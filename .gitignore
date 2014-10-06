@@ -64,3 +64,6 @@ clang_output_*
 # generated docs
 *.[0-9]
 /wikidocs/
+
+# generated systemd unit file
+sysd/gdnsd.service

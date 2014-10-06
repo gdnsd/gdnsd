@@ -28,7 +28,8 @@ MAN_SED = $(SED) \
 	-e 's|@GDNSD_DEFPATH_STATE[@]|$(GDNSD_DEFPATH_STATE)|g' \
 	-e 's|@GDNSD_DEFPATH_RUN[@]|$(GDNSD_DEFPATH_RUN)|g' \
 	-e 's|@GDNSD_DEFPATH_LIB[@]|$(GDNSD_DEFPATH_LIB)|g' \
-	-e 's|@GDNSD_DEFPATH_LIBEXEC[@]|$(GDNSD_DEFPATH_LIBEXEC)|g'
+	-e 's|@GDNSD_DEFPATH_LIBEXEC[@]|$(GDNSD_DEFPATH_LIBEXEC)|g' \
+	-e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g'
 
 # Gather up the .pod files (which are distributed but not installed)
 ALL_PODS = $(PODS_1) $(PODS_3) $(PODS_5) $(PODS_8)

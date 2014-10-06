@@ -3,7 +3,7 @@
 ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
-SUBDIRS = gdnsd plugins docs t
+SUBDIRS = gdnsd plugins docs t sysd
 
 dist_doc_DATA = README.md INSTALL AUTHORS COPYING NEWS
 EXTRA_DIST = qa
@@ -42,3 +42,7 @@ install-exec-hook:
 		echo The default user \"gdnsd\" \(for privdrop when executed as root\) does not seem to exist yet!; \
 		echo; \
 	fi
+
+if DO_SYSD_UNITFILE
+DISTCHECK_CONFIGURE_FLAGS = --with-systemdsystemunitdir=$$dc_install_base/$(systemdsystemunitdir)
+endif

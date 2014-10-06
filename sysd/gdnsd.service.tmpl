@@ -1,0 +1,14 @@
+[Unit]
+Description=gdnsd
+After=local-fs.target
+After=syslog.target
+After=network.target
+
+[Service]
+Type=notify
+NotifyAccess=all
+ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
+ExecStop=@GDNSD_SBINDIR@/gdnsd stop
+
+[Install]
+WantedBy=multi-user.target

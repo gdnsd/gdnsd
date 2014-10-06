@@ -236,17 +236,22 @@ int main(int argc, char** argv) {
     if(!strcmp(argv[1], "Y"))
         debug = true;
 
-    bool startfg = false;
-    if(!strcmp(argv[2], "F"))
-        startfg = true;
+    bool use_syslog = false;
+    if(!strcmp(argv[2], "S"))
+        use_syslog = true;
 
-    dmn_init1(debug, true, startfg, !startfg, "gdnsd_extmon_helper");
+    dmn_init1(debug, true, use_syslog, "gdnsd_extmon_helper");
 
     // regardless, we seal off stdin now.  We don't need it,
     //   and this way we don't have to deal with it when
     //   execv()-ing child commands later.
     if(!freopen("/dev/null", "r", stdin))
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_strerror(errno));
+
+    // Also unconditionally unset NOTIFY_SOCKET here so that children
+    //   don't get any ideas about talking to systemd on our behalf.
+    //   (we're done using it in this process for libdmn stuff at this point)
+    unsetenv("NOTIFY_SOCKET");
 
     // these are the main communication pipes to the daemon/plugin
     plugin_read_fd = atoi(argv[3]);
@@ -255,13 +260,6 @@ int main(int argc, char** argv) {
     if(plugin_read_fd < 3 || plugin_read_fd > 1000
         || plugin_write_fd < 3 || plugin_write_fd > 1000)
         log_fatal("Invalid pipe descriptors!");
-
-    // CLOEXEC the direct lines to the main plugin/daemon,
-    //   so that child scripts can't screw with them.
-    if(fcntl(plugin_read_fd, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on plugin read fd: %s", dmn_logf_strerror(errno));
-    if(fcntl(plugin_write_fd, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on plugin write fd: %s", dmn_logf_strerror(errno));
 
     if(emc_read_exact(plugin_read_fd, "HELO"))
         log_fatal("Failed to read HELO from plugin");
@@ -303,6 +301,10 @@ int main(int argc, char** argv) {
     close(plugin_read_fd);
     if(unlikely(fcntl(plugin_write_fd, F_SETFL, (fcntl(plugin_write_fd, F_GETFL, 0)) | O_NONBLOCK) == -1))
         log_fatal("Failed to set O_NONBLOCK on pipe: %s", dmn_logf_errno());
+
+    // CLOEXEC the write fd so child scripts can't mess with it
+    if(fcntl(plugin_write_fd, F_SETFD, FD_CLOEXEC))
+        log_fatal("Failed to set FD_CLOEXEC on plugin write fd: %s", dmn_logf_strerror(errno));
 
     // init results-sending queue
     sendq_init();

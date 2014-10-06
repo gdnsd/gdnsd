@@ -168,7 +168,26 @@ if test $KILL_QSBR -eq 0; then
 fi
 AC_SUBST([QSBRLIBS])
 
-# libev
+# systemd unit dir for "make install" of gdnsd.service
+PKG_CHECK_VAR([SYSD_UNITDIR], [systemd], [systemdsystemunitdir])
+AC_MSG_CHECKING([for systemd system unit installdir])
+AC_ARG_WITH([systemdsystemunitdir],
+        AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
+        if test x"$with_systemdsystemunitdir" = xno; then
+            with_systemdsystemunitdir=""
+        fi,
+        [with_systemdsystemunitdir="$SYSD_UNITDIR"]
+)
+if test -n "$with_systemdsystemunitdir"; then
+    AC_MSG_RESULT([$with_systemdsystemunitdir])
+else
+    AC_MSG_RESULT([none])
+fi
+AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
+AM_CONDITIONAL(DO_SYSD_UNITFILE, [test -n "$with_systemdsystemunitdir"])
+
+# libev (which shouldn't use pkg-config anyways, but has
+#   to on Fedora because they munge the header path the author intended...)
 PKG_CHECK_MODULES([LIBEV],[libev >= 4.0],
     CPPFLAGS="${CPPFLAGS} ${LIBEV_CFLAGS}"
 ,
@@ -345,7 +364,7 @@ AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
 # clump up all of the libgdnsd libdeps for re-use in LDADD for
 #   binaries that link libgdnsd on platforms where libtool's
 #   automatic dep resolution is disabled
-LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN $SYSD_DAEMON_LIBS $SYSD_JOURNAL_LIBS"
+LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
 AC_SUBST([LIBGDNSD_LIBS])
 
 # Output generation
@@ -355,6 +374,7 @@ AC_CONFIG_FILES([
   gdnsd/Makefile
   gdnsd/libgdnsd/Makefile
   gdnsd/libgdnsd/libdmn/Makefile
+  sysd/Makefile
   t/Makefile
   docs/Makefile
   plugins/Makefile
@@ -373,7 +393,6 @@ AC_OUTPUT
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
-if test "x$USE_SYSTEMD" = x1; then CFSUM_SYSD=Yes; else CFSUM_SYSD=No; fi
 if test "x$HAVE_QSBR" = x1; then
     CFSUM_QSBR=Yes
 else
@@ -391,6 +410,5 @@ echo "| Developer Build?            $CFSUM_DEV"
 echo "| Userspace-rcu support:      $CFSUM_QSBR"
 echo "| Linux sendmmsg support:     $CFSUM_SENDMMSG"
 echo "| Linux inotify support:      $CFSUM_INOTIFY"
-echo "| Linux systemd support:      $CFSUM_SYSD"
 echo "| Test Port Start:            $CFSUM_TP"
 echo "======================================="

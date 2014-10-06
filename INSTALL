@@ -2,47 +2,52 @@
 Building From Source
 ====================
 
-In general, this is a standard autoconf-style project: ./configure && make check && sudo make install
+In general, this is a standard autoconf-style project:
+./configure && make check && sudo make install
 
-If your starting point is a tarball download, the following prerequisites apply:
+If your starting point is a tarball, the following prerequisites apply:
 
 * A basically functional POSIX build environment with a C99 compiler
-* libev headers and libraries, version 4.x: distro pkg or http://software.schmorp.de/pkg/libev.html
-* Perl 5.8.1 or higher and the perl "pod2man" command for document generation
-  (this may be in the package perl-podlaters on some systems)
-* liburcu aka userspace-rcu headers and libraries. Use distro pkg or http://lttng.org/urcu/
-  (^ optional, but important for performance!)
+* libev headers and libraries, version 4.x: distro pkg
+  or http://software.schmorp.de/pkg/libev.html
+* Perl 5.8.1 or higher and the perl "pod2man" command for document
+  generation (this may be in the package perl-podlaters)
+* liburcu aka userspace-rcu headers and libraries. Use distro pkg or
+  http://lttng.org/urcu/ (optional, but important for performance!)
 
-The following have no real effect on the build or runtime, but are required in order to run the testsuite:
+The following have no real effect on the build or runtime, but are
+required in order to run the testsuite:
 
 * Perl modules: LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
 
-If working directly from a git clone rather than a tarball, in addition to all of the above:
+If working directly from a git clone, you may also need:
 
-* You may need to install autoconf (2.63+), automake(1.11.1+), and libtool(2.2.6+) packages
-* You will need a working copy of Ragel 6.x: http://www.complang.org/ragel/ (or distro package)
-* Use "git clean -dfx" to reset to a truly clean state (could wipe local edits!)
+* autoconf (2.63+), automake(1.11.1+), and libtool(2.2.6+) packages
+* Ragel 6.x: http://www.complang.org/ragel/ (or distro package)
 * Start with "autoreconf -vi", then ./configure ...
 
 Interesting / Non-standard autoconf options
 ===========================================
 
---with-systemd
-  Turns on compile-time support for running as a systemd service.
-  You want this iff your Linux distribution uses systemd.  If systemd
-  is detected at runtime (that is, systemd is booted and it appears
-  the gdnsd invocation in question is being executed as part of a
-  systemd service), gdnsd will use systemd APIs as appropriate.
-  Notably this includes sd_notify() of MAINPID when starting a new
-  daemon, logging via sd_journal_printv(), and watchdog support
-  (if systemd version is >= 209 and configured in the unit file).
+--with-rundir=/some/where
+  Set an alternate system-level rundir, e.g. in situations where a Linux
+    distro wants to use "/run" in place of "/var/run".
 
-  Note that currently there is no support for gdnsd's standard fast,
-  overlapped restart behavior under systemd, as systemd has no
-  apparent capability to handle this concept.  "systemctl restart"
-  will result in a full shutdown and then a full startup, sequentially,
-  and a systemd-started gdnsd can't be fast-restarted from outside
-  of systemctl.
+--with-systemdsystemunitdir=DIR
+  Sets the install path for the systemd gdnsd.service unit file on
+    linux hosts with systemd, which would normally be obtained via:
+    "pkg-config --variable=systemdsystemunitdir systemd".
+  Note that the automatic value for this from pkg-config doesn't follow
+    autoconf's prefix at all; it will still pick e.g.
+    "/usr/lib/systemd/system" even when --prefix is "/usr/local".
+  If pkg-config and/or systemd do not exist and this is not set manually
+    the unit file is neither generated nor installed.
+  To disable the generation and installation of the unit file on systems
+    which have systemd software installed (but e.g. are not using it for
+    the init system), use --without-systemdsystemunitdir.
+
+--without-urcu
+  Explicitly disable support for liburcu (falls back to pthread rwlocks)
 
 --enable-developer
   Builds a debugging build (-g) with a lot of extra gcc warnings
@@ -58,10 +63,3 @@ Interesting / Non-standard autoconf options
    on 127.0.0.1, starting with port N.  The default is 12345.  If
    this conflicts with some existing service on your machine, change
    it here.
-
---without-urcu
-  Explicitly disable support for liburcu (falls back to pthread locks)
-
---with-rundir=/some/where
-  Set an alternate system-level rundir, e.g. in situations where a Linux
-  distro wants to use "/run" in place of "/var/run".

@@ -7,10 +7,11 @@ gdnsd - An authoritative DNS daemon
 
   Usage: gdnsd [-fsSD] [-c @GDNSD_DEFPATH_CONFIG@] <action>
     -D - Enable verbose debug output
-    -f - Foreground mode for start/restart-like actions
+    -f - Foreground mode for [re]start actions
     -s - Force 'zones_strict_startup = true' for this invocation
     -S - Force 'zones_strict_data = true' for this invocation
     -c - Configuration directory
+    -x - No syslog output (must use -f with this if [re]start)
   Actions:
     checkconf - Checks validity of config and zone files
     start - Start as a regular daemon
@@ -55,11 +56,13 @@ Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.
 
 =item B<-f>
 
-Sets foreground mode for start/restart -like actions.  The daemon will
-remain attached to the controlling terminal and will not fork-and-terminate
-to free up the invoking shell.  It will, however, participate in pidfile
-locking with other (e.g. background) instances of itself using the same
-configuration.
+Sets foreground mode for the start, restart, condrestart, or try-restart
+actions.  All other actions are implicitly foreground operations and
+ignore this flag.  When [re]starting with C<-f>, the new daemon will not
+use C<fork(); setsid(); fork();> to detach from the terminal, and will
+not close default stdio descriptors or stop mirroring its log output to
+the stdio descriptors at runtime.  Otherwise it behaves the same as an
+invocation without this flag.  See also C<-x> regarding syslog output.
 
 =item B<-s>
 
@@ -77,6 +80,27 @@ mostly useful for validation during the C<checkconf> option.
 
 Enables additional debugging output to syslog and/or the terminal,
 as appropriate.
+
+=item B<-x>
+
+Disables syslog output completely.  By default, almost all possible
+output from all gdnsd invocations is sent to syslog, even if it is also
+mirrored to the terminal.  The only exception to this rule (well, apart
+from certain early fatal log outputs which are only triggered in the
+case of internal code bugs) is the commandline usage output on invalid
+commandline arguments.
+
+This flag is only legal for the start, restart, condrestart, and
+try-restart options if used in combination with the C<-f> flag (as
+otherwise the resulting daemon could end up with no error output channel
+at all).  It is legal for all other commands (which are all implicitly
+foreground actions, and all also output to syslog by default).
+
+Primarily intended for e.g. linting invocations of checkconf, the
+daemon's testsuite, etc, to avoid spamming syslog with things unrelated
+to a real runtime daemon.
+
+Do not use this flag for a start invocation within a systemd unit file.
 
 =back
 
@@ -103,15 +127,11 @@ runtime use.
 
 =item B<start>
 
-Starts gdnsd as a regular background daemon.
-
-With the C<-f> option, starts gdnsd in the foreground with logs
-mirrored to both stderr and syslog.  Useful for debugging and
-testing.
+Starts gdnsd as a runtime DNS daemon.
 
 =item B<stop>
 
-Stops the gdnsd daemon previously started by start.
+Stops a gdnsd daemon previously started by start.
 
 =item B<restart>
 
@@ -140,13 +160,17 @@ for the previous daemon's pid to exit.  The delay should normally be
 fairly constant (does not scale up with zones/configuration) and minimal
 in these cases, on the order of <1s.
 
-C<SO_REUSEPORT> became available in Linux kernels starting with kernel
+C<SO_REUSEPORT> became available in Linux starting with kernel
 version 3.9.  BSDs have had it for much longer.
 
 =item B<reload-zones>
 
 Sends C<SIGUSR1> to the running daemon, forcing a manual re-check
-of the zones directory for updated files.
+of the zones directory for updated files.  Generally this should
+only be necessary if the configuration option C<zones_rfc1035_auto>
+has been explicitly set to C<false>, disabling the default mode
+where gdnsd continuously monitors for and loads zonefile data
+changes.
 
 =item B<condrestart>
 
@@ -360,6 +384,34 @@ file are listed in the daemon's HTML, CSV, and JSON -format outputs from
 the built-in status http server (default port 3506), as are their current
 monitors and admin_state-forced states.
 
+=head1 SYSTEMD COMPATIBILITY
+
+This daemon is implicitly compatible with running as a systemd service
+on Linux, and should have come with a ready-made unit file during
+installation that works correctly.
+
+When the daemon detects that it's running underneath systemd as a unit
+(by detecting that systemd is the running init system and that gdnsd's
+initial parent pid is C<1>), it makes some changes to its default
+behaviors to be more systemd-friendly.  This includes shutting off stdio
+output very early (as soon as syslog is open) because the stdio and
+syslog output channels are redundant under systemd and lead to duplicate
+messages in the journal.  It also makes use of systemd's notification
+socket to coordinate operations with the init system.
+
+Because of these things, it is critical that the gdnsd unit file uses
+the C<NotifyAccess=all> setting, and that the C<ExecStart=> command for
+gdnsd uses a commandline that resembles C<gdnsd -f start> and
+does not use C<-x> (other extra options are ok).
+
+Example unit file contents for the Service section:
+
+    [Service]
+    Type=notify
+    NotifyAccess=all
+    ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
+    ExecStop=@GDNSD_SBINDIR@/gdnsd stop
+
 =head1 SIGNALS
 
 Any signal not explicitly mentioned is not explicitly handled.  That
@@ -378,11 +430,11 @@ Causes the daemon to attempt to load any new changes to the zone data.
 
 =item B<SIGHUP>
 
-Ignored when daemonized.
+Ignored during daemon runtime.
 
 =item B<SIGPIPE>
 
-Ignored when daemonized.
+Ignored always.
 
 =back
 
