@@ -263,7 +263,7 @@ Important directory paths for the core daemon code:
 
 =item F<@GDNSD_DEFPATH_CONFIG@>
 
-Default configuration directory, unless overriden via C<-c>.  The
+Default configuration directory, unless overridden via C<-c>.  The
 primary configuration file is always the file F<config> in the
 configuration directory.
 
@@ -303,7 +303,7 @@ resolution decisions.  The intent of this file is to allow explicit, human
 administrative decisions to temporarily override the states affecting plugin
 decision-making on issues of failover and/or geographic distribution.  A
 non-existent file is treated the same as an empty file.  The file is watched
-at runtime for changes, and any overriden state found is applied quickly.
+at runtime for changes, and any overridden state found is applied quickly.
 The file is expected to persist reboots and daemon restarts in order to
 preserve the administrator's intent through these events.
 
