@@ -1,3 +1,8 @@
+  *** The canonical HTTP and git-clone URL locations for the project
+      have changed to http://github.com/gdnsd/gdnsd .  The old URLs
+      and git remotes will work correctly for some time, but not
+      indefinitely.
+
 2.0.0 - 2014-10-02
   *** Commandline / Signal changes:
     * The signal for zone data reloads is now SIGUSR1, not SIGHUP.

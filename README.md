@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/blblack/gdnsd.png)](https://travis-ci.org/blblack/gdnsd)
+[![Build Status](https://travis-ci.org/gdnsd/gdnsd.png)](https://travis-ci.org/gdnsd/gdnsd)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/760/badge.svg)](https://scan.coverity.com/projects/760)
 
 ## Overview
@@ -13,13 +13,13 @@ The geographically-aware features also support the emerging EDNS Client Subnet d
 
 Project site: http://gdnsd.org/
 
-Release downloads: https://github.com/blblack/gdnsd/releases/
+Release downloads: https://github.com/gdnsd/gdnsd/releases/
 
-The code is hosted at Github: https://github.com/blblack/gdnsd/
+The code is hosted at Github: https://github.com/gdnsd/gdnsd/
 
-Bug reports: https://github.com/blblack/gdnsd/issues
+Bug reports: https://github.com/gdnsd/gdnsd/issues
 
-Wikified docs: https://github.com/blblack/gdnsd/wiki
+Wikified docs: https://github.com/gdnsd/gdnsd/wiki
 
 Google Group for discussion: https://groups.google.com/forum/#!forum/gdnsd
 

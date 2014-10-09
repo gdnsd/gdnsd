@@ -8,7 +8,7 @@ AM_SILENT_RULES([yes])
 
 # For autoconf < 2.63b this has to be manual, but this is the "right" name
 #   to use for the 2.63b+ AC_INIT version of the same
-AC_DEFINE([PACKAGE_URL],["https://github.com/blblack/gdnsd/"],[Package URL])
+AC_DEFINE([PACKAGE_URL],["https://github.com/gdnsd/gdnsd/"],[Package URL])
 
 # TODO: when/if a new autoconf release has a C11 macro,
 #    prefer that and fall back to requiring C99.
