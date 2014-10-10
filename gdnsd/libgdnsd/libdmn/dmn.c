@@ -346,13 +346,26 @@ bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_aliv
 
 #else
 
-// This includes standard sd_booted() checks as well as
-// getppid() == 1 to distinguish cmdline invocation on
-// a system that happens to also be running systemd as init.
+// This goes a bit beyond sd_booted()'s lstat check, because
+//   that only tells us that systemd is the init system in use,
+//   not that we were invoked underneath it.
+// With a correct unit file, either of getppid() or the NOTIFY_SOCKET
+//   check should suffice for ExecStart's purposes.  Using both
+//   just ensures we're not surprised by future systemd changes in
+//   either direction and that we generate better error output if
+//   the unit file is set up incorrectly.
+// It's not critical that ExecStop (and future ExecReload) detect
+//   systemd properly as they don't actually make functional use
+//   of NOTIFY_SOCKET.  As of systemd-208, they don't seem to get
+//   it set anyways, in spite of NotifyAccess=all, so the getppid()
+//   check is their only recourse here.  If that check becomes
+//   obsolete because of a future systemd change (where ExecStop
+//   might not be executed with PPID=1), the worst-case fallout
+//   is just duplicate messages to the journal.
 static void dmn_set_running_under_sd(const bool use_syslog) {
     struct stat st;
     state.running_under_sd =
-        getppid() == 1
+        (getenv("NOTIFY_SOCKET") || getppid() == 1)
         && !lstat("/run/systemd/system/", &st)
         && S_ISDIR(st.st_mode);
     if(state.running_under_sd) {
