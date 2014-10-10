@@ -572,7 +572,7 @@ static bool inotify_setup(const bool initial) {
         rv = true; // failure
     }
     else {
-        inot.main_fd = inotify_init1(IN_NONBLOCK);
+        inot.main_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
         if(inot.main_fd < 0) {
             // initial ENOSYS is reported here as well for 2.6.36+ hosts that
             //   don't implement the syscall for whatever architecture.
