@@ -188,15 +188,22 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
 // DMN_NO_FATAL_COVERAGE is to allow coverage testing to skip
 //   over fatal conditions.  If your tests don't cover those
 //   for pragmatic reasons, this considerably reduces line noise.
-// Note that this is only going to work if your tests *never*
+//   Note that this is only going to work if your tests *never*
 //   exercise a fatal case; it will probably cause random
 //   bugs leading to test failures otherwise.
+// DMN_COVERTEST_EXIT uses exit(57) rather than abort() on fatals,
+//   because exit() is needed to gather coverage data.
 #ifdef DMN_NO_FATAL_COVERAGE
 #  define dmn_log_fatal(...) ((void)(0))
-#else
+#elif defined DMN_COVERTEST_EXIT
 #  define dmn_log_fatal(...) do {\
      dmn_logger(LOG_CRIT,__VA_ARGS__);\
      exit(57);\
+   } while(0)
+#else
+#  define dmn_log_fatal(...) do {\
+     dmn_logger(LOG_CRIT,__VA_ARGS__);\
+     abort();\
    } while(0)
 #endif
 

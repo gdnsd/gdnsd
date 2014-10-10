@@ -628,7 +628,7 @@ int main(int argc, char** argv) {
     // Restore normal signal mask
     pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL);
 
-#ifdef COVERTEST_EXIT
+#ifdef DMN_COVERTEST_EXIT
     // We have to use exit() when testing coverage, as raise()
     //   skips over writing out gcov data
     exit(0);
