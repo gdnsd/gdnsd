@@ -717,9 +717,12 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
     pthread_attr_init(&attribs);
     pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_JOINABLE);
 
-    sigset_t sigmask_all, sigmask_prev;
+    sigset_t sigmask_all;
     sigfillset(&sigmask_all);
-    pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev);
+    sigset_t sigmask_prev;
+    sigemptyset(&sigmask_prev);
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
+        log_fatal("pthread_sigmask() failed");
 
     int pthread_err;
     if((pthread_err = pthread_create(&gdmaps->reload_tid, &attribs, gdmaps_reload_thread, gdmaps)))
@@ -727,6 +730,7 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
 
     gdmaps->reload_thread_spawned = true;
 
-    pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL);
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
+        log_fatal("pthread_sigmask() failed");
     pthread_attr_destroy(&attribs);
 }

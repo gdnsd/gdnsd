@@ -165,9 +165,12 @@ static void* mon_runtime(void* unused V_UNUSED) {
 static void start_threads(void) {
     // Block all signals using the pthreads interface while starting threads,
     //  which causes them to inherit the same mask.
-    sigset_t sigmask_all, sigmask_prev;
+    sigset_t sigmask_all;
     sigfillset(&sigmask_all);
-    pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev);
+    sigset_t sigmask_prev;
+    sigemptyset(&sigmask_prev);
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
+        log_fatal("pthread_sigmask() failed");
 
     // system scope scheduling, joinable threads
     pthread_attr_t attribs;
@@ -206,7 +209,8 @@ static void start_threads(void) {
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
-    pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL);
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
+        log_fatal("pthread_sigmask() failed");
     pthread_attr_destroy(&attribs);
 }
 
@@ -584,7 +588,9 @@ int main(int argc, char** argv) {
 
     // Block the relevant signals before entering the sigwait() loop
     sigset_t sigmask_prev;
-    pthread_sigmask(SIG_BLOCK, &mainthread_sigs, &sigmask_prev);
+    sigemptyset(&sigmask_prev);
+    if(pthread_sigmask(SIG_BLOCK, &mainthread_sigs, &sigmask_prev))
+        log_fatal("pthread_sigmask() failed");
 
     // Report success back to whoever invoked "start" or "restart" command...
     //  (or in the foreground case, kill our helper process)
@@ -626,7 +632,8 @@ int main(int argc, char** argv) {
     atexit_debug_execute();
 
     // Restore normal signal mask
-    pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL);
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
+        log_fatal("pthread_sigmask() failed");
 
 #ifdef DMN_COVERTEST_EXIT
     // We have to use exit() when testing coverage, as raise()
