@@ -39,6 +39,8 @@
 #include <stddef.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <sys/wait.h>
+#include <signal.h>
 
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>
@@ -403,4 +405,72 @@ size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {
     return name_end > sizeof(struct dirent)
         ? name_end
         : sizeof(struct dirent);
+}
+
+static pid_t* children = NULL;
+static unsigned n_children = 0;
+
+void gdnsd_register_child_pid(pid_t child) {
+    dmn_assert(child);
+    children = xrealloc(children, sizeof(pid_t) * (n_children + 1));
+    children[n_children++] = child;
+}
+
+static unsigned _attempt_reap(unsigned attempts) {
+    unsigned n_children_remain = 0;
+    for(unsigned i = 0; i < n_children; i++)
+        if(children[i])
+            n_children_remain++;
+
+    while(attempts) {
+        pid_t wprv = waitpid(-1, NULL, WNOHANG);
+        if(wprv < 0) {
+            if(errno == ECHILD)
+                break;
+            else
+                log_fatal("waitpid(-1, NULL, WNOHANG) failed: %s", dmn_logf_errno());
+        }
+        if(wprv) {
+            log_debug("waitpid() reaped %li", (long)wprv);
+            for(unsigned i = 0; i < n_children; i++) {
+                if(children[i] == wprv) {
+                    children[i] = 0;
+                    n_children_remain--;
+                }
+            }
+            if(!n_children_remain)
+                break;
+        }
+        const struct timespec ms_10 = { 0, 10000000 };
+        nanosleep(&ms_10, NULL);
+        attempts--;
+    }
+
+    if(n_children_remain && attempts) { // implies ECHILD
+        log_err("BUG? waitpid() says no children remain, but we expected %u more", n_children_remain);
+        return 0;
+    }
+
+    return n_children_remain;
+}
+
+void gdnsd_kill_registered_children(void) {
+    if(!n_children)
+        return;
+
+    for(unsigned i = 0; i < n_children; i++) {
+        log_info("Sending SIGTERM to child process %li", (long)children[i]);
+        kill(children[i], SIGTERM);
+    }
+    unsigned notdone = _attempt_reap(1000); // 10s
+
+    if(notdone) {
+        for(unsigned i = 0; i < n_children; i++) {
+            if(children[i]) {
+                log_info("Sending SIGKILL to child process %li", (long)children[i]);
+                kill(children[i], SIGKILL);
+            }
+        }
+        _attempt_reap(500); // 5s max
+    }
 }

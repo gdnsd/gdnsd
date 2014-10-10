@@ -26,4 +26,7 @@
 // Globally initialize meta-prng at daemon startup
 void gdnsd_rand_meta_init(void);
 
+// Kill+Reap pids from gdnsd_register_child_pid()
+void gdnsd_kill_registered_children(void);
+
 #endif // GDNSD_MISC_PRIV_H

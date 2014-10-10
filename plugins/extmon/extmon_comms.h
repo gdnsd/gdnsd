@@ -68,6 +68,10 @@ static inline uint32_t emc_encode_mon(const unsigned idx, const bool failed) {
         );
 }
 
+// send/recv helper-exit
+static inline uint32_t emc_encode_exit(void) { return 0xFFFFFFFF; }
+static inline bool emc_decode_is_exit(const uint32_t data) { return !!(data == 0xFFFFFFFF); }
+
 static inline unsigned emc_decode_mon_idx(const uint32_t data) {
     return (data >> 16);
 }

@@ -628,6 +628,9 @@ int main(int argc, char** argv) {
         }
     }
 
+    // get rid of child procs (e.g. extmon helper)
+    gdnsd_kill_registered_children();
+
     // deallocate resources in debug mode
     atexit_debug_execute();
 

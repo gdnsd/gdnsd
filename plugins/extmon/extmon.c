@@ -69,26 +69,29 @@ static bool init_phase = true;
 static unsigned init_phase_count = 0;
 
 // if we experience total helper failure at any point
-//   (which is in turn signalled by pipe close)
-static bool total_helper_failure_flag = false;
+static bool helper_is_dead_flag = false;
 
 // behavior on helper failure
 static bool die_on_helper_failure = false;
 
 static const char fail_msg[] = "plugin_extmon: Cannot continue monitoring, child process gdnsd_extmon_helper failed!";
-static void total_helper_failure(struct ev_loop* loop) {
+static void helper_is_dead(struct ev_loop* loop, const bool graceful) {
     dmn_assert(loop);
 
-    for(unsigned i = 0; i < num_mons; i++)
-        ev_timer_stop(loop, mons[i].local_timeout);
+    if(graceful) {
+        log_info("plugin_extmon: helper process %li exiting gracefully", (long)helper_pid);
+    }
+    else {
+        if(die_on_helper_failure)
+            log_fatal(fail_msg);
+        log_err(fail_msg);
+    }
 
-    if(die_on_helper_failure)
-        log_fatal(fail_msg);
-
-    log_err(fail_msg);
     close(helper_read_fd);
     ev_io_stop(loop, helper_read_watcher);
-    total_helper_failure_flag = true;
+    for(unsigned i = 0; i < num_mons; i++)
+        ev_timer_stop(loop, mons[i].local_timeout);
+    helper_is_dead_flag = true;
 }
 
 // common code to bump the local_timeout timer for (interval+timeout)*2,
@@ -118,7 +121,12 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
             else {
                 log_err("plugin_extmon: helper pipe closed, no more results");
             }
-            total_helper_failure(loop);
+            helper_is_dead(loop, false);
+            return;
+        }
+
+        if(emc_decode_is_exit(data)) {
+            helper_is_dead(loop, true);
             return;
         }
 
@@ -136,6 +144,7 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         else {
             gdnsd_mon_state_updater(this_mon->idx, !failed); // wants true for success
         }
+
         if(init_phase) {
             ev_timer_stop(loop, this_mon->local_timeout);
             if(!this_mon->seen_once) {
@@ -232,11 +241,37 @@ static void spawn_helper(void) {
     if(pipe(readpipe))
         log_fatal("plugin_extmon: pipe() failed: %s", dmn_logf_strerror(errno));
 
+    // Before forking, block all signals and save the old mask
+    //   to avoid a race condition where local sighandlers execute
+    //   in the child between fork and exec().
+    sigset_t all_sigs;
+    sigfillset(&all_sigs);
+    sigset_t saved_mask;
+    sigemptyset(&saved_mask);
+    if(pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask))
+        log_fatal("pthread_sigmask() failed");
+
     helper_pid = fork();
     if(helper_pid == -1)
         log_fatal("plugin_extmon: fork() failed: %s", dmn_logf_strerror(errno));
 
     if(!helper_pid) { // child
+        // reset all signal handlers to default before unblocking
+        struct sigaction defaultme;
+        sigemptyset(&defaultme.sa_mask);
+        defaultme.sa_handler = SIG_DFL;
+        defaultme.sa_flags = 0;
+
+        // we really don't care about error retvals here
+        for(unsigned i = 0; i < NSIG; i++)
+            (void)sigaction(i, &defaultme, NULL);
+
+        // unblock all
+        sigset_t no_sigs;
+        sigemptyset(&no_sigs);
+        if(pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
+            log_fatal("pthread_sigmask() failed");
+
         close(writepipe[1]);
         close(readpipe[0]);
         const char* child_read_fdstr = num_to_str(writepipe[0]);
@@ -246,8 +281,13 @@ static void spawn_helper(void) {
         log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_logf_strerror(errno));
     }
 
+    // restore previous signal mask from before fork in parent
+    if(pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
+        log_fatal("pthread_sigmask() failed");
+
     // parent;
     dmn_assert(helper_pid);
+    gdnsd_register_child_pid(helper_pid);
 
     close(writepipe[0]);
     close(readpipe[1]);
@@ -395,7 +435,7 @@ void plugin_extmon_init_monitors(struct ev_loop* mon_loop) {
 }
 
 void plugin_extmon_start_monitors(struct ev_loop* mon_loop) {
-    if(num_mons && !total_helper_failure_flag) {
+    if(num_mons && !helper_is_dead_flag) {
         init_phase = false;
         ev_io_start(mon_loop, helper_read_watcher);
         for(unsigned i = 0; i < num_mons; i++)

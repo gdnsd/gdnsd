@@ -32,8 +32,14 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <time.h>
 
 #include <ev.h>
+
+// hopefully everyone defines this
+#ifndef NSIG
+#  define NSIG 100
+#endif
 
 typedef struct {
     extmon_cmd_t* cmd;
@@ -52,8 +58,11 @@ static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s"
 
 static int plugin_read_fd = -1;
 static int plugin_write_fd = -1;
-static ev_io* plugin_read_watcher = NULL;
 static ev_io* plugin_write_watcher = NULL;
+static ev_signal* sigterm_watcher = NULL;
+static ev_signal* sigint_watcher = NULL;
+static ev_signal* sighup_watcher = NULL;
+static int killed_by = 0;
 
 /*************************************************************************/
 // This implements a simple unidirectional FIFO queue for buffering
@@ -61,10 +70,10 @@ static ev_io* plugin_write_watcher = NULL;
 // The queue is actually an array with moving head pointer that
 //   wraps circularly, and is resized via re-allocation when necc.
 
-uint32_t* sendq = NULL;
-unsigned sendq_alloc = 0;
-unsigned sendq_len = 0;
-unsigned sendq_head = 0;
+static uint32_t* sendq = NULL;
+static unsigned sendq_alloc = 0;
+static unsigned sendq_len = 0;
+static unsigned sendq_head = 0;
 
 // must be power of 2!
 #define SENDQ_INITSIZE 16
@@ -132,8 +141,10 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     //   and restart the child watcher for a new child, effectively
     //   giving up on waitpid() of this child.  Not much else we
     //   could do in that case anyways.
-    sendq_enq(emc_encode_mon(this_mon->cmd->idx, true));
-    ev_io_start(loop, plugin_write_watcher);
+    if(!killed_by) {
+        sendq_enq(emc_encode_mon(this_mon->cmd->idx, true));
+        ev_io_start(loop, plugin_write_watcher);
+    }
     this_mon->result_pending = false;
 }
 
@@ -162,8 +173,10 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
     // If timeout already sent a failure, don't double-send
     //   here when we reap the SIGKILL'd child
     if(this_mon->result_pending) {
-        sendq_enq(emc_encode_mon(this_mon->cmd->idx, failed));
-        ev_io_start(loop, plugin_write_watcher);
+        if(!killed_by) {
+            sendq_enq(emc_encode_mon(this_mon->cmd->idx, failed));
+            ev_io_start(loop, plugin_write_watcher);
+        }
         this_mon->result_pending = false;
     }
 }
@@ -174,17 +187,47 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
     mon_t* this_mon = w->data;
     dmn_assert(!this_mon->result_pending);
 
+    // Before forking, block all signals and save the old mask
+    //   to avoid a race condition where local sighandlers execute
+    //   in the child between fork and exec().
+    sigset_t all_sigs;
+    sigfillset(&all_sigs);
+    sigset_t saved_mask;
+    sigemptyset(&saved_mask);
+    if(pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask))
+        log_fatal("pthread_sigmask() failed");
+
     this_mon->cmd_pid = fork();
     if(this_mon->cmd_pid == -1)
         log_fatal("fork() failed: %s", dmn_logf_strerror(errno));
 
     if(!this_mon->cmd_pid) { // child
+        // reset all signal handlers to default before unblocking
+        struct sigaction defaultme;
+        sigemptyset(&defaultme.sa_mask);
+        defaultme.sa_handler = SIG_DFL;
+        defaultme.sa_flags = 0;
+
+        // we really don't care about error retvals here
+        for(unsigned i = 0; i < NSIG; i++)
+            (void)sigaction(i, &defaultme, NULL);
+
+        // unblock all
+        sigset_t no_sigs;
+        sigemptyset(&no_sigs);
+        if(pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
+            log_fatal("pthread_sigmask() failed");
+
         // technically, we could go ahead and close off stdout/stderr
         //   here for the "startfg" case, but why bother?  If the user
         //   is debugging via startfg they might want to see this crap anyways.
         execv(this_mon->cmd->args[0], (char* const *)this_mon->cmd->args);
         log_fatal("execv(%s, ...) failed: %s", this_mon->cmd->args[0], dmn_logf_strerror(errno));
     }
+
+    // restore previous signal mask from before fork in parent
+    if(pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
+        log_fatal("pthread_sigmask() failed");
 
     this_mon->result_pending = true;
     ev_timer_set(this_mon->cmd_timeout, this_mon->cmd->timeout, 0);
@@ -196,6 +239,7 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
 static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_WRITE);
 
+    dmn_assert(plugin_write_fd > -1);
     while(!sendq_empty()) {
         const uint32_t data = sendq_deq_peek();
         int rv = write(plugin_write_fd, &data, 4);
@@ -221,6 +265,54 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
         sendq_deq_commit();
     }
     ev_io_stop(loop, w); // queue now empty
+
+    if(killed_by) { // we've sent our final message, close
+        close(plugin_write_fd);
+        plugin_write_fd = -1;
+    }
+}
+
+F_NONNULL
+static void die_gracefully(struct ev_loop* loop) {
+    dmn_assert(loop);
+
+    dmn_assert(killed_by);
+    static bool done_once = false;
+    if(!done_once) { // avoid repetition
+        done_once = true;
+        // send friendly death message to plugin
+        sendq_enq(emc_encode_exit());
+        ev_io_start(loop, plugin_write_watcher);
+        // kill interval timers for future invocations
+        //   and immediately clamp the remaining timeout
+        //   for any running commands to 2.0s.
+        for(unsigned i = 0; i < num_mons; i++) {
+            ev_timer_stop(loop, mons[i].interval_timer);
+            if(ev_is_active(mons[i].cmd_timeout)) {
+                if(ev_timer_remaining(loop, mons[i].cmd_timeout) > 2.0) {
+                    ev_timer_stop(loop, mons[i].cmd_timeout);
+                    ev_timer_set(mons[i].cmd_timeout, 2.0, 0.);
+                    ev_timer_start(loop, mons[i].cmd_timeout);
+                }
+            }
+        }
+    }
+}
+
+F_NONNULL
+static void sig_cb(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_SIGNAL);
+    switch(w->signum) {
+        case SIGINT:
+        case SIGTERM:
+        case SIGHUP:
+            killed_by = w->signum;
+            dmn_log_info("Got terminal signal %i, starting graceful exit", killed_by);
+            die_gracefully(loop);
+            break;
+        default:
+            dmn_assert(0);
+    }
 }
 
 int main(int argc, char** argv) {
@@ -316,8 +408,21 @@ int main(int argc, char** argv) {
     struct ev_loop* def_loop = ev_default_loop(EVFLAG_AUTO);
     if(!def_loop) log_fatal("Could not initialize the default libev loop");
 
+    // Catch SIGINT/TERM/HUP, and do not let them prevent loop exit
+    sigterm_watcher = xmalloc(sizeof(ev_signal));
+    sigint_watcher = xmalloc(sizeof(ev_signal));
+    sighup_watcher = xmalloc(sizeof(ev_signal));
+    ev_signal_init(sigterm_watcher, sig_cb, SIGTERM);
+    ev_signal_init(sigint_watcher, sig_cb, SIGINT);
+    ev_signal_init(sighup_watcher, sig_cb, SIGHUP);
+    ev_signal_start(def_loop, sigterm_watcher);
+    ev_signal_start(def_loop, sigint_watcher);
+    ev_signal_start(def_loop, sighup_watcher);
+    ev_unref(def_loop);
+    ev_unref(def_loop);
+    ev_unref(def_loop);
+
     // set up primary read/write watchers on the pipe to the daemon's plugin
-    plugin_read_watcher = xmalloc(sizeof(ev_io));
     plugin_write_watcher = xmalloc(sizeof(ev_io));
     ev_io_init(plugin_write_watcher, plugin_write_cb, plugin_write_fd, EV_WRITE);
     ev_set_priority(plugin_write_watcher, 1);
@@ -346,13 +451,44 @@ int main(int argc, char** argv) {
 
     log_info("gdnsd_extmon_helper running");
     ev_run(def_loop, 0);
-    log_info("gdnsd_extmon_helper terminating");
 
-    // kill -9 on any extant child procs
-    for(unsigned i = 0; i < num_mons; i++)
-        if(mons[i].cmd_pid)
+    // graceful shutdown should have cleared out children, but
+    // the hard kill/wait below is for (a) ungraceful shutdown
+    // on unexpected pipe close and (b) anything else going wrong
+    // during graceful shutdown.
+    bool needs_wait = false;
+    for(unsigned i = 0; i < num_mons; i++) {
+        if(mons[i].cmd_pid) {
+            log_debug("not-so-graceful shutdown: sending SIGKILL to %li", (long)mons[i].cmd_pid);
             kill(mons[i].cmd_pid, SIGKILL);
+            needs_wait = true;
+        }
+    }
+
+    if(needs_wait) {
+        unsigned i = 500; // 5s for OS to give us all the SIGKILL'd zombies
+        while(i--) {
+            pid_t wprv = waitpid(-1, NULL, WNOHANG);
+            if(wprv < 0) {
+                if(errno == ECHILD)
+                    break;
+                else
+                    log_fatal("waitpid(-1, NULL, WNOHANG) failed: %s", dmn_logf_errno());
+            }
+            if(wprv)
+                log_debug("not-so-graceful shutdown: waitpid reaped %li", (long)wprv);
+            const struct timespec ms_10 = { 0, 10000000 };
+            nanosleep(&ms_10, NULL);
+        }
+    }
 
     // Bye!
-    exit(0);
+    if(killed_by) {
+        log_info("gdnsd_extmon_helper exiting gracefully due to signal %i", killed_by);
+        raise(killed_by);
+    }
+    else {
+        log_info("gdnsd_extmon_helper exiting un-gracefully");
+        exit(42);
+    }
 }

@@ -100,4 +100,8 @@ uint32_t gdnsd_lookup2(const char *k, uint32_t len);
 F_NONNULL
 size_t gdnsd_dirent_bufsize(DIR* d V_UNUSED, const char* dirname);
 
+// Register a child process that exists for the life of the daemon, so that
+//   the core can SIGTERM and reap it on clean shutdown.
+void gdnsd_register_child_pid(pid_t child);
+
 #endif // GDNSD_MISC_H
