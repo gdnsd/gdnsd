@@ -69,17 +69,11 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr) {
     const int mtu_type = IP_PMTUDISC_DONT;
     if(setsockopt(sock, SOL_IP, IP_MTU_DISCOVER, &mtu_type, sizeof (mtu_type)) == -1)
         log_fatal("Failed to disable Path MTU Discovery for UDP socket: %s", dmn_logf_errno());
-#elif defined IP_DONTFRAG
+#endif
+#if defined IP_DONTFRAG
     const int opt_zero = 0;
     if(setsockopt(sock, SOL_IP, IP_DONTFRAG, &opt_zero, sizeof (opt_zero)) == -1)
         log_fatal("Failed to disable DF bit for UDP socket: %s", dmn_logf_errno());
-#endif
-
-    // This is just a latency hack, it's not necessary for correct operation
-#if defined IP_TOS && defined IPTOS_LOWDELAY
-    const int opt_tos = IPTOS_LOWDELAY;
-    if(setsockopt(sock, SOL_IP, IP_TOS, &opt_tos, sizeof opt_tos) == -1)
-        log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", dmn_logf_errno());
 #endif
 
     if(any_addr) {
@@ -99,6 +93,14 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr) {
         log_fatal("IPv4 any-address '0.0.0.0' not supported for DNS listening on your platform (no IP_PKTINFO or IP_RECVDSTADDR+IP_SENDSRCADDR)");
 #endif
     }
+
+    // This is just a latency hack, it's not necessary for correct operation
+#if defined IP_TOS && defined IPTOS_LOWDELAY
+    const int opt_tos = IPTOS_LOWDELAY;
+    if(setsockopt(sock, SOL_IP, IP_TOS, &opt_tos, sizeof opt_tos) == -1)
+        log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", dmn_logf_errno());
+#endif
+
 }
 
 /* Here, we assume that if neither IPV6_USE_MIN_MTU or IPV6_MTU is
@@ -132,14 +134,32 @@ static void udp_sock_opts_v6(const int sock) {
     if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", dmn_logf_errno());
 
+#if defined IPV6_MTU_DISCOVER && defined IPV6_PMTUDISC_DONT
+    const int mtu_type = IPV6_PMTUDISC_DONT;
+    if(setsockopt(sock, SOL_IPV6, IPV6_MTU_DISCOVER, &mtu_type, sizeof (mtu_type)) == -1)
+        log_fatal("Failed to disable Path MTU Discovery for UDP socket: %s", dmn_logf_errno());
+#endif
+#if defined IPV6_DONTFRAG
+    const int opt_zero = 0;
+    if(setsockopt(sock, SOL_IPV6, IPV6_DONTFRAG, &opt_zero, sizeof (opt_zero)) == -1)
+        log_fatal("Failed to disable DF bit for UDP socket: %s", dmn_logf_errno());
+#endif
+
+#if defined IPV6_RECVPKTINFO
+    if(setsockopt(sock, SOL_IPV6, IPV6_RECVPKTINFO, &opt_one, sizeof opt_one) == -1)
+        log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", dmn_logf_errno());
+#elif defined IPV6_PKTINFO
+    if(setsockopt(sock, SOL_IPV6, IPV6_PKTINFO, &opt_one, sizeof opt_one) == -1)
+        log_fatal("Failed to set IPV6_PKTINFO on UDP socket: %s", dmn_logf_errno());
+#else
+#   error IPV6_RECVPKTINFO or IPV6_PKTINFO required; this host lacks both
+#endif
+
 #if defined IPV6_TCLASS && defined IPTOS_LOWDELAY
     const int opt_tos = IPTOS_LOWDELAY;
     if(setsockopt(sock, SOL_IPV6, IPV6_TCLASS, &opt_tos, sizeof opt_tos) == -1)
         log_fatal("Failed to set IPTOS_LOWDELAY on UDP socket: %s", dmn_logf_errno());
 #endif
-
-    if(setsockopt(sock, SOL_IPV6, IPV6_RECVPKTINFO, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", dmn_logf_errno());
 }
 
 F_NONNULL
