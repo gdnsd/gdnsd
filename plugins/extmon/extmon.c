@@ -31,6 +31,11 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+// hopefully everyone defines this
+#ifndef NSIG
+#  define NSIG 100
+#endif
+
 typedef struct {
     char* name;
     char** args;
