@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <dirent.h>
+#include <sys/types.h>
 
 extern const char gdnsd_lcmap[256];
 
