@@ -89,7 +89,7 @@ struct _gdnsd_una32 { uint32_t x; } S_PACKED;
 #define gdnsd_put_una32(_v,_p) (((struct _gdnsd_una32*)(_p))->x) = (_v)
 
 // Valgrind hooks for debug builds
-#if !defined(NDEBUG) && defined(HAVE_VALGRIND_MEMCHECK_H)
+#if !defined(NDEBUG) && defined(HAVE_VALGRIND_MEMCHECK_H) && !defined(_CPPCHECK)
 #  include <valgrind/memcheck.h>
 #define NOWARN_VALGRIND_MAKE_MEM_NOACCESS(x,y) \
     do { int _x V_UNUSED; _x = VALGRIND_MAKE_MEM_NOACCESS(x,y); } while(0)
