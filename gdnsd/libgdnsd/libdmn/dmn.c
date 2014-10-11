@@ -172,6 +172,7 @@ static params_t params = {
 typedef struct {
     phase_t phase;
     bool    syslog_alive;
+    bool    sd_booted;
     bool    running_under_sd;
     pid_t   helper_pid_reap;
     int     pipe_to_helper[2];
@@ -183,6 +184,7 @@ typedef struct {
 static state_t state = {
     .phase            = PHASE0_UNINIT,
     .syslog_alive     = false,
+    .sd_booted        = false,
     .running_under_sd = false,
     .helper_pid_reap  = 0,
     .pipe_to_helper   = { -1, -1 },
@@ -341,7 +343,7 @@ bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_aliv
 #ifndef __linux__
 
 // skip all systemd-related things on non-linux
-#define dmn_set_running_under_sd(_x) ((void)0)
+#define dmn_detect_systemd(_x) ((void)0)
 #define dmn_sd_notify(_x,_y) ((void)0)
 
 #else
@@ -358,16 +360,16 @@ bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_aliv
 //   systemd properly as they don't actually make functional use
 //   of NOTIFY_SOCKET.  As of systemd-208, they don't seem to get
 //   it set anyways, in spite of NotifyAccess=all, so the getppid()
-//   check is their only recourse here.  If that check becomes
-//   obsolete because of a future systemd change (where ExecStop
-//   might not be executed with PPID=1), the worst-case fallout
-//   is just duplicate messages to the journal.
-static void dmn_set_running_under_sd(const bool use_syslog) {
+//   and MAINPID checks are their only recourse here.
+static void dmn_detect_systemd(const bool use_syslog) {
     struct stat st;
-    state.running_under_sd =
-        (getenv("NOTIFY_SOCKET") || getppid() == 1)
-        && !lstat("/run/systemd/system/", &st)
-        && S_ISDIR(st.st_mode);
+    state.sd_booted = !lstat("/run/systemd/system/", &st) && S_ISDIR(st.st_mode);
+    state.running_under_sd = state.sd_booted && (
+           getenv("NOTIFY_SOCKET")
+        || getenv("MAINPID")
+        || getppid() == 1
+    );
+
     if(state.running_under_sd) {
         dmn_log_debug("Running within systemd control");
         if(!params.foreground)
@@ -610,7 +612,7 @@ void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name) {
     if(!name)
         dmn_log_fatal("BUG: dmn_init1(): argument 'name' is *required*");
 
-    dmn_set_running_under_sd(use_syslog);
+    dmn_detect_systemd(use_syslog);
     if(use_syslog) {
         openlog(params.name, LOG_NDELAY|LOG_PID, LOG_DAEMON);
         state.syslog_alive = true;
@@ -721,6 +723,15 @@ void dmn_init3(const char* username, const bool restart) {
 
     params.restart = restart;
     params.invoked_as_root = !geteuid();
+
+    if(restart) {
+        if(state.running_under_sd)
+            dmn_log_fatal("Do not use the 'restart' action from a systemd unit file; it does not work correctly there");
+
+        // This kind of sucks, but I don't know what else to do for now
+        if(state.sd_booted)
+            dmn_log_warn("If the current %s daemon is running as a systemd service, you should use 'systemctl restart %s' rather than this command.  This command may succeed, but the replacement daemon will *not* be a systemd service anymore!", params.name, params.name);
+    }
 
     if(username && params.invoked_as_root) {
         params.username = strdup(username);
