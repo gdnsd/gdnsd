@@ -163,6 +163,15 @@ in these cases, on the order of <1s.
 C<SO_REUSEPORT> became available in Linux starting with kernel
 version 3.9.  BSDs have had it for much longer.
 
+Note: C<restart> will B<not> work correctly for a daemon that's running
+under systemd, no matter how it's executed.  Executing it from the
+commandline will sort-of work in that it will replace the daemon that's
+running as a systemd service with one that isn't a systemd service, but
+that probably isn't what you want to do.  Those running under systemd
+will need to use e.g.  C<systemctl restart gdnsd>, which will do a full
+serial stop -> start cycle, in order for configuration changes to take
+effect.
+
 =item B<reload-zones>
 
 Sends C<SIGUSR1> to the running daemon, forcing a manual re-check
@@ -171,6 +180,13 @@ only be necessary if the configuration option C<zones_rfc1035_auto>
 has been explicitly set to C<false>, disabling the default mode
 where gdnsd continuously monitors for and loads zonefile data
 changes.
+
+It is not advised to set up an initscript C<reload> action which
+invokes C<reload-zones>, as a future version of gdnsd will very likely
+include a true reload action for full re-configuration without
+restart.  It's better to leave the canonical reload action undefined
+for now to reduce incompatibilities and/or surprises when that update
+occurs.
 
 =item B<condrestart>
 
@@ -411,6 +427,20 @@ Example unit file contents for the Service section:
     NotifyAccess=all
     ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
     ExecStop=@GDNSD_SBINDIR@/gdnsd stop
+
+It is not advised to set up C<ExecReload=@GDNSD_SBINDIR@/gdnsd reload-zones>
+to re-purpose the systemctl reload action for zone reloads, as a future
+version of gdnsd will very likely include a real option for full configuration
+reload under systemd, which would change this behavior.  It's better to leave
+the canonical reload action undefined for now to reduce incompatibilities
+and/or surprises when that update occurs.  It is even less advised to
+try to configure C<ExecReload=@GDNSD_SBINDIR@/gdnsd restart>, as this
+will B<not> work!
+
+In general, if you're running gdnsd as a systemd service, you should use
+the supplied style of unit file and use C<systemctl> for daemon control
+(e.g. start, stop, restart, status), and use C<@GDNSD_SBINDIR@/gdnsd reload-zones>
+for zone reloads.
 
 =head1 SIGNALS
 
