@@ -40,11 +40,13 @@ static bool reuseport_ok = false;
 void gdnsd_init_net(void) {
     struct protoent* pe;
 
+    // cppcheck-suppress nonreentrantFunctionsgetprotobyname (init time, no threads)
     pe = getprotobyname("tcp");
     if(!pe)
         log_fatal("getprotobyname('tcp') failed");
     tcp_proto = pe->p_proto;
 
+    // cppcheck-suppress nonreentrantFunctionsgetprotobyname (init time, no threads)
     pe = getprotobyname("udp");
     if(!pe)
         log_fatal("getprotobyname('udp') failed");

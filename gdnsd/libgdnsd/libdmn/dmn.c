@@ -726,6 +726,7 @@ void dmn_init3(const char* username, const bool restart) {
         params.username = strdup(username);
         if(params.invoked_as_root) {
             errno = 0;
+            // cppcheck-suppress nonreentrantFunctionsgetpwnam (init time, no threads)
             struct passwd* p = getpwnam(username);
             if(!p) {
                 if(errno)
