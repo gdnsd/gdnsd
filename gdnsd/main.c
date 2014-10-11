@@ -628,6 +628,10 @@ int main(int argc, char** argv) {
         }
     }
 
+    // let newer versions of systemd know what's going on
+    //  in the case the int/term sig came from outside
+    dmn_sd_notify("STOPPING=1", true);
+
     // get rid of child procs (e.g. extmon helper)
     gdnsd_kill_registered_children();
 

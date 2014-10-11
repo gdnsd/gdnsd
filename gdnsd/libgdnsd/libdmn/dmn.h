@@ -170,6 +170,12 @@ void dmn_logger(int level, const char* fmt, ...);
 DMN_F_NONNULLX(2)
 void dmn_loggerv(int level, const char* fmt, va_list ap);
 
+// If running under systemd, send it a message over the
+//   notification socket.  If !optional and the message
+//   cannot be sent, a fatal error will be thrown.
+DMN_F_NONNULL
+void dmn_sd_notify(const char* notify_msg, const bool optional);
+
 // The intended simple API for logging with 5 separate
 //  function-call-like interfaces with different levels.
 // The _fatal variant exits after emitting the logged statement,

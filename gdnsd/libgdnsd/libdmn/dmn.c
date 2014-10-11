@@ -344,7 +344,13 @@ bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_aliv
 
 // skip all systemd-related things on non-linux
 #define dmn_detect_systemd(_x) ((void)0)
-#define dmn_sd_notify(_x,_y) ((void)0)
+
+void dmn_sd_notify(const char* notify_msg, const bool optional) {
+    if(optional)
+        dmn_log_debug("notify: %s", notify_msg);
+    else
+        dmn_log_info("notify: %s", notify_msg);
+}
 
 #else
 
@@ -391,7 +397,7 @@ static void dmn_detect_systemd(const bool use_syslog) {
 // This is mostly copied from systemd sources (from before
 // the sd_pid_notify() changes, which aren't relevant in
 // our case), and just updated to match local style + conditions.
-static void dmn_sd_notify(const char *notify_msg, const bool optional) {
+void dmn_sd_notify(const char *notify_msg, const bool optional) {
     dmn_assert(notify_msg);
 
     if(!state.running_under_sd)
