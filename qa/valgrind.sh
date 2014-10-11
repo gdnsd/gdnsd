@@ -10,7 +10,7 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-CFLAGS="-O0" ./configure --enable-developer --prefix=/tmp/_gdnsd_inst --with-rootdir=/tmp/_gdnsd_inst/root
+CFLAGS="-O0" ./configure --enable-developer --prefix=/tmp/_gdnsd_inst --without-systemdsystemunitdir
 make clean all
 make check-download
 make install
