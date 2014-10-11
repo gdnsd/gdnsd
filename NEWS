@@ -2,6 +2,9 @@
   *** Bugfixes:
     * Fixed JSON stats output (was malformed; missing commas
       in the service state portion of the output).
+    * Several relatively-benign deficiencies related to
+      daemonization, logging, and/or process control were fixed
+      throughout the source tree.
     * Syslog output was not being generated if compiled using
       --with-systemd, but not actually running under systemd.
       (obviated/fixed by the changes below)
