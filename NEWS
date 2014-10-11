@@ -5,6 +5,7 @@
     * Several relatively-benign deficiencies related to
       daemonization, logging, and/or process control were fixed
       throughout the source tree.
+    * Path MTU Discovery is now properly disabled on UDPv6 sockets
     * Syslog output was not being generated if compiled using
       --with-systemd, but not actually running under systemd.
       (obviated/fixed by the changes below)
@@ -29,10 +30,14 @@
 
   *** syslog/stdio behavior (relevant mostly for initscripts):
     * New commandline flag "-x" suppresses syslog output completely.
+      (This is intended for testsuites and linting invocations of
+      checkconf and such, not for runtime use).
     * When the gdnsd binary hasn't fully daemonized yet (meaning the
       initial process has not yet exited, regardless of command/mode),
       Info- and Debug- level messages are output to stdout, while
-      messages of severity Warning and higher are output to stderr.
+      messages of severity Warning and higher are output to stderr
+      (unless we're running under systemd, in which case we stop using
+      stdio as soon as syslog is open to avoid journal duplicates).
       Everything is mirrored to syslog regardless unless the -x cmdline
       flag is used.
     * If you don't want any gdnsd command output interfering with e.g.
