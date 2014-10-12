@@ -246,7 +246,7 @@ static void zfhash_del(zfile_t* zf) {
     zf_delete(zf);
 }
 
-F_NONNULL
+F_NONNULL F_PURE
 static zfile_t* zfhash_find(const char* zfn) {
     dmn_assert(zfn);
 

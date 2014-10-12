@@ -1637,7 +1637,7 @@ static unsigned construct_normal_response(unsigned offset, const ltree_rrset_t* 
 // XXX - really, the necessity of this is sort of the last straw on the current scheme involving
 //  the interactions of ctx->qname_comp, ctx->auth_comp, lqname, store_dname(), search_ltree(), and CNAME
 //  processing.  It's too complex to understand easily and needs refactoring.
-F_NONNULL
+F_NONNULL F_PURE
 static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned auth_depth) {
     dmn_assert(packet); dmn_assert(offset);
     dmn_assert(offset < 65536);

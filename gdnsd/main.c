@@ -80,7 +80,7 @@ static void atexit_debug_execute(void) { }
 
 #endif
 
-F_NONNULL
+F_NONNULL F_NORETURN
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, dmn_logf_errno()); }
 
 F_NONNULL F_NORETURN

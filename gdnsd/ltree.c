@@ -717,7 +717,7 @@ bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* 
 
 // It is critical that get/add_rrset_rfc3597 are not called with
 //  rrtype set to the number of other known, explicitly supported types...
-F_NONNULL
+F_NONNULL F_PURE
 static ltree_rrset_rfc3597_t* ltree_node_get_rrset_rfc3597(const ltree_node_t* node, const unsigned rrtype) {
     dmn_assert(node);
     ltree_rrset_t* rrsets = node->rrsets;

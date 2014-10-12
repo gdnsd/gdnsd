@@ -53,7 +53,7 @@ typedef struct {
 static unsigned num_mons = 0;
 static mon_t* mons = NULL;
 
-F_NONNULL
+F_NONNULL F_NORETURN
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, dmn_logf_errno()); }
 
 static int plugin_read_fd = -1;

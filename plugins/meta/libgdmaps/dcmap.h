@@ -29,7 +29,7 @@ typedef struct _dcmap dcmap_t;
 
 F_NONNULL
 dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto);
-F_NONNULL
+F_NONNULL F_PURE
 int dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr);
 F_NONNULL
 void dcmap_destroy(dcmap_t* dcmap);

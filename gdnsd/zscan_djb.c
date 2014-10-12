@@ -94,6 +94,7 @@ void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t *zone) {
     *zd = nzd;
 }
 
+F_PURE
 zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t* zd, const uint8_t* dname, int exact) {
     zscan_djb_zonedata_t* best = NULL;
 

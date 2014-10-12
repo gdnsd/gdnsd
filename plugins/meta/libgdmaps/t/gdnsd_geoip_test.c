@@ -39,6 +39,7 @@
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
+F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr, "\nUsage: %s [-c %s] [map_name addr]\n"
         "  -c\t\tgdnsd config dir, see main gdnsd(8) manpage for details\n"

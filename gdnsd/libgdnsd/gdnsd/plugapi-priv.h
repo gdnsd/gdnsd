@@ -43,10 +43,12 @@ struct dyn_result {
 //   point forward (can be cached locally).
 // Return value is the offset into dyn_result.storage where
 //   IPv6 address data begins
+F_PURE
 unsigned gdnsd_result_get_v6_offset(void);
 
 // Same rules as above, returns the memory size that
 //   should be allocated for dyn_result
+F_PURE
 unsigned gdnsd_result_get_alloc(void);
 
 // MUST call this before loading plugins below,

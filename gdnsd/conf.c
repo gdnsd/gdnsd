@@ -283,7 +283,7 @@ static void process_http_listen(vscf_data_t* http_listen_opt, const unsigned def
     }
 }
 
-F_NONNULL
+F_NONNULL F_PURE
 static bool dns_addr_is_dupe(const dmn_anysin_t* new_addr) {
     dmn_assert(new_addr);
     dmn_assert(new_addr->sa.sa_family == AF_INET6 || new_addr->sa.sa_family == AF_INET);

@@ -73,7 +73,7 @@ static unsigned map_get_len(const unsigned mapnum) {
     return dclists[mapnum]->num_dcs;
 }
 
-F_NONNULL
+F_NONNULL F_PURE
 static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
     dmn_assert(dcname);
     dmn_assert(mapnum < num_dclists);

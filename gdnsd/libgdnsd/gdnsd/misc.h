@@ -94,6 +94,7 @@ uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs);
 bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z);
 
 // Jenkins lookup2
+F_PURE
 uint32_t gdnsd_lookup2(const char *k, uint32_t len);
 
 // Get system/filesystem-specific dirent buffer size for readdir_r() safely
