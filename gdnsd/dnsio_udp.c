@@ -272,7 +272,7 @@ void udp_sock_setup(dns_thread_t* t) {
 #define CMSG_BUFSIZE 256
 
 F_NORETURN F_NONNULL
-static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg) {
+static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     dmn_assert(stats);
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
@@ -341,7 +341,7 @@ static void mainloop(const int fd, dnspacket_stats_t* stats, const bool use_cmsg
         }
         else {
             asin.len = msg_hdr.msg_namelen;
-            iov.iov_len = process_dns_query(&asin, buf, buf_in_len);
+            iov.iov_len = process_dns_query(dnsp_ctx, stats, &asin, buf, buf_in_len);
             if(likely(iov.iov_len)) {
                 const int sent = sendmsg(fd, &msg_hdr, 0);
                 if(unlikely(sent < 0)) {
@@ -367,7 +367,7 @@ static bool has_mmsg(void) {
 }
 
 F_NORETURN F_NONNULL
-static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t* stats, const bool use_cmsg) {
+static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     dmn_assert(stats);
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
@@ -445,7 +445,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, dnspacket_stats_t*
                 }
                 else {
                     asin[i].len = dgrams[i].msg_hdr.msg_namelen;
-                    iov[i][0].iov_len = process_dns_query(&asin[i], buf[i], dgrams[i].msg_len);
+                    iov[i][0].iov_len = process_dns_query(dnsp_ctx, stats, &asin[i], buf[i], dgrams[i].msg_len);
                 }
             }
 
@@ -527,7 +527,8 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     const dns_addr_t* addrconf = t->ac;
 
-    dnspacket_stats_t* stats = dnspacket_init(t->threadnum, true);
+    dnspacket_stats_t* stats = dnspacket_stats_init(t->threadnum, true);
+    void* dnsp_ctx = dnspacket_ctx_init(true);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -549,11 +550,11 @@ void* dnsio_udp_start(void* thread_asvoid) {
     if(addrconf->udp_recv_width > 1) {
         log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
             addrconf->udp_recv_width, dmn_logf_anysin(&addrconf->addr));
-        mainloop_mmsg(addrconf->udp_recv_width, t->sock, stats, need_cmsg);
+        mainloop_mmsg(addrconf->udp_recv_width, t->sock, dnsp_ctx, stats, need_cmsg);
     }
     else
 #endif
     {
-        mainloop(t->sock, stats, need_cmsg);
+        mainloop(t->sock, dnsp_ctx, stats, need_cmsg);
     }
 }
