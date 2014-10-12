@@ -271,7 +271,7 @@ void udp_sock_setup(dns_thread_t* t) {
 // A reasonable guess for v4/v6 dstaddr pktinfo + cmsg header?
 #define CMSG_BUFSIZE 256
 
-F_NORETURN F_NONNULL
+F_HOT F_NORETURN F_NONNULL
 static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     dmn_assert(stats);
 
@@ -366,7 +366,7 @@ static bool has_mmsg(void) {
     return rv;
 }
 
-F_NORETURN F_NONNULL
+F_HOT F_NORETURN F_NONNULL
 static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     dmn_assert(stats);
 

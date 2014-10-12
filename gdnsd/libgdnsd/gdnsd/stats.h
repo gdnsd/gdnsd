@@ -66,23 +66,23 @@ typedef uintptr_t stats_uint_t;
 typedef struct { stats_uint_t _x; } stats_t;
 
 // stats_own_set() -> set the stats value from the owner thread only
-F_NONNULL
-static inline void stats_own_set(stats_t* s, const stats_uint_t v)
+F_NONNULL F_UNUSED
+static void stats_own_set(stats_t* s, const stats_uint_t v)
     { dmn_assert(s); s->_x = v; }
 
 // stats_own_inc() -> increment stats value from the owner thread only
-F_NONNULL
-static inline void stats_own_inc(stats_t* s)
+F_NONNULL F_UNUSED
+static void stats_own_inc(stats_t* s)
     { dmn_assert(s); s->_x++; }
 
 // stats_own_get() -> read the value from the owner thread
-F_NONNULL
-static inline stats_uint_t stats_own_get(const stats_t* s)
+F_NONNULL F_UNUSED
+static stats_uint_t stats_own_get(const stats_t* s)
     { dmn_assert(s); return s->_x; }
 
 // stats_get() -> read the value from any other thread
-F_NONNULL
-static inline stats_uint_t stats_get(const stats_t* s)
+F_NONNULL F_UNUSED
+static stats_uint_t stats_get(const stats_t* s)
     { dmn_assert(s); return *(volatile stats_uint_t*)&s->_x; }
 
 #endif // GDNSD_STATS_H

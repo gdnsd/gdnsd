@@ -70,7 +70,7 @@ typedef struct {
   stats_t edns_clientsub;
 } dnspacket_stats_t;
 
-F_NONNULL
+F_HOT F_NONNULL
 unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const dmn_anysin_t* asin, uint8_t* packet, const unsigned packet_len);
 
 F_MALLOC

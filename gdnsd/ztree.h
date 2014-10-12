@@ -42,7 +42,9 @@
 #  define get_mtimens(_xst) 0
 #  define has_mtimens 0
 #endif
-static inline uint64_t get_extended_mtime(const struct stat* st) {
+
+F_UNUSED
+static uint64_t get_extended_mtime(const struct stat* st) {
     return (((uint64_t)st->st_mtime) * 1000000000ULL)
         + (uint64_t)get_mtimens(*st);
 }
@@ -107,7 +109,7 @@ void zone_delete(zone_t* zone);
 // auth_depth_out is mostly useful for dnspacket.c, it tells you
 //   how many bytes into the dname the authoritative zone name
 //   starts at.
-F_NONNULL
+F_HOT F_NONNULL
 zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 
 #endif // GDNSD_ZTREE_H

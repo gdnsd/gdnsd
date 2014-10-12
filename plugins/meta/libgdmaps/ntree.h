@@ -31,7 +31,7 @@
 // ipv6 is a uint8_t[16]
 // bit is 0->127 (MSB -> LSB)
 F_NONNULL F_UNUSED
-static inline void SETBIT_v6(uint8_t* ipv6, const unsigned bit) {
+static void SETBIT_v6(uint8_t* ipv6, const unsigned bit) {
     dmn_assert(ipv6);
     dmn_assert(bit < 128);
     ipv6[bit >> 3] |= (1UL << (~bit & 7));

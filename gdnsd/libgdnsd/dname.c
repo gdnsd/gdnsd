@@ -194,23 +194,6 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
     }
 }
 
-gdnsd_dname_status_t gdnsd_dname_from_raw(uint8_t* restrict dname, const uint8_t* restrict raw) {
-    unsigned offset = 0;
-    unsigned llen;
-    while((llen = raw[offset])) {
-        llen++; // include len byte itself
-        if(offset + llen > 254)
-            return DNAME_INVALID;
-        memcpy(&dname[offset + 1], &raw[offset], llen);
-        offset += llen;
-    }
-    dname[++offset] = 0;
-    dname[0] = offset;
-
-    return DNAME_VALID;
-}
-
-
 gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2) {
     dmn_assert(dname_status(dn1) != DNAME_INVALID);
     dmn_assert(dname_status(dn2) != DNAME_INVALID);
@@ -267,31 +250,6 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
     }
 
     return DNAME_VALID;
-}
-
-bool gdnsd_dname_isinzone(const uint8_t* zone, const uint8_t* dname) {
-    dmn_assert(zone); dmn_assert(dname);
-    dmn_assert(dname_status(zone) == DNAME_VALID);
-    dmn_assert(dname_status(dname) == DNAME_VALID);
-
-    const unsigned plen = *zone++;
-    const unsigned clen = *dname++;
-
-    if(plen <= clen) {
-        int ldiff = clen - plen;
-        dmn_assert(ldiff > -1);
-        if(!memcmp(dname + ldiff, zone, plen)) {
-            while(ldiff > 0) {
-                ldiff--;
-                const unsigned cllen = *dname++;
-                dname += cllen;
-                ldiff -= cllen;
-            }
-            if(ldiff == 0) return true;
-        }
-    }
-
-    return false;
 }
 
 bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child) {

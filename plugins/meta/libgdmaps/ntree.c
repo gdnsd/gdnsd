@@ -138,7 +138,7 @@ void ntree_assert_optimal(const ntree_t* tree) {
 #endif
 
 F_NONNULL
-static inline bool CHKBIT_v6(const uint8_t* ipv6, const unsigned bit) {
+static bool CHKBIT_v6(const uint8_t* ipv6, const unsigned bit) {
     dmn_assert(ipv6);
     dmn_assert(bit < 128);
     return ipv6[bit >> 3] & (1UL << (~bit & 7));
@@ -163,7 +163,7 @@ static unsigned ntree_lookup_v6(const ntree_t* tree, const uint8_t* ip, unsigned
     return NN_GET_DCLIST(offset);
 }
 
-static inline bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit) {
+static bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit) {
     dmn_assert(maskbit < 32U);
     return ip & (1U << (31U - maskbit));
 }

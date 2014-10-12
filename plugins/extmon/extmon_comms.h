@@ -58,8 +58,8 @@ extmon_cmd_t* emc_read_command(const int fd);
 // these uin32_t results are the only runtime traffic, and
 // they only flow in the helper->plugin direction
 
-F_CONST
-static inline uint32_t emc_encode_mon(const unsigned idx, const bool failed) {
+F_CONST F_UNUSED
+static uint32_t emc_encode_mon(const unsigned idx, const bool failed) {
     dmn_assert(idx < 0x10000);
     return (idx << 16)
         | (failed
@@ -69,14 +69,18 @@ static inline uint32_t emc_encode_mon(const unsigned idx, const bool failed) {
 }
 
 // send/recv helper-exit
-static inline uint32_t emc_encode_exit(void) { return 0xFFFFFFFF; }
-static inline bool emc_decode_is_exit(const uint32_t data) { return !!(data == 0xFFFFFFFF); }
+F_CONST F_UNUSED
+static uint32_t emc_encode_exit(void) { return 0xFFFFFFFF; }
+F_CONST F_UNUSED
+static bool emc_decode_is_exit(const uint32_t data) { return !!(data == 0xFFFFFFFF); }
 
-static inline unsigned emc_decode_mon_idx(const uint32_t data) {
+F_CONST F_UNUSED
+static unsigned emc_decode_mon_idx(const uint32_t data) {
     return (data >> 16);
 }
 
-static inline bool emc_decode_mon_failed(const uint32_t data) {
+F_UNUSED
+static bool emc_decode_mon_failed(const uint32_t data) {
     const unsigned failflag = data & 0xFFFF;
     bool rv = true;
     if(failflag == (((unsigned)'O' << 8) | (unsigned)'K')) {

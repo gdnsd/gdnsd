@@ -48,7 +48,7 @@ struct _ztree_struct {
 // This is how readers access ->zones for a zone_t*
 //   (while under a read lock section, of course)
 F_NONNULL
-static inline zone_t* ztree_reader_get_zone(const ztree_t* zt) {
+static zone_t* ztree_reader_get_zone(const ztree_t* zt) {
     dmn_assert(zt);
     zone_t** temp = gdnsd_prcu_rdr_deref(zt->zones);
     return temp ? *temp : NULL;
@@ -136,7 +136,7 @@ static int zone_cmp(zone_t* za, zone_t* zb) {
 
 /******* ztree code *********/
 
-static inline unsigned label_hash(const uint8_t* label) {
+static unsigned label_hash(const uint8_t* label) {
     const unsigned len = *label++;
     return gdnsd_lookup2((const char*)label, len);
 }

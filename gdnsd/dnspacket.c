@@ -605,6 +605,20 @@ static unsigned store_dname(dnsp_ctx_t* ctx, const unsigned pkt_dname_offset, co
     }
 }
 
+F_NONNULL
+static void dname_from_raw(uint8_t* restrict dname, const uint8_t* restrict raw) {
+    unsigned offset = 0;
+    unsigned llen;
+    while((llen = raw[offset])) {
+        llen++; // include len byte itself
+        dmn_assert(offset + llen <= 254);
+        memcpy(&dname[offset + 1], &raw[offset], llen);
+        offset += llen;
+    }
+    dname[++offset] = 0;
+    dname[0] = offset;
+}
+
 // We know a given name was stored at packet+orig_offset already.  We
 //  want to repeat it at (packet|addtl_store)+store_at_offset, using
 //  compression if possible and warranted, but not pointer-to-pointer.
@@ -645,9 +659,7 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
                 //  not fully-compressed.
                 dmn_assert(is_addtl);
                 uint8_t dntmp[256];
-                dname_status_t dnstat V_UNUSED
-                    = gdnsd_dname_from_raw(dntmp, &inpkt[orig_offset]);
-                dmn_assert(dnstat == DNAME_VALID);
+                dname_from_raw(dntmp, &inpkt[orig_offset]);
                 rv = store_dname(ctx, store_at_offset, dntmp, true);
             }
         }

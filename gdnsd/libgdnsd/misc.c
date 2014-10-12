@@ -154,69 +154,6 @@ void gdnsd_thread_setname(const char* n V_UNUSED) {
     #endif
 }
 
-/***************
- * This Public-Domain JLKISS64 PRNG implementation is from:
- * http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
- * I've made cosmetic modifications (style, C99)
- *  and given it a state pointer for threading, and renamed
- *  it into the gdnsd API namespace so it can be swapped out
- *  easily later.
- * I've also wrapped everything up such that there's one
- *  global PRNG initialized at startup from decent sources,
- *  which is mutex-protected and used to set seeds for later
- *  runtime per-thread/plugin PRNG initializations, and provided
- *  a buffer to use one iteration of jlkiss64 to generate
- *  2x numbers in 32-bit space.
- * This seems at least as fast as jkiss32 for the 32-bit
- *  results on modern 64-bit CPUs, has much longer periods
- *  and is more resilient in general, and it gives us the
- *  option to burn a little extra CPU on 64-bit PRNG results when
- *  warranted.
- ***************/
-
-struct _gdnsd_rstate_t {
-    uint64_t x;
-    uint64_t y;
-    uint32_t z1;
-    uint32_t c1;
-    uint32_t z2;
-    uint32_t c2;
-    uint32_t buf32;
-    bool buf32_ok;
-};
-
-uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) {
-    dmn_assert(rs);
-
-    uint64_t t;
-
-    rs->x = 1490024343005336237ULL * rs->x + 123456789;
-    rs->y ^= rs->y << 21;
-    rs->y ^= rs->y >> 17;
-    rs->y ^= rs->y << 30;
-    t = 4294584393ULL * rs->z1 + rs->c1;
-    rs->c1 = t >> 32; rs->z1 = t;
-    t = 4246477509ULL * rs->z2 + rs->c2;
-    rs->c2 = t >> 32; rs->z2 = t;
-    return rs->x + rs->y + rs->z1 + ((uint64_t)rs->z2 << 32);
-}
-
-uint32_t gdnsd_rand_get32(gdnsd_rstate_t* rs) {
-    dmn_assert(rs);
-
-    if(rs->buf32_ok) {
-       rs->buf32_ok = false;
-       return rs->buf32;
-    }
-    else {
-       rs->buf32_ok = true;
-       uint64_t new = gdnsd_rand_get64(rs);
-       rs->buf32 = (uint32_t)new;
-       new >>= 32;
-       return (uint32_t)new;
-    }
-}
-
 static pthread_mutex_t rand_init_lock = PTHREAD_MUTEX_INITIALIZER;
 static gdnsd_rstate_t rand_init_state = { 0, 0, 0, 0, 0, 0, 0, false };
 
@@ -330,66 +267,6 @@ bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned 
             rv = true;
     }
     return rv;
-}
-
-// gdnsd_lookup2 is lookup2() by Bob Jenkins,
-//   from http://www.burtleburtle.net/bob/c/lookup2.c,
-//   which is in the public domain.
-// It's just been reformatted/styled to match my code.
-
-#define mix(a,b,c) { \
-    a -= b; a -= c; a ^= (c>>13); \
-    b -= c; b -= a; b ^= (a<<8);  \
-    c -= a; c -= b; c ^= (b>>13); \
-    a -= b; a -= c; a ^= (c>>12); \
-    b -= c; b -= a; b ^= (a<<16); \
-    c -= a; c -= b; c ^= (b>>5);  \
-    a -= b; a -= c; a ^= (c>>3);  \
-    b -= c; b -= a; b ^= (a<<10); \
-    c -= a; c -= b; c ^= (b>>15); \
-}
-
-uint32_t gdnsd_lookup2(const char *k, uint32_t len) {
-    dmn_assert(k || !len);
-
-    const uint32_t orig_len = len;
-
-    uint32_t a = 0x9e3779b9;
-    uint32_t b = 0x9e3779b9;
-    uint32_t c = 0xdeadbeef;
-
-    while(len >= 12) {
-        a += (k[0] + ((uint32_t)k[1]  << 8)
-                   + ((uint32_t)k[2]  << 16)
-                   + ((uint32_t)k[3]  << 24));
-        b += (k[4] + ((uint32_t)k[5]  << 8)
-                   + ((uint32_t)k[6]  << 16)
-                   + ((uint32_t)k[7]  << 24));
-        c += (k[8] + ((uint32_t)k[9]  << 8)
-                   + ((uint32_t)k[10] << 16)
-                   + ((uint32_t)k[11] << 24));
-        mix(a,b,c);
-        k += 12; len -= 12;
-    }
-
-    c += orig_len;
-
-    switch(len) {
-        case 11: c += ((uint32_t)k[10] << 24);
-        case 10: c += ((uint32_t)k[9]  << 16);
-        case 9 : c += ((uint32_t)k[8]  << 8);
-        case 8 : b += ((uint32_t)k[7]  << 24);
-        case 7 : b += ((uint32_t)k[6]  << 16);
-        case 6 : b += ((uint32_t)k[5]  << 8);
-        case 5 : b += k[4];
-        case 4 : a += ((uint32_t)k[3]  << 24);
-        case 3 : a += ((uint32_t)k[2]  << 16);
-        case 2 : a += ((uint32_t)k[1]  << 8);
-        case 1 : a += k[0];
-    }
-
-    mix(a,b,c);
-    return c;
 }
 
 size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {

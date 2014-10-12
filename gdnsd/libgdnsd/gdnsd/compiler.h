@@ -41,8 +41,10 @@
 #  define F_WUNUSED       __attribute__((__warn_unused_result__))
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
 #    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
+#    define F_HOT           __attribute__((__hot__))
 #  else
 #    define F_ALLOCSZ(...)
+#    define F_HOT
 #  endif
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
 #    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
@@ -69,6 +71,7 @@
 #  define F_NONNULL
 #  define F_WUNUSED
 #  define F_ALLOCSZ(...)
+#  define F_HOT
 #  define F_ALLOCAL(_x)
 #  define F_RETNN
 #endif
