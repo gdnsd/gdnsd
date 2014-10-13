@@ -92,7 +92,7 @@ vscf_data_t* vscf_get_parent(const vscf_data_t* d);
 
 // Get the length of a simple string value
 F_NONNULL
-unsigned vscf_simple_get_len(const vscf_data_t* d);
+unsigned vscf_simple_get_len(vscf_data_t* d);
 
 // Get a const pointer to the simple string itself (note that
 //  the format allows embedded NULs, hence the need for a length).
@@ -100,17 +100,17 @@ unsigned vscf_simple_get_len(const vscf_data_t* d);
 //  one byte past the official end of string data.  For many cases
 //  this allows one to use them as NUL-terminated strings.
 F_NONNULL
-const char* vscf_simple_get_data(const vscf_data_t* d);
+const char* vscf_simple_get_data(vscf_data_t* d);
 
 // Return value indicates type-conversion success or failure (whether the
 //  data was exactly convertible), output stored in out.  The numeric
 //  conversions are per the rules of strtoul, strtol, and strtod and must
 //  consume the entire string.  The bool conversion requires the data
 //  to be the string "true" or "false" in any mix of upper/lower case.
-F_NONNULL bool vscf_simple_get_as_ulong(const vscf_data_t* d, unsigned long* out);
-F_NONNULL bool vscf_simple_get_as_long(const vscf_data_t* d, long* out);
-F_NONNULL bool vscf_simple_get_as_double(const vscf_data_t* d, double* out);
-F_NONNULL bool vscf_simple_get_as_bool(const vscf_data_t* d, bool* out);
+F_NONNULL bool vscf_simple_get_as_ulong(vscf_data_t* d, unsigned long* out);
+F_NONNULL bool vscf_simple_get_as_long(vscf_data_t* d, long* out);
+F_NONNULL bool vscf_simple_get_as_double(vscf_data_t* d, double* out);
+F_NONNULL bool vscf_simple_get_as_bool(vscf_data_t* d, bool* out);
 
 // Get a simple value as a "dname"-formatted domainname, according to
 //  the same basic rules and return value as gdnsd_dname_from_string()

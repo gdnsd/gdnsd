@@ -458,9 +458,8 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
 }
 
 F_NONNULL
-static void vscf_simple_ensure_val(const vscf_simple_t* cs) {
-    dmn_assert(cs);
-    vscf_simple_t* s = (vscf_simple_t*)cs; // kill const...
+static void vscf_simple_ensure_val(vscf_simple_t* s) {
+    dmn_assert(s);
     if(!s->val)
         s->len = unescape_string(&s->val, s->rval, s->rlen);
 }
@@ -824,13 +823,13 @@ bool vscf_is_hash(const vscf_data_t* d) { dmn_assert(d); return d->type == VSCF_
 bool vscf_is_root(const vscf_data_t* d) { dmn_assert(d); return d->parent == NULL; }
 vscf_data_t* vscf_get_parent(const vscf_data_t* d) { dmn_assert(d); return d->parent; }
 
-unsigned vscf_simple_get_len(const vscf_data_t* d) {
+unsigned vscf_simple_get_len(vscf_data_t* d) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     return d->simple.len;
 }
 
-const char* vscf_simple_get_data(const vscf_data_t* d) {
+const char* vscf_simple_get_data(vscf_data_t* d) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     return d->simple.val;
@@ -943,7 +942,7 @@ void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f) {
         d->hash.ordered[i]->index = i;
 }
 
-bool vscf_simple_get_as_ulong(const vscf_data_t* d, unsigned long* out) {
+bool vscf_simple_get_as_ulong(vscf_data_t* d, unsigned long* out) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
     dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
@@ -961,7 +960,7 @@ bool vscf_simple_get_as_ulong(const vscf_data_t* d, unsigned long* out) {
     return true;
 }
 
-bool vscf_simple_get_as_long(const vscf_data_t* d, long* out) {
+bool vscf_simple_get_as_long(vscf_data_t* d, long* out) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
     dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
@@ -979,7 +978,7 @@ bool vscf_simple_get_as_long(const vscf_data_t* d, long* out) {
     return true;
 }
 
-bool vscf_simple_get_as_double(const vscf_data_t* d, double* out) {
+bool vscf_simple_get_as_double(vscf_data_t* d, double* out) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
     dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
@@ -997,7 +996,7 @@ bool vscf_simple_get_as_double(const vscf_data_t* d, double* out) {
     return true;
 }
 
-bool vscf_simple_get_as_bool(const vscf_data_t* d, bool* out) {
+bool vscf_simple_get_as_bool(vscf_data_t* d, bool* out) {
     dmn_assert(d); dmn_assert(vscf_is_simple(d));
     dmn_assert(out);
     vscf_simple_ensure_val(&d->simple);
