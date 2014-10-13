@@ -46,7 +46,7 @@ changes and/or solicit your feedback!).
 
 =head1 OVERVIEW
 
-This file documents version 15 of the gdnsd plugin API.
+This file documents versions 15-16 of the gdnsd plugin API.
 
 L<gdnsd>'s plugin API offers the ability to write plugins that can
 do either (or both) of two roles:
@@ -487,9 +487,9 @@ its matching set of changes.
 
 =head1 RECENT API CHANGES
 
-=head2 Version 15
+=head2 Version 15/16
 
-This corresponds with the release of 2.0.0
+This corresponds with the release of 2.0.0 and 2.1.0
 
 The changes below are versus Version 12 (final gdnsd 1.x API version).
 Versions 13 and 14 only existed in development releases and were moving
@@ -540,6 +540,10 @@ C<_load_config()> as appropriate).
 The type C<vscf_data_t*> in callback arguments used to be C<const>, and now it is
 not.  Similar changes occured in many places in the vscf API in general.  Just remove
 const from your plugin's local vscf pointers and recompile.
+
+Version 16 was bumped just to require a recompile (some formerly-exported funcs
+became inlines, some const changes in signatures, etc), but is mostly the same
+as 15 otherwise.
 
 =head1 SEE ALSO
 
