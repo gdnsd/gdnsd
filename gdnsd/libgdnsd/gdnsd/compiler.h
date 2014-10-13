@@ -20,12 +20,14 @@
 #ifndef GDNSD_COMPILER_H
 #define GDNSD_COMPILER_H
 
-// GCC features we can take advantage of
+// Compiler features we can take advantage of
 
-#ifdef __GNUC__
-#  if __GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4)
-#    error Your GCC is way too old (< 3.4)...
-#  endif
+#if defined __GNUC__ && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
+#  error Your GCC is way too old (< 3.4)...
+#endif
+
+// Basic features common to clang and gcc
+#if defined __clang__ || defined __GNUC__
 #  define HAVE_BUILTIN_CLZ 1
 #  define likely(_x)      __builtin_expect(!!(_x), 1)
 #  define unlikely(_x)    __builtin_expect(!!(_x), 0)
@@ -39,40 +41,84 @@
 #  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
 #  define F_NONNULL       __attribute__((__nonnull__))
 #  define F_WUNUSED       __attribute__((__warn_unused_result__))
+#endif
+
+// Newer features
+#ifdef __clang__
+#  if __has_attribute(hot)
+#    define F_HOT           __attribute__((__hot__))
+#  endif
+#  if __has_attribute(alloc_size)
+#    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
+#  endif
+#  if __has_attribute(alloc_align)
+#    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
+#  endif
+#  if __has_attribute(returns_nonnull)
+#    define F_RETNN         __attribute__((__returns_nonnull__))
+#  endif
+#elif defined __GNUC__
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
 #    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
 #    define F_HOT           __attribute__((__hot__))
-#  else
-#    define F_ALLOCSZ(...)
-#    define F_HOT
 #  endif
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
 #    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
 #    define F_RETNN         __attribute__((__returns_nonnull__))
-#  else
-#    define F_ALLOCAL(_x)
-#    define F_RETNN
 #  endif
-#else // Other C99+ compilers...
-#  define likely(_x)      (!!(_x))
-#  define unlikely(_x)    (!!(_x))
-#  define V_UNUSED
-#  define F_UNUSED
-#  define F_CONST
-#  define F_PURE
-#  define F_MALLOC
+#endif
+
+// defaults for unknown compilers and things left unset above
+#ifndef F_NORETURN
 #  if __STDC_VERSION__ >= 201112L // C11
 #    define F_NORETURN _Noreturn
 #  else
 #    define F_NORETURN
 #  endif
+#endif
+#ifndef likely
+#  define likely(_x) (!!(_x))
+#endif
+#ifndef unlikely
+#  define unlikely(_x) (!!(_x))
+#endif
+#ifndef   V_UNUSED
+#  define V_UNUSED
+#endif
+#ifndef   F_UNUSED
+#  define F_UNUSED
+#endif
+#ifndef   F_CONST
+#  define F_CONST
+#endif
+#ifndef   F_PURE
+#  define F_PURE
+#endif
+#ifndef   F_MALLOC
+#  define F_MALLOC
+#endif
+#ifndef   F_NOINLINE
 #  define F_NOINLINE
+#endif
+#ifndef   F_NONNULLX
 #  define F_NONNULLX(...)
+#endif
+#ifndef   F_NONNULL
 #  define F_NONNULL
+#endif
+#ifndef   F_WUNUSED
 #  define F_WUNUSED
+#endif
+#ifndef   F_ALLOCSZ
 #  define F_ALLOCSZ(...)
+#endif
+#ifndef   F_HOT
 #  define F_HOT
+#endif
+#ifndef   F_ALLOCAL
 #  define F_ALLOCAL(_x)
+#endif
+#ifndef   F_RETNN
 #  define F_RETNN
 #endif
 

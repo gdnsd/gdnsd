@@ -33,22 +33,22 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-// gcc function attributes
-#if defined __GNUC__ && __GNUC__ >= 3 // gcc 3.0+
+// gcc/clang features
+
+#if defined __GNUC__ && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
+#  error Your GCC is way too old (< 3.4)...
+#endif
+
+#if defined __clang__ || defined __GNUC__
 #  define DMN_F_PRINTF(X,Y)   __attribute__((__format__(__printf__, X, Y)))
-#  if __GNUC__ > 3 || __GNUC_MINOR__ > 2 // gcc 3.3+
-#    define DMN_F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
-#    define DMN_F_NONNULL       __attribute__((__nonnull__))
-#  else
-#    define DMN_F_NONNULLX(...)
-#    define DMN_F_NONNULL
-#  endif
-#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 4) // gcc 4.5+
-#    define DMN_HAVE_UNREACH_BUILTIN 1
-#  elif defined __clang__ // clang needs a separate check for unreach
+#  define DMN_F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
+#  define DMN_F_NONNULL       __attribute__((__nonnull__))
+#  if defined __clang__
 #    if __has_builtin(__builtin_unreachable)
 #      define DMN_HAVE_UNREACH_BUILTIN 1
 #    endif
+#  elif __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
+#    define DMN_HAVE_UNREACH_BUILTIN 1
 #  endif
 #else
 #  define DMN_F_PRINTF(X,Y)
