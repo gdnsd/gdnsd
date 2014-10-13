@@ -637,10 +637,8 @@ void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name) {
     if(sigaction(SIGPIPE, &sa_ign, NULL))
         dmn_log_fatal("sigaction(SIGPIPE, SIG_IGN) failed: %s", dmn_logf_errno());
 
-    // set umask and cwd early for consistency
+    // set umask early for consistency
     umask(022);
-    if(chdir("/"))
-        dmn_log_fatal("chdir(/) failed: %s", dmn_logf_errno());
 }
 
 void dmn_init2(const char* pid_dir) {
@@ -798,6 +796,13 @@ static FILE* _dup_write_stream(FILE* old, const char* old_name) {
 
 void dmn_fork(void) {
     phase_check(PHASE3_INIT3, PHASE5_SECURED, 1);
+
+    // I moved this up to init1() once, but that messed up
+    //   relative configdir paths on the commandline because
+    //   init1() happens after dealing with those in conf_load(), etc
+    // Maybe this can be reconsidered during a later refactor.
+    if(chdir("/"))
+        dmn_log_fatal("chdir(/) failed: %s", dmn_logf_errno());
 
     // whether this invocation needs a forked helper process.
     // In background cases, we always need this to hold the
