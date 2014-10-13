@@ -715,7 +715,8 @@ void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
 
     pthread_attr_t attribs;
     pthread_attr_init(&attribs);
-    pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
 
     sigset_t sigmask_all;
     sigfillset(&sigmask_all);
