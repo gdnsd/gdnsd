@@ -208,14 +208,14 @@ static unsigned num_pcalls = 0;
     } \
     if(_unique) {\
         static unsigned _call_count = 0; \
-        if(++_call_count > 1) \
+        if(_call_count++) \
             dmn_log_fatal("BUG: %s can only be called once and was already called!", __func__); \
     } \
     if(_after && state.phase < _after) \
         dmn_log_fatal("BUG: %s must be called after %s", __func__, phase_actor[_after]); \
     if(_before && state.phase >= _before) \
         dmn_log_fatal("BUG: %s must be called before %s", __func__, phase_actor[_before]); \
-} while(0);
+} while(0)
 
 /***********************************************************
 ***** Logging **********************************************
