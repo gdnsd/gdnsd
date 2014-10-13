@@ -125,7 +125,7 @@ static void usage(const char* argv0) {
             " none"
 #       endif
 
-        "\nFor updates, bug reports, etc, please visit " PACKAGE_URL "\n",
+        "\nFor updates, bug reports, etc, please visit " PKG_URL "\n",
         argv0, gdnsd_get_default_config_dir()
     );
     exit(2);

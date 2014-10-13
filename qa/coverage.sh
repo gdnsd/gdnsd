@@ -14,7 +14,7 @@ set -e
 
 git clean -dfx
 autoreconf -vi
-CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --disable-developer
+CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --disable-developer --without-hardening
 make
 
 lcov -c -i -d . -o gdnsd-base.info --rc lcov_branch_coverage=1

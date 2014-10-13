@@ -49,6 +49,11 @@ Interesting / Non-standard autoconf options
 --without-urcu
   Explicitly disable support for liburcu (falls back to pthread rwlocks)
 
+--without-hardening
+  Disable the default compiler/linker flags for security hardening.
+  Probably not a great idea unless they're breaking things on your
+  platform and/or you're supplying replacement flags of your own.
+
 --enable-developer
   Builds a debugging build (-g) with a lot of extra gcc warnings
     flags, a large suite of assert()ions, and extra

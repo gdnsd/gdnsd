@@ -6,9 +6,11 @@ AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
-# For autoconf < 2.63b this has to be manual, but this is the "right" name
-#   to use for the 2.63b+ AC_INIT version of the same
-AC_DEFINE([PACKAGE_URL],["https://github.com/gdnsd/gdnsd/"],[Package URL])
+# We're compatible to autoconf 2.63, which doesn't have PACKAGE_URL
+#   as a final arg to AC_INIT.  We can't define it ourselves here
+#   with the same name as this causes compiler warnings that matter
+#   during other parts of ./configure.  So, pick a new name for now.
+AC_DEFINE([PKG_URL],["https://github.com/gdnsd/gdnsd/"],[Package URL])
 
 # TODO: when/if a new autoconf release has a C11 macro,
 #    prefer that and fall back to requiring C99.
@@ -26,6 +28,8 @@ AC_C_VARARRAYS
 if test "x$ac_cv_c_vararrays" = xno; then
     AC_MSG_ERROR([Your compiler lacks support for variable arrays])
 fi
+
+AM_PROG_CC_C_O
 
 # POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
@@ -54,6 +58,84 @@ LT_LIB_DLLOAD
 AC_SUBST([LIBTOOL_DEPS])
 AC_SUBST([LIBADD_DLOPEN])
 LIBS=$XLIBS
+
+# Check for --enable-developer
+developer=no
+AC_ARG_ENABLE([developer],
+    [  --enable-developer      Turn on gcc developer warnings, debugging, etc (default=no)],
+    [if test "x$enable_developer" = xyes; then developer=yes; fi])
+
+# normal builds set -DNDEBUG because we make very very heavy
+#   use of assertions that really slow stuff down.
+# --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
+if test "x$developer" != xno; then
+    AC_DEFINE([DEBUG_RCU], 1, [liburcu verification checks])
+    AC_DEFINE([RCU_DEBUG], 1, [liburcu verification checks])
+else
+    CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
+fi
+
+harden=1
+AC_ARG_WITH([hardening],[AS_HELP_STRING([--without-hardening],
+    [Disable compiler/linker flags for security hardening])],[
+    if test "x$withval" = xno; then
+        harden=0
+    fi
+])
+HARDEN_COMPILER=
+HARDEN_LINKER=
+CFLAGS_PIE=
+LDFLAGS_PIE=
+if test $harden = 1; then
+    AS_CASE([$CFLAGS], [*-O[[1-6]]*], [CPPFLAGS="-D_FORTIFY_SOURCE=2 ${CPPFLAGS}"])
+    HARDEN_COMPILER="-fstack-protector-all -ftrapv"
+    HARDEN_LINKER="-Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack"
+    AX_APPEND_COMPILE_FLAGS([-fPIE],[CFLAGS_PIE],[])
+    AX_APPEND_LINK_FLAGS([-pie],[LDFLAGS_PIE],[])
+fi
+
+AC_SUBST([CFLAGS_PIE])
+AC_SUBST([LDFLAGS_PIE])
+AX_APPEND_LINK_FLAGS([$HARDEN_LINKER -Wl,--as-needed],[LDFLAGS],[])
+AX_APPEND_COMPILE_FLAGS([\
+    $HARDEN_COMPILER \
+    -fno-common \
+    -Wall \
+    -Wextra \
+    -Wbad-function-cast \
+    -Wcast-align \
+    -Wclobbered \
+    -Wempty-body \
+    -Wendif-labels \
+    -Wfloat-equal \
+    -Wformat=2 \
+    -Wformat-nonliteral \
+    -Wformat-security \
+    -Wignored-qualifiers \
+    -Winit-self \
+    -Wlogical-op \
+    -Wmissing-declarations \
+    -Wmissing-field-initializers \
+    -Wmissing-include-dirs \
+    -Wmissing-parameter-type \
+    -Wmissing-prototypes \
+    -Wold-style-declaration \
+    -Wold-style-definition \
+    -Woverride-init \
+    -Wpointer-arith \
+    -Wredundant-decls \
+    -Wshadow \
+    -Wsign-compare \
+    -Wstack-protector \
+    -Wstrict-aliasing=3 \
+    -Wstrict-overflow=5 \
+    -Wstrict-prototypes \
+    -Wtype-limits \
+    -Wundef \
+    -Wuninitialized \
+    -Wunused \
+    -Wwrite-strings \
+],[CFLAGS],[-Werror])
 
 # include libdmn configure stuff
 m4_include([gdnsd/libgdnsd/libdmn/libdmn.m4])
@@ -310,35 +392,6 @@ AC_ARG_WITH([testport],[AS_HELP_STRING([--with-testport=N],
 TESTPORT_START=$with_testport
 AC_SUBST([TESTPORT_START])
 
-# Check for --enable-developer
-developer=no
-AC_ARG_ENABLE([developer],
-    [  --enable-developer      Turn on gcc developer warnings, debugging, etc (default=no)],
-    [if test "x$enable_developer" = xyes; then developer=yes; fi])
-
-# normal builds set -DNDEBUG because we make very very heavy
-#   use of assertions that really slow stuff down, and also
-#   adds "-Wall -W" to CFLAGS if the compiler is gcc.
-# --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
-#   and also sets "-g" for debug if the compiler supports it,
-#   and sets a ton of gcc 4.x extra warnings flags.
-GCC_WARNFLAGS="-Wall -W -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wshadow -Wredundant-decls -Wwrite-strings -Wformat=2"
-GCC_DEV_WARNFLAGS="${GCC_WARNFLAGS} -Wpointer-arith -Wfloat-equal -Wcast-align"
-if test "x$developer" != xno; then
-  if test "x$ac_cv_c_compiler_gnu" = xyes; then
-    CFLAGS="${CFLAGS} -g ${GCC_DEV_WARNFLAGS}"
-  elif test "x$ac_cv_prog_cc_g" = xyes; then
-    CFLAGS="${CFLAGS} -g"
-  fi
-  AC_DEFINE([DEBUG_RCU], 1, [liburcu verification checks])
-  AC_DEFINE([RCU_DEBUG], 1, [liburcu verification checks])
-else
-  if test "x$ac_cv_c_compiler_gnu" = xyes; then
-    CFLAGS="${CFLAGS} ${GCC_WARNFLAGS}"
-  fi
-  CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
-fi
-
 AC_CHECK_HEADERS([valgrind/memcheck.h])
 
 # Allow specifying an alternate rundir (default $localstatedir/run) for distros
@@ -403,10 +456,13 @@ else
     fi
 fi
 CFSUM_TP=$TESTPORT_START
-
+echo "======================================="
+echo "CPPFLAGS: $CPPFLAGS"
+echo "CFLAGS: $CFLAGS $CFLAGS_PIE"
+echo "LDFLAGS: $LDFLAGS $LDFLAGS_PIE"
 echo "======================================="
 echo "| Configuration Summary:"
-echo "| Developer Build?            $CFSUM_DEV"
+echo "| Developer Build:            $CFSUM_DEV"
 echo "| Userspace-rcu support:      $CFSUM_QSBR"
 echo "| Linux sendmmsg support:     $CFSUM_SENDMMSG"
 echo "| Linux inotify support:      $CFSUM_INOTIFY"
