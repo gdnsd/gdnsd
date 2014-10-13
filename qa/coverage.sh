@@ -12,14 +12,12 @@ fi
 set -x
 set -e
 
-git clean -dfx
-autoreconf -vi
 CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --disable-developer --without-hardening
-make
+make clean all
+make check-download
 
 lcov -c -i -d . -o gdnsd-base.info --rc lcov_branch_coverage=1
 
-make check-download
 make check
 
 lcov -c -d . -o gdnsd-test.info --rc lcov_branch_coverage=1

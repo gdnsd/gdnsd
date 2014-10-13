@@ -485,7 +485,11 @@ int main(int argc, char** argv) {
     // Bye!
     if(killed_by) {
         log_info("gdnsd_extmon_helper exiting gracefully due to signal %i", killed_by);
+#ifdef COVERTEST_EXIT
+        exit(0);
+#else
         raise(killed_by);
+#endif
     }
     else {
         log_info("gdnsd_extmon_helper exiting un-gracefully");

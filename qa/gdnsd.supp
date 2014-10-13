@@ -1,41 +1,34 @@
 # Valgrind suppression data
-# These suppress valgrind leak warnings about
-#   per-thread data with process-lifetime scope
-#   which isn't stored in global storage anywhere,
-#   which we never clean up when an iothread is cancelled
 
+# valgrind+glibc DSO+TLS thread issue
 {
-  ev_loop_new
+  dso_tls_glibc
   Memcheck:Leak
-  ...
-  fun:ev_loop_new
-}
-{
-  ev_loop_destroy
-  Memcheck:Leak
-  ...
-  fun:ev_loop_destroy
-}
-{
-  dnsio_tcp_tctx
-  Memcheck:Leak
-  fun:malloc
-  fun:dnsio_tcp_start
-}
-{
-  dnspacket_init
-  Memcheck:Leak
-  ...
-  fun:dnspacket_init
+  fun:memalign
+  fun:tls_get_addr_tail
+  fun:init_rand
+  fun:plugin_weighted_iothread_init
 }
 
-# also, we don't explicitly terminate threads in the normal case
+# Seems to be some kind of fallout from the above...
 {
-  pthreads_unkilled
+  weighted_init_rand
+  Memcheck:Leak
+  fun:calloc
+  fun:gdnsd_xcalloc
+  fun:gdnsd_rand_init
+  fun:init_rand
+  fun:plugin_weighted_iothread_init
+}
+
+# also, we don't explicitly terminate threads in the normal case,
+#  and valgrind has a bug where it treats creation with the detached
+#  attribute differently from create()->detach()
+{
+  pthreads_detached
   Memcheck:Leak
   ...
   fun:pthread_create*
-  ...
 }
 
 # This one is a little different.  libev's code
