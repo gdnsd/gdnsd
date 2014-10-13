@@ -56,11 +56,16 @@
 
 // These control the growth of the log formatting-buffer space
 // These define the buffer count, size of first buffer, and shift
-//   value sets how fast the buffer sizes grow
-// At these settings (4, 10, 2), the buffer sizes are:
-//   1024, 4096, 16384, 65536
+//   value for the size increases.
+// At these settings (4, 8, 2), the buffer sizes are:
+//   256, 1024, 4096, 16384
+// This means the program will abort with a buffer exhaustion
+//   message if someone tries to log a message containing
+//   >~21K of custom-formatted strings (or less if they're
+//   chunky, because we don't split allocations across
+//   buffer boundaries).
 #define FMTBUF_CT     4U
-#define FMTBUF_START 10U
+#define FMTBUF_START  8U
 #define FMTBUF_STEP   2U
 
 /***********************************************************
@@ -117,20 +122,6 @@ static const char* phase_actor[] = {
 // makes sides of int[] from pipe() clearer
 static const unsigned PIPE_RD = 0;
 static const unsigned PIPE_WR = 1;
-
-/***********************************************************
-***** Static per-thread data *******************************
-***********************************************************/
-
-// This is our log-formatting buffer.  It holds multiple buffers
-//   of increasing size (see constants) above which are allocated
-//   per-thread as-needed, permanently for the life of the thread.
-typedef struct {
-    unsigned used[FMTBUF_CT];
-    char* bufs[FMTBUF_CT];
-} fmtbuf_t;
-
-static __thread fmtbuf_t fmtbuf = {{0},{NULL}};
 
 /***********************************************************
 ***** Static process-global data ***************************
@@ -221,38 +212,58 @@ static unsigned num_pcalls = 0;
 ***** Logging **********************************************
 ***********************************************************/
 
-// Allocate a chunk from the per-thread format buffer
-char* dmn_fmtbuf_alloc(unsigned size) {
-    phase_check(0, 0, 0);
+// private to the two functions below it
+static char* _fmtbuf_common(const unsigned size) {
+    // This is our log-formatting buffer.  It holds multiple buffers
+    //   of increasing size (see constants above) which are allocated
+    //   per-thread as-needed, permanently for the life of the thread.
+    static __thread struct {
+        unsigned used[FMTBUF_CT];
+        char* bufs[FMTBUF_CT];
+    } fmtbuf = {{0},{NULL}};
+
     char* rv = NULL;
 
-    unsigned bsize = 1U << FMTBUF_START;
-    for(unsigned i = 0; i < FMTBUF_CT; i++) {
-        if(!fmtbuf.bufs[i]) {
-            fmtbuf.bufs[i] = malloc(bsize);
-            if(!fmtbuf.bufs[i])
-                dmn_log_fatal("memory allocation failure!");
+    // Allocate a chunk from the per-thread format buffer
+    if(size) {
+        unsigned bsize = 1U << FMTBUF_START;
+        for(unsigned i = 0; i < FMTBUF_CT; i++) {
+            if(!fmtbuf.bufs[i]) {
+                fmtbuf.bufs[i] = malloc(bsize);
+                if(!fmtbuf.bufs[i])
+                    dmn_log_fatal("memory allocation failure!");
+            }
+            if((bsize - fmtbuf.used[i]) >= size) {
+                rv = &fmtbuf.bufs[i][fmtbuf.used[i]];
+                fmtbuf.used[i] += size;
+                break;
+            }
+            bsize <<= FMTBUF_STEP;
         }
-        if((bsize - fmtbuf.used[i]) >= size) {
-            rv = &fmtbuf.bufs[i][fmtbuf.used[i]];
-            fmtbuf.used[i] += size;
-            break;
-        }
-        bsize <<= FMTBUF_STEP;
+    }
+    // Reset (free allocations within) the format buffer,
+    else {
+        for(unsigned i = 0; i < FMTBUF_CT; i++)
+            fmtbuf.used[i] = 0;
     }
 
-    if(!rv)
-        dmn_log_fatal("BUG: format buffer exhausted");
     return rv;
 }
 
-// Reset (free allocations within) the format buffer,
-//  but do not trigger initial allocation in the process
+// Public (including this file) interfaces to _fmtbuf_common()
+char* dmn_fmtbuf_alloc(const unsigned size) {
+    phase_check(0, 0, 0);
+    char* rv = NULL;
+    if(size) {
+        rv = _fmtbuf_common(size);
+        if(!rv)
+            dmn_log_fatal("BUG: format buffer exhausted");
+    }
+    return rv;
+}
 void dmn_fmtbuf_reset(void) {
     phase_check(0, 0, 0);
-
-    for(unsigned i = 0; i < FMTBUF_CT; i++)
-        fmtbuf.used[i] = 0;
+    _fmtbuf_common(0);
 }
 
 // dmn_logf_strerror(), which hides GNU or POSIX strerror_r() thread-safe

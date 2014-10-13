@@ -259,7 +259,8 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
 //
 //  dmn_log_warn("The integer had value %s!", my_int_formatter(someint));
 //
-char* dmn_fmtbuf_alloc(unsigned size);
+// if size==0, the retval will be NULL
+char* dmn_fmtbuf_alloc(const unsigned size);
 
 // Reset (free allocations within) the format buffer.  Do not use this
 //  with the normal log functions.  If you use the fmtbuf-based formatters
