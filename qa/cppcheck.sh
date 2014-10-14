@@ -54,4 +54,9 @@ set -e
 # yes, source tree must be buildable and built (mostly because of the
 # "generated" gdnsd/dmn.h include)
 make
-cppcheck -j4 --std=c99 --std=posix --enable=warning,performance,portability,information,style,missingInclude --platform=unix64 $INCDIRS $SKIPFILES $DEFS --inline-suppr --force --quiet --error-exitcode=42 .
+for plat in unix64 unix32; do
+  cppcheck -j4 --platform=$plat --std=c99 --std=posix \
+    --enable=warning,performance,portability,information,style,missingInclude \
+    --inline-suppr --force --quiet --error-exitcode=42 \
+    $INCDIRS $SKIPFILES $DEFS .
+done
