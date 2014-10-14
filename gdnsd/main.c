@@ -628,6 +628,9 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Ask statio thread to send final stats to the log
+    statio_final_stats();
+
     // let newer versions of systemd know what's going on
     //  in the case the int/term sig came from outside
     dmn_sd_notify("STOPPING=1", true);
@@ -637,6 +640,9 @@ int main(int argc, char** argv) {
 
     // deallocate resources in debug mode
     atexit_debug_execute();
+
+    // wait for stats thread to finish logging request
+    statio_final_stats_wait();
 
     // Restore normal signal mask
     if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))

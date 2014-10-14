@@ -24,6 +24,7 @@
 #include <time.h>
 #include <string.h>
 #include <sys/uio.h>
+#include <pthread.h>
 
 #include "conf.h"
 #include "socks.h"
@@ -193,6 +194,7 @@ static time_t start_time;
 static time_t pop_statio_time = 0;
 static ev_timer* log_watcher = NULL;
 static ev_io** accept_watchers;
+static struct ev_loop* statio_loop = NULL;
 static int* lsocks;
 static unsigned num_lsocks;
 static bool* lsocks_bound;
@@ -200,6 +202,12 @@ static unsigned num_conn_watchers = 0;
 static unsigned data_buffer_size = 0;
 static unsigned hdr_buffer_size = 0;
 static statio_t statio;
+
+// coordination for final stats output
+static ev_async* final_stats_async = NULL;
+static pthread_mutex_t final_stats_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t final_stats_cond = PTHREAD_COND_INITIALIZER;
+static bool final_stats_done = false;
 
 static void accumulate_statio(unsigned threadnum) {
     dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
@@ -664,11 +672,47 @@ bool statio_check_socks(bool soft) {
     return rv;
 }
 
-void statio_start(struct ev_loop* statio_loop) {
-    dmn_assert(statio_loop);
+// called within our thread/loop to do the final stats output
+F_NONNULL
+static void final_stats_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
+    dmn_assert(loop); dmn_assert(w);
 
+    // stop further periodic log output and do final output
+    if(log_watcher)
+        ev_timer_stop(loop, log_watcher);
+    statio_log_stats();
+
+    // let mainthread return from statio_final_stats_wait()
+    pthread_mutex_lock(&final_stats_mutex);
+    final_stats_done = true;
+    pthread_cond_signal(&final_stats_cond);
+    pthread_mutex_unlock(&final_stats_mutex);
+}
+
+// called from main thread to feed ev_async for final stats
+void statio_final_stats(void) {
+    dmn_assert(statio_loop); dmn_assert(final_stats_async);
+    ev_async_send(statio_loop, final_stats_async);
+}
+
+// called from main thread to wait on final_stats_cb() completion
+void statio_final_stats_wait(void) {
+    pthread_mutex_lock(&final_stats_mutex);
+    while(!final_stats_done)
+        pthread_cond_wait(&final_stats_cond, &final_stats_mutex);
+    pthread_mutex_unlock(&final_stats_mutex);
+}
+
+void statio_start(struct ev_loop* statio_loop_arg) {
+    dmn_assert(statio_loop_arg);
+
+    statio_loop = statio_loop_arg;
     if(log_watcher)
         ev_timer_start(statio_loop, log_watcher);
+
+    final_stats_async = xmalloc(sizeof(ev_async));
+    ev_async_init(final_stats_async, final_stats_cb);
+    ev_async_start(statio_loop, final_stats_async);
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         if(listen(lsocks[i], 128) == -1)
@@ -679,4 +723,3 @@ void statio_start(struct ev_loop* statio_loop) {
         ev_io_start(statio_loop, accept_watchers[i]);
     }
 }
-

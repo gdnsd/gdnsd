@@ -561,6 +561,14 @@ version reporting, which responds to "version.bind" queries in the
 C<CH> class, and is what a client will see if they use such a query
 against a gdnsd server.
 
+=item B<log_stats>
+
+Integer, default 3600, min 0, max 86400.  The current stats counters
+will be emitted as log output (e.g. to syslog) every C<log_stats>
+seconds.  If set to zero, periodic stats logging is disabled.
+Regardless of this setting, stats counters are always emitted to the log
+once at the time of daemon shutdown.
+
 =item B<run_dir>
 
 String, defaults to F<@GDNSD_DEFPATH_RUN@>.  This is the directory

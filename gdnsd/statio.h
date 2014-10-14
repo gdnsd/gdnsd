@@ -32,5 +32,11 @@ bool statio_check_socks(bool soft);
 F_NONNULL
 void statio_start(struct ev_loop* statio_loop);
 
+// main thread calls this to issue final stats output
+void statio_final_stats(void);
+
+// main thread calls this to wait on completion of the above
+void statio_final_stats_wait(void);
+
 #endif // GDSND_STATIO_H
 

@@ -182,8 +182,22 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
             if(!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
                 log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if((_min && _val < _min) || _val > _max) \
+            if(_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
+            gconfig._gconf_loc = (unsigned) _val; \
+        } \
+    } while(0)
+
+#define CFG_OPT_UINT_NOMIN(_opt_set, _gconf_loc, _max) \
+    do { \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        if(_opt_setting) { \
+            unsigned long _val; \
+            if(!vscf_is_simple(_opt_setting) \
+            || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
+                log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
+            if(_val > _max) \
+                log_fatal("Config option %s: Value out of range (0, %lu)", #_gconf_loc, _max); \
             gconfig._gconf_loc = (unsigned) _val; \
         } \
     } while(0)
@@ -559,7 +573,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
-        CFG_OPT_UINT(options, log_stats, 1LU, 2147483647LU);
+        CFG_OPT_UINT_NOMIN(options, log_stats, 86400LU);
         CFG_OPT_UINT(options, max_http_clients, 1LU, 65535LU);
         CFG_OPT_UINT(options, http_timeout, 3LU, 60LU);
 
