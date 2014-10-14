@@ -71,8 +71,10 @@ AC_ARG_ENABLE([developer],
 if test "x$developer" != xno; then
     AC_DEFINE([DEBUG_RCU], 1, [liburcu verification checks])
     AC_DEFINE([RCU_DEBUG], 1, [liburcu verification checks])
+    TRY_DEBUG_CFLAGS=-g
 else
     CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
+    TRY_DEBUG_CFLAGS=
 fi
 
 harden=1
@@ -98,6 +100,7 @@ AC_SUBST([CFLAGS_PIE])
 AC_SUBST([LDFLAGS_PIE])
 AX_APPEND_LINK_FLAGS([$HARDEN_LINKER -Wl,--as-needed],[LDFLAGS],[])
 AX_APPEND_COMPILE_FLAGS([\
+    $TRY_DEBUG_CFLAGS \
     $HARDEN_COMPILER \
     -fno-common \
     -Wall \

@@ -52,16 +52,14 @@ Interesting / Non-standard autoconf options
 --without-hardening
   Disable the default compiler/linker flags for security hardening.
   Probably not a great idea unless they're breaking things on your
-  platform and/or you're supplying replacement flags of your own.
+    platform and/or you're supplying replacement flags of your own.
 
 --enable-developer
-  Builds a debugging build (-g) with a lot of extra gcc warnings
-    flags, a large suite of assert()ions, and extra
-    informative debug information via STDERR or syslog().
-    It also does other excessive runtime checks that really
-    slow things down.
-  Not generally for production use.  If you just want debug
-    symbols, put -g in your CFLAGS.
+  Builds a debugging build (-g) with a large suite of assert()ions, extra
+    informative debug information via STDERR or syslog(), and some
+    other expensive, excessive runtime checks that really slow things down.
+  Not generally for production use, but handy for development or tracking
+    down evasive bugs.  If you just want debug symbols, put -g in CFLAGS.
 
 --with-testport=N
   The test suite needs to be able to bind to 3 consecutive ports
