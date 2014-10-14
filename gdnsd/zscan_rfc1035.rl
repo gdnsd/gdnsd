@@ -729,9 +729,13 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
         if(len < space)
             eof = pe;
 
+#ifndef __clang_analyzer__
+        // ^ ... because the ragel-generated code for the zonefile parser is
+        //   so huge that it makes analyzer runs take forever.
         %%{
             write exec;
         }%%
+#endif // __clang_analyzer__
 
         if(cs == zone_error) {
             parse_error_noargs("General parse error");
