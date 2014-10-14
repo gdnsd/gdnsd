@@ -164,17 +164,13 @@ Overall Design
     udp_recvfail
         Count of UDP recvmsg() errors, where the OS indicated that something
         bad happened on receive. Obviously, we don't even get these
-        requests, so they can't be processed and replied to.
+        requests, so they can't be processed and replied to.  We also count
+        it as udp_recvfail (and do not process the request) if the recvmsg()
+        call succeeds but the client used an illegal source port of zero.
 
     udp_sendfail
         Count of UDP "sendmsg()" errors, which almost definitely resulted in
         dropped responses from the client's point of view.
-
-        Note that a common cause for these I've seen on Linux is requests
-        with a source port of zero. For some reason Linux will pass these to
-        us on the input side, but then the "sendmsg()" call to send a
-        response back to port zero immediately fails due to the bad port
-        number.
 
     udp_tc
         Non-EDNS (traditional 512-byte) UDP responses that were truncated
@@ -206,12 +202,12 @@ Overall Design
     These statistics are tracked in per-thread structures. The actual data
     slots are uintptr_t, which helps with rollover on 64-bit machines.
 
-    The monitoring thread reports the statistics in two different ways. The first
-    is via syslog every log_stats seconds (default 3600), as well as always
-    at exit time. The other is via an embedded HTTP server which listens by
-    default on port 3506. The HTTP server can give the data in both html
-    (for humans) and csv (for monitoring tools) formats. All of the stats
-    reporting code is in statio.c.
+    The monitoring thread reports the statistics in two different ways.
+    The first is via syslog every log_stats seconds (default 3600), as well
+    as always at exit time. The other is via an embedded HTTP server which
+    listens by default on port 3506. The HTTP server can give the data in
+    html, json and csv formats.  All of the stats reporting code is in
+    statio.c.
 
   Truncation Handling and other related things
 
@@ -237,20 +233,29 @@ Security
 
     Any public-facing network daemon has to consider security issues. While
     the potential will always exist for gdnsd to contain stupid buffer
-    overflow bugs and the like, I believe the code to be reasonable secure.
+    overflow bugs and the like, I believe the code to be reasonably secure
+    by design.
+
+    The compiler/linker flags set up by the autotools config in the source
+    tree default to turning on all of the relevant security hardening flags
+    I'm aware of for the GNU toolchain if they seem to be supported at build
+    time.  This can be disabled via --without-hardening if you'd like to
+    supply different/conflicting ones, or to aid in debugging/analysis.
 
     I regularly audit the code as best I can, both manually and with tools
-    like valgrind, to look for stupid memory bugs. Another point in its
-    favor is the fact that, being a purely authoritative server, gdnsd has
-    no reason to believe anything anyone else on the network has to say
-    about anything. This eliminates entire classes of attacks related to
-    poisoning and the like. gdnsd never sends DNS queries (even indirectly
-    via gethostbyname()) to anyone else. It's a DNS server, not a DNS
-    client.
+    like valgrind, clang-analyzer, coverity, cppcheck, etc to look for
+    stupid memory (or other) bugs. Another point in its favor is the fact
+    that, being a purely authoritative server, gdnsd has no reason to
+    believe anything anyone else on the network has to say about anything.
+    This eliminates entire classes of attacks related to poisoning and the
+    like.  gdnsd never sends DNS queries (even indirectly via
+    gethostbyname()) to anyone else. It's a DNS server, not a DNS client.
 
     Perhaps more importantly, gdnsd doesn't trust itself to be root on your
     machine. Any time gdnsd is started as root, it will drop privileges to
-    those of the user named "gdnsd" (configurable).
+    those of the user named "gdnsd" (configurable) before it begins
+    receiving network traffic.  This cannot be disabled, and the user isn't
+    allowed to have root's uid or gid either.
 
     If any security-related operation fails, the daemon will fail to start
     itself and abort with a log message indicating the problem.
