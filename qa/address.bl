@@ -1,0 +1,2 @@
+# ragel-regenerated zscan_rfc1035.c:scanner() crashes sanitizers
+fun:scanner

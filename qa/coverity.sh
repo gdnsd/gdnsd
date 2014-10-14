@@ -11,8 +11,8 @@ set -x
 set -e
 
 rm -rf gdnsd.tgz cov-int
-make distclean
 ./configure --disable-developer
+make clean
 cov-build --dir cov-int make
 tar -czf gdnsd.tgz cov-int
 
