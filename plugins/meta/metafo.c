@@ -86,21 +86,6 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
     return 0;
 }
 
-F_UNUSED
-static void maps_destroy(void) {
-    if(dclists) {
-        for(unsigned i = 0; i < num_dclists; i++) {
-            dclist_t* dcl = dclists[i];
-            for(unsigned j = 1; j <= dcl->num_dcs; j++)
-                free(dcl->dc_names[j]);
-            free(dcl->dc_names);
-            free(dcl->dc_list);
-            free(dcl);
-        }
-        free(dclists);
-    }
-}
-
 F_NONNULL
 static void top_config_hook(vscf_data_t* top_config V_UNUSED) {
     dmn_assert(top_config); dmn_assert(vscf_is_hash(top_config));

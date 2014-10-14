@@ -138,12 +138,3 @@ fips_t* fips_init(const char* pathname) {
         log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", pathname, dmn_logf_errno());
     return fips;
 }
-
-void fips_destroy(fips_t* fips) {
-    dmn_assert(fips);
-
-    for(unsigned i = 0; i < FIPS_HASH_SIZE; i++)
-        if(fips->table[i].val)
-            free(fips->table[i].val);
-    free(fips);
-}

@@ -46,7 +46,5 @@ F_NONNULL F_PURE
 const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum);
 F_NONNULL F_PURE
 unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum);
-F_NONNULL
-void dcinfo_destroy(dcinfo_t* info);
 
 #endif // DCINFO_H

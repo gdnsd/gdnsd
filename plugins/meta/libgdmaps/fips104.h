@@ -33,7 +33,4 @@ fips_t* fips_init(const char* pathname);
 F_PURE F_NONNULL
 const char* fips_lookup(const fips_t* fips, const uint32_t key);
 
-F_NONNULL
-void fips_destroy(fips_t* fips);
-
 #endif // FIPS104_H

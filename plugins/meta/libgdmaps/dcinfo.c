@@ -185,14 +185,3 @@ unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum) {
     dmn_assert(dcnum && dcnum <= info->num_dcs);
     return info->indices[dcnum - 1];
 }
-
-void dcinfo_destroy(dcinfo_t* info) {
-    dmn_assert(info);
-    for(unsigned i = 0; i < info->num_dcs; i++)
-        free(info->names[i]);
-    free(info->names);
-    free(info->indices);
-    if(info->coords)
-        free(info->coords);
-    free(info);
-}
