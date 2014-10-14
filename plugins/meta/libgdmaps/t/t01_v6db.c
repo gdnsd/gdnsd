@@ -23,12 +23,14 @@
 #include <gdnsd/log.h>
 #include "gdmaps_test.h"
 
+static gdmaps_t* gdmaps = NULL;
+
 int main(int argc, char* argv[]) {
     if(argc != 2)
         log_fatal("root directory must be set on commandline");
 
     // dcs are 1 == dc02 and 2 == dc01
-    gdmaps_t* gdmaps = gdmaps_test_init(argv[1]);
+    gdmaps = gdmaps_test_init(argv[1]);
     unsigned tnum = 0;
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "192.0.2.1", "\2\1", 19);
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "79.125.18.68", "\2", 17);

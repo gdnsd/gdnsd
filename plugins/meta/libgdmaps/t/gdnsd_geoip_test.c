@@ -39,6 +39,8 @@
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
+static gdmaps_t* gdmaps = NULL;
+
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
     fprintf(stderr, "\nUsage: %s [-c %s] [map_name addr]\n"
@@ -50,7 +52,7 @@ static void usage(const char* argv0) {
 }
 
 F_NONNULL
-static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* ip_arg) {
+static void do_lookup(const char* map_name, const char* ip_arg) {
     dmn_assert(gdmaps); dmn_assert(map_name); dmn_assert(ip_arg);
 
     int map_idx = gdmaps_name2idx(gdmaps, map_name);
@@ -103,8 +105,7 @@ static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* 
     dmn_fmtbuf_reset();
 }
 
-F_NONNULL
-static void do_repl(gdmaps_t* gdmaps) {
+static void do_repl(void) {
     dmn_assert(gdmaps);
 
     char linebuf[256];
@@ -129,7 +130,7 @@ static void do_repl(gdmaps_t* gdmaps) {
             continue;
         }
 
-        do_lookup(gdmaps, map_name, ip_addr);
+        do_lookup(map_name, ip_addr);
     }
 }
 
@@ -165,16 +166,15 @@ int main(int argc, char* argv[]) {
             usage(argv[0]);
     }
 
-    gdmaps_t* gdmaps = gdmaps_test_init(input_cfgdir);
+    gdmaps = gdmaps_test_init(input_cfgdir);
 
     if(map_name) {
         dmn_assert(ip_arg);
-        do_lookup(gdmaps, map_name, ip_arg);
+        do_lookup(map_name, ip_arg);
     }
     else {
-        do_repl(gdmaps);
+        do_repl();
     }
 
     return 0;
 }
-
