@@ -818,7 +818,7 @@ static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_r
 // Invoke dyna callback for DYN[AC], taking care of zeroing
 //   out ctx->dyn and cleaning up the ttl + scope_mask issues,
 //   returning the TTL to actually use, in network order.
-F_NONNULLX(1)
+F_NONNULLX(1,2)
 static unsigned do_dyn_callback(dnsp_ctx_t* ctx, gdnsd_resolve_cb_t func, const uint8_t* origin, const unsigned res, const unsigned ttl_max_net, const unsigned ttl_min) {
     dmn_assert(ctx); dmn_assert(func);
 
@@ -1607,7 +1607,7 @@ static unsigned (*encode_funcptrs[256])(dnsp_ctx_t*, unsigned, const void*, cons
     NULL,                  // 255 - ANY
 };
 
-F_NONNULLX(3)
+F_NONNULLX(1,4)
 static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* res_rrsets, const ltree_node_t* authdom, const bool res_is_auth) {
     dmn_assert(ctx); dmn_assert(authdom);
 
