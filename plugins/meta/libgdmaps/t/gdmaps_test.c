@@ -167,7 +167,6 @@ gdmaps_t* gdmaps_test_init(const char* input_cfgdir) {
     vscf_destroy(cfg_root);
 
     gdmaps_load_databases(gdmaps);
-    gdmaps_setup_watchers(gdmaps);
 
     return gdmaps;
 }
