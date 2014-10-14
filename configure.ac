@@ -103,6 +103,7 @@ AX_APPEND_COMPILE_FLAGS([\
     $TRY_DEBUG_CFLAGS \
     $HARDEN_COMPILER \
     -fno-common \
+    -pipe \
     -Wall \
     -Wextra \
     -Wbad-function-cast \
