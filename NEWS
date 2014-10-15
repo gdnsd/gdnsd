@@ -1,4 +1,4 @@
-2.1.0 - 2014-10-?? (not yet released)
+2.1.0 - 2014-10-14
   *** Bugfixes:
     * Fixed JSON stats output (was malformed; missing commas
       in the service state portion of the output).
@@ -50,9 +50,13 @@
       nothing was output to any stdio anywhere, and was inconsistent
       depending on flags/command/situation).
 
-  *** Lots of misc improvements to the build and qa stuff.  Notably the
-      default build will now use security-hardening flags on modern GNU
-      toolchains.
+  *** Misc changes:
+    * Documentation added for log_stats option
+    * Final stats output at daemon shutdown restored; was removed during a
+      refactor some time ago and I forgot to get it working again.
+    * Lots of misc improvements to the build and qa stuff.  Notably the
+      default build will now use aggressive security-hardening flags on
+      modern GNU(-like) toolchains which support them.
 
   *** The canonical HTTP and git-clone URL locations for the project
       have changed to http://github.com/gdnsd/gdnsd .  The old URLs
