@@ -13,7 +13,7 @@ fi
 set -x
 set -e
 
-case "$TRAVIS_BUILD" in
+case "$GDNSD_TRAVIS_BUILD" in
     optimized)
         CFLAGS=-O3 ./configure
         make

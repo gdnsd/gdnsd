@@ -5,16 +5,18 @@ language: c
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -qq ragel libev-dev liburcu-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl geoip-database lcov
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/l/lcov/lcov_1.10-1_all.deb
+  - sudo dpkg -i lcov_1.10-1_all.deb
   - gem install coveralls-lcov
 before_script:
   - autoreconf -vi
 matrix:
   include:
     - compiler: clang
-      env: TRAVIS_BUILD=optimized
+      env: GDNSD_TRAVIS_BUILD=optimized
     - compiler: gcc
-      env: TRAVIS_BUILD=optimized
+      env: GDNSD_TRAVIS_BUILD=optimized
     - compiler: gcc
-      env: TRAVIS_BUILD=coveralls
+      env: GDNSD_TRAVIS_BUILD=coveralls
 script:
   - ./qa/travis-build.sh
