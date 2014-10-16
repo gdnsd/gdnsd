@@ -22,9 +22,9 @@ case "$TRAVIS_BUILD" in
     coveralls)
         CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage -fno-omit-frame-pointer" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --without-hardening
         make
-        lcov --no-external -c -i -d . -o gdnsd-base.info
+        lcov -c -i -d . -o gdnsd-base.info
         make check
-        lcov --no-external -c -d . -o gdnsd-test.info
+        lcov -c -d . -o gdnsd-test.info
         lcov -a gdnsd-base.info -a gdnsd-test.info -o gdnsd-tested.info
         # This filters out the ragel-generated parsers, the inlines from liburcu,
         #  and libgdmaps test-only sources
