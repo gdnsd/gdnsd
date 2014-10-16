@@ -1,8 +1,20 @@
+branches:
+  only:
+    - master
 language: c
-compiler:
-  - gcc
-  - clang
-script: autoreconf -vi && ./configure --disable-silent-rules && make && make test
 before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -qq ragel libev-dev liburcu-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl geoip-database
+  - sudo apt-get install -qq ragel libev-dev liburcu-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl geoip-database lcov
+  - gem install coveralls-lcov
+before_script:
+  - autoreconf -vi
+matrix:
+  include:
+    - compiler: clang
+      env: TRAVIS_BUILD=optimized
+    - compiler: gcc
+      env: TRAVIS_BUILD=optimized
+    - compiler: gcc
+      env: TRAVIS_BUILD=coveralls
+script:
+  - ./qa/travis-build.sh
