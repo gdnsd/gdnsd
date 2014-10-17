@@ -1,12 +1,12 @@
 EXTRA_DIST = gdnsd.service.tmpl
 
-if DO_SYSD_UNITFILE
-
 gdnsd.service: gdnsd.service.tmpl
 	$(AM_V_GEN)sed 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' <$< >$@
 
 clean-local:
 	rm -f $(builddir)/gdnsd.service
+
+if DO_SYSD_UNITFILE
 
 systemdsystemunit_DATA = gdnsd.service
 
@@ -20,5 +20,9 @@ install-exec-hook:
 	@echo systemctl enable gdnsd
 	@echo systemctl start gdnsd
 	@echo
+
+else
+
+noinst_SCRIPTS = gdnsd.service
 
 endif

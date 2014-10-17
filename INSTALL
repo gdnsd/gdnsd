@@ -41,10 +41,10 @@ Interesting / Non-standard autoconf options
     autoconf's prefix at all; it will still pick e.g.
     "/usr/lib/systemd/system" even when --prefix is "/usr/local".
   If pkg-config and/or systemd do not exist and this is not set manually
-    the unit file is neither generated nor installed.
-  To disable the generation and installation of the unit file on systems
-    which have systemd software installed (but e.g. are not using it for
-    the init system), use --without-systemdsystemunitdir.
+    the unit file is generated, but not installed.
+  To disable the installation of the unit file on systems which have
+    systemd software installed (but e.g. are not using it for the init
+    system), use --without-systemdsystemunitdir
 
 --without-urcu
   Explicitly disable support for liburcu (falls back to pthread rwlocks)
