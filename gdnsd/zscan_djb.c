@@ -373,7 +373,7 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         const char* src = field[1].ptr;
         unsigned chunks = (bytes + 254) / 255;
 
-        if(bytes > 255 && gconfig.disable_text_autosplit)
+        if(bytes > 255 && gcfg->disable_text_autosplit)
             parse_error_noargs("Text chunk too long (>255 unescaped)");
         if(bytes > 65500)
             parse_error_noargs("Text chunk too long (>65500 unescaped)");

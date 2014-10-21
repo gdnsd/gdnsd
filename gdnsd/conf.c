@@ -52,8 +52,7 @@ static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00"
 static const unsigned chaos_prefix_len = 10;
 static const char chaos_def[] = "gdnsd";
 
-// Global config, readonly after loaded from conf file
-global_config_t gconfig = {
+static const cfg_t cfg_defaults = {
     .dns_addrs = NULL,
     .dns_threads = NULL,
     .http_addrs = NULL,
@@ -93,7 +92,7 @@ global_config_t gconfig = {
 };
 
 F_NONNULL
-static void set_chaos(const char* data) {
+static void set_chaos(cfg_t* cfg, const char* data) {
     dmn_assert(data);
 
     const unsigned dlen = strlen(data);
@@ -107,8 +106,8 @@ static void set_chaos(const char* data) {
     combined[chaos_prefix_len + 1] = dlen + 1;
     combined[chaos_prefix_len + 2] = dlen;
     memcpy(combined + chaos_prefix_len + 3, data, dlen);
-    gconfig.chaos = combined;
-    gconfig.chaos_len = overall_len;
+    cfg->chaos = combined;
+    cfg->chaos_len = overall_len;
 }
 
 static void plugins_cleanup(void) {
@@ -131,7 +130,7 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin
 }
 
 F_NONNULLX(1)
-static void plugin_load_and_configure(const char* name, vscf_data_t* pconf) {
+static void plugin_load_and_configure(const cfg_t* cfg, const char* name, vscf_data_t* pconf) {
     dmn_assert(name);
 
     if(pconf && !vscf_is_hash(pconf))
@@ -139,27 +138,28 @@ static void plugin_load_and_configure(const char* name, vscf_data_t* pconf) {
 
     plugin_t* plugin = gdnsd_plugin_find_or_load(name);
     if(plugin->load_config) {
-        plugin->load_config(pconf, gconfig.num_dns_threads);
+        plugin->load_config(pconf, cfg->num_dns_threads);
         plugin->config_loaded = true;
     }
 }
 
-F_NONNULLX(1,3)
-static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, void* data V_UNUSED) {
-    dmn_assert(name); dmn_assert(pconf);
-    plugin_load_and_configure(name, pconf);
+F_NONNULL
+static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, void* cfg_asvoid) {
+    dmn_assert(name); dmn_assert(pconf); dmn_assert(cfg_asvoid);
+    const cfg_t* cfg = cfg_asvoid;
+    plugin_load_and_configure(cfg, name, pconf);
     return true;
 }
 
 // These defines are for the repetitive case of simple checking/assignment
-//  of certain types directly into simple gconfig variables
+//  of certain types directly into simple cfg variables
 
 #define CFG_OPT_BOOL(_opt_set, _gconf_loc) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if(_opt_setting) { \
             if(!vscf_is_simple(_opt_setting) \
-            || !vscf_simple_get_as_bool(_opt_setting, &gconfig._gconf_loc)) \
+            || !vscf_simple_get_as_bool(_opt_setting, &cfg->_gconf_loc)) \
                 log_fatal("Config option %s: Value must be 'true' or 'false'", #_gconf_loc); \
         } \
     } while(0)
@@ -184,7 +184,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
                 log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
             if(_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
-            gconfig._gconf_loc = (unsigned) _val; \
+            cfg->_gconf_loc = (unsigned) _val; \
         } \
     } while(0)
 
@@ -198,7 +198,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
                 log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
             if(_val > _max) \
                 log_fatal("Config option %s: Value out of range (0, %lu)", #_gconf_loc, _max); \
-            gconfig._gconf_loc = (unsigned) _val; \
+            cfg->_gconf_loc = (unsigned) _val; \
         } \
     } while(0)
 
@@ -212,7 +212,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
                 log_fatal("Config option %s: Value must be a valid floating-point number", #_gconf_loc); \
             if(_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%.3g, %.3g)", #_gconf_loc, _min, _max); \
-            gconfig._gconf_loc = _val; \
+            cfg->_gconf_loc = _val; \
         } \
     } while(0)
 
@@ -226,7 +226,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
                 log_fatal("Config option %s: Value must be an integer", #_gconf_loc); \
             if(_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%li, %li)", #_gconf_loc, _min, _max); \
-            gconfig._gconf_loc = (int) _val; \
+            cfg->_gconf_loc = (int) _val; \
         } \
     } while(0)
 
@@ -264,7 +264,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
         if(_opt_setting) { \
             if(!vscf_is_simple(_opt_setting)) \
                 log_fatal("Config option %s: Wrong type (should be string)", #_gconf_loc); \
-            gconfig._gconf_loc = strdup(vscf_simple_get_data(_opt_setting)); \
+            cfg->_gconf_loc = strdup(vscf_simple_get_data(_opt_setting)); \
         } \
     } while(0)
 
@@ -278,34 +278,38 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
         } \
     } while(0)
 
-static void process_http_listen(vscf_data_t* http_listen_opt, const unsigned def_http_port) {
+F_NONNULLX(1)
+static void process_http_listen(cfg_t* cfg, vscf_data_t* http_listen_opt, const unsigned def_http_port) {
+    dmn_assert(cfg);
+
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
-        gconfig.num_http_addrs = 2;
-        gconfig.http_addrs = xcalloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
-        make_addr("0.0.0.0", def_http_port, gconfig.http_addrs);
-        make_addr("::", def_http_port, &gconfig.http_addrs[1]);
+        cfg->num_http_addrs = 2;
+        cfg->http_addrs = xcalloc(cfg->num_http_addrs, sizeof(dmn_anysin_t));
+        make_addr("0.0.0.0", def_http_port, cfg->http_addrs);
+        make_addr("::", def_http_port, &cfg->http_addrs[1]);
     }
     else {
-        gconfig.num_http_addrs = vscf_array_get_len(http_listen_opt);
-        gconfig.http_addrs = xcalloc(gconfig.num_http_addrs, sizeof(dmn_anysin_t));
-        for(unsigned i = 0; i < gconfig.num_http_addrs; i++) {
+        cfg->num_http_addrs = vscf_array_get_len(http_listen_opt);
+        cfg->http_addrs = xcalloc(cfg->num_http_addrs, sizeof(dmn_anysin_t));
+        for(unsigned i = 0; i < cfg->num_http_addrs; i++) {
             vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
             if(!vscf_is_simple(lspec))
                 log_fatal("Config option 'http_listen': all listen specs must be strings");
-            make_addr(vscf_simple_get_data(lspec), def_http_port, &gconfig.http_addrs[i]);
+            make_addr(vscf_simple_get_data(lspec), def_http_port, &cfg->http_addrs[i]);
         }
     }
 }
 
 F_NONNULL F_PURE
-static bool dns_addr_is_dupe(const dmn_anysin_t* new_addr) {
+static bool dns_addr_is_dupe(const cfg_t* cfg, const dmn_anysin_t* new_addr) {
+    dmn_assert(cfg);
     dmn_assert(new_addr);
     dmn_assert(new_addr->sa.sa_family == AF_INET6 || new_addr->sa.sa_family == AF_INET);
 
-    for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
-        if(gconfig.dns_addrs[i].addr.sa.sa_family == new_addr->sa.sa_family) {
-            dmn_assert(new_addr->len == gconfig.dns_addrs[i].addr.len);
-            if(!memcmp(new_addr, &gconfig.dns_addrs[i].addr, new_addr->len))
+    for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
+        if(cfg->dns_addrs[i].addr.sa.sa_family == new_addr->sa.sa_family) {
+            dmn_assert(new_addr->len == cfg->dns_addrs[i].addr.len);
+            if(!memcmp(new_addr, &cfg->dns_addrs[i].addr, new_addr->len))
                 return true;
         }
     }
@@ -313,21 +317,23 @@ static bool dns_addr_is_dupe(const dmn_anysin_t* new_addr) {
     return false;
 }
 
-static void dns_listen_any(const dns_addr_t* addr_defs) {
-    dmn_assert(addr_defs);
+F_NONNULL
+static void dns_listen_any(cfg_t* cfg, const dns_addr_t* addr_defs) {
+    dmn_assert(cfg); dmn_assert(addr_defs);
 
-    gconfig.num_dns_addrs = 2;
-    gconfig.dns_addrs = xcalloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
-    dns_addr_t* ac_v4 = &gconfig.dns_addrs[0];
+    cfg->num_dns_addrs = 2;
+    cfg->dns_addrs = xcalloc(cfg->num_dns_addrs, sizeof(dns_addr_t));
+    dns_addr_t* ac_v4 = &cfg->dns_addrs[0];
     memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
     make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
-    dns_addr_t* ac_v6 = &gconfig.dns_addrs[1];
+    dns_addr_t* ac_v6 = &cfg->dns_addrs[1];
     memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
     make_addr("::", addr_defs->dns_port, &ac_v6->addr);
 }
 
-static void dns_listen_scan(const dns_addr_t* addr_defs) {
-    dmn_assert(addr_defs);
+F_NONNULL
+static void dns_listen_scan(cfg_t* cfg, const dns_addr_t* addr_defs) {
+    dmn_assert(cfg); dmn_assert(addr_defs);
 
     dmn_anysin_t temp_asin;
 
@@ -335,7 +341,7 @@ static void dns_listen_scan(const dns_addr_t* addr_defs) {
     if(getifaddrs(&ifap))
         dmn_log_fatal("getifaddrs() for 'listen => scan' failed: %s", dmn_logf_errno());
 
-    gconfig.num_dns_addrs = 0;
+    cfg->num_dns_addrs = 0;
     for(;ifap;ifap = ifap->ifa_next) {
         if(!ifap->ifa_addr)
             continue;
@@ -360,11 +366,11 @@ static void dns_listen_scan(const dns_addr_t* addr_defs) {
         else
             temp_asin.sin.sin_port = htons(addr_defs->dns_port);
 
-        if(dns_addr_is_dupe(&temp_asin))
+        if(dns_addr_is_dupe(cfg, &temp_asin))
             continue;
 
-        gconfig.dns_addrs = xrealloc(gconfig.dns_addrs, (gconfig.num_dns_addrs + 1) * sizeof(dns_addr_t));
-        dns_addr_t* addrconf = &gconfig.dns_addrs[gconfig.num_dns_addrs++];
+        cfg->dns_addrs = xrealloc(cfg->dns_addrs, (cfg->num_dns_addrs + 1) * sizeof(dns_addr_t));
+        dns_addr_t* addrconf = &cfg->dns_addrs[cfg->num_dns_addrs++];
         memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
         memcpy(&addrconf->addr, &temp_asin, sizeof(dmn_anysin_t));
         addrconf->autoscan = true;
@@ -372,30 +378,31 @@ static void dns_listen_scan(const dns_addr_t* addr_defs) {
 
     freeifaddrs(ifap);
 
-    if(!gconfig.num_dns_addrs)
+    if(!cfg->num_dns_addrs)
         dmn_log_fatal("automatic interface scanning via 'listen => scan' found no valid addresses to listen on");
 }
 
-static void fill_dns_addrs(vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-    dmn_assert(addr_defs);
+F_NONNULLX(1,3)
+static void fill_dns_addrs(cfg_t* cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+    dmn_assert(cfg); dmn_assert(addr_defs);
 
     if(!listen_opt)
-        return dns_listen_any(addr_defs);
+        return dns_listen_any(cfg, addr_defs);
     if(vscf_is_simple(listen_opt)) {
         const char* simple_str = vscf_simple_get_data(listen_opt);
         if(!strcmp(simple_str, "any")) {
-            return dns_listen_any(addr_defs);
+            return dns_listen_any(cfg, addr_defs);
         }
         else if(!strcmp(simple_str, "scan")) {
-            return dns_listen_scan(addr_defs);
+            return dns_listen_scan(cfg, addr_defs);
         }
     }
 
     if(vscf_is_hash(listen_opt)) {
-        gconfig.num_dns_addrs = vscf_hash_get_len(listen_opt);
-        gconfig.dns_addrs = xcalloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
-        for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
-            dns_addr_t* addrconf = &gconfig.dns_addrs[i];
+        cfg->num_dns_addrs = vscf_hash_get_len(listen_opt);
+        cfg->dns_addrs = xcalloc(cfg->num_dns_addrs, sizeof(dns_addr_t));
+        for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
+            dns_addr_t* addrconf = &cfg->dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
             const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
             vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
@@ -427,10 +434,10 @@ static void fill_dns_addrs(vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
         }
     }
     else {
-        gconfig.num_dns_addrs = vscf_array_get_len(listen_opt);
-        gconfig.dns_addrs = xcalloc(gconfig.num_dns_addrs, sizeof(dns_addr_t));
-        for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
-            dns_addr_t* addrconf = &gconfig.dns_addrs[i];
+        cfg->num_dns_addrs = vscf_array_get_len(listen_opt);
+        cfg->dns_addrs = xcalloc(cfg->num_dns_addrs, sizeof(dns_addr_t));
+        for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
+            dns_addr_t* addrconf = &cfg->dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
             vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
             if(!vscf_is_simple(lspec))
@@ -440,35 +447,38 @@ static void fill_dns_addrs(vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
     }
 }
 
-static void process_listen(vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-    // this fills in gconfig.dns_addrs raw data
-    fill_dns_addrs(listen_opt, addr_defs);
+F_NONNULLX(1,3)
+static void process_listen(cfg_t* cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
+    dmn_assert(cfg); dmn_assert(addr_defs);
 
-    if(!gconfig.num_dns_addrs)
+    // this fills in cfg->dns_addrs raw data
+    fill_dns_addrs(cfg, listen_opt, addr_defs);
+
+    if(!cfg->num_dns_addrs)
         dmn_log_fatal("DNS listen addresses explicitly configured as an empty set - cannot continue without at least one address!");
 
     // use dns_addrs to populate dns_threads....
 
-    gconfig.num_dns_threads = 0;
-    for(unsigned i = 0; i < gconfig.num_dns_addrs; i++)
-        gconfig.num_dns_threads += (gconfig.dns_addrs[i].udp_threads + gconfig.dns_addrs[i].tcp_threads);
+    cfg->num_dns_threads = 0;
+    for(unsigned i = 0; i < cfg->num_dns_addrs; i++)
+        cfg->num_dns_threads += (cfg->dns_addrs[i].udp_threads + cfg->dns_addrs[i].tcp_threads);
 
-    if(!gconfig.num_dns_threads)
+    if(!cfg->num_dns_threads)
         dmn_log_fatal("All listen addresses configured for zero UDP and zero TCP threads - cannot continue without at least one listener!");
 
-    gconfig.dns_threads = xcalloc(gconfig.num_dns_threads, sizeof(dns_thread_t));
+    cfg->dns_threads = xcalloc(cfg->num_dns_threads, sizeof(dns_thread_t));
 
     unsigned tnum = 0;
-    for(unsigned i = 0; i < gconfig.num_dns_addrs; i++) {
-        dns_addr_t* a = &gconfig.dns_addrs[i];
+    for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
+        dns_addr_t* a = &cfg->dns_addrs[i];
         for(unsigned j = 0; j < a->udp_threads; j++) {
-            dns_thread_t* t = &gconfig.dns_threads[tnum];
+            dns_thread_t* t = &cfg->dns_threads[tnum];
             t->ac = a;
             t->is_udp = true;
             t->threadnum = tnum++;
         }
         for(unsigned j = 0; j < a->tcp_threads; j++) {
-            dns_thread_t* t = &gconfig.dns_threads[tnum];
+            dns_thread_t* t = &cfg->dns_threads[tnum];
             t->ac = a;
             t->is_udp = false;
             t->threadnum = tnum++;
@@ -481,7 +491,7 @@ static void process_listen(vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
                 a->udp_threads, a->tcp_threads, dmn_logf_anysin(&a->addr));
     }
 
-    dmn_assert(tnum == gconfig.num_dns_threads);
+    dmn_assert(tnum == cfg->num_dns_threads);
 }
 
 static vscf_data_t* conf_load_vscf(const char* cfg_file) {
@@ -506,8 +516,7 @@ static vscf_data_t* conf_load_vscf(const char* cfg_file) {
     return out;
 }
 
-void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, const conf_mode_t cmode) {
-
+vscf_data_t* conf_parse(const char* cfg_dir) {
     gdnsd_set_config_dir(cfg_dir);
     char* cfg_file = gdnsd_resolve_path_cfg("config", NULL);
     vscf_data_t* cfg_root = conf_load_vscf(cfg_file);
@@ -522,6 +531,10 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     }
 #endif
 
+    return cfg_root;
+}
+
+cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool force_zsd, const conf_mode_t cmode) {
     dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
@@ -546,7 +559,10 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     // fast-path exit for simple actions like stop/status/reload-zones, only
     //   needs run_dir configuration and nothing more
     if(cmode == CONF_SIMPLE_ACTION)
-        return;
+        return NULL;
+
+    cfg_t* cfg = xmalloc(sizeof(*cfg));
+    memcpy(cfg, &cfg_defaults, sizeof(*cfg));
 
     vscf_data_t* listen_opt = NULL;
     vscf_data_t* http_listen_opt = NULL;
@@ -602,16 +618,16 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
         CFG_OPT_UINT(options, max_ttl, 3600LU, (unsigned long)GDNSD_STTL_TTL_MAX);
-        if(gconfig.max_ttl < gconfig.min_ttl)
-            log_fatal("The global option 'max_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", gconfig.max_ttl, gconfig.min_ttl);
+        if(cfg->max_ttl < cfg->min_ttl)
+            log_fatal("The global option 'max_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ttl, cfg->min_ttl);
         CFG_OPT_UINT(options, max_ncache_ttl, 10LU, 86400LU);
-        if(gconfig.max_ncache_ttl < gconfig.min_ttl)
-            log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", gconfig.max_ncache_ttl, gconfig.min_ttl);
+        if(cfg->max_ncache_ttl < cfg->min_ttl)
+            log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ncache_ttl, cfg->min_ttl);
         CFG_OPT_UINT(options, max_response, 4096LU, 64000LU);
         CFG_OPT_UINT(options, max_edns_response, 512LU, 64000LU);
-        if(gconfig.max_edns_response > gconfig.max_response) {
-            log_warn("The global option 'max_edns_response' was reduced from %u to the max_response size of %u", gconfig.max_edns_response, gconfig.max_response);
-            gconfig.max_edns_response = gconfig.max_response;
+        if(cfg->max_edns_response > cfg->max_response) {
+            log_warn("The global option 'max_edns_response' was reduced from %u to the max_response size of %u", cfg->max_edns_response, cfg->max_response);
+            cfg->max_edns_response = cfg->max_response;
         }
         // Limit here (24) is critical, to ensure that when encode_rr_cname resets
         //  c->qname_comp in dnspacket.c, c->qname_comp must still be <16K into a packet.
@@ -637,18 +653,18 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
 
     // if cmdline forced, override any default or config setting
     if(force_zss)
-        gconfig.zones_strict_startup = true;
+        cfg->zones_strict_startup = true;
     if(force_zsd)
-        gconfig.zones_strict_data = true;
+        cfg->zones_strict_data = true;
 
     // set response string for CHAOS queries
-    set_chaos(chaos_data);
+    set_chaos(cfg, chaos_data);
 
     // Set up the http listener data
-    process_http_listen(http_listen_opt, def_http_port);
+    process_http_listen(cfg, http_listen_opt, def_http_port);
 
     // Initial setup of the listener data
-    process_listen(listen_opt, &addr_defs);
+    process_listen(cfg, listen_opt, &addr_defs);
 
     vscf_data_t* stypes_cfg = cfg_root
         ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
@@ -671,14 +687,14 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
         //   the list of meta-plugins will remain short and in-tree.
         vscf_data_t* geoplug = vscf_hash_get_data_byconstkey(plugins_hash, "geoip", true);
         if(geoplug)
-            plugin_load_and_configure("geoip", geoplug);
+            plugin_load_and_configure(cfg, "geoip", geoplug);
         // ditto for "metafo"
         // Technically, geoip->metafo synthesis will work, but not metafo->geoip synthesis.
         // Both can reference each other directly (%plugin!resource)
         vscf_data_t* metaplug = vscf_hash_get_data_byconstkey(plugins_hash, "metafo", true);
         if(metaplug)
-            plugin_load_and_configure("metafo", metaplug);
-        vscf_hash_iterate(plugins_hash, true, load_plugin_iter, NULL);
+            plugin_load_and_configure(cfg, "metafo", metaplug);
+        vscf_hash_iterate(plugins_hash, true, load_plugin_iter, cfg);
     }
 
     // Any plugins loaded via the plugins hash above will already have had load_config() called
@@ -687,7 +703,7 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     // Because of the possibility of mixed plugins and the configuration ordering above for
     //    meta-plugins, this must happen at this sequential point (after plugins_hash processing,
     //    but before stypes_p2())
-    gdnsd_plugins_configure_all(gconfig.num_dns_threads);
+    gdnsd_plugins_configure_all(cfg->num_dns_threads);
 
     // Phase 2 of service_types config
     gdnsd_mon_cfg_stypes_p2(stypes_cfg);
@@ -696,15 +712,15 @@ void conf_load(const char* cfg_dir, const bool force_zss, const bool force_zsd, 
     gdnsd_atexit_debug(plugins_cleanup);
 
     // Throw an error if there are any other unretrieved root config keys
-    if(cfg_root) {
+    if(cfg_root)
         vscf_hash_iterate_const(cfg_root, true, bad_key, "top-level config");
-        vscf_destroy(cfg_root);
-    }
+
+    return cfg;
 }
 
-void dns_lsock_init(void) {
-    for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
-        dns_thread_t* t = &gconfig.dns_threads[i];
+void dns_lsock_init(cfg_t* cfg) {
+    for(unsigned i = 0; i < cfg->num_dns_threads; i++) {
+        dns_thread_t* t = &cfg->dns_threads[i];
         if(t->is_udp)
             udp_sock_setup(t);
         else

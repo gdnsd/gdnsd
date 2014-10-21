@@ -44,7 +44,7 @@ static const uint8_t ooz_glue_label[1] = { 0 };
 
 #define log_zwarn(...)\
     do {\
-        if(gconfig.zones_strict_data) {\
+        if(gcfg->zones_strict_data) {\
             log_err(__VA_ARGS__);\
             return true;\
         }\
@@ -281,13 +281,13 @@ MK_RRSET_ADD(txt, txt, DNS_TYPE_TXT)
 
 // standard chunk for clamping TTLs in ltree_add_rec_*
 #define CLAMP_TTL(_t) \
-        if(ttl > gconfig.max_ttl) {\
-            log_zwarn("Name '%s%s': %s TTL %u too large, clamped to max_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), _t, ttl, gconfig.max_ttl);\
-            ttl = gconfig.max_ttl;\
+        if(ttl > gcfg->max_ttl) {\
+            log_zwarn("Name '%s%s': %s TTL %u too large, clamped to max_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), _t, ttl, gcfg->max_ttl);\
+            ttl = gcfg->max_ttl;\
         }\
-        else if(ttl < gconfig.min_ttl) {\
-            log_zwarn("Name '%s%s': %s TTL %u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), _t, ttl, gconfig.min_ttl);\
-            ttl = gconfig.min_ttl;\
+        else if(ttl < gcfg->min_ttl) {\
+            log_zwarn("Name '%s%s': %s TTL %u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), _t, ttl, gcfg->min_ttl);\
+            ttl = gcfg->min_ttl;\
         }
 
 bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t addr, unsigned ttl, const unsigned limit_v4, const bool ooz) {
@@ -419,9 +419,9 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char*
     }
 
     CLAMP_TTL("DYNA")
-    if(ttl_min < gconfig.min_ttl) {
-        log_zwarn("Name '%s%s': DYNA Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), ttl_min, gconfig.min_ttl);
-        ttl_min = gconfig.min_ttl;
+    if(ttl_min < gcfg->min_ttl) {
+        log_zwarn("Name '%s%s': DYNA Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), ttl_min, gcfg->min_ttl);
+        ttl_min = gcfg->min_ttl;
     }
     if(ttl_min > ttl) {
         log_zwarn("Name '%s%s': DYNA Min-TTL /%u larger than Max-TTL %u, clamping to Max-TTL", logf_dname(dname), logf_dname(zone->dname), ttl_min, ttl);
@@ -478,9 +478,9 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
     dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs); dmn_assert(origin);
 
     CLAMP_TTL("DYNC")
-    if(ttl_min < gconfig.min_ttl) {
-        log_zwarn("Name '%s%s': DYNC Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), ttl_min, gconfig.min_ttl);
-        ttl_min = gconfig.min_ttl;
+    if(ttl_min < gcfg->min_ttl) {
+        log_zwarn("Name '%s%s': DYNC Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), ttl_min, gcfg->min_ttl);
+        ttl_min = gcfg->min_ttl;
     }
     if(ttl_min > ttl) {
         log_zwarn("Name '%s%s': DYNC Min-TTL /%u larger than Max-TTL %u, clamping to Max-TTL", logf_dname(dname), logf_dname(zone->dname), ttl_min, ttl);
@@ -686,13 +686,13 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
 bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, const unsigned serial, const unsigned refresh, const unsigned retry, const unsigned expire, unsigned ncache) {
     dmn_assert(zone); dmn_assert(dname); dmn_assert(master); dmn_assert(email);
 
-    if(unlikely(ncache > gconfig.max_ncache_ttl)) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(dname), ncache, gconfig.max_ncache_ttl);
-        ncache = gconfig.max_ncache_ttl;
+    if(unlikely(ncache > gcfg->max_ncache_ttl)) {
+        log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(dname), ncache, gcfg->max_ncache_ttl);
+        ncache = gcfg->max_ncache_ttl;
     }
-    else if(unlikely(ncache < gconfig.min_ttl)) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too small, clamped to min_ttl setting of %u", logf_dname(dname), ncache, gconfig.min_ttl);
-        ncache = gconfig.min_ttl;
+    else if(unlikely(ncache < gcfg->min_ttl)) {
+        log_zwarn("Zone '%s': SOA negative-cache field %u too small, clamped to min_ttl setting of %u", logf_dname(dname), ncache, gcfg->min_ttl);
+        ncache = gcfg->min_ttl;
     }
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -911,8 +911,8 @@ static bool p1_proc_cname(const zone_t* zone, const ltree_rrset_cname_t* node_cn
 
     unsigned cn_depth = 1;
     while(cn_target && cnstat == DNAME_AUTH && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME) {
-        if(unlikely(++cn_depth > gconfig.max_cname_depth)) {
-            log_zfatal("CNAME '%s%s' leads to a CNAME chain longer than %u (max_cname_depth)", logf_lstack(lstack, depth, zone->dname), gconfig.max_cname_depth);
+        if(unlikely(++cn_depth > gcfg->max_cname_depth)) {
+            log_zfatal("CNAME '%s%s' leads to a CNAME chain longer than %u (max_cname_depth)", logf_lstack(lstack, depth, zone->dname), gcfg->max_cname_depth);
             break;
         }
         ltree_rrset_cname_t* cur_cname = &cn_target->rrsets->cname;
@@ -1095,8 +1095,8 @@ static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* no
                 if(AD_IS_GLUE(nsrd[i].ad))
                     num_glue++;
             }
-            if(unlikely(num_glue > gconfig.max_addtl_rrsets))
-                log_zfatal("Delegation point '%s%s' has '%u' glued NS RRs, which is greater than the configured max_addtl_rrsets (%u)", logf_lstack(lstack, depth, zone->dname), num_glue, gconfig.max_addtl_rrsets);
+            if(unlikely(num_glue > gcfg->max_addtl_rrsets))
+                log_zfatal("Delegation point '%s%s' has '%u' glued NS RRs, which is greater than the configured max_addtl_rrsets (%u)", logf_lstack(lstack, depth, zone->dname), num_glue, gcfg->max_addtl_rrsets);
         }
     }
 

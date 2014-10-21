@@ -252,10 +252,10 @@ static void accumulate_statio(unsigned threadnum) {
 
 static void populate_stats(void) {
     const time_t now = time(NULL);
-    if(gconfig.realtime_stats || now > pop_statio_time) {
+    if(gcfg->realtime_stats || now > pop_statio_time) {
         memset(&statio, 0, sizeof(statio));
 
-        const unsigned nio = gconfig.num_dns_threads;
+        const unsigned nio = gcfg->num_dns_threads;
         for(unsigned i = 0; i < nio; i++)
             accumulate_statio(i);
         pop_statio_time = now;
@@ -391,7 +391,7 @@ static void cleanup_conn_watchers(struct ev_loop* loop, http_data_t* tdata) {
     free(tdata->write_watcher);
     free(tdata->asin);
 
-    if((num_conn_watchers-- == gconfig.max_http_clients))
+    if((num_conn_watchers-- == gcfg->max_http_clients))
         for(unsigned i = 0; i < num_lsocks; i++)
             ev_io_start(loop, accept_watchers[i]);
 
@@ -586,11 +586,11 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     ev_set_priority(read_watcher, 0);
     ev_io_start(loop, read_watcher);
 
-    ev_timer_init(timeout_watcher, timeout_cb, gconfig.http_timeout, 0);
+    ev_timer_init(timeout_watcher, timeout_cb, gcfg->http_timeout, 0);
     ev_set_priority(timeout_watcher, -1);
     ev_timer_start(loop, timeout_watcher);
 
-    if((++num_conn_watchers == gconfig.max_http_clients)) {
+    if((++num_conn_watchers == gcfg->max_http_clients)) {
         log_warn("Stats HTTP connection limit reached");
         for(unsigned i = 0; i < num_lsocks; i++)
             ev_io_stop(loop, accept_watchers[i]);
@@ -638,35 +638,35 @@ void statio_init(void) {
     data_buffer_size <<= 1U;
 
     // now set up the normal stuff, like libev event watchers
-    if(gconfig.log_stats) {
+    if(gcfg->log_stats) {
         log_watcher = xmalloc(sizeof(ev_timer));
-        ev_timer_init(log_watcher, log_watcher_cb, gconfig.log_stats, gconfig.log_stats);
+        ev_timer_init(log_watcher, log_watcher_cb, gcfg->log_stats, gcfg->log_stats);
         ev_set_priority(log_watcher, -2);
     }
 
-    num_lsocks = gconfig.num_http_addrs;
+    num_lsocks = gcfg->num_http_addrs;
     lsocks = xmalloc(sizeof(int) * num_lsocks);
     lsocks_bound = xcalloc(num_lsocks, sizeof(bool));
     accept_watchers = xmalloc(sizeof(ev_io*) * num_lsocks);
 
     for(unsigned i = 0; i < num_lsocks; i++) {
-        const dmn_anysin_t* asin = &gconfig.http_addrs[i];
-        lsocks[i] = tcp_listen_pre_setup(asin, gconfig.http_timeout);
+        const dmn_anysin_t* asin = &gcfg->http_addrs[i];
+        lsocks[i] = tcp_listen_pre_setup(asin, gcfg->http_timeout);
     }
 }
 
 void statio_bind_socks(void) {
     for(unsigned i = 0; i < num_lsocks; i++)
         if(!lsocks_bound[i])
-            if(!socks_helper_bind("TCP stats", lsocks[i], &gconfig.http_addrs[i], false))
+            if(!socks_helper_bind("TCP stats", lsocks[i], &gcfg->http_addrs[i], false))
                 lsocks_bound[i] = true;
 }
 
 bool statio_check_socks(bool soft) {
     unsigned rv = true;
     for(unsigned i = 0; i < num_lsocks; i++)
-        if(!socks_sock_is_bound_to(lsocks[i], &gconfig.http_addrs[i]) && !soft)
-            log_fatal("Failed to bind() stats TCP socket to %s", dmn_logf_anysin(&gconfig.http_addrs[i]));
+        if(!socks_sock_is_bound_to(lsocks[i], &gcfg->http_addrs[i]) && !soft)
+            log_fatal("Failed to bind() stats TCP socket to %s", dmn_logf_anysin(&gcfg->http_addrs[i]));
         else
             rv = false;
     return rv;
@@ -716,7 +716,7 @@ void statio_start(struct ev_loop* statio_loop_arg) {
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         if(listen(lsocks[i], 128) == -1)
-            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, dmn_logf_anysin(&gconfig.http_addrs[i]), dmn_logf_errno());
+            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, dmn_logf_anysin(&gcfg->http_addrs[i]), dmn_logf_errno());
         accept_watchers[i] = xmalloc(sizeof(ev_io));
         ev_io_init(accept_watchers[i], accept_cb, lsocks[i], EV_READ);
         ev_set_priority(accept_watchers[i], -2);

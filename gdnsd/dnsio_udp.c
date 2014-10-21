@@ -253,7 +253,7 @@ void udp_sock_setup(dns_thread_t* t) {
                 dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {
-        negotiate_udp_buffer(sock, SO_SNDBUF, gconfig.max_edns_response, addrconf->udp_recv_width, asin);
+        negotiate_udp_buffer(sock, SO_SNDBUF, gcfg->max_edns_response, addrconf->udp_recv_width, asin);
     }
 
     if(isv6)
@@ -279,7 +279,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     long pgsz = sysconf(_SC_PAGESIZE);
     if(pgsz < 1024) // if sysconf() error or ridiculous value, use 1K
         pgsz = 1024;
-    const unsigned max_rounded = ((gconfig.max_response + pgsz - 1) / pgsz) * pgsz;
+    const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
     dmn_anysin_t asin;
     void* buf = gdnsd_xpmalign(pgsz, max_rounded);
@@ -372,11 +372,11 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
 
     const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
 
-    // gconfig.max_response, rounded up to the next nearest multiple of the page size
+    // gcfg->max_response, rounded up to the next nearest multiple of the page size
     long pgsz = sysconf(_SC_PAGESIZE);
     if(pgsz < 1024) // if sysconf() error or ridiculous value, use 1K
         pgsz = 1024;
-    const unsigned max_rounded = ((gconfig.max_response + pgsz - 1) / pgsz) * pgsz;
+    const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
     uint8_t* buf[width];
     struct iovec iov[width][1];

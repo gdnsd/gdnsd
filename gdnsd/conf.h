@@ -25,6 +25,7 @@
 
 #include <stdbool.h>
 #include <pthread.h>
+#include <gdnsd/vscf.h>
 
 typedef struct {
     dmn_anysin_t addr;
@@ -81,9 +82,9 @@ typedef struct {
     unsigned zones_rfc1035_auto_interval;
     double zones_rfc1035_min_quiesce;
     double zones_rfc1035_quiesce;
-} global_config_t;
+} cfg_t;
 
-extern global_config_t gconfig;
+extern const cfg_t* gcfg;
 
 typedef enum {
     CONF_SIMPLE_ACTION = 0, // only picks up directory settings for e.g. reload-zones/status/stop
@@ -91,8 +92,10 @@ typedef enum {
     CONF_START = 2,         // full config + necessary writes for startup (e.g. create run/state dirs)
 } conf_mode_t;
 
-void conf_load(const char* cfg_file, const bool force_zss, const bool force_zsd, const conf_mode_t cmode);
+vscf_data_t* conf_parse(const char* cfg_dir);
+cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool force_zsd, const conf_mode_t cmode);
 
-void dns_lsock_init(void);
+F_NONNULL
+void dns_lsock_init(cfg_t* cfg);
 
 #endif // GDNSD_CONF_H

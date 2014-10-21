@@ -285,7 +285,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
         ev_io_stop(loop, ctx->accept_watcher);
 
     tcpdns_conn_t* tdata = xcalloc(1, sizeof(tcpdns_conn_t));
-    tdata->buffer = xmalloc(gconfig.max_response + 2);
+    tdata->buffer = xmalloc(gcfg->max_response + 2);
     tdata->state = READING_INITIAL;
     tdata->asin = asin;
     tdata->ctx = ctx;

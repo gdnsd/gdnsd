@@ -60,8 +60,8 @@ bool socks_helper_bind(const char* desc, const int sock, const dmn_anysin_t* asi
 
 // helper process: bind all sockets (udp/tcp dns + statio)
 void socks_helper_bind_all(void) {
-    for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
-        dns_thread_t* t = &gconfig.dns_threads[i];
+    for(unsigned i = 0; i < gcfg->num_dns_threads; i++) {
+        dns_thread_t* t = &gcfg->dns_threads[i];
         if(!t->bind_success)
             if(!socks_helper_bind(t->is_udp ? "UDP DNS" : "TCP DNS", t->sock, &t->ac->addr, t->ac->autoscan))
                 t->bind_success = true;
@@ -94,8 +94,8 @@ bool socks_sock_is_bound_to(int sock, dmn_anysin_t* addr) {
 
 bool socks_daemon_check_all(bool soft) {
     bool rv = false;
-    for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
-        dns_thread_t* t = &gconfig.dns_threads[i];
+    for(unsigned i = 0; i < gcfg->num_dns_threads; i++) {
+        dns_thread_t* t = &gcfg->dns_threads[i];
         const char* ptxt = t->is_udp ? "UDP" : "TCP";
         if(!t->bind_success) {
             if(!socks_sock_is_bound_to(t->sock, &t->ac->addr)) {

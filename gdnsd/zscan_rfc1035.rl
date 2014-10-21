@@ -228,7 +228,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
     dmn_assert(newlen <= len);
 
     if(newlen > 255) {
-        if(!big_ok || gconfig.disable_text_autosplit)
+        if(!big_ok || gcfg->disable_text_autosplit)
             parse_error_noargs("Text chunk too long (>255 unescaped)");
         if(newlen > 65500) parse_error_noargs("Text chunk too long (>65500 unescaped)");
         unsigned remainder = newlen % 255;
@@ -800,7 +800,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
 
     zscan_t* z = xcalloc(1, sizeof(zscan_t));
     z->lcount = 1;
-    z->def_ttl = gconfig.zones_default_ttl;
+    z->def_ttl = gcfg->zones_default_ttl;
     z->zone = zone;
     dname_copy(z->origin, zone->dname);
     z->lhs_dname[0] = 1; // set lhs to relative origin initially

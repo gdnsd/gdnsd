@@ -36,7 +36,7 @@
 #include "ztree.h"
 #include "main.h"
 
-// IFF gconfig.zones_strict_startup is true,
+// IFF gcfg->zones_strict_startup is true,
 //   this flag will be temporarily set to true during
 //   the initial scan, then set back to false, making
 //   zonefile parsing errors fatal for the initial scan.
@@ -627,7 +627,7 @@ static void initial_run(struct ev_loop* loop) {
     }
     else {
         reload_timer = xcalloc(1, sizeof(ev_timer));
-        ev_timer_init(reload_timer, periodic_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
+        ev_timer_init(reload_timer, periodic_scan, gcfg->zones_rfc1035_auto_interval, gcfg->zones_rfc1035_auto_interval);
         ev_timer_start(loop, reload_timer);
     }
 }
@@ -661,7 +661,7 @@ static void handle_inotify_failure(struct ev_loop* loop) {
     close(inot.main_fd);
 
     // insert periodic timer for fallback/retry scanning
-    ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
+    ev_timer_init(inot.fallback_watcher, inotify_fallback_scan, gcfg->zones_rfc1035_auto_interval, gcfg->zones_rfc1035_auto_interval);
     ev_timer_start(loop, inot.fallback_watcher);
 }
 
@@ -762,7 +762,7 @@ F_NONNULL
 static void initial_run(struct ev_loop* loop) {
     dmn_assert(loop);
     reload_timer = xcalloc(1, sizeof(ev_timer));
-    ev_timer_init(reload_timer, periodic_scan, gconfig.zones_rfc1035_auto_interval, gconfig.zones_rfc1035_auto_interval);
+    ev_timer_init(reload_timer, periodic_scan, gcfg->zones_rfc1035_auto_interval, gcfg->zones_rfc1035_auto_interval);
     ev_timer_start(loop, reload_timer);
 }
 
@@ -842,12 +842,12 @@ static void set_quiesce(void) {
     free(testfn);
 #endif // has_mtimens
 
-    min_quiesce = (sys_min_quiesce > gconfig.zones_rfc1035_min_quiesce)
+    min_quiesce = (sys_min_quiesce > gcfg->zones_rfc1035_min_quiesce)
         ? sys_min_quiesce
-        : gconfig.zones_rfc1035_min_quiesce;
-    full_quiesce = (min_quiesce > gconfig.zones_rfc1035_quiesce)
+        : gcfg->zones_rfc1035_min_quiesce;
+    full_quiesce = (min_quiesce > gcfg->zones_rfc1035_quiesce)
         ? min_quiesce
-        : gconfig.zones_rfc1035_quiesce;
+        : gcfg->zones_rfc1035_quiesce;
     log_info("rfc1035: quiescence times are %.3g min, %.3g full", min_quiesce, full_quiesce);
 
     // undocumented env var to speed startup for the testsuite on slow filesystems,
@@ -873,9 +873,9 @@ void zsrc_rfc1035_load_zones(const bool check_only) {
     else
         set_quiesce();
 
-    if(gconfig.zones_rfc1035_auto)
+    if(gcfg->zones_rfc1035_auto)
         inotify_initial_setup(); // no-op if no compile-time support
-    if(gconfig.zones_strict_startup)
+    if(gcfg->zones_strict_startup)
         fail_fatally = true;
     struct ev_loop* temp_load_loop = ev_loop_new(EVFLAG_AUTO);
     scan_dir(temp_load_loop, min_quiesce);
@@ -914,6 +914,6 @@ void zsrc_rfc1035_runtime_init(struct ev_loop* loop) {
     ev_async_init(sigusr1_waker, sigusr1_cb);
     ev_async_start(loop, sigusr1_waker);
 
-    if(gconfig.zones_rfc1035_auto)
+    if(gcfg->zones_rfc1035_auto)
         initial_run(zones_loop);
 }

@@ -44,11 +44,15 @@
 #include "zsrc_djb.h"
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
 #include <gdnsd/plugapi-priv.h>
 #include <gdnsd/net-priv.h>
 #include <gdnsd/misc-priv.h>
 #include <gdnsd/paths-priv.h>
 #include <gdnsd/mon-priv.h>
+
+// Global config, readonly
+const cfg_t* gcfg = NULL;
 
 // ev loop used for monitoring and statio
 // (which shared a thread as well)
@@ -162,7 +166,10 @@ static void* mon_runtime(void* unused V_UNUSED) {
     return NULL;
 }
 
-static void start_threads(void) {
+F_NONNULL
+static void start_threads(cfg_t* cfg) {
+    dmn_assert(cfg);
+
     // Block all signals using the pthreads interface while starting threads,
     //  which causes them to inherit the same mask.
     sigset_t sigmask_all;
@@ -180,8 +187,8 @@ static void start_threads(void) {
 
     int pthread_err;
 
-    for(unsigned i = 0; i < gconfig.num_dns_threads; i++) {
-        dns_thread_t* t = &gconfig.dns_threads[i];
+    for(unsigned i = 0; i < cfg->num_dns_threads; i++) {
+        dns_thread_t* t = &cfg->dns_threads[i];
         if(t->is_udp)
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, t);
         else
@@ -416,8 +423,13 @@ int main(int argc, char** argv) {
     // Init meta-PRNG - needed for config load
     gdnsd_rand_meta_init();
 
-    // Load config file
-    conf_load(copts.cfg_dir, copts.force_zss, copts.force_zsd, cmode);
+    // Load config
+    vscf_data_t* cfg_root = conf_parse(copts.cfg_dir);
+    cfg_t* cfg = conf_load(cfg_root, copts.force_zss, copts.force_zsd, cmode);
+    vscf_destroy(cfg_root);
+
+    // Expose readonly process-global config
+    gcfg = cfg;
 
     // init2() lets us do daemon actions
     char* rundir = gdnsd_resolve_path_run(NULL, NULL);
@@ -465,7 +477,7 @@ int main(int argc, char** argv) {
     }
 
     // Set up and validate privdrop info if necc
-    dmn_init3(gconfig.username, (action == ACT_RESTART));
+    dmn_init3(cfg->username, (action == ACT_RESTART));
 
     log_info("Loading zone data...");
     ztree_init();
@@ -484,11 +496,11 @@ int main(int argc, char** argv) {
     const bool started_as_root = !geteuid();
 
     // Check/set rlimits for mlockall() if necessary and possible
-    if(gconfig.lock_mem)
+    if(cfg->lock_mem)
         memlock_rlimits(started_as_root);
 
     // Initialize DNS listening sockets, but do not bind() them yet
-    dns_lsock_init();
+    dns_lsock_init(cfg);
 
     // init the stats summing/output code + listening sockets (again no bind yet)
     statio_init();
@@ -499,17 +511,17 @@ int main(int argc, char** argv) {
     dmn_fork();
 
     // If root, or if user explicitly set a priority...
-    if(started_as_root || gconfig.priority != -21) {
+    if(started_as_root || cfg->priority != -21) {
         // If root and no explicit value, use -11
-        if(started_as_root && gconfig.priority == -21)
-            gconfig.priority = -11;
-        if(setpriority(PRIO_PROCESS, getpid(), gconfig.priority))
-            log_warn("setpriority(%i) failed: %s", gconfig.priority, dmn_logf_errno());
+        if(started_as_root && cfg->priority == -21)
+            cfg->priority = -11;
+        if(setpriority(PRIO_PROCESS, getpid(), cfg->priority))
+            log_warn("setpriority(%i) failed: %s", cfg->priority, dmn_logf_errno());
     }
 
     // Lock whole daemon into memory, including
     //  all future allocations.
-    if(gconfig.lock_mem)
+    if(cfg->lock_mem)
         if(mlockall(MCL_CURRENT | MCL_FUTURE))
             log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)",
                 dmn_logf_errno());
@@ -567,7 +579,7 @@ int main(int argc, char** argv) {
     // event loop (libev for TCP, manual blocking loop for UDP)
     // Also starts the zone data reload thread
     // and the statio+monitoring thread
-    start_threads();
+    start_threads(cfg);
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");

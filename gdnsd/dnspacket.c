@@ -71,10 +71,10 @@ typedef struct {
     // used to pseudo-randomly rotate some RRsets (A, AAAA, NS, PTR)
     gdnsd_rstate_t* rand_state;
 
-    // Allocated at dnspacket startup, needs room for gconfig.max_cname_depth * 256
+    // Allocated at dnspacket startup, needs room for gcfg->max_cname_depth * 256
     uint8_t* dync_store;
 
-    // This is sized the same as the main packet buffer (gconfig.max_response), and
+    // This is sized the same as the main packet buffer (gcfg->max_response), and
     //  used as temporary space for building Additional section records
     uint8_t* addtl_store;
 
@@ -132,7 +132,7 @@ dnspacket_stats_t** dnspacket_stats;
 // Allocates the array of pointers to stats structures, one per I/O thread
 // Called from main thread before I/O threads are spawned.
 void dnspacket_global_setup(void) {
-    dnspacket_stats = xcalloc(gconfig.num_dns_threads, sizeof(dnspacket_stats_t*));
+    dnspacket_stats = xcalloc(gcfg->num_dns_threads, sizeof(dnspacket_stats_t*));
     result_v6_offset = gdnsd_result_get_v6_offset();
 }
 
@@ -140,7 +140,7 @@ void dnspacket_global_setup(void) {
 //  ensures they all finish allocating their stats and storing the pointers
 //  into dnspacket_stats before allowing the main thread to continue.
 void dnspacket_wait_stats(void) {
-    const unsigned waitfor = gconfig.num_dns_threads;
+    const unsigned waitfor = gcfg->num_dns_threads;
     pthread_mutex_lock(&stats_init_mutex);
     while(stats_initialized < waitfor)
         pthread_cond_wait(&stats_init_cond, &stats_init_mutex);
@@ -152,10 +152,10 @@ void* dnspacket_ctx_init(const bool is_udp) {
 
     ctx->rand_state = gdnsd_rand_init();
     ctx->is_udp = is_udp;
-    ctx->addtl_rrsets = xmalloc(gconfig.max_addtl_rrsets * sizeof(addtl_rrset_t));
+    ctx->addtl_rrsets = xmalloc(gcfg->max_addtl_rrsets * sizeof(addtl_rrset_t));
     ctx->comptargets = xmalloc(COMPTARGETS_MAX * sizeof(comptarget_t));
-    ctx->dync_store = xmalloc(gconfig.max_cname_depth * 256);
-    ctx->addtl_store = xmalloc(gconfig.max_response);
+    ctx->dync_store = xmalloc(gcfg->max_cname_depth * 256);
+    ctx->addtl_store = xmalloc(gcfg->max_response);
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
 
     return ctx;
@@ -308,7 +308,7 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, unsign
     dmn_assert(ctx); dmn_assert(stats); dmn_assert(opt_data);
 
     bool rv = false;
-    if((opt_code == EDNS_CLIENTSUB_OPTCODE) && gconfig.edns_client_subnet)
+    if((opt_code == EDNS_CLIENTSUB_OPTCODE) && gcfg->edns_client_subnet)
         rv = handle_edns_client_subnet(ctx, stats, opt_len, opt_data);
     else
         log_devdebug("Unknown EDNS option code: %x", opt_code);
@@ -369,16 +369,16 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const w
             unsigned client_req = DNS_OPTRR_GET_MAXSIZE(opt);
             if(client_req < 512U)
                 client_req = 512U;
-            ctx->this_max_response = client_req < gconfig.max_edns_response
+            ctx->this_max_response = client_req < gcfg->max_edns_response
                 ? client_req
-                : gconfig.max_edns_response;
+                : gcfg->max_edns_response;
         }
         else { // TCP
-            ctx->this_max_response = gconfig.max_response;
+            ctx->this_max_response = gcfg->max_response;
         }
 
         // ensure nothing goes wrong with implied limits above
-        dmn_assert(ctx->this_max_response <= gconfig.max_response);
+        dmn_assert(ctx->this_max_response <= gcfg->max_response);
         // leave room for basic OPT RR (edns-client-subnet room is addressed elsewhere)
         ctx->this_max_response -= 11;
 
@@ -495,7 +495,7 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, uint8_
             ctx->this_max_response = 512;
         }
         else { // No valid EDNS OPT RR in request, TCP
-            ctx->this_max_response = gconfig.max_response;
+            ctx->this_max_response = gcfg->max_response;
         }
     } while (0);
 
@@ -872,8 +872,8 @@ static bool add_addtl_rrset_check(dnsp_ctx_t* ctx, const ltree_rrset_addr_t* rrs
 
     bool rv = true;
 
-    // gconfig.max_addtl_rrsets unique addtl rrsets
-    if(unlikely(ctx->addtl_count == gconfig.max_addtl_rrsets)) {
+    // gcfg->max_addtl_rrsets unique addtl rrsets
+    if(unlikely(ctx->addtl_count == gcfg->max_addtl_rrsets)) {
         rv = false;
     }
     else {
@@ -1633,7 +1633,7 @@ static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, cons
 
     if(!ctx->ancount)
         offset = encode_rr_soa_negative(ctx, offset, ltree_node_get_rrset_soa(authdom));
-    else if(gconfig.include_optional_ns && ctx->qtype != DNS_TYPE_NS
+    else if(gcfg->include_optional_ns && ctx->qtype != DNS_TYPE_NS
         && (ctx->qtype != DNS_TYPE_ANY || !res_is_auth))
             offset = encode_rrs_ns(ctx, offset, ltree_node_get_rrset_ns(authdom), false);
 
@@ -1747,7 +1747,7 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
 
     if(dr->is_cname) {
         dmn_assert(gdnsd_dname_status(dr->storage) == DNAME_VALID);
-        dmn_assert(ctx->dync_count < gconfig.max_cname_depth);
+        dmn_assert(ctx->dync_count < gcfg->max_cname_depth);
         uint8_t* cn_store = &ctx->dync_store[ctx->dync_count++ * 256];
         dname_copy(cn_store, dr->storage);
         ctx->dync_synth_rrset.gen.type = DNS_TYPE_CNAME;
@@ -1843,8 +1843,8 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const 
                 res_hdr->flags1 |= 4; // AA bit
                 via_cname = true;
 
-                if(++cname_depth > gconfig.max_cname_depth) {
-                    log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gconfig.max_cname_depth);
+                if(++cname_depth > gcfg->max_cname_depth) {
+                    log_err("Query for '%s' leads to a CNAME chain longer than %u (max_cname_depth)! This is a DYNC plugin configuration problem, and gdnsd will respond with NXDOMAIN protect against infinite client<->server CNAME-chasing loops!", logf_dname(qname), gcfg->max_cname_depth);
                     // wipe state back to an empty NXDOMAIN response
                     resdom = NULL;
                     res_rrsets = NULL;
@@ -2005,8 +2005,8 @@ unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const dmn
         }
         else {
             ctx->ancount = 1;
-            memcpy(&packet[res_offset], gconfig.chaos, gconfig.chaos_len);
-            res_offset += gconfig.chaos_len;
+            memcpy(&packet[res_offset], gcfg->chaos, gcfg->chaos_len);
+            res_offset += gcfg->chaos_len;
         }
 
         if(hdr->flags2 == DNS_RCODE_NOERROR) stats_own_inc(&stats->noerror);
