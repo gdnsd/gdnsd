@@ -104,14 +104,13 @@ union _vscf_data_t {
 };
 
 typedef struct {
-    int           cont_stack_top;
     int           cs;
-    int           top;
-    int           cont_stack_alloc;
-    int           cs_stack_alloc;
+    unsigned      top;
+    unsigned      cont_stack_top;
+    unsigned      cont_stack_alloc;
+    unsigned      cs_stack_alloc;
     unsigned      lcount;
     unsigned      cur_klen;
-    vscf_data_t*  cont;
     vscf_data_t** cont_stack;
     int*          cs_stack;
     const char*   p;
@@ -354,16 +353,18 @@ static void set_key(vscf_scnr_t* scnr, const char* end) {
 F_NONNULL
 static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
     dmn_assert(scnr);
-    dmn_assert(scnr->cont);
     dmn_assert(v);
 
-    if(scnr->cont->type == VSCF_HASH_T) {
-        vscf_hash_t* h = &scnr->cont->hash;
+    vscf_data_t* cont = scnr->cont_stack[scnr->cont_stack_top];
+    dmn_assert(cont);
+
+    if(cont->type == VSCF_HASH_T) {
+        vscf_hash_t* h = &cont->hash;
         return scnr_hash_add_val(scnr, h, v);
     }
     else {
-        dmn_assert(scnr->cont->type == VSCF_ARRAY_T);
-        vscf_array_t* a = &scnr->cont->array;
+        dmn_assert(cont->type == VSCF_ARRAY_T);
+        vscf_array_t* a = &cont->array;
         array_add_val(a, v);
         return true;
     }
@@ -431,7 +432,8 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
         return false;
     }
 
-    if(vscf_is_hash(scnr->cont) && !scnr->cur_key) { // this is hash-merge context
+    vscf_data_t* cont = scnr->cont_stack[scnr->cont_stack_top];
+    if(vscf_is_hash(cont) && !scnr->cur_key) { // this is hash-merge context
         if(vscf_is_array(inc_data)) {
             parse_error("Included file '%s' cannot be an array in this context", input_fn);
             return false;
@@ -441,7 +443,7 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
         // destructively merge include stuff into parent, stealing values
         for(unsigned i = 0; i < inc_data->hash.child_count; i++) {
             vscf_hentry_t* inc_he = inc_data->hash.ordered[i];
-            if(!hash_add_val(inc_he->key, inc_he->klen, (vscf_hash_t*)scnr->cont, inc_he->val)) {
+            if(!hash_add_val(inc_he->key, inc_he->klen, (vscf_hash_t*)cont, inc_he->val)) {
                parse_error("Include file '%s' has duplicate key '%s' when merging into parent hash", input_fn, inc_he->key);
                val_destroy(inc_data);
                return false;
@@ -467,16 +469,13 @@ static void vscf_simple_ensure_val(vscf_simple_t* s) {
 F_NONNULL
 static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
     dmn_assert(scnr); dmn_assert(c);
-    dmn_assert(scnr->cont);
-
-    if(++scnr->cont_stack_top == scnr->cont_stack_alloc)
-        scnr->cont_stack = xrealloc(scnr->cont_stack, ++scnr->cont_stack_alloc * sizeof(vscf_data_t*));
 
     if(!add_to_cur_container(scnr, c))
         return false;
 
-    scnr->cont_stack[scnr->cont_stack_top] = scnr->cont;
-    scnr->cont = c;
+    if(++scnr->cont_stack_top == scnr->cont_stack_alloc)
+        scnr->cont_stack = xrealloc(scnr->cont_stack, ++scnr->cont_stack_alloc * sizeof(vscf_data_t*));
+    scnr->cont_stack[scnr->cont_stack_top] = c;
 
     return true;
 }
@@ -484,8 +483,8 @@ static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
 F_NONNULL
 static void cont_stack_pop(vscf_scnr_t* scnr) {
     dmn_assert(scnr);
-    dmn_assert(scnr->cont_stack_top > -1);
-    scnr->cont = scnr->cont_stack[scnr->cont_stack_top--];
+    dmn_assert(scnr->cont_stack_top > 0);
+    --scnr->cont_stack_top;
 }
 
 /*** Destructors ***/
@@ -624,11 +623,10 @@ static void val_destroy(vscf_data_t* d) {
     }
 
     action top_array {
-        dmn_assert(scnr->cont); // outermost
-        dmn_assert(scnr->cont_stack_top == -1); // outermost
-        dmn_assert(vscf_is_hash(scnr->cont)); // default hash
-        hash_destroy((vscf_hash_t*)scnr->cont);
-        scnr->cont = (vscf_data_t*)array_new();
+        dmn_assert(scnr->cont_stack_top == 0); // outermost
+        dmn_assert(vscf_is_hash(scnr->cont_stack[0])); // default hash
+        hash_destroy((vscf_hash_t*)scnr->cont_stack[0]);
+        scnr->cont_stack[0] = (vscf_data_t*)array_new();
     }
 
     action process_include {
@@ -694,12 +692,13 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
 
     scnr->lcount = 1;
     scnr->fn = fn;
-    scnr->cont_stack_top = -1;
     scnr->cs = vscf_start;
     scnr->err = err;
+    scnr->cont_stack_alloc = 2;
+    scnr->cont_stack = xmalloc(scnr->cont_stack_alloc * sizeof(vscf_data_t*));
 
     // default container is hash, will be replaced if array
-    scnr->cont = (vscf_data_t*)hash_new();
+    scnr->cont_stack[0] = (vscf_data_t*)hash_new();
 
     while(!scnr->eof) {
         unsigned have;
@@ -777,20 +776,15 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
     vscf_data_t* retval;
 
     if(*err) {
-        if(scnr->cont_stack_top == -1)
-            val_destroy(scnr->cont);
-        else
-            val_destroy(scnr->cont_stack[0]);
+        val_destroy(scnr->cont_stack[0]);
         retval = NULL;
     }
     else {
-        dmn_assert(scnr->cont_stack_top == -1);
-        retval = scnr->cont; // outermost container
+        dmn_assert(scnr->cont_stack_top == 0);
+        retval = scnr->cont_stack[0];
     }
 
-    if(scnr->cont_stack)
-        free(scnr->cont_stack);
-
+    free(scnr->cont_stack);
     free(scnr);
     return retval;
 }
