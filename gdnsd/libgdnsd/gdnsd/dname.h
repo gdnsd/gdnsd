@@ -280,29 +280,47 @@ static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2) {
 // returns true if they are identical (only difference from _isparentof)
 // dname and zone must be DNAME_VALID (fully-qualified).
 F_NONNULL F_PURE F_UNUSED
-static bool gdnsd_dname_isinzone(const uint8_t* zone, const uint8_t* dname) {
-    dmn_assert(zone); dmn_assert(dname);
-    dmn_assert(gdnsd_dname_status(zone) == DNAME_VALID);
-    dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
+static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
+    dmn_assert(parent); dmn_assert(child);
+    dmn_assert(gdnsd_dname_status(parent) == DNAME_VALID);
+    dmn_assert(gdnsd_dname_status(child) == DNAME_VALID);
 
-    const unsigned plen = *zone++;
-    const unsigned clen = *dname++;
+    bool rv = false;
+    const unsigned plen = *parent++;
+    const unsigned clen = *child++;
+    dmn_assert(plen); // implied by DNAME_VALID check above
+    dmn_assert(clen); // implied by DNAME_VALID check above
 
-    if(plen <= clen) {
-        int ldiff = clen - plen;
-        dmn_assert(ldiff > -1);
-        if(!memcmp(dname + ldiff, zone, plen)) {
-            while(ldiff > 0) {
-                ldiff--;
-                const unsigned cllen = *dname++;
-                dname += cllen;
-                ldiff -= cllen;
+    if(plen <= clen) { // if child shorter than parent, cannot be isinzone
+        // child_pstart is the hypothetical location of
+        //   the trailing "parent" in "child" if isinzone
+        const uint8_t* child_pstart = child + (clen - plen);
+        if(!memcmp(child_pstart, parent, plen)) { // basic trailing ~match
+            // There are corner cases that can fool the quick memcmp check
+            //   into a false positive.  Basically, picture www.xfoo.com vs
+            //   foo.com, where 'x' happens to be the integer value 3 (the
+            //   length of "foo") within child's label. This is more
+            //   realistic for long labels where the length byte could be
+            //   in the ASCII range for numerals, so we must iterate
+            //   child's actual labels and make sure that one of them falls
+            //   exactly on child_pstart.
+            while(*child) { // not reached the terminal \0
+                if(child == child_pstart) { // definite match
+                    rv = true;
+                    break;
+                }
+                // jump to next start-of-label
+                const unsigned llen = *child++;
+                child += llen;
             }
-            if(ldiff == 0) return true;
+            // the above misses the case of both parent and child being the
+            //   root zone of the DNS, and this catches it.
+            if(plen == 1)
+                rv = true;
         }
     }
 
-    return false;
+    return rv;
 }
 
 // returns true if parent is the parent of child, false otherwise.

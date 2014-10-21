@@ -252,29 +252,15 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
     return DNAME_VALID;
 }
 
+// Nothing's currently using this.  I'd delete it but I don't want to
+//   bump the API version for it :p
 bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child) {
     dmn_assert(parent); dmn_assert(child);
     dmn_assert(dname_status(parent) == DNAME_VALID);
     dmn_assert(dname_status(child) == DNAME_VALID);
 
-    const unsigned plen = *parent++;
-    const unsigned clen = *child++;
-
-    if(plen < clen) {
-        int ldiff = clen - plen;
-        dmn_assert(ldiff > 0);
-        if(!memcmp(child + ldiff, parent, plen)) {
-            while(ldiff > 0) {
-                ldiff--;
-                const unsigned cllen = *child++;
-                child += cllen;
-                ldiff -= cllen;
-            }
-            if(ldiff == 0) return true;
-        }
-    }
-
-    return false;
+    return (gdnsd_dname_isinzone(parent, child)
+        && *parent != *child);
 }
 
 uint32_t gdnsd_dname_hash(const uint8_t *k) {
