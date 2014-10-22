@@ -164,45 +164,45 @@ static void udp_sock_opts_v6(const int sock) {
 
 F_NONNULL
 static void negotiate_udp_buffer(int sock, int which, const int pktsize, const unsigned width, const dmn_anysin_t* asin) {
-        dmn_assert(sock > -1);
-        dmn_assert(which == SO_SNDBUF || which == SO_RCVBUF);
-        dmn_assert(pktsize >= 512);
-        dmn_assert(width > 0);
-        dmn_assert(asin);
+    dmn_assert(sock > -1);
+    dmn_assert(which == SO_SNDBUF || which == SO_RCVBUF);
+    dmn_assert(pktsize >= 512);
+    dmn_assert(width > 0);
+    dmn_assert(asin);
 
-        // Our default desired buffer.  This is based on enough room for
-        //   recv_width * 8 packets.  recv_width is counted as "4" if less than 4
-        //   (including the non-sendmmsg() case).
-        const int desired_buf = pktsize * 8 * ((width < 4) ? 4 : width);
+    // Our default desired buffer.  This is based on enough room for
+    //   recv_width * 8 packets.  recv_width is counted as "4" if less than 4
+    //   (including the non-sendmmsg() case).
+    const int desired_buf = pktsize * 8 * ((width < 4) ? 4 : width);
 
-        // Bare minimum buffer we'll accept: the greater of 16K or pktsize
-        const int min_buf = (pktsize < 16384) ? 16384 : pktsize;
+    // Bare minimum buffer we'll accept: the greater of 16K or pktsize
+    const int min_buf = (pktsize < 16384) ? 16384 : pktsize;
 
-        // For log messages below
-        const char* which_str = (which == SO_SNDBUF) ? "SO_SNDBUF" : "SO_RCVBUF";
+    // For log messages below
+    const char* which_str = (which == SO_SNDBUF) ? "SO_SNDBUF" : "SO_RCVBUF";
 
-        // Negotiate with the kernel: if it reports <desired, try to set desired,
-        //   cutting in half on failure so long as we stay above the min, and then
-        //   eventually trying the exact minimum.  If we can't set the min, fail fatally.
-        int opt_size;
-        socklen_t size_size = sizeof(opt_size);
-        if(getsockopt(sock, SOL_SOCKET, which, &opt_size, &size_size) == -1)
-            log_fatal("Failed to get %s on UDP socket: %s", which_str, dmn_logf_errno());
-        if(opt_size < desired_buf) {
-            opt_size = desired_buf;
-            while(setsockopt(sock, SOL_SOCKET, which, &opt_size, sizeof(opt_size)) == -1) {
-                if(opt_size > (min_buf << 1))
-                    opt_size >>= 1;
-                else if(opt_size > min_buf)
-                    opt_size = min_buf;
-                else
-                    log_fatal("Failed to set %s to %u for UDP socket %s: %s.  You may need to reduce the max_edns_response and/or udp_recv_width, or specify workable buffer sizes explicitly in the config", which_str, opt_size, dmn_logf_anysin(asin), dmn_logf_errno());
-            }
+    // Negotiate with the kernel: if it reports <desired, try to set desired,
+    //   cutting in half on failure so long as we stay above the min, and then
+    //   eventually trying the exact minimum.  If we can't set the min, fail fatally.
+    int opt_size;
+    socklen_t size_size = sizeof(opt_size);
+    if(getsockopt(sock, SOL_SOCKET, which, &opt_size, &size_size) == -1)
+        log_fatal("Failed to get %s on UDP socket: %s", which_str, dmn_logf_errno());
+    if(opt_size < desired_buf) {
+        opt_size = desired_buf;
+        while(setsockopt(sock, SOL_SOCKET, which, &opt_size, sizeof(opt_size)) == -1) {
+            if(opt_size > (min_buf << 1))
+                opt_size >>= 1;
+            else if(opt_size > min_buf)
+                opt_size = min_buf;
+            else
+                log_fatal("Failed to set %s to %u for UDP socket %s: %s.  You may need to reduce the max_edns_response and/or udp_recv_width, or specify workable buffer sizes explicitly in the config", which_str, opt_size, dmn_logf_anysin(asin), dmn_logf_errno());
         }
+    }
 
-        // If we had to endure some reductions above, complain about it
-        if(opt_size < desired_buf)
-            log_info("UDP socket %s: %s: wanted %i, got %i", dmn_logf_anysin(asin), which_str, desired_buf, opt_size);
+    // If we had to endure some reductions above, complain about it
+    if(opt_size < desired_buf)
+        log_info("UDP socket %s: %s: wanted %i, got %i", dmn_logf_anysin(asin), which_str, desired_buf, opt_size);
 }
 
 void udp_sock_setup(dns_thread_t* t) {
