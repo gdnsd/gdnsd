@@ -613,13 +613,11 @@ static char* str_combine_n(const unsigned count, ...) {
 ***********************************************************/
 
 void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name) {
+    // All of this needs to be set up before we can even log failures below
     params.debug = debug;
     params.foreground = foreground;
-    params.name = strdup(name);
     state.stderr_out = stderr;
     state.stdout_out = stdout;
-
-    // set phase early so that dmn_log calls don't fail
     const phase_t prev_phase = state.phase;
     state.phase = PHASE1_INIT1;
 
@@ -628,6 +626,8 @@ void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name) {
         dmn_log_fatal("BUG: dmn_init1() can only be called once!");
     if(!name)
         dmn_log_fatal("BUG: dmn_init1(): argument 'name' is *required*");
+
+    params.name = strdup(name);
 
     dmn_detect_systemd(use_syslog);
     if(use_syslog) {
