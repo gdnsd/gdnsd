@@ -758,17 +758,11 @@ F_NONNULL F_NOINLINE
 static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
     dmn_assert(z); dmn_assert(buf); dmn_assert(fd >= 0);
 
-    volatile bool failed = true;
-
     if(!sigsetjmp(z->jbuf, 0)) {
         scanner(z, buf, bufsize, fd);
-        failed = false;
+        return false;
     }
-    else {
-        failed = true;
-    }
-
-    return failed;
+    return true;
 }
 
 bool zscan_rfc1035(zone_t* zone, const char* fn) {

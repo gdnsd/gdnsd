@@ -493,6 +493,19 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
     }
 }
 
+// See similar in zscan_rfc1035.rl
+typedef bool (*sij_func_t)(zscan_t*,djb_recordcb_t);
+F_NONNULL F_NOINLINE
+static bool _scan_isolate_jmp(zscan_t* z, djb_recordcb_t cb) {
+    dmn_assert(z); dmn_assert(cb);
+
+    if(!sigsetjmp(z->jbuf, 0)) {
+        zscan_foreach_file_record(z, cb);
+        return false;
+    }
+    return true;
+}
+
 static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
     DIR *dir;
     bool failed = false;
@@ -532,11 +545,10 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
         uint64_t emtime = get_extended_mtime(&st);
         if (emtime > z->mtime)
             z->mtime = emtime;
-        failed = true;
-        if(!sigsetjmp(z->jbuf, 0)) {
-            zscan_foreach_file_record(z, cb);
-            failed = false;
-        }
+
+        sij_func_t sij = &_scan_isolate_jmp;
+        failed = sij(z, cb);
+
         if (z->file) {
             fclose(z->file);
             z->file = NULL;
