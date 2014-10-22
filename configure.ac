@@ -37,6 +37,16 @@ LIBS="$PTHREAD_LIBS $LIBS"
 CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 CC="$PTHREAD_CC"
 
+AC_MSG_CHECKING([if compiling with clang])
+AC_COMPILE_IFELSE(
+[AC_LANG_PROGRAM([], [[
+#ifndef __clang__
+       not clang
+#endif
+]])],
+[CLANG=yes], [CLANG=no])
+AC_MSG_RESULT([$CLANG])
+
 # need to know endian-ness
 AC_C_BIGENDIAN
 
@@ -99,6 +109,16 @@ fi
 AC_SUBST([CFLAGS_PIE])
 AC_SUBST([LDFLAGS_PIE])
 AX_APPEND_LINK_FLAGS([$HARDEN_LINKER -Wl,--as-needed],[LDFLAGS],[])
+
+# clang does not fail on some unsupported options without this,
+#  but it screws up some of our warnflag tests on gcc as well.
+# with this solution, we miss two warning flags under clang because
+#  AC_LANG_PROGRAM triggers them, but gcc gets all its flags
+CLANG_WERROR=
+if test $CLANG = yes; then
+   CLANG_WERROR="-Werror"
+fi
+
 AX_APPEND_COMPILE_FLAGS([\
     $TRY_DEBUG_CFLAGS \
     $HARDEN_COMPILER \
@@ -139,7 +159,8 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wuninitialized \
     -Wunused \
     -Wwrite-strings \
-],[CFLAGS],[-Werror])
+    -Wthis-does-not-exist \
+],[CFLAGS],[$CLANG_WERROR])
 
 # include libdmn configure stuff
 m4_include([gdnsd/libgdnsd/libdmn/libdmn.m4])
