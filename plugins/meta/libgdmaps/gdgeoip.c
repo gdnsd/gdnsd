@@ -368,11 +368,11 @@ static unsigned city_get_dclist(const geoip_db_t* db, unsigned offs) {
         rec += strlen((const char*)rec);
         rec++;
 
-        for(int j = 0; j < 3; ++j)
+        for(unsigned j = 0; j < 3; ++j)
             raw_lat += (rec[j] << (j * 8));
         rec += 3;
 
-        for(int j = 0; j < 3; ++j)
+        for(unsigned j = 0; j < 3; ++j)
             raw_lon += (rec[j] << (j * 8));
 
         if(db->dcmap)

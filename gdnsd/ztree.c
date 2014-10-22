@@ -137,8 +137,8 @@ static int zone_cmp(zone_t* za, zone_t* zb) {
 /******* ztree code *********/
 
 static unsigned label_hash(const uint8_t* label) {
-    const unsigned len = *label++;
-    return gdnsd_lookup2((const char*)label, len);
+    const uint32_t len = *label++;
+    return gdnsd_lookup2(label, len);
 }
 
 // search the children of one node for a given label

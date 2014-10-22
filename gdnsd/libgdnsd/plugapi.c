@@ -133,12 +133,12 @@ void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array) {
     dmn_assert(!psearch); // only called once
 
     // Create a plugin search path array
-    int psearch_count = psearch_array
+    unsigned psearch_count = psearch_array
         ? vscf_array_get_len(psearch_array)
         : 0;
 
     psearch = xmalloc((psearch_count + 2) * sizeof(const char*));
-    for(int i = 0; i < psearch_count; i++) {
+    for(unsigned i = 0; i < psearch_count; i++) {
         vscf_data_t* psd = vscf_array_get_data(psearch_array, i);
         if(!vscf_is_simple(psd))
             log_fatal("Plugin search paths must be strings");

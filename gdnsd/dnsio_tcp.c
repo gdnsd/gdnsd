@@ -325,7 +325,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 #define SOL_TCP IPPROTO_TCP
 #endif
 
-int tcp_listen_pre_setup(const dmn_anysin_t* asin, const int timeout V_UNUSED) {
+int tcp_listen_pre_setup(const dmn_anysin_t* asin, const unsigned timeout V_UNUSED) {
 
     dmn_assert(asin);
 
@@ -351,7 +351,7 @@ int tcp_listen_pre_setup(const dmn_anysin_t* asin, const int timeout V_UNUSED) {
 #endif
 
 #ifdef TCP_DEFER_ACCEPT
-    const int opt_timeout = timeout;
+    const int opt_timeout = (int)timeout;
     if(setsockopt(sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof opt_timeout) == -1)
         log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", dmn_logf_errno());
 #endif

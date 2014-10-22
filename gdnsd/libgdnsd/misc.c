@@ -166,12 +166,12 @@ void gdnsd_rand_meta_init(void) {
         gettimeofday(&t, NULL);
         pid_t pidval = getpid();
         long clockval = clock();
-        rand_init_state.x = 123456789123ULL ^ t.tv_sec;
-        rand_init_state.y = 987654321987ULL ^ t.tv_usec;
-        rand_init_state.z1 = 43219876 ^ clockval;
-        rand_init_state.c1 = 6543217;
-        rand_init_state.z2 = 21987643;
-        rand_init_state.c2 = 1732654 ^ pidval;
+        rand_init_state.x = 123456789123ULL ^ (uint64_t)t.tv_sec;
+        rand_init_state.y = 987654321987ULL ^ (uint64_t)t.tv_usec;
+        rand_init_state.z1 = 43219876U ^ (uint32_t)clockval;
+        rand_init_state.c1 = 6543217U;
+        rand_init_state.z2 = 21987643U;
+        rand_init_state.c2 = 1732654U ^ (uint32_t)pidval;
     }
     while(throw_away--)
         gdnsd_rand_get64(&rand_init_state);
@@ -234,7 +234,7 @@ size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {
             dirname, dmn_logf_errno());
     if(name_max < NAME_MAX)
         name_max = NAME_MAX;
-    const size_t name_end = offsetof(struct dirent, d_name) + name_max + 1;
+    const size_t name_end = offsetof(struct dirent, d_name) + (size_t)name_max + 1U;
     return name_end > sizeof(struct dirent)
         ? name_end
         : sizeof(struct dirent);

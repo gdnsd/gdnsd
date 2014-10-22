@@ -558,7 +558,7 @@ static unsigned store_dname(dnsp_ctx_t* ctx, const unsigned pkt_dname_offset, co
         unsigned cand_remain = cand_last - cand;
 
         do {
-            const int lcmp = dn_remain - cand_remain;
+            const int lcmp = (int)dn_remain - (int)cand_remain;
             if(lcmp == 0 && !memcmp(dn_current, cand_current, dn_remain)) {
                 best_offset = ctarg->stored_at + (cand_current - cand);
                 best_matched_at = dn_current;
@@ -1119,7 +1119,7 @@ static unsigned encode_rrs_naptr(dnsp_ctx_t* ctx, unsigned offset, const ltree_r
         // flags, services, regexp
         for(unsigned j = 0; j < 3; j++) {
             const uint8_t* this_txt = rd->texts[j];
-            const unsigned oal = *this_txt + 1; // oal is the encoded len value + 1 for the len byte itself
+            const unsigned oal = *this_txt + 1U; // oal is the encoded len value + 1 for the len byte itself
             memcpy(&packet[offset], this_txt, oal);
             offset += oal;
         }
@@ -1156,7 +1156,7 @@ static unsigned encode_rrs_txt(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
         unsigned j = 0;
         const ltree_rdata_txt_t rd = rrset->rdata[i];
         while((bs = rd[j++])) {
-            const unsigned oal = *bs + 1; // oal is the encoded len value + 1 for the len byte itself
+            const unsigned oal = *bs + 1U; // oal is the encoded len value + 1 for the len byte itself
             memcpy(&packet[offset], bs, oal);
             offset += oal;
             rdata_len += oal;
@@ -1654,7 +1654,7 @@ static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned 
     while(auth_depth) {
         unsigned llen = packet[offset];
         if(llen & 0xC0) { // compression pointer
-            offset = ntohs(gdnsd_get_una16(&packet[offset])) & ~0xC000;
+            offset = ntohs(gdnsd_get_una16(&packet[offset])) & ~0xC000u;
             dmn_assert(offset < 16384);
         }
         else {

@@ -251,7 +251,7 @@ static zfile_t* zfhash_find(const char* zfn) {
     dmn_assert(zfn);
 
     if(likely(zfhash_alloc)) {
-        const unsigned zfn_hash = gdnsd_lookup2(zfn, strlen(zfn));
+        const unsigned zfn_hash = gdnsd_lookup2((const uint8_t*)zfn, strlen(zfn));
         const unsigned hash_mask = zfhash_alloc - 1;
         unsigned slot = zfn_hash & hash_mask;
         unsigned jmpby = 1;
@@ -405,7 +405,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
         current_zft = xcalloc(1, sizeof(zfile_t));
         current_zft->full_fn = full_fn;
         current_zft->fn = fn;
-        current_zft->hash = gdnsd_lookup2(fn, strlen(fn));
+        current_zft->hash = gdnsd_lookup2((const uint8_t*)fn, strlen(fn));
         zfhash_add(current_zft);
     }
     else {

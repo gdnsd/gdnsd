@@ -266,6 +266,6 @@ bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child) {
 uint32_t gdnsd_dname_hash(const uint8_t *k) {
     dmn_assert(k);
 
-    const uint32_t len = *k++ - 1;
-    return gdnsd_lookup2((const char*)k, len);
+    const uint32_t len = *k++ - 1U;
+    return gdnsd_lookup2(k, len);
 }

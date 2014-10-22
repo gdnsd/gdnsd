@@ -163,20 +163,26 @@ static void udp_sock_opts_v6(const int sock) {
 }
 
 F_NONNULL
-static void negotiate_udp_buffer(int sock, int which, const int pktsize, const unsigned width, const dmn_anysin_t* asin) {
+static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, const unsigned width, const dmn_anysin_t* asin) {
     dmn_assert(sock > -1);
     dmn_assert(which == SO_SNDBUF || which == SO_RCVBUF);
     dmn_assert(pktsize >= 512);
+    dmn_assert(pktsize <= 65536);
     dmn_assert(width > 0);
+    dmn_assert(width <= 64);
     dmn_assert(asin);
 
     // Our default desired buffer.  This is based on enough room for
     //   recv_width * 8 packets.  recv_width is counted as "4" if less than 4
     //   (including the non-sendmmsg() case).
-    const int desired_buf = pktsize * 8 * ((width < 4) ? 4 : width);
+    const int desired_buf = (int)(pktsize * 8 * ((width < 4) ? 4 : width));
+    dmn_assert(desired_buf >= 16384); // 512 * 8 * 4
+    dmn_assert(desired_buf <= 33554432); // 64K * 8 * 64
 
     // Bare minimum buffer we'll accept: the greater of 16K or pktsize
-    const int min_buf = (pktsize < 16384) ? 16384 : pktsize;
+    const int min_buf = (int)((pktsize < 16384) ? 16384 : pktsize);
+    dmn_assert(min_buf >= 16384);
+    dmn_assert(min_buf <= 65536);
 
     // For log messages below
     const char* which_str = (which == SO_SNDBUF) ? "SO_SNDBUF" : "SO_RCVBUF";
@@ -237,7 +243,7 @@ void udp_sock_setup(dns_thread_t* t) {
 #endif
 
     if(addrconf->udp_rcvbuf) {
-        int opt_size = addrconf->udp_rcvbuf;
+        int opt_size = (int)addrconf->udp_rcvbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_RCVBUF to %u for UDP socket %s: %s", opt_size,
                 dmn_logf_anysin(asin), dmn_logf_errno());
@@ -247,7 +253,7 @@ void udp_sock_setup(dns_thread_t* t) {
     }
 
     if(addrconf->udp_sndbuf) {
-        int opt_size = addrconf->udp_sndbuf;
+        int opt_size = (int)addrconf->udp_sndbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s", opt_size,
                 dmn_logf_anysin(asin), dmn_logf_errno());
@@ -275,7 +281,7 @@ F_HOT F_NORETURN F_NONNULL
 static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     dmn_assert(stats);
 
-    const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
+    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
     long pgsz = sysconf(_SC_PAGESIZE);
     if(pgsz < 1024) // if sysconf() error or ridiculous value, use 1K
         pgsz = 1024;
@@ -370,7 +376,7 @@ F_HOT F_NORETURN F_NONNULL
 static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     dmn_assert(stats);
 
-    const int cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1;
+    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
 
     // gcfg->max_response, rounded up to the next nearest multiple of the page size
     long pgsz = sysconf(_SC_PAGESIZE);
@@ -473,8 +479,8 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             }
 
             struct mmsghdr* dgptr = dgrams;
-            while(pkts) {
-                int sent = sendmmsg(fd, dgptr, pkts, 0);
+            while(pkts > 0) {
+                int sent = sendmmsg(fd, dgptr, (unsigned)pkts, 0);
                 dmn_assert(sent != 0);
                 dmn_assert(sent <= pkts);
                 if(unlikely(sent < pkts)) {
