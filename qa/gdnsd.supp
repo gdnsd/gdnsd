@@ -4,19 +4,7 @@
 {
   dso_tls_glibc
   Memcheck:Leak
-  fun:memalign
-  fun:tls_get_addr_tail
-  fun:init_rand
-  fun:plugin_weighted_iothread_init
-}
-
-# Seems to be some kind of fallout from the above...
-{
-  weighted_init_rand
-  Memcheck:Leak
-  fun:calloc
-  fun:gdnsd_xcalloc
-  fun:gdnsd_rand_init
+  ...
   fun:init_rand
   fun:plugin_weighted_iothread_init
 }

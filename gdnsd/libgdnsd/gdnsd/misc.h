@@ -61,95 +61,112 @@ char* gdnsd_str_combine_n(const unsigned count, ...);
 // set thread name (via pthread_setname_np or similar)
 void gdnsd_thread_setname(const char* n);
 
-
 /***************
- * This Public-Domain JLKISS64 PRNG implementation is from:
- * http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
- * I've made cosmetic modifications (style, C99)
- *  and given it a state pointer for threading, and renamed
- *  it into the gdnsd API namespace so it can be swapped out
- *  easily later.
+ * These are Public-Domain JKISS32/JLKISS64 PRNG implementations
+ *   which I initially got from David Jones' RNG paper here:
+ *   http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
+ *   ... and then incorporated some usage/optimization hints from
+ *   https://github.com/bhickey/librng
+ * The actual algorithms ultimately came from George Marsaglia.
+ * I've made cosmetic modifications (style, C99) and given them a
+ *  state pointer for threading, and renamed them into the gdnsd API
+ *  namespace so they can be swapped out easily later.
  * I've also wrapped everything up such that there's one
  *  global PRNG initialized at startup from decent sources,
  *  which is mutex-protected and used to set seeds for later
- *  runtime per-thread/plugin PRNG initializations, and provided
- *  a buffer to use one iteration of jlkiss64 to generate
- *  2x numbers in 32-bit space.
- * This seems at least as fast as jkiss32 for the 32-bit
- *  results on modern 64-bit CPUs, has much longer periods
- *  and is more resilient in general, and it gives us the
- *  option to burn a little extra CPU on 64-bit PRNG results when
- *  warranted.
+ *  runtime per-thread/plugin PRNG initializations.
  ***************/
 
-// PRNG:
-// gdnsd_rand_init() allocates an opaque PRNG state which can
-//   be later free()'d when no longer required.
-typedef struct _gdnsd_rstate_t {
+/* Note there are separate 64-bit and 32-bit interfaces here.
+ * Both have periods sufficient for this software in general,
+ *   given an analysis of high end per-thread DNS query rates and
+ *   daemon uptimes, etc.  The 32-bit one is faster and should
+ *   be used by default.
+ * The 64-bit one is supplied for cases (such as plugin_weighted)
+ *   where the result is being used in an integer modulo operation
+ *   with unpredictable mod values which could be large enough to
+ *   induce bias with the 32-bit one.
+ * For "gdnsd_rand32_get() % N":
+ *     maxN -> bias
+ *     ----    ----
+ *     2^24 -> 0.39%
+ *     2^28 -> 6.25%
+ *     2^29 -> 12.5%
+ *     2^30 -> 25%
+ * ... whereas rand64_get() will have an almost immeasurably small
+ *   bias for modvals up to 2^32.
+ */
+
+typedef struct _gdnsd_rstate64_t {
     uint64_t x;
     uint64_t y;
     uint32_t z1;
     uint32_t c1;
     uint32_t z2;
     uint32_t c2;
-    uint32_t buf32;
-    bool buf32_ok;
-} gdnsd_rstate_t;
+} gdnsd_rstate64_t;
 
-gdnsd_rstate_t* gdnsd_rand_init(void);
+gdnsd_rstate64_t* gdnsd_rand64_init(void);
 
-// gdnsd_rand_get32(rs) returns uint32_t random numbers
-// gdnsd_rand_get64(rs) returns uint64_t random numbers
-// You can reduce the ranges via the modulo operator, provided that
-//  your modulo values are never too large relative to the overall
-//  size. Very large modulos could introduce significant bias in the
-//  results.  Of course, perfect power-of-two modulos have no bias.
-// In the common case of dynamic modulo values in code, the maximum
-//  bias is proportional the maximum modulo your code uses, and the
-//  bias can be significant for _get32() cases.
-// Examples: max_modulo vs _get32() -> bias
-//  2^20 -> 0.02%
-//  2^24 -> 0.4%
-//  2^28 -> 6.25%
-//  2^29 -> 12.5%
-//  2^30 -> 25%
-//  2^32-1 -> 50%
-// Whereas _get64() will have a bias < 0.00000003% for any modulo
-//  that's 2^32 or smaller.
-
+// This is JLKISS64
 F_NONNULL F_UNUSED
-static uint64_t gdnsd_rand_get64(gdnsd_rstate_t* rs) {
+static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs) {
     dmn_assert(rs);
-
-    uint64_t t;
 
     rs->x = 1490024343005336237ULL * rs->x + 123456789;
-    rs->y ^= rs->y << 21;
-    rs->y ^= rs->y >> 17;
-    rs->y ^= rs->y << 30;
-    t = 4294584393ULL * rs->z1 + rs->c1;
-    rs->c1 = t >> 32; rs->z1 = t;
+
+    uint64_t y = rs->y;
+    y ^= y << 21;
+    y ^= y >> 17;
+    y ^= y << 30;
+    rs->y = y;
+
+    uint64_t t = 4294584393ULL * rs->z1 + rs->c1;
+    rs->c1 = t >> 32;
+    rs->z1 = t;
+
     t = 4246477509ULL * rs->z2 + rs->c2;
-    rs->c2 = t >> 32; rs->z2 = t;
-    return rs->x + rs->y + rs->z1 + ((uint64_t)rs->z2 << 32);
+    rs->c2 = t >> 32;
+    rs->z2 = t;
+
+    return rs->x + y + rs->z1 + ((uint64_t)rs->z2 << 32);
 }
 
+typedef struct _gdnsd_rstate32_t {
+    uint32_t x;
+    uint32_t y;
+    uint32_t z;
+    uint32_t w;
+    uint32_t c;
+} gdnsd_rstate32_t;
+
+gdnsd_rstate32_t* gdnsd_rand32_init(void);
+
+// This is JKISS32
 F_NONNULL F_UNUSED
-static uint32_t gdnsd_rand_get32(gdnsd_rstate_t* rs) {
+static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
     dmn_assert(rs);
 
-    if(rs->buf32_ok) {
-       rs->buf32_ok = false;
-       return rs->buf32;
-    }
-    else {
-       rs->buf32_ok = true;
-       uint64_t new = gdnsd_rand_get64(rs);
-       rs->buf32 = (uint32_t)new;
-       new >>= 32;
-       return (uint32_t)new;
-    }
+    uint32_t y = rs->y;
+    y ^= y << 5;
+    y ^= y >> 7;
+    y ^= y << 22;
+    rs->y = y;
+
+    // Note local mods to how t is handled (results are the same)
+    uint32_t t = rs->z + rs->w + rs->c;
+    rs->z = rs->w;
+    rs->c = (t & 1U << 31) >> 31;
+    rs->w = t & 2147483647;
+
+    rs->x += 1411392427;
+
+    return rs->x + y + rs->w;
 }
+
+/***************
+ * End PRNG Stuff
+ ***************/
 
 // Returns true if running on Linux with a kernel version >= x.y.z
 // Returns false for non-Linux systems, or Linux kernels older than specified.

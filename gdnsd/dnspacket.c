@@ -68,8 +68,8 @@ typedef struct {
     //  should be plenty.
     comptarget_t* comptargets;
 
-    // used to pseudo-randomly rotate some RRsets (A, AAAA, NS, PTR)
-    gdnsd_rstate_t* rand_state;
+    // used to pseudo-randomly rotate some RRsets (A, AAAA, and NS)
+    gdnsd_rstate32_t* rand_state;
 
     // Allocated at dnspacket startup, needs room for gcfg->max_cname_depth * 256
     uint8_t* dync_store;
@@ -150,7 +150,7 @@ void dnspacket_wait_stats(void) {
 void* dnspacket_ctx_init(const bool is_udp) {
     dnsp_ctx_t* ctx = xcalloc(1, sizeof(dnsp_ctx_t));
 
-    ctx->rand_state = gdnsd_rand_init();
+    ctx->rand_state = gdnsd_rand32_init();
     ctx->is_udp = is_udp;
     ctx->addtl_rrsets = xmalloc(gcfg->max_addtl_rrsets * sizeof(addtl_rrset_t));
     ctx->comptargets = xmalloc(COMPTARGETS_MAX * sizeof(comptarget_t));
@@ -685,7 +685,7 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
     {\
         const unsigned _tot = (_total);\
         unsigned _x_count = (_limit);\
-        unsigned i = gdnsd_rand_get32(ctx->rand_state) % _tot;\
+        unsigned i = gdnsd_rand32_get(ctx->rand_state) % _tot;\
         while(_x_count--) {\
 
             // Your code using "i" as an rrset index goes here

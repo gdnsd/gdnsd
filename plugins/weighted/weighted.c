@@ -109,11 +109,11 @@ static unsigned num_resources = 0;
 // it's important that the modulo operation happen in 64-bit space,
 //   even though modval and the effective return value are in 32-bit space,
 //   because it vastly reduces the bias in the returned numbers.
-static __thread gdnsd_rstate_t* rstate = NULL;
-static void init_rand(void) { rstate = gdnsd_rand_init(); }
+static __thread gdnsd_rstate64_t* rstate = NULL;
+static void init_rand(void) { rstate = gdnsd_rand64_init(); }
 static uint64_t get_rand(const uint64_t modval) {
     dmn_assert(modval); dmn_assert(rstate);
-    return gdnsd_rand_get64(rstate) % modval;
+    return gdnsd_rand64_get(rstate) % modval;
 }
 
 // Main config code starts here

@@ -111,12 +111,18 @@ void gdnsd_thread_setname(const char* n V_UNUSED) {
 }
 
 static pthread_mutex_t rand_init_lock = PTHREAD_MUTEX_INITIALIZER;
-static gdnsd_rstate_t rand_init_state = { 0, 0, 0, 0, 0, 0, 0, false };
+static gdnsd_rstate64_t rand_init_state = { 0, 0, 0, 0, 0, 0 };
+
+typedef union {
+    uint64_t u64[5];
+    uint32_t u32[10];
+    uint16_t u16[20];
+} urand_data_t;
 
 // Try to get 5x uint64_t from /dev/urandom, ensuring
-//   none of them are all-zeros.
+//   none of them are all-zeros at the u32 level.
 F_NONNULL
-static bool get_urand_data(uint64_t* rdata) {
+static bool get_urand_data(urand_data_t* rdata) {
     dmn_assert(rdata);
 
     bool rv = false;
@@ -124,15 +130,14 @@ static bool get_urand_data(uint64_t* rdata) {
     if(urfd > -1) {
         unsigned attempts = 10;
         do {
-            memset(rdata, 0, 40);
-            if(read(urfd, rdata, 40) != 40)
+            memset(rdata, 0, sizeof(*rdata));
+            if(read(urfd, rdata, sizeof(*rdata)) != sizeof(*rdata))
                 break;
-            if(rdata[0] && rdata[1] && rdata[2]
-               && rdata[3] && rdata[4]) {
-                rv = true;
-                break;
-            }
-        } while(attempts--);
+            rv = true;
+            for(unsigned i = 0; i < sizeof(*rdata)/sizeof(rdata->u32[0]); i++)
+                if(!rdata->u32[i])
+                    rv = false;
+        } while(!rv && attempts--);
         close(urfd);
     }
     return rv;
@@ -143,22 +148,22 @@ static bool get_urand_data(uint64_t* rdata) {
 static const unsigned THROW_MIN = 31013;
 static const unsigned THROW_MASK = 0xFFFF;
 
+// Must be called early, before any consumers of the public PRNG
+//  init interfaces from C<gdnsd/misc.h>
 void gdnsd_rand_meta_init(void) {
-    union {
-        uint64_t u64[5];
-        uint32_t u32[10];
-    } rdata;
+    urand_data_t rdata;
+    unsigned throw_away;
 
-    unsigned throw_away = THROW_MIN;
-    pthread_mutex_lock(&rand_init_lock);
-    if(get_urand_data(rdata.u64)) {
+    if(get_urand_data(&rdata)) {
         rand_init_state.x = rdata.u64[0];
         rand_init_state.y = rdata.u64[1];
         rand_init_state.z1 = rdata.u32[4];
         rand_init_state.c1 = rdata.u32[5];
         rand_init_state.z2 = rdata.u32[6];
         rand_init_state.c2 = rdata.u32[7];
-        throw_away += (rdata.u32[8] & THROW_MASK);
+        throw_away = (
+            rdata.u16[16] ^ rdata.u16[17] ^ rdata.u16[18] ^ rdata.u16[19]
+        );
     }
     else {
         log_warn("Did not get valid PRNG init via /dev/urandom, using iffy sources");
@@ -172,28 +177,56 @@ void gdnsd_rand_meta_init(void) {
         rand_init_state.c1 = 6543217U;
         rand_init_state.z2 = 21987643U;
         rand_init_state.c2 = 1732654U ^ (uint32_t)pidval;
+        throw_away = 0;
     }
-    while(throw_away--)
-        gdnsd_rand_get64(&rand_init_state);
-    pthread_mutex_unlock(&rand_init_lock);
-}
-
-gdnsd_rstate_t* gdnsd_rand_init(void) {
-    unsigned throw_away;
-    gdnsd_rstate_t* newstate = xcalloc(1, sizeof(gdnsd_rstate_t));
-    pthread_mutex_lock(&rand_init_lock);
-    newstate->x = gdnsd_rand_get64(&rand_init_state);
-    newstate->y = gdnsd_rand_get64(&rand_init_state);
-    newstate->z1 = gdnsd_rand_get32(&rand_init_state);
-    newstate->c1 = gdnsd_rand_get32(&rand_init_state);
-    newstate->z2 = gdnsd_rand_get32(&rand_init_state);
-    newstate->c2 = gdnsd_rand_get32(&rand_init_state);
-    throw_away  = gdnsd_rand_get64(&rand_init_state);
-    pthread_mutex_unlock(&rand_init_lock);
     throw_away &= THROW_MASK;
     throw_away += THROW_MIN;
     while(throw_away--)
-        gdnsd_rand_get64(newstate);
+        gdnsd_rand64_get(&rand_init_state);
+}
+
+gdnsd_rstate64_t* gdnsd_rand64_init(void) {
+    unsigned throw_away;
+    gdnsd_rstate64_t* newstate = xmalloc(sizeof(*newstate));
+
+    pthread_mutex_lock(&rand_init_lock);
+    newstate->x  = gdnsd_rand64_get(&rand_init_state);
+    do {
+        newstate->y = gdnsd_rand64_get(&rand_init_state);
+    } while(!newstate->y); // y==0 is bad for jlkiss64
+    newstate->z1 = gdnsd_rand64_get(&rand_init_state);
+    newstate->c1 = gdnsd_rand64_get(&rand_init_state);
+    newstate->z2 = gdnsd_rand64_get(&rand_init_state);
+    newstate->c2 = gdnsd_rand64_get(&rand_init_state);
+    throw_away   = gdnsd_rand64_get(&rand_init_state);
+    pthread_mutex_unlock(&rand_init_lock);
+
+    throw_away &= THROW_MASK;
+    throw_away += THROW_MIN;
+    while(throw_away--)
+        gdnsd_rand64_get(newstate);
+    return newstate;
+}
+
+gdnsd_rstate32_t* gdnsd_rand32_init(void) {
+    unsigned throw_away;
+    gdnsd_rstate32_t* newstate = xmalloc(sizeof(*newstate));
+
+    pthread_mutex_lock(&rand_init_lock);
+    newstate->x = gdnsd_rand64_get(&rand_init_state);
+    do {
+        newstate->y = gdnsd_rand64_get(&rand_init_state);
+    } while(!newstate->y); // y==0 is bad for jkisss32
+    newstate->z = gdnsd_rand64_get(&rand_init_state);
+    newstate->w = gdnsd_rand64_get(&rand_init_state);
+    newstate->c = 0;
+    throw_away  = gdnsd_rand64_get(&rand_init_state);
+    pthread_mutex_unlock(&rand_init_lock);
+
+    throw_away &= THROW_MASK;
+    throw_away += THROW_MIN;
+    while(throw_away--)
+        gdnsd_rand32_get(newstate);
     return newstate;
 }
 
