@@ -66,9 +66,12 @@ typedef enum {
     READING_JUNK
 } http_state_t;
 
+// How many bytes of the request we really read()
+#define HTTP_READ_BYTES 18
+
 typedef struct {
     dmn_anysin_t* asin;
-    char read_buffer[9];
+    char read_buffer[HTTP_READ_BYTES];
     struct iovec outbufs[2];
     char* hdr_buf;
     char* data_buf;
@@ -188,6 +191,7 @@ static const char html_fixed[] =
 static const char html_footer[] =
     "<p>For machine-readable CSV output, use <a href='/csv'>/csv</a></p>\r\n"
     "<p>For machine-readable JSON output, use <a href='/json'>/json</a></p>\r\n"
+    "<p>For delta stats (since last such query), append the query param '?f=1'</p>\r\n"
     "</body></html>\r\n";
 
 static time_t start_time;
@@ -201,7 +205,14 @@ static bool* lsocks_bound;
 static unsigned num_conn_watchers = 0;
 static unsigned data_buffer_size = 0;
 static unsigned hdr_buffer_size = 0;
+
+// This is memset to zero and re-accumulated for every output
 static statio_t statio;
+
+// Requests that specify ?f=1 (f for flush) only get the delta since
+//  the last ?f=1 (or daemon start, whichever is more recent).
+// All ?f=1 clients share one state, so don't have two independent ones!
+static statio_t flush_hist; // copy of raw stats accum from last f=1
 
 // coordination for final stats output
 static ev_async* final_stats_async = NULL;
@@ -250,7 +261,7 @@ static void accumulate_statio(unsigned threadnum) {
     statio.dns_edns_clientsub += stats_get(&this_stats->edns_clientsub);
 }
 
-static void populate_stats(void) {
+static void populate_stats(const bool flush) {
     const time_t now = time(NULL);
     if(gcfg->realtime_stats || now > pop_statio_time) {
         memset(&statio, 0, sizeof(statio));
@@ -259,6 +270,33 @@ static void populate_stats(void) {
         for(unsigned i = 0; i < nio; i++)
             accumulate_statio(i);
         pop_statio_time = now;
+        if(flush) {
+            // save past history to tmp_hist
+            statio_t tmp_hist;
+            memcpy(&tmp_hist, &flush_hist, sizeof(tmp_hist));
+            // save new values to flush_hist for next time
+            memcpy(&flush_hist, &statio, sizeof(flush_hist));
+            // subtract past history from current counters for output
+            statio.udp_recvfail       -= tmp_hist.udp_recvfail;
+            statio.udp_sendfail       -= tmp_hist.udp_sendfail;
+            statio.udp_tc             -= tmp_hist.udp_tc;
+            statio.udp_edns_big       -= tmp_hist.udp_edns_big;
+            statio.udp_edns_tc        -= tmp_hist.udp_edns_tc;
+            statio.tcp_recvfail       -= tmp_hist.tcp_recvfail;
+            statio.tcp_sendfail       -= tmp_hist.tcp_sendfail;
+            statio.dns_noerror        -= tmp_hist.dns_noerror;
+            statio.dns_refused        -= tmp_hist.dns_refused;
+            statio.dns_nxdomain       -= tmp_hist.dns_nxdomain;
+            statio.dns_notimp         -= tmp_hist.dns_notimp;
+            statio.dns_badvers        -= tmp_hist.dns_badvers;
+            statio.dns_formerr        -= tmp_hist.dns_formerr;
+            statio.dns_dropped        -= tmp_hist.dns_dropped;
+            statio.dns_v6             -= tmp_hist.dns_v6;
+            statio.dns_edns           -= tmp_hist.dns_edns;
+            statio.dns_edns_clientsub -= tmp_hist.dns_edns_clientsub;
+            statio.udp_reqs           -= tmp_hist.udp_reqs;
+            statio.tcp_reqs           -= tmp_hist.tcp_reqs;
+        }
     }
     dmn_assert(pop_statio_time >= start_time);
 }
@@ -294,16 +332,16 @@ static const char* fmt_uptime(void) {
 }
 
 static void statio_log_stats(void) {
-    populate_stats();
+    populate_stats(false);
     log_info(log_dns, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub);
     log_info(log_udp, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc);
     log_info(log_tcp, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 }
 
 F_NONNULL
-static void statio_fill_outbuf_csv(struct iovec* outbufs) {
+static void statio_fill_outbuf_csv(struct iovec* outbufs, const bool flush) {
     dmn_assert(outbufs);
-    populate_stats();
+    populate_stats(flush);
 
     outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
 
@@ -312,9 +350,9 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs) {
 }
 
 F_NONNULL
-static void statio_fill_outbuf_json(struct iovec* outbufs) {
+static void statio_fill_outbuf_json(struct iovec* outbufs, const bool flush) {
     dmn_assert(outbufs);
-    populate_stats();
+    populate_stats(flush);
 
     dmn_assert(pop_statio_time >= start_time);
 
@@ -327,9 +365,9 @@ static void statio_fill_outbuf_json(struct iovec* outbufs) {
 }
 
 F_NONNULL
-static void statio_fill_outbuf_html(struct iovec* outbufs) {
+static void statio_fill_outbuf_html(struct iovec* outbufs, const bool flush) {
     dmn_assert(outbufs);
-    populate_stats();
+    populate_stats(flush);
 
     struct tm now_tm;
     if(!gmtime_r(&pop_statio_time, &now_tm))
@@ -366,16 +404,52 @@ static void log_watcher_cb(struct ev_loop* loop V_UNUSED, ev_timer* t V_UNUSED, 
     statio_log_stats();
 }
 
+typedef void (*ob_cb_t)(struct iovec*, const bool);
+
+static struct {
+    const char* match;
+    const ob_cb_t func;
+} http_lookup[]
+= {
+    // if one match is another's leading substring, the longer
+    //   one must come first in the list!
+    { "GET /json",     statio_fill_outbuf_json },
+    { "GET /csv",      statio_fill_outbuf_csv  },
+    { "GET /html",     statio_fill_outbuf_html },
+    { "GET /",         statio_fill_outbuf_html },
+};
+
+static const unsigned n_http_lookup = ARRAY_SIZE(http_lookup);
+
+// This still doesn't even remotely come close to properly parsing
+//   the request, but it does handle a few basic things, and should
+//   be enough to work for these purposes for now.  The "f=1" query
+//   param must be the first.
 F_NONNULL
 static void process_http_query(char* inbuffer, struct iovec* outbufs) {
     dmn_assert(inbuffer); dmn_assert(outbufs);
-    if(!memcmp(inbuffer, "GET / ", 6))
-        statio_fill_outbuf_html(outbufs);
-    else if(!memcmp(inbuffer, "GET /csv", 8))
-        statio_fill_outbuf_csv(outbufs);
-    else if(!memcmp(inbuffer, "GET /json", 9))
-        statio_fill_outbuf_json(outbufs);
-    else
+
+    bool matched = false;
+    for(unsigned i = 0; i < n_http_lookup; i++) {
+        const unsigned msize = strlen(http_lookup[i].match);
+        dmn_assert(msize + 5 <= HTTP_READ_BYTES); // match + "/?f=1"
+        if(!memcmp(inbuffer, http_lookup[i].match, msize)) {
+            const char* trailptr = &inbuffer[msize];
+            // allow for trailing slash, e.g. "GET /csv/ HTTP/1.0"
+            if(*trailptr == '/')
+                trailptr++;
+            // require termination of the name with space, query, or frag
+            if(strchr(" ?#", *trailptr)) {
+                // check for f=1 only as first query arg
+                const bool flush = !memcmp(trailptr, "?f=1", 4);
+                http_lookup[i].func(outbufs, flush);
+                matched = true;
+            }
+            break;
+        }
+    }
+
+    if(!matched)
         statio_fill_outbuf_404(outbufs);
 }
 
@@ -495,9 +569,9 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
     }
 
     dmn_assert(tdata->state == READING_REQ);
-    dmn_assert(tdata->read_done < 9);
+    dmn_assert(tdata->read_done < HTTP_READ_BYTES);
     char* destination = &tdata->read_buffer[tdata->read_done];
-    const size_t wanted = 9 - tdata->read_done;
+    const size_t wanted = HTTP_READ_BYTES - tdata->read_done;
     ssize_t recvlen = recv(io->fd, destination, wanted, 0);
     if(unlikely(recvlen == -1)) {
         if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
@@ -507,7 +581,7 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
         return;
     }
     tdata->read_done += recvlen;
-    if(tdata->read_done < 9) return;
+    if(tdata->read_done < HTTP_READ_BYTES) return;
 
     // We're relying on the OS to buffer the rest of the request while
     //  we write the response.  After we're done writing we'll drain
@@ -610,6 +684,9 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 
 void statio_init(void) {
     start_time = time(NULL);
+
+    // initial flush history
+    memset(&flush_hist, 0, sizeof(flush_hist));
 
     // the junk buffer
     junk_buffer = xmalloc(JUNK_SIZE);
