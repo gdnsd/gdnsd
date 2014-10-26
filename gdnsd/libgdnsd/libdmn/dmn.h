@@ -43,6 +43,7 @@
 #  define DMN_F_PRINTF(X,Y)   __attribute__((__format__(__printf__, X, Y)))
 #  define DMN_F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
 #  define DMN_F_NONNULL       __attribute__((__nonnull__))
+#  define DMN_F_NORETURN      __attribute__((__noreturn__))
 #  if defined __clang__
 #    if __has_builtin(__builtin_unreachable)
 #      define DMN_HAVE_UNREACH_BUILTIN 1
@@ -54,6 +55,7 @@
 #  define DMN_F_PRINTF(X,Y)
 #  define DMN_F_NONNULLX(...)
 #  define DMN_F_NONNULL
+#  define DMN_F_NORETURN
 #endif
 
 /***
@@ -167,7 +169,7 @@ void dmn_logger(int level, const char* fmt, ...);
 
 // As above, but with a va_list interface to make it
 //  easier to integrate with your own custom wrapper code.
-DMN_F_NONNULLX(2)
+DMN_F_NONNULLX(2) DMN_F_PRINTF(2,0)
 void dmn_loggerv(int level, const char* fmt, va_list ap);
 
 // If running under systemd, send it a message over the

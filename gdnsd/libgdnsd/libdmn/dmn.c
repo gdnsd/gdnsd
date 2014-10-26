@@ -527,6 +527,7 @@ static void close_pipefd(int* fd_p) {
 }
 
 // the helper process executes here and does not return
+DMN_F_NORETURN
 static void helper_proc(const pid_t middle_pid) {
     dmn_assert(state.phase == PHASE3_INIT3);
 
