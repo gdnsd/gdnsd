@@ -220,36 +220,25 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
     if(!oal)
         return DNAME_INVALID;
 
-    unsigned cur_oal = 1; // for terminal \0 or 255
+    const uint8_t* dnptr = dname;
+    unsigned llen;
 
-    while(1) {
-        // Get next label len (or terminal byte)
-        const unsigned llen = *dname;
-
-        // End of input
-        if(oal == cur_oal) {
-            if(!llen)
-                return DNAME_VALID;
-            if(llen == 255)
-                return DNAME_PARTIAL;
-            else
-                return DNAME_INVALID;
-        }
-
-        // Update cur_oal
-        cur_oal++;
-        cur_oal += llen;
-
-        // check oal overflow (label ran off end)
-        if(cur_oal > oal)
-            return DNAME_INVALID;
-
-        // advance dname to next len byte (or terminal byte)
-        dname++;
-        dname += llen;
+    // Step by-label until we reach llen==0 (end of fqdn)
+    //   or llen==255 (DNAME_PARTIAL).
+    while((llen = *dnptr++) && llen != 255) {
+        dnptr += llen;
+        if(&dname[oal] <= dnptr)
+            return DNAME_INVALID; // tried to run off the end!
     }
 
-    return DNAME_VALID;
+    // We came up short (hit terminal label-len byte before running
+    //   out of overall length)
+    if(&dname[oal] > dnptr)
+        return DNAME_INVALID;
+
+    dmn_assert(&dname[oal] == dnptr);
+
+    return llen ? DNAME_PARTIAL : DNAME_VALID;
 }
 
 // Nothing's currently using this.  I'd delete it but I don't want to
