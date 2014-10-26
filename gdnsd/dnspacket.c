@@ -606,7 +606,7 @@ static unsigned store_dname(dnsp_ctx_t* ctx, const unsigned pkt_dname_offset, co
 }
 
 F_NONNULL
-static void dname_from_raw(uint8_t* restrict dname, const uint8_t* restrict raw) {
+static void dname_from_raw(uint8_t* dname, const uint8_t* raw) {
     unsigned offset = 0;
     unsigned llen;
     while((llen = raw[offset])) {
@@ -1152,7 +1152,7 @@ static unsigned encode_rrs_txt(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
 
         const unsigned rdata_offset = offset;
         unsigned rdata_len = 0;
-        const uint8_t* restrict bs;
+        const uint8_t* bs;
         unsigned j = 0;
         const ltree_rdata_txt_t rd = rrset->rdata[i];
         while((bs = rd[j++])) {
