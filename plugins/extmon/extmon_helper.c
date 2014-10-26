@@ -221,7 +221,7 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         // technically, we could go ahead and close off stdout/stderr
         //   here for the "startfg" case, but why bother?  If the user
         //   is debugging via startfg they might want to see this crap anyways.
-        execv(this_mon->cmd->args[0], (char* const *)this_mon->cmd->args);
+        execv(this_mon->cmd->args[0], this_mon->cmd->args);
         log_fatal("execv(%s, ...) failed: %s", this_mon->cmd->args[0], dmn_logf_strerror(errno));
     }
 

@@ -436,7 +436,7 @@ void dmn_sd_notify(const char *notify_msg, const bool optional) {
 
     struct iovec iovec;
     memset(&iovec, 0, sizeof(iovec));
-    iovec.iov_base = (char*)notify_msg; // casting away const is intentional
+    memcpy(&iovec.iov_base, &notify_msg, sizeof(void*)); // iov_base=const hack
     iovec.iov_len = strlen(notify_msg);
 
     struct msghdr msghdr;

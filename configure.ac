@@ -128,6 +128,7 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wextra \
     -Wbad-function-cast \
     -Wcast-align \
+    -Wcast-qual \
     -Wendif-labels \
     -Wfloat-equal \
     -Wformat=2 \

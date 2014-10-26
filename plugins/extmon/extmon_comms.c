@@ -193,7 +193,7 @@ extmon_cmd_t* emc_read_command(const int fd) {
                 log_debug("emc_read_command(): argument runs off end of buffer");
                 goto out_error;
             }
-            memcpy((char*)cmd->args[cmd->num_args], current, cmdlen);
+            memcpy(cmd->args[cmd->num_args], current, cmdlen);
             current += cmdlen;
             len_remain -= cmdlen;
         }
@@ -219,7 +219,7 @@ extmon_cmd_t* emc_read_command(const int fd) {
     if(cmd) {
         if(cmd->args) {
             for(unsigned x = 0; x < cmd->num_args; x++)
-                free((char*)cmd->args[x]);
+                free(cmd->args[x]);
             free(cmd->args);
         }
         free(cmd);

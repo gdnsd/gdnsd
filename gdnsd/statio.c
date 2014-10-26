@@ -354,9 +354,10 @@ F_NONNULL
 static void statio_fill_outbuf_404(struct iovec* outbufs) {
     dmn_assert(outbufs);
     outbufs[0].iov_len = sizeof(http_404_hdr) - 1;
-    outbufs[0].iov_base = (char*)http_404_hdr;
     outbufs[1].iov_len = sizeof(http_404_data) - 1;
-    outbufs[1].iov_base = (char*)http_404_data;
+    // iov_base=const hack
+    memcpy(&outbufs[0].iov_base, &http_404_hdr[0], sizeof(void*));
+    memcpy(&outbufs[1].iov_base, &http_404_data[0], sizeof(void*));
 }
 
 F_NONNULL

@@ -225,7 +225,7 @@ static void send_cmd(const unsigned idx, const mon_t* mon) {
         .timeout = mon->svc->timeout,
         .interval = mon->svc->interval,
         .num_args = mon->svc->num_args,
-        .args = (const char**)this_args,
+        .args = this_args,
         .desc = mon->desc,
     };
 
@@ -282,7 +282,7 @@ static void spawn_helper(void) {
         const char* child_read_fdstr = num_to_str(writepipe[0]);
         const char* child_write_fdstr = num_to_str(readpipe[1]);
         execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N", dmn_get_syslog_alive() ? "S" : "X",
-            child_read_fdstr, child_write_fdstr, (const char*)NULL);
+            child_read_fdstr, child_write_fdstr, NULL);
         log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_logf_strerror(errno));
     }
 

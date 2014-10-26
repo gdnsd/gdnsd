@@ -474,7 +474,7 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
             continue;
 
         for (i = 0, c = z->line + 1; i < sizeof(field)/sizeof(field[0]); i++) {
-            field[i].ptr = c ?: (char*) "";
+            field[i].ptr = c ?: NULL;
             field[i].len = 0;
             if (c) {
                 char *n = strchr(c, ':');

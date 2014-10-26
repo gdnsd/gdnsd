@@ -83,6 +83,6 @@ static stats_uint_t stats_own_get(const stats_t* s)
 // stats_get() -> read the value from any other thread
 F_NONNULL F_UNUSED
 static stats_uint_t stats_get(const stats_t* s)
-    { dmn_assert(s); return *(volatile stats_uint_t*)&s->_x; }
+    { dmn_assert(s); return *(const volatile stats_uint_t*)&s->_x; }
 
 #endif // GDNSD_STATS_H

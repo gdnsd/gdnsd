@@ -33,8 +33,8 @@ typedef struct {
     unsigned interval;
     unsigned num_args;
     // all strings NUL-terminated
-    const char** args; // array-of-strings NULL-terminated
-    const char* desc;
+    char** args; // array-of-strings NULL-terminated
+    const char* desc; // NUL-terminated, and we don't own it in plugin
 } extmon_cmd_t;
 
 // these are used for simple protocol messages during
