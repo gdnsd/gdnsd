@@ -311,6 +311,7 @@ static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked) {
         case VSCF_HASH_T:   rv = (vscf_data_t*)hash_clone(&d->hash, ignore_marked); break;
         case VSCF_ARRAY_T:  rv = (vscf_data_t*)array_clone(&d->array, ignore_marked); break;
         case VSCF_SIMPLE_T: rv = (vscf_data_t*)simple_clone(&d->simple); break;
+        default:            dmn_assert(0);
     }
     return rv;
 }
@@ -526,6 +527,7 @@ static void val_destroy(vscf_data_t* d) {
             case VSCF_HASH_T:   hash_destroy(&d->hash); break;
             case VSCF_ARRAY_T:  array_destroy(&d->array); break;
             case VSCF_SIMPLE_T: simple_destroy(&d->simple); break;
+            default:            dmn_assert(0);
         }
     }
 }
@@ -743,8 +745,14 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
             variable p     scnr->p;
             variable pe    scnr->pe;
             variable eof   scnr->eof;
+        }%%
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch-default"
+        %%{
             write exec;
         }%%
+#pragma GCC diagnostic pop
 
         if(scnr->cs == vscf_error) {
             parse_error_noargs("Syntax error");

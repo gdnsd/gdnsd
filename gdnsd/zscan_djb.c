@@ -142,6 +142,7 @@ static uint8_t *parse_dname(zscan_t *z, uint8_t *dname, field_t *f) {
             if(dname_cat(dname, dname_root) == DNAME_INVALID)
                 parse_error("'%.*s' is not a valid name", f->len, f->ptr);
             break;
+        default: dmn_assert(0);
     }
     return dname;
 }
@@ -174,6 +175,7 @@ static uint8_t *expand_dname(zscan_t *z, uint8_t *dname, field_t *f, const uint8
         case DNAME_INVALID:
             parse_error("unable to expand '%.*s' as to valid domain name", f->len, f->ptr);
             break;
+        default: dmn_assert(0);
     }
 
     return dname;

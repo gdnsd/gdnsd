@@ -203,6 +203,7 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
                 gdnsd_dname_drop_zone(dname, z->zone->dname);
             }
             break;
+        default: dmn_assert(0);
     }
 }
 
@@ -299,6 +300,7 @@ static void mult_uval(zscan_t* z, int fc) {
         case 'h': z->uval *= 3600; break;
         case 'd': z->uval *= 86400; break;
         case 'w': z->uval *= 604800; break;
+        default: dmn_assert(0);
     }
 }
 
@@ -732,9 +734,12 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
 #ifndef __clang_analyzer__
         // ^ ... because the ragel-generated code for the zonefile parser is
         //   so huge that it makes analyzer runs take forever.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch-default"
         %%{
             write exec;
         }%%
+#pragma GCC diagnostic pop
 #endif // __clang_analyzer__
 
         if(cs == zone_error) {

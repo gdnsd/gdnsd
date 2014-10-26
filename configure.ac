@@ -144,6 +144,7 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wstack-protector \
     -Wstrict-overflow=5 \
     -Wstrict-prototypes \
+    -Wswitch-default \
     -Wundef \
     -Wunused \
     -Wwrite-strings \

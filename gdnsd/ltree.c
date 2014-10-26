@@ -1158,8 +1158,9 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone) {
         ltree_rrset_t* rrset = zroot->rrsets;
         while(rrset) {
             switch(rrset->gen.type) {
-                case DNS_TYPE_SOA:   zroot_soa   = &rrset->soa; break;
-                case DNS_TYPE_NS:    zroot_ns    = &rrset->ns; break;
+                case DNS_TYPE_SOA: zroot_soa = &rrset->soa; break;
+                case DNS_TYPE_NS:  zroot_ns  = &rrset->ns;  break;
+                default: break;
             }
             rrset = rrset->gen.next;
         }

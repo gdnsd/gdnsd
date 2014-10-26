@@ -227,6 +227,7 @@ static uint32_t gdnsd_lookup2(const uint8_t *k, uint32_t len) {
         case 3 : a += ((uint32_t)k[2]  << 16);
         case 2 : a += ((uint32_t)k[1]  << 8);
         case 1 : a += k[0];
+        default: break;
     }
 
     mix(a,b,c);
