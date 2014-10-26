@@ -16,12 +16,12 @@ set -e
 case "$GDNSD_TRAVIS_BUILD" in
     optimized)
         CFLAGS=-O3 ./configure
-        make
+        make -j2
         make check
     ;;
     coveralls)
         CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage -fno-omit-frame-pointer" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --without-hardening
-        make
+        make -j2
         lcov -c -i -d . -o gdnsd-base.info
         make check
         lcov -c -d . -o gdnsd-test.info
@@ -32,7 +32,7 @@ case "$GDNSD_TRAVIS_BUILD" in
         coveralls-lcov gdnsd-filtered.info
     ;;
     *)
-        echo "Invalid TRAVIS_BUILD: $TRAVIS_BUILD"
+        echo "Invalid GDNSD_TRAVIS_BUILD: $GDNSD_TRAVIS_BUILD"
         exit 99
     ;;
 esac

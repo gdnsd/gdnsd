@@ -9,9 +9,9 @@ set -x
 set -e
 export ASAN_OPTIONS="check_initialization_order=1"
 for san_type in address undefined; do
-  CFLAGS="-O1 -Werror -fno-omit-frame-pointer -fno-sanitize-recover -fsanitize=$san_type -fsanitize-blacklist=$PWD/qa/${san_type}.bl" \
+  CFLAGS="-O1 -fno-omit-frame-pointer -fno-sanitize-recover -fsanitize=$san_type -fsanitize-blacklist=$PWD/qa/${san_type}.bl" \
     CC=clang ./configure --enable-developer --without-hardening
-  make clean all
+  make -j4 clean all
   make check-download
   make check
 done
