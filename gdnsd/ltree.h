@@ -143,7 +143,7 @@ typedef struct _ltree_rrset_rfc3597_struct ltree_rrset_rfc3597_t;
 //  in ltree_rdata_ns_t, which is stored in the LSB.
 #define AD_IS_GLUE(x) (!!(((uintptr_t)(x)) & 1UL))
 #define AD_SET_GLUE(x) ((x) = (void*)(((uintptr_t)(x)) | 1UL))
-#define AD_GET_PTR(x) ((const ltree_rrset_addr_t*)((uintptr_t)(x) & (~1UL)))
+#define AD_GET_PTR(x) ((const ltree_rrset_addr_t*)((uintptr_t)(x) & ~((uintptr_t)1UL)))
 
 struct _ltree_rdata_ns_struct {
     const uint8_t* dname;
