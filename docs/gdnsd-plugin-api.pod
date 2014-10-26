@@ -491,22 +491,23 @@ its matching set of changes.
 
 This corresponds with the release of 2.2.0
 
-The changes versus version 16 are in the interfaces for Pseudo-Random
-Number Generators.  If your plugin does not use these there are no
-source changes, but a recompile is still required.
+Changes versus version 16:
 
-The old interface returned a C<gdnsd_rstate_t*> from the call
-C<gdnsd_rand_init()>, which could then be passed to either of
-C<gdnsd_rand_get32()> or C<gdnsd_rand_get64()> to get unsigned 32-bit or
-64-bit random numbers, respectively.  The replacement interface has
-split the 32-bit and 64-bit random number generators into completely
+C<gdnsd_dname_isparentof()> removed (can be trivially replaced using
+C<gdnsd_dname_isinzone()> if necessary).
+
+The PRNG interfaces have changed completely.  The old interface returned a
+C<gdnsd_rstate_t*> from the call C<gdnsd_rand_init()>, which could then be
+passed to either of C<gdnsd_rand_get32()> or C<gdnsd_rand_get64()> to get
+unsigned 32-bit or 64-bit random numbers, respectively.  The replacement
+interface has split the 32-bit and 64-bit random number generators into
 separate interfaces and state structures.
 
-For a 32-bit PRNG, one calls C<gdnsd_rand32_init()> which returns a
+For a 32-bit PRNG, call C<gdnsd_rand32_init()> which returns a
 C<gdnsd_rstate32_t*>, which can then be passed to C<gdnsd_rand32_get()>
 to obtain unsigned 32-bit random numbers.
 
-For a 64-bit PRNG, one calls C<gdnsd_rand64_init()> which returns a
+For a 64-bit PRNG, call C<gdnsd_rand64_init()> which returns a
 C<gdnsd_rstate64_t*>, which can then be passed to C<gdnsd_rand64_get()>
 to obtain unsigned 64-bit random numbers.
 

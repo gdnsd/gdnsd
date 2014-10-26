@@ -277,7 +277,7 @@ static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2) {
 }
 
 // returns true if dname is within zone
-// returns true if they are identical (only difference from _isparentof)
+// returns true if they are identical
 // dname and zone must be DNAME_VALID (fully-qualified).
 F_NONNULL F_PURE F_UNUSED
 static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
@@ -323,12 +323,6 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
     return rv;
 }
 
-// returns true if parent is the parent of child, false otherwise.
-// returns false if they are identical (only difference from _isinzone)
-// parent and child must be DNAME_VALID (fully-qualified).
-F_NONNULL F_PURE
-bool gdnsd_dname_isparentof(const uint8_t* parent, const uint8_t* child);
-
 // both arguments must be DNAME_VALID, and dname must be known
 //   to be a child of (or equal to) parent (e.g. via gdnsd_dname_isinzone()).
 // chops the zone part off the end of dname, re-rooting it as a valid name.
@@ -373,7 +367,6 @@ typedef gdnsd_dname_status_t dname_status_t;
 #define dname_dup gdnsd_dname_dup
 #define dname_cmp gdnsd_dname_cmp
 #define dname_isinzone gdnsd_dname_isinzone
-#define dname_isparentof gdnsd_dname_isparentof
 #define dname_iswild gdnsd_dname_iswild
 #define dname_hash gdnsd_dname_hash
 
