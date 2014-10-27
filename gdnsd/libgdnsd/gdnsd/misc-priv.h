@@ -23,10 +23,14 @@
 #include <gdnsd/compiler.h>
 #include <gdnsd/misc.h>
 
+#pragma GCC visibility push(default)
+
 // Globally initialize meta-prng at daemon startup
 void gdnsd_rand_meta_init(void);
 
 // Kill+Reap pids from gdnsd_register_child_pid()
 void gdnsd_kill_registered_children(void);
+
+#pragma GCC visibility pop
 
 #endif // GDNSD_MISC_PRIV_H

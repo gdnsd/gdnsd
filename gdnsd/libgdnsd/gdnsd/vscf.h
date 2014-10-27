@@ -26,6 +26,8 @@
 
 #include <gdnsd/dname.h>
 
+#pragma GCC visibility push(default)
+
 // Opaque data type used for all complex data pointers in the public API
 typedef union _vscf_data_t vscf_data_t;
 
@@ -241,5 +243,7 @@ void vscf_hash_inherit_all(const vscf_data_t* src, vscf_data_t* dest, const bool
 // Obviously, it's easy to shoot yourself in the foot with this and cause strange results...
 F_NONNULL
 bool vscf_hash_bequeath_all(const vscf_data_t* src, const char* k, const bool mark_src, const bool skip_marked);
+
+#pragma GCC visibility pop
 
 #endif /* VSCF_H */

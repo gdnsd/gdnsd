@@ -70,6 +70,8 @@
 #define SYM_INIT_MONS(x)      xSYM_INIT_MONS(x)
 #define SYM_START_MONS(x)     xSYM_START_MONS(x)
 
+#pragma GCC visibility push(default)
+
 F_CONST
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
 unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
@@ -91,6 +93,8 @@ F_NONNULL
 void SYM_INIT_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 F_NONNULL
 void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
+
+#pragma GCC visibility pop
 
 #undef SYM_APIV
 #undef SYM_LOAD_CONFIG

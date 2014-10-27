@@ -47,6 +47,8 @@
 
 #include <pthread.h>
 
+#pragma GCC visibility push(default)
+
 extern pthread_rwlock_t gdnsd_prcu_rwlock;
 
 #define gdnsd_prcu_rdr_thread_start() do { } while(0)
@@ -63,6 +65,8 @@ void gdnsd_prcu_setup_lock(void);
 #define gdnsd_prcu_upd_assign(d,s) (d) = (s)
 #define gdnsd_prcu_upd_unlock() pthread_rwlock_unlock(&gdnsd_prcu_rwlock)
 void gdnsd_prcu_destroy_lock(void);
+
+#pragma GCC visibility pop
 
 #endif // HAVE_QSBR
 

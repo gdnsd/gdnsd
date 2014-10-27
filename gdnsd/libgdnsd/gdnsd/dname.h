@@ -155,6 +155,8 @@ typedef enum {
     DNAME_INVALID,
 } gdnsd_dname_status_t;
 
+#pragma GCC visibility push(default)
+
 // Unescape the string "in" into the storage at "out", using
 //  DNS zonefile escaping rules.
 // Return value is output len, which will be <= input len
@@ -202,6 +204,11 @@ static void gdnsd_dname_terminate(uint8_t* dname) {
 //  input that looks like a name longer than the allocation.
 F_NONNULL F_PURE
 gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
+
+F_PURE F_NONNULL
+unsigned gdnsd_dname_hash(const uint8_t* input);
+
+#pragma GCC visibility pop
 
 // Check the status of a known-good dname.  It is assumed that the dname was
 //  constructed correctly by other code, and merely differentiates quickly
@@ -351,9 +358,6 @@ static bool gdnsd_dname_iswild(const uint8_t* dname) {
         return true;
     return false;
 }
-
-F_PURE F_NONNULL
-unsigned gdnsd_dname_hash(const uint8_t* input);
 
 typedef gdnsd_dname_status_t dname_status_t;
 #define dns_unescape gdnsd_dns_unescape

@@ -1,4 +1,4 @@
-AM_LDFLAGS = -avoid-version -module -export-symbols-regex ^plugin_
+AM_LDFLAGS = -avoid-version -module
 AM_CPPFLAGS = -I$(top_srcdir)/gdnsd/libgdnsd -I$(top_builddir)/gdnsd/libgdnsd
 AM_LIBTOOLFLAGS = --silent
 

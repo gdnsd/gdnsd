@@ -24,6 +24,8 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
+#pragma GCC visibility push(default)
+
 // These internally check for errors and throw
 //   fatal exceptions.  They also do not allow
 //   the use of size==0 as an alternative syntax
@@ -41,6 +43,8 @@ void* gdnsd_xrealloc(void* ptr, size_t size);
 
 F_MALLOC F_ALLOCSZ(2) F_ALLOCAL(1) F_WUNUSED F_RETNN
 void* gdnsd_xpmalign(size_t alignment, size_t size);
+
+#pragma GCC visibility pop
 
 #define xmalloc gdnsd_xmalloc
 #define xcalloc gdnsd_xcalloc

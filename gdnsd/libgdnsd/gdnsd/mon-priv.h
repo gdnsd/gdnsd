@@ -24,6 +24,8 @@
 #include <gdnsd/vscf.h>
 #include <ev.h>
 
+#pragma GCC visibility push(default)
+
 // conf.c calls these.  the order of execution is important due
 //   to chicken-and-egg problems with explicit plugin configuration
 //   for monitoring plugins vs the config of resolver plugins which
@@ -56,5 +58,7 @@ F_NONNULL
 unsigned gdnsd_mon_stats_out_json(char* buf);
 F_NONNULL
 unsigned gdnsd_mon_stats_out_html(char* buf);
+
+#pragma GCC visibility pop
 
 #endif // GDNSD_MON_PRIV_H

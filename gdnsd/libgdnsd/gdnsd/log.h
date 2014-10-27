@@ -38,6 +38,8 @@
 #define log_debug dmn_log_debug
 #define log_devdebug dmn_log_devdebug
 
+#pragma GCC visibility push(default)
+
 /* Custom thread-safe %s-formatters for dmn_anysin_t*, errno, etc..
  * Use these *only* in the argument lists of log_foo() calls!
  *
@@ -55,6 +57,8 @@ const char* gdnsd_logf_dname(const uint8_t* dname);
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6);
 // standard "struct in6_addr" (basically the same thing...)
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
+
+#pragma GCC visibility pop
 
 // shortcuts for the above
 #define logf_dname gdnsd_logf_dname

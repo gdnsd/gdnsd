@@ -43,6 +43,8 @@ static const gdnsd_sttl_t GDNSD_STTL_TTL_MAX       = ((1U << 28U) - 1U);
 // the only hard rule on this data type is zero in the reserved bits for now
 #define assert_valid_sttl(_x) dmn_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
 
+#pragma GCC visibility push(default)
+
 // Parses a string of the form STATE[/TTL], where STATE is UP or DOWN and
 //   the TTL is in the legal range 0 through 2^28-1.  Returns 0 on success.
 // This is exported mostly so that it can be shared with plugin_extfile,
@@ -92,6 +94,8 @@ unsigned gdnsd_mon_admin(const char* desc);
 // State-fetching (one table call per resolve invocation, reused
 //   for as many index fetches as necc)
 const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void);
+
+#pragma GCC visibility pop
 
 // Given two sttl values, combine them according to the following rules:
 //   1) result TTL is the lesser of both TTLs

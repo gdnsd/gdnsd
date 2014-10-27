@@ -6,7 +6,7 @@ libextmon_comms_la_SOURCES = extmon_comms.c extmon_comms.h
 
 pkglib_LTLIBRARIES = plugin_extmon.la
 plugin_extmon_la_SOURCES  = extmon.c extmon_comms.h
-plugin_extmon_la_LDFLAGS  = -avoid-version -module -export-symbols-regex ^plugin_extmon_
+plugin_extmon_la_LDFLAGS  = -avoid-version -module
 plugin_extmon_la_LIBADD  = libextmon_comms.la
 
 pkglibexec_PROGRAMS = gdnsd_extmon_helper

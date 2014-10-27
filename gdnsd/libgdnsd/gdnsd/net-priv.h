@@ -22,7 +22,11 @@
 
 #include <gdnsd/net.h>
 
+#pragma GCC visibility push(default)
+
 // This is for the core code only, called early and single-threaded.
 void gdnsd_init_net(void);
+
+#pragma GCC visibility pop
 
 #endif // GDNSD_NET_PRIV_H

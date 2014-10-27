@@ -33,6 +33,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#pragma GCC visibility push(default)
+
 // gcc/clang features
 
 #if defined __GNUC__ && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
@@ -343,5 +345,7 @@ int dmn_anysin2str_noport(const dmn_anysin_t* asin, char* buf);
 // Log-formatters for dmn_anysin_t + dmn_log_*(), which use the above...
 const char* dmn_logf_anysin(const dmn_anysin_t* asin);
 const char* dmn_logf_anysin_noport(const dmn_anysin_t* asin);
+
+#pragma GCC visibility pop
 
 #endif // DMN_H

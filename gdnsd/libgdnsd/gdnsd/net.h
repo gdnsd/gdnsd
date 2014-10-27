@@ -28,6 +28,8 @@
 #define gdnsd_anysin_getaddrinfo(__a,__p,__r) dmn_anysin_getaddrinfo((__a),(__p),(__r),true)
 #define gdnsd_anysin_fromstr(__a,__d,__r) dmn_anysin_fromstr((__a),(__d),(__r),true)
 
+#pragma GCC visibility push(default)
+
 // Plugins should use these to get protocol numbers
 F_PURE
 int gdnsd_getproto_udp(void);
@@ -37,5 +39,7 @@ int gdnsd_getproto_tcp(void);
 // Whether SO_REUSEPORT seems to be a runtime-valid sockopt
 F_PURE
 bool gdnsd_reuseport_ok(void);
+
+#pragma GCC visibility pop
 
 #endif // GDNSD_NET_H

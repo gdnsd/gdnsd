@@ -35,6 +35,8 @@
 // For gdnsd_sttl_t
 #include <gdnsd/mon.h>
 
+#pragma GCC visibility push(default)
+
 /***
  * Plugin API version, bumped on any change that's not backwards-compat.
  * This is hardcoded as the return value of plugin_foo_get_api_version()
@@ -155,5 +157,7 @@ plugin_t* gdnsd_plugin_find(const char* plugin_name);
         log_err(__VA_ARGS__);\
         return -1;\
     } while(0)
+
+#pragma GCC visibility pop
 
 #endif // GDNSD_PLUGINAPI_H

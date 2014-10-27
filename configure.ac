@@ -105,23 +105,28 @@ if test $harden = 1; then
     AX_APPEND_COMPILE_FLAGS([-fPIE],[CFLAGS_PIE],[])
     AX_APPEND_LINK_FLAGS([-pie],[LDFLAGS_PIE],[])
 fi
-
 AC_SUBST([CFLAGS_PIE])
 AC_SUBST([LDFLAGS_PIE])
-AX_APPEND_LINK_FLAGS([$HARDEN_LINKER -Wl,--as-needed],[LDFLAGS],[])
 
 # clang does not fail on some unsupported options without this,
 #  but it screws up some of our warnflag tests on gcc as well.
-# with this solution, we miss two warning flags under clang because
-#  AC_LANG_PROGRAM triggers them, but gcc gets all its flags
 CLANG_WERROR=
 if test $CLANG = yes; then
    CLANG_WERROR="-Werror"
 fi
 
+AX_APPEND_LINK_FLAGS([\
+    $HARDEN_LINKER \
+    -Wl,--as-needed \
+    -Wl,--gc-sections \
+],[LDFLAGS],[$CLANG_WERROR])
+
 AX_APPEND_COMPILE_FLAGS([\
     $TRY_DEBUG_CFLAGS \
     $HARDEN_COMPILER \
+    -fvisibility=hidden \
+    -ffunction-sections \
+    -fdata-sections \
     -fno-common \
     -pipe \
     -Wall \

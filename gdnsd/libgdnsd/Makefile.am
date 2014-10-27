@@ -11,7 +11,7 @@ xHEADERS_BUILT_ALL = $(xHEADERS_BUILT) cfg-dirs.h
 libgdnsd_la_SOURCES = prcu.c dname.c net.c log.c mon.c misc.c paths.c plugapi.c alloc.c $(xHEADERS_DIST_ALL)
 nodist_libgdnsd_la_SOURCES = $(xHEADERS_BUILT_ALL) vscf.c
 
-libgdnsd_la_LDFLAGS = -shared -avoid-version -export-symbols-regex '^(gdnsd|vscf|dmn)_'
+libgdnsd_la_LDFLAGS = -shared -avoid-version
 libgdnsd_la_LIBADD  = $(LIBGDNSD_LIBS) libdmn/libdmn.la
 
 libgdnsd_la_pkgincludedir = $(pkgincludedir)

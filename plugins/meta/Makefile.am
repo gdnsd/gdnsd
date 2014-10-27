@@ -5,11 +5,11 @@ SUBDIRS = libgdmaps
 
 pkglib_LTLIBRARIES = plugin_geoip.la plugin_metafo.la
 plugin_geoip_la_SOURCES  = geoip.c
-plugin_geoip_la_LDFLAGS  = -avoid-version -module -export-symbols-regex ^plugin_geoip_
+plugin_geoip_la_LDFLAGS  = -avoid-version -module
 plugin_geoip_la_LIBADD   = libgdmaps/libgdmaps.la
 
 plugin_metafo_la_SOURCES  = metafo.c
-plugin_metafo_la_LDFLAGS  = -avoid-version -module -export-symbols-regex ^plugin_metafo_
+plugin_metafo_la_LDFLAGS  = -avoid-version -module
 
 EXTRA_DIST = meta_core.c
 

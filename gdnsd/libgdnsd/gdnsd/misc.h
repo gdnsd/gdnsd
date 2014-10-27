@@ -28,6 +28,59 @@
 #include <dirent.h>
 #include <sys/types.h>
 
+typedef struct _gdnsd_rstate32_t {
+    uint32_t x;
+    uint32_t y;
+    uint32_t z;
+    uint32_t w;
+    uint32_t c;
+} gdnsd_rstate32_t;
+
+typedef struct _gdnsd_rstate64_t {
+    uint64_t x;
+    uint64_t y;
+    uint32_t z1;
+    uint32_t c1;
+    uint32_t z2;
+    uint32_t c2;
+} gdnsd_rstate64_t;
+
+#pragma GCC visibility push(default)
+
+// Get system/filesystem-specific dirent buffer size for readdir_r() safely
+//   (dirname is just for error output)
+F_NONNULL
+size_t gdnsd_dirent_bufsize(DIR* d V_UNUSED, const char* dirname);
+
+// Register a child process that exists for the life of the daemon, so that
+//   the core can SIGTERM and reap it on clean shutdown.
+void gdnsd_register_child_pid(pid_t child);
+
+// allocate a new string, concatenating s1 + s2.
+// retval is the new string
+// if s2_offs is not NULL, *s2_offs will be set
+//   to the offset of the copy of s2 within the retval.
+F_MALLOC F_NONNULLX(1,2) F_WUNUSED
+char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
+
+// allocate a new string and concatenate all "count" strings
+//   from the args list into it.
+F_MALLOC F_NONNULL F_WUNUSED
+char* gdnsd_str_combine_n(const unsigned count, ...);
+
+// set thread name (via pthread_setname_np or similar)
+void gdnsd_thread_setname(const char* n);
+
+// Returns true if running on Linux with a kernel version >= x.y.z
+// Returns false for non-Linux systems, or Linux kernels older than specified.
+bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z);
+
+// State initializers for gdnsd_randXX_get() below
+gdnsd_rstate32_t* gdnsd_rand32_init(void);
+gdnsd_rstate64_t* gdnsd_rand64_init(void);
+
+#pragma GCC visibility pop
+
 // downcase an array of bytes of known length
 F_NONNULL F_UNUSED
 static void gdnsd_downcase_bytes(char* bytes, unsigned len) {
@@ -45,21 +98,6 @@ static void gdnsd_downcase_str(char* str) {
         str++;
     }
 }
-
-// allocate a new string, concatenating s1 + s2.
-// retval is the new string
-// if s2_offs is not NULL, *s2_offs will be set
-//   to the offset of the copy of s2 within the retval.
-F_MALLOC F_NONNULLX(1,2) F_WUNUSED
-char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
-
-// allocate a new string and concatenate all "count" strings
-//   from the args list into it.
-F_MALLOC F_NONNULL F_WUNUSED
-char* gdnsd_str_combine_n(const unsigned count, ...);
-
-// set thread name (via pthread_setname_np or similar)
-void gdnsd_thread_setname(const char* n);
 
 /***************
  * These are Public-Domain JKISS32/JLKISS64 PRNG implementations
@@ -97,17 +135,6 @@ void gdnsd_thread_setname(const char* n);
  *   bias for modvals up to 2^32.
  */
 
-typedef struct _gdnsd_rstate64_t {
-    uint64_t x;
-    uint64_t y;
-    uint32_t z1;
-    uint32_t c1;
-    uint32_t z2;
-    uint32_t c2;
-} gdnsd_rstate64_t;
-
-gdnsd_rstate64_t* gdnsd_rand64_init(void);
-
 // This is JLKISS64
 F_NONNULL F_UNUSED
 static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs) {
@@ -131,16 +158,6 @@ static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs) {
 
     return rs->x + y + rs->z1 + ((uint64_t)rs->z2 << 32);
 }
-
-typedef struct _gdnsd_rstate32_t {
-    uint32_t x;
-    uint32_t y;
-    uint32_t z;
-    uint32_t w;
-    uint32_t c;
-} gdnsd_rstate32_t;
-
-gdnsd_rstate32_t* gdnsd_rand32_init(void);
 
 // This is JKISS32
 F_NONNULL F_UNUSED
@@ -167,10 +184,6 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
 /***************
  * End PRNG Stuff
  ***************/
-
-// Returns true if running on Linux with a kernel version >= x.y.z
-// Returns false for non-Linux systems, or Linux kernels older than specified.
-bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z);
 
 // gdnsd_lookup2 is lookup2() by Bob Jenkins,
 //   from http://www.burtleburtle.net/bob/c/lookup2.c,
@@ -233,14 +246,5 @@ static uint32_t gdnsd_lookup2(const uint8_t *k, uint32_t len) {
     mix(a,b,c);
     return c;
 }
-
-// Get system/filesystem-specific dirent buffer size for readdir_r() safely
-//   (dirname is just for error output)
-F_NONNULL
-size_t gdnsd_dirent_bufsize(DIR* d V_UNUSED, const char* dirname);
-
-// Register a child process that exists for the life of the daemon, so that
-//   the core can SIGTERM and reap it on clean shutdown.
-void gdnsd_register_child_pid(pid_t child);
 
 #endif // GDNSD_MISC_H

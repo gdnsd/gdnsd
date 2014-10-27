@@ -24,6 +24,8 @@
 #include <gdnsd/paths.h>
 #include <stdbool.h>
 
+#pragma GCC visibility push(default)
+
 // Mostly for help output
 const char* gdnsd_get_default_config_dir(void);
 
@@ -38,5 +40,7 @@ void gdnsd_set_config_dir(const char* config_dir);
 //   uses outside of gdnsd itself (e.g. testsuite binaries),
 //   as well as stop/status/reload-zones/checkconf actions.
 void gdnsd_set_runtime_dirs(const char* run_dir, const char* state_dir, const bool check_create);
+
+#pragma GCC visibility pop
 
 #endif // GDNSD_PATHS_PRIV_H

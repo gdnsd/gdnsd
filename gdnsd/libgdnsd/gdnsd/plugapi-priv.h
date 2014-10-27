@@ -37,6 +37,8 @@ struct dyn_result {
     };
 };
 
+#pragma GCC visibility push(default)
+
 // Intended for result consumers (dnspacket.c), only valid
 //   after all resolver plugins are finished configuring,
 //   and is static for the life of the daemon from that
@@ -72,5 +74,7 @@ F_NONNULL
 void gdnsd_plugins_action_pre_run(void);
 void gdnsd_plugins_action_iothread_init(const unsigned threadnum);
 void gdnsd_plugins_action_exit(void);
+
+#pragma GCC visibility pop
 
 #endif // GDNSD_PLUGINAPI_PRIV_H
