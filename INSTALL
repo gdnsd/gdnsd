@@ -10,18 +10,22 @@ If your starting point is a tarball, the following prerequisites apply:
 * A basically functional POSIX build environment with a C99 compiler
 * libev headers and libraries, version 4.x: distro pkg
   or http://software.schmorp.de/pkg/libev.html
-* liburcu aka userspace-rcu headers and libraries. Use distro pkg or
-  http://lttng.org/urcu/ (optional, but important for performance!)
 * Ragel 6.x: http://www.complang.org/ragel/ (or distro package)
 * Perl 5.8.1 or higher and the perl "pod2man" command for document
   generation (this may be in the package perl-podlaters)
+
+The following are recommended but optional:
+
+* liburcu aka userspace-rcu headers and libraries. Use distro pkg or
+  http://lttng.org/urcu/ (important for performance!)
+* libunwind headers and libraries. (for stacktrace on some fatals)
 
 The following have no real effect on the build or runtime, but are
 required in order to run the testsuite:
 
 * Perl modules: LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
 
-If working directly from a git clone, you may also need:
+If working directly from a git clone, you also need:
 
 * autoconf (2.63+), automake(1.11.1+), and libtool(2.2.6+) packages
 * Start with "autoreconf -vi", then ./configure ...

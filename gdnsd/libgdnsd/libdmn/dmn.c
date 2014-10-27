@@ -39,6 +39,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#ifdef HAVE_LIBUNWIND
+#  define UNW_LOCAL_ONLY
+#  include <libunwind.h>
+#endif
+
 #include "dmn.h"
 
 /***********************************************************
@@ -231,7 +236,7 @@ static char* _fmtbuf_common(const unsigned size) {
             if(!fmtbuf.bufs[i]) {
                 fmtbuf.bufs[i] = malloc(bsize);
                 if(!fmtbuf.bufs[i])
-                    dmn_log_fatal("memory allocation failure!");
+                    dmn_log_fatal("allocation failure in fmtbuf_alloc!");
             }
             if((bsize - fmtbuf.used[i]) >= size) {
                 rv = &fmtbuf.bufs[i][fmtbuf.used[i]];
@@ -340,6 +345,48 @@ void dmn_logger(int level, const char* fmt, ...) {
     va_start(ap, fmt);
     dmn_loggerv(level, fmt, ap);
     va_end(ap);
+}
+
+
+const char* dmn_logf_bt(void) {
+#ifdef HAVE_LIBUNWIND
+    static const unsigned bt_size = 1024U;
+    static const unsigned bt_max_name = 60U;
+
+    char* tbuf = dmn_fmtbuf_alloc(bt_size);
+    unsigned tbuf_pos = 0;
+    tbuf[tbuf_pos] = '\0'; // in case no output below
+
+    unw_cursor_t cursor;
+    unw_context_t uc;
+    unw_getcontext(&uc);
+    unw_init_local(&cursor, &uc);
+
+    while(unw_step(&cursor) > 0 && tbuf_pos < bt_size) {
+        unw_word_t ip = 0;
+        unw_word_t sp = 0;
+        unw_word_t offset = 0;
+        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+        if(!ip)
+            break;
+        unw_get_reg(&cursor, UNW_REG_SP, &sp);
+
+        char cbuf[bt_max_name];
+        cbuf[0] = '\0'; // in case no output below
+        (void)unw_get_proc_name(&cursor, cbuf, bt_max_name, &offset);
+
+        int snp_rv = snprintf(&tbuf[tbuf_pos],
+            (bt_size - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
+            (unsigned long)ip, (unsigned long)sp,
+            cbuf, (unsigned long)offset);
+        if(snp_rv < 0)
+            break;
+        tbuf_pos += (unsigned)snp_rv;
+    }
+    return tbuf;
+#else
+    return "(no libunwind)";
+#endif
 }
 
 #pragma GCC diagnostic pop

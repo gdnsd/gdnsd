@@ -232,11 +232,11 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
 #else
 #  define dmn_assert(expr) do {\
      if(!(expr)) {\
-       dmn_logger(LOG_CRIT,"Assertion '%s' failed in %s() at %s:%u",\
-       #expr, __func__, __FILE__, __LINE__);\
+       dmn_logger(LOG_CRIT,"Assertion '%s' failed in %s() at %s:%u, backtrace:%s",\
+       #expr, __func__, __FILE__, __LINE__, dmn_logf_bt());\
        abort();\
      }\
-} while(0)
+   } while(0)
 #  define dmn_log_devdebug(...) do {\
      if(dmn_get_debug())\
          dmn_logger(LOG_DEBUG,__VA_ARGS__);\
@@ -278,6 +278,9 @@ void dmn_fmtbuf_reset(void);
 //  and POSIX strerror_r() variants.
 const char* dmn_logf_strerror(const int errnum);
 #define dmn_logf_errno() dmn_logf_strerror(errno)
+
+// Adds a strack trace to the log message, iff built w/ libunwind
+const char* dmn_logf_bt(void);
 
 /******** network utility stuff ***********/
 

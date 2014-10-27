@@ -28,7 +28,8 @@ void* gdnsd_xmalloc(size_t size) {
     dmn_assert(size);
     void* rv = malloc(size);
     if(!rv)
-        log_fatal("memory allocation error!");
+        log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
+            size, dmn_logf_errno(), dmn_logf_bt());
     return rv;
 }
 
@@ -36,7 +37,8 @@ void* gdnsd_xcalloc(size_t nmemb, size_t size) {
     dmn_assert(size); dmn_assert(nmemb);
     void* rv = calloc(nmemb, size);
     if(!rv)
-        log_fatal("memory allocation error!");
+        log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
+            size * nmemb, dmn_logf_errno(), dmn_logf_bt());
     return rv;
 }
 
@@ -44,7 +46,8 @@ void* gdnsd_xrealloc(void* ptr, size_t size) {
     dmn_assert(size);
     void* rv = realloc(ptr, size);
     if(!rv)
-        log_fatal("memory allocation error!");
+        log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
+            size, dmn_logf_errno(), dmn_logf_bt());
     return rv;
 }
 
@@ -52,6 +55,7 @@ void* gdnsd_xpmalign(size_t alignment, size_t size) {
     dmn_assert(size); dmn_assert(alignment);
     void* rv = NULL;
     if(posix_memalign(&rv, alignment, size) || !rv)
-        log_fatal("memory allocation error!");
+        log_fatal("Cannot allocate %zu bytes aligned to %zu (%s)! backtrace:%s",
+            size, alignment, dmn_logf_errno(), dmn_logf_bt());
     return rv;
 }

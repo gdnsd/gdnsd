@@ -435,7 +435,7 @@ AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
 # clump up all of the libgdnsd libdeps for re-use in LDADD for
 #   binaries that link libgdnsd on platforms where libtool's
 #   automatic dep resolution is disabled
-LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN"
+LIBGDNSD_LIBS="$QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN $LIBUNWIND_LIBS"
 AC_SUBST([LIBGDNSD_LIBS])
 
 # Output generation
@@ -464,6 +464,7 @@ AC_OUTPUT
 if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
+if test "x$HAVE_LIBUNWIND" = x1; then CFSUM_UNWIND=Yes; else CFSUM_UNWIND=No; fi
 if test "x$HAVE_QSBR" = x1; then
     CFSUM_QSBR=Yes
 else
@@ -480,9 +481,10 @@ echo "CFLAGS: $CFLAGS $CFLAGS_PIE"
 echo "LDFLAGS: $LDFLAGS $LDFLAGS_PIE"
 echo "======================================="
 echo "| Configuration Summary:"
-echo "| Developer Build:            $CFSUM_DEV"
-echo "| Userspace-rcu support:      $CFSUM_QSBR"
-echo "| Linux sendmmsg support:     $CFSUM_SENDMMSG"
-echo "| Linux inotify support:      $CFSUM_INOTIFY"
-echo "| Test Port Start:            $CFSUM_TP"
+echo "| Developer Build:        $CFSUM_DEV"
+echo "| Userspace-rcu support:  $CFSUM_QSBR"
+echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
+echo "| Linux inotify support:  $CFSUM_INOTIFY"
+echo "| Libunwind support:      $CFSUM_UNWIND"
+echo "| Test Port Start:        $CFSUM_TP"
 echo "======================================="
