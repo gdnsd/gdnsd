@@ -17,14 +17,12 @@
 /plugins/extmon/gdnsd_extmon_helper
 /plugins/meta/libgdmaps/t/gdnsd_geoip_test
 
-# Built, distributed C sources (Ragel outputs)
+# Built and not distributed or installed
 /gdnsd/zscan_rfc1035.c
 /gdnsd/libgdnsd/vscf.c
-
-# Built headers, not distributed
 /gdnsd/libgdnsd/cfg-dirs.h
 
-# Copied, renamed, distributed, installed
+# Copied for #include pathname purposes
 /gdnsd/libgdnsd/gdnsd/dmn.h
 
 # Testsuite input/output directories

@@ -384,11 +384,10 @@ AX_PROG_PERL_MODULES([Test::More LWP=5.805 Socket6 IO::Socket::INET6 HTTP::Daemo
 AC_SUBST([HAVE_TESTSUITE_MODULES])
 
 # Find ragel
-AC_REQUIRE_AUX_FILE([noragel])
 AC_MSG_CHECKING([for Ragel v6.x]);
 AC_PATH_PROGS_FEATURE_CHECK([RAGEL], [ragel],
   [[$ac_path_RAGEL --version |$EGREP 'Ragel State Machine Compiler version 6\.' >/dev/null && ac_cv_path_RAGEL=$ac_path_RAGEL ac_path_RAGEL_found=:]],
-  [ac_cv_path_RAGEL=$am_aux_dir/noragel])
+  AC_MSG_ERROR([Ragel version 6.x not found]))
 AC_SUBST([RAGEL], [$ac_cv_path_RAGEL])
 AC_MSG_RESULT([$ac_cv_path_RAGEL])
 
