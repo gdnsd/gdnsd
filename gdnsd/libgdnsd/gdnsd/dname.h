@@ -178,6 +178,13 @@ unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const u
 F_NONNULL
 gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len);
 
+// Turns a dname back into a printable string
+// "dname" must be DNAME_VALID or DNAME_PARTIAL
+// "str" must be preallocated to at least 1024 bytes,
+// retval is the length of the string stored to "str", including the terminal NUL
+F_NONNULL
+unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str);
+
 // Concatenate one dname onto the end of another.  Invalid inputs are not allowed.
 //  You are responsible for ensuring this is the case before calling, or crashes
 //  could ensue.  As before, "dn1" must have a full 256 bytes of storage.

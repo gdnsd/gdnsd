@@ -194,6 +194,41 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
     }
 }
 
+unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str) {
+    dmn_assert(dname);
+    dmn_assert(dname_status(dname) != DNAME_INVALID);
+
+    const char* str_base = str; // for output length later
+    dname++; // skip overall length byte, we don't use it here
+
+    unsigned llen; // label len
+    while((llen = *dname++) && llen != 255U) {
+        // output "label."
+        for(uint8_t i = 0; i < llen; i++) {
+            unsigned char x = *dname++;
+            if(x > 0x20 && x < 0x7F) {
+                *str++ = x;
+            }
+            else {
+                *str++ = '\\';
+                *str++ = '0' + (x / 100);
+                *str++ = '0' + ((x / 10) % 10);
+                *str++ = '0' + (x % 10);
+            }
+        }
+        *str++ = '.';
+    }
+
+    // In the special case that logf_dname() was called on a DNAME_PARTIAL
+    //   we need to undo any final dot added at the end of the last loop above
+    if(llen == 255U && str > str_base)
+        str--;
+    *str++ = '\0';
+
+    dmn_assert(str > str_base);
+    return (unsigned)(str - str_base);
+}
+
 gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2) {
     dmn_assert(dname_status(dn1) != DNAME_INVALID);
     dmn_assert(dname_status(dn2) != DNAME_INVALID);

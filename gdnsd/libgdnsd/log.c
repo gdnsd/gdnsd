@@ -34,22 +34,9 @@
 #include <gdnsd/stats.h>
 #include <gdnsd/dmn.h>
 #include <gdnsd/paths-priv.h>
+#include <gdnsd/dname.h>
 
-/* libdmn custom log formatters and the buffer sizes they use:
- *
- * const char* dmn_logf_anysin(const dmn_anysin_t* asin); // variable...
- * const char* dmn_logf_anysin_noport(const dmn_anysin_t* asin); // variable...
- * const char* logf_dname(const uint8_t* dname); // 1024
- *
- * Usage example:
- *   dmn_anysin_t* saddr = ...;
- *   uint8_t*  dname = ...;
- *   int pthread_errno = ...;
- *   log_err("pthread error: %s during req for name '%s' from %s",
- *      dmn_logf_strerror(pthread_errno), logf_dname(dname), dmn_logf_anysin(saddr));
- */
-
-static const char* generic_nullstr = "(null)";
+static const char generic_nullstr[] = "(null)";
 
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
     dmn_anysin_t tempsin;
@@ -68,41 +55,9 @@ const char* gdnsd_logf_dname(const uint8_t* dname) {
     if(!dname)
         return generic_nullstr;
 
-    char* dnbuf = dmn_fmtbuf_alloc(1024);
-    char* dnptr = dnbuf;
-
-    dname++; // skip initial OAL byte
-
-    while(1) {
-        unsigned llen = *dname++;
-
-        // Handle terminal cases
-        if(llen == 255)
-            break;
-        if(llen == 0) {
-            *dnptr++ = '.';
-            break;
-        }
-
-        // Inter-label dot, if something has already been written
-        if(dnptr != dnbuf)
-            *dnptr++ = '.';
-
-        // Label text
-        for(uint8_t i = 0; i < llen; i++) {
-            unsigned char x = *dname++;
-            if(x > 0x20 && x < 0x7F) {
-                *dnptr++ = x;
-            }
-            else {
-                *dnptr++ = '\\';
-                *dnptr++ = '0' + (x / 100);
-                *dnptr++ = '0' + ((x / 10) % 10);
-                *dnptr++ = '0' + (x % 10);
-            }
-        }
-    }
-
-    *dnptr = '\0';
+    char tmpbuf[1024];
+    const unsigned len = gdnsd_dname_to_string(dname, tmpbuf);
+    char* dnbuf = dmn_fmtbuf_alloc(len);
+    memcpy(dnbuf, tmpbuf, len);
     return dnbuf;
 }

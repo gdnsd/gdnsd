@@ -255,8 +255,11 @@ static void create_zones(zscan_t *z, char record_type, field_t *field) {
         return;
 
     char* src = gdnsd_str_combine("djb:", z->fn, NULL);
-    zscan_djbzone_add(&z->zonedata, zone_new(logf_dname(dname), src));
-    dmn_fmtbuf_reset();
+
+    char dnstr[1024];
+    gdnsd_dname_to_string(dname, dnstr);
+    zscan_djbzone_add(&z->zonedata, zone_new(dnstr, src));
+
     free(src);
 }
 

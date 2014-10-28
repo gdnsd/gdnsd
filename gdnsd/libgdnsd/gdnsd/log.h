@@ -40,23 +40,10 @@
 
 #pragma GCC visibility push(default)
 
-/* Custom thread-safe %s-formatters for dmn_anysin_t*, errno, etc..
- * Use these *only* in the argument lists of log_foo() calls!
- *
- * e.g.:
- *
- * dmn_anysin_t* asin = ...;
- * int pthread_error = ...;
- * log_err("pthread error: %s, regular errno: %s, sockaddr: %s",
- *     dmn_logf_strerror(pthread_error), dmn_logf_errno(), dmn_logf_anysin(asin));
- */
-const char* gdnsd_logf_dname(const uint8_t* dname);
-
-// "ipv6" must be allocated for 16 bytes, containing
-//   a network-order address
+// libdmn custom log formatters for raw ipv6 data and dnames
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6);
-// standard "struct in6_addr" (basically the same thing...)
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
+const char* gdnsd_logf_dname(const uint8_t* dname);
 
 #pragma GCC visibility pop
 
