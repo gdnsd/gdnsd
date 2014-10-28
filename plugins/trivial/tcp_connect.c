@@ -73,7 +73,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
     dmn_assert(md);
 
-    if(unlikely(md->tcp_state != TCP_STATE_WAITING)) {
+    if(md->tcp_state != TCP_STATE_WAITING) {
         log_warn("plugin_tcp_connect: A monitoring request attempt seems to have "
             "lasted longer than the monitoring interval. "
             "Skipping this round of monitoring - are you "
@@ -90,12 +90,12 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     const bool isv6 = md->addr.sa.sa_family == AF_INET6;
 
     const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
-    if(unlikely(sock == -1)) {
+    if(sock == -1) {
         log_err("plugin_tcp_connect: Failed to create monitoring socket: %s", dmn_logf_errno());
         return;
     }
 
-    if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
+    if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1) {
         log_err("plugin_tcp_connect: Failed to set O_NONBLOCK on monitoring socket: %s", dmn_logf_errno());
         close(sock);
         return;

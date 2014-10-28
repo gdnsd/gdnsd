@@ -305,7 +305,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 #ifdef HAVE_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
     const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
-    if(unlikely(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short))))
+    if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", dmn_logf_errno());
     bool is_online = true;
 #endif
@@ -338,9 +338,9 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         buf_in_len = recvmsg(fd, &msg_hdr, 0);
 #endif
 
-        if(unlikely((asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
+        if((asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
             || (asin.sa.sa_family == AF_INET6 && !asin.sin6.sin6_port)
-            || buf_in_len < 0)) {
+            || buf_in_len < 0) {
                 if(buf_in_len < 0)
                     log_err("UDP recvmsg() error: %s", dmn_logf_errno());
                 stats_own_inc(&stats->udp.recvfail);
@@ -350,7 +350,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
             iov.iov_len = process_dns_query(dnsp_ctx, stats, &asin, buf, buf_in_len);
             if(likely(iov.iov_len)) {
                 const int sent = sendmsg(fd, &msg_hdr, 0);
-                if(unlikely(sent < 0)) {
+                if(sent < 0) {
                     stats_own_inc(&stats->udp.sendfail);
                     log_err("UDP sendmsg() of %zu bytes failed with retval %i for client %s: %s", iov.iov_len, sent, dmn_logf_anysin(&asin), dmn_logf_errno());
                 }
@@ -398,7 +398,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
 #ifdef HAVE_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
     const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
-    if(unlikely(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short))))
+    if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", dmn_logf_errno());
     bool is_online = true;
 #endif
@@ -483,7 +483,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
                 int sent = sendmmsg(fd, dgptr, (unsigned)pkts, 0);
                 dmn_assert(sent != 0);
                 dmn_assert(sent <= pkts);
-                if(unlikely(sent < pkts)) {
+                if(sent < pkts) {
                     int sockerr = 0;
                     socklen_t sock_len = sizeof(sockerr);
                     (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);

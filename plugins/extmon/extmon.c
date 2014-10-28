@@ -323,7 +323,7 @@ static void spawn_helper(void) {
 
     // done sending stuff, close writepipe and go nonblock on read side for eventloop
     close(helper_write_fd);
-    if(unlikely(fcntl(helper_read_fd, F_SETFL, (fcntl(helper_read_fd, F_GETFL, 0)) | O_NONBLOCK) == -1))
+    if(fcntl(helper_read_fd, F_SETFL, (fcntl(helper_read_fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
         log_fatal("plugin_extmon: Failed to set O_NONBLOCK on pipe: %s", dmn_logf_errno());
 }
 

@@ -274,7 +274,7 @@ static char* make_zone_name(const char* zf_name) {
     unsigned zf_name_len = strlen(zf_name);
     char* out = NULL;
 
-    if(unlikely(zf_name_len > 1004)) {
+    if(zf_name_len > 1004) {
         log_err("rfc1035: Zone file name '%s' is illegal", zf_name);
     }
     else {
@@ -470,7 +470,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
         struct dirent* buf = xmalloc(bufsz);
         struct dirent* result = NULL;
         do {
-            if(unlikely(readdir_r(zdhandle, buf, &result)))
+            if(readdir_r(zdhandle, buf, &result))
                 log_fatal("rfc1035: readdir_r(%s) failed: %s", rfc1035_dir, dmn_logf_errno());
             if(likely(result && result->d_name[0] != '.'))
                 process_zonefile(result->d_name, loop, initial_quiesce_time);
@@ -685,7 +685,7 @@ static bool inot_process_event(struct ev_loop* loop, const char* fname, uint32_t
 
     if(!fname) { // directory-level event
         log_debug("rfc1035: inotified for directory event: %s", logf_inmask(emask));
-        if(unlikely(emask & (IN_Q_OVERFLOW|IN_IGNORED|IN_UNMOUNT|IN_DELETE_SELF|IN_MOVE_SELF))) {
+        if(emask & (IN_Q_OVERFLOW|IN_IGNORED|IN_UNMOUNT|IN_DELETE_SELF|IN_MOVE_SELF)) {
             log_err("rfc1035: inotify watcher stopping due to directory-level event %s", logf_inmask(emask));
             handle_inotify_failure(loop);
             rv = true;

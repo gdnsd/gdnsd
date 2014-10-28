@@ -272,7 +272,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 
     log_devdebug("Received TCP DNS connection from %s", dmn_logf_anysin(asin));
 
-    if(unlikely(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)) {
+    if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1) {
         free(asin);
         close(sock);
         log_err("Failed to set O_NONBLOCK on inbound TCP DNS socket: %s", dmn_logf_errno());

@@ -936,13 +936,13 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
         get_state_texts(i, &cur_st, &real_st);
         get_class_texts(i, &cur_class, &real_class);
         int written = snprintf(buf, avail, http_tmpl, smgrs[i].desc, cur_class, cur_st, real_class, real_st);
-        if(unlikely(written >= avail))
+        if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (html mon data)");
         buf += written;
         avail -= written;
     }
 
-    if(unlikely(avail <= (int)http_foot_len))
+    if(avail <= (int)http_foot_len)
         log_fatal("BUG: monio stats buf miscalculated (html mon foot)");
 
     memcpy(buf, http_foot, http_foot_len);
@@ -973,7 +973,7 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
         const char* real_st;
         get_state_texts(i, &cur_st, &real_st);
         int written = snprintf(buf, avail, csv_tmpl, smgrs[i].desc, cur_st, real_st);
-        if(unlikely(written >= avail))
+        if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (csv data)");
         buf += written;
         avail -= written;
@@ -1012,12 +1012,12 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
         const char* real_st;
         get_state_texts(i, &cur_st, &real_st);
         int written = snprintf(buf, avail, json_tmpl, smgrs[i].desc, cur_st, real_st);
-        if(unlikely(written >= avail))
+        if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (json mon data)");
         buf += written;
         avail -= written;
         if( i < num_smgrs -1 ) {
-            if(unlikely(avail <= (int)json_sep_len))
+            if(avail <= (int)json_sep_len)
                 log_fatal("BUG: monio stats buf miscalculated (json mon data-sep)");
             memcpy(buf, json_sep, json_sep_len);
             buf += json_sep_len;
@@ -1025,7 +1025,7 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
         }
     }
 
-    if(unlikely(avail <= (int)json_foot_len))
+    if(avail <= (int)json_foot_len)
         log_fatal("BUG: monio stats buf miscalculated (json mon footer)");
 
     memcpy(buf, json_foot, json_foot_len);

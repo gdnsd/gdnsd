@@ -529,7 +529,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
 
     while(1) {
         struct dirent* e = NULL;
-        if(unlikely(readdir_r(dir, buf, &e)))
+        if(readdir_r(dir, buf, &e))
             log_fatal("djb: readdir_r(%s) failed: %s", z->path, dmn_logf_errno());
         if(!e)
             break;

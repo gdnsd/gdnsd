@@ -391,7 +391,7 @@ int main(int argc, char** argv) {
 
     // done with the serial setup, close the readpipe and go nonblocking on write for eventloop...
     close(plugin_read_fd);
-    if(unlikely(fcntl(plugin_write_fd, F_SETFL, (fcntl(plugin_write_fd, F_GETFL, 0)) | O_NONBLOCK) == -1))
+    if(fcntl(plugin_write_fd, F_SETFL, (fcntl(plugin_write_fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
         log_fatal("Failed to set O_NONBLOCK on pipe: %s", dmn_logf_errno());
 
     // CLOEXEC the write fd so child scripts can't mess with it

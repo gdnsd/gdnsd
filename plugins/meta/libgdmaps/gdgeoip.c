@@ -420,7 +420,7 @@ static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, 
     bool rv = false;
 
     do {
-        if(unlikely(depth < 1 || ((3 * 2 * db_off) + 6) > db->size)) {
+        if(depth < 1 || ((3 * 2 * db_off) + 6) > db->size) {
             log_err("plugin_geoip: map '%s': Error traversing GeoIP database, corrupt?", db->map_name);
             rv = true;
             break;
