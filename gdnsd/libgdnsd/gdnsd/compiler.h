@@ -137,6 +137,9 @@ struct _gdnsd_una32 { uint32_t x; } S_PACKED;
 #define gdnsd_put_una16(_v,_p) (((struct _gdnsd_una16*)(_p))->x) = (_v)
 #define gdnsd_put_una32(_v,_p) (((struct _gdnsd_una32*)(_p))->x) = (_v)
 
+// Generic useful macros
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 // Valgrind hooks for debug builds
 #if !defined(NDEBUG) && defined(HAVE_VALGRIND_MEMCHECK_H) && !defined(_CPPCHECK)
 #  include <valgrind/memcheck.h>

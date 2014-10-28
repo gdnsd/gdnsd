@@ -312,7 +312,7 @@ static action_t match_action(const char* arg) {
     dmn_assert(arg);
 
     unsigned i;
-    for(i = 0; i < (sizeof actionmap / sizeof actionmap[0]); i++)
+    for(i = 0; i < ARRAY_SIZE(actionmap); i++)
         if(!strcasecmp(actionmap[i].cmdstring, arg))
             return actionmap[i].action;
     return ACT_UNDEF;
