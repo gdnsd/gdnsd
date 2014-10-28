@@ -45,30 +45,20 @@
  * is implemented in the header file directly.
  */
 
-#define xSYM_GET_APIV(x)      plugin_ ## x ## _get_api_version
-#define xSYM_LOAD_CONFIG(x)   plugin_ ## x ## _load_config
-#define xSYM_MAP_RES(x)       plugin_ ## x ## _map_res
-#define xSYM_PRE_RUN(x)       plugin_ ## x ## _pre_run
-#define xSYM_IOTH_INIT(x)     plugin_ ## x ## _iothread_init
-#define xSYM_RESOLVE(x)       plugin_ ## x ## _resolve
-#define xSYM_EXIT(x)          plugin_ ## x ## _exit
-#define xSYM_ADD_SVC(x)       plugin_ ## x ## _add_svctype
-#define xSYM_ADD_MON_ADDR(x)  plugin_ ## x ## _add_mon_addr
-#define xSYM_ADD_MON_CNAME(x) plugin_ ## x ## _add_mon_cname
-#define xSYM_INIT_MONS(x)     plugin_ ## x ## _init_monitors
-#define xSYM_START_MONS(x)    plugin_ ## x ## _start_monitors
-#define SYM_GET_APIV(x)       xSYM_GET_APIV(x)
-#define SYM_LOAD_CONFIG(x)    xSYM_LOAD_CONFIG(x)
-#define SYM_MAP_RES(x)        xSYM_MAP_RES(x)
-#define SYM_PRE_RUN(x)        xSYM_PRE_RUN(x)
-#define SYM_IOTH_INIT(x)      xSYM_IOTH_INIT(x)
-#define SYM_RESOLVE(x)        xSYM_RESOLVE(x)
-#define SYM_EXIT(x)           xSYM_EXIT(x)
-#define SYM_ADD_SVC(x)        xSYM_ADD_SVC(x)
-#define SYM_ADD_MON_ADDR(x)   xSYM_ADD_MON_ADDR(x)
-#define SYM_ADD_MON_CNAME(x)  xSYM_ADD_MON_CNAME(x)
-#define SYM_INIT_MONS(x)      xSYM_INIT_MONS(x)
-#define SYM_START_MONS(x)     xSYM_START_MONS(x)
+#define __PASTE3(a,b,c) a##b##c
+
+#define SYM_GET_APIV(x)      __PASTE3(plugin_, x, _get_api_version)
+#define SYM_LOAD_CONFIG(x)   __PASTE3(plugin_, x, _load_config)
+#define SYM_MAP_RES(x)       __PASTE3(plugin_, x, _map_res)
+#define SYM_PRE_RUN(x)       __PASTE3(plugin_, x, _pre_run)
+#define SYM_IOTH_INIT(x)     __PASTE3(plugin_, x, _iothread_init)
+#define SYM_RESOLVE(x)       __PASTE3(plugin_, x, _resolve)
+#define SYM_EXIT(x)          __PASTE3(plugin_, x, _exit)
+#define SYM_ADD_SVC(x)       __PASTE3(plugin_, x, _add_svctype)
+#define SYM_ADD_MON_ADDR(x)  __PASTE3(plugin_, x, _add_mon_addr)
+#define SYM_ADD_MON_CNAME(x) __PASTE3(plugin_, x, _add_mon_cname)
+#define SYM_INIT_MONS(x)     __PASTE3(plugin_, x, _init_monitors)
+#define SYM_START_MONS(x)    __PASTE3(plugin_, x, _start_monitors)
 
 #pragma GCC visibility push(default)
 
@@ -108,15 +98,3 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef SYM_ADD_MON_CNAME
 #undef SYM_INIT_MONS
 #undef SYM_START_MONS
-#undef xSYM_APIV
-#undef xSYM_LOAD_CONFIG
-#undef xSYM_MAP_RES
-#undef xSYM_PRE_RUN
-#undef xSYM_IOTH_INIT
-#undef xSYM_RESOLVE
-#undef xSYM_EXIT
-#undef xSYM_ADD_SVC
-#undef xSYM_ADD_MON_ADDR
-#undef xSYM_ADD_MON_CNAME
-#undef xSYM_INIT_MONS
-#undef xSYM_START_MONS
