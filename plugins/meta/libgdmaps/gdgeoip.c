@@ -413,14 +413,14 @@ static unsigned get_dclist_cached(geoip_db_t* db, const unsigned offset) {
 }
 
 F_NONNULL
-static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, const int depth, const unsigned db_off) {
+static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, const unsigned depth, const unsigned db_off) {
     dmn_assert(db); dmn_assert(nl);
     dmn_assert(depth < 129);
 
     bool rv = false;
 
     do {
-        if(depth < 1 || ((3 * 2 * db_off) + 6) > db->size) {
+        if(!depth || ((3 * 2 * db_off) + 6) > db->size) {
             log_err("plugin_geoip: map '%s': Error traversing GeoIP database, corrupt?", db->map_name);
             rv = true;
             break;
@@ -446,7 +446,7 @@ static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, 
         const unsigned db_zero_off = db_buf[0] + (db_buf[1] << 8) + (db_buf[2] << 16);
         const unsigned db_one_off = db_buf[3] + (db_buf[4] << 8) + (db_buf[5] << 16);
 
-        const int next_depth = depth - 1;
+        const unsigned next_depth = depth - 1U;
         const unsigned mask = 128U - next_depth;
 
         if(db_zero_off >= db->base) {
