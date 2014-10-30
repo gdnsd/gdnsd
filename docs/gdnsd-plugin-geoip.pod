@@ -389,22 +389,27 @@ configuration for C<geoip> resources.
 
 =head1 IPv4 Compatible Addresses
 
-This plugin knows of five different relatively-trivial ways to map IPv4
-addresses into the IPv6 address space.  These are shown below, with
-C<NNNN:NNNN> in place of the copied IPv4 address bytes:
+This plugin knows of six different relatively-trivial ways to map IPv4
+addresses into the IPv6 address space.  These are shown below in as much
+detail matters to this plugin, with C<NNNN:NNNN> in place of the copied
+IPv4 address bytes:
 
-   ::NNNN:NNNN/96        # v4compat - canonical form for this plugin
-   ::FFFF:NNNN:NNNN/96   # v4mapped
-   ::FFFF:0:NNNN:NNNN/96 # SIIT
-   2001::NNNN:NNNN/32    # Teredo (NNNN:NNNN is xor'd with FFFF:FFFF)
-   2002:NNNN:NNNN::/16   # 6to4
+         ::0000:NNNN:NNNN/96   # RFC 4291 - v4compat (deprecated)
+         ::ffff:NNNN:NNNN/96   # RFC 4291 - v4mapped
+    ::ffff:0000:NNNN:NNNN/96   # RFC 2765 - SIIT (obsoleted)
+       64:ff9b::NNNN:NNNN/96   # RFC 6502 - Well-Known Prefix
+    2001:0000:X:NNNN:NNNN/32   # RFC 4380 - Teredo (IPv4 bits are flipped)
+           2002:NNNN:NNNN::/16 # RFC 3056 - 6to4
+
+    (in the Teredo case above, "X" represents some variable non-zero bytes
+     that occupy the center 64 bits of the address).
 
 All of this plugin's internal lookup databases are IPv6 databases, and any
 IPv4-like information is always stored in the v4compat space within these
 databases.  When doing runtime lookups all other v4-like addresses (raw
-IPv4 addresses, v4mapped, SIIT, Teredo, and 6to4) are converted to the
+IPv4 addresses, v4mapped, SIIT, WKP, Teredo, and 6to4) are converted to the
 canonical v4compat IPv6 representation before querying the internal
-databases.  The other representations (v4mapped, SIIT, Teredo, 6to4) are
+databases.  The other representations (v4mapped, SIIT, WKP, Teredo, 6to4) are
 Undefined internally, and will never be referenced at lookup-time due to
 the v4compat conversion mentioned earlier.
 

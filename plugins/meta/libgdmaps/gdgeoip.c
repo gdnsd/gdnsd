@@ -434,6 +434,8 @@ static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, 
                 break;
             else if(!memcmp(ip.s6_addr, start_siit, 12))
                 break;
+            else if(!memcmp(ip.s6_addr, start_wkp, 12))
+                break;
         }
         else if(depth == 96 && !memcmp(ip.s6_addr, start_teredo, 4)) {
             break;

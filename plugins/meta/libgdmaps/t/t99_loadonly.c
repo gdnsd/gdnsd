@@ -41,6 +41,7 @@ int main(int argc, char* argv[]) {
     gdmaps_lookup_noop(tnum++, gdmaps, "my_prod_map", "::69.58.186.119"); // v4-compat
     gdmaps_lookup_noop(tnum++, gdmaps, "my_prod_map", "::FFFF:69.58.186.119"); // v4-mapped
     gdmaps_lookup_noop(tnum++, gdmaps, "my_prod_map", "::FFFF:0:69.58.186.119"); // SIIT
+    gdmaps_lookup_noop(tnum++, gdmaps, "my_prod_map", "64:ff9b::69.58.186.119"); // WKP
     gdmaps_lookup_noop(tnum++, gdmaps, "my_prod_map", "2002:453A:BA77::"); // 6to4
     gdmaps_lookup_noop(tnum++, gdmaps, "my_prod_map", "2001::BAC5:4588"); // Teredo
     gdmaps_lookup_noop(tnum++, gdmaps, "my_prod_map", "2600:3c00::f03c:91ff:fe96:6a4f"); // native v6, defaulted

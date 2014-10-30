@@ -50,6 +50,7 @@ static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask) {
     return (
           v6_subnet_of(ipv6, mask, start_v4mapped, 96)
        || v6_subnet_of(ipv6, mask, start_siit, 96)
+       || v6_subnet_of(ipv6, mask, start_wkp, 96)
        || v6_subnet_of(ipv6, mask, start_teredo, 32)
        || v6_subnet_of(ipv6, mask, start_6to4, 16)
     );
@@ -140,7 +141,7 @@ nlist_t* nets_make_list(vscf_data_t* nets_cfg, dclists_t* dclists, const char* m
     }
 
     if(nl) {
-        // This masks out the 4x v4-like spaces that we *never*
+        // This masks out the 5x v4-like spaces that we *never*
         //   lookup directly.  These "NN_UNDEF" dclists will
         //   never be seen by runtime lookups.  The only
         //   reason these exist is so that supernets and
@@ -150,6 +151,7 @@ nlist_t* nets_make_list(vscf_data_t* nets_cfg, dclists_t* dclists, const char* m
         //   the cache to affect lookup of these spaces...
         nlist_append(nl, start_v4mapped, 96, NN_UNDEF);
         nlist_append(nl, start_siit, 96, NN_UNDEF);
+        nlist_append(nl, start_wkp, 96, NN_UNDEF);
         nlist_append(nl, start_6to4, 16, NN_UNDEF);
         nlist_append(nl, start_teredo, 32, NN_UNDEF);
         nlist_finish(nl);

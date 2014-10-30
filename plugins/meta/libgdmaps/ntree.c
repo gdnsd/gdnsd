@@ -204,7 +204,8 @@ static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
     uint32_t ip_out = 0;
 
     if(!memcmp(in, start_v4mapped, 12)
-        || !memcmp(in, start_siit, 12)) {
+        || !memcmp(in, start_siit, 12)
+        || !memcmp(in, start_wkp, 12)) {
         ip_out = ntohl(gdnsd_get_una32(&in[12]));
         *mask_adj = 96;
     }
