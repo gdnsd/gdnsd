@@ -39,4 +39,3 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "10.0.0.44", "", 3);
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "192.168.1.1", "", 9);
 }
-

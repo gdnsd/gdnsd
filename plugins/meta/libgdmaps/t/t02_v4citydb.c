@@ -43,4 +43,3 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "137.138.144.168", "\2", 16); // City, Geneva
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "::FFFF:137.138.144.168", "\2", 112); // City, Geneva
 }
-

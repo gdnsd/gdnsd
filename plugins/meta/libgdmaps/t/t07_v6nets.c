@@ -58,4 +58,3 @@ int main(int argc, char* argv[]) {
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c02:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", "\2", 32);
     gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c03::0", "\2\1", 32);
 }
-

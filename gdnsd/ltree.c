@@ -1349,4 +1349,3 @@ void ltree_destroy(ltree_node_t* node) {
     free(node->child_table);
     free(node);
 }
-

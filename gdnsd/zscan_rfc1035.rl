@@ -828,4 +828,3 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
 
     return failed;
 }
-
