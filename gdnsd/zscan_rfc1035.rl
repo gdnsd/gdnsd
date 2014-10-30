@@ -734,12 +734,11 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
 #ifndef __clang_analyzer__
         // ^ ... because the ragel-generated code for the zonefile parser is
         //   so huge that it makes analyzer runs take forever.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wswitch-default"
+DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
         %%{
             write exec;
         }%%
-#pragma GCC diagnostic pop
+DMN_DIAG_POP
 #endif // __clang_analyzer__
 
         if(cs == zone_error) {

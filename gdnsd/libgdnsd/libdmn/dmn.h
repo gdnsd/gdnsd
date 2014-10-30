@@ -35,6 +35,8 @@
 
 #pragma GCC visibility push(default)
 
+#define PRAG_(x) _Pragma(#x)
+
 // gcc/clang features
 
 #if defined __GNUC__ && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
@@ -55,12 +57,20 @@
 #  if __has_attribute(cold)
 #    define DMN_F_COLD __attribute__((__cold__))
 #  endif
+#  define DMN_DIAG_PUSH_IGNORED(x) _Pragma("clang diagnostic push"); \
+                                   PRAG_(clang diagnostic ignored x)
+#  define DMN_DIAG_POP             _Pragma("clang diagnostic pop")
 #elif defined __GNUC__
+#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
+#    define DMN_F_COLD __attribute__((__cold__))
+#  endif
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
 #    define DMN_HAVE_UNREACH_BUILTIN 1
 #  endif
-#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
-#    define DMN_F_COLD __attribute__((__cold__))
+#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
+#    define DMN_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push"); \
+                                     PRAG_(GCC diagnostic ignored x)
+#    define DMN_DIAG_POP             _Pragma("GCC diagnostic pop")
 #  endif
 #endif
 
@@ -78,6 +88,12 @@
 #endif
 #ifndef DMN_F_COLD
 #  define DMN_F_COLD
+#endif
+#ifndef DMN_DIAG_PUSH_IGNORE
+#  define DMN_DIAG_PUSH_IGNORE(_x)
+#endif
+#ifndef DMN_DIAG_POP
+#  define DMN_DIAG_POP
 #endif
 
 /***

@@ -301,8 +301,7 @@ const char* dmn_logf_strerror(const int errnum) {
     return buf;
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+DMN_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 
 void dmn_loggerv(int level, const char* fmt, va_list ap) {
     phase_check(0, 0, 0);
@@ -347,6 +346,7 @@ void dmn_logger(int level, const char* fmt, ...) {
     va_end(ap);
 }
 
+DMN_DIAG_POP
 
 const char* dmn_logf_bt(void) {
 #ifdef HAVE_LIBUNWIND
@@ -388,8 +388,6 @@ const char* dmn_logf_bt(void) {
     return "(no libunwind)";
 #endif
 }
-
-#pragma GCC diagnostic pop
 
 bool dmn_get_debug(void) { phase_check(0, 0, 0); return params.debug; }
 bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_alive; }

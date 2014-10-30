@@ -747,12 +747,11 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
             variable eof   scnr->eof;
         }%%
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wswitch-default"
+DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
         %%{
             write exec;
         }%%
-#pragma GCC diagnostic pop
+DMN_DIAG_POP
 
         if(scnr->cs == vscf_error) {
             parse_error_noargs("Syntax error");
