@@ -397,7 +397,7 @@ IPv4 address bytes:
          ::0000:NNNN:NNNN/96   # RFC 4291 - v4compat (deprecated)
          ::ffff:NNNN:NNNN/96   # RFC 4291 - v4mapped
     ::ffff:0000:NNNN:NNNN/96   # RFC 2765 - SIIT (obsoleted)
-       64:ff9b::NNNN:NNNN/96   # RFC 6502 - Well-Known Prefix
+       64:ff9b::NNNN:NNNN/96   # RFC 6052 - Well-Known Prefix
     2001:0000:X:NNNN:NNNN/32   # RFC 4380 - Teredo (IPv4 bits are flipped)
            2002:NNNN:NNNN::/16 # RFC 3056 - 6to4
 
