@@ -38,7 +38,7 @@ struct _dcmap {
     //  child_dclist[i] is non-zero, indicating a direct dclist
     //  child_dcmap[i] is non-null, indicating another level of depth
     char** child_names;
-    int* child_dclists;
+    uint32_t* child_dclists;
     dcmap_t** child_dcmaps;
     unsigned def_dclist; // copied from parent if not specced in cfg, required at root
     unsigned num_children;
@@ -88,10 +88,10 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
     if(def_cfg) {
         if(!true_depth) {
             uint8_t newlist[256];
-            int status = dclists_xlate_vscf(dclists, def_cfg, map_name, newlist, allow_auto);
-            if(status) {
-                dmn_assert(status == -1 && allow_auto);
-                dcmap->def_dclist = -1;
+            bool is_auto = dclists_xlate_vscf(dclists, def_cfg, map_name, newlist, allow_auto);
+            if(is_auto) {
+                dmn_assert(allow_auto);
+                dcmap->def_dclist = DCLIST_AUTO;
             }
             else {
                 dcmap->def_dclist = 0;
@@ -105,7 +105,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
     }
     else {
         if(!true_depth) {
-            dcmap->def_dclist = allow_auto ? -1 : 0;
+            dcmap->def_dclist = allow_auto ? DCLIST_AUTO : 0;
         }
         else {
             dcmap->def_dclist = parent_def;
@@ -122,7 +122,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
     if(nchild) {
         dcmap->num_children = nchild;
         dcmap->child_names = xcalloc(nchild, sizeof(char*));
-        dcmap->child_dclists = xcalloc(nchild, sizeof(int));
+        dcmap->child_dclists = xcalloc(nchild, sizeof(uint32_t));
         dcmap->child_dcmaps = xcalloc(nchild, sizeof(dcmap_t*));
         dcmap_iter_data did = {
             .child_num = 0,
@@ -138,7 +138,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
     return dcmap;
 }
 
-int dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr) {
+uint32_t dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr) {
     dmn_assert(dcmap); dmn_assert(locstr);
 
     if(*locstr && dcmap->skip_level)

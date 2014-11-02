@@ -34,6 +34,24 @@ typedef enum {
    KILL_NEW_LISTS
 } dclists_destroy_depth_t;
 
+// At the nlist/ntree layer, a uint32_t node reference has the high bit set
+//   if it's a dclist, and cleared if it's an internal tree-node reference.
+// This implies that legal, real dclist indices used in the construction of
+//   nlist_t and ntree_t cannot have the high bit set, ever, and thus our
+//   list of real dclist indices is a 31-bit value.
+// As a further constraint, the maximal 31-bit value is not allowed for a real
+//   dclist index because it is used in two magic ways:
+//   1) At the dclists/dcmap/gdgeoip layer it's used to signal automatic
+//     distance-mapped mapping (DCLIST_AUTO below), which will be translated
+//     to a real dclist index before passing to the nlist/tree layer.
+//   2) NN_UNDEF is the 'undefined' case at the nlist/tree layer and is the
+//     value UINT32_MAX, and we don't want a legit dclist index, when OR'd
+//     with the high-bit at the ntree layer, to overlap with this definition
+//     of NN_UNDEF.
+// Therefore:
+#define DCLIST_AUTO 0x7FFFFFFF
+#define DCLIST_MAX  0x7FFFFFFE
+
 F_NONNULL
 dclists_t* dclists_new(const dcinfo_t* info);
 F_NONNULL
@@ -41,15 +59,18 @@ dclists_t* dclists_clone(const dclists_t* old);
 F_NONNULL F_PURE
 unsigned dclists_get_count(const dclists_t* lists);
 F_NONNULL F_PURE
-const uint8_t* dclists_get_list(const dclists_t* lists, const unsigned idx);
+const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx);
 F_NONNULL
 void dclists_replace_list0(dclists_t* lists, uint8_t* newlist);
+
+// retval here: true -> "auto", false -> normal list
 F_NONNULL
-int dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto);
+bool dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto);
+
 F_NONNULL
-int dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto);
+uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto);
 F_NONNULL
-unsigned dclists_city_auto_map(dclists_t* lists, const char* map_name, const unsigned raw_lat, const unsigned raw_lon);
+uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const unsigned raw_lat, const unsigned raw_lon);
 F_NONNULL
 void dclists_destroy(dclists_t* lists, dclists_destroy_depth_t depth);
 

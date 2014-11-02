@@ -97,12 +97,13 @@ static const struct in6_addr ip6_zero = { .s6_addr = { 0 } };
  *   and we store it as a uint32_t using the high bit to signal which
  * For each of the branch fields zero and one:
  *   if the MSB is set, the rest of the uint32_t is a dclist
- *     index (terminal).
+ *     index (terminal).  If the remainder is INT32_MAX (meaning
+ *     the whole is UINT32_MAX), it is the special value NN_UNDEF.
  *   if the MSB is not set, the rest of the uint32_t is
  *     a node index for recursion.
  */
 
-#define NN_UNDEF 0xFFFFFFFF // special undefined dclist, never
+#define NN_UNDEF UINT32_MAX // special undefined dclist, never
                             //   the result of a lookup, used to
                             //   to get netmasks correct adjacent
                             //   to undefined v4-like spaces...

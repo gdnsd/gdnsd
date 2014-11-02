@@ -120,7 +120,8 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
 
         // get dclist integer from rhs
         vscf_data_t* dc_cfg = vscf_hash_get_data_byindex(nets_cfg, i);
-        const unsigned dclist = dclists_find_or_add_vscf(dclists, dc_cfg, map_name, false);
+        const uint32_t dclist = dclists_find_or_add_vscf(dclists, dc_cfg, map_name, false);
+        dmn_assert(dclist <= DCLIST_MAX); // auto not allowed here
         nlist_append(nl, ipv6, mask, dclist);
     }
 

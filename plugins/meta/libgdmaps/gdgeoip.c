@@ -137,14 +137,14 @@ static const char continent_list[NUM_CONTINENTS][3] = {
 
 typedef struct {
     unsigned offset;
-    unsigned dclist;
+    uint32_t dclist;
 } offset_cache_item_t;
 #define OFFSET_CACHE_SIZE 129113 // prime
 
 struct _geoip_db;
 typedef struct _geoip_db geoip_db_t;
 
-typedef unsigned (*dclist_get_func_t)(const geoip_db_t* db, const unsigned offset);
+typedef uint32_t (*dclist_get_func_t)(const geoip_db_t* db, const unsigned offset);
 
 struct _geoip_db {
     const char* pathname;
@@ -187,7 +187,7 @@ void validate_continent_code(const char* cc, const char* map_name) {
 
 
 F_NONNULL
-static unsigned country_get_dclist(const geoip_db_t* db, const unsigned offset) {
+static uint32_t country_get_dclist(const geoip_db_t* db, const unsigned offset) {
     dmn_assert(db); dmn_assert(offset >= db->base);
 
     unsigned rv = 0;
@@ -212,7 +212,7 @@ static unsigned country_get_dclist(const geoip_db_t* db, const unsigned offset) 
 }
 
 F_NONNULL
-static unsigned region_get_dclist(const geoip_db_t* db, const unsigned offset) {
+static uint32_t region_get_dclist(const geoip_db_t* db, const unsigned offset) {
     dmn_assert(db); dmn_assert(offset >= db->base);
 
     unsigned rv = 0;
@@ -271,7 +271,7 @@ static unsigned region_get_dclist(const geoip_db_t* db, const unsigned offset) {
 }
 
 F_NONNULL
-static unsigned city_get_dclist(const geoip_db_t* db, unsigned offs) {
+static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
     dmn_assert(db); dmn_assert(offs >= db->base);
 
     char locstr[256];
@@ -379,19 +379,24 @@ static unsigned city_get_dclist(const geoip_db_t* db, unsigned offs) {
             locstr[loc_pos] = '\0';
     }
 
-    int dclist = db->dcmap ? dcmap_lookup_loc(db->dcmap, locstr) : -1;
-    if(dclist < 0) {
+    uint32_t dclist = db->dcmap
+        ? dcmap_lookup_loc(db->dcmap, locstr)
+        : DCLIST_AUTO;
+
+    if(dclist == DCLIST_AUTO) {
         dmn_assert(db->city_auto_mode);
-        dmn_assert(dclist == -1);
         dclist = dclists_city_auto_map(db->dclists, db->map_name, raw_lat, raw_lon);
+        dmn_assert(dclist != DCLIST_AUTO);
+        dmn_assert(dclist <= DCLIST_MAX);
     }
 
-    dmn_assert(dclist > -1);
+    dmn_assert(dclist != DCLIST_AUTO);
+    dmn_assert(dclist <= DCLIST_MAX);
     return dclist;
 }
 
 F_NONNULL
-static unsigned get_dclist_cached(geoip_db_t* db, const unsigned offset) {
+static uint32_t get_dclist_cached(geoip_db_t* db, const unsigned offset) {
     dmn_assert(db);
 
     unsigned bucket_size = 0;
@@ -403,12 +408,13 @@ static unsigned get_dclist_cached(geoip_db_t* db, const unsigned offset) {
                 return db->offset_cache[ndx][bucket_size].dclist;
     }
 
-    unsigned dclist = db->dclist_get_func(db, offset);
+    uint32_t dclist = db->dclist_get_func(db, offset);
     db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
     dmn_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
     db->offset_cache[ndx][bucket_size + 1].offset = 0;
+    dmn_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
     return dclist;
 }
 

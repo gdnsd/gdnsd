@@ -132,9 +132,7 @@ void ntree_assert_optimal(const ntree_t* tree) {
         }
     }
 }
-#else
-#define ntree_debug_dump(x)
-#define ntree_assert_optimal(x)
+
 #endif
 
 F_NONNULL

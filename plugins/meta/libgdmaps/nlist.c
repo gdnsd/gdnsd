@@ -25,6 +25,8 @@
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 
+#include "dclists.h"
+
 #define NLIST_INITSIZE 64
 
 typedef struct {

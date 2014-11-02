@@ -96,12 +96,14 @@ dclists_t* dclists_clone(const dclists_t* old) {
 
 unsigned dclists_get_count(const dclists_t* lists) {
     dmn_assert(lists);
+    dmn_assert(lists->count <= (DCLIST_MAX + 1U));
     return lists->count;
 }
 
-const uint8_t* dclists_get_list(const dclists_t* lists, const unsigned idx) {
+const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx) {
     dmn_assert(lists);
     dmn_assert(idx < lists->count);
+    dmn_assert(idx <= DCLIST_MAX);
     return lists->list[idx];
 }
 
@@ -112,24 +114,21 @@ const uint8_t* dclists_get_list(const dclists_t* lists, const unsigned idx) {
 //  search for comparisons, and it could realloc the list by doubling instead of 1-at-a-time.
 // Not terribly worried about this unless someone complains first.
 F_NONNULL
-static unsigned dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist, const char* map_name) {
+static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist, const char* map_name) {
     dmn_assert(lists); dmn_assert(newlist); dmn_assert(map_name);
 
-    for(unsigned i = 0; i < lists->count; i++)
+    for(uint32_t i = 0; i < lists->count; i++)
         if(!strcmp((const char*)newlist, (const char*)(lists->list[i])))
             return i;
 
-    // it's actually unsigned, but the top bit is reserved for nnode_t
-    //   to use to flag the difference between node recursion and a
-    //   terminal dclist, and the special value INT32_MAX - 1 (also
-    //   with the top bit set), is used as an error signal in nnode_t.
-    // Therefore the maximum legal index is INT32_MAX - 2
-    if(lists->count == (INT32_MAX - 1))
+    if(lists->count > DCLIST_MAX)
         log_fatal("plugin_geoip: map '%s': too many unique dclists (>%u)", map_name, lists->count);
 
-    const unsigned newidx = lists->count;
+    const uint32_t newidx = lists->count;
     lists->list = xrealloc(lists->list, (++lists->count) * sizeof(uint8_t*));
     lists->list[newidx] = (uint8_t*)strdup((const char*)newlist);
+
+    dmn_assert(newidx <= DCLIST_MAX);
     return newidx;
 }
 
@@ -142,7 +141,7 @@ void dclists_replace_list0(dclists_t* lists, uint8_t* newlist) {
 
 // We should probably check for dupes in these map dclists, but really the fallout
 //  is just some redundant lookup work if the user screws that up.
-int dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto) {
+bool dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto) {
     dmn_assert(lists); dmn_assert(vscf_list); dmn_assert(lists); dmn_assert(newlist); dmn_assert(map_name);
 
     const unsigned count = vscf_array_get_len(vscf_list);
@@ -153,7 +152,7 @@ int dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map
             log_fatal("plugin_geoip: map '%s': datacenter lists must be an array of one or more datacenter name strings", map_name);
         const char* dcname = vscf_simple_get_data(dcname_cfg);
         if(count == 1 && allow_auto && !strcmp(dcname, "auto"))
-            return -1;
+            return true;
         const unsigned idx = dcinfo_name2num(lists->info, dcname);
         if(!idx)
             log_fatal("plugin_geoip: map '%s': datacenter name '%s' invalid ...", map_name, dcname);
@@ -161,15 +160,18 @@ int dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map
     }
     newlist[count] = 0;
 
-    return 0;
+    return false;
 }
 
-int dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto) {
+uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto) {
     dmn_assert(lists); dmn_assert(vscf_list); dmn_assert(lists); dmn_assert(map_name);
     uint8_t newlist[256];
-    int status = dclists_xlate_vscf(lists,vscf_list,map_name,newlist,allow_auto);
-    dmn_assert(status == 0 || (status == -1 && allow_auto));
-    return status ? status : (int)dclists_find_or_add_raw(lists, newlist, map_name);
+    bool is_auto = dclists_xlate_vscf(lists,vscf_list,map_name,newlist,allow_auto);
+    if(is_auto) {
+        dmn_assert(allow_auto);
+        return DCLIST_AUTO;
+    }
+    return dclists_find_or_add_raw(lists, newlist, map_name);
 }
 
 // Geographic distance between two lat/long points.
@@ -183,7 +185,7 @@ static double haversine(double lat1, double lon1, double lat2, double lon2) {
     return atan2(sqrt(a), sqrt(1.0 - a));
 }
 
-unsigned dclists_city_auto_map(dclists_t* lists, const char* map_name, const unsigned raw_lat, const unsigned raw_lon) {
+uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const unsigned raw_lat, const unsigned raw_lon) {
     dmn_assert(lists);
 
     // Generally speaking, seems that almost all records
