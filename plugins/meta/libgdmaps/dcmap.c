@@ -157,6 +157,46 @@ uint32_t dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr) {
     return dcmap->def_dclist;
 }
 
+// as above, but supports abitrary levels of nesting in the map without regard
+//   to any named hierarchy, and without prefetching levels from the lookup source
+//   unless the map actually wants to see them.
+static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* data, unsigned level) {
+    dmn_assert(dcmap); dmn_assert(cb); dmn_assert(data);
+
+    // map empty within this level, e.g. "US => {}" or "US => { default => [...] }"
+    if(!dcmap->num_children)
+        return dcmap->def_dclist;
+
+    // if skip_level, throw away one level of result from callback
+    if(dcmap->skip_level)
+        cb(data, NULL, level++);
+
+    // This will potentially execute multiple callbacks to search several
+    //   levels deep in the network record for a match, but only once we've
+    //   explicitly passed the Country level (so search only happens for
+    //   subdivisions and cities).
+    char lookup[DCMAP_LOOKUP_MAXLEN];
+    do {
+        lookup[0] = '\0';
+        cb(data, &lookup[0], level++);
+        if(!lookup[0])
+            break;
+        for(unsigned i = 0; i < dcmap->num_children; i++) {
+            if(!strcasecmp(lookup, dcmap->child_names[i])) {
+                if(dcmap->child_dcmaps[i])
+                    return dcmap_llc_(dcmap->child_dcmaps[i], cb, data, level);
+                return dcmap->child_dclists[i];
+            }
+        }
+    } while(level > 2); // >1 => post-continent, >2 => post-country
+
+    return dcmap->def_dclist;
+}
+
+uint32_t dcmap_lookup_loc_callback(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* data) {
+    return dcmap_llc_(dcmap, cb, data, 0);
+}
+
 void dcmap_destroy(dcmap_t* dcmap) {
     dmn_assert(dcmap);
 

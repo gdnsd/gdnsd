@@ -121,11 +121,15 @@ static void usage(const char* argv0) {
 #       ifdef USE_INOTIFY
             " inotify"
 #       endif
+#       ifdef HAVE_GEOIP2
+            " geoip2"
+#       endif
 
 #       if  defined NDEBUG \
         && !defined HAVE_QSBR \
         && !defined USE_SENDMMSG \
-        && !defined USE_INOTIFY
+        && !defined USE_INOTIFY \
+        && !defined HAVE_GEOIP2
             " none"
 #       endif
 

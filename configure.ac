@@ -159,6 +159,9 @@ AX_APPEND_COMPILE_FLAGS([\
 # include libdmn configure stuff
 m4_include([gdnsd/libgdnsd/libdmn/libdmn.m4])
 
+# include libgdmaps configure stuff
+m4_include([plugins/meta/libgdmaps/libgdmaps.m4])
+
 # explicit check on math lib.  libev also does this, but
 #  might not in the future, and we need it directly
 XLIBS=$LIBS
@@ -465,6 +468,7 @@ if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
 if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
 if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
 if test "x$HAVE_LIBUNWIND" = x1; then CFSUM_UNWIND=Yes; else CFSUM_UNWIND=No; fi
+if test "x$HAVE_GEOIP2" = x1; then CFSUM_GEOIP2=Yes; else CFSUM_GEOIP2=No; fi
 if test "x$HAVE_QSBR" = x1; then
     CFSUM_QSBR=Yes
 else
@@ -486,5 +490,6 @@ echo "| Userspace-rcu support:  $CFSUM_QSBR"
 echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
 echo "| Linux inotify support:  $CFSUM_INOTIFY"
 echo "| Libunwind support:      $CFSUM_UNWIND"
+echo "| GeoIP2 support:         $CFSUM_GEOIP2"
 echo "| Test Port Start:        $CFSUM_TP"
 echo "======================================="

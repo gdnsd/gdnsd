@@ -1,11 +1,10 @@
-
 AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd
 AM_LIBTOOLFLAGS = --silent
 
 SUBDIRS = . t
 
 noinst_LTLIBRARIES = libgdmaps.la
-libgdmaps_la_LIBADD = $(MATH_LIB)
+libgdmaps_la_LIBADD = $(MATH_LIB) $(GEOIP2_LIBS)
 libgdmaps_la_SOURCES = \
 	gdmaps.c \
 	gdmaps.h \
@@ -23,6 +22,8 @@ libgdmaps_la_SOURCES = \
 	nets.h \
 	gdgeoip.c \
 	gdgeoip.h \
+	gdgeoip2.c \
+	gdgeoip2.h \
 	fips104.c \
 	fips104.h
 
