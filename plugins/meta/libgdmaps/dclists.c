@@ -185,28 +185,17 @@ static double haversine(double lat1, double lon1, double lat2, double lon2) {
     return atan2(sqrt(a), sqrt(1.0 - a));
 }
 
-uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const unsigned raw_lat, const unsigned raw_lon) {
-    dmn_assert(lists);
+uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const double lat, const double lon) {
+    dmn_assert(lists); dmn_assert(map_name);
 
-    // Generally speaking, seems that almost all records
-    //  in City DB have lat/lon with the exception of
-    //  those in continent -- (countries --,O1,A1,A2)
-    //  and the US Military regions AE/AP/AA, all of
-    //  which show up as lat:0 lon:0.
-
-    // default for 0/0 coords
-    if(raw_lat == 1800000 && raw_lon == 1800000)
-        return 0;
+    const double lat_rad = lat * DEG2RAD;
+    const double lon_rad = lon * DEG2RAD;
 
     // Copy the default datacenter list to local storage for sorting
     const unsigned num_dcs = dcinfo_get_count(lists->info);
     const unsigned store_len = num_dcs + 1;
     uint8_t sortlist[store_len];
     memcpy(sortlist, lists->list[0], store_len);
-
-    // convert raw form to double radians
-    const double lat_rad = (raw_lat - 1800000.0) / 10000.0 * DEG2RAD;
-    const double lon_rad = (raw_lon - 1800000.0) / 10000.0 * DEG2RAD;
 
     // calculate the target's distance from each datacenter.
     // note the first element of 'dists' is unused, and

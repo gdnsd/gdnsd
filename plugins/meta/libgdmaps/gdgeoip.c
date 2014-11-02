@@ -385,9 +385,18 @@ static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
 
     if(dclist == DCLIST_AUTO) {
         dmn_assert(db->city_auto_mode);
-        dclist = dclists_city_auto_map(db->dclists, db->map_name, raw_lat, raw_lon);
-        dmn_assert(dclist != DCLIST_AUTO);
-        dmn_assert(dclist <= DCLIST_MAX);
+
+        // default for 0/0 coords
+        if(raw_lat == 1800000 && raw_lon == 1800000) {
+            dclist = 0;
+        }
+        else {
+            const double lat_deg = (raw_lat - 1800000.0) * 0.0001;
+            const double lon_deg = (raw_lon - 1800000.0) * 0.0001;
+            dclist = dclists_city_auto_map(db->dclists, db->map_name, lat_deg, lon_deg);
+            dmn_assert(dclist != DCLIST_AUTO);
+            dmn_assert(dclist <= DCLIST_MAX);
+        }
     }
 
     dmn_assert(dclist != DCLIST_AUTO);

@@ -70,7 +70,7 @@ bool dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* ma
 F_NONNULL
 uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto);
 F_NONNULL
-uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const unsigned raw_lat, const unsigned raw_lon);
+uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const double lat, const double lon);
 F_NONNULL
 void dclists_destroy(dclists_t* lists, dclists_destroy_depth_t depth);
 
