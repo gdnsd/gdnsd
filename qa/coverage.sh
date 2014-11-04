@@ -13,7 +13,8 @@ set -x
 set -e
 
 CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --disable-developer --without-hardening
-make -j4 clean all
+make clean
+make -j4 all
 make check-download
 
 lcov -c -i -d . -o gdnsd-base.info --rc lcov_branch_coverage=1

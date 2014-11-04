@@ -11,7 +11,8 @@ fi
 set -x
 set -e
 CPPFLAGS="-DCOVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --prefix=/tmp/_gdnsd_inst --without-systemdsystemunitdir --without-hardening
-make -j4 clean all
+make clean
+make -j4 all
 make check-download
 make install
 TEST_RUNNER="valgrind --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make -C plugins/meta/libgdmaps/t check
