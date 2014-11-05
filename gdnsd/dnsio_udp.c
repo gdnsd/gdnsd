@@ -473,21 +473,19 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             }
 
             struct mmsghdr* dgptr = dgrams;
-            while(pkts) {
-                int sent = sendmmsg(fd, dgptr, pkts, 0);
-                dmn_assert(sent != 0);
-                dmn_assert(sent <= pkts);
-                if(unlikely(sent < pkts)) {
+            while(pkts > 0) {
+                int mmsg_rv = sendmmsg(fd, dgptr, pkts, 0);
+                if(mmsg_rv < 0) {
+                    stats_own_inc(&stats->udp.sendfail);
                     int sockerr = 0;
                     socklen_t sock_len = sizeof(sockerr);
                     (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
-                    stats_own_inc(&stats->udp.sendfail);
-                    if(sent < 0) sent = 0;
-                    log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[sent].msg_hdr.msg_iov[0].iov_len, dmn_logf_anysin(dgptr[sent].msg_hdr.msg_name), dmn_logf_strerror(sockerr));
-                    dgptr += sent; // skip past the successes
-                    dgptr++; // skip the failed one too
-                    pkts--; // drop one count for the failed message
+                    log_err("UDP sendmmsg() failed: %s", dmn_logf_strerror(sockerr));
+                    break;
                 }
+                unsigned sent = (unsigned)mmsg_rv;
+                dmn_assert(sent <= pkts);
+                dgptr += sent; // skip past the successes
                 pkts -= sent; // drop the count of all successes
             }
         }
