@@ -209,7 +209,7 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         defaultme.sa_flags = 0;
 
         // we really don't care about error retvals here
-        for(unsigned i = 0; i < NSIG; i++)
+        for(int i = 0; i < NSIG; i++)
             (void)sigaction(i, &defaultme, NULL);
 
         // unblock all
@@ -242,9 +242,9 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
     dmn_assert(plugin_write_fd > -1);
     while(!sendq_empty()) {
         const uint32_t data = sendq_deq_peek();
-        int rv = write(plugin_write_fd, &data, 4);
-        if(rv != 4) {
-            if(rv < 0) {
+        ssize_t write_rv = write(plugin_write_fd, &data, 4);
+        if(write_rv != 4) {
+            if(write_rv < 0) {
                 if(errno == EAGAIN || errno == EWOULDBLOCK)
                     return; // pipe full, wait for more libev notification of write-ready
                 else if(errno == EINTR)
@@ -254,12 +254,12 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
                     return;
                 }
             }
-            else if(rv == 0) {
+            else if(write_rv == 0) {
                 ev_break(loop, EVBREAK_ALL);
                 return;
             }
             else {
-                log_fatal("BUG: atomic pipe write of 4 bytes was not atomic, retval was %u", rv);
+                log_fatal("BUG: atomic pipe write of 4 bytes was not atomic, retval was %zi", write_rv);
             }
         }
         sendq_deq_commit();

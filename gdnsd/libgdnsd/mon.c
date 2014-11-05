@@ -84,7 +84,7 @@ static smgr_t* smgrs = NULL;
 static gdnsd_sttl_t* smgr_sttl = NULL;
 static gdnsd_sttl_t* smgr_sttl_consumer = NULL;
 
-static int max_stats_len = 0;
+static unsigned max_stats_len = 0;
 
 static bool initial_round = false;
 static bool testsuite_nodelay = false;
@@ -133,17 +133,18 @@ const char* gdnsd_logf_sttl(const gdnsd_sttl_t s) {
     // the minimal is "UP/1"
     // 4-14 bytes not counting NUL
     char tmpbuf[15];
-    int snp_len;
     const unsigned ttl = s & GDNSD_STTL_TTL_MASK;
     const char* state = (s & GDNSD_STTL_DOWN) ? "DOWN" : "UP";
+    int snp_rv;
     if(!ttl || ttl == GDNSD_STTL_TTL_MAX)
-        snp_len = snprintf(tmpbuf, 15, "%s/%s", state, ttl ? "MAX" : "MIN");
+        snp_rv = snprintf(tmpbuf, 15, "%s/%s", state, ttl ? "MAX" : "MIN");
     else
-        snp_len = snprintf(tmpbuf, 15, "%s/%u", state, ttl);
+        snp_rv = snprintf(tmpbuf, 15, "%s/%u", state, ttl);
 
-    dmn_assert(snp_len >= 4 && snp_len <= 14);
-    char* out = dmn_fmtbuf_alloc((unsigned)snp_len + 1);
-    memcpy(out, tmpbuf, snp_len + 1);
+    dmn_assert(snp_rv >= 4 && snp_rv <= 14);
+    const unsigned snp_len = (unsigned)snp_rv;
+    char* out = dmn_fmtbuf_alloc(snp_len + 1U);
+    memcpy(out, tmpbuf, snp_len + 1U);
     return out;
 }
 
@@ -920,9 +921,9 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
     dmn_assert(max_stats_len);
 
     const char* const buf_start = buf;
-    int avail = max_stats_len;
+    unsigned avail = max_stats_len;
 
-    if(avail <= (int)http_head_len)
+    if(avail <= http_head_len)
         log_fatal("BUG: monio stats buf miscalculated (html mon head)");
     memcpy(buf, http_head, http_head_len);
     buf += http_head_len;
@@ -935,14 +936,16 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
         const char* real_class;
         get_state_texts(i, &cur_st, &real_st);
         get_class_texts(i, &cur_class, &real_class);
-        int written = snprintf(buf, avail, http_tmpl, smgrs[i].desc, cur_class, cur_st, real_class, real_st);
+        const int snp_rv = snprintf(buf, avail, http_tmpl, smgrs[i].desc, cur_class, cur_st, real_class, real_st);
+        dmn_assert(snp_rv > 0);
+        const unsigned written = (unsigned)snp_rv;
         if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (html mon data)");
         buf += written;
         avail -= written;
     }
 
-    if(avail <= (int)http_foot_len)
+    if(avail <= http_foot_len)
         log_fatal("BUG: monio stats buf miscalculated (html mon foot)");
 
     memcpy(buf, http_foot, http_foot_len);
@@ -960,9 +963,9 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
     dmn_assert(max_stats_len);
 
     const char* const buf_start = buf;
-    int avail = max_stats_len;
+    unsigned avail = max_stats_len;
 
-    if(avail <= (int)csv_head_len)
+    if(avail <= csv_head_len)
         log_fatal("BUG: monio stats buf miscalculated (csv mon head)");
     memcpy(buf, csv_head, csv_head_len);
     buf += csv_head_len;
@@ -972,7 +975,9 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
         const char* cur_st;
         const char* real_st;
         get_state_texts(i, &cur_st, &real_st);
-        int written = snprintf(buf, avail, csv_tmpl, smgrs[i].desc, cur_st, real_st);
+        const int snp_rv = snprintf(buf, avail, csv_tmpl, smgrs[i].desc, cur_st, real_st);
+        dmn_assert(snp_rv > 0);
+        const unsigned written = (unsigned)snp_rv;
         if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (csv data)");
         buf += written;
@@ -986,14 +991,14 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
     dmn_assert(buf);
 
     dmn_assert(max_stats_len);
-    int avail = max_stats_len;
+    unsigned avail = max_stats_len;
 
     const char* const buf_start = buf;
 
-    if(avail <= (int)(json_sep_len + json_head_len))
+    if(avail <= json_sep_len + json_head_len)
         log_fatal("BUG: monio stats buf miscalculated (json mon head)");
 
-    if(num_smgrs == 0 ) {
+    if(num_smgrs == 0) {
         memcpy(buf, json_nl, json_nl_len);
         buf += json_nl_len;
         return (buf - buf_start);
@@ -1011,13 +1016,15 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
         const char* cur_st;
         const char* real_st;
         get_state_texts(i, &cur_st, &real_st);
-        int written = snprintf(buf, avail, json_tmpl, smgrs[i].desc, cur_st, real_st);
+        const int snp_rv = snprintf(buf, avail, json_tmpl, smgrs[i].desc, cur_st, real_st);
+        dmn_assert(snp_rv > 0);
+        const unsigned written = (unsigned)snp_rv;
         if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (json mon data)");
         buf += written;
         avail -= written;
         if( i < num_smgrs -1 ) {
-            if(avail <= (int)json_sep_len)
+            if(avail <= json_sep_len)
                 log_fatal("BUG: monio stats buf miscalculated (json mon data-sep)");
             memcpy(buf, json_sep, json_sep_len);
             buf += json_sep_len;
@@ -1025,7 +1032,7 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
         }
     }
 
-    if(avail <= (int)json_foot_len)
+    if(avail <= json_foot_len)
         log_fatal("BUG: monio stats buf miscalculated (json mon footer)");
 
     memcpy(buf, json_foot, json_foot_len);

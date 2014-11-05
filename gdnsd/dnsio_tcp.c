@@ -115,8 +115,8 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     const size_t wanted = tdata->size - tdata->size_done;
     const uint8_t* source = tdata->buffer + tdata->size_done;
 
-    const ssize_t written = send(io->fd, source, wanted, 0);
-    if(unlikely(written == -1)) {
+    const ssize_t send_rv = send(io->fd, source, wanted, 0);
+    if(unlikely(send_rv < 0)) {
         if(errno != EAGAIN && errno != EWOULDBLOCK) {
             log_devdebug("TCP DNS send() failed, dropping response to %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             stats_own_inc(&tdata->ctx->stats->tcp.sendfail);
@@ -125,7 +125,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
         }
     }
     else { // we sent something...
-        tdata->size_done += written;
+        tdata->size_done += (size_t)send_rv;
         if(likely(tdata->size_done == tdata->size)) {
             ev_timer_again(loop, tdata->timeout_watcher);
             tdata->state = READING_INITIAL;
@@ -188,7 +188,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
 
     if(likely(tdata->state == READING_INITIAL)) {
         if(likely(tdata->size_done > 1)) {
-            tdata->size = (tdata->buffer[0] << 8) + tdata->buffer[1] + 2;
+            tdata->size = (tdata->buffer[0] << 8U) + tdata->buffer[1] + 2U;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
                 log_devdebug("Oversized TCP DNS query of length %u from %s", tdata->size, dmn_logf_anysin(tdata->asin));
                 stats_own_inc(&tdata->ctx->stats->tcp.recvfail);
@@ -391,8 +391,8 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     const dns_addr_t* addrconf = t->ac;
 
     if(t->bind_success)
-        if(listen(t->sock, addrconf->tcp_clients_per_thread) == -1)
-            log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
+        if(listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
+            log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
 
     tcpdns_thread_t* ctx = xmalloc(sizeof(tcpdns_thread_t));
     ctx->stats = dnspacket_stats_init(t->threadnum, false);

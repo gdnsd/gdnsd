@@ -719,12 +719,13 @@ static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd)
             z->tstart = buf;
         }
 
-        const int space = bufsize - have;
+        const unsigned space = bufsize - have;
         const char* p = read_at = buf + have;
 
-        const int len = read(fd, read_at, space);
-        if(len < 0)
+        const ssize_t read_rv = read(fd, read_at, space);
+        if(read_rv < 0)
             parse_error("read() failed: %s", dmn_logf_errno());
+        const size_t len = (size_t)read_rv;
 
         pe = p + len;
 

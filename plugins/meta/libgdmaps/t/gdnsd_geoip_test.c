@@ -55,11 +55,12 @@ F_NONNULL
 static void do_lookup(const char* map_name, const char* ip_arg) {
     dmn_assert(gdmaps); dmn_assert(map_name); dmn_assert(ip_arg);
 
-    int map_idx = gdmaps_name2idx(gdmaps, map_name);
-    if(map_idx < 0) {
+    const int rv = gdmaps_name2idx(gdmaps, map_name);
+    if(rv < 0) {
         log_err("Mapping name '%s' not found in configuration", map_name);
         return;
     }
+    const unsigned map_idx = (unsigned)rv;
 
     client_info_t cinfo;
 

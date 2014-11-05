@@ -519,7 +519,7 @@ int main(int argc, char** argv) {
         // If root and no explicit value, use -11
         if(started_as_root && cfg->priority == -21)
             cfg->priority = -11;
-        if(setpriority(PRIO_PROCESS, getpid(), cfg->priority))
+        if(setpriority(PRIO_PROCESS, (id_t)getpid(), cfg->priority))
             log_warn("setpriority(%i) failed: %s", cfg->priority, dmn_logf_errno());
     }
 

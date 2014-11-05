@@ -499,7 +499,7 @@ void dmn_sd_notify(const char *notify_msg, const bool optional) {
     close(fd);
 
     if(sm_rv < 0)
-        _sdnfail("sendmmsg() failed: %s", dmn_logf_errno());
+        _sdnfail("sendmsg() failed: %s", dmn_logf_errno());
 }
 
 #endif // __linux__
@@ -592,13 +592,13 @@ static void helper_proc(const pid_t middle_pid) {
 
     do {
         uint8_t msg;
-        int readrv;
+        ssize_t read_rv;
         do {
             errno = 0;
-            readrv = read(readpipe, &msg, 1);
-        } while(errno == EAGAIN || errno == EWOULDBLOCK);
+            read_rv = read(readpipe, &msg, 1);
+        } while(errno == EINTR);
 
-        if(errno || readrv != 1)
+        if(errno || read_rv != 1)
             break; // pipe close or other error
         else if(msg >= 128U)
             break; // high-bit reserved for responses!
@@ -610,8 +610,8 @@ static void helper_proc(const pid_t middle_pid) {
             break;
         errno = 0;
         msg |= 128U; // set high-bit for response
-        int writerv = write(writepipe, &msg, 1);
-        if(errno || writerv != 1)
+        ssize_t write_rv = write(writepipe, &msg, 1);
+        if(errno || write_rv != 1)
             break;
     } while(1);
 

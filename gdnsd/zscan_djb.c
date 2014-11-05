@@ -385,8 +385,8 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
 
         z->texts = xrealloc(z->texts, sizeof(uint8_t *) * (chunks + 1));
         for (i = 0; i < chunks; i++) {
-            int s = (bytes > 255 ? 255 : bytes);
-            z->texts[i] = xmalloc(s + 1);
+            unsigned s = (bytes > 255U ? 255U : bytes);
+            z->texts[i] = xmalloc(s + 1U);
             z->texts[i][0] = s;
             memcpy(&z->texts[i][1], src, s);
             bytes -= s;

@@ -104,9 +104,10 @@ void gdmaps_lookup_noop(const unsigned tnum, const gdmaps_t* gdmaps, const char*
 
     log_info("Subtest %u starting", tnum);
 
-    int map_idx = gdmaps_name2idx(gdmaps, map_name);
-    if(map_idx < 0)
+    const int rv = gdmaps_name2idx(gdmaps, map_name);
+    if(rv < 0)
         log_fatal("Subtest %u failed: Map name '%s' not found in configuration", tnum, map_name);
+    const unsigned map_idx = (unsigned)rv;
 
     client_info_t cinfo;
     cinfo.edns_client_mask = 128U;
@@ -127,9 +128,10 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
 
     log_info("Subtest %u starting", tnum);
 
-    int map_idx = gdmaps_name2idx(gdmaps, map_name);
-    if(map_idx < 0)
+    const int rv = gdmaps_name2idx(gdmaps, map_name);
+    if(rv < 0)
         log_fatal("Subtest %u failed: Map name '%s' not found in configuration", tnum, map_name);
+    const unsigned map_idx = (unsigned)rv;
 
     client_info_t cinfo;
     cinfo.edns_client_mask = 128U;

@@ -56,12 +56,11 @@ static const uint8_t ooz_glue_label[1] = { 0 };
 // don't use this directly, use macro below
 // this logs the lstack labels as a partial domainname (possibly empty),
 // intended to be completed with the zone name via the macro below
-static const char* _logf_lstack(const uint8_t** lstack, int depth) {
+static const char* _logf_lstack(const uint8_t** lstack, unsigned depth) {
     char* dnbuf = dmn_fmtbuf_alloc(1024);
     char* dnptr = dnbuf;
 
-    while(depth) {
-        depth--;
+    while(depth--) {
         const uint8_t llen = *(lstack[depth]);
         for(unsigned i = 1; i <= llen; i++) {
             unsigned char x = lstack[depth][i];
@@ -104,7 +103,7 @@ F_CONST
 static uint32_t count2mask(const uint32_t x) {
     // This variant is about twice as fast as the above, but
     //  only available w/ GCC 3.4 and above.
-    return ((1U << (31U - __builtin_clz(x|1U))) << 1U) - 1U;
+    return ((1U << (31U - (unsigned)__builtin_clz(x|1U))) << 1U) - 1U;
 }
 
 #endif
@@ -340,7 +339,7 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
             }
         }
         else {
-            rrset->addrs.v4 = xrealloc(rrset->addrs.v4, sizeof(uint32_t) * (1 + rrset->gen.count));
+            rrset->addrs.v4 = xrealloc(rrset->addrs.v4, sizeof(uint32_t) * (1U + rrset->gen.count));
             rrset->addrs.v4[rrset->gen.count++] = addr;
         }
     }
@@ -392,7 +391,7 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
             rrset->addrs.v4 = new_v4;
             rrset->addrs.v6 = NULL;
         }
-        rrset->addrs.v6 = xrealloc(rrset->addrs.v6, 16 * (1 + rrset->count_v6));
+        rrset->addrs.v6 = xrealloc(rrset->addrs.v6, 16 * (1U + rrset->count_v6));
         memcpy(rrset->addrs.v6 + (rrset->count_v6++ * 16), addr, 16);
     }
 
@@ -545,7 +544,7 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
         if(rrset->gen.count == UINT16_MAX)\
             log_zfatal("Name '%s%s': Too many RRs of type %s", logf_dname(dname), logf_dname(zone->dname), _pnam);\
         if(_szassume == 1 || rrset->gen.count >= _szassume) \
-            rrset->rdata = xrealloc(rrset->rdata, (1 + rrset->gen.count) * sizeof(ltree_rdata_ ## _typ ## _t));\
+            rrset->rdata = xrealloc(rrset->rdata, (1U + rrset->gen.count) * sizeof(ltree_rdata_ ## _typ ## _t));\
         new_rdata = &rrset->rdata[rrset->gen.count++];\
     }\
 }
@@ -780,7 +779,7 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
             log_zwarn("Name '%s%s': All TTLs for type RFC3597 TYPE%u should match (using %u)", logf_dname(dname), logf_dname(zone->dname), rrtype, ntohl(rrset->gen.ttl));
         if(rrset->gen.count == UINT16_MAX)
             log_zfatal("Name '%s%s': Too many RFC3597 RRs of type TYPE%u", logf_dname(dname), logf_dname(zone->dname), rrtype);
-        rrset->rdata = xrealloc(rrset->rdata, (1 + rrset->gen.count) * sizeof(ltree_rdata_rfc3597_t));
+        rrset->rdata = xrealloc(rrset->rdata, (1U + rrset->gen.count) * sizeof(ltree_rdata_rfc3597_t));
         new_rdata = &rrset->rdata[rrset->gen.count++];
     }
 

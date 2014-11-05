@@ -215,7 +215,7 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
     //  this simple insertion sort is probably reasonably quick
     for(unsigned i = 1; i < num_dcs; i++) {
         unsigned temp = sortlist[i];
-        int j = i - 1;
+        int j = (int)i - 1;
         while(j >= 0 && (dists[temp] < dists[sortlist[j]])) {
             sortlist[j + 1] = sortlist[j];
             j--;

@@ -44,11 +44,11 @@ typedef struct {
 // The ones with bool retvals return zero on success, and
 //   emc_read_command() returns NULL on failure.
 F_WUNUSED F_NONNULL
-bool emc_write_string(const int fd, const char* str, const unsigned len);
+bool emc_write_string(const int fd, const char* str, const size_t len);
 F_WUNUSED F_NONNULL
 bool emc_read_exact(const int fd, const char* str);
 F_WUNUSED F_NONNULL
-bool emc_read_nbytes(const int fd, const unsigned len, uint8_t* out);
+bool emc_read_nbytes(const int fd, const size_t len, uint8_t* out);
 F_WUNUSED F_NONNULL
 bool emc_write_command(const int fd, const extmon_cmd_t* cmd);
 F_WUNUSED

@@ -268,8 +268,9 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
     //   so create a new node at this slot...
     if(!rv) {
         rv = xcalloc(1, sizeof(ztree_t));
-        rv->label = xmalloc(*label + 1);
-        memcpy(rv->label, label, *label + 1);
+        const unsigned lsz = *label + 1U;
+        rv->label = xmalloc(lsz);
+        memcpy(rv->label, label, lsz);
         gdnsd_prcu_upd_assign(children->store[slot], rv);
         children->count++;
     }
@@ -309,7 +310,7 @@ static void zones_sort(zone_t** list, const unsigned len) {
     dmn_assert(list); dmn_assert(len);
     for(unsigned i = 1; i < len; i++) {
         zone_t* temp = list[i];
-        int j = i - 1;
+        int j = (int)i - 1;
         while(j >= 0 && (zone_cmp(temp, list[j]) <= 0)) {
             list[j + 1] = list[j];
             j--;

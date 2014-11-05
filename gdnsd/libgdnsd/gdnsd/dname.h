@@ -233,7 +233,7 @@ static bool gdnsd_dname_is_partial(const uint8_t* dname) {
 F_WUNUSED F_NONNULL F_UNUSED
 static uint8_t* gdnsd_dname_trim(uint8_t* dname) {
     dmn_assert(dname); dmn_assert(*dname);
-    return xrealloc(dname, *dname + 1);
+    return xrealloc(dname, *dname + 1U);
 }
 
 // Copy "source" dname to the storage at dest, which must be allocated
@@ -252,7 +252,7 @@ static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
 F_WUNUSED F_NONNULL F_UNUSED
 static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact) {
     dmn_assert(dname); dmn_assert(*dname);
-    uint8_t* out = xmalloc(exact ? (*dname + 1) : 256);
+    uint8_t* out = xmalloc(exact ? (*dname + 1U) : 256U);
     gdnsd_dname_copy(out, dname);
     return out;
 }
@@ -349,7 +349,7 @@ static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot) {
     dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
     dmn_assert(gdnsd_dname_status(zroot) == DNAME_VALID);
     dmn_assert((*dname) >= (*zroot));
-    const unsigned newterm = (*dname) - ((*zroot) - 1);
+    const unsigned newterm = (*dname) - ((*zroot) - 1U);
     dmn_assert(dname[newterm] == zroot[1]);
     dname[0] = newterm;
     dname[newterm] = 0;

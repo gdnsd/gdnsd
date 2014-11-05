@@ -343,10 +343,14 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs, const bool flush) {
     dmn_assert(outbufs);
     populate_stats(flush);
 
-    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
-
+    int snp_rv = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
+    dmn_assert(snp_rv > 0);
+    outbufs[1].iov_len = (unsigned)snp_rv;
     outbufs[1].iov_len += gdnsd_mon_stats_out_csv(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
-    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "text/plain", (unsigned)outbufs[1].iov_len);
+
+    snp_rv = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "text/plain", (unsigned)outbufs[1].iov_len);
+    dmn_assert(snp_rv > 0);
+    outbufs[0].iov_len = (unsigned)snp_rv;
 }
 
 F_NONNULL
@@ -356,12 +360,16 @@ static void statio_fill_outbuf_json(struct iovec* outbufs, const bool flush) {
 
     dmn_assert(pop_statio_time >= start_time);
 
-    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, json_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
-
+    int snp_rv = snprintf(outbufs[1].iov_base, data_buffer_size, json_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
+    dmn_assert(snp_rv > 0);
+    outbufs[1].iov_len = (unsigned)snp_rv;
     outbufs[1].iov_len += gdnsd_mon_stats_out_json(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
-    memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_footer, (sizeof(json_footer)) - 1);
-    outbufs[1].iov_len += (sizeof(json_footer)-1);
-    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/json", (unsigned)outbufs[1].iov_len);
+    memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_footer, sizeof(json_footer) - 1U);
+    outbufs[1].iov_len += (sizeof(json_footer) - 1U);
+
+    snp_rv = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/json", (unsigned)outbufs[1].iov_len);
+    dmn_assert(snp_rv > 0);
+    outbufs[0].iov_len = (unsigned)snp_rv;
 }
 
 F_NONNULL
@@ -377,12 +385,16 @@ static void statio_fill_outbuf_html(struct iovec* outbufs, const bool flush) {
     if(!strftime(now_char, 63, "%a %b %e %T %Y", &now_tm))
         log_fatal("strftime() failed");
 
-    outbufs[1].iov_len = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_uptime(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
-
+    int snp_rv = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_uptime(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
+    dmn_assert(snp_rv > 0);
+    outbufs[1].iov_len = (unsigned)snp_rv;
     outbufs[1].iov_len += gdnsd_mon_stats_out_html(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
-    memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), html_footer, (sizeof(html_footer)) - 1);
-    outbufs[1].iov_len += (sizeof(html_footer)-1);
-    outbufs[0].iov_len = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/xhtml+xml", (unsigned)outbufs[1].iov_len);
+    memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), html_footer, sizeof(html_footer) - 1U);
+    outbufs[1].iov_len += (sizeof(html_footer) - 1U);
+
+    snp_rv = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/xhtml+xml", (unsigned)outbufs[1].iov_len);
+    dmn_assert(snp_rv > 0);
+    outbufs[0].iov_len = (unsigned)snp_rv;
 }
 
 // Could be merged to a single iov, but this keeps things
@@ -502,7 +514,7 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
     struct iovec* iovs = tdata->outbufs;
 
     struct iovec* iovs_writev;
-    unsigned iovcnt_writev;
+    int iovcnt_writev;
     if(iovs[0].iov_len) {
         iovs_writev = &iovs[0];
         iovcnt_writev = 2;
@@ -515,13 +527,13 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
 
     if(unlikely(write_rv < 0)) {
         if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-            log_debug("HTTP send() failed (%s), dropping response to %s", dmn_logf_errno(), dmn_logf_anysin(tdata->asin));
+            log_debug("HTTP writev() failed (%s), dropping response to %s", dmn_logf_errno(), dmn_logf_anysin(tdata->asin));
             cleanup_conn_watchers(loop, tdata);
         }
         return;
     }
 
-    unsigned written = write_rv;
+    size_t written = (size_t)write_rv;
 
     if(iovs[0].iov_len) {
         if(written >= iovs[0].iov_len) {
@@ -558,13 +570,14 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
     dmn_assert(tdata->state != WRITING_RES);
 
     if(tdata->state == READING_JUNK) {
-        ssize_t recvlen = recv(io->fd, junk_buffer, JUNK_SIZE, 0);
-        if(unlikely(recvlen == -1)) {
+        const ssize_t recv_rv = recv(io->fd, junk_buffer, JUNK_SIZE, 0);
+        if(unlikely(recv_rv < 0)) {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
                 return;
             log_debug("HTTP recv() error (lingering) from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
         }
-        if(recvlen < 1) cleanup_conn_watchers(loop, tdata);
+        if(recv_rv < 1)
+            cleanup_conn_watchers(loop, tdata);
         return;
     }
 
@@ -572,14 +585,15 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
     dmn_assert(tdata->read_done < HTTP_READ_BYTES);
     char* destination = &tdata->read_buffer[tdata->read_done];
     const size_t wanted = HTTP_READ_BYTES - tdata->read_done;
-    ssize_t recvlen = recv(io->fd, destination, wanted, 0);
-    if(unlikely(recvlen == -1)) {
+    const ssize_t recv_rv = recv(io->fd, destination, wanted, 0);
+    if(unlikely(recv_rv < 0)) {
         if(errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
             log_debug("HTTP recv() error from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
             cleanup_conn_watchers(loop, tdata);
         }
         return;
     }
+    const size_t recvlen = (size_t)recv_rv;
     tdata->read_done += recvlen;
     if(tdata->read_done < HTTP_READ_BYTES) return;
 

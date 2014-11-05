@@ -145,7 +145,7 @@ static int net_sorter(const void* a_void, const void* b_void) {
     const net_t* b = b_void;
     int rv = memcmp(a->ipv6, b->ipv6, 16);
     if(!rv)
-        rv = a->mask - b->mask;
+        rv = (int)a->mask - (int)b->mask;
     return rv;
 }
 

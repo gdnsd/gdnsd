@@ -189,11 +189,11 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
     }
 
     dmn_assert(md->done < md->http_svc->req_data_len);
-    const int to_send = md->http_svc->req_data_len - md->done;
+    const unsigned to_send = md->http_svc->req_data_len - md->done;
     dmn_assert(to_send > 0);
 
-    const int sent = send(sock, md->http_svc->req_data + md->done, to_send, 0);
-    if(unlikely(sent == -1)) {
+    const ssize_t send_rv = send(sock, md->http_svc->req_data + md->done, to_send, 0);
+    if(unlikely(send_rv < 0)) {
         switch(errno) {
             case EAGAIN:
 #if EWOULDBLOCK != EAGAIN
@@ -209,7 +209,7 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
             case EPIPE:
                 break;
             default:
-                log_err("plugin_http_status: write() to monitoring socket failed, possible local problem: %s", dmn_logf_errno());
+                log_err("plugin_http_status: send() to monitoring socket failed, possible local problem: %s", dmn_logf_errno());
         }
         shutdown(sock, SHUT_RDWR);
         close(sock);
@@ -218,8 +218,10 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
         ev_timer_stop(loop, md->timeout_watcher);
         md->hstate = HTTP_STATE_WAITING;
         gdnsd_mon_state_updater(md->idx, false);
+        return;
     }
 
+    const size_t sent = (size_t)send_rv;
     dmn_assert(sent <= to_send);
 
     if(unlikely(sent != to_send)) {
@@ -248,9 +250,9 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
     dmn_assert(md->sock > -1);
 
     bool final_status = false;
-    const int to_recv = 13 - md->done;
-    const int recvd = recv(md->sock, md->res_buf + md->done, to_recv, 0);
-    if(unlikely(recvd == -1)) {
+    const unsigned to_recv = 13U - md->done;
+    const ssize_t recv_rv = recv(md->sock, md->res_buf + md->done, to_recv, 0);
+    if(unlikely(recv_rv < 0)) {
         switch(errno) {
             case EAGAIN:
 #if EWOULDBLOCK != EAGAIN
@@ -267,11 +269,12 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
                 log_err("plugin_http_status: read() from monitoring socket failed, possible local problem: %s", dmn_logf_errno());
         }
     }
-    else if(recvd < to_recv) {
-        md->done += recvd;
-        return;
-    }
     else {
+        const size_t recvd = (size_t)recv_rv;
+        if(recvd < to_recv) {
+            md->done += recvd;
+            return;
+        }
         md->res_buf[13] = '\0';
         char code_str[4] = { 0 };
         if(1 == sscanf(md->res_buf, "HTTP/1.%*1[01]%*1[ ]%3c%*1[ ]", code_str)) {

@@ -721,10 +721,10 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
     uint8_t evtbuf[inotify_bufsize];
 
     while(1) {
-        int bytes = read(w->fd, evtbuf, inotify_bufsize);
-        if(bytes < 1) {
-            if(!bytes || (errno != EAGAIN && errno != EWOULDBLOCK)) {
-                if(bytes)
+        ssize_t read_rv = read(w->fd, evtbuf, inotify_bufsize);
+        if(read_rv < 1) {
+            if(!read_rv || (errno != EAGAIN && errno != EWOULDBLOCK)) {
+                if(read_rv)
                     log_err("rfc1035: read() of inotify file descriptor failed: %s", dmn_logf_errno());
                 else
                     log_err("rfc1035: Got EOF on inotify file descriptor!");
@@ -732,9 +732,10 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
             }
             return;
         }
+        const size_t bytes = (size_t)read_rv;
 
-        unsigned offset = 0;
-        while(offset < (unsigned)bytes) {
+        size_t offset = 0;
+        while(offset < bytes) {
             if((bytes - offset) < sizeof(struct inotify_event)) {
                 log_err("rfc1035: inotify sent truncated/garbage data");
                 handle_inotify_failure(loop);

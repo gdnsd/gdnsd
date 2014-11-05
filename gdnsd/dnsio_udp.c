@@ -270,9 +270,13 @@ void udp_sock_setup(dns_thread_t* t) {
     t->sock = sock;
 }
 
-#ifndef MAP_ANONYMOUS
-#define MAP_ANONYMOUS MAP_ANON
-#endif
+static unsigned get_pgsz(void) {
+    long pgsz = sysconf(_SC_PAGESIZE);
+    // if sysconf() error or ridiculous value, use 4K
+    if(pgsz < 1024 || pgsz > (1 << 20))
+        pgsz = 4096;
+    return (unsigned)pgsz;
+}
 
 // A reasonable guess for v4/v6 dstaddr pktinfo + cmsg header?
 #define CMSG_BUFSIZE 256
@@ -282,9 +286,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     dmn_assert(stats);
 
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
-    long pgsz = sysconf(_SC_PAGESIZE);
-    if(pgsz < 1024) // if sysconf() error or ridiculous value, use 1K
-        pgsz = 1024;
+    const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
     dmn_anysin_t asin;
@@ -310,7 +312,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     bool is_online = true;
 #endif
 
-    int buf_in_len;
+    ssize_t recvmsg_rv;
     while(1) {
         iov.iov_len = DNS_RECV_SIZE;
         msg_hdr.msg_controllen = cmsg_size;
@@ -320,8 +322,8 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 #ifdef HAVE_QSBR
         if(is_online) {
             gdnsd_prcu_rdr_quiesce();
-            buf_in_len = recvmsg(fd, &msg_hdr, 0);
-            if(buf_in_len < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
+            if(recvmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
                 setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
@@ -329,23 +331,24 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
             }
         }
         else {
-            buf_in_len = recvmsg(fd, &msg_hdr, 0);
+            recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
             gdnsd_prcu_rdr_online();
         }
 #else
-        buf_in_len = recvmsg(fd, &msg_hdr, 0);
+        recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
 #endif
 
         if((asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
             || (asin.sa.sa_family == AF_INET6 && !asin.sin6.sin6_port)
-            || buf_in_len < 0) {
-                if(buf_in_len < 0)
+            || recvmsg_rv < 0) {
+                if(recvmsg_rv < 0)
                     log_err("UDP recvmsg() error: %s", dmn_logf_errno());
                 stats_own_inc(&stats->udp.recvfail);
         }
         else {
+            size_t buf_in_len = (size_t)recvmsg_rv;
             asin.len = msg_hdr.msg_namelen;
             iov.iov_len = process_dns_query(dnsp_ctx, stats, &asin, buf, buf_in_len);
             if(likely(iov.iov_len)) {
@@ -379,9 +382,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
 
     // gcfg->max_response, rounded up to the next nearest multiple of the page size
-    long pgsz = sysconf(_SC_PAGESIZE);
-    if(pgsz < 1024) // if sysconf() error or ridiculous value, use 1K
-        pgsz = 1024;
+    const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
     uint8_t* buf[width];
@@ -403,8 +404,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     bool is_online = true;
 #endif
 
-    int pkts;
-
+    int mmsg_rv;
     while(1) {
         /* Set up msg_hdr stuff: moving initialization inside of the loop was
              necessitated by the memmove() below */
@@ -422,8 +422,8 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
 #ifdef HAVE_QSBR
         if(is_online) {
             gdnsd_prcu_rdr_quiesce();
-            pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
-            if(pkts < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+            if(mmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
                 setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
@@ -431,19 +431,20 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             }
         }
         else {
-            pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+            mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
             gdnsd_prcu_rdr_online();
         }
 #else
-        pkts = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+        mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
 #endif
 
-        dmn_assert(pkts != 0);
-        dmn_assert(pkts <= (int)width);
-        if(likely(pkts > 0)) {
-            for(int i = 0; i < pkts; i++) {
+        dmn_assert(mmsg_rv != 0); // Because we block and we don't have signals
+        if(likely(mmsg_rv > 0)) {
+            unsigned pkts = (unsigned)mmsg_rv;
+            dmn_assert(pkts <= width);
+            for(unsigned i = 0; i < pkts; i++) {
                 if(unlikely((asin[i].sa.sa_family == AF_INET && !asin[i].sin.sin_port)
                     || (asin[i].sa.sa_family == AF_INET6 && !asin[i].sin6.sin6_port))) {
                         stats_own_inc(&stats->udp.recvfail);
@@ -463,10 +464,10 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
              *   no action for this entry, but still count it in the total number of successes
              */
             {
-                int i = 0;
+                unsigned i = 0;
                 while(i < pkts) {
                     if(unlikely(!dgrams[i].msg_hdr.msg_iov[0].iov_len)) {
-                        const int next = i + 1;
+                        const unsigned next = i + 1;
                         if(next < pkts) {
                             memmove(&dgrams[i], &dgrams[next], sizeof(struct mmsghdr) * (pkts - next));
                         }
@@ -482,8 +483,8 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             while(pkts > 0) {
                 int sent = sendmmsg(fd, dgptr, (unsigned)pkts, 0);
                 dmn_assert(sent != 0);
-                dmn_assert(sent <= pkts);
-                if(sent < pkts) {
+                dmn_assert(sent <= (int)pkts);
+                if(sent < (int)pkts) {
                     int sockerr = 0;
                     socklen_t sock_len = sizeof(sockerr);
                     (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);

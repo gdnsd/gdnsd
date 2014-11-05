@@ -112,15 +112,15 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 
     while(1) { // loop on all immediately-available results
         uint32_t data;
-        int rv = read(helper_read_fd, &data, 4);
-        if(rv != 4) {
-            if(rv < 0) {
+        ssize_t read_rv = read(helper_read_fd, &data, 4);
+        if(read_rv != 4) {
+            if(read_rv < 0) {
                 if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
                     return;
                 else
                     log_err("plugin_extmon: pipe read() failed: %s", dmn_logf_strerror(errno));
             }
-            else if(rv != 0) {
+            else if(read_rv != 0) {
                 log_err("plugin_extmon: BUG: short pipe read for mon results");
             }
             else {
@@ -268,7 +268,7 @@ static void spawn_helper(void) {
         defaultme.sa_flags = 0;
 
         // we really don't care about error retvals here
-        for(unsigned i = 0; i < NSIG; i++)
+        for(int i = 0; i < NSIG; i++)
             (void)sigaction(i, &defaultme, NULL);
 
         // unblock all

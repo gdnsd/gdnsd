@@ -27,13 +27,13 @@
 #include <unistd.h>
 #include <string.h>
 
-bool emc_write_string(const int fd, const char* str, const unsigned len) {
+bool emc_write_string(const int fd, const char* str, const size_t len) {
     bool rv = false;
-    unsigned written = 0;
+    size_t written = 0;
     while(written < len) {
-        int writerv = write(fd, str + written, len - written);
-        if(writerv < 1) {
-            if(!writerv) {
+        ssize_t write_rv = write(fd, str + written, len - written);
+        if(write_rv < 1) {
+            if(!write_rv) {
                 log_debug("plugin_extmon: emc_write_string(%s) failed: pipe closed", str);
                 rv = true;
                 break;
@@ -45,19 +45,19 @@ bool emc_write_string(const int fd, const char* str, const unsigned len) {
             }
         }
         else {
-            written += writerv;
+            written += (size_t)write_rv;
         }
     }
     return rv;
 }
 
-bool emc_read_nbytes(const int fd, const unsigned len, uint8_t* out) {
+bool emc_read_nbytes(const int fd, const size_t len, uint8_t* out) {
     bool rv = false;
-    unsigned seen = 0;
+    size_t seen = 0;
     while(seen < len) {
-        int readrv = read(fd, out + seen, len - seen);
-        if(readrv < 1) {
-            if(!readrv) {
+        ssize_t read_rv = read(fd, out + seen, len - seen);
+        if(read_rv < 1) {
+            if(!read_rv) {
                 log_debug("plugin_extmon: emc_read_nbytes() failed: pipe closed");
                 rv = true;
                 break;
@@ -69,7 +69,7 @@ bool emc_read_nbytes(const int fd, const unsigned len, uint8_t* out) {
             }
         }
         else {
-            seen += readrv;
+            seen += (size_t)read_rv;
         }
     }
     return rv;

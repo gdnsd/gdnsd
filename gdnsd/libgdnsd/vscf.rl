@@ -143,7 +143,7 @@ static unsigned djb_hash(const char* k, unsigned klen, const unsigned hash_mask)
    unsigned hash = 5381;
 
    while(klen--)
-       hash = ((hash << 5) + hash) ^ *k++;
+       hash = ((hash << 5) + hash) ^ (unsigned)*k++;
 
    return hash & hash_mask;
 }
@@ -719,16 +719,17 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
             scnr->tstart = buf;
         }
 
-        const int space = buf_size - have;
+        const unsigned space = buf_size - have;
         char* read_at = buf + have;
         scnr->p = read_at;
 
-        const int len = read(fd, read_at, space);
-        scnr->pe = scnr->p + len;
-        if(len < 0) {
+        const ssize_t read_rv = read(fd, read_at, space);
+        if(read_rv < 0) {
             set_err(err, "read() of '%s' failed: errno %i\n", scnr->fn, errno);
             break;
         }
+        const size_t len = (size_t)read_rv;
+        scnr->pe = scnr->p + len;
         if(len < space)
             scnr->eof = scnr->pe;
 
@@ -748,9 +749,11 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
         }%%
 
 DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
+DMN_DIAG_PUSH_IGNORED("-Wsign-conversion")
         %%{
             write exec;
         }%%
+DMN_DIAG_POP
 DMN_DIAG_POP
 
         if(scnr->cs == vscf_error) {
@@ -903,7 +906,7 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
         vscf_hentry_t* he = d->hash.children[child_hash];
         while(he) {
             if((klen == he->klen) && !memcmp(key, he->key, klen))
-                return he->index;
+                return (int)he->index;
             he = he->next;
         }
     }

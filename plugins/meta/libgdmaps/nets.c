@@ -108,7 +108,7 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
         }
         else {
             dmn_assert(tempsin.sa.sa_family == AF_INET);
-            mask = ntohs(tempsin.sin.sin_port) + 96;
+            mask = ntohs(tempsin.sin.sin_port) + 96U;
             if(mask > 128) {
                 log_err("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv4 mask (>32)", map_name, net_str, mask_str);
                 rv = true;
