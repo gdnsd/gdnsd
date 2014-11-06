@@ -92,10 +92,12 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
     len += 4;
 
     // 2-byte index, 1-byte timeout, 1-byte interval
-    buf[len++] = cmd->idx >> 8;
-    buf[len++] = cmd->idx & 0xFF;
-    buf[len++] = cmd->timeout;
-    buf[len++] = cmd->interval;
+    buf[len++] = (char)(cmd->idx >> 8);
+    buf[len++] = (char)(cmd->idx & 0xFF);
+    buf[len++] = (char)(cmd->timeout >> 8);
+    buf[len++] = (char)(cmd->timeout & 0xFF);
+    buf[len++] = (char)(cmd->interval >> 8);
+    buf[len++] = (char)(cmd->interval & 0xFF);
 
     // skip 2-byte len for rest of packet at offset 8
     len += 2;
@@ -123,9 +125,9 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
 
     // now go back and fill in the overall len
     //   of the variable area for desc/args.
-    const unsigned var_len = len - 10;
-    buf[8] = var_len >> 8;
-    buf[9] = var_len & 0xFF;
+    const unsigned var_len = len - 12;
+    buf[10] = (char)(var_len >> 8);
+    buf[11] = (char)(var_len & 0xFF);
 
     bool rv = emc_write_string(fd, buf, len);
     free(buf);
@@ -148,8 +150,8 @@ extmon_cmd_t* emc_read_command(const int fd) {
     extmon_cmd_t* cmd = NULL;
 
     {
-        uint8_t fixed_part[10];
-        if(emc_read_nbytes(fd, 10, fixed_part)
+        uint8_t fixed_part[12];
+        if(emc_read_nbytes(fd, 12, fixed_part)
             || strncmp((char*)fixed_part, "CMD:", 4)) {
             log_debug("emc_read_command() failed to read CMD: prefix");
             goto out_error;
@@ -157,13 +159,13 @@ extmon_cmd_t* emc_read_command(const int fd) {
 
         cmd = xmalloc(sizeof(extmon_cmd_t));
         cmd->idx = ((unsigned)fixed_part[4] << 8) + fixed_part[5];
-        cmd->timeout = fixed_part[6];
-        cmd->interval = fixed_part[7];
+        cmd->timeout = ((unsigned)fixed_part[6] << 8) + fixed_part[7];
+        cmd->interval = ((unsigned)fixed_part[8] << 8) + fixed_part[9];
         cmd->args = NULL;
         cmd->num_args = 0;
 
         // note we add an extra NULL at the end of args here, for execl()
-        const unsigned var_len = ((unsigned)fixed_part[8] << 8) + fixed_part[9];
+        const unsigned var_len = ((unsigned)fixed_part[10] << 8) + fixed_part[11];
         if(var_len < 4) {
             // 4 bytes would be enough for num_args, a single 1-byte argument
             //   and its NUL termiantor, and a zero-length NUL-terminated desc
