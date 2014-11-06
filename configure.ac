@@ -6,11 +6,23 @@ AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
+## Autoconf-2.63-Compat
+# Future reference: both of the below could be addressed by bumping our
+# AC_PREREQ() to 2.64.  It's just a question of at what point in the future
+# the 2.63-using distros are old enough that it's reasonable to do so.
+#---
 # We're compatible to autoconf 2.63, which doesn't have PACKAGE_URL
 #   as a final arg to AC_INIT.  We can't define it ourselves here
 #   with the same name as this causes compiler warnings that matter
 #   during other parts of ./configure.  So, pick a new name for now.
 AC_DEFINE([PKG_URL],["https://github.com/gdnsd/gdnsd/"],[Package URL])
+#---
+# This hack makes PKG_CHECK_VARS from m4/pkg.m4 work on autoconf 2.63
+# ( courtesy of sunnybear in https://github.com/gdnsd/gdnsd/issues/85 )
+m4_ifndef([AS_VAR_COPY],
+[m4_define([AS_VAR_COPY],
+[AS_LITERAL_IF([$1[]$2], [$1=$$2], [eval $1=\$$2])])])
+## End Autoconf-2.63-Compat
 
 # TODO: when/if a new autoconf release has a C11 macro,
 #    prefer that and fall back to requiring C99.
