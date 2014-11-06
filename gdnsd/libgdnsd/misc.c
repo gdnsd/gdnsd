@@ -42,6 +42,7 @@
 #include <pthread.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <math.h>
 
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>
@@ -339,4 +340,12 @@ void gdnsd_kill_registered_children(void) {
         }
         _attempt_reap(500); // 5s max
     }
+}
+
+unsigned gdnsd_uscale_ceil(unsigned v, double s) {
+    dmn_assert(s >= 0.0);
+    dmn_assert(s <= 1.0);
+    const double sv = ceil(v * s);
+    dmn_assert(sv <= (double)v);
+    return (unsigned)sv;
 }

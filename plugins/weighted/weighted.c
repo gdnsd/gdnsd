@@ -21,7 +21,6 @@
 #include "config.h"
 #define GDNSD_PLUGIN_NAME weighted
 #include <gdnsd/plugin.h>
-#include <math.h>
 
 static const char DEFAULT_SVCNAME[] = "up";
 
@@ -387,7 +386,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     dmn_assert(addrset->weight);
     dmn_assert(addrset->max_weight);
 
-    addrset->up_weight = ceil(up_thresh * addrset->weight);
+    addrset->up_weight = gdnsd_uscale_ceil(addrset->weight, up_thresh);
     dmn_assert(addrset->up_weight);
 }
 
@@ -509,7 +508,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
 
     dmn_assert(cnset->weight);
 
-    cnset->up_weight = ceil(up_thresh * cnset->weight);
+    cnset->up_weight = gdnsd_uscale_ceil(cnset->weight, up_thresh);
 }
 
 F_NONNULL

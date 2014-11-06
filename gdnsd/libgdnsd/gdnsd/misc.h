@@ -79,6 +79,11 @@ bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned 
 gdnsd_rstate32_t* gdnsd_rand32_init(void);
 gdnsd_rstate64_t* gdnsd_rand64_init(void);
 
+// scale an unsigned by a double in the range [0.0 - 1.0]
+//   and get the ceiling of the result.  Cannot overflow.
+F_UNUSED F_CONST
+unsigned gdnsd_uscale_ceil(unsigned v, double s);
+
 #pragma GCC visibility pop
 
 // downcase an array of bytes of known length

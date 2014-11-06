@@ -27,7 +27,6 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <math.h>
 
 static const char DEFAULT_SVCNAME[] = "up";
 static const double DEF_UP_THRESH = 0.5;
@@ -188,7 +187,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
 
     aset->count = num_addrs;
     aset->as = xcalloc(num_addrs, sizeof(addrstate_t));
-    aset->up_thresh = ceil(up_thresh * aset->count);
+    aset->up_thresh = gdnsd_uscale_ceil(aset->count, up_thresh);
 
     addrs_iter_data_t aid = {
         .resname = resname,
