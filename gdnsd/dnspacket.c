@@ -1862,7 +1862,9 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const 
                     //   to reset some initial parameters (qname, auth_depth)
                     //   and loop back up via the do/while...
                     qname = cname->dname;
-                    auth_depth = *qname - *query_zone->dname;
+                    int len_diff = *qname - *query_zone->dname;
+                    dmn_assert(len_diff >= 0);
+                    auth_depth = (unsigned)len_diff;
                     iterating_for_cname = true;
                 }
                 else {

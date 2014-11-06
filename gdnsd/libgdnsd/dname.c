@@ -55,10 +55,10 @@ unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const u
                     optr = out;
                     break;
                 }
-                unsigned x = ((in[i++] - '0') * 100);
+                int x = ((in[i++] - '0') * 100);
                 x += ((in[i++] - '0') * 10);
                 x += (in[i] - '0');
-                if(unlikely(x > 255)) { // numeric escape val too large
+                if(unlikely(x > 255 || x < 0)) { // numeric escape val too large
                     optr = out;
                     break;
                 }
@@ -205,7 +205,7 @@ unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str
     while((llen = *dname++) && llen != 255U) {
         // output "label."
         for(uint8_t i = 0; i < llen; i++) {
-            unsigned char x = *dname++;
+            char x = (char)*dname++;
             if(x > 0x20 && x < 0x7F) {
                 *str++ = x;
             }

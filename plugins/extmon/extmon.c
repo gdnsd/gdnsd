@@ -306,8 +306,8 @@ static void spawn_helper(void) {
 
     char cmds_buf[7];
     memcpy(cmds_buf, "CMDS:", 5);
-    cmds_buf[5] = num_mons >> 8;
-    cmds_buf[6] = num_mons & 0xFF;
+    cmds_buf[5] = (char)(num_mons >> 8);
+    cmds_buf[6] = (char)(num_mons & 0xFF);
     if(emc_write_string(helper_write_fd, cmds_buf, 7))
         log_fatal("plugin_extmon: failed to write command count to helper process");
     if(emc_read_exact(helper_read_fd, "CMDS_ACK"))
@@ -374,6 +374,8 @@ void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
     this_svc->num_args = vscf_array_get_len(args_cfg);
     if(this_svc->num_args < 1)
         log_fatal("plugin_extmon: service_type '%s': option 'cmd' cannot be an empty array", name);
+    if(this_svc->num_args > 254)
+        log_fatal("plugin_extmon: service_type '%s': option 'cmd' has too many arguments", name);
     this_svc->args = xmalloc(this_svc->num_args * sizeof(const char*));
     for(unsigned i = 0; i < this_svc->num_args; i++) {
         vscf_data_t* arg_cfg = vscf_array_get_data(args_cfg, i);

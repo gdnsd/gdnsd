@@ -63,7 +63,7 @@ static const char* _logf_lstack(const uint8_t** lstack, unsigned depth) {
     while(depth--) {
         const uint8_t llen = *(lstack[depth]);
         for(unsigned i = 1; i <= llen; i++) {
-            unsigned char x = lstack[depth][i];
+            char x = (char)lstack[depth][i];
             if(x > 0x20 && x < 0x7F) {
                 *dnptr++ = x;
             }

@@ -369,11 +369,11 @@ static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
         rec++;
 
         for(unsigned j = 0; j < 3; ++j)
-            raw_lat += (rec[j] << (j * 8));
+            raw_lat += ((unsigned)rec[j] << (j * 8U));
         rec += 3;
 
         for(unsigned j = 0; j < 3; ++j)
-            raw_lon += (rec[j] << (j * 8));
+            raw_lon += ((unsigned)rec[j] << (j * 8U));
 
         if(db->dcmap)
             locstr[loc_pos] = '\0';
@@ -460,8 +460,12 @@ static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, 
         }
 
         const unsigned char *db_buf = db->data + 3 * 2 * db_off;
-        const unsigned db_zero_off = db_buf[0] + (db_buf[1] << 8) + (db_buf[2] << 16);
-        const unsigned db_one_off = db_buf[3] + (db_buf[4] << 8) + (db_buf[5] << 16);
+        const unsigned db_zero_off = (unsigned)db_buf[0]
+            + ((unsigned)db_buf[1] << 8)
+            + ((unsigned)db_buf[2] << 16);
+        const unsigned db_one_off = (unsigned)db_buf[3]
+            + ((unsigned)db_buf[4] << 8)
+            + ((unsigned)db_buf[5] << 16);
 
         const unsigned next_depth = depth - 1U;
         const unsigned mask = 128U - next_depth;
@@ -569,15 +573,20 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
      *   4th byte is the database type.
      */
     db->type = GEOIP_COUNTRY_EDITION;
-    int offset = db->size - 3;
+    unsigned offset = db->size - 3U;
     for(unsigned i = 0; i < STRUCTURE_INFO_MAX_SIZE; i++) {
         if(db->data[offset] == 255 && db->data[offset + 1] == 255 && db->data[offset + 2] == 255) {
-            if(i) db->type = db->data[offset + 3];
+            if(i)
+                db->type = db->data[offset + 3];
             break;
         }
-        offset -= 1;
-        if(offset < 0)
-            break;
+        // if offset reaches zero, the database is borked as far as we're concerned
+        if(!offset) {
+            log_err("plugin_geoip: map '%s': Could not find database info structure in '%s'", map_name, pathname);
+            geoip_db_close(db);
+            return NULL;
+        }
+        offset--;
     }
 
     if(city_auto_mode) {
@@ -622,9 +631,9 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
             // fall-through intentional
         case GEOIP_CITY_EDITION_REV0:
         case GEOIP_CITY_EDITION_REV1:
-            offset += 4;
+            offset += 4U;
             for(unsigned i = 0; i < 3; i++)
-                db->base += (db->data[offset + i] << (i * 8));
+                db->base += ((unsigned)db->data[offset + i] << (i * 8U));
             if(fips)
                 db->fips = fips;
             db->dclist_get_func = city_get_dclist;

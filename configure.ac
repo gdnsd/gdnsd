@@ -136,6 +136,7 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wcast-qual \
     -Wendif-labels \
     -Wfloat-equal \
+    -Wfloat-conversion \
     -Wformat=2 \
     -Winit-self \
     -Wlogical-op \
@@ -146,6 +147,7 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wpointer-arith \
     -Wredundant-decls \
     -Wshadow \
+    -Wsign-conversion \
     -Wstack-protector \
     -Wstrict-overflow=5 \
     -Wstrict-prototypes \

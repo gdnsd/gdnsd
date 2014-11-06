@@ -276,7 +276,7 @@ static unsigned hexbyte(const char* intxt) {
         || (intxt[1] >= 'a' && intxt[1] <= 'f')
     );
 
-    unsigned out;
+    int out;
 
     if(intxt[0] <= '9')
         out = (intxt[0] - '0') << 4;
@@ -288,7 +288,8 @@ static unsigned hexbyte(const char* intxt) {
     else
         out |= ((intxt[1] | 0x20) - ('a' - 10));
 
-    return out;
+    dmn_assert(out >= 0 && out < 256);
+    return (unsigned)out;
 }
 
 F_NONNULL

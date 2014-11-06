@@ -188,7 +188,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
 
     if(likely(tdata->state == READING_INITIAL)) {
         if(likely(tdata->size_done > 1)) {
-            tdata->size = (tdata->buffer[0] << 8U) + tdata->buffer[1] + 2U;
+            tdata->size = ((unsigned)tdata->buffer[0] << 8U) + (unsigned)tdata->buffer[1] + 2U;
             if(unlikely(tdata->size > DNS_RECV_SIZE)) {
                 log_devdebug("Oversized TCP DNS query of length %u from %s", tdata->size, dmn_logf_anysin(tdata->asin));
                 stats_own_inc(&tdata->ctx->stats->tcp.recvfail);

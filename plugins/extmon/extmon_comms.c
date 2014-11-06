@@ -92,16 +92,16 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
     len += 4;
 
     // 2-byte index, 1-byte timeout, 1-byte interval
-    buf[len++] = cmd->idx >> 8;
-    buf[len++] = cmd->idx & 0xFF;
-    buf[len++] = cmd->timeout;
-    buf[len++] = cmd->interval;
+    buf[len++] = (char)(cmd->idx >> 8);
+    buf[len++] = (char)(cmd->idx & 0xFF);
+    buf[len++] = (char)cmd->timeout;
+    buf[len++] = (char)cmd->interval;
 
     // skip 2-byte len for rest of packet at offset 8
     len += 2;
 
     // arg count + NUL-terminated arguments
-    buf[len++] = cmd->num_args;
+    buf[len++] = (char)cmd->num_args;
     for(unsigned i = 0; i < cmd->num_args; i++) {
         const unsigned arg_len = strlen(cmd->args[i]) + 1;
         while((len + arg_len + 16) > alloc) {
@@ -124,8 +124,8 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
     // now go back and fill in the overall len
     //   of the variable area for desc/args.
     const unsigned var_len = len - 10;
-    buf[8] = var_len >> 8;
-    buf[9] = var_len & 0xFF;
+    buf[8] = (char)(var_len >> 8);
+    buf[9] = (char)(var_len & 0xFF);
 
     bool rv = emc_write_string(fd, buf, len);
     free(buf);
