@@ -90,8 +90,8 @@
 #ifndef DMN_F_COLD
 #  define DMN_F_COLD
 #endif
-#ifndef DMN_DIAG_PUSH_IGNORE
-#  define DMN_DIAG_PUSH_IGNORE(_x)
+#ifndef DMN_DIAG_PUSH_IGNORED
+#  define DMN_DIAG_PUSH_IGNORED(_x)
 #endif
 #ifndef DMN_DIAG_POP
 #  define DMN_DIAG_POP
