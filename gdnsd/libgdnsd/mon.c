@@ -784,7 +784,7 @@ static const char http_head[] = "<p><span class='bold big'>Monitored Service Sta
 static const unsigned http_head_len = sizeof(http_head) - 1;
 
 static const char http_tmpl[] = "<tr><td>%s</td><td class='%s'>%s</td><td class='%s'>%s</td></tr>\r\n";
-static const unsigned http_tmpl_len = sizeof(http_head) - 11; // 5x%s
+static const unsigned http_tmpl_len = sizeof(http_tmpl) - 11; // 5x%s
 
 static const char http_foot[] = "</table>\r\n";
 static const unsigned http_foot_len = sizeof(http_foot) - 1;
