@@ -320,10 +320,10 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         msg_hdr.msg_flags      = 0;
 
 #ifdef HAVE_QSBR
-        if(is_online) {
+        if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-            if(recvmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            if(unlikely(recvmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
                 setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
@@ -340,9 +340,11 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
 #endif
 
-        if((asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
+        if(unlikely(
+               (asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
             || (asin.sa.sa_family == AF_INET6 && !asin.sin6.sin6_port)
-            || recvmsg_rv < 0) {
+            || recvmsg_rv < 0
+        )) {
                 if(recvmsg_rv < 0)
                     log_err("UDP recvmsg() error: %s", dmn_logf_errno());
                 stats_own_inc(&stats->udp.recvfail);
