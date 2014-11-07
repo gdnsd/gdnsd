@@ -1,3 +1,37 @@
+2.2.0 - ??? (not yet released)
+  *** Bugfixes:
+    * Fixed incorrect error-handling code for the sendmmsg() syscall, which
+      could have caused an unecessary additional dropped packet and/or
+      bad error messages after failing to send one or more packets from a set.
+    * The per-address level udp_recv_width option is now correctly limited to
+      a value of 64 (previously it was being incorrectly limited to 32).
+    * plugin_extmon bugfix for bad timeout/interval behavior if either >255s
+
+  *** Features:
+    * plugin_geoip: Support for MaxMind GeoIP2 databases.  Requires
+      libmaxminddb at build time to enable, which is a new optional build
+      dependency.
+    * plugin_geoip: Added v6->v4 translations for 64:ff9b::/96, the 'Well
+      Known Prefix' from RFC6052 used for e.g. NAT64.
+    * The http stats server now supports atomic flush-after-fetch behavior if
+      given the query argument '?f=1', so that the stat counts are 'since last
+      flush' instead of 'since startup'.  The flushed state is shared between
+      all clients using the argument.  Does not affect stats for clients not
+      using the argument.
+    * New optional compile-time dependency on libunwind.  If available,
+      dmn_assert() in developer builds and certain fatal errors in production
+      builds will produce stack backtraces before terminating the process.
+
+  *** Other:
+    * Ragel 6.x is now a hard build dependency for all builds.  Previously it
+      was required for building from git, but not from tarballs.
+    * sysd/gdnsd.service is now always generated in the build tree from the
+      template, even if --without-systemdsystemunitdir and/or no systemd
+      detected at all, to give more options for how packagers handle things.
+    * Fixed autoconf 2.63 compat when running autoreconf (broken in 2.1.0)
+    * Minor plugin API updates (most would just need a recompile).
+    * A number of less-visible refactorings for quality and/or performance.
+
 2.1.0 - 2014-10-14
   *** Bugfixes:
     * Fixed JSON stats output (was malformed; missing commas

@@ -18,6 +18,8 @@ The following are recommended but optional:
 
 * liburcu aka userspace-rcu headers and libraries. Use distro pkg or
   http://lttng.org/urcu/ (important for performance!)
+* libmaxminddb headers and libraries to enable MaxMind GeoIP2 database
+  support in plugin_geoip
 * libunwind headers and libraries. (for stacktrace on some fatals)
 
 The following have no real effect on the build or runtime, but are
