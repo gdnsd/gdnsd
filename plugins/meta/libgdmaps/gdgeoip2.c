@@ -351,6 +351,12 @@ F_NONNULL
 static uint32_t geoip2_get_dclist_cached(geoip2_t* db, const uint32_t offset) {
     dmn_assert(db);
 
+    // In GeoIP2, an offset of zero means not found in the DB, so default it.
+    // (even if it works in geoip2_get_dclist(), the offset cache can't handle
+    // an offset of zero efficiently anyways).
+    if(!offset)
+        return 0;
+
     unsigned bucket_size = 0;
     const unsigned ndx = offset % OFFSET_CACHE_SIZE;
 
