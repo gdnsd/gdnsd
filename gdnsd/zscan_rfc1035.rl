@@ -51,8 +51,11 @@
  *  halts strtoul().  The corner case is if the last digit of an
  *  integer happened to be the last byte of the buffer.  This
  *  is why we allocate one extra buffer byte and set it to zero.
+ * Therefore, with buffer sizes large enough to typically trigger
+ *  mmap behavior with glibc, it's better to use a size that's
+ *  2n-1 so that it's an even page multiple after the +1.
  */
-#define MAX_BUFSIZE 65536
+#define MAX_BUFSIZE 262143
 
 #define parse_error(_fmt, ...) \
     do {\
