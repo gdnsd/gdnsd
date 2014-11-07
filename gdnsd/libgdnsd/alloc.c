@@ -24,8 +24,20 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 
+// We don't expect anything to call our allocators for sizes
+//   greater than ~2GB in practice, so this makes a good sanity
+//   checkpoint for certain classes of allocation size bugs from
+//   bad math, memory bugs, and/or overflows that works well in
+//   both the 32 and 64 -bit cases.
+#define ALLOC_MAX 2147483647LLU
+
 void* gdnsd_xmalloc(size_t size) {
     dmn_assert(size);
+
+    if(size > ALLOC_MAX)
+        log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
+            size, dmn_logf_bt());
+
     void* rv = malloc(size);
     if(!rv)
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
@@ -34,7 +46,13 @@ void* gdnsd_xmalloc(size_t size) {
 }
 
 void* gdnsd_xcalloc(size_t nmemb, size_t size) {
-    dmn_assert(size); dmn_assert(nmemb);
+    dmn_assert(size);
+    dmn_assert(nmemb);
+
+    if(size > ALLOC_MAX || size * nmemb > ALLOC_MAX)
+        log_fatal("Bad allocation request for %zu * %zu bytes! backtrace:%s",
+            nmemb, size, dmn_logf_bt());
+
     void* rv = calloc(nmemb, size);
     if(!rv)
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
@@ -44,6 +62,11 @@ void* gdnsd_xcalloc(size_t nmemb, size_t size) {
 
 void* gdnsd_xrealloc(void* ptr, size_t size) {
     dmn_assert(size);
+
+    if(size > ALLOC_MAX)
+        log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
+            size, dmn_logf_bt());
+
     void* rv = realloc(ptr, size);
     if(!rv)
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
@@ -52,7 +75,13 @@ void* gdnsd_xrealloc(void* ptr, size_t size) {
 }
 
 void* gdnsd_xpmalign(size_t alignment, size_t size) {
-    dmn_assert(size); dmn_assert(alignment);
+    dmn_assert(alignment);
+    dmn_assert(size);
+
+    if(size > ALLOC_MAX)
+        log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
+            size, dmn_logf_bt());
+
     void* rv = NULL;
     if(posix_memalign(&rv, alignment, size) || !rv)
         log_fatal("Cannot allocate %zu bytes aligned to %zu (%s)! backtrace:%s",
