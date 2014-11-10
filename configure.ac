@@ -15,7 +15,7 @@ AM_SILENT_RULES([yes])
 #   as a final arg to AC_INIT.  We can't define it ourselves here
 #   with the same name as this causes compiler warnings that matter
 #   during other parts of ./configure.  So, pick a new name for now.
-AC_DEFINE([PKG_URL],["https://github.com/gdnsd/gdnsd/"],[Package URL])
+AC_DEFINE([PKG_URL],["http://gdnsd.org"],[Package URL])
 #---
 # This hack makes PKG_CHECK_VARS from m4/pkg.m4 work on autoconf 2.63
 # ( courtesy of sunnybear in https://github.com/gdnsd/gdnsd/issues/85 )
