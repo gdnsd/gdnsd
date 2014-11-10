@@ -106,34 +106,12 @@ static void usage(const char* argv0) {
         "  restart - Equivalent to checkconf && stop && start, but faster\n"
         "  condrestart - Does 'restart' action only if already running\n"
         "  try-restart - Aliases 'condrestart'\n"
-        "  status - Checks the status of the running daemon\n\n"
-        "Optional compile-time features:"
-
-#       ifndef NDEBUG
-            " developer-debug-build"
-#       endif
-#       ifdef HAVE_QSBR
-            " urcu"
-#       endif
-#       ifdef USE_SENDMMSG
-            " mmsg"
-#       endif
-#       ifdef USE_INOTIFY
-            " inotify"
-#       endif
-#       ifdef HAVE_GEOIP2
-            " geoip2"
-#       endif
-
-#       if  defined NDEBUG \
-        && !defined HAVE_QSBR \
-        && !defined USE_SENDMMSG \
-        && !defined USE_INOTIFY \
-        && !defined HAVE_GEOIP2
-            " none"
-#       endif
-
-        "\nFor updates, bug reports, etc, please visit " PKG_URL "\n",
+        "  status - Checks the status of the running daemon\n"
+        "\nFeatures: " BUILD_FEATURES
+        "\nBuild Info: " BUILD_INFO
+        "\nBug report URL: " PACKAGE_BUGREPORT
+        "\nGeneral info URL: " PKG_URL
+        "\n",
         argv0, gdnsd_get_default_config_dir()
     );
     exit(2);

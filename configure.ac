@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([gdnsd],[2.1.0],[blblack@gmail.com],[gdnsd])
+AC_INIT([gdnsd],[2.1.0],[https://github.com/gdnsd/gdnsd/issues])
 AC_CONFIG_SRCDIR([gdnsd/main.c])
 AC_CONFIG_AUX_DIR([acaux])
 AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])
@@ -455,6 +455,26 @@ AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
 LIBGDNSD_LIBS="$MATH_LIB $QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN $LIBUNWIND_LIBS"
 AC_SUBST([LIBGDNSD_LIBS])
 
+# BUILD_FEATURES for cmdline output
+B_FEAT="prod"
+if test "x$developer" != xno;    then B_FEAT="dev";             fi
+if test "x$HAS_SENDMMSG" = x1;   then B_FEAT="$B_FEAT mmsg";    fi
+if test "x$USE_INOTIFY" = x1;    then B_FEAT="$B_FEAT inotify"; fi
+if test "x$HAVE_LIBUNWIND" = x1; then B_FEAT="$B_FEAT unwind";  fi
+if test "x$HAVE_GEOIP2" = x1;    then B_FEAT="$B_FEAT geoip2";  fi
+if test "x$HAVE_QSBR" = x1;      then B_FEAT="$B_FEAT urcu";    fi
+AC_DEFINE_UNQUOTED([BUILD_FEATURES], ["$B_FEAT"], [Build Features])
+
+# BUILD_INFO for cmdline output
+B_SRC=tarball
+if test -d ${GIT_DIR:-.git} -o -f .git; then
+    [B_SRC=`git describe --match 'v[0-9]*' --always --dirty`]
+fi
+B_HOST=`uname -n`
+B_DATE=`date -u "+%Y-%m-%d %H:%M:%S UTC"`
+B_INFO="$B_SRC ${USER}@${B_HOST} $B_DATE"
+AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
+
 # Output generation
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
@@ -476,34 +496,10 @@ AC_CONFIG_FILES([
 ])
 AC_OUTPUT
 
-# Summary output for the user
-
-if test "x$developer" != xno; then CFSUM_DEV=Yes; else CFSUM_DEV=No; fi
-if test "x$HAS_SENDMMSG" = x1; then CFSUM_SENDMMSG=Yes; else CFSUM_SENDMMSG=No; fi
-if test "x$USE_INOTIFY" = x1; then CFSUM_INOTIFY=Yes; else CFSUM_INOTIFY=No; fi
-if test "x$HAVE_LIBUNWIND" = x1; then CFSUM_UNWIND=Yes; else CFSUM_UNWIND=No; fi
-if test "x$HAVE_GEOIP2" = x1; then CFSUM_GEOIP2=Yes; else CFSUM_GEOIP2=No; fi
-if test "x$HAVE_QSBR" = x1; then
-    CFSUM_QSBR=Yes
-else
-    if test "x$KILL_QSBR" = x1; then
-        CFSUM_QSBR=Disabled
-    else
-        CFSUM_QSBR=No
-    fi
-fi
-CFSUM_TP=$TESTPORT_START
-echo "======================================="
-echo "CPPFLAGS: $CPPFLAGS"
-echo "CFLAGS: $CFLAGS $CFLAGS_PIE"
-echo "LDFLAGS: $LDFLAGS $LDFLAGS_PIE"
-echo "======================================="
-echo "| Configuration Summary:"
-echo "| Developer Build:        $CFSUM_DEV"
-echo "| Userspace-rcu support:  $CFSUM_QSBR"
-echo "| Linux sendmmsg support: $CFSUM_SENDMMSG"
-echo "| Linux inotify support:  $CFSUM_INOTIFY"
-echo "| Libunwind support:      $CFSUM_UNWIND"
-echo "| GeoIP2 support:         $CFSUM_GEOIP2"
-echo "| Test Port Start:        $CFSUM_TP"
-echo "======================================="
+echo "========================================================================"
+echo "| Build Info: $B_INFO"
+echo "| Build Features: $B_FEAT"
+echo "| CPPFLAGS: $CPPFLAGS"
+echo "| CFLAGS: $CFLAGS $CFLAGS_PIE"
+echo "| LDFLAGS: $LDFLAGS $LDFLAGS_PIE"
+echo "========================================================================"
