@@ -10,7 +10,7 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-CPPFLAGS="-DCOVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --prefix=/tmp/_gdnsd_inst --without-systemdsystemunitdir --without-hardening
+CPPFLAGS="-DDMN_COVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --prefix=/tmp/_gdnsd_inst --without-systemdsystemunitdir --without-hardening
 make clean
 make -j4 all
 make check-download

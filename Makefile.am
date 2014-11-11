@@ -1,9 +1,9 @@
-
 # Where we keep m4 files for aclocal
 ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
-SUBDIRS = gdnsd plugins docs t sysd
+#  ("." first for the check-local below before subdir tests)
+SUBDIRS = . gdnsd plugins docs t sysd
 
 dist_doc_DATA = README.md INSTALL AUTHORS COPYING NEWS
 EXTRA_DIST = qa
@@ -15,6 +15,20 @@ DISTCLEANFILES = config.h.in~ configure.ac~
 MAINTAINERCLEANFILES = *.info gdnsd-*.tar.*
 
 test:	check
+
+check-local:
+	@if test `id -u` == "0"; then \
+		echo "*** WARNING *** Testing (or even building!) as the root user is not wise!"; \
+		echo "*** WARNING *** If you experience any failures, please retry as a non-root user before reporting..."; \
+	fi
+	@if test "x$(PROVE)" == xmissing; then \
+		echo "Cannot 'make check' or 'make installcheck' without 'prove' command (see 'configure' output)"; \
+		exit 101; \
+	fi
+	@if test "x$(HAVE_TESTSUITE_MODULES)" == x0; then \
+		echo "Cannot 'make check' or 'make installcheck' without required Perl modules (see 'configure' output)"; \
+		exit 101; \
+	fi
 
 libtool: $(LIBTOOL_DEPS) 
 	$(SHELL) ./config.status --recheck 

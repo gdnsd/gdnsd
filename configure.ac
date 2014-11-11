@@ -389,29 +389,54 @@ if test $USE_INOTIFY -eq 1; then
     AC_DEFINE([USE_INOTIFY], 1, [Linux 2.6.36+ inotify support])
 fi
 
-# Basic perl 5.8.1+ and pod2man for doc generation
-AC_PATH_PROG([PERL],[perl],[missing])
+# Basic perl 5.10.1+
+AC_ARG_VAR([PERL],[path to Perl 5.10.1 or higher])
+if test "x$ac_cv_env_PERL_set" != "xset"; then
+    AC_PATH_PROG([PERL],[perl],[missing])
+fi
 if test x"$PERL" = xmissing; then
     AC_MSG_ERROR([Cannot find required perl binary])
 fi
-AX_PROG_PERL_VERSION([5.8.1],,[AC_MSG_ERROR([Perl 5.8.1 or higher required])])
-AC_PATH_PROG([POD2MAN],[pod2man],[missing])
+AX_PROG_PERL_VERSION([5.10.1],,[AC_MSG_ERROR([Perl 5.10.1 or higher required])])
+
+# pod2man
+AC_ARG_VAR([POD2MAN],[path to the Perl "pod2man" command])
+if test "x$ac_cv_env_POD2MAN_set" != "xset"; then
+    AC_PATH_PROG([POD2MAN],[pod2man],[missing])
+fi
 if test x"$POD2MAN" = xmissing; then
     AC_MSG_ERROR([Cannot find required pod2man binary (perl podlater)])
 fi
 
-# Various perl modules for the testsuite (optional)
+# prove for test harness (optional)
+AC_ARG_VAR([PROVE], [path to the Perl Test::Harness "prove" command])
+if test "x$ac_cv_env_PROVE_set" != "xset"; then
+    AC_PATH_PROG([PROVE],[prove],[missing])
+fi
+if test x"$PROVE" = xmissing; then
+    AC_MSG_WARN([Cannot "make check" without the Perl Test::Harness "prove" command])
+fi
+
+# various perl modules for the testsuites (optional)
 HAVE_TESTSUITE_MODULES=0
-AX_PROG_PERL_MODULES([Test::More LWP=5.805 Socket6 IO::Socket::INET6 HTTP::Daemon],[HAVE_TESTSUITE_MODULES=1], AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More (aka Test-Simple for some package managers), LWP (aka libwww-perl) 5.805+, Socket6, IO::Socket::INET6, and HTTP::Daemon]]))
+AX_PROG_PERL_MODULES(
+    [Test::More Socket6 IO::Socket::INET6 HTTP::Daemon LWP],
+    [HAVE_TESTSUITE_MODULES=1],
+    AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More, Socket6, IO::Socket::INET6, HTTP::Daemon, and LWP (aka libwww-perl)]])
+)
 AC_SUBST([HAVE_TESTSUITE_MODULES])
 
 # Find ragel
-AC_MSG_CHECKING([for Ragel v6.x]);
-AC_PATH_PROGS_FEATURE_CHECK([RAGEL], [ragel],
-  [[$ac_path_RAGEL --version |$EGREP 'Ragel State Machine Compiler version 6\.' >/dev/null && ac_cv_path_RAGEL=$ac_path_RAGEL ac_path_RAGEL_found=:]],
-  AC_MSG_ERROR([Ragel version 6.x not found]))
-AC_SUBST([RAGEL], [$ac_cv_path_RAGEL])
-AC_MSG_RESULT([$ac_cv_path_RAGEL])
+AC_ARG_VAR([RAGEL],[path to ragel version 6.x])
+if test "x$ac_cv_env_RAGEL_set" != "xset"; then
+    AC_PATH_PROG([RAGEL],[ragel],[missing])
+fi
+if test "x$RAGEL" = xmissing; then
+    AC_MSG_ERROR([Ragel not found])
+else
+    $RAGEL --version|$EGREP 'Ragel State Machine Compiler version 6\.' >/dev/null \
+        || AC_MSG_ERROR([Ragel is not version 6.x])
+fi
 
 # download/unpack for GeoLite data for plugin_geoip tests
 AC_CHECK_PROGS(GEOLITE_DECOMP, [xz], [none])

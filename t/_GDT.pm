@@ -114,11 +114,10 @@ sub safe_rmtree {
 
 my %SIGS;
 {
-    my $i = 0;
     defined $Config{sig_name} || die "No sigs?";
-    foreach my $name (split(' ', $Config{sig_name})) {
-        $SIGS{$name} = $i++;
-    }
+    defined $Config{sig_num} || die "No sigs?";
+    my @names = split(' ', $Config{sig_name});
+    @SIGS{@names} = split(' ', $Config{sig_num});
 }
 
 # Set up per-testfile output directory and zones input directory
@@ -1120,6 +1119,8 @@ sub test_kill_daemon {
         Test::More::BAIL_OUT("Daemon at pid $pid was dead before we tried to shut it down");
     }
     else {
+        local $@ = undef;
+        my $diestr = "";
         eval {
             local $SIG{ALRM} = sub { die "Failed to kill daemon cleanly at pid $pid"; };
             alarm($TEST_RUNNER ? 60 : 30);
@@ -1127,10 +1128,24 @@ sub test_kill_daemon {
             waitpid($pid, 0);
         };
         if($@) {
+            $diestr = $@;
             kill('SIGKILL', $pid);
             waitpid($pid, 0);
-            Test::More::ok(0);
-            Test::More::BAIL_OUT($@);
+        }
+
+        if(WIFEXITED(${^CHILD_ERROR_NATIVE})) {
+            my $ev = WEXITSTATUS(${^CHILD_ERROR_NATIVE});
+            if($ev) {
+                Test::More::ok(0);
+                Test::More::BAIL_OUT("$diestr - Exit value was $ev");
+            }
+        }
+        elsif(WIFSIGNALED(${^CHILD_ERROR_NATIVE})) {
+            my $s = WTERMSIG(${^CHILD_ERROR_NATIVE});
+            if($s != $SIGS{'TERM'}) {
+                Test::More::ok(0);
+                Test::More::BAIL_OUT("$diestr - Terminated by signal $s");
+            }
         }
     }
 

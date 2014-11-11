@@ -10,7 +10,7 @@ If your starting point is a tarball, the following prerequisites apply:
 * libev headers and libraries, version 4.x: distro pkg
   or http://software.schmorp.de/pkg/libev.html
 * Ragel 6.x: http://www.complang.org/ragel/ (or distro package)
-* Perl 5.8.1 or higher and the perl "pod2man" command for document
+* Perl 5.10.1 or higher and the perl "pod2man" command for document
   generation (this may be in the package perl-podlaters)
 
 The following are recommended but optional:
