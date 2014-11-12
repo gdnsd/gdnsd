@@ -63,6 +63,7 @@ clang_output_*
 
 # generated docs
 *.[0-9]
+*.pod
 /wikidocs/
 
 # generated systemd unit file
