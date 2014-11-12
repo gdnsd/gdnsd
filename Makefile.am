@@ -3,7 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
 #  ("." first for the check-local below before subdir tests)
-SUBDIRS = . gdnsd plugins docs t sysd
+SUBDIRS = . libtap gdnsd plugins docs sysd t
 
 dist_doc_DATA = README.md INSTALL AUTHORS COPYING NEWS
 EXTRA_DIST = qa

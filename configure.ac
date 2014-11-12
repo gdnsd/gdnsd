@@ -507,9 +507,10 @@ AC_CONFIG_FILES([
   gdnsd/Makefile
   gdnsd/libgdnsd/Makefile
   gdnsd/libgdnsd/libdmn/Makefile
+  docs/Makefile
   sysd/Makefile
   t/Makefile
-  docs/Makefile
+  libtap/Makefile
   plugins/Makefile
   plugins/extfile/Makefile
   plugins/extmon/Makefile

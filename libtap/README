@@ -1,0 +1,9 @@
+There are several variants of "libtap" floating around the net, many of which
+are derived from the one by Nik Clayton, as is this one.
+
+This one is based on CCAN's: http://ccodearchive.net/info/tap.html
+
+It has been modified to suit gdnsd's build setup, which includes a few
+compiler things, warnings fixes, and removal of the tap fail callback stuff,
+but is otherwise as fetched from the CCAN repo circa Nov 10, 2014 at git rev
+291237b4.
