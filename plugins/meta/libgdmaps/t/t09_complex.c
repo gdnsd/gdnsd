@@ -21,22 +21,53 @@
 
 #include "config.h"
 #include <gdnsd/log.h>
+#include <stdlib.h>
 #include "gdmaps_test.h"
+
+#include <tap.h>
+
+static const char cfg[] = QUOTE(
+   // bringing it all together: city-auto w/ 5 dcs,
+   //  dual GeoIP inputs, custom maps, custom nets
+   my_prod_map => {
+    geoip_db => GeoLiteCityv6-20111210.dat,
+    geoip_db_v4_overlay => GeoLiteCity-20111210.dat,
+    datacenters => [ us, ie, sg, tr, br ]
+    auto_dc_coords => {
+     us = [ 38.9, -77 ]
+     ie = [ 53.3, -6.3 ]
+     sg = [ 1.3, 103.9 ]
+     tr = [ 38.7, 35.5 ]
+     br = [ -22.9, -43.2 ]
+    }
+    map => {
+     AS => { JP => [ ie, tr ] }
+    }
+    nets => {
+     10.0.1.0/24 => [ ]
+     10.0.0.0/24 => [ tr, ie ]
+    }
+   }
+);
 
 static gdmaps_t* gdmaps = NULL;
 
-int main(int argc, char* argv[]) {
-    if(argc != 2)
-        log_fatal("root directory must be set on commandline");
-
-    gdmaps = gdmaps_test_init(argv[1]);
-    unsigned tnum = 0;
+int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+    gdmaps_test_init(getenv("TEST_CFDIR"));
+    if(!gdmaps_test_db_exists("GeoLiteCityv6-20111210.dat")
+      || !gdmaps_test_db_exists("GeoLiteCity-20111210.dat")) {
+        plan_skip_all("Missing database");
+        exit(exit_status());
+    }
+    plan_tests(LOOKUP_CHECK_NTESTS * 7);
+    gdmaps = gdmaps_test_load(cfg);
     //datacenters => [ us, ie, sg, tr, br ]
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "137.138.144.168", "\2\4\1", 16); // Geneva
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "69.58.186.119", "\1\2\5", 17); // US East Coast
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "117.53.170.202", "\3\5\4", 20); // Australia
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "133.11.114.194", "\2\4", 8); // JP, horrible custom 'map' entry
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "10.0.0.44", "\4\2", 24); // Custom 'nets' entry
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "10.0.1.44", "", 24); // Custom 'nets' entry, empty
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "192.168.1.1", "\1\2\3\4\5", 16); // meta-default, no loc
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "137.138.144.168", "\2\4\1", 16); // Geneva
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "69.58.186.119", "\1\2\5", 17); // US East Coast
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "117.53.170.202", "\3\5\4", 20); // Australia
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "133.11.114.194", "\2\4", 8); // JP, horrible custom 'map' entry
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "10.0.0.44", "\4\2", 24); // Custom 'nets' entry
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "10.0.1.44", "", 24); // Custom 'nets' entry, empty
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "192.168.1.1", "\1\2\3\4\5", 16); // meta-default, no loc
+    exit(exit_status());
 }

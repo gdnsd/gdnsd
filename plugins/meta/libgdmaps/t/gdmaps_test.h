@@ -27,17 +27,32 @@
 
 #include "gdmaps.h"
 
-// init gdmaps_t based on user-supplied configfile
-gdmaps_t* gdmaps_test_init(const char* input_cfgfile);
-
-// A complete results-checker.  It will terminate with stderr output if
-//  the data comparison (or any earlier part of the operation) fails.
+// initialize test environment.  cfg_data is a string containing
+//   the ",,," from "plugins => { geoip => { maps => { ... } }}
+//   cfg_dir is where to look for referenced nets/geoip files.
+// these two must be called in sequence.
 F_NONNULL
-void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp);
+void gdmaps_test_init(const char* cfg_dir);
+F_NONNULL
+gdmaps_t* gdmaps_test_load(const char* cfg_data);
+
+// A complete results-checker.
+F_NONNULL
+void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp);
 
 // This variant only validates that we can complete the lookup operation
 //   without crashing, it doesn't care about the data in the results
 F_NONNULL
-void gdmaps_lookup_noop(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt);
+void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt);
+
+// boolean for whether a given file exists in the geoip config dir
+bool gdmaps_test_db_exists(const char* dbfile);
+
+// number of actual libtap tests for each invocation above
+#define LOOKUP_CHECK_NTESTS 2
+#define LOOKUP_NOOP_NTESTS 1
+
+// handy for config blocks
+#define QUOTE(...) #__VA_ARGS__
 
 #endif // GDMAPS_TEST_H

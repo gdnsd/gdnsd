@@ -5,8 +5,13 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
    exit 99
 fi
 
-# because cppcheck can't handle large ragel outputs well
-SKIPFILES="-igdnsd/zscan_rfc1035.c -igdnsd/libgdnsd/vscf.c"
+# because cppcheck can't handle large ragel outputs well,
+#  and doesn't handle the QUOTE construct in the gdmaps tests
+SKIPFILES="
+-igdnsd/zscan_rfc1035.c
+-igdnsd/libgdnsd/vscf.c
+-iplugins/meta/libgdmaps/t
+"
 
 # occasionally running this with --check-config may reveal the need for
 # changes to this list (basically, it's every directory with headers

@@ -13,5 +13,10 @@ plugin_metafo_la_LDFLAGS  = -avoid-version -module
 
 EXTRA_DIST = meta_core.c
 
+bin_PROGRAMS = gdnsd_geoip_test
+gdnsd_geoip_test_SOURCES = gdnsd_geoip_test.c
+gdnsd_geoip_test_CFLAGS  = $(CFLAGS_PIE)
+gdnsd_geoip_test_LDADD   = libgdmaps/libgdmaps.la $(top_builddir)/gdnsd/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
+
 check-download:
 	@$(MAKE) $(AM_MAKEFLAGS) -C libgdmaps check-download

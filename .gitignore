@@ -15,7 +15,7 @@
 # Built, installed binaries
 /gdnsd/gdnsd
 /plugins/extmon/gdnsd_extmon_helper
-/plugins/meta/libgdmaps/t/gdnsd_geoip_test
+/plugins/meta/gdnsd_geoip_test
 
 # Built and not distributed or installed
 /gdnsd/zscan_rfc1035.c
@@ -34,9 +34,9 @@ testroot/
 
 # libgdmaps unit test junk
 /plugins/meta/libgdmaps/t/*.bin
-/plugins/meta/libgdmaps/t/Geo*.dat
-/plugins/meta/libgdmaps/t/regioncodes-*
-/plugins/meta/libgdmaps/t/LICENSE.txt
+/plugins/meta/libgdmaps/t/etc/geoip/*.dat
+/plugins/meta/libgdmaps/t/etc/geoip/regioncodes-*
+/plugins/meta/libgdmaps/t/etc/geoip/LICENSE.txt
 
 # Various tool outputs in all dirs
 Makefile

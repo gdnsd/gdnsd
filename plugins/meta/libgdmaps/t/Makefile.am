@@ -1,17 +1,13 @@
-
-AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(srcdir)/..
+AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(top_srcdir)/libtap -I$(srcdir)/..
 AM_LIBTOOLFLAGS = --silent
 
-noinst_LTLIBRARIES = libgdmaps_test.la
+check_LTLIBRARIES = libgdmaps_test.la
 libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h
+libgdmaps_test_la_LIBADD = ../libgdmaps.la $(top_builddir)/libtap/libtap.la $(top_builddir)/gdnsd/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
-LDADD = libgdmaps_test.la ../libgdmaps.la ../../../../gdnsd/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
-
-bin_PROGRAMS = gdnsd_geoip_test
-gdnsd_geoip_test_SOURCES = gdnsd_geoip_test.c
+LDADD = libgdmaps_test.la
 
 # ----------- testsuite stuff --------------
-
 # I've mirrored these to S3 as "downloads.gdnsd.org" to be dynamically downloaded for those who
 #  bother running make check.  They were pulled on the date indicated in the filename in order
 #  to provide a stable test baseline, and won't be updated unless there's a technical testsuite
@@ -24,7 +20,7 @@ gdnsd_geoip_test_SOURCES = gdnsd_geoip_test.c
 GEOLITE_URL_BASE = http://downloads.gdnsd.org/GeoLiteTestData/
 GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat regioncodes-20130115.csv
 
-TESTLIST_NONETS = \
+TESTLIST = \
 	t00_v4db \
 	t01_v6db \
 	t02_v4citydb \
@@ -41,9 +37,6 @@ TESTLIST_NONETS = \
 	t13_castatdef \
 	t14_missingcoords \
 	t15_nogeo \
-	t99_loadonly
-
-TESTLIST_NETS = \
 	t16_extnets \
 	t17_extn_empty \
 	t18_extn_all \
@@ -53,21 +46,29 @@ TESTLIST_NETS = \
 	t22_nets_corner \
 	t23_gn_corner
 
-TESTLIST = $(TESTLIST_NONETS) $(TESTLIST_NETS)
-
-EXTRA_DIST = trunner.sh tdownload.sh $(TESTLIST:=.cfg) $(TESTLIST_NETS:=.nets)
+EXTRA_DIST = tdownload.sh etc
 
 check_PROGRAMS = $(TESTLIST:=.bin)
 
-test_verbose = $(test_verbose_@AM_V@)
-test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
 test_verbose_0 = @echo TEST $@;
+test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
+test_verbose = $(test_verbose_@AM_V@)
 
-check-local:
-	$(test_verbose)ASDIR="$(abs_srcdir)" ABDIR="$(abs_builddir)" GEOLITE_FILES="$(GEOLITE_FILES)" TLIST="$(TESTLIST)" $(srcdir)/trunner.sh
+# re-use silent-rules to set "prove" execution mode:
+#  V=0 -> quiet + parallelized
+#  V=1 -> verbose + serial
+prove_mode_0 = -q -j4
+prove_mode_1 = -v
+prove_mode_  = $(prove_mode_@AM_DEFAULT_V@)
+prove_mode   = $(prove_mode_@AM_V@)
+
+CHECK_PROGS_INTREE = $(check_PROGRAMS:%=$(builddir)/%)
+check-local: $(check_PROGRAMS)
+	$(test_verbose)TEST_CFDIR="$(abs_builddir)/etc" $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)" $(CHECK_PROGS_INTREE)
+
+CHECK_PROGS_INSTALL = $(check_PROGRAMS:%=$(builddir)/.libs/%)
+installcheck-local: $(check_PROGRAMS)
+	$(test_verbose)TEST_CFDIR="$(abs_builddir)/etc" $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)" $(CHECK_PROGS_INSTALL)
 
 check-download: tdownload.sh
 	@ABDIR="$(abs_builddir)" GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" GEOLITE_FILES="$(GEOLITE_FILES)" $(srcdir)/tdownload.sh
-
-clean-local:
-	rm -rf $(builddir)/testroot

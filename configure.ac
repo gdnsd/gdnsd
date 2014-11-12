@@ -500,7 +500,22 @@ B_DATE=`date -u "+%Y-%m-%d %H:%M:%S UTC"`
 B_INFO="$B_SRC ${USER}@${B_HOST} $B_DATE"
 AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
 
+# Files that need to be linked/copied into the builddir if the two are separate
+BUILDDIR_LINKS="
+    plugins/meta/libgdmaps/t/etc/geoip/t16_extnets.nets
+    plugins/meta/libgdmaps/t/etc/geoip/t17_extn_empty.nets
+    plugins/meta/libgdmaps/t/etc/geoip/t18_extn_all.nets
+    plugins/meta/libgdmaps/t/etc/geoip/t19_extn_allg.nets
+    plugins/meta/libgdmaps/t/etc/geoip/t20_extn_allgs.nets
+    plugins/meta/libgdmaps/t/etc/geoip/t21_extn_subs.nets
+    plugins/meta/libgdmaps/t/etc/geoip/t22_nets_corner.nets
+    plugins/meta/libgdmaps/t/etc/geoip/t23_gn_corner.nets
+"
+
 # Output generation
+for f in $BUILDDIR_LINKS; do
+    AC_CONFIG_LINKS([$f:$f])
+done
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
   Makefile

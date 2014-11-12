@@ -17,96 +17,30 @@
  *
  */
 
-// This source is a testing core for the gdmaps.c functionality,
-//  to be re-used by the user-level gdnsd_geoip_test as well
-//  as internal unit tests.
-// It basically emulates a small portion of the initial setup code
-//  from gdnsd, loading a real gdnsd config file, but only paying
-//  attention to the plugin config and a few minor options bits.
-
 #include "config.h"
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <stdlib.h>
-#include <unistd.h>
 
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
-#include <gdnsd/plugapi.h>
-#include <gdnsd/misc.h>
-
 #include <gdnsd/paths-priv.h>
 
 #include "gdmaps.h"
 #include "gdmaps_test.h"
 
-static vscf_data_t* conf_load_vscf(const char* cfg_dir) {
-    vscf_data_t* out = NULL;
+#include <tap.h>
 
-    gdnsd_set_config_dir(cfg_dir);
-    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
-
-    struct stat cfg_stat;
-    if(!stat(cfg_path, &cfg_stat)) {
-        log_info("Loading configuration from '%s'", cfg_path);
-        char* vscf_err;
-        out = vscf_scan_filename(cfg_path, &vscf_err);
-        if(!out)
-            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
-        if(!vscf_is_hash(out))
-            log_fatal("Configuration from '%s' failed: config was an array!", cfg_path);
-    }
-    else {
-        log_info("No config file at '%s', using defaults + zones auto-scan", cfg_path);
-    }
-
-    free(cfg_path);
-    return out;
-}
-
-F_NONNULL
-static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root) {
-    dmn_assert(cfg_root);
-
-    // plugins stanza
-    vscf_data_t* plugins = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
-    if(!plugins)
-        log_fatal("Config file has no plugins stanza");
-    if(!vscf_is_hash(plugins))
-        log_fatal("Config stanza 'plugins' must be a hash");
-
-    // plugins->geoip stanza
-    vscf_data_t* geoip = vscf_hash_get_data_byconstkey(plugins, "geoip", true);
-    if(!geoip)
-        log_fatal("Config file has no geoip plugin config");
-    if(!vscf_is_hash(geoip))
-        log_fatal("Plugin config for 'geoip' must be a hash");
-
-    // plugins->geoip->maps stanza
-    vscf_data_t* maps = vscf_hash_get_data_byconstkey(geoip, "maps", true);
-    if(!maps)
-        log_fatal("Config file has no geoip maps defined");
-    if(!vscf_is_hash(maps))
-        log_fatal("Geoip plugin config for 'maps' must be a hash");
-
-    return maps;
-}
-
-//***** Public funcs
-
-void gdmaps_lookup_noop(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt) {
+void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt) {
     dmn_assert(gdmaps);
     dmn_assert(map_name);
     dmn_assert(addr_txt);
 
-    log_info("Subtest %u starting", tnum);
-
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if(rv < 0)
-        log_fatal("Subtest %u failed: Map name '%s' not found in configuration", tnum, map_name);
+        log_fatal("Map name '%s' not found in configuration", map_name);
     const unsigned map_idx = (unsigned)rv;
 
     client_info_t cinfo;
@@ -115,22 +49,22 @@ void gdmaps_lookup_noop(const unsigned tnum, const gdmaps_t* gdmaps, const char*
 
     const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &cinfo.edns_client);
     if(addr_err)
-        log_fatal("Subtest %u failed: Cannot parse address '%s': %s", tnum, addr_txt, gai_strerror(addr_err));
+        log_fatal("Cannot parse address '%s': %s", addr_txt, gai_strerror(addr_err));
 
     gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope);
+    ok(1, "gdmaps_lookup(%s, %s) did not crash", map_name, addr_txt);
 }
 
-void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp) {
+void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp) {
     dmn_assert(gdmaps);
     dmn_assert(map_name);
     dmn_assert(addr_txt);
     dmn_assert(dclist_cmp);
 
-    log_info("Subtest %u starting", tnum);
-
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if(rv < 0)
-        log_fatal("Subtest %u failed: Map name '%s' not found in configuration", tnum, map_name);
+        log_fatal("Map name '%s' not found in configuration", map_name);
+
     const unsigned map_idx = (unsigned)rv;
 
     client_info_t cinfo;
@@ -139,36 +73,50 @@ void gdmaps_test_lookup_check(const unsigned tnum, const gdmaps_t* gdmaps, const
 
     const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &cinfo.edns_client);
     if(addr_err)
-        log_fatal("Subtest %u failed: Cannot parse address '%s': %s", tnum, addr_txt, gai_strerror(addr_err));
+        log_fatal("Cannot parse address '%s': %s", addr_txt, gai_strerror(addr_err));
 
     const uint8_t* dclist = gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope);
 
-    // w/ edns_client_mask set, scope_mask should *always* be set by gdmaps_lookup();
-    // (and regardless, dclist should also always be set and contain something)
-    if(!dclist)
-        log_fatal("Subtest %u failed: gdmaps_lookup(%s, %s) returned NULL", tnum, map_name, addr_txt);
-    if(scope == 175U)
-        log_fatal("Subtest %u failed: gdmaps_lookup(%s, %s) failed to set the scope mask", tnum, map_name, addr_txt);
-
-    if(strcmp((const char*)dclist, dclist_cmp))
-        log_fatal("Subtest %u failed: Wanted dclist %s, got dclist %s", tnum,
+    ok(!strcmp((const char*)dclist, dclist_cmp),
+        "gdmaps_lookup(%s, %s) returns dclist %s (got %s)",
+            map_name, addr_txt,
             gdmaps_logf_dclist(gdmaps, map_idx, (const uint8_t*)dclist_cmp),
             gdmaps_logf_dclist(gdmaps, map_idx, dclist));
 
-    if(scope != scope_cmp)
-        log_fatal("Subtest %u failed: Wanted scope mask %u, got %u", tnum, scope_cmp, scope);
+    ok(scope == scope_cmp,
+        "gdmaps_lookup(%s, %s) returns scope %u (got %u)",
+            map_name, addr_txt, scope_cmp, scope);
 }
 
-gdmaps_t* gdmaps_test_init(const char* input_cfgdir) {
-
+void gdmaps_test_init(const char* cfg_dir) {
+    dmn_assert(cfg_dir);
     dmn_init1(false, true, false, "gdmaps_test");
+    gdnsd_set_config_dir(cfg_dir);
+}
 
-    vscf_data_t* cfg_root = conf_load_vscf(input_cfgdir);
-    vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
-    gdmaps_t* gdmaps = gdmaps_new(maps_cfg);
-    vscf_destroy(cfg_root);
+gdmaps_t* gdmaps_test_load(const char* cfg_data) {
+    dmn_assert(cfg_data);
 
-    gdmaps_load_databases(gdmaps);
+    char* vscf_err = NULL;
+    vscf_data_t* maps_cfg = vscf_scan_buf(strlen(cfg_data), cfg_data, "(test maps)", &vscf_err);
+    if(!maps_cfg)
+        log_fatal("Test config load failed: %s", vscf_err);
+    if(!vscf_is_hash(maps_cfg))
+        log_fatal("Geoip plugin config for 'maps' must be a hash");
+    gdmaps_t* rv = gdmaps_new(maps_cfg);
+    vscf_destroy(maps_cfg);
 
-    return gdmaps;
+    gdmaps_load_databases(rv);
+
+    return rv;
+}
+
+bool gdmaps_test_db_exists(const char* dbfile) {
+    bool rv = false;
+    char* fn = gdnsd_resolve_path_cfg(dbfile, "geoip");
+    struct stat st;
+    if(!stat(fn, &st) && !S_ISDIR(st.st_mode))
+        rv = true;
+    free(fn);
+    return rv;
 }

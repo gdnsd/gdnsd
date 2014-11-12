@@ -21,16 +21,30 @@
 
 #include "config.h"
 #include <gdnsd/log.h>
+#include <stdlib.h>
 #include "gdmaps_test.h"
+
+#include <tap.h>
+
+static const char cfg[] = QUOTE(
+   my_prod_map => {
+    datacenters => [ dc01, dc02 ],
+    geoip_db => GeoIP-20111210.dat,
+    nets => t20_extn_allgs.nets
+   }
+);
 
 static gdmaps_t* gdmaps = NULL;
 
-int main(int argc, char* argv[]) {
-    if(argc != 2)
-        log_fatal("root directory must be set on commandline");
-
-    gdmaps = gdmaps_test_init(argv[1]);
-    unsigned tnum = 0;
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "192.0.2.1", "\2", 24);
-    gdmaps_test_lookup_check(tnum++, gdmaps, "my_prod_map", "2600:3c02:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", "\2", 31);
+int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+    gdmaps_test_init(getenv("TEST_CFDIR"));
+    if(!gdmaps_test_db_exists("GeoIP-20111210.dat")) {
+        plan_skip_all("Missing database");
+        exit(exit_status());
+    }
+    plan_tests(LOOKUP_CHECK_NTESTS * 2);
+    gdmaps = gdmaps_test_load(cfg);
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "192.0.2.1", "\2", 24);
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "2600:3c02:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF", "\2", 31);
+    exit(exit_status());
 }
