@@ -1,4 +1,3 @@
-
 # This tests various forms of subzone delegation
 
 use _GDT ();

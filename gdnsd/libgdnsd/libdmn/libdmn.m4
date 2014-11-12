@@ -1,4 +1,3 @@
-
 # Find out which strerror_r we have
 AC_FUNC_STRERROR_R
 

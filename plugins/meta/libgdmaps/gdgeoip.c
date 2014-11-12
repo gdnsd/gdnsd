@@ -36,7 +36,6 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
 
-
 /*****************************************************************************
  * This portion of the code in this file is specific to parsing
  * MaxMind's various GeoIP databases, and much of it was obviously created by
@@ -184,7 +183,6 @@ void validate_continent_code(const char* cc, const char* map_name) {
             return;
     log_fatal("plugin_geoip: map '%s': Continent code '%s' is illegal", map_name, cc);
 }
-
 
 F_NONNULL
 static uint32_t country_get_dclist(const geoip_db_t* db, const unsigned offset) {

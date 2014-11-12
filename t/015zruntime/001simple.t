@@ -1,4 +1,3 @@
-
 # Basic operational and test infrastructure check, just add/delete/mod checks
 #   without involving complexities like subzones and duplicates.
 

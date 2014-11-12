@@ -1,4 +1,3 @@
-
 # Basic plugin tests
 
 use _GDT ();

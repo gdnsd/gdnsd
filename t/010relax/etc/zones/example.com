@@ -1,4 +1,3 @@
-
 @	SOA foo hostmaster (
 	1      ; serial
 	7200   ; refresh

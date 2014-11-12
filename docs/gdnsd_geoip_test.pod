@@ -1,4 +1,3 @@
-
 =head1 NAME
 
 gdnsd_geoip_test - Commandline test program for gdnsd-plugin-geoip maps

@@ -1,4 +1,3 @@
-
 # Test domainname bytes other than the usual [-a-z0-9]
 
 use _GDT ();

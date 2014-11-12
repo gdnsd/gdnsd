@@ -1,4 +1,3 @@
-
 # Test various forms of "broken" queries
 
 use _GDT ();

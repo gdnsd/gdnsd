@@ -1,4 +1,3 @@
-
 =head1 NAME
 
 gdnsd-plugin-api - How to write gdnsd plugin code

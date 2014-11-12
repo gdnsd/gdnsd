@@ -113,7 +113,6 @@ static void dnhash_grow(dnhash_t* dnhash) {
     dnhash->mask = new_mask;
 }
 
-
 struct _ltarena {
     uint8_t** pools;
     unsigned pool;

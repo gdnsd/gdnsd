@@ -1,4 +1,3 @@
-
 # Basic dynamic resource tests
 
 use _GDT ();

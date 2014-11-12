@@ -303,7 +303,6 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
         update_dclists = gdmap->dclists_pend;
     }
 
-
     char* vscf_err;
     vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path, &vscf_err);
     nlist_t* new_list = NULL;

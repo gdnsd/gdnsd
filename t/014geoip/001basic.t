@@ -1,4 +1,3 @@
-
 # Basic geoip plugin tests
 
 use _GDT ();

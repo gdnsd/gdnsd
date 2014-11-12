@@ -1,4 +1,3 @@
-
   ; You can start a one-line comment anywhere reasonable
 
 ; blank for the SOA is intended here, to test that it

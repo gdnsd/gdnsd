@@ -1,4 +1,3 @@
-
 =head1 NAME
 
 gdnsd-plugin-reflect - gdnsd cache reflector plugin

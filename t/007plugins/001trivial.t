@@ -1,4 +1,3 @@
-
 # Basic plugin tests
 
 use _GDT ();
@@ -195,6 +194,5 @@ _GDT->test_dns(
     qname => 'adyn.example.com', qtype => 'A',
     answer => 'adyn.example.com 86400 A 192.0.2.41',
 );
-
 
 _GDT->test_kill_daemon($pid);

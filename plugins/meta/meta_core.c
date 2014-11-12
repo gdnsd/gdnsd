@@ -420,7 +420,6 @@ static int map_res_inner(const char* resname, const uint8_t* origin, const char*
     map_res_err("plugin_" PNSTR ": Invalid resource name '%s' detected from zonefile lookup", resname);
 }
 
-
 /********** Callbacks from gdnsd **************/
 
 void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED) {

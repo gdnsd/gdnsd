@@ -740,7 +740,6 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, c
     return nrr;
 }
 
-
 bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd) {
     dmn_assert(zone); dmn_assert(dname);
 

@@ -1,4 +1,3 @@
-
 @	SOA ns1 hmaster.example.net. (
 	1      ; serial
 	7200   ; refresh

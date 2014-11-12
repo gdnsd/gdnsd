@@ -17,7 +17,6 @@ if [ $GEOLITE_DL = "none" ]; then
     exit 1
 fi
 
-
 if [ $GEOLITE_DL = "curl" ]; then
     GEOLITE_DL="curl -LO"
 fi

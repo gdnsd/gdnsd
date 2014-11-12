@@ -1,4 +1,3 @@
-
 #
 # This tests that the test infrastructure basically works,
 #  and that we can spawn a gdnsd instance with an absolutely

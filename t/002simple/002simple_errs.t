@@ -1,4 +1,3 @@
-
 # And these are some simple error checks against the same data as
 #  001noerr.t.  Just basic NOERROR+0answers, NXDOMAIN, REFUSED, etc.
 

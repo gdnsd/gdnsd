@@ -1,4 +1,3 @@
-
 # This tests RFC3597-related stuff
 
 use _GDT ();

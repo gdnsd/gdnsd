@@ -1,4 +1,3 @@
-
 # test chaos_response option
 
 use _GDT ();

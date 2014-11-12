@@ -1,4 +1,3 @@
-
 # This tests NAPTR-related stuff
 
 use _GDT ();

@@ -17,7 +17,6 @@
  *
  */
 
-
 /*
 
   ltree == "Label Tree", a representation of DNS data as a tree by domain

@@ -1,4 +1,3 @@
-
 # Oversized data sets, truncation, tcp, edns0, etc...
 
 use _GDT ();

@@ -1,4 +1,3 @@
-
 # Dynamic CNAME plugin tests
 
 use _GDT ();

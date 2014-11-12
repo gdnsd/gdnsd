@@ -1,4 +1,3 @@
-
 # Random packet torture testing.
 # All of these queries should result
 # in "dropped", "fmterr", etc...

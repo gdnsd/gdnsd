@@ -1,4 +1,3 @@
-
 SUBDIRS = libgdnsd
 AM_CPPFLAGS = -I$(srcdir)/libgdnsd -I$(builddir)/libgdnsd
 

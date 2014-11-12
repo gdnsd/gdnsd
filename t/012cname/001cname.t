@@ -1,4 +1,3 @@
-
 # CNAME test, with include_optional_ns to get the auth section right...
 # this is basically going through A, CNAME, and ANY queries against
 #  five different classes of CNAME targets (local nonexistent,

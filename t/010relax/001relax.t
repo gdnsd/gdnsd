@@ -1,4 +1,3 @@
-
 # This tests a zone with all of the constructs
 #  which used to be only legal with strict_data = false
 # These now universally generate mere warnings, and

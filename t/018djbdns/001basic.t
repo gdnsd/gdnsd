@@ -1,4 +1,3 @@
-
 use _GDT ();
 use FindBin ();
 use File::Spec ();

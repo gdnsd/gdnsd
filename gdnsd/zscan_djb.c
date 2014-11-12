@@ -127,7 +127,6 @@ void zscan_djbzone_free(zscan_djb_zonedata_t** zd) {
     *zd = NULL;
 }
 
-
 F_NONNULL
 static uint8_t *parse_dname(zscan_t *z, uint8_t *dname, field_t *f) {
     dname_status_t status = dname_from_string(dname, f->ptr, f->len);

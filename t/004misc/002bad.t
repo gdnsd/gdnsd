@@ -1,4 +1,3 @@
-
 # This tests various malformed questions that have to be hand-encoded.
 use _GDT ();
 use FindBin ();

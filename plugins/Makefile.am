@@ -1,4 +1,3 @@
-
 # Subdirectories to recurse into
 SUBDIRS = \
 	trivial \

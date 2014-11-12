@@ -1,4 +1,3 @@
-
 # This tests static A/AAAA and rrset size limiting
 
 use _GDT ();

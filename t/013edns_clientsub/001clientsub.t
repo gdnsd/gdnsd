@@ -1,4 +1,3 @@
-
 # Test edns client subnet option via reflect plugin
 
 use _GDT ();

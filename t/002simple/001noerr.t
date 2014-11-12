@@ -1,4 +1,3 @@
-
 # These are all the "positive" tests for 002simple's example.com zone,
 #  as in tests that return actual valid data from the DB with NOERROR rcode
 

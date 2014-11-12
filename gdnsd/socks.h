@@ -1,4 +1,3 @@
-
 /* Copyright © 2014 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.

@@ -1,4 +1,3 @@
-
 # Compression torture testing.
 # This tests depends on exact packet sizes, so
 # it will need to be updated if our compression

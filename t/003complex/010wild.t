@@ -1,4 +1,3 @@
-
 # This tests wildcard labels
 
 use _GDT ();

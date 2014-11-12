@@ -1,4 +1,3 @@
-
 =head1 NAME
 
 gdnsd-plugin-extmon - gdnsd plugin for monitoring via external commands

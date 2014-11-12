@@ -1,4 +1,3 @@
-
 # CNAME torture testing
 
 use _GDT ();

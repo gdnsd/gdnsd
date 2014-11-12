@@ -173,7 +173,6 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         }
     }
 
-
     vscf_hash_iterate_const(opts, true, bad_res_opt, resname);
     return true;
 }

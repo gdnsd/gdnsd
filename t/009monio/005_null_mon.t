@@ -1,4 +1,3 @@
-
 # null-monitor dynamic resource tests
 
 use _GDT ();

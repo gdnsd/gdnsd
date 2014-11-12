@@ -1,4 +1,3 @@
-
 # Test what happens when a zonefile fails to load at runtime
 
 use _GDT ();

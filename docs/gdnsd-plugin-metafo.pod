@@ -1,4 +1,3 @@
-
 =head1 NAME
 
 gdnsd-plugin-metafo - gdnsd plugin for address meta-failover
@@ -99,7 +98,6 @@ Another minimal structural example down to this level:
       }
     }
   }
-
 
 There are several forms the per-datacenter values (C<???> above) can take,
 documented in the next section.

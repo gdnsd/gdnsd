@@ -1,4 +1,3 @@
-
 # This tests AAAA and related stuff
 
 use _GDT ();
