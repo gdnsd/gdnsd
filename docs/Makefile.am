@@ -1,26 +1,26 @@
 # dist + install simple docs
 dist_doc_DATA = gdnsd_manual.txt
 
-PODS_1 = gdnsd_geoip_test.pod
-PODS_3 = gdnsd-plugin-api.pod
-PODS_5 = \
-	gdnsd.config.pod \
-	gdnsd.zonefile.pod \
-	gdnsd.djbdns.pod
-PODS_8 = \
-	gdnsd.pod \
-	gdnsd-plugin-extfile.pod \
-	gdnsd-plugin-extmon.pod \
-	gdnsd-plugin-geoip.pod \
-	gdnsd-plugin-http_status.pod \
-	gdnsd-plugin-metafo.pod \
-	gdnsd-plugin-multifo.pod \
-	gdnsd-plugin-null.pod \
-	gdnsd-plugin-reflect.pod \
-	gdnsd-plugin-simplefo.pod \
-	gdnsd-plugin-static.pod \
-	gdnsd-plugin-tcp_connect.pod \
-	gdnsd-plugin-weighted.pod
+PODS_IN_1 = gdnsd_geoip_test.podin
+PODS_IN_3 = gdnsd-plugin-api.podin
+PODS_IN_5 = \
+	gdnsd.config.podin \
+	gdnsd.zonefile.podin \
+	gdnsd.djbdns.podin
+PODS_IN_8 = \
+	gdnsd.podin \
+	gdnsd-plugin-extfile.podin \
+	gdnsd-plugin-extmon.podin \
+	gdnsd-plugin-geoip.podin \
+	gdnsd-plugin-http_status.podin \
+	gdnsd-plugin-metafo.podin \
+	gdnsd-plugin-multifo.podin \
+	gdnsd-plugin-null.podin \
+	gdnsd-plugin-reflect.podin \
+	gdnsd-plugin-simplefo.podin \
+	gdnsd-plugin-static.podin \
+	gdnsd-plugin-tcp_connect.podin \
+	gdnsd-plugin-weighted.podin
 
 # This translates default path variables in the pod sources
 MAN_SED = $(SED) \
@@ -31,24 +31,26 @@ MAN_SED = $(SED) \
 	-e 's|@GDNSD_DEFPATH_LIBEXEC[@]|$(GDNSD_DEFPATH_LIBEXEC)|g' \
 	-e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g'
 
-# Gather up the .pod files (which are distributed but not installed)
-ALL_PODS = $(PODS_1) $(PODS_3) $(PODS_5) $(PODS_8)
+# Gather up the .podin files (which are distributed but not installed)
+ALL_PODS = $(PODS_IN_1) $(PODS_IN_3) $(PODS_IN_5) $(PODS_IN_8)
 EXTRA_DIST = $(ALL_PODS)
 
 # Manpages for installation, generated via sed templating then pod2man
 #  (the Makefile dep is for the sed command on change of --prefix, etc)
-nodist_man_MANS = $(PODS_1:.pod=.1) $(PODS_3:.pod=.3) $(PODS_5:.pod=.5) $(PODS_8:.pod=.8)
+nodist_man_MANS = $(PODS_IN_1:.podin=.1) $(PODS_IN_3:.podin=.3) $(PODS_IN_5:.podin=.5) $(PODS_IN_8:.podin=.8)
 $(nodist_man_MANS): Makefile
 clean-local:
 	rm -f $(nodist_man_MANS)
+.podin.pod:
+	$(AM_V_GEN)$(MAN_SED) <$< >$@
 .pod.8:
-	$(AM_V_GEN)$(MAN_SED) <$< | $(POD2MAN) --section=8 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) >$@
+	$(AM_V_GEN)$(POD2MAN) --section=8 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
 .pod.5:
-	$(AM_V_GEN)$(MAN_SED) <$< | $(POD2MAN) --section=5 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) >$@
+	$(AM_V_GEN)$(POD2MAN) --section=5 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
 .pod.3:
-	$(AM_V_GEN)$(MAN_SED) <$< | $(POD2MAN) --section=3 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) >$@
+	$(AM_V_GEN)$(POD2MAN) --section=3 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
 .pod.1:
-	$(AM_V_GEN)$(MAN_SED) <$< | $(POD2MAN) --section=1 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) >$@
+	$(AM_V_GEN)$(POD2MAN) --section=1 --release="$(PACKAGE_NAME) $(VERSION)" --center=$(PACKAGE_NAME) $< $@
 
 # "make wikidocs" ->
 # Basically it renames all the podfiles from e.g. gdnsd-plugin-geoip.pod
@@ -63,7 +65,7 @@ wikidocs:
 		$(MKDIR_P) $(WIKI_DIR); \
 	fi
 	@for podsrc in $(ALL_PODS); do \
-		wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Pod$$/.pod/'`; \
+		wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Podin$$/.pod/'`; \
 		echo Copying $$podsrc to $(WIKI_DIR)/$$wikifn ...; \
 		$(MAN_SED) <$$podsrc >$(WIKI_DIR)/$$wikifn; \
 	done
