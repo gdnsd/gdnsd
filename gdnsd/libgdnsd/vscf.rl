@@ -24,22 +24,14 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <inttypes.h>
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
 #include <gdnsd/vscf.h>
-
-/*
- * The initial size of the read()/fread() buffer.  Note that
- *  we can only parse a key or simple value by having
- *  it fit completely inside one buffer.  Therefore to
- *  avoid arbitrary restrictions, the buffer is
- *  resized by doubling if we run into a key or string
- *  value that exceeds the buffer size.
- */
-#define INIT_BUF_SIZE 8192
 
 #define set_err(_epp, _fmt, ...) do { \
     dmn_assert(_epp); \
@@ -682,16 +674,16 @@ static void val_destroy(vscf_data_t* d) {
     write data;
 }%%
 
-static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
-    dmn_assert(fd > -1); dmn_assert(fn); dmn_assert(err); dmn_assert(*err == NULL);
+/****************************/
+/*** Public API functions ***/
+/****************************/
+
+vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* fn, char** err) {
+    dmn_assert(buf); dmn_assert(fn); dmn_assert(err); dmn_assert(*err == NULL);
 
     (void)vscf_en_main; // silence unused var warning from generated code
 
     vscf_scnr_t* scnr = xcalloc(1, sizeof(vscf_scnr_t));
-    unsigned buf_size = INIT_BUF_SIZE;
-    char* buf = xmalloc(buf_size);
-    dmn_assert(buf);
-
     scnr->lcount = 1;
     scnr->fn = fn;
     scnr->cs = vscf_start;
@@ -702,86 +694,50 @@ static vscf_data_t* vscf_scan_fd(const int fd, const char* fn, char** err) {
     // default container is hash, will be replaced if array
     scnr->cont_stack[0] = (vscf_data_t*)hash_new();
 
-    while(!scnr->eof) {
-        unsigned have;
-        if(scnr->tstart == NULL)
-            have = 0;
-        else {
-            have = scnr->pe - scnr->tstart;
-            if(scnr->tstart == buf) {
-                buf_size *= 2;
-                buf = xrealloc(buf, buf_size);
-                dmn_assert(buf);
-            }
-            else {
-                memmove(buf, scnr->tstart, have);
-            }
-            scnr->tstart = buf;
+    // Whole input in one chunk
+    scnr->tstart = scnr->p = buf;
+    scnr->eof = scnr->pe = buf + len;
+
+    %%{
+        prepush {
+            if(scnr->top == scnr->cs_stack_alloc)
+                scnr->cs_stack
+                    = xrealloc(scnr->cs_stack,
+                        ++scnr->cs_stack_alloc * sizeof(int));
         }
-
-        const unsigned space = buf_size - have;
-        char* read_at = buf + have;
-        scnr->p = read_at;
-
-        const ssize_t read_rv = read(fd, read_at, space);
-        if(read_rv < 0) {
-            set_err(err, "read() of '%s' failed: errno %i\n", scnr->fn, errno);
-            break;
-        }
-        const size_t len = (size_t)read_rv;
-        scnr->pe = scnr->p + len;
-        if(len < space)
-            scnr->eof = scnr->pe;
-
-        %%{
-            prepush {
-                if(scnr->top == scnr->cs_stack_alloc)
-                    scnr->cs_stack
-                        = xrealloc(scnr->cs_stack,
-                            ++scnr->cs_stack_alloc * sizeof(int));
-            }
-            variable stack scnr->cs_stack;
-            variable top   scnr->top;
-            variable cs    scnr->cs;
-            variable p     scnr->p;
-            variable pe    scnr->pe;
-            variable eof   scnr->eof;
-        }%%
+        variable stack scnr->cs_stack;
+        variable top   scnr->top;
+        variable cs    scnr->cs;
+        variable p     scnr->p;
+        variable pe    scnr->pe;
+        variable eof   scnr->eof;
+    }%%
 
 DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
 DMN_DIAG_PUSH_IGNORED("-Wsign-conversion")
-        %%{
-            write exec;
-        }%%
+    %%{
+        write exec;
+    }%%
 DMN_DIAG_POP
 DMN_DIAG_POP
 
-        if(scnr->cs == vscf_error) {
-            parse_error_noargs("Syntax error");
-        }
-        else if(scnr->eof && scnr->cs < vscf_first_final) {
-            if(scnr->eof > buf && *(scnr->eof - 1) != '\n')
-                parse_error_noargs("Trailing incomplete or unparseable record at end of file (missing newline at end of file?)");
-            else
-                parse_error_noargs("Trailing incomplete or unparseable record at end of file");
-        }
-
-        if(*err)
-            break;
+    // Error/incomplete states
+    if(scnr->cs == vscf_error) {
+        parse_error_noargs("Syntax error");
     }
-
-    if(!*err && scnr->cs < vscf_first_final) {
+    else if(scnr->cs < vscf_first_final) {
         if(scnr->cs == vscf_en_hash)
-            parse_error_noargs("Unterminated hash");
+            parse_error_noargs("Unterminated hash at end of file");
         else if(scnr->cs == vscf_en_array)
-            parse_error_noargs("Unterminated array");
+            parse_error_noargs("Unterminated array at end of file");
+        else if(*(scnr->eof - 1) != '\n')
+            parse_error_noargs("Trailing incomplete or unparseable record at end of file (missing newline at end of file?)");
         else
-            parse_error_noargs("Syntax error");
+            parse_error_noargs("Trailing incomplete or unparseable record at end of file");
     }
 
     if(scnr->cs_stack)
         free(scnr->cs_stack);
-    free(buf);
 
     vscf_data_t* retval;
 
@@ -799,10 +755,6 @@ DMN_DIAG_POP
     return retval;
 }
 
-/****************************/
-/*** Public API functions ***/
-/****************************/
-
 vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
     dmn_assert(fn); dmn_assert(err);
     *err = NULL;
@@ -813,8 +765,54 @@ vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
         return NULL;
     }
 
-    vscf_data_t* retval = vscf_scan_fd(fd, fn, err);
-    close(fd);
+    struct stat st;
+    if(fstat(fd, &st) < 0) {
+        set_err(err, "Cannot fstat file '%s': errno %i\n", fn, errno);
+        close(fd);
+        return NULL;
+    }
+
+    if(S_ISDIR(st.st_mode) || st.st_size < 0) {
+        set_err(err, "File '%s' is not a valid input file", fn);
+        close(fd);
+        return NULL;
+    }
+
+    const size_t len = (size_t)st.st_size;
+
+    // mmap doesn't always work for zero-length files
+    if(!len) {
+        close(fd);
+        char mbuf[1] = { '\0' };
+        return vscf_scan_buf(0, mbuf, fn, err);
+    }
+
+    char* mapbuf = NULL;
+
+    if((mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+        set_err(err, "Cannot mmap file '%s': errno %i\n", fn, errno);
+        close(fd);
+        return NULL;
+    }
+
+    vscf_data_t* retval = vscf_scan_buf(len, mapbuf, fn, err);
+
+    if(munmap(mapbuf, len)) {
+        set_err(err, "Cannot munmap file '%s': errno %i\n", fn, errno);
+        if(retval) {
+            vscf_destroy(retval);
+            retval = NULL;
+        }
+    }
+
+    if(close(fd)) {
+        set_err(err, "Cannot close file '%s': errno %i\n", fn, errno);
+        if(retval) {
+            vscf_destroy(retval);
+            retval = NULL;
+        }
+    }
+
     return retval;
 }
 

@@ -44,6 +44,12 @@ typedef struct {
 F_NONNULL
 vscf_data_t* vscf_scan_filename(const char* fn, char** err);
 
+// As above, but operates on vscf text in a buffer "buf" of length "len".
+// "fn" in this call is used only to construct error messages, and may
+//   contain whatever text seems appropriate for describing the source.
+F_NONNULL
+vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* fn, char** err);
+
 // Destroys (de-allocates) the entire tree of data returned by vscf_scan()
 //  Do not call on sub-elements, only on the value actually returned by vscf_scan().
 // Passing a NULL argument is harmless
