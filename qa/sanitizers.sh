@@ -14,5 +14,5 @@ for san_type in address undefined; do
   make clean
   make -j4 all
   make check-download
-  make check
+  make -j4 check
 done

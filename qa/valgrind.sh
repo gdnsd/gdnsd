@@ -15,7 +15,7 @@ make clean
 make -j4 all
 make check-download
 make install
-TEST_RUNNER="valgrind --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make installcheck
+TEST_RUNNER="valgrind --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make -j4 installcheck
 set +e
 set +x
 grep "ERROR SUM" t/testout/*/gdnsd.out | grep -v ' 0 errors' || rm -rf /tmp/_gdnsd_inst
