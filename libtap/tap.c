@@ -69,6 +69,7 @@ _expected_tests(unsigned int tests)
 {
 
 	printf("1..%u\n", tests);
+	fflush(stdout);
 	e_tests = tests;
 }
 
@@ -188,6 +189,8 @@ _gen_result(int ok, const char *func, const char *file, unsigned int line,
 
 //	if (!ok && tap_fail_callback)
 //		tap_fail_callback();
+
+	fflush(stdout);
 
 	/* We only care (when testing) that ok is positive, but here we
 	   specifically only want to return 1 or 0 */
