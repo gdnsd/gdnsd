@@ -1,9 +1,9 @@
-AM_CPPFLAGS = -I$(top_srcdir)/libgdnsd -I$(top_srcdir)/libtap -I$(srcdir)/..
+AM_CPPFLAGS = -I$(top_srcdir)/libgdnsd -I$(top_srcdir)/libtap -I$(top_srcdir)/libgdmaps
 AM_LIBTOOLFLAGS = --silent
 
 check_LTLIBRARIES = libgdmaps_test.la
 libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h
-libgdmaps_test_la_LIBADD = ../libgdmaps.la $(top_builddir)/libtap/libtap.la $(top_builddir)/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
+libgdmaps_test_la_LIBADD = $(top_builddir)/libgdmaps/libgdmaps.la $(top_builddir)/libtap/libtap.la $(top_builddir)/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 LDADD = libgdmaps_test.la
 
@@ -17,8 +17,14 @@ LDADD = libgdmaps_test.la
 # This product includes GeoLite data created by MaxMind, available from http://maxmind.com/
 # These files are subject to MaxMind's GeoLite Open Data license, which is also re-distributed by download
 
-GEOLITE_URL_BASE = http://downloads.gdnsd.org/GeoLiteTestData/
-GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat regioncodes-20130115.csv
+export GEOLITE_URL_BASE = http://downloads.gdnsd.org/GeoLiteTestData/
+export GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat regioncodes-20130115.csv
+
+# These are set during configure
+export GEOLITE_DECOMP
+export GEOLITE_DL
+
+export TEST_CFDIR = $(abs_builddir)/etc
 
 TESTLIST = \
 	t00_v4db \
@@ -62,13 +68,16 @@ prove_mode_1 = -v
 prove_mode_  = $(prove_mode_@AM_DEFAULT_V@)
 prove_mode   = $(prove_mode_@AM_V@)
 
+# The common prove commandline args
+prove_run = $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)"
+
 CHECK_PROGS_INTREE = $(check_PROGRAMS:%=$(builddir)/%)
 check-local: $(check_PROGRAMS)
-	$(test_verbose)TEST_CFDIR="$(abs_builddir)/etc" $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)" $(CHECK_PROGS_INTREE)
+	$(test_verbose)$(prove_run) $(CHECK_PROGS_INTREE)
 
 CHECK_PROGS_INSTALL = $(check_PROGRAMS:%=$(builddir)/.libs/%)
 installcheck-local: $(check_PROGRAMS)
-	$(test_verbose)TEST_CFDIR="$(abs_builddir)/etc" $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)" $(CHECK_PROGS_INSTALL)
+	$(test_verbose)$(prove_run) $(CHECK_PROGS_INSTALL)
 
-check-download: tdownload.sh
-	@ABDIR="$(abs_builddir)" GEOLITE_DECOMP="$(GEOLITE_DECOMP)" GEOLITE_DL="$(GEOLITE_DL)" GEOLITE_URL_BASE="$(GEOLITE_URL_BASE)" GEOLITE_FILES="$(GEOLITE_FILES)" $(srcdir)/tdownload.sh
+check-download: tdownload.sh Makefile
+	@$(srcdir)/tdownload.sh

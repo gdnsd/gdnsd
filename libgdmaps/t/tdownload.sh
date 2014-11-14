@@ -21,7 +21,7 @@ if [ $GEOLITE_DL = "curl" ]; then
     GEOLITE_DL="curl -LO"
 fi
 
-cd $ABDIR/etc/geoip/
+cd $TEST_CFDIR/geoip/
 
 for glfile in $GEOLITE_FILES; do
     if [ ! -f $glfile ]; then
@@ -37,7 +37,7 @@ for glfile in $GEOLITE_FILES; do
             $GEOLITE_DL ${GEOLITE_URL_BASE}${glfile}
         fi
     else
-        echo $ABDIR/etc/geoip/$glfile already exists, remove manually if corrupted
+        echo $TEST_CFDIR/geoip/$glfile already exists, remove manually if corrupted
     fi
 done
 
