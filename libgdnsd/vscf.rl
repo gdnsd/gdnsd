@@ -255,8 +255,9 @@ F_NONNULL
 static vscf_simple_t* simple_new(const char* rval, const unsigned rlen) {
     dmn_assert(rval);
     vscf_simple_t* s = xcalloc(1, sizeof(vscf_simple_t));
-    char* storage = xmalloc(rlen);
+    char* storage = xmalloc(rlen + 1U);
     memcpy(storage, rval, rlen);
+    storage[rlen] = '\0';
     s->type   = VSCF_SIMPLE_T;
     s->rlen   = rlen;
     s->rval   = storage;

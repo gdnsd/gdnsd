@@ -6,6 +6,8 @@
     * The per-address level udp_recv_width option is now correctly limited to
       a value of 64 (previously it was being incorrectly limited to 32).
     * plugin_extmon bugfix for bad timeout/interval behavior if either >255s
+    * Bugfix for zero-length configuration strings causing assertion failure
+      in developer-debug builds
 
   *** Features:
     * plugin_geoip: Support for MaxMind GeoIP2 databases.  Requires
