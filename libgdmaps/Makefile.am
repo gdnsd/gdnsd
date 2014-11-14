@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd
+AM_CPPFLAGS = -I$(top_srcdir)/libgdnsd
 AM_LIBTOOLFLAGS = --silent
 
 SUBDIRS = . t

@@ -27,7 +27,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "dmn.h"
+#include <gdnsd/dmn.h>
 
 /* network utils */
 

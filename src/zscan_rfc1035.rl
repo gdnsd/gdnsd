@@ -569,7 +569,7 @@ static void close_paren(zscan_t* z) {
     escape_int = 25[0-5] | ( 2[0-4] | [01][0-9] ) [0-9] ;
     escapes    = ('\\' [^0-9\r\n]) | ('\\' escape_int) | ('\\' nl);
 
-    # Quoted character string 
+    # Quoted character string
     qword     = '"' ([^"\r\n\\]|escapes|nl)* '"';
 
     # The base set of literal characters allowed in unquoted character

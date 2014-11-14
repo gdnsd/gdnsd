@@ -3,7 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 # Subdirectories to recurse into
 #  ("." first for the check-local below before subdir tests)
-SUBDIRS = . libtap gdnsd plugins docs sysd t
+SUBDIRS = . libtap libgdnsd libgdmaps src plugins docs sysd t
 
 dist_doc_DATA = README.md INSTALL AUTHORS COPYING NEWS
 EXTRA_DIST = qa
@@ -36,7 +36,7 @@ libtool: $(LIBTOOL_DEPS)
 all-local: libtool
 
 check-download:
-	@$(MAKE) $(AM_MAKEFLAGS) -C plugins check-download
+	@$(MAKE) $(AM_MAKEFLAGS) -C libgdmaps check-download
 
 wikidocs:
 	@$(MAKE) $(AM_MAKEFLAGS) -C docs wikidocs

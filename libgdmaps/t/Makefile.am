@@ -1,9 +1,9 @@
-AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd -I$(top_srcdir)/libtap -I$(srcdir)/..
+AM_CPPFLAGS = -I$(top_srcdir)/libgdnsd -I$(top_srcdir)/libtap -I$(srcdir)/..
 AM_LIBTOOLFLAGS = --silent
 
 check_LTLIBRARIES = libgdmaps_test.la
 libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h
-libgdmaps_test_la_LIBADD = ../libgdmaps.la $(top_builddir)/libtap/libtap.la $(top_builddir)/gdnsd/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
+libgdmaps_test_la_LIBADD = ../libgdmaps.la $(top_builddir)/libtap/libtap.la $(top_builddir)/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 LDADD = libgdmaps_test.la
 

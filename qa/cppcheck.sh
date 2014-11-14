@@ -8,9 +8,9 @@ fi
 # because cppcheck can't handle large ragel outputs well,
 #  and doesn't handle the QUOTE construct in the gdmaps tests
 SKIPFILES="
--igdnsd/zscan_rfc1035.c
--igdnsd/libgdnsd/vscf.c
--iplugins/meta/libgdmaps/t
+-isrc/zscan_rfc1035.c
+-ilibgdnsd/vscf.c
+-ilibgdmaps/t
 "
 
 # occasionally running this with --check-config may reveal the need for
@@ -19,10 +19,10 @@ SKIPFILES="
 INCDIRS="
 -I.
 -Igdnsd
--Igdnsd/libgdnsd
--Iplugins/meta/libgdmaps
--Iplugins/meta/libgdmaps/t
--Iplugins/extmon
+-Ilibgdnsd
+-Iplugins
+-Ilibgdmaps
+-Ilibgdmaps/t
 "
 
 # This isn't optimal, but it gets most of the code covered on my box
@@ -56,9 +56,6 @@ DEFS="
 set -x
 set -e
 
-# yes, source tree must be buildable and built (mostly because of the
-# "generated" gdnsd/dmn.h include)
-make
 for plat in unix64 unix32; do
   cppcheck -j4 --platform=$plat --std=c99 --std=posix \
     --enable=warning,performance,portability,information,style,missingInclude \

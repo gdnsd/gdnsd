@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_builddir)/gdnsd/libgdnsd -I$(top_srcdir)/gdnsd/libgdnsd
+AM_CPPFLAGS = -I$(top_srcdir)/libgdnsd
 check_LTLIBRARIES = libtap.la
 libtap_la_SOURCES = tap.c tap.h
 installcheck-local: $(check_LTLIBRARIES)

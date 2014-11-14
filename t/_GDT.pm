@@ -175,11 +175,11 @@ our $PRIVDROP_USER = ($> == 0) ? 'nobody' : '';
 
 our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
     ? "$ENV{INSTALLCHECK_SBINDIR}/gdnsd"
-    : "$ENV{TOP_BUILDDIR}/gdnsd/gdnsd";
+    : "$ENV{TOP_BUILDDIR}/src/gdnsd";
 
 our $EXTMON_BIN = $ENV{INSTALLCHECK_BINDIR}
     ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_extmon_helper"
-    : "$ENV{TOP_BUILDDIR}/plugins/extmon/gdnsd_extmon_helper";
+    : "$ENV{TOP_BUILDDIR}/plugins/gdnsd_extmon_helper";
 
 # During installcheck, the default hardcoded plugin path
 #  should work correctly for finding the installed plugins
@@ -189,19 +189,7 @@ if($ENV{INSTALLCHECK_SBINDIR}) {
     $PLUGIN_PATH = "/xxx_does_not_exist";
 }
 else {
-    my $top_pdir = "$ENV{TOP_BUILDDIR}/plugins";
-    opendir(my $dh, $top_pdir) or die "Cannot open top plugins directory: $!";
-    $PLUGIN_PATH
-        = q{["}
-        . join(
-            q{","},
-            grep { -d $_ }
-             map { "$top_pdir/$_/.libs" }
-              grep { !/^\./ }
-               readdir($dh)
-        )
-        . q{"]};
-    closedir($dh);
+    $PLUGIN_PATH = "$ENV{TOP_BUILDDIR}/plugins/.libs";
     $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$EXTMON_BIN" }|;
 }
 

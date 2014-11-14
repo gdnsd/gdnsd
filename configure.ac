@@ -1,6 +1,6 @@
 AC_PREREQ([2.63])
 AC_INIT([gdnsd],[2.1.0],[https://github.com/gdnsd/gdnsd/issues])
-AC_CONFIG_SRCDIR([gdnsd/main.c])
+AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_AUX_DIR([acaux])
 AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])
 AC_CONFIG_MACRO_DIR([m4])
@@ -171,10 +171,10 @@ AX_APPEND_COMPILE_FLAGS([\
 ],[CFLAGS],[$CLANG_WERROR])
 
 # include libdmn configure stuff
-m4_include([gdnsd/libgdnsd/libdmn/libdmn.m4])
+m4_include([libgdnsd/libdmn.m4])
 
 # include libgdmaps configure stuff
-m4_include([plugins/meta/libgdmaps/libgdmaps.m4])
+m4_include([libgdmaps/libgdmaps.m4])
 
 # explicit check on math lib.  libev also does this, but
 #  might not in the future, and we need it directly
@@ -502,14 +502,14 @@ AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
 
 # Files that need to be linked/copied into the builddir if the two are separate
 BUILDDIR_LINKS="
-    plugins/meta/libgdmaps/t/etc/geoip/t16_extnets.nets
-    plugins/meta/libgdmaps/t/etc/geoip/t17_extn_empty.nets
-    plugins/meta/libgdmaps/t/etc/geoip/t18_extn_all.nets
-    plugins/meta/libgdmaps/t/etc/geoip/t19_extn_allg.nets
-    plugins/meta/libgdmaps/t/etc/geoip/t20_extn_allgs.nets
-    plugins/meta/libgdmaps/t/etc/geoip/t21_extn_subs.nets
-    plugins/meta/libgdmaps/t/etc/geoip/t22_nets_corner.nets
-    plugins/meta/libgdmaps/t/etc/geoip/t23_gn_corner.nets
+    libgdmaps/t/etc/geoip/t16_extnets.nets
+    libgdmaps/t/etc/geoip/t17_extn_empty.nets
+    libgdmaps/t/etc/geoip/t18_extn_all.nets
+    libgdmaps/t/etc/geoip/t19_extn_allg.nets
+    libgdmaps/t/etc/geoip/t20_extn_allgs.nets
+    libgdmaps/t/etc/geoip/t21_extn_subs.nets
+    libgdmaps/t/etc/geoip/t22_nets_corner.nets
+    libgdmaps/t/etc/geoip/t23_gn_corner.nets
 "
 
 # Output generation
@@ -519,21 +519,15 @@ done
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
   Makefile
-  gdnsd/Makefile
-  gdnsd/libgdnsd/Makefile
-  gdnsd/libgdnsd/libdmn/Makefile
+  libtap/Makefile
+  libgdnsd/Makefile
+  libgdmaps/Makefile
+  libgdmaps/t/Makefile
+  src/Makefile
+  plugins/Makefile
   docs/Makefile
   sysd/Makefile
   t/Makefile
-  libtap/Makefile
-  plugins/Makefile
-  plugins/extfile/Makefile
-  plugins/extmon/Makefile
-  plugins/meta/Makefile
-  plugins/meta/libgdmaps/Makefile
-  plugins/meta/libgdmaps/t/Makefile
-  plugins/weighted/Makefile
-  plugins/trivial/Makefile
 ])
 AC_OUTPUT
 

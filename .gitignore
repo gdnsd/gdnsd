@@ -13,17 +13,14 @@
 /gdnsd-*.tar.xz
 
 # Built, installed binaries
-/gdnsd/gdnsd
-/plugins/extmon/gdnsd_extmon_helper
-/plugins/meta/gdnsd_geoip_test
+/src/gdnsd
+/plugins/gdnsd_extmon_helper
+/plugins/gdnsd_geoip_test
 
 # Built and not distributed or installed
-/gdnsd/zscan_rfc1035.c
-/gdnsd/libgdnsd/vscf.c
-/gdnsd/libgdnsd/cfg-dirs.h
-
-# Copied for #include pathname purposes
-/gdnsd/libgdnsd/gdnsd/dmn.h
+/src/zscan_rfc1035.c
+/libgdnsd/vscf.c
+/libgdnsd/cfg-dirs.h
 
 # Testsuite input/output directories
 testout/
@@ -33,10 +30,10 @@ testroot/
 /lcovout/
 
 # libgdmaps unit test junk
-/plugins/meta/libgdmaps/t/*.bin
-/plugins/meta/libgdmaps/t/etc/geoip/*.dat
-/plugins/meta/libgdmaps/t/etc/geoip/regioncodes-*
-/plugins/meta/libgdmaps/t/etc/geoip/LICENSE.txt
+/libgdmaps/t/*.bin
+/libgdmaps/t/etc/geoip/*.dat
+/libgdmaps/t/etc/geoip/regioncodes-*
+/libgdmaps/t/etc/geoip/LICENSE.txt
 
 # Various tool outputs in all dirs
 Makefile

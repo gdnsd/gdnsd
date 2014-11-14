@@ -123,7 +123,7 @@ static int zone_cmp(zone_t* za, zone_t* zb) {
     int rv = 0;
     if(sa != sb) {
         if(  ((sa > sb) && ((sa - sb) < u_i32_max))
-          || ((sa < sb) && ((sb - sa) > u_i32_max))) 
+          || ((sa < sb) && ((sb - sa) > u_i32_max)))
             rv = -1;
         else
             rv = 1;
