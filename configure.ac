@@ -185,8 +185,8 @@ MATH_LIB=$LIBS
 LIBS=$XLIBS
 AC_SUBST([MATH_LIB])
 
-# posix_fadvise to readahead on zonefiles
-AC_CHECK_FUNCS([posix_fadvise])
+# posix_madvise to readahead on zonefiles
+AC_CHECK_FUNCS([posix_madvise])
 
 # high-precision mtime from struct stat
 AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])

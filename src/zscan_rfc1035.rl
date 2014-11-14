@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <setjmp.h>
 #include <errno.h>
+#include <sys/mman.h>
 
 #include "conf.h"
 #include "ltree.h"
@@ -37,25 +38,6 @@
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN 46
 #endif
-
-/*
- * The longest possible tstart-based token is a maximum-length
- *  quoted TXT string, which given autosplit, can be up to
- *  roughly 64K, which means buffer size has to be that big
- *  to accommodate that.  There probably wouldn't be any bugs
- *  going down to something reasonable like 4K, but it would
- *  cause parse errors if anyone tried to use longer TXT strings.
- * Another important thing: for integers, we use strtoul() directly
- *  on the buffer itself.  In the normal case this works because
- *  there is always some non-integer after it in the buffer, which
- *  halts strtoul().  The corner case is if the last digit of an
- *  integer happened to be the last byte of the buffer.  This
- *  is why we allocate one extra buffer byte and set it to zero.
- * Therefore, with buffer sizes large enough to typically trigger
- *  mmap behavior with glibc, it's better to use a size that's
- *  2n-1 so that it's an even page multiple after the +1.
- */
-#define MAX_BUFSIZE 262143
 
 #define parse_error(_fmt, ...) \
     do {\
@@ -105,7 +87,7 @@ typedef struct {
 } zscan_t;
 
 F_NONNULL
-static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd);
+static void scanner(zscan_t* z, char* buf, const size_t bufsize);
 
 /******** IP Addresses ********/
 
@@ -700,41 +682,15 @@ static void close_paren(zscan_t* z) {
     write data;
 }%%
 
-F_NONNULL
-static void scanner(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
-    dmn_assert(z);
+static void scanner(zscan_t* z, char* buf, const size_t bufsize) {
+    dmn_assert(z); dmn_assert(buf);
 
     (void)zone_en_main; // silence unused var warning from generated code
 
-    char* read_at;
-
-    const char* pe = NULL;
-    const char* eof = NULL;
     int cs = zone_start;
-
-    while(!eof) {
-        unsigned have = 0;
-        if(z->tstart != NULL) {
-            dmn_assert(pe);
-            dmn_assert(z->tstart < pe);
-            dmn_assert(z->tstart != buf);
-            have = pe - z->tstart;
-            memmove(buf, z->tstart, have);
-            z->tstart = buf;
-        }
-
-        const unsigned space = bufsize - have;
-        const char* p = read_at = buf + have;
-
-        const ssize_t read_rv = read(fd, read_at, space);
-        if(read_rv < 0)
-            parse_error("read() failed: %s", dmn_logf_errno());
-        const size_t len = (size_t)read_rv;
-
-        pe = p + len;
-
-        if(len < space)
-            eof = pe;
+    const char* p = buf;
+    const char* pe = buf + bufsize;
+    const char* eof = pe;
 
 #ifndef __clang_analyzer__
         // ^ ... because the ragel-generated code for the zonefile parser is
@@ -746,15 +702,14 @@ DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
 DMN_DIAG_POP
 #endif // __clang_analyzer__
 
-        if(cs == zone_error) {
-            parse_error_noargs("General parse error");
-        }
-        else if(eof && cs < zone_first_final) {
-            if(eof > buf && *(eof - 1) != '\n')
-                parse_error_noargs("Trailing incomplete or unparseable record at end of file (missing newline at end of file?)");
-            else
-                parse_error_noargs("Trailing incomplete or unparseable record at end of file");
-        }
+    if(cs == zone_error) {
+        parse_error_noargs("General parse error");
+    }
+    else if(cs < zone_first_final) {
+        if(*(eof - 1) != '\n')
+            parse_error_noargs("Trailing incomplete or unparseable record at end of file (missing newline at end of file?)");
+        else
+            parse_error_noargs("Trailing incomplete or unparseable record at end of file");
     }
 }
 
@@ -762,13 +717,13 @@ DMN_DIAG_POP
 //   function pointer to eliminate the possibility of
 //   inlining on non-gcc compilers, I hope) to avoid issues with
 //   setjmp and all of the local auto variables in zscan_rfc1035() below.
-typedef bool (*sij_func_t)(zscan_t*,char*,const unsigned,const int);
+typedef bool (*sij_func_t)(zscan_t*,char*,const unsigned);
 F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize, const int fd) {
-    dmn_assert(z); dmn_assert(buf); dmn_assert(fd >= 0);
+static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize) {
+    dmn_assert(z); dmn_assert(buf);
 
     if(!sigsetjmp(z->jbuf, 0)) {
-        scanner(z, buf, bufsize, fd);
+        scanner(z, buf, bufsize);
         return false;
     }
     return true;
@@ -786,20 +741,37 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
         return true;
     }
 
-    unsigned bufsize = MAX_BUFSIZE;
-    {
-        struct stat fdstat;
-        if(!fstat(fd, &fdstat)) {
-#ifdef HAVE_POSIX_FADVISE
-            (void)posix_fadvise(fd, 0, fdstat.st_size, POSIX_FADV_SEQUENTIAL);
-#endif
-            if(fdstat.st_size < (int)bufsize)
-                bufsize = fdstat.st_size;
-        }
-        else {
-            log_warn("rfc1035: fstat(%s) failed for advice, not critical...", fn);
-        }
+    struct stat st;
+    if(fstat(fd, &st)) {
+        log_err("rfc1035: fstat(%s) failed: %s", fn, dmn_logf_errno());
+        close(fd);
+        return true;
     }
+
+    if(S_ISDIR(st.st_mode) || st.st_size < 0) {
+        log_err("rfc1035: '%s' is not a valid input file", fn);
+        close(fd);
+        return true;
+    }
+
+    if(!st.st_size) {
+        log_err("rfc1035: '%s' is an empty file", fn);
+        close(fd);
+        return true;
+    }
+
+    const size_t bufsize = (size_t)st.st_size;
+
+    char* buf = NULL;
+    if((buf = mmap(NULL, bufsize, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+        log_err("Cannot mmap file '%s': %s\n", fn, dmn_logf_errno());
+        close(fd);
+        return true;
+    }
+
+#ifdef HAVE_POSIX_MADVISE
+    (void)posix_madvise(buf, bufsize, POSIX_MADV_SEQUENTIAL);
+#endif
 
     zscan_t* z = xcalloc(1, sizeof(zscan_t));
     z->lcount = 1;
@@ -808,18 +780,18 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     dname_copy(z->origin, zone->dname);
     z->lhs_dname[0] = 1; // set lhs to relative origin initially
 
-    char* buf = xmalloc(bufsize + 1);
-    buf[bufsize] = 0;
-
     sij_func_t sij = &_scan_isolate_jmp;
-    bool failed = sij(z, buf, bufsize, fd);
+    bool failed = sij(z, buf, bufsize);
+
+    if(munmap(buf, bufsize)) {
+        log_err("Cannot munmap file '%s': %s\n", fn, dmn_logf_errno());
+        failed = true;
+    }
 
     if(close(fd)) {
         log_err("rfc1035: Cannot close file '%s': %s", fn, dmn_logf_errno());
         failed = true;
     }
-
-    free(buf);
 
     if(z->texts) {
         for(unsigned i = 0; i < z->num_texts; i++)
