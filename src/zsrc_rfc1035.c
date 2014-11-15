@@ -100,12 +100,12 @@ typedef struct {
 } statcmp_t;
 
 static bool statcmp_eq(statcmp_t* a, statcmp_t* b) {
-    return !((a->m ^ b->m) | (a->i ^ b->i) | (a->d ^ b->d));
+    return !((a->m ^ b->m) | (uint64_t)(a->i ^ b->i) | (uint64_t)(a->d ^ b->d));
 }
 
 // check for 0/0/0, indicating deleted or invalid (e.g. socket)
 static bool statcmp_nx(statcmp_t* a) {
-    return !(a->m | a->i | a->d);
+    return !(a->m | (uint64_t)a->i | (uint64_t)a->d);
 }
 
 // represents a zone file

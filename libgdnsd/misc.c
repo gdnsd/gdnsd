@@ -171,7 +171,7 @@ void gdnsd_rand_meta_init(void) {
         struct timeval t;
         gettimeofday(&t, NULL);
         pid_t pidval = getpid();
-        long clockval = clock();
+        clock_t clockval = clock();
         rand_init_state.x = 123456789123ULL ^ (uint64_t)t.tv_sec;
         rand_init_state.y = 987654321987ULL ^ (uint64_t)t.tv_usec;
         rand_init_state.z1 = 43219876U ^ (uint32_t)clockval;
