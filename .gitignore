@@ -8,7 +8,6 @@
 /configure
 /libtool
 /stamp-h1
-
 # Distribution tarballs
 /gdnsd-*.tar.xz
 
@@ -20,20 +19,16 @@
 # Built and not distributed or installed
 /src/zscan_rfc1035.c
 /libgdnsd/vscf.c
-/libgdnsd/cfg-dirs.h
 
 # Testsuite input/output directories
-testout/
-testroot/
+/t/testout/
 
 # lcov html output from qa/coverage.sh
 /lcovout/
 
 # libgdmaps unit test junk
-/libgdmaps/t/*.bin
-/libgdmaps/t/etc/geoip/*.dat
-/libgdmaps/t/etc/geoip/regioncodes-*
-/libgdmaps/t/etc/geoip/LICENSE.txt
+/t/libgdmaps/*.bin
+/t/libgdmaps/etc/
 
 # Various tool outputs in all dirs
 Makefile

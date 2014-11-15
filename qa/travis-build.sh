@@ -16,8 +16,7 @@ set -e
 case "$GDNSD_TRAVIS_BUILD" in
     optimized)
         CFLAGS=-O3 ./configure
-        make -j2
-        make check
+        make -j2 check
     ;;
     coveralls)
         CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage -fno-omit-frame-pointer" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --without-hardening
@@ -26,9 +25,8 @@ case "$GDNSD_TRAVIS_BUILD" in
         make check
         lcov -c -d . -o gdnsd-test.info
         lcov -a gdnsd-base.info -a gdnsd-test.info -o gdnsd-tested.info
-        # This filters out the ragel-generated parsers, the inlines from liburcu,
-        #  and libgdmaps test-only sources
-        lcov -o gdnsd-filtered.info -r gdnsd-tested.info zscan_rfc1035.c vscf.c urcu-qsbr.h 't/t*.c'
+        # This filters out the ragel-generated parsers, the inlines from liburcu, and any test-only sources
+        lcov -o gdnsd-filtered.info -r gdnsd-tested.info zscan_rfc1035.c vscf.c urcu-qsbr.h 'libtap/*.c' 'libgdmaps/t*.c'
         coveralls-lcov gdnsd-filtered.info
     ;;
     *)

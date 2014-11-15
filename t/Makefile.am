@@ -1,13 +1,13 @@
+SUBDIRS = libtap libgdmaps
+
 EXTRA_DIST = README-NETDNS _GDT.pm _FakeGeoIP.pm Net $(srcdir)/[0-9]*/* $(srcdir)/[0-9]*/*/*
 TESTOUT_DIR = $(abs_builddir)/testout
 TEXEC = TESTOUT_DIR=$(TESTOUT_DIR) TESTPORT_START=$(TESTPORT_START) $(PROVE) --norc --merge -f -I$(srcdir)
 ALLTESTS = $(srcdir)/[0-9]*/*.t
 
 precheck:
-	@if [ ! -d $(TESTOUT_DIR) ]; then \
-		$(MKDIR_P) $(TESTOUT_DIR); \
-	fi
-	@echo Test data/outputs will be stored at $(TESTOUT_DIR)
+	@$(MKDIR_P) $(TESTOUT_DIR); \
+	echo Test data/outputs will be stored at $(TESTOUT_DIR)
 
 # To run just one test subdir: make check TRUN=007plugins/*.t
 check-local: precheck
@@ -26,3 +26,7 @@ installcheck-local: precheck
 
 clean-local:
 	rm -rf $(TESTOUT_DIR)
+
+.PHONY: check-download
+check-download:
+	@$(MAKE) $(AM_MAKEFLAGS) -C libgdmaps check-download

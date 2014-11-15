@@ -30,8 +30,6 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 
-#include "cfg-dirs.h"
-
 // The default (minimum) values here amount to 240 bytes of address
 //   storage (12*4+12*16), which is less than the minimum allocation
 //   of 256 to store a CNAME, therefore there's no savings trying to

@@ -2,7 +2,7 @@ AC_PREREQ([2.63])
 AC_INIT([gdnsd],[2.1.0],[https://github.com/gdnsd/gdnsd/issues])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_AUX_DIR([acaux])
-AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar -Wall])
+AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wall])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
@@ -500,40 +500,21 @@ B_DATE=`date -u "+%Y-%m-%d %H:%M:%S UTC"`
 B_INFO="$B_SRC ${USER}@${B_HOST} $B_DATE"
 AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
 
-# Files that need to be linked/copied into the builddir if the two are separate
-BUILDDIR_LINKS="
-    libgdmaps/t/etc/geoip/t16_extnets.nets
-    libgdmaps/t/etc/geoip/t17_extn_empty.nets
-    libgdmaps/t/etc/geoip/t18_extn_all.nets
-    libgdmaps/t/etc/geoip/t19_extn_allg.nets
-    libgdmaps/t/etc/geoip/t20_extn_allgs.nets
-    libgdmaps/t/etc/geoip/t21_extn_subs.nets
-    libgdmaps/t/etc/geoip/t22_nets_corner.nets
-    libgdmaps/t/etc/geoip/t23_gn_corner.nets
-"
-
 # Output generation
-for f in $BUILDDIR_LINKS; do
-    AC_CONFIG_LINKS([$f:$f])
-done
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
   Makefile
-  libtap/Makefile
-  libgdnsd/Makefile
-  libgdmaps/Makefile
-  libgdmaps/t/Makefile
-  src/Makefile
-  plugins/Makefile
-  docs/Makefile
-  sysd/Makefile
   t/Makefile
+  t/libtap/Makefile
+  t/libgdmaps/Makefile
 ])
+AC_CONFIG_COMMANDS([mkdirs],[$MKDIR_P sysd; $MKDIR_P docs])
 AC_OUTPUT
 
 echo "========================================================================"
 echo "| Build Info: $B_INFO"
 echo "| Build Features: $B_FEAT"
+echo "| CC: $CC"
 echo "| CPPFLAGS: $CPPFLAGS"
 echo "| CFLAGS: $CFLAGS $CFLAGS_PIE"
 echo "| LDFLAGS: $LDFLAGS $LDFLAGS_PIE"

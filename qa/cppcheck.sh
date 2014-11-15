@@ -31,7 +31,7 @@ fi
 SKIPFILES="
 -isrc/zscan_rfc1035.c
 -ilibgdnsd/vscf.c
--ilibgdmaps/t
+-it/libgdmaps
 "
 
 # occasionally running this with --check-config may reveal the need for
@@ -43,7 +43,8 @@ INCDIRS="
 -Ilibgdnsd
 -Iplugins
 -Ilibgdmaps
--Ilibgdmaps/t
+-It/libtap
+-It/libgdmaps
 "
 
 # This isn't optimal, but it gets most of the code covered on my box

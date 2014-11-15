@@ -38,8 +38,6 @@
 #include <fcntl.h>
 #include <pthread.h>
 
-#include "cfg-dirs.h"
-
 /* paths */
 
 const char* gdnsd_get_default_config_dir(void) { return GDNSD_DEFPATH_CONFIG; }

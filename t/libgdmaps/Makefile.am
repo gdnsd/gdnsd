@@ -1,9 +1,9 @@
-AM_CPPFLAGS = -I$(top_srcdir)/libgdnsd -I$(top_srcdir)/libtap -I$(top_srcdir)/libgdmaps
+AM_CPPFLAGS = -I$(top_srcdir)/libgdmaps -I$(top_srcdir)/libgdnsd -I$(top_srcdir)/t/libtap
 AM_LIBTOOLFLAGS = --silent
 
 check_LTLIBRARIES = libgdmaps_test.la
 libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h
-libgdmaps_test_la_LIBADD = $(top_builddir)/libgdmaps/libgdmaps.la $(top_builddir)/libtap/libtap.la $(top_builddir)/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
+libgdmaps_test_la_LIBADD = $(top_builddir)/libgdmaps/libgdmaps.la $(top_builddir)/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS) $(top_builddir)/t/libtap/libtap.la
 
 LDADD = libgdmaps_test.la
 
@@ -52,7 +52,34 @@ TESTLIST = \
 	t22_nets_corner \
 	t23_gn_corner
 
-EXTRA_DIST = tdownload.sh etc
+SRC_TESTDATA = \
+    tdata/t16_extnets.nets \
+    tdata/t17_extn_empty.nets \
+    tdata/t18_extn_all.nets \
+    tdata/t19_extn_allg.nets \
+    tdata/t20_extn_allgs.nets \
+    tdata/t21_extn_subs.nets \
+    tdata/t22_nets_corner.nets \
+    tdata/t23_gn_corner.nets
+
+# populate builddir with links to any SRC_TESTDATA
+#   which actually exist (they can be optional...)
+.PHONY: tdatadir precheck
+tdatadir:
+	@$(MKDIR_P) etc/geoip
+precheck: tdatadir
+	@case $(srcdir) in \
+		/*) rsdir=$(srcdir) ;; \
+		*) rsdir=../../$(srcdir) ;; \
+	esac; \
+	for td in $(SRC_TESTDATA); do \
+		tdbn=`basename $$td`; \
+		if test -e $(srcdir)/$$td -a ! -e etc/geoip/$$tdbn; then \
+			$(LN_S) $$rsdir/$$td etc/geoip/; \
+		fi; \
+	done
+
+EXTRA_DIST = tdownload.sh tdata
 
 check_PROGRAMS = $(TESTLIST:=.bin)
 
@@ -71,13 +98,10 @@ prove_mode   = $(prove_mode_@AM_V@)
 # The common prove commandline args
 prove_run = $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)"
 
-CHECK_PROGS_INTREE = $(check_PROGRAMS:%=$(builddir)/%)
-check-local: $(check_PROGRAMS)
-	$(test_verbose)$(prove_run) $(CHECK_PROGS_INTREE)
+CHECK_PROGS_PATHED = $(check_PROGRAMS:%=./%)
+check-local: $(check_PROGRAMS) precheck
+	$(test_verbose)$(prove_run) $(CHECK_PROGS_PATHED)
 
-CHECK_PROGS_INSTALL = $(check_PROGRAMS:%=$(builddir)/.libs/%)
-installcheck-local: $(check_PROGRAMS)
-	$(test_verbose)$(prove_run) $(CHECK_PROGS_INSTALL)
-
-check-download: tdownload.sh Makefile
+.PHONY: check-download
+check-download: tdownload.sh Makefile tdatadir
 	@$(srcdir)/tdownload.sh

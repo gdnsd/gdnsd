@@ -12,7 +12,6 @@ for san_type in address undefined; do
   CFLAGS="-O1 -fno-omit-frame-pointer -fno-sanitize-recover -fsanitize=$san_type -fsanitize-blacklist=$PWD/qa/${san_type}.bl" \
     CC=clang ./configure --enable-developer --without-hardening
   make clean
-  make -j4 all
   make check-download
-  make -j4 check
+  make check
 done
