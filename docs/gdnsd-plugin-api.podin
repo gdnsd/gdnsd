@@ -20,7 +20,7 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     # only 'start', 'restart', and 'condrestart' continue past this point
     [ M] void plugin_foo_init_monitors(struct ev_loop* mon_loop)
     [ M] void plugin_foo_start_monitors(struct ev_loop* mon_loop)
-    [R ] void plugin_foo_pre_run(struct ev_loop* loop)
+    [R ] void plugin_foo_pre_run()
     [R ] void plugin_foo_iothread_init(unsigned threadnum)
 
     -- runtime stuff (called from main or zonefile thread)
@@ -297,12 +297,11 @@ threads themselves, so that a thread-aware malloc can avoid false sharing.
 
 At this point, gdnsd is ready to begin serving DNS queries.  After all
 I/O threads have finished initialization (and thus moved on to already
-serving requests), the primary thread will enter the libev loop
-mentioned above and remain under its control until daemon exit time.
-During this time the only direct callback your plugin will receive
-from I/O thread contexts is C<plugin_foo_resolve>.  If you registered
-any libev watchers during pre_run, you will also receive relevant
-callbacks there in the monitoring thread's execution context.
+serving requests), the primary thread will do its own thing for managing
+daemon lifecycle and signals and such.
+
+During runtime the only direct callbacks your plugin will receive
+from I/O thread contexts are C<plugin_foo_resolve> and C<plugin_foo_map_res>.
 
 As a general style rule, the runtime resolver callback is not allowed
 to block or fail.  It is expected to respond immediately with valid
@@ -348,29 +347,22 @@ plugin to indicate the up/down state and TTL of the response placed
 in the C<dyn_result_t>, which is used to carry these values upwards
 through nested meta-plugins (e.g. multifo -> metafo -> geoip).
 
-When a signal is sent to stop the daemon, the primary thread's libev
-loop will return and no further watcher callbacks (set up via pre_run()
-or start_monitors()) will be invoked.  The main daemon will syslog()
-some final stats output and invoke C<exit()> to terminate the process.
-This in turn unwinds the stack of C<atexit()> handlers.  First will be
-a handler which cancels and joins all of the outstanding I/O threads,
-then comes another which invokes each plugin's C<plugin_foo_exit()>
-from the main thread's context.  You can log any stats output you wish
-here, and/or destruct any resources you wish (no worry about races from
-io thread access, they're all dead now).
-
 The C<map_res> callback may also be
 called at any time during normal runtime as a result of zonefiles being
 dynamically reloaded.  These should be readonly operations so there
 shouldn't be any locking concerns.  It's important that these calls
 never fail fatally.  Simply log an error and return -1.
 
+At the time of daemon exit, C<plugin_foo_exit()> may be called in developer
+builds as a hook to e.g. unwind complex runtime memory allocation routines
+for valgrind verification.  It's never called in regular production builds.
+
 =head1 THREADING
 
-gdnsd uses POSIX threads.  Only the runtime resolve callback
-C<plugin_foo_resolve> needs to to concern itself with thread safety.
-It can and will be called from multiple POSIX threads simultaneously
-for runtime requests.
+gdnsd uses POSIX threads.  Only the runtime resolve callbacks
+C<plugin_foo_map_res> and C<plugin_foo_resolve> need to to concern themselves
+with thread safety.  They can and will be called from multiple POSIX threads
+simultaneously for runtime requests.
 
 The simplest (but least-performant) way to ensure thread-safety would
 be to wrap the contents of this function in a pthread mutex.
