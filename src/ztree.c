@@ -26,7 +26,7 @@
 #include <gdnsd/dname.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/prcu-priv.h>
+#include <gdnsd/prcu.h>
 
 // The tree data structure that will hold the zone_t's
 struct _ztree_struct;
@@ -294,12 +294,10 @@ static void ztree_leak_warn(ztree_t* node) {
 
 static void ztree_atexit(void) {
     ztree_leak_warn(ztree_root);
-    gdnsd_prcu_destroy_lock();
 }
 
 void ztree_init(void) {
     dmn_assert(!ztree_root);
-    gdnsd_prcu_setup_lock();
     ztree_root = xcalloc(1, sizeof(ztree_t));
     gdnsd_atexit_debug(ztree_atexit);
 }

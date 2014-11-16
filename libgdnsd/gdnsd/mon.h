@@ -24,6 +24,7 @@
 
 // For anysin stuff
 #include <gdnsd/net.h>
+#include <gdnsd/prcu.h>
 
 // gdnsd_sttl_t
 //  sttl -> state+ttl
@@ -91,11 +92,18 @@ unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname, const uint
 F_NONNULL
 unsigned gdnsd_mon_admin(const char* desc);
 
-// State-fetching (one table call per resolve invocation, reused
-//   for as many index fetches as necc)
-const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void);
+// do not ref this directly in a plugin!
+// use gdnsd_mon_get_sttl_table() below for access!
+extern gdnsd_sttl_t* smgr_sttl_consumer_;
 
 #pragma GCC visibility pop
+
+// State-fetching (one table call per resolve invocation, reused
+//   for as many index fetches as necc)
+F_UNUSED
+static const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void) {
+    return gdnsd_prcu_rdr_deref(smgr_sttl_consumer_);
+}
 
 // Given two sttl values, combine them according to the following rules:
 //   1) result TTL is the lesser of both TTLs

@@ -265,6 +265,7 @@ xHEADERS_DIST = \
 	libgdnsd/gdnsd/misc.h \
 	libgdnsd/gdnsd/paths.h \
 	libgdnsd/gdnsd/alloc.h \
+	libgdnsd/gdnsd/prcu.h \
 	libgdnsd/gdnsd/dmn.h
 
 xHEADERS_ALL = \
@@ -272,7 +273,6 @@ xHEADERS_ALL = \
 	libgdnsd/gdnsd/plugapi-priv.h \
 	libgdnsd/gdnsd/misc-priv.h \
 	libgdnsd/gdnsd/net-priv.h \
-	libgdnsd/gdnsd/prcu-priv.h \
 	libgdnsd/gdnsd/paths-priv.h \
 	libgdnsd/gdnsd/mon-priv.h
 
@@ -303,11 +303,18 @@ libgdnsd_libgdnsd_la_LIBADD  = $(LIBGDNSD_LIBS)
 
 libgdnsd_libgdnsd_la_pkgincludedir = $(pkgincludedir)
 dist_libgdnsd_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_DIST)
+nodist_libgdnsd_libgdnsd_la_pkginclude_HEADERS = libgdnsd/bopts.h
+
+libgdnsd/bopts.h: Makefile
+	@echo '#ifndef GDNSD_BOPTS_H' >$@; \
+	 echo '#define GDNSD_BOPTS_H' >>$@; \
+	 echo '#define GDNSD_B_QSBR $(GDNSD_B_QSBR)' >>$@; \
+	 echo '#endif // GDNSD_BOPTS_H' >>$@
 
 nodist_libgdnsd_libgdnsd_la_SOURCES = libgdnsd/vscf.c
 libgdnsd/vscf.c: libgdnsd/vscf.rl
 	$(AM_V_GEN)$(RAGEL) -T0 -o $@ $(srcdir)/libgdnsd/vscf.rl
-CLEANFILES += libgdnsd/vscf.c
+CLEANFILES += libgdnsd/vscf.c libgdnsd/bopts.h
 EXTRA_DIST += libgdnsd/vscf.rl
 
 #=====================================

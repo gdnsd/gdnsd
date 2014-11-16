@@ -26,6 +26,7 @@
 // Include all of the libgdnsd stuff for convenience
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
+#include <gdnsd/dmn.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/net.h>
@@ -34,6 +35,8 @@
 #include <gdnsd/plugapi.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/paths.h>
+#include <gdnsd/prcu.h>
+#include <gdnsd/stats.h>
 
 #ifndef GDNSD_PLUGIN_NAME
 #error You must define GDNSD_PLUGIN_NAME before including <gdnsd/plugin.h>
@@ -63,8 +66,8 @@
 #pragma GCC visibility push(default)
 
 F_CONST
-unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
-unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
+uint32_t SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
+uint32_t SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
 
 void SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(vscf_data_t* config, const unsigned num_threads);
 int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);

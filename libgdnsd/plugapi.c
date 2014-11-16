@@ -188,7 +188,7 @@ static void* plugin_dlopen(const char* pname) {
         if(0 == stat(pp, &plugstat) && S_ISREG(plugstat.st_mode)) {
             void* phandle = dlopen(pp, RTLD_NOW | RTLD_LOCAL);
             if(!phandle)
-                log_fatal("Failed to dlopen() the '%s' plugin from path '%s': %s", pname, pp, dlerror());
+                log_fatal("Failed to dlopen() the '%s' plugin from path '%s' (%s).  The plugin may need to be recompiled due to binary compatibility issues", pname, pp, dlerror());
             free(pp);
             return phandle;
         }
@@ -220,10 +220,24 @@ static plugin_t* gdnsd_plugin_load(const char* pname) {
     const gdnsd_apiv_cb_t apiv = (gdnsd_apiv_cb_t)plugin_dlsym(pptr, pname, "get_api_version");
     if(!apiv)
         log_fatal("Plugin '%s' does not appear to be a valid gdnsd plugin", pname);
-    const unsigned this_version = apiv();
-    if(this_version != GDNSD_PLUGIN_API_VERSION)
-        log_fatal("Plugin '%s' needs to be recompiled (wanted API version %u, got %u)",
-            pname, GDNSD_PLUGIN_API_VERSION, this_version);
+
+    // The raw number for the API version is now split into two 16-bit chunks:
+    //    the bottom 16 bits are still a regular version number
+    //    the top 16 bits are build option flags that affect binary compatibility
+    //      (these come from <gdnsd/bopt.h> for 3rd party plugins)
+    const uint32_t this_version = apiv();
+    if(this_version != GDNSD_PLUGIN_API_VERSION) {
+        unsigned apiv_vers = GDNSD_PLUGIN_API_VERSION & 0xFFFF;
+        unsigned apiv_bopt = GDNSD_PLUGIN_API_VERSION >> 16;
+        unsigned this_vers = this_version & 0xFFFF;
+        unsigned this_bopt = this_version >> 16;
+        if(apiv_vers != this_vers)
+            log_fatal("Plugin '%s' needs to be recompiled! (wanted API version %u, got %u)",
+                pname, apiv_vers, this_vers);
+        else
+            log_fatal("Plugin '%s' needs to be recompiled! (wanted build options %x, got %x)",
+                pname, apiv_bopt, this_bopt);
+    }
 
 #   define PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
     PSETFUNC(load_config)

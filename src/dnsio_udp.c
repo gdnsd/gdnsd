@@ -40,7 +40,7 @@
 #include "socks.h"
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/prcu-priv.h>
+#include <gdnsd/prcu.h>
 
 #ifndef SOL_IPV6
 #define SOL_IPV6 IPPROTO_IPV6
@@ -304,7 +304,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     msg_hdr.msg_iovlen     = 1;
     msg_hdr.msg_control    = use_cmsg ? cmsg_buf : NULL;
 
-#ifdef HAVE_QSBR
+#if GDNSD_B_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
     const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
     if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
@@ -319,7 +319,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         msg_hdr.msg_namelen    = DMN_ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
 
-#ifdef HAVE_QSBR
+#if GDNSD_B_QSBR
         if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
@@ -398,7 +398,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     for(unsigned i = 0; i < width; i++)
         iov[i][0].iov_base = buf[i] = gdnsd_xpmalign(pgsz, max_rounded);
 
-#ifdef HAVE_QSBR
+#if GDNSD_B_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
     const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
     if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
@@ -421,7 +421,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             dgrams[i].msg_hdr.msg_flags      = 0;
         }
 
-#ifdef HAVE_QSBR
+#if GDNSD_B_QSBR
         if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);

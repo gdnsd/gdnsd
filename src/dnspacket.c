@@ -30,7 +30,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/plugapi-priv.h>
-#include <gdnsd/prcu-priv.h>
+#include <gdnsd/prcu.h>
 #include "ztree.h"
 
 typedef struct {

@@ -20,6 +20,9 @@
 /src/zscan_rfc1035.c
 /libgdnsd/vscf.c
 
+# Built and installed, but not distributed
+/libgdnsd/bopts.h
+
 # Testsuite input/output directories
 /t/testout/
 

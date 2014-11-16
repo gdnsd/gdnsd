@@ -36,7 +36,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/net.h>
-#include <gdnsd/prcu-priv.h>
+#include <gdnsd/prcu.h>
 
 typedef enum {
     READING_INITIAL = 0,

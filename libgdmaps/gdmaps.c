@@ -51,7 +51,7 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/prcu-priv.h>
+#include <gdnsd/prcu.h>
 
 // When an input file change is detected, we wait this long
 //  for a followup change notification before processing.  Every time we get

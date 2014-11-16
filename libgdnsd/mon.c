@@ -26,7 +26,7 @@
 #include <gdnsd/paths.h>
 #include <gdnsd/plugapi.h>
 #include <gdnsd/plugapi-priv.h>
-#include <gdnsd/prcu-priv.h>
+#include <gdnsd/prcu.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
 
@@ -82,7 +82,7 @@ static smgr_t* smgrs = NULL;
 //   and copied over each other.
 // (see sttl_update_update() below)
 static gdnsd_sttl_t* smgr_sttl = NULL;
-static gdnsd_sttl_t* smgr_sttl_consumer = NULL;
+gdnsd_sttl_t* smgr_sttl_consumer_ = NULL;
 
 static unsigned max_stats_len = 0;
 
@@ -103,15 +103,15 @@ static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSE
     dmn_assert(revents == EV_TIMER);
 
     // prcu-swap of the two tables
-    gdnsd_sttl_t* saved_old_consumer = smgr_sttl_consumer;
+    gdnsd_sttl_t* saved_old_consumer = smgr_sttl_consumer_;
     gdnsd_prcu_upd_lock();
-    gdnsd_prcu_upd_assign(smgr_sttl_consumer, smgr_sttl);
+    gdnsd_prcu_upd_assign(smgr_sttl_consumer_, smgr_sttl);
     gdnsd_prcu_upd_unlock();
     smgr_sttl = saved_old_consumer;
 
     // now copy the (new) consumer table back over the old one
     //   that we're using for future offline updates until the next swap
-    memcpy(smgr_sttl, smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
+    memcpy(smgr_sttl, smgr_sttl_consumer_, sizeof(gdnsd_sttl_t) * num_smgrs);
 }
 
 // anything that ends up changing a value in smgr_sttl[] calls
@@ -509,8 +509,8 @@ static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, co
         this_smgr->real_sttl |= GDNSD_STTL_DOWN;
 
     smgr_sttl = xrealloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer = xrealloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
+    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
 }
@@ -533,17 +533,13 @@ unsigned gdnsd_mon_admin(const char* desc) {
     const unsigned idx = num_smgrs++;
     smgrs = xrealloc(smgrs, sizeof(smgr_t) * num_smgrs);
     smgr_sttl = xrealloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer = xrealloc(smgr_sttl_consumer, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(gdnsd_sttl_t) * num_smgrs);
     smgr_t* this_smgr = &smgrs[idx];
     memset(this_smgr, 0, sizeof(smgr_t));
     this_smgr->desc = strdup(desc);
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
-    smgr_sttl_consumer[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
+    smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
     return idx;
-}
-
-const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void) {
-    return gdnsd_prcu_rdr_deref(smgr_sttl_consumer);
 }
 
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \

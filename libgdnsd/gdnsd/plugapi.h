@@ -35,7 +35,14 @@
 // For gdnsd_sttl_t
 #include <gdnsd/mon.h>
 
-#pragma GCC visibility push(default)
+// The bopts header is sort of like a "config.h" for plugin binary compat
+// It defines only features that affect binary compatibility between plugins
+// and the core code, so that plugins can be rejected as needing a recompile
+// if they were built against a compatible gdnsd version but with incompatible
+// build options.
+#ifndef GDNSD_SOURCE_TREE
+#include <gdnsd/bopts.h>
+#endif
 
 /***
  * Plugin API version, bumped on any change that's not backwards-compat.
@@ -47,7 +54,14 @@
  *   because libgdnsd is missing symbols it wants to link against that
  *   were dropped in the new API.  This is just to protect other cases).
  ***/
-#define GDNSD_PLUGIN_API_VERSION 17
+
+// We have room for 16 option bits here coming from bopts.h/config.h
+#define API_B_OPT_QSBR_ ((GDNSD_B_QSBR ? 1 : 0) << 0)
+#define API_B_OPTS_ (API_B_OPT_QSBR_)
+#define API_ACTUAL_VERSION_ 17
+#define GDNSD_PLUGIN_API_VERSION (((API_B_OPTS_) << 16) | (API_ACTUAL_VERSION_))
+
+#pragma GCC visibility push(default)
 
 // Called by resolver plugins during configuration load callback
 // Indicates the maximum count of each address family that the plugin
