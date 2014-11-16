@@ -492,8 +492,8 @@ AC_DEFINE_UNQUOTED([BUILD_FEATURES], ["$B_FEAT"], [Build Features])
 
 # BUILD_INFO for cmdline output
 B_SRC=tarball
-if test -d ${GIT_DIR:-.git} -o -f .git; then
-    [B_SRC=`git describe --match 'v[0-9]*' --always --dirty`]
+if test -d ${srcdir}/${GIT_DIR:-.git} -o -f ${srcdir}/.git; then
+    [B_SRC=`cd ${srcdir}; git describe --match 'v[0-9]*' --always --dirty`]
 fi
 B_HOST=`uname -n`
 B_DATE=`date -u "+%Y-%m-%d %H:%M:%S UTC"`
