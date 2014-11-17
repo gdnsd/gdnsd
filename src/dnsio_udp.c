@@ -422,10 +422,10 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
         }
 
 #ifdef HAVE_QSBR
-        if(is_online) {
+        if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
-            if(mmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            if(unlikely(mmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
                 setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
@@ -465,26 +465,25 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
              *   e.g. a msg_flags flag that indicates the sendmmsg() internal loop should take
              *   no action for this entry, but still count it in the total number of successes
              */
-            {
-                unsigned i = 0;
-                while(i < pkts) {
-                    if(unlikely(!dgrams[i].msg_hdr.msg_iov[0].iov_len)) {
-                        const unsigned next = i + 1;
-                        if(next < pkts) {
-                            memmove(&dgrams[i], &dgrams[next], sizeof(struct mmsghdr) * (pkts - next));
-                        }
-                        pkts--;
-                    }
-                    else {
-                        i++;
-                    }
+            unsigned i = 0;
+            while(i < pkts) {
+                if(unlikely(!dgrams[i].msg_hdr.msg_iov[0].iov_len)) {
+                    const unsigned next = i + 1;
+                    if(next < pkts)
+                        memmove(&dgrams[i], &dgrams[next], sizeof(struct mmsghdr) * (pkts - next));
+                    pkts--;
+                }
+                else {
+                    i++;
                 }
             }
+            if(unlikely(!pkts))
+                continue;
 
             struct mmsghdr* dgptr = dgrams;
-            while(pkts > 0) {
+            do {
                 mmsg_rv = sendmmsg(fd, dgptr, pkts, 0);
-                if(mmsg_rv < 0) {
+                if(unlikely(mmsg_rv < 0)) {
                     stats_own_inc(&stats->udp.sendfail);
                     int sockerr = 0;
                     socklen_t sock_len = sizeof(sockerr);
@@ -496,7 +495,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
                 dmn_assert(sent <= pkts);
                 dgptr += sent; // skip past the successes
                 pkts -= sent; // drop the count of all successes
-            }
+            } while(unlikely(pkts > 0));
         }
         else {
             stats_own_inc(&stats->udp.recvfail);
