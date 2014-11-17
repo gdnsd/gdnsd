@@ -25,8 +25,4 @@ installcheck-local: precheck
 	fi
 
 clean-local:
-	rm -rf $(TESTOUT_DIR)
-
-.PHONY: check-download
-check-download:
-	@$(MAKE) $(AM_MAKEFLAGS) -C libgdmaps check-download
+	-rm -rf $(TESTOUT_DIR)

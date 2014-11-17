@@ -34,7 +34,7 @@ static const char cfg[] = QUOTE(
      NA => [ dc02, dc01 ],
      EU => { IE => [ dc01 ] },
     }
-    nets => t16_extnets.nets
+    nets => extnets.nets
    }
 );
 

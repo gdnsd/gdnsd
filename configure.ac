@@ -443,9 +443,12 @@ else
         || AC_MSG_ERROR([Ragel is not version 6.x])
 fi
 
-# download/unpack for GeoLite data for plugin_geoip tests
-AC_CHECK_PROGS(GEOLITE_DECOMP, [xz], [none])
-AC_CHECK_PROGS(GEOLITE_DL, [wget curl], [none])
+# Decompressor for compressed test data from git submodule
+AC_ARG_VAR([XZ],[path to xz compression utility])
+if test "x$ac_cv_env_XZ_set" != "xset"; then
+    AC_PATH_PROG([XZ], [xz], [missing])
+fi
+AM_CONDITIONAL(HAS_XZ, [test x$XZ != xmissing])
 
 # Allow user to override the port range we use for testing
 AC_ARG_WITH([testport],[AS_HELP_STRING([--with-testport=N],

@@ -18,7 +18,7 @@ The following are recommended but optional:
 * liburcu aka userspace-rcu headers and libraries. Use distro pkg or
   http://lttng.org/urcu/ (important for performance!)
 * libmaxminddb headers and libraries to enable MaxMind GeoIP2 database
-  support in plugin_geoip
+  support: https://github.com/maxmind/libmaxminddb/releases
 * libunwind headers and libraries. (for stacktrace on some fatals)
 
 The following have no real effect on the build or runtime, but are
@@ -26,10 +26,14 @@ required in order to run the testsuite:
 
 * Perl modules: LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
 
-If working directly from a git clone, you also need:
+If working directly from a git clone:
 
 * autoconf (2.63+), automake(1.11.1+), and libtool(2.2.6+) packages
-* Start with "autoreconf -vi", then ./configure ...
+* If you want "make check" to run optional GeoIP-related unit tests which use
+  large compressed files, those are stored in a separate repo as a submodule.
+  You can bring them into your tree via: "git submodule update --init".
+  You will also need the 'xz' compression utility installed to unpack them.
+* Start with "autoreconf -vif", then ./configure ...
 
 Interesting / Non-standard autoconf options
 ===========================================

@@ -30,7 +30,7 @@ static const char cfg[] = QUOTE(
    my_prod_map => {
     datacenters => [ dc01, dc02 ],
     geoip_db => GeoIP-20111210.dat,
-    nets => t20_extn_allgs.nets
+    nets => extn_allgs.nets
    }
 );
 

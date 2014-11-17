@@ -16,11 +16,6 @@ SUBDIRS = . t
 .PHONY: test
 test: check
 
-# check-download is a custom target in t/libgdmaps/
-.PHONY: check-download
-check-download:
-	@$(MAKE) $(AM_MAKEFLAGS) -C t check-download
-
 # ask gmake to delete corrupted partial build outputs
 .DELETE_ON_ERROR:
 

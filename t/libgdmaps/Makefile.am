@@ -6,25 +6,6 @@ libgdmaps_test_la_LIBADD = $(top_builddir)/libgdmaps/libgdmaps.la $(top_builddir
 
 LDADD = libgdmaps_test.la
 
-# ----------- testsuite stuff --------------
-# I've mirrored these to S3 as "downloads.gdnsd.org" to be dynamically downloaded for those who
-#  bother running make check.  They were pulled on the date indicated in the filename in order
-#  to provide a stable test baseline, and won't be updated unless there's a technical testsuite
-#  reason (database format changes requiring new tests, etc).
-# They are *not* redistributed with the tarball, and are *not* intended to be installed for
-#  runtime use by users.
-# This product includes GeoLite data created by MaxMind, available from http://maxmind.com/
-# These files are subject to MaxMind's GeoLite Open Data license, which is also re-distributed by download
-
-export GEOLITE_URL_BASE = http://downloads.gdnsd.org/GeoLiteTestData/
-export GEOLITE_FILES = LICENSE.txt GeoIP-20111210.dat GeoIPv6-20111210.dat GeoLiteCity-20111210.dat GeoLiteCityv6-20111210.dat regioncodes-20130115.csv
-
-# These are set during configure
-export GEOLITE_DECOMP
-export GEOLITE_DL
-
-export TEST_CFDIR = $(abs_builddir)/etc
-
 TESTLIST = \
 	t00_v4db \
 	t01_v6db \
@@ -51,40 +32,75 @@ TESTLIST = \
 	t22_nets_corner \
 	t23_gn_corner
 
-SRC_TESTDATA = \
-    tdata/t16_extnets.nets \
-    tdata/t17_extn_empty.nets \
-    tdata/t18_extn_all.nets \
-    tdata/t19_extn_allg.nets \
-    tdata/t20_extn_allgs.nets \
-    tdata/t21_extn_subs.nets \
-    tdata/t22_nets_corner.nets \
-    tdata/t23_gn_corner.nets
+#====================================================================
+# START TEST DATA STUFF
+#====================================================================
+# This somewhat crazy looking construct allows for:
+#   (a) the XZ files to be optional if they don't exist in $srcdir
+#   (b) the uncompressed XZ files to be optional if no xz binary
+#   (c) the actual XZ invocations to be parallelized by make -jN
+#   (d) Nothing is re-done redundantly after it's set up once in
+#       the builddir (until "make distclean", etc)
+#====================================================================
 
-# populate builddir with links to any SRC_TESTDATA
-#   which actually exist (they can be optional...)
-.PHONY: tdatadir precheck
-tdatadir:
-	@$(MKDIR_P) etc/geoip
-precheck: tdatadir
-	@case $(srcdir) in \
+# These are in the main git repo and required
+TDATA_NOXZ = \
+	tdata/extnets.nets \
+	tdata/extn_empty.nets \
+	tdata/extn_all.nets \
+	tdata/extn_allgs.nets \
+	tdata/extn_subs.nets \
+	tdata/nets_corner.nets \
+	tdata/gn_corner.nets
+
+# These are not and optional
+TDATA_XZ = \
+	gdnsd-geoip-testdata/GeoLiteCityv6-20111210.dat.xz \
+	gdnsd-geoip-testdata/GeoLiteCity-20111210.dat.xz \
+	gdnsd-geoip-testdata/GeoLite2-City-20141008.mmdb.xz \
+	gdnsd-geoip-testdata/GeoLite2-Country-20141008.mmdb.xz \
+	gdnsd-geoip-testdata/GeoIPv6-20111210.dat.xz \
+	gdnsd-geoip-testdata/GeoIP-20111210.dat.xz \
+	gdnsd-geoip-testdata/regioncodes-20130115.csv.xz
+
+TDATA_FINAL_NOXZ = $(TDATA_NOXZ:tdata/%=etc/geoip/%)
+TDATA_FINAL_XZ = $(TDATA_XZ:gdnsd-geoip-testdata/%.xz=etc/geoip/%)
+TDATA_FINAL = $(TDATA_FINAL_NOXZ)
+TDATA_LINK = $(TDATA_NOXZ)
+
+$(TDATA_FINAL_NOXZ): etc/geoip/.test_data_setup_done
+$(TDATA_FINAL_XZ): etc/geoip/.test_data_setup_done
+	@test -e $@ || if test -e $(@:%=%.xz); then \
+		echo Decompressing $@ ...; \
+		$(XZ) -dkf $(@:%=%.xz); \
+	fi
+
+if HAS_XZ
+TDATA_FINAL += $(TDATA_FINAL_XZ)
+TDATA_LINK += $(TDATA_XZ)
+XZ_WARN =
+else
+XZ_WARN = === You must install xz and re-configure to decompress the missing databases above
+endif
+
+etc/geoip/.test_data_setup_done: Makefile
+	@rm -rf etc ||:; \
+	case $(srcdir) in \
 		/*) rsdir=$(srcdir) ;; \
 		*) rsdir=../../$(srcdir) ;; \
 	esac; \
-	for td in $(SRC_TESTDATA); do \
-		tdbn=`basename $$td`; \
-		if test -e $(srcdir)/$$td -a ! -e etc/geoip/$$tdbn; then \
-			$(LN_S) $$rsdir/$$td etc/geoip/; \
-		fi; \
-	done
+	$(MKDIR_P) etc/geoip/; \
+	cd etc/geoip/; \
+	for srcfile in $(TDATA_LINK); do \
+		if test -e $$rsdir/$$srcfile; then \
+			$(LN_S) $$rsdir/$$srcfile .; \
+		fi \
+	done; \
+	touch .test_data_setup_done
 
-EXTRA_DIST = tdownload.sh tdata
-
-check_PROGRAMS = $(TESTLIST:=.bin)
-
-test_verbose_0 = @echo TEST $@;
-test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
-test_verbose = $(test_verbose_@AM_V@)
+#=====================================================================
+# END TEST DATA STUFF; $(TDATA_FINAL) is what tests should depend on
+#=====================================================================
 
 # re-use silent-rules to set "prove" execution mode:
 #  V=0 -> quiet + parallelized
@@ -93,14 +109,23 @@ prove_mode_0 = -q -j4
 prove_mode_1 = -v
 prove_mode_  = $(prove_mode_@AM_DEFAULT_V@)
 prove_mode   = $(prove_mode_@AM_V@)
-
-# The common prove commandline args
 prove_run = $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)"
+test_verbose_0 = @echo TEST $@;
+test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
+test_verbose = $(test_verbose_@AM_V@)
 
+check_PROGRAMS = $(TESTLIST:=.bin)
 CHECK_PROGS_PATHED = $(check_PROGRAMS:%=./%)
-check-local: $(check_PROGRAMS) precheck
-	$(test_verbose)$(prove_run) $(CHECK_PROGS_PATHED)
 
-.PHONY: check-download
-check-download: tdownload.sh Makefile tdatadir
-	@$(srcdir)/tdownload.sh
+check-local: $(check_PROGRAMS) $(TDATA_FINAL)
+	$(test_verbose)TEST_CFDIR=$(abs_builddir)/etc $(prove_run) $(CHECK_PROGS_PATHED); \
+	if test -e $(top_srcdir)/.git; then \
+		if test ! -e $(srcdir)/gdnsd-geoip-testdata/README.md; then \
+			echo "=== To fetch the missing databases above (optional), 'git submodule update --init' and re-configure"; \
+		fi; \
+		echo $(XZ_WARN); \
+	fi
+
+EXTRA_DIST = tdata
+distclean-local:
+	-rm -rf etc

@@ -29,7 +29,7 @@
 static const char cfg[] = QUOTE(
    my_prod_map => {
     datacenters => [ dc01, dc02, dc03 ],
-    nets => t22_nets_corner.nets
+    nets => nets_corner.nets
    }
 );
 

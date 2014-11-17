@@ -8,7 +8,6 @@ set -x
 set -e
 CPPFLAGS="-DDMN_COVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --without-hardening
 make clean
-make check-download
 TEST_RUNNER="libtool --mode=execute valgrind --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make check
 set +e
 set +x
