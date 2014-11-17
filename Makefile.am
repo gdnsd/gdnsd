@@ -5,9 +5,6 @@
 # Where we keep m4 files for aclocal
 ACLOCAL_AMFLAGS = -I m4
 
-# Silence libtool spam
-AM_LIBTOOLFLAGS = --silent
-
 # Common header path for libgdnsd
 AM_CPPFLAGS = -I$(srcdir)/libgdnsd
 
