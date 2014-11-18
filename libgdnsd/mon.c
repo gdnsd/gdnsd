@@ -279,8 +279,15 @@ static bool admin_process_hash(vscf_data_t* raw) {
                 affected = true;
             }
         }
-        if(affected && !initial_round)
-            kick_sttl_update_timer();
+
+        if(affected) {
+            if(!initial_round)
+                kick_sttl_update_timer();
+            log_info("admin_state: reload complete");
+        }
+        else {
+            log_info("admin_state: reload complete, no net changes");
+        }
     }
 
     return success;
