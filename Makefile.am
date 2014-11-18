@@ -327,15 +327,15 @@ DISTCHECK_CONFIGURE_FLAGS += --with-systemdsystemunitdir=$$dc_install_base/$(sys
 systemdsystemunit_DATA = sysd/gdnsd.service
 INSTALL_EXEC_HOOK_DEPS += install-exec-hook-sysd
 install-exec-hook-sysd:
-	@echo
-	@echo === READ ME ===
-	@echo A systemd service unit file was installed at $(systemdsystemunitdir)/gdnsd.service
-	@echo You may need to issue the following command to update systemd:
-	@echo systemctl daemon-reload
-	@echo You will also need to enable and/or start it via:
-	@echo systemctl enable gdnsd
-	@echo systemctl start gdnsd
-	@echo
+	@echo;\
+	echo === READ ME ===;\
+	echo A systemd service unit file was installed at $(systemdsystemunitdir)/gdnsd.service;\
+	echo You may need to issue the following command to update systemd:;\
+	echo systemctl daemon-reload;\
+	echo You will also need to enable and/or start it via:;\
+	echo systemctl enable gdnsd;\
+	echo systemctl start gdnsd;\
+	echo
 
 else
 
