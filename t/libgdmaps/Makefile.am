@@ -7,6 +7,17 @@ libgdmaps_test_la_LIBADD = $(top_builddir)/libgdmaps/libgdmaps.la $(top_builddir
 LDADD = libgdmaps_test.la
 
 TESTLIST = \
+	t50_g2_country \
+	t51_g2_city \
+	t52_g2_nets \
+	t53_g2_cityauto \
+	t54_g2_complex \
+	t55_g2_def2 \
+	t56_g2_defnone \
+	t57_g2_castatdef \
+	t58_g2_missingcoords \
+	t59_g2_extnets \
+	t60_g2_gn_corner \
 	t00_v4db \
 	t01_v6db \
 	t02_v4citydb \
