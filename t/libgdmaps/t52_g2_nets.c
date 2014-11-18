@@ -50,6 +50,10 @@ static gdmaps_t* gdmaps = NULL;
 
 int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
     gdmaps_test_init(getenv("TEST_CFDIR"));
+#ifndef HAVE_GEOIP2
+    plan_skip_all("No GeoIP2 support");
+    exit(exit_status());
+#endif
     if(!gdmaps_test_db_exists("GeoLite2-Country-20141008.mmdb")) {
         plan_skip_all("Missing database");
         exit(exit_status());
