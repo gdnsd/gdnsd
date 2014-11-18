@@ -8,6 +8,8 @@
     * plugin_extmon bugfix for bad timeout/interval behavior if either >255s
     * Bugfix for zero-length configuration strings causing assertion failure
       in developer-debug builds
+    * Bugfix for crash/assertfail if admin_state file contents are
+      defined by the user as an array instead of a hash
 
   *** Features:
     * plugin_geoip: Support for MaxMind GeoIP2 databases.  Requires

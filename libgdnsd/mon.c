@@ -224,16 +224,77 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
     return success;
 }
 
+F_NONNULL
+static bool admin_process_hash(vscf_data_t* raw) {
+    dmn_assert(raw); dmn_assert(vscf_is_hash(raw));
+
+    bool success = true;
+
+    gdnsd_sttl_t updates[num_smgrs];
+    memset(updates, 0, sizeof(updates));
+
+    const unsigned num_raw = vscf_hash_get_len(raw);
+    for(unsigned i = 0; i < num_raw; i++) {
+        const char* matchme = vscf_hash_get_key_byindex(raw, i, NULL);
+        vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
+        if(!vscf_is_simple(val)) {
+            log_err("admin_state: value for '%s' must be a simple string!", matchme);
+            success = false;
+            break;
+        }
+        else {
+            gdnsd_sttl_t update_val;
+            if(gdnsd_mon_parse_sttl(vscf_simple_get_data(val), &update_val, GDNSD_STTL_TTL_MAX)) {
+                log_err("admin_state: value for '%s' must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", matchme, GDNSD_STTL_TTL_MAX);
+                success = false;
+                break;
+            }
+            else {
+                update_val |= GDNSD_STTL_FORCED; // all admin-states are forced
+                if(!admin_process_entry(matchme, updates, update_val)) {
+                    success = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    if(success) {
+        bool affected = false;
+        for(unsigned i = 0; i < num_smgrs; i++) {
+            if(updates[i]) { // some entry wants to affect this slot
+                if(smgr_sttl[i] != updates[i]) { // new state change
+                    if(smgr_sttl[i] != smgrs[i].real_sttl) // already forced
+                        log_info("admin_state: state of '%s' re-forced from %s to %s, real state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(updates[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
+                    else
+                        log_info("admin_state: state of '%s' forced to %s, real state is %s", smgrs[i].desc, logf_sttl(updates[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
+                    smgr_sttl[i] = updates[i];
+                    affected = true;
+                }
+            }
+            else if(smgr_sttl[i] & GDNSD_STTL_FORCED) { // was forced before, isn't now
+                log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
+                smgr_sttl[i] = smgrs[i].real_sttl;
+                dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
+                affected = true;
+            }
+        }
+        if(affected && !initial_round)
+            kick_sttl_update_timer();
+    }
+
+    return success;
+}
+
 static void admin_process_file(const char* pathname) {
     log_info("admin_state: (re-)loading state file '%s'...", pathname);
 
-    bool success = true;
+    bool success = false;
 
     char* vscf_err;
     vscf_data_t* raw = vscf_scan_filename(pathname, &vscf_err);
     if(!raw) {
         dmn_assert(vscf_err);
-        success = false;
         log_err("admin_state: Loading file '%s' failed: %s", pathname, vscf_err);
         free(vscf_err);
     }
@@ -241,61 +302,9 @@ static void admin_process_file(const char* pathname) {
         dmn_assert(!vscf_err);
         if(!vscf_is_hash(raw))
             log_err("admin_state: top level of file '%s' must be a hash", pathname);
-
-        gdnsd_sttl_t updates[num_smgrs];
-        memset(updates, 0, sizeof(updates));
-
-        const unsigned num_raw = vscf_hash_get_len(raw);
-        for(unsigned i = 0; i < num_raw; i++) {
-            const char* matchme = vscf_hash_get_key_byindex(raw, i, NULL);
-            vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
-            if(!vscf_is_simple(val)) {
-                log_err("admin_state: value for '%s' must be a simple string!", matchme);
-                success = false;
-                break;
-            }
-            else {
-                gdnsd_sttl_t update_val;
-                if(gdnsd_mon_parse_sttl(vscf_simple_get_data(val), &update_val, GDNSD_STTL_TTL_MAX)) {
-                    log_err("admin_state: value for '%s' must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", matchme, GDNSD_STTL_TTL_MAX);
-                    success = false;
-                    break;
-                }
-                else {
-                    update_val |= GDNSD_STTL_FORCED; // all admin-states are forced
-                    if(!admin_process_entry(matchme, updates, update_val)) {
-                        success = false;
-                        break;
-                    }
-                }
-            }
-        }
-
+        else
+            success = admin_process_hash(raw);
         vscf_destroy(raw);
-
-        if(success) {
-            bool affected = false;
-            for(unsigned i = 0; i < num_smgrs; i++) {
-                if(updates[i]) { // some entry wants to affect this slot
-                    if(smgr_sttl[i] != updates[i]) { // new state change
-                        if(smgr_sttl[i] != smgrs[i].real_sttl) // already forced
-                            log_info("admin_state: state of '%s' re-forced from %s to %s, real state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), logf_sttl(updates[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
-                        else
-                            log_info("admin_state: state of '%s' forced to %s, real state is %s", smgrs[i].desc, logf_sttl(updates[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
-                        smgr_sttl[i] = updates[i];
-                        affected = true;
-                    }
-                }
-                else if(smgr_sttl[i] & GDNSD_STTL_FORCED) { // was forced before, isn't now
-                    log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
-                    smgr_sttl[i] = smgrs[i].real_sttl;
-                    dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
-                    affected = true;
-                }
-            }
-            if(affected && !initial_round)
-                kick_sttl_update_timer();
-        }
     }
 
     if(!success)
