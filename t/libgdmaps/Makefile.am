@@ -91,7 +91,7 @@ TDATA_FINAL += $(TDATA_FINAL_XZ)
 TDATA_LINK += $(TDATA_XZ)
 XZ_WARN =
 else
-XZ_WARN = === You must install xz and re-configure to decompress the missing databases above
+XZ_WARN = === You must install xz and re-configure to decompress the missing databases below
 endif
 
 etc/geoip/.test_data_setup_done: Makefile
@@ -128,11 +128,14 @@ test_verbose = $(test_verbose_@AM_V@)
 check_PROGRAMS = $(TESTLIST:=.bin)
 CHECK_PROGS_PATHED = $(check_PROGRAMS:%=./%)
 
-check-local: $(check_PROGRAMS) $(TDATA_FINAL)
-	$(test_verbose)TEST_CFDIR=$(abs_builddir)/etc $(prove_run) $(CHECK_PROGS_PATHED); \
-	if test -e $(top_srcdir)/.git; then \
+check-local: $(check_PROGRAMS) $(TDATA_FINAL) check-warn
+	$(test_verbose)TEST_CFDIR=$(abs_builddir)/etc $(prove_run) $(CHECK_PROGS_PATHED);
+
+.PHONY: check-warn
+check-warn:
+	@if test -e $(top_srcdir)/.git; then \
 		if test ! -e $(srcdir)/gdnsd-geoip-testdata/README.md; then \
-			echo "=== To fetch the missing databases above (optional), 'git submodule update --init' and re-configure"; \
+			echo "=== To fetch the missing databases below (optional), 'git submodule update --init' and re-configure"; \
 		fi; \
 		echo $(XZ_WARN); \
 	fi
