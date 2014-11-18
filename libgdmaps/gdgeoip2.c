@@ -192,7 +192,7 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
     return db;
 }
 
-static const char* GEOIP2_PATH_CONTINTENT[] = { "continent", "code", NULL };
+static const char* GEOIP2_PATH_CONTINENT[] = { "continent", "code", NULL };
 static const char* GEOIP2_PATH_COUNTRY[] = { "country", "iso_code", NULL };
 static const char* GEOIP2_PATH_CITY[] = { "city", "names", "en", NULL };
 
@@ -229,7 +229,7 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level) {
     MMDB_entry_data_s val;
 
     if(!level) {
-        mmdb_lookup_utf8_(GEOIP2_PATH_CONTINTENT);
+        mmdb_lookup_utf8_(GEOIP2_PATH_CONTINENT);
         return;
     }
 
