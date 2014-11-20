@@ -49,7 +49,7 @@ void* gdnsd_xcalloc(size_t nmemb, size_t size) {
     dmn_assert(size);
     dmn_assert(nmemb);
 
-    if(size > ALLOC_MAX || size * nmemb > ALLOC_MAX)
+    if(size > ALLOC_MAX || (uint64_t)size * (uint64_t)nmemb > ALLOC_MAX)
         log_fatal("Bad allocation request for %zu * %zu bytes! backtrace:%s",
             nmemb, size, dmn_logf_bt());
 
