@@ -12,6 +12,9 @@
       defined by the user as an array instead of a hash
 
   *** Features:
+    * If the admin_state file exists but doesn't parse correctly, that will
+      now be a fatal error for startup or checkconf.  Previously the error was
+      logged but startup/checkconf was successful.
     * plugin_geoip: Support for MaxMind GeoIP2 databases.  Requires
       libmaxminddb at build time to enable, which is a new optional build
       dependency.

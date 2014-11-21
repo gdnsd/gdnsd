@@ -715,6 +715,9 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
     if(cfg_root)
         vscf_hash_iterate_const(cfg_root, true, bad_key, "top-level config");
 
+    // admin_state checking, can fail fatally
+    gdnsd_mon_check_admin_file();
+
     return cfg;
 }
 

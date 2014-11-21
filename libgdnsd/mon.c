@@ -225,7 +225,7 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
 }
 
 F_NONNULL
-static bool admin_process_hash(vscf_data_t* raw) {
+static bool admin_process_hash(vscf_data_t* raw, const bool check_only) {
     dmn_assert(raw); dmn_assert(vscf_is_hash(raw));
 
     bool success = true;
@@ -259,8 +259,8 @@ static bool admin_process_hash(vscf_data_t* raw) {
         }
     }
 
-    if(success) {
-        bool affected = false;
+    bool affected = false;
+    if(success && !check_only) {
         for(unsigned i = 0; i < num_smgrs; i++) {
             if(updates[i]) { // some entry wants to affect this slot
                 if(smgr_sttl[i] != updates[i]) { // new state change
@@ -283,18 +283,21 @@ static bool admin_process_hash(vscf_data_t* raw) {
         if(affected) {
             if(!initial_round)
                 kick_sttl_update_timer();
-            log_info("admin_state: reload complete");
+            log_info("admin_state: load complete");
         }
         else {
-            log_info("admin_state: reload complete, no net changes");
+            log_info("admin_state: load complete, no net changes");
         }
     }
 
     return success;
 }
 
-static void admin_process_file(const char* pathname) {
-    log_info("admin_state: (re-)loading state file '%s'...", pathname);
+static bool admin_process_file(const char* pathname, const bool check_only) {
+    if(check_only)
+        log_info("admin_state: checking state file '%s'...", pathname);
+    else
+        log_info("admin_state: (re-)loading state file '%s'...", pathname);
 
     bool success = false;
 
@@ -310,12 +313,14 @@ static void admin_process_file(const char* pathname) {
         if(!vscf_is_hash(raw))
             log_err("admin_state: top level of file '%s' must be a hash", pathname);
         else
-            success = admin_process_hash(raw);
+            success = admin_process_hash(raw, check_only);
         vscf_destroy(raw);
     }
 
-    if(!success)
+    if(!success && !check_only)
         log_err("admin_state: file '%s' had errors; all contents were ignored and any current forced states are unaffected", pathname);
+
+    return success;
 }
 
 static void admin_deleted_file(const char* pathname) {
@@ -338,7 +343,7 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
     ev_timer_stop(loop, w);
     if(admin_file_watcher->attr.st_nlink)
-        admin_process_file(admin_file_watcher->path);
+        admin_process_file(admin_file_watcher->path, false);
     else
         admin_deleted_file(admin_file_watcher->path);
 }
@@ -368,7 +373,7 @@ static void admin_init(struct ev_loop* mloop) {
     // ev_stat_start stat()'s the file for ->attr, use that
     //   to process the file initially if it exists.
     if(admin_file_watcher->attr.st_nlink)
-        admin_process_file(pathname);
+        admin_process_file(pathname, false);
     else
         log_info("admin_state: state file '%s' does not yet exist at startup", pathname);
 }
@@ -376,6 +381,23 @@ static void admin_init(struct ev_loop* mloop) {
 //--------------------------------------------------
 // core monitoring stuff
 //--------------------------------------------------
+
+// public interface to just check admin_state parsing
+void gdnsd_mon_check_admin_file(void) {
+    struct stat st;
+    char* pathname = gdnsd_resolve_path_state("admin_state", NULL);
+
+    if(!stat(pathname, &st)) {
+        if(!admin_process_file(pathname, true))
+            log_fatal("%s has errors!", pathname);
+    }
+    else if(errno != ENOENT) {
+        log_fatal("Error checking admin_state pathname '%s': %s",
+            pathname, dmn_logf_errno());
+    }
+
+    free(pathname);
+}
 
 // Called once after all servicetypes and monitored stuff
 //  have been configured, from main thread.  mloop happens

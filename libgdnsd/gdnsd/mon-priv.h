@@ -46,6 +46,11 @@
 void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg);
 void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg);
 
+// conf can call this to pre-check the admin_state syntax
+// fails fatally if the admin_state pathname exists
+//    but can't be loaded correctly
+void gdnsd_mon_check_admin_file(void);
+
 // main.c calls this for adding monio events to the main thread's eventloop
 F_NONNULL
 void gdnsd_mon_start(struct ev_loop* mon_loop);
