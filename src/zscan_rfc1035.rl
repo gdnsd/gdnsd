@@ -683,7 +683,16 @@ static void close_paren(zscan_t* z) {
 }%%
 
 static void scanner(zscan_t* z, char* buf, const size_t bufsize) {
-    dmn_assert(z); dmn_assert(buf);
+    dmn_assert(z); dmn_assert(buf); dmn_assert(bufsize);
+
+    // This avoids the unfortunately common case of files with final lines
+    //   that are unterminated by bailing out early.  This also incidentally
+    //   but importantly protects from set_uval()'s strtoul running off the
+    //   end of the buffer if we were parsing an integer at that point.
+    if(buf[bufsize - 1] != '\n') {
+        parse_error_noargs("No newline at end of file");
+        return;
+    }
 
     (void)zone_en_main; // silence unused var warning from generated code
 
@@ -702,15 +711,10 @@ DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
 DMN_DIAG_POP
 #endif // __clang_analyzer__
 
-    if(cs == zone_error) {
+    if(cs == zone_error)
         parse_error_noargs("General parse error");
-    }
-    else if(cs < zone_first_final) {
-        if(*(eof - 1) != '\n')
-            parse_error_noargs("Trailing incomplete or unparseable record at end of file (missing newline at end of file?)");
-        else
-            parse_error_noargs("Trailing incomplete or unparseable record at end of file");
-    }
+    else if(cs < zone_first_final)
+        parse_error_noargs("Trailing incomplete or unparseable record at end of file");
 }
 
 // This is broken out into a separate function (called via
