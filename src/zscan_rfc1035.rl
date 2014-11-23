@@ -770,7 +770,8 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     }
 
 #ifdef HAVE_POSIX_MADVISE
-    (void)posix_madvise(buf, bufsize, POSIX_MADV_SEQUENTIAL);
+    if(bufsize > 8192) // why waste the syscall on small files?
+        (void)posix_madvise(buf, bufsize, POSIX_MADV_SEQUENTIAL);
 #endif
 
     zscan_t* z = xcalloc(1, sizeof(zscan_t));
