@@ -697,19 +697,17 @@ static void scanner(zscan_t* z, char* buf, const size_t bufsize) {
     (void)zone_en_main; // silence unused var warning from generated code
 
     int cs = zone_start;
+
+DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
+#ifndef __clang_analyzer__
+    // ^ ... because the ragel-generated code for the zonefile parser is
+    //   so huge that it makes analyzer runs take forever.
     const char* p = buf;
     const char* pe = buf + bufsize;
     const char* eof = pe;
-
-#ifndef __clang_analyzer__
-        // ^ ... because the ragel-generated code for the zonefile parser is
-        //   so huge that it makes analyzer runs take forever.
-DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
-        %%{
-            write exec;
-        }%%
-DMN_DIAG_POP
+    %%{ write exec; }%%
 #endif // __clang_analyzer__
+DMN_DIAG_POP
 
     if(cs == zone_error)
         parse_error_noargs("General parse error");
