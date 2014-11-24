@@ -26,7 +26,7 @@ case "$GDNSD_TRAVIS_BUILD" in
         lcov -c -d . -o gdnsd-test.info
         lcov -a gdnsd-base.info -a gdnsd-test.info -o gdnsd-tested.info
         # This filters out the ragel-generated parsers, the inlines from liburcu, and any test-only sources
-        lcov -o gdnsd-filtered.info -r gdnsd-tested.info zscan_rfc1035.c vscf.c urcu-qsbr.h 'libtap/*.c' 'libgdmaps/t*.c'
+        lcov -o gdnsd-filtered.info -r gdnsd-tested.info zscan_rfc1035.c vscf.c urcu-qsbr.h 't/lib*/*.c'
         coveralls-lcov gdnsd-filtered.info
     ;;
     *)
