@@ -259,8 +259,9 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only) {
         }
     }
 
-    bool affected = false;
     if(success && !check_only) {
+        bool affected = false;
+
         for(unsigned i = 0; i < num_smgrs; i++) {
             if(updates[i]) { // some entry wants to affect this slot
                 if(smgr_sttl[i] != updates[i]) { // new state change
