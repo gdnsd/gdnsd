@@ -5,8 +5,8 @@
 # Where we keep m4 files for aclocal
 ACLOCAL_AMFLAGS = -I m4
 
-# Common header path for libgdnsd
-AM_CPPFLAGS = -I$(srcdir)/libgdnsd
+# Common header path for libgdnsd's public gdnsd/*.h
+AM_CPPFLAGS = -I$(srcdir)/include
 
 # Subdirectories to recurse into
 #  ("." first so testsuite stuff always after main stuff)
@@ -129,10 +129,15 @@ src_gdnsd_SOURCES = \
 	src/dnswire.h \
 	src/zscan_rfc1035.h
 
-src_gdnsd_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
-src_gdnsd_CPPFLAGS = -I$(srcdir)/src $(AM_CPPFLAGS)
+# The reason for -I$(srcdir)/src below is that zscan_rfc1035.c is
+#   created in the builddir, so the compiler won't otherwise pick
+#   up includes from $(srcdir)/src when compiling it.
+# The reason for -I$(srcdir)/libgdnsd is for the libgdnsd *-prot.h
+#   headers, which are private to libgdnsd and the main gdnsd binary
+src_gdnsd_CPPFLAGS = -I$(srcdir)/src -I$(srcdir)/libgdnsd $(AM_CPPFLAGS)
 src_gdnsd_CFLAGS = $(CFLAGS_PIE)
 src_gdnsd_LDFLAGS = $(LDFLAGS_PIE)
+src_gdnsd_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 nodist_src_gdnsd_SOURCES = src/zscan_rfc1035.c
 src/zscan_rfc1035.c: src/zscan_rfc1035.rl
@@ -247,29 +252,35 @@ libgdmaps_libgdmaps_la_SOURCES = \
 
 pkglib_LTLIBRARIES += libgdnsd/libgdnsd.la
 
-xHEADERS_DIST = \
-	libgdnsd/gdnsd/vscf.h \
-	libgdnsd/gdnsd/dname.h \
-	libgdnsd/gdnsd/log.h \
-	libgdnsd/gdnsd/compiler.h \
-	libgdnsd/gdnsd/mon.h \
-	libgdnsd/gdnsd/stats.h \
-	libgdnsd/gdnsd/net.h \
-	libgdnsd/gdnsd/plugapi.h \
-	libgdnsd/gdnsd/plugin.h \
-	libgdnsd/gdnsd/misc.h \
-	libgdnsd/gdnsd/paths.h \
-	libgdnsd/gdnsd/alloc.h \
-	libgdnsd/gdnsd/prcu.h \
-	libgdnsd/gdnsd/dmn.h
+# These are the public libgdnsd headers that all in-tree source can use. They
+# are also installed via "make install" and can be used by 3rd-party plugins
+# built independently.
+xHEADERS_INST = \
+	include/gdnsd/vscf.h \
+	include/gdnsd/dname.h \
+	include/gdnsd/log.h \
+	include/gdnsd/compiler.h \
+	include/gdnsd/mon.h \
+	include/gdnsd/stats.h \
+	include/gdnsd/net.h \
+	include/gdnsd/plugapi.h \
+	include/gdnsd/plugin.h \
+	include/gdnsd/misc.h \
+	include/gdnsd/paths.h \
+	include/gdnsd/alloc.h \
+	include/gdnsd/prcu.h \
+	include/gdnsd/dmn.h
 
+# foo-prot.h define shlib interfaces private to libgdnsd + gdnsd
+# foo-priv.h define non-shlib interfaces private to libgdnsd only
 xHEADERS_ALL = \
-	$(xHEADERS_DIST) \
-	libgdnsd/gdnsd/plugapi-priv.h \
-	libgdnsd/gdnsd/misc-priv.h \
-	libgdnsd/gdnsd/net-priv.h \
-	libgdnsd/gdnsd/paths-priv.h \
-	libgdnsd/gdnsd/mon-priv.h
+	$(xHEADERS_INST) \
+	libgdnsd/plugapi-prot.h \
+	libgdnsd/plugapi-priv.h \
+	libgdnsd/misc-prot.h \
+	libgdnsd/misc-priv.h \
+	libgdnsd/mon-prot.h \
+	libgdnsd/net-priv.h
 
 libgdnsd_libgdnsd_la_SOURCES = \
 	$(xHEADERS_ALL) \
@@ -297,9 +308,13 @@ libgdnsd_libgdnsd_la_LDFLAGS = -shared -avoid-version
 libgdnsd_libgdnsd_la_LIBADD  = $(LIBGDNSD_LIBS)
 
 libgdnsd_libgdnsd_la_pkgincludedir = $(pkgincludedir)
-dist_libgdnsd_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_DIST)
-nodist_libgdnsd_libgdnsd_la_pkginclude_HEADERS = libgdnsd/bopts.h
+libgdnsd_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_INST)
 
+# This header is also installed for external consumption.  It replaces any
+# necessary defines that would have come from config.h in-tree, and should be
+# used sparingly for binary compat issues.  It is not included in any in-tree
+# sources.
+nodist_libgdnsd_libgdnsd_la_pkginclude_HEADERS = libgdnsd/bopts.h
 libgdnsd/bopts.h: Makefile
 	@echo '#ifndef GDNSD_BOPTS_H' >$@; \
 	 echo '#define GDNSD_BOPTS_H' >>$@; \

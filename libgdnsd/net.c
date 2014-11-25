@@ -28,8 +28,9 @@
 #include <unistd.h>
 
 #include <gdnsd/net.h>
-#include <gdnsd/net-priv.h>
 #include <gdnsd/log.h>
+
+#include "net-priv.h"
 
 /* network utils */
 
@@ -38,6 +39,12 @@ static int udp_proto = 0;
 static bool reuseport_ok = false;
 
 void gdnsd_init_net(void) {
+    static bool has_run = false;
+    if(has_run)
+        log_fatal("BUG: gdnsd_init_net() should only be called once!");
+    else
+        has_run = true;
+
     struct protoent* pe;
 
     // cppcheck-suppress nonreentrantFunctionsgetprotobyname (init time, no threads)

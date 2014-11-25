@@ -34,10 +34,9 @@
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/plugapi.h>
-#include <gdnsd/paths-priv.h>
+#include <gdnsd/paths.h>
 
-#include "gdmaps.h"
-//#include "gdmaps_test.h"
+#include <gdmaps.h>
 
 static gdmaps_t* gdmaps = NULL;
 
@@ -135,30 +134,6 @@ static void do_repl(void) {
     }
 }
 
-static vscf_data_t* conf_load_vscf(const char* cfg_dir) {
-    vscf_data_t* out = NULL;
-
-    gdnsd_set_config_dir(cfg_dir);
-    char* cfg_path = gdnsd_resolve_path_cfg("config", NULL);
-
-    struct stat cfg_stat;
-    if(!stat(cfg_path, &cfg_stat)) {
-        log_info("Loading configuration from '%s'", cfg_path);
-        char* vscf_err;
-        out = vscf_scan_filename(cfg_path, &vscf_err);
-        if(!out)
-            log_fatal("Configuration from '%s' failed: %s", cfg_path, vscf_err);
-        if(!vscf_is_hash(out))
-            log_fatal("Configuration from '%s' failed: config was an array!", cfg_path);
-    }
-    else {
-        log_info("No config file at '%s', using defaults + zones auto-scan", cfg_path);
-    }
-
-    free(cfg_path);
-    return out;
-}
-
 F_NONNULL
 static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root) {
     dmn_assert(cfg_root);
@@ -191,7 +166,7 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir) {
 
     dmn_init1(false, true, false, "gdmaps_test");
 
-    vscf_data_t* cfg_root = conf_load_vscf(input_cfgdir);
+    vscf_data_t* cfg_root = gdnsd_initialize(input_cfgdir, false);
     vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* rv = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);

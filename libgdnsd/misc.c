@@ -21,7 +21,6 @@
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/misc-priv.h>
 #include <gdnsd/log.h>
 
 #include <inttypes.h>
@@ -47,6 +46,9 @@
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>
 #endif
+
+#include "misc-prot.h"
+#include "misc-priv.h"
 
 /* misc */
 
@@ -152,6 +154,12 @@ static const unsigned THROW_MASK = 0xFFFF;
 // Must be called early, before any consumers of the public PRNG
 //  init interfaces from C<gdnsd/misc.h>
 void gdnsd_rand_meta_init(void) {
+    static bool has_run = false;
+    if(has_run)
+        log_fatal("BUG: gdnsd_rand_meta_init() should only be called once!");
+    else
+        has_run = true;
+
     urand_data_t rdata;
     unsigned throw_away;
 

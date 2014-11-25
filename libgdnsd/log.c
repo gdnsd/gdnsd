@@ -33,7 +33,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/stats.h>
 #include <gdnsd/dmn.h>
-#include <gdnsd/paths-priv.h>
+#include <gdnsd/paths.h>
 #include <gdnsd/dname.h>
 
 static const char generic_nullstr[] = "(null)";

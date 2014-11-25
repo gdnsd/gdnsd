@@ -23,10 +23,8 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/log.h>
-#include <gdnsd/paths.h>
-#include <gdnsd/paths-priv.h>
-#include <gdnsd/plugapi-priv.h>
-#include <gdnsd/mon-priv.h>
+#include <plugapi-prot.h>
+#include <mon-prot.h>
 
 #include <unistd.h>
 #include <string.h>
@@ -494,72 +492,8 @@ static void process_listen(cfg_t* cfg, vscf_data_t* listen_opt, const dns_addr_t
     dmn_assert(tnum == cfg->num_dns_threads);
 }
 
-static vscf_data_t* conf_load_vscf(const char* cfg_file) {
-    vscf_data_t* out = NULL;
-
-    struct stat cfg_stat;
-    if(!stat(cfg_file, &cfg_stat)) {
-        log_info("Loading configuration from '%s'", cfg_file);
-        char* vscf_err;
-        out = vscf_scan_filename(cfg_file, &vscf_err);
-        if(!out)
-            log_fatal("Loading configuration from '%s' failed: %s", cfg_file, vscf_err);
-        if(!vscf_is_hash(out)) {
-            dmn_assert(vscf_is_array(out));
-            log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", cfg_file);
-        }
-    }
-    else {
-        log_info("No config file at '%s', using defaults", cfg_file);
-    }
-
-    return out;
-}
-
-vscf_data_t* conf_parse(const char* cfg_dir) {
-    gdnsd_set_config_dir(cfg_dir);
-    char* cfg_file = gdnsd_resolve_path_cfg("config", NULL);
-    vscf_data_t* cfg_root = conf_load_vscf(cfg_file);
-    free(cfg_file);
-
-#ifndef NDEBUG
-    // in developer debug builds, exercise clone+destroy
-    if(cfg_root) {
-        vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
-        vscf_destroy(cfg_root);
-        cfg_root = temp_cfg;
-    }
-#endif
-
-    return cfg_root;
-}
-
-cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool force_zsd, const conf_mode_t cmode) {
+cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool force_zsd) {
     dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
-
-    vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
-
-    // daemon actions only need the rundir, so we process dirs first and bail
-    //   early in those cases without doing the rest of the complex stuff
-    {
-        const char* cfg_run_dir = NULL;
-        const char* cfg_state_dir = NULL;
-        if(options) {
-            if(!vscf_is_hash(options))
-                log_fatal("Config key 'options': wrong type (must be hash)");
-            CFG_OPT_STR_NOCOPY(options, run_dir, cfg_run_dir);
-            CFG_OPT_STR_NOCOPY(options, state_dir, cfg_state_dir);
-        }
-
-        // only ask set_dirs to check/create run/state dirs if we're starting, as opposed
-        // to stop/status/reload-zones (CONF_SIMPLE_ACTION) or checkconf (CONF_CHECK)
-        gdnsd_set_runtime_dirs(cfg_run_dir, cfg_state_dir, cmode == CONF_START);
-    }
-
-    // fast-path exit for simple actions like stop/status/reload-zones, only
-    //   needs run_dir configuration and nothing more
-    if(cmode == CONF_SIMPLE_ACTION)
-        return NULL;
 
     cfg_t* cfg = xmalloc(sizeof(*cfg));
     memcpy(cfg, &cfg_defaults, sizeof(*cfg));
@@ -582,6 +516,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
         .tcp_threads = 1U,
     };
 
+    vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
         CFG_OPT_INT(options, priority, -20L, 20L);
         CFG_OPT_BOOL(options, include_optional_ns);

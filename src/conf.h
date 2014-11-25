@@ -86,14 +86,7 @@ typedef struct {
 
 extern const cfg_t* gcfg;
 
-typedef enum {
-    CONF_SIMPLE_ACTION = 0, // only picks up directory settings for e.g. reload-zones/status/stop
-    CONF_CHECK = 1,         // full config for checking only (do not write to disk)
-    CONF_START = 2,         // full config + necessary writes for startup (e.g. create run/state dirs)
-} conf_mode_t;
-
-vscf_data_t* conf_parse(const char* cfg_dir);
-cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool force_zsd, const conf_mode_t cmode);
+cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool force_zsd);
 
 F_NONNULL
 void dns_lsock_init(cfg_t* cfg);

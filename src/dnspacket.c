@@ -29,8 +29,8 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/plugapi-priv.h>
 #include <gdnsd/prcu.h>
+#include <plugapi-prot.h>
 #include "ztree.h"
 
 typedef struct {

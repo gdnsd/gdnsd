@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef GDNSD_PLUGAPI_PRIV_H
-#define GDNSD_PLUGAPI_PRIV_H
+#ifndef GDNSD_PLUGAPI_PROT_H
+#define GDNSD_PLUGAPI_PROT_H
 
 #include <gdnsd/plugapi.h>
 #include <gdnsd/vscf.h>
@@ -66,15 +66,10 @@ plugin_t* gdnsd_plugin_find_or_load(const char* pname);
 void gdnsd_plugins_configure_all(const unsigned num_threads);
 
 // action iterators
-F_NONNULL
-void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop);
-F_NONNULL
-void gdnsd_plugins_action_start_monitors(struct ev_loop* mon_loop);
-F_NONNULL
 void gdnsd_plugins_action_pre_run(void);
 void gdnsd_plugins_action_iothread_init(const unsigned threadnum);
 void gdnsd_plugins_action_exit(void);
 
 #pragma GCC visibility pop
 
-#endif // GDNSD_PLUGINAPI_PRIV_H
+#endif // GDNSD_PLUGINAPI_PROT_H

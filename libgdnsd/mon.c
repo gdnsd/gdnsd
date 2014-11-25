@@ -21,11 +21,9 @@
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/mon.h>
-#include <gdnsd/mon-priv.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/plugapi.h>
-#include <gdnsd/plugapi-priv.h>
 #include <gdnsd/prcu.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
@@ -34,6 +32,10 @@
 #include <unistd.h>
 #include <fnmatch.h>
 #include <ev.h>
+
+#include "mon-prot.h"
+#include "plugapi-prot.h"
+#include "plugapi-priv.h"
 
 typedef struct {
     const char* name;

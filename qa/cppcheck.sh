@@ -39,8 +39,9 @@ SKIPFILES="
 # files in-tree, but from the pov of relative include paths)
 INCDIRS="
 -I.
--Igdnsd
+-Isrc
 -Ilibgdnsd
+-Iinclude
 -Iplugins
 -Ilibgdmaps
 -It/libtap

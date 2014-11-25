@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2014 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -20,13 +20,6 @@
 #ifndef GDNSD_NET_PRIV_H
 #define GDNSD_NET_PRIV_H
 
-#include <gdnsd/net.h>
-
-#pragma GCC visibility push(default)
-
-// This is for the core code only, called early and single-threaded.
 void gdnsd_init_net(void);
-
-#pragma GCC visibility pop
 
 #endif // GDNSD_NET_PRIV_H

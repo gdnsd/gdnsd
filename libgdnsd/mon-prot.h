@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef GDNSD_MON_PRIV_H
-#define GDNSD_MON_PRIV_H
+#ifndef GDNSD_MON_PROT_H
+#define GDNSD_MON_PROT_H
 
 #include <gdnsd/mon.h>
 #include <gdnsd/vscf.h>
@@ -66,4 +66,4 @@ unsigned gdnsd_mon_stats_out_html(char* buf);
 
 #pragma GCC visibility pop
 
-#endif // GDNSD_MON_PRIV_H
+#endif // GDNSD_MON_PROT_H

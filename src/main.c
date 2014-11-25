@@ -45,11 +45,10 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
-#include <gdnsd/plugapi-priv.h>
-#include <gdnsd/net-priv.h>
-#include <gdnsd/misc-priv.h>
-#include <gdnsd/paths-priv.h>
-#include <gdnsd/mon-priv.h>
+#include <gdnsd/paths.h>
+#include <plugapi-prot.h>
+#include <misc-prot.h>
+#include <mon-prot.h>
 
 // Global config, readonly
 const cfg_t* gcfg = NULL;
@@ -366,28 +365,20 @@ int main(int argc, char** argv) {
     action_t action = parse_args(argc, argv, &copts);
 
     // basic action-based parameters
-    conf_mode_t cmode;
+    bool will_start;
     switch(action) {
-        case ACT_STATUS: // fall-through
-        case ACT_RELOADZ: // fall-through
-        case ACT_STOP:
-            cmode = CONF_SIMPLE_ACTION;
-            break;
-        case ACT_CHECKCFG:
-            cmode = CONF_CHECK;
-            break;
         case ACT_START:
         case ACT_RESTART:
         case ACT_CRESTART:
-            cmode = CONF_START;
+            will_start = true;
             break;
         default:
-            dmn_assert(0);
+            will_start = false;
             break;
     }
 
     // All simple/check actions are implicitly foreground invocations
-    if(cmode != CONF_START)
+    if(!will_start)
         copts.foreground = true;
 
     // Do not allow disabling syslog when attempting to daemonize
@@ -399,19 +390,8 @@ int main(int argc, char** argv) {
     // init1 lets us start using dmn log funcs for config errors, etc
     dmn_init1(copts.debug, copts.foreground, copts.use_syslog, PACKAGE_NAME);
 
-    // Initialize net stuff in libgdnsd - needed for config load
-    gdnsd_init_net();
-
-    // Init meta-PRNG - needed for config load
-    gdnsd_rand_meta_init();
-
-    // Load config
-    vscf_data_t* cfg_root = conf_parse(copts.cfg_dir);
-    cfg_t* cfg = conf_load(cfg_root, copts.force_zss, copts.force_zsd, cmode);
-    vscf_destroy(cfg_root);
-
-    // Expose readonly process-global config
-    gcfg = cfg;
+    // Initialize libgdnsd and get parsed config
+    vscf_data_t* cfg_root = gdnsd_initialize(copts.cfg_dir, will_start);
 
     // init2() lets us do daemon actions
     char* rundir = gdnsd_resolve_path_run(NULL, NULL);
@@ -457,6 +437,11 @@ int main(int argc, char** argv) {
             action = ACT_RESTART;
         }
     }
+
+    // Load full configuration and expose through the readonly global "gcfg"
+    cfg_t* cfg = conf_load(cfg_root, copts.force_zss, copts.force_zsd);
+    gcfg = cfg;
+    vscf_destroy(cfg_root);
 
     // Set up and validate privdrop info if necc
     dmn_init3(cfg->username, (action == ACT_RESTART));

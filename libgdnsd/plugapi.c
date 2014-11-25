@@ -21,7 +21,6 @@
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/plugapi.h>
-#include <gdnsd/plugapi-priv.h>
 #include <gdnsd/log.h>
 #include <gdnsd/net.h>
 #include <gdnsd/misc.h>
@@ -29,6 +28,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <dlfcn.h>
+
+#include "plugapi-prot.h"
+#include "plugapi-priv.h"
 
 // The default (minimum) values here amount to 240 bytes of address
 //   storage (12*4+12*16), which is less than the minimum allocation
