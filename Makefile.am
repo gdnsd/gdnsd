@@ -105,8 +105,10 @@ install-exec-hook-top:
 sbin_PROGRAMS += src/gdnsd
 
 src_gdnsd_SOURCES = \
-	src/main.c \
-	src/main.h \
+	src/mcp.c \
+	src/mcp.h \
+	src/runtime.c \
+	src/runtime.h \
 	src/conf.c \
 	src/conf.h \
 	src/zsrc_djb.c \

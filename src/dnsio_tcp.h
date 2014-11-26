@@ -35,7 +35,4 @@ void* dnsio_tcp_start(void* thread_asvoid);
 F_NONNULL
 int tcp_listen_pre_setup(const dmn_anysin_t* asin, const unsigned timeout V_UNUSED);
 
-F_NONNULL
-void tcp_dns_listen_setup(dns_thread_t* t);
-
 #endif // GDNSD_DNSIO_TCP_H

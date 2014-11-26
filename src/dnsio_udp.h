@@ -25,7 +25,7 @@
 #include <gdnsd/compiler.h>
 
 F_NONNULL
-void udp_sock_setup(dns_thread_t* t);
+void udp_sock_setup(dns_thread_t* t, const unsigned max_edns_response);
 
 F_NONNULL F_NORETURN
 void* dnsio_udp_start(void* thread_asvoid);

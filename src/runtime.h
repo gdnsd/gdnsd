@@ -1,4 +1,4 @@
-/* Copyright © 2014 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -17,12 +17,20 @@
  *
  */
 
-#ifndef GDNSD_MAIN
-#define GDNSD_MAIN
+#ifndef GDNSD_RUNTIME_H
+#define GDNSD_RUNTIME_H
+
+#include "socks.h"
 
 #include <gdnsd/compiler.h>
+#include <gdnsd/vscf.h>
+
+#include <stdbool.h>
+
+F_NONNULLX(2) DMN_F_NORETURN
+void runtime(vscf_data_t* cfg_root, socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd, const int mcp_sock);
 
 F_NONNULL
 void gdnsd_atexit_debug(void (*f)(void));
 
-#endif // GDNSD_MAIN
+#endif // GDNSD_RUNTIME_H

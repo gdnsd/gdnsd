@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -207,7 +207,7 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
         log_info("UDP socket %s: %s: wanted %i, got %i", dmn_logf_anysin(asin), which_str, desired_buf, opt_size);
 }
 
-void udp_sock_setup(dns_thread_t* t) {
+void udp_sock_setup(dns_thread_t* t, const unsigned max_edns_response) {
     dmn_assert(t);
 
     dns_addr_t* addrconf = t->ac;
@@ -255,7 +255,7 @@ void udp_sock_setup(dns_thread_t* t) {
                 dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {
-        negotiate_udp_buffer(sock, SO_SNDBUF, gcfg->max_edns_response, addrconf->udp_recv_width, asin);
+        negotiate_udp_buffer(sock, SO_SNDBUF, max_edns_response, addrconf->udp_recv_width, asin);
     }
 
     if(isv6)
@@ -516,29 +516,17 @@ F_NORETURN
 void* dnsio_udp_start(void* thread_asvoid) {
     dmn_assert(thread_asvoid);
 
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     gdnsd_thread_setname("gdnsd-io-udp");
 
     const dns_thread_t* t = thread_asvoid;
     dmn_assert(t->is_udp);
 
-    const dns_addr_t* addrconf = t->ac;
-
     dnspacket_stats_t* stats = dnspacket_stats_init(t->threadnum, true);
-    void* dnsp_ctx = dnspacket_ctx_init(true);
 
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-    if(!t->bind_success) {
-        dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
-        log_warn("Could not bind UDP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", dmn_logf_anysin(&t->ac->addr));
-        //  we come here to  spawn the thread and do the dnspacket_context_setup() properly and
-        //  then exit the iothread.  The rest of the code will see this as a thread that
-        //  simply never gets requests.  This way we don't have to adjust stats arrays for
-        //  the missing thread, etc.
-        pthread_exit(NULL);
-    }
-
+    const dns_addr_t* addrconf = t->ac;
     const bool need_cmsg = needs_cmsg(&addrconf->addr);
+    void* dnsp_ctx = dnspacket_ctx_init(true);
 
     gdnsd_prcu_rdr_thread_start();
 

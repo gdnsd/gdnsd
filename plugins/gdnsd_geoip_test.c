@@ -164,7 +164,7 @@ static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root) {
 
 static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir) {
 
-    dmn_init1(false, true, false, "gdmaps_test");
+    dmn_init(false, true, false, "gdmaps_test");
 
     vscf_data_t* cfg_root = gdnsd_initialize(input_cfgdir, false);
     if(!cfg_root)

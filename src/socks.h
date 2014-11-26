@@ -1,4 +1,4 @@
-/* Copyright © 2014 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -28,7 +28,6 @@
 
 typedef struct {
     dmn_anysin_t addr;
-    bool autoscan;
     unsigned dns_port;
     unsigned udp_recv_width;
     unsigned udp_sndbuf;
@@ -45,41 +44,37 @@ typedef struct {
     unsigned threadnum;
     int sock;
     bool is_udp;
-    bool bind_success;
 } dns_thread_t;
 
 typedef struct {
-    dns_addr_t*    dns_addrs;
-    dns_thread_t*  dns_threads;
-    dmn_anysin_t*  http_addrs;
+    dmn_anysin_t addr;
+    int sock;
+    unsigned http_port;
+    unsigned timeout;
+    unsigned max_clients;
+} http_addr_t;
+
+typedef struct {
+    dns_addr_t*   dns_addrs;
+    dns_thread_t* dns_threads;
+    http_addr_t*  http_addrs;
     unsigned num_dns_addrs;
     unsigned num_dns_threads;
     unsigned num_http_addrs;
-    unsigned http_timeout;
-    unsigned max_http_clients;
+    unsigned max_response;
+    unsigned max_edns_response;
 } socks_cfg_t;
 
-// this is to be eliminated eventually, I think
-extern socks_cfg_t* scfg;
-
+// this loads the configuration in socks_cfg_t, but does not
+//   actually operate on the underlying socket fds
 socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root);
 
+// initializes the actual socket fds and does various setsockopt()
+//   sorts of things on them, but does not bind() them.
 F_NONNULL
-void socks_dns_lsocks_init(socks_cfg_t* socks_cfg);
+void socks_lsocks_init(socks_cfg_t* socks_cfg);
 
-F_NONNULL
-bool socks_helper_bind(const char* desc, const int sock, const dmn_anysin_t* asin, bool no_freebind);
-
-// helper uses this (when told) to bind all sockets (calls above, indirectly in the statio case)
-void socks_helper_bind_all(void);
-
-F_NONNULL
-bool socks_sock_is_bound_to(const int sock, const dmn_anysin_t* addr);
-
-// daemon uses this to validate work done above
-// if soft: false retval means all succeeded, true retval means one or more failed
-// if !soft: will log_fatal() if any fail
-F_NONNULL
-bool socks_daemon_check_all(socks_cfg_t* socks_cfg, bool soft);
+// bind() the sockets.
+void socks_lsocks_bind(const socks_cfg_t* socks_cfg);
 
 #endif // GDNSD_SOCKS_H

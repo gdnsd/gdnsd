@@ -352,7 +352,7 @@ int main(int argc, char** argv) {
     if(!strcmp(argv[2], "S"))
         use_syslog = true;
 
-    dmn_init1(debug, true, use_syslog, "gdnsd_extmon_helper");
+    dmn_init(debug, true, use_syslog, "gdnsd_extmon_helper");
     // Note that gdnsd_initialize() would be standard here, but extmon_helper
     // is special: it doesn't actually make use of most of libgdnsd, just the
     // very basic compiler, allocator, and libdmn logging bits.

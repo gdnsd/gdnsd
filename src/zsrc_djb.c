@@ -23,7 +23,7 @@
 #include "zscan_djb.h"
 #include "conf.h"
 #include "ltree.h"
-#include "main.h"
+#include "runtime.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>

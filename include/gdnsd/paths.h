@@ -31,7 +31,7 @@
 const char* gdnsd_get_default_config_dir(void);
 
 // Every independent program which makes use of libgdnsd must call this
-// fairly early in its lifecycle, usually right after dmn_init1().
+// fairly early in its lifecycle, usually right after dmn_init().
 // One should assume that everything else in the gdnsd_ namespace from
 // libgdnsd depends on this being called first to initialize the library.
 //

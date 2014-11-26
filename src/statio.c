@@ -72,6 +72,14 @@ typedef enum {
 #define HTTP_READ_BYTES 18
 
 typedef struct {
+    ev_io* accept_watcher;
+    unsigned num_conn_watchers;
+    unsigned max_clients;
+    unsigned timeout;
+} statio_addr_t;
+
+typedef struct {
+    statio_addr_t* statio_addr;
     dmn_anysin_t* asin;
     char read_buffer[HTTP_READ_BYTES];
     struct iovec outbufs[2];
@@ -196,20 +204,17 @@ static const char html_footer[] =
     "<p>For delta stats (since last such query), append the query param '?f=1'</p>\r\n"
     "</body></html>\r\n";
 
-static time_t start_time;
-static time_t pop_statio_time = 0;
-static ev_timer* log_watcher = NULL;
-static ev_io** accept_watchers;
-static struct ev_loop* statio_loop = NULL;
-static int* lsocks;
-static unsigned num_lsocks;
-static bool* lsocks_bound;
-static unsigned num_conn_watchers = 0;
+// basic data about gathering/serving output
 static unsigned data_buffer_size = 0;
 static unsigned hdr_buffer_size = 0;
-static unsigned max_http_clients;
-static unsigned http_timeout;
-static unsigned num_dns_threads;
+static unsigned num_dns_threads = 0;
+static time_t start_time = 0;
+static time_t pop_statio_time = 0;
+
+// i/o handling
+unsigned num_statio_addrs = 0;
+static statio_addr_t* statio_addrs = NULL;
+static ev_timer* log_watcher = NULL;
 
 // This is memset to zero and re-accumulated for every output
 static statio_t statio;
@@ -218,12 +223,6 @@ static statio_t statio;
 //  the last ?f=1 (or daemon start, whichever is more recent).
 // All ?f=1 clients share one state, so don't have two independent ones!
 static statio_t flush_hist; // copy of raw stats accum from last f=1
-
-// coordination for final stats output
-static ev_async* final_stats_async = NULL;
-static pthread_mutex_t final_stats_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t final_stats_cond = PTHREAD_COND_INITIALIZER;
-static bool final_stats_done = false;
 
 static void accumulate_statio(unsigned threadnum) {
     dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
@@ -485,9 +484,8 @@ static void cleanup_conn_watchers(struct ev_loop* loop, http_data_t* tdata) {
     free(tdata->write_watcher);
     free(tdata->asin);
 
-    if((num_conn_watchers-- == max_http_clients))
-        for(unsigned i = 0; i < num_lsocks; i++)
-            ev_io_start(loop, accept_watchers[i]);
+    if((tdata->statio_addr->num_conn_watchers-- == tdata->statio_addr->max_clients))
+        ev_io_start(loop, tdata->statio_addr->accept_watcher);
 
     free(tdata);
 }
@@ -616,6 +614,9 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
+    statio_addr_t* this_addr = io->data;
+    dmn_assert(this_addr);
+
     dmn_anysin_t* asin = xmalloc(sizeof(dmn_anysin_t));
     asin->len = DMN_ANYSIN_MAXLEN;
 
@@ -657,11 +658,12 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
         return;
     }
 
-    ev_io* read_watcher = xmalloc(sizeof(ev_io));
-    ev_io* write_watcher = xmalloc(sizeof(ev_io));
-    ev_timer* timeout_watcher = xmalloc(sizeof(ev_timer));
+    ev_io* read_watcher = xmalloc(sizeof(*read_watcher));
+    ev_io* write_watcher = xmalloc(sizeof(*write_watcher));
+    ev_timer* timeout_watcher = xmalloc(sizeof(*timeout_watcher));
 
-    http_data_t* tdata = xcalloc(1, sizeof(http_data_t));
+    http_data_t* tdata = xcalloc(1, sizeof(*tdata));
+    tdata->statio_addr = this_addr;
     tdata->state = READING_REQ;
     tdata->asin = asin;
     tdata->read_watcher = read_watcher;
@@ -682,15 +684,12 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
     ev_set_priority(read_watcher, 0);
     ev_io_start(loop, read_watcher);
 
-    ev_timer_init(timeout_watcher, timeout_cb, http_timeout, 0);
+    ev_timer_init(timeout_watcher, timeout_cb, this_addr->timeout, 0);
     ev_set_priority(timeout_watcher, -1);
     ev_timer_start(loop, timeout_watcher);
 
-    if((++num_conn_watchers == max_http_clients)) {
-        log_warn("Stats HTTP connection limit reached");
-        for(unsigned i = 0; i < num_lsocks; i++)
-            ev_io_stop(loop, accept_watchers[i]);
-    }
+    if((++this_addr->num_conn_watchers == this_addr->max_clients))
+        ev_io_stop(loop, io);
 
 #ifdef TCP_DEFER_ACCEPT
     // Since we use DEFER_ACCEPT, the request is likely already
@@ -700,8 +699,16 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 #endif
 }
 
-void statio_init(const socks_cfg_t* socks_cfg) {
-    dmn_assert(socks_cfg);
+// stop further periodic log output and do final log output
+void statio_final_stats(struct ev_loop* statio_loop) {
+    dmn_assert(statio_loop);
+    if(log_watcher)
+        ev_timer_stop(statio_loop, log_watcher);
+    statio_log_stats();
+}
+
+void statio_start(struct ev_loop* statio_loop, const socks_cfg_t* socks_cfg) {
+    dmn_assert(statio_loop); dmn_assert(socks_cfg);
 
     start_time = time(NULL);
 
@@ -738,93 +745,31 @@ void statio_init(const socks_cfg_t* socks_cfg) {
     //   having made any stupid mistakes in the max len calcuations :P
     data_buffer_size <<= 1U;
 
+    // how many dns threads we gather stats from
+    num_dns_threads = socks_cfg->num_dns_threads;
+
     // now set up the normal stuff, like libev event watchers
     if(gcfg->log_stats) {
-        log_watcher = xmalloc(sizeof(ev_timer));
+        log_watcher = xmalloc(sizeof(*log_watcher));
         ev_timer_init(log_watcher, log_watcher_cb, gcfg->log_stats, gcfg->log_stats);
         ev_set_priority(log_watcher, -2);
-    }
-
-    num_lsocks = socks_cfg->num_http_addrs;
-    max_http_clients = socks_cfg->max_http_clients;
-    http_timeout = socks_cfg->http_timeout;
-    num_dns_threads = socks_cfg->num_dns_threads;
-    lsocks = xmalloc(sizeof(int) * num_lsocks);
-    lsocks_bound = xcalloc(num_lsocks, sizeof(bool));
-    accept_watchers = xmalloc(sizeof(ev_io*) * num_lsocks);
-
-    for(unsigned i = 0; i < num_lsocks; i++) {
-        const dmn_anysin_t* asin = &socks_cfg->http_addrs[i];
-        lsocks[i] = tcp_listen_pre_setup(asin, socks_cfg->http_timeout);
-    }
-}
-
-void statio_bind_socks(void) {
-    for(unsigned i = 0; i < num_lsocks; i++)
-        if(!lsocks_bound[i])
-            if(!socks_helper_bind("TCP stats", lsocks[i], &scfg->http_addrs[i], false))
-                lsocks_bound[i] = true;
-}
-
-bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft) {
-    dmn_assert(socks_cfg);
-    unsigned rv = false;
-    for(unsigned i = 0; i < num_lsocks; i++)
-        if(!socks_sock_is_bound_to(lsocks[i], &socks_cfg->http_addrs[i]) && !soft)
-            log_fatal("Failed to bind() stats TCP socket to %s", dmn_logf_anysin(&socks_cfg->http_addrs[i]));
-        else
-            rv = true;
-    return rv;
-}
-
-// called within our thread/loop to do the final stats output
-F_NONNULL
-static void final_stats_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
-
-    // stop further periodic log output and do final output
-    if(log_watcher)
-        ev_timer_stop(loop, log_watcher);
-    statio_log_stats();
-
-    // let mainthread return from statio_final_stats_wait()
-    pthread_mutex_lock(&final_stats_mutex);
-    final_stats_done = true;
-    pthread_cond_signal(&final_stats_cond);
-    pthread_mutex_unlock(&final_stats_mutex);
-}
-
-// called from main thread to feed ev_async for final stats
-void statio_final_stats(void) {
-    dmn_assert(statio_loop); dmn_assert(final_stats_async);
-    ev_async_send(statio_loop, final_stats_async);
-}
-
-// called from main thread to wait on final_stats_cb() completion
-void statio_final_stats_wait(void) {
-    pthread_mutex_lock(&final_stats_mutex);
-    while(!final_stats_done)
-        pthread_cond_wait(&final_stats_cond, &final_stats_mutex);
-    pthread_mutex_unlock(&final_stats_mutex);
-}
-
-void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg) {
-    dmn_assert(statio_loop_arg); dmn_assert(socks_cfg);
-
-    statio_loop = statio_loop_arg;
-    if(log_watcher)
         ev_timer_start(statio_loop, log_watcher);
+    }
 
-    final_stats_async = xmalloc(sizeof(ev_async));
-    ev_async_init(final_stats_async, final_stats_cb);
-    ev_async_start(statio_loop, final_stats_async);
-
-    for(unsigned i = 0; i < num_lsocks; i++) {
-        if(listen(lsocks[i], 128) == -1)
-            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, dmn_logf_anysin(&socks_cfg->http_addrs[i]), dmn_logf_errno());
-        accept_watchers[i] = xmalloc(sizeof(ev_io));
-        ev_io_init(accept_watchers[i], accept_cb, lsocks[i], EV_READ);
-        ev_set_priority(accept_watchers[i], -2);
-        ev_io_start(statio_loop, accept_watchers[i]);
+    num_statio_addrs = socks_cfg->num_http_addrs;
+    statio_addrs = xmalloc(num_statio_addrs * sizeof(*statio_addrs));
+    for(unsigned i = 0; i < num_statio_addrs; i++) {
+        const http_addr_t* this_cfg = &socks_cfg->http_addrs[i];
+        statio_addr_t* this_addr = &statio_addrs[i];
+        this_addr->num_conn_watchers = 0;
+        this_addr->max_clients = this_cfg->max_clients;
+        this_addr->timeout = this_cfg->timeout;
+        this_addr->accept_watcher = xmalloc(sizeof(*this_addr->accept_watcher));
+        ev_io_init(this_addr->accept_watcher, accept_cb, this_cfg->sock, EV_READ);
+        this_addr->accept_watcher->data = this_addr;
+        ev_set_priority(this_addr->accept_watcher, -2);
+        ev_io_start(statio_loop, this_addr->accept_watcher);
+        if(listen(this_cfg->sock, 128) == -1)
+            log_fatal("Failed to listen(%s, %i) for stats TCP socket: %s", dmn_logf_anysin(&socks_cfg->http_addrs[i].addr), 128, dmn_logf_errno());
     }
 }

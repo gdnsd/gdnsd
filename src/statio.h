@@ -29,18 +29,10 @@
 #include <ev.h>
 
 F_NONNULL
-void statio_init(const socks_cfg_t* socks_cfg);
-void statio_bind_socks(void);
-F_NONNULL
-bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft);
-
-F_NONNULL
-void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg);
+void statio_start(struct ev_loop* statio_loop, const socks_cfg_t* socks_cfg);
 
 // main thread calls this to issue final stats output
-void statio_final_stats(void);
-
-// main thread calls this to wait on completion of the above
-void statio_final_stats_wait(void);
+F_NONNULL
+void statio_final_stats(struct ev_loop* statio_loop);
 
 #endif // GDSND_STATIO_H
