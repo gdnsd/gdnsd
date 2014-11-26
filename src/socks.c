@@ -227,6 +227,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             return dns_listen_any(socks_cfg, addr_defs);
         }
         else if(!strcmp(simple_str, "scan")) {
+            log_warn("The 'listen => scan' interface-scanning mode is being deprecated and will likely disappear in a future release! If 'listen => any' does not work as a replacement for your use-case, *please* file a bug at " PACKAGE_BUGREPORT);
             return dns_listen_scan(socks_cfg, addr_defs);
         }
     }

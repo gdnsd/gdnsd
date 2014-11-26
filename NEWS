@@ -30,6 +30,10 @@
       builds will produce stack backtraces before terminating the process.
 
   *** Other:
+    * The 'listen => scan' feature is now deprecated, but continues to
+      function and issues a deprecation warning when used.  Please either
+      migrate to 'listen => any' (the current default) or file a bug
+      indicating why that doesn't work for your platform/use-case!
     * Ragel 6.x is now a hard build dependency for all builds.  Previously it
       was required for building from git, but not from tarballs.
     * Perl version dependency has been raised from 5.8.1 to 5.10.1

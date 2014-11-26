@@ -137,8 +137,8 @@ It can also take the form of an array of such addresses, as in:
     ]
   }
 
-Finally, it can also be a hash where the keys are listen addresses, and
-the values are per-address options, as in:
+It can also be a hash where the keys are listen addresses, and the values are
+per-address options, as in:
 
   options => {
     listen => {
@@ -156,18 +156,16 @@ the global option of the same name) are C<tcp_threads>,
 C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>, C<udp_recv_width>,
 C<udp_rcvbuf>, and C<udp_sndbuf>.
 
-There are also two special singular string values: C<any> and C<scan>.
-
-If set to C<any>, the daemon will listen on the C<dns_port> port (default 53)
-on C<0.0.0.0> and C<::>.  This is the default if no C<listen> option is provided.
+Finally, it can also be set to the special string value C<any>, as in:
 
   options => { listen => any }
 
-If set to C<scan>, scan all available IP (v4 and v6) network interfaces
-via C<getifaddrs()> and set up a separate listener on the C<dns_port>
-port (again, default 53) for each address found.
-
-  options => { listen => scan }
+This is the default mode if no explicit C<listen> option is provided.  In this
+mode, the daemon will listen on the C<dns_port> port (default 53) on the IPv4
+and IPv6 C<ANY> addresses C<0.0.0.0> and C<::>.  gdnsd's C<ANY>-address
+sockets should correctly handle sending outgoing datagrams via the interface
+they were received on with a source address matching the destination address of
+the request.
 
 =item B<http_listen>
 
