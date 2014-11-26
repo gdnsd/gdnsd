@@ -22,6 +22,8 @@
 #include <stdlib.h>
 
 #include "main.h"
+#include "zsrc_rfc1035.h"
+#include "zsrc_djb.h"
 #include <gdnsd/alloc.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/log.h>
@@ -296,10 +298,18 @@ static void ztree_atexit(void) {
     ztree_leak_warn(ztree_root);
 }
 
-void ztree_init(void) {
+void ztree_init(const bool check_only) {
+    log_info("Loading zone data...");
+
     dmn_assert(!ztree_root);
     ztree_root = xcalloc(1, sizeof(ztree_t));
     gdnsd_atexit_debug(ztree_atexit);
+
+    zsrc_djb_load_zones(check_only);
+    zsrc_rfc1035_load_zones(check_only);
+
+    if(check_only)
+        log_info("Configuration and zone data loads just fine");
 }
 
 // insertion sort for mostly-sorted arrays

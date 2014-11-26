@@ -67,8 +67,8 @@ struct _zone_struct {
     zone_t* next;         // init to NULL, owned by ztree...
 };
 
-// Singleton init
-void ztree_init(void);
+// Singleton init, loads zones from providers as well
+void ztree_init(const bool check_only);
 
 // --- zsrc_* interfaces ---
 

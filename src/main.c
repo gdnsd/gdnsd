@@ -449,15 +449,10 @@ int main(int argc, char** argv) {
     // Set up and validate privdrop info if necc
     dmn_init3(cfg->username, (action == ACT_RESTART));
 
-    log_info("Loading zone data...");
-    ztree_init();
-    zsrc_djb_load_zones(action == ACT_CHECKCFG);
-    zsrc_rfc1035_load_zones(action == ACT_CHECKCFG);
-
-    if(action == ACT_CHECKCFG) {
-        log_info("Configuration and zone data loads just fine");
+    // Load zone data (final step if ACT_CHECKCFG)
+    ztree_init(action == ACT_CHECKCFG);
+    if(action == ACT_CHECKCFG)
         exit(0);
-    }
 
     // from here out, all actions are attempting startup...
     dmn_assert(action == ACT_START || action == ACT_RESTART);
