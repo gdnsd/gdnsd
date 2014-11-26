@@ -25,6 +25,7 @@
 #include <time.h>
 
 #include "conf.h"
+#include "socks.h"
 #include "dnswire.h"
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -131,16 +132,16 @@ dnspacket_stats_t** dnspacket_stats;
 
 // Allocates the array of pointers to stats structures, one per I/O thread
 // Called from main thread before I/O threads are spawned.
-void dnspacket_global_setup(void) {
-    dnspacket_stats = xcalloc(gcfg->num_dns_threads, sizeof(dnspacket_stats_t*));
+void dnspacket_global_setup(const socks_cfg_t* socks_cfg) {
+    dnspacket_stats = xcalloc(socks_cfg->num_dns_threads, sizeof(dnspacket_stats_t*));
     result_v6_offset = gdnsd_result_get_v6_offset();
 }
 
 // Called from main thread after starting all of the I/O threads,
 //  ensures they all finish allocating their stats and storing the pointers
 //  into dnspacket_stats before allowing the main thread to continue.
-void dnspacket_wait_stats(void) {
-    const unsigned waitfor = gcfg->num_dns_threads;
+void dnspacket_wait_stats(const socks_cfg_t* socks_cfg) {
+    const unsigned waitfor = socks_cfg->num_dns_threads;
     pthread_mutex_lock(&stats_init_mutex);
     while(stats_initialized < waitfor)
         pthread_cond_wait(&stats_init_cond, &stats_init_mutex);

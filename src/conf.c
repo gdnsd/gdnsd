@@ -18,8 +18,8 @@
  */
 
 #include "conf.h"
-#include "dnsio_udp.h"
-#include "dnsio_tcp.h"
+#include "main.h"
+#include "socks.h"
 #include <gdnsd/alloc.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/log.h>
@@ -28,32 +28,20 @@
 
 #include <unistd.h>
 #include <string.h>
-#include <libgen.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <limits.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <ifaddrs.h>
-#include <netinet/in.h>
 
-#include "main.h"
+// Global config, read-only
+const cfg_t* gcfg = NULL;
 
 static const char DEF_USERNAME[] = PACKAGE_NAME;
 
 // just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
 static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00";
-static const unsigned chaos_prefix_len = 10;
+static const unsigned chaos_prefix_len = 10U;
 static const char chaos_def[] = "gdnsd";
 
 static const cfg_t cfg_defaults = {
-    .dns_addrs = NULL,
-    .dns_threads = NULL,
-    .http_addrs = NULL,
     .username = DEF_USERNAME,
     .chaos = NULL,
     .include_optional_ns = false,
@@ -75,12 +63,7 @@ static const cfg_t cfg_defaults = {
     .max_ttl = 3600000U,
     .min_ttl = 5U,
     .log_stats = 3600U,
-    .max_http_clients = 128U,
-    .http_timeout = 5U,
     .max_edns_response = 1410U,
-    .num_dns_addrs = 0U,
-    .num_dns_threads = 0U,
-    .num_http_addrs = 0U,
     .max_response = 16384U,
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
@@ -120,15 +103,8 @@ static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UN
     log_fatal("Invalid %s key '%s'", which, key);
 }
 
-static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin_t* result) {
-    dmn_assert(result);
-    const int addr_err = gdnsd_anysin_fromstr(lspec_txt, def_port, result);
-    if(addr_err)
-        log_fatal("Could not process listen-address spec '%s': %s", lspec_txt, gai_strerror(addr_err));
-}
-
-F_NONNULLX(1)
-static void plugin_load_and_configure(const cfg_t* cfg, const char* name, vscf_data_t* pconf) {
+F_NONNULLX(2)
+static void plugin_load_and_configure(const unsigned num_dns_threads, const char* name, vscf_data_t* pconf) {
     dmn_assert(name);
 
     if(pconf && !vscf_is_hash(pconf))
@@ -136,16 +112,16 @@ static void plugin_load_and_configure(const cfg_t* cfg, const char* name, vscf_d
 
     plugin_t* plugin = gdnsd_plugin_find_or_load(name);
     if(plugin->load_config) {
-        plugin->load_config(pconf, cfg->num_dns_threads);
+        plugin->load_config(pconf, num_dns_threads);
         plugin->config_loaded = true;
     }
 }
 
 F_NONNULL
-static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, void* cfg_asvoid) {
-    dmn_assert(name); dmn_assert(pconf); dmn_assert(cfg_asvoid);
-    const cfg_t* cfg = cfg_asvoid;
-    plugin_load_and_configure(cfg, name, pconf);
+static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, const void* scfg_asvoid) {
+    dmn_assert(name); dmn_assert(pconf); dmn_assert(scfg_asvoid);
+    const socks_cfg_t* socks_cfg = scfg_asvoid;
+    plugin_load_and_configure(socks_cfg->num_dns_threads, name, pconf);
     return true;
 }
 
@@ -276,245 +252,14 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
         } \
     } while(0)
 
-F_NONNULLX(1)
-static void process_http_listen(cfg_t* cfg, vscf_data_t* http_listen_opt, const unsigned def_http_port) {
-    dmn_assert(cfg);
-
-    if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
-        cfg->num_http_addrs = 2;
-        cfg->http_addrs = xcalloc(cfg->num_http_addrs, sizeof(dmn_anysin_t));
-        make_addr("0.0.0.0", def_http_port, cfg->http_addrs);
-        make_addr("::", def_http_port, &cfg->http_addrs[1]);
-    }
-    else {
-        cfg->num_http_addrs = vscf_array_get_len(http_listen_opt);
-        cfg->http_addrs = xcalloc(cfg->num_http_addrs, sizeof(dmn_anysin_t));
-        for(unsigned i = 0; i < cfg->num_http_addrs; i++) {
-            vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
-            if(!vscf_is_simple(lspec))
-                log_fatal("Config option 'http_listen': all listen specs must be strings");
-            make_addr(vscf_simple_get_data(lspec), def_http_port, &cfg->http_addrs[i]);
-        }
-    }
-}
-
-F_NONNULL F_PURE
-static bool dns_addr_is_dupe(const cfg_t* cfg, const dmn_anysin_t* new_addr) {
-    dmn_assert(cfg);
-    dmn_assert(new_addr);
-    dmn_assert(new_addr->sa.sa_family == AF_INET6 || new_addr->sa.sa_family == AF_INET);
-
-    for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
-        if(cfg->dns_addrs[i].addr.sa.sa_family == new_addr->sa.sa_family) {
-            dmn_assert(new_addr->len == cfg->dns_addrs[i].addr.len);
-            if(!memcmp(new_addr, &cfg->dns_addrs[i].addr, new_addr->len))
-                return true;
-        }
-    }
-
-    return false;
-}
-
-F_NONNULL
-static void dns_listen_any(cfg_t* cfg, const dns_addr_t* addr_defs) {
-    dmn_assert(cfg); dmn_assert(addr_defs);
-
-    cfg->num_dns_addrs = 2;
-    cfg->dns_addrs = xcalloc(cfg->num_dns_addrs, sizeof(dns_addr_t));
-    dns_addr_t* ac_v4 = &cfg->dns_addrs[0];
-    memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
-    make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
-    dns_addr_t* ac_v6 = &cfg->dns_addrs[1];
-    memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
-    make_addr("::", addr_defs->dns_port, &ac_v6->addr);
-}
-
-F_NONNULL
-static void dns_listen_scan(cfg_t* cfg, const dns_addr_t* addr_defs) {
-    dmn_assert(cfg); dmn_assert(addr_defs);
-
-    dmn_anysin_t temp_asin;
-
-    struct ifaddrs* ifap;
-    if(getifaddrs(&ifap))
-        dmn_log_fatal("getifaddrs() for 'listen => scan' failed: %s", dmn_logf_errno());
-
-    cfg->num_dns_addrs = 0;
-    for(;ifap;ifap = ifap->ifa_next) {
-        if(!ifap->ifa_addr)
-            continue;
-
-        if(ifap->ifa_addr->sa_family == AF_INET6) {
-            memcpy(&temp_asin.sin6, ifap->ifa_addr, sizeof(struct sockaddr_in6));
-            temp_asin.len = sizeof(struct sockaddr_in6);
-        }
-        else if(ifap->ifa_addr->sa_family == AF_INET) {
-            memcpy(&temp_asin.sin, ifap->ifa_addr, sizeof(struct sockaddr_in));
-            temp_asin.len = sizeof(struct sockaddr_in);
-        }
-        else { // unknown family...
-            continue;
-        }
-
-        if(dmn_anysin_is_anyaddr(&temp_asin))
-            continue;
-
-        if(temp_asin.sa.sa_family == AF_INET6)
-            temp_asin.sin6.sin6_port = htons(addr_defs->dns_port);
-        else
-            temp_asin.sin.sin_port = htons(addr_defs->dns_port);
-
-        if(dns_addr_is_dupe(cfg, &temp_asin))
-            continue;
-
-        cfg->dns_addrs = xrealloc(cfg->dns_addrs, (cfg->num_dns_addrs + 1) * sizeof(dns_addr_t));
-        dns_addr_t* addrconf = &cfg->dns_addrs[cfg->num_dns_addrs++];
-        memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
-        memcpy(&addrconf->addr, &temp_asin, sizeof(dmn_anysin_t));
-        addrconf->autoscan = true;
-    }
-
-    freeifaddrs(ifap);
-
-    if(!cfg->num_dns_addrs)
-        dmn_log_fatal("automatic interface scanning via 'listen => scan' found no valid addresses to listen on");
-}
-
-F_NONNULLX(1,3)
-static void fill_dns_addrs(cfg_t* cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-    dmn_assert(cfg); dmn_assert(addr_defs);
-
-    if(!listen_opt)
-        return dns_listen_any(cfg, addr_defs);
-    if(vscf_is_simple(listen_opt)) {
-        const char* simple_str = vscf_simple_get_data(listen_opt);
-        if(!strcmp(simple_str, "any")) {
-            return dns_listen_any(cfg, addr_defs);
-        }
-        else if(!strcmp(simple_str, "scan")) {
-            return dns_listen_scan(cfg, addr_defs);
-        }
-    }
-
-    if(vscf_is_hash(listen_opt)) {
-        cfg->num_dns_addrs = vscf_hash_get_len(listen_opt);
-        cfg->dns_addrs = xcalloc(cfg->num_dns_addrs, sizeof(dns_addr_t));
-        for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
-            dns_addr_t* addrconf = &cfg->dns_addrs[i];
-            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
-            const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
-            vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
-            if(!vscf_is_hash(addr_opts))
-                log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
-
-            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_recv_width, 1LU, 64LU, addrconf->udp_recv_width);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
-            CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, udp_threads, 1024LU, addrconf->udp_threads);
-
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
-            CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_threads, 1024LU, addrconf->tcp_threads);
-
-            if(!gdnsd_reuseport_ok()) {
-                if(addrconf->udp_threads > 1) {
-                    log_warn("DNS listen address '%s': option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", lspec, addrconf->udp_threads);
-                    addrconf->udp_threads = 1;
-                }
-                if(addrconf->tcp_threads > 1) {
-                    log_warn("DNS listen address '%s': option 'tcp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", lspec, addrconf->tcp_threads);
-                    addrconf->tcp_threads = 1;
-                }
-            }
-
-            make_addr(lspec, addrconf->dns_port, &addrconf->addr);
-            vscf_hash_iterate_const(addr_opts, true, bad_key, "per-address listen option");
-        }
-    }
-    else {
-        cfg->num_dns_addrs = vscf_array_get_len(listen_opt);
-        cfg->dns_addrs = xcalloc(cfg->num_dns_addrs, sizeof(dns_addr_t));
-        for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
-            dns_addr_t* addrconf = &cfg->dns_addrs[i];
-            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
-            vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
-            if(!vscf_is_simple(lspec))
-                log_fatal("Config option 'listen': all listen specs must be strings");
-            make_addr(vscf_simple_get_data(lspec), addr_defs->dns_port, &addrconf->addr);
-        }
-    }
-}
-
-F_NONNULLX(1,3)
-static void process_listen(cfg_t* cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-    dmn_assert(cfg); dmn_assert(addr_defs);
-
-    // this fills in cfg->dns_addrs raw data
-    fill_dns_addrs(cfg, listen_opt, addr_defs);
-
-    if(!cfg->num_dns_addrs)
-        dmn_log_fatal("DNS listen addresses explicitly configured as an empty set - cannot continue without at least one address!");
-
-    // use dns_addrs to populate dns_threads....
-
-    cfg->num_dns_threads = 0;
-    for(unsigned i = 0; i < cfg->num_dns_addrs; i++)
-        cfg->num_dns_threads += (cfg->dns_addrs[i].udp_threads + cfg->dns_addrs[i].tcp_threads);
-
-    if(!cfg->num_dns_threads)
-        dmn_log_fatal("All listen addresses configured for zero UDP and zero TCP threads - cannot continue without at least one listener!");
-
-    cfg->dns_threads = xcalloc(cfg->num_dns_threads, sizeof(dns_thread_t));
-
-    unsigned tnum = 0;
-    for(unsigned i = 0; i < cfg->num_dns_addrs; i++) {
-        dns_addr_t* a = &cfg->dns_addrs[i];
-        for(unsigned j = 0; j < a->udp_threads; j++) {
-            dns_thread_t* t = &cfg->dns_threads[tnum];
-            t->ac = a;
-            t->is_udp = true;
-            t->threadnum = tnum++;
-        }
-        for(unsigned j = 0; j < a->tcp_threads; j++) {
-            dns_thread_t* t = &cfg->dns_threads[tnum];
-            t->ac = a;
-            t->is_udp = false;
-            t->threadnum = tnum++;
-        }
-        if(!(a->udp_threads + a->tcp_threads))
-            dmn_log_warn("DNS listen address %s explicitly configured with no UDP or TCP threads - nothing is actually listening on this address!",
-                dmn_logf_anysin(&a->addr));
-        else
-            dmn_log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
-                a->udp_threads, a->tcp_threads, dmn_logf_anysin(&a->addr));
-    }
-
-    dmn_assert(tnum == cfg->num_dns_threads);
-}
-
-cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool force_zsd) {
+cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd) {
     dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
 
     cfg_t* cfg = xmalloc(sizeof(*cfg));
     memcpy(cfg, &cfg_defaults, sizeof(*cfg));
 
-    vscf_data_t* listen_opt = NULL;
-    vscf_data_t* http_listen_opt = NULL;
     vscf_data_t* psearch_array = NULL;
     const char* chaos_data = chaos_def;
-    unsigned def_http_port = 3506U;
-
-    dns_addr_t addr_defs = {
-        .autoscan = false,
-        .dns_port = 53U,
-        .udp_recv_width = 8U,
-        .udp_rcvbuf = 0U,
-        .udp_sndbuf = 0U,
-        .udp_threads = 1U,
-        .tcp_clients_per_thread = 128U,
-        .tcp_timeout = 5U,
-        .tcp_threads = 1U,
-    };
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
@@ -525,31 +270,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
         CFG_OPT_UINT_NOMIN(options, log_stats, 86400LU);
-        CFG_OPT_UINT(options, max_http_clients, 1LU, 65535LU);
-        CFG_OPT_UINT(options, http_timeout, 3LU, 60LU);
 
-        CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
-        CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
-        CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
-        CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, addr_defs.udp_sndbuf);
-        CFG_OPT_UINT_ALTSTORE_NOMIN(options, udp_threads, 1024LU, addr_defs.udp_threads);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, addr_defs.tcp_timeout);
-
-        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
-        CFG_OPT_UINT_ALTSTORE_NOMIN(options, tcp_threads, 1024LU, addr_defs.tcp_threads);
-
-        if(!gdnsd_reuseport_ok()) {
-            if(addr_defs.udp_threads > 1) {
-                log_warn("The global option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", addr_defs.udp_threads);
-                addr_defs.udp_threads = 1;
-            }
-            if(addr_defs.tcp_threads > 1) {
-                log_warn("The global option 'tcp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", addr_defs.tcp_threads);
-                addr_defs.tcp_threads = 1;
-            }
-        }
-
-        CFG_OPT_UINT_ALTSTORE(options, http_port, 1LU, 65535LU, def_http_port);
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
         CFG_OPT_UINT(options, max_ttl, 3600LU, (unsigned long)GDNSD_STTL_TTL_MAX);
@@ -580,8 +301,6 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
         CFG_OPT_DBL(options, zones_rfc1035_quiesce, 0.0, 60.0);
         CFG_OPT_STR(options, username);
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
-        listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
-        http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate_const(options, true, bad_key, "options");
     }
@@ -594,12 +313,6 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
 
     // set response string for CHAOS queries
     set_chaos(cfg, chaos_data);
-
-    // Set up the http listener data
-    process_http_listen(cfg, http_listen_opt, def_http_port);
-
-    // Initial setup of the listener data
-    process_listen(cfg, listen_opt, &addr_defs);
 
     vscf_data_t* stypes_cfg = cfg_root
         ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
@@ -622,14 +335,14 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
         //   the list of meta-plugins will remain short and in-tree.
         vscf_data_t* geoplug = vscf_hash_get_data_byconstkey(plugins_hash, "geoip", true);
         if(geoplug)
-            plugin_load_and_configure(cfg, "geoip", geoplug);
+            plugin_load_and_configure(socks_cfg->num_dns_threads, "geoip", geoplug);
         // ditto for "metafo"
         // Technically, geoip->metafo synthesis will work, but not metafo->geoip synthesis.
         // Both can reference each other directly (%plugin!resource)
         vscf_data_t* metaplug = vscf_hash_get_data_byconstkey(plugins_hash, "metafo", true);
         if(metaplug)
-            plugin_load_and_configure(cfg, "metafo", metaplug);
-        vscf_hash_iterate(plugins_hash, true, load_plugin_iter, cfg);
+            plugin_load_and_configure(socks_cfg->num_dns_threads, "metafo", metaplug);
+        vscf_hash_iterate_const(plugins_hash, true, load_plugin_iter, socks_cfg);
     }
 
     // Any plugins loaded via the plugins hash above will already have had load_config() called
@@ -638,7 +351,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
     // Because of the possibility of mixed plugins and the configuration ordering above for
     //    meta-plugins, this must happen at this sequential point (after plugins_hash processing,
     //    but before stypes_p2())
-    gdnsd_plugins_configure_all(cfg->num_dns_threads);
+    gdnsd_plugins_configure_all(socks_cfg->num_dns_threads);
 
     // Phase 2 of service_types config
     gdnsd_mon_cfg_stypes_p2(stypes_cfg);
@@ -654,14 +367,4 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zss, const bool f
     gdnsd_mon_check_admin_file();
 
     return cfg;
-}
-
-void dns_lsock_init(cfg_t* cfg) {
-    for(unsigned i = 0; i < cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &cfg->dns_threads[i];
-        if(t->is_udp)
-            udp_sock_setup(t);
-        else
-            tcp_dns_listen_setup(t);
-    }
 }

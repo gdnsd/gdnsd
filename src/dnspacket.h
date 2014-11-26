@@ -22,6 +22,7 @@
 
 #include "config.h"
 #include "ltree.h"
+#include "socks.h"
 #include <gdnsd/misc.h>
 #include <gdnsd/stats.h>
 
@@ -78,8 +79,8 @@ dnspacket_stats_t* dnspacket_stats_init(const unsigned this_threadnum, const boo
 F_MALLOC
 void* dnspacket_ctx_init(const bool is_udp);
 
-void dnspacket_global_setup(void);
-void dnspacket_wait_stats(void);
+void dnspacket_global_setup(const socks_cfg_t* socks_cfg);
+void dnspacket_wait_stats(const socks_cfg_t* socks_cfg);
 
 extern dnspacket_stats_t** dnspacket_stats;
 

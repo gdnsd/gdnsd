@@ -50,9 +50,6 @@
 #include <misc-prot.h>
 #include <mon-prot.h>
 
-// Global config, readonly
-const cfg_t* gcfg = NULL;
-
 // ev loop used for monitoring and statio
 // (which shared a thread as well)
 static struct ev_loop* mon_loop = NULL;
@@ -135,11 +132,15 @@ static void* zone_data_runtime(void* unused V_UNUSED) {
 }
 
 // thread entry point for monitoring (+statio) thread
-static void* mon_runtime(void* unused V_UNUSED) {
+F_NONNULL
+static void* mon_runtime(void* scfg_asvoid) {
+    dmn_assert(scfg_asvoid);
+    const socks_cfg_t* socks_cfg = scfg_asvoid;
+
     gdnsd_thread_setname("gdnsd-mon");
 
     // mon_start already queued up its events in mon_loop earlier...
-    statio_start(mon_loop);
+    statio_start(mon_loop, socks_cfg);
     ev_run(mon_loop, 0);
 
     dmn_assert(0); // should never be reached as loop never terminates
@@ -148,8 +149,8 @@ static void* mon_runtime(void* unused V_UNUSED) {
 }
 
 F_NONNULL
-static void start_threads(cfg_t* cfg) {
-    dmn_assert(cfg);
+static void start_threads(socks_cfg_t* socks_cfg) {
+    dmn_assert(socks_cfg);
 
     // Block all signals using the pthreads interface while starting threads,
     //  which causes them to inherit the same mask.
@@ -168,8 +169,8 @@ static void start_threads(cfg_t* cfg) {
 
     int pthread_err;
 
-    for(unsigned i = 0; i < cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &cfg->dns_threads[i];
+    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+        dns_thread_t* t = &socks_cfg->dns_threads[i];
         if(t->is_udp)
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, t);
         else
@@ -188,10 +189,10 @@ static void start_threads(cfg_t* cfg) {
     //  by the i/o threads before continuing on.  They must be ready
     //  before the monitoring thread starts below, as it will read
     //  those stat structures
-    dnspacket_wait_stats();
+    dnspacket_wait_stats(socks_cfg);
 
     pthread_t mon_threadid;
-    pthread_err = pthread_create(&mon_threadid, &attribs, &mon_runtime, NULL);
+    pthread_err = pthread_create(&mon_threadid, &attribs, &mon_runtime, socks_cfg);
     if(pthread_err)
         log_fatal("pthread_create() of monitoring thread failed: %s", dmn_logf_strerror(pthread_err));
 
@@ -438,8 +439,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Load full configuration and expose through the readonly global "gcfg"
-    cfg_t* cfg = conf_load(cfg_root, copts.force_zss, copts.force_zsd);
+    // Load full configuration and expose through the globals
+    socks_cfg_t* socks_cfg = socks_conf_load(cfg_root);
+    scfg = socks_cfg;
+    cfg_t* cfg = conf_load(cfg_root, socks_cfg, copts.force_zss, copts.force_zsd);
     gcfg = cfg;
     vscf_destroy(cfg_root);
 
@@ -467,10 +470,10 @@ int main(int argc, char** argv) {
         memlock_rlimits(started_as_root);
 
     // Initialize DNS listening sockets, but do not bind() them yet
-    dns_lsock_init(cfg);
+    socks_dns_lsocks_init(socks_cfg);
 
     // init the stats summing/output code + listening sockets (again no bind yet)
-    statio_init();
+    statio_init(socks_cfg);
 
     // set up our pcall for socket binding later
     unsigned bind_socks_funcidx = dmn_add_pcall(socks_helper_bind_all);
@@ -494,7 +497,7 @@ int main(int argc, char** argv) {
                 dmn_logf_errno());
 
     // Initialize dnspacket stuff
-    dnspacket_global_setup();
+    dnspacket_global_setup(socks_cfg);
 
     // drop privs if started as root
     dmn_secure();
@@ -522,7 +525,7 @@ int main(int argc, char** argv) {
     dmn_pcall(bind_socks_funcidx);
 
     // validate the results of the above, softly
-    bool first_binds_failed = socks_daemon_check_all(true);
+    bool first_binds_failed = socks_daemon_check_all(socks_cfg, true);
 
     // if the first binds didn't work (probably lack of SO_REUSEPORT,
     //   either in general or just in the old 1.x daemon we're taking over),
@@ -538,7 +541,7 @@ int main(int argc, char** argv) {
 
         // hard check this time - this function will fail fatally
         //   if any sockets can't be acquired.
-        socks_daemon_check_all(false);
+        socks_daemon_check_all(socks_cfg, false);
     }
 
     // Start up all of the UDP and TCP threads, each of
@@ -546,7 +549,7 @@ int main(int argc, char** argv) {
     // event loop (libev for TCP, manual blocking loop for UDP)
     // Also starts the zone data reload thread
     // and the statio+monitoring thread
-    start_threads(cfg);
+    start_threads(socks_cfg);
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");

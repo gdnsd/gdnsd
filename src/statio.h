@@ -21,16 +21,19 @@
 #define GDSND_STATIO_H
 
 #include "config.h"
+#include "socks.h"
 #include <gdnsd/compiler.h>
 #include <stdbool.h>
 #include <ev.h>
 
-void statio_init(void);
+F_NONNULL
+void statio_init(const socks_cfg_t* socks_cfg);
 void statio_bind_socks(void);
-bool statio_check_socks(bool soft);
+F_NONNULL
+bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft);
 
 F_NONNULL
-void statio_start(struct ev_loop* statio_loop);
+void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg);
 
 // main thread calls this to issue final stats output
 void statio_final_stats(void);
