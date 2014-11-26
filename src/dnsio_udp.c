@@ -77,20 +77,14 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr) {
 #endif
 
     if(any_addr) {
-#if HAVE_DECL_IP_PKTINFO
+#if defined IP_PKTINFO
         if(setsockopt(sock, SOL_IP, IP_PKTINFO, &opt_one, sizeof opt_one) == -1)
             log_fatal("Failed to set IP_PKTINFO on UDP socket: %s", dmn_logf_errno());
-#elif HAVE_DECL_IP_RECVDSTADDR && HAVE_DECL_IP_SENDSRCADDR
-        // we don't use SENDSRCADDR directly, but it seems most smart implementors
-        //  define it as an alias to RECVDSTADDR.  Importantly: MacOS, which does
-        //  not implement the sending part of this magic, does not declare SENDSRCADDR
-#  if IP_RECVDSTADDR != IP_SENDSRCADDR
-#    error Your platform violates some gdnsd assumptions (IP_RECVDSTADDR != IP_SENDSRCADDR)
-#  endif
+#elif defined IP_RECVDSTADDR
         if(setsockopt(sock, SOL_IP, IP_RECVDSTADDR, &opt_one, sizeof opt_one) == -1)
             log_fatal("Failed to set IP_RECVDSTADDR on UDP socket: %s", dmn_logf_errno());
 #else
-        log_fatal("IPv4 any-address '0.0.0.0' not supported for DNS listening on your platform (no IP_PKTINFO or IP_RECVDSTADDR+IP_SENDSRCADDR)");
+        log_fatal("IPv4 any-address '0.0.0.0' not supported for DNS listening on your platform (no IP_PKTINFO or IP_RECVDSTADDR)");
 #endif
     }
 

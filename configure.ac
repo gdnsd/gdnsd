@@ -205,65 +205,8 @@ if test $HAS_SENDMMSG -eq 1; then
     AC_DEFINE([USE_SENDMMSG],1,[Linux sendmmsg is usable])
 fi
 
-# ======== Begin Network Stuff ==========
-AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion to use RFC3542 IPv6 stuff])
-
-# Find out if -lsocket -lnsl is needed, and put them
-#  in $NETLIBS if so, and use them for these network-related
-#  feature checks...
-XLIBS=$LIBS
-LIBS=""
-AC_SEARCH_LIBS([gethostent],[nsl],[],[],[])
-AC_SEARCH_LIBS([setsockopt],[socket],[],[],[])
-NETLIBS=$LIBS
-AC_SUBST([NETLIBS])
-
-# sockaddr<->string mapping
-AC_CHECK_FUNCS([inet_pton getifaddrs getaddrinfo getnameinfo],,AC_MSG_ERROR([required network library calls missing]))
-AC_CHECK_DECLS([NI_NUMERICHOST, NI_NUMERICSERV],,AC_MSG_ERROR([NI_NUMERIC* decls missing]),[
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-])
-AC_CHECK_DECLS([AF_INET6, PF_INET6, AF_INET, PF_INET, AF_UNSPEC],,AC_MSG_ERROR([AF_*/PF_* decls missing]),[
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-])
-
-# The IPv4 UDP source-addr fixup stuff is optional.  If not present, gdnsd
-#  will abort at startup if configured to listen on 0.0.0.0.
-AC_CHECK_DECLS([IP_PKTINFO, IP_RECVDSTADDR, IP_SENDSRCADDR],,,[
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-])
-
-# Whereas the equivalent IPv6 source-addr/flow/interface stuff is absolutely
-#  required even for specific listen-adddreses, because we have to at minimum
-#  copy the sending hosts' flow labels.  We allow IPV6_RECVPKTINFO to be optional,
-#  but not the corresponding IPV6_PKTINFO (for the MacOS quirk of
-#  re-using IPV6_PKTINFO as IPV6_RECVPKTINFO prior to Lion, where we #define
-#  the latter to the former).
-AC_CHECK_DECLS([IPV6_PKTINFO],,AC_MSG_ERROR([IPV6_PKTINFO is required]),[
-    #include <sys/types.h>
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <netinet/ip.h>
-])
-AC_CHECK_DECLS([IPV6_RECVPKTINFO],,,[
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-])
-
-# restore original LIBS, from before NETLIBS
-LIBS=$XLIBS
-
-# ======== End Network Stuff ==========
+# Network Stuff
+AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion and higher to use RFC3542 IPv6 stuff])
 
 # liburcu-qsbr
 KILL_QSBR=0
@@ -485,7 +428,7 @@ AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
 # clump up all of the libgdnsd libdeps for re-use in LDADD for
 #   binaries that link libgdnsd on platforms where libtool's
 #   automatic dep resolution is disabled
-LIBGDNSD_LIBS="$MATH_LIB $QSBRLIBS $LIBEV_LIBS $NETLIBS $LIBADD_DLOPEN $LIBUNWIND_LIBS"
+LIBGDNSD_LIBS="$MATH_LIB $QSBRLIBS $LIBEV_LIBS $LIBADD_DLOPEN $LIBUNWIND_LIBS"
 AC_SUBST([LIBGDNSD_LIBS])
 
 # BUILD_FEATURES for cmdline output
