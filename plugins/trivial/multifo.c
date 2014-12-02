@@ -183,8 +183,6 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
 
     if(!num_addrs)
         log_fatal("plugin_multifo: resource '%s' (%s): must define one or more 'desc => IP' mappings, either directly or inside a subhash named 'addrs'", resname, stanza);
-    if(num_addrs > 64)
-        log_fatal("plugin_multifo: resource %s (%s): too many IPv%c addresses (limit 64)", resname, stanza, ipv6 ? '6' : '4');
 
     aset->count = num_addrs;
     aset->as = xcalloc(num_addrs, sizeof(addrstate_t));
