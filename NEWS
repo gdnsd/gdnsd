@@ -5,6 +5,7 @@
       bad error messages after failing to send one or more packets from a set.
     * The per-address level udp_recv_width option is now correctly limited to
       a value of 64 (previously it was being incorrectly limited to 32).
+    * plugin_multifo no longer pointlessly limits to 64 addrs per family
     * plugin_extmon bugfix for bad timeout/interval behavior if either >255s
     * Bugfix for zero-length configuration strings causing assertion failure
       in developer-debug builds
