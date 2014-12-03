@@ -4,11 +4,28 @@ After=local-fs.target
 After=syslog.target
 After=network.target
 
+[Install]
+WantedBy=multi-user.target
+
 [Service]
 Type=notify
 NotifyAccess=all
 ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
 ExecStop=@GDNSD_SBINDIR@/gdnsd stop
 
-[Install]
-WantedBy=multi-user.target
+#---
+# Things below this mark are not strictly required for proper operation,
+# they're just considered good baseline defaults.
+#---
+
+# Usually an authdns server is critical infrastructure; make it
+# less likely to be oomkilled if something else goes crazy:
+OOMScoreAdjust=-900
+
+# Stricter security environment:
+MountFlags=slave
+DevicePolicy=closed
+PrivateDevices=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
