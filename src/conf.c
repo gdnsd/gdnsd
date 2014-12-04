@@ -68,8 +68,7 @@ static const cfg_t cfg_defaults = {
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
     .zones_rfc1035_auto_interval = 31U,
-    .zones_rfc1035_quiesce = 5.0,
-    .zones_rfc1035_min_quiesce = 0.0,
+    .zones_rfc1035_quiesce = 3.0,
 };
 
 F_NONNULL
@@ -294,11 +293,11 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_BOOL(options, zones_strict_startup);
         CFG_OPT_BOOL(options, zones_rfc1035_auto);
 
-        // it's important that auto_interval is never lower than 2s, or it could cause
-        //   us to miss fast events on filesystems with 1-second mtime resolution.
         CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
-        CFG_OPT_DBL(options, zones_rfc1035_min_quiesce, 0.0, 5.0);
-        CFG_OPT_DBL(options, zones_rfc1035_quiesce, 0.0, 60.0);
+        CFG_OPT_DBL(options, zones_rfc1035_quiesce, 1.02, 60.0);
+        if(vscf_hash_get_data_byconstkey(options, "zones_rfc1035_min_quiesce", true))
+            log_warn("The global option 'zones_rfc1035_min_quiesce' is deprecated and no longer has any effect");
+
         CFG_OPT_STR(options, username);
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);

@@ -31,6 +31,13 @@
       builds will produce stack backtraces before terminating the process.
 
   *** Other:
+    * The range, default, and effects of the zones_rfc1035_quiesce option
+      have changed.  The zones_rfc1035_min_quiesce option is now deprecated
+      and useless and will generate a harmless warning on startup.  This
+      shouldn't be a pragmatic issue for most users.
+    * Related to the above: the code no longer makes heuristic attempts to
+      determine the effective filesystem timestamp accuracy of the zones
+      directory on startup by writing temporary test files to it.
     * The 'listen => scan' feature is now deprecated, but continues to
       function and issues a deprecation warning when used.  Please either
       migrate to 'listen => any' (the current default) or file a bug

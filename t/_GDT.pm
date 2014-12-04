@@ -132,12 +132,6 @@ our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
     $OUTDIR = $ENV{TESTOUT_DIR} . '/' . $tname;
 }
 
-# this makes gdnsd start faster on low-res filesystems,
-#   individual scripts which actually test runtime
-#   zone data changes must disable this for the
-#   tests to work accurately!
-$ENV{GDNSD_TESTSUITE_NO_ZONEFILE_MODS} = 1;
-
 # generic flag to eliminate various timer delays under testing
 $ENV{GDNSD_TESTSUITE_NODELAY} = 1;
 
@@ -330,6 +324,7 @@ sub proc_tmpl {
         run_dir = $OUTDIR/run/gdnsd
         state_dir = $OUTDIR/var/lib/gdnsd
         realtime_stats = true
+        zones_rfc1035_quiesce = 1.02
     };
 
     if($PRIVDROP_USER) {
@@ -575,8 +570,12 @@ sub test_log_output {
 
 sub insert_altzone {
     my ($class, $fn, $destfn) = @_;
-    File::Copy::copy("$ALTZONES_IN/$fn", $OUTDIR . "/etc/zones/$destfn")
-        or die "Failed to copy alt zonefile '$fn' to 'etc/zones/$destfn': $!";
+    my $full_temp_fn = $OUTDIR . "/etc/zones/.mvtmp.$destfn";
+    my $full_dest_fn = $OUTDIR . "/etc/zones/$destfn";
+    File::Copy::copy("$ALTZONES_IN/$fn", $full_temp_fn)
+        or die "Failed to copy alt zonefile '$fn' to '$full_temp_fn': $!";
+    File::Copy::move($full_temp_fn, $full_dest_fn)
+        or die "Failed to move '$full_temp_fn' to '$full_dest_fn': $!";
 }
 
 sub delete_altzone {

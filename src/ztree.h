@@ -31,16 +31,12 @@
 // high-res mtime stuff, for zsrc_*.c to use internally...
 #if defined HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
 #  define get_mtimens(_xst) ((_xst).st_mtim.tv_nsec)
-#  define has_mtimens 1
 #elif defined HAVE_STRUCT_STAT_ST_MTIMESPEC_TV_NSEC
 #  define get_mtimens(_xst) ((_xst).st_mtimespec.tv_nsec)
-#  define has_mtimens 1
 #elif defined HAVE_STRUCT_STAT_ST_MTIMENSEC
 #  define get_mtimens(_xst) ((_xst).st_mtimensec)
-#  define has_mtimens 1
 #else
 #  define get_mtimens(_xst) 0
-#  define has_mtimens 0
 #endif
 
 F_UNUSED

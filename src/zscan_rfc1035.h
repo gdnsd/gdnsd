@@ -22,9 +22,22 @@
 
 #include "config.h"
 #include "ztree.h"
+#include <gdnsd/compiler.h>
 
-// Actually scan the zonefile, creating the data
-F_WUNUSED F_NONNULL
-bool zscan_rfc1035(zone_t* zone, const char* fn);
+// Actually scan the zonefile, creating the data.  The failure type
+//   distinction is useful for the filesystem-level code over in
+//   zsrc_rfc1035.c in deciding whether and when to retry a failure.
+// FAILED_FILE means that something went wrong with filesystem-level
+//   operations (cannot open, lock, mmap, close, etc), whereas FAILED_PARSE
+//   means the contents were no good.
+
+typedef enum {
+    ZSCAN_RFC1035_SUCCESS = 0,
+    ZSCAN_RFC1035_FAILED_PARSE = 1,
+    ZSCAN_RFC1035_FAILED_FILE = 2,
+} zscan_rfc1035_status_t;
+
+F_NONNULL
+zscan_rfc1035_status_t zscan_rfc1035(zone_t* zone, const char* fn);
 
 #endif // GDNSD_ZSCAN_H
