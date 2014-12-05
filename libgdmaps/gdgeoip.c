@@ -25,16 +25,14 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/file.h>
 
 /*****************************************************************************
  * This portion of the code in this file is specific to parsing
@@ -148,14 +146,14 @@ typedef uint32_t (*dclist_get_func_t)(const geoip_db_t* db, const unsigned offse
 struct _geoip_db {
     const char* pathname;
     const char* map_name;
+    gdnsd_fmap_t* fmap;
     const fips_t* fips;
     const dcmap_t* dcmap;
     dclists_t* dclists;
     dclist_get_func_t dclist_get_func;
-    uint8_t* data;
+    const uint8_t* data;
     unsigned base;
     unsigned size;
-    int fd;
     int type;
     gdgeoip_v4o_t v4o_flag;
     bool ipv6;
@@ -493,25 +491,13 @@ static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, 
 F_NONNULL
 static bool geoip_db_close(geoip_db_t* db) {
     dmn_assert(db);
+
     bool rv = false;
-
-    if(db->fd != -1) {
-        if(db->data) {
-            if(-1 == munmap(db->data, db->size)) {
-                log_err("plugin_geoip: munmap() of '%s' failed: %s", db->pathname, dmn_logf_errno());
-                rv = true;
-            }
-        }
-        if(close(db->fd) == -1) {
-            log_err("plugin_geoip: close() of '%s' failed: %s", db->pathname, dmn_logf_errno());
-            rv = true;
-        }
-    }
-
+    if(db->fmap)
+        rv = gdnsd_fmap_delete(db->fmap);
     for (unsigned i = 0; i < OFFSET_CACHE_SIZE; i++)
         free(db->offset_cache[i]);
     free(db);
-
     return rv;
 }
 
@@ -520,7 +506,6 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
     dmn_assert(pathname); dmn_assert(map_name); dmn_assert(dclists);
 
     geoip_db_t* db = xcalloc(1, sizeof(geoip_db_t));
-    db->fd = -1;
     db->pathname = pathname;
     db->map_name = map_name;
     db->dclists = dclists;
@@ -529,20 +514,15 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
     db->city_auto_mode = city_auto_mode;
     db->city_no_region = city_no_region;
 
-    if((db->fd = open(pathname, O_RDONLY)) == -1) {
-        log_err("plugin_geoip: map '%s': Cannot open '%s' for reading: %s", map_name, pathname, dmn_logf_errno());
-        geoip_db_close(db);
+    db->fmap = gdnsd_fmap_new(pathname, false);
+    if(!db->fmap) {
+        log_err("plugin_geoip: map '%s': Cannot load '%s'", map_name, pathname);
+        free(db);
         return NULL;
     }
 
-    struct stat db_stat;
-    if(fstat(db->fd, &db_stat) == -1) {
-        log_err("plugin_geoip: map '%s': Cannot fstat '%s': %s", map_name, pathname, dmn_logf_errno());
-        geoip_db_close(db);
-        return NULL;
-    }
-
-    db->size = db_stat.st_size;
+    db->size = gdnsd_fmap_get_len(db->fmap);
+    db->data = gdnsd_fmap_get_buf(db->fmap);
 
     // 9 bytes would be a single record splitting the IPv4
     //   space into 0.0.0.0/1 and 128.0.0.0/1, each mapped
@@ -550,13 +530,6 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
     //   end marker.
     if(db->size < 9) {
         log_err("plugin_geoip: map '%s': GeoIP database '%s' too small", map_name, pathname);
-        geoip_db_close(db);
-        return NULL;
-    }
-
-    if((db->data = mmap(NULL, db->size, PROT_READ, MAP_SHARED, db->fd, 0)) == MAP_FAILED) {
-        db->data = 0;
-        log_err("plugin_geoip: map '%s': Failed to mmap GeoIP DB '%s': %s", map_name, pathname, dmn_logf_errno());
         geoip_db_close(db);
         return NULL;
     }

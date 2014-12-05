@@ -23,15 +23,13 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <inttypes.h>
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
 #include <gdnsd/vscf.h>
+#include <gdnsd/file.h>
 
 #define parse_error(_fmt, ...) do {\
     if(!scnr->err_emitted) {\
@@ -768,61 +766,19 @@ DMN_DIAG_POP
 vscf_data_t* vscf_scan_filename(const char* fn) {
     dmn_assert(fn);
 
-    int fd = open(fn, O_RDONLY);
-    if(fd < 0) {
-        dmn_log_err("Cannot open file '%s' for reading: %s\n", fn, dmn_logf_errno());
-        return NULL;
-    }
-
-    struct stat st;
-    if(fstat(fd, &st) < 0) {
-        dmn_log_err("Cannot fstat file '%s': %s\n", fn, dmn_logf_errno());
-        close(fd);
-        return NULL;
-    }
-
-    if(S_ISDIR(st.st_mode) || st.st_size < 0) {
-        dmn_log_err("File '%s' is not a valid input file", fn);
-        close(fd);
-        return NULL;
-    }
-
-    const size_t len = (size_t)st.st_size;
-
-    // mmap doesn't always work for zero-length files
-    if(!len) {
-        close(fd);
-        char mbuf[1] = { '\0' };
-        return vscf_scan_buf(0, mbuf, fn, true);
-    }
-
-    char* mapbuf = NULL;
-
-    if((mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-        dmn_log_err("Cannot mmap file '%s': %s\n", fn, dmn_logf_errno());
-        close(fd);
-        return NULL;
-    }
-
-    vscf_data_t* retval = vscf_scan_buf(len, mapbuf, fn, true);
-
-    if(munmap(mapbuf, len)) {
-        dmn_log_err("Cannot munmap file '%s': %s\n", fn, dmn_logf_errno());
-        if(retval) {
-            vscf_destroy(retval);
-            retval = NULL;
+    vscf_data_t* rv = NULL;
+    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
+    if(fmap) {
+        const size_t len = gdnsd_fmap_get_len(fmap);
+        const char* buf = gdnsd_fmap_get_buf(fmap);
+        rv = vscf_scan_buf(len, buf, fn, true);
+        if(gdnsd_fmap_delete(fmap) && rv) {
+            vscf_destroy(rv);
+            rv = NULL;
         }
     }
 
-    if(close(fd)) {
-        dmn_log_err("Cannot close file '%s': %s\n", fn, dmn_logf_errno());
-        if(retval) {
-            vscf_destroy(retval);
-            retval = NULL;
-        }
-    }
-
-    return retval;
+    return rv;
 }
 
 void vscf_destroy(vscf_data_t* d) { val_destroy(d); }

@@ -22,11 +22,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <setjmp.h>
 #include <errno.h>
-#include <sys/mman.h>
 
 #include "conf.h"
 #include "ltree.h"
@@ -34,6 +31,7 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/file.h>
 
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN 46
@@ -87,7 +85,7 @@ typedef struct {
 } zscan_t;
 
 F_NONNULL
-static void scanner(zscan_t* z, char* buf, const size_t bufsize);
+static void scanner(zscan_t* z, const char* buf, const size_t bufsize);
 
 /******** IP Addresses ********/
 
@@ -682,7 +680,7 @@ static void close_paren(zscan_t* z) {
     write data;
 }%%
 
-static void scanner(zscan_t* z, char* buf, const size_t bufsize) {
+static void scanner(zscan_t* z, const char* buf, const size_t bufsize) {
     dmn_assert(z); dmn_assert(buf); dmn_assert(bufsize);
 
     // This avoids the unfortunately common case of files with final lines
@@ -719,9 +717,9 @@ DMN_DIAG_POP
 //   function pointer to eliminate the possibility of
 //   inlining on non-gcc compilers, I hope) to avoid issues with
 //   setjmp and all of the local auto variables in zscan_rfc1035() below.
-typedef bool (*sij_func_t)(zscan_t*,char*,const unsigned);
+typedef bool (*sij_func_t)(zscan_t*,const char*,const unsigned);
 F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize) {
+static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsize) {
     dmn_assert(z); dmn_assert(buf);
 
     if(!sigsetjmp(z->jbuf, 0)) {
@@ -737,44 +735,12 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     dmn_assert(fn);
     log_debug("rfc1035: Scanning zone '%s'", logf_dname(zone->dname));
 
-    const int fd = open(fn, O_RDONLY);
-    if(fd < 0) {
-        log_err("rfc1035: Cannot open file '%s' for reading: %s", fn, dmn_logf_errno());
+    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
+    if(!fmap)
         return true;
-    }
 
-    struct stat st;
-    if(fstat(fd, &st)) {
-        log_err("rfc1035: fstat(%s) failed: %s", fn, dmn_logf_errno());
-        close(fd);
-        return true;
-    }
-
-    if(S_ISDIR(st.st_mode) || st.st_size < 0) {
-        log_err("rfc1035: '%s' is not a valid input file", fn);
-        close(fd);
-        return true;
-    }
-
-    if(!st.st_size) {
-        log_err("rfc1035: '%s' is an empty file", fn);
-        close(fd);
-        return true;
-    }
-
-    const size_t bufsize = (size_t)st.st_size;
-
-    char* buf = NULL;
-    if((buf = mmap(NULL, bufsize, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-        log_err("Cannot mmap file '%s': %s\n", fn, dmn_logf_errno());
-        close(fd);
-        return true;
-    }
-
-#ifdef HAVE_POSIX_MADVISE
-    if(bufsize > 8192) // why waste the syscall on small files?
-        (void)posix_madvise(buf, bufsize, POSIX_MADV_SEQUENTIAL);
-#endif
+    const size_t bufsize = gdnsd_fmap_get_len(fmap);
+    const char* buf = gdnsd_fmap_get_buf(fmap);
 
     zscan_t* z = xcalloc(1, sizeof(zscan_t));
     z->lcount = 1;
@@ -786,15 +752,8 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     sij_func_t sij = &_scan_isolate_jmp;
     bool failed = sij(z, buf, bufsize);
 
-    if(munmap(buf, bufsize)) {
-        log_err("Cannot munmap file '%s': %s\n", fn, dmn_logf_errno());
+    if(gdnsd_fmap_delete(fmap))
         failed = true;
-    }
-
-    if(close(fd)) {
-        log_err("rfc1035: Cannot close file '%s': %s", fn, dmn_logf_errno());
-        failed = true;
-    }
 
     if(z->texts) {
         for(unsigned i = 0; i < z->num_texts; i++)

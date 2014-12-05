@@ -267,6 +267,7 @@ xHEADERS_INST = \
 	include/gdnsd/plugin.h \
 	include/gdnsd/misc.h \
 	include/gdnsd/paths.h \
+	include/gdnsd/file.h \
 	include/gdnsd/alloc.h \
 	include/gdnsd/prcu.h \
 	include/gdnsd/dmn.h
@@ -291,6 +292,7 @@ libgdnsd_libgdnsd_la_SOURCES = \
 	libgdnsd/mon.c \
 	libgdnsd/misc.c \
 	libgdnsd/paths.c \
+	libgdnsd/file.c \
 	libgdnsd/plugapi.c \
 	libgdnsd/alloc.c \
 	libgdnsd/dmn.c \
