@@ -180,16 +180,12 @@ F_NONNULL
 static void process_file(const extf_svc_t* svc) {
     dmn_assert(svc);
 
-    char* vscf_err;
-    vscf_data_t* raw = vscf_scan_filename(svc->path, &vscf_err);
+    vscf_data_t* raw = vscf_scan_filename(svc->path);
     if(!raw) {
-        dmn_assert(vscf_err);
-        log_err("plugin_extfile: Service type '%s': loading file '%s' failed: %s", svc->name, svc->path, vscf_err);
-        free(vscf_err);
+        log_err("plugin_extfile: Service type '%s': loading file '%s' failed", svc->name, svc->path);
         return;
     }
     else {
-        dmn_assert(!vscf_err);
         if(!vscf_is_hash(raw)) {
             log_err("plugin_extfile: Service type '%s': top level of file '%s' must be a hash", svc->name, svc->path);
             return;

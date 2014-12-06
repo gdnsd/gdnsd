@@ -304,11 +304,9 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
         update_dclists = gdmap->dclists_pend;
     }
 
-    char* vscf_err;
-    vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path, &vscf_err);
+    vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path);
     nlist_t* new_list = NULL;
     if(nets_cfg) {
-        dmn_assert(!vscf_err);
         if(vscf_is_hash(nets_cfg)) {
             new_list = nets_make_list(nets_cfg, update_dclists, gdmap->name);
             if(!new_list)
@@ -321,8 +319,7 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
         vscf_destroy(nets_cfg);
     }
     else {
-        log_err("plugin_geoip: map '%s': parsing nets file '%s' failed: %s", gdmap->name, gdmap->nets_path, vscf_err);
-        free(vscf_err);
+        log_err("plugin_geoip: map '%s': parsing nets file '%s' failed", gdmap->name, gdmap->nets_path);
     }
 
     bool rv = false;

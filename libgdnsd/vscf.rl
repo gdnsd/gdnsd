@@ -33,19 +33,19 @@
 #include <gdnsd/dmn.h>
 #include <gdnsd/vscf.h>
 
-#define set_err(_epp, _fmt, ...) do { \
-    dmn_assert(_epp); \
-    if(!*_epp) { \
-        *_epp = xmalloc(256); \
-        snprintf(*_epp, 256, _fmt, __VA_ARGS__); \
-    } \
+#define parse_error(_fmt, ...) do {\
+    if(!scnr->err_emitted) {\
+        scnr->err_emitted = true;\
+        dmn_log_err("Parse error at %s line %u: " _fmt, scnr->desc, scnr->lcount, __VA_ARGS__);\
+    }\
 } while(0)
 
-#define parse_error(_fmt, ...) \
-    set_err(scnr->err, "Parse error at %s line %u: " _fmt, scnr->fn, scnr->lcount, __VA_ARGS__)
-
-#define parse_error_noargs(_fmt) \
-    set_err(scnr->err, "Parse error at %s line %u: " _fmt, scnr->fn, scnr->lcount)
+#define parse_error_noargs(_fmt) do {\
+    if(!scnr->err_emitted) {\
+        scnr->err_emitted = true;\
+        dmn_log_err("Parse error at %s line %u: " _fmt, scnr->desc, scnr->lcount);\
+    }\
+} while(0)
 
 /*************************************/
 /*** Private data type definitions ***/
@@ -110,8 +110,9 @@ typedef struct {
     const char*   eof;
     char*         cur_key;
     const char*   fn;
+    const char*   desc;
     const char*   tstart;
-    char**        err;
+    bool          err_emitted;
 } vscf_scnr_t;
 
 /*************************/
@@ -140,6 +141,7 @@ static unsigned djb_hash(const char* k, unsigned klen, const unsigned hash_mask)
    return hash & hash_mask;
 }
 
+F_WUNUSED
 static vscf_hash_t* hash_new(void) {
     vscf_hash_t* h = xcalloc(1, sizeof(vscf_hash_t));
     h->type = VSCF_HASH_T;
@@ -180,7 +182,7 @@ static void hash_grow(vscf_hash_t* h) {
     h->ordered = xrealloc(h->ordered, (new_hash_mask + 1) * sizeof(vscf_hentry_t*));
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, vscf_data_t* v) {
     dmn_assert(key); dmn_assert(h); dmn_assert(v);
     v->parent = (vscf_data_t*)h;
@@ -217,7 +219,7 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
     return true;
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v) {
     dmn_assert(scnr);
     dmn_assert(h);
@@ -236,6 +238,7 @@ static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v)
     return rv;
 }
 
+F_WUNUSED
 static vscf_array_t* array_new(void) {
     vscf_array_t* a = xcalloc(1, sizeof(vscf_array_t));
     a->type   = VSCF_ARRAY_T;
@@ -251,7 +254,7 @@ static void array_add_val(vscf_array_t* a, vscf_data_t* v) {
     a->vals[idx] = v;
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static vscf_simple_t* simple_new(const char* rval, const unsigned rlen) {
     dmn_assert(rval);
     vscf_simple_t* s = xcalloc(1, sizeof(vscf_simple_t));
@@ -264,7 +267,7 @@ static vscf_simple_t* simple_new(const char* rval, const unsigned rlen) {
     return s;
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked);
 
 F_NONNULL
@@ -275,13 +278,15 @@ static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked) {
         const vscf_hentry_t* hentry = h->ordered[i];
         if(!ignore_marked || !hentry->marked) {
             vscf_data_t* new_child = val_clone(hentry->val, ignore_marked);
-            hash_add_val(hentry->key, hentry->klen, nh, new_child);
+            const bool add_ok V_UNUSED
+                = hash_add_val(hentry->key, hentry->klen, nh, new_child);
+            dmn_assert(add_ok);
         }
     }
     return nh;
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked) {
     dmn_assert(a);
     vscf_array_t* na = array_new();
@@ -291,12 +296,13 @@ static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked
     return na;
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static vscf_simple_t* simple_clone(const vscf_simple_t* s) {
     dmn_assert(s);
     return simple_new(s->rval, s->rlen);
 }
 
+F_WUNUSED
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked) {
     dmn_assert(d);
     vscf_data_t* rv = NULL;
@@ -344,7 +350,7 @@ static void set_key(vscf_scnr_t* scnr, const char* end) {
     scnr->tstart = NULL;
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
     dmn_assert(scnr);
     dmn_assert(v);
@@ -364,7 +370,7 @@ static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
     }
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end) {
     dmn_assert(scnr);
     dmn_assert(scnr->tstart);
@@ -377,7 +383,7 @@ static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end) {
 
 static void val_destroy(vscf_data_t* d);
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
     dmn_assert(scnr);
     dmn_assert(scnr->tstart);
@@ -390,10 +396,15 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
     input_fn[infn_len] = '\0';
     scnr->tstart = NULL;
 
-    dmn_log_debug("found an include statement for '%s' within '%s'!", input_fn, scnr->fn);
+    dmn_log_debug("found an include statement for '%s' within '%s'!", input_fn, scnr->desc);
 
     char* final_scan_path = input_fn; // default, take it as it is
     if(input_fn[0] != '/') { // relative path, make relative to including file if possible
+        if(!scnr->fn) {
+            parse_error("Relative include path '%s' not allowed here because scanner does not know the filesystem path of including data '%s'", input_fn, scnr->desc);
+            return false;
+        }
+
         const unsigned cur_fn_len = strlen(scnr->fn);
         char path_temp[cur_fn_len + infn_len + 2]; // slightly oversized, who cares
 
@@ -414,15 +425,12 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
         }
     }
 
-    char* inc_parse_err = NULL;
-    vscf_data_t* inc_data = vscf_scan_filename(final_scan_path, &inc_parse_err);
+    vscf_data_t* inc_data = vscf_scan_filename(final_scan_path);
     if(final_scan_path != input_fn)
         free(final_scan_path);
 
     if(!inc_data) {
-        dmn_assert(inc_parse_err);
-        parse_error("within included file: %s", inc_parse_err);
-        free(inc_parse_err);
+        parse_error("Failed to load included file %s", input_fn);
         return false;
     }
 
@@ -447,7 +455,7 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
         val_destroy(inc_data);
     }
     else { // value context
-        add_to_cur_container(scnr, inc_data);
+        return add_to_cur_container(scnr, inc_data);
     }
 
     return true;
@@ -460,7 +468,7 @@ static void vscf_simple_ensure_val(vscf_simple_t* s) {
         s->len = unescape_string(&s->val, s->rval, s->rlen);
 }
 
-F_NONNULL
+F_NONNULL F_WUNUSED
 static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
     dmn_assert(scnr); dmn_assert(c);
 
@@ -679,16 +687,17 @@ static void val_destroy(vscf_data_t* d) {
 /*** Public API functions ***/
 /****************************/
 
-vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* fn, char** err) {
-    dmn_assert(buf); dmn_assert(fn); dmn_assert(err); dmn_assert(*err == NULL);
+vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source, bool source_is_fn) {
+    dmn_assert(buf); dmn_assert(source);
 
     (void)vscf_en_main; // silence unused var warning from generated code
 
     vscf_scnr_t* scnr = xcalloc(1, sizeof(vscf_scnr_t));
     scnr->lcount = 1;
-    scnr->fn = fn;
+    if(source_is_fn)
+        scnr->fn = source;
+    scnr->desc = source;
     scnr->cs = vscf_start;
-    scnr->err = err;
     scnr->cont_stack_alloc = 2;
     scnr->cont_stack = xmalloc(scnr->cont_stack_alloc * sizeof(vscf_data_t*));
 
@@ -742,7 +751,7 @@ DMN_DIAG_POP
 
     vscf_data_t* retval;
 
-    if(*err) {
+    if(scnr->err_emitted) {
         val_destroy(scnr->cont_stack[0]);
         retval = NULL;
     }
@@ -756,25 +765,24 @@ DMN_DIAG_POP
     return retval;
 }
 
-vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
-    dmn_assert(fn); dmn_assert(err);
-    *err = NULL;
+vscf_data_t* vscf_scan_filename(const char* fn) {
+    dmn_assert(fn);
 
     int fd = open(fn, O_RDONLY);
     if(fd < 0) {
-        set_err(err, "Cannot open file '%s' for reading: errno %i\n", fn, errno);
+        dmn_log_err("Cannot open file '%s' for reading: %s\n", fn, dmn_logf_errno());
         return NULL;
     }
 
     struct stat st;
     if(fstat(fd, &st) < 0) {
-        set_err(err, "Cannot fstat file '%s': errno %i\n", fn, errno);
+        dmn_log_err("Cannot fstat file '%s': %s\n", fn, dmn_logf_errno());
         close(fd);
         return NULL;
     }
 
     if(S_ISDIR(st.st_mode) || st.st_size < 0) {
-        set_err(err, "File '%s' is not a valid input file", fn);
+        dmn_log_err("File '%s' is not a valid input file", fn);
         close(fd);
         return NULL;
     }
@@ -785,21 +793,21 @@ vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
     if(!len) {
         close(fd);
         char mbuf[1] = { '\0' };
-        return vscf_scan_buf(0, mbuf, fn, err);
+        return vscf_scan_buf(0, mbuf, fn, true);
     }
 
     char* mapbuf = NULL;
 
     if((mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-        set_err(err, "Cannot mmap file '%s': errno %i\n", fn, errno);
+        dmn_log_err("Cannot mmap file '%s': %s\n", fn, dmn_logf_errno());
         close(fd);
         return NULL;
     }
 
-    vscf_data_t* retval = vscf_scan_buf(len, mapbuf, fn, err);
+    vscf_data_t* retval = vscf_scan_buf(len, mapbuf, fn, true);
 
     if(munmap(mapbuf, len)) {
-        set_err(err, "Cannot munmap file '%s': errno %i\n", fn, errno);
+        dmn_log_err("Cannot munmap file '%s': %s\n", fn, dmn_logf_errno());
         if(retval) {
             vscf_destroy(retval);
             retval = NULL;
@@ -807,7 +815,7 @@ vscf_data_t* vscf_scan_filename(const char* fn, char** err) {
     }
 
     if(close(fd)) {
-        set_err(err, "Cannot close file '%s': errno %i\n", fn, errno);
+        dmn_log_err("Cannot close file '%s': %s\n", fn, dmn_logf_errno());
         if(retval) {
             vscf_destroy(retval);
             retval = NULL;

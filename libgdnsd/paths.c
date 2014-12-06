@@ -90,10 +90,9 @@ static vscf_data_t* conf_load_vscf(const char* cfg_file) {
     struct stat cfg_stat;
     if(!stat(cfg_file, &cfg_stat)) {
         log_info("Loading configuration from '%s'", cfg_file);
-        char* vscf_err;
-        out = vscf_scan_filename(cfg_file, &vscf_err);
+        out = vscf_scan_filename(cfg_file);
         if(!out)
-            log_fatal("Loading configuration from '%s' failed: %s", cfg_file, vscf_err);
+            log_fatal("Loading configuration from '%s' failed", cfg_file);
         if(!vscf_is_hash(out)) {
             dmn_assert(vscf_is_array(out));
             log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", cfg_file);

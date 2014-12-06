@@ -38,17 +38,19 @@ typedef struct {
 } vscf_key_t;
 
 // Invokes the scanner, returning the root-level hash or array on success
-// On error, NULL is returned, and *err is set to a newly allocated
-//  string containing a specific error message.  If you plan to
-//  continue execution you should free this string to avoid leaks.
+// On error, NULL is returned and the error is emitted with dmn_log_err()
 F_NONNULL
-vscf_data_t* vscf_scan_filename(const char* fn, char** err);
+vscf_data_t* vscf_scan_filename(const char* fn);
 
 // As above, but operates on vscf text in a buffer "buf" of length "len".
-// "fn" in this call is used only to construct error messages, and may
-//   contain whatever text seems appropriate for describing the source.
+// "source" describes the input source.
+// If there is a known filename for the source data, "source" should be that
+//   filename exactly and "source_is_fn" should be true.
+// Otherwise, set "source_is_fn" to false, in which case "source" will only be
+//   used as a descriptive label in error outputs, and any "$include{}" within
+//   the data which references a non-absolute filename will be a parse error.
 F_NONNULL
-vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* fn, char** err);
+vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source, bool source_is_fn);
 
 // Destroys (de-allocates) the entire tree of data returned by vscf_scan()
 //  Do not call on sub-elements, only on the value actually returned by vscf_scan().

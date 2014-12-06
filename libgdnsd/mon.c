@@ -304,15 +304,11 @@ static bool admin_process_file(const char* pathname, const bool check_only) {
 
     bool success = false;
 
-    char* vscf_err;
-    vscf_data_t* raw = vscf_scan_filename(pathname, &vscf_err);
+    vscf_data_t* raw = vscf_scan_filename(pathname);
     if(!raw) {
-        dmn_assert(vscf_err);
-        log_err("admin_state: Loading file '%s' failed: %s", pathname, vscf_err);
-        free(vscf_err);
+        log_err("admin_state: Loading file '%s' failed", pathname);
     }
     else {
-        dmn_assert(!vscf_err);
         if(!vscf_is_hash(raw))
             log_err("admin_state: top level of file '%s' must be a hash", pathname);
         else
