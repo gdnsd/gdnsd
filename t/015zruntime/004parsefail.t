@@ -5,6 +5,7 @@ use FindBin ();
 use File::Spec ();
 use Test::More tests => 12;
 
+$ENV{USE_ZONES_AUTO} = 1;
 my $pid = _GDT->test_spawn_daemon();
 
 # example.com exists from the start

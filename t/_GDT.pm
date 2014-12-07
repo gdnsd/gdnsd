@@ -327,6 +327,13 @@ sub proc_tmpl {
         zones_rfc1035_quiesce = 1.02
     };
 
+    if($ENV{USE_ZONES_AUTO}) {
+        $std_opts .= qq{        zones_rfc1035_auto = true\n};
+    }
+    else {
+        $std_opts .= qq{        zones_rfc1035_auto = false\n};
+    }
+
     if($PRIVDROP_USER) {
         $std_opts .= qq{username = $PRIVDROP_USER\n};
     }

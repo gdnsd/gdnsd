@@ -38,6 +38,9 @@
     * Related to the above: the code no longer makes heuristic attempts to
       determine the effective filesystem timestamp accuracy of the zones
       directory on startup by writing temporary test files to it.
+    * A warning is now generated if the 'zones_rfc1035_auto' option is not set
+      explicitly, because the default value is likely to change from 'true' to
+      'false' in a future version.
     * The 'listen => scan' feature is now deprecated, but continues to
       function and issues a deprecation warning when used.  Please either
       migrate to 'listen => any' (the current default) or file a bug

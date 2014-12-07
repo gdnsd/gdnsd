@@ -291,8 +291,10 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
         CFG_OPT_BOOL(options, zones_strict_data);
         CFG_OPT_BOOL(options, zones_strict_startup);
-        CFG_OPT_BOOL(options, zones_rfc1035_auto);
 
+        CFG_OPT_BOOL(options, zones_rfc1035_auto);
+        if(!vscf_hash_get_data_byconstkey(options, "zones_rfc1035_auto", true))
+            log_warn("The default value of the global option 'zones_rfc1035_auto' will likely change from 'true' to 'false' in a future version.  Setting the value explicitly for forward-compatibility is recommended!");
         CFG_OPT_UINT(options, zones_rfc1035_auto_interval, 10LU, 600LU);
         CFG_OPT_DBL(options, zones_rfc1035_quiesce, 1.02, 60.0);
         if(vscf_hash_get_data_byconstkey(options, "zones_rfc1035_min_quiesce", true))
