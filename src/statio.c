@@ -633,9 +633,9 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 #endif
             case ENETDOWN:
 #ifdef EPROTO
-	    case EPROTO:
+            case EPROTO:
 #endif
-	    case EHOSTDOWN:
+            case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
                 log_debug("HTTP: early tcp socket death: %s", dmn_logf_errno());
@@ -721,8 +721,8 @@ void statio_init(const socks_cfg_t* socks_cfg) {
     // in the other cases, html is obviously-bigger, but if I have
     //  to count it out to know, may as well automated it...
     const unsigned fixed = sizeof(html_fixed) > sizeof(json_fixed)
-	? sizeof(html_fixed) - 1
-	: sizeof(json_fixed) - 1;
+        ? sizeof(html_fixed) - 1
+        : sizeof(json_fixed) - 1;
 
     data_buffer_size =
         fixed                                 // html_fixed format string
