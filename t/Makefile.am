@@ -5,6 +5,7 @@ TESTOUT_DIR = $(abs_builddir)/testout
 TEXEC = TESTOUT_DIR=$(TESTOUT_DIR) TESTPORT_START=$(TESTPORT_START) $(PROVE) --norc --merge -f -I$(srcdir)
 ALLTESTS = $(srcdir)/[0-9]*/*.t
 
+.PHONY: precheck
 precheck:
 	@$(MKDIR_P) $(TESTOUT_DIR); \
 	echo Test data/outputs will be stored at $(TESTOUT_DIR)
