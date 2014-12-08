@@ -766,12 +766,12 @@ void statio_bind_socks(void) {
 
 bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft) {
     dmn_assert(socks_cfg);
-    unsigned rv = true;
+    unsigned rv = false;
     for(unsigned i = 0; i < num_lsocks; i++)
         if(!socks_sock_is_bound_to(lsocks[i], &socks_cfg->http_addrs[i]) && !soft)
             log_fatal("Failed to bind() stats TCP socket to %s", dmn_logf_anysin(&socks_cfg->http_addrs[i]));
         else
-            rv = false;
+            rv = true;
     return rv;
 }
 

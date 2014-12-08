@@ -11,6 +11,9 @@
       in developer-debug builds
     * Bugfix for crash/assertfail if admin_state file contents are
       defined by the user as an array instead of a hash
+    * Bugfix: if the stats http socket failed to bind() on startup, the daemon
+      could carry on anyways, causing it to bind to a different, arbitrary
+      port number
 
   *** Features:
     * If the admin_state file exists but doesn't parse correctly, that will
