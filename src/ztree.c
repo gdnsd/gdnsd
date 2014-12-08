@@ -143,35 +143,47 @@ static unsigned label_hash(const uint8_t* label) {
     return gdnsd_lookup2(label, len);
 }
 
-// search the children of one node for a given label
+// search the children of one node for a given label.
+// the _writer version is for the zone updater thread.
+// the normal version is for readers that need prcu_deref.
 F_NONNULL
-static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label, const bool reader) {
+static ztree_t* ztree_node_find_child_writer(ztree_t* node, const uint8_t* label) {
     dmn_assert(node); dmn_assert(label);
 
     ztree_t* rv = NULL;
     ztchildren_t* children;
-    if(reader)
-        children = gdnsd_prcu_rdr_deref(node->children);
-    else
-        children = node->children;
+    children = node->children;
     if(children) {
         dmn_assert(children->alloc);
         const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
         unsigned slot = label_hash(label) & child_mask;
-        if(reader) {
-            while((rv = gdnsd_prcu_rdr_deref(children->store[slot]))
-              && gdnsd_label_cmp(label, rv->label)) {
-                slot += jmpby++;
-                slot &= child_mask;
-            }
+        while((rv = children->store[slot])
+          && gdnsd_label_cmp(label, rv->label)) {
+            slot += jmpby++;
+            slot &= child_mask;
         }
-        else {
-            while((rv = children->store[slot])
-              && gdnsd_label_cmp(label, rv->label)) {
-                slot += jmpby++;
-                slot &= child_mask;
-            }
+    }
+
+    return rv;
+}
+
+F_NONNULL
+static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label) {
+    dmn_assert(node); dmn_assert(label);
+
+    ztree_t* rv = NULL;
+    ztchildren_t* children;
+    children = gdnsd_prcu_rdr_deref(node->children);
+    if(children) {
+        dmn_assert(children->alloc);
+        const unsigned child_mask = children->alloc - 1;
+        unsigned jmpby = 1;
+        unsigned slot = label_hash(label) & child_mask;
+        while((rv = gdnsd_prcu_rdr_deref(children->store[slot]))
+          && gdnsd_label_cmp(label, rv->label)) {
+            slot += jmpby++;
+            slot &= child_mask;
         }
     }
 
@@ -190,7 +202,7 @@ zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
     unsigned lcount = dname_to_lstack(dname, lstack);
     ztree_t* current = gdnsd_prcu_rdr_deref(ztree_root);
     while(current && !(rv = ztree_reader_get_zone(current)) && lcount)
-        current = ztree_node_find_child(current, lstack[--lcount], true);
+        current = ztree_node_find_child(current, lstack[--lcount]);
 
     if(rv) {
         unsigned auth_depth = lcount;
@@ -433,7 +445,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
         while(lcount) {
             if(this_zt->zones)
                 hiding_zone = this_zt->zones[0]->dname;
-            this_zt = ztree_node_find_child(this_zt, lstack[--lcount], false);
+            this_zt = ztree_node_find_child_writer(this_zt, lstack[--lcount]);
             dmn_assert(this_zt);
         }
 
