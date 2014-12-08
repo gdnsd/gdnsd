@@ -120,16 +120,21 @@ my %SIGS;
     @SIGS{@names} = split(' ', $Config{sig_num});
 }
 
-# Set up per-testfile output directory and zones input directory
+# Set up per-testfile output directory, zones input directory,
+#   and $TEST_SERIAL.
 our $OUTDIR;
+our $TEST_SERIAL;
 our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
 {
     my $tname = $FindBin::Bin;
     $tname =~ s{^.*/}{};
     $tname .= '_' . $FindBin::Script;
     $tname =~ s{\.t$}{};
-
     $OUTDIR = $ENV{TESTOUT_DIR} . '/' . $tname;
+
+    $FindBin::Script =~ m{^0*([0-9]{1,3})}
+        or die "Cannot figure out TEST_SERIAL value for $tname";
+    $TEST_SERIAL = $1;
 }
 
 # generic flag to eliminate various timer delays under testing
@@ -144,22 +149,13 @@ our $TESTPORT_START = $ENV{TESTPORT_START};
 die "Test port start specification is not a number"
     unless looks_like_number($TESTPORT_START);
 
-our $DNS_PORT = $TESTPORT_START;
-our $HTTP_PORT = $TESTPORT_START + 1;
-our $EXTRA_PORT  = $TESTPORT_START + 2;
+our $DNS_PORT = $TESTPORT_START + (5 * $TEST_SERIAL);
+our $HTTP_PORT = $DNS_PORT + 1;
+our $EXTRA_PORT  = $DNS_PORT + 2;
+our $DNS_SPORT4 = $DNS_PORT + 3;
+our $DNS_SPORT6 = $DNS_PORT + 4;
 
 our $saved_pid;
-
-# Skip V6 tests if perl doesn't have the modules for it,
-#  or it doesn't work at runtime.
-our $HAVE_V6 = 1;
-{
-    my $test_sock = IO::Socket::INET6->new(LocalAddr => '::1', LocalPort => $DNS_PORT);
-    if(!$test_sock) {
-        warn "IPv6 tests disabled (Cannot bind to [::1]:$DNS_PORT: $@)";
-        $HAVE_V6=0;
-    }
-}
 
 # If user runs testsuite as root, we try to set the privdrop
 #   user to nobody as a more-reliable choice.  Failing that,
@@ -307,13 +303,9 @@ sub proc_tmpl {
     open(my $out_fh, '>', $outpath)
         or die "Cannot open test template output '$outpath' for writing: $!";
 
-    my $dns_lspec = $HAVE_V6
-        ? qq{[ 127.0.0.1, ::1 ]}
-        : qq{127.0.0.1};
+    my $dns_lspec = qq{[ 127.0.0.1, ::1 ]};
 
-    my $http_lspec = $HAVE_V6
-        ? qq{[ 127.0.0.1, ::1 ]}
-        : qq{127.0.0.1};
+    my $http_lspec = qq{[ 127.0.0.1, ::1 ]};
 
     my $std_opts = qq{
         listen => $dns_lspec
@@ -612,8 +604,13 @@ my $_resolver6;
 sub get_resolver {
     return $_resolver ||= Net::DNS::Resolver->new(
         recurse => 0,
-        nameservers => [ '127.0.0.1'],
+        nameservers => [ '127.0.0.1' ],
         port => $DNS_PORT,
+        srcport => $DNS_SPORT4,
+        srcaddr => '127.0.0.1',
+        force_v4 => 1,
+        persistent_tcp => 1,
+        persistent_udp => 1,
         udp_timeout => 3,
         tcp_timeout => 3,
         retrans => 1,
@@ -624,8 +621,13 @@ sub get_resolver {
 sub get_resolver6 {
     return $_resolver6 ||= Net::DNS::Resolver->new(
         recurse => 0,
-        nameservers => [ '::1'],
+        nameservers => [ '::1' ],
         port => $DNS_PORT,
+        srcport => $DNS_SPORT6,
+        srcaddr => '::1',
+        force_v6 => 1,
+        persistent_tcp => 1,
+        persistent_udp => 1,
         udp_timeout => 3,
         tcp_timeout => 3,
         retrans => 1,
@@ -964,6 +966,8 @@ sub query_server {
         my $sock = $sockclass->new(
             PeerAddr => $ns,
             PeerPort => $port,
+            LocalPort => ($transport eq 'IPv6') ? $DNS_SPORT6 : $DNS_SPORT4,
+            ReuseAddr => 1,
             Proto => 'udp',
             Timeout => 10,
         );
@@ -1067,7 +1071,7 @@ sub test_dns {
         }
     }
 
-    if(!$args{v4_only} && $HAVE_V6) {
+    if(!$args{v4_only}) {
         for my $i (1 .. $args{rep}) {
             foreach my $stat (@{$args{stats}}) {
                 $stats_accum{$stat}++;

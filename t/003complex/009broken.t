@@ -132,7 +132,7 @@ my @edns_base = (
     my $id = $pkt->header->id;
     my $raw = $pkt->data;
     substr($raw, -2, 2, pack('n', 1));
-    
+
     my $optrr_res = Net::DNS::RR->new(@edns_base);
     _GDT->test_dns(
         qpacket_raw => $raw,
@@ -153,7 +153,7 @@ my @edns_base = (
     my $raw = $pkt->data;
     substr($raw, -2, 2, pack('n', 3));
     $raw .= 'xxx';
-    
+
     my $optrr_res = Net::DNS::RR->new(@edns_base);
     _GDT->test_dns(
         qpacket_raw => $raw,
@@ -174,7 +174,7 @@ my @edns_base = (
     my $raw = $pkt->data;
     substr($raw, -2, 2, pack('n', 5));
     $raw .= pack('nnC', 0x5555, 2, 1);
-    
+
     my $optrr_res = Net::DNS::RR->new(@edns_base);
     _GDT->test_dns(
         qpacket_raw => $raw,

@@ -116,11 +116,11 @@ etc/geoip/.test_data_setup_done: Makefile
 # re-use silent-rules to set "prove" execution mode:
 #  V=0 -> quiet + parallelized
 #  V=1 -> verbose + serial
-prove_mode_0 = -q -j4
-prove_mode_1 = -v
+prove_mode_0 = -q --merge -j$(TEST_CPUS) --state=slow,save
+prove_mode_1 = -v -f
 prove_mode_  = $(prove_mode_@AM_DEFAULT_V@)
 prove_mode   = $(prove_mode_@AM_V@)
-prove_run = $(PROVE) --norc --merge $(prove_mode) -f -e "$(TEST_RUNNER)"
+prove_run = $(PROVE) --norc $(prove_mode) -e "$(TEST_RUNNER)"
 test_verbose_0 = @echo TEST $@;
 test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
 test_verbose = $(test_verbose_@AM_V@)
@@ -129,7 +129,7 @@ check_PROGRAMS = $(TESTLIST:=.t)
 CHECK_PROGS_PATHED = $(check_PROGRAMS:%=./%)
 
 check-local: $(check_PROGRAMS) $(TDATA_FINAL) check-warn
-	$(test_verbose)TEST_CFDIR=$(abs_builddir)/etc $(prove_run) $(CHECK_PROGS_PATHED);
+	$(test_verbose)TEST_CFDIR=$(abs_builddir)/etc $(prove_run) $(CHECK_PROGS_PATHED)
 
 .PHONY: check-warn
 check-warn:
@@ -141,5 +141,6 @@ check-warn:
 	fi
 
 EXTRA_DIST = tdata
+DISTCLEANFILES = .prove
 distclean-local:
 	-rm -rf etc

@@ -207,7 +207,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
-    answer => [ 
+    answer => [
         'res3.example.com 86400 CNAME dc1cn.example.com',
         'dc1cn.example.com 86400 A 192.0.2.100',
     ],
@@ -229,7 +229,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res3dc1.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
-    answer => [ 
+    answer => [
         'res3dc1.example.com 86400 CNAME dc1cn.example.com',
         'dc1cn.example.com 86400 A 192.0.2.100',
     ],

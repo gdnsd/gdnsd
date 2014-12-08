@@ -10,7 +10,7 @@ sub make_query {
     my $qname = shift;
     my $arcount = shift || 0;
     my $qtype = shift || 1;
-    return pack("nCCnnnna*nn", 
+    return pack("nCCnnnna*nn",
         $_id++,
         0, # flags1
         0, # flags2

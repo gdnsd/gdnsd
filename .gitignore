@@ -33,6 +33,9 @@
 /t/libgdmaps/*.t
 /t/libgdmaps/etc/
 
+# saved state for "prove"
+.prove
+
 # Various tool outputs in all dirs
 Makefile
 Makefile.in

@@ -71,7 +71,6 @@ Interesting / Non-standard autoconf options
     down evasive bugs.  If you just want debug symbols, put -g in CFLAGS.
 
 --with-testport=N
-  The test suite needs to be able to bind to 3 consecutive ports
-   on 127.0.0.1, starting with port N.  The default is 12345.  If
-   this conflicts with some existing service on your machine, change
-   it here.
+  The test suite needs to be able to bind to ~300 consecutive ports on
+    127.0.0.1 and ::1, starting with port N.  The default is 12345.  If this
+    conflicts with some existing service on your machine, change it here.

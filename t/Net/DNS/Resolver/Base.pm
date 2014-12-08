@@ -11,7 +11,6 @@ BEGIN {
 
 use vars qw(
 	    $VERSION
-	    $has_inet6
 	    $AUTOLOAD
 );
 
@@ -56,20 +55,7 @@ $VERSION = (qw$LastChangedRevision: 932 $)[1];
 # Olaf Kolkman, RIPE NCC, December 2003.
 
 
-BEGIN {
-    if (
-	 eval {require IO::Socket::INET6; IO::Socket::INET6->VERSION("2.00");}
-	 ) {
- 	$has_inet6=1;
-    }else{
- 	$has_inet6=0;
-    }
- }
-
-
-
-
-
+require IO::Socket::INET6;
 
 #
 # Set up a closure to be our class data.
@@ -106,8 +92,8 @@ BEGIN {
 		udppacketsize  => 0,  # The actual default is lower bound by Net::DNS::PACKETSZ
 	        cdflag         => 0,  # this is only used when {dnssec} == 1
 	        adflag         => 1,  # this is only used when {dnssec} == 1
-		force_v4       => 0,  # force_v4 is only relevant when we have
-                                      # v6 support available
+		force_v4       => 0,
+		force_v6       => 0,
 		ignqrid        => 0,  # normally packets with non-matching ID
                                       # or with the qr bit of are thrown away
 			              # in 'ignqrid' these packets are
@@ -134,6 +120,8 @@ my %public_attr = map { $_ => 1 } qw(
 	port
 	srcaddr
 	srcport
+	force_v4
+	force_v6
 	domain
 	searchlist
 	retrans
@@ -286,7 +274,7 @@ sub string {
 	my $self = shift;
 
 	my $timeout = defined $self->{'tcp_timeout'} ? $self->{'tcp_timeout'} : 'indefinite';
-	my $hasINET6line= $has_inet6 ?" (IPv6 Transport is available)":" (IPv6 Transport is not available)";
+	my $hasINET6line= " (IPv6 Transport is available)";
 	my $ignqrid=$self->{'ignqrid'} ? "\n;; ACCEPTING ALL PACKETS (IGNQRID)":"";
 	return <<END;
 ;; RESOLVER state:
@@ -370,7 +358,7 @@ sub nameservers {
     }
     my @returnval;
     foreach my $ns (@{$self->{'nameservers'}}){
-	next if _ip_is_ipv6($ns) && (! $has_inet6 || $self->force_v4() );
+	#next if _ip_is_ipv6($ns) && $self->force_v4();
 	push @returnval, $ns;
     }
 
@@ -664,13 +652,11 @@ sub send_udp {
 
 
  	if ($self->persistent_udp){
- 	    if ($has_inet6){
  		if ( defined ($self->{'sockets'}[AF_INET6()]{'UDP'})) {
  		    $sock[AF_INET6()] = $self->{'sockets'}[AF_INET6()]{'UDP'};
  		    print ";; using persistent AF_INET6() family type socket\n"
 			if $self->{'debug'};
  		}
- 	    }
  	    if ( defined ($self->{'sockets'}[AF_INET]{'UDP'})) {
  		$sock[AF_INET] = $self->{'sockets'}[AF_INET]{'UDP'};
  		print ";; using persistent AF_INET() family type socket\n"
@@ -678,9 +664,7 @@ sub send_udp {
  	    }
 	}
 
-	if ($has_inet6  && ! $self->force_v4() && !defined( $sock[AF_INET6()] )){
-
-
+	if (!$self->force_v4() && !defined( $sock[AF_INET6()] )){
 	    # '::' Otherwise the INET6 socket will fail.
 
             my $srcaddr6 = $srcaddr eq '0.0.0.0' ? '::' : $srcaddr;
@@ -699,20 +683,18 @@ sub send_udp {
 	    $sock[AF_INET6()] = IO::Socket::INET6->new(
 						       LocalAddr => $srcaddr6,
 						       LocalPort => ($srcport || undef),
+							ReuseAddr => 1,
 						       Proto     => 'udp',
 						       );
 
 
 
 
-	    print (defined($sock[AF_INET6()])?"done\n":"failed\n") if $has_inet6 && $self->debug();
+	    print (defined($sock[AF_INET6()])?"done\n":"failed\n") if $self->debug();
 
 	}
 
-	# Always set up an AF_INET socket.
-	# It will be used if the address familly of for the endpoint is V4.
-
-	if (!defined( $sock[AF_INET]))
+	if (! $self->{force_v6} && !defined( $sock[AF_INET()] ))
 
 	{
 	    print ";; setting up an AF_INET() family type UDP socket\n"
@@ -724,6 +706,7 @@ sub send_udp {
  	    $sock[AF_INET] = IO::Socket::INET->new(
  						   LocalAddr => $srcaddr,
  						   LocalPort => ($srcport || undef),
+							ReuseAddr => 1,
  						   Proto     => 'udp',
  						   ) ;
  	    #$^W = $old_wflag;
@@ -731,14 +714,14 @@ sub send_udp {
 
 
 
-	unless (defined $sock[AF_INET] || ($has_inet6 && defined $sock[AF_INET6()])) {
+	unless (defined $sock[AF_INET] || defined $sock[AF_INET6()]) {
 
 	    $self->errorstring("could not get socket");   #'
 	    return;
 	}
 
-	$self->{'sockets'}[AF_INET]{'UDP'} = $sock[AF_INET] if ($self->persistent_udp) && defined( $sock[AF_INET] );
-	$self->{'sockets'}[AF_INET6()]{'UDP'} = $sock[AF_INET6()] if $has_inet6 && ($self->persistent_udp) && defined( $sock[AF_INET6()]) && ! $self->force_v4();
+	$self->{'sockets'}[AF_INET]{'UDP'} = $sock[AF_INET] if ($self->persistent_udp) && defined( $sock[AF_INET] ) && ! $self->{force_v6};
+	$self->{'sockets'}[AF_INET6()]{'UDP'} = $sock[AF_INET6()] if ($self->persistent_udp) && defined( $sock[AF_INET6()]) && ! $self->force_v4();
 
  	# Constructing an array of arrays that contain 3 elements: The
  	# nameserver IP address, its sockaddr and the sockfamily for
@@ -750,7 +733,7 @@ sub send_udp {
 	  # If getaddrinfo is available that is used for both INET4 and INET6
 	  # If getaddrinfo is not avialable (Socket6 failed to load) we revert
 	  # to the 'classic mechanism
-	  if ($has_inet6  && ! $self->force_v4() ){
+	  # if (! $self->force_v4() ){
 	      # we can use getaddrinfo
 	      no strict 'subs';   # Because of the eval statement in the BEGIN
 	      # AI_NUMERICHOST is not available at compile time.
@@ -778,11 +761,11 @@ sub send_udp {
 
 	      push @ns,[$ns_address,$dst_sockaddr,$sockfamily];
 
-	  }else{
-	      next NSADDRESS unless( _ip_is_ipv4($ns_address));
-	      my $dst_sockaddr = sockaddr_in($dstport, inet_aton($ns_address));
-	      push @ns, [$ns_address,$dst_sockaddr,AF_INET];
-	  }
+	  # }else{
+	  #    next NSADDRESS unless( _ip_is_ipv4($ns_address));
+	  #    my $dst_sockaddr = sockaddr_in($dstport, inet_aton($ns_address));
+	  #    push @ns, [$ns_address,$dst_sockaddr,AF_INET];
+	  #}
 
       }
 
@@ -795,8 +778,8 @@ sub send_udp {
  	my $sel = IO::Select->new() ;
 	# We allready tested that one of the two socket exists
 
- 	$sel->add($sock[AF_INET]) if defined ($sock[AF_INET]);
- 	$sel->add($sock[AF_INET6()]) if $has_inet6 &&  defined ($sock[AF_INET6()]) && ! $self->force_v4();
+	$sel->add($sock[AF_INET]) if defined ($sock[AF_INET]) && ! $self->{force_v6};
+	$sel->add($sock[AF_INET6()]) if defined ($sock[AF_INET6()]) && ! $self->force_v4();
 
 
 	# Perform each round of retries.
@@ -829,14 +812,14 @@ sub send_udp {
 			unless (defined ($sock[ $nssockfamily ])){
 			    print "Send error: cannot reach $nsname (".
 
-				( ($has_inet6 && $nssockfamily == AF_INET6()) ? "IPv6" : "" ).
+				( ($nssockfamily == AF_INET6()) ? "IPv6" : "" ).
 				( ($nssockfamily == AF_INET) ? "IPv4" : "" ).
 				") not available"
 				if $self->debug();
 
 
 			    $self->errorstring("Send error: cannot reach $nsname (" .
-					       ( ($has_inet6 && $nssockfamily == AF_INET6()) ? "IPv6" : "" ).
+					       ( ($nssockfamily == AF_INET6()) ? "IPv6" : "" ).
 					       ( ($nssockfamily == AF_INET) ? "IPv4" : "" ).
 					       ") not available"
 
@@ -962,7 +945,7 @@ sub bgsend {
 	# If getaddrinfo is available that is used for both INET4 and INET6
 	# If getaddrinfo is not avialable (Socket6 failed to load) we revert
 	# to the 'classic mechanism
-	if ($has_inet6  && ! $self->force_v4()){
+	#if (! $self->force_v4()){
 
 	    my ( $socktype_tmp, $proto_tmp, $canonname_tmp);
 
@@ -988,16 +971,16 @@ sub bgsend {
 		die ("can't resolve \"$ns_address\" to address (it could have been an IP address)");
 	    }
 
-	}else{
-	    $sockfamily=AF_INET;
-
-	    if (! _ip_is_ipv4($ns_address)){
-		$self->errorstring("bgsend(ipv4 only):$ns_address does not seem to be a valid IPv4 address");
-		return;
-	    }
-
-	    $dst_sockaddr = sockaddr_in($dstport, inet_aton($ns_address));
-	}
+	#}else{
+	#    $sockfamily=AF_INET;
+#
+#	    if (! _ip_is_ipv4($ns_address)){
+#		$self->errorstring("bgsend(ipv4 only):$ns_address does not seem to be a valid IPv4 address");
+#		return;
+#	    }
+#
+#	    $dst_sockaddr = sockaddr_in($dstport, inet_aton($ns_address));
+#	}
 	my @socket;
 
 	if ($sockfamily == AF_INET) {
@@ -1006,8 +989,9 @@ sub bgsend {
 							 Type => SOCK_DGRAM,
 							 LocalAddr => $srcaddr,
 							 LocalPort => ($srcport || undef),
+							ReuseAddr => 1,
 					    );
-	} elsif ($has_inet6 && $sockfamily == AF_INET6() ) {
+	} elsif ( $sockfamily == AF_INET6() ) {
 	    # Otherwise the INET6 socket will just fail
 	    my $srcaddr6 = $srcaddr eq "0.0.0.0" ? '::' : $srcaddr;
 	    $socket[$sockfamily] = IO::Socket::INET6->new(
@@ -1015,6 +999,7 @@ sub bgsend {
 							  Type => SOCK_DGRAM,
 							  LocalAddr => $srcaddr6,
 							  LocalPort => ($srcport || undef),
+							ReuseAddr => 1,
 					     );
 	} else {
 	    die ref($self)." bgsend: Unsupported Socket Family: $sockfamily";
@@ -1449,7 +1434,7 @@ sub _create_tcp_socket {
 	#my $old_wflag = $^W;
 	#$^W = 0;
 
-	if ($has_inet6 && ! $self->force_v4() && _ip_is_ipv6($ns) ){
+	if (! $self->force_v4() && _ip_is_ipv6($ns) ){
 		# XXX IO::Socket::INET6 fails in a cryptic way upon send()
 		# on AIX5L if "0" is passed in as LocalAddr
 		# $srcaddr="0" if $srcaddr eq "0.0.0.0";  # Otherwise the INET6 socket will just fail
@@ -1462,6 +1447,7 @@ sub _create_tcp_socket {
 					   PeerAddr =>    $ns,
 					   LocalAddr => $srcaddr6,
 					   LocalPort => ($srcport || undef),
+						ReuseAddr => 1,
 					   Proto     => 'tcp',
 					   Timeout   => $timeout,
 					   );
@@ -1496,6 +1482,7 @@ sub _create_tcp_socket {
 					      PeerPort  => $dstport,
 					      LocalAddr => $srcaddr,
 					      LocalPort => ($srcport || undef),
+						ReuseAddr => 1,
 					      Proto     => 'tcp',
 					      Timeout   => $timeout
 					      )

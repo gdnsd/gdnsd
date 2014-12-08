@@ -65,6 +65,7 @@ typedef struct {
 
 static unsigned num_svcs = 0;
 static extf_svc_t* service_types = NULL;
+static bool testsuite_nodelay = false;
 
 #define SVC_OPT_UINT(_hash, _typnam, _nam, _loc, _min, _max) \
     do { \
@@ -254,7 +255,11 @@ static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
     extf_svc_t* svc = w->data;
     dmn_assert(svc);
     dmn_assert(svc->direct);
-    ev_timer_again(loop, svc->time_watcher);
+
+    if(testsuite_nodelay)
+        timer_cb(loop, svc->time_watcher, EV_TIMER);
+    else
+        ev_timer_again(loop, svc->time_watcher);
 }
 
 F_NONNULL
@@ -291,6 +296,9 @@ void plugin_extfile_start_monitors(struct ev_loop* mon_loop) {
 
 void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
     dmn_assert(mon_loop);
+
+    if(getenv("GDNSD_TESTSUITE_NODELAY"))
+        testsuite_nodelay = true;
 
     for(unsigned i = 0; i < num_svcs; i++) {
         extf_svc_t* svc = &service_types[i];

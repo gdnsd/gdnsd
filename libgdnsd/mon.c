@@ -367,7 +367,8 @@ static void admin_init(struct ev_loop* mloop) {
     admin_quiesce_timer = xmalloc(sizeof(ev_timer));
     ev_timer_init(admin_quiesce_timer, admin_timer_cb, 0.0, 1.02);
     admin_file_watcher = xmalloc(sizeof(ev_stat));
-    ev_stat_init(admin_file_watcher, admin_file_cb, pathname, 5.02);
+    ev_stat_init(admin_file_watcher, admin_file_cb, pathname,
+        testsuite_nodelay ? 0.1 : 3.0);
     ev_stat_start(mloop, admin_file_watcher);
 
     // ev_stat_start stat()'s the file for ->attr, use that

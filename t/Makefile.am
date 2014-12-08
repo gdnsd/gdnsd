@@ -2,8 +2,18 @@ SUBDIRS = libtap libgdmaps
 
 EXTRA_DIST = README-NETDNS _GDT.pm _FakeGeoIP.pm Net $(srcdir)/[0-9]*/* $(srcdir)/[0-9]*/*/*
 TESTOUT_DIR = $(abs_builddir)/testout
-TEXEC = TESTOUT_DIR=$(TESTOUT_DIR) TESTPORT_START=$(TESTPORT_START) $(PROVE) --norc --merge -f -I$(srcdir)
 ALLTESTS = $(srcdir)/[0-9]*/*.t
+
+# re-use silent-rules to set "prove" execution mode:
+#  V=0 -> quiet + parallelized
+#  V=1 -> verbose + serial
+# Note test concurrency is TEST_CPUS * 2; we do a lot of sleeping/waiting...
+prove_mode_0 = -q --merge -j$$(($(TEST_CPUS) * 2)) --state=slow,save
+prove_mode_1 = -v -f
+prove_mode_  = $(prove_mode_@AM_DEFAULT_V@)
+prove_mode   = $(prove_mode_@AM_V@)
+
+TEXEC = TESTOUT_DIR=$(TESTOUT_DIR) TESTPORT_START=$(TESTPORT_START) $(PROVE) $(prove_mode) --norc -I$(srcdir)
 
 .PHONY: precheck
 precheck:
@@ -27,3 +37,5 @@ installcheck-local: precheck
 
 clean-local:
 	-rm -rf $(TESTOUT_DIR)
+
+DISTCLEANFILES = .prove

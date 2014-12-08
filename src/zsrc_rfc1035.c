@@ -810,7 +810,8 @@ void zsrc_rfc1035_load_zones(const bool check_only V_UNUSED) {
     //   startup race, and in any case inotify or the next manual directory
     //   scan would pick up the change shortly afterwards and correct it, so
     //   there's no point delaying startup for the corner-case.
-    full_quiesce = gcfg->zones_rfc1035_quiesce;
+    if(!getenv("GDNSD_TESTSUITE_NODELAY")) // testsuite can bypass restrictions!
+        full_quiesce = gcfg->zones_rfc1035_quiesce;
     log_info("rfc1035: quiescence time is %.3g", full_quiesce);
 }
 

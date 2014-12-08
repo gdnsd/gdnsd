@@ -13,14 +13,17 @@ fi
 set -x
 set -e
 
+TEST_CPUS=`getconf _NPROCESSORS_ONLN`
+export TEST_CPUS
+
 case "$GDNSD_TRAVIS_BUILD" in
     optimized)
         CFLAGS=-O3 ./configure
-        make -j2 check
+        make -j$TEST_CPUS check
     ;;
     coveralls)
         CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage -fno-omit-frame-pointer" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --without-hardening
-        make -j2
+        make -j$TEST_CPUS
         lcov -c -i -d . -o gdnsd-base.info
         make check
         lcov -c -d . -o gdnsd-test.info

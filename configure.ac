@@ -386,6 +386,27 @@ else
         || AC_MSG_ERROR([Ragel is not version 6.x])
 fi
 
+# Discover CPUs for testsuite parallelism, allowing user to override via env var.
+# I'd much rather either:
+#  (a) steal the user-supplied -jN argument from make inside of Makefile.am,
+#      but there doesn't seem to be a really good way to do that reliably, especially with
+#      recursive make.  or...
+#  (b) Set -jN based on TEST_CPUS (and rename it BUILD_CPUS), but there doesn't seem
+#      to be any clean way to do that either without disabling direct user override
+#      of that in MAKEFLAGS at make invocation time...
+# As things stand with this commit, user-supplied -jN controls build parallelism
+#  and is not auto-detected, while TEST_CPUS controls testsuite parallelism, and
+#  is auto-detected but can be overridden at configure time.
+AC_ARG_VAR([TEST_CPUS],[number of CPUs to assume when parallelizing the testsuite])
+AC_MSG_CHECKING([number of CPUs available for testing])
+if test "x$ac_cv_env_TEST_CPUS_set" = "xset"; then
+    AC_MSG_RESULT([$TEST_CPUS (user-specified)])
+else
+    # These two methods should work for the *BSDs, MacOS, and Linux
+    TEST_CPUS=$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+    AC_MSG_RESULT([$TEST_CPUS])
+fi
+
 # Decompressor for compressed test data from git submodule
 AC_ARG_VAR([XZ],[path to xz compression utility])
 if test "x$ac_cv_env_XZ_set" != "xset"; then
@@ -395,7 +416,7 @@ AM_CONDITIONAL(HAS_XZ, [test x$XZ != xmissing])
 
 # Allow user to override the port range we use for testing
 AC_ARG_WITH([testport],[AS_HELP_STRING([--with-testport=N],
-    [The testsuite needs a set of 3 IP port numbers to use, starting at "N", that it can bind to on "127.0.0.1".  If the default value of "12345" does not work for you, change it here.])],
+    [The testsuite needs ~300 IP port numbers to use, starting at "N", that it can bind to on "127.0.0.1" and "::1".  If the default value of "12345" does not work for you, change it here.])],
     [],
     [with_testport=12345]
 )
