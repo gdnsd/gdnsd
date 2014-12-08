@@ -30,7 +30,7 @@
 /lcovout/
 
 # libgdmaps unit test junk
-/t/libgdmaps/*.bin
+/t/libgdmaps/*.t
 /t/libgdmaps/etc/
 
 # Various tool outputs in all dirs

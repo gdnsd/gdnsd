@@ -125,7 +125,7 @@ test_verbose_0 = @echo TEST $@;
 test_verbose_ = $(test_verbose_@AM_DEFAULT_V@)
 test_verbose = $(test_verbose_@AM_V@)
 
-check_PROGRAMS = $(TESTLIST:=.bin)
+check_PROGRAMS = $(TESTLIST:=.t)
 CHECK_PROGS_PATHED = $(check_PROGRAMS:%=./%)
 
 check-local: $(check_PROGRAMS) $(TDATA_FINAL) check-warn
