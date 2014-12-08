@@ -45,6 +45,11 @@ static uint64_t get_extended_mtime(const struct stat* st) {
         + (uint64_t)get_mtimens(*st);
 }
 
+F_UNUSED F_CONST
+static uint64_t extended_mtime_secs(const uint64_t emtime) {
+    return emtime / 1000000000ULL;
+}
+
 // mutually-dependent stuff between zone.h and ltree.h
 struct _zone_struct;
 typedef struct _zone_struct zone_t;

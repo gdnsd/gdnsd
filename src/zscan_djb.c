@@ -291,7 +291,7 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
                               parse_dname(z, dname2, &field[1]),
                               parse_dname(z, email, &field[2]),
                               parse_ttl(z, &field[8], TTL_NEGATIVE),
-                              zone->serial ?: z->mtime, /* serial */
+                              zone->serial ?: extended_mtime_secs(z->mtime), /* serial */
                               parse_int(z, &field[4]) ?:    16384, /* refresh */
                               parse_int(z, &field[5]) ?:     2048, /* retry */
                               parse_int(z, &field[6]) ?:  1048576, /* expire */
