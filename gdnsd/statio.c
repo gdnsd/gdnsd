@@ -663,12 +663,12 @@ void statio_bind_socks(void) {
 }
 
 bool statio_check_socks(bool soft) {
-    unsigned rv = true;
+    unsigned rv = false;
     for(unsigned i = 0; i < num_lsocks; i++)
         if(!socks_sock_is_bound_to(lsocks[i], &gconfig.http_addrs[i]) && !soft)
             log_fatal("Failed to bind() stats TCP socket to %s", dmn_logf_anysin(&gconfig.http_addrs[i]));
         else
-            rv = false;
+            rv = true;
     return rv;
 }
 
