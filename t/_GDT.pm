@@ -481,7 +481,7 @@ sub test_spawn_daemon {
     };
     unless(Test::More::ok(!$@ && $pid)) {
         Test::More::diag("Cannot spawn daemon: $@");
-        Test::More::BAIL_OUT($@);
+        die $@;
     }
 
     return $pid;
@@ -496,7 +496,7 @@ sub test_spawn_daemon_setup {
     };
     unless(Test::More::ok(!$@)) {
         Test::More::diag("Cannot setup daemon: $@");
-        Test::More::BAIL_OUT($@);
+        die $@;
     }
 }
 
@@ -512,7 +512,7 @@ sub test_spawn_daemon_execute {
     };
     unless(Test::More::ok(!$@ && $pid)) {
         Test::More::diag("Cannot spawn daemon: $@");
-        Test::More::BAIL_OUT($@);
+        die $@;
     }
 
     return $pid;
@@ -1105,12 +1105,14 @@ sub test_kill_daemon {
 
     if(!$pid) {
         Test::More::ok(0);
-        Test::More::BAIL_OUT("Test Bug: no pid specified?");
+        Test::More::diag("Test Bug: no pid specified?");
+        die "Test Bug: no pid specified?";
     }
 
     if(!kill(0, $pid)) {
         Test::More::ok(0);
-        Test::More::BAIL_OUT("Daemon at pid $pid was dead before we tried to shut it down");
+        Test::More::diag("Daemon at pid $pid was dead before we tried to shut it down");
+        die "Daemon at pid $pid was dead before we tried to shut it down";
     }
     else {
         local $@ = undef;
@@ -1131,14 +1133,16 @@ sub test_kill_daemon {
             my $ev = WEXITSTATUS(${^CHILD_ERROR_NATIVE});
             if($ev) {
                 Test::More::ok(0);
-                Test::More::BAIL_OUT("$diestr - Exit value was $ev");
+                Test::More::diag("$diestr - Exit value was $ev");
+                die "$diestr - Exit value was $ev";
             }
         }
         elsif(WIFSIGNALED(${^CHILD_ERROR_NATIVE})) {
             my $s = WTERMSIG(${^CHILD_ERROR_NATIVE});
             if($s != $SIGS{'TERM'}) {
                 Test::More::ok(0);
-                Test::More::BAIL_OUT("$diestr - Terminated by signal $s");
+                Test::More::diag("$diestr - Terminated by signal $s");
+                die "$diestr - Terminated by signal $s";
             }
         }
     }
