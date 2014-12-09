@@ -147,7 +147,7 @@ static unsigned label_hash(const uint8_t* label) {
 // the _writer version is for the zone updater thread.
 // the normal version is for readers that need prcu_deref.
 F_NONNULL
-static ztree_t* ztree_node_find_child_writer(ztree_t* node, const uint8_t* label) {
+static ztree_t* ztree_node_find_child_writer(const ztree_t* node, const uint8_t* label) {
     dmn_assert(node); dmn_assert(label);
 
     ztree_t* rv = NULL;
@@ -169,7 +169,7 @@ static ztree_t* ztree_node_find_child_writer(ztree_t* node, const uint8_t* label
 }
 
 F_NONNULL
-static ztree_t* ztree_node_find_child(ztree_t* node, const uint8_t* label) {
+static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label) {
     dmn_assert(node); dmn_assert(label);
 
     ztree_t* rv = NULL;
