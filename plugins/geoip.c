@@ -95,4 +95,4 @@ static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum) {
 #define CB_MAP plugin_geoip_map_res
 #define CB_RES plugin_geoip_resolve
 #define META_MAP_ADMIN 1
-#include "meta_core.c"
+#include "meta_core.inc"

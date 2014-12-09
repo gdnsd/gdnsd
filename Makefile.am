@@ -149,9 +149,6 @@ EXTRA_DIST += src/zscan_rfc1035.rl
 # plugins/
 #=====================================
 
-# This is shared via #include between metafo and geoip
-EXTRA_DIST += plugins/meta_core.c
-
 pkglib_LTLIBRARIES += \
 	plugins/plugin_http_status.la \
 	plugins/plugin_multifo.la \
@@ -210,12 +207,12 @@ plugins_gdnsd_geoip_test_CFLAGS   = $(CFLAGS_PIE)
 plugins_gdnsd_geoip_test_LDFLAGS  = $(LDFLAGS_PIE)
 plugins_gdnsd_geoip_test_LDADD    = libgdmaps/libgdmaps.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
-plugins_plugin_geoip_la_SOURCES   = plugins/geoip.c
+plugins_plugin_geoip_la_SOURCES   = plugins/geoip.c plugins/meta_core.inc
 plugins_plugin_geoip_la_CPPFLAGS  = -I$(srcdir)/libgdmaps $(AM_CPPFLAGS)
 plugins_plugin_geoip_la_LDFLAGS   = -avoid-version -module
 plugins_plugin_geoip_la_LIBADD    = libgdmaps/libgdmaps.la
 
-plugins_plugin_metafo_la_SOURCES  = plugins/metafo.c
+plugins_plugin_metafo_la_SOURCES  = plugins/metafo.c plugins/meta_core.inc
 plugins_plugin_metafo_la_LDFLAGS  = -avoid-version -module
 
 #=====================================

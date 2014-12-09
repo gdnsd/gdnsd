@@ -104,4 +104,4 @@ static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t*
 #define CB_MAP plugin_metafo_map_res
 #define CB_RES plugin_metafo_resolve
 #define META_MAP_ADMIN 0
-#include "meta_core.c"
+#include "meta_core.inc"
