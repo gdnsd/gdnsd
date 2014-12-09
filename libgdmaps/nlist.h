@@ -20,10 +20,12 @@
 #ifndef NLIST_H
 #define NLIST_H
 
-#include "config.h"
+#include "ntree.h"
+
+#include <gdnsd/compiler.h>
+
 #include <inttypes.h>
 #include <stdbool.h>
-#include "ntree.h"
 
 typedef struct _nlist nlist_t;
 

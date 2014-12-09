@@ -20,20 +20,13 @@
 #ifndef GDNSD_PLUGAPI_H
 #define GDNSD_PLUGAPI_H
 
-// for uint8_t
+#include <gdnsd/vscf.h>
+#include <gdnsd/net.h>
+#include <gdnsd/mon.h>
+
 #include <inttypes.h>
 
-// For struct ev_loop
 #include <ev.h>
-
-// For vscf_data_t
-#include <gdnsd/vscf.h>
-
-// For dmn_anysin_t
-#include <gdnsd/net.h>
-
-// For gdnsd_sttl_t
-#include <gdnsd/mon.h>
 
 // The bopts header is sort of like a "config.h" for plugin binary compat
 // It defines only features that affect binary compatibility between plugins

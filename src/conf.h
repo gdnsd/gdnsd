@@ -20,11 +20,13 @@
 #ifndef GDNSD_CONF_H
 #define GDNSD_CONF_H
 
-#include "config.h"
 #include "socks.h"
 
-#include <stdbool.h>
+#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
+
+#include <stdbool.h>
+#include <inttypes.h>
 
 typedef struct {
     const char*    username;
@@ -54,6 +56,7 @@ typedef struct {
 
 extern const cfg_t* gcfg;
 
+F_NONNULLX(2)
 cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd);
 
 #endif // GDNSD_CONF_H

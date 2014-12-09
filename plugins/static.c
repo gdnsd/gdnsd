@@ -17,10 +17,13 @@
  *
  */
 
-#define GDNSD_PLUGIN_NAME static
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME static
 #include <gdnsd/plugin.h>
+
+#include <stdbool.h>
+#include <inttypes.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>

@@ -20,9 +20,10 @@
 #ifndef GDNSD_NET_H
 #define GDNSD_NET_H
 
-#include <stdbool.h>
-#include <gdnsd/dmn.h>
 #include <gdnsd/compiler.h>
+#include <gdnsd/dmn.h>
+
+#include <stdbool.h>
 
 // We always use numeric_only=true in gdnsd
 #define gdnsd_anysin_getaddrinfo(__a,__p,__r) dmn_anysin_getaddrinfo((__a),(__p),(__r),true)

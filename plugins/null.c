@@ -17,11 +17,13 @@
  *
  */
 
-#define GDNSD_PLUGIN_NAME null
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME null
 #include <gdnsd/plugin.h>
+
 #include <string.h>
+#include <inttypes.h>
 
 void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED) {
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family

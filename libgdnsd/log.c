@@ -17,7 +17,15 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+#include <gdnsd/log.h>
+
+#include <gdnsd/compiler.h>
+#include <gdnsd/net.h>
+#include <gdnsd/stats.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/paths.h>
+#include <gdnsd/dname.h>
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -27,14 +35,6 @@
 #include <syslog.h>
 #include <stdarg.h>
 #include <pthread.h>
-
-#include <gdnsd/compiler.h>
-#include <gdnsd/net.h>
-#include <gdnsd/log.h>
-#include <gdnsd/stats.h>
-#include <gdnsd/dmn.h>
-#include <gdnsd/paths.h>
-#include <gdnsd/dname.h>
 
 static const char generic_nullstr[] = "(null)";
 

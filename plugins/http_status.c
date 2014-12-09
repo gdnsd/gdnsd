@@ -17,10 +17,12 @@
  *
  */
 
-#define GDNSD_PLUGIN_NAME http_status
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME http_status
 #include <gdnsd/plugin.h>
+
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in_systm.h>

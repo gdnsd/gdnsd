@@ -17,21 +17,23 @@
  *
  */
 
+#include <config.h>
 #include "zsrc_djb.h"
+
 #include "zscan_djb.h"
+#include "conf.h"
+#include "ltree.h"
+#include "main.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/paths.h>
 
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
-#include "conf.h"
-#include "ltree.h"
-#include "main.h"
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
-#include <gdnsd/paths.h>
 
 static struct ev_loop* zones_loop = NULL;
 static ev_async* sigusr1_waker = NULL;

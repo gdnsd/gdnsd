@@ -20,10 +20,13 @@
 #ifndef DCMAP_H
 #define DCMAP_H
 
-#include "config.h"
 #include "dclists.h"
+
+#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
+
 #include <inttypes.h>
+#include <stdbool.h>
 
 typedef struct _dcmap dcmap_t;
 

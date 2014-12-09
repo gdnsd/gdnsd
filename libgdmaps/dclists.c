@@ -19,14 +19,14 @@
 
 // gdmaps = GeoIP -> Datacenter Mapping library code
 
-#include "config.h"
+#include <config.h>
 #include "dclists.h"
-
-#include <math.h>
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
+
+#include <math.h>
 
 /***************************************
  * dclists_t and related methods

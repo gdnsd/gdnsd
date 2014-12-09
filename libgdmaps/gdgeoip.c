@@ -17,15 +17,8 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
 #include "gdgeoip.h"
-
-#include <inttypes.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
@@ -33,6 +26,13 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/file.h>
+
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 /*****************************************************************************
  * This portion of the code in this file is specific to parsing

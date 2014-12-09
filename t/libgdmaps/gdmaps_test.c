@@ -17,19 +17,20 @@
  *
  */
 
-#include "config.h"
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
+#include <config.h>
+#include "gdmaps_test.h"
 
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
 
-#include <gdmaps.h>
-#include "gdmaps_test.h"
+#include <inttypes.h>
+#include <stdbool.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 #include <tap.h>
 

@@ -20,9 +20,10 @@
 #ifndef GDNSD_DNSWIRE_H
 #define GDNSD_DNSWIRE_H
 
-#include "config.h"
 #include <gdnsd/compiler.h>
+
 #include <inttypes.h>
+#include <arpa/inet.h>
 
 // Our UDP input buffers are shared with output buffer
 //  space, and the output buffer size in turn has

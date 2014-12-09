@@ -20,11 +20,10 @@
 #ifndef GDNSD_STATS_H
 #define GDNSD_STATS_H
 
-// For uintptr_t
-#include <inttypes.h>
-
 #include <gdnsd/compiler.h>
 #include <gdnsd/dmn.h>
+
+#include <inttypes.h>
 
 /*
  * This header defines two data types named stats_t and stats_uint_t,

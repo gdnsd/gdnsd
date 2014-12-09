@@ -17,10 +17,13 @@
  *
  */
 
-#define GDNSD_PLUGIN_NAME simplefo
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME simplefo
 #include <gdnsd/plugin.h>
+
+#include <stdbool.h>
+#include <inttypes.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>

@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I$(top_srcdir)/libgdmaps -I$(top_srcdir)/include -I$(top_srcdir)/t/libtap
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/t/libtap
 
 check_LTLIBRARIES = libgdmaps_test.la
 libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h

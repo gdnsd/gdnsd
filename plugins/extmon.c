@@ -17,11 +17,15 @@
  *
  */
 
-#define GDNSD_PLUGIN_NAME extmon
+#include <config.h>
 
-#include "config.h"
-#include "extmon_comms.h"
+#define GDNSD_PLUGIN_NAME extmon
 #include <gdnsd/plugin.h>
+
+#include "extmon_comms.h"
+
+#include <inttypes.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>

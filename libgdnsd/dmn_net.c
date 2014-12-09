@@ -1,3 +1,4 @@
+
 /* Copyright © 2012 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
@@ -17,7 +18,8 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+#include <gdnsd/dmn.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -26,8 +28,6 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <gdnsd/dmn.h>
 
 /* network utils */
 

@@ -17,10 +17,14 @@
  *
  */
 
-#include "config.h"
-
-#include <gdnsd/alloc.h>
+#include <config.h>
 #include <gdnsd/mon.h>
+#include <gdnsd-prot/mon.h>
+
+#include "plugapi.h"
+
+#include <gdnsd-prot/plugapi.h>
+#include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/plugapi.h>
@@ -31,11 +35,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <fnmatch.h>
-#include <ev.h>
 
-#include "mon-prot.h"
-#include "plugapi-prot.h"
-#include "plugapi-priv.h"
+#include <ev.h>
 
 typedef struct {
     const char* name;

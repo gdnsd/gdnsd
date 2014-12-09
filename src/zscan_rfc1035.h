@@ -20,8 +20,8 @@
 #ifndef GDNSD_ZSCAN_H
 #define GDNSD_ZSCAN_H
 
-#include "config.h"
 #include "ztree.h"
+
 #include <gdnsd/compiler.h>
 
 // Actually scan the zonefile, creating the data.  The failure type

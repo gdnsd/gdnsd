@@ -20,12 +20,13 @@
 #ifndef GDGEOIP2_H
 #define GDGEOIP2_H
 
-#include "config.h"
+#include <gdnsd/compiler.h>
+
 #include "dclists.h"
 #include "dcmap.h"
 #include "nlist.h"
+
 #include <stdbool.h>
-#include <gdnsd/compiler.h>
 
 F_NONNULLX(1,2,3)
 nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode, const bool city_no_region);

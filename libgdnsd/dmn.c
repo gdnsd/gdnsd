@@ -17,7 +17,8 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+#include <gdnsd/dmn.h>
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -43,8 +44,6 @@
 #  define UNW_LOCAL_ONLY
 #  include <libunwind.h>
 #endif
-
-#include <gdnsd/dmn.h>
 
 /***********************************************************
 ***** Defines **********************************************

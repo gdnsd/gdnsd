@@ -17,6 +17,9 @@
  *
  */
 
+#ifndef GDNSD_LTREE_H
+#define GDNSD_LTREE_H
+
 /*
 
   ltree == "Label Tree", a representation of DNS data as a tree by domain
@@ -81,20 +84,18 @@ daemon exit time).
 
 */
 
-#ifndef GDNSD_LTREE_H
-#define GDNSD_LTREE_H
-
-#include "config.h"
 #include "dnswire.h"
-#include "ltarena.h"
-#include <gdnsd/plugapi.h>
 
-// struct/typedef stuff
+// [zl]tree.h have a mutual dependency due to type definitions:
 struct _ltree_node_struct;
 typedef struct _ltree_node_struct ltree_node_t;
-
-// depends on ltree_node_t above
 #include "ztree.h"
+
+#include <gdnsd/compiler.h>
+#include <gdnsd/plugapi.h>
+
+#include <inttypes.h>
+#include <stdbool.h>
 
 struct _ltree_rdata_ns_struct;
 struct _ltree_rdata_ptr_struct;

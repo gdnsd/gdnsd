@@ -20,7 +20,7 @@
 #ifndef DCINFO_H
 #define DCINFO_H
 
-#include "config.h"
+#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
 
 // DEG2RAD converts degrees to radians.  Our auto_dc_coords input

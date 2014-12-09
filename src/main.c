@@ -17,7 +17,27 @@
  *
  */
 
+#include <config.h>
 #include "main.h"
+
+#include "conf.h"
+#include "socks.h"
+#include "dnsio_tcp.h"
+#include "dnsio_udp.h"
+#include "dnspacket.h"
+#include "statio.h"
+#include "ztree.h"
+#include "zsrc_rfc1035.h"
+#include "zsrc_djb.h"
+
+#include <gdnsd-prot/plugapi.h>
+#include <gdnsd-prot/misc.h>
+#include <gdnsd-prot/mon.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/paths.h>
+#include <gdnsd/misc.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -33,22 +53,6 @@
 #include <sys/resource.h>
 #include <pwd.h>
 #include <time.h>
-
-#include "socks.h"
-#include "dnsio_tcp.h"
-#include "dnsio_udp.h"
-#include "dnspacket.h"
-#include "statio.h"
-#include "ztree.h"
-#include "zsrc_rfc1035.h"
-#include "zsrc_djb.h"
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
-#include <gdnsd/vscf.h>
-#include <gdnsd/paths.h>
-#include <plugapi-prot.h>
-#include <misc-prot.h>
-#include <mon-prot.h>
 
 // ev loop used for monitoring and statio
 // (which shared a thread as well)

@@ -17,12 +17,16 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
 #include "gdgeoip2.h"
+
 #include "dclists.h"
 #include "dcmap.h"
 #include "nlist.h"
 #include "ntree.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -32,9 +36,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <setjmp.h>
-
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
 
 #ifdef HAVE_GEOIP2
 

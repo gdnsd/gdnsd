@@ -20,10 +20,9 @@
 #ifndef FIPS104_H
 #define FIPS104_H
 
-#include "config.h"
+#include <gdnsd/compiler.h>
 
 #include <inttypes.h>
-#include <gdnsd/compiler.h>
 
 typedef struct _fips_t fips_t;
 

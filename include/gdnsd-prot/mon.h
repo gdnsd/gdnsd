@@ -20,8 +20,9 @@
 #ifndef GDNSD_MON_PROT_H
 #define GDNSD_MON_PROT_H
 
-#include <gdnsd/mon.h>
+#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
+
 #include <ev.h>
 
 #pragma GCC visibility push(default)

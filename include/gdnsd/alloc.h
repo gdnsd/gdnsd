@@ -21,8 +21,8 @@
 #define GDNSD_ALLOC_H
 
 #include <gdnsd/compiler.h>
+
 #include <sys/types.h>
-#include <stdbool.h>
 
 #pragma GCC visibility push(default)
 

@@ -19,11 +19,8 @@
 
 // Unit test for gdmaps
 
-#include "config.h"
-#include <gdnsd/log.h>
-#include <stdlib.h>
+#include <config.h>
 #include "gdmaps_test.h"
-
 #include <tap.h>
 
 static const char cfg[] = QUOTE(

@@ -17,19 +17,20 @@
  *
  */
 
+#include <config.h>
+#include <gdnsd/vscf.h>
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/file.h>
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <inttypes.h>
-
-#include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
-#include <gdnsd/vscf.h>
-#include <gdnsd/file.h>
 
 #define parse_error(_fmt, ...) do {\
     if(!scnr->err_emitted) {\

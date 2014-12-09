@@ -17,21 +17,23 @@
  *
  */
 
+#include <config.h>
 #include "zscan_rfc1035.h"
+
+#include "conf.h"
+#include "ltree.h"
+#include "ltarena.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/file.h>
 
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <setjmp.h>
 #include <errno.h>
-
-#include "conf.h"
-#include "ltree.h"
-#include "ltarena.h"
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
-#include <gdnsd/misc.h>
-#include <gdnsd/file.h>
 
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN 46

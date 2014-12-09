@@ -20,10 +20,9 @@
 #ifndef GDNSD_LTARENA_H
 #define GDNSD_LTARENA_H
 
-#include "config.h"
 #include <gdnsd/compiler.h>
+
 #include <inttypes.h>
-#include <string.h>
 
 /******************************************************************\
 * ltarena is arena storage for ltree string data, it allocates

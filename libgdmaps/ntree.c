@@ -17,8 +17,9 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
 #include "ntree.h"
+
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 

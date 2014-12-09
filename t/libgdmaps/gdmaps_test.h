@@ -20,12 +20,9 @@
 #ifndef GDMAPS_TEST_H
 #define GDMAPS_TEST_H
 
-#include "config.h"
-#include <inttypes.h>
-#include <gdnsd/vscf.h>
-#include <gdnsd/plugapi.h>
+#include <gdmaps.h>
 
-#include "gdmaps.h"
+#include <stdbool.h>
 
 // initialize test environment.  cfg_data is a string containing
 //   the ",,," from "plugins => { geoip => { maps => { ... } }}

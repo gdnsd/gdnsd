@@ -21,7 +21,12 @@
 #define GDNSD_PLUGAPI_PROT_H
 
 #include <gdnsd/plugapi.h>
+
+#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
+
+#include <inttypes.h>
+#include <stdbool.h>
 
 struct dyn_result {
     unsigned edns_scope_mask; // inits to zero

@@ -20,9 +20,6 @@
 #ifndef GDNSD_MISC_PROT_H
 #define GDNSD_MISC_PROT_H
 
-#include <gdnsd/compiler.h>
-#include <gdnsd/misc.h>
-
 #pragma GCC visibility push(default)
 
 // Kill+Reap pids from gdnsd_register_child_pid()

@@ -17,7 +17,17 @@
  *
  */
 
+#include <config.h>
 #include "dnsio_udp.h"
+
+#include "conf.h"
+#include "dnswire.h"
+#include "dnspacket.h"
+#include "socks.h"
+
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/prcu.h>
 
 #include <netdb.h>
 #include <unistd.h>
@@ -33,14 +43,6 @@
 #include <pthread.h>
 #include <sys/time.h>
 #include <time.h>
-
-#include "conf.h"
-#include "dnswire.h"
-#include "dnspacket.h"
-#include "socks.h"
-#include <gdnsd/log.h>
-#include <gdnsd/misc.h>
-#include <gdnsd/prcu.h>
 
 #ifndef SOL_IPV6
 #define SOL_IPV6 IPPROTO_IPV6

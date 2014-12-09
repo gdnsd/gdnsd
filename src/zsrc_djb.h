@@ -20,10 +20,11 @@
 #ifndef GDNSD_ZSRC_DJB_H
 #define GDNSD_ZSRC_DJB_H
 
-#include "config.h"
-#include "ztree.h"
-#include <ev.h>
+#include <gdnsd/compiler.h>
+
 #include <stdbool.h>
+
+#include <ev.h>
 
 void zsrc_djb_load_zones(const bool check_only);
 

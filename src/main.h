@@ -20,8 +20,7 @@
 #ifndef GDNSD_MAIN
 #define GDNSD_MAIN
 
-#include "config.h"
-#include "conf.h"
+#include <gdnsd/compiler.h>
 
 F_NONNULL
 void gdnsd_atexit_debug(void (*f)(void));

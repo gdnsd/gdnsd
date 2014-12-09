@@ -17,7 +17,11 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+#include <gdnsd/net.h>
+#include "net.h"
+
+#include <gdnsd/log.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -26,11 +30,6 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <gdnsd/net.h>
-#include <gdnsd/log.h>
-
-#include "net-priv.h"
 
 /* network utils */
 

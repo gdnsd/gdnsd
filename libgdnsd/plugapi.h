@@ -21,6 +21,7 @@
 #define GDNSD_PLUGAPI_PRIV_H
 
 #include <gdnsd/compiler.h>
+
 #include <ev.h>
 
 F_NONNULL

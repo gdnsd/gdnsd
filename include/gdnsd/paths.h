@@ -20,8 +20,8 @@
 #ifndef GDNSD_PATHS_H
 #define GDNSD_PATHS_H
 
-#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
+
 #include <stdbool.h>
 
 #pragma GCC visibility push(default)

@@ -17,18 +17,20 @@
  *
  */
 
+#include <config.h>
 #include "ztree.h"
-
-#include <stdlib.h>
 
 #include "main.h"
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
+
 #include <gdnsd/alloc.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/prcu.h>
+
+#include <stdlib.h>
 
 // The tree data structure that will hold the zone_t's
 struct _ztree_struct;

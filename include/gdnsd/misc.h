@@ -22,6 +22,7 @@
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/dmn.h>
+
 #include <inttypes.h>
 #include <stdbool.h>
 #include <pthread.h>

@@ -17,20 +17,22 @@
  *
  */
 
+#include <config.h>
 #include "ltree.h"
+
+#include "conf.h"
+#include "dnspacket.h"
+#include "ltarena.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/dname.h>
+#include <gdnsd/log.h>
 
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
-
-#include "conf.h"
-#include "dnspacket.h"
-#include "ltarena.h"
-#include <gdnsd/alloc.h>
-#include <gdnsd/dname.h>
-#include <gdnsd/log.h>
 
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists

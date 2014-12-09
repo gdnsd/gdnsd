@@ -17,10 +17,12 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+#include <gdnsd/misc.h>
+#include <gdnsd-prot/misc.h>
+#include "misc.h"
 
 #include <gdnsd/alloc.h>
-#include <gdnsd/misc.h>
 #include <gdnsd/log.h>
 
 #include <inttypes.h>
@@ -33,7 +35,6 @@
 #include <sys/time.h>
 #include <sys/utsname.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <stddef.h>
@@ -46,9 +47,6 @@
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>
 #endif
-
-#include "misc-prot.h"
-#include "misc-priv.h"
 
 /* misc */
 

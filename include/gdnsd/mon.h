@@ -20,11 +20,11 @@
 #ifndef GDNSD_MON_H
 #define GDNSD_MON_H
 
-#include <inttypes.h>
-
-// For anysin stuff
+#include <gdnsd/compiler.h>
 #include <gdnsd/net.h>
 #include <gdnsd/prcu.h>
+
+#include <inttypes.h>
 
 // gdnsd_sttl_t
 //  sttl -> state+ttl

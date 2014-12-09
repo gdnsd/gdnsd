@@ -20,15 +20,14 @@
 #ifndef GDNSD_LOG_H
 #define GDNSD_LOG_H
 
-#include <gdnsd/compiler.h>
 #include <gdnsd/net.h>
+#include <gdnsd/dmn.h>
 
 #include <inttypes.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <syslog.h>
-#include <gdnsd/dmn.h>
 
 // shortcut defines for basic log levels
 #define log_info dmn_log_info

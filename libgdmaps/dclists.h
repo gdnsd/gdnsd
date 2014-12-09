@@ -20,9 +20,11 @@
 #ifndef DCLISTS_H
 #define DCLISTS_H
 
-#include "config.h"
 #include "dcinfo.h"
+
+#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
+
 #include <inttypes.h>
 #include <stdbool.h>
 

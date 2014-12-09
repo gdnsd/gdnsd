@@ -17,9 +17,12 @@
  *
  */
 
-#include "config.h"
-
+#include <config.h>
 #include <gdnsd/paths.h>
+
+#include "misc.h"
+#include "net.h"
+
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/log.h>
@@ -34,12 +37,8 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-
-#include "misc-priv.h"
-#include "net-priv.h"
 
 /* paths */
 

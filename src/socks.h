@@ -20,10 +20,11 @@
 #ifndef GDNSD_SOCKS_H
 #define GDNSD_SOCKS_H
 
-#include "config.h"
+#include <gdnsd/dmn.h>
+#include <gdnsd/vscf.h>
+
 #include <stdbool.h>
 #include <pthread.h>
-#include <gdnsd/vscf.h>
 
 typedef struct {
     dmn_anysin_t addr;

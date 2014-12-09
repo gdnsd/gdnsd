@@ -17,7 +17,18 @@
  *
  */
 
+#include <config.h>
 #include "statio.h"
+
+#include "conf.h"
+#include "socks.h"
+#include "dnsio_udp.h"
+#include "dnsio_tcp.h"
+#include "dnspacket.h"
+
+#include <gdnsd-prot/mon.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -25,15 +36,6 @@
 #include <string.h>
 #include <sys/uio.h>
 #include <pthread.h>
-
-#include "conf.h"
-#include "socks.h"
-#include "dnsio_udp.h"
-#include "dnsio_tcp.h"
-#include "dnspacket.h"
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
-#include <mon-prot.h>
 
 // Macro to add an offset to a void* portably...
 #define ADDVOID(_vstar,_offs) ((void*)(((char*)(_vstar)) + _offs))

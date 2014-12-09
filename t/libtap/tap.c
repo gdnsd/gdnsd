@@ -23,17 +23,19 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "config.h"
+
+#include <config.h>
+
+#include "tap.h"
+
+// for diag push stuff
+#include <gdnsd/dmn.h>
+
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-// for diag push stuff
-#include <gdnsd/dmn.h>
-
-#include "tap.h"
 
 static int no_plan = 0;
 static int skip_all = 0;

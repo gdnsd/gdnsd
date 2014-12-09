@@ -20,14 +20,14 @@
 #ifndef GDNSD_DNAME_H
 #define GDNSD_DNAME_H
 
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/dmn.h>
+
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-
-#include <gdnsd/compiler.h>
-#include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
 
 /*
  * Notes about Domain Names in general:

@@ -17,14 +17,18 @@
  *
  */
 
+#include <config.h>
 #include "conf.h"
+
 #include "main.h"
 #include "socks.h"
+
+#include <gdnsd-prot/mon.h>
+#include <gdnsd-prot/plugapi.h>
 #include <gdnsd/alloc.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/log.h>
-#include <plugapi-prot.h>
-#include <mon-prot.h>
+#include <gdnsd/plugapi.h>
 
 #include <unistd.h>
 #include <string.h>
@@ -252,7 +256,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
     } while(0)
 
 cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd) {
-    dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
+    dmn_assert(!cfg_root || vscf_is_hash(cfg_root)); dmn_assert(socks_cfg);
 
     cfg_t* cfg = xmalloc(sizeof(*cfg));
     memcpy(cfg, &cfg_defaults, sizeof(*cfg));

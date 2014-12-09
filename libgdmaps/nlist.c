@@ -17,15 +17,17 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
 #include "nlist.h"
-#include <string.h>
-#include <stdlib.h>
+
+#include "dclists.h"
+
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 
-#include "dclists.h"
+#include <string.h>
+#include <stdlib.h>
 
 #define NLIST_INITSIZE 64
 

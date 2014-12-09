@@ -20,13 +20,17 @@
 #ifndef GDNSD_ZTREE_H
 #define GDNSD_ZTREE_H
 
-#include "config.h"
+#include "ltarena.h"
+
+// [zl]tree.h have a mutual dependency due to type definitions:
+struct _zone_struct;
+typedef struct _zone_struct zone_t;
+#include "ltree.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "ltarena.h"
 
 // high-res mtime stuff, for zsrc_*.c to use internally...
 #if defined HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
@@ -49,12 +53,6 @@ F_UNUSED F_CONST
 static uint64_t extended_mtime_secs(const uint64_t emtime) {
     return emtime / 1000000000ULL;
 }
-
-// mutually-dependent stuff between zone.h and ltree.h
-struct _zone_struct;
-typedef struct _zone_struct zone_t;
-
-#include "ltree.h"
 
 struct _zone_struct {
     unsigned hash;        // hash of dname

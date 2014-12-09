@@ -20,11 +20,13 @@
 #ifndef GDGEOIP_H
 #define GDGEOIP_H
 
-#include <gdnsd/log.h>
 #include "fips104.h"
 #include "dclists.h"
 #include "dcmap.h"
 #include "nlist.h"
+
+#include <gdnsd/compiler.h>
+#include <gdnsd/log.h>
 
 F_NONNULL
 void validate_country_code(const char* cc, const char* map_name);

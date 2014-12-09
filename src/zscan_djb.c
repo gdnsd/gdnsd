@@ -17,7 +17,16 @@
  *
  */
 
-#define _GNU_SOURCE
+#include <config.h>
+#include "zscan_djb.h"
+
+#include "conf.h"
+#include "ztree.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -26,13 +35,6 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <setjmp.h>
-
-#include "conf.h"
-#include "ztree.h"
-#include "zscan_djb.h"
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
-#include <gdnsd/misc.h>
 
 #define TTL_NS 259200
 #define TTL_POSITIVE 86400

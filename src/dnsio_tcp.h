@@ -20,8 +20,10 @@
 #ifndef GDNSD_DNSIO_TCP_H
 #define GDNSD_DNSIO_TCP_H
 
-#include "config.h"
-#include "conf.h"
+#include "socks.h"
+
+#include <gdnsd/compiler.h>
+#include <gdnsd/dmn.h>
 
 F_NONNULL
 void* dnsio_tcp_start(void* thread_asvoid);

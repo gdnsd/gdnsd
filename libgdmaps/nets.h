@@ -20,9 +20,9 @@
 #ifndef NETS_H
 #define NETS_H
 
-#include "config.h"
 #include "dclists.h"
 #include "nlist.h"
+
 #include <gdnsd/vscf.h>
 
 F_NONNULLX(2, 3)

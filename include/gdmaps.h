@@ -20,10 +20,10 @@
 #ifndef GDMAPS_H
 #define GDMAPS_H
 
-#include "config.h"
-#include <inttypes.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/plugapi.h>
+
+#include <inttypes.h>
 
 typedef struct _gdmaps_t gdmaps_t;
 

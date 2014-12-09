@@ -20,9 +20,10 @@
 #ifndef NTREE_H
 #define NTREE_H
 
-#include "config.h"
-#include <inttypes.h>
+#include <gdnsd/compiler.h>
 #include <gdnsd/plugapi.h>
+
+#include <inttypes.h>
 
 /***************************************
  * ntree_t and related methods

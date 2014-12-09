@@ -18,10 +18,12 @@
  * Author: Brandon L Black <blblack@gmail.com>
  */
 
-#define GDNSD_PLUGIN_NAME multifo
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME multifo
 #include <gdnsd/plugin.h>
+
+#include <stdbool.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>

@@ -17,10 +17,16 @@
  *
  */
 
+#include <config.h>
 #include "socks.h"
+
 #include "statio.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/log.h>
 
 #include <unistd.h>
 #include <string.h>
@@ -34,10 +40,6 @@
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <netinet/tcp.h>
-
-#include <gdnsd/alloc.h>
-#include <gdnsd/misc.h>
-#include <gdnsd/log.h>
 
 // Global access, only used in a few places, probably
 //   will be removable after future refactors

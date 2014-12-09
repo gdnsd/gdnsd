@@ -18,9 +18,13 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+
 #define GDNSD_PLUGIN_NAME weighted
 #include <gdnsd/plugin.h>
+
+#include <inttypes.h>
+#include <stdbool.h>
 
 static const char DEFAULT_SVCNAME[] = "up";
 

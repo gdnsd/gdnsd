@@ -20,15 +20,7 @@
 // This source is for the gdnsd_geoip_test binary, which exercises
 //  the core of the gdnsd-plugin-geoip plugin from the commandline.
 
-#include "config.h"
-#include <string.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <stdio.h>
+#include <config.h>
 
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
@@ -37,6 +29,14 @@
 #include <gdnsd/paths.h>
 
 #include <gdmaps.h>
+
+#include <string.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 static gdmaps_t* gdmaps = NULL;
 

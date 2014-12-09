@@ -17,12 +17,12 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+#include <gdnsd/file.h>
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
-#include <gdnsd/file.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>

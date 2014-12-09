@@ -17,11 +17,13 @@
  *
  */
 
-#define GDNSD_PLUGIN_NAME reflect
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME reflect
 #include <gdnsd/plugin.h>
+
 #include <string.h>
+#include <inttypes.h>
 
 #define NUM_RTYPES 4
 

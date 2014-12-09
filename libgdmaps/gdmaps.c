@@ -19,8 +19,9 @@
 
 // gdmaps = GeoIP -> Datacenter Mapping library code
 
-#include "config.h"
-#include "gdmaps.h"
+#include <config.h>
+#include <gdmaps.h>
+
 #include "fips104.h"
 #include "dcinfo.h"
 #include "dclists.h"
@@ -30,6 +31,14 @@
 #include "nets.h"
 #include "gdgeoip.h"
 #include "gdgeoip2.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/paths.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/prcu.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -44,14 +53,6 @@
 #include <pthread.h>
 
 #include <ev.h>
-
-#include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
-#include <gdnsd/log.h>
-#include <gdnsd/vscf.h>
-#include <gdnsd/paths.h>
-#include <gdnsd/misc.h>
-#include <gdnsd/prcu.h>
 
 // When an input file change is detected, we wait this long
 //  for a followup change notification before processing.  Every time we get

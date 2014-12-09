@@ -33,12 +33,15 @@
 //   file feeds into normal anti-flap/TTL calculations, as we do with standard
 //   real monitors like http_status.
 
-#define GDNSD_PLUGIN_NAME extfile
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME extfile
 #include <gdnsd/plugin.h>
+
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
+
 #include <ev.h>
 
 typedef struct {

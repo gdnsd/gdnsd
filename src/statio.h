@@ -20,10 +20,12 @@
 #ifndef GDSND_STATIO_H
 #define GDSND_STATIO_H
 
-#include "config.h"
 #include "socks.h"
+
 #include <gdnsd/compiler.h>
+
 #include <stdbool.h>
+
 #include <ev.h>
 
 F_NONNULL

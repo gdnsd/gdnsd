@@ -20,10 +20,11 @@
 #ifndef GDNSD_EXTMON_COMMS_H
 #define GDNSD_EXTMON_COMMS_H
 
-#include "config.h"
 #include <gdnsd/compiler.h>
 #include <gdnsd/log.h>
+
 #include <inttypes.h>
+#include <stdbool.h>
 
 // this is all of the binary data that needs to pass
 //   from plugin->helper to describe an extmon command's execution

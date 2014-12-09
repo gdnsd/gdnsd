@@ -20,7 +20,10 @@
 #ifndef GDNSD_ZSCAN_DJB_H
 #define GDNSD_ZSCAN_DJB_H
 
-#include "config.h"
+#include "ztree.h"
+
+#include <stdbool.h>
+#include <inttypes.h>
 
 typedef struct _zscan_djb_zonedata {
     zone_t* zone;

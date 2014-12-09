@@ -22,14 +22,14 @@
 
 #include <pthread.h>
 
-#pragma GCC visibility push(default)
-extern pthread_rwlock_t gdnsd_prcu_rwlock_;
-#pragma GCC visibility pop
-
 // source for GDNSD_B_QSBR definition for out-of-tree includers
 #ifndef GDNSD_SOURCE_TREE
 #include <gdnsd/bopts.h>
 #endif
+
+#pragma GCC visibility push(default)
+extern pthread_rwlock_t gdnsd_prcu_rwlock_;
+#pragma GCC visibility pop
 
 // comes from config.h in-tree, or above if out-of-tree
 #if GDNSD_B_QSBR

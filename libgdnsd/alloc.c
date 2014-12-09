@@ -17,12 +17,12 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+#include <gdnsd/alloc.h>
+
+#include <gdnsd/log.h>
 
 #include <stdlib.h>
-
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
 
 // We don't expect anything to call our allocators for sizes
 //   greater than ~2GB in practice, so this makes a good sanity

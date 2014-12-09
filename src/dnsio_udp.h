@@ -20,8 +20,9 @@
 #ifndef GDNSD_DNSIO_UDP_H
 #define GDNSD_DNSIO_UDP_H
 
-#include "config.h"
-#include "conf.h"
+#include "socks.h"
+
+#include <gdnsd/compiler.h>
 
 F_NONNULL
 void udp_sock_setup(dns_thread_t* t);

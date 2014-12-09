@@ -21,10 +21,12 @@
 //   to just check connect() success or failure without doing
 //   any actual socket i/o.
 
-#define GDNSD_PLUGIN_NAME tcp_connect
+#include <config.h>
 
-#include "config.h"
+#define GDNSD_PLUGIN_NAME tcp_connect
 #include <gdnsd/plugin.h>
+
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in_systm.h>

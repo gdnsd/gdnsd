@@ -17,16 +17,17 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
+
+#define GDNSD_PLUGIN_NAME geoip
+#include <gdnsd/plugin.h>
+
+#include <gdmaps.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
-
-#define GDNSD_PLUGIN_NAME geoip
-
-#include <gdnsd/plugin.h>
-
-#include "gdmaps.h"
+#include <stdbool.h>
 
 static gdmaps_t* gdmaps;
 

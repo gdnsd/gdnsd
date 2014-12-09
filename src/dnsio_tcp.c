@@ -17,7 +17,19 @@
  *
  */
 
+#include <config.h>
 #include "dnsio_tcp.h"
+
+#include "conf.h"
+#include "dnswire.h"
+#include "dnspacket.h"
+#include "socks.h"
+
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/net.h>
+#include <gdnsd/prcu.h>
 
 #include <netdb.h>
 #include <unistd.h>
@@ -28,15 +40,7 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 
-#include "conf.h"
-#include "dnswire.h"
-#include "dnspacket.h"
-#include "socks.h"
-#include <gdnsd/alloc.h>
-#include <gdnsd/log.h>
-#include <gdnsd/misc.h>
-#include <gdnsd/net.h>
-#include <gdnsd/prcu.h>
+#include <ev.h>
 
 typedef enum {
     READING_INITIAL = 0,

@@ -21,7 +21,9 @@
 #define GDNSD_FILE_H
 
 #include <gdnsd/compiler.h>
+
 #include <sys/types.h>
+#include <stdbool.h>
 
 struct gdnsd_fmap_s_;
 typedef struct gdnsd_fmap_s_ gdnsd_fmap_t;

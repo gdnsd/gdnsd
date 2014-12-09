@@ -19,18 +19,17 @@
 
 // fips104.c - FIPS 10-4 2-letter region code -> full text
 
-#include "config.h"
-#include <stdio.h>
-#include <string.h>
-#include <inttypes.h>
+#include <config.h>
+#include "fips104.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
 
-#include "fips104.h"
-#include "gdmaps.h"
+#include <stdio.h>
+#include <string.h>
+#include <inttypes.h>
 
 // Data source URL is http://www.maxmind.com/download/geoip/misc/region_codes.csv
 // As of this writing (Mar 13, 2014), the file had a Last-Modified header of

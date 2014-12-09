@@ -17,13 +17,18 @@
  *
  */
 
+#include <config.h>
 #include "zsrc_rfc1035.h"
+
+#include "zscan_rfc1035.h"
+#include "conf.h"
+#include "ztree.h"
+#include "main.h"
+
 #include <gdnsd/alloc.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
-#include "zscan_rfc1035.h"
-#include "conf.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -32,9 +37,6 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <time.h>
-
-#include "ztree.h"
-#include "main.h"
 
 // IFF gcfg->zones_strict_startup is true, this flag will be temporarily set
 //   to true during the initial scan, then set back to false, making zonefile

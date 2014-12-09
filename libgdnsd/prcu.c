@@ -17,8 +17,9 @@
  *
  */
 
-#include "config.h"
+#include <config.h>
 #include <gdnsd/prcu.h>
+
 #include <pthread.h>
 
 #ifdef PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP

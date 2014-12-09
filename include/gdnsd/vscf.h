@@ -20,11 +20,11 @@
 #ifndef VSCF_H
 #define VSCF_H
 
+#include <gdnsd/dname.h>
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <sys/types.h>
-
-#include <gdnsd/dname.h>
 
 #pragma GCC visibility push(default)
 

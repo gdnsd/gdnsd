@@ -132,9 +132,7 @@ src_gdnsd_SOURCES = \
 # The reason for -I$(srcdir)/src below is that zscan_rfc1035.c is
 #   created in the builddir, so the compiler won't otherwise pick
 #   up includes from $(srcdir)/src when compiling it.
-# The reason for -I$(srcdir)/libgdnsd is for the libgdnsd *-prot.h
-#   headers, which are private to libgdnsd and the main gdnsd binary
-src_gdnsd_CPPFLAGS = -I$(srcdir)/src -I$(srcdir)/libgdnsd $(AM_CPPFLAGS)
+src_gdnsd_CPPFLAGS = -I$(srcdir)/src $(AM_CPPFLAGS)
 src_gdnsd_CFLAGS = $(CFLAGS_PIE)
 src_gdnsd_LDFLAGS = $(LDFLAGS_PIE)
 src_gdnsd_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
@@ -202,13 +200,11 @@ plugins_plugin_extmon_la_LIBADD   = plugins/libextmon_comms.la
 
 bin_PROGRAMS += plugins/gdnsd_geoip_test
 plugins_gdnsd_geoip_test_SOURCES  = plugins/gdnsd_geoip_test.c
-plugins_gdnsd_geoip_test_CPPFLAGS = -I$(srcdir)/libgdmaps $(AM_CPPFLAGS)
 plugins_gdnsd_geoip_test_CFLAGS   = $(CFLAGS_PIE)
 plugins_gdnsd_geoip_test_LDFLAGS  = $(LDFLAGS_PIE)
 plugins_gdnsd_geoip_test_LDADD    = libgdmaps/libgdmaps.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 plugins_plugin_geoip_la_SOURCES   = plugins/geoip.c plugins/meta_core.inc
-plugins_plugin_geoip_la_CPPFLAGS  = -I$(srcdir)/libgdmaps $(AM_CPPFLAGS)
 plugins_plugin_geoip_la_LDFLAGS   = -avoid-version -module
 plugins_plugin_geoip_la_LIBADD    = libgdmaps/libgdmaps.la
 
@@ -222,8 +218,8 @@ plugins_plugin_metafo_la_LDFLAGS  = -avoid-version -module
 noinst_LTLIBRARIES += libgdmaps/libgdmaps.la
 libgdmaps_libgdmaps_la_LIBADD = $(MATH_LIB) $(GEOIP2_LIBS)
 libgdmaps_libgdmaps_la_SOURCES = \
+	include/gdmaps.h \
 	libgdmaps/gdmaps.c \
-	libgdmaps/gdmaps.h \
 	libgdmaps/dcinfo.c \
 	libgdmaps/dcinfo.h \
 	libgdmaps/dclists.c \
@@ -269,16 +265,16 @@ xHEADERS_INST = \
 	include/gdnsd/prcu.h \
 	include/gdnsd/dmn.h
 
-# foo-prot.h define shlib interfaces private to libgdnsd + gdnsd
-# foo-priv.h define non-shlib interfaces private to libgdnsd only
+# include/gdnsd-prot/foo.h define shlib interfaces private to libgdnsd + gdnsd
+# libgdnsd/foo.h define non-shlib interfaces private to libgdnsd only
 xHEADERS_ALL = \
 	$(xHEADERS_INST) \
-	libgdnsd/plugapi-prot.h \
-	libgdnsd/plugapi-priv.h \
-	libgdnsd/misc-prot.h \
-	libgdnsd/misc-priv.h \
-	libgdnsd/mon-prot.h \
-	libgdnsd/net-priv.h
+	include/gdnsd-prot/misc.h \
+	include/gdnsd-prot/mon.h \
+	include/gdnsd-prot/plugapi.h \
+	libgdnsd/misc.h \
+	libgdnsd/net.h \
+	libgdnsd/plugapi.h
 
 libgdnsd_libgdnsd_la_SOURCES = \
 	$(xHEADERS_ALL) \
@@ -315,10 +311,10 @@ libgdnsd_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_INST)
 # sources.
 nodist_libgdnsd_libgdnsd_la_pkginclude_HEADERS = libgdnsd/bopts.h
 libgdnsd/bopts.h: Makefile
-	@echo '#ifndef GDNSD_BOPTS_H' >$@; \
-	 echo '#define GDNSD_BOPTS_H' >>$@; \
-	 echo '#define GDNSD_B_QSBR $(GDNSD_B_QSBR)' >>$@; \
-	 echo '#endif // GDNSD_BOPTS_H' >>$@
+	$(AM_V_GEN)echo '#ifndef GDNSD_BOPTS_H' >$@; \
+	echo '#define GDNSD_BOPTS_H' >>$@; \
+	echo '#define GDNSD_B_QSBR $(GDNSD_B_QSBR)' >>$@; \
+	echo '#endif // GDNSD_BOPTS_H' >>$@
 
 nodist_libgdnsd_libgdnsd_la_SOURCES = libgdnsd/vscf.c
 libgdnsd/vscf.c: libgdnsd/vscf.rl

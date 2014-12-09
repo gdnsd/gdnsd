@@ -20,11 +20,13 @@
 #ifndef GDNSD_DNSPACKET_H
 #define GDNSD_DNSPACKET_H
 
-#include "config.h"
-#include "ltree.h"
 #include "socks.h"
-#include <gdnsd/misc.h>
+
+#include <gdnsd/compiler.h>
 #include <gdnsd/stats.h>
+
+#include <inttypes.h>
+#include <stdbool.h>
 
 #define COMPTARGETS_MAX 256
 
