@@ -48,6 +48,7 @@ static const char chaos_def[] = "gdnsd";
 static const cfg_t cfg_defaults = {
     .username = DEF_USERNAME,
     .chaos = NULL,
+    .weaker_security = false,
     .include_optional_ns = false,
     .realtime_stats = false,
     .lock_mem = false,
@@ -267,6 +268,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
         CFG_OPT_INT(options, priority, -20L, 20L);
+        CFG_OPT_BOOL(options, weaker_security);
         CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, realtime_stats);
         CFG_OPT_BOOL(options, lock_mem);

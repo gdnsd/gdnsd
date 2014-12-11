@@ -159,7 +159,9 @@ void dmn_fork(void);
 //   and we're running as root, the pid_dir will be created and/or chowned
 //   as necessary/possible before the loss of privilege to do so here in
 //   this function.
-void dmn_secure(void);
+// Unless "weak" is set, dmn_secure() may take additional restrictive measures
+//   regardless of whether we were executing as root or not.
+void dmn_secure(const bool weak);
 
 // If the restart parameter was set in init3, this function will first
 //   check for a running daemon via the pidfile lock mechanism and terminate it.

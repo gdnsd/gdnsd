@@ -498,8 +498,8 @@ int main(int argc, char** argv) {
     // Initialize dnspacket stuff
     dnspacket_global_setup(socks_cfg);
 
-    // drop privs if started as root
-    dmn_secure();
+    // drop privs
+    dmn_secure(cfg->weaker_security);
 
     // Set up libev error callback
     ev_set_syserr_cb(&syserr_for_ev);

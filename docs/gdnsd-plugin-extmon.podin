@@ -7,10 +7,11 @@ gdnsd-plugin-extmon - gdnsd plugin for monitoring via external commands
 Example plugin config:
 
   service_types => {
-    pingit => {
+    wget_ssl_index => {
       plugin => "extmon",
-      timeout => 5,
-      cmd => ["/bin/ping", "-w", "2", "-c", "2", "%%ITEM%%"]
+      timeout => 15,
+      interval => 30,
+      cmd => ["/usr/bin/wget", "-T", "3", "-q", "-O", "/dev/null", "https://%%ITEM%%/index.html"]
     },
     svc_alwaysok => {
       plugin => "extmon",

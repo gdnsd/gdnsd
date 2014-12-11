@@ -31,6 +31,7 @@
 typedef struct {
     const char*    username;
     const uint8_t* chaos;
+    bool     weaker_security;
     bool     include_optional_ns;
     bool     realtime_stats;
     bool     lock_mem;

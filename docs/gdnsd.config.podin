@@ -59,6 +59,28 @@ These options control the overall behavior of L<gdnsd(8)>.
 String, defaults to "gdnsd".  This is the username the daemon drops
 privileges to the uid/gid of on startup if started as root.
 
+=item B<weaker_security>
+
+Boolean, default false.  When false, the daemon may take additional
+privilege-preventing measures beyond the basic drop of the uid/gid of the
+process.  These may be platform specific and evolve over time, and may impose
+limits that break some users' configurations in corner cases.
+
+This option exists as an escape hatch to get things working again, but the
+name of the option is intended to pressure you to find another way to
+accomplish your goal without requiring reduced security.
+
+At this time, the only security feature this controls is setting the
+Linux-specific C<prctl()> flag C<PR_SET_NO_NEW_PRIVS> on kernels 3.5 and
+higher.  When this is set, it immutably prevents the process and all
+descendants from ever gaining new privileges again.  This is done regardless
+of whether the daemon initially started as root and voluntarily dropped its
+own privileges or was started as a regular user.
+
+Note that C<PR_SET_NO_NEW_PRIVS> could break plugin_extmon configurations
+which execute binaries that need escalated privileges via set[ug]id bits
+and/or capabilities bits.  A classic example of such a binary is C<ping>.
+
 =item B<zones_default_ttl>
 
 Integer seconds, default 86400.  This is the global default

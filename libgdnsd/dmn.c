@@ -45,6 +45,10 @@
 #  include <libunwind.h>
 #endif
 
+#ifdef __linux__
+#  include <sys/prctl.h>
+#endif
+
 /***********************************************************
 ***** Defines **********************************************
 ***********************************************************/
@@ -946,7 +950,7 @@ void dmn_fork(void) {
     state.phase = PHASE4_FORKED;
 }
 
-void dmn_secure(void) {
+void dmn_secure(const bool weak) {
     phase_check(PHASE4_FORKED, PHASE6_PIDLOCKED, 1);
 
     // Validate/correct pid_dir + pid_file on-disk...
@@ -1013,6 +1017,16 @@ void dmn_secure(void) {
             || getgid() != params.gid
         )
             dmn_log_fatal("Platform-specific BUG: setgid() and/or setuid() do not permanently drop privs as expected!");
+
+    }
+
+    if(!weak) {
+        // On linux 3.5+, immutably disallows regaining privileges (e.g. via
+        // execve() of a binary with set[ug]id or capability bits) for this
+        // process and all descendants.
+#       if defined __linux__ && defined PR_SET_NO_NEW_PRIVS
+            prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+#       endif
     }
 
     state.phase = PHASE5_SECURED;
