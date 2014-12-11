@@ -164,7 +164,6 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wredundant-decls \
     -Wshadow \
     -Wsign-conversion \
-    -Wstack-protector \
     -Wstrict-overflow=5 \
     -Wstrict-prototypes \
     -Wswitch-default \
