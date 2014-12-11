@@ -20,6 +20,8 @@
 #ifndef GDNSD_PRCU_H
 #define GDNSD_PRCU_H
 
+#include <gdnsd/dmn.h>
+
 #include <pthread.h>
 
 // source for GDNSD_B_QSBR definition for out-of-tree includers
@@ -44,14 +46,22 @@ extern pthread_rwlock_t gdnsd_prcu_rwlock_;
 #define gdnsd_prcu_rdr_online() rcu_thread_online()
 #define gdnsd_prcu_rdr_quiesce() rcu_quiescent_state()
 #define gdnsd_prcu_rdr_lock() rcu_read_lock()
-#define gdnsd_prcu_rdr_deref(s) rcu_dereference((s))
+//#define gdnsd_prcu_rdr_deref(s) rcu_dereference((s))
 #define gdnsd_prcu_rdr_unlock() rcu_read_unlock()
 #define gdnsd_prcu_rdr_offline() rcu_thread_offline()
 #define gdnsd_prcu_rdr_thread_end() rcu_unregister_thread()
 
 #define gdnsd_prcu_upd_lock() do { } while(0)
-#define gdnsd_prcu_upd_assign(d,s) rcu_assign_pointer((d),(s))
+//#define gdnsd_prcu_upd_assign(d,s) rcu_assign_pointer((d),(s))
 #define gdnsd_prcu_upd_unlock() synchronize_rcu()
+
+// We do this instead of the commented-out defines above because "ccache"
+// confuses gcc about whether the urcu inlines are in a "system header",
+// generating tons of undeserved cast-qual warnings...
+DMN_DIAG_PUSH_IGNORED("-Wcast-qual")
+static inline void* gdnsd_prcu_rdr_deref(void* s) { return rcu_dereference(s); }
+static inline void gdnsd_prcu_upd_assign(void* d, void* s) { rcu_assign_pointer(d, s); }
+DMN_DIAG_POP
 
 #else // !GDNSD_B_QSBR
 
