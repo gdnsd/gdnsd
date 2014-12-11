@@ -812,7 +812,7 @@ void zsrc_rfc1035_load_zones(const bool check_only V_UNUSED) {
     //   there's no point delaying startup for the corner-case.
     if(!getenv("GDNSD_TESTSUITE_NODELAY")) // testsuite can bypass restrictions!
         full_quiesce = gcfg->zones_rfc1035_quiesce;
-    log_info("rfc1035: quiescence time is %.3g", full_quiesce);
+    log_info("rfc1035: quiescence time is %.3g seconds", full_quiesce);
 }
 
 // we track the loop here for the async sigusr1 request

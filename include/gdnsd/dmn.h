@@ -236,7 +236,7 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
 //   Note that this is only going to work if your tests *never*
 //   exercise a fatal case; it will probably cause random
 //   bugs leading to test failures otherwise.
-// DMN_COVERTEST_EXIT uses exit(42) rather than _exit(42) on fatals,
+// DMN_COVERTEST_EXIT uses exit(57) rather than _exit(42) on fatals,
 //   because exit() is needed to gather coverage data.
 #ifdef DMN_NO_FATAL_COVERAGE
 #  define dmn_log_fatal(...) ((void)(0))
