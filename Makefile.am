@@ -16,6 +16,11 @@ SUBDIRS = . t
 .PHONY: test
 test: check
 
+# If using ccache, tell it to re-cpp on cache misses, otherwise it trips up
+#   the compiler's idea of what came from "system headers" for warnings
+#   purposes, generating tons of warnings-spam.
+export CCACHE_CPP2 = 1
+
 # ask gmake to delete corrupted partial build outputs
 .DELETE_ON_ERROR:
 
