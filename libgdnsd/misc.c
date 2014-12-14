@@ -135,7 +135,7 @@ static bool get_urand_data(urand_data_t* rdata) {
             if(read(urfd, rdata, sizeof(*rdata)) != sizeof(*rdata))
                 break;
             rv = true;
-            for(unsigned i = 0; i < sizeof(*rdata)/sizeof(rdata->u32[0]); i++)
+            for(unsigned i = 0; i < ARRAY_SIZE(rdata->u32); i++)
                 if(!rdata->u32[i])
                     rv = false;
         } while(!rv && attempts--);
