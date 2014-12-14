@@ -1,23 +1,7 @@
 #!/bin/sh
 #
-# NOTE: when I first started using cppcheck it reported
-#  some useful things and I was able to get the output
-#  clean by adding some annotations that made sense.
-# However, with the latest version of cppcheck in Fedora (1.66),
-#  there are several new reports that are completely invalid
-#  (as in, buggy false positives due to cppcheck bugs) that
-#  shouldn't and don't have annotations.  Currently the set of
-#  these looks like:
-#
-# [libgdnsd/dmn.c:809] -> [libgdnsd/dmn.c:803]: (warning) Possible null pointer dereference: p - otherwise it is redundant to check it against null.
-# [libgdnsd/dmn.c:811] -> [libgdnsd/dmn.c:803]: (warning) Possible null pointer dereference: p - otherwise it is redundant to check it against null.
-# [libgdnsd/dmn.c:812] -> [libgdnsd/dmn.c:803]: (warning) Possible null pointer dereference: p - otherwise it is redundant to check it against null.
-# [libgdnsd/misc.c:144]: (error) Resource leak: urfd
-# [src/zsrc_rfc1035.c:476] -> [src/zsrc_rfc1035.c:475]: (warning) Possible null pointer dereference: result - otherwise it is redundant to check it against null.
-#
-# We'll see how it plays out in the long run, there are already
-#  bugs filed upstream for these.  Take any new reports from this
-#  tool with a grain of salt for now.
+# I've seen a few strange false positives with cppcheck 1.66, so don't be
+# surprised if others crop up in the future...
 #
 
 # run from top of repo

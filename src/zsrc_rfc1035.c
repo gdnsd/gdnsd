@@ -493,8 +493,9 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
         do {
             if(readdir_r(zdhandle, buf, &result))
                 log_fatal("rfc1035: readdir_r(%s) failed: %s", rfc1035_dir, dmn_logf_errno());
-            if(likely(result && result->d_name[0] != '.'))
-                process_zonefile(result->d_name, loop, initial_quiesce_time);
+            if(likely(result))
+                if(result->d_name[0] != '.')
+                    process_zonefile(result->d_name, loop, initial_quiesce_time);
         } while(result);
         free(buf);
         if(closedir(zdhandle))

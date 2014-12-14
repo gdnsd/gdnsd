@@ -126,21 +126,24 @@ F_NONNULL
 static bool get_urand_data(urand_data_t* rdata) {
     dmn_assert(rdata);
 
-    bool rv = false;
     int urfd = open("/dev/urandom", O_RDONLY);
-    if(urfd > -1) {
-        unsigned attempts = 10;
-        do {
-            memset(rdata, 0, sizeof(*rdata));
-            if(read(urfd, rdata, sizeof(*rdata)) != sizeof(*rdata))
-                break;
-            rv = true;
-            for(unsigned i = 0; i < ARRAY_SIZE(rdata->u32); i++)
-                if(!rdata->u32[i])
-                    rv = false;
-        } while(!rv && attempts--);
-        close(urfd);
-    }
+    if(urfd < 0)
+        return false;
+
+    bool rv = false;
+    unsigned attempts = 10;
+    while(!rv && attempts) {
+        memset(rdata, 0, sizeof(*rdata));
+        if(read(urfd, rdata, sizeof(*rdata)) != sizeof(*rdata))
+            break;
+        rv = true;
+        for(unsigned i = 0; i < ARRAY_SIZE(rdata->u32); i++)
+            if(!rdata->u32[i])
+                rv = false;
+        attempts--;
+    };
+
+    close(urfd);
     return rv;
 }
 
