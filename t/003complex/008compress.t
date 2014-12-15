@@ -9,8 +9,6 @@
 # 814-byte version makes sense.
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 4;
 
 my $compt_mxset = [

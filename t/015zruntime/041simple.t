@@ -2,8 +2,6 @@
 #   without involving complexities like subzones and duplicates.
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 14;
 
 $ENV{USE_ZONES_AUTO} = 1;

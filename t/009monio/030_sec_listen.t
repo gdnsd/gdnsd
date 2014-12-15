@@ -1,8 +1,6 @@
 # Basic dynamic resource tests
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use File::Temp qw/tmpnam/;
 use Test::More tests => 8;
 

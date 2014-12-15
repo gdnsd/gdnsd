@@ -1,8 +1,6 @@
 # null-monitor dynamic resource tests
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Net::DNS;
 use Test::More tests => 8;
 

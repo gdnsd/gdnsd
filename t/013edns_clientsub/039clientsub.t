@@ -1,8 +1,6 @@
 # Test edns client subnet option via reflect plugin
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Socket qw/AF_INET/;
 use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;

@@ -1,7 +1,5 @@
 # This tests various malformed questions that have to be hand-encoded.
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Scalar::Util ();
 use Test::More tests => 13;
 

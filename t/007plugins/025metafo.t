@@ -1,8 +1,6 @@
 # Basic plugin tests
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 6;
 
 my $soa = 'example.com 86400 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';

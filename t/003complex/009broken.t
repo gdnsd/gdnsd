@@ -1,8 +1,6 @@
 # Test various forms of "broken" queries
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 17;
 
 my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';

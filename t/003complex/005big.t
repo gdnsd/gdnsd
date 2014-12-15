@@ -1,8 +1,6 @@
 # Oversized data sets, truncation, tcp, edns0, etc...
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 14;
 
 my $pid = _GDT->test_spawn_daemon();

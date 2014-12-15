@@ -2,8 +2,6 @@
 #  as in tests that return actual valid data from the DB with NOERROR rcode
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 19;
 
 my $standard_auth = [

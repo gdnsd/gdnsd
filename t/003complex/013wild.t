@@ -1,8 +1,6 @@
 # This tests wildcard labels
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 9;
 
 my $neg_soa = 'example.org 120 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120';

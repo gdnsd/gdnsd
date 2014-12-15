@@ -1,8 +1,6 @@
 # Duplicates and serial-number sorting...
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 13;
 
 $ENV{USE_ZONES_AUTO} = 1;

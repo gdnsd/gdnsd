@@ -1,8 +1,6 @@
 # This tests RFC3597-related stuff
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 5;
 
 my $pid = _GDT->test_spawn_daemon();

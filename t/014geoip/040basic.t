@@ -1,8 +1,6 @@
 # Basic geoip plugin tests
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 54 * 2;
 
 my $neg_soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';

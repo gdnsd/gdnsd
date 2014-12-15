@@ -1,8 +1,6 @@
 # Subzones...
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 31;
 
 $ENV{USE_ZONES_AUTO} = 1;

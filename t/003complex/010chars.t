@@ -1,8 +1,6 @@
 # Test domainname bytes other than the usual [-a-z0-9]
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 4;
 
 my $pid = _GDT->test_spawn_daemon();

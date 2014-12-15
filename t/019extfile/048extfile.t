@@ -1,6 +1,4 @@
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Net::DNS;
 use Test::More tests => 7;
 

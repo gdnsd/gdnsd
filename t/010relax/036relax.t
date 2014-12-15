@@ -4,8 +4,6 @@
 #  there is no strict_data setting.
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 10;
 
 my $pid = _GDT->test_spawn_daemon();

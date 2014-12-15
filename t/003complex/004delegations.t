@@ -1,8 +1,6 @@
 # This tests various forms of subzone delegation
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 29;
 
 my $pid = _GDT->test_spawn_daemon();

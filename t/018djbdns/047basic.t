@@ -1,6 +1,4 @@
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 3;
 
 my $pid = _GDT->test_spawn_daemon();

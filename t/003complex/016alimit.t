@@ -1,8 +1,6 @@
 # This tests static A/AAAA and rrset size limiting
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 8;
 
 my $setlimit_A = [

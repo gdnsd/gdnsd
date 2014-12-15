@@ -5,8 +5,6 @@
 # Also covers a few EDNS cases at the bottom
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 12;
 
 $optrr = Net::DNS::RR->new(

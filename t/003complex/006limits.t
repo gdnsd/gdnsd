@@ -1,8 +1,6 @@
 # This tests RR data limits (min/max numeric values, string/name lengths, etc)
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 24;
 
 my $standard_auth = [

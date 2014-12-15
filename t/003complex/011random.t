@@ -10,8 +10,6 @@
 # and well.
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Scalar::Util ();
 use Test::More tests => 4 + ($_GDT::RAND_LOOPS * 5);
 

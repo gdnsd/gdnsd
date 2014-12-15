@@ -1,8 +1,6 @@
 # This tests NAPTR-related stuff
 
 use _GDT ();
-use FindBin ();
-use File::Spec ();
 use Test::More tests => 7;
 
 my $naptr_u1 = 'naptr-u.example.com 21600 NAPTR 100 10 "U" "E2U+sip" "!^.*$!sip:customer-service@example.com!i" .';
