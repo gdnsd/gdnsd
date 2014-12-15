@@ -32,6 +32,15 @@
     * New optional compile-time dependency on libunwind.  If available,
       dmn_assert() in developer builds and certain fatal errors in production
       builds will produce stack backtraces before terminating the process.
+    * Security is a little tighter by default now on Linux due to prctl()
+      PR_SET_NO_NEW_PRIVS, which may interfere with existing plugin_extmon
+      configurations if they're running privileged binaries (set[ug]id,
+      capabilities).  If this interferes with your configuration, it can be
+      disabled via the global option 'weaker_security => true'.
+    * The shipped gdnsd.service systemd unit file now defaults to more secure
+      settings (e.g. private tmp, no homedir access, readonly system fs, no
+      device access, etc).  These can be overridden by the user without
+      editing the defaults in e.g. /etc/systemd/system/gdnsd.d/custom.conf.
 
   *** Other:
     * The range, default, and effects of the zones_rfc1035_quiesce option
