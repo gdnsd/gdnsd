@@ -24,7 +24,8 @@ The following are recommended but optional:
 The following have no real effect on the build or runtime, but are
 required in order to run the testsuite:
 
-* Perl modules: LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
+* Perl modules: JSON::PP, LWP 5.805+, Socket6, IO::Socket::INET6, HTTP::Daemon
+  (JSON::PP comes with Perl v5.13.9 and higher)
 
 If working directly from a git clone:
 

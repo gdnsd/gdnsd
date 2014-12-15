@@ -367,9 +367,9 @@ fi
 # various perl modules for the testsuites (optional)
 HAVE_TESTSUITE_MODULES=0
 AX_PROG_PERL_MODULES(
-    [Test::More Socket6 IO::Socket::INET6 HTTP::Daemon LWP],
+    [Test::More JSON::PP Socket6 IO::Socket::INET6 HTTP::Daemon LWP],
     [HAVE_TESTSUITE_MODULES=1],
-    AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More, Socket6, IO::Socket::INET6, HTTP::Daemon, and LWP (aka libwww-perl)]])
+    AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More, JSON::PP, Socket6, IO::Socket::INET6, HTTP::Daemon, and LWP (aka libwww-perl)]])
 )
 AC_SUBST([HAVE_TESTSUITE_MODULES])
 

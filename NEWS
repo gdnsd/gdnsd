@@ -60,6 +60,8 @@
     * Ragel 6.x is now a hard build dependency for all builds.  Previously it
       was required for building from git, but not from tarballs.
     * Perl version dependency has been raised from 5.8.1 to 5.10.1
+    * Testsuite now also requires JSON::PP (which comes with Perl 5.13.9+, but
+      may need to be installed for older ones).
     * sysd/gdnsd.service is now always generated in the build tree from the
       template, even if --without-systemdsystemunitdir and/or no systemd
       detected at all, to give more options for how packagers handle things.

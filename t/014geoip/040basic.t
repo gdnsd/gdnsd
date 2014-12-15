@@ -1,7 +1,12 @@
 # Basic geoip plugin tests
 
 use _GDT ();
-use Test::More tests => 54 * 2;
+use Test::More tests => 56 * 2;
+
+my $test_bin = $ENV{INSTALLCHECK_BINDIR}
+    ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_geoip_test"
+    : "$ENV{TOP_BUILDDIR}/plugins/gdnsd_geoip_test";
+my $test_exec = qq|$test_bin -c ${_GDT::OUTDIR}/etc|;
 
 my $neg_soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -515,4 +520,12 @@ _GDT->test_dns(
 );
 
 _GDT->test_kill_daemon($pid);
+
+# This re-tests a couple of the same results checked above, but using
+#   the commandline gdnsd_geoip_test tool
+$map1_10_result = qx{$test_exec map1 10.10.0.0};
+$map1_192_result = qx{$test_exec map1 192.0.2.1};
+Test::More::like($map1_10_result, qr{^map1 => 10.10.0.0/1 => na, sa$}m);
+Test::More::like($map1_192_result, qr{^map1 => 192.0.2.1/1 => eu, na$}m);
+
 }
