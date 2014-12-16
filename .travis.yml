@@ -2,6 +2,7 @@ branches:
   only:
     - master
 language: c
+cache: apt
 before_install:
   - sudo add-apt-repository ppa:jbboehr/ppa -y
   - sudo apt-get update -qq
