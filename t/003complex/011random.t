@@ -215,3 +215,19 @@ eval {_GDT->check_stats(
 ok(!$@) or diag $@;
 
 _GDT->test_kill_daemon($pid);
+
+# Save random seed to test output directory if any tests failed.
+#   (we also diag the seed on every run, but with the new parallel
+#   testing method it does not get displayed during a normal run)
+# We cannot use is_passing() here because we need to be
+#   compatible back to the 5.10.1 versions of these modules
+my $failed;
+map { $failed++ unless $_ } Test::More->builder->summary();
+if($failed) {
+    my $rsfile = "${_GDT::OUTDIR}/FAILED_RANDOM_SEED.$$";
+    diag "There were failing tests; saving random seed $rseed to $rsfile";
+    open(my $rsfh, ">$rsfile")
+        or die "Cannot open $rsfile for writing: $!";
+    print $rsfh "$rseed\n";
+    close($rsfh);
+}
