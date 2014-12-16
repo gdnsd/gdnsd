@@ -167,6 +167,8 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir) {
     dmn_init1(false, true, false, "gdmaps_test");
 
     vscf_data_t* cfg_root = gdnsd_initialize(input_cfgdir, false);
+    if(!cfg_root)
+        log_fatal("gdnsd_geoip_test cannot proceed without an actual config file");
     vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* rv = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);
