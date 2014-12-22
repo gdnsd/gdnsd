@@ -1,20 +1,10 @@
-2.2.0 - ??? (not yet released)
+2.2.0 - 2014-12-30
   *** Bugfixes:
-    * Fixed incorrect error-handling code for the sendmmsg() syscall, which
-      could have caused an unecessary additional dropped packet and/or
-      bad error messages after failing to send one or more packets from a set.
-    * The per-address level udp_recv_width option is now correctly limited to
-      a value of 64 (previously it was being incorrectly limited to 32).
-    * plugin_multifo no longer pointlessly limits to 64 addrs per family
-    * plugin_extmon bugfix for bad timeout/interval behavior if either >255s
-    * Bugfix for zero-length configuration strings causing assertion failure
+    * fix for zero-length configuration strings causing assertion failure
       in developer-debug builds
-    * Bugfix for crash/assertfail if admin_state file contents are
+    * fix for crash/assertfail if admin_state file contents are
       defined by the user as an array instead of a hash
-    * Bugfix: if the stats http socket failed to bind() on startup, the daemon
-      could carry on anyways, causing it to bind to a different, arbitrary
-      port number
-    * Bugfix: restored the logging of monitored state transitions, which was
+    * restored the logging of monitored state transitions, which was
       omitted in earlier 2.x releases but present in 1.x.
 
   *** Features:
@@ -67,9 +57,22 @@
     * sysd/gdnsd.service is now always generated in the build tree from the
       template, even if --without-systemdsystemunitdir and/or no systemd
       detected at all, to give more options for how packagers handle things.
-    * Fixed autoconf 2.63 compat when running autoreconf (broken in 2.1.0)
     * Minor plugin API updates (most would just need a recompile).
     * A number of less-visible refactorings for quality and/or performance.
+
+2.1.1 - 2014-12-30
+  *** Bugfixes backported from master branch:
+    * Fixed incorrect error-handling code for the sendmmsg() syscall, which
+      could have caused an unecessary additional dropped packet and/or
+      bad error messages after failing to send one or more packets from a set.
+    * The per-address level udp_recv_width option is now correctly limited to
+      a value of 64 (previously it was being incorrectly limited to 32).
+    * plugin_multifo no longer pointlessly limits to 64 addrs per family
+    * plugin_extmon bugfix for bad timeout/interval behavior if either >255s
+    * if the stats http socket failed to bind() on startup, the daemon
+      could carry on anyways, causing it to bind to a different, arbitrary
+      port number
+    * Fixed autoconf 2.63 compat when running autoreconf (broken in 2.1.0)
 
 2.1.0 - 2014-10-14
   *** Bugfixes:
