@@ -14,6 +14,8 @@
     * Bugfix: if the stats http socket failed to bind() on startup, the daemon
       could carry on anyways, causing it to bind to a different, arbitrary
       port number
+    * Bugfix: restored the logging of monitored state transitions, which was
+      omitted in earlier 2.x releases but present in 1.x.
 
   *** Features:
     * If the admin_state file exists but doesn't parse correctly, that will

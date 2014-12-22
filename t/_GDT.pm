@@ -398,7 +398,7 @@ sub spawn_daemon_setup {
 
     safe_rmtree($OUTDIR);
 
-    foreach my $d ($OUTDIR, "${OUTDIR}/etc", "${OUTDIR}/run", "${OUTDIR}/var", "${OUTDIR}/var/lib") {
+    foreach my $d ($OUTDIR, "${OUTDIR}/etc", "${OUTDIR}/run", "${OUTDIR}/var", "${OUTDIR}/var/lib", "${OUTDIR}/var/lib/gdnsd") {
         mkdir $d or die "Cannot create directory $d: $!";
     }
 

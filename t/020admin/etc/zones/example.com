@@ -16,3 +16,4 @@ r1	DYNA	simplefo!r1
 r2	DYNA	simplefo!r2
 m1	DYNC	metafo!m1
 m1cname	A	192.0.2.42
+ra	DYNA	simplefo!ra

@@ -2,6 +2,15 @@ options => {
   @std_testsuite_options@
 }
 
+service_types => {
+    extf_admin => {
+        plugin => extfile
+        file => extf_admin
+        interval = 5
+        direct = true
+    }
+}
+
 plugins => {
   simplefo => {
     r1 => {
@@ -13,6 +22,11 @@ plugins => {
       service_types = up
       primary = 127.2.2.2
       secondary = 192.0.2.2
+    }
+    ra => {
+      service_types = extf_admin
+      primary = 127.3.3.3
+      secondary = 192.0.2.3
     }
   }
   metafo => {

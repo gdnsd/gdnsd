@@ -4,11 +4,9 @@ use Test::More tests => 7;
 
 _GDT->test_spawn_daemon_setup();
 
-my $statedir = $_GDT::OUTDIR . "/var/lib/gdnsd";
-my $ext_statedir = $statedir . "/extfile";
-foreach ($statedir, $ext_statedir) {
-    mkdir($_) or die "mkdir('$_') failed: $!";
-}
+my $ext_statedir = $_GDT::OUTDIR . "/var/lib/gdnsd/extfile";
+mkdir($ext_statedir)
+    or die "mkdir('$_') failed: $!";
 
 _GDT->write_statefile('extfile/extf_m', qq{
     127.0.0.1 => up

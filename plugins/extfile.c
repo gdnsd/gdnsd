@@ -265,6 +265,9 @@ static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
 F_NONNULL
 static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
     dmn_assert(svc); dmn_assert(mon_loop);
+
+    const double delay = testsuite_nodelay ? 0.01 : svc->interval;
+
     if(svc->direct) {
         // in the direct case, interval is the ev_stat time hint, and all ev_stat
         //   hits (re-)kick a 1.02s stat()-settling timer, which processes the file
@@ -273,7 +276,7 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
         ev_timer_init(svc->time_watcher, timer_cb, 0.0, 1.02);
         svc->time_watcher->data = svc;
         svc->file_watcher = xmalloc(sizeof(ev_stat));
-        ev_stat_init(svc->file_watcher, file_cb, svc->path, svc->interval);
+        ev_stat_init(svc->file_watcher, file_cb, svc->path, delay);
         svc->file_watcher->data = svc;
         ev_stat_start(mon_loop, svc->file_watcher);
     }
@@ -281,7 +284,7 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
         // in the monitor case, interval is a fixed repeating timer that processes
         //   the file on every expiry.
         svc->time_watcher = xmalloc(sizeof(ev_timer));
-        ev_timer_init(svc->time_watcher, timer_cb, svc->interval, svc->interval);
+        ev_timer_init(svc->time_watcher, timer_cb, delay, delay);
         svc->time_watcher->data = svc;
         ev_timer_start(mon_loop, svc->time_watcher);
     }

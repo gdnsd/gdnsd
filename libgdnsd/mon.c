@@ -83,7 +83,7 @@ static smgr_t* smgrs = NULL;
 // There are only ever the two chunks of memory that are
 //   first allocated for these, they just get swapped around
 //   and copied over each other.
-// (see sttl_update_update() below)
+// (see sttl_table_update() below)
 static gdnsd_sttl_t* smgr_sttl = NULL;
 gdnsd_sttl_t* smgr_sttl_consumer_ = NULL;
 
@@ -368,7 +368,7 @@ static void admin_init(struct ev_loop* mloop) {
     ev_timer_init(admin_quiesce_timer, admin_timer_cb, 0.0, 1.02);
     admin_file_watcher = xmalloc(sizeof(ev_stat));
     ev_stat_init(admin_file_watcher, admin_file_cb, pathname,
-        testsuite_nodelay ? 0.1 : 3.0);
+        testsuite_nodelay ? 0.01 : 3.0);
     ev_stat_start(mloop, admin_file_watcher);
 
     // ev_stat_start stat()'s the file for ->attr, use that
@@ -726,11 +726,22 @@ static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
     dmn_assert(!(new_sttl & GDNSD_STTL_FORCED));
 
     if(initial_round) {
+        log_info("state of '%s' initialized to %s", smgr->desc, logf_sttl(new_sttl));
         smgr_sttl[idx] = smgr->real_sttl = new_sttl;
         // table update taken care of in gdnsd_mon_start()
         //  after all initial monitors complete
     }
     else if(new_sttl != smgr->real_sttl) {
+        if((new_sttl & GDNSD_STTL_DOWN) != (smgr->real_sttl & GDNSD_STTL_DOWN)) {
+            if(smgr_sttl[idx] & GDNSD_STTL_FORCED)
+                log_info("state of '%s' changed from %s to %s,"
+                    " effective state remains administratively forced to %s",
+                    smgr->desc, logf_sttl(smgr->real_sttl), logf_sttl(new_sttl),
+                    logf_sttl(smgr_sttl[idx]));
+            else
+                log_info("state of '%s' changed from %s to %s",
+                    smgr->desc, logf_sttl(smgr->real_sttl), logf_sttl(new_sttl));
+        }
         smgr->real_sttl = new_sttl;
         if(new_sttl != smgr_sttl[idx] && !(smgr_sttl[idx] & GDNSD_STTL_FORCED)) {
             smgr_sttl[idx] = new_sttl;
