@@ -30,7 +30,7 @@ static const char cfg[] = QUOTE(
    }
 );
 
-static gdmaps_t* gdmaps = NULL;
+gdmaps_t* gdmaps = NULL;
 
 int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
     gdmaps_test_init(getenv("TEST_CFDIR"));
