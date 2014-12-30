@@ -429,7 +429,7 @@ WIKI_DIR = wikidocs
 wikidocs:
 	@$(MKDIR_P) $(WIKI_DIR); \
 	for podsrc in $(ALL_PODS); do \
-		wikifn=`echo $$podsrc | $(PERL) -pe 's/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Podin$$/.pod/'`; \
+		wikifn=`echo $$podsrc | $(PERL) -pe 's,^docs/,,; s/^([a-z])/uc($$1)/e; s/[_.-]([a-zA-Z0-9])/uc($$1)/ge; s/Podin$$/.pod/'`; \
 		echo Processing $$podsrc into $(WIKI_DIR)/$$wikifn ...; \
 		$(MAN_SED) <$$podsrc >$(WIKI_DIR)/$$wikifn; \
 	done
