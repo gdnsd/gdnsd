@@ -322,13 +322,13 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
             if(unlikely(recvmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
-                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
+                (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
                 continue;
             }
         }
         else {
             recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+            (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
             gdnsd_prcu_rdr_online();
         }
@@ -424,13 +424,13 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             if(unlikely(mmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
-                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
+                (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
                 continue;
             }
         }
         else {
             mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
-            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
+            (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
             gdnsd_prcu_rdr_online();
         }
