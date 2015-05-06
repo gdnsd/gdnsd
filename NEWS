@@ -1,4 +1,4 @@
-2.1.2 - ??? no release yet ???
+2.1.2 - 2015-05-06
     * Cherrypicked manpage title bugfix from v2.2.0 - (was f7672493 there)
       (Because newer perl pod2man commands fail completely without
       a valid title)
