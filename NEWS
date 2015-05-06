@@ -1,3 +1,8 @@
+2.1.2 - ??? no release yet ???
+    * Cherrypicked manpage title bugfix from v2.2.0 - (was f7672493 there)
+      (Because newer perl pod2man commands fail completely without
+      a valid title)
+
 2.1.1 - 2014-12-30
   *** Bugfixes backported from master branch:
     * Fixed incorrect error-handling code for the sendmmsg() syscall, which
