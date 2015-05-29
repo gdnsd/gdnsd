@@ -351,19 +351,28 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
         } \
     } while(0)
 
+// _LEN sizes below are without trailing NUL, and without
+//   and printf templates (%s) either.
+
+static const char REQ_TMPL[] = "GET %s HTTP/1.0\r\n\r\n";
+static const unsigned REQ_TMPL_LEN = sizeof(REQ_TMPL) - 2 - 1;
+
+static const char REQ_TMPL_VHOST[] = "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n";
+static const unsigned REQ_TMPL_VHOST_LEN = sizeof(REQ_TMPL) - 2 - 2 - 1;
+
 F_NONNULLX(1, 2)
 static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost) {
     dmn_assert(s); dmn_assert(url_path);
     const unsigned url_len = strlen(url_path);
     if(vhost) {
-        s->req_data_len = 25 + url_len + strlen(vhost);
+        s->req_data_len = REQ_TMPL_VHOST_LEN + url_len + strlen(vhost);
         s->req_data = xmalloc(s->req_data_len + 1);
-        snprintf(s->req_data, s->req_data_len + 1, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n", url_path, vhost);
+        snprintf(s->req_data, s->req_data_len + 1, REQ_TMPL_VHOST, url_path, vhost);
     }
     else {
-        s->req_data_len = 17 + url_len;
+        s->req_data_len = REQ_TMPL_LEN + url_len;
         s->req_data = xmalloc(s->req_data_len + 1);
-        snprintf(s->req_data, s->req_data_len + 1, "GET %s HTTP/1.0\r\n\r\n", url_path);
+        snprintf(s->req_data, s->req_data_len + 1, REQ_TMPL, url_path);
     }
 }
 
