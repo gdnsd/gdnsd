@@ -409,8 +409,14 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents V_U
     }
 }
 
+// verify_statcmp:
+//   false -> inotify sort of case: we have a positive indication of change, and
+//     should definitely consider an existing file to have changed even if its
+//     stat() data wasn't modified.
+//   true -> scan_dir sort of case: no positive indication yet, must filter existing
+//     files based on whether stat() data changed before taking any action.
 F_NONNULL
-static void process_zonefile(const char* zfn, struct ev_loop* loop, const double initial_quiesce_time) {
+static void process_zonefile(const char* zfn, struct ev_loop* loop, const double initial_quiesce_time, const bool verify_statcmp) {
     dmn_assert(zfn);
     dmn_assert(loop);
 
@@ -447,17 +453,15 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
     //   this zfile_t*'s target was deleted from the filesystem.
     current_zft->generation = generation;
     if(current_zft->pending_event) { // we already had a pending change
-        // Note that this condition can be found via two different paths:
-        //   the one here in process_zonefile(), and also when the current
-        //   pending event timer expires at the bottom of quiesce_check(),
-        //   whichever comes first.
-        log_debug("rfc1035: Change detected for already-pending zonefile '%s' via process_zonefile(), delaying %.3g secs for further changes...", current_zft->fn, full_quiesce);
-        memcpy(&current_zft->pending, &newstat, sizeof(current_zft->pending));
-        ev_timer_stop(loop, current_zft->pending_event);
-        ev_timer_set(current_zft->pending_event, full_quiesce, 0.);
-        ev_timer_start(loop, current_zft->pending_event);
+        if(!verify_statcmp || !statcmp_eq(&newstat, &current_zft->pending)) { // but it changed again!
+            log_debug("rfc1035: Change detected for already-pending zonefile '%s' via process_zonefile(), delaying %.3g secs for further changes...", current_zft->fn, full_quiesce);
+            memcpy(&current_zft->pending, &newstat, sizeof(current_zft->pending));
+            ev_timer_stop(loop, current_zft->pending_event);
+            ev_timer_set(current_zft->pending_event, full_quiesce, 0.);
+            ev_timer_start(loop, current_zft->pending_event);
+        }
     }
-    else { // notification of change with no event currently pending
+    else if(!verify_statcmp || !statcmp_eq(&newstat, &current_zft->loaded)) { // notification of change with no event currently pending
         if(statcmp_nx(&current_zft->loaded))
             log_debug("rfc1035: New zonefile '%s', delaying %.3g secs for further changes...", current_zft->fn, initial_quiesce_time);
         else
@@ -495,7 +499,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
                 log_fatal("rfc1035: readdir_r(%s) failed: %s", rfc1035_dir, dmn_logf_errno());
             if(likely(result))
                 if(result->d_name[0] != '.')
-                    process_zonefile(result->d_name, loop, initial_quiesce_time);
+                    process_zonefile(result->d_name, loop, initial_quiesce_time, true);
         } while(result);
         free(buf);
         if(closedir(zdhandle))
@@ -519,7 +523,7 @@ static void check_missing(struct ev_loop* loop) {
         if(SLOT_REAL(zf)) {
             if(zf->generation != generation) {
                 log_debug("rfc1035: check_missing() found deletion of zonefile '%s', triggering process_zonefile()", zf->fn);
-                process_zonefile(zf->fn, loop, full_quiesce);
+                process_zonefile(zf->fn, loop, full_quiesce, true);
             }
         }
     }
@@ -721,7 +725,7 @@ static bool inot_process_event(struct ev_loop* loop, const char* fname, uint32_t
         //   not fully quiesce since the latter isn't going to cause an
         //   incidental wipe of any current zone data regardless.
         const double q_timer = (emask & IN_MODIFY) ? full_quiesce : 0.0;
-        process_zonefile(fname, loop, q_timer);
+        process_zonefile(fname, loop, q_timer, false);
     }
 
     return rv;
