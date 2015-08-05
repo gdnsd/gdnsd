@@ -306,7 +306,10 @@ void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
     for(unsigned i = 0; i < num_svcs; i++) {
         extf_svc_t* svc = &service_types[i];
         // qsort() sets up for the bsearch() in process_file at runtime
+        // aftwerwards, the midx values must be rewritten to the new order
         qsort(svc->mons, svc->num_mons, sizeof(extf_mon_t), moncmp);
+        for(unsigned j = 0; j < svc->num_mons; j++)
+            svc->mons[j].midx = j;
         process_file(svc);
     }
 }
