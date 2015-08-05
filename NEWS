@@ -1,3 +1,16 @@
+2.2.1 - 2015-08-05
+  *** Bugs fixed:
+    * extfile plugin - if the addresses/CNAMEs for a given extfile
+      service_type are not listed in natural sort order in the configuration,
+      extfile will update the wrong items (sorting bug).
+    * rfc1035 zonefile reloading - Directory scanning (SIGUSR1, or automatic
+      periodic scanning on a non-inotify system) would treat all zonefiles as
+      changed and reload them all, without first filtering them on whether
+      their stat() data had changed since the previous scan.  Not really a
+      functional issue, but certainly wasteful and noisy.
+    * HTTP monitoring - was not sending any User-Agent string, now sends
+      "User-Agent: gdnsd-monitor"
+
 2.2.0 - 2014-12-30
   *** Bugfixes:
     * fix for zero-length configuration strings causing assertion failure
