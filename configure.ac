@@ -462,13 +462,10 @@ if test "x$GDNSD_B_QSBR" = x1;   then B_FEAT="$B_FEAT urcu";    fi
 AC_DEFINE_UNQUOTED([BUILD_FEATURES], ["$B_FEAT"], [Build Features])
 
 # BUILD_INFO for cmdline output
-B_SRC=tarball
+B_INFO=non-git
 if test -d ${srcdir}/${GIT_DIR:-.git} -o -f ${srcdir}/.git; then
-    [B_SRC=`cd ${srcdir}; git describe --match 'v[0-9]*' --always --dirty`]
+    [B_INFO=`cd ${srcdir}; git describe --match 'v[0-9]*' --always --dirty`]
 fi
-B_HOST=`uname -n`
-B_DATE=`date -u "+%Y-%m-%d %H:%M:%S UTC"`
-B_INFO="$B_SRC ${USER}@${B_HOST} $B_DATE"
 AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
 
 # Output generation
