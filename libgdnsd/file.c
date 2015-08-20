@@ -66,9 +66,14 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     locker.l_type = F_RDLCK;
     locker.l_whence = SEEK_SET;
     if(fcntl(fd, F_OFD_SETLK, &locker)) {
-        dmn_log_err("Cannot get readlock on '%s': %s", fn, dmn_logf_errno());
-        close(fd);
-        return NULL;
+        // try fallback to F_SETLK on EINVAL, in case binary was built with
+        // F_OFD_SETLK support, but runtime kernel doesn't have it.
+        if(errno != EINVAL
+            || (F_OFD_SETLK != F_SETLK && fcntl(fd, F_SETLK, &locker))) {
+                dmn_log_err("Cannot get readlock on '%s': %s", fn, dmn_logf_errno());
+                close(fd);
+                return NULL;
+        }
     }
 
     struct stat st;
