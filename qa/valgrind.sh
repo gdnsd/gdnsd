@@ -11,4 +11,4 @@ make clean
 TEST_RUNNER="libtool --mode=execute valgrind --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make check
 set +e
 set +x
-grep "ERROR SUM" t/testout/*/gdnsd.out | grep -v ' 0 errors' || rm -rf /tmp/_gdnsd_inst
+grep "ERROR SUM" t/testout/*/gdnsd.out | grep -v ' 0 errors'
