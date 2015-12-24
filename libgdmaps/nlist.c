@@ -91,7 +91,7 @@ static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask) {
 
     if(likely(mask)) {
         const unsigned revmask = 128 - mask;
-        const unsigned byte_mask = ~(0xFF << (revmask & 7)) & 0xFF;
+        const unsigned byte_mask = ~(0xFFu << (revmask & 7)) & 0xFF;
         unsigned bbyte = 15 - (revmask >> 3);
 
         dmn_assert(!(ipv6[bbyte] & byte_mask));
@@ -114,7 +114,7 @@ static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned 
 
     if(likely(mask)) {
         const unsigned revmask = 128 - mask;
-        const unsigned byte_mask = ~(0xFF << (revmask & 7)) & 0xFF;
+        const unsigned byte_mask = ~(0xFFu << (revmask & 7)) & 0xFF;
         unsigned bbyte = 15 - (revmask >> 3);
 
         if(ipv6[bbyte] & byte_mask) {
@@ -159,7 +159,7 @@ static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned
     const unsigned bytes = mask >> 3;
     dmn_assert(bytes < 16U);
 
-    const unsigned bytemask = (0xFF00 >> (mask & 7)) & 0xFF;
+    const unsigned bytemask = (0xFF00u >> (mask & 7)) & 0xFF;
     return !memcmp(v6a, v6b, bytes)
         && (v6a[bytes] & bytemask) == (v6b[bytes] & bytemask);
 }
@@ -325,7 +325,7 @@ static bool net_subnet_of(const net_t* sub, const net_t* super) {
     bool rv = false;
     if(sub->mask >= super->mask) {
         const unsigned wbyte = (super->mask >> 3);
-        const unsigned byte_mask = (0xFF << (8 - (super->mask & 7))) & 0xFF;
+        const unsigned byte_mask = (0xFFu << (8u - (super->mask & 7))) & 0xFF;
         if(!memcmp(sub->ipv6, super->ipv6, wbyte)) {
             if(wbyte == 16 || (super->ipv6[wbyte] & byte_mask) == (sub->ipv6[wbyte] & byte_mask))
                 rv = true;
