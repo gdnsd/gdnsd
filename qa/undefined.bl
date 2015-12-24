@@ -1,6 +1,0 @@
-# ragel-regenerated zscan_rfc1035.c:scanner() crashes sanitizers
-fun:scanner
-# "bounds" sanitizer issues with flexible array members as they're used here:
-#     struct x { ....; union { uint32_t y[0]; uint8_t z[0]; }; };
-fun:gdnsd_result_add_anysin
-fun:enc_a_dynamic

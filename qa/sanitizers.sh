@@ -5,17 +5,14 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
    exit 99
 fi
 
-# NOTE: the sanitizer blacklists don't work well with ccache because the cache
-# doesn't know to vary on the contents of the blacklist file.  Given that some
-# distributions enable ccache for all compilers silently by default if it's
-# installed at all, it's wise to "ccache -C" if changing a blacklist file.
+# Note this uses gcc 5.3's sanitizers, this probably won't work with earlier gcc versions
 
 set -x
 set -e
-export ASAN_OPTIONS="check_initialization_order=1"
+export ASAN_OPTIONS="check_initialization_order=1:detect_invalid_pointer_pairs=10"
 for san_type in address undefined; do
-  CFLAGS="-O1 -fno-omit-frame-pointer -fno-sanitize-recover -fsanitize=$san_type -fsanitize-blacklist=$PWD/qa/${san_type}.bl" \
-    CC=clang ./configure --enable-developer --without-hardening
+  CFLAGS="-O1 -fno-omit-frame-pointer -fno-common -fno-sanitize-recover=all -fsanitize=$san_type" \
+    CC=gcc ./configure --enable-developer --without-hardening
   make clean
   make check
 done
