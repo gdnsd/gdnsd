@@ -61,12 +61,12 @@ void gdnsd_register_child_pid(pid_t child);
 // retval is the new string
 // if s2_offs is not NULL, *s2_offs will be set
 //   to the offset of the copy of s2 within the retval.
-F_MALLOC F_NONNULLX(1,2) F_WUNUSED
+F_MALLOC F_NONNULLX(1,2)
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
 
 // allocate a new string and concatenate all "count" strings
 //   from the args list into it.
-F_MALLOC F_NONNULL F_WUNUSED
+F_MALLOC F_NONNULL
 char* gdnsd_str_combine_n(const unsigned count, ...);
 
 // set thread name (via pthread_setname_np or similar)

@@ -37,7 +37,7 @@ typedef struct gdnsd_fmap_s_ gdnsd_fmap_t;
 //   will return length 0 and a valid pointer to 1 NUL byte.
 // "seq" is an optimization hint: set to true if expected buffer access
 //   pattern is sequential.
-F_NONNULL
+F_NONNULL F_MALLOC
 gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq);
 
 // Get the length of the mapped file data (zero is possible)

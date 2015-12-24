@@ -92,7 +92,7 @@ void ztree_txn_end(void);
 
 // These are for zsrc_* code to create/delete detached zone_t's used
 //   in ztree_update() calls.
-F_NONNULL
+F_NONNULL F_MALLOC
 zone_t* zone_new(const char* zname, const char* source);
 F_NONNULL
 bool zone_finalize(zone_t* zone);

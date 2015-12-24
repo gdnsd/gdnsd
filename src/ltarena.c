@@ -65,7 +65,7 @@ typedef struct {
     const uint8_t** table;
 } dnhash_t;
 
-F_MALLOC F_WUNUSED
+F_MALLOC
 static dnhash_t* dnhash_new(void) {
     dmn_assert(INIT_DNHASH_MASK);
     dmn_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK)); // 2^n-1
@@ -176,7 +176,7 @@ void lta_destroy(ltarena_t* lta) {
     free(lta);
 }
 
-F_MALLOC F_WUNUSED F_NONNULL
+F_MALLOC F_NONNULL
 static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
     dmn_assert(lta); dmn_assert(size);
     dmn_assert(lta->dnhash); // not closed

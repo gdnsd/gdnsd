@@ -203,14 +203,16 @@ void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f);
 //  even higher than normal potential API breakage risk.
 // Use at your own (and users') peril...
 
+F_MALLOC
 vscf_data_t* vscf_hash_new(void);
+F_MALLOC
 vscf_data_t* vscf_array_new(void);
 
 // rval does not need to be 0-terminated, and rlen should not
 //    account for any 0-termination that is present.  Embedded
 //    nuls are fine.
 // rval storage is copied, you own the original
-F_NONNULL
+F_NONNULL F_MALLOC
 vscf_data_t* vscf_simple_new(const char* rval, const unsigned rlen);
 F_NONNULL
 void vscf_array_add_val(vscf_data_t* a, vscf_data_t* v);

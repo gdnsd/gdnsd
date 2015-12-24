@@ -35,7 +35,7 @@
 #  define F_UNUSED        __attribute__((__unused__))
 #  define F_CONST         __attribute__((__const__))
 #  define F_PURE          __attribute__((__pure__))
-#  define F_MALLOC        __attribute__((__malloc__))
+#  define F_MALLOC        __attribute__((__malloc__)) __attribute__((__warn_unused_result__))
 #  define F_NORETURN      __attribute__((__noreturn__))
 #  define F_NOINLINE      __attribute__((__noinline__))
 #  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))

@@ -125,6 +125,7 @@ typedef struct {
                     //   set to zero after _finish()
 } ntree_t;
 
+F_MALLOC
 ntree_t* ntree_new(void);
 
 F_NONNULL

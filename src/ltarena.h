@@ -32,14 +32,14 @@
 typedef struct _ltarena ltarena_t;
 
 // Allocate a new arena
-F_MALLOC F_WUNUSED
+F_MALLOC
 ltarena_t* lta_new(void);
 
 // This is like a strdup() that allocates from an lta arena
 //  and happens to know the internally-encoded length of
 //  label strings as used in ltrees.
 // Use only for label data.
-F_MALLOC F_WUNUSED F_NONNULL
+F_MALLOC F_NONNULL
 uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label);
 
 // As above, except:

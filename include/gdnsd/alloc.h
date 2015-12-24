@@ -32,16 +32,16 @@
 //   for free() (this is checked in debug builds).
 //   These functions *never* return NULL.
 
-F_MALLOC F_ALLOCSZ(1) F_WUNUSED F_RETNN
+F_MALLOC F_ALLOCSZ(1) F_RETNN
 void* gdnsd_xmalloc(size_t size);
 
-F_MALLOC F_ALLOCSZ(1,2) F_WUNUSED F_RETNN
+F_MALLOC F_ALLOCSZ(1,2) F_RETNN
 void* gdnsd_xcalloc(size_t nmemb, size_t size);
 
 F_ALLOCSZ(2) F_WUNUSED F_RETNN
 void* gdnsd_xrealloc(void* ptr, size_t size);
 
-F_MALLOC F_ALLOCSZ(2) F_ALLOCAL(1) F_WUNUSED F_RETNN
+F_MALLOC F_ALLOCSZ(2) F_ALLOCAL(1) F_RETNN
 void* gdnsd_xpmalign(size_t alignment, size_t size);
 
 #pragma GCC visibility pop
