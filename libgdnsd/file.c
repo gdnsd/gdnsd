@@ -99,6 +99,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
         if(mapbuf == MAP_FAILED) {
             dmn_log_err("Cannot mmap '%s': %s\n", fn, dmn_logf_errno());
             close(fd);
+            // cppcheck-suppress memleak (MAP_FAILED is not a leak :P)
             return NULL;
         }
 #ifdef HAVE_POSIX_MADVISE

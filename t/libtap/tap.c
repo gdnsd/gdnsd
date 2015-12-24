@@ -105,7 +105,6 @@ unsigned int
 _gen_result(int ok, const char *func, const char *file, unsigned int line,
 	    const char *test_name, ...)
 {
-	va_list ap;
 	char *local_test_name = NULL;
 	char *c;
 
@@ -116,6 +115,7 @@ _gen_result(int ok, const char *func, const char *file, unsigned int line,
 	/* Start by taking the test name and performing any printf()
 	   expansions on it */
 	if(test_name != NULL) {
+		va_list ap;
 		va_start(ap, test_name);
 		if (vasprintf(&local_test_name, test_name, ap) < 0)
 			local_test_name = NULL;
