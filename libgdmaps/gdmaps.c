@@ -499,6 +499,7 @@ static void gdmap_setup_nets_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
     gdmap->nets_reload_timer->data = gdmap;
 
     gdmap->nets_stat_watcher = xmalloc(sizeof(ev_stat));
+    memset(&gdmap->nets_stat_watcher->attr, 0, sizeof(gdmap->nets_stat_watcher->attr));
     ev_stat_init(gdmap->nets_stat_watcher, gdmap_nets_reload_stat_cb, gdmap->nets_path, 0);
     ev_set_priority(gdmap->nets_stat_watcher, 0);
     gdmap->nets_stat_watcher->data = gdmap;
@@ -530,6 +531,7 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
 
     // the reload stat() watchers (they share a callback differentiated on w->path)
     gdmap->geoip_stat_watcher = xmalloc(sizeof(ev_stat));
+    memset(&gdmap->geoip_stat_watcher->attr, 0, sizeof(gdmap->geoip_stat_watcher->attr));
     ev_stat_init(gdmap->geoip_stat_watcher, gdmap_geoip_reload_stat_cb, gdmap->geoip_path, 0);
     ev_set_priority(gdmap->geoip_stat_watcher, 0);
     gdmap->geoip_stat_watcher->data = gdmap;
@@ -537,6 +539,7 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
 
     if(v4o) {
         gdmap->geoip_v4o_stat_watcher = xmalloc(sizeof(ev_stat));
+        memset(&gdmap->geoip_v4o_stat_watcher->attr, 0, sizeof(gdmap->geoip_v4o_stat_watcher->attr));
         ev_stat_init(gdmap->geoip_v4o_stat_watcher, gdmap_geoip_reload_stat_cb, gdmap->geoip_v4o_path, 0);
         ev_set_priority(gdmap->geoip_v4o_stat_watcher, 0);
         gdmap->geoip_v4o_stat_watcher->data = gdmap;

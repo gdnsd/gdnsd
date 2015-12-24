@@ -276,6 +276,7 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
         ev_timer_init(svc->time_watcher, timer_cb, 0.0, 1.02);
         svc->time_watcher->data = svc;
         svc->file_watcher = xmalloc(sizeof(ev_stat));
+        memset(&svc->file_watcher->attr, 0, sizeof(svc->file_watcher->attr));
         ev_stat_init(svc->file_watcher, file_cb, svc->path, delay);
         svc->file_watcher->data = svc;
         ev_stat_start(mon_loop, svc->file_watcher);
