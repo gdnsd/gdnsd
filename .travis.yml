@@ -4,6 +4,7 @@ branches:
 language: c
 cache: apt
 before_install:
+  - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
   - sudo add-apt-repository ppa:jbboehr/ppa -y
   - sudo apt-get update -qq
   - sudo apt-get install -qq ragel libev-dev liburcu-dev libunwind7-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl lcov
