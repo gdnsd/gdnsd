@@ -22,7 +22,7 @@ case "$GDNSD_TRAVIS_BUILD" in
         make -j$TEST_CPUS check
     ;;
     codecov)
-        CFLAGS="-O0 -g -coverage -fno-omit-frame-pointer" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --without-hardening
+        LIBS="-lgcov" CFLAGS="-O0 -g -coverage -fno-omit-frame-pointer" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --without-hardening
         make -j$TEST_CPUS
         make check
         codecov
