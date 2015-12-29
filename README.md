@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/gdnsd/gdnsd.png)](https://travis-ci.org/gdnsd/gdnsd)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/760/badge.svg)](https://scan.coverity.com/projects/760)
-[![Coverage Status](https://coveralls.io/repos/gdnsd/gdnsd/badge.png?branch=master)](https://coveralls.io/r/gdnsd/gdnsd?branch=master)
+[![Coverage Status](https://coveralls.io/repos/gdnsd/gdnsd/badge.svg?branch=master&service=github)](https://coveralls.io/github/gdnsd/gdnsd?branch=master)
 
 ## Overview
 
