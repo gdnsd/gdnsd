@@ -1,3 +1,14 @@
+2.2.2 - 2016-01-06
+  *** Bugs fixed:
+    * Fixed a bug (introduced in 2.2.1) in HTTP monitoring when using the
+      "vhost" parameter.
+    * The code now falls back from F_OFD_SETLK to F_SETLK at runtime if the
+      runtime environment differs from the compile-time one.
+    * Changed the binary "Build Info" string to make the build
+      reproducible (do not include e.g. host or date information).
+    * Several updates to qa scripts/tools to keep up with recent changes
+    * A few trivial warning/analysis cleanups that should be no-op
+
 2.2.1 - 2015-08-05
   *** Bugs fixed:
     * extfile plugin - if the addresses/CNAMEs for a given extfile
