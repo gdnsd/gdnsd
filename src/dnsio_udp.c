@@ -308,8 +308,9 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     bool is_online = true;
 #endif
 
-    ssize_t recvmsg_rv;
     while(1) {
+        ssize_t recvmsg_rv;
+
         iov.iov_len = DNS_RECV_SIZE;
         msg_hdr.msg_controllen = cmsg_size;
         msg_hdr.msg_namelen    = DMN_ANYSIN_MAXLEN;
@@ -402,8 +403,9 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     bool is_online = true;
 #endif
 
-    int mmsg_rv;
     while(1) {
+        int mmsg_rv;
+
         /* Set up msg_hdr stuff: moving initialization inside of the loop was
              necessitated by the memmove() below */
         for (unsigned i = 0; i < width; i++) {
