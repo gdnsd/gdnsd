@@ -102,7 +102,13 @@ install-exec-hook-top:
 # src/
 #=====================================
 
+bin_PROGRAMS += src/gdnsdctl
 sbin_PROGRAMS += src/gdnsd
+
+src_gdnsdctl_SOURCES = src/gdnsdctl.c
+src_gdnsdctl_CFLAGS = $(CFLAGS_PIE)
+src_gdnsdctl_LDFLAGS = $(CFLAGS_PIE)
+src_gdnsdctl_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 src_gdnsd_SOURCES = \
 	src/mcp.c \
