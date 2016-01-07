@@ -270,6 +270,7 @@ xHEADERS_INST = \
 	include/gdnsd/file.h \
 	include/gdnsd/alloc.h \
 	include/gdnsd/prcu.h \
+	include/gdnsd/cs.h \
 	include/gdnsd/dmn.h
 
 # include/gdnsd-prot/foo.h define shlib interfaces private to libgdnsd + gdnsd
@@ -295,6 +296,7 @@ libgdnsd_libgdnsd_la_SOURCES = \
 	libgdnsd/file.c \
 	libgdnsd/plugapi.c \
 	libgdnsd/alloc.c \
+	libgdnsd/cs.c \
 	libgdnsd/dmn.c \
 	libgdnsd/dmn_net.c
 
