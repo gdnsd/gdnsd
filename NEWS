@@ -23,6 +23,11 @@
     * The "listen => scan" option, which scanned interfaces for IPs to bind to,
       has been removed completely.  It was deprecated with runtime warnings and
       removed from the documentation back in v2.2.0
+    * A unix control socket interface was added for daemon control, and a new
+      program "gdnsdctl" added as the primary client of this socket.  In
+      general, where possible, all operations are synchronous and report status
+      back via exit codes as well.  "gdnsdctl" initially implements "stop",
+      "reload-zones", and "status", but "reload-zones" is not yet synchronous.
 
 2.4.0 - 2018-02-15
     * plugin_multifo: added "ignore_health" parameter. If "ignore_health" is

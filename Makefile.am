@@ -99,13 +99,22 @@ install-exec-hook-top:
 # src/
 #=====================================
 
+bin_PROGRAMS += src/gdnsdctl
 sbin_PROGRAMS += src/gdnsd
+
+src_gdnsdctl_SOURCES = src/gdnsdctl.c src/csc.c src/csc.h
+src_gdnsdctl_CFLAGS = $(CFLAGS_PIE)
+src_gdnsdctl_LDFLAGS = $(LDLAGS_PIE)
+src_gdnsdctl_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 src_gdnsd_SOURCES = \
 	src/main.c \
 	src/main.h \
 	src/daemon.c \
 	src/daemon.h \
+	src/css.c \
+	src/css.h \
+	src/cs.h \
 	src/conf.c \
 	src/conf.h \
 	src/zsrc_djb.c \
@@ -349,7 +358,7 @@ noinst_SCRIPTS += sysd/gdnsd.service
 endif
 
 sysd/gdnsd.service: sysd/gdnsd.service.tmpl Makefile
-	$(AM_V_GEN)sed 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' <$(srcdir)/sysd/gdnsd.service.tmpl >$@
+	$(AM_V_GEN)sed -e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' -e 's|@GDNSD_BINDIR[@]|$(bindir)|g' <$(srcdir)/sysd/gdnsd.service.tmpl >$@
 
 EXTRA_DIST += sysd/gdnsd.service.tmpl
 CLEANFILES += sysd/gdnsd.service
@@ -369,6 +378,7 @@ PODS_IN_5 = \
 	docs/gdnsd.djbdns.podin
 PODS_IN_8 = \
 	docs/gdnsd.podin \
+	docs/gdnsdctl.podin \
 	docs/gdnsd-plugin-extfile.podin \
 	docs/gdnsd-plugin-extmon.podin \
 	docs/gdnsd-plugin-geoip.podin \

@@ -122,7 +122,8 @@ C<daemonize>, the C<-l> flag should be used, and the type should be set
 to C<Type=notify> with C<NotifyAccess=all>.  The latter bits will cause
 systemd to set C<$NOTIFY_SOCKET> for the daemon, and the daemon in turn
 will use this to send a readiness notification when it's done with
-initial startup tasks and ready to service requests.
+initial startup tasks and ready to service requests.  C<gdnsdctl -l stop>
+should be used for the C<ExecStop=> command.
 
 The source tree contains an example systemd unit file with reasonable
 defaults for a production deployment.
@@ -229,9 +230,9 @@ configuration directory.
 
 =item F<@GDNSD_DEFPATH_RUN@>
 
-Default run_dir.
-See the entry for C<run_dir> in the L<gdnsd.config(5)> manpage
-for more information about this directory.
+Default run_dir.  This is where the daemon's control socket and lock
+files are created.  See the entry for C<run_dir> in the
+L<gdnsd.config(5)> manpage for more information about this directory.
 
 =item F<@GDNSD_DEFPATH_STATE@>
 

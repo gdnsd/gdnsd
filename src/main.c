@@ -30,6 +30,7 @@
 #include "ztree.h"
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
+#include "css.h"
 
 #include <gdnsd-prot/plugapi.h>
 #include <gdnsd-prot/misc.h>
@@ -306,6 +307,11 @@ int main(int argc, char** argv) {
     gdnsd_init_net();
     gdnsd_init_rand();
 
+    // init locked control socket, can fail if concurrent daemon...
+    css_t* css = css_new();
+    if(!css)
+        log_fatal("Another instance is already running and has the control socket locked!");
+
     // Initialize DNS listening sockets, but do not bind() them yet
     socks_dns_lsocks_init(socks_cfg);
 
@@ -343,19 +349,22 @@ int main(int argc, char** argv) {
     // Bind sockets
     socks_bind_all(socks_cfg);
 
+    // actually set up libev hooks + listen on sockets for statio
+    statio_start(def_loop, socks_cfg);
+
     // Start up all of the UDP and TCP threads, each of
     // which has all signals blocked and has its own
     // event loop (libev for TCP, manual blocking loop for UDP)
     // Also starts the zone data reload thread
     start_threads(socks_cfg);
 
-    // actually set up libev hooks + listen on sockets for statio
-    statio_start(def_loop, socks_cfg);
-
     // This waits for all of the stat structures to be allocated
     //  by the i/o threads before continuing on.  They must be ready
     //  before ev_run() below, because statio event handlers hit them.
     dnspacket_wait_stats(socks_cfg);
+
+    // Set up control socket handlers in the loop
+    css_start(css, def_loop);
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
@@ -371,11 +380,6 @@ int main(int argc, char** argv) {
     ev_signal_stop(def_loop, sig_term);
     ev_signal_stop(def_loop, sig_int);
 
-    // If we didn't get a signal (maybe future controlsock shutdown?),
-    // set killed_by to SIGTERM for raise() later
-    if(!killed_by)
-        killed_by = SIGTERM;
-
     // get rid of child procs (e.g. extmon helper)
     gdnsd_kill_registered_children();
 
@@ -385,6 +389,13 @@ int main(int argc, char** argv) {
     // Log final stats
     statio_log_stats();
 
+    log_info("Exiting");
+
+    // We delete this last, because in the case of "gdnsdctl stop" this is
+    // where the active connection to gdnsdctl will be broken, sending it into
+    // a loop waiting on our PID to cease existing.
+    css_delete(css);
+
 #ifdef GDNSD_COVERTEST_EXIT
     // We have to use exit() when testing coverage, as raise()
     //   skips over writing out gcov data
@@ -392,7 +403,10 @@ int main(int argc, char** argv) {
 #else
     // kill self with same signal, so that our exit status is correct
     //   for any parent/manager/whatever process that may be watching
-    raise(killed_by);
+    if(killed_by)
+        raise(killed_by);
+    else
+        exit(0);
 #endif
 
     // raise should not return

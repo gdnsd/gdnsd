@@ -24,11 +24,13 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
+#include <string.h>
 
 /* network utils */
 
@@ -66,6 +68,15 @@ void gdnsd_init_net(void) {
         close(sock_rp);
     }
 #endif
+}
+
+void sun_set_path(struct sockaddr_un* a, const char* path) {
+    memset(a, 0, sizeof(*a));
+    a->sun_family = AF_UNIX;
+    const unsigned plen = strlen(path) + 1;
+    if(plen > sizeof(a->sun_path))
+        log_fatal("Implementation bug/limit: desired control socket path %s exceeds sun_path length of %zu", path, sizeof(a->sun_path));
+    memcpy(a->sun_path, path, plen);
 }
 
 int gdnsd_getproto_udp(void) { return udp_proto; }

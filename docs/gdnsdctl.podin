@@ -1,0 +1,72 @@
+=head1 NAME
+
+gdnsd - An authoritative DNS daemon
+
+=head1 SYNOPSIS
+
+  Usage: gdnsdctl [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-t 47] <action>
+    -c - Configuration directory (def @GDNSD_DEFPATH_CONFIG@)
+    -D - Enable verbose debug output
+    -l - Send logs to syslog rather than stderr
+    -t - Timeout in seconds (def 47, range 5 - 300)
+  Actions:
+    stop - Stops the running daemon
+    reload-zones - Reload the running daemon's zone data
+    reload - Full reload (code, config, data) of the running daemon
+    status - Checks the running daemon's status
+    stats - Dumps JSON statistics from the running daemon
+
+=head1 DESCRIPTION
+
+B<gdnsdctl> is the canonical control socket client for B<gdnsd>.  All
+operations described above are synchronous and report success by exiting with
+exit status zero, or failure by non-zero.
+
+=head1 COMMANDLINE OPTION FLAGS
+
+=over 4
+
+=item B<-c>
+
+Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.
+
+=item B<-D>
+
+Enables additional debug-level log output as appropriate.
+
+=item B<-l>
+
+Sends log output to syslog rather than the default stderr.
+
+=item B<-t>
+
+Sets the timeout in seconds (default 47) for various io and waiting operations.
+
+=back
+
+=head1 SEE ALSO
+
+L<gdnsd(8)>, L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd.djbdns(5)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2012 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

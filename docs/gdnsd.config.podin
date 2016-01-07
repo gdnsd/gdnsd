@@ -556,6 +556,8 @@ The contents of this directory are private to the daemon and
 shouldn't be interfered with.  This can live on a filesystem that's
 volatile across reboots, and doesn't require much disk space.
 
+The daemon's control socket and lock files live here.
+
 =item B<state_dir>
 
 String, defaults to F<@GDNSD_DEFPATH_STATE@>.  This is the directory
@@ -569,6 +571,8 @@ The contents of this directory belong to the system administrator
 and are used to communicate persistent, stateful information to
 the daemon.  This should live on a filesystem which is preserved
 across reboots.
+
+The F<admin_state> file lives here.
 
 =item B<any_mitigation>
 

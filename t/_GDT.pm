@@ -162,6 +162,11 @@ our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
     ? "$ENV{INSTALLCHECK_SBINDIR}/gdnsd"
     : "$ENV{TOP_BUILDDIR}/src/gdnsd";
 
+# As above for gdnsdctl
+our $GDNSDCTL_BIN = $ENV{INSTALLCHECK_BINDIR}
+    ? "$ENV{INSTALLCHECK_BINDIR}/gdnsdctl"
+    : "$ENV{TOP_BUILDDIR}/src/gdnsdctl";
+
 # extmon_helper works out of the box for "installcheck",
 # but needs some custom paths for "check"
 our $EXTMON_BIN;
@@ -182,6 +187,10 @@ else {
 }
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
+
+# Server control socket
+our $CSOCK_PATH = "$OUTDIR/run/gdnsd/control.sock";
+our $csock;
 
 my $CSV_TEMPLATE = 
     "uptime\r\n"
@@ -456,7 +465,10 @@ sub test_spawn_daemon {
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $pid = eval{
         $class->spawn_daemon_setup(@_);
-        $class->spawn_daemon_execute();
+        my $p = $class->spawn_daemon_execute();
+        $csock = IO::Socket::UNIX->new($CSOCK_PATH)
+            or die "hard-fail: cannot open runtime control socket $CSOCK_PATH: $!";
+        $p;
     };
     unless(Test::More::ok(!$@ && $pid)) {
         Test::More::diag("Cannot spawn daemon: $@");
@@ -487,7 +499,10 @@ sub test_spawn_daemon_execute {
 
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $pid = eval{
-        $class->spawn_daemon_execute();
+        my $p = $class->spawn_daemon_execute();
+        $csock = IO::Socket::UNIX->new($CSOCK_PATH)
+            or die "hard-fail: cannot open runtime control socket $CSOCK_PATH: $!";
+        $p;
     };
     unless(Test::More::ok(!$@ && $pid)) {
         Test::More::diag("Cannot spawn daemon: $@");
@@ -495,6 +510,45 @@ sub test_spawn_daemon_execute {
     }
 
     return $pid;
+}
+
+sub test_run_gdnsdctl {
+    my $class = shift;
+    my $args = shift;
+    my $ctl_out = $OUTDIR . '/gdnsdctl.out';
+    my $exec_line = $TEST_RUNNER
+        ? qq{$TEST_RUNNER $GDNSDCTL_BIN -t 300 -Dc $OUTDIR/etc $args}
+        : qq{$GDNSDCTL_BIN -t 17 -Dc $OUTDIR/etc $args};
+
+    # Because gdnsdctl could intentionally cause a daemon to exit and then wait
+    # on it to fully dissappear, we must install an auto-reaper for the daemon
+    # itself while testing a gdnsdctl command.
+    local $SIG{CHLD} = sub {
+        local ($!, $?);
+        waitpid($saved_pid, WNOHANG);
+    };
+
+    my $gpid = fork();
+    die "Fork failed!" if !defined $gpid;
+
+    if(!$gpid) { # child, exec daemon
+        open(STDOUT, '>', $ctl_out)
+            or die "Cannot open '$ctl_out' for writing as STDOUT: $!";
+        open(STDIN, '<', '/dev/null')
+            or die "Cannot open /dev/null for reading as STDIN: $!";
+        open(STDERR, '>&STDOUT')
+            or die "Cannot dup STDOUT to STDERR: $!";
+        exec($exec_line);
+    }
+
+    waitpid($gpid, 0);
+    if($?) {
+        Test::More::ok(0);
+        Test::More::diag("gdnsdctl status was $?");
+        die "gdnsdctl status was $?";
+    }
+
+    Test::More::ok(1);
 }
 
 ##### START RELOAD STUFF
@@ -1090,7 +1144,7 @@ sub test_stats {
 
 sub stats_inc { shift; $stats_accum{$_}++ foreach (@_); }
 
-sub test_kill_daemon {
+sub test_kill_other_daemon {
     my ($class, $pid) = @_;
     local $Test::Builder::Level = $Test::Builder::Level + 1;
 
@@ -1141,6 +1195,70 @@ sub test_kill_daemon {
     Test::More::ok(1);
 }
 
+sub test_kill_daemon {
+    my ($class, $pid) = @_;
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+    # use synchronous controlsock stop
+    my $req = "X\0\0\0\0\0\0\0";
+    my $resp;
+    if(syswrite($csock, $req, 8) != 8) {
+        my $d = "Failed to write stop request to control socket";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(sysread($csock, $resp, 8) != 8 || $resp ne "A\0\0\0\0\0\0\0") {
+        my $d = "Failed to read ACK from control socket when stopping";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(sysread($csock, $resp, 1) != 0) {
+        my $d = "Failed to read conn-close condition on control socket when stopping";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+
+    # reap gdnsd and validate exitcode of zero.
+    if(!$pid) {
+        my $d = "Test Bug: no gdnsd pid specified?";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    eval {
+        local $SIG{ALRM} = sub { die "gdnsd waitpid timeout"; };
+        alarm($TEST_RUNNER ? 60 : 30);
+        waitpid($pid, 0);
+    };
+    if($@) {
+        my $d = "Daemon at pid $pid failed to exit in reasonable time after stop";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(!WIFEXITED(${^CHILD_ERROR_NATIVE})) {
+        my $d = "gdnsd exited strangely... CHILD_ERROR_NATIVE is " . ${^CHILD_ERROR_NATIVE};
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    my $ev = WEXITSTATUS(${^CHILD_ERROR_NATIVE});
+    if($ev) {
+        my $d = "Daemon exit value was $ev";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    undef $saved_pid; # avoid END-block SIGKILL if we know it died fine
+
+    # if we make it here, gdnsd exited with status zero as expected.
+    Test::More::ok(1);
+    return;
+}
+
 my $EDNS_CLIENTSUB_OPTCODE = 0x0008;
 sub optrr_clientsub {
     my %args = @_;
@@ -1172,5 +1290,8 @@ sub optrr_clientsub {
     );
 }
 
-END { kill('SIGKILL', $saved_pid) if $saved_pid; }
+END {
+    kill('SIGKILL', $saved_pid) if $saved_pid;
+}
+
 1;

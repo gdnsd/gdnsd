@@ -27,6 +27,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/un.h>
 #include <netdb.h>
 #include <errno.h>
 
@@ -44,6 +45,9 @@
 // Initialize network stuff (caches getprotoent, test features, etc),
 // needed before runtime socket creations, etc.
 void gdnsd_init_net(void);
+
+F_NONNULL
+void sun_set_path(struct sockaddr_un* a, const char* path);
 
 // Plugins should use these to get protocol numbers
 F_PURE

@@ -14,6 +14,7 @@
 
 # Built, installed binaries
 /src/gdnsd
+/src/gdnsdctl
 /plugins/gdnsd_extmon_helper
 /plugins/gdnsd_geoip_test
 
