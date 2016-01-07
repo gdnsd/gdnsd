@@ -36,6 +36,7 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/cs.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -300,6 +301,7 @@ static struct {
     ev_signal*         w_sigint;
     ev_signal*         w_sighup;
     struct ev_loop*    loop;
+    gdnsd_css_t*       css;
 } mcp = {
     .state = MCP_WAITING_RT_BIND_SOCKS,
     .rtsock = -1,
@@ -312,7 +314,15 @@ static struct {
     .w_sigint = NULL,
     .w_sighup = NULL,
     .loop = NULL,
+    .css = NULL,
 };
+
+F_NONNULLX(1, 2)
+static bool css_handler(uint8_t* buffer V_UNUSED, uint32_t* len V_UNUSED, void* data V_UNUSED) {
+    dmn_assert(buffer); dmn_assert(len);
+    // with no code here, will echo to client
+    return false;
+}
 
 static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
     dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_READ);
@@ -365,6 +375,9 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
             if(!gdnsd_reuseport_ok())
                 dmn_acquire_pidfile(); // kills previous daemon if restarting
             socks_lsocks_bind(mcp.socks_cfg);
+            char* path = gdnsd_resolve_path_run("mcp.sock", NULL);
+            mcp.css = gdnsd_css_new(path, css_handler, NULL, 100, 1024, 16, 300); // XXX tunables...
+            free(path);
             mcp.state = MCP_SENDING_RT_LISTEN;
             ev_io_start(mcp.loop, mcp.w_rtsock_write);
             break;
@@ -378,6 +391,7 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
             ev_signal_start(mcp.loop, mcp.w_sigint);
             if(mcp.fg)
                 ev_signal_start(mcp.loop, mcp.w_sighup);
+            gdnsd_css_start(mcp.css, mcp.loop);
             dmn_finish();
             break;
         case MCP_WAITING_RT_SHUTDOWN:
@@ -438,6 +452,7 @@ static void mcp_sighandle(struct ev_loop* loop, ev_signal* w, int revents V_UNUS
     if(mcp.state > MCP_IDLE)
         return; // ignore redundant shutdown signals during shutdown sequence
 
+    gdnsd_css_delete(mcp.css);
     dmn_assert(mcp.state == MCP_IDLE);
     mcp.state = MCP_SENDING_RT_SHUTDOWN;
     mcp.killed_by = w->signum;

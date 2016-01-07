@@ -39,7 +39,9 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/cs.h>
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -167,6 +169,7 @@ static struct {
     ev_signal* w_sigint;
     ev_signal* w_sighup;
     struct ev_loop* loop;
+    gdnsd_css_t* css;
 } rt = {
     .state = RT_WRITING_MSG_2MCP_BIND_SOCKS,
     .mcpsock = -1,
@@ -177,11 +180,23 @@ static struct {
     .w_sigint = NULL,
     .w_sighup = NULL,
     .loop = NULL,
+    .css = NULL,
 };
+
+F_NONNULLX(1, 2)
+static bool css_handler(uint8_t* buffer V_UNUSED, uint32_t* len V_UNUSED, void* data V_UNUSED) {
+    dmn_assert(buffer); dmn_assert(len);
+    // with no code here, will echo to client
+    return false;
+}
 
 // final tasks for orderly shutdown - after this we send a confirmation to MCP
 // before doing exit(0)
 static void runtime_shutdown(void) {
+    // Stop our control socket so we don't get new connections/requests while
+    // running through the shutdown sequence internally and with the MCP
+    gdnsd_css_delete(rt.css);
+
     // Ask statio thread to send final stats to the log
     statio_final_stats(rt.loop);
 
@@ -219,6 +234,9 @@ static void rt_mcpsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
                 dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
             start_threads(rt.socks_cfg);
             statio_start(rt.loop, rt.socks_cfg);
+            char* path = gdnsd_resolve_path_run("rt.sock", NULL);
+            rt.css = gdnsd_css_new(path, css_handler, NULL, 100, 1024, 16, 300); // XXX tunables...
+            free(path);
             log_info("DNS listeners started");
             rt.state = RT_WRITING_MSG_2MCP_LISTENING;
             ev_io_start(loop, rt.w_mcpsock_write);
@@ -273,12 +291,16 @@ static void rt_mcpsock_write(struct ev_loop* loop, ev_io* w, int revents V_UNUSE
     }
     dmn_log_debug("Runtime: MCP accepted message %c", msg);
 
-    // special case: exit after successful send of shutdown confirm
+    ev_io_stop(rt.loop, rt.w_mcpsock_write);
+    rt.state = next_state;
+
+    // special case: exit after successful send of shutdown confirmation
     if(rt.state == RT_WRITING_MSG_2MCP_SHUTDOWN)
         exit(0);
 
-    rt.state = next_state;
-    ev_io_stop(rt.loop, rt.w_mcpsock_write);
+    // special case: accept csock connections on entering RT_IDLE
+    if(rt.state == RT_IDLE)
+        gdnsd_css_start(rt.css, rt.loop);
 }
 
 static void rt_sighandle(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED) {
