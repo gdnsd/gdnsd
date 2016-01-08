@@ -52,4 +52,4 @@ _GDT->test_dns(
     addtl => 'barmx.xmrab.xxx.fox.example.org 43201 AAAA ::1',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

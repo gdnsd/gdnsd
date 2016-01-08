@@ -25,4 +25,4 @@ _GDT->test_dns(
     stats => [qw/udp_reqs nxdomain/],
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

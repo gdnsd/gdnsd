@@ -29,4 +29,4 @@ _GDT->test_dns(
     answer => 'abc.def.ghi.jkl.mno.pqr CH TXT "some random string"',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

@@ -329,4 +329,4 @@ _GDT->test_dns(
     answer => 'example.xxx 21600 NS somewhere.over.the.rainbow'
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

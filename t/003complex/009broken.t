@@ -194,4 +194,4 @@ _GDT->test_dns(
     answer => 'foo.example.com 21600 A 192.0.2.160',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

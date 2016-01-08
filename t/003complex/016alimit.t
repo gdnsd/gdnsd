@@ -95,4 +95,4 @@ _GDT->test_dns(
     limit_v6 => 1,
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

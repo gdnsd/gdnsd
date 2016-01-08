@@ -18,4 +18,4 @@ _GDT->test_dns(
     addtl => 'maxttl.example.com 3600000 A 192.0.2.199',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

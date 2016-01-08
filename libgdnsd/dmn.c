@@ -532,23 +532,14 @@ void dmn_privdrop(const char* username, const bool weak) {
     }
 }
 
-/***********************************************************
-***** Private subroutines used by daemonization ************
-***********************************************************/
-
-// The terminal signal SIGTERM is sent exactly once, then
-//  the status of the daemon is polled repeatedly at 100ms
-//  delay intervals
-// Function returns when either the process is dead or
-//  our delays all expired.  Total timeout is 15s.
-// True retval indicates daemon is still running.
-static bool terminate_pid_and_wait(pid_t pid) {
+// Total timeout is 15s.  True retval indicates daemon is still running.
+bool dmn_terminate_pid_and_wait(int sig, pid_t pid) {
     bool still_running = false;
 
-    if(!kill(pid, SIGTERM)) {
+    if(!kill(pid, sig)) {
         still_running = true;
-        const struct timespec ts = { 0, 100000000 };
-        unsigned tries = 150;
+        const struct timespec ts = { 0, 50000000 };
+        unsigned tries = 300;
         while(tries--) {
             nanosleep(&ts, NULL);
             if(kill(pid, 0)) {
@@ -560,6 +551,10 @@ static bool terminate_pid_and_wait(pid_t pid) {
 
     return still_running;
 }
+
+/***********************************************************
+***** Private subroutines used by daemonization ************
+***********************************************************/
 
 // Wait for a pid to _exit(0), do not accept
 //  any other result, survive interrupts
@@ -759,7 +754,7 @@ pid_t dmn_stop(void) {
         return 0;
     }
 
-    if(terminate_pid_and_wait(pid)) {
+    if(dmn_terminate_pid_and_wait(SIGTERM, pid)) {
         dmn_log_err("Cannot stop daemon at pid %li", (long)pid);
         return pid;
     }

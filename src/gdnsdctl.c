@@ -61,8 +61,18 @@ F_NORETURN
 static void action_stop(const int argc V_UNUSED, char** argv V_UNUSED) {
     dmn_assert(argc); dmn_assert(argv);
 
-    // XXX works for now, but should use socket eventually...
-    exit(dmn_stop() ? 1 : 0);
+    char* mcp_path = gdnsd_resolve_path_run("mcp.sock", NULL);
+    gdnsd_csc_t* mcp_csc = gdnsd_csc_new(mcp_path);
+    free(mcp_path);
+    pid_t csc_pid = gdnsd_csc_getpid(mcp_csc);
+    uint8_t mcp_buffer[8] = "stop";
+    const uint32_t mcp_resp_len = gdnsd_csc_txn(mcp_csc, mcp_buffer, 4, 8);
+    if(mcp_resp_len != 8 || memcmp(mcp_buffer, "stopping", 8))
+        log_fatal("MCP did not respond correctly to 'stop' command");
+    gdnsd_csc_closewait(mcp_csc);
+    if(dmn_terminate_pid_and_wait(0, csc_pid))
+        log_fatal("Stop failed, daemon still running, giving up!");
+    exit(0);
 }
 
 F_NORETURN

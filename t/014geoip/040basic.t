@@ -519,7 +519,7 @@ _GDT->test_dns(
     stats => [qw/udp_reqs noerror/],
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);
 
 # This re-tests a couple of the same results checked above, but using
 #   the commandline gdnsd_geoip_test tool

@@ -156,6 +156,7 @@ our $DNS_SPORT4 = $DNS_PORT + 3;
 our $DNS_SPORT6 = $DNS_PORT + 4;
 
 our $saved_pid;
+our $saved_gdnsdctl_pid;
 
 # If user runs testsuite as root, we try to set the privdrop
 #   user to nobody as a more-reliable choice.  Failing that,
@@ -164,9 +165,14 @@ our $saved_pid;
 our $PRIVDROP_USER = ($> == 0) ? 'nobody' : '';
 
 # Where to find the gdnsd binary during "installcheck" vs "check"
-our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
+our $GDNSD_BINARY = $ENV{INSTALLCHECK_SBINDIR}
     ? "$ENV{INSTALLCHECK_SBINDIR}/gdnsd"
     : "$ENV{TOP_BUILDDIR}/src/gdnsd";
+
+# Where to find the gdnsdctl binary during "installcheck" vs "check"
+our $GDNSDCTL_BINARY = $ENV{INSTALLCHECK_BINDIR}
+    ? "$ENV{INSTALLCHECK_BINDIR}/gdnsdctl"
+    : "$ENV{TOP_BUILDDIR}/src/gdnsdctl";
 
 # extmon_helper works out of the box for "installcheck",
 # but needs some custom paths for "check"
@@ -417,8 +423,8 @@ sub spawn_daemon_setup {
 
 sub spawn_daemon_execute {
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -Dxfc $OUTDIR/etc start}
-        : qq{$GDNSD_BIN -Dxfc $OUTDIR/etc start};
+        ? qq{$TEST_RUNNER $GDNSD_BINARY -Dxfc $OUTDIR/etc start}
+        : qq{$GDNSD_BINARY -Dxfc $OUTDIR/etc start};
 
     my $daemon_out = $OUTDIR . '/gdnsd.out';
 
@@ -1157,6 +1163,96 @@ sub test_kill_daemon {
     Test::More::ok(1);
 }
 
+sub test_kill_gdnsd {
+    my ($class, $pid) = @_;
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+    # use synchronous gdnsdctl-based stop
+    my $ctlstop_pid = fork();
+    if(!defined($ctlstop_pid)) {
+        my $d = "fork() for gdnsdctl stop failed: $?";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(!$ctlstop_pid) {
+        my $exec_line = $TEST_RUNNER
+            ? qq{$TEST_RUNNER $GDNSDCTL_BINARY -Dc $OUTDIR/etc stop}
+            : qq{$GDNSDCTL_BINARY -Dc $OUTDIR/etc stop};
+        exec($exec_line);
+        die "exec() of gdnsdctl stop failed: $?";
+    }
+    else {
+        $saved_gdnsdctl_pid = $ctlstop_pid;
+    }
+
+    # reap gdnsd, which gdnsdctl is stopping in the other side of the fork,
+    #  and validate exitcode of zero.
+    if(!$pid) {
+        my $d = "Test Bug: no gdnsd pid specified?";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    eval {
+        local $SIG{ALRM} = sub { die "gdnsd waitpid timeout"; };
+        alarm($TEST_RUNNER ? 60 : 30);
+        waitpid($pid, 0);
+    };
+    if($@) {
+        my $d = "Daemon at pid $pid failed to exit in reasonable time after gdnsdctl stop success";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(!WIFEXITED(${^CHILD_ERROR_NATIVE})) {
+        my $d = "gdnsd exited strangely... CHILD_ERROR_NATIVE is " . ${^CHILD_ERROR_NATIVE};
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    my $ev = WEXITSTATUS(${^CHILD_ERROR_NATIVE});
+    if($ev) {
+        my $d = "Daemon exit value was $ev";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    undef $saved_pid; # avoid END-block SIGKILL if we know it died fine
+
+    # reap gdnsdctl via waitpid and validate exitcode zero
+    local $@ = undef;
+    eval {
+        local $SIG{ALRM} = sub { die "gdnsdctl waitpid timeout"; };
+        alarm($TEST_RUNNER ? 60 : 30);
+        waitpid($ctlstop_pid, 0);
+    };
+    if($@) {
+        my $d = "gdnsdctl stop at pid $pid failed to exit in reasonable time";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(!WIFEXITED(${^CHILD_ERROR_NATIVE})) {
+        my $d = "gdnsdctl stop exited strangely... CHILD_ERROR_NATIVE is " . ${^CHILD_ERROR_NATIVE};
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    $ev = WEXITSTATUS(${^CHILD_ERROR_NATIVE});
+    if($ev) {
+        my $d = "gdnsdctl stop exit value was $ev";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    undef $saved_gdnsdctl_pid; # avoid END-block SIGKILL if we know it died fine
+
+    # if we make it here, both gdnsd and gdnsdctl exited with status zero as expected.
+    Test::More::ok(1);
+    return;
+}
+
 my $EDNS_CLIENTSUB_OPTCODE = 0x0008;
 sub optrr_clientsub {
     my %args = @_;
@@ -1188,5 +1284,9 @@ sub optrr_clientsub {
     );
 }
 
-END { kill('SIGKILL', $saved_pid) if $saved_pid; }
+END {
+    kill('SIGKILL', $saved_gdnsdctl_pid) if $saved_gdnsdctl_pid;
+    kill('SIGKILL', $saved_pid) if $saved_pid;
+}
+
 1;

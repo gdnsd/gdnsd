@@ -997,4 +997,4 @@ sub get_json_flushed_stats {
     Test::More::is($stats2->{stats}->{noerror}, 0, "Zero noerror stat post-flush via JSON");
 }
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

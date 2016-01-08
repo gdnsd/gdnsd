@@ -225,4 +225,4 @@ _GDT->test_dns(
     stats => [qw/udp_reqs udp_edns_tc tcp_reqs edns edns noerror noerror/],
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

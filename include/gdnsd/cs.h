@@ -120,6 +120,10 @@ gdnsd_csc_t* gdnsd_csc_new(const char* path);
 F_NONNULL
 uint32_t gdnsd_csc_txn(gdnsd_csc_t* csc, uint8_t* buffer, uint32_t req_len, uint32_t max_resp_len);
 
+// blocking wait for server to close control socket (e.g. for monitoring other side's requested exit)
+F_NONNULL
+void gdnsd_csc_closewait(gdnsd_csc_t* csc);
+
 // invoke built-in server "ping" function - retval false for success, true for failure
 F_NONNULL
 bool gdnsd_csc_ping(gdnsd_csc_t* csc);

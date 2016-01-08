@@ -317,11 +317,43 @@ static struct {
     .css = NULL,
 };
 
+// killed_by is a signal, or zero for controlsock
+static void mcp_shutdown(int killed_by) {
+    // controlsock and signal watchers not installed until we reach MCP_IDLE,
+    //  and protect themselves from calling here once shutdown commences...
+    dmn_assert(mcp.state == MCP_IDLE);
+
+    mcp.state = MCP_SENDING_RT_SHUTDOWN;
+    ev_io_start(mcp.loop, mcp.w_rtsock_write);
+    if(killed_by) {
+        mcp.killed_by = killed_by;
+        log_info("MCP: Beginning shutdown process down due to signal %i", killed_by);
+    }
+    else {
+        log_info("MCP: Beginning shutdown process down due to control socket command");
+    }
+    dmn_sd_notify("STOPPING=1", false);
+}
+
 F_NONNULLX(1, 2)
-static bool css_handler(uint8_t* buffer V_UNUSED, uint32_t* len V_UNUSED, void* data V_UNUSED) {
+static bool css_handler(uint8_t* buffer, uint32_t* len, void* data V_UNUSED) {
     dmn_assert(buffer); dmn_assert(len);
-    // with no code here, will echo to client
-    return false;
+
+    // controlsock not installed until we reach MCP_IDLE
+    dmn_assert(mcp.state >= MCP_IDLE);
+
+    if(mcp.state > MCP_IDLE)
+        return true; // abort on all new commands once we're shutting down...
+
+    // handle stop command
+    if(*len == 4 && !memcmp(buffer, "stop", 4)) {
+        memcpy(buffer, "stopping", 8);
+        *len = 8;
+        mcp_shutdown(0);
+        return false;
+    }
+
+    return true; // abort controlsock on invalid input
 }
 
 static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
@@ -349,6 +381,7 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
                 if(!WIFEXITED(status) || WEXITSTATUS(status))
                     dmn_log_fatal("MCP: runtime child %li exited abnormally with status %i", (long)runtime_pid, status);
                 dmn_log_info("MCP: exiting cleanly after runtime shutdown completion");
+                gdnsd_css_delete(mcp.css);
                 if(mcp.killed_by) {
                     ev_signal_stop(loop, mcp.w_sigterm);
                     ev_signal_stop(loop, mcp.w_sigint);
@@ -452,12 +485,7 @@ static void mcp_sighandle(struct ev_loop* loop, ev_signal* w, int revents V_UNUS
     if(mcp.state > MCP_IDLE)
         return; // ignore redundant shutdown signals during shutdown sequence
 
-    gdnsd_css_delete(mcp.css);
-    dmn_assert(mcp.state == MCP_IDLE);
-    mcp.state = MCP_SENDING_RT_SHUTDOWN;
-    mcp.killed_by = w->signum;
-    ev_io_start(mcp.loop, mcp.w_rtsock_write);
-    log_info("MCP: Beginning shutdown process down due to signal %i", w->signum);
+    mcp_shutdown(w->signum);
 }
 
 DMN_F_NORETURN

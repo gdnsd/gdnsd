@@ -137,4 +137,4 @@ _GDT->test_dns(
     ]
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

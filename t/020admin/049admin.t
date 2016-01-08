@@ -394,4 +394,4 @@ _GDT->test_dns(
     answer => 'ra.example.com 42 A 127.3.3.3',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

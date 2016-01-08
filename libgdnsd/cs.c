@@ -471,6 +471,14 @@ uint32_t gdnsd_csc_txn(gdnsd_csc_t* csc, uint8_t* buffer, uint32_t req_len, uint
     return szbuf.u32;
 }
 
+void gdnsd_csc_closewait(gdnsd_csc_t* csc) {
+    dmn_assert(csc);
+    char x;
+    const ssize_t recv_rv = recv(csc->fd, &x, 1, 0);
+    if(recv_rv)
+        dmn_log_fatal("while waiting for server close, control socket retval was %zi: %s", recv_rv, dmn_logf_errno());
+}
+
 bool gdnsd_csc_ping(gdnsd_csc_t* csc) {
     uint8_t buffer[4] = "ping";
     const uint32_t resp_len = gdnsd_csc_txn(csc, buffer, 4, 4);

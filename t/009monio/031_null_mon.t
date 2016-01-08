@@ -44,4 +44,4 @@ _GDT->test_dns(
     answer => 'ns1.example.com 86400 A 192.0.2.254',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

@@ -151,4 +151,4 @@ foreach my $qt (qw/CNAME ANY/) {
     );
 }
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);
