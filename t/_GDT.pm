@@ -163,24 +163,28 @@ our $saved_pid;
 #   the testsuite output...
 our $PRIVDROP_USER = ($> == 0) ? 'nobody' : '';
 
+# Where to find the gdnsd binary during "installcheck" vs "check"
 our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
     ? "$ENV{INSTALLCHECK_SBINDIR}/gdnsd"
     : "$ENV{TOP_BUILDDIR}/src/gdnsd";
 
-our $EXTMON_BIN = $ENV{INSTALLCHECK_BINDIR}
-    ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_extmon_helper"
-    : "$ENV{TOP_BUILDDIR}/plugins/gdnsd_extmon_helper";
+# extmon_helper works out of the box for "installcheck",
+# but needs some custom paths for "check"
+our $EXTMON_BIN;
+our $EXTMON_HELPER_CFG = '';
+if(!$ENV{INSTALLCHECK_SBINDIR}) { # not installcheck, regular check
+    $EXTMON_BIN = "$ENV{TOP_BUILDDIR}/plugins/gdnsd_extmon_helper";
+    $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$EXTMON_BIN" }|;
+}
 
 # During installcheck, the default hardcoded plugin path
 #  should work correctly for finding the installed plugins
 our $PLUGIN_PATH;
-our $EXTMON_HELPER_CFG = '';
 if($ENV{INSTALLCHECK_SBINDIR}) {
     $PLUGIN_PATH = "/xxx_does_not_exist";
 }
 else {
     $PLUGIN_PATH = "$ENV{TOP_BUILDDIR}/plugins/.libs";
-    $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$EXTMON_BIN" }|;
 }
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
@@ -333,12 +337,11 @@ sub proc_tmpl {
     while(<$in_fh>) {
         s/\@std_testsuite_options\@/$std_opts/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
-        # if the test used the extmon helper, pre-execute
-        #   it now to do libtool stuff before privdrop, in case
-        #   of testsuite running as root.  Otherwise on first
-        #   execution libtool tries to write to the builddir as
-        #   as the privdrop user.
-        if(s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g && $PRIVDROP_USER) {
+        # if the test uses the extmon helper from source dir, pre-execute it
+        #   now to do libtool stuff before privdrop, in case of testsuite
+        #   running as root.  Otherwise on first execution libtool tries to
+        #   write to the builddir as as the privdrop user.
+        if(s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g && $PRIVDROP_USER && $EXTMON_BIN) {
             system("$EXTMON_BIN >/dev/null 2>&1");
         }
         print $out_fh $_;
