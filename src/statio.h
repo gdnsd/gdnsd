@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -28,11 +28,17 @@
 
 #include <ev.h>
 
+// retval is json buffer allocation, which is the maximum possible
+// value for *len output from statio_get_json() later
 F_NONNULL
-void statio_start(struct ev_loop* statio_loop, const socks_cfg_t* socks_cfg);
+unsigned statio_start(struct ev_loop* statio_loop, const unsigned n_dns_threads);
 
-// main thread calls this to issue final stats output
+// runtime calls this to issue final stats output
 F_NONNULL
 void statio_final_stats(struct ev_loop* statio_loop);
+
+// runtime calls this to get control socket json output
+F_NONNULL
+const char* statio_get_json(unsigned* len);
 
 #endif // GDSND_STATIO_H

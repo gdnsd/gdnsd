@@ -20,7 +20,6 @@
 #include <config.h>
 #include "socks.h"
 
-#include "statio.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 
@@ -52,19 +51,11 @@ static const dns_addr_t addr_defs_defaults = {
     .tcp_threads = 1U,
 };
 
-static const http_addr_t http_defs_defaults = {
-    .http_port = 3506U,
-    .timeout = 5U,
-    .max_clients = 128U,
-};
-
 static const socks_cfg_t socks_cfg_defaults = {
     .dns_addrs = NULL,
     .dns_threads = NULL,
-    .http_addrs = NULL,
     .num_dns_addrs = 0U,
     .num_dns_threads = 0U,
-    .num_http_addrs = 0U,
     .max_response = 16384U,
     .max_edns_response = 1410U,
 };
@@ -111,31 +102,6 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin
             _store = (unsigned) _val; \
         } \
     } while(0)
-
-F_NONNULLX(1)
-static void process_http_listen(socks_cfg_t* socks_cfg, vscf_data_t* http_listen_opt, const http_addr_t* http_defs) {
-    dmn_assert(socks_cfg);
-
-    if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
-        socks_cfg->num_http_addrs = 2;
-        socks_cfg->http_addrs = xcalloc(socks_cfg->num_http_addrs, sizeof(*socks_cfg->http_addrs));
-        memcpy(&socks_cfg->http_addrs[0], http_defs, sizeof(socks_cfg->http_addrs[0]));
-        memcpy(&socks_cfg->http_addrs[1], http_defs, sizeof(socks_cfg->http_addrs[0]));
-        make_addr("0.0.0.0", socks_cfg->http_addrs[0].http_port, &socks_cfg->http_addrs[0].addr);
-        make_addr("::", socks_cfg->http_addrs[0].http_port, &socks_cfg->http_addrs[1].addr);
-    }
-    else {
-        socks_cfg->num_http_addrs = vscf_array_get_len(http_listen_opt);
-        socks_cfg->http_addrs = xcalloc(socks_cfg->num_http_addrs, sizeof(*socks_cfg->http_addrs));
-        for(unsigned i = 0; i < socks_cfg->num_http_addrs; i++) {
-            memcpy(&socks_cfg->http_addrs[i], http_defs, sizeof(socks_cfg->http_addrs[0]));
-            vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
-            if(!vscf_is_simple(lspec))
-                log_fatal("Config option 'http_listen': all listen specs must be strings");
-            make_addr(vscf_simple_get_data(lspec), socks_cfg->http_addrs[i].http_port, &socks_cfg->http_addrs[i].addr);
-        }
-    }
-}
 
 F_NONNULL
 static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) {
@@ -267,21 +233,15 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
     memcpy(socks_cfg, &socks_cfg_defaults, sizeof(*socks_cfg));
 
     vscf_data_t* listen_opt = NULL;
-    vscf_data_t* http_listen_opt = NULL;
 
     // These are initially populated with static defaults, then updated
     //   with global options to become the defaults for per-address-level
-    //   settings within process_(http_)listen()
+    //   settings within process_listen()
     dns_addr_t addr_defs;
     memcpy(&addr_defs, &addr_defs_defaults, sizeof(addr_defs));
-    http_addr_t http_defs;
-    memcpy(&http_defs, &http_defs_defaults, sizeof(http_defs));
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
-        CFG_OPT_UINT_ALTSTORE(options, max_http_clients, 1LU, 65535LU, http_defs.max_clients);
-        CFG_OPT_UINT_ALTSTORE(options, http_timeout, 3LU, 60LU, http_defs.timeout);
-        CFG_OPT_UINT_ALTSTORE(options, http_port, 1LU, 65535LU, http_defs.http_port);
         CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
         CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
@@ -310,10 +270,8 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
         }
 
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
-        http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
     }
 
-    process_http_listen(socks_cfg, http_listen_opt, &http_defs);
     process_listen(socks_cfg, listen_opt, &addr_defs);
 
     return socks_cfg;
@@ -327,11 +285,6 @@ void socks_lsocks_init(socks_cfg_t* socks_cfg) {
             udp_sock_setup(t, socks_cfg->max_edns_response);
         else
             t->sock = tcp_listen_pre_setup(&t->ac->addr, t->ac->tcp_timeout);
-    }
-
-    for(unsigned i = 0; i < socks_cfg->num_http_addrs; i++) {
-        http_addr_t* a = &socks_cfg->http_addrs[i];
-        a->sock = tcp_listen_pre_setup(&a->addr, a->timeout);
     }
 }
 
@@ -386,16 +339,11 @@ static void socks_helper_bind(const char* desc, const int sock, const dmn_anysin
         desc, dmn_logf_anysin(asin), dmn_logf_strerror(bind_errno));
 }
 
-// bind all sockets (udp/tcp dns + statio)
+// bind all sockets (udp/tcp dns)
 void socks_lsocks_bind(const socks_cfg_t* socks_cfg) {
     for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         const dns_thread_t* t = &socks_cfg->dns_threads[i];
         socks_helper_bind(t->is_udp ? "UDP DNS" : "TCP DNS",
             t->sock, &t->ac->addr);
-    }
-
-    for(unsigned i = 0; i < socks_cfg->num_http_addrs; i++) {
-        const http_addr_t* a = &socks_cfg->http_addrs[i];
-        socks_helper_bind("TCP stats", a->sock, &a->addr);
     }
 }

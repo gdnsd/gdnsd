@@ -45,6 +45,7 @@ static const char chaos_def[] = "gdnsd";
 
 static const cfg_t cfg_defaults = {
     .chaos = NULL,
+    .stats_file_path = NULL,
     .include_optional_ns = false,
     .realtime_stats = false,
     .disable_text_autosplit = false,
@@ -54,6 +55,7 @@ static const cfg_t cfg_defaults = {
     .zones_rfc1035_auto = true,
     .any_tcp_only = true,
     .chaos_len = 0,
+    .stats_file_interval = 15,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
     .max_ttl = 3600000U,
@@ -265,6 +267,10 @@ void conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const 
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
+        CFG_OPT_STR(options, stats_file_path);
+        if(!cfg->stats_file_path)
+            cfg->stats_file_path = strdup("stats.json");
+        CFG_OPT_UINT_NOMIN(options, stats_file_interval, 3600LU);
         CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, realtime_stats);
         CFG_OPT_BOOL(options, disable_text_autosplit);

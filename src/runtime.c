@@ -184,10 +184,18 @@ static struct {
 };
 
 F_NONNULLX(1, 2)
-static bool css_handler(uint8_t* buffer V_UNUSED, uint32_t* len V_UNUSED, void* data V_UNUSED) {
+static bool css_handler(uint8_t* buffer, uint32_t* len, void* data V_UNUSED) {
     dmn_assert(buffer); dmn_assert(len);
-    // with no code here, will echo to client
-    return false;
+
+    if(*len == 5 && !memcmp(buffer, "stats", 5)) {
+        unsigned jlen;
+        const char* jdata = statio_get_json(&jlen);
+        memcpy(buffer, jdata, jlen);
+        *len = jlen;
+        return false;
+    }
+
+    return true; // abort socket if no match above
 }
 
 // final tasks for orderly shutdown - after this we send a confirmation to MCP
@@ -233,9 +241,9 @@ static void rt_mcpsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
             if(msg != MSG_2RT_OK_TO_LISTEN)
                 dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
             start_threads(rt.socks_cfg);
-            statio_start(rt.loop, rt.socks_cfg);
+            const unsigned max_json = statio_start(rt.loop, rt.socks_cfg->num_dns_threads);
             char* path = gdnsd_resolve_path_run("rt.sock", NULL);
-            rt.css = gdnsd_css_new(path, css_handler, NULL, 100, 1024, 16, 300); // XXX tunables...
+            rt.css = gdnsd_css_new(path, css_handler, NULL, 100, max_json, 16, 300); // XXX tunables...
             free(path);
             log_info("DNS listeners started");
             rt.state = RT_WRITING_MSG_2MCP_LISTENING;

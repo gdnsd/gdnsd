@@ -33,13 +33,14 @@ use FindBin ();
 use File::Spec ();
 use Net::DNS::Resolver ();
 use Net::DNS ();
-use LWP::UserAgent ();
 use Test::More ();
 use File::Copy qw//;
 use Socket qw/AF_INET/;
 use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
 use File::Path qw//;
+use IO::Socket::UNIX qw//;
+use JSON::PP;
 use Config;
 
 # The generic rr-matching code assumes "$rr->string eq $rr->string" is sufficient
@@ -195,16 +196,6 @@ else {
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
 
-my $CSV_TEMPLATE = 
-    "uptime\r\n"
-    . "([0-9]+)\r\n"
-    . "noerror,refused,nxdomain,notimp,badvers,formerr,dropped,v6,edns,edns_clientsub\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
-    . "udp_reqs,udp_recvfail,udp_sendfail,udp_tc,udp_edns_big,udp_edns_tc\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
-    . "tcp_reqs,tcp_recvfail,tcp_sendfail\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+)\r\n";
-
 my %stats_accum = (
     noerror      => 0,
     refused      => 0,
@@ -227,59 +218,39 @@ my %stats_accum = (
     tcp_sendfail => 0,
 );
 
-my $_useragent;
-sub _get_daemon_csv_stats {
-    $_useragent ||= LWP::UserAgent->new(
-        protocols_allowed => ['http'],
-        requests_redirectable => [],
-        max_size => 10240,
-        timeout => 3,
-    );
-    my $response = $_useragent->get("http://127.0.0.1:${HTTP_PORT}/csv");
-    if(!$response) {
-        return "No response...";
+my $rtsock;
+sub _get_daemon_json_stats {
+    if(!$rtsock) {
+        my $rtsock_path = "$OUTDIR/run/gdnsd/rt.sock";
+        $rtsock = IO::Socket::UNIX->new($rtsock_path)
+            or die "hard-fail: cannot open runtime control socket $rtsock_path: $!";
     }
-    elsif($response->code != 200) {
-        return "Response code was not 200. Response dump:\n" . $response->as_string("\n");
-    }
-    return $response->content;
+    # Not much point errorchecking these read/write calls - if they don't work
+    # as expected the testsuite will still fail...
+    my $req = pack('L', 5) . 'stats';
+    syswrite($rtsock, $req, 9);
+    my $resp;
+    sysread($rtsock, $resp, 4);
+    my $resplen = unpack('L', $resp);
+    sysread($rtsock, $resp, $resplen);
+    return decode_json($resp);
 }
 
 sub check_stats_inner {
     my ($class, %to_check) = @_;
-    my $content = _get_daemon_csv_stats();
-    if($content !~ m/^${CSV_TEMPLATE}/s) {
-       die "Content does not match CSV_TEMPLATE, content is: " . $content;
-    }
-    my $csv_vals = {
-        uptime          => $1,
-        noerror         => $2,
-        refused         => $3,
-        nxdomain        => $4,
-        notimp          => $5,
-        badvers         => $6,
-        formerr         => $7,
-        dropped         => $8,
-        v6              => $9,
-        edns            => $10,
-        edns_clientsub  => $11,
-        udp_reqs        => $12,
-        udp_recvfail    => $13,
-        udp_sendfail    => $14,
-        udp_tc          => $15,
-        udp_edns_big    => $16,
-        udp_edns_tc     => $17,
-        tcp_reqs        => $18,
-        tcp_recvfail    => $19,
-        tcp_sendfail    => $20,
-    };
 
-    ## use Data::Dumper; warn Dumper($csv_vals);
+    my $json = _get_daemon_json_stats();
+    # For hysterical raisins, we flatten the structure and use prefixes here...
+    my %json_vals = %{$json->{'stats'}};
+    @json_vals{ map { "udp_" . $_; } keys %{$json->{'udp'}} } = values %{$json->{'udp'}};
+    @json_vals{ map { "tcp_" . $_; } keys %{$json->{'tcp'}} } = values %{$json->{'tcp'}};
+
+    ## use Data::Dumper; warn Dumper(\%json_vals);
 
     foreach my $checkit (keys %to_check) {
-        if($csv_vals->{$checkit} != $to_check{$checkit}) {
-            my $ftype = ($csv_vals->{$checkit} < $to_check{$checkit}) ? 'soft' : 'hard';
-            die "$checkit mismatch (${ftype}-fail), wanted " . $to_check{$checkit} . ", got " . $csv_vals->{$checkit};
+        if($json_vals{$checkit} != $to_check{$checkit}) {
+            my $ftype = ($json_vals{$checkit} < $to_check{$checkit}) ? 'soft' : 'hard';
+            die "$checkit mismatch (${ftype}-fail), wanted " . $to_check{$checkit} . ", got " . $json_vals{$checkit};
         }
     }
 
@@ -315,13 +286,9 @@ sub proc_tmpl {
 
     my $dns_lspec = qq{[ 127.0.0.1, ::1 ]};
 
-    my $http_lspec = qq{[ 127.0.0.1, ::1 ]};
-
     my $std_opts = qq{
         listen => $dns_lspec
-        http_listen => $http_lspec
         dns_port => $DNS_PORT
-        http_port => $HTTP_PORT
         plugin_search_path = $PLUGIN_PATH
         run_dir = $OUTDIR/run/gdnsd
         state_dir = $OUTDIR/var/lib/gdnsd
@@ -1166,6 +1133,9 @@ sub test_kill_daemon {
 sub test_kill_gdnsd {
     my ($class, $pid) = @_;
     local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+    # close open controlsock used for stats, in case we exec a second daemon
+    undef $rtsock;
 
     # use synchronous gdnsdctl-based stop
     my $ctlstop_pid = fork();

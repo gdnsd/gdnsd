@@ -47,20 +47,10 @@ typedef struct {
 } dns_thread_t;
 
 typedef struct {
-    dmn_anysin_t addr;
-    int sock;
-    unsigned http_port;
-    unsigned timeout;
-    unsigned max_clients;
-} http_addr_t;
-
-typedef struct {
     dns_addr_t*   dns_addrs;
     dns_thread_t* dns_threads;
-    http_addr_t*  http_addrs;
     unsigned num_dns_addrs;
     unsigned num_dns_threads;
-    unsigned num_http_addrs;
     unsigned max_response;
     unsigned max_edns_response;
 } socks_cfg_t;

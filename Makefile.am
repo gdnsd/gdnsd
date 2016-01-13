@@ -375,7 +375,9 @@ CLEANFILES += sysd/gdnsd.service
 #=====================================
 
 # dist + install simple docs
-dist_doc_DATA += docs/gdnsd_manual.txt
+dist_doc_DATA += \
+	docs/gdnsd_manual.txt \
+	docs/stats_example.html
 
 PODS_IN_1 = docs/gdnsd_geoip_test.podin
 PODS_IN_3 = docs/gdnsd-plugin-api.podin

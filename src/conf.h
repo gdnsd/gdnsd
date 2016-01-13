@@ -30,6 +30,7 @@
 
 typedef struct {
     const uint8_t* chaos;
+    char*    stats_file_path;
     bool     include_optional_ns;
     bool     realtime_stats;
     bool     disable_text_autosplit;
@@ -39,6 +40,7 @@ typedef struct {
     bool     zones_rfc1035_auto;
     bool     any_tcp_only;
     unsigned chaos_len;
+    unsigned stats_file_interval;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;
     unsigned max_ttl;
