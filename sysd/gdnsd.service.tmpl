@@ -12,7 +12,8 @@ WantedBy=multi-user.target
 Type=notify
 NotifyAccess=all
 ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
-ExecStop=@GDNSD_SBINDIR@/gdnsd stop
+ExecReload=@GDNSD_BINDIR@/gdnsdctl reload
+ExecStop=@GDNSD_BINDIR@/gdnsdctl stop
 
 #---
 # Things below this mark are not strictly required for proper operation,

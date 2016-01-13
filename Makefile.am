@@ -365,7 +365,7 @@ noinst_SCRIPTS += sysd/gdnsd.service
 endif
 
 sysd/gdnsd.service: sysd/gdnsd.service.tmpl Makefile
-	$(AM_V_GEN)sed 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' <$(srcdir)/sysd/gdnsd.service.tmpl >$@
+	$(AM_V_GEN)sed -e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' -e 's|@GDNSD_BINDIR[@]|$(bindir)|g' <$(srcdir)/sysd/gdnsd.service.tmpl >$@
 
 EXTRA_DIST += sysd/gdnsd.service.tmpl
 CLEANFILES += sysd/gdnsd.service
@@ -379,7 +379,9 @@ dist_doc_DATA += \
 	docs/gdnsd_manual.txt \
 	docs/stats_example.html
 
-PODS_IN_1 = docs/gdnsd_geoip_test.podin
+PODS_IN_1 = \
+	docs/gdnsdctl.podin \
+	docs/gdnsd_geoip_test.podin
 PODS_IN_3 = docs/gdnsd-plugin-api.podin
 PODS_IN_5 = \
 	docs/gdnsd.config.podin \

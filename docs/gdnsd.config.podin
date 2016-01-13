@@ -120,12 +120,6 @@ Integer port, 1-65535, default 53.  This is the global default port
 number for DNS listener addresses which do not specify port numbers
 themselves.
 
-=item B<http_port>
-
-Integer port, 1-65535, default 3506.  This is the default HTTP port
-number for stats listener addresses which do not specify port numbers
-themselves.
-
 =item B<listen>
 
 The listen option specifies the socket addresses the server listens on
@@ -188,19 +182,6 @@ and IPv6 C<ANY> addresses C<0.0.0.0> and C<::>.  gdnsd's C<ANY>-address
 sockets should correctly handle sending outgoing datagrams via the interface
 they were received on with a source address matching the destination address of
 the request.
-
-=item B<http_listen>
-
-Basically like B<listen> above, but used for the HTTP listener (serving
-stats information), and defaulting to port 3506.  The hash form isn't
-supported as there are no per-address options, and the any/all options
-don't exist here.  The default is to listen on the IPv4 and IPv6
-any-addresses (C<0.0.0.0> and C<::>).
-
-It makes common sense to restrict access to this service via firewall
-rules, as the data served leaks information about the rate and nature
-of your DNS traffic.  This is mostly intended for your own internal
-monitoring purposes.
 
 =item B<tcp_threads>
 
@@ -270,18 +251,6 @@ Integer, min 4096, max 1048576.  If set, this value will be used to set
 the C<SO_SNDBUF> socket option on the UDP listening socket(s).  Tuning
 advice mirrors the above.
 
-=item B<max_http_clients>
-
-Integer, default 128, min 1, max 65535.  Maximum number of HTTP
-connections to allow in parallel at any given time.  Once this number
-is reached, no more new connections will be answered until an existing
-connection closes or times out.
-
-=item B<http_timeout>
-
-Integer seconds, default 5, min 3, max 60.  HTTP connections will be
-forcibly shut down if they go idle for more than this many seconds.
-
 =item B<zones_strict_data>
 
 Boolean, default C<false>
@@ -302,14 +271,12 @@ would continue to be served until the error is corrected in the source.
 
 Boolean, default C<true>
 
-If true (the default), on daemon startup (via C<start> or C<restart>)
-if any zone fails to load correctly, the daemon will
-abort.  If false, the daemon will simply ignore the failed zone and
-continue operations.
+If true (the default), on daemon startup if any zone fails to load correctly,
+the daemon will abort.  If false, the daemon will simply ignore the failed zone
+and continue operations.
 
-Runtime reloads via SIGUSR1 and/or periodic/inotify scanning always
-treat bad zone data non-fatally (leaving any existing good copy intact
-in memory for lookups).
+Runtime zone data reloads via gdnsdctl always treat bad zone data non-fatally
+(leaving any existing good copy intact in memory for lookups).
 
 This also affects the C<checkconf> action.  It will only fail in terms
 of exit value on bad zonefiles if this is true (although it will note
@@ -329,9 +296,7 @@ filesystem modifications in realtime.  In these cases it will not usually run
 the periodic C<lstat()> scans.
 
 Regardless of whether this setting is true or false, you can always manually
-trigger a rescan of the zones directory for new data by sending the daemon a
-C<SIGUSR1> (or executing the "reload-zones" command, which sends SIGUSR1 for
-you).
+trigger a rescan of the zones directory for new data by executing C<gdnsdctl reload-zones>.
 
 =item B<zones_rfc1035_auto_interval>
 
@@ -456,15 +421,14 @@ for plugins *before* trying the default, fixed search path.
 
 Boolean, default false.  Normally the daemon self-imposes a limit of
 not recalculating the daemon-wide statistics more often than once per
-second.  This improves efficiency in the case that the polling traffic
-on our HTTP interface gets high.
+second.  This improves efficiency.
 
 For most uses the default should be fine.  If you set this option to
 true, the stats will be recalculated on the spot for every stats
 request.  The test suite uses this so that it can double-check
 statistics counters between every request it sends.  I don't imagine
-anyone else will need to use this option, and it could even be
-determinental to performance on SMP machines.
+anyone else will need to use this option, and it is probably determinental to
+performance on SMP machines.
 
 =item B<max_response>
 
@@ -590,9 +554,11 @@ on startup.  If it does not exist and cannot be created, or the
 permissions and ownership cannot be set to acceptable values, the
 daemon will not start.
 
-The contents of this directory are private to the daemon and
-shouldn't be interfered with.  This can live on a filesystem that's
-volatile across reboots, and doesn't require much disk space.
+The contents of this directory are private to the daemon and shouldn't be
+interfered with.  Generally there will be a locked pidfile and a couple of
+control sockets here, as well as the default json stats file for external
+consumption.  This can live on a filesystem that's volatile across reboots,
+and doesn't require much disk space.
 
 =item B<state_dir>
 
@@ -620,6 +586,18 @@ a normal expectation regardless, and supporting DNS over TCP is a
 requirement of the DNS.  Therefore this should cause no real-world
 performance or interoperability problems in exchange for the protection
 it offers.
+
+=item B<stats_file_path>
+
+String, defaults to F<stats.json>.  The daemon will output a JSON file full of
+daemon stats at regular intervals at this pathname.  If not fully-qualified,
+the path is relative to the C<run_dir> described above.
+
+=item B<stats_file_interval>
+
+Integer, default 15, min 0, max 3600.  This is the interval, in seconds,
+between writing the daemon's JSON stats file above.  If set to zero, no stats
+file will be written at all.
 
 =back
 
@@ -655,8 +633,7 @@ until the anti-flap thresholds are crossed and the state moves to
 C<DOWN>.
 
 Any services monitored for plugins also have their state reported
-alongside the standard gdnsd statistics report, served by the built-in
-HTTP server (default port is 3506).
+along with the standard JSON statistics output.
 
 The following are the generic parameters for all service_types:
 
