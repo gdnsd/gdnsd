@@ -337,9 +337,9 @@ static void mcp_shutdown(int killed_by) {
     dmn_sd_notify("STOPPING=1", false);
 }
 
-F_NONNULLX(1, 2)
-static bool css_handler(uint8_t* buffer, uint32_t* len, void* data V_UNUSED) {
-    dmn_assert(buffer); dmn_assert(len);
+F_NONNULLX(1,3)
+static bool css_read_handler(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len, void* data V_UNUSED) {
+    dmn_assert(css); dmn_assert(clid); dmn_assert(buffer); dmn_assert(len);
 
     // controlsock not installed until we reach MCP_IDLE
     dmn_assert(mcp.state >= MCP_IDLE);
@@ -348,10 +348,10 @@ static bool css_handler(uint8_t* buffer, uint32_t* len, void* data V_UNUSED) {
         return true; // abort on all new commands once we're shutting down...
 
     // handle stop command
-    if(*len == 4 && !memcmp(buffer, "stop", 4)) {
-        memcpy(buffer, "stopping", 8);
-        *len = 8;
+    if(len == 4 && !memcmp(buffer, "stop", 4)) {
         mcp_shutdown(0);
+        memcpy(buffer, "stopping", 8);
+        gdnsd_css_respond(css, clid, buffer, 8);
         return false;
     }
 
@@ -405,7 +405,7 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
                 dmn_log_fatal("MCP<-Runtime: unexpected input %c", msg);
             socks_lsocks_bind(mcp.socks_cfg);
             char* path = gdnsd_resolve_path_run("mcp.sock", NULL);
-            mcp.css = gdnsd_css_new(path, css_handler, NULL, 100, 1024, 16, 300); // XXX tunables...
+            mcp.css = gdnsd_css_new(path, css_read_handler, NULL, 100, 1024, 16, 300); // XXX tunables...
             free(path);
             mcp.state = MCP_SENDING_RT_LISTEN;
             ev_io_start(mcp.loop, mcp.w_rtsock_write);

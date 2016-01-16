@@ -38,6 +38,7 @@ static const mode_t CSOCK_PERMS = (S_IRUSR|S_IWUSR); // 0600
 typedef enum {
     READING_SIZE = 0,
     READING_DATA,
+    WAITING_RESPONSE,
     WRITING_SIZE,
     WRITING_DATA,
 } css_cstate_t;
@@ -53,6 +54,7 @@ struct css_conn_s_ {
     ev_io* w_read;
     ev_io* w_write;
     ev_timer* w_timeout;
+    uint64_t clid;
     int fd;
     union {
         uint32_t u32;
@@ -70,7 +72,8 @@ struct gdnsd_css_s_ {
     unsigned max_clients;
     unsigned timeout;
     unsigned num_clients;
-    gdnsd_css_cb_t cb;
+    uint64_t next_clid;
+    gdnsd_css_rcb_t rcb;
     void* data;
     ev_io* w_accept;
     struct ev_loop* loop;
@@ -215,43 +218,35 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) 
         }
         return;
     }
-    else {
-        // built-in ping->pong no-op transaction
-        if(c->size == 4 && !memcmp(c->buffer, "ping", 4)) {
-            c->buffer[1] = 'o';
-        }
-        // built-in getpid transaction
-        else if(c->size == 6 && !memcmp(c->buffer, "getpid", 6)) {
-            pid_t my_pid = getpid();
-            int snp_rv = snprintf((char*)c->buffer, 22, "%li", (long)my_pid);
-            dmn_assert(snp_rv > 0);
-            c->size = (unsigned)snp_rv;
-        }
-        // callback for real transactions
-        else {
-            if(css->cb(c->buffer, &c->size, css->data)) {
-                css_conn_cleanup(c);
-                return;
-            }
-            if(!c->size) {
-                dmn_log_err("server control socket message of length zero is illegal");
-                css_conn_cleanup(c);
-                return;
-            }
-            if(c->size > css->max_buffer_out) {
-                dmn_log_err("oversized server control socket message of length %" PRIu32, c->size);
-                css_conn_cleanup(c);
-                return;
-            }
-        }
-    }
 
+    // we have a full request to process from here...
+    c->state = WAITING_RESPONSE;
     ev_io_stop(loop, c->w_read);
-    ev_io_start(loop, c->w_write);
-    c->state = WRITING_SIZE;
-    c->szbuf.u32 = c->size;
-    c->size = 4;
-    c->size_done = 0;
+
+    // built-in ping->pong no-op transaction
+    if(c->size == 4 && !memcmp(c->buffer, "ping", 4)) {
+        c->buffer[1] = 'o';
+        c->state = WRITING_SIZE;
+        c->szbuf.u32 = 4;
+        c->size = 4;
+        c->size_done = 0;
+        ev_io_start(loop, c->w_write);
+    }
+    // built-in getpid transaction
+    else if(c->size == 6 && !memcmp(c->buffer, "getpid", 6)) {
+        pid_t my_pid = getpid();
+        int snp_rv = snprintf((char*)c->buffer, 22, "%li", (long)my_pid);
+        dmn_assert(snp_rv > 0);
+        c->state = WRITING_SIZE;
+        c->szbuf.u32 = (uint32_t)snp_rv;
+        c->size = 4;
+        c->size_done = 0;
+        ev_io_start(loop, c->w_write);
+    }
+    // callback for real transactions
+    else if(css->rcb(css, c->clid, c->buffer, c->size, css->data)) {
+        css_conn_cleanup(c);
+    }
 }
 
 F_NONNULL
@@ -287,15 +282,27 @@ static void css_accept(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
     if(++css->num_clients == css->max_clients)
         ev_io_stop(css->loop, css->w_accept);
 
+    // calculate max + set SO_(SND|RCV)BUF
+    const uint32_t maxbuf = css->max_buffer_out > css->max_buffer_in
+        ? css->max_buffer_out
+        : css->max_buffer_in;
+
+    if(maxbuf > 4096U) {
+        int opt_size = (int)maxbuf;
+        if(setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)))
+            dmn_log_warn("Failed to set SO_SNDBUF to %i for controlsock fd: %s",
+                         opt_size, dmn_logf_errno());
+        if(setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)))
+            dmn_log_warn("Failed to set SO_RCVBUF to %i for controlsock fd: %s",
+                         opt_size, dmn_logf_errno());
+    }
+
     // set up the per-connection state and start reading requests...
     css_conn_t* c = xmalloc(sizeof(css_conn_t));
     c->css = css;
     c->fd = fd;
-    c->buffer = xmalloc(
-        css->max_buffer_out > css->max_buffer_in
-            ? css->max_buffer_out
-            : css->max_buffer_in
-    );
+    c->clid = css->next_clid++;
+    c->buffer = xmalloc(maxbuf);
     c->w_read = xmalloc(sizeof(ev_io));
     c->w_write = xmalloc(sizeof(ev_io));
     c->w_timeout = xmalloc(sizeof(ev_timer));
@@ -336,8 +343,8 @@ static void sun_set_path(struct sockaddr_un* a, const char* path) {
  * Public interfaces *
  *********************/
 
-gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_cb_t cb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout) {
-    dmn_assert(path); dmn_assert(cb);
+gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout) {
+    dmn_assert(path); dmn_assert(rcb);
 
     // floor buffer maxes for reasonable built-ins
     if(max_buffer_out < 64)
@@ -360,12 +367,13 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_cb_t cb, void* data, uint
     css->timeout = timeout;
     css->num_clients = 0;
     css->first_client = NULL;
+    css->next_clid = 1;
 
     css->fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(css->fd < 0)
         dmn_log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", dmn_logf_errno());
 
-    css->cb = cb;
+    css->rcb = rcb;
     css->data = data;
     css->w_accept = xmalloc(sizeof(ev_io));
     ev_io_init(css->w_accept, css_accept, css->fd, EV_READ);
@@ -396,6 +404,40 @@ void gdnsd_css_start(gdnsd_css_t* css, struct ev_loop* loop) {
     dmn_assert(loop);
     css->loop = loop;
     ev_io_start(css->loop, css->w_accept);
+}
+
+void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len) {
+    dmn_assert(css); dmn_assert(buffer);
+
+    // find this client (we assume the list isn't so huge that linear search is an issue)
+    css_conn_t* c = NULL;
+    css_conn_t* searchme = css->first_client;
+    while(!c && searchme) {
+        if(searchme->clid == clid)
+            c = searchme;
+        else
+            searchme = searchme->next;
+    }
+
+    if(!c)
+        dmn_log_fatal("BUG: css_respond called with invalid clid %" PRIu64, clid);
+
+    if(c->state != WAITING_RESPONSE)
+        dmn_log_fatal("BUG: css_respond called for clid %" PRIu64 ", which was not waiting on a response", clid);
+
+    if(len > css->max_buffer_out)
+        dmn_log_fatal("BUG: css_respond called with len %" PRIu32 " vs max_buffer_out %" PRIu32, len, css->max_buffer_out);
+
+    if(!len)
+        dmn_log_err("BUG: css_respond called with zero response length for clid %" PRIu64, clid);
+
+    if(buffer != c->buffer)
+        memcpy(c->buffer, buffer, len);
+    c->state = WRITING_SIZE;
+    c->szbuf.u32 = len;
+    c->size = 4;
+    c->size_done = 0;
+    ev_io_start(css->loop, c->w_write);
 }
 
 void gdnsd_css_delete(gdnsd_css_t* css) {

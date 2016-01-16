@@ -183,15 +183,15 @@ static struct {
     .css = NULL,
 };
 
-F_NONNULLX(1, 2)
-static bool css_handler(uint8_t* buffer, uint32_t* len, void* data V_UNUSED) {
-    dmn_assert(buffer); dmn_assert(len);
+F_NONNULLX(1,3)
+static bool css_read_handler(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len, void* data V_UNUSED) {
+    dmn_assert(css); dmn_assert(clid); dmn_assert(buffer); dmn_assert(len);
 
-    if(*len == 5 && !memcmp(buffer, "stats", 5)) {
+    if(len == 5 && !memcmp(buffer, "stats", 5)) {
         unsigned jlen;
         const char* jdata = statio_get_json(&jlen);
         memcpy(buffer, jdata, jlen);
-        *len = jlen;
+        gdnsd_css_respond(css, clid, buffer, jlen);
         return false;
     }
 
@@ -243,7 +243,7 @@ static void rt_mcpsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
             start_threads(rt.socks_cfg);
             const unsigned max_json = statio_start(rt.loop, rt.socks_cfg->num_dns_threads);
             char* path = gdnsd_resolve_path_run("rt.sock", NULL);
-            rt.css = gdnsd_css_new(path, css_handler, NULL, 100, max_json, 16, 300); // XXX tunables...
+            rt.css = gdnsd_css_new(path, css_read_handler, NULL, 100, max_json, 16, 300); // XXX tunables...
             free(path);
             log_info("DNS listeners started");
             rt.state = RT_WRITING_MSG_2MCP_LISTENING;

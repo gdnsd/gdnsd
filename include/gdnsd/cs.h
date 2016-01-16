@@ -58,21 +58,25 @@ typedef struct gdnsd_csc_s_ gdnsd_csc_t;
  *************/
 
 // This is the css (control socket server) callback function prototype.
-// buffer - contains client input, you store your output here as well, pre-allocated
-//          to the greater of max_buffer_(in|out) from gdnsd_css_new()
-// len - pointer to length of client input, you store output length here as well
+// css - the server object returned from _new()
+// clid - unique identifier for this client in this gdnsd_css_t
+// buffer - contains client input, is allocated to the greater of
+//          max_buffer_(in|out) from gdnsd_css_new()
+// len - length of client input
 // data - opaque generic context data pointer you provided to gdnsd_css_new()
-// retval - true -> close client connection (no response, buffer and len not examined)
-//          false -> respond with len bytes of buffer and leave connection open for more requests
-// Note that as no connection/client identifier is sent at this time, all
-// requests are stateless relative to other requests from the same connection
-typedef bool (*gdnsd_css_cb_t)(uint8_t* buffer, uint32_t* len, void* data);
+// retval - true -> close client connection immediately with no response
+//                  (even if you called css_respond() inside this call!)
+//          false -> hold client open for a response
+// note: "buffer" can also be used to buffer your response - your code owns it
+//       until you invoke gdnsd_css_respond() with this clid, or
+//       invoke gdnsd_css_delete() to tear down the whole server
+typedef bool (*gdnsd_css_rcb_t)(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len, void* data);
 
 #pragma GCC visibility push(default)
 
 // Create a new control socket server:
 // path - the fileystem pathname of the socket to create
-// cb - your request-processing callback
+// rcb - your request read callback
 // data - opaque generic context data pointer for your callback
 // max_buffer_(in|out) - set limits on input and output sizes, respectively.
 //    (the shared buffer will be allocated to the greater of the two values)
@@ -86,11 +90,28 @@ typedef bool (*gdnsd_css_cb_t)(uint8_t* buffer, uint32_t* len, void* data);
 //    an eventloop with other things going on...), but will be immediately
 //    after it returns if applicable.
 F_NONNULLX(1,2) F_MALLOC
-gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_cb_t cb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout);
+gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout);
 
 // Start accepting connections using libev loop "loop"
 F_NONNULL
 void gdnsd_css_start(gdnsd_css_t* css, struct ev_loop* loop);
+
+// Respond to a request received via the rcb callback
+// clid   - unique client ID from rcb callback
+// buffer - contains up to max_buffer_out data
+// len    - the length of the actual response in buffer
+// note: this can be called from within the rcb read callback
+// note: "buffer" can be the buffer received in the rcb callback,
+//     or can be a new buffer belonging to the caller.  If it's a
+//     new buffer, it will be copied immediately and can be freed
+//     or reused after this call returns.  max_buffer_out still
+//     applies either way.
+// note: there is no indication of success - the response is blind
+//     from the caller's perspective - the client could have even
+//     closed the connection while waiting, in which case the
+//     response will be discarded.
+F_NONNULL
+void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len);
 
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL
