@@ -243,7 +243,7 @@ static void rt_mcpsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
             start_threads(rt.socks_cfg);
             const unsigned max_json = statio_start(rt.loop, rt.socks_cfg->num_dns_threads);
             char* path = gdnsd_resolve_path_run("rt.sock", NULL);
-            rt.css = gdnsd_css_new(path, css_read_handler, NULL, 100, max_json, 16, 300); // XXX tunables...
+            rt.css = gdnsd_css_new(path, css_read_handler, NULL, 100, max_json, 16, 300, -1); // XXX tunables...
             free(path);
             log_info("DNS listeners started");
             rt.state = RT_WRITING_MSG_2MCP_LISTENING;

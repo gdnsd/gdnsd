@@ -405,7 +405,7 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
                 dmn_log_fatal("MCP<-Runtime: unexpected input %c", msg);
             socks_lsocks_bind(mcp.socks_cfg);
             char* path = gdnsd_resolve_path_run("mcp.sock", NULL);
-            mcp.css = gdnsd_css_new(path, css_read_handler, NULL, 100, 1024, 16, 300); // XXX tunables...
+            mcp.css = gdnsd_css_new(path, css_read_handler, NULL, 100, 1024, 16, 300, -1); // XXX tunables...
             free(path);
             mcp.state = MCP_SENDING_RT_LISTEN;
             ev_io_start(mcp.loop, mcp.w_rtsock_write);
