@@ -397,16 +397,10 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
         }
     }
 
-    // note the reuseport/pidfile interactions in the cases below,
-    // which affect the availabilty penalty on a true-restart:
-    // if reuseport works, we bind->listen->kill-previous-daemon
-    // if not, we kill-previous-daemon->bind->listen
     switch(mcp.state) {
         case MCP_WAITING_RT_BIND_SOCKS:
             if(msg != MSG_2MCP_BIND_SOCKS)
                 dmn_log_fatal("MCP<-Runtime: unexpected input %c", msg);
-            if(!gdnsd_reuseport_ok())
-                dmn_acquire_pidfile(); // kills previous daemon if restarting
             socks_lsocks_bind(mcp.socks_cfg);
             char* path = gdnsd_resolve_path_run("mcp.sock", NULL);
             mcp.css = gdnsd_css_new(path, css_handler, NULL, 100, 1024, 16, 300); // XXX tunables...
@@ -417,8 +411,6 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
         case MCP_WAITING_RT_LISTEN:
             if(msg != MSG_2MCP_LISTENING)
                 dmn_log_fatal("MCP<-Runtime: unexpected input %c", msg);
-            if(gdnsd_reuseport_ok())
-                dmn_acquire_pidfile(); // kills previous daemon if restarting
             mcp.state = MCP_IDLE;
             ev_signal_start(mcp.loop, mcp.w_sigterm);
             ev_signal_start(mcp.loop, mcp.w_sigint);
@@ -602,6 +594,10 @@ int main(int argc, char** argv) {
     // leaves foreground process running to later exit with
     //   correct status at correct time when dmn_finish() called.
     dmn_fork();
+
+    // attempt to lock up the pidfile: fails fatally if already running
+    // XXX note this will need special care on "reload"
+    dmn_acquire_pidfile();
 
     // socketpair for MCP<->Runtime
     int sockets[2] = { -1, -1 };
