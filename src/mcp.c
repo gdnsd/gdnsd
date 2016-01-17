@@ -292,6 +292,7 @@ typedef enum {
 static struct {
     mcp_state_t        state;
     int                rtsock;
+    int                pidfd;
     int                killed_by;
     bool               fg;
     const socks_cfg_t* socks_cfg;
@@ -305,6 +306,7 @@ static struct {
 } mcp = {
     .state = MCP_WAITING_RT_BIND_SOCKS,
     .rtsock = -1,
+    .pidfd = -1,
     .killed_by = 0,
     .fg = false,
     .socks_cfg = NULL,
@@ -597,7 +599,7 @@ int main(int argc, char** argv) {
 
     // attempt to lock up the pidfile: fails fatally if already running
     // XXX note this will need special care on "reload"
-    dmn_acquire_pidfile();
+    mcp.pidfd = dmn_acquire_pidfile();
 
     // socketpair for MCP<->Runtime
     int sockets[2] = { -1, -1 };
@@ -620,6 +622,10 @@ int main(int argc, char** argv) {
         if(close(sockets[0]))
             dmn_log_fatal("close() of socketpair() fd in runtime failed: %s", dmn_logf_errno());
         const int mcp_sock = sockets[1];
+
+        // Close the pidfd, the runtime child doesn't need it
+        if(close(mcp.pidfd))
+            dmn_log_fatal("close() of pidfile fd in runtime failed: %s", dmn_logf_errno());
 
         // within the runtime child process, but over here in mcp.c,
         //   we take care of things that require privileges, then drop

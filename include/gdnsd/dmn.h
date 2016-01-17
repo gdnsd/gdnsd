@@ -135,7 +135,11 @@ void dmn_fork(void);
 //   was defined back in _pm_config (otherwise this call is a no-op).
 // When this returns without dying, the current process is now the official
 //   runtime instance of this daemon for e.g. dmn_status().
-void dmn_acquire_pidfile(void);
+// Return value is the open file descriptor on the pidfile, which holds an
+// fcntl lock.  For a normal daemon, it's best to leave this open indefinitely
+// and allows close-on-exit to release the lock, but you may wish to also
+// close it for forked children, etc...
+int dmn_acquire_pidfile(void);
 
 // Finish the daemon startup procedure by signalling the parent process still
 //   attached to the terminal (if applicable) to exit with status 0.  If your

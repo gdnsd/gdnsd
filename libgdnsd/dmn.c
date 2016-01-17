@@ -872,7 +872,7 @@ void dmn_fork(void) {
     state.phase = PHASE3_FORKED;
 }
 
-void dmn_acquire_pidfile(void) {
+int dmn_acquire_pidfile(void) {
     phase_check(PHASE3_FORKED, PHASE5_FINISHED, 1);
 
     // The pid_(file|dir) parameters come as a pair
@@ -884,7 +884,7 @@ void dmn_acquire_pidfile(void) {
     // skip if not specified earlier
     if(!params.pid_file) {
         state.phase = PHASE4_PIDLOCKED;
-        return;
+        return -1;
     }
 
     const bool currently_root = !geteuid();
@@ -949,10 +949,9 @@ void dmn_acquire_pidfile(void) {
     if(dprintf(pidfd, "%li\n", (long)getpid()) < 2)
         dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
 
-    // leak of pidfd here is intentional, it stays open/locked for the duration
-    //   of the daemon's execution.  Daemon death by any means unlocks-on-close,
-    //   signaling to other code that this instance is no longer running...
     state.phase = PHASE4_PIDLOCKED;
+
+    return pidfd;
 }
 
 void dmn_finish(void) {
