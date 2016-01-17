@@ -18,8 +18,8 @@ gdnsdctl - Control command for the gdnsd daemon
 
 B<gdnsdctl> is the tool for controlling and/or querying the C<gdnsd> daemon.
 Please read the C<gdnsd(8)> manpage for basic information on the daemon
-itself.  B<gdnsdctl> primarily communicates with the daemon through the two
-control sockets documents in its manpage: F<mcp.sock> and F<rt.sock>.
+itself.  B<gdnsdctl> primarily communicates with the daemon through the
+control socket F<cs> which is normally located in F<@GDNSD_DEFPATH_RUN@>.
 
 =head1 FLAGS
 

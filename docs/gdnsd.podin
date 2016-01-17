@@ -328,30 +328,12 @@ Example unit file contents for the Service section:
     ExecReload=@GDNSD_BINDIR@/gdnsdctl reload
     ExecStop=@GDNSD_BINDIR@/gdnsdctl stop
 
-=head1 CONTROL SOCKETS
+=head1 CONTROL SOCKET
 
-gdnsd opens two control sockets normally, which are primarily for use by the
-C<gdnsdctl> command for controlling the daemon.  Both sockets will be opened
-in the daemon's run directory, which defaults to F<@GDNSD_DEFPATH_RUN@>, but
-can be overridden in the config file:
-
-=over 4
-
-=item F<mcp.sock>
-
-This socket is primarly for C<gdnsdctl>'s use for controlled whole-daemon
-shutdown and reload operations.  The protocol here is considered a private
-implementation detail.
-
-=item F<rt.sock>
-
-This socket is for queries and control requests that can happen while the
-daemon is running normally.  The primary client is (again) C<gdnsdctl>, which
-uses this socket for operations like C<status>, C<stats>, C<reload-zones>,
-etc.  Some of the protocol of this socket will eventually be documented for
-3rd party tool access (especially stats queries).
-
-=back
+gdnsd opens a control socket with the filename F<cs> normally, which is
+primarily for use by the C<gdnsdctl> command for controlling the daemon.  The
+socket will normally be opened in the daemon's run directory, which defaults to
+F<@GDNSD_DEFPATH_RUN@>, but can be overridden in the config file.
 
 =head1 SIGNALS
 

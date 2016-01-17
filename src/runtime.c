@@ -151,60 +151,27 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     pthread_attr_destroy(&attribs);
 }
 
-typedef enum {
-    RT_WRITING_MSG_2MCP_BIND_SOCKS,
-    RT_WAITING_MSG_2RT_OK_TO_LISTEN,
-    RT_WRITING_MSG_2MCP_LISTENING,
-    RT_IDLE,
-    RT_WRITING_MSG_2MCP_SHUTDOWN,
-} rt_state_t;
-
 static struct {
-    rt_state_t state;
     int mcpsock;
     socks_cfg_t* socks_cfg;
     ev_io* w_mcpsock_read;
-    ev_io* w_mcpsock_write;
     ev_signal* w_sigterm;
     ev_signal* w_sigint;
     ev_signal* w_sighup;
     struct ev_loop* loop;
-    gdnsd_css_t* css;
 } rt = {
-    .state = RT_WRITING_MSG_2MCP_BIND_SOCKS,
     .mcpsock = -1,
     .socks_cfg = NULL,
     .w_mcpsock_read = NULL,
-    .w_mcpsock_write = NULL,
     .w_sigterm = NULL,
     .w_sigint = NULL,
     .w_sighup = NULL,
     .loop = NULL,
-    .css = NULL,
 };
-
-F_NONNULLX(1,3)
-static bool css_read_handler(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len, void* data V_UNUSED) {
-    dmn_assert(css); dmn_assert(clid); dmn_assert(buffer); dmn_assert(len);
-
-    if(len == 5 && !memcmp(buffer, "stats", 5)) {
-        unsigned jlen;
-        const char* jdata = statio_get_json(&jlen);
-        memcpy(buffer, jdata, jlen);
-        gdnsd_css_respond(css, clid, buffer, jlen);
-        return false;
-    }
-
-    return true; // abort socket if no match above
-}
 
 // final tasks for orderly shutdown - after this we send a confirmation to MCP
 // before doing exit(0)
 static void runtime_shutdown(void) {
-    // Stop our control socket so we don't get new connections/requests while
-    // running through the shutdown sequence internally and with the MCP
-    gdnsd_css_delete(rt.css);
-
     // Ask statio thread to send final stats to the log
     statio_final_stats(rt.loop);
 
@@ -213,6 +180,78 @@ static void runtime_shutdown(void) {
 
     // deallocate resources in debug mode
     atexit_debug_execute();
+}
+
+// Try to bump SO_SNDBUF to the expected transmit size, just in case
+static void adjust_mcpsock_sndbuf(const unsigned datasize) {
+    if(datasize < 4096U)
+        return;
+    int opt_size = (int)datasize;
+    if(setsockopt(rt.mcpsock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)))
+        dmn_log_warn("Failed to set SO_SNDBUF to %i for anonymous socketpair: %s",
+                     opt_size, dmn_logf_errno());
+}
+
+F_NONNULL
+static void mcp_write(const char* data, const unsigned len) {
+    dmn_assert(data); dmn_assert(len);
+
+    // blocking write
+    if(fcntl(rt.mcpsock, F_SETFL, (fcntl(rt.mcpsock, F_GETFL, 0)) & ~O_NONBLOCK) == -1)
+        dmn_log_fatal("Failed to clear O_NONBLOCK on mcp socket: %s", dmn_logf_errno());
+
+    int writerv = 0;
+    do {
+        errno = 0;
+        writerv = write(rt.mcpsock, data, len);
+    } while(writerv < 0 && errno == EINTR);
+
+    if(writerv < 0 || (unsigned)writerv != len)
+        log_fatal("Runtime->MCP comms error: %s", dmn_logf_errno());
+
+    if(len == 1)
+        dmn_log_debug("Runtime: MCP accepted message %c", data[0]);
+    else
+        dmn_log_debug("Runtime: MCP accepted %u bytes of data", len);
+
+    // non-blocking for loop re-entry and next read
+    if(fcntl(rt.mcpsock, F_SETFL, (fcntl(rt.mcpsock, F_GETFL, 0)) | O_NONBLOCK) == -1)
+        dmn_log_fatal("Failed to set O_NONBLOCK on mcp socket: %s", dmn_logf_errno());
+}
+
+static void wait_and_listen(void) {
+    // blocking read
+    if(fcntl(rt.mcpsock, F_SETFL, (fcntl(rt.mcpsock, F_GETFL, 0)) & ~O_NONBLOCK) == -1)
+        dmn_log_fatal("Failed to clear O_NONBLOCK on mcp socket: %s", dmn_logf_errno());
+
+    char msg;
+    int readrv = 0;
+    do {
+        errno = 0;
+        readrv = read(rt.mcpsock, &msg, 1);
+    } while(readrv < 0 && errno == EINTR);
+
+    if(readrv != 1) {
+        dmn_assert(readrv < 1);
+        if(readrv < 0)
+            dmn_log_fatal("Runtime<-MCP comms: exiting on socket error: %s", dmn_logf_errno());
+        else
+            dmn_log_fatal("Runtime<-MCP comms: unexpected socket close");
+    }
+
+    if(msg != MSG_2RT_OK_TO_LISTEN)
+        dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
+    start_threads(rt.socks_cfg);
+    const unsigned max_json = statio_start(rt.loop, rt.socks_cfg->num_dns_threads);
+    if(max_json > EXPECTED_MAX_JSON)
+        dmn_log_fatal("BUG: Stats buffer size %u is larger than expected", max_json);
+    adjust_mcpsock_sndbuf(max_json + 5);
+    log_info("DNS listeners started");
+    mcp_write(&MSG_2MCP_LISTENING, 1);
+
+    // non-blocking for loop re-entry and next read
+    if(fcntl(rt.mcpsock, F_SETFL, (fcntl(rt.mcpsock, F_GETFL, 0)) | O_NONBLOCK) == -1)
+        dmn_log_fatal("Failed to set O_NONBLOCK on mcp socket: %s", dmn_logf_errno());
 }
 
 static void rt_mcpsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
@@ -232,85 +271,28 @@ static void rt_mcpsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
         }
     }
 
-    // note the reuseport/pidfile interactions in the cases below,
-    // which affect the availabilty penalty on a true-restart:
-    // if reuseport works, we bind->listen->kill-previous-daemon
-    // if not, we kill-previous-daemon->bind->listen
-    switch(rt.state) {
-        case RT_WAITING_MSG_2RT_OK_TO_LISTEN:
-            if(msg != MSG_2RT_OK_TO_LISTEN)
-                dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
-            start_threads(rt.socks_cfg);
-            const unsigned max_json = statio_start(rt.loop, rt.socks_cfg->num_dns_threads);
-            char* path = gdnsd_resolve_path_run("rt.sock", NULL);
-            rt.css = gdnsd_css_new(path, css_read_handler, NULL, 100, max_json, 16, 300, -1); // XXX tunables...
-            free(path);
-            log_info("DNS listeners started");
-            rt.state = RT_WRITING_MSG_2MCP_LISTENING;
-            ev_io_start(loop, rt.w_mcpsock_write);
-            break;
-        case RT_IDLE:
-            if(msg != MSG_2RT_SHUTDOWN)
-                dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
-            log_info("Runtime: shutting down on MCP request");
-            runtime_shutdown();
-            rt.state = RT_WRITING_MSG_2MCP_SHUTDOWN;
-            ev_io_start(loop, rt.w_mcpsock_write);
-            break;
-        case RT_WRITING_MSG_2MCP_BIND_SOCKS: // fall-through intentional
-        case RT_WRITING_MSG_2MCP_LISTENING:  // fall-through intentional
-        case RT_WRITING_MSG_2MCP_SHUTDOWN:   // fall-through intentional
-            dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
-            break;
-        default:
-            dmn_assert(0);
-    }
-}
-
-static void rt_mcpsock_write(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_WRITE);
-
-    char msg;
-    rt_state_t next_state;
-    switch(rt.state) {
-        case RT_WRITING_MSG_2MCP_BIND_SOCKS:
-            msg = MSG_2MCP_BIND_SOCKS;
-            next_state = RT_WAITING_MSG_2RT_OK_TO_LISTEN;
-            break;
-        case RT_WRITING_MSG_2MCP_LISTENING:
-            msg = MSG_2MCP_LISTENING;
-            next_state = RT_IDLE;
-            break;
-        case RT_WRITING_MSG_2MCP_SHUTDOWN:
-            msg = MSG_2MCP_SHUTDOWN;
-            next_state = RT_WRITING_MSG_2MCP_SHUTDOWN; // no true next state...
-            break;
-        default:
-            // In all other states, we don't have an active write watcher
-            dmn_assert(0);
-    }
-
-    int writerv = write(w->fd, &msg, 1);
-    if(writerv != 1) {
-        dmn_assert(writerv < 0);
-        if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
-        log_fatal("Runtime->MCP comms error: %s", dmn_logf_errno());
-    }
-    dmn_log_debug("Runtime: MCP accepted message %c", msg);
-
-    ev_io_stop(rt.loop, rt.w_mcpsock_write);
-    rt.state = next_state;
-
-    // special case: exit after successful send of shutdown confirmation
-    if(rt.state == RT_WRITING_MSG_2MCP_SHUTDOWN)
+    if(msg == MSG_2RT_SHUTDOWN) {
+        log_info("Runtime: shutting down on MCP request");
+        runtime_shutdown();
+        mcp_write(&MSG_2MCP_SHUTDOWN, 1);
         exit(0);
-
-    // special case: accept csock connections on entering RT_IDLE
-    if(rt.state == RT_IDLE) {
-        gdnsd_css_set_loop(rt.css, rt.loop);
-        gdnsd_css_start_accept(rt.css);
     }
+
+    if(msg == MSG_2RT_STATS) {
+        unsigned jlen;
+        const char* jdata = statio_get_json(&jlen);
+        union {
+            uint32_t u32;
+            char i8;
+        } jl;
+        jl.u32 = jlen;
+        mcp_write(&MSG_2MCP_STATS, 1);
+        mcp_write(&jl.i8, 4);
+        mcp_write(jdata, jlen);
+        return;
+    }
+
+    dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
 }
 
 static void rt_sighandle(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED) {
@@ -318,41 +300,13 @@ static void rt_sighandle(struct ev_loop* loop, ev_signal* w, int revents V_UNUSE
     log_info("Runtime: ignoring signal %i (send it to the main process instead)", w->signum);
 }
 
-DMN_F_NORETURN
-static void runtime_loop(const int mcpsock, socks_cfg_t* socks_cfg) {
-    rt.mcpsock = mcpsock;
-    rt.socks_cfg = socks_cfg;
-
-    // non-block for mcpsock
-    if(fcntl(rt.mcpsock, F_SETFL, (fcntl(rt.mcpsock, F_GETFL, 0)) | O_NONBLOCK) == -1)
-        dmn_log_fatal("Failed to set O_NONBLOCK on mcp socket: %s", dmn_logf_errno());
-
-    // Set up socket watchers
-    rt.w_mcpsock_read = xmalloc(sizeof(ev_io));
-    rt.w_mcpsock_write = xmalloc(sizeof(ev_io));
-    rt.w_sigterm = xmalloc(sizeof(ev_signal));
-    rt.w_sigint = xmalloc(sizeof(ev_signal));
-    rt.w_sighup = xmalloc(sizeof(ev_signal));
-    ev_io_init(rt.w_mcpsock_read, rt_mcpsock_read, rt.mcpsock, EV_READ);
-    ev_io_init(rt.w_mcpsock_write, rt_mcpsock_write, rt.mcpsock, EV_WRITE);
-    ev_signal_init(rt.w_sigterm, rt_sighandle, SIGTERM);
-    ev_signal_init(rt.w_sigint, rt_sighandle, SIGINT);
-    ev_signal_init(rt.w_sighup, rt_sighandle, SIGHUP);
-
-    ev_io_start(rt.loop, rt.w_mcpsock_read);
-    ev_io_start(rt.loop, rt.w_mcpsock_write);
-    ev_signal_start(rt.loop, rt.w_sigterm);
-    ev_signal_start(rt.loop, rt.w_sigint);
-    ev_signal_start(rt.loop, rt.w_sighup);
-
-    // Start the loop - does not return!
-    ev_run(rt.loop, 0);
-    dmn_assert(0);
-}
-
 void runtime(vscf_data_t* cfg_root, socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd, const int mcp_sock) {
     dmn_assert(socks_cfg);
     dmn_assert(mcp_sock >= 0);
+
+    // set these as rt-global data
+    rt.mcpsock = mcp_sock;
+    rt.socks_cfg = socks_cfg;
 
     // Process the bulk of the configuration, including loading plugins, etc...
     conf_load(cfg_root, socks_cfg, force_zss, force_zsd);
@@ -380,7 +334,30 @@ void runtime(vscf_data_t* cfg_root, socks_cfg_t* socks_cfg, const bool force_zss
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
 
-    // Runtime eventloop, never returns
-    runtime_loop(mcp_sock, socks_cfg);
+    // ask MCP to bind our DNS sockets
+    mcp_write(&MSG_2MCP_BIND_SOCKS, 1);
+
+    // Set up MCP socket and signal watchers
+    rt.w_mcpsock_read = xmalloc(sizeof(ev_io));
+    ev_io_init(rt.w_mcpsock_read, rt_mcpsock_read, rt.mcpsock, EV_READ);
+    ev_io_start(rt.loop, rt.w_mcpsock_read);
+
+    rt.w_sigterm = xmalloc(sizeof(ev_signal));
+    ev_signal_init(rt.w_sigterm, rt_sighandle, SIGTERM);
+    ev_signal_start(rt.loop, rt.w_sigterm);
+
+    rt.w_sigint = xmalloc(sizeof(ev_signal));
+    ev_signal_init(rt.w_sigint, rt_sighandle, SIGINT);
+    ev_signal_start(rt.loop, rt.w_sigint);
+
+    rt.w_sighup = xmalloc(sizeof(ev_signal));
+    ev_signal_init(rt.w_sighup, rt_sighandle, SIGHUP);
+    ev_signal_start(rt.loop, rt.w_sighup);
+
+    // wait for MCP to finish binding, start DNS listeners...
+    wait_and_listen();
+
+    // Start the loop for normal runtime MCP requests + signals - no return!
+    ev_run(rt.loop, 0);
     dmn_assert(0);
 }

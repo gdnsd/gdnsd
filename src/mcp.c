@@ -337,6 +337,62 @@ static void mcp_shutdown(int killed_by) {
     dmn_sd_notify("STOPPING=1", false);
 }
 
+F_NONNULL
+static void rt_sync_write1(const char msg) {
+    // Note: assumes already blocking!
+
+    int writerv = 0;
+    do {
+        errno = 0;
+        writerv = write(mcp.rtsock, &msg, 1);
+    } while(writerv < 0 && errno == EINTR);
+
+    if(writerv != 1)
+        log_fatal("MCP->Runtime comms error: %s", dmn_logf_errno());
+
+    dmn_log_debug("MCP: Runtime accepted message %c", msg);
+}
+
+static void rt_sync_read(void* buf, unsigned bytes) {
+    // Note: assumes already blocking!
+
+    int readrv = 0;
+    do {
+        errno = 0;
+        readrv = read(mcp.rtsock, buf, bytes);
+    } while(readrv < 0 && errno == EINTR);
+
+    if(readrv < 0 || (unsigned)readrv != bytes) {
+        dmn_assert(readrv < 1);
+        if(readrv < 0)
+            dmn_log_fatal("Runtime<-MCP comms: exiting on socket error: %s", dmn_logf_errno());
+        else
+            dmn_log_fatal("Runtime<-MCP comms: unexpected socket close");
+    }
+}
+
+F_NONNULL
+static unsigned rt_sync_read_stats(uint8_t* buffer) {
+    dmn_assert(buffer);
+    // Note: assumes already blocking!
+
+    union {
+        uint32_t u32;
+        char i8[4];
+    } msgbuf;
+
+    rt_sync_read(msgbuf.i8, 1);
+    if(msgbuf.i8[0] != MSG_2MCP_STATS)
+        dmn_log_fatal("MCP<-Runtime: expected %c, got %c", MSG_2MCP_STATS, msgbuf.i8[0]);
+    rt_sync_read(msgbuf.i8, 4);
+    const unsigned len = msgbuf.u32;
+    if(len > EXPECTED_MAX_JSON)
+        dmn_log_fatal("MCP<-Runtime: oversized stats len of %u", len);
+    rt_sync_read(buffer, len);
+
+    return len;
+}
+
 F_NONNULLX(1,3)
 static bool css_read_handler(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len, void* data V_UNUSED) {
     dmn_assert(css); dmn_assert(clid); dmn_assert(buffer); dmn_assert(len);
@@ -352,6 +408,23 @@ static bool css_read_handler(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, u
         mcp_shutdown(0);
         memcpy(buffer, "stopping", 8);
         gdnsd_css_respond(css, clid, buffer, 8);
+        return false;
+    }
+
+    // proxy stats command to runtime
+    if(len == 5 && !memcmp(buffer, "stats", 5)) {
+        // blocking for sync r/w
+        if(fcntl(mcp.rtsock, F_SETFL, (fcntl(mcp.rtsock, F_GETFL, 0)) & ~O_NONBLOCK) == -1)
+            dmn_log_fatal("Failed to clear O_NONBLOCK on rt socket: %s", dmn_logf_errno());
+
+        rt_sync_write1(MSG_2RT_STATS);
+        len = rt_sync_read_stats(buffer);
+        gdnsd_css_respond(css, clid, buffer, len);
+
+        // non-blocking for loop re-entry and next read
+        if(fcntl(mcp.rtsock, F_SETFL, (fcntl(mcp.rtsock, F_GETFL, 0)) | O_NONBLOCK) == -1)
+            dmn_log_fatal("Failed to set O_NONBLOCK on rt socket: %s", dmn_logf_errno());
+
         return false;
     }
 
@@ -404,8 +477,8 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
             if(msg != MSG_2MCP_BIND_SOCKS)
                 dmn_log_fatal("MCP<-Runtime: unexpected input %c", msg);
             socks_lsocks_bind(mcp.socks_cfg);
-            char* path = gdnsd_resolve_path_run("mcp.sock", NULL);
-            mcp.css = gdnsd_css_new(path, css_read_handler, NULL, 100, 1024, 16, 300, -1); // XXX tunables...
+            char* path = gdnsd_resolve_path_run("cs", NULL);
+            mcp.css = gdnsd_css_new(path, css_read_handler, NULL, 100, EXPECTED_MAX_JSON, 16, 300, -1); // XXX tunables...
             free(path);
             mcp.state = MCP_SENDING_RT_LISTEN;
             ev_io_start(mcp.loop, mcp.w_rtsock_write);

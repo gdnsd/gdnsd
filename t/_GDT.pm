@@ -218,21 +218,21 @@ my %stats_accum = (
     tcp_sendfail => 0,
 );
 
-my $rtsock;
+my $csock;
 sub _get_daemon_json_stats {
-    if(!$rtsock) {
-        my $rtsock_path = "$OUTDIR/run/gdnsd/rt.sock";
-        $rtsock = IO::Socket::UNIX->new($rtsock_path)
-            or die "hard-fail: cannot open runtime control socket $rtsock_path: $!";
+    if(!$csock) {
+        my $csock_path = "$OUTDIR/run/gdnsd/cs";
+        $csock = IO::Socket::UNIX->new($csock_path)
+            or die "hard-fail: cannot open control socket $csock_path: $!";
     }
     # Not much point errorchecking these read/write calls - if they don't work
     # as expected the testsuite will still fail...
     my $req = pack('L', 5) . 'stats';
-    syswrite($rtsock, $req, 9);
+    syswrite($csock, $req, 9);
     my $resp;
-    sysread($rtsock, $resp, 4);
+    sysread($csock, $resp, 4);
     my $resplen = unpack('L', $resp);
-    sysread($rtsock, $resp, $resplen);
+    sysread($csock, $resp, $resplen);
     return decode_json($resp);
 }
 
@@ -1135,7 +1135,7 @@ sub test_kill_gdnsd {
     local $Test::Builder::Level = $Test::Builder::Level + 1;
 
     # close open controlsock used for stats, in case we exec a second daemon
-    undef $rtsock;
+    undef $csock;
 
     # use synchronous gdnsdctl-based stop
     my $ctlstop_pid = fork();

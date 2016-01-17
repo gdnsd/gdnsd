@@ -61,15 +61,15 @@ F_NORETURN
 static void action_stop(const int argc V_UNUSED, char** argv V_UNUSED) {
     dmn_assert(argc); dmn_assert(argv);
 
-    char* mcp_path = gdnsd_resolve_path_run("mcp.sock", NULL);
-    gdnsd_csc_t* mcp_csc = gdnsd_csc_new(mcp_path);
-    free(mcp_path);
-    pid_t csc_pid = gdnsd_csc_getpid(mcp_csc);
-    uint8_t mcp_buffer[8] = "stop";
-    const uint32_t mcp_resp_len = gdnsd_csc_txn(mcp_csc, mcp_buffer, 4, 8);
-    if(mcp_resp_len != 8 || memcmp(mcp_buffer, "stopping", 8))
-        log_fatal("MCP did not respond correctly to 'stop' command");
-    gdnsd_csc_closewait(mcp_csc);
+    char* cs_path = gdnsd_resolve_path_run("cs", NULL);
+    gdnsd_csc_t* csc = gdnsd_csc_new(cs_path);
+    free(cs_path);
+    pid_t csc_pid = gdnsd_csc_getpid(csc);
+    uint8_t buffer[8] = "stop";
+    const uint32_t resp_len = gdnsd_csc_txn(csc, buffer, 4, 8);
+    if(resp_len != 8 || memcmp(buffer, "stopping", 8))
+        log_fatal("gdnsd did not respond correctly to 'stop' command");
+    gdnsd_csc_closewait(csc);
     if(dmn_terminate_pid_and_wait(0, csc_pid))
         log_fatal("Stop failed, daemon still running, giving up!");
     exit(0);
@@ -98,17 +98,11 @@ static void action_status(const int argc V_UNUSED, char** argv V_UNUSED) {
     }
     log_info("status: running at pid %li", (long)oldpid);
 
-    // check runtime socket with ping
-    char* rt_path = gdnsd_resolve_path_run("rt.sock", NULL);
-    gdnsd_csc_t* rt_csc = gdnsd_csc_new(rt_path);
-    free(rt_path);
-    if(gdnsd_csc_ping(rt_csc))
-        log_fatal("Failed ping to Runtime control socket");
-    // validate mcp socket "getpid" vs fcntl result above
-    char* mcp_path = gdnsd_resolve_path_run("mcp.sock", NULL);
-    gdnsd_csc_t* mcp_csc = gdnsd_csc_new(mcp_path);
-    free(mcp_path);
-    pid_t csc_pid = gdnsd_csc_getpid(mcp_csc);
+    // validate csock "getpid" vs fcntl result above
+    char* cs_path = gdnsd_resolve_path_run("cs", NULL);
+    gdnsd_csc_t* csc = gdnsd_csc_new(cs_path);
+    free(cs_path);
+    pid_t csc_pid = gdnsd_csc_getpid(csc);
     if(oldpid != csc_pid)
         log_fatal("MCP PID validation failed: pidfile has %li, socket says %li",
             (long)oldpid, (long)csc_pid);
@@ -121,12 +115,12 @@ F_NORETURN
 static void action_stats(const int argc V_UNUSED, char** argv V_UNUSED) {
     dmn_assert(argc); dmn_assert(argv);
 
-    char* rt_path = gdnsd_resolve_path_run("rt.sock", NULL);
-    gdnsd_csc_t* rt_csc = gdnsd_csc_new(rt_path);
-    free(rt_path);
+    char* cs_path = gdnsd_resolve_path_run("cs", NULL);
+    gdnsd_csc_t* csc = gdnsd_csc_new(cs_path);
+    free(cs_path);
     uint8_t* rt_buffer = xmalloc(65000);
     memcpy(rt_buffer, "stats", 5);
-    const uint32_t rt_resp_len = gdnsd_csc_txn(rt_csc, rt_buffer, 5, 65000);
+    const uint32_t rt_resp_len = gdnsd_csc_txn(csc, rt_buffer, 5, 65000);
     fwrite(rt_buffer, 1, rt_resp_len, stdout);
     exit(0);
 }
