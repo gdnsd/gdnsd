@@ -72,6 +72,7 @@ struct gdnsd_css_s_ {
     unsigned max_clients;
     unsigned timeout;
     unsigned num_clients;
+    bool accept_started;
     uint64_t next_clid;
     gdnsd_css_rcb_t rcb;
     void* data;
@@ -110,8 +111,8 @@ static void css_conn_cleanup(css_conn_t* c) {
         c->next->prev = c->prev;
     free(c);
 
-    // if we were at the maximum, start accepting connections again
-    if(css->num_clients-- == css->max_clients)
+    // if we were at the maximum, and configured to accept, start accepting connections again
+    if(css->num_clients-- == css->max_clients && css->accept_started)
         ev_io_start(css->loop, css->w_accept);
 }
 
@@ -368,6 +369,7 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, ui
     css->num_clients = 0;
     css->first_client = NULL;
     css->next_clid = 1;
+    css->accept_started = false;
 
     css->fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(css->fd < 0)
@@ -399,11 +401,26 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, ui
     return css;
 }
 
-void gdnsd_css_start(gdnsd_css_t* css, struct ev_loop* loop) {
+void gdnsd_css_set_loop(gdnsd_css_t* css, struct ev_loop* loop) {
     dmn_assert(css);
     dmn_assert(loop);
+    dmn_assert(!css->loop);
     css->loop = loop;
-    ev_io_start(css->loop, css->w_accept);
+}
+
+void gdnsd_css_start_accept(gdnsd_css_t* css) {
+    dmn_assert(css);
+    dmn_assert(css->loop);
+    css->accept_started = true;
+    if(css->num_clients < css->max_clients)
+        ev_io_start(css->loop, css->w_accept);
+}
+
+void gdnsd_css_stop_accept(gdnsd_css_t* css) {
+    dmn_assert(css);
+    dmn_assert(css->loop);
+    ev_io_stop(css->loop, css->w_accept);
+    css->accept_started = false;
 }
 
 void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len) {

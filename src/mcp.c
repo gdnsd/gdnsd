@@ -418,7 +418,8 @@ static void mcp_rtsock_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
             ev_signal_start(mcp.loop, mcp.w_sigint);
             if(mcp.fg)
                 ev_signal_start(mcp.loop, mcp.w_sighup);
-            gdnsd_css_start(mcp.css, mcp.loop);
+            gdnsd_css_set_loop(mcp.css, mcp.loop);
+            gdnsd_css_start_accept(mcp.css);
             dmn_finish();
             break;
         case MCP_WAITING_RT_SHUTDOWN:

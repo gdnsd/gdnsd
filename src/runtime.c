@@ -307,8 +307,10 @@ static void rt_mcpsock_write(struct ev_loop* loop, ev_io* w, int revents V_UNUSE
         exit(0);
 
     // special case: accept csock connections on entering RT_IDLE
-    if(rt.state == RT_IDLE)
-        gdnsd_css_start(rt.css, rt.loop);
+    if(rt.state == RT_IDLE) {
+        gdnsd_css_set_loop(rt.css, rt.loop);
+        gdnsd_css_start_accept(rt.css);
+    }
 }
 
 static void rt_sighandle(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED) {
