@@ -89,13 +89,8 @@ typedef bool (*gdnsd_css_rcb_t)(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer
 //    the request-processing callback (which should be fast - it's holding up
 //    an eventloop with other things going on...), but will be immediately
 //    after it returns if applicable.
-// fd - pass in an open AF_UNIX file descriptor, preferably one passed
-//    across a fork+execve boundary from a previous gdnsd_css_postfork() call.
-//    If this is not -1, it's assumed valid.  If getsockname() on it matches
-//    "path", it will be re-used as already open.  If not, it will be closed
-//    and the call proceeds as if it were -1 and opens a fresh socket.
 F_NONNULLX(1,2) F_MALLOC
-gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout, int fd);
+gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout);
 
 // Set the eventloop to accept connections on
 // must be called before _start_accept(), cannot be called twice
@@ -130,17 +125,6 @@ void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL
 void gdnsd_css_delete(gdnsd_css_t* css);
-
-// Intended to be used after a fork() and just before an execve(), if the
-// intent is to preserve the open control socket but not any active client
-// conns.  This does not alter the state of the css object, which is invalid
-// for all purposes after this call (including invoking the loop which
-// probably still contains watchers for it).  It close()'s the file
-// descriptors for any active client connections, and returns (without
-// closing) the file descriptor for the listen socket, for use in _new()
-// post-execve().
-F_NONNULL
-int gdnsd_css_postfork(gdnsd_css_t* css);
 
 /**************
  * Client API *

@@ -340,23 +340,11 @@ static void sun_set_path(struct sockaddr_un* a, const char* path) {
     memcpy(a->sun_path, path, plen);
 }
 
-F_NONNULL
-static bool sun_check_path(const int fd, const char* path) {
-    dmn_assert(path); dmn_assert(fd > -1);
-
-    struct sockaddr_un a;
-    memset(&a, 0, sizeof(a));
-    socklen_t a_len = sizeof(a);
-    if(getsockname(fd, &a, &a_len) || a.sun_family != AF_UNIX)
-        return true;
-    return !!strcmp(path, a.sun_path);
-}
-
 /*********************
  * Public interfaces *
  *********************/
 
-gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout, int fd) {
+gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout) {
     dmn_assert(path); dmn_assert(rcb);
 
     // floor buffer maxes for reasonable built-ins
@@ -371,34 +359,9 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, ui
     if(timeout < 3)
         timeout = 3;
 
-    // Create a new AF_UNIX fd at path, if necessary
-    if(fd < 0 || sun_check_path(fd, path)) {
-        if(fd >= 0)
-            close(fd);
-        fd = socket(AF_UNIX, SOCK_STREAM, 0);
-        if(fd < 0)
-            dmn_log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", dmn_logf_errno());
-        struct sockaddr_un addr;
-        sun_set_path(&addr, path);
-        if(unlink(path) && errno != ENOENT)
-            dmn_log_fatal("unlink(%s) failed: %s", path, dmn_logf_errno());
-        if(bind(fd, (struct sockaddr*)&addr, sizeof(addr)))
-            dmn_log_fatal("bind() of unix domain socket %s failed: %s", path, dmn_logf_errno());
-    }
-
-    // XXX There's a potential race here, maybe, on some platforms, that could
-    // allow unauthorized access to the control socket from unrelated local
-    // users.  But it may not be much of an issue in practice...?
-    if(chmod(path, CSOCK_PERMS))
-        dmn_log_fatal("Failed to chmod(%s, 0%o): %s", path, CSOCK_PERMS, dmn_logf_errno());
-    if(listen(fd, 100))
-        dmn_log_fatal("Failed to listen() on control socket %s: %s", path, dmn_logf_errno());
-    if(fcntl(fd, F_SETFL, (fcntl(fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
-        dmn_log_fatal("Failed to set O_NONBLOCK on control socket %s: %s", path, dmn_logf_errno());
-
     gdnsd_css_t* css = xmalloc(sizeof(gdnsd_css_t));
-    css->fd = fd;
     css->loop = NULL;
+    css->path = strdup(path);
     css->max_buffer_in = max_buffer_in;
     css->max_buffer_out = max_buffer_out;
     css->max_clients = max_clients;
@@ -407,12 +370,33 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, ui
     css->first_client = NULL;
     css->next_clid = 1;
     css->accept_started = false;
-    css->path = strdup(path);
+
+    css->fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(css->fd < 0)
+        dmn_log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", dmn_logf_errno());
+
     css->rcb = rcb;
     css->data = data;
     css->w_accept = xmalloc(sizeof(ev_io));
     ev_io_init(css->w_accept, css_accept, css->fd, EV_READ);
     css->w_accept->data = css;
+
+    struct sockaddr_un addr;
+    sun_set_path(&addr, css->path);
+    if(unlink(css->path) && errno != ENOENT)
+        dmn_log_fatal("unlink(%s) failed: %s", css->path, dmn_logf_errno());
+    if(bind(css->fd, (struct sockaddr*)&addr, sizeof(addr)))
+        dmn_log_fatal("bind() of unix domain socket %s failed: %s", css->path, dmn_logf_errno());
+
+    // XXX There's a potential race here, maybe, on some platforms, that could
+    // allow unauthorized access to the control socket from unrelated local
+    // users.  But it may not be much of an issue in practice...?
+    if(chmod(css->path, CSOCK_PERMS))
+        dmn_log_fatal("Failed to chmod(%s, 0%o): %s", css->path, CSOCK_PERMS, dmn_logf_errno());
+    if(listen(css->fd, 100))
+        dmn_log_fatal("Failed to listen() on control socket %s: %s", css->path, dmn_logf_errno());
+    if(fcntl(css->fd, F_SETFL, (fcntl(css->fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
+        dmn_log_fatal("Failed to set O_NONBLOCK on control socket %s: %s", css->path, dmn_logf_errno());
 
     return css;
 }
@@ -493,17 +477,6 @@ void gdnsd_css_delete(gdnsd_css_t* css) {
     // free remaining data
     free(css->path);
     free(css);
-}
-
-int gdnsd_css_postfork(gdnsd_css_t* css) {
-    dmn_assert(css);
-    css_conn_t* c = css->first_client;
-    while(c) {
-        css_conn_t* next = c->next;
-        close(c->fd);
-        c = next;
-    };
-    return css->fd;
 }
 
 gdnsd_csc_t* gdnsd_csc_new(const char* path) {
