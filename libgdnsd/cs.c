@@ -272,11 +272,11 @@ static void css_accept(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
         return;
     }
 
-    if(fcntl(fd, F_SETFL, (fcntl(fd, F_GETFL, 0)) | O_NONBLOCK) == -1) {
-        close(fd);
-        dmn_log_err("Failed to set O_NONBLOCK on control socket connection: %s", dmn_logf_errno());
-        return;
-    }
+    if(fcntl(css->fd, F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on control socket fd failed: %s", dmn_logf_errno());
+
+    if(fcntl(fd, F_SETFL, (fcntl(fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
+        dmn_log_fatal("Failed to set O_NONBLOCK on control socket connection: %s", dmn_logf_errno());
 
     // if we now have max_clients connected, stop accepting new ones
     if(++css->num_clients == css->max_clients)
@@ -372,6 +372,8 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, ui
     css->fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(css->fd < 0)
         dmn_log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", dmn_logf_errno());
+    if(fcntl(css->fd, F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on control socket fd failed: %s", dmn_logf_errno());
 
     css->rcb = rcb;
     css->data = data;
