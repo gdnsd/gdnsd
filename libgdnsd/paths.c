@@ -270,9 +270,10 @@ static char* gdnsd_realdir(const char* dpath, const char* desc, const bool creat
     int stat_rv = stat(dpath, &st);
 
     if(stat_rv) {
-        // if we can't create and doesn't exist, let the error fall through to whoever uses it...
+        // if we can't create and doesn't exist, we must fail, so that we can always realpath()
+        // (this is the cfg_dir case...)
         if(!create)
-            return strdup(dpath);
+            log_fatal("directory '%s' must exist, but does not", dpath);
         if(mkdir(dpath, def_mode))
             log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, dmn_logf_strerror(errno));
         log_info("Created %s directory %s", desc, dpath);
