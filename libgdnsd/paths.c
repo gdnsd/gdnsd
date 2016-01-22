@@ -40,9 +40,225 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+// for OSX _NSGetExecutablePath()
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
+// for FreeBSD-like sysctl(3)
+#ifdef HAVE_SYS_SYSCTL_H
+#include <sys/sysctl.h>
+#endif
+
 /* paths */
 
-// Anytime
+// ---------------------------
+// Anytime stuff
+
+F_NONNULL F_UNUSED
+static char* readlink_wrapper(const char* linkpath) {
+    dmn_assert(linkpath);
+
+    size_t blen = 1024;
+    char* buf = xmalloc(blen);
+    while(1) {
+        ssize_t rl_rv = readlink(linkpath, buf, blen);
+        if(rl_rv < 0) {
+            free(buf);
+            return NULL;
+        }
+        if(((size_t)rl_rv + 1) >= blen) {
+            // just in case, to prevent a runaway loop
+            if(blen >= 4194304)
+                dmn_log_fatal("BUG: readlink_wrapper(%s) wanted dynamic bufsize >4MB", linkpath);
+            blen <<= 1;
+            buf = xrealloc(buf, blen);
+        }
+        else { // success, but needs termination
+            buf[rl_rv] = '\0';
+            return buf;
+        }
+    }
+}
+
+F_UNUSED
+static char* getcwd_wrapper(void) {
+    size_t blen = 1024;
+    char* buf = xmalloc(blen);
+    while(1) {
+        char* rv = getcwd(buf, blen);
+        if(rv)
+            return buf;
+        if(errno != ERANGE)
+            dmn_log_fatal("getcwd() failed: %s", dmn_logf_errno());
+        // just in case, to prevent a runaway loop
+        if(blen >= 4194304)
+            dmn_log_fatal("BUG: getcwd_wrapper() wanted dynamic bufsize >4MB");
+        blen <<= 1;
+        buf = xrealloc(buf, blen);
+    }
+
+    return buf;
+}
+
+F_NONNULL F_UNUSED
+static char* resolve_argv0_path(const char* argv0, const char* path) {
+    dmn_assert(argv0); dmn_assert(path);
+
+    const size_t argv0_len = strlen(argv0);
+
+    const char* pptr = path;
+    while(*pptr) {
+        // find len of next path element
+        size_t plen;
+        const char* eptr = strchr(pptr, ':');
+        if(eptr) {
+            dmn_assert(eptr >= pptr);
+            plen = (size_t)(eptr - pptr);
+        }
+        else { // last element, no trailing ':'
+            plen = strlen(pptr);
+        }
+
+        // try this path element (if absolute!), return if good candidate found
+        if(plen && *pptr == '/') {
+            char* buf = xmalloc(plen + 1 + argv0_len + 1);
+            memcpy(buf, pptr, plen);
+            buf[plen] = '/';
+            memcpy(&buf[plen + 1], argv0, argv0_len);
+            buf[plen + 1 + argv0_len] = '\0';
+            struct stat st;
+            if(!stat(buf, &st) && S_ISREG(st.st_mode))
+                return buf;
+            free(buf);
+        }
+
+        // skip consumed (possibly zero-len no-op) path element
+        pptr += plen;
+
+        // if not yet at the end, should be ':' to skip
+        if(*pptr) {
+            dmn_assert(*pptr == ':');
+            pptr++;
+        }
+    }
+
+    return NULL;
+}
+
+F_NONNULL F_UNUSED
+static char* resolve_argv0(const char* argv0) {
+    dmn_assert(argv0);
+
+    // absolutes need no resolution
+    if(argv0[0] == '/')
+        return strdup(argv0);
+
+    // if it has some other '/', it's relative to getcwd()
+    if(strchr(argv0, '/')) {
+        char* cwd = getcwd_wrapper();
+        size_t cwd_len = strlen(cwd);
+        size_t argv0_len = strlen(argv0);
+        char* buf = xmalloc(cwd_len + 1 + argv0_len + 1);
+        memcpy(buf, cwd, cwd_len);
+        buf[cwd_len] = '/';
+        memcpy(&buf[cwd_len + 1], argv0, argv0_len);
+        buf[cwd_len + 1 + argv0_len] = '\0';
+        free(cwd);
+        return buf;
+    }
+
+    // if we make it here, we need to search $PATH or confstr(_CS_PATH)...
+    char* result = NULL;
+    const char* path_env = getenv("PATH");
+    if(path_env) {
+        result = resolve_argv0_path(argv0, path_env);
+    }
+    else {
+        size_t blen = confstr(_CS_PATH, NULL, 0);
+        if(!blen)
+            return NULL;
+        char* buf = xmalloc(blen);
+        confstr(_CS_PATH, buf, blen);
+        result = resolve_argv0_path(argv0, buf);
+        free(buf);
+    }
+
+    return result;
+}
+
+char* gdnsd_self_exe_path(const char* argv0 V_UNUSED) {
+    char* best = NULL;
+
+// OSX
+#if defined(__APPLE__)
+    uint32_t nsgep_len = 1024U;
+    best = xmalloc(nsgep_len);
+    if(_NSGetExecutablePath(best, &nsgep_len)) {
+        best = xrealloc(best, nsgep_len);
+        if(_NSGetExecutablePath(best, &nsgep_len))
+            dmn_log_fatal("_NSGetExecutablePath() failed: %s", dmn_logf_errno());
+    }
+
+// FreeBSD (or similar for this purpose)
+#elif defined(HAVE_SYS_SYSCTL_H) && defined(CTL_KERN) && defined(KERN_PROC) && defined(KERN_PROC_PATHNAME)
+    int kpp_mib[4];
+    kpp_mib[0] = CTL_KERN;
+    kpp_mib[1] = KERN_PROC;
+    kpp_mib[2] = KERN_PROC_PATHNAME;
+    kpp_mib[3] = -1;
+    size_t kpp_len = 0;
+    const int scrv = sysctl(kpp_mib, 4, NULL, &kpp_len, NULL, 0);
+    if(!kpp_len || (scrv && errno != ENOMEM))
+        dmn_log_fatal("sysctl(KERN_PROC_PATHNAME) size check failed: %s", dmn_logf_errno);
+    best = xmalloc(kpp_len);
+    if(sysctl(kpp_mib, 4, best, &kpp_len, NULL, 0))
+        dmn_log_fatal("sysctl(KERN_PROC_PATHNAME) failed: %s", dmn_logf_errno);
+
+#else // Not OSX or FreeBSD-style
+
+    // These should work on Linux and some BSDs
+    const char* const rlpaths[3] = {
+        "/proc/self/exe",
+        "/proc/curproc/file",
+        "/proc/curproc/exe",
+    };
+    unsigned i = 0;
+    while(i < 3 && !best)
+        best = readlink_wrapper(rlpaths[i++]);
+
+    // final portable fallback: try to actually interpret argv0 if supplied,
+    // possibly using $PATH or confstr(_CS_PATH).  Note that argv0 isn't
+    // always reliable, as the invoker of execve() could set argv[0] to an
+    // arbitrary string which differs from the actual binary executed, but by
+    // convention argv[0] should match the executed binary path.
+    if(!best && argv0)
+        best = resolve_argv0(argv0);
+
+    if(!best)
+        dmn_log_fatal("Cannot find our own executable path via /proc or interpreting argv[0]!");
+
+#endif // OSX vs FreeBSD vs Other
+
+    if(best[0] != '/')
+        dmn_log_fatal("BUG: our own executable path '%s' is not absolute!", best);
+
+    struct stat st;
+    if(stat(best, &st))
+        dmn_log_fatal("Cannot stat our own executable path '%s': %s!", best, dmn_logf_errno());
+
+    if(!S_ISREG(st.st_mode))
+        dmn_log_fatal("Our own executable path '%s' is not a regular file", best);
+
+    // We could do realpath() here just to clean up ".." and symlinks, and I'm
+    // inclined to just for cleanliness, but it might screw up a scheme where
+    // the binary path we execute from is intentionally a versioned symlink,
+    // e.g. you upgrade from 3.2 to 3.3 by changing /usr/sbin/gdnsd's symlink
+    // from /usr/sbin/gdnsd-3.2 to /usr/sbin/gdnsd-3.3.
+
+    return best;
+}
+
 const char* gdnsd_get_default_config_dir(void) { return GDNSD_DEFPATH_CONFIG; }
 
 // ---------------------------

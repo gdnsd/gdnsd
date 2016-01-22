@@ -325,6 +325,11 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
 # end pthread_setname stuff
 #---------------------------------------------
 
+#----------------------------------------------------------------------
+# non-standard header, used for FreeBSD sysctl() for KERN_PROC_PATHNAME
+AC_CHECK_HEADERS([sys/sysctl.h])
+#----------------------------------------------------------------------
+
 # == inotify stuff ==
 # inotify_init1() is Linux 2.6.27+ and glibc 2.9
 # We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
