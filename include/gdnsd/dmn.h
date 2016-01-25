@@ -269,6 +269,17 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
      } while(0)
 #endif // NDEBUG
 
+// just like dmn_assert, but is included in all builds even if NDEBUG is on.
+// intent is to use this for API usage checks in a shared library, etc...
+// (to check that the user conformed to the interface requirements)
+#define dmn_assert_ndebug(expr) do {\
+     if(!(expr)) {\
+       dmn_logger(LOG_CRIT,"Assertion '%s' failed in %s() at %s:%u, backtrace:%s",\
+       #expr, __func__, __FILE__, __LINE__, dmn_logf_bt());\
+       abort();\
+     }\
+   } while(0)
+
 //
 // fmtbuf_alloc() allows you to make custom string-formatters
 //  for use with the above logging functions.  You use this

@@ -112,17 +112,6 @@ typedef enum {
     PHASE5_FINISHED,
 } phase_t;
 
-// the functions which move the state forward
-//   to each of the above phases, for use in BUG output
-static const char* phase_actor[] = {
-    NULL,
-    "dmn_init()",
-    "dmn_pm_config()",
-    "dmn_fork()",
-    "dmn_acquire_pidfile()",
-    "dmn_finish()",
-};
-
 /***********************************************************
 ***** Static process-global data ***************************
 ***********************************************************/
@@ -165,31 +154,13 @@ static state_t state = {
 };
 
 /***********************************************************
-***** API usage checks *************************************
-***********************************************************/
-
-#define phase_check(_after, _before, _unique) do { \
-    if(state.phase == PHASE0_UNINIT) { \
-        fprintf(stderr, "BUG: dmn_init() must be called before any other libdmn function!\n"); \
-        abort(); \
-    } \
-    if(_unique) {\
-        static unsigned _call_count = 0; \
-        if(_call_count++) \
-            dmn_log_fatal("BUG: %s can only be called once and was already called!", __func__); \
-    } \
-    if(_after && state.phase < _after) \
-        dmn_log_fatal("BUG: %s must be called after %s", __func__, phase_actor[_after]); \
-    if(_before && state.phase >= _before) \
-        dmn_log_fatal("BUG: %s must be called before %s", __func__, phase_actor[_before]); \
-} while(0)
-
-/***********************************************************
 ***** Logging **********************************************
 ***********************************************************/
 
 // private to the two functions below it
 static char* _fmtbuf_common(const unsigned size) {
+    dmn_assert(state.phase > PHASE0_UNINIT);
+
     // This is our log-formatting buffer.  It holds multiple buffers
     //   of increasing size (see constants above) which are allocated
     //   per-thread as-needed, permanently for the life of the thread.
@@ -228,7 +199,7 @@ static char* _fmtbuf_common(const unsigned size) {
 
 // Public (including this file) interfaces to _fmtbuf_common()
 char* dmn_fmtbuf_alloc(const unsigned size) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     char* rv = NULL;
     if(size) {
         rv = _fmtbuf_common(size);
@@ -238,7 +209,7 @@ char* dmn_fmtbuf_alloc(const unsigned size) {
     return rv;
 }
 void dmn_fmtbuf_reset(void) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     _fmtbuf_common(0);
 }
 
@@ -246,7 +217,7 @@ void dmn_fmtbuf_reset(void) {
 //  errno->string translation behind a more strerror()-like interface
 //  using dmn_fmtbuf_alloc()
 const char* dmn_logf_strerror(const int errnum) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 
     char tmpbuf[DMN_ERRNO_MAXLEN];
     const char* tmpbuf_ptr;
@@ -275,7 +246,7 @@ const char* dmn_logf_strerror(const int errnum) {
 DMN_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 
 void dmn_loggerv(int level, const char* fmt, va_list ap) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 
     if(state.stderr_out) {
         const char* pfx;
@@ -306,7 +277,7 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
 }
 
 void dmn_logger(int level, const char* fmt, ...) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     va_list ap;
     va_start(ap, fmt);
     dmn_loggerv(level, fmt, ap);
@@ -316,6 +287,7 @@ void dmn_logger(int level, const char* fmt, ...) {
 DMN_DIAG_POP
 
 const char* dmn_logf_bt(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 #ifdef HAVE_LIBUNWIND
     static const unsigned bt_size = 1024U;
     static const unsigned bt_max_name = 60U;
@@ -356,8 +328,15 @@ const char* dmn_logf_bt(void) {
 #endif
 }
 
-bool dmn_get_debug(void) { phase_check(0, 0, 0); return params.debug; }
-bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_alive; }
+bool dmn_get_debug(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    return params.debug;
+}
+
+bool dmn_get_syslog_alive(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    return state.syslog_alive;
+}
 
 /***********************************************************
 ***** systemd **********************************************
@@ -369,6 +348,8 @@ bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_aliv
 #define dmn_detect_systemd() ((void)0)
 
 void dmn_sd_notify(const char* notify_msg, const bool optional) {
+    dmn_assert_ndebug(notify_msg);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     if(optional)
         dmn_log_debug("notify: %s", notify_msg);
     else
@@ -391,6 +372,7 @@ void dmn_sd_notify(const char* notify_msg, const bool optional) {
 //   it set anyways, in spite of NotifyAccess=all, so the getppid()
 //   and MAINPID checks are their only recourse here.
 static void dmn_detect_systemd(void) {
+    dmn_assert(state.phase > PHASE0_UNINIT);
     struct stat st;
     state.running_under_sd = (
         (!lstat("/run/systemd/system/", &st) && S_ISDIR(st.st_mode))
@@ -421,7 +403,8 @@ static void dmn_detect_systemd(void) {
 // the sd_pid_notify() changes, which aren't relevant in
 // our case), and just updated to match local style + conditions.
 void dmn_sd_notify(const char *notify_msg, const bool optional) {
-    dmn_assert(notify_msg);
+    dmn_assert_ndebug(notify_msg);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 
     if(!state.running_under_sd)
         return;
@@ -471,13 +454,14 @@ void dmn_sd_notify(const char *notify_msg, const bool optional) {
 
 #endif // __linux__
 
-
 /***********************************************************
 ***** Public helper funcs **********************************
 ***********************************************************/
 
 // create a socketpair with FD_CLOEXEC and fatal error-checking built in
 void dmn_socketpair_cloexec(int sockets[2]) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+
     if(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets))
         dmn_log_fatal("socketpair(AF_UNIX, SOCK_STREAM) failed: %s", dmn_logf_errno());
     if(fcntl(sockets[0], F_SETFD, FD_CLOEXEC))
@@ -488,7 +472,7 @@ void dmn_socketpair_cloexec(int sockets[2]) {
 
 // Privdrop (othgonal to phased stuff, mostly)
 void dmn_privdrop(const char* username, const bool weak) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 
     if(!geteuid() && username) {
         errno = 0;
@@ -534,6 +518,9 @@ void dmn_privdrop(const char* username, const bool weak) {
 
 // Total timeout is 15s.  True retval indicates daemon is still running.
 bool dmn_terminate_pid_and_wait(int sig, pid_t pid) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    dmn_assert_ndebug(pid > 1);
+
     bool still_running = false;
 
     if(!kill(pid, sig)) {
@@ -559,6 +546,9 @@ bool dmn_terminate_pid_and_wait(int sig, pid_t pid) {
 // Wait for a pid to _exit(0), do not accept
 //  any other result, survive interrupts
 static void waitpid_zero(pid_t child) {
+    dmn_assert(child >= 0);
+    dmn_assert(state.phase > PHASE0_UNINIT);
+
     int status;
     do {
         pid_t wp_rv = waitpid(child, &status, 0);
@@ -620,6 +610,7 @@ static void parent_proc(const pid_t middle_pid, const int sock) {
 // this isn't meant to be high-speed or elegant, but it saves
 //   some repetitive string-mod code elsewhere.
 static char* str_combine_n(const unsigned count, ...) {
+    dmn_assert(state.phase > PHASE0_UNINIT);
     dmn_assert(count > 1);
 
     struct {
@@ -702,7 +693,7 @@ void dmn_init(bool debug, bool foreground, bool use_syslog, const char* name) {
 }
 
 void dmn_pm_config(const char* pid_dir) {
-    phase_check(PHASE1_INIT, PHASE3_FORKED, 1);
+    dmn_assert_ndebug(state.phase == PHASE1_INIT);
 
     if(pid_dir) {
         if(pid_dir[0] != '/')
@@ -715,7 +706,7 @@ void dmn_pm_config(const char* pid_dir) {
 }
 
 pid_t dmn_status(void) {
-    phase_check(PHASE2_PMCONF, PHASE4_PIDLOCKED, 0);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     if(!params.pid_file)
         return 0;
@@ -746,7 +737,7 @@ pid_t dmn_status(void) {
 }
 
 pid_t dmn_stop(void) {
-    phase_check(PHASE2_PMCONF, PHASE4_PIDLOCKED, 0);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     const pid_t pid = dmn_status();
     if(!pid) {
@@ -764,7 +755,7 @@ pid_t dmn_stop(void) {
 }
 
 int dmn_signal(int sig) {
-    phase_check(PHASE2_PMCONF, PHASE4_PIDLOCKED, 0);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     int rv = 1; // error
     const pid_t pid = dmn_status();
@@ -786,6 +777,7 @@ int dmn_signal(int sig) {
 DMN_F_NONNULL
 static FILE* _dup_write_stream(FILE* old, const char* old_name) {
     dmn_assert(old); dmn_assert(old_name);
+    dmn_assert(state.phase > PHASE0_UNINIT);
 
     const int old_fd = fileno(old);
     if(old_fd < 0)
@@ -803,7 +795,7 @@ static FILE* _dup_write_stream(FILE* old, const char* old_name) {
 }
 
 void dmn_fork(void) {
-    phase_check(PHASE2_PMCONF, PHASE4_PIDLOCKED, 1);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     // I moved this up to init1() once, but that messed up
     //   relative configdir paths on the commandline because
@@ -873,7 +865,7 @@ void dmn_fork(void) {
 }
 
 int dmn_acquire_pidfile(void) {
-    phase_check(PHASE3_FORKED, PHASE5_FINISHED, 1);
+    dmn_assert_ndebug(state.phase == PHASE3_FORKED);
 
     // The pid_(file|dir) parameters come as a pair
     dmn_assert(
@@ -955,7 +947,7 @@ int dmn_acquire_pidfile(void) {
 }
 
 void dmn_finish(void) {
-    phase_check(PHASE4_PIDLOCKED, 0, 1);
+    dmn_assert_ndebug(state.phase == PHASE4_PIDLOCKED);
 
     // notify systemd of full readiness if applicable
     dmn_sd_notify("READY=1", false);
