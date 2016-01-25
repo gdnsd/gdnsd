@@ -55,15 +55,21 @@ static void usage(const char* argv0) {
     exit(2);
 }
 
+// get control socket client handle
+static gdnsd_csc_t* get_csc(void) {
+    char* cs_path = gdnsd_resolve_path_run("cs", NULL);
+    gdnsd_csc_t* csc = gdnsd_csc_new(cs_path);
+    free(cs_path);
+    return csc;
+}
+
 /**** Action functions ****/
 
 F_NORETURN
 static void action_stop(const int argc V_UNUSED, char** argv V_UNUSED) {
     dmn_assert(argc); dmn_assert(argv);
 
-    char* cs_path = gdnsd_resolve_path_run("cs", NULL);
-    gdnsd_csc_t* csc = gdnsd_csc_new(cs_path);
-    free(cs_path);
+    gdnsd_csc_t* csc = get_csc();
     pid_t csc_pid = gdnsd_csc_getpid(csc);
     uint8_t buffer[8] = "stop";
     const uint32_t resp_len = gdnsd_csc_txn(csc, buffer, 4, 8);
@@ -99,9 +105,7 @@ static void action_status(const int argc V_UNUSED, char** argv V_UNUSED) {
     log_info("status: running at pid %li", (long)oldpid);
 
     // validate csock "getpid" vs fcntl result above
-    char* cs_path = gdnsd_resolve_path_run("cs", NULL);
-    gdnsd_csc_t* csc = gdnsd_csc_new(cs_path);
-    free(cs_path);
+    gdnsd_csc_t* csc = get_csc();
     pid_t csc_pid = gdnsd_csc_getpid(csc);
     if(oldpid != csc_pid)
         log_fatal("MCP PID validation failed: pidfile has %li, socket says %li",
@@ -115,9 +119,7 @@ F_NORETURN
 static void action_stats(const int argc V_UNUSED, char** argv V_UNUSED) {
     dmn_assert(argc); dmn_assert(argv);
 
-    char* cs_path = gdnsd_resolve_path_run("cs", NULL);
-    gdnsd_csc_t* csc = gdnsd_csc_new(cs_path);
-    free(cs_path);
+    gdnsd_csc_t* csc = get_csc();
     uint8_t* rt_buffer = xmalloc(65000);
     memcpy(rt_buffer, "stats", 5);
     const uint32_t rt_resp_len = gdnsd_csc_txn(csc, rt_buffer, 5, 65000);
