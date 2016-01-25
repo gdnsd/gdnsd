@@ -672,7 +672,7 @@ int main(int argc, char** argv) {
 
     // attempt to lock up the pidfile: fails fatally if already running
     // XXX note this will need special care on "reload"
-    mcp.pidfd = dmn_acquire_pidfile();
+    mcp.pidfd = dmn_pidfile_lock(DMN_LOCK_EX);
 
     // socketpair for MCP<->Runtime
     int sockets[2] = { -1, -1 };

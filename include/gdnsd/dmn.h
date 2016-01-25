@@ -119,10 +119,10 @@ void dmn_init(bool debug, bool foreground, bool use_syslog, const char* name);
 //   "/run" or "/var/run", it should be something like "/run/somedaemond" or
 //   "/var/run/somedaemond".  Must be an absolute path (begins with /).  If
 //   NULL, none of the pidfile -related calls (_stop, _status, _signal) will
-//   do anything useful, and _acquire_pidfile() will be a no-op).
+//   do anything useful, and dmn_pidfile_lock() will be a no-op).
 void dmn_pm_config(const char* pid_dir);
 
-// Call after _pm_config(), and before acquire_pidfile()
+// Call after _pm_config(), and before dmn_pidfile_lock()
 // In !foreground cases, does the whole 9 yards of proper daemonization,
 //   with execution continuing in the final daemonized child.  The original
 //   process that invoked dmn_fork lingers in a private subroutine inside
@@ -131,21 +131,47 @@ void dmn_pm_config(const char* pid_dir);
 // In foreground cases it should still be called, but does nothing.
 void dmn_fork(void);
 
-// This will then acquire a proper pidfile lock (or die trying), if pid_dir
-//   was defined back in _pm_config (otherwise this call is a no-op).
-// When this returns without dying, the current process is now the official
-//   runtime instance of this daemon for e.g. dmn_status().
-// Return value is the open file descriptor on the pidfile, which holds an
-// fcntl lock.  For a normal daemon, it's best to leave this open indefinitely
-// and allows close-on-exit to release the lock, but you may wish to also
-// close it for forked children, etc...
-int dmn_acquire_pidfile(void);
+// locked pidfiles for daemon exclusivity, post-dmn_fork().
+// libdmn tracks the pidfile fd internally.  switching lock types after initial
+// lock is allowed.  _lock always returns the (new or existing) lock fd in case
+// it needs to be closed after an application fork().
+// For normal daemon startup:
+//    dmn_fork(); ...; dmn_pidfile_lock(DMN_LOCK_EXCL); ...; dmn_finish();
+// Normal daemon shutdown:
+//    do not explicitly release - exiting releases-on-exit
+// For controlled handoff from old to new daemon instance (e.g.
+// reload via fork->execve), the pattern is something like:
+// -------------------------------------------------------------------
+// old daemon                    | new daemon
+// -------------------------------------------------------------------
+// dmn_finish()                  |
+// ... normal runtime ...        |
+// ... decides to reload ...     |
+// dmn_pidfile_lock(DMN_LOCK_SH) |
+// ... spawn new daemon ...      |
+//                               | ... lots of startup stuff ...
+//                               | dmn_pidfile_lock(DMN_LOCK_SH)
+//                               | ... notify parent to release ...
+// dmn_pidfile_release()         | dmn_pidfile_lock(DMN_LOCK_EX|DMN_LOCK_W)
+// ... cleanup ...               | dmn_finish()
+// exit                          | ... normal runtime ...
+// -------------------------------------------------------------------
+// (and of course, if the new daemon fails before old daemon's release, old
+// daemon can switch back to excl when aborting the reload operation).
+typedef enum {
+   DMN_LOCK_SH = 0, // shared
+   DMN_LOCK_EX = 1, // exclusive
+   DMN_LOCK_W  = 2, // blocking wait on lock acquisition
+} dmn_lockflags_t;
+int dmn_pidfile_lock(const dmn_lockflags_t flags);
+void dmn_pidfile_release(void);
 
 // Finish the daemon startup procedure by signalling the parent process still
 //   attached to the terminal (if applicable) to exit with status 0.  If your
 //   daemon doesn't make it far enough to call this, the helper will exit
 //   non-zero to indicate failure to the shell/manager/etc.  It also sends a
 //   readiness notification to systemd if applicable.
+// Must acquire excl pidfile lock before dmn_finish()!
 void dmn_finish(void);
 
 // These 3x process management calls require _pm_config() first!

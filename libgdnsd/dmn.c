@@ -99,8 +99,7 @@ static const mode_t PERMS_MASK = (S_IRWXU|S_IRWXG|S_IRWXO);
 // These are phases used to enforce a strict ordering
 //   of operations and dependencies between the functions in this file
 // PHASE0_UNINIT is the default at library load, and the
-//   code only allows forward, serial movement through this list
-//   one entry at a time.
+//   code only allows forward, serial movement through this list.
 // Note that in PHASE0_UNINIT, *nothing* is valid to call except
 //   dmn_init(), including all of the log/assert functions.
 typedef enum {
@@ -139,6 +138,7 @@ typedef struct {
     phase_t phase;
     bool    syslog_alive;
     bool    running_under_sd;
+    int     pid_fd;
     int     dmn_sock;
     FILE*   stderr_out;
     FILE*   stdout_out;
@@ -148,6 +148,7 @@ static state_t state = {
     .phase            = PHASE0_UNINIT,
     .syslog_alive     = false,
     .running_under_sd = false,
+    .pid_fd           = -1,
     .dmn_sock         = -1,
     .stderr_out       = NULL,
     .stdout_out       = NULL,
@@ -864,20 +865,9 @@ void dmn_fork(void) {
     state.phase = PHASE3_FORKED;
 }
 
-int dmn_acquire_pidfile(void) {
-    dmn_assert_ndebug(state.phase == PHASE3_FORKED);
-
-    // The pid_(file|dir) parameters come as a pair
-    dmn_assert(
-        (params.pid_file && params.pid_dir)
-        || (!params.pid_file && !params.pid_dir)
-    );
-
-    // skip if not specified earlier
-    if(!params.pid_file) {
-        state.phase = PHASE4_PIDLOCKED;
-        return -1;
-    }
+static void dmn_acquire_pid_fd(void) {
+    dmn_assert(state.pid_fd == -1);
+    dmn_assert(params.pid_file && params.pid_dir);
 
     const bool currently_root = !geteuid();
     struct stat st;
@@ -910,40 +900,63 @@ int dmn_acquire_pidfile(void) {
                 dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file, PERMS640, dmn_logf_errno());
     }
 
+    // get an open handle on the pidfile...
+    state.pid_fd = open(params.pid_file, O_RDWR | O_CREAT | O_SYNC, PERMS640);
+    if(state.pid_fd == -1)
+        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file, dmn_logf_errno());
+    if(fcntl(state.pid_fd, F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file, dmn_logf_errno());
+}
+
+static void dmn_pid_fd_lock(const dmn_lockflags_t flags) {
+    const bool excl = !!(flags & DMN_LOCK_EX);
+    const bool wait = !!(flags & DMN_LOCK_W);
+
+    // get pid fd if this is the initial lock call
+    if(state.pid_fd == -1)
+        dmn_acquire_pid_fd();
+
     // flock structure for acquiring pidfile lock
     struct flock pidlock_set;
     memset(&pidlock_set, 0, sizeof(struct flock));
-    pidlock_set.l_type = F_WRLCK;
+    pidlock_set.l_type = excl ? F_WRLCK : F_RDLCK;
     pidlock_set.l_whence = SEEK_SET;
-
-    // get an open write-handle on the pidfile for lock+update
-    int pidfd = open(params.pid_file, O_WRONLY | O_CREAT | O_SYNC, PERMS640);
-    if(pidfd == -1)
-        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file, dmn_logf_errno());
-    if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file, dmn_logf_errno());
 
     // Attempt lock - this is where we resolve a double-startup race
     // definitively, but it would be prudent for the daemon to have checked
     // dmn_status() for itself much earlier to detect common, un-racy cases.
-    if(fcntl(pidfd, F_SETLK, &pidlock_set)) {
+    if(fcntl(state.pid_fd, wait ? F_SETLKW : F_SETLK, &pidlock_set)) {
         // Various failure modes
         if(errno != EAGAIN && errno != EACCES)
             dmn_log_fatal("bug? fcntl(pidfile, F_SETLK) failed: %s", dmn_logf_errno());
         dmn_log_fatal("cannot acquire fcntl lock on pidfile %s, another"
-                      " instance of this daemon is already holding it at"
-                      " pid: %li", params.pid_file, (long)dmn_status());
+                      " instance of this daemon is conflicting!", params.pid_file);
     }
 
-    // Success - assuming writing to our locked pidfile doesn't fail!
-    if(ftruncate(pidfd, 0))
-        dmn_log_fatal("truncating pidfile failed: %s", dmn_logf_errno());
-    if(dprintf(pidfd, "%li\n", (long)getpid()) < 2)
-        dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
+    // always write current pid on acquisition of exclusive lock
+    if(excl) {
+        if(ftruncate(state.pid_fd, 0))
+            dmn_log_fatal("truncating pidfile failed: %s", dmn_logf_errno());
+        if(dprintf(state.pid_fd, "%li\n", (long)getpid()) < 2)
+            dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
+    }
+}
 
-    state.phase = PHASE4_PIDLOCKED;
+int dmn_pidfile_lock(const dmn_lockflags_t flags) {
+    dmn_assert_ndebug(state.phase >= PHASE3_FORKED);
+    if(params.pid_file)
+        dmn_pid_fd_lock(flags);
+    if(state.phase == PHASE3_FORKED && (flags & DMN_LOCK_EX))
+        state.phase = PHASE4_PIDLOCKED;
+    return state.pid_fd;
+}
 
-    return pidfd;
+void dmn_pidfile_release(void) {
+    if(!params.pid_file)
+        return;
+    if(state.pid_fd != -1 && close(state.pid_fd))
+        dmn_log_fatal("Cannot close pidfile fd for release: %s", dmn_logf_errno());
+    state.pid_fd = -1;
 }
 
 void dmn_finish(void) {
