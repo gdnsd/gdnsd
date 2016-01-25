@@ -90,7 +90,16 @@ static void action_reloadz(const int argc V_UNUSED, char** argv V_UNUSED) {
 F_NORETURN
 static void action_reload(const int argc V_UNUSED, char** argv V_UNUSED) {
     dmn_assert(argc); dmn_assert(argv);
-    dmn_log_fatal("XXX Not yet implemented");
+
+    gdnsd_csc_t* csc = get_csc();
+    uint8_t buffer[9] = "reload";
+    const uint32_t resp_len = gdnsd_csc_txn(csc, buffer, 6, 8);
+    if(resp_len == 8 && !memcmp(buffer, "reloaded", 8)) {
+        gdnsd_csc_closewait(csc);
+        exit(0);
+    }
+
+    dmn_log_fatal("reload operation failed");
 }
 
 F_NORETURN
