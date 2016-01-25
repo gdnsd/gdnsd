@@ -425,7 +425,7 @@ void gdnsd_css_recreate(gdnsd_css_t* css) {
         ev_io_start(css->loop, css->w_accept);
 }
 
-void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len) {
+void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, const void* buffer, uint32_t len) {
     dmn_assert(css); dmn_assert(buffer);
 
     // find this client (we assume the list isn't so huge that linear search is an issue)
@@ -499,7 +499,7 @@ gdnsd_csc_t* gdnsd_csc_new(const char* path) {
     return csc;
 }
 
-uint32_t gdnsd_csc_txn(gdnsd_csc_t* csc, uint8_t* buffer, uint32_t req_len, uint32_t max_resp_len) {
+uint32_t gdnsd_csc_txn(gdnsd_csc_t* csc, void* buffer, uint32_t req_len, uint32_t max_resp_len) {
     dmn_assert(csc); dmn_assert(buffer);
 
     if(!req_len)

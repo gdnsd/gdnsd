@@ -372,7 +372,7 @@ static void rt_sync_read(void* buf, unsigned bytes) {
 }
 
 F_NONNULL
-static unsigned rt_sync_read_stats(uint8_t* buffer) {
+static unsigned rt_sync_read_stats(void* buffer) {
     dmn_assert(buffer);
     // Note: assumes already blocking!
 
@@ -394,7 +394,7 @@ static unsigned rt_sync_read_stats(uint8_t* buffer) {
 }
 
 F_NONNULLX(1,3)
-static bool css_read_handler(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len, void* data V_UNUSED) {
+static bool css_read_handler(gdnsd_css_t* css, uint64_t clid, void* buffer, uint32_t len, void* data V_UNUSED) {
     dmn_assert(css); dmn_assert(clid); dmn_assert(buffer); dmn_assert(len);
 
     // controlsock not installed until we reach MCP_IDLE

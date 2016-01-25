@@ -70,7 +70,7 @@ typedef struct gdnsd_csc_s_ gdnsd_csc_t;
 // note: "buffer" can also be used to buffer your response - your code owns it
 //       until you invoke gdnsd_css_respond() with this clid, or
 //       invoke gdnsd_css_delete() to tear down the whole server
-typedef bool (*gdnsd_css_rcb_t)(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len, void* data);
+typedef bool (*gdnsd_css_rcb_t)(gdnsd_css_t* css, uint64_t clid, void* buffer, uint32_t len, void* data);
 
 #pragma GCC visibility push(default)
 
@@ -117,7 +117,7 @@ void gdnsd_css_recreate(gdnsd_css_t* css);
 //     closed the connection while waiting, in which case the
 //     response will be discarded.
 F_NONNULL
-void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len);
+void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, const void* buffer, uint32_t len);
 
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL
@@ -145,7 +145,7 @@ gdnsd_csc_t* gdnsd_csc_new(const char* path);
 //                allocated sufficiently for this!
 // return value - actual length of response data
 F_NONNULL
-uint32_t gdnsd_csc_txn(gdnsd_csc_t* csc, uint8_t* buffer, uint32_t req_len, uint32_t max_resp_len);
+uint32_t gdnsd_csc_txn(gdnsd_csc_t* csc, void* buffer, uint32_t req_len, uint32_t max_resp_len);
 
 // blocking wait for server to close control socket (e.g. for monitoring other side's requested exit)
 F_NONNULL
