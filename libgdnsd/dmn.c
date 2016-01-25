@@ -139,7 +139,7 @@ typedef struct {
     bool    syslog_alive;
     bool    running_under_sd;
     int     pid_fd;
-    int     dmn_sock;
+    int     dmn_pipe;
     FILE*   stderr_out;
     FILE*   stdout_out;
 } state_t;
@@ -149,7 +149,7 @@ static state_t state = {
     .syslog_alive     = false,
     .running_under_sd = false,
     .pid_fd           = -1,
-    .dmn_sock         = -1,
+    .dmn_pipe         = -1,
     .stderr_out       = NULL,
     .stdout_out       = NULL,
 };
@@ -466,18 +466,6 @@ void dmn_sd_notify_readypid(void) {
 ***** Public helper funcs **********************************
 ***********************************************************/
 
-// create a socketpair with FD_CLOEXEC and fatal error-checking built in
-void dmn_socketpair_cloexec(int sockets[2]) {
-    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
-
-    if(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets))
-        dmn_log_fatal("socketpair(AF_UNIX, SOCK_STREAM) failed: %s", dmn_logf_errno());
-    if(fcntl(sockets[0], F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(FD_CLOEXEC) on socketpair fd failed: %s", dmn_logf_errno());
-    if(fcntl(sockets[1], F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(FD_CLOEXEC) on socketpair fd failed: %s", dmn_logf_errno());
-}
-
 // Privdrop (othgonal to phased stuff, mostly)
 void dmn_privdrop(const char* username, const bool weak) {
     dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
@@ -578,7 +566,7 @@ static void waitpid_zero(pid_t child) {
 
 // the parent process executes here and does not return
 DMN_F_NORETURN
-static void parent_proc(const pid_t middle_pid, const int sock) {
+static void parent_proc(const pid_t middle_pid, const int pipefd) {
     dmn_assert(state.phase == PHASE2_PMCONF);
     dmn_assert(middle_pid);
 
@@ -596,7 +584,7 @@ static void parent_proc(const pid_t middle_pid, const int sock) {
     // parent -> exit(0)
     // child -> continues with normal runtime operations
     //
-    // If anything goes wrong with that sequence or the socket closes early,
+    // If anything goes wrong with that sequence or the pipefd closes early,
     //   both sides will abort with a bad exit value.
 
     int exitval = 1;
@@ -605,7 +593,7 @@ static void parent_proc(const pid_t middle_pid, const int sock) {
     ssize_t read_rv;
     do {
         errno = 0;
-        read_rv = read(sock, &msg, 1);
+        read_rv = read(pipefd, &msg, 1);
     } while(read_rv < 0 && errno == EINTR);
 
     if(read_rv == 1 && msg == 0x55)
@@ -818,12 +806,13 @@ void dmn_fork(void) {
         return;
     }
 
-    // This socketpair is used to communicate with the outer parent
+    // This pipe is used to communicate with the outer parent
     //   so that it can exit correctly after the daemon is up.
-    // Our convention is that s[0] is the ancestor process, and
-    //   s[1] is the descendant process.
-    int sockets[2] = { -1, -1 };
-    dmn_socketpair_cloexec(sockets);
+    int pipes[2];
+    if(pipe(pipes))
+        dmn_log_fatal("pipe() failed: %s", dmn_logf_errno());
+    if(fcntl(pipes[1], F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on pipe write fd failed: %s", dmn_logf_errno());
 
     // Fork for the first time...
     const pid_t middle_pid = fork();
@@ -832,16 +821,16 @@ void dmn_fork(void) {
 
     // if parent, go run the parent code
     if(middle_pid) {
-        if(close(sockets[1]))
-            dmn_log_fatal("close() of socketpair fd in dmn parent failed: %s", dmn_logf_errno());
-        parent_proc(middle_pid, sockets[0]);
+        if(close(pipes[1]))
+            dmn_log_fatal("close() of pipe write fd in dmn parent failed: %s", dmn_logf_errno());
+        parent_proc(middle_pid, pipes[0]);
         dmn_assert(0); // above never returns control
     }
 
     // child process (to become runtime daemon)
-    if(close(sockets[0]))
-        dmn_log_fatal("close() of socketpair fd in dmn child failed: %s", dmn_logf_errno());
-    state.dmn_sock = sockets[1];
+    if(close(pipes[0]))
+        dmn_log_fatal("close() of pipe read fd in dmn child failed: %s", dmn_logf_errno());
+    state.dmn_pipe = pipes[1];
 
     // setsid() before the second fork
     if(setsid() == -1)
@@ -972,15 +961,15 @@ void dmn_finish(void) {
     dmn_sd_notify_readypid();
 
     if(!params.foreground) {
-        dmn_assert(state.dmn_sock >= 0);
+        dmn_assert(state.dmn_pipe >= 0);
 
         errno = 0;
         uint8_t msg = 0x55;
-        if(1 != write(state.dmn_sock, &msg, 1))
+        if(1 != write(state.dmn_pipe, &msg, 1))
             dmn_log_fatal("Bug? failed to notify parent of daemon success: %s", dmn_logf_errno());
 
-        if(close(state.dmn_sock))
-            dmn_log_fatal("close() of socketpair fd in dmn_finish failed: %s", dmn_logf_errno());
+        if(close(state.dmn_pipe))
+            dmn_log_fatal("close() of pipe fd in dmn_finish failed: %s", dmn_logf_errno());
 
         // Close our copied streams if daemonized
         fclose(state.stdout_out);
@@ -989,7 +978,7 @@ void dmn_finish(void) {
         state.stderr_out = NULL;
     }
     else {
-        dmn_assert(state.dmn_sock == -1);
+        dmn_assert(state.dmn_pipe == -1);
     }
 
     state.phase = PHASE5_FINISHED;

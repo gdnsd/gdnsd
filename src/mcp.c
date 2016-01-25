@@ -676,7 +676,12 @@ int main(int argc, char** argv) {
 
     // socketpair for MCP<->Runtime
     int sockets[2] = { -1, -1 };
-    dmn_socketpair_cloexec(sockets);
+    if(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets))
+        dmn_log_fatal("socketpair(AF_UNIX, SOCK_STREAM) failed: %s", dmn_logf_errno());
+    if(fcntl(sockets[0], F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on socketpair fd failed: %s", dmn_logf_errno());
+    if(fcntl(sockets[1], F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on socketpair fd failed: %s", dmn_logf_errno());
 
     // This fork delineates the MCP process from the Runtime process
     // MCP is "the daemon" from the POV of the rest of the host machine,

@@ -196,9 +196,6 @@ int dmn_signal(int sig);
 //   measures regardless of whether we were executing as root or not.
 void dmn_privdrop(const char* username, const bool weak);
 
-// does socketpair() + FD_CLOEXEC on both sides, fails fatally
-void dmn_socketpair_cloexec(int sockets[2]);
-
 // The "sig" signal (could be zero - no signal) is sent exactly once, then the
 // status of the daemon is polled repeatedly at 50ms delay intervals
 // Function returns when either the process is dead or our delays all expired.
