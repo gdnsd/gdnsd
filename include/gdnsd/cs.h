@@ -96,6 +96,12 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, ui
 F_NONNULL
 void gdnsd_css_start(gdnsd_css_t* css, struct ev_loop* loop);
 
+// Re-create the listening socket, without affecting any ongoing clients.
+// This will effectively create a new listening socket, unlink the socket
+// path, and bind the new socket to the socket path.
+F_NONNULL
+void gdnsd_css_recreate(gdnsd_css_t* css);
+
 // Respond to a request received via the rcb callback
 // clid   - unique client ID from rcb callback
 // buffer - contains up to max_buffer_out data

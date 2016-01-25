@@ -339,6 +339,23 @@ static void sun_set_path(struct sockaddr_un* a, const char* path) {
     memcpy(a->sun_path, path, plen);
 }
 
+static int lsock_create_and_bind(const char* path) {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(fd < 0)
+        dmn_log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", dmn_logf_errno());
+    if(fcntl(fd, F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on control socket fd failed: %s", dmn_logf_errno());
+
+    struct sockaddr_un addr;
+    sun_set_path(&addr, path);
+    if(unlink(path) && errno != ENOENT)
+        dmn_log_fatal("unlink(%s) failed: %s", path, dmn_logf_errno());
+    if(bind(fd, (struct sockaddr*)&addr, sizeof(addr)))
+        dmn_log_fatal("bind() of unix domain socket %s failed: %s", path, dmn_logf_errno());
+
+    return fd;
+}
+
 /*********************
  * Public interfaces *
  *********************/
@@ -369,24 +386,13 @@ gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, ui
     css->first_client = NULL;
     css->next_clid = 1;
 
-    css->fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if(css->fd < 0)
-        dmn_log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", dmn_logf_errno());
-    if(fcntl(css->fd, F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(FD_CLOEXEC) on control socket fd failed: %s", dmn_logf_errno());
+    css->fd = lsock_create_and_bind(css->path);
 
     css->rcb = rcb;
     css->data = data;
     css->w_accept = xmalloc(sizeof(ev_io));
     ev_io_init(css->w_accept, css_accept, css->fd, EV_READ);
     css->w_accept->data = css;
-
-    struct sockaddr_un addr;
-    sun_set_path(&addr, css->path);
-    if(unlink(css->path) && errno != ENOENT)
-        dmn_log_fatal("unlink(%s) failed: %s", css->path, dmn_logf_errno());
-    if(bind(css->fd, (struct sockaddr*)&addr, sizeof(addr)))
-        dmn_log_fatal("bind() of unix domain socket %s failed: %s", css->path, dmn_logf_errno());
 
     // XXX There's a potential race here, maybe, on some platforms, that could
     // allow unauthorized access to the control socket from unrelated local
@@ -406,6 +412,17 @@ void gdnsd_css_start(gdnsd_css_t* css, struct ev_loop* loop) {
     dmn_assert(loop);
     css->loop = loop;
     ev_io_start(css->loop, css->w_accept);
+}
+
+void gdnsd_css_recreate(gdnsd_css_t* css) {
+    dmn_assert(css);
+    dmn_assert(css->loop);
+    ev_io_stop(css->loop, css->w_accept);
+    close(css->fd);
+    css->fd = lsock_create_and_bind(css->path);
+    ev_io_set(css->w_accept, css->fd, EV_READ);
+    if(css->num_clients < css->max_clients)
+        ev_io_start(css->loop, css->w_accept);
 }
 
 void gdnsd_css_respond(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer, uint32_t len) {
