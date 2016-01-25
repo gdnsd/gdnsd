@@ -92,18 +92,9 @@ typedef bool (*gdnsd_css_rcb_t)(gdnsd_css_t* css, uint64_t clid, uint8_t* buffer
 F_NONNULLX(1,2) F_MALLOC
 gdnsd_css_t* gdnsd_css_new(const char* path, gdnsd_css_rcb_t rcb, void* data, uint32_t max_buffer_in, uint32_t max_buffer_out, unsigned max_clients, unsigned timeout);
 
-// Set the eventloop to accept connections on
-// must be called before _start_accept(), cannot be called twice
+// Start accepting connections using libev loop "loop"
 F_NONNULL
-void gdnsd_css_set_loop(gdnsd_css_t* css, struct ev_loop* loop);
-
-// Start accepting connections (requires set_loop first!)
-F_NONNULL
-void gdnsd_css_start_accept(gdnsd_css_t* css);
-
-// Stop accepting connections (can cycle them back on with _start())
-F_NONNULL
-void gdnsd_css_stop_accept(gdnsd_css_t* css);
+void gdnsd_css_start(gdnsd_css_t* css, struct ev_loop* loop);
 
 // Respond to a request received via the rcb callback
 // clid   - unique client ID from rcb callback
