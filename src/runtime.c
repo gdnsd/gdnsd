@@ -241,11 +241,11 @@ static void wait_and_listen(void) {
 
     if(msg != MSG_2RT_OK_TO_LISTEN)
         dmn_log_fatal("Runtime<-MCP: unexpected input %c", msg);
-    start_threads(rt.socks_cfg);
     const unsigned max_json = statio_start(rt.loop, rt.socks_cfg->num_dns_threads);
     if(max_json > EXPECTED_MAX_JSON)
         dmn_log_fatal("BUG: Stats buffer size %u is larger than expected", max_json);
     adjust_mcpsock_sndbuf(max_json + 5);
+    start_threads(rt.socks_cfg);
     log_info("DNS listeners started");
     mcp_write(&MSG_2MCP_LISTENING, 1);
 
