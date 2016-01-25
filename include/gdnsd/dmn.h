@@ -232,6 +232,11 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
 DMN_F_NONNULL
 void dmn_sd_notify(const char* notify_msg, const bool optional);
 
+// sends non-optional "MAINPID=X\nREADY=1\n", where X is getpid().
+// note this is already done by dmn_finish(), but there are other uses with
+// complex reload management.
+void dmn_sd_notify_readypid(void);
+
 // The intended simple API for logging with 5 separate
 //  function-call-like interfaces with different levels.
 // The _fatal variant exits after emitting the logged statement,

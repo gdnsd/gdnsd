@@ -455,6 +455,13 @@ void dmn_sd_notify(const char *notify_msg, const bool optional) {
 
 #endif // __linux__
 
+void dmn_sd_notify_readypid(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    char sdnbuf[64];
+    snprintf(sdnbuf, 64, "MAINPID=%li\nREADY=1\n", (long)getpid());
+    dmn_sd_notify(sdnbuf, false);
+}
+
 /***********************************************************
 ***** Public helper funcs **********************************
 ***********************************************************/
@@ -962,8 +969,7 @@ void dmn_pidfile_release(void) {
 void dmn_finish(void) {
     dmn_assert_ndebug(state.phase == PHASE4_PIDLOCKED);
 
-    // notify systemd of full readiness if applicable
-    dmn_sd_notify("READY=1", false);
+    dmn_sd_notify_readypid();
 
     if(!params.foreground) {
         dmn_assert(state.dmn_sock >= 0);
