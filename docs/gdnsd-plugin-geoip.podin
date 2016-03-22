@@ -301,8 +301,8 @@ datacenters, or to yet another recursive layer.
 The next two layers deep are for Region and City level information, only
 available from the Region and City type databases.  The Region database
 type only provides region information for the US and Canada, using the
-standard local 2-letter abbrevations (e.g. AB for Alberta, OK for
-Oklahama).  The City databases use those same region abbrevations for the
+standard local 2-letter abbreviations (e.g. AB for Alberta, OK for
+Oklahama).  The City databases use those same region abbreviations for the
 US and Canada, but use either FIPS 10-4 2-letter codes or full region names
 for the rest of the world's regions (as detailed earlier in, and controlled
 by, the C<city_region_names> option).

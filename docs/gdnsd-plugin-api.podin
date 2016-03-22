@@ -553,7 +553,7 @@ fit in these can be placed elsewhere (e.g. C<_start_monitors()>, C<_pre_run()>, 
 C<_load_config()> as appropriate).
 
 The type C<vscf_data_t*> in callback arguments used to be C<const>, and now it is
-not.  Similar changes occured in many places in the vscf API in general.  Just remove
+not.  Similar changes occurred in many places in the vscf API in general.  Just remove
 const from your plugin's local vscf pointers and recompile.
 
 Version 16 was bumped just to require a recompile (some formerly-exported funcs
