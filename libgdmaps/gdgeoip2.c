@@ -41,6 +41,12 @@
 
 #include <maxminddb.h>
 
+// libmaxminddb broke assumptions for code which manual recurses the data
+// with the bump from 1.1.4 to 1.1.5.  New interfaces to fix this in the
+// long term will appear in 1.2.0, I think.  For now, we set a static flag
+// early in startup to address the discrepancy.
+static bool libmmdb_gt_114 = false;
+
 typedef struct {
     unsigned offset;
     uint32_t dclist;
@@ -323,6 +329,12 @@ static unsigned geoip2_get_dclist(geoip2_t* db, const uint32_t offset) {
         .out_of_data = false,
     };
 
+    // for 1.1.5+, we must subtract MMDB_DATA_SECTION_SEPARATOR
+    // (which maxminddb.c internally defines as the value 16) from
+    // the offset before calling functions like MMDB_aget_value()
+    if(libmmdb_gt_114)
+        state.entry.offset -= 16;
+
     uint32_t dclist = DCLIST_AUTO;
 
     if(db->dcmap) {
@@ -467,6 +479,13 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
     return nl;
 }
 
+void gdgeoip2_init(void) {
+    unsigned x, y, z;
+    if(sscanf(MMDB_lib_version(), "%3u.%3u.%3u", &x, &y, &z) == 3)
+        if(x > 1 || (x == 1 && (y > 1 || (y == 1 && z > 4))))
+            libmmdb_gt_114 = true;
+}
+
 #else // HAVE_GEOIP2
 
 nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists V_UNUSED, const dcmap_t* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED, const bool city_no_region V_UNUSED) {
@@ -474,5 +493,7 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
     log_fatal("plugin_geoip: map '%s': GeoIP2 support needed by '%s' not included in this build!", map_name, pathname);
     return NULL; // unreachable
 }
+
+void gdgeoip2_init(void) { }
 
 #endif

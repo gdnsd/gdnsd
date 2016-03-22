@@ -617,6 +617,8 @@ gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg) {
     dmn_assert(maps_cfg);
     dmn_assert(vscf_is_hash(maps_cfg));
 
+    gdgeoip2_init();
+
     gdmaps_t* gdmaps = xcalloc(1, sizeof(gdmaps_t));
 
     vscf_data_t* crn_cfg = vscf_hash_get_data_byconstkey(maps_cfg, "city_region_names", true);
