@@ -212,8 +212,8 @@ static const char* GEOIP2_PATH_CITY[] = { "city", "names", "en", NULL };
         }\
     }\
     else if(mmrv_ != MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR) {\
-        dmn_log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2 data (%i: %s): Backtrace: %s",\
-            state->db->map_name, mmrv_, MMDB_strerror(mmrv_), dmn_logf_bt());\
+        dmn_log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2 data (%s)",\
+            state->db->map_name, MMDB_strerror(mmrv_));\
         siglongjmp(state->db->jbuf, 1);\
     }\
 } while(0)
