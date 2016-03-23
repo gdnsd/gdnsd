@@ -1,3 +1,8 @@
+2.2.3 - 2016-03-23
+    * Workaround for libmaxminddb 1.1.5 compatibility
+    * Added a Documentation= tag in the systemd unit file template
+    * A few typo fixes in the documentation
+
 2.2.2 - 2016-01-06
   *** Bugs fixed:
     * Fixed a bug (introduced in 2.2.1) in HTTP monitoring when using the
