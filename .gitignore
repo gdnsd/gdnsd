@@ -8,8 +8,9 @@
 /configure
 /libtool
 /stamp-h1
-# Distribution tarballs
+# Distribution tarballs and signatures
 /gdnsd-*.tar.xz
+/gdnsd-*.tar.xz.asc
 
 # Built, installed binaries
 /src/gdnsd
