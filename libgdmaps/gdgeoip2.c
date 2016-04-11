@@ -321,6 +321,11 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
         .out_of_data = false,
     };
 
+    // In GeoIP2 <1.2.0, an offset of zero (before the modification below)
+    // means not found in the DB, so default it.
+    if(!db_entry->offset)
+        return 0;
+
     // for 1.1.5+, we must subtract MMDB_DATA_SECTION_SEPARATOR
     // (which maxminddb.c internally defines as the value 16) from
     // the offset before calling functions like MMDB_aget_value()
@@ -356,19 +361,13 @@ F_NONNULL
 static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry) {
     dmn_assert(db); dmn_assert(db_entry);
 
-    // In GeoIP2, an offset of zero means not found in the DB, so default it.
-    // (even if it works in geoip2_get_dclist(), the offset cache can't handle
-    // an offset of zero efficiently anyways).
-    if(!db_entry->offset)
-        return 0;
-
     const uint32_t offset = db_entry->offset;
 
     unsigned bucket_size = 0;
     const unsigned ndx = offset % OFFSET_CACHE_SIZE;
 
     if(db->offset_cache[ndx]) {
-        for(bucket_size = 0; db->offset_cache[ndx][bucket_size].offset; bucket_size++)
+        for(bucket_size = 0; db->offset_cache[ndx][bucket_size].dclist != UINT32_MAX; bucket_size++)
             if(db->offset_cache[ndx][bucket_size].offset == offset)
                 return db->offset_cache[ndx][bucket_size].dclist;
     }
@@ -378,7 +377,7 @@ static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry) {
     dmn_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
-    db->offset_cache[ndx][bucket_size + 1].offset = 0;
+    db->offset_cache[ndx][bucket_size + 1].dclist = UINT32_MAX;
     dmn_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
     return dclist;
 }
