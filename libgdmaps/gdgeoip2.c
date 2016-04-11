@@ -312,11 +312,6 @@ F_NONNULL
 static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
     dmn_assert(db); dmn_assert(db_entry);
 
-    if(db_entry->offset > db->mmdb.data_section_size) {
-        dmn_log_err("plugin_geoip: map %s: GeoIP2 data has invalid offset %u (corrupt?)", db->map_name, db_entry->offset);
-        siglongjmp(db->jbuf, 1);
-    }
-
     // lack of both would be pointless, and is checked at outer scope
     dmn_assert(db->dcmap || db->city_auto_mode);
 
