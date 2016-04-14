@@ -41,11 +41,12 @@
 
 #include <maxminddb.h>
 
-// libmaxminddb broke assumptions for code which manual recurses the data
-// with the bump from 1.1.4 to 1.1.5.  New interfaces to fix this in the
-// long term will appear in 1.2.0, I think.  For now, we set a static flag
-// early in startup to address the discrepancy.
+#ifndef MMDB_GTE_120
+// libmaxminddb broke assumptions for code which manual recurses the data with
+// the bump from 1.1.4 to 1.1.5.  We use newer/better interfaces for 1.2.0, so
+// this flag is only for 1.1.x where x > 4.
 static bool libmmdb_gt_114 = false;
+#endif
 
 typedef struct {
     unsigned offset;
@@ -204,7 +205,7 @@ static const char* GEOIP2_PATH_COUNTRY[] = { "country", "iso_code", NULL };
 static const char* GEOIP2_PATH_CITY[] = { "city", "names", "en", NULL };
 
 #define mmdb_lookup_utf8_(...) do {\
-    int mmrv_ = MMDB_aget_value(&state->entry, &val, __VA_ARGS__);\
+    int mmrv_ = MMDB_aget_value(state->entry, &val, __VA_ARGS__);\
     if(mmrv_ == MMDB_SUCCESS && val.has_data && val.type == MMDB_DATA_TYPE_UTF8_STRING && val.utf8_string) {\
         if(lookup) {\
             memcpy(lookup, val.utf8_string, val.data_size);\
@@ -220,7 +221,7 @@ static const char* GEOIP2_PATH_CITY[] = { "city", "names", "en", NULL };
 
 typedef struct {
     geoip2_t* db;
-    MMDB_entry_s entry;
+    MMDB_entry_s* entry;
     bool out_of_data;
 } geoip2_dcmap_cb_data_t;
 
@@ -273,7 +274,7 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level) {
     const char* path_subd[] = { "subdivisions", &idx[0], "iso_code", NULL };
 
     // fetch this level of subdivision data if possible
-    int mmrv = MMDB_aget_value(&state->entry, &val, path_subd);
+    int mmrv = MMDB_aget_value(state->entry, &val, path_subd);
     if(mmrv == MMDB_SUCCESS && val.has_data && val.type == MMDB_DATA_TYPE_UTF8_STRING && val.utf8_string) {
         if(lookup) {
             memcpy(lookup, val.utf8_string, val.data_size);
@@ -297,7 +298,7 @@ static const char* GEOIP2_PATH_LAT[] = { "location", "latitude", NULL };
 static const char* GEOIP2_PATH_LON[] = { "location", "longitude", NULL };
 
 #define mmdb_lookup_double_(d_out, ...) do {\
-    int mmrv_ = MMDB_aget_value(&state.entry, &val, __VA_ARGS__);\
+    int mmrv_ = MMDB_aget_value(state.entry, &val, __VA_ARGS__);\
     if(mmrv_ == MMDB_SUCCESS && val.has_data && val.type == MMDB_DATA_TYPE_DOUBLE) {\
         d_out = val.double_value;\
     }\
@@ -309,31 +310,31 @@ static const char* GEOIP2_PATH_LON[] = { "location", "longitude", NULL };
 } while(0)
 
 F_NONNULL
-static unsigned geoip2_get_dclist(geoip2_t* db, const uint32_t offset) {
-    dmn_assert(db);
-
-    if(offset > db->mmdb.data_section_size) {
-        dmn_log_err("plugin_geoip: map %s: GeoIP2 data has invalid offset %u (corrupt?)", db->map_name, offset);
-        siglongjmp(db->jbuf, 1);
-    }
+static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
+    dmn_assert(db); dmn_assert(db_entry);
 
     // lack of both would be pointless, and is checked at outer scope
     dmn_assert(db->dcmap || db->city_auto_mode);
 
     geoip2_dcmap_cb_data_t state = {
         .db = db,
-        .entry = {
-            .mmdb = &db->mmdb,
-            .offset = offset,
-        },
+        .entry = db_entry,
         .out_of_data = false,
     };
 
-    // for 1.1.5+, we must subtract MMDB_DATA_SECTION_SEPARATOR
-    // (which maxminddb.c internally defines as the value 16) from
-    // the offset before calling functions like MMDB_aget_value()
+#ifndef MMDB_GTE_120
+    // In GeoIP2 <1.2.0, an offset of zero (before the modification below)
+    // means not found in the DB, so default it.
+    if(!db_entry->offset)
+        return 0;
+
+    // for 1.1.5+ (but not 1.2.0+), we must subtract
+    // MMDB_DATA_SECTION_SEPARATOR (which maxminddb.c internally defines as
+    // the value 16) from the offset before calling functions like
+    // MMDB_aget_value()
     if(libmmdb_gt_114)
-        state.entry.offset -= 16;
+        state.entry->offset -= 16;
+#endif
 
     uint32_t dclist = DCLIST_AUTO;
 
@@ -361,36 +362,32 @@ static unsigned geoip2_get_dclist(geoip2_t* db, const uint32_t offset) {
 }
 
 F_NONNULL
-static uint32_t geoip2_get_dclist_cached(geoip2_t* db, const uint32_t offset) {
-    dmn_assert(db);
+static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry) {
+    dmn_assert(db); dmn_assert(db_entry);
 
-    // In GeoIP2, an offset of zero means not found in the DB, so default it.
-    // (even if it works in geoip2_get_dclist(), the offset cache can't handle
-    // an offset of zero efficiently anyways).
-    if(!offset)
-        return 0;
+    const uint32_t offset = db_entry->offset;
 
     unsigned bucket_size = 0;
     const unsigned ndx = offset % OFFSET_CACHE_SIZE;
 
     if(db->offset_cache[ndx]) {
-        for(bucket_size = 0; db->offset_cache[ndx][bucket_size].offset; bucket_size++)
+        for(bucket_size = 0; db->offset_cache[ndx][bucket_size].dclist != UINT32_MAX; bucket_size++)
             if(db->offset_cache[ndx][bucket_size].offset == offset)
                 return db->offset_cache[ndx][bucket_size].dclist;
     }
 
-    const uint32_t dclist = geoip2_get_dclist(db, offset);
+    const uint32_t dclist = geoip2_get_dclist(db, db_entry);
     db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
     dmn_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
-    db->offset_cache[ndx][bucket_size + 1].offset = 0;
+    db->offset_cache[ndx][bucket_size + 1].dclist = UINT32_MAX;
     dmn_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
     return dclist;
 }
 
 F_NONNULL
-static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr ip, unsigned depth, const uint32_t node_count, const uint32_t node_num) {
+static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr ip, unsigned depth, const uint32_t node_num) {
     dmn_assert(db); dmn_assert(nl);
     dmn_assert(depth < 129U);
 
@@ -419,28 +416,76 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
         siglongjmp(db->jbuf, 1);
     }
 
-    const uint32_t zero_node_num = node.left_record;
-    const uint32_t one_node_num = node.right_record;
     const unsigned new_depth = depth - 1U;
     const unsigned mask = 128U - new_depth;
 
-    if(zero_node_num >= node_count)
-        nlist_append(nl, ip.s6_addr, mask, geoip2_get_dclist_cached(db, zero_node_num - node_count));
-    else
-        geoip2_list_xlate_recurse(db, nl, ip, new_depth, node_count, zero_node_num);
+#ifdef MMDB_GTE_120
+
+    switch(node.left_record_type) {
+        case MMDB_RECORD_TYPE_SEARCH_NODE:
+            geoip2_list_xlate_recurse(db, nl, ip, new_depth, node.left_record);
+            break;
+        case MMDB_RECORD_TYPE_EMPTY:
+            nlist_append(nl, ip.s6_addr, mask, 0);
+            break;
+        case MMDB_RECORD_TYPE_DATA:
+            nlist_append(nl, ip.s6_addr, mask,
+                geoip2_get_dclist_cached(db, &node.left_record_entry));
+            break;
+        default:
+            dmn_log_err("plugin_geoip: map %s: GeoIP2 data invalid left of node %u", db->map_name, node_num);
+            siglongjmp(db->jbuf, 1);
+            break;
+    }
 
     SETBIT_v6(ip.s6_addr, mask - 1U);
 
-    if(one_node_num >= node_count)
-        nlist_append(nl, ip.s6_addr, mask, geoip2_get_dclist_cached(db, one_node_num - node_count));
-    else
-        geoip2_list_xlate_recurse(db, nl, ip, new_depth, node_count, one_node_num);
+    switch(node.right_record_type) {
+        case MMDB_RECORD_TYPE_SEARCH_NODE:
+            geoip2_list_xlate_recurse(db, nl, ip, new_depth, node.right_record);
+            break;
+        case MMDB_RECORD_TYPE_EMPTY:
+            nlist_append(nl, ip.s6_addr, mask, 0);
+            break;
+        case MMDB_RECORD_TYPE_DATA:
+            nlist_append(nl, ip.s6_addr, mask,
+                geoip2_get_dclist_cached(db, &node.right_record_entry));
+            break;
+        default:
+            dmn_log_err("plugin_geoip: map %s: GeoIP2 data invalid right of node %u", db->map_name, node_num);
+            siglongjmp(db->jbuf, 1);
+            break;
+    }
+
+#else // mmdb < 1.2.0
+
+    const uint32_t node_count = db->mmdb.metadata.node_count;
+
+    const uint32_t zero_node_num = node.left_record;
+    if(zero_node_num >= node_count) {
+        MMDB_entry_s e = { .mmdb = &db->mmdb, .offset = zero_node_num - node_count };
+        nlist_append(nl, ip.s6_addr, mask, geoip2_get_dclist_cached(db, &e));
+    }
+    else {
+        geoip2_list_xlate_recurse(db, nl, ip, new_depth, zero_node_num);
+    }
+
+    SETBIT_v6(ip.s6_addr, mask - 1U);
+
+    const uint32_t one_node_num = node.right_record;
+    if(one_node_num >= node_count) {
+        MMDB_entry_s e = { .mmdb = &db->mmdb, .offset = one_node_num - node_count };
+        nlist_append(nl, ip.s6_addr, mask, geoip2_get_dclist_cached(db, &e));
+    }
+    else {
+        geoip2_list_xlate_recurse(db, nl, ip, new_depth, one_node_num);
+    }
+#endif
 }
 
 static void geoip2_list_xlate(geoip2_t* db, nlist_t* nl) {
-    const uint32_t node_count = db->mmdb.metadata.node_count;
     const unsigned start_depth = db->is_v4 ? 32U : 128U;
-    geoip2_list_xlate_recurse(db, nl, ip6_zero, start_depth, node_count, 0U);
+    geoip2_list_xlate_recurse(db, nl, ip6_zero, start_depth, 0U);
 }
 
 typedef void (*ij_func_t)(geoip2_t*,nlist_t**);
@@ -481,9 +526,20 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
 
 void gdgeoip2_init(void) {
     unsigned x, y, z;
-    if(sscanf(MMDB_lib_version(), "%3u.%3u.%3u", &x, &y, &z) == 3)
-        if(x > 1 || (x == 1 && (y > 1 || (y == 1 && z > 4))))
+    if(sscanf(MMDB_lib_version(), "%3u.%3u.%3u", &x, &y, &z) == 3) {
+#ifdef MMDB_GTE_120
+        if(x < 1 || (x == 1 && y < 2))
+            log_fatal("plugin_geoip: compiled against libmaxminddb >= 1.2.0, but runtime reports version %u.%u.%u", x, y, z);
+#else
+        if(x > 1 || (x == 1 && y > 1))
+            log_fatal("plugin_geoip: compiled against libmaxminddb <1.2.0, but runtime reports version %u.%u.%u", x, y, z);
+        if(x == 1 && y == 1 && z > 4)
             libmmdb_gt_114 = true;
+#endif
+    }
+    else {
+        log_fatal("plugin_geoip: Cannot determine runtime version of libmaxminddb");
+    }
 }
 
 #else // HAVE_GEOIP2
