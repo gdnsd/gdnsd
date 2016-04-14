@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([gdnsd],[2.2.3],[https://github.com/gdnsd/gdnsd/issues])
+AC_INIT([gdnsd],[2.2.4],[https://github.com/gdnsd/gdnsd/issues])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_AUX_DIR([acaux])
 AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wall])

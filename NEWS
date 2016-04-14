@@ -1,3 +1,15 @@
+2.2.4 - 2016-04-14
+    * libmaxminddb 1.2.0+ compatibility, using the new interface.
+    * Note that libmaxminddb's 1.2.0 release is a shared library runtime
+      compatibility barrier for gdnsd; compiling gdnsd against <1.2.0 and
+      running against >= 1.2.0 (or vice-versa) is not supported, and the
+      daemon will exit with an error message indicating this if it happens.
+      For distributions, you may simply want to make 1.2.0 a required
+      minimum for gdnsd going forward.  This situation is unfortunate, but
+      there's no clean way to avoid it given upstream broke the undocumented
+      (but only!) database iteration interface's assumptions in 1.1.5, then
+      broke them again in 1.2.0 while introducing the new interface.
+
 2.2.3 - 2016-03-23
     * Workaround for libmaxminddb 1.1.5 compatibility
     * Added a Documentation= tag in the systemd unit file template
