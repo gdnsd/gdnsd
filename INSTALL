@@ -19,6 +19,7 @@ The following are recommended but optional:
   http://lttng.org/urcu/ (important for performance!)
 * libmaxminddb headers and libraries to enable MaxMind GeoIP2 database
   support: https://github.com/maxmind/libmaxminddb/releases
+  Preferably version 1.2.0 or higher!
 * libunwind headers and libraries. (for stacktrace on some fatals)
 
 The following have no real effect on the build or runtime, but are
