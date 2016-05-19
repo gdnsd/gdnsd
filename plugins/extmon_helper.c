@@ -54,6 +54,8 @@ typedef struct {
 static unsigned num_mons = 0;
 static mon_t* mons = NULL;
 
+static unsigned num_proc = 0;
+
 F_NONNULL F_NORETURN
 static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, dmn_logf_errno()); }
 
@@ -146,6 +148,9 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
         sendq_enq(emc_encode_mon(this_mon->cmd->idx, true));
         ev_io_start(loop, plugin_write_watcher);
     }
+    if (num_proc > 0) {
+        num_proc--;
+    }
     this_mon->result_pending = false;
 }
 
@@ -178,6 +183,9 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
             sendq_enq(emc_encode_mon(this_mon->cmd->idx, failed));
             ev_io_start(loop, plugin_write_watcher);
         }
+        if (num_proc > 0) {
+            num_proc--;
+        }
         this_mon->result_pending = false;
     }
 }
@@ -187,6 +195,16 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
 
     mon_t* this_mon = w->data;
     dmn_assert(!this_mon->result_pending);
+
+    if (this_mon->cmd->max_proc > 0 && num_proc >= this_mon->cmd->max_proc) {
+        // If more than max_proc processes are running, reschedule excess
+        //   checks to run 0.1 seconds later. After a few passes, this will
+        //   smooth the schedule out to prevent a thundering herd.
+        ev_timer_stop(loop, this_mon->interval_timer);
+        ev_timer_set(this_mon->interval_timer, 0.1, this_mon->cmd->interval);
+        ev_timer_start(loop, this_mon->interval_timer);
+        return;
+    }
 
     // Before forking, block all signals and save the old mask
     //   to avoid a race condition where local sighandlers execute
@@ -224,6 +242,8 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         //   is debugging via startfg they might want to see this crap anyways.
         execv(this_mon->cmd->args[0], this_mon->cmd->args);
         log_fatal("execv(%s, ...) failed: %s", this_mon->cmd->args[0], dmn_logf_strerror(errno));
+    } else { // parent
+        num_proc++;
     }
 
     // restore previous signal mask from before fork in parent
