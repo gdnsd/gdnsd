@@ -22,6 +22,7 @@ Example plugin config:
     svc_alwaysfail_via_timeout => {
       plugin => "extmon",
       timeout => 2,
+      max_proc => 10,
       cmd => ["/bin/sh", "-c", "sleep 5"]
     }
   }
@@ -122,6 +123,17 @@ and failure on every run, so will the internal state and so will the resulting
 changes in resolution.  Useful if extmon is actually gathering state from an
 external complex monitoring environment that has already taken care of things
 like anti-flap measures.
+
+=item B<max_proc>
+
+Interger, default 0 (unlimited).
+
+The maximum number of concurrent processes to spawn.
+
+This sets the limit on the number of concurrent commands that will be run.
+If the limit is exceeded, excess commands are rescheduled for 0.1 seconds
+later. After a few runs, the processes will be spread out enough to run
+without running into the limit.
 
 =back
 

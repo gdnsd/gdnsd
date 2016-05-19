@@ -32,6 +32,7 @@ typedef struct {
     unsigned idx;
     unsigned timeout;
     unsigned interval;
+    unsigned max_proc;
     unsigned num_args;
     // all strings NUL-terminated
     char** args; // array-of-strings NULL-terminated

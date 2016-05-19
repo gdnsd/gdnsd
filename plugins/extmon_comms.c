@@ -94,15 +94,17 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
     memcpy(buf, "CMD:", 4);
     len += 4;
 
-    // 2-byte index, 1-byte timeout, 1-byte interval
+    // 2-byte index, 2-byte timeout, 2-byte interval, 2-byte max_proc
     buf[len++] = (char)(cmd->idx >> 8);
     buf[len++] = (char)(cmd->idx & 0xFF);
     buf[len++] = (char)(cmd->timeout >> 8);
     buf[len++] = (char)(cmd->timeout & 0xFF);
     buf[len++] = (char)(cmd->interval >> 8);
     buf[len++] = (char)(cmd->interval & 0xFF);
+    buf[len++] = (char)(cmd->max_proc >> 8);
+    buf[len++] = (char)(cmd->max_proc & 0xFF);
 
-    // skip 2-byte len for rest of packet at offset 8
+    // skip 2-byte len for rest of packet at offset 12
     len += 2;
 
     // arg count + NUL-terminated arguments
@@ -128,9 +130,9 @@ bool emc_write_command(const int fd, const extmon_cmd_t* cmd) {
 
     // now go back and fill in the overall len
     //   of the variable area for desc/args.
-    const unsigned var_len = len - 12;
-    buf[10] = (char)(var_len >> 8);
-    buf[11] = (char)(var_len & 0xFF);
+    const unsigned var_len = len - 14;
+    buf[12] = (char)(var_len >> 8);
+    buf[13] = (char)(var_len & 0xFF);
 
     bool rv = emc_write_string(fd, buf, len);
     free(buf);
@@ -153,8 +155,8 @@ extmon_cmd_t* emc_read_command(const int fd) {
     extmon_cmd_t* cmd = NULL;
 
     {
-        uint8_t fixed_part[12];
-        if(emc_read_nbytes(fd, 12, fixed_part)
+        uint8_t fixed_part[14];
+        if(emc_read_nbytes(fd, 14, fixed_part)
             || strncmp((char*)fixed_part, "CMD:", 4)) {
             log_debug("emc_read_command() failed to read CMD: prefix");
             goto out_error;
@@ -164,11 +166,12 @@ extmon_cmd_t* emc_read_command(const int fd) {
         cmd->idx = ((unsigned)fixed_part[4] << 8) + fixed_part[5];
         cmd->timeout = ((unsigned)fixed_part[6] << 8) + fixed_part[7];
         cmd->interval = ((unsigned)fixed_part[8] << 8) + fixed_part[9];
+        cmd->max_proc = ((unsigned)fixed_part[10] << 8) + fixed_part[11];
         cmd->args = NULL;
         cmd->num_args = 0;
 
         // note we add an extra NULL at the end of args here, for execl()
-        const unsigned var_len = ((unsigned)fixed_part[10] << 8) + fixed_part[11];
+        const unsigned var_len = ((unsigned)fixed_part[12] << 8) + fixed_part[13];
         if(var_len < 4) {
             // 4 bytes would be enough for num_args, a single 1-byte argument
             //   and its NUL termiantor, and a zero-length NUL-terminated desc
