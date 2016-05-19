@@ -242,9 +242,8 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         //   is debugging via startfg they might want to see this crap anyways.
         execv(this_mon->cmd->args[0], this_mon->cmd->args);
         log_fatal("execv(%s, ...) failed: %s", this_mon->cmd->args[0], dmn_logf_strerror(errno));
-    } else { // parent
-        num_proc++;
     }
+    num_proc++;
 
     // restore previous signal mask from before fork in parent
     if(pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
