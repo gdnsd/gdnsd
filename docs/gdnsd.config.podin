@@ -608,6 +608,19 @@ and are used to communicate persistent, stateful information to
 the daemon.  This should live on a filesystem which is preserved
 across reboots.
 
+=item B<any_tcp_only>
+
+Boolean, default true.  If true, ANY queries over UDP are answered with
+truncated empty responses, which forces the client to retry over TCP.
+This is a mitigation against attackers using a gdnsd server as an
+amplified reflection traffic source, as ANY queries tend to have the
+largest response sizes.  ANY queries aren't commonly used by legitimate
+clients (they're mostly for debugging), truncation responses to TCP are
+a normal expectation regardless, and supporting DNS over TCP is a
+requirement of the DNS.  Therefore this should cause no real-world
+performance or interoperability problems in exchange for the protection
+it offers.
+
 =back
 
 =head1 SERVICE_TYPES

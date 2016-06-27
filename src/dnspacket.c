@@ -1927,8 +1927,11 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, 
     wire_dns_header_t* res_hdr = (wire_dns_header_t*)ctx->packet;
     offset = answer_from_db(ctx, stats, qname, offset);
 
-    // Check for TC-bit (overflow w/ just ans, auth, and glue)
-    if(unlikely(offset + (ctx->addtl_has_glue ? ctx->addtl_offset : 0) > ctx->this_max_response)) {
+    // Check for truncation (ANY-over-UDP truncation, or true overflow w/ just ans, auth, and glue)
+    if(unlikely(
+        (offset + (ctx->addtl_has_glue ? ctx->addtl_offset : 0) > ctx->this_max_response)
+        || (gcfg->any_tcp_only && ctx->qtype == DNS_TYPE_ANY && ctx->is_udp)
+    )) {
         ctx->ancount = 0;
         ctx->nscount = 0;
         ctx->arcount = 0;
