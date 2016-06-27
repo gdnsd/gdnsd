@@ -1914,6 +1914,14 @@ F_NONNULL
 static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, uint8_t* qname, unsigned offset) {
     dmn_assert(ctx); dmn_assert(stats); dmn_assert(qname); dmn_assert(offset);
 
+    if(*qname != 1) {
+        ctx->comptarget_count = 1;
+        ctx->comptargets[0].original = qname;
+        ctx->comptargets[0].comp_ptr = qname + 255;
+        ctx->comptargets[0].stored_at = sizeof(wire_dns_header_t);
+    }
+    ctx->qname_comp = 0x0C;
+
     const unsigned full_trunc_offset = offset;
 
     wire_dns_header_t* res_hdr = (wire_dns_header_t*)ctx->packet;
@@ -1996,14 +2004,6 @@ unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const dmn
 
     if(likely(status == DECODE_OK)) {
         hdr->flags2 = DNS_RCODE_NOERROR;
-        if(*lqname != 1) {
-            ctx->comptarget_count = 1;
-            ctx->comptargets[0].original = lqname;
-            ctx->comptargets[0].comp_ptr = lqname + 255;
-            ctx->comptargets[0].stored_at = sizeof(wire_dns_header_t);
-        }
-        ctx->qname_comp = 0x0C;
-
         if(likely(!ctx->chaos)) {
             memcpy(&ctx->client_info.dns_source, asin, sizeof(dmn_anysin_t));
             res_offset = answer_from_db_outer(ctx, stats, lqname, res_offset);
