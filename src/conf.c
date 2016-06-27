@@ -57,19 +57,19 @@ static const cfg_t cfg_defaults = {
     .zones_strict_data = false,
     .zones_strict_startup = true,
     .zones_rfc1035_auto = true,
-    .chaos_len = 0,
      // legal values are -20 to 20, so -21
      //  is really just an indicator that the user
      //  didn't explicitly set it.  The default
      //  behavior is dynamic...
     .priority = -21,
+    .chaos_len = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
     .max_ttl = 3600000U,
     .min_ttl = 5U,
     .log_stats = 3600U,
-    .max_edns_response = 1410U,
     .max_response = 16384U,
+    .max_edns_response = 1410U,
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
     .zones_rfc1035_auto_interval = 31U,
