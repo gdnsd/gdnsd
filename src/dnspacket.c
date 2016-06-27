@@ -1708,7 +1708,7 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
         const uint8_t* child_label = lstack[lcount];
         deleg_mod += *child_label;
         deleg_mod++;
-        ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
+        ltree_node_t* entry = current->child_table[ltree_hash(child_label, current->child_hash_mask)];
 
         while(entry) {
             if(!gdnsd_label_cmp(entry->label, child_label)) {
@@ -1723,7 +1723,7 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
     if(!rv_node && current->child_table) {
         dmn_assert(rval == DNAME_AUTH);
         static const uint8_t label_wild[2] =  { '\001', '*' };
-        ltree_node_t* entry = current->child_table[label_djb_hash(label_wild, current->child_hash_mask)];
+        ltree_node_t* entry = current->child_table[ltree_hash(label_wild, current->child_hash_mask)];
         while(entry) {
             if(entry->label[0] == '\001' && entry->label[1] == '*') {
                 rv_node = entry;

@@ -26,6 +26,7 @@
 #include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
+#include <gdnsd/misc.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -53,16 +54,9 @@ struct _fips_t {
 
 // keys are a uint32_t made of 4 bytes: CCRR (Country/Region)
 F_CONST
-static unsigned fips_djb_hash(uint32_t key) {
+static unsigned fips_hash(uint32_t key) {
    dmn_assert(key);
-
-   unsigned hash = 5381U;
-   hash = (hash * 33) ^ (key & 0xFFU);
-   hash = (hash * 33) ^ ((key & 0xFF00U) >> 8U);
-   hash = (hash * 33) ^ ((key & 0xFF0000U) >> 16U);
-   hash = (hash * 33) ^ ((key & 0xFF000000U) >> 24U);
-
-   return hash & FIPS_HASH_MASK;
+   return gdnsd_lookup2((const uint8_t*)&key, 4) & FIPS_HASH_MASK;
 }
 
 // It is assumed there are no duplicates in the input data.
@@ -73,7 +67,7 @@ static void fips_hash_add(fips_t* fips, const uint32_t key, const char* val) {
     dmn_assert(val);
 
     unsigned jmpby = 1;
-    unsigned slotnum = fips_djb_hash(key);
+    unsigned slotnum = fips_hash(key);
     while(fips->table[slotnum].key)
         slotnum = (slotnum + jmpby++) & FIPS_HASH_MASK;
     fips->table[slotnum].key = key;
@@ -115,7 +109,7 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
     dmn_assert(key);
 
     unsigned jmpby = 1;
-    unsigned slotnum = fips_djb_hash(key);
+    unsigned slotnum = fips_hash(key);
     while(fips->table[slotnum].key) {
         if(fips->table[slotnum].key == key)
             return fips->table[slotnum].val;

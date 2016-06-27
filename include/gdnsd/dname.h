@@ -23,6 +23,7 @@
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
+#include <gdnsd/misc.h>
 
 #include <inttypes.h>
 #include <string.h>
@@ -212,10 +213,22 @@ static void gdnsd_dname_terminate(uint8_t* dname) {
 F_NONNULL F_PURE
 gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
 
+// gdnsd_dname_hash was a library function, and must remain so for un-rebuilt
+// 3rd party plugins for now.  To cleanup in next major version bump...
 F_PURE F_NONNULL
 unsigned gdnsd_dname_hash(const uint8_t* input);
 
 #pragma GCC visibility pop
+
+// This static version of the above and #define lets core code and rebuilt
+// plugins use the static version instead, which can be inlined.
+F_PURE F_NONNULL F_UNUSED
+static unsigned gdnsd_dname_hash_static(const uint8_t *input) {
+    dmn_assert(input);
+    const uint32_t len = *input++ - 1U;
+    return gdnsd_lookup2(input, len);
+}
+#define gdnsd_dname_hash gdnsd_dname_hash_static
 
 // Check the status of a known-good dname.  It is assumed that the dname was
 //  constructed correctly by other code, and merely differentiates quickly

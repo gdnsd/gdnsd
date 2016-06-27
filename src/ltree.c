@@ -123,7 +123,7 @@ static void ltree_childtable_grow(ltree_node_t* node) {
             ltree_node_t* next_entry = entry->next;
             entry->next = NULL;
 
-            const uint32_t child_hash = label_djb_hash(entry->label, new_hash_mask);
+            const uint32_t child_hash = ltree_hash(entry->label, new_hash_mask);
             ltree_node_t* slot = new_table[child_hash];
 
             if(slot) {
@@ -152,7 +152,7 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 
     if(node->child_table) {
         const uint32_t child_mask = count2mask(node->child_hash_mask);
-        const uint32_t child_hash = label_djb_hash(child_label, child_mask);
+        const uint32_t child_hash = ltree_hash(child_label, child_mask);
         ltree_node_t* child = node->child_table[child_hash];
         while(child) {
             if(!gdnsd_label_cmp(child_label, child->label)) {
@@ -183,7 +183,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
     dmn_assert(node); dmn_assert(child_label);
 
     const uint32_t child_mask = count2mask(node->child_hash_mask);
-    const uint32_t child_hash = label_djb_hash(child_label, child_mask);
+    const uint32_t child_hash = ltree_hash(child_label, child_mask);
 
     if(!node->child_table) {
         dmn_assert(!node->child_hash_mask);
@@ -820,7 +820,7 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
 
             lcount--;
             const uint8_t* child_label = lstack[lcount];
-            ltree_node_t* entry = current->child_table[label_djb_hash(child_label, current->child_hash_mask)];
+            ltree_node_t* entry = current->child_table[ltree_hash(child_label, current->child_hash_mask)];
 
             while(entry) {
                 if(!gdnsd_label_cmp(child_label, entry->label)) {
@@ -834,7 +834,7 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
         //  If in auth space with no match, and we still have a child_table, check for wildcard
         if(!rv_node && rval == DNAME_AUTH && current->child_table) {
             static const uint8_t label_wild[2] =  { '\001', '*' };
-            ltree_node_t* entry = current->child_table[label_djb_hash(label_wild, current->child_hash_mask)];
+            ltree_node_t* entry = current->child_table[ltree_hash(label_wild, current->child_hash_mask)];
             while(entry) {
                 if(entry->label[0] == '\001' && entry->label[1] == '*') {
                     rv_node = entry;

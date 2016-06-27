@@ -23,6 +23,7 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/dmn.h>
 #include <gdnsd/file.h>
+#include <gdnsd/misc.h>
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -129,15 +130,9 @@ static unsigned count2mask(unsigned x) {
 }
 
 F_NONNULL F_PURE
-static unsigned djb_hash(const char* k, unsigned klen, const unsigned hash_mask) {
+static unsigned key_hash(const char* k, unsigned klen, const unsigned hash_mask) {
    dmn_assert(k);
-
-   unsigned hash = 5381;
-
-   while(klen--)
-       hash = ((hash << 5) + hash) ^ (unsigned)*k++;
-
-   return hash & hash_mask;
+   return gdnsd_lookup2((const uint8_t*)k, klen) & hash_mask;
 }
 
 F_WUNUSED
@@ -157,7 +152,7 @@ static void hash_grow(vscf_hash_t* h) {
     for(unsigned i = 0; i <= old_hash_mask; i++) {
         vscf_hentry_t* entry = h->children[i];
         while(entry) {
-            const unsigned child_hash = djb_hash(entry->key, entry->klen, new_hash_mask);
+            const unsigned child_hash = key_hash(entry->key, entry->klen, new_hash_mask);
             vscf_hentry_t* slot = new_table[child_hash];
             vscf_hentry_t* next_entry = entry->next;
             entry->next = NULL;
@@ -192,7 +187,7 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
     }
 
     const unsigned child_mask = count2mask(h->child_count);
-    const unsigned child_hash = djb_hash(key, klen, child_mask);
+    const unsigned child_hash = key_hash(key, klen, child_mask);
 
     vscf_hentry_t** store_at = &(h->children[child_hash]);
     while(*store_at) {
@@ -830,7 +825,7 @@ vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, uns
     dmn_assert(key);
     if(d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
-        unsigned child_hash = djb_hash(key, klen, child_mask);
+        unsigned child_hash = key_hash(key, klen, child_mask);
         vscf_hentry_t* he = d->hash.children[child_hash];
         while(he) {
             if((klen == he->klen) && !memcmp(key, he->key, klen)) {
@@ -866,7 +861,7 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
     dmn_assert(key);
     if(d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
-        unsigned child_hash = djb_hash(key, klen, child_mask);
+        unsigned child_hash = key_hash(key, klen, child_mask);
         vscf_hentry_t* he = d->hash.children[child_hash];
         while(he) {
             if((klen == he->klen) && !memcmp(key, he->key, klen))

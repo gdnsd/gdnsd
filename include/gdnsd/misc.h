@@ -208,7 +208,7 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
     c -= a; c -= b; c ^= (b>>15); \
 }
 
-F_PURE F_UNUSED
+F_PURE F_UNUSED F_WUNUSED
 static uint32_t gdnsd_lookup2(const uint8_t *k, uint32_t len) {
     dmn_assert(k || !len);
 

@@ -93,6 +93,7 @@ typedef struct _ltree_node_struct ltree_node_t;
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/plugapi.h>
+#include <gdnsd/misc.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -375,23 +376,13 @@ typedef enum {
     DNAME_DELEG = 2
 } ltree_dname_status_t;
 
-/********************************************************************
- * This is the excellent fast string hash algorithm DJB came up
- * with.  He uses it in his cdb database.  http://cr.yp.to
- ********************************************************************/
-
-// this variant is for labels encoded as one length-byte followed
-//  by N characters.  Thus the label "www" becomes "\003www" (4 bytes)
+// this hash wrapper is for labels encoded as one length-byte followed
+//  by N characters.  Thus the label "www" is "\003www" (4 bytes)
 F_UNUSED F_PURE F_WUNUSED F_NONNULL F_UNUSED
-static uint32_t label_djb_hash(const uint8_t* input, const uint32_t hash_mask) {
+static uint32_t ltree_hash(const uint8_t* input, const uint32_t hash_mask) {
    dmn_assert(input);
-
-   uint32_t hash = 5381;
-   uint32_t len = *input++;
-   while(len--)
-       hash = (hash * 33) ^ *input++;
-
-   return hash & hash_mask;
+   const unsigned len = *input++;
+   return gdnsd_lookup2(input, len) & hash_mask;
 }
 
 // "lstack" must be allocated to 127 pointers

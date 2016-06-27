@@ -140,11 +140,6 @@ static int zone_cmp(zone_t* za, zone_t* zb) {
 
 /******* ztree code *********/
 
-static unsigned label_hash(const uint8_t* label) {
-    const uint32_t len = *label++;
-    return gdnsd_lookup2(label, len);
-}
-
 // search the children of one node for a given label.
 // the _writer version is for the zone updater thread.
 // the normal version is for readers that need prcu_deref.
@@ -159,7 +154,7 @@ static ztree_t* ztree_node_find_child_writer(const ztree_t* node, const uint8_t*
         dmn_assert(children->alloc);
         const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
-        unsigned slot = label_hash(label) & child_mask;
+        unsigned slot = ltree_hash(label, child_mask);
         while((rv = children->store[slot])
           && gdnsd_label_cmp(label, rv->label)) {
             slot += jmpby++;
@@ -181,7 +176,7 @@ static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label)
         dmn_assert(children->alloc);
         const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
-        unsigned slot = label_hash(label) & child_mask;
+        unsigned slot = ltree_hash(label, child_mask);
         while((rv = gdnsd_prcu_rdr_deref(children->store[slot]))
           && gdnsd_label_cmp(label, rv->label)) {
             slot += jmpby++;
@@ -243,7 +238,7 @@ static void ztree_node_check_grow(ztree_t* node) {
             if(entry) {
                 new_children->count++;
                 unsigned jmpby = 1;
-                unsigned slot = label_hash(entry->label) & new_hash_mask;
+                unsigned slot = ltree_hash(entry->label, new_hash_mask);
                 while(new_children->store[slot]) {
                     slot += jmpby++;
                     slot &= new_hash_mask;
@@ -273,7 +268,7 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
 
     const unsigned child_mask = children->alloc - 1;
     unsigned jmpby = 1;
-    unsigned slot = label_hash(label) & child_mask;
+    unsigned slot = ltree_hash(label, child_mask);
     while((rv = children->store[slot])
       && gdnsd_label_cmp(label, rv->label)) {
         slot += jmpby++;
