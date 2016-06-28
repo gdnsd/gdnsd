@@ -17,5 +17,6 @@
   Memcheck:Leak
   ...
   fun:_dl_allocate_tls
+  ...
   fun:pthread_create*
 }
