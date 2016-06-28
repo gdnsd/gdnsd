@@ -365,7 +365,7 @@ void plugin_extmon_load_config(vscf_data_t* config, const unsigned num_threads V
         helper_path = gdnsd_resolve_path_libexec("gdnsd_extmon_helper", NULL);
 }
 
-#define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
+#define SVC_OPT_UINT_NOMIN(_hash, _typnam, _loc, _max) \
     do { \
         vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
         if(_data) { \
@@ -373,8 +373,8 @@ void plugin_extmon_load_config(vscf_data_t* config, const unsigned num_threads V
             if(!vscf_is_simple(_data) \
             || !vscf_simple_get_as_ulong(_data, &_val)) \
                 log_fatal("plugin_extmon: Service type '%s': option '%s': Value must be a positive integer", _typnam, #_loc); \
-            if(_val < _min || _val > _max) \
-                log_fatal("plugin_extmon: Service type '%s': option '%s': Value out of range (%lu, %lu)", _typnam, #_loc, _min, _max); \
+            if(_val > _max) \
+                log_fatal("plugin_extmon: Service type '%s': option '%s': Value out of range (0, %lu)", _typnam, #_loc, _max); \
             _loc = (unsigned) _val; \
         } \
     } while(0)
@@ -391,7 +391,7 @@ void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
     this_svc->name = strdup(name);
     this_svc->timeout = timeout;
     this_svc->interval = interval;
-    SVC_OPT_UINT(svc_cfg, name, max_proc, 0LU, 65534LU);
+    SVC_OPT_UINT_NOMIN(svc_cfg, name, max_proc, 65534LU);
     this_svc->max_proc = max_proc;
 
     vscf_data_t* args_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "cmd", true);
