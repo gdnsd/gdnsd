@@ -1,0 +1,5 @@
+mfo3 => {
+  service_types = [ down ]
+  1 => 2001:DB8::DECA:FBAD
+  2 => 2001:DB8::AD15:EA5E
+}

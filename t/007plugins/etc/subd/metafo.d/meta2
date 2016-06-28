@@ -1,0 +1,8 @@
+meta2 => {
+  datacenters => [ dc1, dc2, dc3 ]
+  dcmap => {
+    dc1 => 192.0.2.134 # failed service_types=down inherit
+    dc2 => [ 192.0.2.134, 192.0.2.135 ] # failed service_types=down inherit
+    dc3 => %metafo!meta1 # self-reference and up
+  }
+}

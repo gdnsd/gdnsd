@@ -1,0 +1,7 @@
+meta1 => {
+  datacenters => [ dc1, dc2 ]
+  dcmap => {
+    dc1 => %simplefo!sfo1 # this is failed
+    dc2 => %multifo!mfo2 # this is not
+  }
+}

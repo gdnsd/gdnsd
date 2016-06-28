@@ -965,15 +965,25 @@ Example 3 (compressed and ugly):
 
 vscf now has a mechanism for config includefiles.  The syntax is
 
-  $include{filename}
+  $include{dir/file} # single file must exist
+  $include{dir/*}   # not ok if no matching files
+  $include{dir}     # ok if no files in dir
 
-where C<filename> can use the same kinds of escaping and/or
-double-quoting as normal scalar string data.  Whitespace between
-the filename and the surrounding brackets is optional.  Whitespace
-between C<$include> and the following C<{> is not allowed.  If the filename
-is relative (does not begin with F</>), it is interpreted as
-relative to the directory containing the parent file.  Include files
-can nest other include files to arbitrary depth.
+where the path can use the same kinds of escaping and/or double-quoting
+as normal scalar string data.  Whitespace between the path and the
+surrounding brackets is optional.  Whitespace between C<$include> and
+the following C<{> is not allowed.  If the path is relative (does not
+begin with F</>), it is interpreted as relative to the directory
+containing the parent file.  Includes can nest other includes to
+arbitrary depth.
+
+The path is normally treated as a glob, allowing the inclusion of
+multiple files.  When used as a glob, there must be at least one match -
+it will be an error if there are no matching files.  However, if C<path>
+is not a glob and names an B<existing> directory explicitly, it will be
+treated like it was a glob of all files within that directory by
+appending C</*>, and it will not be an error if there are no files
+within that directory (no matches for the glob).
 
 Keep in mind that at the top level of any given vscf file (even
 include files), the file must syntactically be either an implicit
@@ -991,7 +1001,8 @@ hand side of a hash map entry or a member of an array) with its own
 contents, which are either a hash or an array.  Note that there is no
 mechanism for flattening an include-file's array into the parent array
 (the whole included array would be a single array item within the parent
-array).  Examples:
+array).  Also, including multiple files in a single statement (directory
+name or glob pattern) are not allowed in value context.  Examples:
 
   main config:
     options => { listen => $include{foo} }
@@ -1016,13 +1027,16 @@ not allowed. Example:
     options => { ... },
     plugins => {
         extmon => { ... },
-        metafo => { ... },
-        $include{geoip_cfg},
-        simplefo => { ... }
+        $include{geoip.cfg},
+        $include{plugins.d},
     }
-  geoip_cfg:
-    geoip => { ... },
+  geoip.cfg:
+    geoip => { ... }
+  plugins.d/foo:
     weighted => { ... }
+    simplefo => { ... }
+  plugins.d/bar:
+    metafo => { ... }
 
 =back
 

@@ -1,0 +1,8 @@
+meta-ac => {
+  datacenters => [ dc-x, dc-y ],
+  service_types => up # applies to the CNAME in dc-y below...
+  dcmap => {
+    dc-x => %simplefo!sfo1 # is a failed address resource
+    dc-y => primary.is.down.example.net. # will return this CNAME instead
+  }
+}
