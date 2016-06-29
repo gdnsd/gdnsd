@@ -1,6 +1,6 @@
 AC_PREREQ([2.63])
 AC_INIT([gdnsd],[2.2.4],[https://github.com/gdnsd/gdnsd/issues])
-AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_SRCDIR([src/runtime.c])
 AC_CONFIG_AUX_DIR([acaux])
 AM_INIT_AUTOMAKE([1.11.1 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wall])
 AC_CONFIG_MACRO_DIR([m4])
@@ -325,6 +325,11 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
 # end pthread_setname stuff
 #---------------------------------------------
 
+#----------------------------------------------------------------------
+# non-standard header, used for FreeBSD sysctl() for KERN_PROC_PATHNAME
+AC_CHECK_HEADERS([sys/sysctl.h])
+#----------------------------------------------------------------------
+
 # == inotify stuff ==
 # inotify_init1() is Linux 2.6.27+ and glibc 2.9
 # We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
@@ -367,9 +372,9 @@ fi
 # various perl modules for the testsuites (optional)
 HAVE_TESTSUITE_MODULES=0
 AX_PROG_PERL_MODULES(
-    [Test::More JSON::PP Socket6 IO::Socket::INET6 HTTP::Daemon LWP],
+    [Test::More JSON::PP Socket6 IO::Socket::INET6 HTTP::Daemon],
     [HAVE_TESTSUITE_MODULES=1],
-    AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More, JSON::PP, Socket6, IO::Socket::INET6, HTTP::Daemon, and LWP (aka libwww-perl)]])
+    AC_MSG_WARN([[Cannot "make check" without Perl modules Test::More, JSON::PP, Socket6, IO::Socket::INET6, and HTTP::Daemon]])
 )
 AC_SUBST([HAVE_TESTSUITE_MODULES])
 

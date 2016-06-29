@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -20,7 +20,7 @@
 #include <config.h>
 #include "conf.h"
 
-#include "main.h"
+#include "runtime.h"
 #include "socks.h"
 
 #include <gdnsd-prot/mon.h>
@@ -38,39 +38,31 @@
 // Global config, read-only
 const cfg_t* gcfg = NULL;
 
-static const char DEF_USERNAME[] = PACKAGE_NAME;
-
 // just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
 static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00";
 static const unsigned chaos_prefix_len = 10U;
 static const char chaos_def[] = "gdnsd";
 
 static const cfg_t cfg_defaults = {
-    .username = DEF_USERNAME,
     .chaos = NULL,
-    .weaker_security = false,
+    .stats_file_path = NULL,
     .include_optional_ns = false,
     .realtime_stats = false,
-    .lock_mem = false,
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
     .zones_strict_data = false,
     .zones_strict_startup = true,
     .zones_rfc1035_auto = true,
     .any_tcp_only = true,
-     // legal values are -20 to 20, so -21
-     //  is really just an indicator that the user
-     //  didn't explicitly set it.  The default
-     //  behavior is dynamic...
-    .priority = -21,
     .chaos_len = 0,
+    .stats_file_interval = 15,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
     .max_ttl = 3600000U,
     .min_ttl = 5U,
     .log_stats = 3600U,
-    .max_response = 16384U,
-    .max_edns_response = 1410U,
+    .max_response = 0U,
+    .max_edns_response = 0U,
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
     .zones_rfc1035_auto_interval = 31U,
@@ -257,7 +249,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
         } \
     } while(0)
 
-cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd) {
+void conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd) {
     dmn_assert(!cfg_root || vscf_is_hash(cfg_root)); dmn_assert(socks_cfg);
 
     cfg_t* cfg = xmalloc(sizeof(*cfg));
@@ -266,13 +258,21 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     vscf_data_t* psearch_array = NULL;
     const char* chaos_data = chaos_def;
 
+    // max_response and max_edns_response are copied from socks_cfg to main config:
+    cfg->max_response = socks_cfg->max_response;
+    cfg->max_edns_response = socks_cfg->max_edns_response;
+    dmn_assert(cfg->max_response);
+    dmn_assert(cfg->max_edns_response);
+    dmn_assert(cfg->max_response >= cfg->max_edns_response);
+
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
-        CFG_OPT_INT(options, priority, -20L, 20L);
-        CFG_OPT_BOOL(options, weaker_security);
+        CFG_OPT_STR(options, stats_file_path);
+        if(!cfg->stats_file_path)
+            cfg->stats_file_path = strdup("stats.json");
+        CFG_OPT_UINT_NOMIN(options, stats_file_interval, 3600LU);
         CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, realtime_stats);
-        CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
         CFG_OPT_BOOL(options, any_tcp_only);
@@ -286,12 +286,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_UINT(options, max_ncache_ttl, 10LU, 86400LU);
         if(cfg->max_ncache_ttl < cfg->min_ttl)
             log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ncache_ttl, cfg->min_ttl);
-        CFG_OPT_UINT(options, max_response, 4096LU, 64000LU);
-        CFG_OPT_UINT(options, max_edns_response, 512LU, 64000LU);
-        if(cfg->max_edns_response > cfg->max_response) {
-            log_warn("The global option 'max_edns_response' was reduced from %u to the max_response size of %u", cfg->max_edns_response, cfg->max_response);
-            cfg->max_edns_response = cfg->max_response;
-        }
+
         // Limit here (24) is critical, to ensure that when encode_rr_cname resets
         //  c->qname_comp in dnspacket.c, c->qname_comp must still be <16K into a packet.
         // Nobody should have even the default 16-depth CNAMEs anyways :P
@@ -308,7 +303,6 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         if(vscf_hash_get_data_byconstkey(options, "zones_rfc1035_min_quiesce", true))
             log_warn("The global option 'zones_rfc1035_min_quiesce' is deprecated and no longer has any effect");
 
-        CFG_OPT_STR(options, username);
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate_const(options, true, bad_key, "options");
@@ -375,5 +369,6 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     // admin_state checking, can fail fatally
     gdnsd_mon_check_admin_file();
 
-    return cfg;
+    // expose a readonly copy of the config data globally
+    gcfg = cfg;
 }

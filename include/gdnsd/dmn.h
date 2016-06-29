@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -99,13 +99,7 @@
 **** Daemonization interfaces
 ***/
 
-// the pcall stuff isn't very well designed yet :P
-typedef void(*dmn_func_vv_t)(void);
-DMN_F_NONNULL
-unsigned dmn_add_pcall(dmn_func_vv_t func);
-void dmn_pcall(unsigned id);
-
-// dmn_init1() *must* be called before *any* other libdmn function!
+// dmn_init() *must* be called before *any* other libdmn function!
 // debug: if false, all potential messages from dmn_log_debug() and
 //    dmn_log_devdebug() will be suppressed.
 // foreground: if true, we won't actually do fork/setsid-type daemonization,
@@ -113,69 +107,74 @@ void dmn_pcall(unsigned id);
 // use_syslog: whether to log to syslog at all (false for test/cmdline stuff)
 // name: the name of your daemon/program.  Will be used for log outputs
 //    and pidfile naming.
-// Immediately after init1(), only the logging APIs (dmn_log_*, dmn_logf_*
-//    dmn_fmtbuf_*) are available.
+// After dmn_init(), most of the API is usable, except for the process
+// management calls and daemon startup stuff which depend on pm_config below.
 DMN_F_NONNULL
-void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name);
+void dmn_init(bool debug, bool foreground, bool use_syslog, const char* name);
 
-// dmn_init2() must be called after dmn_init1() and before dmn_init3().
-// pid_dir: This is the application-specific(!)
-//   directory within which the pidfile exists (or will be created).  This
-//   should not be, for example, "/run" or "/var/run", it should be something
-//   like "/run/somedaemond" or "/var/run/somedaemond".
-//   Must be an absolute path (begins with /).  If NULL, none of the pidfile
-//   -related calls (_stop, _status, _signal) will do anything useful, and
-//   _acquire_pidfile() will be a no-op).
-// Immediately after dmn_init2() the basic daemon-control APIs
-//   (dmn_status(), dmn_stop(), and dmn_signal()) are now
-//   available for use (in addition to the log APIs allowed
-//   by init1()).
-void dmn_init2(const char* pid_dir);
+// dmn_pm_config() comes after dmn_init(), and configures libdmn for process
+//   management (of other procs, or daemonized startup of self).
+// pid_dir: This is the application-specific(!) directory within which the
+//   pidfile exists (or will be created).  This should not be, for example,
+//   "/run" or "/var/run", it should be something like "/run/somedaemond" or
+//   "/var/run/somedaemond".  Must be an absolute path (begins with /).  If
+//   NULL, none of the pidfile -related calls (_stop, _status, _signal) will
+//   do anything useful, and dmn_pidfile_lock() will be a no-op).
+void dmn_pm_config(const char* pid_dir);
 
-// dmn_init3 must be called after dmn_init2() and before dmn_fork().
-// username: optional - if set, the daemon will drop privileges
-//   to the uid/gid of this user during dmn_secure() later.  If
-//   the daemon was not started as root, this option is ignored.
-// restart: if true, much later in dmn_acquire_pidfile() this
-//   daemon will try to kill any conflicting instance of itself
-//   (same pidfile) before acquiring the pidfile.
-void dmn_init3(const char* username, const bool restart);
-
+// Call after _pm_config(), and before dmn_pidfile_lock()
 // In !foreground cases, does the whole 9 yards of proper daemonization,
 //   with execution continuing in the final daemonized child.  The original
 //   process that invoked dmn_fork lingers in a private subroutine inside
 //   libdmn as a "helper" until dmn_finish(), thus keeping the terminal
 //   or manager process tied up until it can return a correct exit value,
-//   and helping with any pcall operations as root post-privdrop.
-// In "foreground" cases using privdrop *and* pcalls, this will not do
-//   any real daemonization, but will fork a helper process to retain root
-//   for pcall execution later, which terminates at dmn_finish().
-// In foreground cases with no privdrop (or no pcalls), does basically nothing.
+// In foreground cases it should still be called, but does nothing.
 void dmn_fork(void);
 
-// If we're executing as the root user, this will privdrop
-//   us as indicated by the earlier username option to init3.
-// If pid_dir doesn't exist and/or isn't owned by username (if defined),
-//   and we're running as root, the pid_dir will be created and/or chowned
-//   as necessary/possible before the loss of privilege to do so here in
-//   this function.
-// Unless "weak" is set, dmn_secure() may take additional restrictive measures
-//   regardless of whether we were executing as root or not.
-void dmn_secure(const bool weak);
+// locked pidfiles for daemon exclusivity, post-dmn_fork().
+// libdmn tracks the pidfile fd internally.  switching lock types after initial
+// lock is allowed.  _lock always returns the (new or existing) lock fd in case
+// it needs to be closed after an application fork().
+// For normal daemon startup:
+//    dmn_fork(); ...; dmn_pidfile_lock(DMN_LOCK_EXCL); ...; dmn_finish();
+// Normal daemon shutdown:
+//    do not explicitly release - exiting releases-on-exit
+// For controlled handoff from old to new daemon instance (e.g.
+// reload via fork->execve), the pattern is something like:
+// -------------------------------------------------------------------
+// old daemon                    | new daemon
+// -------------------------------------------------------------------
+// dmn_finish()                  |
+// ... normal runtime ...        |
+// ... decides to reload ...     |
+// dmn_pidfile_lock(DMN_LOCK_SH) |
+// ... spawn new daemon ...      |
+//                               | ... lots of startup stuff ...
+//                               | dmn_pidfile_lock(DMN_LOCK_SH)
+//                               | ... notify parent to release ...
+// dmn_pidfile_release()         | dmn_pidfile_lock(DMN_LOCK_EX|DMN_LOCK_W)
+// ... cleanup ...               | dmn_finish()
+// exit                          | ... normal runtime ...
+// -------------------------------------------------------------------
+// (and of course, if the new daemon fails before old daemon's release, old
+// daemon can switch back to excl when aborting the reload operation).
+typedef enum {
+   DMN_LOCK_SH = 0, // shared
+   DMN_LOCK_EX = 1, // exclusive
+   DMN_LOCK_W  = 2, // blocking wait on lock acquisition
+} dmn_lockflags_t;
+int dmn_pidfile_lock(const dmn_lockflags_t flags);
+void dmn_pidfile_release(void);
 
-// If the restart parameter was set in init3, this function will first
-//   check for a running daemon via the pidfile lock mechanism and terminate it.
-// Regardless, it will then acquire a proper pidfile lock (or die trying),
-//   if pid_dir was defined back in init3 (otherwise this call is a no-op).
-// When this returns without dying, the current process is now the official
-//   runtime instance of this daemon for e.g. dmn_status().
-void dmn_acquire_pidfile(void);
-
-// Finish the daemon startup procedure by signalling the helper process
-//   (if any) to exit with status 0.  If your daemon doesn't make it
-//   far enough to call this, the helper will exit non-zero to indicate
-//   failure to the shell/manager/etc.
+// Finish the daemon startup procedure by signalling the parent process still
+//   attached to the terminal (if applicable) to exit with status 0.  If your
+//   daemon doesn't make it far enough to call this, the helper will exit
+//   non-zero to indicate failure to the shell/manager/etc.  It also sends a
+//   readiness notification to systemd if applicable.
+// Must acquire excl pidfile lock before dmn_finish()!
 void dmn_finish(void);
+
+// These 3x process management calls require _pm_config() first!
 
 // retval == 0 means daemon is not running
 // retval != 0 means daemon is still running (and the pid is the retval)
@@ -189,6 +188,19 @@ pid_t dmn_stop(void);
 // Send an arbitrary signal to the running daemon, retval zero indicates
 //   success, non-zero indicates failure.
 int dmn_signal(int sig);
+
+// If "username" is not NULL and the process is currently executing as root,
+//   drops privileges to the specified user and fails fatally if any part of
+//   that procedure doesn't work correctly.
+// Unless "weak" is set, dmn_privdrop() may take additional restrictive
+//   measures regardless of whether we were executing as root or not.
+void dmn_privdrop(const char* username, const bool weak);
+
+// The "sig" signal (could be zero - no signal) is sent exactly once, then the
+// status of the daemon is polled repeatedly at 50ms delay intervals
+// Function returns when either the process is dead or our delays all expired.
+// Total timeout is 15s.  True retval indicates daemon is still running.
+bool dmn_terminate_pid_and_wait(int sig, pid_t pid);
 
 /***
 **** Logging interfaces
@@ -216,6 +228,11 @@ void dmn_loggerv(int level, const char* fmt, va_list ap);
 //   cannot be sent, a fatal error will be thrown.
 DMN_F_NONNULL
 void dmn_sd_notify(const char* notify_msg, const bool optional);
+
+// sends non-optional "MAINPID=X\nREADY=1\n", where X is getpid().
+// note this is already done by dmn_finish(), but there are other uses with
+// complex reload management.
+void dmn_sd_notify_readypid(void);
 
 // The intended simple API for logging with 5 separate
 //  function-call-like interfaces with different levels.
@@ -279,6 +296,17 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
          dmn_logger(LOG_DEBUG,__VA_ARGS__);\
      } while(0)
 #endif // NDEBUG
+
+// just like dmn_assert, but is included in all builds even if NDEBUG is on.
+// intent is to use this for API usage checks in a shared library, etc...
+// (to check that the user conformed to the interface requirements)
+#define dmn_assert_ndebug(expr) do {\
+     if(!(expr)) {\
+       dmn_logger(LOG_CRIT,"Assertion '%s' failed in %s() at %s:%u, backtrace:%s",\
+       #expr, __func__, __FILE__, __LINE__, dmn_logf_bt());\
+       abort();\
+     }\
+   } while(0)
 
 //
 // fmtbuf_alloc() allows you to make custom string-formatters

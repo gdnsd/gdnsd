@@ -91,7 +91,7 @@ void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, cons
 
 void gdmaps_test_init(const char* cfg_dir) {
     dmn_assert(cfg_dir);
-    dmn_init1(false, true, false, "gdmaps_test");
+    dmn_init(false, true, false, "gdmaps_test");
     gdnsd_initialize(cfg_dir, false);
 }
 

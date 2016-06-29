@@ -23,7 +23,7 @@
 #include "zscan_rfc1035.h"
 #include "conf.h"
 #include "ztree.h"
-#include "main.h"
+#include "runtime.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/misc.h>

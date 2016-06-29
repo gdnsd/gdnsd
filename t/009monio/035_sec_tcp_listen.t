@@ -50,7 +50,7 @@ _GDT->test_dns(
     answer => 'ns1.example.com 86400 A 192.0.2.254',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);
 _GDT->test_kill_daemon($http_pid);
 
 END { kill(9, $http_pid) if($http_pid && kill(0, $http_pid)) }

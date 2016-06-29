@@ -214,7 +214,7 @@ eval {_GDT->check_stats(
 )};
 ok(!$@) or diag $@;
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);
 
 # Save random seed to test output directory if any tests failed.
 #   (we also diag the seed on every run, but with the new parallel

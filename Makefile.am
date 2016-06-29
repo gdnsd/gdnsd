@@ -102,11 +102,19 @@ install-exec-hook-top:
 # src/
 #=====================================
 
+bin_PROGRAMS += src/gdnsdctl
 sbin_PROGRAMS += src/gdnsd
 
+src_gdnsdctl_SOURCES = src/gdnsdctl.c
+src_gdnsdctl_CFLAGS = $(CFLAGS_PIE)
+src_gdnsdctl_LDFLAGS = $(CFLAGS_PIE)
+src_gdnsdctl_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
+
 src_gdnsd_SOURCES = \
-	src/main.c \
-	src/main.h \
+	src/mcp.c \
+	src/mcp.h \
+	src/runtime.c \
+	src/runtime.h \
 	src/conf.c \
 	src/conf.h \
 	src/zsrc_djb.c \
@@ -268,6 +276,7 @@ xHEADERS_INST = \
 	include/gdnsd/file.h \
 	include/gdnsd/alloc.h \
 	include/gdnsd/prcu.h \
+	include/gdnsd/cs.h \
 	include/gdnsd/dmn.h
 
 # include/gdnsd-prot/foo.h define shlib interfaces private to libgdnsd + gdnsd
@@ -293,6 +302,7 @@ libgdnsd_libgdnsd_la_SOURCES = \
 	libgdnsd/file.c \
 	libgdnsd/plugapi.c \
 	libgdnsd/alloc.c \
+	libgdnsd/cs.c \
 	libgdnsd/dmn.c \
 	libgdnsd/dmn_net.c
 
@@ -355,7 +365,7 @@ noinst_SCRIPTS += sysd/gdnsd.service
 endif
 
 sysd/gdnsd.service: sysd/gdnsd.service.tmpl Makefile
-	$(AM_V_GEN)sed 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' <$(srcdir)/sysd/gdnsd.service.tmpl >$@
+	$(AM_V_GEN)sed -e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' -e 's|@GDNSD_BINDIR[@]|$(bindir)|g' <$(srcdir)/sysd/gdnsd.service.tmpl >$@
 
 EXTRA_DIST += sysd/gdnsd.service.tmpl
 CLEANFILES += sysd/gdnsd.service
@@ -365,9 +375,13 @@ CLEANFILES += sysd/gdnsd.service
 #=====================================
 
 # dist + install simple docs
-dist_doc_DATA += docs/gdnsd_manual.txt
+dist_doc_DATA += \
+	docs/gdnsd_manual.txt \
+	docs/stats_example.html
 
-PODS_IN_1 = docs/gdnsd_geoip_test.podin
+PODS_IN_1 = \
+	docs/gdnsdctl.podin \
+	docs/gdnsd_geoip_test.podin
 PODS_IN_3 = docs/gdnsd-plugin-api.podin
 PODS_IN_5 = \
 	docs/gdnsd.config.podin \

@@ -162,4 +162,4 @@ eval {_GDT->check_stats(
 )};
 ok(!$@) or diag $@;
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

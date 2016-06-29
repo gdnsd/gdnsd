@@ -56,4 +56,4 @@ _GDT->test_dns(
     answer => 'mxcn.example.com 86400 MX 0 ns1cn.example.com',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -29,20 +29,18 @@
 #include <inttypes.h>
 
 typedef struct {
-    const char*    username;
     const uint8_t* chaos;
-    bool     weaker_security;
+    char*    stats_file_path;
     bool     include_optional_ns;
     bool     realtime_stats;
-    bool     lock_mem;
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
     bool     zones_strict_data;
     bool     zones_strict_startup;
     bool     zones_rfc1035_auto;
     bool     any_tcp_only;
-    int      priority;
     unsigned chaos_len;
+    unsigned stats_file_interval;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;
     unsigned max_ttl;
@@ -59,6 +57,6 @@ typedef struct {
 extern const cfg_t* gcfg;
 
 F_NONNULLX(2)
-cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd);
+void conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd);
 
 #endif // GDNSD_CONF_H

@@ -20,7 +20,7 @@
 #include <config.h>
 #include "ztree.h"
 
-#include "main.h"
+#include "runtime.h"
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
 

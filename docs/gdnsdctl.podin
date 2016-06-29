@@ -1,0 +1,127 @@
+=head1 NAME
+
+gdnsdctl - Control command for the gdnsd daemon
+
+=head1 SYNOPSIS
+
+  Usage: gdnsdctl [-D] [-c @GDNSD_DEFPATH_CONFIG@] <action>
+    -D - Enable verbose debug output
+    -c - Configuration directory
+  Actions:
+    stop - Stops the running daemon
+    reload-zones - Reload the running daemon's zone data
+    reload - Full reload (code, config, data) of the running daemon
+    status - Checks the running daemon's status
+    stats - Dumps JSON statistics from the running daemon
+
+=head1 DESCRIPTION
+
+B<gdnsdctl> is the tool for controlling and/or querying the C<gdnsd> daemon.
+Please read the C<gdnsd(8)> manpage for basic information on the daemon
+itself.  B<gdnsdctl> primarily communicates with the daemon through the
+control socket F<cs> which is normally located in F<@GDNSD_DEFPATH_RUN@>.
+
+=head1 FLAGS
+
+=over 4
+
+=item B<-D>
+
+Enables additional debugging output to stderr.
+
+=item B<-c>
+
+Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.  It is
+important that this is the same configuration directory as the daemon you wish
+to control.
+
+=back
+
+=head1 ACTIONS
+
+=over 4
+
+=item B<stop>
+
+Stops the running daemon.  This operation is synchronous; the command will not
+exit until the daemon has completely exited or the shutdown failed, and the
+exit status will reflect the shutdown's success or failure.
+
+=item B<reload-zones>
+
+Asks the running daemon to reload its zone data.  This operation is
+synchronous; the command will not exit until the reload completes to the point
+of serving new data to clients or fails, and the exit status will reflect the
+success or failure.
+
+=item B<reload>
+
+Asks the running daemon to completely reload itself.  This will result in the
+C<execve()> of a new binary (i.e. binary package version upgrades take
+effect), a full reload of the entire configuration, and freshly loading all
+zone data.  In other words, it has all of the same effects one would expect
+from a full cycle stopping and then starting a fresh daemon.
+
+However, as opposed to stopping and then starting, the reload mechanism
+happens under an overlapped-sockets scheme, where the old instance of the
+daemon does not stop answering requests until the new daemon begins answering
+them on the same listening sockets.  Any listening sockets the two
+configurations had in common will be passed over directly and shared during
+the brief overlap, and should result in zero (or very very little; somewhat
+platform dependent) loss of service.  Also, the process ID of the daemon does
+not change under "reload", and there is no race with any concurrent attempts
+to start a new daemon, as the lockfiles and control sockets are never actually
+released.
+
+This operation is synchronous; the command will not exit until the entire
+operation above completes, and its exit status will reflect the success of the
+operation.
+
+=item B<status>
+
+Queries the status of the running daemon.  Internally, this checks the
+daemon's locked pidfile, queries both control sockets, and does some
+sanity-checking on the results.  It will print some information to stderr in
+the process, and the primary output is the exit status.  It will exit with
+status zero only if the daemon is running normally.
+
+=item B<stats>
+
+This fetches a copy of the daemon's JSON stats output in realtime and prints
+it to stdout.  stderr may contain other informative/debug output.  Exit status
+is zero on success, or non-zero if the stats were not (completely) fetched.
+
+=back
+
+=head1 EXIT STATUS
+
+An exit status of zero indicates success, anything else indicates failure.
+Generally B<gdnsdctl>'s actions are synchronous: when it eventually exits with
+status zero, the operation is complete.
+
+=head1 SEE ALSO
+
+L<gdnsd(8)>, L<gdnsd.config(5)>
+
+The gdnsd manual.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2016 Brandon L Black <blblack@gmail.com>
+
+This file is part of gdnsd.
+
+gdnsd is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+gdnsd is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with gdnsd.  If not, see <http://www.gnu.org/licenses/>.
+
+=cut

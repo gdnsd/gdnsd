@@ -13,4 +13,4 @@ foreach my $n (0..99) {
     );
 }
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

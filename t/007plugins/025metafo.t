@@ -33,4 +33,4 @@ _GDT->test_dns(
     answer => 'acfail.example.com 86400 CNAME primary.is.down.example.net.',
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

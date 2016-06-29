@@ -33,13 +33,14 @@ use FindBin ();
 use File::Spec ();
 use Net::DNS::Resolver ();
 use Net::DNS ();
-use LWP::UserAgent ();
 use Test::More ();
 use File::Copy qw//;
 use Socket qw/AF_INET/;
 use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
 use File::Path qw//;
+use IO::Socket::UNIX qw//;
+use JSON::PP;
 use Config;
 
 # The generic rr-matching code assumes "$rr->string eq $rr->string" is sufficient
@@ -156,6 +157,7 @@ our $DNS_SPORT4 = $DNS_PORT + 3;
 our $DNS_SPORT6 = $DNS_PORT + 4;
 
 our $saved_pid;
+our $saved_gdnsdctl_pid;
 
 # If user runs testsuite as root, we try to set the privdrop
 #   user to nobody as a more-reliable choice.  Failing that,
@@ -164,9 +166,14 @@ our $saved_pid;
 our $PRIVDROP_USER = ($> == 0) ? 'nobody' : '';
 
 # Where to find the gdnsd binary during "installcheck" vs "check"
-our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
+our $GDNSD_BINARY = $ENV{INSTALLCHECK_SBINDIR}
     ? "$ENV{INSTALLCHECK_SBINDIR}/gdnsd"
     : "$ENV{TOP_BUILDDIR}/src/gdnsd";
+
+# Where to find the gdnsdctl binary during "installcheck" vs "check"
+our $GDNSDCTL_BINARY = $ENV{INSTALLCHECK_BINDIR}
+    ? "$ENV{INSTALLCHECK_BINDIR}/gdnsdctl"
+    : "$ENV{TOP_BUILDDIR}/src/gdnsdctl";
 
 # extmon_helper works out of the box for "installcheck",
 # but needs some custom paths for "check"
@@ -188,16 +195,6 @@ else {
 }
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
-
-my $CSV_TEMPLATE = 
-    "uptime\r\n"
-    . "([0-9]+)\r\n"
-    . "noerror,refused,nxdomain,notimp,badvers,formerr,dropped,v6,edns,edns_clientsub\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
-    . "udp_reqs,udp_recvfail,udp_sendfail,udp_tc,udp_edns_big,udp_edns_tc\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+),([0-9]+)\r\n"
-    . "tcp_reqs,tcp_recvfail,tcp_sendfail\r\n"
-    . "([0-9]+),([0-9]+),([0-9]+)\r\n";
 
 my %stats_accum = (
     noerror      => 0,
@@ -221,59 +218,39 @@ my %stats_accum = (
     tcp_sendfail => 0,
 );
 
-my $_useragent;
-sub _get_daemon_csv_stats {
-    $_useragent ||= LWP::UserAgent->new(
-        protocols_allowed => ['http'],
-        requests_redirectable => [],
-        max_size => 10240,
-        timeout => 3,
-    );
-    my $response = $_useragent->get("http://127.0.0.1:${HTTP_PORT}/csv");
-    if(!$response) {
-        return "No response...";
+my $csock;
+sub _get_daemon_json_stats {
+    if(!$csock) {
+        my $csock_path = "$OUTDIR/run/gdnsd/cs";
+        $csock = IO::Socket::UNIX->new($csock_path)
+            or die "hard-fail: cannot open control socket $csock_path: $!";
     }
-    elsif($response->code != 200) {
-        return "Response code was not 200. Response dump:\n" . $response->as_string("\n");
-    }
-    return $response->content;
+    # Not much point errorchecking these read/write calls - if they don't work
+    # as expected the testsuite will still fail...
+    my $req = pack('L', 5) . 'stats';
+    syswrite($csock, $req, 9);
+    my $resp;
+    sysread($csock, $resp, 4);
+    my $resplen = unpack('L', $resp);
+    sysread($csock, $resp, $resplen);
+    return decode_json($resp);
 }
 
 sub check_stats_inner {
     my ($class, %to_check) = @_;
-    my $content = _get_daemon_csv_stats();
-    if($content !~ m/^${CSV_TEMPLATE}/s) {
-       die "Content does not match CSV_TEMPLATE, content is: " . $content;
-    }
-    my $csv_vals = {
-        uptime          => $1,
-        noerror         => $2,
-        refused         => $3,
-        nxdomain        => $4,
-        notimp          => $5,
-        badvers         => $6,
-        formerr         => $7,
-        dropped         => $8,
-        v6              => $9,
-        edns            => $10,
-        edns_clientsub  => $11,
-        udp_reqs        => $12,
-        udp_recvfail    => $13,
-        udp_sendfail    => $14,
-        udp_tc          => $15,
-        udp_edns_big    => $16,
-        udp_edns_tc     => $17,
-        tcp_reqs        => $18,
-        tcp_recvfail    => $19,
-        tcp_sendfail    => $20,
-    };
 
-    ## use Data::Dumper; warn Dumper($csv_vals);
+    my $json = _get_daemon_json_stats();
+    # For hysterical raisins, we flatten the structure and use prefixes here...
+    my %json_vals = %{$json->{'stats'}};
+    @json_vals{ map { "udp_" . $_; } keys %{$json->{'udp'}} } = values %{$json->{'udp'}};
+    @json_vals{ map { "tcp_" . $_; } keys %{$json->{'tcp'}} } = values %{$json->{'tcp'}};
+
+    ## use Data::Dumper; warn Dumper(\%json_vals);
 
     foreach my $checkit (keys %to_check) {
-        if($csv_vals->{$checkit} != $to_check{$checkit}) {
-            my $ftype = ($csv_vals->{$checkit} < $to_check{$checkit}) ? 'soft' : 'hard';
-            die "$checkit mismatch (${ftype}-fail), wanted " . $to_check{$checkit} . ", got " . $csv_vals->{$checkit};
+        if($json_vals{$checkit} != $to_check{$checkit}) {
+            my $ftype = ($json_vals{$checkit} < $to_check{$checkit}) ? 'soft' : 'hard';
+            die "$checkit mismatch (${ftype}-fail), wanted " . $to_check{$checkit} . ", got " . $json_vals{$checkit};
         }
     }
 
@@ -309,13 +286,9 @@ sub proc_tmpl {
 
     my $dns_lspec = qq{[ 127.0.0.1, ::1 ]};
 
-    my $http_lspec = qq{[ 127.0.0.1, ::1 ]};
-
     my $std_opts = qq{
         listen => $dns_lspec
-        http_listen => $http_lspec
         dns_port => $DNS_PORT
-        http_port => $HTTP_PORT
         plugin_search_path = $PLUGIN_PATH
         run_dir = $OUTDIR/run/gdnsd
         state_dir = $OUTDIR/var/lib/gdnsd
@@ -417,8 +390,8 @@ sub spawn_daemon_setup {
 
 sub spawn_daemon_execute {
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -Dxfc $OUTDIR/etc start}
-        : qq{$GDNSD_BIN -Dxfc $OUTDIR/etc start};
+        ? qq{$TEST_RUNNER $GDNSD_BINARY -Dxfc $OUTDIR/etc start}
+        : qq{$GDNSD_BINARY -Dxfc $OUTDIR/etc start};
 
     my $daemon_out = $OUTDIR . '/gdnsd.out';
 
@@ -1157,6 +1130,99 @@ sub test_kill_daemon {
     Test::More::ok(1);
 }
 
+sub test_kill_gdnsd {
+    my ($class, $pid) = @_;
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+    # close open controlsock used for stats, in case we exec a second daemon
+    undef $csock;
+
+    # use synchronous gdnsdctl-based stop
+    my $ctlstop_pid = fork();
+    if(!defined($ctlstop_pid)) {
+        my $d = "fork() for gdnsdctl stop failed: $?";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(!$ctlstop_pid) {
+        my $exec_line = $TEST_RUNNER
+            ? qq{$TEST_RUNNER $GDNSDCTL_BINARY -Dc $OUTDIR/etc stop}
+            : qq{$GDNSDCTL_BINARY -Dc $OUTDIR/etc stop};
+        exec($exec_line);
+        die "exec() of gdnsdctl stop failed: $?";
+    }
+    else {
+        $saved_gdnsdctl_pid = $ctlstop_pid;
+    }
+
+    # reap gdnsd, which gdnsdctl is stopping in the other side of the fork,
+    #  and validate exitcode of zero.
+    if(!$pid) {
+        my $d = "Test Bug: no gdnsd pid specified?";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    eval {
+        local $SIG{ALRM} = sub { die "gdnsd waitpid timeout"; };
+        alarm($TEST_RUNNER ? 60 : 30);
+        waitpid($pid, 0);
+    };
+    if($@) {
+        my $d = "Daemon at pid $pid failed to exit in reasonable time after gdnsdctl stop success";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(!WIFEXITED(${^CHILD_ERROR_NATIVE})) {
+        my $d = "gdnsd exited strangely... CHILD_ERROR_NATIVE is " . ${^CHILD_ERROR_NATIVE};
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    my $ev = WEXITSTATUS(${^CHILD_ERROR_NATIVE});
+    if($ev) {
+        my $d = "Daemon exit value was $ev";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    undef $saved_pid; # avoid END-block SIGKILL if we know it died fine
+
+    # reap gdnsdctl via waitpid and validate exitcode zero
+    local $@ = undef;
+    eval {
+        local $SIG{ALRM} = sub { die "gdnsdctl waitpid timeout"; };
+        alarm($TEST_RUNNER ? 60 : 30);
+        waitpid($ctlstop_pid, 0);
+    };
+    if($@) {
+        my $d = "gdnsdctl stop at pid $pid failed to exit in reasonable time";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    if(!WIFEXITED(${^CHILD_ERROR_NATIVE})) {
+        my $d = "gdnsdctl stop exited strangely... CHILD_ERROR_NATIVE is " . ${^CHILD_ERROR_NATIVE};
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    $ev = WEXITSTATUS(${^CHILD_ERROR_NATIVE});
+    if($ev) {
+        my $d = "gdnsdctl stop exit value was $ev";
+        Test::More::ok(0);
+        Test::More::diag($d);
+        die $d;
+    }
+    undef $saved_gdnsdctl_pid; # avoid END-block SIGKILL if we know it died fine
+
+    # if we make it here, both gdnsd and gdnsdctl exited with status zero as expected.
+    Test::More::ok(1);
+    return;
+}
+
 my $EDNS_CLIENTSUB_OPTCODE = 0x0008;
 sub optrr_clientsub {
     my %args = @_;
@@ -1188,5 +1254,9 @@ sub optrr_clientsub {
     );
 }
 
-END { kill('SIGKILL', $saved_pid) if $saved_pid; }
+END {
+    kill('SIGKILL', $saved_gdnsdctl_pid) if $saved_gdnsdctl_pid;
+    kill('SIGKILL', $saved_pid) if $saved_pid;
+}
+
 1;

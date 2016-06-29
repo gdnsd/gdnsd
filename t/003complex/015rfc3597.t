@@ -25,4 +25,4 @@ _GDT->test_dns(
     answer => [$t31337_1, $t31337_2, $sshfp_1, $sshfp_2],
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

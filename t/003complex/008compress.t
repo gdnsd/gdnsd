@@ -75,4 +75,4 @@ my $size = _GDT->test_dns(
 );
 is($size, 814, "Packet size as expected");
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -367,15 +367,6 @@ int tcp_listen_pre_setup(const dmn_anysin_t* asin, const unsigned timeout V_UNUS
     return sock;
 }
 
-void tcp_dns_listen_setup(dns_thread_t* t) {
-    dmn_assert(t);
-
-    const dns_addr_t* addrconf = t->ac;
-    dmn_assert(addrconf);
-
-    t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout);
-}
-
 static void prcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {
     tcpdns_thread_t* ctx = w->data;
     if(ctx->prcu_online) {
@@ -387,36 +378,21 @@ static void prcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, 
 void* dnsio_tcp_start(void* thread_asvoid) {
     dmn_assert(thread_asvoid);
 
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     gdnsd_thread_setname("gdnsd-io-tcp");
 
     const dns_thread_t* t = thread_asvoid;
     dmn_assert(!t->is_udp);
 
-    const dns_addr_t* addrconf = t->ac;
-
-    if(t->bind_success)
-        if(listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
-            log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
-
     tcpdns_thread_t* ctx = xmalloc(sizeof(tcpdns_thread_t));
     ctx->stats = dnspacket_stats_init(t->threadnum, false);
     ctx->dnsp_ctx = dnspacket_ctx_init(false);
 
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    const dns_addr_t* addrconf = t->ac;
 
     ctx->num_conn_watchers = 0;
     ctx->timeout = addrconf->tcp_timeout;
     ctx->max_clients = addrconf->tcp_clients_per_thread;
-
-    if(!t->bind_success) {
-        dmn_assert(t->ac->autoscan); // other cases would fail fatally earlier
-        log_warn("Could not bind TCP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", dmn_logf_anysin(&t->ac->addr));
-        //  we come here to  spawn the thread and do the dnspacket_context_setup() properly and
-        //  then exit the iothread.  The rest of the code will see this as a thread that
-        //  simply never gets requests.  This way we don't have to adjust stats arrays for
-        //  the missing thread, etc.
-        pthread_exit(NULL);
-    }
 
     struct ev_io* accept_watcher = ctx->accept_watcher = xmalloc(sizeof(struct ev_io));
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
@@ -435,6 +411,10 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     ev_prepare_init(prep_watcher, prcu_offline);
     prep_watcher->data = ctx;
     ev_prepare_start(loop, prep_watcher);
+
+    if(listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
+        log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, dmn_logf_anysin(&addrconf->addr), dmn_logf_errno());
+
     ev_run(loop, 0);
 
     return NULL;

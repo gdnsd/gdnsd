@@ -1,4 +1,4 @@
-/* Copyright © 2014 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2016 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -99,37 +99,17 @@ static const mode_t PERMS_MASK = (S_IRWXU|S_IRWXG|S_IRWXO);
 // These are phases used to enforce a strict ordering
 //   of operations and dependencies between the functions in this file
 // PHASE0_UNINIT is the default at library load, and the
-//   code only allows forward, serial movement through this list
-//   one entry at a time.
+//   code only allows forward, serial movement through this list.
 // Note that in PHASE0_UNINIT, *nothing* is valid to call except
-//   dmn_init1(), including all of the log/assert functions.
+//   dmn_init(), including all of the log/assert functions.
 typedef enum {
     PHASE0_UNINIT      = 0,
-    PHASE1_INIT1,
-    PHASE2_INIT2,
-    PHASE3_INIT3,
-    PHASE4_FORKED,
-    PHASE5_SECURED,
-    PHASE6_PIDLOCKED,
-    PHASE7_FINISHED,
+    PHASE1_INIT,
+    PHASE2_PMCONF,
+    PHASE3_FORKED,
+    PHASE4_PIDLOCKED,
+    PHASE5_FINISHED,
 } phase_t;
-
-// the functions which move the state forward
-//   to each of the above phases, for use in BUG output
-static const char* phase_actor[] = {
-    NULL,
-    "dmn_init1()",
-    "dmn_init2()",
-    "dmn_init3()",
-    "dmn_fork()",
-    "dmn_secure()",
-    "dmn_acquire_pidfile()",
-    "dmn_finish()",
-};
-
-// makes sides of int[] from pipe() clearer
-static const unsigned PIPE_RD = 0;
-static const unsigned PIPE_WR = 1;
 
 /***********************************************************
 ***** Static process-global data ***************************
@@ -139,16 +119,9 @@ typedef struct {
     // directly supplied by caller
     bool  debug;
     bool  foreground;
-    bool  restart;
     char* name;
-    char* username;
 
     // calculated/inferred/discovered
-    bool     invoked_as_root; // !geteuid() during init3()
-    bool     will_privdrop;   // invoked_as_root && non-null username from init3()
-    bool     need_helper;     // depends on foreground, will_privdrop, and pcall registration - set in _fork
-    uid_t    uid;             // uid of username from init3()
-    gid_t    gid;             // gid of username from init3()
     char*    pid_dir;         // from init2()
     char*    pid_file;        // depends on pid_dir + name
 } params_t;
@@ -156,14 +129,7 @@ typedef struct {
 static params_t params = {
     .debug           = false,
     .foreground      = false,
-    .restart         = false,
     .name            = NULL,
-    .username        = NULL,
-    .invoked_as_root = false,
-    .will_privdrop   = false,
-    .need_helper     = false,
-    .uid             = 0,
-    .gid             = 0,
     .pid_dir         = NULL,
     .pid_file        = NULL,
 };
@@ -171,11 +137,9 @@ static params_t params = {
 typedef struct {
     phase_t phase;
     bool    syslog_alive;
-    bool    sd_booted;
     bool    running_under_sd;
-    pid_t   helper_pid_reap;
-    int     pipe_to_helper[2];
-    int     pipe_from_helper[2];
+    int     pid_fd;
+    int     dmn_pipe;
     FILE*   stderr_out;
     FILE*   stdout_out;
 } state_t;
@@ -183,38 +147,12 @@ typedef struct {
 static state_t state = {
     .phase            = PHASE0_UNINIT,
     .syslog_alive     = false,
-    .sd_booted        = false,
     .running_under_sd = false,
-    .helper_pid_reap  = 0,
-    .pipe_to_helper   = { -1, -1 },
-    .pipe_from_helper = { -1, -1 },
+    .pid_fd           = -1,
+    .dmn_pipe         = -1,
     .stderr_out       = NULL,
     .stdout_out       = NULL,
 };
-
-// pcall funcptrs
-static dmn_func_vv_t* pcalls = NULL;
-static unsigned num_pcalls = 0;
-
-/***********************************************************
-***** API usage checks *************************************
-***********************************************************/
-
-#define phase_check(_after, _before, _unique) do { \
-    if(state.phase == PHASE0_UNINIT) { \
-        fprintf(stderr, "BUG: dmn_init1() must be called before any other libdmn function!\n"); \
-        abort(); \
-    } \
-    if(_unique) {\
-        static unsigned _call_count = 0; \
-        if(_call_count++) \
-            dmn_log_fatal("BUG: %s can only be called once and was already called!", __func__); \
-    } \
-    if(_after && state.phase < _after) \
-        dmn_log_fatal("BUG: %s must be called after %s", __func__, phase_actor[_after]); \
-    if(_before && state.phase >= _before) \
-        dmn_log_fatal("BUG: %s must be called before %s", __func__, phase_actor[_before]); \
-} while(0)
 
 /***********************************************************
 ***** Logging **********************************************
@@ -222,6 +160,8 @@ static unsigned num_pcalls = 0;
 
 // private to the two functions below it
 static char* _fmtbuf_common(const unsigned size) {
+    dmn_assert(state.phase > PHASE0_UNINIT);
+
     // This is our log-formatting buffer.  It holds multiple buffers
     //   of increasing size (see constants above) which are allocated
     //   per-thread as-needed, permanently for the life of the thread.
@@ -260,7 +200,7 @@ static char* _fmtbuf_common(const unsigned size) {
 
 // Public (including this file) interfaces to _fmtbuf_common()
 char* dmn_fmtbuf_alloc(const unsigned size) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     char* rv = NULL;
     if(size) {
         rv = _fmtbuf_common(size);
@@ -270,7 +210,7 @@ char* dmn_fmtbuf_alloc(const unsigned size) {
     return rv;
 }
 void dmn_fmtbuf_reset(void) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     _fmtbuf_common(0);
 }
 
@@ -278,7 +218,7 @@ void dmn_fmtbuf_reset(void) {
 //  errno->string translation behind a more strerror()-like interface
 //  using dmn_fmtbuf_alloc()
 const char* dmn_logf_strerror(const int errnum) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 
     char tmpbuf[DMN_ERRNO_MAXLEN];
     const char* tmpbuf_ptr;
@@ -307,13 +247,9 @@ const char* dmn_logf_strerror(const int errnum) {
 DMN_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 
 void dmn_loggerv(int level, const char* fmt, va_list ap) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 
-    FILE* stdio_out = (level == LOG_DEBUG || level == LOG_INFO)
-        ? state.stdout_out
-        : state.stderr_out;
-
-    if(stdio_out) {
+    if(state.stderr_out) {
         const char* pfx;
         switch(level) {
             case LOG_DEBUG: pfx = PFX_DEBUG; break;
@@ -326,13 +262,13 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
 
         va_list apcpy;
         va_copy(apcpy, ap);
-        flockfile(stdio_out);
-        fputs_unlocked(pfx, stdio_out);
-        vfprintf(stdio_out, fmt, apcpy);
+        flockfile(state.stderr_out);
+        fputs_unlocked(pfx, state.stderr_out);
+        vfprintf(state.stderr_out, fmt, apcpy);
         va_end(apcpy);
-        putc_unlocked('\n', stdio_out);
-        fflush_unlocked(stdio_out);
-        funlockfile(stdio_out);
+        putc_unlocked('\n', state.stderr_out);
+        fflush_unlocked(state.stderr_out);
+        funlockfile(state.stderr_out);
     }
 
     if(state.syslog_alive)
@@ -342,7 +278,7 @@ void dmn_loggerv(int level, const char* fmt, va_list ap) {
 }
 
 void dmn_logger(int level, const char* fmt, ...) {
-    phase_check(0, 0, 0);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     va_list ap;
     va_start(ap, fmt);
     dmn_loggerv(level, fmt, ap);
@@ -352,6 +288,7 @@ void dmn_logger(int level, const char* fmt, ...) {
 DMN_DIAG_POP
 
 const char* dmn_logf_bt(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 #ifdef HAVE_LIBUNWIND
     static const unsigned bt_size = 1024U;
     static const unsigned bt_max_name = 60U;
@@ -392,8 +329,15 @@ const char* dmn_logf_bt(void) {
 #endif
 }
 
-bool dmn_get_debug(void) { phase_check(0, 0, 0); return params.debug; }
-bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_alive; }
+bool dmn_get_debug(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    return params.debug;
+}
+
+bool dmn_get_syslog_alive(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    return state.syslog_alive;
+}
 
 /***********************************************************
 ***** systemd **********************************************
@@ -402,9 +346,11 @@ bool dmn_get_syslog_alive(void) { phase_check(0, 0, 0); return state.syslog_aliv
 #ifndef __linux__
 
 // skip all systemd-related things on non-linux
-#define dmn_detect_systemd(_x) ((void)0)
+#define dmn_detect_systemd() ((void)0)
 
 void dmn_sd_notify(const char* notify_msg, const bool optional) {
+    dmn_assert_ndebug(notify_msg);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
     if(optional)
         dmn_log_debug("notify: %s", notify_msg);
     else
@@ -415,7 +361,7 @@ void dmn_sd_notify(const char* notify_msg, const bool optional) {
 
 // This goes a bit beyond sd_booted()'s lstat check, because
 //   that only tells us that systemd is the init system in use,
-//   not that we were invoked underneath it.
+//   not that we were invoked underneath it as a service unit.
 // With a correct unit file, either of getppid() or the NOTIFY_SOCKET
 //   check should suffice for ExecStart's purposes.  Using both
 //   just ensures we're not surprised by future systemd changes in
@@ -426,21 +372,22 @@ void dmn_sd_notify(const char* notify_msg, const bool optional) {
 //   of NOTIFY_SOCKET.  As of systemd-208, they don't seem to get
 //   it set anyways, in spite of NotifyAccess=all, so the getppid()
 //   and MAINPID checks are their only recourse here.
-static void dmn_detect_systemd(const bool use_syslog) {
+static void dmn_detect_systemd(void) {
+    dmn_assert(state.phase > PHASE0_UNINIT);
     struct stat st;
-    state.sd_booted = !lstat("/run/systemd/system/", &st) && S_ISDIR(st.st_mode);
-    state.running_under_sd = state.sd_booted && (
-           getenv("NOTIFY_SOCKET")
-        || getenv("MAINPID")
-        || getppid() == 1
+    state.running_under_sd = (
+        (!lstat("/run/systemd/system/", &st) && S_ISDIR(st.st_mode))
+        && (
+            getenv("NOTIFY_SOCKET")
+            || getenv("MAINPID")
+            || getppid() == 1
+        )
     );
 
     if(state.running_under_sd) {
         dmn_log_debug("Running within systemd control");
         if(!params.foreground)
             dmn_log_fatal("unit file settings incorrect: ExecStart should use '-f'");
-        if(!use_syslog)
-            dmn_log_fatal("unit file settings incorrect: ExecStart should not use '-x'");
     }
 }
 
@@ -457,7 +404,8 @@ static void dmn_detect_systemd(const bool use_syslog) {
 // the sd_pid_notify() changes, which aren't relevant in
 // our case), and just updated to match local style + conditions.
 void dmn_sd_notify(const char *notify_msg, const bool optional) {
-    dmn_assert(notify_msg);
+    dmn_assert_ndebug(notify_msg);
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
 
     if(!state.running_under_sd)
         return;
@@ -507,23 +455,74 @@ void dmn_sd_notify(const char *notify_msg, const bool optional) {
 
 #endif // __linux__
 
+void dmn_sd_notify_readypid(void) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    char sdnbuf[64];
+    snprintf(sdnbuf, 64, "MAINPID=%li\nREADY=1\n", (long)getpid());
+    dmn_sd_notify(sdnbuf, false);
+}
+
 /***********************************************************
-***** Private subroutines used by daemonization ************
+***** Public helper funcs **********************************
 ***********************************************************/
 
-// The terminal signal SIGTERM is sent exactly once, then
-//  the status of the daemon is polled repeatedly at 100ms
-//  delay intervals
-// Function returns when either the process is dead or
-//  our delays all expired.  Total timeout is 15s.
-// True retval indicates daemon is still running.
-static bool terminate_pid_and_wait(pid_t pid) {
+// Privdrop (othgonal to phased stuff, mostly)
+void dmn_privdrop(const char* username, const bool weak) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+
+    if(!geteuid() && username) {
+        errno = 0;
+        struct passwd* p;
+        // cppcheck-suppress nonreentrantFunctionsgetpwnam (init time, no threads)
+        if(!(p = getpwnam(username))) {
+            if(errno)
+                dmn_log_fatal("getpwnam('%s') failed: %s", username, dmn_logf_errno());
+            else
+                dmn_log_fatal("User '%s' does not exist", username);
+        }
+        if(!p->pw_uid || !p->pw_gid)
+            dmn_log_fatal("User '%s' has root's uid and/or gid", username);
+
+        // drop privs
+        if(setgid(p->pw_gid))
+            dmn_log_fatal("setgid(%u) failed: %s", p->pw_gid, dmn_logf_errno());
+        if(initgroups(username, p->pw_gid))
+            dmn_log_fatal("initgroups(%s,%u) failed: %s", username, p->pw_gid, dmn_logf_errno());
+        if(setuid(p->pw_uid))
+            dmn_log_fatal("setuid(%u) failed: %s", p->pw_uid, dmn_logf_errno());
+
+        // verify that regaining root privs fails, and [e][ug]id values are as expected
+        if(    !setegid(0)
+            || !seteuid(0)
+            || geteuid() != p->pw_uid
+            || getuid() != p->pw_uid
+            || getegid() != p->pw_gid
+            || getgid() != p->pw_gid
+        )
+            dmn_log_fatal("Platform-specific BUG: setgid() and/or setuid() do not permanently drop privs as expected!");
+    }
+
+    if(!weak) {
+        // On linux 3.5+, immutably disallows regaining privileges (e.g. via
+        // execve() of a binary with set[ug]id or capability bits) for this
+        // process and all descendants.
+#       if defined __linux__ && defined PR_SET_NO_NEW_PRIVS
+            prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
+#       endif
+    }
+}
+
+// Total timeout is 15s.  True retval indicates daemon is still running.
+bool dmn_terminate_pid_and_wait(int sig, pid_t pid) {
+    dmn_assert_ndebug(state.phase > PHASE0_UNINIT);
+    dmn_assert_ndebug(pid > 1);
+
     bool still_running = false;
 
-    if(!kill(pid, SIGTERM)) {
+    if(!kill(pid, sig)) {
         still_running = true;
-        const struct timespec ts = { 0, 100000000 };
-        unsigned tries = 150;
+        const struct timespec ts = { 0, 50000000 };
+        unsigned tries = 300;
         while(tries--) {
             nanosleep(&ts, NULL);
             if(kill(pid, 0)) {
@@ -536,9 +535,16 @@ static bool terminate_pid_and_wait(pid_t pid) {
     return still_running;
 }
 
+/***********************************************************
+***** Private subroutines used by daemonization ************
+***********************************************************/
+
 // Wait for a pid to _exit(0), do not accept
 //  any other result, survive interrupts
 static void waitpid_zero(pid_t child) {
+    dmn_assert(child >= 0);
+    dmn_assert(state.phase > PHASE0_UNINIT);
+
     int status;
     do {
         pid_t wp_rv = waitpid(child, &status, 0);
@@ -546,11 +552,11 @@ static void waitpid_zero(pid_t child) {
             if(errno == EINTR)
                 continue;
             else
-                dmn_log_fatal("waitpid() on helper process %li failed: %s",
+                dmn_log_fatal("waitpid() on process %li failed: %s",
                     (long)child, dmn_logf_errno());
         }
         if(wp_rv != child)
-            dmn_log_fatal("waitpid() for helper process %li caught process %li instead",
+            dmn_log_fatal("waitpid() for process %li caught process %li instead",
                 (long)child, (long)wp_rv);
         if(status)
             dmn_log_fatal("waitpid(%li) returned bad status %i", (long)child, status);
@@ -558,65 +564,40 @@ static void waitpid_zero(pid_t child) {
     } while(1);
 }
 
-// create a pipe with FD_CLOEXEC and fatal error-checking built in
-static void pipe_create(int pipefd[2]) {
-    if(pipe(pipefd))
-        dmn_log_fatal("pipe() failed: %s", dmn_logf_errno());
-    if(fcntl(pipefd[PIPE_RD], F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(FD_CLOEXEC) on pipe fd failed: %s", dmn_logf_errno());
-    if(fcntl(pipefd[PIPE_WR], F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(FD_CLOEXEC) on pipe fd failed: %s", dmn_logf_errno());
-}
-// reset pipe fds to -1 on close
-static void close_pipefd(int* fd_p) {
-    if(close(*fd_p))
-        dmn_log_fatal("close() of pipe() fd failed: %s", dmn_logf_errno());
-    *fd_p = -1;
-}
-
-// the helper process executes here and does not return
+// the parent process executes here and does not return
 DMN_F_NORETURN
-static void helper_proc(const pid_t middle_pid) {
-    dmn_assert(state.phase == PHASE3_INIT3);
+static void parent_proc(const pid_t middle_pid, const int pipefd) {
+    dmn_assert(state.phase == PHASE2_PMCONF);
+    dmn_assert(middle_pid);
 
-    // if middle_pid is set, we're doing a full
-    //   fork->setsid->fork, and middle_pid is
-    //   the pid of the middle process.  Clean it
-    //   up with waitpid before continuing.
-    if(middle_pid)
-        waitpid_zero(middle_pid);
+    // middle_pid is the temporary process in the midst
+    //   of the fork->setsid->fork cycle and needs reaping
+    waitpid_zero(middle_pid);
 
-    const int readpipe = state.pipe_to_helper[PIPE_RD];
-    const int writepipe = state.pipe_from_helper[PIPE_WR];
-    dmn_assert(readpipe >= 0);
-    dmn_assert(writepipe >= 0);
+    // The point of all of this is to ensure that the outer parent process
+    //   doesn't exit until dmn_finish() in the child.  This makes startup
+    //   synchronous; when the outer process returns the invoker knows runtime
+    //   service is available.
+    //
+    // Our protocol is:
+    // child -> parent: 0x55 (when child done initializing)
+    // parent -> exit(0)
+    // child -> continues with normal runtime operations
+    //
+    // If anything goes wrong with that sequence or the pipefd closes early,
+    //   both sides will abort with a bad exit value.
 
     int exitval = 1;
 
+    uint8_t msg;
+    ssize_t read_rv;
     do {
-        uint8_t msg;
-        ssize_t read_rv;
-        do {
-            errno = 0;
-            read_rv = read(readpipe, &msg, 1);
-        } while(errno == EINTR);
-
-        if(errno || read_rv != 1)
-            break; // pipe close or other error
-        else if(msg >= 128U)
-            break; // high-bit reserved for responses!
-        else if(msg == 0U) // daemon success
-            exitval = 0;
-        else if(msg > 63U) // pcall
-            pcalls[msg - 64U]();
-        else
-            break;
         errno = 0;
-        msg |= 128U; // set high-bit for response
-        ssize_t write_rv = write(writepipe, &msg, 1);
-        if(errno || write_rv != 1)
-            break;
-    } while(1);
+        read_rv = read(pipefd, &msg, 1);
+    } while(read_rv < 0 && errno == EINTR);
+
+    if(read_rv == 1 && msg == 0x55)
+        exitval = 0;
 
     // _exit avoids any atexit that may have been installed before fork
     _exit(exitval);
@@ -625,6 +606,7 @@ static void helper_proc(const pid_t middle_pid) {
 // this isn't meant to be high-speed or elegant, but it saves
 //   some repetitive string-mod code elsewhere.
 static char* str_combine_n(const unsigned count, ...) {
+    dmn_assert(state.phase > PHASE0_UNINIT);
     dmn_assert(count > 1);
 
     struct {
@@ -661,24 +643,24 @@ static char* str_combine_n(const unsigned count, ...) {
 ***** Daemonization ****************************************
 ***********************************************************/
 
-void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name) {
+void dmn_init(bool debug, bool foreground, bool use_syslog, const char* name) {
     // All of this needs to be set up before we can even log failures below
     params.debug = debug;
     params.foreground = foreground;
     state.stderr_out = stderr;
     state.stdout_out = stdout;
     const phase_t prev_phase = state.phase;
-    state.phase = PHASE1_INIT1;
+    state.phase = PHASE1_INIT;
 
     // init1 phase checks are not handled by the usual macro
     if(prev_phase != PHASE0_UNINIT)
-        dmn_log_fatal("BUG: dmn_init1() can only be called once!");
+        dmn_log_fatal("BUG: dmn_init() can only be called once!");
     if(!name)
-        dmn_log_fatal("BUG: dmn_init1(): argument 'name' is *required*");
+        dmn_log_fatal("BUG: dmn_init(): argument 'name' is *required*");
 
     params.name = strdup(name);
 
-    dmn_detect_systemd(use_syslog);
+    dmn_detect_systemd();
     if(use_syslog) {
         openlog(params.name, LOG_NDELAY|LOG_PID, LOG_DAEMON);
         state.syslog_alive = true;
@@ -697,12 +679,17 @@ void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name) {
     if(sigaction(SIGPIPE, &sa_ign, NULL))
         dmn_log_fatal("sigaction(SIGPIPE, SIG_IGN) failed: %s", dmn_logf_errno());
 
+    // ignore SIGHUP if we're not in foreground mode
+    if(!foreground)
+        if(sigaction(SIGHUP, &sa_ign, NULL))
+            dmn_log_fatal("sigaction(SIGHUP, SIG_IGN) failed: %s", dmn_logf_errno());
+
     // set umask early for consistency
     umask(022);
 }
 
-void dmn_init2(const char* pid_dir) {
-    phase_check(PHASE1_INIT1, PHASE3_INIT3, 1);
+void dmn_pm_config(const char* pid_dir) {
+    dmn_assert_ndebug(state.phase == PHASE1_INIT);
 
     if(pid_dir) {
         if(pid_dir[0] != '/')
@@ -711,11 +698,11 @@ void dmn_init2(const char* pid_dir) {
         params.pid_file = str_combine_n(4, pid_dir, "/", params.name, ".pid");
     }
 
-    state.phase = PHASE2_INIT2;
+    state.phase = PHASE2_PMCONF;
 }
 
 pid_t dmn_status(void) {
-    phase_check(PHASE2_INIT2, PHASE6_PIDLOCKED, 0);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     if(!params.pid_file)
         return 0;
@@ -746,7 +733,7 @@ pid_t dmn_status(void) {
 }
 
 pid_t dmn_stop(void) {
-    phase_check(PHASE2_INIT2, PHASE6_PIDLOCKED, 0);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     const pid_t pid = dmn_status();
     if(!pid) {
@@ -754,7 +741,7 @@ pid_t dmn_stop(void) {
         return 0;
     }
 
-    if(terminate_pid_and_wait(pid)) {
+    if(dmn_terminate_pid_and_wait(SIGTERM, pid)) {
         dmn_log_err("Cannot stop daemon at pid %li", (long)pid);
         return pid;
     }
@@ -764,7 +751,7 @@ pid_t dmn_stop(void) {
 }
 
 int dmn_signal(int sig) {
-    phase_check(PHASE2_INIT2, PHASE6_PIDLOCKED, 0);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     int rv = 1; // error
     const pid_t pid = dmn_status();
@@ -782,62 +769,11 @@ int dmn_signal(int sig) {
     return rv;
 }
 
-void dmn_init3(const char* username, const bool restart) {
-    phase_check(PHASE2_INIT2, PHASE4_FORKED, 1);
-
-    params.restart = restart;
-    params.invoked_as_root = !geteuid();
-
-    if(restart) {
-        if(state.running_under_sd)
-            dmn_log_fatal("Do not use the 'restart' action from a systemd unit file; it does not work correctly there");
-
-        // This kind of sucks, but I don't know what else to do for now
-        if(state.sd_booted)
-            dmn_log_warn("If the current %s daemon is running as a systemd service, you should use 'systemctl restart %s' rather than this command.  This command may succeed, but the replacement daemon will *not* be a systemd service anymore!", params.name, params.name);
-    }
-
-    if(username && params.invoked_as_root) {
-        params.username = strdup(username);
-        if(params.invoked_as_root) {
-            errno = 0;
-            struct passwd* p;
-            // cppcheck-suppress nonreentrantFunctionsgetpwnam (init time, no threads)
-            if(!(p = getpwnam(username))) {
-                if(errno)
-                    dmn_log_fatal("getpwnam('%s') failed: %s", username, dmn_logf_errno());
-                else
-                    dmn_log_fatal("User '%s' does not exist", username);
-            }
-            if(!p->pw_uid || !p->pw_gid)
-                dmn_log_fatal("User '%s' has root's uid and/or gid", username);
-            params.uid = p->pw_uid;
-            params.gid = p->pw_gid;
-            params.will_privdrop = true;
-        }
-    }
-
-    state.phase = PHASE3_INIT3;
-}
-
-unsigned dmn_add_pcall(dmn_func_vv_t func) {
-    phase_check(0, PHASE4_FORKED, 0);
-    if(!func)
-        dmn_log_fatal("BUG: set_pcall requires a funcptr argument!");
-    const unsigned idx = num_pcalls;
-    if(idx >= 64)
-        dmn_log_fatal("Too many pcalls registered (64+)!");
-    pcalls = realloc(pcalls, sizeof(dmn_func_vv_t) * (++num_pcalls));
-    if(!pcalls)
-        dmn_log_fatal("memory allocation failure!");
-    pcalls[idx] = func;
-    return idx;
-}
-
 // fully duplicate a stream and underlying fd for writing, with CLOEXEC set
 DMN_F_NONNULL
 static FILE* _dup_write_stream(FILE* old, const char* old_name) {
     dmn_assert(old); dmn_assert(old_name);
+    dmn_assert(state.phase > PHASE0_UNINIT);
 
     const int old_fd = fileno(old);
     if(old_fd < 0)
@@ -855,7 +791,7 @@ static FILE* _dup_write_stream(FILE* old, const char* old_name) {
 }
 
 void dmn_fork(void) {
-    phase_check(PHASE3_INIT3, PHASE5_SECURED, 1);
+    dmn_assert_ndebug(state.phase == PHASE2_PMCONF);
 
     // I moved this up to init1() once, but that messed up
     //   relative configdir paths on the commandline because
@@ -864,73 +800,48 @@ void dmn_fork(void) {
     if(chdir("/"))
         dmn_log_fatal("chdir(/) failed: %s", dmn_logf_errno());
 
-    // whether this invocation needs a forked helper process.
-    // In background cases, we always need this to hold the
-    //   terminal/parent open until final exit status is ready,
-    //   and the "helper" is actually the original process instance
-    //   from before any daemonization forks.
-    // In foreground cases, we fork off a separate helper iff
-    //   we plan to privdrop *and* pcalls have been registered, so
-    //   that we have a root-owned process to execute the pcalls with.
-    //   (and if we don't need the helper in this case, there's nothing
-    //   else left to do in dmn_fork())
-    params.need_helper = true;
-    if(params.foreground && (!params.will_privdrop || !num_pcalls)) {
-        params.need_helper = false;
-        state.phase = PHASE4_FORKED;
+    // Foreground procs don't need to fork
+    if(params.foreground) {
+        state.phase = PHASE3_FORKED;
         return;
     }
 
-    // These pipes are used to communicate with the "helper" process,
-    //   which is the original parent when daemonizing properly, or
-    //   a special forked helper when necessary in the foreground.
-    pipe_create(state.pipe_to_helper);
-    pipe_create(state.pipe_from_helper);
+    // This pipe is used to communicate with the outer parent
+    //   so that it can exit correctly after the daemon is up.
+    int pipes[2];
+    if(pipe(pipes))
+        dmn_log_fatal("pipe() failed: %s", dmn_logf_errno());
+    if(fcntl(pipes[1], F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(FD_CLOEXEC) on pipe write fd failed: %s", dmn_logf_errno());
 
     // Fork for the first time...
-    const pid_t first_fork_pid = fork();
-    if(first_fork_pid == -1)
+    const pid_t middle_pid = fork();
+    if(middle_pid == -1)
         dmn_log_fatal("fork() failed: %s", dmn_logf_errno());
 
-    // The helper process role is the child of the above fork
-    //   in the foreground case, but it is the parent
-    //   in the non-foreground case.
-    const bool is_helper = params.foreground
-        ? !first_fork_pid
-        : first_fork_pid;
-
-    // if helper, go run the helper code
-    if(is_helper) {
-        close_pipefd(&state.pipe_to_helper[PIPE_WR]);
-        close_pipefd(&state.pipe_from_helper[PIPE_RD]);
-        helper_proc(first_fork_pid);
+    // if parent, go run the parent code
+    if(middle_pid) {
+        if(close(pipes[1]))
+            dmn_log_fatal("close() of pipe write fd in dmn parent failed: %s", dmn_logf_errno());
+        parent_proc(middle_pid, pipes[0]);
         dmn_assert(0); // above never returns control
     }
 
-    // non-helper code (to become runtime daemon)
-
-    close_pipefd(&state.pipe_to_helper[PIPE_RD]);
-    close_pipefd(&state.pipe_from_helper[PIPE_WR]);
-
-    // foreground case doesn't use the daemonization steps below,
-    //   but does need to track helper pid for later reaping
-    if(params.foreground) {
-        state.phase = PHASE4_FORKED;
-        dmn_assert(first_fork_pid);
-        state.helper_pid_reap = first_fork_pid;
-        return;
-    }
+    // child process (to become runtime daemon)
+    if(close(pipes[0]))
+        dmn_log_fatal("close() of pipe read fd in dmn child failed: %s", dmn_logf_errno());
+    state.dmn_pipe = pipes[1];
 
     // setsid() before the second fork
     if(setsid() == -1)
         dmn_log_fatal("setsid() failed: %s", dmn_logf_errno());
 
     // Fork again.  This time the intermediate parent exits immediately.
-    const pid_t second_fork_pid = fork();
-    if(second_fork_pid == -1)
+    const pid_t final_pid = fork();
+    if(final_pid == -1)
         dmn_log_fatal("fork() failed: %s", dmn_logf_errno());
-    if(second_fork_pid) // intermediate parent proc
-        _exit(0); // helper_proc() reaps this as "middle_pid"
+    if(final_pid) // is middle process, to be reaped immediately by parent
+        _exit(0);
 
     // Make full copies (new fds + streams) of stderr + stdout for logging
     // so that we can continue outputting to the terminal's stderr as
@@ -947,221 +858,128 @@ void dmn_fork(void) {
         dmn_log_fatal("Cannot open /dev/null: %s", dmn_logf_errno());
 
     dmn_log_info("Daemonized, final pid is %li", (long)getpid());
-    state.phase = PHASE4_FORKED;
+    state.phase = PHASE3_FORKED;
 }
 
-void dmn_secure(const bool weak) {
-    phase_check(PHASE4_FORKED, PHASE6_PIDLOCKED, 1);
+static void dmn_acquire_pid_fd(void) {
+    dmn_assert(state.pid_fd == -1);
+    dmn_assert(params.pid_file && params.pid_dir);
 
-    // Validate/correct pid_dir + pid_file on-disk...
-    if(params.pid_dir) {
-        struct stat st;
-        if(stat(params.pid_dir, &st)) {
-            if(mkdir(params.pid_dir, PERMS750))
-                dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir, dmn_logf_errno());
-            if(stat(params.pid_dir, &st)) // reload st for privdrop below
-                dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir, dmn_logf_errno());
-        }
-        else if(!S_ISDIR(st.st_mode)) {
-            dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir);
-        }
-        else if((st.st_mode & PERMS_MASK) != PERMS750) {
-            if(chmod(params.pid_dir, PERMS750))
-                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir, PERMS750, dmn_logf_errno());
-        }
+    const bool currently_root = !geteuid();
+    struct stat st;
 
-        // directory chown only applies in privdrop case
-        if(params.will_privdrop) {
-            if(st.st_uid != params.uid || st.st_gid != params.gid)
-                if(chown(params.pid_dir, params.uid, params.gid))
-                    dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_dir, params.uid, params.gid, dmn_logf_errno());
-        }
+    // check/create/chmod pid_dir as appropriate
+    if(stat(params.pid_dir, &st)) {
+        if(mkdir(params.pid_dir, PERMS750))
+            dmn_log_fatal("pidfile directory %s does not exist and mkdir() failed with: %s", params.pid_dir, dmn_logf_errno());
+        if(stat(params.pid_dir, &st))
+            dmn_log_fatal("stat() of pidfile directory %s failed (post-mkdir): %s", params.pid_dir, dmn_logf_errno());
+    }
+    if(!S_ISDIR(st.st_mode))
+        dmn_log_fatal("pidfile directory %s is not a directory!", params.pid_dir);
+    if(currently_root && (st.st_uid != 0 || st.st_gid != 0))
+        if(chown(params.pid_dir, 0, 0))
+            dmn_log_fatal("chown('%s',0,0) failed: %s", params.pid_dir, dmn_logf_errno());
+    if((st.st_mode & PERMS_MASK) != PERMS750)
+        if(chmod(params.pid_dir, PERMS750))
+            dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_dir, PERMS750, dmn_logf_errno());
 
-        dmn_assert(params.pid_file);
-
-        if(!lstat(params.pid_file, &st)) {
-            if(!S_ISREG(st.st_mode))
-                dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file);
-            if((st.st_mode & PERMS_MASK) != PERMS640)
-                if(chmod(params.pid_file, PERMS640))
-                    dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file, PERMS640, dmn_logf_errno());
-            // file chown only if privdrop
-            if(params.will_privdrop) {
-                if(st.st_uid != params.uid || st.st_gid != params.gid)
-                    if(chown(params.pid_file, params.uid, params.gid))
-                        dmn_log_fatal("chown('%s',%u,%u) failed: %s", params.pid_file, params.uid, params.gid, dmn_logf_errno());
-            }
-        }
+    // check/chmod pid_file as appropriate, if it exists
+    if(!lstat(params.pid_file, &st)) {
+        if(!S_ISREG(st.st_mode))
+            dmn_log_fatal("pidfile %s exists and is not a regular file!", params.pid_file);
+        if(currently_root && (st.st_uid != 0 || st.st_gid != 0))
+            if(chown(params.pid_file, 0, 0))
+                dmn_log_fatal("chown('%s',0,0) failed: %s", params.pid_file, dmn_logf_errno());
+        if((st.st_mode & PERMS_MASK) != PERMS640)
+            if(chmod(params.pid_file, PERMS640))
+                dmn_log_fatal("chmod('%s',%.4o) failed: %s", params.pid_file, PERMS640, dmn_logf_errno());
     }
 
-    if(params.will_privdrop) {
-        dmn_assert(params.invoked_as_root);
-        dmn_assert(params.username);
-        dmn_assert(params.uid);
-        dmn_assert(params.gid);
-
-        // drop privs
-        if(setgid(params.gid))
-            dmn_log_fatal("setgid(%u) failed: %s", params.gid, dmn_logf_errno());
-        if(initgroups(params.username, params.gid))
-            dmn_log_fatal("initgroups(%s,%u) failed: %s", params.username, params.gid, dmn_logf_errno());
-        if(setuid(params.uid))
-            dmn_log_fatal("setuid(%u) failed: %s", params.uid, dmn_logf_errno());
-
-        // verify that regaining root privs fails, and [e][ug]id values are as expected
-        if(    !setegid(0)
-            || !seteuid(0)
-            || geteuid() != params.uid
-            || getuid() != params.uid
-            || getegid() != params.gid
-            || getgid() != params.gid
-        )
-            dmn_log_fatal("Platform-specific BUG: setgid() and/or setuid() do not permanently drop privs as expected!");
-
-    }
-
-    if(!weak) {
-        // On linux 3.5+, immutably disallows regaining privileges (e.g. via
-        // execve() of a binary with set[ug]id or capability bits) for this
-        // process and all descendants.
-#       if defined __linux__ && defined PR_SET_NO_NEW_PRIVS
-            prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-#       endif
-    }
-
-    state.phase = PHASE5_SECURED;
+    // get an open handle on the pidfile...
+    state.pid_fd = open(params.pid_file, O_RDWR | O_CREAT | O_SYNC, PERMS640);
+    if(state.pid_fd == -1)
+        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file, dmn_logf_errno());
+    if(fcntl(state.pid_fd, F_SETFD, FD_CLOEXEC))
+        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file, dmn_logf_errno());
 }
 
-void dmn_acquire_pidfile(void) {
-    phase_check(PHASE5_SECURED, PHASE7_FINISHED, 1);
+static void dmn_pid_fd_lock(const dmn_lockflags_t flags) {
+    const bool excl = !!(flags & DMN_LOCK_EX);
+    const bool wait = !!(flags & DMN_LOCK_W);
 
-    if(!params.pid_file) {
-        state.phase = PHASE6_PIDLOCKED;
-        return;
-    }
+    // get pid fd if this is the initial lock call
+    if(state.pid_fd == -1)
+        dmn_acquire_pid_fd();
 
     // flock structure for acquiring pidfile lock
     struct flock pidlock_set;
     memset(&pidlock_set, 0, sizeof(struct flock));
-    pidlock_set.l_type = F_WRLCK;
+    pidlock_set.l_type = excl ? F_WRLCK : F_RDLCK;
     pidlock_set.l_whence = SEEK_SET;
 
-    // get an open write-handle on the pidfile for lock+update
-    int pidfd = open(params.pid_file, O_WRONLY | O_CREAT | O_SYNC, PERMS640);
-    if(pidfd == -1)
-        dmn_log_fatal("open(%s, O_WRONLY|O_CREAT) failed: %s", params.pid_file, dmn_logf_errno());
-    if(fcntl(pidfd, F_SETFD, FD_CLOEXEC))
-        dmn_log_fatal("fcntl(%s, F_SETFD, FD_CLOEXEC) failed: %s", params.pid_file, dmn_logf_errno());
-
-    // check on existing daemon
-    const pid_t old_pid = dmn_status();
-    bool really_restart = false;
-    if(old_pid) {
-        if(!params.restart)
-            dmn_log_fatal("start: another daemon instance is already running at pid %li!", (long)old_pid);
-        else
-            really_restart = true;
-    }
-    else if(params.restart) {
-        dmn_log_info("restart: No previous daemon instance to stop...");
-    }
-
-    // if restarting, TERM the old daemon and wait for it to exit for a bit...
-    // (technically, there's a race here.  the old daemon could have died since we checked
-    // dmn_status() above, and another process could have replaced it at the same pid.  To
-    // be fixed someday when default action->daemon interaction switches from signals to a socket.)
-    if(really_restart) {
-        dmn_log_info("restart: Stopping previous daemon instance at pid %li...", (long)old_pid);
-        if(terminate_pid_and_wait(old_pid))
-            dmn_log_fatal("restart: failed, old daemon at pid %li did not die!", (long)old_pid);
-    }
-
-    // Attempt lock
-    if(fcntl(pidfd, F_SETLK, &pidlock_set)) {
+    // Attempt lock - this is where we resolve a double-startup race
+    // definitively, but it would be prudent for the daemon to have checked
+    // dmn_status() for itself much earlier to detect common, un-racy cases.
+    if(fcntl(state.pid_fd, wait ? F_SETLKW : F_SETLK, &pidlock_set)) {
         // Various failure modes
         if(errno != EAGAIN && errno != EACCES)
             dmn_log_fatal("bug? fcntl(pidfile, F_SETLK) failed: %s", dmn_logf_errno());
-        dmn_log_fatal("cannot acquire pidfile lock on pidfile: %s, owned by pid: %li)", params.pid_file, (long)dmn_status());
+        dmn_log_fatal("cannot acquire fcntl lock on pidfile %s, another"
+                      " instance of this daemon is conflicting!", params.pid_file);
     }
 
-    // Success - assuming writing to our locked pidfile doesn't fail!
-    if(ftruncate(pidfd, 0))
-        dmn_log_fatal("truncating pidfile failed: %s", dmn_logf_errno());
-    if(dprintf(pidfd, "%li\n", (long)getpid()) < 2)
-        dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
-
-    // leak of pidfd here is intentional, it stays open/locked for the duration
-    //   of the daemon's execution.  Daemon death by any means unlocks-on-close,
-    //   signaling to other code that this instance is no longer running...
-    state.phase = PHASE6_PIDLOCKED;
+    // always write current pid on acquisition of exclusive lock
+    if(excl) {
+        if(ftruncate(state.pid_fd, 0))
+            dmn_log_fatal("truncating pidfile failed: %s", dmn_logf_errno());
+        if(dprintf(state.pid_fd, "%li\n", (long)getpid()) < 2)
+            dmn_log_fatal("dprintf to pidfile failed: %s", dmn_logf_errno());
+    }
 }
 
-void dmn_pcall(unsigned id) {
-    phase_check(PHASE4_FORKED, PHASE7_FINISHED, 0);
+int dmn_pidfile_lock(const dmn_lockflags_t flags) {
+    dmn_assert_ndebug(state.phase >= PHASE3_FORKED);
+    if(params.pid_file)
+        dmn_pid_fd_lock(flags);
+    if(state.phase == PHASE3_FORKED && (flags & DMN_LOCK_EX))
+        state.phase = PHASE4_PIDLOCKED;
+    return state.pid_fd;
+}
 
-    if(id >= num_pcalls)
-        dmn_log_fatal("BUG: dmn_daemon_pcall() on non-existent index %u", id);
-
-    // if !will_privdrop, we can execute locally since privileges never changed
-    if(!params.will_privdrop)
-        return pcalls[id]();
-
-    dmn_assert(state.pipe_to_helper[PIPE_WR] >= 0);
-    dmn_assert(state.pipe_from_helper[PIPE_RD] >= 0);
-
-    uint8_t msg = id + 64U;
-    if(1 != write(state.pipe_to_helper[PIPE_WR], &msg, 1))
-        dmn_log_fatal("Bug? failed to write pcall request for %u to helper! Errno was %s", id, dmn_logf_errno());
-    if(1 != read(state.pipe_from_helper[PIPE_RD], &msg, 1))
-        dmn_log_fatal("Bug? failed to read pcall return for %u from helper! Errno was %s", id, dmn_logf_errno());
-    if(msg != ((id + 64U) | 128U))
-        dmn_log_fatal("Bug? invalid pcall return of '%hhu' for %u from helper!", msg, id);
+void dmn_pidfile_release(void) {
+    if(!params.pid_file)
+        return;
+    if(state.pid_fd != -1 && close(state.pid_fd))
+        dmn_log_fatal("Cannot close pidfile fd for release: %s", dmn_logf_errno());
+    state.pid_fd = -1;
 }
 
 void dmn_finish(void) {
-    phase_check(PHASE6_PIDLOCKED, 0, 1);
+    dmn_assert_ndebug(state.phase == PHASE4_PIDLOCKED);
 
-    if(params.need_helper) { // inform the helper of our success (bidirectional)
-        dmn_assert(state.pipe_to_helper[PIPE_RD] == -1);
-        dmn_assert(state.pipe_to_helper[PIPE_WR] >= 0);
-        dmn_assert(state.pipe_from_helper[PIPE_RD] >= 0);
-        dmn_assert(state.pipe_from_helper[PIPE_WR] == -1);
+    dmn_sd_notify_readypid();
+
+    if(!params.foreground) {
+        dmn_assert(state.dmn_pipe >= 0);
 
         errno = 0;
-        uint8_t msg = 0;
-        if(1 != write(state.pipe_to_helper[PIPE_WR], &msg, 1))
-            dmn_log_fatal("Bug? failed to notify helper of daemon success! Errno was %s", dmn_logf_errno());
-        if(1 != read(state.pipe_from_helper[PIPE_RD], &msg, 1))
-            dmn_log_fatal("Bug? failed to read helper final status! Errno was %s", dmn_logf_errno());
-        if(msg != 128U)
-            dmn_log_fatal("Bug? final message from helper was '%hhu'", msg);
+        uint8_t msg = 0x55;
+        if(1 != write(state.dmn_pipe, &msg, 1))
+            dmn_log_fatal("Bug? failed to notify parent of daemon success: %s", dmn_logf_errno());
 
-        close_pipefd(&state.pipe_to_helper[PIPE_WR]);
-        close_pipefd(&state.pipe_from_helper[PIPE_RD]);
+        if(close(state.dmn_pipe))
+            dmn_log_fatal("close() of pipe fd in dmn_finish failed: %s", dmn_logf_errno());
 
-        // if helper was forked by us as a temp child (-f + privdrop),
-        //    we should reap it here
-        if(params.foreground) {
-            dmn_assert(state.helper_pid_reap);
-            waitpid_zero(state.helper_pid_reap);
-        }
-    }
-
-    dmn_assert(state.pipe_to_helper[PIPE_RD] == -1);
-    dmn_assert(state.pipe_to_helper[PIPE_WR] == -1);
-    dmn_assert(state.pipe_from_helper[PIPE_RD] == -1);
-    dmn_assert(state.pipe_from_helper[PIPE_WR] == -1);
-
-    // Close our copied streams if daemonized
-    if(!params.foreground) {
+        // Close our copied streams if daemonized
         fclose(state.stdout_out);
         fclose(state.stderr_out);
         state.stdout_out = NULL;
         state.stderr_out = NULL;
     }
+    else {
+        dmn_assert(state.dmn_pipe == -1);
+    }
 
-    // notify systemd of full readiness if applicable
-    dmn_sd_notify("READY=1", false);
-
-    state.phase = PHASE7_FINISHED;
+    state.phase = PHASE5_FINISHED;
 }

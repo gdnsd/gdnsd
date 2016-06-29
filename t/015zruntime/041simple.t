@@ -69,4 +69,4 @@ _GDT->test_dns(
     v4_only => 1
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

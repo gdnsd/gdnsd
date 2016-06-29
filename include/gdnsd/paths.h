@@ -31,7 +31,7 @@
 const char* gdnsd_get_default_config_dir(void);
 
 // Every independent program which makes use of libgdnsd must call this
-// fairly early in its lifecycle, usually right after dmn_init1().
+// fairly early in its lifecycle, usually right after dmn_init().
 // One should assume that everything else in the gdnsd_ namespace from
 // libgdnsd depends on this being called first to initialize the library.
 //
@@ -80,6 +80,11 @@ char* gdnsd_resolve_path_state(const char* inpath, const char* pfx);
 
 // As above for "libexec" paths (e.g. /usr/libexec/gdnsd/)
 char* gdnsd_resolve_path_libexec(const char* inpath, const char* pfx);
+
+// Make a best effort to find our own executable's pathname, fails fatally.
+// argv0 is optional, but chances are better (especially on unpopular
+// platforms) if it's set to the original argv[0] value.
+char* gdnsd_self_exe_path(const char* argv0);
 
 #pragma GCC visibility pop
 

@@ -511,7 +511,7 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
     rrset->func = p->resolve;
 
     // we pass rrset->origin instead of origin here, in case the plugin author saves the pointer
-    //  (which he probably shouldn't, but can't hurt to make life easier)
+    //  (which they probably shouldn't, but can't hurt to make life easier)
     rrset->resource = 0;
     if(p->map_res) {
         const int res = p->map_res(resource_name, rrset->origin);

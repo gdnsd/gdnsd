@@ -58,4 +58,4 @@ _GDT->test_dns(
     answer => [$nsa1, $nsa2, $nsa3, $nsa4],
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);

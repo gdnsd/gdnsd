@@ -96,4 +96,4 @@ _GDT->test_dns(
     stats => [qw/udp_reqs refused/],
 );
 
-_GDT->test_kill_daemon($pid);
+_GDT->test_kill_gdnsd($pid);
