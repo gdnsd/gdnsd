@@ -40,7 +40,7 @@ typedef struct {
     bool     zones_strict_data;
     bool     zones_strict_startup;
     bool     zones_rfc1035_auto;
-    bool     any_tcp_only;
+    bool     any_mitigation;
     int      priority;
     unsigned chaos_len;
     unsigned zones_default_ttl;

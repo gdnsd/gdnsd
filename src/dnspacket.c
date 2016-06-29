@@ -1930,7 +1930,7 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, 
     // Check for truncation (ANY-over-UDP truncation, or true overflow w/ just ans, auth, and glue)
     if(unlikely(
         (offset + (ctx->addtl_has_glue ? ctx->addtl_offset : 0) > ctx->this_max_response)
-        || (gcfg->any_tcp_only && ctx->qtype == DNS_TYPE_ANY && ctx->is_udp)
+        || (gcfg->any_mitigation && ctx->qtype == DNS_TYPE_ANY && ctx->is_udp)
     )) {
         ctx->ancount = 0;
         ctx->nscount = 0;

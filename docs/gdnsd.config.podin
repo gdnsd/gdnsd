@@ -608,18 +608,27 @@ and are used to communicate persistent, stateful information to
 the daemon.  This should live on a filesystem which is preserved
 across reboots.
 
-=item B<any_tcp_only>
+=item B<any_mitigation>
 
-Boolean, default true.  If true, ANY queries over UDP are answered with
-truncated empty responses, which forces the client to retry over TCP.
-This is a mitigation against attackers using a gdnsd server as an
-amplified reflection traffic source, as ANY queries tend to have the
-largest response sizes.  ANY queries aren't commonly used by legitimate
-clients (they're mostly for debugging), truncation responses to TCP are
-a normal expectation regardless, and supporting DNS over TCP is a
-requirement of the DNS.  Therefore this should cause no real-world
-performance or interoperability problems in exchange for the protection
-it offers.
+Boolean, default true.  If true, the server will attempt to mitigate
+problems with ANY-query reflection attacks over UDP.  As ANY queries
+tend to have the largest response sizes, they are an obvious target for
+amplified reflection attacks using gdnsd as the traffic source.  ANY
+queries aren't commonly used by legitimate clients; they're mostly for
+debugging.
+
+Currently gdnsd's only mechanism for mitigation is forcing legitimate
+clients to use TCP for ANY queries by sending a truncated UDP response.
+Truncation responses are a normal expectation regardless, and supporting
+DNS over TCP is a requirement of the DNS.  Therefore this should cause
+no real-world performance or interoperability problems in exchange for
+the protection it offers.
+
+In future releases, C<any_mitigation> may behave differently and allow
+some ANY-over-UDP traffic to succeed when it's safe to do so.  For
+example, it may allow ANY over UDP up to a certain response ratelimit,
+and/or it may allow ANY over UDP when the request source is weakly
+validated by an edns0 cookie.
 
 =back
 

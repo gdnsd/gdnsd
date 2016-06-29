@@ -57,7 +57,7 @@ static const cfg_t cfg_defaults = {
     .zones_strict_data = false,
     .zones_strict_startup = true,
     .zones_rfc1035_auto = true,
-    .any_tcp_only = true,
+    .any_mitigation = true,
      // legal values are -20 to 20, so -21
      //  is really just an indicator that the user
      //  didn't explicitly set it.  The default
@@ -275,7 +275,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
-        CFG_OPT_BOOL(options, any_tcp_only);
+        CFG_OPT_BOOL(options, any_mitigation);
         CFG_OPT_UINT_NOMIN(options, log_stats, 86400LU);
 
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
