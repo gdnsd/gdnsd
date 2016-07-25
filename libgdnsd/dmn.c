@@ -457,8 +457,6 @@ static void dmn_detect_systemd(const bool use_syslog) {
 // the sd_pid_notify() changes, which aren't relevant in
 // our case), and just updated to match local style + conditions.
 void dmn_sd_notify(const char *notify_msg, const bool optional) {
-    dmn_assert(notify_msg);
-
     if(!state.running_under_sd)
         return;
 
@@ -673,8 +671,6 @@ void dmn_init1(bool debug, bool foreground, bool use_syslog, const char* name) {
     // init1 phase checks are not handled by the usual macro
     if(prev_phase != PHASE0_UNINIT)
         dmn_log_fatal("BUG: dmn_init1() can only be called once!");
-    if(!name)
-        dmn_log_fatal("BUG: dmn_init1(): argument 'name' is *required*");
 
     params.name = strdup(name);
 
@@ -822,8 +818,6 @@ void dmn_init3(const char* username, const bool restart) {
 
 unsigned dmn_add_pcall(dmn_func_vv_t func) {
     phase_check(0, PHASE4_FORKED, 0);
-    if(!func)
-        dmn_log_fatal("BUG: set_pcall requires a funcptr argument!");
     const unsigned idx = num_pcalls;
     if(idx >= 64)
         dmn_log_fatal("Too many pcalls registered (64+)!");
@@ -837,8 +831,6 @@ unsigned dmn_add_pcall(dmn_func_vv_t func) {
 // fully duplicate a stream and underlying fd for writing, with CLOEXEC set
 DMN_F_NONNULL
 static FILE* _dup_write_stream(FILE* old, const char* old_name) {
-    dmn_assert(old); dmn_assert(old_name);
-
     const int old_fd = fileno(old);
     if(old_fd < 0)
         dmn_log_fatal("fileno(%s) failed: %s", old_name, dmn_logf_errno());

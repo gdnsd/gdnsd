@@ -69,8 +69,8 @@ static unsigned num_mons = 0;
 static null_svc_t** null_svcs = NULL;
 static null_mon_t** null_mons = NULL;
 
+F_NONNULL
 static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
     null_mon_t* mon = t->data;
@@ -79,7 +79,6 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 }
 
 void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED) {
-    dmn_assert(name); dmn_assert(svc_cfg);
     null_svcs = xrealloc(null_svcs, sizeof(null_svc_t*) * ++num_svcs);
     null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(null_svc_t));
     this_svc->name = strdup(name);
@@ -109,18 +108,14 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
 }
 
 void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
     add_mon_any(svc_name, idx);
 }
 
 void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname);
     add_mon_any(svc_name, idx);
 }
 
 void plugin_null_init_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = null_mons[i]->interval_watcher;
         ev_timer_set(ival_watcher, 0, 0);
@@ -129,8 +124,6 @@ void plugin_null_init_monitors(struct ev_loop* mon_loop) {
 }
 
 void plugin_null_start_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_mons; i++) {
         null_mon_t* mon = null_mons[i];
         const unsigned ival = mon->svc->interval;

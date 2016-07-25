@@ -179,8 +179,8 @@ dnspacket_stats_t* dnspacket_stats_init(const unsigned this_threadnum, const boo
     return stats;
 }
 
+F_NONNULL
 static void reset_context(dnsp_ctx_t* ctx) {
-    dmn_assert(ctx);
     memset(
         &ctx->answer_addr_rrset, 0,
         sizeof(dnsp_ctx_t) - offsetof(dnsp_ctx_t, answer_addr_rrset)
@@ -190,8 +190,6 @@ static void reset_context(dnsp_ctx_t* ctx) {
 // "buf" points to the question section of an input packet.
 F_NONNULL
 static unsigned parse_question(dnsp_ctx_t* ctx, uint8_t* lqname, const uint8_t* buf, const unsigned len) {
-    dmn_assert(ctx); dmn_assert(lqname); dmn_assert(buf);
-
     uint8_t* lqname_ptr = lqname + 1;
     unsigned pos = 0;
     unsigned llen;
@@ -246,8 +244,6 @@ static unsigned parse_question(dnsp_ctx_t* ctx, uint8_t* lqname, const uint8_t* 
 // retval: true -> FORMERR, false -> OK
 F_NONNULL
 static bool handle_edns_client_subnet(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, unsigned opt_len, const uint8_t* opt_data) {
-    dmn_assert(ctx); dmn_assert(stats); dmn_assert(opt_data);
-
     bool rv = false;
 
     do {
@@ -308,8 +304,6 @@ static bool handle_edns_client_subnet(dnsp_ctx_t* ctx, dnspacket_stats_t* stats,
 // retval: true -> FORMERR, false -> OK
 F_NONNULL
 static bool handle_edns_option(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, unsigned opt_code, unsigned opt_len, const uint8_t* opt_data) {
-    dmn_assert(ctx); dmn_assert(stats); dmn_assert(opt_data);
-
     bool rv = false;
     if((opt_code == EDNS_CLIENTSUB_OPTCODE) && gcfg->edns_client_subnet)
         rv = handle_edns_client_subnet(ctx, stats, opt_len, opt_data);
@@ -322,7 +316,7 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, unsign
 // retval: true -> FORMERR, false -> OK
 F_NONNULL
 static bool handle_edns_options(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, unsigned rdlen, const uint8_t* rdata) {
-    dmn_assert(ctx); dmn_assert(stats); dmn_assert(rdlen); dmn_assert(rdata);
+    dmn_assert(rdlen);
 
     bool rv = false;
 
@@ -362,8 +356,6 @@ typedef enum {
 
 F_NONNULL
 static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const wire_dns_rr_opt_t* opt, const dmn_anysin_t* asin V_UNUSED, const unsigned packet_len, const unsigned offset) {
-    dmn_assert(ctx); dmn_assert(stats); dmn_assert(opt); dmn_assert(asin);
-
     rcode_rv_t rcode = DECODE_OK;
     ctx->use_edns = true;            // send OPT RR with response
     stats_own_inc(&stats->edns);
@@ -406,7 +398,7 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const w
 
 F_NONNULL
 static rcode_rv_t decode_query(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, uint8_t* lqname, unsigned* question_len_ptr, const unsigned packet_len, const dmn_anysin_t* asin) {
-    dmn_assert(ctx); dmn_assert(stats); dmn_assert(ctx->packet); dmn_assert(lqname); dmn_assert(question_len_ptr); dmn_assert(asin);
+    dmn_assert(ctx->packet);
 
     rcode_rv_t rcode = DECODE_OK;
 
@@ -508,7 +500,7 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, uint8_
 // is_addtl refers to where we're storing to
 F_NONNULL
 static unsigned store_dname_nocomp(dnsp_ctx_t* ctx, const unsigned pkt_dname_offset, const uint8_t* dn) {
-    dmn_assert(ctx); dmn_assert(pkt_dname_offset); dmn_assert(dn);
+    dmn_assert(pkt_dname_offset);
 
     if(*dn != 1 && likely(pkt_dname_offset < 16384) && likely(ctx->comptarget_count < COMPTARGETS_MAX)) {
         comptarget_t* new_ctarg = &(ctx->comptargets[ctx->comptarget_count++]);
@@ -526,8 +518,6 @@ static unsigned store_dname_nocomp(dnsp_ctx_t* ctx, const unsigned pkt_dname_off
 // is_addtl refers to where we're storing to
 F_NONNULL
 static unsigned store_dname(dnsp_ctx_t* ctx, const unsigned pkt_dname_offset, const uint8_t* dn, const bool is_addtl) {
-    dmn_assert(ctx); dmn_assert(dn);
-
     uint8_t* packet = is_addtl ? ctx->addtl_store : ctx->packet;
 
     // Deal with the root case, which should never be compressed, or compressed against
@@ -632,7 +622,7 @@ static void dname_from_raw(uint8_t* dname, const uint8_t* raw) {
 //    both of which are gauranteed <16K offset.
 F_NONNULL
 static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned orig_offset, const bool is_addtl) {
-    dmn_assert(ctx); dmn_assert(ctx->packet);
+    dmn_assert(ctx->packet);
     if(!is_addtl) {
         dmn_assert(orig_offset < 16384);
         dmn_assert(orig_offset == ctx->qname_comp || orig_offset == ctx->auth_comp);
@@ -700,7 +690,6 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
 
 F_NONNULL
 static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const bool is_addtl) {
-    dmn_assert(ctx); dmn_assert(rrset);
     dmn_assert(rrset->gen.count);
 
     uint8_t* packet = is_addtl ? ctx->addtl_store : ctx->packet;
@@ -729,7 +718,6 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
 
 F_NONNULL
 static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const bool is_addtl) {
-    dmn_assert(ctx); dmn_assert(rrset);
     dmn_assert(rrset->count_v6);
 
     uint8_t* packet = is_addtl ? ctx->addtl_store : ctx->packet;
@@ -755,7 +743,7 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
 
 F_NONNULL
 static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const bool is_addtl, const unsigned ttl) {
-    dmn_assert(ctx); dmn_assert(ctx->packet);
+    dmn_assert(ctx->packet);
 
     uint8_t* packet = is_addtl ? ctx->addtl_store : ctx->packet;
     const dyn_result_t* dr = ctx->dyn;
@@ -787,7 +775,7 @@ static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrse
 
 F_NONNULL
 static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const bool is_addtl, const unsigned ttl) {
-    dmn_assert(ctx); dmn_assert(ctx->packet);
+    dmn_assert(ctx->packet);
 
     uint8_t* packet = is_addtl ? ctx->addtl_store : ctx->packet;
     const dyn_result_t* dr = ctx->dyn;
@@ -823,8 +811,6 @@ static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_r
 //   returning the TTL to actually use, in network order.
 F_NONNULLX(1,2)
 static unsigned do_dyn_callback(dnsp_ctx_t* ctx, gdnsd_resolve_cb_t func, const uint8_t* origin, const unsigned res, const unsigned ttl_max_net, const unsigned ttl_min) {
-    dmn_assert(ctx); dmn_assert(func);
-
     dyn_result_t* dr = ctx->dyn;
     memset(dr, 0, sizeof(dyn_result_t));
     const gdnsd_sttl_t sttl = func(res, origin, &ctx->client_info, dr);
@@ -843,8 +829,6 @@ static unsigned do_dyn_callback(dnsp_ctx_t* ctx, gdnsd_resolve_cb_t func, const 
 
 F_NONNULL
 static unsigned encode_rrs_anyaddr(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const bool is_addtl) {
-    dmn_assert(ctx); dmn_assert(rrset);
-
     // This is to prevent duplicating the answer AAAA+A
     // rrset in the addtl section
     if(!is_addtl)
@@ -871,8 +855,6 @@ static unsigned encode_rrs_anyaddr(dnsp_ctx_t* ctx, unsigned offset, const ltree
 // retval indicates whether to actually add it or not
 F_NONNULL
 static bool add_addtl_rrset_check(dnsp_ctx_t* ctx, const ltree_rrset_addr_t* rrset) {
-    dmn_assert(ctx); dmn_assert(rrset);
-
     bool rv = true;
 
     // gcfg->max_addtl_rrsets unique addtl rrsets
@@ -893,8 +875,6 @@ static bool add_addtl_rrset_check(dnsp_ctx_t* ctx, const ltree_rrset_addr_t* rrs
 
 F_NONNULL
 static void track_addtl_rrset_unwind(dnsp_ctx_t* ctx, const ltree_rrset_addr_t* rrset) {
-    dmn_assert(ctx); dmn_assert(rrset);
-
     // arcount and addtl_offset should be zero when first additional is added...
     dmn_assert(ctx->addtl_count || !ctx->addtl_offset);
     dmn_assert(ctx->addtl_count || !ctx->arcount);
@@ -908,8 +888,6 @@ static void track_addtl_rrset_unwind(dnsp_ctx_t* ctx, const ltree_rrset_addr_t* 
 
 F_NONNULL
 static void add_addtl_rrset(dnsp_ctx_t* ctx, const ltree_rrset_addr_t* rrset, const unsigned nameptr) {
-    dmn_assert(ctx); dmn_assert(rrset);
-
     if(rrset != ctx->answer_addr_rrset && add_addtl_rrset_check(ctx, rrset)) {
         track_addtl_rrset_unwind(ctx, rrset);
         ctx->addtl_offset = encode_rrs_anyaddr(ctx, ctx->addtl_offset, rrset, nameptr, true);
@@ -922,7 +900,7 @@ static void add_addtl_rrset(dnsp_ctx_t* ctx, const ltree_rrset_addr_t* rrset, co
 //  it's impossible for the check to fail.
 F_NONNULL
 static unsigned encode_rrs_a(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(offset);
     dmn_assert(ctx->qtype == DNS_TYPE_A);
 
     // This is to prevent duplicating the answer AAAA+A
@@ -953,7 +931,7 @@ static unsigned encode_rrs_a(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
 
 F_NONNULL
 static unsigned encode_rrs_aaaa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(offset);
     dmn_assert(ctx->qtype == DNS_TYPE_AAAA);
 
     // This is to prevent duplicating the answer AAAA+A
@@ -984,7 +962,7 @@ static unsigned encode_rrs_aaaa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
 
 F_NONNULL
 static unsigned encode_rrs_ns(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_ns_t* rrset, const bool answer) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(ctx->packet); dmn_assert(offset);
     dmn_assert(rrset->gen.count); // we never call encode_rrs_ns without an NS record present
 
     uint8_t* packet = ctx->packet;
@@ -1019,7 +997,7 @@ static unsigned encode_rrs_ns(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrse
 
 F_NONNULL
 static unsigned encode_rrs_ptr(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_ptr_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(ctx->packet); dmn_assert(offset);
 
     uint8_t* packet = ctx->packet;
 
@@ -1041,7 +1019,7 @@ static unsigned encode_rrs_ptr(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
 
 F_NONNULL
 static unsigned encode_rrs_mx(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_mx_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(ctx->packet); dmn_assert(offset);
 
     uint8_t* packet = ctx->packet;
 
@@ -1068,7 +1046,7 @@ static unsigned encode_rrs_mx(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrse
 
 F_NONNULL
 static unsigned encode_rrs_srv(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_srv_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(rrset);
+    dmn_assert(ctx->packet);
 
     uint8_t* packet = ctx->packet;
 
@@ -1100,7 +1078,7 @@ static unsigned encode_rrs_srv(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
 
 F_NONNULL
 static unsigned encode_rrs_naptr(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_naptr_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(ctx->packet); dmn_assert(offset);
 
     uint8_t* packet = ctx->packet;
 
@@ -1140,7 +1118,7 @@ static unsigned encode_rrs_naptr(dnsp_ctx_t* ctx, unsigned offset, const ltree_r
 
 F_NONNULL
 static unsigned encode_rrs_txt(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_txt_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(ctx->packet); dmn_assert(offset);
 
     uint8_t* packet = ctx->packet;
 
@@ -1176,7 +1154,7 @@ static unsigned encode_rrs_txt(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
 //    (and in either case, it's going into the answer section)
 F_NONNULL
 static unsigned encode_rr_cname(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_cname_t* rd, const bool answer) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rd);
+    dmn_assert(ctx->packet); dmn_assert(offset);
 
     uint8_t* packet = ctx->packet;
 
@@ -1207,7 +1185,7 @@ static unsigned encode_rr_cname(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
 
 F_NONNULL
 static unsigned encode_rr_soa_common(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_soa_t* rdata, const bool answer, const bool negative) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rdata);
+    dmn_assert(ctx->packet); dmn_assert(offset);
 
     uint8_t* packet = ctx->packet;
 
@@ -1246,7 +1224,7 @@ static unsigned encode_rr_soa_negative(dnsp_ctx_t* ctx, unsigned offset, const l
 }
 
 static unsigned encode_rrs_rfc3597(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_rfc3597_t* rrset, const bool answer V_UNUSED) {
-    dmn_assert(ctx); dmn_assert(ctx->packet); dmn_assert(offset); dmn_assert(rrset);
+    dmn_assert(ctx->packet); dmn_assert(offset);
 
     // assert that DYNC (which is technically in the range
     //  served exclusively by this function, but which we
@@ -1275,9 +1253,8 @@ static unsigned encode_rrs_rfc3597(dnsp_ctx_t* ctx, unsigned offset, const ltree
     return offset;
 }
 
+F_NONNULLX(1)
 static unsigned encode_rrs_any(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* res_rrsets) {
-    dmn_assert(ctx);
-
     // Address rrsets have to be processed first outside of the main loop,
     //   so that ctx->answer_addr_rrset gets set before any other RR-types
     //   try to add duplicate addr records to the addtl section
@@ -1336,7 +1313,6 @@ static unsigned encode_rrs_any(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
 #define MK_RRSET_GET(_typ, _nam, _dtyp) \
 F_NONNULL F_PURE \
 static const ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _nam (const ltree_node_t* node) {\
-    dmn_assert(node);\
     const ltree_rrset_t* rrsets = node->rrsets;\
     dmn_assert(rrsets);\
     while(rrsets->gen.type != _dtyp) {\
@@ -1612,8 +1588,6 @@ static unsigned (*encode_funcptrs[256])(dnsp_ctx_t*, unsigned, const void*, cons
 
 F_NONNULLX(1,4)
 static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* res_rrsets, const ltree_node_t* authdom, const bool res_is_auth) {
-    dmn_assert(ctx); dmn_assert(authdom);
-
     if(ctx->qtype == DNS_TYPE_ANY) {
         offset = encode_rrs_any(ctx, offset, res_rrsets);
     }
@@ -1650,7 +1624,7 @@ static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, cons
 //  processing.  It's too complex to understand easily and needs refactoring.
 F_NONNULL F_PURE
 static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned auth_depth) {
-    dmn_assert(packet); dmn_assert(offset);
+    dmn_assert(offset);
     dmn_assert(offset < 65536);
     dmn_assert(auth_depth < 256);
 
@@ -1673,7 +1647,6 @@ static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned 
 
 F_NONNULL
 static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zone_t* zone, const ltree_node_t** node_out, unsigned* auth_deleg_mod) {
-    dmn_assert(dname); dmn_assert(zone); dmn_assert(node_out);
     dmn_assert(*dname != 0); dmn_assert(*dname != 2); // these are always illegal dnames
     dmn_assert(dname_isinzone(zone->dname, dname));
 
@@ -1742,7 +1715,6 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
 //   storage.
 F_NONNULL
 static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync_t* rd) {
-    dmn_assert(rd);
     dmn_assert(!rd->gen.next); // DYNC does not co-exist with other rrsets
 
     const unsigned ttl = do_dyn_callback(ctx, rd->func, rd->origin, rd->resource, rd->gen.ttl, rd->ttl_min);
@@ -1790,7 +1762,7 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
 
 F_NONNULL
 static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const uint8_t* qname, unsigned offset) {
-    dmn_assert(ctx); dmn_assert(stats); dmn_assert(qname); dmn_assert(offset);
+    dmn_assert(offset);
 
     const unsigned first_offset = offset;
     bool via_cname = false;
@@ -1912,7 +1884,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const 
 
 F_NONNULL
 static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, uint8_t* qname, unsigned offset) {
-    dmn_assert(ctx); dmn_assert(stats); dmn_assert(qname); dmn_assert(offset);
+    dmn_assert(offset);
 
     if(*qname != 1) {
         ctx->comptarget_count = 1;
@@ -1960,8 +1932,6 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, 
 }
 
 unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const dmn_anysin_t* asin, uint8_t* packet, const unsigned packet_len) {
-    dmn_assert(ctx_asvoid); dmn_assert(stats); dmn_assert(asin); dmn_assert(packet);
-
     dnsp_ctx_t* ctx = ctx_asvoid;
     reset_context(ctx);
     ctx->packet = packet;

@@ -46,7 +46,6 @@ struct _nlist {
 };
 
 nlist_t* nlist_new(const char* map_name, const bool pre_norm) {
-    dmn_assert(map_name);
     nlist_t* nl = xmalloc(sizeof(nlist_t));
     nl->nets = xmalloc(sizeof(net_t) * NLIST_INITSIZE);
     nl->map_name = strdup(map_name);
@@ -59,7 +58,6 @@ nlist_t* nlist_new(const char* map_name, const bool pre_norm) {
 // only used for normalization assertions in debug builds...
 F_UNUSED F_NONNULL
 static nlist_t* nlist_clone(const nlist_t* nl) {
-    dmn_assert(nl);
     nlist_t* nlc = xmalloc(sizeof(nlist_t));
     nlc->map_name = strdup(nl->map_name);
     nlc->alloc = nl->alloc;
@@ -71,14 +69,12 @@ static nlist_t* nlist_clone(const nlist_t* nl) {
 }
 
 void nlist_debug_dump(const nlist_t* nl) {
-    dmn_assert(nl);
     log_debug(" --- nlist debug on %s --- ", nl->map_name);
     for(unsigned i = 0; i < nl->count; i++)
         log_debug("   %s/%u -> %u", logf_ipv6(nl->nets[i].ipv6), nl->nets[i].mask, nl->nets[i].dclist);
 }
 
 void nlist_destroy(nlist_t* nl) {
-    dmn_assert(nl);
     free(nl->map_name);
     free(nl->nets);
     free(nl);
@@ -87,7 +83,7 @@ void nlist_destroy(nlist_t* nl) {
 #ifndef NDEBUG
 F_NONNULL
 static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask) {
-    dmn_assert(ipv6); dmn_assert(mask < 129);
+    dmn_assert(mask < 129);
 
     if(likely(mask)) {
         const unsigned revmask = 128 - mask;
@@ -108,7 +104,7 @@ static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask) {
 
 F_NONNULL
 static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned mask) {
-    dmn_assert(map_name); dmn_assert(ipv6); dmn_assert(mask < 129);
+    dmn_assert(mask < 129);
 
     bool maskbad = false;
 
@@ -142,7 +138,6 @@ static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned 
 //   lowest network number, smallest mask.
 F_NONNULL F_PURE
 static int net_sorter(const void* a_void, const void* b_void) {
-    dmn_assert(a_void); dmn_assert(b_void);
     const net_t* a = a_void;
     const net_t* b = b_void;
     int rv = memcmp(a->ipv6, b->ipv6, 16);
@@ -153,7 +148,6 @@ static int net_sorter(const void* a_void, const void* b_void) {
 
 F_NONNULL F_PURE
 static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned mask) {
-    dmn_assert(v6a); dmn_assert(v6b);
     dmn_assert(mask < 128U); // 2x128 would call here w/ 127...
 
     const unsigned bytes = mask >> 3;
@@ -166,7 +160,6 @@ static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned
 
 F_NONNULL F_PURE
 static bool mergeable_nets(const net_t* na, const net_t* nb) {
-    dmn_assert(na); dmn_assert(nb);
     bool rv = false;
     if(na->dclist == nb->dclist) {
         if(na->mask == nb->mask)
@@ -178,8 +171,6 @@ static bool mergeable_nets(const net_t* na, const net_t* nb) {
 }
 
 void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist) {
-    dmn_assert(nl); dmn_assert(ipv6);
-
     if(unlikely(nl->count == nl->alloc)) {
         nl->alloc <<= 1U;
         nl->nets = xrealloc(nl->nets, sizeof(net_t) * nl->alloc);
@@ -222,14 +213,14 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
 
 F_NONNULL F_PURE
 static bool net_eq(const net_t* na, const net_t* nb) {
-    dmn_assert(na); dmn_assert(nb);
     return na->mask == nb->mask && !memcmp(na->ipv6, nb->ipv6, 16);
 }
 
 // do a single pass of forward-normalization
 //   on a sorted nlist, then sort the result.
+F_NONNULL
 static bool nlist_normalize_1pass(nlist_t* nl) {
-    dmn_assert(nl); dmn_assert(nl->count);
+    dmn_assert(nl->count);
 
     bool rv = false;
 
@@ -275,9 +266,8 @@ static bool nlist_normalize_1pass(nlist_t* nl) {
     return rv;
 }
 
+F_NONNULL
 static void nlist_normalize(nlist_t* nl, const bool post_merge) {
-    dmn_assert(nl);
-
     if(nl->count) {
         // initial sort, unless already sorted by the merge process
         if(!post_merge)
@@ -300,7 +290,6 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge) {
 
 F_NONNULL
 void nlist_finish(nlist_t* nl) {
-    dmn_assert(nl);
     if(nl->normalized) {
 #ifndef NDEBUG
         // assert normalization in debug builds via clone->normalize->compare
@@ -318,7 +307,6 @@ void nlist_finish(nlist_t* nl) {
 
 F_NONNULL F_PURE
 static bool net_subnet_of(const net_t* sub, const net_t* super) {
-    dmn_assert(sub); dmn_assert(super);
     dmn_assert(sub->mask < 129);
     dmn_assert(super->mask < 129);
 
@@ -337,7 +325,6 @@ static bool net_subnet_of(const net_t* sub, const net_t* super) {
 
 F_NONNULL
 static nlist_t* nlist_merge(const nlist_t* nl_a, const nlist_t* nl_b) {
-    dmn_assert(nl_a); dmn_assert(nl_b);
     dmn_assert(nl_a->normalized);
     dmn_assert(nl_b->normalized);
 
@@ -386,7 +373,6 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
 
 F_NONNULL
 static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* nt, net_t tree_net, const unsigned nt_idx, const bool direction) {
-    dmn_assert(nlp); dmn_assert(nl_end); dmn_assert(nt);
     dmn_assert(tree_net.mask < 129 && tree_net.mask > 0);
 
     const net_t* nl = *nlp;
@@ -434,7 +420,6 @@ static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* n
 
 F_NONNULL
 static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt, net_t tree_net) {
-    dmn_assert(nl); dmn_assert(nl_end); dmn_assert(nt);
     dmn_assert(tree_net.mask < 128);
     tree_net.mask++; // now mask for zero/one stubs
 
@@ -455,7 +440,6 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
 }
 
 ntree_t* nlist_xlate_tree(const nlist_t* nl) {
-    dmn_assert(nl);
     dmn_assert(nl->normalized);
 
     ntree_t* nt = ntree_new();
@@ -493,8 +477,6 @@ ntree_t* nlist_xlate_tree(const nlist_t* nl) {
 }
 
 ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b) {
-    dmn_assert(nl_a); dmn_assert(nl_b);
-
     nlist_t* merged = nlist_merge(nl_a, nl_b);
     ntree_t* rv = nlist_xlate_tree(merged);
     nlist_destroy(merged);
@@ -502,8 +484,6 @@ ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b) {
 }
 
 ntree_t* nlist_merge3_tree(const nlist_t* nl_a, const nlist_t* nl_b, const nlist_t* nl_c) {
-    dmn_assert(nl_a); dmn_assert(nl_b); dmn_assert(nl_c);
-
     nlist_t* merge1 = nlist_merge(nl_a, nl_b);
     nlist_t* merge2 = nlist_merge(merge1, nl_c);
     nlist_destroy(merge1);

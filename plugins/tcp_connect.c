@@ -68,7 +68,6 @@ static tcp_events_t** mons = NULL;
 
 F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
@@ -140,7 +139,6 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
 F_NONNULL
 static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
     tcp_events_t* md = io->data;
@@ -186,7 +184,6 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
 
 F_NONNULL
 static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
@@ -220,8 +217,6 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
     } while(0)
 
 void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
-    dmn_assert(name); dmn_assert(svc_cfg);
-
     service_types = xrealloc(service_types, (num_tcp_svcs + 1) * sizeof(tcp_svc_t));
     tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
 
@@ -238,8 +233,6 @@ void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
 }
 
 void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(addr);
-
     tcp_events_t* this_mon = xcalloc(1, sizeof(tcp_events_t));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
@@ -282,8 +275,6 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
 }
 
 void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = mons[i]->interval_watcher;
         dmn_assert(mons[i]->sock == -1);
@@ -293,8 +284,6 @@ void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
 }
 
 void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_mons; i++) {
         tcp_events_t* mon = mons[i];
         dmn_assert(mon->sock == -1);

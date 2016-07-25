@@ -163,7 +163,6 @@ struct _geoip_db {
 };
 
 void validate_country_code(const char* cc, const char* map_name) {
-    dmn_assert(cc); dmn_assert(map_name);
     for(unsigned i = 0; i < NUM_COUNTRIES; i++)
         if( !((cc[0] ^ GeoIP_country_code[i][0]) & 0xDF)
          && !((cc[1] ^ GeoIP_country_code[i][1]) & 0xDF)
@@ -173,7 +172,6 @@ void validate_country_code(const char* cc, const char* map_name) {
 }
 
 void validate_continent_code(const char* cc, const char* map_name) {
-    dmn_assert(cc); dmn_assert(map_name);
     for(unsigned i = 0; i < NUM_CONTINENTS; i++)
         if( !((cc[0] ^ continent_list[i][0]) & 0xDF)
          && !((cc[1] ^ continent_list[i][1]) & 0xDF)
@@ -184,7 +182,7 @@ void validate_continent_code(const char* cc, const char* map_name) {
 
 F_NONNULL
 static uint32_t country_get_dclist(const geoip_db_t* db, const unsigned offset) {
-    dmn_assert(db); dmn_assert(offset >= db->base);
+    dmn_assert(offset >= db->base);
 
     unsigned rv = 0;
     if(db->dcmap) {
@@ -209,7 +207,7 @@ static uint32_t country_get_dclist(const geoip_db_t* db, const unsigned offset) 
 
 F_NONNULL
 static uint32_t region_get_dclist(const geoip_db_t* db, const unsigned offset) {
-    dmn_assert(db); dmn_assert(offset >= db->base);
+    dmn_assert(offset >= db->base);
 
     unsigned rv = 0;
     if(db->dcmap) {
@@ -268,7 +266,7 @@ static uint32_t region_get_dclist(const geoip_db_t* db, const unsigned offset) {
 
 F_NONNULL
 static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
-    dmn_assert(db); dmn_assert(offs >= db->base);
+    dmn_assert(offs >= db->base);
 
     char locstr[256];
     unsigned raw_lat = 0;
@@ -402,8 +400,6 @@ static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
 
 F_NONNULL
 static uint32_t get_dclist_cached(geoip_db_t* db, const unsigned offset) {
-    dmn_assert(db);
-
     unsigned bucket_size = 0;
     const unsigned ndx = offset % OFFSET_CACHE_SIZE;
 
@@ -425,7 +421,6 @@ static uint32_t get_dclist_cached(geoip_db_t* db, const unsigned offset) {
 
 F_NONNULL
 static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, const unsigned depth, const unsigned db_off) {
-    dmn_assert(db); dmn_assert(nl);
     dmn_assert(depth < 129);
 
     bool rv = false;
@@ -490,8 +485,6 @@ static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, 
 
 F_NONNULL
 static bool geoip_db_close(geoip_db_t* db) {
-    dmn_assert(db);
-
     bool rv = false;
     if(db->fmap)
         rv = gdnsd_fmap_delete(db->fmap);
@@ -503,8 +496,6 @@ static bool geoip_db_close(geoip_db_t* db) {
 
 F_NONNULLX(1,2,3)
 static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const fips_t* fips, const gdgeoip_v4o_t v4o_flag, const bool city_auto_mode, const bool city_no_region) {
-    dmn_assert(pathname); dmn_assert(map_name); dmn_assert(dclists);
-
     geoip_db_t* db = xcalloc(1, sizeof(geoip_db_t));
     db->pathname = pathname;
     db->map_name = map_name;
@@ -631,8 +622,6 @@ static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dcl
 }
 
 nlist_t* gdgeoip_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const fips_t* fips, const gdgeoip_v4o_t v4o_flag, const bool city_auto_mode, const bool city_no_region) {
-    dmn_assert(pathname); dmn_assert(map_name); dmn_assert(dclists);
-
     log_info("plugin_geoip: map '%s': Processing GeoIP database '%s'", map_name, pathname);
 
     nlist_t* nl = NULL;

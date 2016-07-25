@@ -70,8 +70,6 @@ typedef struct {
 
 F_NONNULL
 static bool geoip2_mmdb_log_meta(const MMDB_metadata_s* meta, const char* map_name, const char* pathname) {
-    dmn_assert(meta); dmn_assert(map_name); dmn_assert(pathname);
-
     char btime_str[32];
     const time_t btime = (time_t)meta->build_epoch;
     struct tm btime_tm;
@@ -117,8 +115,6 @@ static void geoip2_destroy(geoip2_t* db) {
 
 F_NONNULLX(1,2,3)
 static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode, const bool city_no_region) {
-    dmn_assert(pathname); dmn_assert(map_name); dmn_assert(dclists);
-
     geoip2_t* db = xcalloc(1, sizeof(*db));
     int status = MMDB_open(pathname, MMDB_MODE_MMAP, &db->mmdb);
     if(status != MMDB_SUCCESS) {
@@ -225,9 +221,8 @@ typedef struct {
     bool out_of_data;
 } geoip2_dcmap_cb_data_t;
 
+F_NONNULLX(1)
 static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level) {
-    dmn_assert(data);
-
     geoip2_dcmap_cb_data_t* state = data;
 
     // Explicit out-of-data set from below
@@ -311,8 +306,6 @@ static const char* GEOIP2_PATH_LON[] = { "location", "longitude", NULL };
 
 F_NONNULL
 static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
-    dmn_assert(db); dmn_assert(db_entry);
-
     // lack of both would be pointless, and is checked at outer scope
     dmn_assert(db->dcmap || db->city_auto_mode);
 
@@ -363,8 +356,6 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
 
 F_NONNULL
 static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry) {
-    dmn_assert(db); dmn_assert(db_entry);
-
     const uint32_t offset = db_entry->offset;
 
     unsigned bucket_size = 0;
@@ -388,7 +379,6 @@ static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry) {
 
 F_NONNULL
 static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr ip, unsigned depth, const uint32_t node_num) {
-    dmn_assert(db); dmn_assert(nl);
     dmn_assert(depth < 129U);
 
     if(!depth) {
@@ -483,6 +473,7 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
 #endif
 }
 
+F_NONNULL
 static void geoip2_list_xlate(geoip2_t* db, nlist_t* nl) {
     const unsigned start_depth = db->is_v4 ? 32U : 128U;
     geoip2_list_xlate_recurse(db, nl, ip6_zero, start_depth, 0U);
@@ -491,8 +482,6 @@ static void geoip2_list_xlate(geoip2_t* db, nlist_t* nl) {
 typedef void (*ij_func_t)(geoip2_t*,nlist_t**);
 F_NONNULL F_NOINLINE
 static void isolate_jmp(geoip2_t* db, nlist_t** nl) {
-    dmn_assert(db); dmn_assert(nl);
-
     *nl = nlist_new(db->map_name, true);
     if(!sigsetjmp(db->jbuf, 0)) {
         geoip2_list_xlate(db, *nl);
@@ -505,8 +494,6 @@ static void isolate_jmp(geoip2_t* db, nlist_t** nl) {
 }
 
 nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode, const bool city_no_region) {
-    dmn_assert(pathname); dmn_assert(map_name); dmn_assert(dclists);
-
     nlist_t* nl = NULL;
 
     geoip2_t* db = geoip2_new(pathname, map_name, dclists, dcmap, city_auto_mode, city_no_region);

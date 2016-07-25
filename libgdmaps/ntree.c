@@ -36,13 +36,11 @@ ntree_t* ntree_new(void) {
 }
 
 void ntree_destroy(ntree_t* tree) {
-    dmn_assert(tree);
     free(tree->store);
     free(tree);
 }
 
 unsigned ntree_add_node(ntree_t* tree) {
-    dmn_assert(tree);
     dmn_assert(tree->alloc);
     if(tree->count == tree->alloc) {
         tree->alloc <<= 1;
@@ -61,8 +59,6 @@ unsigned ntree_add_node(ntree_t* tree) {
 //   faster and simpler.
 F_NONNULL
 static unsigned ntree_find_v4root(const ntree_t* tree) {
-    dmn_assert(tree);
-
     unsigned offset = 0;
     unsigned mask_depth = 96;
     do {
@@ -74,7 +70,6 @@ static unsigned ntree_find_v4root(const ntree_t* tree) {
 }
 
 void ntree_finish(ntree_t* tree) {
-    dmn_assert(tree);
     tree->alloc = 0; // flag fixed, will fail asserts on add_node, etc now
     tree->store = xrealloc(tree->store, tree->count * sizeof(nnode_t));
     tree->ipv4 = ntree_find_v4root(tree);
@@ -87,7 +82,6 @@ static void ntree_dump_recurse(const ntree_t* tree, const unsigned bitdepth, con
 
 F_NONNULL
 static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, const unsigned val, struct in6_addr ipv6) {
-    dmn_assert(tree);
     if(NN_IS_DCLIST(val)) {
         dmn_anysin_t tempsin;
         memset(&tempsin, 0, sizeof(tempsin));
@@ -103,7 +97,6 @@ static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, con
 }
 
 static void ntree_dump_recurse(const ntree_t* tree, const unsigned bitdepth, const unsigned offset, struct in6_addr ipv6) {
-    dmn_assert(tree);
     const nnode_t* this_node = &tree->store[offset];
     ntree_dump_rec_sub(tree, bitdepth, this_node->zero, ipv6);
     SETBIT_v6(ipv6.s6_addr, 127 - bitdepth);
@@ -111,7 +104,6 @@ static void ntree_dump_recurse(const ntree_t* tree, const unsigned bitdepth, con
 }
 
 void ntree_debug_dump(const ntree_t* tree) {
-    dmn_assert(tree);
     ntree_dump_recurse(tree, 127, 0, ip6_zero);
 }
 
@@ -120,8 +112,6 @@ void ntree_debug_dump(const ntree_t* tree) {
 //   should have been merged up a layer to be optimal).  Note that
 //   we don't ever alias ntree subtrees...
 void ntree_assert_optimal(const ntree_t* tree) {
-    dmn_assert(tree);
-
     // note that for tree->count == 1 and the whole space
     //   mapped to a single dclist, we can't optimize that to
     //   a full /0 mask, it has to be a pair of /1 results,
@@ -138,15 +128,12 @@ void ntree_assert_optimal(const ntree_t* tree) {
 
 F_NONNULL
 static bool CHKBIT_v6(const uint8_t* ipv6, const unsigned bit) {
-    dmn_assert(ipv6);
     dmn_assert(bit < 128);
     return ipv6[bit >> 3] & (1UL << (~bit & 7));
 }
 
 F_NONNULL
 static unsigned ntree_lookup_v6(const ntree_t* tree, const uint8_t* ip, unsigned* mask_out) {
-    dmn_assert(tree); dmn_assert(ip); dmn_assert(mask_out);
-
     unsigned chkbit = 0;
     unsigned offset = 0;
     do {
@@ -174,7 +161,6 @@ static bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit) {
 //   more confusing and not worth optimizing for.
 F_NONNULL
 static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned* mask_out) {
-    dmn_assert(tree); dmn_assert(mask_out);
     dmn_assert(tree->ipv4);
 
     unsigned chkbit = 0;
@@ -198,8 +184,6 @@ static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned
 // else, leave addr as-is and return 0.
 F_NONNULL
 static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
-    dmn_assert(in); dmn_assert(mask_adj);
-
     uint32_t ip_out = 0;
 
     if(!memcmp(in, start_v4mapped, 12)
@@ -222,8 +206,6 @@ static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj) {
 
 F_NONNULL
 static unsigned ntree_lookup_inner(const ntree_t* tree, const dmn_anysin_t* client_addr, unsigned* scope_mask) {
-    dmn_assert(tree); dmn_assert(client_addr); dmn_assert(scope_mask);
-
     unsigned rv;
 
     if(client_addr->sa.sa_family == AF_INET) {
@@ -247,7 +229,6 @@ static unsigned ntree_lookup_inner(const ntree_t* tree, const dmn_anysin_t* clie
 }
 
 unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask) {
-    dmn_assert(tree); dmn_assert(client); dmn_assert(scope_mask);
     dmn_assert(!tree->alloc); // ntree_finish() was called
     dmn_assert(tree->ipv4); // must be a non-zero node offset or a dclist w/ high-bit set
 

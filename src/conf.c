@@ -79,8 +79,6 @@ static const cfg_t cfg_defaults = {
 
 F_NONNULL
 static void set_chaos(cfg_t* cfg, const char* data) {
-    dmn_assert(data);
-
     const unsigned dlen = strlen(data);
     if(dlen > 254)
         log_fatal("Option 'chaos_response' must be a string less than 255 characters long");
@@ -103,15 +101,12 @@ static void plugins_cleanup(void) {
 // Generic iterator for catching bad config hash keys in various places below
 F_NONNULL
 static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* which_asvoid) {
-    dmn_assert(key); dmn_assert(d); dmn_assert(which_asvoid);
     const char* which = which_asvoid;
     log_fatal("Invalid %s key '%s'", which, key);
 }
 
 F_NONNULLX(2)
 static void plugin_load_and_configure(const unsigned num_dns_threads, const char* name, vscf_data_t* pconf) {
-    dmn_assert(name);
-
     if(pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
@@ -124,7 +119,6 @@ static void plugin_load_and_configure(const unsigned num_dns_threads, const char
 
 F_NONNULL
 static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, const void* scfg_asvoid) {
-    dmn_assert(name); dmn_assert(pconf); dmn_assert(scfg_asvoid);
     const socks_cfg_t* socks_cfg = scfg_asvoid;
     plugin_load_and_configure(socks_cfg->num_dns_threads, name, pconf);
     return true;
@@ -258,7 +252,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
     } while(0)
 
 cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd) {
-    dmn_assert(!cfg_root || vscf_is_hash(cfg_root)); dmn_assert(socks_cfg);
+    dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
 
     cfg_t* cfg = xmalloc(sizeof(*cfg));
     memcpy(cfg, &cfg_defaults, sizeof(*cfg));

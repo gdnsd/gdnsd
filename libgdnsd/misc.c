@@ -51,7 +51,6 @@
 /* misc */
 
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs) {
-    dmn_assert(s1); dmn_assert(s2);
     const unsigned s1_len = strlen(s1);
     const unsigned s2_len = strlen(s2);
     char* out = xmalloc(s1_len + s2_len + 1);
@@ -124,8 +123,6 @@ typedef union {
 //   none of them are all-zeros at the u32 level.
 F_NONNULL
 static bool get_urand_data(urand_data_t* rdata) {
-    dmn_assert(rdata);
-
     int urfd = open("/dev/urandom", O_RDONLY);
     if(urfd < 0)
         return false;
@@ -269,7 +266,6 @@ bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned 
 }
 
 size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {
-    dmn_assert(d); dmn_assert(dirname);
     errno = 0;
     long name_max = fpathconf(dirfd(d), _PC_NAME_MAX);
     if(name_max < 0)

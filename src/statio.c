@@ -344,7 +344,6 @@ static void statio_log_stats(void) {
 
 F_NONNULL
 static void statio_fill_outbuf_csv(struct iovec* outbufs, const bool flush) {
-    dmn_assert(outbufs);
     populate_stats(flush);
 
     int snp_rv = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
@@ -359,7 +358,6 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs, const bool flush) {
 
 F_NONNULL
 static void statio_fill_outbuf_json(struct iovec* outbufs, const bool flush) {
-    dmn_assert(outbufs);
     populate_stats(flush);
 
     dmn_assert(pop_statio_time >= start_time);
@@ -378,7 +376,6 @@ static void statio_fill_outbuf_json(struct iovec* outbufs, const bool flush) {
 
 F_NONNULL
 static void statio_fill_outbuf_html(struct iovec* outbufs, const bool flush) {
-    dmn_assert(outbufs);
     populate_stats(flush);
 
     struct tm now_tm;
@@ -406,7 +403,6 @@ static void statio_fill_outbuf_html(struct iovec* outbufs, const bool flush) {
 //  out with two iovecs to send.
 F_NONNULL
 static void statio_fill_outbuf_404(struct iovec* outbufs) {
-    dmn_assert(outbufs);
     outbufs[0].iov_len = sizeof(http_404_hdr) - 1;
     outbufs[1].iov_len = sizeof(http_404_data) - 1;
     // iov_base=const hack
@@ -416,7 +412,6 @@ static void statio_fill_outbuf_404(struct iovec* outbufs) {
 
 F_NONNULL
 static void log_watcher_cb(struct ev_loop* loop V_UNUSED, ev_timer* t V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
     statio_log_stats();
 }
 
@@ -443,8 +438,6 @@ static const unsigned n_http_lookup = ARRAY_SIZE(http_lookup);
 //   param must be the first.
 F_NONNULL
 static void process_http_query(char* inbuffer, struct iovec* outbufs) {
-    dmn_assert(inbuffer); dmn_assert(outbufs);
-
     bool matched = false;
     for(unsigned i = 0; i < n_http_lookup; i++) {
         const unsigned msize = strlen(http_lookup[i].match);
@@ -471,8 +464,6 @@ static void process_http_query(char* inbuffer, struct iovec* outbufs) {
 
 F_NONNULL
 static void cleanup_conn_watchers(struct ev_loop* loop, http_data_t* tdata) {
-    dmn_assert(loop); dmn_assert(tdata);
-
     shutdown(tdata->read_watcher->fd, SHUT_RDWR);
     close(tdata->read_watcher->fd);
     ev_timer_stop(loop, tdata->timeout_watcher);
@@ -494,9 +485,6 @@ static void cleanup_conn_watchers(struct ev_loop* loop, http_data_t* tdata) {
 
 F_NONNULL
 static void timeout_cb(struct ev_loop* loop V_UNUSED, ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
-    dmn_assert(revents == EV_TIMER);
-
     http_data_t* tdata = t->data;
     log_debug("HTTP connection timed out while %s %s",
         tdata->state == READING_REQ
@@ -511,7 +499,6 @@ static void timeout_cb(struct ev_loop* loop V_UNUSED, ev_timer* t, const int rev
 
 F_NONNULL
 static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
     http_data_t* tdata = io->data;
@@ -566,7 +553,6 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
 
 F_NONNULL
 static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
     http_data_t* tdata = io->data;
 
@@ -613,7 +599,6 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
 
 F_NONNULL
 static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
     dmn_anysin_t* asin = xmalloc(sizeof(dmn_anysin_t));
@@ -701,8 +686,6 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 }
 
 void statio_init(const socks_cfg_t* socks_cfg) {
-    dmn_assert(socks_cfg);
-
     start_time = time(NULL);
 
     // initial flush history
@@ -767,7 +750,6 @@ void statio_bind_socks(void) {
 }
 
 bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft) {
-    dmn_assert(socks_cfg);
     unsigned rv = false;
     for(unsigned i = 0; i < num_lsocks; i++)
         if(!socks_sock_is_bound_to(lsocks[i], &socks_cfg->http_addrs[i]) && !soft)
@@ -780,8 +762,6 @@ bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft) {
 // called within our thread/loop to do the final stats output
 F_NONNULL
 static void final_stats_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
-
     // stop further periodic log output and do final output
     if(log_watcher)
         ev_timer_stop(loop, log_watcher);
@@ -809,8 +789,6 @@ void statio_final_stats_wait(void) {
 }
 
 void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg) {
-    dmn_assert(statio_loop_arg); dmn_assert(socks_cfg);
-
     statio_loop = statio_loop_arg;
     if(log_watcher)
         ev_timer_start(statio_loop, log_watcher);

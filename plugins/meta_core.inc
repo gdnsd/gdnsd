@@ -79,8 +79,6 @@ static resource_t* resources;
 // "plugin", if existed in config, will be marked afterwards
 F_NONNULL
 static char* get_defaulted_plugname(vscf_data_t* cfg, const char* resname, const char* dcname) {
-    dmn_assert(cfg);
-
     char* rv;
     vscf_data_t* plugname_data = vscf_hash_get_data_byconstkey(cfg, "plugin", true);
     if(plugname_data) {
@@ -97,7 +95,6 @@ static char* get_defaulted_plugname(vscf_data_t* cfg, const char* resname, const
 
 F_NONNULL
 static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_data_t* cfg) {
-    dmn_assert(this_dc); dmn_assert(resname); dmn_assert(cfg);
     dmn_assert(this_dc->dc_name);
 
     char* child_resname = gdnsd_str_combine_n(5, PNSTR, "_", resname, "_", this_dc->dc_name);
@@ -175,8 +172,6 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
 
 F_NONNULL
 static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, vscf_data_t* dc_data) {
-    dmn_assert(resname); dmn_assert(this_dc); dmn_assert(dc_name); dmn_assert(dc_data);
-
     this_dc->dc_name = strdup(dc_name);
 
     char* dc_mon_desc = gdnsd_str_combine_n(5, PNSTR, "/", resname, "/", dc_name);
@@ -250,7 +245,6 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
 
 F_NONNULL
 static dc_t* config_res_dcmap(vscf_data_t* res_cfg, const unsigned mapnum, vscf_data_t* dcmap_cfg, const char* resname) {
-    dmn_assert(dcmap_cfg); dmn_assert(resname);
     dmn_assert(vscf_is_hash(dcmap_cfg));
 
     const unsigned num_dcs = vscf_hash_get_len(dcmap_cfg);
@@ -274,10 +268,6 @@ static dc_t* config_res_dcmap(vscf_data_t* res_cfg, const unsigned mapnum, vscf_
 
 F_NONNULL
 static void make_resource(resource_t* res, const char* res_name, vscf_data_t* res_cfg) {
-    dmn_assert(res);
-    dmn_assert(res_name);
-    dmn_assert(res_cfg);
-
     res->name = strdup(res_name);
 
     if(!vscf_is_hash(res_cfg))
@@ -336,7 +326,6 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, con
 
 F_UNUSED F_NONNULL
 static void resource_destroy(resource_t* res) {
-    dmn_assert(res);
     free(res->name);
     if(res->dcs) {
         for(unsigned i = 1; i <= res->num_dcs; i++) {
@@ -358,8 +347,6 @@ static void resource_destroy(resource_t* res) {
 
 F_NONNULLX(1)
 static int map_res_inner(const char* resname, const uint8_t* origin, const char* dcname) {
-    dmn_assert(resname);
-
     for(unsigned i = 0; i < num_res; i++) {
         if(!strcmp(resname, resources[i].name)) { // match!
             const resource_t* res = &resources[i];
@@ -481,8 +468,6 @@ int CB_MAP(const char* resname, const uint8_t* origin) {
 }
 
 gdnsd_sttl_t CB_RES(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
-    dmn_assert(cinfo); dmn_assert(result);
-
     // extract and clear any datacenter index from upper 8 bits
     //  (used for synthetic resname/dcname resources)
     const unsigned synth_dc = (resnum & DC_MASK) >> DC_SHIFT;

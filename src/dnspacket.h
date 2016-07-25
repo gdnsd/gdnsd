@@ -81,7 +81,9 @@ dnspacket_stats_t* dnspacket_stats_init(const unsigned this_threadnum, const boo
 F_MALLOC
 void* dnspacket_ctx_init(const bool is_udp);
 
+F_NONNULL
 void dnspacket_global_setup(const socks_cfg_t* socks_cfg);
+F_NONNULL
 void dnspacket_wait_stats(const socks_cfg_t* socks_cfg);
 
 extern dnspacket_stats_t** dnspacket_stats;

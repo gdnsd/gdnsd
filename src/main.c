@@ -67,7 +67,6 @@ static void (**exitfuncs)(void) = NULL;
 static unsigned exitfuncs_pending = 0;
 
 void gdnsd_atexit_debug(void (*f)(void)) {
-    dmn_assert(f);
     exitfuncs = xrealloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(void (*)(void)));
     exitfuncs[exitfuncs_pending++] = f;
 }
@@ -85,7 +84,7 @@ static void atexit_debug_execute(void) { }
 #endif
 
 F_NONNULL F_NORETURN
-static void syserr_for_ev(const char* msg) { dmn_assert(msg); log_fatal("%s: %s", msg, dmn_logf_errno()); }
+static void syserr_for_ev(const char* msg) { log_fatal("%s: %s", msg, dmn_logf_errno()); }
 
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
@@ -138,7 +137,6 @@ static void* zone_data_runtime(void* unused V_UNUSED) {
 // thread entry point for monitoring (+statio) thread
 F_NONNULL
 static void* mon_runtime(void* scfg_asvoid) {
-    dmn_assert(scfg_asvoid);
     const socks_cfg_t* socks_cfg = scfg_asvoid;
 
     gdnsd_thread_setname("gdnsd-mon");
@@ -154,8 +152,6 @@ static void* mon_runtime(void* scfg_asvoid) {
 
 F_NONNULL
 static void start_threads(socks_cfg_t* socks_cfg) {
-    dmn_assert(socks_cfg);
-
     // Block all signals using the pthreads interface while starting threads,
     //  which causes them to inherit the same mask.
     sigset_t sigmask_all;
@@ -295,8 +291,6 @@ static actmap_t actionmap[] = {
 
 F_NONNULL F_PURE
 static action_t match_action(const char* arg) {
-    dmn_assert(arg);
-
     unsigned i;
     for(i = 0; i < ARRAY_SIZE(actionmap); i++)
         if(!strcasecmp(actionmap[i].cmdstring, arg))

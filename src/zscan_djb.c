@@ -503,8 +503,6 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
 typedef bool (*sij_func_t)(zscan_t*,djb_recordcb_t);
 F_NONNULL F_NOINLINE
 static bool _scan_isolate_jmp(zscan_t* z, djb_recordcb_t cb) {
-    dmn_assert(z); dmn_assert(cb);
-
     if(!sigsetjmp(z->jbuf, 0)) {
         zscan_foreach_file_record(z, cb);
         return false;
@@ -574,8 +572,6 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
 F_WUNUSED F_NONNULL
 bool zscan_djb(const char* djb_path, zscan_djb_zonedata_t** zonedata)
 {
-    dmn_assert(djb_path);
-
     zscan_t _z, *z = &_z;
     memset(z, 0, sizeof(*z));
     z->path = djb_path;

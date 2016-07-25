@@ -98,7 +98,6 @@ typedef struct {
 
 F_NONNULL
 static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* val V_UNUSED, const void* mapname_asvoid) {
-    dmn_assert(key); dmn_assert(val); dmn_assert(mapname_asvoid);
     const char* mapname = mapname_asvoid;
     log_fatal("plugin_geoip: map '%s': invalid config key '%s'", mapname, key);
     return false;
@@ -106,8 +105,6 @@ static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* 
 
 F_NONNULLX(1,2)
 static gdmap_t* gdmap_new(const char* name, vscf_data_t* map_cfg, const fips_t* fips) {
-    dmn_assert(name); dmn_assert(map_cfg);
-
     // basics
     gdmap_t* gdmap = xcalloc(1, sizeof(gdmap_t));
     gdmap->name = strdup(name);
@@ -196,7 +193,6 @@ static gdmap_t* gdmap_new(const char* name, vscf_data_t* map_cfg, const fips_t* 
 
 F_NONNULL
 static void gdmap_tree_update(gdmap_t* gdmap) {
-    dmn_assert(gdmap);
     dmn_assert(gdmap->dclists_pend);
 
     ntree_t* merged;
@@ -232,8 +228,6 @@ static void gdmap_tree_update(gdmap_t* gdmap) {
 
 F_NONNULL
 static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_list_ptr, gdgeoip_v4o_t v4o_flag) {
-    dmn_assert(gdmap); dmn_assert(path); dmn_assert(out_list_ptr);
-
     dclists_t* update_dclists;
 
     if(!gdmap->dclists_pend) {
@@ -292,7 +286,6 @@ static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_l
 
 F_NONNULL
 static bool gdmap_update_nets(gdmap_t* gdmap) {
-    dmn_assert(gdmap);
     dmn_assert(gdmap->nets_path);
 
     dclists_t* update_dclists;
@@ -343,7 +336,6 @@ static bool gdmap_update_nets(gdmap_t* gdmap) {
 
 F_NONNULL
 static void gdmap_initial_load_all(gdmap_t* gdmap) {
-    dmn_assert(gdmap);
     dmn_assert(gdmap->dclists_pend);
     dmn_assert(!gdmap->geoip_list);
 
@@ -369,8 +361,6 @@ static void gdmap_initial_load_all(gdmap_t* gdmap) {
 
 F_NONNULL
 static void gdmap_kick_tree_update(gdmap_t* gdmap, struct ev_loop* loop) {
-    dmn_assert(gdmap); dmn_assert(loop);
-
     if(!ev_is_active(gdmap->tree_update_timer) && !ev_is_pending(gdmap->tree_update_timer))
         log_info("plugin_geoip: map '%s': runtime data changes are pending, waiting for %gs of change quiescence...", gdmap->name, ALL_RELOAD_WAIT);
     else
@@ -380,7 +370,7 @@ static void gdmap_kick_tree_update(gdmap_t* gdmap, struct ev_loop* loop) {
 
 F_NONNULL
 static void gdmap_geoip_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
 
     gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
@@ -397,7 +387,7 @@ static void gdmap_geoip_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUS
 
 F_NONNULL
 static void gdmap_geoip_v4o_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
 
     gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
@@ -413,7 +403,7 @@ static void gdmap_geoip_v4o_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_
 
 F_NONNULL
 static void gdmap_nets_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
 
     gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
@@ -429,7 +419,7 @@ static void gdmap_nets_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSE
 
 F_NONNULL
 static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
+    dmn_assert(revents == EV_STAT);
 
     gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
@@ -456,7 +446,7 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
 
 F_NONNULL
 static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
+    dmn_assert(revents == EV_STAT);
 
     gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
@@ -479,7 +469,7 @@ static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int reve
 
 F_NONNULL
 static void gdmap_tree_update_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
 
     gdmap_t* gdmap = w->data;
     dmn_assert(gdmap);
@@ -489,7 +479,6 @@ static void gdmap_tree_update_cb(struct ev_loop* loop, ev_timer* w, int revents 
 
 F_NONNULL
 static void gdmap_setup_nets_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
-    dmn_assert(gdmap); dmn_assert(loop);
     dmn_assert(gdmap->nets_path);
 
     gdmap->nets_reload_timer = xmalloc(sizeof(ev_timer));
@@ -508,7 +497,6 @@ static void gdmap_setup_nets_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
 
 F_NONNULL
 static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
-    dmn_assert(gdmap); dmn_assert(loop);
     dmn_assert(gdmap->geoip_path);
 
     const bool v4o = !!gdmap->geoip_v4o_path;
@@ -549,7 +537,6 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop) {
 
 F_NONNULL
 static void gdmap_setup_watchers(gdmap_t* gdmap, struct ev_loop* loop) {
-    dmn_assert(gdmap); dmn_assert(loop);
     if(gdmap->geoip_path)
         gdmap_setup_geoip_watcher(gdmap, loop);
     if(gdmap->nets_path)
@@ -564,14 +551,11 @@ static void gdmap_setup_watchers(gdmap_t* gdmap, struct ev_loop* loop) {
 
 F_NONNULL F_PURE
 static const char* gdmap_get_name(const gdmap_t* gdmap) {
-    dmn_assert(gdmap);
     return gdmap->name;
 }
 
 F_NONNULL
 static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, unsigned* scope_mask) {
-    dmn_assert(gdmap); dmn_assert(client);
-
     // gdnsd_prcu_rdr_online() + gdnsd_prcu_rdr_lock()
     //   is handled by the iothread and dns lookup code
     //   in the main daemon, in a far outer scope from
@@ -606,7 +590,6 @@ struct _gdmaps_t {
 
 F_NONNULL
 static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data) {
-    dmn_assert(key); dmn_assert(val); dmn_assert(data);
     gdmaps_t* gdmaps = data;
     gdmaps->maps = xrealloc(gdmaps->maps, sizeof(gdmap_t*) * (gdmaps->count + 1));
     gdmaps->maps[gdmaps->count++] = gdmap_new(key, val, gdmaps->fips);
@@ -614,7 +597,6 @@ static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_
 }
 
 gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg) {
-    dmn_assert(maps_cfg);
     dmn_assert(vscf_is_hash(maps_cfg));
 
     gdgeoip2_init();
@@ -635,7 +617,6 @@ gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg) {
 }
 
 int gdmaps_name2idx(const gdmaps_t* gdmaps, const char* map_name) {
-    dmn_assert(gdmaps); dmn_assert(map_name);
     for(unsigned i = 0; i < gdmaps->count; i++)
         if(!strcmp(map_name, gdmap_get_name(gdmaps->maps[i])))
             return (int)i;
@@ -643,32 +624,27 @@ int gdmaps_name2idx(const gdmaps_t* gdmaps, const char* map_name) {
 }
 
 const char* gdmaps_idx2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx) {
-    dmn_assert(gdmaps);
     if(gdmap_idx >= gdmaps->count)
         return NULL;
     return gdmap_get_name(gdmaps->maps[gdmap_idx]);
 }
 
 unsigned gdmaps_get_dc_count(const gdmaps_t* gdmaps, const unsigned gdmap_idx) {
-    dmn_assert(gdmaps);
     dmn_assert(gdmap_idx < gdmaps->count);
     return dcinfo_get_count(gdmaps->maps[gdmap_idx]->dcinfo);
 }
 
 unsigned gdmaps_dcname2num(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const char* dcname) {
-    dmn_assert(gdmaps); dmn_assert(dcname);
     dmn_assert(gdmap_idx < gdmaps->count);
     return dcinfo_name2num(gdmaps->maps[gdmap_idx]->dcinfo, dcname);
 }
 
 const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum) {
-    dmn_assert(gdmaps);
     dmn_assert(gdmap_idx < gdmaps->count);
     return dcinfo_num2name(gdmaps->maps[gdmap_idx]->dcinfo, dcnum);
 }
 
 unsigned gdmaps_map_mon_idx(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum) {
-    dmn_assert(gdmaps);
     dmn_assert(gdmap_idx < gdmaps->count);
     return dcinfo_map_mon_idx(gdmaps->maps[gdmap_idx]->dcinfo, dcnum);
 }
@@ -679,7 +655,6 @@ unsigned gdmaps_map_mon_idx(const gdmaps_t* gdmaps, const unsigned gdmap_idx, co
 //   stuff, though, so that's not important.
 static const char dclist_nodc[] = "<INVALID>";
 const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const uint8_t* dclist) {
-    dmn_assert(gdmaps); dmn_assert(dclist);
     dmn_assert(gdmap_idx < gdmaps->count);
 
     // Save original...
@@ -715,13 +690,11 @@ const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx,
 }
 
 const uint8_t* gdmaps_lookup(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const client_info_t* client, unsigned* scope_mask) {
-    dmn_assert(gdmaps); dmn_assert(client);
     dmn_assert(gdmap_idx < gdmaps->count);
     return gdmap_lookup(gdmaps->maps[gdmap_idx], client, scope_mask);
 }
 
 void gdmaps_load_databases(gdmaps_t* gdmaps) {
-    dmn_assert(gdmaps);
     for(unsigned i = 0; i < gdmaps->count; i++)
         gdmap_initial_load_all(gdmaps->maps[i]);
 }
@@ -744,8 +717,6 @@ static void* gdmaps_reload_thread(void* arg) {
 }
 
 void gdmaps_setup_watchers(gdmaps_t* gdmaps) {
-    dmn_assert(gdmaps);
-
     pthread_attr_t attribs;
     pthread_attr_init(&attribs);
     pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_DETACHED);

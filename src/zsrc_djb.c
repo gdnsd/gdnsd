@@ -109,7 +109,6 @@ void zsrc_djb_load_zones(const bool check_only V_UNUSED) {
 // called within our thread/loop to take sigusr1 action
 F_NONNULL
 static void sigusr1_cb(struct ev_loop* loop V_UNUSED, ev_async* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
     log_info("zsrc_djb: received SIGUSR1 notification, scanning for changes...");
     zsrc_djb_sync_zones();
 }
@@ -121,8 +120,6 @@ void zsrc_djb_sigusr1(void) {
 }
 
 void zsrc_djb_runtime_init(struct ev_loop* loop) {
-    dmn_assert(loop);
-
     zones_loop = loop;
     sigusr1_waker = xmalloc(sizeof(ev_async));
     ev_async_init(sigusr1_waker, sigusr1_cb);

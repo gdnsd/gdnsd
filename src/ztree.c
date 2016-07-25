@@ -53,7 +53,6 @@ struct _ztree_struct {
 //   (while under a read lock section, of course)
 F_NONNULL
 static zone_t* ztree_reader_get_zone(const ztree_t* zt) {
-    dmn_assert(zt);
     zone_t** temp = gdnsd_prcu_rdr_deref(zt->zones);
     return temp ? *temp : NULL;
 }
@@ -67,7 +66,6 @@ static ztree_t* new_root = NULL;
 /****** zone_t code ********/
 
 void zone_delete(zone_t* zone) {
-    dmn_assert(zone);
     if(zone->root)
         ltree_destroy(zone->root);
     lta_destroy(zone->arena);
@@ -76,8 +74,6 @@ void zone_delete(zone_t* zone) {
 }
 
 zone_t* zone_new(const char* zname, const char* source) {
-    dmn_assert(zname);
-
     // Convert to terminated-dname format and check for problems
     uint8_t dname[256];
     dname_status_t status = dname_from_string(dname, zname, strlen(zname));
@@ -120,8 +116,6 @@ bool zone_finalize(zone_t* zone) {
 static const uint32_t u_i32_max = 0x80000000UL;
 F_PURE F_NONNULL
 static int zone_cmp(zone_t* za, zone_t* zb) {
-    dmn_assert(za); dmn_assert(zb);
-
     const unsigned sa = za->serial;
     const unsigned sb = zb->serial;
     int rv = 0;
@@ -145,8 +139,6 @@ static int zone_cmp(zone_t* za, zone_t* zb) {
 // the normal version is for readers that need prcu_deref.
 F_NONNULL
 static ztree_t* ztree_node_find_child_writer(const ztree_t* node, const uint8_t* label) {
-    dmn_assert(node); dmn_assert(label);
-
     ztree_t* rv = NULL;
     ztchildren_t* children;
     children = node->children;
@@ -167,8 +159,6 @@ static ztree_t* ztree_node_find_child_writer(const ztree_t* node, const uint8_t*
 
 F_NONNULL
 static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label) {
-    dmn_assert(node); dmn_assert(label);
-
     ztree_t* rv = NULL;
     ztchildren_t* children;
     children = gdnsd_prcu_rdr_deref(node->children);
@@ -191,8 +181,6 @@ static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label)
 //   logically contains this dname, IFF one exists, for runtime
 //   lookup purposes
 zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
-    dmn_assert(dname); dmn_assert(auth_depth_out);
-
     zone_t* rv = NULL;
 
     const uint8_t* lstack[127];
@@ -217,8 +205,6 @@ zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
 //   or during deletion, or at all?
 F_NONNULL
 static void ztree_node_check_grow(ztree_t* node) {
-    dmn_assert(node);
-
     ztchildren_t* old_children = node->children;
     if(!old_children) {
         ztchildren_t* children = xcalloc(1, sizeof(ztchildren_t));
@@ -258,8 +244,6 @@ static void ztree_node_check_grow(ztree_t* node) {
 //  child node if it doesn't exist.
 F_NONNULL
 static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label) {
-    dmn_assert(node); dmn_assert(label);
-
     ztree_node_check_grow(node);
     ztchildren_t* children = node->children;
     dmn_assert(children);
@@ -290,7 +274,6 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
 }
 
 static void ztree_leak_warn(ztree_t* node) {
-    dmn_assert(node);
     ztchildren_t* children = node->children;
     if(children) {
         for(unsigned i = 0; i < children->alloc; i++) {
@@ -324,7 +307,7 @@ void ztree_init(const bool check_only) {
 // insertion sort for mostly-sorted arrays
 F_NONNULL
 static void zones_sort(zone_t** list, const unsigned len) {
-    dmn_assert(list); dmn_assert(len);
+    dmn_assert(len);
     for(unsigned i = 1; i < len; i++) {
         zone_t* temp = list[i];
         int j = (int)i - 1;
@@ -341,7 +324,6 @@ static const char zt_msg_revealed[] = "Zone %s: subzone unhidden due to removal 
 
 F_NONNULL
 static void ztree_subzone_reporter(const ztree_t* zt, const uint8_t* parent_dname, const bool hide) {
-    dmn_assert(zt); dmn_assert(parent_dname);
     const ztchildren_t* ztc = zt->children;
     if(ztc) {
         for(unsigned i = 0; i < ztc->alloc; i++) {
@@ -359,18 +341,16 @@ static void ztree_subzone_reporter(const ztree_t* zt, const uint8_t* parent_dnam
 
 F_NONNULL
 static void ztree_report_hidden_subzones(const ztree_t* zt, const uint8_t* parent_dname) {
-    dmn_assert(zt); dmn_assert(parent_dname);
     ztree_subzone_reporter(zt, parent_dname, true);
 }
 
 F_NONNULL
 static void ztree_report_revealed_subzones(const ztree_t* zt, const uint8_t* parent_dname) {
-    dmn_assert(zt); dmn_assert(parent_dname);
     ztree_subzone_reporter(zt, parent_dname, false);
 }
 
+F_NONNULLX(1)
 static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const bool in_txn) {
-    dmn_assert(root);
     dmn_assert((uintptr_t)z_old | (uintptr_t)z_new); // (NULL,NULL) illegal
 
     // when replacing, the old and new zone names must be the same, as
@@ -540,8 +520,6 @@ void ztree_txn_update(zone_t* z_old, zone_t* z_new) {
 //  not the ztree_t/ztchildren_t containers.
 F_NONNULL
 static ztree_t* ztree_clone(const ztree_t* original) {
-    dmn_assert(original);
-
     ztree_t* ztclone = xmalloc(sizeof(ztree_t));
     ztclone->label = original->label;
     if  (original->zones) {
@@ -572,8 +550,6 @@ static ztree_t* ztree_clone(const ztree_t* original) {
 
 F_NONNULL
 static void ztree_destroy_clone(ztree_t* ztclone) {
-    dmn_assert(ztclone);
-
     ztchildren_t* old_ztc = ztclone->children;
     if(old_ztc) {
         if(old_ztc->alloc) {

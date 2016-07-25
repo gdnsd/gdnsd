@@ -34,7 +34,6 @@
 
 F_NONNULL F_PURE
 static bool v6_subnet_of(const uint8_t* check, const unsigned check_mask, const uint8_t* v4, const unsigned v4_mask) {
-    dmn_assert(check); dmn_assert(v4);
     dmn_assert(!(v4_mask & 7)); // all v4_mask are whole byte masks
 
     bool rv = false;
@@ -47,7 +46,7 @@ static bool v6_subnet_of(const uint8_t* check, const unsigned check_mask, const 
 
 F_NONNULL F_PURE
 static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask) {
-    dmn_assert(ipv6); dmn_assert(mask < 129);
+    dmn_assert(mask < 129);
 
     return (
           v6_subnet_of(ipv6, mask, start_v4mapped, 96)
@@ -62,8 +61,6 @@ static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask) {
 //   if we upgraded nlist_normalize1 to de-dupe matching dclists instead of failing them
 F_NONNULL
 static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name, nlist_t* nl) {
-    dmn_assert(nets_cfg); dmn_assert(dclists); dmn_assert(map_name); dmn_assert(nl);
-
     bool rv = false;
 
     const unsigned input_nnets = vscf_hash_get_len(nets_cfg);
@@ -131,8 +128,6 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
 }
 
 nlist_t* nets_make_list(vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name) {
-    dmn_assert(dclists); dmn_assert(map_name);
-
     nlist_t* nl = nlist_new(map_name, false);
 
     if(nets_cfg) {

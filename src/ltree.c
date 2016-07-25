@@ -112,8 +112,6 @@ static uint32_t count2mask(const uint32_t x) {
 
 F_NONNULL
 static void ltree_childtable_grow(ltree_node_t* node) {
-    dmn_assert(node);
-
     const uint32_t old_max_slot = count2mask(node->child_hash_mask);
     const uint32_t new_hash_mask = (old_max_slot << 1) | 1;
     ltree_node_t** new_table = xcalloc(new_hash_mask + 1, sizeof(ltree_node_t*));
@@ -146,8 +144,6 @@ static void ltree_childtable_grow(ltree_node_t* node) {
 
 F_NONNULL F_PURE
 static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8_t* child_label) {
-    dmn_assert(node); dmn_assert(child_label);
-
     ltree_node_t* rv = NULL;
 
     if(node->child_table) {
@@ -169,8 +165,6 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 // Creates a new, disconnected node
 F_NONNULLX(1)
 static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label, const uint32_t flags) {
-    dmn_assert(arena);
-
     ltree_node_t* rv = xcalloc(1, sizeof(ltree_node_t));
     if(label)
         rv->label = lta_labeldup(arena, label);
@@ -180,8 +174,6 @@ static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label, cons
 
 F_NONNULL
 static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t* node, const uint8_t* child_label) {
-    dmn_assert(node); dmn_assert(child_label);
-
     const uint32_t child_mask = count2mask(node->child_hash_mask);
     const uint32_t child_hash = ltree_hash(child_label, child_mask);
 
@@ -215,7 +207,6 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
 //     known as "www.example.com." should be just "www."
 F_NONNULL
 static ltree_node_t* ltree_find_or_add_dname(const zone_t* zone, const uint8_t* dname) {
-    dmn_assert(zone); dmn_assert(dname);
     dmn_assert(zone->root); dmn_assert(zone->dname);
     dmn_assert(dname_status(dname) == DNAME_VALID);
 
@@ -233,7 +224,6 @@ static ltree_node_t* ltree_find_or_add_dname(const zone_t* zone, const uint8_t* 
 #define MK_RRSET_GET(_typ, _nam, _dtyp) \
 F_NONNULL F_PURE \
 static ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _nam (const ltree_node_t* node) {\
-    dmn_assert(node);\
     ltree_rrset_t* rrsets = node->rrsets;\
     while(rrsets) {\
         if(rrsets->gen.type == _dtyp)\
@@ -259,7 +249,6 @@ MK_RRSET_GET(txt, txt, DNS_TYPE_TXT)
 #define MK_RRSET_ADD(_typ, _nam, _dtyp) \
 F_NONNULL \
 static ltree_rrset_ ## _typ ## _t* ltree_node_add_rrset_ ## _nam (ltree_node_t* node) {\
-    dmn_assert(node); \
     ltree_rrset_t** store_at = &node->rrsets;\
     while(*store_at)\
         store_at = &(*store_at)->gen.next;\
@@ -292,8 +281,6 @@ MK_RRSET_ADD(txt, txt, DNS_TYPE_TXT)
         }
 
 bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t addr, unsigned ttl, const unsigned limit_v4, const bool ooz) {
-    dmn_assert(zone); dmn_assert(dname);
-
     ltree_node_t* node;
     if(ooz) {
         ltree_node_t* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
@@ -350,8 +337,6 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
 }
 
 bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const unsigned limit_v6, const bool ooz) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(addr);
-
     ltree_node_t* node;
     if(ooz) {
         ltree_node_t* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
@@ -401,8 +386,6 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
 }
 
 bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6, const bool ooz) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
-
     ltree_node_t* node;
     if(ooz) {
         ltree_node_t* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
@@ -462,8 +445,6 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char*
 }
 
 bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
-
     CLAMP_TTL("CNAME")
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -476,9 +457,8 @@ bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t
 }
 
 bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, const uint8_t* origin, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs); dmn_assert(origin);
-
     CLAMP_TTL("DYNC")
+
     if(ttl_min < gcfg->min_ttl) {
         log_zwarn("Name '%s%s': DYNC Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), ttl_min, gcfg->min_ttl);
         ttl_min = gcfg->min_ttl;
@@ -552,8 +532,6 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
 }
 
 bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
-
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     INSERT_NEXT_RR(ptr, ptr, "PTR", 1);
@@ -564,8 +542,6 @@ bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* 
 }
 
 bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
-
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     // If this is a delegation by definition, (NS rec not at zone root), flag it
@@ -583,8 +559,6 @@ bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* r
 }
 
 bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned pref) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
-
     if(pref > 65535U)
         log_zfatal("Name '%s%s': MX preference value %u too large", logf_dname(dname), logf_dname(zone->dname), pref);
 
@@ -598,8 +572,6 @@ bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* r
 }
 
 bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned priority, const unsigned weight, const unsigned port) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs);
-
     if(priority > 65535U)
         log_zfatal("Name '%s%s': SRV priority value %u too large", logf_dname(dname), logf_dname(zone->dname), priority);
     if(weight > 65535U)
@@ -631,8 +603,6 @@ bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* 
  */
 F_NONNULL
 static bool naptr_validate_flags(const uint8_t* zone_dname, const uint8_t* dname, const uint8_t* flags) {
-    dmn_assert(dname); dmn_assert(flags);
-
     unsigned len = *flags++;
     while(len--) {
         unsigned c = *flags++;
@@ -647,7 +617,7 @@ static bool naptr_validate_flags(const uint8_t* zone_dname, const uint8_t* dname
 }
 
 bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned num_texts V_UNUSED, uint8_t** texts) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(rhs); dmn_assert(texts); dmn_assert(num_texts == 3);
+    dmn_assert(num_texts == 3);
 
     if(order > 65535U)
         log_zfatal("Name '%s%s': NAPTR order value %u too large", logf_dname(dname), logf_dname(zone->dname), order);
@@ -673,7 +643,7 @@ bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t
 // We copy the array of pointers, but alias the actual data (which is malloc'd for
 //   us per call in the parser).
 bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(texts); dmn_assert(num_texts);
+    dmn_assert(num_texts);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -685,8 +655,6 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
 }
 
 bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, const unsigned serial, const unsigned refresh, const unsigned retry, const unsigned expire, unsigned ncache) {
-    dmn_assert(zone); dmn_assert(dname); dmn_assert(master); dmn_assert(email);
-
     if(ncache > gcfg->max_ncache_ttl) {
         log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(dname), ncache, gcfg->max_ncache_ttl);
         ncache = gcfg->max_ncache_ttl;
@@ -720,7 +688,6 @@ bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* 
 //  rrtype set to the number of other known, explicitly supported types...
 F_NONNULL F_PURE
 static ltree_rrset_rfc3597_t* ltree_node_get_rrset_rfc3597(const ltree_node_t* node, const unsigned rrtype) {
-    dmn_assert(node);
     ltree_rrset_t* rrsets = node->rrsets;
     while(rrsets) {
         if(rrsets->gen.type == rrtype)
@@ -732,7 +699,6 @@ static ltree_rrset_rfc3597_t* ltree_node_get_rrset_rfc3597(const ltree_node_t* n
 
 F_NONNULL
 static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, const unsigned rrtype) {
-    dmn_assert(node);
     ltree_rrset_t** store_at = &node->rrsets;
     while(*store_at)
         store_at = &(*store_at)->gen.next;
@@ -743,8 +709,6 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, c
 }
 
 bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd) {
-    dmn_assert(zone); dmn_assert(dname);
-
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     if(rrtype == DNS_TYPE_A
@@ -791,7 +755,6 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
 
 F_NONNULL
 static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const zone_t* zone, ltree_node_t** node_out) {
-    dmn_assert(dname); dmn_assert(zone); dmn_assert(node_out);
     dmn_assert(*dname != 0); dmn_assert(*dname != 2); // these are always illegal dnames
 
     ltree_dname_status_t rval = DNAME_NOAUTH;
@@ -853,7 +816,7 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
 //         false, the target points at an authoritative name in the same zone which doesn't exist
 F_NONNULL
 static bool set_valid_addr(const uint8_t* dname, const zone_t* zone, ltree_rrset_addr_t** addr_out) {
-    dmn_assert(dname); dmn_assert(*dname); dmn_assert(zone); dmn_assert(addr_out);
+    dmn_assert(*dname);
 
     ltree_node_t* node;
     const ltree_dname_status_t status = ltree_search_dname_zone(dname, zone, &node);
@@ -872,7 +835,7 @@ static bool set_valid_addr(const uint8_t* dname, const zone_t* zone, ltree_rrset
 //   (in upper or lower case form).
 F_NONNULL F_PURE
 static bool binstr_hasichr(const uint8_t* bstr, const uint8_t c) {
-    dmn_assert(bstr); dmn_assert(c > 0x40 && c < 0x5B);
+    dmn_assert(c > 0x40 && c < 0x5B);
     unsigned len = *bstr++;
     while(len--) {
         if(((*bstr++) & (~0x20)) == c)
@@ -894,8 +857,6 @@ static void fix_addr_limits(ltree_rrset_addr_t* node_addr) {
 
 F_WUNUSED F_NONNULL
 static bool p1_proc_cname(const zone_t* zone, const ltree_rrset_cname_t* node_cname, const uint8_t** lstack, const unsigned depth) {
-    dmn_assert(zone); dmn_assert(node_cname); dmn_assert(lstack);
-
     ltree_node_t* cn_target;
     ltree_dname_status_t cnstat = ltree_search_dname_zone(node_cname->dname, zone, &cn_target);
     if(cnstat == DNAME_AUTH) {
@@ -924,7 +885,6 @@ static bool p1_proc_cname(const zone_t* zone, const ltree_rrset_cname_t* node_cn
 
 F_WUNUSED F_NONNULL
 static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t* this_ns, const uint8_t** lstack, const unsigned depth) {
-    dmn_assert(zone); dmn_assert(this_ns); dmn_assert(lstack);
     dmn_assert(!this_ns->ad);
 
     ltree_node_t* ns_target = NULL;
@@ -976,8 +936,6 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
 //    Phase 2) to chase later.
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg) {
-    dmn_assert(lstack); dmn_assert(node); dmn_assert(zone);
-
     bool node_has_rfc3597 = false;
     ltree_rrset_addr_t* node_addr = NULL;
     ltree_rrset_cname_t* node_cname = NULL;
@@ -1076,8 +1034,6 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
 //  Checks TTL matching between NS and glue RRs
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg) {
-    dmn_assert(lstack); dmn_assert(node); dmn_assert(zone);
-
     if(in_deleg) {
         dmn_assert(!ltree_node_get_rrset_cname(node));
         dmn_assert(!ltree_node_get_rrset_dync(node));
@@ -1105,8 +1061,6 @@ static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* no
 
 F_WUNUSED F_NONNULLX(1, 2, 3)
 static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool), const uint8_t** lstack, ltree_node_t* node, const zone_t* zone, const unsigned depth, bool in_deleg) {
-    dmn_assert(fn); dmn_assert(lstack); dmn_assert(node);
-
     if(node->flags & LTNFLAG_DELEG) {
         dmn_assert(node->label);
         if(in_deleg)
@@ -1136,8 +1090,6 @@ static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, c
 
 F_WUNUSED F_NONNULL
 static bool ltree_postproc(const zone_t* zone, bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool)) {
-    dmn_assert(zone); dmn_assert(fn);
-
     // label stack:
     //  used to reconstruct full domainnames
     //  for error/warning message output
@@ -1148,8 +1100,6 @@ static bool ltree_postproc(const zone_t* zone, bool (*fn)(const uint8_t**, const
 
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_zroot_phase1(zone_t* zone) {
-    dmn_assert(zone);
-
     ltree_node_t* zroot = zone->root;
     ltree_rrset_soa_t* zroot_soa = NULL;
     ltree_rrset_ns_t* zroot_ns = NULL;
@@ -1189,6 +1139,7 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone) {
     return false;
 }
 
+F_NONNULL
 static bool ltree_postproc_zroot_phase2(const zone_t* zone) {
     ltree_node_t* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
     if(ooz) {
@@ -1211,7 +1162,6 @@ static bool ltree_postproc_zroot_phase2(const zone_t* zone) {
 
 F_NONNULL
 static void ltree_fix_masks(ltree_node_t* node) {
-    dmn_assert(node);
     const uint32_t cmask = count2mask(node->child_hash_mask);
     node->child_hash_mask = cmask;
     if(node->child_table) {
@@ -1227,7 +1177,6 @@ static void ltree_fix_masks(ltree_node_t* node) {
 
 // common processing for zones
 void ltree_init_zone(zone_t* zone) {
-    dmn_assert(zone);
     dmn_assert(zone->dname);
     dmn_assert(zone->arena);
     dmn_assert(!zone->root);
@@ -1236,7 +1185,6 @@ void ltree_init_zone(zone_t* zone) {
 }
 
 bool ltree_postproc_zone(zone_t* zone) {
-    dmn_assert(zone);
     dmn_assert(zone->dname);
     dmn_assert(zone->arena);
     dmn_assert(zone->root);
@@ -1271,7 +1219,6 @@ bool ltree_postproc_zone(zone_t* zone) {
 }
 
 void ltree_destroy(ltree_node_t* node) {
-    dmn_assert(node);
     ltree_rrset_t* rrset = node->rrsets;
     while(rrset) {
         ltree_rrset_t* next = rrset->gen.next;

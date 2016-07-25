@@ -32,8 +32,6 @@
 /* network utils */
 
 int dmn_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, dmn_anysin_t* result, bool numeric_only) {
-    dmn_assert(addr_txt); dmn_assert(result);
-
     struct addrinfo* ainfo = NULL;
     const struct addrinfo hints = {
         .ai_flags = numeric_only ? (AI_NUMERICHOST | AI_NUMERICSERV) : 0,
@@ -66,8 +64,6 @@ int dmn_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, dmn_anysi
 static const char invalid_addr[] = "!!invalid!!";
 
 int dmn_anysin_fromstr(const char* addr_port_text, const unsigned def_port, dmn_anysin_t* result, bool numeric_only) {
-    dmn_assert(addr_port_text); dmn_assert(result);
-
     char* apcopy = strdup(addr_port_text);
 
     const char* addr = apcopy;
@@ -125,7 +121,6 @@ int dmn_anysin_fromstr(const char* addr_port_text, const unsigned def_port, dmn_
 }
 
 bool dmn_anysin_is_anyaddr(const dmn_anysin_t* asin) {
-    dmn_assert(asin);
     dmn_assert(asin->sa.sa_family == AF_INET || asin->sa.sa_family == AF_INET6);
 
     if(asin->sa.sa_family == AF_INET6) {

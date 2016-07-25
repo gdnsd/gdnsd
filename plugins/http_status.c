@@ -73,7 +73,6 @@ static http_events_t** mons = NULL;
 
 F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
     http_events_t* md = t->data;
@@ -148,7 +147,6 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
 F_NONNULL
 static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
     http_events_t* md = io->data;
@@ -240,7 +238,6 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
 
 F_NONNULL
 static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
     http_events_t* md = io->data;
@@ -305,7 +302,6 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
 
 F_NONNULL
 static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
     http_events_t* md = t->data;
@@ -362,7 +358,6 @@ static const unsigned REQ_TMPL_VHOST_LEN = sizeof(REQ_TMPL_VHOST) - 2 - 2 - 1;
 
 F_NONNULLX(1, 2)
 static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost) {
-    dmn_assert(s); dmn_assert(url_path);
     const unsigned url_len = strlen(url_path);
     if(vhost) {
         s->req_data_len = REQ_TMPL_VHOST_LEN + url_len + strlen(vhost);
@@ -377,8 +372,6 @@ static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost
 }
 
 void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
-    dmn_assert(name);
-
     // defaults
     const char* url_path = "/";
     const char* vhost = NULL;
@@ -425,8 +418,6 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
 }
 
 void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
-
     http_events_t* this_mon = xcalloc(1, sizeof(http_events_t));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
@@ -473,8 +464,6 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
 }
 
 void plugin_http_status_init_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = mons[i]->interval_watcher;
         dmn_assert(mons[i]->sock == -1);
@@ -484,8 +473,6 @@ void plugin_http_status_init_monitors(struct ev_loop* mon_loop) {
 }
 
 void plugin_http_status_start_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_mons; i++) {
         http_events_t* mon = mons[i];
         dmn_assert(mon->sock == -1);

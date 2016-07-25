@@ -58,8 +58,6 @@ typedef struct {
 
 F_NONNULL
 static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data) {
-    dmn_assert(key); dmn_assert(val); dmn_assert(data);
-
     dcmap_iter_data* did = data;
 
     unsigned true_depth = did->true_depth + (did->dcmap->skip_level ? 1 : 0);
@@ -80,7 +78,6 @@ static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t
 }
 
 dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto) {
-    dmn_assert(map_cfg); dmn_assert(dclists); dmn_assert(map_name);
     dmn_assert(vscf_is_hash(map_cfg));
 
     dcmap_t* dcmap = xcalloc(1, sizeof(dcmap_t));
@@ -141,8 +138,6 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
 }
 
 uint32_t dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr) {
-    dmn_assert(dcmap); dmn_assert(locstr);
-
     if(*locstr && dcmap->skip_level)
         locstr += strlen(locstr) + 1;
 
@@ -163,8 +158,6 @@ uint32_t dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr) {
 //   to any named hierarchy, and without prefetching levels from the lookup source
 //   unless the map actually wants to see them.
 static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* data, unsigned level) {
-    dmn_assert(dcmap); dmn_assert(cb); dmn_assert(data);
-
     // map empty within this level, e.g. "US => {}" or "US => { default => [...] }"
     if(!dcmap->num_children)
         return dcmap->def_dclist;
@@ -200,8 +193,6 @@ uint32_t dcmap_lookup_loc_callback(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, v
 }
 
 void dcmap_destroy(dcmap_t* dcmap) {
-    dmn_assert(dcmap);
-
     if(dcmap->child_names) {
         for(unsigned i = 0; i < dcmap->num_children; i++) {
             if(dcmap->child_names[i])

@@ -52,7 +52,7 @@ static void usage(const char* argv0) {
 
 F_NONNULL
 static void do_lookup(const char* map_name, const char* ip_arg) {
-    dmn_assert(gdmaps); dmn_assert(map_name); dmn_assert(ip_arg);
+    dmn_assert(gdmaps);
 
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if(rv < 0) {
@@ -136,8 +136,6 @@ static void do_repl(void) {
 
 F_NONNULL
 static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root) {
-    dmn_assert(cfg_root);
-
     // plugins stanza
     vscf_data_t* plugins = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
     if(!plugins)

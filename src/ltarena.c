@@ -79,7 +79,6 @@ static dnhash_t* dnhash_new(void) {
 
 F_NONNULL
 static void dnhash_destroy(dnhash_t* dnhash) {
-    dmn_assert(dnhash);
     dmn_assert(dnhash->table);
     dmn_assert(dnhash->mask);
     free(dnhash->table);
@@ -89,7 +88,7 @@ static void dnhash_destroy(dnhash_t* dnhash) {
 // grow a dnhash_t's hashtable size by doubling
 F_NONNULL
 static void dnhash_grow(dnhash_t* dnhash) {
-    dmn_assert(dnhash); dmn_assert(dnhash->count);
+    dmn_assert(dnhash->count);
     // assert that dnhash->mask is still 2^n-1 and >0
     dmn_assert(dnhash->mask); dmn_assert(!((dnhash->mask + 1U) & dnhash->mask));
 
@@ -178,7 +177,7 @@ void lta_destroy(ltarena_t* lta) {
 
 F_MALLOC F_NONNULL
 static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
-    dmn_assert(lta); dmn_assert(size);
+    dmn_assert(size);
     dmn_assert(lta->dnhash); // not closed
 
     // Currently, all allocations obey this assertion.
@@ -219,7 +218,6 @@ static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
 }
 
 uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label) {
-    dmn_assert(lta); dmn_assert(label);
     const unsigned sz = *label + 1U;
     uint8_t* rv = lta_malloc(lta, sz);
     memcpy(rv, label, sz);
@@ -229,8 +227,6 @@ uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label) {
 // this mixes internal access to dnhash_t as well, so it's not
 //   properly a just method of ltarena_t in that sense.
 const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
-    dmn_assert(lta); dmn_assert(dname);
-
     dnhash_t* dnhash = lta->dnhash;
     dmn_assert(dnhash); // not closed
 

@@ -35,10 +35,6 @@
 #include <tap.h>
 
 void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt) {
-    dmn_assert(gdmaps);
-    dmn_assert(map_name);
-    dmn_assert(addr_txt);
-
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if(rv < 0)
         log_fatal("Map name '%s' not found in configuration", map_name);
@@ -57,11 +53,6 @@ void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const
 }
 
 void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp) {
-    dmn_assert(gdmaps);
-    dmn_assert(map_name);
-    dmn_assert(addr_txt);
-    dmn_assert(dclist_cmp);
-
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if(rv < 0)
         log_fatal("Map name '%s' not found in configuration", map_name);
@@ -90,14 +81,11 @@ void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, cons
 }
 
 void gdmaps_test_init(const char* cfg_dir) {
-    dmn_assert(cfg_dir);
     dmn_init1(false, true, false, "gdmaps_test");
     gdnsd_initialize(cfg_dir, false);
 }
 
 gdmaps_t* gdmaps_test_load(const char* cfg_data) {
-    dmn_assert(cfg_data);
-
     vscf_data_t* maps_cfg = vscf_scan_buf(strlen(cfg_data), cfg_data, "(test maps)", false);
     if(!maps_cfg)
         log_fatal("Test config load failed");

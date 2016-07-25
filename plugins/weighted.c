@@ -123,9 +123,6 @@ static uint64_t get_rand(const uint64_t modval) {
 
 F_NONNULL
 static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, addrset_t* addrset) {
-    dmn_assert(res_name); dmn_assert(stanza); dmn_assert(item_name);
-    dmn_assert(res_item); dmn_assert(cfg_data); dmn_assert(addrset);
-
     long wtemp = 0;
     if(!vscf_is_array(cfg_data)
             || (2 != vscf_array_get_len(cfg_data))
@@ -170,7 +167,7 @@ typedef struct {
 
 F_NONNULL
 static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len V_UNUSED, vscf_data_t* lb_data, void* iaga_asvoid) {
-    dmn_assert(lb_name); dmn_assert(lb_name_len); dmn_assert(lb_data); dmn_assert(iaga_asvoid);
+    dmn_assert(lb_name_len);
 
     iaga_t* iaga = iaga_asvoid;
 
@@ -215,9 +212,6 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
 
 F_NONNULL
 static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, addrset_t* addrset) {
-    dmn_assert(res_name); dmn_assert(stanza); dmn_assert(item_name);
-    dmn_assert(res_item); dmn_assert(cfg_data); dmn_assert(addrset);
-
     if(!vscf_is_hash(cfg_data))
         log_fatal("plugin_weighted: resource '%s' (%s), group '%s': groups values must be a hashes", res_name, stanza, item_name);
 
@@ -300,8 +294,6 @@ static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, v
 
 F_NONNULL
 static void config_addrset(const char* res_name, const char* stanza, const bool ipv6, addrset_t* addrset, vscf_data_t* cfg) {
-    dmn_assert(res_name); dmn_assert(stanza); dmn_assert(addrset); dmn_assert(cfg);
-
     if(!vscf_is_hash(cfg))
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
 
@@ -403,7 +395,6 @@ typedef struct {
 
 F_NONNULL
 static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* cfg_data, void* cid_asvoid) {
-    dmn_assert(item_name); dmn_assert(cfg_data); dmn_assert(cid_asvoid);
     cname_iter_data_t* cid = cid_asvoid;
 
     cnset_t* cnset = cid->cnset;
@@ -445,8 +436,6 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
 
 F_NONNULL
 static void config_cnameset(const char* res_name, const char* stanza, cnset_t* cnset, vscf_data_t* cfg) {
-    dmn_assert(res_name); dmn_assert(stanza); dmn_assert(cnset); dmn_assert(cfg);
-
     if(!vscf_is_hash(cfg))
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
 
@@ -517,7 +506,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
 
 F_NONNULL
 static void config_auto(resource_t* res, vscf_data_t* res_cfg) {
-    dmn_assert(res); dmn_assert(res_cfg); dmn_assert(vscf_is_hash(res_cfg));
+    dmn_assert(vscf_is_hash(res_cfg));
 
     // mark all possible parameter-keys
     vscf_hash_get_data_byconstkey(res_cfg, "service_types", true);
@@ -586,7 +575,6 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg) {
 
 F_NONNULL
 static bool res_mixed_fail(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* rname_asvoid) {
-    dmn_assert(item_name); dmn_assert(d); dmn_assert(rname_asvoid);
     const char* rname = rname_asvoid;
     log_fatal("plugin_weighted: resource '%s' seems to have explicit 'addrs_v4', 'addrs_v6', or 'cnames' configuration mixed with direct item config (e.g. '%s'), which is not allowed", rname, item_name);
     return false;
@@ -709,9 +697,8 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* origin) {
 
 void plugin_weighted_iothread_init(const unsigned threadnum V_UNUSED) { init_rand(); }
 
+F_NONNULL
 static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, const uint8_t* origin, dyn_result_t* result) {
-    dmn_assert(resource); dmn_assert(origin); dmn_assert(result);
-
     cnset_t* cnset = resource->cnames;
     dmn_assert(cnset);
     dmn_assert(cnset->weight);
@@ -779,8 +766,6 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
 
 F_NONNULL
 static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result) {
-    dmn_assert(aset); dmn_assert(result);
-
     const unsigned num_items = aset->count;
     unsigned dyn_items_sum = 0; // sum of dyn_item_sums[]
     unsigned dyn_items_max = 0; // max of dyn_item_sums[]
@@ -893,8 +878,6 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
 
 F_NONNULL
 static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t* res, dyn_result_t* result) {
-    dmn_assert(result); dmn_assert(res);
-
     gdnsd_sttl_t rv;
 
     if(res->addrs_v4) {
@@ -914,8 +897,6 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t*
 }
 
 gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-    dmn_assert(result);
-
     const resource_t* resource = &resources[resnum];
     dmn_assert(resource);
 

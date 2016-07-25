@@ -380,7 +380,6 @@ typedef enum {
 //  by N characters.  Thus the label "www" is "\003www" (4 bytes)
 F_UNUSED F_PURE F_WUNUSED F_NONNULL F_UNUSED
 static uint32_t ltree_hash(const uint8_t* input, const uint32_t hash_mask) {
-   dmn_assert(input);
    const unsigned len = *input++;
    return gdnsd_lookup2(input, len) & hash_mask;
 }
@@ -390,8 +389,7 @@ static uint32_t ltree_hash(const uint8_t* input, const uint32_t hash_mask) {
 // retval is label count (not including zero-width root label)
 F_UNUSED F_WUNUSED F_NONNULL
 static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack) {
-    dmn_assert(dname); dmn_assert(dname_status(dname) == DNAME_VALID);
-    dmn_assert(lstack);
+    dmn_assert(dname_status(dname) == DNAME_VALID);
 
     dname++; // skip overall len byte
     unsigned lcount = 0;

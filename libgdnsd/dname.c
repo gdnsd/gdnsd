@@ -31,7 +31,7 @@
 /* The semantics of these functions are described in gdnsd/dname.h ... */
 
 unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const unsigned len) {
-    dmn_assert(out); dmn_assert(len);
+    dmn_assert(len);
 
     char* optr = out;
     for(unsigned i = 0; i < len; i++) {
@@ -74,8 +74,6 @@ unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const u
 }
 
 gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len) {
-    dmn_assert(dname); dmn_assert(instr || !len);
-
     // A label can be at most 63 bytes after unescaping,
     //  which means up to 252 bytes while escaped...
     char label_buf[252];
@@ -195,7 +193,6 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
 }
 
 unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str) {
-    dmn_assert(dname);
     dmn_assert(dname_status(dname) != DNAME_INVALID);
 
     const char* str_base = str; // for output length later
@@ -248,8 +245,6 @@ gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restr
 }
 
 gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
-    dmn_assert(dname);
-
     // over-all length zero is invalid
     const unsigned oal = *dname++;
     if(!oal)
@@ -279,8 +274,6 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
 // see dname.h re: static vs library variant
 #undef gdnsd_dname_hash
 uint32_t gdnsd_dname_hash(const uint8_t *k) {
-    dmn_assert(k);
-
     const uint32_t len = *k++ - 1U;
     return gdnsd_lookup2(k, len);
 }

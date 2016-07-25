@@ -62,10 +62,6 @@ static unsigned fips_hash(uint32_t key) {
 // It is assumed there are no duplicates in the input data.
 F_NONNULL
 static void fips_hash_add(fips_t* fips, const uint32_t key, const char* val) {
-    dmn_assert(fips);
-    dmn_assert(key);
-    dmn_assert(val);
-
     unsigned jmpby = 1;
     unsigned slotnum = fips_hash(key);
     while(fips->table[slotnum].key)
@@ -76,8 +72,6 @@ static void fips_hash_add(fips_t* fips, const uint32_t key, const char* val) {
 
 F_NONNULL
 static void fips_parse(fips_t* fips, FILE* file) {
-    dmn_assert(fips); dmn_assert(file);
-
     unsigned line = 0;
     while(1) {
         char ccrr[5];
@@ -105,7 +99,6 @@ static void fips_parse(fips_t* fips, FILE* file) {
 /**** public interface ****/
 
 const char* fips_lookup(const fips_t* fips, const uint32_t key) {
-    dmn_assert(fips);
     dmn_assert(key);
 
     unsigned jmpby = 1;
@@ -120,8 +113,6 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 }
 
 fips_t* fips_init(const char* pathname) {
-    dmn_assert(pathname);
-
     FILE* file = fopen(pathname, "r");
     if(!file)
         log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", pathname, dmn_logf_errno());

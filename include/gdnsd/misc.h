@@ -148,8 +148,6 @@ static void gdnsd_downcase_str(char* str) {
 // This is JLKISS64
 F_NONNULL F_UNUSED
 static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs) {
-    dmn_assert(rs);
-
     rs->x = 1490024343005336237ULL * rs->x + 123456789;
 
     uint64_t y = rs->y;
@@ -172,8 +170,6 @@ static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs) {
 // This is JKISS32
 F_NONNULL F_UNUSED
 static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
-    dmn_assert(rs);
-
     uint32_t y = rs->y;
     y ^= y << 5;
     y ^= y >> 7;

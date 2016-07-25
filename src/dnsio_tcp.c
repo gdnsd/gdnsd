@@ -74,8 +74,6 @@ typedef struct {
 
 F_NONNULL
 static void cleanup_conn_watchers(struct ev_loop* loop, tcpdns_conn_t* tdata) {
-    dmn_assert(loop); dmn_assert(tdata);
-
     shutdown(tdata->read_watcher->fd, SHUT_RDWR);
     close(tdata->read_watcher->fd);
     ev_timer_stop(loop, tdata->timeout_watcher);
@@ -95,7 +93,6 @@ static void cleanup_conn_watchers(struct ev_loop* loop, tcpdns_conn_t* tdata) {
 
 F_NONNULL
 static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(t);
     dmn_assert(revents == EV_TIMER);
 
     tcpdns_conn_t* tdata = t->data;
@@ -112,7 +109,6 @@ static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, cons
 
 F_NONNULL
 static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_WRITE);
 
     tcpdns_conn_t* tdata = io->data;
@@ -155,7 +151,6 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
 
 F_NONNULL
 static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
     tcpdns_conn_t* tdata = io->data;
 
@@ -239,7 +234,6 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
 
 F_NONNULL
 static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(io);
     dmn_assert(revents == EV_READ);
 
     dmn_anysin_t* asin = xmalloc(sizeof(dmn_anysin_t));
@@ -330,9 +324,6 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 #endif
 
 int tcp_listen_pre_setup(const dmn_anysin_t* asin, const unsigned timeout V_UNUSED) {
-
-    dmn_assert(asin);
-
     const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
     dmn_assert(isv6 || asin->sa.sa_family == AF_INET);
 
@@ -368,8 +359,6 @@ int tcp_listen_pre_setup(const dmn_anysin_t* asin, const unsigned timeout V_UNUS
 }
 
 void tcp_dns_listen_setup(dns_thread_t* t) {
-    dmn_assert(t);
-
     const dns_addr_t* addrconf = t->ac;
     dmn_assert(addrconf);
 
@@ -385,8 +374,6 @@ static void prcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, 
 }
 
 void* dnsio_tcp_start(void* thread_asvoid) {
-    dmn_assert(thread_asvoid);
-
     gdnsd_thread_setname("gdnsd-io-tcp");
 
     const dns_thread_t* t = thread_asvoid;

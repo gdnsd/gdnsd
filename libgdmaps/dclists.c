@@ -95,13 +95,11 @@ dclists_t* dclists_clone(const dclists_t* old) {
 }
 
 unsigned dclists_get_count(const dclists_t* lists) {
-    dmn_assert(lists);
     dmn_assert(lists->count <= (DCLIST_MAX + 1U));
     return lists->count;
 }
 
 const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx) {
-    dmn_assert(lists);
     dmn_assert(idx < lists->count);
     dmn_assert(idx <= DCLIST_MAX);
     return lists->list[idx];
@@ -115,8 +113,6 @@ const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx) {
 // Not terribly worried about this unless someone complains first.
 F_NONNULL
 static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist, const char* map_name) {
-    dmn_assert(lists); dmn_assert(newlist); dmn_assert(map_name);
-
     for(uint32_t i = 0; i < lists->count; i++)
         if(!strcmp((const char*)newlist, (const char*)(lists->list[i])))
             return i;
@@ -134,7 +130,6 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
 
 // replace the first (default) dclist...
 void dclists_replace_list0(dclists_t* lists, uint8_t* newlist) {
-    dmn_assert(lists); dmn_assert(newlist);
     free(lists->list[0]);
     lists->list[0] = newlist;
 }
@@ -142,8 +137,6 @@ void dclists_replace_list0(dclists_t* lists, uint8_t* newlist) {
 // We should probably check for dupes in these map dclists, but really the fallout
 //  is just some redundant lookup work if the user screws that up.
 bool dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto) {
-    dmn_assert(lists); dmn_assert(vscf_list); dmn_assert(lists); dmn_assert(newlist); dmn_assert(map_name);
-
     const unsigned count = vscf_array_get_len(vscf_list);
 
     for(unsigned i = 0; i < count; i++) {
@@ -164,7 +157,6 @@ bool dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* ma
 }
 
 uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto) {
-    dmn_assert(lists); dmn_assert(vscf_list); dmn_assert(lists); dmn_assert(map_name);
     uint8_t newlist[256];
     bool is_auto = dclists_xlate_vscf(lists,vscf_list,map_name,newlist,allow_auto);
     if(is_auto) {
@@ -186,8 +178,6 @@ static double haversine(double lat1, double lon1, double lat2, double lon2) {
 }
 
 uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const double lat, const double lon) {
-    dmn_assert(lists); dmn_assert(map_name);
-
     const double lat_rad = lat * DEG2RAD;
     const double lon_rad = lon * DEG2RAD;
 
@@ -230,7 +220,6 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
 }
 
 void dclists_destroy(dclists_t* lists, dclists_destroy_depth_t depth) {
-    dmn_assert(lists);
     switch(depth) {
         case KILL_ALL_LISTS:
             for(unsigned i = 0; i < lists->count; i++)

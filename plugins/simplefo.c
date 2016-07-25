@@ -68,15 +68,12 @@ static const char DEFAULT_SVCNAME[] = "up";
 
 F_NONNULL
 static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* resname_asvoid) {
-    dmn_assert(key); dmn_assert(d); dmn_assert(resname_asvoid);
     const char* resname = resname_asvoid;
     log_fatal("plugin_simplefo: resource '%s': bad option '%s'", resname, key);
 }
 
 F_NONNULL
 static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname, const char* stanza, vscf_data_t* cfg) {
-    dmn_assert(as); dmn_assert(resname); dmn_assert(stanza); dmn_assert(cfg); dmn_assert(vscf_is_hash(cfg));
-
     unsigned num_svcs = 0;
     const char** svc_names = NULL;
     vscf_data_t* svctypes_data = vscf_hash_get_data_byconstkey(cfg, "service_types", true);
@@ -224,8 +221,6 @@ int plugin_simplefo_map_res(const char* resname, const uint8_t* origin V_UNUSED)
 // ----------------------------
 F_NONNULL
 static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const addrstate_t* as, dyn_result_t* result) {
-    dmn_assert(as); dmn_assert(result);
-
     const gdnsd_sttl_t p_sttl = gdnsd_sttl_min(sttl_tbl, as->indices[A_PRI], as->num_svcs);
 
     res_which_t which = A_PRI;
@@ -257,8 +252,6 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const addrstate_t
 }
 
 gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-    dmn_assert(result);
-
     res_t* res = &resources[resnum];
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();

@@ -100,8 +100,8 @@ static ev_timer* sttl_update_timer = NULL;
 #define DEF_DOWN_THRESH 10
 #define DEF_INTERVAL 10
 
+F_NONNULL
 static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
     dmn_assert(w == sttl_update_timer);
     dmn_assert(revents == EV_TIMER);
 
@@ -160,8 +160,6 @@ static ev_timer* admin_quiesce_timer = NULL;
 
 // shared with plugin_extfile!
 bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned def_ttl) {
-    dmn_assert(sttl_str); dmn_assert(sttl_out);
-
     bool failed = true;
     gdnsd_sttl_t out = def_ttl;
     assert_valid_sttl(out);
@@ -200,7 +198,6 @@ bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned
 
 F_NONNULL
 static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdnsd_sttl_t update_val) {
-    dmn_assert(matchme); dmn_assert(updates);
     assert_valid_sttl(update_val);
     dmn_assert(update_val & GDNSD_STTL_FORCED);
 
@@ -229,7 +226,7 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
 
 F_NONNULL
 static bool admin_process_hash(vscf_data_t* raw, const bool check_only) {
-    dmn_assert(raw); dmn_assert(vscf_is_hash(raw));
+    dmn_assert(vscf_is_hash(raw));
 
     bool success = true;
 
@@ -297,6 +294,7 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only) {
     return success;
 }
 
+F_NONNULL
 static bool admin_process_file(const char* pathname, const bool check_only) {
     if(check_only)
         log_info("admin_state: checking state file '%s'...", pathname);
@@ -323,6 +321,7 @@ static bool admin_process_file(const char* pathname, const bool check_only) {
     return success;
 }
 
+F_NONNULL
 static void admin_deleted_file(const char* pathname) {
     log_info("admin_state: state file '%s' deleted, clearing any forced states...", pathname);
     bool affected = false;
@@ -340,7 +339,7 @@ static void admin_deleted_file(const char* pathname) {
 
 F_NONNULL
 static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
     ev_timer_stop(loop, w);
     if(admin_file_watcher->attr.st_nlink)
         admin_process_file(admin_file_watcher->path, false);
@@ -350,7 +349,7 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 
 F_NONNULL
 static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
+    dmn_assert(revents == EV_STAT);
     if(testsuite_nodelay)
         admin_timer_cb(loop, admin_quiesce_timer, EV_TIMER);
     else
@@ -359,9 +358,8 @@ static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents
 
 // Note this invoked *after* the initial round of monitoring,
 //   but before the main loop begins runtime execution.
+F_NONNULL
 static void admin_init(struct ev_loop* mloop) {
-    dmn_assert(mloop);
-
     char* pathname = gdnsd_resolve_path_state("admin_state", NULL);
 
     admin_quiesce_timer = xmalloc(sizeof(ev_timer));
@@ -407,8 +405,6 @@ void gdnsd_mon_check_admin_file(void) {
 //  events at this point so that we can fall out after the
 //  initial round of monitoring.
 void gdnsd_mon_start(struct ev_loop* mloop) {
-    dmn_assert(mloop);
-
     // Fall out quickly if nothing to monitor
     if(!num_smgrs) return;
 
@@ -451,7 +447,6 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
 //  is determined by service type.
 F_NONNULL
 static bool addr_eq(const dmn_anysin_t* a, const dmn_anysin_t* b) {
-    dmn_assert(a); dmn_assert(b);
     dmn_assert(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
 
     bool rv = false;
@@ -464,8 +459,8 @@ static bool addr_eq(const dmn_anysin_t* a, const dmn_anysin_t* b) {
     return rv;
 }
 
+F_NONNULLX(1)
 static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, const char* cname, const uint8_t* dname) {
-    dmn_assert(svctype_name);
     if(addr)
         dmn_assert(!cname && !dname);
     else
@@ -568,8 +563,6 @@ unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname, const uint
 
 // .. for virtual entities (e.g. datacenters), which have no service_type
 unsigned gdnsd_mon_admin(const char* desc) {
-    dmn_assert(desc);
-
     const unsigned idx = num_smgrs++;
     smgrs = xrealloc(smgrs, sizeof(smgr_t) * num_smgrs);
     smgr_sttl = xrealloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
@@ -598,13 +591,11 @@ unsigned gdnsd_mon_admin(const char* desc) {
 
 F_NONNULL
 static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* svcname_asvoid) {
-    dmn_assert(key); dmn_assert(d); dmn_assert(svcname_asvoid);
     const char* svcname = svcname_asvoid;
     log_fatal("Service type '%s', bad option '%s'", svcname, key);
 }
 
 void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg) {
-
     unsigned num_svc_types_cfg = 0;
 
     if(svctypes_cfg) {
@@ -719,7 +710,7 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg) {
 
 F_NONNULL
 static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
-    dmn_assert(smgr); dmn_assert(idx < num_smgrs);
+    dmn_assert(idx < num_smgrs);
 
     // Note that the updater interfaces from monitoring plugins cannot set
     //  the FORCED bit - only the admin-state interface can do that.
@@ -931,7 +922,6 @@ static const char* class_str_map[2][2][2] = {
 
 F_NONNULL
 static void get_state_texts(const unsigned i, const char** cur_state_out, const char** real_state_out) {
-    dmn_assert(cur_state_out); dmn_assert(real_state_out);
     dmn_assert(i < num_smgrs);
 
     *cur_state_out = state_str_map
@@ -946,7 +936,6 @@ static void get_state_texts(const unsigned i, const char** cur_state_out, const 
 
 F_NONNULL
 static void get_class_texts(const unsigned i, const char** cur_class_out, const char** real_class_out) {
-    dmn_assert(cur_class_out); dmn_assert(real_class_out);
     dmn_assert(i < num_smgrs);
 
     *cur_class_out = class_str_map
@@ -962,8 +951,6 @@ static void get_class_texts(const unsigned i, const char** cur_class_out, const 
 // Output our stats in html form to buf, returning
 //  how many characters we added to the buf.
 unsigned gdnsd_mon_stats_out_html(char* buf) {
-    dmn_assert(buf);
-
     if(!num_smgrs) return 0;
     dmn_assert(max_stats_len);
 
@@ -1004,8 +991,6 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
 // Output our stats in csv form to buf, returning
 //  how many characters we added to the buf.
 unsigned gdnsd_mon_stats_out_csv(char* buf) {
-    dmn_assert(buf);
-
     if(!num_smgrs) return 0;
     dmn_assert(max_stats_len);
 
@@ -1035,8 +1020,6 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
 }
 
 unsigned gdnsd_mon_stats_out_json(char* buf) {
-    dmn_assert(buf);
-
     dmn_assert(max_stats_len);
     unsigned avail = max_stats_len;
 

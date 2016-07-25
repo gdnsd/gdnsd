@@ -92,8 +92,6 @@ static bool testsuite_nodelay = false;
     } while(0)
 
 void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
-    dmn_assert(name); dmn_assert(svc_cfg);
-
     service_types = xrealloc(service_types, (num_svcs + 1) * sizeof(extf_svc_t));
     extf_svc_t* svc = &service_types[num_svcs++];
 
@@ -120,8 +118,6 @@ void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const un
 }
 
 void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname);
-
     extf_svc_t* svc = NULL;
     for(unsigned i = 0; i < num_svcs; i++) {
         if(!strcmp(svc_name, service_types[i].name)) {
@@ -143,8 +139,8 @@ void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, const c
     plugin_extfile_add_mon_cname(desc, svc_name, cname, idx);
 }
 
+F_NONNULL
 static int moncmp(const void* x, const void* y) {
-    dmn_assert(x); dmn_assert(y);
     const extf_mon_t* xm = x;
     const extf_mon_t* ym = y;
     return strcmp(xm->name, ym->name);
@@ -152,8 +148,6 @@ static int moncmp(const void* x, const void* y) {
 
 F_NONNULL
 static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_t* val, gdnsd_sttl_t* results) {
-    dmn_assert(svc); dmn_assert(matchme); dmn_assert(val); dmn_assert(results);
-
     bool success = false;
     if(!vscf_is_simple(val)) {
         log_err("plugin_extfile: Service type '%s': value for '%s' in file '%s' ignored, must be a simple string!", svc->name, matchme, svc->path);
@@ -182,8 +176,6 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_
 
 F_NONNULL
 static void process_file(const extf_svc_t* svc) {
-    dmn_assert(svc);
-
     vscf_data_t* raw = vscf_scan_filename(svc->path);
     if(!raw) {
         log_err("plugin_extfile: Service type '%s': loading file '%s' failed", svc->name, svc->path);
@@ -239,7 +231,7 @@ static void process_file(const extf_svc_t* svc) {
 
 F_NONNULL
 static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_TIMER);
+    dmn_assert(revents == EV_TIMER);
 
     extf_svc_t* svc = w->data;
     dmn_assert(svc);
@@ -251,7 +243,7 @@ static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
 
 F_NONNULL
 static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_STAT);
+    dmn_assert(revents == EV_STAT);
     extf_svc_t* svc = w->data;
     dmn_assert(svc);
     dmn_assert(svc->direct);
@@ -264,8 +256,6 @@ static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED) {
 
 F_NONNULL
 static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
-    dmn_assert(svc); dmn_assert(mon_loop);
-
     const double delay = testsuite_nodelay ? 0.01 : svc->interval;
 
     if(svc->direct) {
@@ -292,15 +282,11 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop) {
 }
 
 void plugin_extfile_start_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_svcs; i++)
         start_svc(&service_types[i], mon_loop);
 }
 
 void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
-    dmn_assert(mon_loop);
-
     if(getenv("GDNSD_TESTSUITE_NODELAY"))
         testsuite_nodelay = true;
 

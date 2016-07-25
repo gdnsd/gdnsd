@@ -139,8 +139,6 @@ static static_svc_t** static_svcs = NULL;
 static static_mon_t** static_mons = NULL;
 
 void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED) {
-    dmn_assert(name); dmn_assert(svc_cfg);
-
     static_svcs = xrealloc(static_svcs, sizeof(static_svc_t*) * ++num_svcs);
     static_svc_t* this_svc = static_svcs[num_svcs - 1] = xmalloc(sizeof(static_svc_t));
     this_svc->name = strdup(name);
@@ -188,18 +186,14 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
 }
 
 void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname); dmn_assert(addr);
     add_mon_any(svc_name, idx);
 }
 
 void plugin_static_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(cname);
     add_mon_any(svc_name, idx);
 }
 
 void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED) {
-    dmn_assert(mon_loop);
-
     for(unsigned i = 0; i < num_mons; i++)
         gdnsd_mon_sttl_updater(static_mons[i]->idx, static_mons[i]->svc->static_sttl);
 }

@@ -67,8 +67,6 @@ void gdnsd_dyn_addr_max(unsigned v4, unsigned v6) {
 }
 
 void gdnsd_result_add_anysin(dyn_result_t* result, const dmn_anysin_t* asin) {
-    dmn_assert(result); dmn_assert(asin);
-
     dmn_assert(!result->is_cname);
     if(asin->sa.sa_family == AF_INET6) {
         dmn_assert(result->count_v6 < addrlimit_v6);
@@ -82,7 +80,6 @@ void gdnsd_result_add_anysin(dyn_result_t* result, const dmn_anysin_t* asin) {
 }
 
 void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const uint8_t* origin) {
-    dmn_assert(result); dmn_assert(dname); dmn_assert(origin);
     dmn_assert(dname_status(dname) != DNAME_INVALID);
     dmn_assert(dname_status(origin) == DNAME_VALID);
     dmn_assert(!result->is_cname);
@@ -97,30 +94,25 @@ void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const ui
 }
 
 void gdnsd_result_wipe(dyn_result_t* result) {
-    dmn_assert(result);
     result->is_cname = false;
     result->count_v4 = 0;
     result->count_v6 = 0;
 }
 
 void gdnsd_result_wipe_v4(dyn_result_t* result) {
-    dmn_assert(result);
     result->count_v4 = 0;
 }
 
 void gdnsd_result_wipe_v6(dyn_result_t* result) {
-    dmn_assert(result);
     result->count_v6 = 0;
 }
 
 void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope) {
-    dmn_assert(result);
     if(scope > result->edns_scope_mask)
         result->edns_scope_mask = scope;
 }
 
 void gdnsd_result_reset_scope_mask(dyn_result_t* result) {
-    dmn_assert(result);
     result->edns_scope_mask = 0;
 }
 
@@ -149,8 +141,6 @@ void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array) {
 }
 
 plugin_t* gdnsd_plugin_find(const char* pname) {
-    dmn_assert(pname);
-
     const unsigned nplug = num_plugins;
     for(unsigned i = 0; i < nplug; i++) {
         plugin_t* p = plugins[i];
@@ -163,7 +153,6 @@ plugin_t* gdnsd_plugin_find(const char* pname) {
 
 F_NONNULL
 static plugin_t* plugin_allocate(const char* pname) {
-    dmn_assert(pname);
     dmn_assert(!gdnsd_plugin_find(pname));
 
     const unsigned this_idx = num_plugins++;
@@ -178,7 +167,7 @@ static plugin_t* plugin_allocate(const char* pname) {
 
 F_NONNULL
 static void* plugin_dlopen(const char* pname) {
-    dmn_assert(pname); dmn_assert(psearch);
+    dmn_assert(psearch);
 
     struct stat plugstat;
     const char* try_path;
@@ -203,8 +192,6 @@ typedef void(*gen_func_ptr)(void);
 
 F_NONNULL
 static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sym_suffix) {
-    dmn_assert(handle); dmn_assert(pname); dmn_assert(sym_suffix);
-
     // If you see an aliasing warning here, it's ok to ignore it
     char* symname = gdnsd_str_combine_n(4, "plugin_", pname, "_", sym_suffix);
     gen_func_ptr rval;
@@ -214,7 +201,7 @@ static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sy
 }
 
 static plugin_t* gdnsd_plugin_load(const char* pname) {
-    dmn_assert(pname); dmn_assert(psearch);
+    dmn_assert(psearch);
 
     plugin_t* plug = plugin_allocate(pname);
     void* pptr = plugin_dlopen(pname);
@@ -260,7 +247,6 @@ static plugin_t* gdnsd_plugin_load(const char* pname) {
 }
 
 plugin_t* gdnsd_plugin_find_or_load(const char* pname) {
-    dmn_assert(pname);
     plugin_t* p = gdnsd_plugin_find(pname);
     return p ? p : gdnsd_plugin_load(pname);
 }

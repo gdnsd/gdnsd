@@ -73,7 +73,6 @@ static const socks_cfg_t socks_cfg_defaults = {
 // Generic iterator for catching bad config hash keys in various places below
 F_NONNULL
 static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* which_asvoid) {
-    dmn_assert(key); dmn_assert(d); dmn_assert(which_asvoid);
     const char* which = which_asvoid;
     log_fatal("Invalid %s key '%s'", which, key);
 }
@@ -115,8 +114,6 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, dmn_anysin
 
 F_NONNULLX(1)
 static void process_http_listen(socks_cfg_t* socks_cfg, vscf_data_t* http_listen_opt, const unsigned def_http_port) {
-    dmn_assert(socks_cfg);
-
     if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
         socks_cfg->num_http_addrs = 2;
         socks_cfg->http_addrs = xcalloc(socks_cfg->num_http_addrs, sizeof(dmn_anysin_t));
@@ -137,8 +134,6 @@ static void process_http_listen(socks_cfg_t* socks_cfg, vscf_data_t* http_listen
 
 F_NONNULL F_PURE
 static bool dns_addr_is_dupe(const socks_cfg_t* socks_cfg, const dmn_anysin_t* new_addr) {
-    dmn_assert(socks_cfg);
-    dmn_assert(new_addr);
     dmn_assert(new_addr->sa.sa_family == AF_INET6 || new_addr->sa.sa_family == AF_INET);
 
     for(unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
@@ -154,8 +149,6 @@ static bool dns_addr_is_dupe(const socks_cfg_t* socks_cfg, const dmn_anysin_t* n
 
 F_NONNULL
 static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) {
-    dmn_assert(socks_cfg); dmn_assert(addr_defs);
-
     socks_cfg->num_dns_addrs = 2;
     socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(dns_addr_t));
     dns_addr_t* ac_v4 = &socks_cfg->dns_addrs[0];
@@ -168,8 +161,6 @@ static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) 
 
 F_NONNULL
 static void dns_listen_scan(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) {
-    dmn_assert(socks_cfg); dmn_assert(addr_defs);
-
     dmn_anysin_t temp_asin;
 
     struct ifaddrs* ifap;
@@ -219,8 +210,6 @@ static void dns_listen_scan(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs)
 
 F_NONNULLX(1,3)
 static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-    dmn_assert(socks_cfg); dmn_assert(addr_defs);
-
     if(!listen_opt)
         return dns_listen_any(socks_cfg, addr_defs);
     if(vscf_is_simple(listen_opt)) {
@@ -285,8 +274,6 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 
 F_NONNULLX(1,3)
 static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-    dmn_assert(socks_cfg); dmn_assert(addr_defs);
-
     // this fills in socks_cfg->dns_addrs raw data
     fill_dns_addrs(socks_cfg, listen_opt, addr_defs);
 
@@ -382,8 +369,6 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
 }
 
 bool socks_helper_bind(const char* desc, const int sock, const dmn_anysin_t* asin, bool no_freebind V_UNUSED) {
-    dmn_assert(desc); dmn_assert(asin);
-
     if(!bind(sock, &asin->sa, asin->len))
         return false;
 
@@ -483,7 +468,6 @@ bool socks_daemon_check_all(socks_cfg_t* socks_cfg, bool soft) {
 }
 
 void socks_dns_lsocks_init(socks_cfg_t* socks_cfg) {
-    dmn_assert(socks_cfg);
     for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         dns_thread_t* t = &socks_cfg->dns_threads[i];
         if(t->is_udp)

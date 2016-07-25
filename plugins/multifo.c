@@ -63,7 +63,6 @@ static unsigned num_resources = 0;
 
 F_NONNULL
 static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* resname_asvoid) {
-    dmn_assert(key); dmn_assert(d); dmn_assert(resname_asvoid);
     const char* resname = resname_asvoid;
     log_fatal("plugin_multifo: resource '%s': bad option '%s'", resname, key);
 }
@@ -73,7 +72,7 @@ static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d 
 // also works for direct config, even though some of the work is redundant.
 F_NONNULL
 static vscf_data_t* addrs_hash_from_array(vscf_data_t* ary, const char* resname, const char* stanza) {
-    dmn_assert(ary); dmn_assert(!vscf_is_hash(ary));
+    dmn_assert(!vscf_is_hash(ary));
 
     vscf_data_t* parent = vscf_get_parent(ary);
     dmn_assert(vscf_is_hash(parent));
@@ -106,8 +105,6 @@ typedef struct {
 
 F_NONNULL
 static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, vscf_data_t* addr_data, void* aid_asvoid) {
-    dmn_assert(addr_desc); dmn_assert(addr_data); dmn_assert(aid_asvoid);
-
     addrs_iter_data_t* aid = aid_asvoid;
 
     const char* resname = aid->resname;
@@ -141,8 +138,6 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, vscf_data_
 
 F_NONNULL
 static void config_addrs(const char* resname, const char* stanza, addrset_t* aset, const bool ipv6, vscf_data_t* cfg) {
-    dmn_assert(resname); dmn_assert(aset); dmn_assert(cfg);
-
     bool destroy_cfg = false;
     if(!vscf_is_hash(cfg)) {
         cfg = addrs_hash_from_array(cfg, resname, stanza);
@@ -215,8 +210,6 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
 }
 
 static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg) {
-    dmn_assert(res); dmn_assert(stanza); dmn_assert(auto_cfg);
-
     bool destroy_cfg = false;
     if(!vscf_is_hash(auto_cfg)) {
         auto_cfg = addrs_hash_from_array(auto_cfg, res->name, stanza);
@@ -260,8 +253,6 @@ static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg) {
 
 F_NONNULL
 static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_data_t* opts, void* data) {
-    dmn_assert(resname); dmn_assert(opts); dmn_assert(data);
-
     unsigned* residx_ptr = data;
     unsigned rnum = (*residx_ptr)++;
     res_t* res = &resources[rnum];
@@ -339,8 +330,6 @@ int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED) 
 
 F_NONNULL
 static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result, const bool isv6) {
-    dmn_assert(aset); dmn_assert(result);
-
     dmn_assert(aset->count);
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
@@ -376,8 +365,6 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
 }
 
 gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-    dmn_assert(result);
-
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
     res_t* res = &resources[resnum];

@@ -52,8 +52,6 @@ struct gdnsd_fmap_s_ {
 #endif
 
 gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
-    dmn_assert(fn);
-
     int fd = open(fn, O_RDONLY | O_CLOEXEC);
 
     if(fd < 0) {
@@ -127,19 +125,16 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
 }
 
 const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap) {
-    dmn_assert(fmap);
     dmn_assert(fmap->buf);
     return fmap->buf;
 }
 
 size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap) {
-    dmn_assert(fmap);
     dmn_assert(fmap->buf);
     return fmap->len;
 }
 
 bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap) {
-    dmn_assert(fmap);
     dmn_assert(fmap->buf);
 
     bool rv = false; // true == error

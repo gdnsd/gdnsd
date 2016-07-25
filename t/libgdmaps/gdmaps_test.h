@@ -43,6 +43,7 @@ F_NONNULL
 void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt);
 
 // boolean for whether a given file exists in the geoip config dir
+F_NONNULL
 bool gdmaps_test_db_exists(const char* dbfile);
 
 // number of actual libtap tests for each invocation above

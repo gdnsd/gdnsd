@@ -43,7 +43,7 @@ typedef struct _zone_struct zone_t;
 #  define get_mtimens(_xst) 0
 #endif
 
-F_UNUSED
+F_UNUSED F_NONNULL
 static uint64_t get_extended_mtime(const struct stat* st) {
     return (((uint64_t)st->st_mtime) * 1000000000ULL)
         + (uint64_t)get_mtimens(*st);

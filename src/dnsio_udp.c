@@ -166,7 +166,6 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
     dmn_assert(pktsize <= 65536);
     dmn_assert(width > 0);
     dmn_assert(width <= 64);
-    dmn_assert(asin);
 
     // Our default desired buffer.  This is based on enough room for
     //   recv_width * 8 packets.  recv_width is counted as "4" if less than 4
@@ -208,8 +207,6 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
 }
 
 void udp_sock_setup(dns_thread_t* t) {
-    dmn_assert(t);
-
     dns_addr_t* addrconf = t->ac;
     dmn_assert(addrconf);
 
@@ -279,8 +276,6 @@ static unsigned get_pgsz(void) {
 
 F_HOT F_NORETURN F_NONNULL
 static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
-    dmn_assert(stats);
-
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
@@ -376,8 +371,6 @@ static bool has_mmsg(void) {
 
 F_HOT F_NORETURN F_NONNULL
 static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
-    dmn_assert(stats);
-
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
 
     // gcfg->max_response, rounded up to the next nearest multiple of the page size
@@ -505,7 +498,6 @@ static bool has_mmsg(void) { return false; }
 //  as well as the IPv4 any-address (for correct source address).
 F_NONNULL F_PURE
 static bool needs_cmsg(const dmn_anysin_t* asin) {
-    dmn_assert(asin);
     dmn_assert(asin->sa.sa_family == AF_INET6 || asin->sa.sa_family == AF_INET);
     return (asin->sa.sa_family == AF_INET6 || dmn_anysin_is_anyaddr(asin))
         ? true
@@ -514,8 +506,6 @@ static bool needs_cmsg(const dmn_anysin_t* asin) {
 
 F_NORETURN
 void* dnsio_udp_start(void* thread_asvoid) {
-    dmn_assert(thread_asvoid);
-
     gdnsd_thread_setname("gdnsd-io-udp");
 
     const dns_thread_t* t = thread_asvoid;

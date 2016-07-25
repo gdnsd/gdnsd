@@ -65,8 +65,6 @@ struct _dcinfo {
 //  to match (ditto for auto_dc_coords never succeeding with dupes in the
 //  datacenters list).
 dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name) {
-    dmn_assert(dc_cfg); dmn_assert(map_name);
-
     dcinfo_t* info = xmalloc(sizeof(dcinfo_t));
 
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
@@ -149,23 +147,19 @@ dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t*
 }
 
 unsigned dcinfo_get_count(const dcinfo_t* info) {
-    dmn_assert(info);
     return info->num_dcs;
 }
 
 unsigned dcinfo_get_limit(const dcinfo_t* info) {
-    dmn_assert(info);
     return info->auto_limit;
 }
 
 const double* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum) {
-    dmn_assert(info);
     dmn_assert(dcnum < info->num_dcs);
     return &info->coords[dcnum * 2];
 }
 
 unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname) {
-    dmn_assert(info);
     if(dcname)
         for(unsigned i = 0; i < info->num_dcs; i++)
             if(!strcmp(dcname, info->names[i]))
@@ -174,8 +168,6 @@ unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname) {
 }
 
 const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum) {
-    dmn_assert(info);
-
     if(!dcnum || dcnum > info->num_dcs)
         return NULL;
 
@@ -183,7 +175,6 @@ const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum) {
 }
 
 unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum) {
-    dmn_assert(info);
     dmn_assert(dcnum && dcnum <= info->num_dcs);
     return info->indices[dcnum - 1];
 }
