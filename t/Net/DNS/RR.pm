@@ -92,7 +92,8 @@ BEGIN {
 
 	eval {
 	    local $SIG{'__DIE__'} = 'DEFAULT';
-	    require Net::DNS::RR::SIG;
+	    # require Net::DNS::RR::SIG;
+	    die "No DNSSEC support\n";
 	};
 
 	unless ($@) {
