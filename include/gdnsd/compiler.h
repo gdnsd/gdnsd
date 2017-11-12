@@ -41,6 +41,7 @@
 #  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
 #  define F_NONNULL       __attribute__((__nonnull__))
 #  define F_WUNUSED       __attribute__((__warn_unused_result__))
+#  define F_DEPRECATED    __attribute__((__deprecated__))
 #endif
 
 // Newer features
@@ -108,6 +109,9 @@
 #endif
 #ifndef   F_WUNUSED
 #  define F_WUNUSED
+#endif
+#ifndef   F_DEPRECATED
+#  define F_DEPRECATED
 #endif
 #ifndef   F_ALLOCSZ
 #  define F_ALLOCSZ(...)
