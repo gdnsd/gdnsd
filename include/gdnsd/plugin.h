@@ -81,6 +81,7 @@ F_NONNULL
 void SYM_ADD_SVC(GDNSD_PLUGIN_NAME)(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 F_NONNULL
 void SYM_ADD_MON_ADDR(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr, const unsigned idx);
+F_NONNULL
 void SYM_ADD_MON_CNAME(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const char* cname, const unsigned idx);
 F_NONNULL
 void SYM_INIT_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
