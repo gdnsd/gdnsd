@@ -31,6 +31,11 @@ ns2 A 192.0.2.6
 ns3.goober	A	192.0.2.7
 ns4.goober	A	192.0.2.8
 
+; this is here to exercise a rare branch in dnspacket.c
+; This case is looking for non-existent label (NXDOMAIN) within a level of the
+; name tree which contains only single-letter, non-wildcard labels...
+a.www		A	192.0.2.9
+
 _http._tcp	2W	srv	5 500 80 www
 
 @	TXT	"foo bar baz" "asdf 123 123 foo"
