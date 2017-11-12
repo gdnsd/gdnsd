@@ -320,7 +320,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-            if(unlikely(recvmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
+            if(unlikely(recvmsg_rv < 0 && ERRNO_WOULDBLOCK)) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
                 (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
@@ -423,7 +423,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
         if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
-            if(unlikely(mmsg_rv < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
+            if(unlikely(mmsg_rv < 0 && ERRNO_WOULDBLOCK)) {
                 gdnsd_prcu_rdr_offline();
                 is_online = false;
                 (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));

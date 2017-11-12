@@ -29,6 +29,12 @@
 #define gdnsd_anysin_getaddrinfo(__a,__p,__r) dmn_anysin_getaddrinfo((__a),(__p),(__r),true)
 #define gdnsd_anysin_fromstr(__a,__d,__r) dmn_anysin_fromstr((__a),(__d),(__r),true)
 
+#if EAGAIN == EWOULDBLOCK
+#  define ERRNO_WOULDBLOCK (errno == EAGAIN)
+#else
+#  define ERRNO_WOULDBLOCK (errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
+
 #pragma GCC visibility push(default)
 
 // Plugins should use these to get protocol numbers
