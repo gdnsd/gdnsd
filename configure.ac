@@ -183,7 +183,7 @@ m4_include([libgdmaps/libgdmaps.m4])
 #  might not in the future, and we need it directly
 XLIBS=$LIBS
 LIBS=""
-AC_CHECK_LIB(m,ceil)
+AC_CHECK_LIB(m,atan2)
 MATH_LIB=$LIBS
 LIBS=$XLIBS
 AC_SUBST([MATH_LIB])
