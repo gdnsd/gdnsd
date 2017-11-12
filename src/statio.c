@@ -119,7 +119,7 @@ static const char http_headers[] =
     "Cache-Control: no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0\r\n"
     "Refresh: 60\r\n"
     "Content-type: %s; charset=utf-8\r\n"
-    "Content-length: %i\r\n\r\n";
+    "Content-length: %u\r\n\r\n";
 
 static const char csv_fixed[] =
     "uptime\r\n"
