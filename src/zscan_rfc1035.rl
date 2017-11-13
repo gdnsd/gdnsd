@@ -590,8 +590,8 @@ static void close_paren(zscan_t* z) {
     naptr_rdata = uval %set_uv_1 ws uval %set_uv_2 ws naptr_txt ws dname_rhs;
 
     rfc3597_octet = ([0-9A-Fa-f]{2}) >token_start %rfc3597_octet;
-    rfc3597_rdata = uval %set_uv_1 ws '\\' '#' ws uval %rfc3597_data_setup
-        (ws rfc3597_octet+ $1 %0)* $1 %0;
+    rfc3597_rdata = uval %set_uv_1 ws '\\' '#' ws uval %rfc3597_data_setup ws
+        (rfc3597_octet+ ws?)**;
 
     # The left half of a resource record, which for our purposes here
     #  is the optional domainname and/or the optional ttl and/or the
