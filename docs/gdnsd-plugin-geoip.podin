@@ -493,7 +493,7 @@ databases.  The other representations (v4mapped, SIIT, WKP, Teredo, 6to4) are
 Undefined internally, and will never be referenced at lookup-time due to
 the v4compat conversion mentioned earlier.
 
-The C<nets> stanza is not allowed to specify entries in the four undefined
+The C<nets> stanza is not allowed to specify entries in the five undefined
 v4-like IPv6 spaces (those other than v4compat).  Specify those networks as
 normal IPv4 networks or v4compat networks instead.  Legitimate IPv6 C<nets>
 entries which happen to be a supernet of any v4-like spaces will *not*
@@ -539,19 +539,19 @@ C<maps> and C<resources> sections:
               }
               SA => [us-01, sg-01, de-01],
               EU => {
-                default => [eu-01, us-01, sg-01],
+                default => [de-01, us-01, sg-01],
                 CH => {
                   Geneve => {
                     Geneva => [sg-01],
                   }
                 }
               }
-              AF => [eu-01, us-01, sg-01],
-              AS => [sg-01, eu-01, us-01],
-              OC => [sg-01, us-01, eu-01],
+              AF => [de-01, us-01, sg-01],
+              AS => [sg-01, de-01, us-01],
+              OC => [sg-01, us-01, de-01],
           }
           nets => {
-              10.0.0.0/8 => [ eu-01 ],
+              10.0.0.0/8 => [ de-01 ],
               2001:DB8::/32 => [ us-01 ],
           }
         }
