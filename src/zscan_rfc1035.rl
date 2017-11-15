@@ -81,6 +81,7 @@ typedef struct {
     union {
         uint8_t eml_dname[256];
         char    rhs_dyn[256];
+        char    caa_prop[256];
     };
     uint8_t** texts;
     sigjmp_buf jbuf;
@@ -293,6 +294,16 @@ static void set_dyna(zscan_t* z, const char* fpc) {
 }
 
 F_NONNULL
+static void set_caa_prop(zscan_t* z, const char* fpc) {
+    unsigned dlen = fpc - z->tstart;
+    if(dlen > 255)
+        parse_error_noargs("CAA property string cannot exceed 255 chars");
+    memcpy(z->caa_prop, z->tstart, dlen);
+    z->caa_prop[dlen] = 0;
+    z->tstart = NULL;
+}
+
+F_NONNULL
 static void rec_soa(zscan_t* z) {
     validate_lhs_not_ooz(z);
     if(z->lhs_dname[0] != 1)
@@ -395,6 +406,32 @@ static void rec_rfc3597(zscan_t* z) {
 }
 
 F_NONNULL
+static void rec_caa(zscan_t* z) {
+    dmn_assert(z->num_texts == 1); // parser-enforced
+    if(z->uv_1 > 255)
+        parse_error("CAA flags byte value %u is >255", z->uv_1);
+
+    validate_lhs_not_ooz(z);
+
+    const unsigned prop_len = strlen(z->caa_prop);
+    dmn_assert(prop_len < 256); // parser-enforced
+    const unsigned value_len = (uint8_t)z->texts[0][0];
+    const unsigned total_len = 2 + prop_len + value_len;
+
+    uint8_t* caa_rdata = xmalloc(total_len);
+    uint8_t* caa_write = caa_rdata;
+    *caa_write++ = z->uv_1;
+    *caa_write++ = prop_len;
+    memcpy(caa_write, z->caa_prop, prop_len);
+    caa_write += prop_len;
+    memcpy(caa_write, &z->texts[0][1], value_len);
+
+    if(ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata))
+        siglongjmp(z->jbuf, 1);
+    texts_cleanup(z);
+}
+
+F_NONNULL
 static void rfc3597_data_setup(zscan_t* z) {
     z->rfc3597_data_len = z->uval;
     z->rfc3597_data_written = 0;
@@ -482,6 +519,7 @@ static void close_paren(zscan_t* z) {
     action set_limit_v6 { set_limit_v6(z); }
 
     action set_dyna { set_dyna(z, fpc); }
+    action set_caa_prop { set_caa_prop(z, fpc); }
 
     action rec_soa { rec_soa(z); }
     action rec_a { rec_a(z); }
@@ -496,6 +534,7 @@ static void close_paren(zscan_t* z) {
     action rec_dyna { rec_dyna(z); }
     action rec_dync { rec_dync(z); }
     action rec_rfc3597 { rec_rfc3597(z); }
+    action rec_caa { rec_caa(z); }
 
     action rfc3597_data_setup { rfc3597_data_setup(z); }
     action rfc3597_octet { rfc3597_octet(z); }
@@ -593,6 +632,9 @@ static void close_paren(zscan_t* z) {
     rfc3597_rdata = uval %set_uv_1 ws '\\' '#' ws uval %rfc3597_data_setup ws
         (rfc3597_octet+ ws?)**;
 
+    caa_prop = [0-9A-Za-z]{1,255} >token_start %set_caa_prop;
+    caa_rdata = uval %set_uv_1 ws caa_prop ws txt_item >start_txt;
+
     # The left half of a resource record, which for our purposes here
     #  is the optional domainname and/or the optional ttl and/or the
     #  optional 'IN' class, with the order of the latter two being
@@ -626,6 +668,9 @@ static void close_paren(zscan_t* z) {
                     ws ttl %set_uv_2 ws ttl %set_uv_3 ws ttl %set_uv_4
                     ws ttl %set_uv_5) %rec_soa
         | ('TYPE'i  rfc3597_rdata) %rec_rfc3597
+        # From here down, these are parser-only RR-types, which look
+        # identical to RFC3597 to the rest of the core code
+        | ('CAA'i   ws caa_rdata) %rec_caa
     );
 
     # Again, separate copy for the DYN[AC] TTL stuff

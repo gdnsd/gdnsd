@@ -98,10 +98,13 @@ date.
 
 =head1 SUPPORTED RESOURCE RECORD TYPES
 
+All RRs must be of class C<IN>, which is the implicit default.
+
 L<gdnsd(8)> supports the following standard RR types with their
-standard RDATA formats: SOA, A, AAAA, NS, PTR, CNAME, MX, SRV,
-TXT, and NAPTR.  All RRs must be in class C<IN>, which
-is the implicit default.
+standard RDATA formats:
+
+traditional: SOA, A, AAAA, NS, PTR, CNAME, MX, SRV, TXT, NAPTR
+non-traditional: CAA
 
 It also supports the generic format for unknown RR types documented
 in RFC 3597, which has syntax like:
@@ -111,10 +114,11 @@ in RFC 3597, which has syntax like:
 ... which indicates an RR of numeric type 31337 containing
 10 bytes of RDATA, specified as the final part of the RR as
 a pair of 5-byte hex strings.  See RFC 3597 itself for full
-details.  Note however that gdnsd does not allow using the
-RFC 3597 format for types gdnsd explicitly supports (all of
-which predate 3597 anyways), and that even in the RFC 3597 case
-we still only allow class C<IN> RRs.
+details.
+
+gdnsd does not allow using the RFC3597 format to specify any of the
+traditional standard RR types, but it can be used to encode data for
+the non-traditional types.
 
 Additionally, gdnsd supports two special-case, non-standard
 virtual resource record types DYNA and DYNC:
