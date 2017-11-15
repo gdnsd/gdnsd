@@ -60,3 +60,5 @@ metascope DYNA metafo!metascope
 
 res-empty-a DYNA geoip!res-e
 res-empty-c DYNC geoip!res-e
+
+res-undef DYNA geoip!res-u

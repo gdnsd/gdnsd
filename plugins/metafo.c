@@ -85,8 +85,9 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
 }
 
 F_NONNULL
-static void top_config_hook(vscf_data_t* top_config V_UNUSED) {
+static bool top_config_hook(vscf_data_t* top_config V_UNUSED) {
     dmn_assert(vscf_is_hash(top_config));
+    return false;
 }
 
 static void bottom_config_hook(void) { }

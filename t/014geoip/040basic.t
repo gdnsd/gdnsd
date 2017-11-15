@@ -1,7 +1,7 @@
 # Basic geoip plugin tests
 
 use _GDT ();
-use Test::More tests => 56 * 2;
+use Test::More tests => 58 * 2;
 
 my $test_bin = $ENV{INSTALLCHECK_BINDIR}
     ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_geoip_test"
@@ -517,6 +517,25 @@ _GDT->test_dns(
     answer => [],
     auth => $neg_soa,
     stats => [qw/udp_reqs noerror/],
+);
+
+## geoip -> less than all DCs defined in resource, and a map entry creates an empty intersection
+# US maps to just DC-A, res-u only defines DC-B,DC-C
+_GDT->test_dns(
+    qname => 'res-undef.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.1.0.0', src_mask => 16),
+    answer => [],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '10.1.0.0', src_mask => 16, scope_mask => 1),
+    auth => $neg_soa,
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+# FR maps to DC-A,DC-B,DC-C, res-u only defines DC-B,DC-C, answer is DC-B
+_GDT->test_dns(
+    qname => 'res-undef.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24),
+    answer => 'res-undef.example.com 86400 A 192.0.2.180',
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24, scope_mask => 1),
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
 _GDT->test_kill_daemon($pid);

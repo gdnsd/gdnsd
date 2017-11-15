@@ -46,7 +46,7 @@ static const unsigned DC_MASK       = 0xFF000000U;
 static const char DEFAULT_SVCNAME[] = "up";
 
 typedef struct {
-    char* dc_name;
+    char* dc_name; // if NULL, the whole structure is invalid (dc not defined for this res)
     unsigned map_mon_idx; // admin state for map-level datacenter, only used by plugin_geoip
     unsigned dc_mon_idx; // admin state for the datacenter itself, in this resource
     bool is_cname; // which union member below
@@ -65,11 +65,21 @@ typedef struct {
     };
 } dc_t;
 
+// resource_t:
+// num_dcs - just copies the map-level total dc count
+// num_dcs_defined - the count of DCs actually defined in this resource
+// dcs - this is an array of structures, where the array indices are the dc
+//       numbers from the map, and is allocated to num_dcs + 1.  Since dc
+//       numbers from the map start at "1", the 0 index of this array is unused
+//       and all-zeros.  Any dc from the map which is not defined for this
+//       resource will also be all-zeros, and thus we detect this case by
+//       checking NULL-ness of dcs[x].dc_name
 typedef struct {
     char* name;
     dc_t* dcs;
     unsigned map;
     unsigned num_dcs;
+    unsigned num_dcs_defined;
 } resource_t;
 
 static unsigned num_res;
@@ -244,38 +254,36 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
 }
 
 F_NONNULL
-static dc_t* config_res_dcmap(vscf_data_t* res_cfg, const unsigned mapnum, vscf_data_t* dcmap_cfg, const char* resname) {
+static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t* dcmap_cfg, const char* resname) {
     dmn_assert(vscf_is_hash(dcmap_cfg));
 
-    const unsigned num_dcs = vscf_hash_get_len(dcmap_cfg);
-    dc_t* store = xcalloc((num_dcs + 1), sizeof(dc_t));
-    for(unsigned i = 0; i < num_dcs; i++) {
+    res->dcs = xcalloc((res->num_dcs + 1), sizeof(dc_t));
+    const unsigned num_dcs_defined = res->num_dcs_defined;
+    for(unsigned i = 0; i < num_dcs_defined; i++) {
         const char* dc_name = vscf_hash_get_key_byindex(dcmap_cfg, i, NULL);
-        const unsigned dc_idx = map_get_dcidx(mapnum, dc_name);
+        const unsigned dc_idx = map_get_dcidx(res->map, dc_name);
         if(!dc_idx)
             log_fatal("plugin_" PNSTR ": resource '%s': datacenter name '%s' is not valid", resname, dc_name);
-        dmn_assert(dc_idx <= num_dcs);
-        dc_t* this_dc = &store[dc_idx];
+        dmn_assert(dc_idx <= res->num_dcs);
+        dc_t* this_dc = &res->dcs[dc_idx];
 #if META_MAP_ADMIN == 1
-        this_dc->map_mon_idx = map_get_mon_idx(mapnum, dc_idx);
+        this_dc->map_mon_idx = map_get_mon_idx(res->map, dc_idx);
 #endif
         vscf_data_t* dc_data = vscf_hash_get_data_byindex(dcmap_cfg, i);
         config_res_perdc(resname, res_cfg, this_dc, dc_name, dc_data);
     }
-
-    return store;
 }
 
 F_NONNULL
-static void make_resource(resource_t* res, const char* res_name, vscf_data_t* res_cfg) {
+static void make_resource(resource_t* res, const char* res_name, vscf_data_t* res_cfg, const bool undef_dc_ok) {
     res->name = strdup(res_name);
 
     if(!vscf_is_hash(res_cfg))
         log_fatal("plugin_" PNSTR ": the value of resource '%s' must be a hash", res_name);
 
     res->map = res_get_mapnum(res_cfg, res_name);
-    unsigned dc_count = map_get_len(res->map);
-    dmn_assert(dc_count); // empty lists not allowed!
+    res->num_dcs = map_get_len(res->map);
+    dmn_assert(res->num_dcs); // empty lists not allowed!
 
     // the core item: dcmap (dc -> result map)
     vscf_data_t* dcs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "dcmap", true);
@@ -283,14 +291,18 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
         log_fatal("plugin_" PNSTR ": resource '%s': missing required stanza 'dcmap'", res_name);
     if(!vscf_is_hash(dcs_cfg))
         log_fatal("plugin_" PNSTR ": resource '%s': 'dcmap' value must be a hash structure", res_name);
+    res->num_dcs_defined = vscf_hash_get_len(dcs_cfg);
 
-    // Get/check datacenter count
-    res->num_dcs = vscf_hash_get_len(dcs_cfg);
+    if(undef_dc_ok) {
+        if(!res->num_dcs_defined)
+            log_fatal("plugin_" PNSTR ": resource '%s': 'dcmap' must define at least one datacenter", res_name);
+    }
+    else {
+        if(res->num_dcs_defined != res->num_dcs)
+            log_fatal("plugin_" PNSTR ": resource '%s': the dcmap does not match the datacenters list", res_name);
+    }
 
-    if(res->num_dcs != dc_count)
-        log_fatal("plugin_" PNSTR ": resource '%s': the dcmap does not match the datacenters list", res_name);
-
-    res->dcs = config_res_dcmap(res_cfg, res->map, dcs_cfg, res_name);
+    config_res_dcmap(res, res_cfg, dcs_cfg, res_name);
 }
 
 static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result) {
@@ -330,15 +342,17 @@ static void resource_destroy(resource_t* res) {
     if(res->dcs) {
         for(unsigned i = 1; i <= res->num_dcs; i++) {
             dc_t* dc = &res->dcs[i];
-            free(dc->dc_name);
-            if(dc->is_cname) {
-                free(dc->dname);
-                if(dc->num_svcs)
-                    free(dc->indices);
-            }
-            else {
-                free(dc->plugin_name);
-                free(dc->res_name);
+            if(dc->dc_name) {
+                free(dc->dc_name);
+                if(dc->is_cname) {
+                    free(dc->dname);
+                    if(dc->num_svcs)
+                        free(dc->indices);
+                }
+                else {
+                    free(dc->plugin_name);
+                    free(dc->res_name);
+                }
             }
         }
         free(res->dcs);
@@ -361,6 +375,9 @@ static int map_res_inner(const char* resname, const uint8_t* origin, const char*
             const unsigned min_dc = fixed_dc_idx ? fixed_dc_idx : 1;
             const unsigned max_dc = fixed_dc_idx ? fixed_dc_idx : res->num_dcs;
             for(unsigned j = min_dc; j <= max_dc; j++) {
+                // skip if this dc is not defined for this resource
+                if(!res->dcs[j].dc_name)
+                    continue;
                 dc_t* this_dc = &res->dcs[j];
                 if(this_dc->is_cname) {
                     if(!origin)
@@ -415,7 +432,7 @@ void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
 
     dmn_assert(vscf_is_hash(config));
 
-    top_config_hook(config);
+    const bool undef_dc_ok = top_config_hook(config);
 
     vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
     if(!resources_cfg)
@@ -436,7 +453,7 @@ void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
         if(!vscf_is_hash(res_cfg))
             log_fatal("plugin_" PNSTR ": the value of resource '%s' must be a hash", res_name);
         vscf_hash_inherit_all(config, res_cfg, true);
-        make_resource(res, res_name, res_cfg);
+        make_resource(res, res_name, res_cfg, undef_dc_ok);
     }
 
     bottom_config_hook();
@@ -486,12 +503,23 @@ gdnsd_sttl_t CB_RES(unsigned resnum, const uint8_t* origin, const client_info_t*
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
+    unsigned dcnum;
 
-    // empty dclist -> no results
-    unsigned first_dc_num = *dclist;
+    // If the resource does not define all DCs, filter the map's dclist
+    uint8_t dclist_filtered[res->num_dcs_defined + 1];
+    if(res->num_dcs != res->num_dcs_defined) {
+        const uint8_t* dclist_iter = dclist;
+        uint8_t* dclist_filtered_iter = dclist_filtered;
+        while((dcnum = *dclist_iter++))
+            if(res->dcs[dcnum].dc_name)
+                *dclist_filtered_iter++ = dcnum;
+        *dclist_filtered_iter = 0;
+        dclist = dclist_filtered;
+    }
+
+    const unsigned first_dc_num = *dclist;
     if(first_dc_num) {
         // iterate datacenters until we find a success or exhaust the list
-        unsigned dcnum;
         while((dcnum = *dclist++)) {
             dmn_assert(dcnum <= res->num_dcs);
             gdnsd_result_wipe(result);

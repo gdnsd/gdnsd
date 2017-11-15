@@ -4,6 +4,7 @@ options => {
 
 plugins => {
  geoip => {
+  undefined_datacenters_ok => true
   maps => {
    map1 => {
     geoip_db => "FakeGeoIP.dat"
@@ -29,6 +30,13 @@ plugins => {
     geoip_db => "FakeGeoIP.dat"
     datacenters => [ dc1, dc2 ]
     map => { NA => { US => [] } }
+   }
+   map-undef => {
+    geoip_db => "FakeGeoIP.dat"
+    datacenters => [ DC-A, DC-B, DC-C ]
+    map => {
+     NA => { US => [ DC-A ] }
+    }
    }
   }
   service_types => up
@@ -155,6 +163,13 @@ plugins => {
     dcmap => {
      dc1 => 192.0.2.177,
      dc2 => 192.0.2.178,
+    }
+   }
+   res-u => {
+    map => map-undef,
+    dcmap => {
+     DC-B => 192.0.2.180
+     DC-C => 192.0.2.181
     }
    }
   }

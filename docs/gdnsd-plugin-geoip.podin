@@ -118,17 +118,39 @@ You can load from other locations by specifying absolute file paths.
 =head1 CONFIGURATION - TOP-LEVEL
 
 The top level of the geoip plugin's configuration (i.e. C<plugins =E<gt> {
-geoip =E<gt> { ... } }>) supports only two special keys, both of which are
-required and expanded upon in detail in the next two sections: C<maps>, and
-C<resources>.  The C<maps> section defines one or more named mappings of
-location information from GeoIP binary databases to ordered subsets of
-datacenter names.  The C<resources> section defines one or more named
-resources, each of which references one of the named maps and resolves
+geoip =E<gt> { ... } }>) supports only three explicit keys.  One is the
+optional setting C<undefined_datacenters_ok>.
+
+The other two are required and expanded upon in detail in the next two
+sections: C<maps>, and C<resources>.  The C<maps> section defines one or more
+named mappings of location information from GeoIP binary databases to ordered
+subsets of datacenter names.  The C<resources> section defines one or more
+named resources, each of which references one of the named maps and resolves
 datacenter names to specific sets of addresses or CNAMEs.
 
 Any other keys present at this level will be inherited down inside of each
 per-resource hash inside the C<resources> stanza, acting as per-resource
 defaults for anything not defined explicitly there.
+
+=head2 C<undefined_datacenters_ok = false>
+
+Boolean, default false.  If set to true, geoip resources are allowed to leave
+some of the datacenters specified in their C<map> undefined in their
+resource-level C<dcmap>.  For example, a map M might define 3 datacenters
+named A, B, and C, but a resource using map M might only define result
+addresses for datacenters B and C in its C<dcmap>.  This would otherwise be a
+hard configuration error.
+
+B<!!! DANGER !!!> - Setting this value to true is a good way to shoot yourself
+in the foot if you're not very careful about how your maps and resources are
+configured with respect to each other, especially in "City Auto Mode".  Maps
+are calculated without any knowledge of the resources that use them.  If a
+specific network or location maps to a list of datacenters which contains none
+of the defined datacenters for a given resource, the results of runtime
+queries for that resource from that location or network will be the empty set
+(no answer records at all).  This is virtually gauranteed to happen in "City
+Auto Mode" if the number of undefined datacenters in a resource is greater
+than or equal to the map's C<auto_dc_limit>.
 
 =head1 CONFIGURATION - MAPS
 
@@ -448,7 +470,8 @@ is that metafo's per-resource C<datacenters> array is replaced with
 C<map =E<gt> mapname>, which references one of the maps defined in the
 C<maps> stanza, described in detail earlier.  The set of defined
 datacenters in the C<dcmap> stanza must match the total set of datacenters
-defined by the referenced map.
+defined by the referenced map, unless C<undefined_datacenters_ok> is set to
+C<true> (see warnings and documentation above).
 
 =head1 META-PLUGIN INTERACTION
 
