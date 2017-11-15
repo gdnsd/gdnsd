@@ -135,10 +135,19 @@ static void udp_sock_opts_v6(const int sock) {
     if(setsockopt(sock, SOL_IPV6, IPV6_MTU_DISCOVER, &mtu_type, sizeof (mtu_type)) == -1)
         log_fatal("Failed to disable Path MTU Discovery for UDP socket: %s", dmn_logf_errno());
 #endif
+
 #if defined IPV6_DONTFRAG
+    // There have been reports in https://github.com/gdnsd/gdnsd/issues/115 of
+    // the IPV6_DONTFRAG setsockopt failing within the context of some
+    // OpenVZ+Debian environments.
+    // RFC 3542 says "By default, this socket option is disabled", so what
+    // we're doing here is just reinforcing the default as a sanity-check
+    // against bad defaults.
+    // Therefore, we'll merely warn rather than fatal on this, in hopes it
+    // clears up whatever's wrong with these OpenVZ environments.
     const int opt_zero = 0;
     if(setsockopt(sock, SOL_IPV6, IPV6_DONTFRAG, &opt_zero, sizeof (opt_zero)) == -1)
-        log_fatal("Failed to disable DF bit for UDP socket: %s", dmn_logf_errno());
+        log_warn("Failed to disable DF bit for UDP socket: %s", dmn_logf_errno());
 #endif
 
 #if defined IPV6_RECVPKTINFO
