@@ -425,6 +425,7 @@ static void rec_caa(zscan_t* z) {
     memcpy(caa_write, z->caa_prop, prop_len);
     caa_write += prop_len;
     memcpy(caa_write, &z->texts[0][1], value_len);
+    free(z->texts[0]);
 
     if(ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata))
         siglongjmp(z->jbuf, 1);
