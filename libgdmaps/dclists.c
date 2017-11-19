@@ -198,7 +198,7 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
         if (!isnan(coords[0]))
             dists[i + 1] = haversine(lat_rad, lon_rad, coords[0], coords[1]);
         else
-            dists[i + 1] = +INFINITY;
+            dists[i + 1] = (double)+INFINITY;
     }
 
     // Given the relatively small num_dcs of most configs,

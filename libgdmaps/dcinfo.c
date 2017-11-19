@@ -95,7 +95,7 @@ dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t*
         num_auto = vscf_hash_get_len(dc_auto_cfg);
         info->coords = xmalloc(num_dcs * 2 * sizeof(double));
         for(unsigned i = 0; i < 2*num_dcs; i++)
-            info->coords[i] = NAN;
+            info->coords[i] = (double)NAN;
         for(unsigned i = 0; i < num_auto; i++) {
             const char* dcname = vscf_hash_get_key_byindex(dc_auto_cfg, i, NULL);
             unsigned dcidx;

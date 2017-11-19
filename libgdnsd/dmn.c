@@ -1095,8 +1095,10 @@ void dmn_pcall(unsigned id) {
         dmn_log_fatal("BUG: dmn_daemon_pcall() on non-existent index %u", id);
 
     // if !will_privdrop, we can execute locally since privileges never changed
-    if(!params.will_privdrop)
-        return pcalls[id]();
+    if(!params.will_privdrop) {
+        pcalls[id]();
+        return;
+    }
 
     dmn_assert(state.pipe_to_helper[PIPE_WR] >= 0);
     dmn_assert(state.pipe_from_helper[PIPE_RD] >= 0);

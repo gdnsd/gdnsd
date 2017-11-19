@@ -29,9 +29,9 @@
 static const char DEFAULT_SVCNAME[] = "up";
 
 // Importantly, 1048575 * 64 * 64 barely fits in uint32_t
-#define MAX_ITEMS_PER_SET 64
-#define MAX_ADDRS_PER_GROUP 64
-#define MAX_WEIGHT 1048575
+#define MAX_ITEMS_PER_SET 64U
+#define MAX_ADDRS_PER_GROUP 64U
+#define MAX_WEIGHT 1048575U
 #define MAX_WEIGHT_STR "1048575"
 
 /*

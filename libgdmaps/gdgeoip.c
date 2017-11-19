@@ -180,7 +180,7 @@ void validate_continent_code(const char* cc, const char* map_name) {
     log_fatal("plugin_geoip: map '%s': Continent code '%s' is illegal", map_name, cc);
 }
 
-F_NONNULL
+F_NONNULL F_PURE
 static uint32_t country_get_dclist(const geoip_db_t* db, const unsigned offset) {
     dmn_assert(offset >= db->base);
 

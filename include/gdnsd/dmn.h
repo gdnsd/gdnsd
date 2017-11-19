@@ -56,7 +56,7 @@
 #  if __has_attribute(cold)
 #    define DMN_F_COLD __attribute__((__cold__))
 #  endif
-#  define DMN_DIAG_PUSH_IGNORED(x) _Pragma("clang diagnostic push"); \
+#  define DMN_DIAG_PUSH_IGNORED(x) _Pragma("clang diagnostic push") \
                                    PRAG_(clang diagnostic ignored x)
 #  define DMN_DIAG_POP             _Pragma("clang diagnostic pop")
 #elif defined __GNUC__
@@ -67,7 +67,7 @@
 #    define DMN_HAVE_UNREACH_BUILTIN 1
 #  endif
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
-#    define DMN_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push"); \
+#    define DMN_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push") \
                                      PRAG_(GCC diagnostic ignored x)
 #    define DMN_DIAG_POP             _Pragma("GCC diagnostic pop")
 #  endif
@@ -269,7 +269,7 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
 #else
 #  define dmn_assert(expr) do {\
      if(!(expr)) {\
-       dmn_logger(LOG_CRIT,"Assertion '%s' failed in %s() at %s:%u, backtrace:%s",\
+       dmn_logger(LOG_CRIT,"Assertion '%s' failed in %s() at %s:%i, backtrace:%s",\
        #expr, __func__, __FILE__, __LINE__, dmn_logf_bt());\
        abort();\
      }\

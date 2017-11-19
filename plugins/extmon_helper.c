@@ -171,7 +171,7 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
     }
     else {
         if(WIFSIGNALED(status))
-            dmn_log_warn("Monitor child process for '%s' terminated by signal %u", this_mon->cmd->desc, WTERMSIG(status));
+            dmn_log_warn("Monitor child process for '%s' terminated by signal %i", this_mon->cmd->desc, WTERMSIG(status));
         else
             dmn_log_warn("Monitor child process for '%s' terminated abnormally...", this_mon->cmd->desc);
     }

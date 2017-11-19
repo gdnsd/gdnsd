@@ -210,16 +210,20 @@ static void dns_listen_scan(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs)
 
 F_NONNULLX(1,3)
 static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
-    if(!listen_opt)
-        return dns_listen_any(socks_cfg, addr_defs);
+    if(!listen_opt) {
+        dns_listen_any(socks_cfg, addr_defs);
+        return;
+    }
     if(vscf_is_simple(listen_opt)) {
         const char* simple_str = vscf_simple_get_data(listen_opt);
         if(!strcmp(simple_str, "any")) {
-            return dns_listen_any(socks_cfg, addr_defs);
+            dns_listen_any(socks_cfg, addr_defs);
+            return;
         }
         else if(!strcmp(simple_str, "scan")) {
             log_warn("The 'listen => scan' interface-scanning mode is being deprecated and will likely disappear in a future release! If 'listen => any' does not work as a replacement for your use-case, *please* file a bug at " PACKAGE_BUGREPORT);
-            return dns_listen_scan(socks_cfg, addr_defs);
+            dns_listen_scan(socks_cfg, addr_defs);
+            return;
         }
     }
 

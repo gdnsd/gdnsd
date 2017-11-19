@@ -206,7 +206,7 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
             else if(opt_size > min_buf)
                 opt_size = min_buf;
             else
-                log_fatal("Failed to set %s to %u for UDP socket %s: %s.  You may need to reduce the max_edns_response and/or udp_recv_width, or specify workable buffer sizes explicitly in the config", which_str, opt_size, dmn_logf_anysin(asin), dmn_logf_errno());
+                log_fatal("Failed to set %s to %i for UDP socket %s: %s.  You may need to reduce the max_edns_response and/or udp_recv_width, or specify workable buffer sizes explicitly in the config", which_str, opt_size, dmn_logf_anysin(asin), dmn_logf_errno());
         }
     }
 
@@ -247,7 +247,7 @@ void udp_sock_setup(dns_thread_t* t) {
     if(addrconf->udp_rcvbuf) {
         int opt_size = (int)addrconf->udp_rcvbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
-            log_fatal("Failed to set SO_RCVBUF to %u for UDP socket %s: %s", opt_size,
+            log_fatal("Failed to set SO_RCVBUF to %i for UDP socket %s: %s", opt_size,
                 dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {
@@ -257,7 +257,7 @@ void udp_sock_setup(dns_thread_t* t) {
     if(addrconf->udp_sndbuf) {
         int opt_size = (int)addrconf->udp_sndbuf;
         if(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
-            log_fatal("Failed to set SO_SNDBUF to %u for UDP socket %s: %s", opt_size,
+            log_fatal("Failed to set SO_SNDBUF to %i for UDP socket %s: %s", opt_size,
                 dmn_logf_anysin(asin), dmn_logf_errno());
     }
     else {

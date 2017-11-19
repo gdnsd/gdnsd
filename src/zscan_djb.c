@@ -44,17 +44,17 @@
     siglongjmp(z->jbuf, 1)
 
 #define parse_warn(_fmt, ...) \
-    log_warn("djb: %s: parse error at line %u: " _fmt,z->fn,z->lcount,__VA_ARGS__);\
+    log_warn("djb: %s: parse error at line %i: " _fmt,z->fn,z->lcount,__VA_ARGS__);\
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("djb: %s: parse error at line %u: " _fmt,z->fn,z->lcount);\
+        log_err("djb: %s: parse error at line %i: " _fmt,z->fn,z->lcount);\
         parse_abort();\
     } while(0)
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("djb: %s: parse error at line %u: " _fmt,z->fn,z->lcount,__VA_ARGS__);\
+        log_err("djb: %s: parse error at line %i: " _fmt,z->fn,z->lcount,__VA_ARGS__);\
         parse_abort();\
     } while(0)
 
@@ -62,6 +62,9 @@ typedef struct {
     char* ptr;
     unsigned len;
 } field_t;
+
+// for: %.*s
+#define FIELD_FMT(_f) (int)(_f)->len,(_f)->ptr
 
 typedef struct {
     /* variables preserved across files */
@@ -135,13 +138,13 @@ static uint8_t *parse_dname(zscan_t *z, uint8_t *dname, field_t *f) {
 
     switch(status) {
         case DNAME_INVALID:
-            parse_error("'%.*s' is not a domain name", f->len, f->ptr);
+            parse_error("'%.*s' is not a domain name", FIELD_FMT(f));
             break;
         case DNAME_VALID:
             break;
         case DNAME_PARTIAL:
             if(dname_cat(dname, dname_root) == DNAME_INVALID)
-                parse_error("'%.*s' is not a valid name", f->len, f->ptr);
+                parse_error("'%.*s' is not a valid name", FIELD_FMT(f));
             break;
         default: dmn_assert(0);
     }
@@ -174,7 +177,7 @@ static uint8_t *expand_dname(zscan_t *z, uint8_t *dname, field_t *f, const uint8
                 break;
             /* fallthrough */
         case DNAME_INVALID:
-            parse_error("unable to expand '%.*s' as to valid domain name", f->len, f->ptr);
+            parse_error("unable to expand '%.*s' as to valid domain name", FIELD_FMT(f));
             break;
         default: dmn_assert(0);
     }
@@ -199,7 +202,7 @@ static unsigned parse_ttl(zscan_t *z, field_t *f, unsigned defttl) {
         return defttl;
     unsigned ttl = strtol(f->ptr, &end, 10);
     if (end != f->ptr + f->len)
-        parse_error("Invalid TTL '%.*s'", f->len, f->ptr);
+        parse_error("Invalid TTL '%.*s'", FIELD_FMT(f));
     return ttl;
 }
 
@@ -208,7 +211,7 @@ static unsigned parse_int(zscan_t *z, field_t *f) {
     char *end;
     unsigned ttl = strtol(f->ptr, &end, 10);
     if (end != f->ptr + f->len)
-        parse_error("Invalid integer value '%.*s'", f->len, f->ptr);
+        parse_error("Invalid integer value '%.*s'", FIELD_FMT(f));
     return ttl;
 }
 
@@ -374,30 +377,31 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         LOCCHECK(4);
 
         parse_txt(&field[1]);
+        {
+            unsigned bytes = field[1].len;
+            const char* src = field[1].ptr;
+            unsigned chunks = (bytes + 254) / 255;
 
-        unsigned bytes = field[1].len;
-        const char* src = field[1].ptr;
-        unsigned chunks = (bytes + 254) / 255;
+            if(bytes > 255 && gcfg->disable_text_autosplit)
+                parse_error_noargs("Text chunk too long (>255 unescaped)");
+            if(bytes > 65500)
+                parse_error_noargs("Text chunk too long (>65500 unescaped)");
 
-        if(bytes > 255 && gcfg->disable_text_autosplit)
-            parse_error_noargs("Text chunk too long (>255 unescaped)");
-        if(bytes > 65500)
-            parse_error_noargs("Text chunk too long (>65500 unescaped)");
-
-        z->texts = xrealloc(z->texts, sizeof(uint8_t *) * (chunks + 1));
-        for (i = 0; i < chunks; i++) {
-            unsigned s = (bytes > 255U ? 255U : bytes);
-            z->texts[i] = xmalloc(s + 1U);
-            z->texts[i][0] = s;
-            memcpy(&z->texts[i][1], src, s);
-            bytes -= s;
-            src += s;
-        }
-        z->texts[i] = NULL;
-        if (ltree_add_rec_txt(zone, dname, chunks, z->texts, parse_ttl(z,&field[2], TTL_POSITIVE))) {
-            for (i = 0; i < chunks; i++)
-                free(z->texts[i]);
-            parse_abort();
+            z->texts = xrealloc(z->texts, sizeof(uint8_t *) * (chunks + 1));
+            for (i = 0; i < chunks; i++) {
+                unsigned s = (bytes > 255U ? 255U : bytes);
+                z->texts[i] = xmalloc(s + 1U);
+                z->texts[i][0] = s;
+                memcpy(&z->texts[i][1], src, s);
+                bytes -= s;
+                src += s;
+            }
+            z->texts[i] = NULL;
+            if (ltree_add_rec_txt(zone, dname, chunks, z->texts, parse_ttl(z,&field[2], TTL_POSITIVE))) {
+                for (i = 0; i < chunks; i++)
+                    free(z->texts[i]);
+                parse_abort();
+            }
         }
         break;
     case 'S': /* SRV (+ A) */

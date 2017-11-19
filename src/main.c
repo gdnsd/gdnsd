@@ -339,10 +339,8 @@ static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
                 if(action == ACT_UNDEF)
                     usage(argv[0]);
                 return action;
-                break;
             default:
                 usage(argv[0]);
-                break;
         }
     }
 
@@ -371,6 +369,11 @@ int main(int argc, char** argv) {
         case ACT_CRESTART:
             will_start = true;
             break;
+        case ACT_CHECKCFG:
+        case ACT_STOP:
+        case ACT_RELOADZ:
+        case ACT_STATUS:
+        case ACT_UNDEF:
         default:
             will_start = false;
             break;

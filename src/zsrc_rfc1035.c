@@ -78,7 +78,7 @@ static inot_data inot;
 
 #endif
 
-char* rfc1035_dir = NULL;
+static char* rfc1035_dir = NULL;
 
 // POSIX states that inode+dev uniquely identifies a file on
 //   a given system.  Therefore those + mtime should uniquely

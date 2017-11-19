@@ -137,16 +137,6 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
         } \
     } while(0)
 
-#define CFG_OPT_BOOL_ALTSTORE(_opt_set, _gconf_loc, _store) \
-    do { \
-        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
-            if(!vscf_is_simple(_opt_setting) \
-            || !vscf_simple_get_as_bool(_opt_setting, &_store)) \
-                log_fatal("Config option %s: Value must be 'true' or 'false'", #_gconf_loc); \
-        } \
-    } while(0)
-
 #define CFG_OPT_UINT(_opt_set, _gconf_loc, _min, _max) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
@@ -200,34 +190,6 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
             if(_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%li, %li)", #_gconf_loc, _min, _max); \
             cfg->_gconf_loc = (int) _val; \
-        } \
-    } while(0)
-
-#define CFG_OPT_UINT_ALTSTORE(_opt_set, _gconf_loc, _min, _max, _store) \
-    do { \
-        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
-            unsigned long _val; \
-            if(!vscf_is_simple(_opt_setting) \
-            || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
-                log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val < _min || _val > _max) \
-                log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
-            _store = (unsigned) _val; \
-        } \
-    } while(0)
-
-#define CFG_OPT_UINT_ALTSTORE_NOMIN(_opt_set, _gconf_loc, _max, _store) \
-    do { \
-        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
-            unsigned long _val; \
-            if(!vscf_is_simple(_opt_setting) \
-            || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
-                log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val > _max) \
-                log_fatal("Config option %s: Value out of range (0, %lu)", #_gconf_loc, _max); \
-            _store = (unsigned) _val; \
         } \
     } while(0)
 

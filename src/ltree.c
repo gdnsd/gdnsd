@@ -610,7 +610,7 @@ static bool naptr_validate_flags(const uint8_t* zone_dname, const uint8_t* dname
             || (c > 0x5BU && c < 0x61U) // > 'z' && < 'A'
             || (c > 0x39U && c < 0x41U) // > '9' && < 'a'
             || (c < 0x30U))            // < '0'
-            log_zwarn("Name '%s%s': NAPTR has illegal flag char '%c'", logf_dname(dname), logf_dname(zone_dname), c);
+            log_zwarn("Name '%s%s': NAPTR has illegal flag char '%c'", logf_dname(dname), logf_dname(zone_dname), (int)c);
     }
 
     return false;

@@ -147,26 +147,35 @@ AX_APPEND_COMPILE_FLAGS([\
     -pipe \
     -Wall \
     -Wextra \
+    -Warray-bounds=2 \
     -Wbad-function-cast \
     -Wcast-align \
     -Wcast-qual \
+    -Wduplicated-cond \
     -Wendif-labels \
     -Wfloat-equal \
     -Wfloat-conversion \
     -Wformat=2 \
+    -Wformat-signedness \
     -Winit-self \
+    -Wjump-misses-init \
     -Wlogical-op \
+    -Wloop-analysis \
     -Wmissing-declarations \
     -Wmissing-include-dirs \
     -Wmissing-prototypes \
+    -Wnull-dereference \
     -Wold-style-definition \
     -Wpointer-arith \
     -Wredundant-decls \
     -Wshadow \
     -Wsign-conversion \
+    -Wshift-overflow=2 \
     -Wstrict-overflow=5 \
     -Wstrict-prototypes \
     -Wswitch-default \
+    -Wswitch-enum \
+    -Wtrampolines \
     -Wundef \
     -Wunused \
     -Wwrite-strings \

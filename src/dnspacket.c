@@ -451,7 +451,7 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, uint8_
         }
 
         if(DNSH_GET_OPCODE(hdr)) {
-            log_devdebug("Non-QUERY request (NOTIMP) from %s, opcode is %u", dmn_logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
+            log_devdebug("Non-QUERY request (NOTIMP) from %s, opcode is %i", dmn_logf_anysin(asin), (DNSH_GET_OPCODE(hdr) >> 3U));
             rcode = DECODE_NOTIMP;
             break;
         }

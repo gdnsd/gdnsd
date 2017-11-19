@@ -115,7 +115,6 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
                 ev_timer_set(md->timeout_watcher, md->tcp_svc->timeout, 0);
                 ev_timer_start(loop, md->timeout_watcher);
                 return; // don't do socket/status finishing actions below...
-                break; // redundant
             case EPIPE:
             case ECONNREFUSED:
             case ETIMEDOUT:

@@ -425,7 +425,6 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
         default:
             dmn_log_err("plugin_geoip: map %s: GeoIP2 data invalid left of node %u", db->map_name, node_num);
             siglongjmp(db->jbuf, 1);
-            break;
     }
 
     SETBIT_v6(ip.s6_addr, mask - 1U);
@@ -444,7 +443,6 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
         default:
             dmn_log_err("plugin_geoip: map %s: GeoIP2 data invalid right of node %u", db->map_name, node_num);
             siglongjmp(db->jbuf, 1);
-            break;
     }
 
 #else // mmdb < 1.2.0
