@@ -1,3 +1,39 @@
+2.3.0 - 2017-11-20
+  *** Bugfixes:
+    * Comments at the end of RRs using RFC 3597 syntax now work properly with
+      whitespace, fixes Github issue 147.
+    * UDPv6 listening sockets no longer fail fatally if IPV6_DONTFRAG cannot be
+      set on them, possibly fixing Github issue 115 for some OpenVZ+Debian
+      installations.
+  *** Features:
+    * any_mitigation - New boolean config option, default true.  When
+      enabled, gdnsd sends empty truncated responses to ANY queries over
+      UDP, which mitigates their use in amplified reflection attacks and
+      forces legitimate clients to use TCP for these queries.  In the
+      future, the behavior of this option may be relaxed in combination with
+      other more-general mitigation strategies such as RRL and/or cookies.
+    * The configuration language's $include{} directive now supports
+      including whole directories or glob wildcards.  The previous behavior
+      was to treat the include pathname as a singular literal filename.  The
+      new behavior first checks whether the pathname is the literal name of
+      an existing directory.  If so, all files within will be included (as
+      if the glob pattern "/*" were appended), and it will not be an error
+      if no matching files exist.  Otherwise, the pathname is treated as a
+      glob wildcard match, and it will be an error if no matches exist.
+    * plugin_extmon has a new per-service option 'max_proc' which defaults to
+      zero.  If non-zero, this sets the limit on the number of concurrent
+      commands that will be run.  If the limit is exceeded, excess commands are
+      rescheduled for 0.1 seconds later. After a few runs, the processes will
+      be spread out enough to run without running into the limit.  This avoids
+      thundering herds of subprocess executions at startup in large
+      configurations.  Contributed by ScaleEngine / Alan Jude.
+    * CAA records are now natively supported in the normal rdata format from
+      RFC 6844.  CAA records continue to be supported in RFC 3597 generic
+      format as well, although this is not recommended going forward.
+    * plugin_geoip has a new top-level option "undefined_datacenters_ok", which
+      allows resources to leave some of their map's datacenters undefined.
+      Enabling this can be dangerous, see warnings in the documentation.
+
 2.2.4 - 2016-04-14
     * libmaxminddb 1.2.0+ compatibility, using the new interface.
     * Note that libmaxminddb's 1.2.0 release is a shared library runtime
