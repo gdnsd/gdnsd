@@ -95,13 +95,13 @@ dclists_t* dclists_clone(const dclists_t* old) {
 }
 
 unsigned dclists_get_count(const dclists_t* lists) {
-    dmn_assert(lists->count <= (DCLIST_MAX + 1U));
+    gdnsd_assert(lists->count <= (DCLIST_MAX + 1U));
     return lists->count;
 }
 
 const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx) {
-    dmn_assert(idx < lists->count);
-    dmn_assert(idx <= DCLIST_MAX);
+    gdnsd_assert(idx < lists->count);
+    gdnsd_assert(idx <= DCLIST_MAX);
     return lists->list[idx];
 }
 
@@ -124,7 +124,7 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
     lists->list = xrealloc(lists->list, (++lists->count) * sizeof(uint8_t*));
     lists->list[newidx] = (uint8_t*)strdup((const char*)newlist);
 
-    dmn_assert(newidx <= DCLIST_MAX);
+    gdnsd_assert(newidx <= DCLIST_MAX);
     return newidx;
 }
 
@@ -160,7 +160,7 @@ uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, cons
     uint8_t newlist[256];
     bool is_auto = dclists_xlate_vscf(lists,vscf_list,map_name,newlist,allow_auto);
     if(is_auto) {
-        dmn_assert(allow_auto);
+        gdnsd_assert(allow_auto);
         return DCLIST_AUTO;
     }
     return dclists_find_or_add_raw(lists, newlist, map_name);

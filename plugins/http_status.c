@@ -58,7 +58,7 @@ typedef struct {
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
     unsigned idx;
-    dmn_anysin_t addr;
+    gdnsd_anysin_t addr;
     char res_buf[14];
     int sock;
     http_state_t hstate;
@@ -73,11 +73,11 @@ static http_events_t** mons = NULL;
 
 F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
 
     http_events_t* md = t->data;
 
-    dmn_assert(md);
+    gdnsd_assert(md);
 
     if(md->hstate != HTTP_STATE_WAITING) {
         log_warn("plugin_http_status: A monitoring request attempt seems to have "
@@ -87,10 +87,10 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
         return;
     }
 
-    dmn_assert(md->sock == -1);
-    dmn_assert(!ev_is_active(md->read_watcher));
-    dmn_assert(!ev_is_active(md->write_watcher));
-    dmn_assert(!ev_is_active(md->timeout_watcher) && !ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(md->sock == -1);
+    gdnsd_assert(!ev_is_active(md->read_watcher));
+    gdnsd_assert(!ev_is_active(md->write_watcher));
+    gdnsd_assert(!ev_is_active(md->timeout_watcher) && !ev_is_pending(md->timeout_watcher));
 
     log_debug("plugin_http_status: Starting state poll of %s", md->desc);
 
@@ -99,12 +99,12 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
         const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
         if(sock < 0) {
-            log_err("plugin_http_status: Failed to create monitoring socket: %s", dmn_logf_errno());
+            log_err("plugin_http_status: Failed to create monitoring socket: %s", logf_errno());
             break;
         }
 
         if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1) {
-            log_err("plugin_http_status: Failed to set O_NONBLOCK on monitoring socket: %s", dmn_logf_errno());
+            log_err("plugin_http_status: Failed to set O_NONBLOCK on monitoring socket: %s", logf_errno());
             close(sock);
             break;
         }
@@ -122,7 +122,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
                     case ENETUNREACH:
                         break;
                     default:
-                        log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_errno());
+                        log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
                 }
                 close(sock);
                 break;
@@ -147,16 +147,16 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
 F_NONNULL
 static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_WRITE);
+    gdnsd_assert(revents == EV_WRITE);
 
     http_events_t* md = io->data;
 
-    dmn_assert(md);
-    dmn_assert(md->hstate == HTTP_STATE_WRITING);
-    dmn_assert(!ev_is_active(md->read_watcher));
-    dmn_assert(ev_is_active(md->write_watcher));
-    dmn_assert(ev_is_active(md->timeout_watcher) || ev_is_pending(md->timeout_watcher));
-    dmn_assert(md->sock > -1);
+    gdnsd_assert(md);
+    gdnsd_assert(md->hstate == HTTP_STATE_WRITING);
+    gdnsd_assert(!ev_is_active(md->read_watcher));
+    gdnsd_assert(ev_is_active(md->write_watcher));
+    gdnsd_assert(ev_is_active(md->timeout_watcher) || ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(md->sock > -1);
 
     int sock = md->sock;
     if(likely(!md->already_connected)) {
@@ -174,10 +174,10 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
                 case ENETUNREACH:
                     break;
                 default:
-                    log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_strerror(so_error));
+                    log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_strerror(so_error));
             }
 
-            log_debug("plugin_http_status: State poll of %s failed quickly: %s", md->desc, dmn_logf_strerror(so_error));
+            log_debug("plugin_http_status: State poll of %s failed quickly: %s", md->desc, logf_strerror(so_error));
             close(sock); md->sock = -1;
             ev_io_stop(loop, md->write_watcher);
             ev_timer_stop(loop, md->timeout_watcher);
@@ -188,9 +188,9 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
         md->already_connected = true;
     }
 
-    dmn_assert(md->done < md->http_svc->req_data_len);
+    gdnsd_assert(md->done < md->http_svc->req_data_len);
     const unsigned to_send = md->http_svc->req_data_len - md->done;
-    dmn_assert(to_send > 0);
+    gdnsd_assert(to_send > 0);
 
     const ssize_t send_rv = send(sock, md->http_svc->req_data + md->done, to_send, 0);
     if(unlikely(send_rv < 0)) {
@@ -209,7 +209,7 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
             case EPIPE:
                 break;
             default:
-                log_err("plugin_http_status: send() to monitoring socket failed, possible local problem: %s", dmn_logf_errno());
+                log_err("plugin_http_status: send() to monitoring socket failed, possible local problem: %s", logf_errno());
         }
         shutdown(sock, SHUT_RDWR);
         close(sock);
@@ -222,7 +222,7 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
     }
 
     const size_t sent = (size_t)send_rv;
-    dmn_assert(sent <= to_send);
+    gdnsd_assert(sent <= to_send);
 
     if(unlikely(sent != to_send)) {
         md->done += sent;
@@ -238,15 +238,15 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
 
 F_NONNULL
 static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_READ);
+    gdnsd_assert(revents == EV_READ);
 
     http_events_t* md = io->data;
 
-    dmn_assert(md);
-    dmn_assert(md->hstate == HTTP_STATE_READING);
-    dmn_assert(ev_is_active(md->read_watcher));
-    dmn_assert(!ev_is_active(md->write_watcher));
-    dmn_assert(md->sock > -1);
+    gdnsd_assert(md);
+    gdnsd_assert(md->hstate == HTTP_STATE_READING);
+    gdnsd_assert(ev_is_active(md->read_watcher));
+    gdnsd_assert(!ev_is_active(md->write_watcher));
+    gdnsd_assert(md->sock > -1);
 
     bool final_status = false;
     const unsigned to_recv = 13U - md->done;
@@ -265,7 +265,7 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
             case EPIPE:
                 break;
             default:
-                log_err("plugin_http_status: read() from monitoring socket failed, possible local problem: %s", dmn_logf_errno());
+                log_err("plugin_http_status: read() from monitoring socket failed, possible local problem: %s", logf_errno());
         }
     }
     else {
@@ -302,13 +302,13 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
 
 F_NONNULL
 static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
 
     http_events_t* md = t->data;
 
-    dmn_assert(md);
-    dmn_assert(md->sock != -1);
-    dmn_assert(
+    gdnsd_assert(md);
+    gdnsd_assert(md->sock != -1);
+    gdnsd_assert(
         (md->hstate == HTTP_STATE_READING && ev_is_active(md->read_watcher))
      || (md->hstate == HTTP_STATE_WRITING && ev_is_active(md->write_watcher))
     );
@@ -417,7 +417,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     this_svc->interval = interval;
 }
 
-void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr, const unsigned idx) {
+void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx) {
     http_events_t* this_mon = xcalloc(1, sizeof(http_events_t));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
@@ -429,14 +429,14 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
         }
     }
 
-    dmn_assert(this_mon->http_svc);
+    gdnsd_assert(this_mon->http_svc);
 
-    memcpy(&this_mon->addr, addr, sizeof(dmn_anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(gdnsd_anysin_t));
     if(this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->http_svc->port);
     }
     else {
-        dmn_assert(this_mon->addr.sa.sa_family == AF_INET6);
+        gdnsd_assert(this_mon->addr.sa.sa_family == AF_INET6);
         this_mon->addr.sin6.sin6_port = htons(this_mon->http_svc->port);
     }
 
@@ -466,7 +466,7 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
 void plugin_http_status_init_monitors(struct ev_loop* mon_loop) {
     for(unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = mons[i]->interval_watcher;
-        dmn_assert(mons[i]->sock == -1);
+        gdnsd_assert(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
     }
@@ -475,7 +475,7 @@ void plugin_http_status_init_monitors(struct ev_loop* mon_loop) {
 void plugin_http_status_start_monitors(struct ev_loop* mon_loop) {
     for(unsigned i = 0; i < num_mons; i++) {
         http_events_t* mon = mons[i];
-        dmn_assert(mon->sock == -1);
+        gdnsd_assert(mon->sock == -1);
         const unsigned ival = mon->http_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
         ev_timer* ival_watcher = mon->interval_watcher;

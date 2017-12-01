@@ -21,7 +21,6 @@
 #include "gdgeoip.h"
 
 #include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
@@ -182,7 +181,7 @@ void validate_continent_code(const char* cc, const char* map_name) {
 
 F_NONNULL F_PURE
 static uint32_t country_get_dclist(const geoip_db_t* db, const unsigned offset) {
-    dmn_assert(offset >= db->base);
+    gdnsd_assert(offset >= db->base);
 
     unsigned rv = 0;
     if(db->dcmap) {
@@ -207,7 +206,7 @@ static uint32_t country_get_dclist(const geoip_db_t* db, const unsigned offset) 
 
 F_NONNULL
 static uint32_t region_get_dclist(const geoip_db_t* db, const unsigned offset) {
-    dmn_assert(offset >= db->base);
+    gdnsd_assert(offset >= db->base);
 
     unsigned rv = 0;
     if(db->dcmap) {
@@ -266,7 +265,7 @@ static uint32_t region_get_dclist(const geoip_db_t* db, const unsigned offset) {
 
 F_NONNULL
 static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
-    dmn_assert(offs >= db->base);
+    gdnsd_assert(offs >= db->base);
 
     char locstr[256];
     unsigned raw_lat = 0;
@@ -378,7 +377,7 @@ static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
         : DCLIST_AUTO;
 
     if(dclist == DCLIST_AUTO) {
-        dmn_assert(db->city_auto_mode);
+        gdnsd_assert(db->city_auto_mode);
 
         // default for 0/0 coords
         if(raw_lat == 1800000 && raw_lon == 1800000) {
@@ -388,13 +387,13 @@ static uint32_t city_get_dclist(const geoip_db_t* db, unsigned offs) {
             const double lat_deg = (raw_lat - 1800000.0) * 0.0001;
             const double lon_deg = (raw_lon - 1800000.0) * 0.0001;
             dclist = dclists_city_auto_map(db->dclists, db->map_name, lat_deg, lon_deg);
-            dmn_assert(dclist != DCLIST_AUTO);
-            dmn_assert(dclist <= DCLIST_MAX);
+            gdnsd_assert(dclist != DCLIST_AUTO);
+            gdnsd_assert(dclist <= DCLIST_MAX);
         }
     }
 
-    dmn_assert(dclist != DCLIST_AUTO);
-    dmn_assert(dclist <= DCLIST_MAX);
+    gdnsd_assert(dclist != DCLIST_AUTO);
+    gdnsd_assert(dclist <= DCLIST_MAX);
     return dclist;
 }
 
@@ -411,17 +410,17 @@ static uint32_t get_dclist_cached(geoip_db_t* db, const unsigned offset) {
 
     uint32_t dclist = db->dclist_get_func(db, offset);
     db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
-    dmn_assert(db->offset_cache[ndx]);
+    gdnsd_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
     db->offset_cache[ndx][bucket_size + 1].offset = 0;
-    dmn_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
+    gdnsd_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
     return dclist;
 }
 
 F_NONNULL
 static bool list_xlate_recurse(geoip_db_t* db, nlist_t* nl, struct in6_addr ip, const unsigned depth, const unsigned db_off) {
-    dmn_assert(depth < 129);
+    gdnsd_assert(depth < 129);
 
     bool rv = false;
 

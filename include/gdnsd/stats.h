@@ -21,7 +21,6 @@
 #define GDNSD_STATS_H
 
 #include <gdnsd/compiler.h>
-#include <gdnsd/dmn.h>
 
 #include <inttypes.h>
 

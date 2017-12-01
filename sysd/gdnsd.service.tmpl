@@ -10,19 +10,31 @@ WantedBy=multi-user.target
 [Service]
 Type=notify
 NotifyAccess=all
-ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
-ExecStop=@GDNSD_SBINDIR@/gdnsd stop
+ExecStart=@GDNSD_SBINDIR@/gdnsd -l start
 
 #---
 # Things below this mark are not strictly required for proper operation,
-# they're just considered good baseline defaults.
+# they're just considered good baseline defaults for security and/or perf
 #---
 
-# Usually an authdns server is critical infrastructure; make it
-# less likely to be oomkilled if something else goes crazy:
-OOMScoreAdjust=-900
+# The very basics: run as non-root user + allow binding port 53
+UMask=0022
+User=gdnsd
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 
-# Stricter security environment:
+# Usually an authdns server is critical infrastructure and performance
+# sensitive; make it less likely to be oomkilled if something else goes crazy
+# and set a better-than-default nice level:
+OOMScoreAdjust=-900
+Nice=-11
+
+# Allows successful "lock_mem = true" configuration (can be left out otherwise)
+LimitMEMLOCK=infinity
+
+# Various settings for stricter security that probably work for most configs
+NoNewPrivileges=yes
+SecureBits=keep-caps noroot-locked no-setuid-fixup-locked
 MountFlags=slave
 DevicePolicy=closed
 PrivateDevices=true

@@ -38,17 +38,13 @@
 // Global config, read-only
 const cfg_t* gcfg = NULL;
 
-static const char DEF_USERNAME[] = PACKAGE_NAME;
-
 // just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
 static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00";
 static const unsigned chaos_prefix_len = 10U;
 static const char chaos_def[] = "gdnsd";
 
 static const cfg_t cfg_defaults = {
-    .username = DEF_USERNAME,
     .chaos = NULL,
-    .weaker_security = false,
     .include_optional_ns = false,
     .realtime_stats = false,
     .lock_mem = false,
@@ -58,11 +54,6 @@ static const cfg_t cfg_defaults = {
     .zones_strict_startup = true,
     .zones_rfc1035_auto = true,
     .any_mitigation = true,
-     // legal values are -20 to 20, so -21
-     //  is really just an indicator that the user
-     //  didn't explicitly set it.  The default
-     //  behavior is dynamic...
-    .priority = -21,
     .chaos_len = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
@@ -214,7 +205,7 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
     } while(0)
 
 cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd) {
-    dmn_assert(!cfg_root || vscf_is_hash(cfg_root));
+    gdnsd_assert(!cfg_root || vscf_is_hash(cfg_root));
 
     cfg_t* cfg = xmalloc(sizeof(*cfg));
     memcpy(cfg, &cfg_defaults, sizeof(*cfg));
@@ -224,8 +215,6 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
-        CFG_OPT_INT(options, priority, -20L, 20L);
-        CFG_OPT_BOOL(options, weaker_security);
         CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, realtime_stats);
         CFG_OPT_BOOL(options, lock_mem);
@@ -264,7 +253,6 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         if(vscf_hash_get_data_byconstkey(options, "zones_rfc1035_min_quiesce", true))
             log_warn("The global option 'zones_rfc1035_min_quiesce' is deprecated and no longer has any effect");
 
-        CFG_OPT_STR(options, username);
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate_const(options, true, bad_key, "options");

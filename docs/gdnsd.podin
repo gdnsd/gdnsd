@@ -4,33 +4,20 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsd [-fsSD] [-c @GDNSD_DEFPATH_CONFIG@] <action>
+  Usage: gdnsd [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-S] [-s] <action>
+    -c - Configuration directory (default @GDNSD_DEFPATH_CONFIG@)
     -D - Enable verbose debug output
-    -f - Foreground mode for [re]start actions
-    -s - Force 'zones_strict_startup = true' for this invocation
+    -l - Send logs to syslog rather than stderr
     -S - Force 'zones_strict_data = true' for this invocation
-    -c - Configuration directory
-    -x - No syslog output (must use -f with this if [re]start)
+    -s - Force 'zones_strict_startup = true' for this invocation
   Actions:
     checkconf - Checks validity of config and zone files
-    start - Start as a regular daemon
-    stop - Stops a running daemon previously started by 'start'
-    reload-zones - Send SIGUSR1 to running daemon for zone data reload
-    restart - Equivalent to checkconf && stop && start, but faster
-    condrestart - Does 'restart' action only if already running
-    try-restart - Aliases 'condrestart'
-    status - Checks the status of the running daemon
+    start - Start as a regular foreground process
+    daemonize - Start as a background daemon (implies -l)
 
 =head1 DESCRIPTION
 
 B<gdnsd> is very fast, light, and pluggable authoritative DNS daemon.
-
-=head1 BASIC SECURITY
-
-When started as the C<root> user, gdnsd will always attempt to drop
-privileges to another user, and will fail fatally if that does not
-succeed.  The default username for this is C<gdnsd>, but this can
-be overridden in the main config file.
 
 =head1 BASIC CONFIGURATION
 
@@ -53,21 +40,15 @@ directory (C<@GDNSD_DEFPATH_CONFIG@/zones/>).
 
 Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.
 
-=item B<-f>
+=item B<-D>
 
-Sets foreground mode for the start, restart, condrestart, or try-restart
-actions.  All other actions are implicitly foreground operations and
-ignore this flag.  When [re]starting with C<-f>, the new daemon will not
-use C<fork(); setsid(); fork();> to detach from the terminal, and will
-not close default stdio descriptors or stop mirroring its log output to
-the stdio descriptors at runtime.  Otherwise it behaves the same as an
-invocation without this flag.  See also C<-x> regarding syslog output.
+Enables additional debug-level log output as appropriate.
 
-=item B<-s>
+=item B<-l>
 
-Forces the C<zones_strict_startup> configuration option to true for
-this invocation, regardless of the setting in the config file.  This is
-mostly useful for validation during the C<checkconf> option.
+Sends log output to syslog rather than the default stderr.  This is implicitly
+turned on by the C<daemonize> action, and is recommended when running as a
+systemd service as well, to capture priority information.
 
 =item B<-S>
 
@@ -75,134 +56,40 @@ Forces the C<zones_strict_data> configuration option to true for
 this invocation, regardless of the setting in the config file.  This is
 mostly useful for validation during the C<checkconf> option.
 
-=item B<-D>
+=item B<-s>
 
-Enables additional debugging output to syslog and/or the terminal,
-as appropriate.
-
-=item B<-x>
-
-Disables syslog output completely.  By default, almost all possible
-output from all gdnsd invocations is sent to syslog, even if it is also
-mirrored to the terminal.  The only exception to this rule (well, apart
-from certain early fatal log outputs which are only triggered in the
-case of internal code bugs) is the commandline usage output on invalid
-commandline arguments.
-
-This flag is only legal for the start, restart, condrestart, and
-try-restart options if used in combination with the C<-f> flag (as
-otherwise the resulting daemon could end up with no error output channel
-at all).  It is legal for all other commands (which are all implicitly
-foreground actions, and all also output to syslog by default).
-
-Primarily intended for e.g. linting invocations of checkconf, the
-daemon's testsuite, etc, to avoid spamming syslog with things unrelated
-to a real runtime daemon.
-
-Do not use this flag for a start invocation within a systemd unit file.
+Forces the C<zones_strict_startup> configuration option to true for
+this invocation, regardless of the setting in the config file.  This is
+mostly useful for validation during the C<checkconf> option.
 
 =back
 
 =head1 ACTIONS
-
-B<gdnsd> acts as its own initscript, internalizing daemon management
-functions.  All valid invocations of the gdnsd command include an
-B<action>, most of which model normal initscript actions.  You may
-still want a light initscript wrapper to comply with distribution
-standards for e.g. terminal output on success/failure, setting
-up resource and security limits, etc, but it's not necessary for
-basic functionality.
 
 =over 4
 
 =item B<checkconf>
 
 Checks the validity of the configuration file and zonefiles, setting
-the exit status appropriately (0 for success).
-
-The C<start>, and all C<restart>-like actions implicitly do
-the same checks as C<checkconf> as they load the configuration for
-runtime use.
+the exit status appropriately (0 for success).  The same code executes
+implicitly during startup; checkconf just exits at the last point
+before real runtime actions need to be taken, such as acquiring
+sockets.
 
 =item B<start>
 
-Starts gdnsd as a runtime DNS daemon.
+Starts gdnsd as a runtime DNS server foreground process, emitting log
+output to stderr.
 
-=item B<stop>
+=item B<daemonize>
 
-Stops a gdnsd daemon previously started by start.
-
-=item B<restart>
-
-This is equivalent to the sequence C<checkconf && stop && start>.  What
-actually happens behind the scenes is a bit more complicated, with the
-goal of making restarts as seamless and downtime-free as possible.
-
-C<restart> is a special case of C<start> which first completely starts
-itself (including the acquisition of listening sockets, if possible, see
-below) and is ready to answer requests *before* it stops the previous
-instance of the daemon.  This eliminates any stop -> start delays from
-expensive startup steps like parsing large numbers of zonefiles and/or
-polling for initial monitoring results on a large number of resources.
-
-On platforms where C<SO_REUSEPORT> works correctly, the new daemon
-uses this option (as did the old) to start its listening sockets in
-parallel with those of the previous daemon just before sending the
-termination signal to it, to eliminate any window of true unavailability.
-However, keep in mind that a handful of requests will still be lost:
-those which were already in the local socket buffers for the old instance
-when it exited.
-
-If C<SO_REUSEPORT> isn't supported or doesn't work properly, the daemon
-will re-attempt its socket acquisition after the short delay of waiting
-for the previous daemon's pid to exit.  The delay should normally be
-fairly constant (does not scale up with zones/configuration) and minimal
-in these cases, on the order of <1s.
-
-C<SO_REUSEPORT> became available in Linux starting with kernel
-version 3.9.  BSDs have had it for much longer.
-
-Note: C<restart> will B<not> work correctly for a daemon that's running
-under systemd, no matter how it's executed.  Executing it from the
-commandline will sort-of work in that it will replace the daemon that's
-running as a systemd service with one that isn't a systemd service, but
-that probably isn't what you want to do.  Those running under systemd
-will need to use e.g.  C<systemctl restart gdnsd>, which will do a full
-serial stop -> start cycle, in order for configuration changes to take
-effect.
-
-=item B<reload-zones>
-
-Sends C<SIGUSR1> to the running daemon, forcing a manual re-check
-of the zones directory for updated files.  Generally this should
-only be necessary if the configuration option C<zones_rfc1035_auto>
-has been explicitly set to C<false>, disabling the default mode
-where gdnsd continuously monitors for and loads zonefile data
-changes.
-
-It is not advised to set up an initscript C<reload> action which
-invokes C<reload-zones>, as a future version of gdnsd will very likely
-include a true reload action for full re-configuration without
-restart.  It's better to leave the canonical reload action undefined
-for now to reduce incompatibilities and/or surprises when that update
-occurs.
-
-=item B<condrestart>
-
-This is basically "restart only if already running".
-
-Performs the same actions as C<restart>, but aborts early
-(with a successful exit value) if the daemon was not already
-running.
-
-=item B<try-restart>
-
-Alias for C<condrestart>.
-
-=item B<status>
-
-Checks the status of the running daemon, returning 0 if it
-is running or non-zero if it isn't.
+Starts gdnsd as a detached background daemonize process in a new
+session, parented to PID 1 (init), emitting log output to directly to
+syslog.  The initial foreground process will emit no terminal output on
+success, but will wait for the background daemon to complete startup
+operations successfully before exiting with status zero (or not, in
+which case it will exit non-zero and emit some kind of failure output to
+either stderr or syslog).
 
 =back
 
@@ -210,6 +97,35 @@ Any other commandline option will be treated as invalid,
 which will result in displaying a short help text to F<STDERR>
 and exiting with a non-zero exit status.  This includes
 things like the ubiquitous B<--help> and B<--version>.
+
+=head1 PRIVILEGES
+
+This service pays no attention to, nor does it attempt to check or
+modify, anything about the runtime security environment or privelege
+set, or whether or not it happens to be running as C<root>, or attempt
+any actions that would commonly require C<root> priveleges, such as
+altering its own memlock rlimits or raising its own process priority.
+The lone exception is that the code blindly assumes that binding its DNS
+listening ports, which default to being in the priveleged range, will
+Just Work.
+
+It expects all such things to be managed managed by external
+mechanisms: either a systemd-like init system which can do it all
+declaratively, or a combination of tooling in an initscript for a
+traditional init system to take care of the necessary privileged
+settings and/or security-jailing / ACLs, etc,
+
+=head1 SYSTEMD COMPATIBILITY
+
+When run as a systemd service, C<start> should be used rather than
+C<daemonize>, the C<-l> flag should be used, and the type should be set
+to C<Type=notify> with C<NotifyAccess=all>.  The latter bits will cause
+systemd to set C<$NOTIFY_SOCKET> for the daemon, and the daemon in turn
+will use this to send a readiness notification when it's done with
+initial startup tasks and ready to service requests.
+
+The source tree contains an example systemd unit file with reasonable
+defaults for a production deployment.
 
 =head1 ZONE FILES - RFC1035
 
@@ -313,8 +229,7 @@ configuration directory.
 
 =item F<@GDNSD_DEFPATH_RUN@>
 
-Default run_dir.  The daemon will store a pidfile here (which is
-not intended for reliable text-based consumption by third parties).
+Default run_dir.
 See the entry for C<run_dir> in the L<gdnsd.config(5)> manpage
 for more information about this directory.
 
@@ -404,48 +319,6 @@ file are listed in the daemon's HTML, CSV, and JSON -format outputs from
 the built-in status http server (default port 3506), as are their current
 monitors and admin_state-forced states.
 
-=head1 SYSTEMD COMPATIBILITY
-
-This daemon is implicitly compatible with running as a systemd service
-on Linux, and should have come with a ready-made unit file during
-installation that works correctly.
-
-When the daemon detects that it's running underneath systemd as a unit
-(by detecting that systemd is the running init system and that gdnsd's
-initial parent pid is C<1>), it makes some changes to its default
-behaviors to be more systemd-friendly.  This includes shutting off stdio
-output very early (as soon as syslog is open) because the stdio and
-syslog output channels are redundant under systemd and lead to duplicate
-messages in the journal.  It also makes use of systemd's notification
-socket to coordinate operations with the init system.
-
-Because of these things, it is critical that the gdnsd unit file uses
-the C<NotifyAccess=all> setting, and that the C<ExecStart=> command for
-gdnsd uses a commandline that resembles C<gdnsd -f start> and
-does not use C<-x> (other extra options are ok).
-
-Example unit file contents for the Service section:
-
-    [Service]
-    Type=notify
-    NotifyAccess=all
-    ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
-    ExecStop=@GDNSD_SBINDIR@/gdnsd stop
-
-It is not advised to set up C<ExecReload=@GDNSD_SBINDIR@/gdnsd reload-zones>
-to re-purpose the systemctl reload action for zone reloads, as a future
-version of gdnsd will very likely include a real option for full configuration
-reload under systemd, which would change this behavior.  It's better to leave
-the canonical reload action undefined for now to reduce incompatibilities
-and/or surprises when that update occurs.  It is even less advised to
-try to configure C<ExecReload=@GDNSD_SBINDIR@/gdnsd restart>, as this
-will B<not> work!
-
-In general, if you're running gdnsd as a systemd service, you should use
-the supplied style of unit file and use C<systemctl> for daemon control
-(e.g. start, stop, restart, status), and use C<@GDNSD_SBINDIR@/gdnsd reload-zones>
-for zone reloads.
-
 =head1 SIGNALS
 
 Any signal not explicitly mentioned is not explicitly handled.  That
@@ -456,19 +329,24 @@ aborting execution.
 
 =item B<SIGTERM>, B<SIGINT>
 
-Causes the daemon to exit gracefully with accompanying log output.
+Causes the daemon to exit gracefully with accompanying log output.  The exit
+status will reflect the terminating signal appropriately.
 
 =item B<SIGUSR1>
 
 Causes the daemon to attempt to load any new changes to the zone data.
 
-=item B<SIGHUP>
-
-Ignored during daemon runtime.
-
 =item B<SIGPIPE>
 
-Ignored always.
+Ignored.
+
+=item B<SIGHUP>
+
+If started via C<daemonize>, C<SIGHUP> is explicitly ignored by the
+background daemon, but not by the temporary foreground process during
+initialization.  When started via C<start>, C<SIGHUP> handling is left
+at defaults, which will normally result in unclean process termination
+on reception.
 
 =back
 
@@ -476,6 +354,13 @@ Ignored always.
 
 An exit status of zero indicates success, anything else indicates
 failure.
+
+For C<daemonize>, the exit status of the initial foreground process will
+indicate whether the background daemon launched successfully.
+
+For C<start>, the initial foreground process B<is> the daemon, and exit
+status will reflect the terminating signal appropriately even in a clean
+shutdown case, or be zero if cleanly shut down by non-signal mechanisms.
 
 =head1 SEE ALSO
 

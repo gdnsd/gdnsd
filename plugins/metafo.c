@@ -67,14 +67,14 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name) {
 }
 
 static unsigned map_get_len(const unsigned mapnum) {
-    dmn_assert(mapnum < num_dclists);
-    dmn_assert(dclists[mapnum]->num_dcs);
+    gdnsd_assert(mapnum < num_dclists);
+    gdnsd_assert(dclists[mapnum]->num_dcs);
     return dclists[mapnum]->num_dcs;
 }
 
 F_NONNULL F_PURE
 static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
-    dmn_assert(mapnum < num_dclists);
+    gdnsd_assert(mapnum < num_dclists);
 
     dclist_t* this_map = dclists[mapnum];
     for(unsigned i = 1; i <= this_map->num_dcs; i++)
@@ -86,7 +86,7 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
 
 F_NONNULL
 static bool top_config_hook(vscf_data_t* top_config V_UNUSED) {
-    dmn_assert(vscf_is_hash(top_config));
+    gdnsd_assert(vscf_is_hash(top_config));
     return false;
 }
 
@@ -94,7 +94,7 @@ static void bottom_config_hook(void) { }
 
 F_NONNULL
 static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo V_UNUSED, unsigned* scope_out V_UNUSED) {
-    dmn_assert(mapnum < num_dclists);
+    gdnsd_assert(mapnum < num_dclists);
     return dclists[mapnum]->dc_list;
 }
 

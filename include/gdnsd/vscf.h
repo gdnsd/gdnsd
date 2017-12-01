@@ -20,6 +20,7 @@
 #ifndef VSCF_H
 #define VSCF_H
 
+#include <gdnsd/compiler.h>
 #include <gdnsd/dname.h>
 
 #include <stdio.h>
@@ -38,7 +39,7 @@ typedef struct {
 } vscf_key_t;
 
 // Invokes the scanner, returning the root-level hash or array on success
-// On error, NULL is returned and the error is emitted with dmn_log_err()
+// On error, NULL is returned and the error is emitted with gdnsd_log_err()
 F_NONNULL
 vscf_data_t* vscf_scan_filename(const char* fn);
 

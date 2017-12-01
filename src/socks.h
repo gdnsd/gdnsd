@@ -20,14 +20,14 @@
 #ifndef GDNSD_SOCKS_H
 #define GDNSD_SOCKS_H
 
-#include <gdnsd/dmn.h>
+#include <gdnsd/net.h>
 #include <gdnsd/vscf.h>
 
 #include <stdbool.h>
 #include <pthread.h>
 
 typedef struct {
-    dmn_anysin_t addr;
+    gdnsd_anysin_t addr;
     bool autoscan;
     unsigned dns_port;
     unsigned udp_recv_width;
@@ -51,7 +51,7 @@ typedef struct {
 typedef struct {
     dns_addr_t*    dns_addrs;
     dns_thread_t*  dns_threads;
-    dmn_anysin_t*  http_addrs;
+    gdnsd_anysin_t*  http_addrs;
     unsigned num_dns_addrs;
     unsigned num_dns_threads;
     unsigned num_http_addrs;
@@ -68,13 +68,13 @@ F_NONNULL
 void socks_dns_lsocks_init(socks_cfg_t* socks_cfg);
 
 F_NONNULL
-bool socks_helper_bind(const char* desc, const int sock, const dmn_anysin_t* asin, bool no_freebind);
+bool socks_helper_bind(const char* desc, const int sock, const gdnsd_anysin_t* asin, bool no_freebind);
 
 // helper uses this (when told) to bind all sockets (calls above, indirectly in the statio case)
 void socks_helper_bind_all(void);
 
 F_NONNULL
-bool socks_sock_is_bound_to(const int sock, const dmn_anysin_t* addr);
+bool socks_sock_is_bound_to(const int sock, const gdnsd_anysin_t* addr);
 
 // daemon uses this to validate work done above
 // if soft: false retval means all succeeded, true retval means one or more failed

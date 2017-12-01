@@ -72,7 +72,7 @@ typedef enum {
 #define HTTP_READ_BYTES 18
 
 typedef struct {
-    dmn_anysin_t* asin;
+    gdnsd_anysin_t* asin;
     char read_buffer[HTTP_READ_BYTES];
     struct iovec outbufs[2];
     char* hdr_buf;
@@ -227,7 +227,7 @@ static bool final_stats_done = false;
 
 static void accumulate_statio(unsigned threadnum) {
     dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
-    dmn_assert(this_stats);
+    gdnsd_assert(this_stats);
 
     const stats_uint_t l_noerror   = stats_get(&this_stats->noerror);
     const stats_uint_t l_refused   = stats_get(&this_stats->refused);
@@ -302,18 +302,18 @@ static void populate_stats(const bool flush) {
             statio.tcp_reqs           -= tmp_hist.tcp_reqs;
         }
     }
-    dmn_assert(pop_statio_time >= start_time);
+    gdnsd_assert(pop_statio_time >= start_time);
 }
 
 static uint64_t get_uptime_u64(void) {
-    dmn_assert(pop_statio_time >= start_time);
+    gdnsd_assert(pop_statio_time >= start_time);
     return (uint64_t)pop_statio_time - (uint64_t)start_time;
 }
 
 #define IVAL_BUFSZ 16
 static char ival_buf[IVAL_BUFSZ];
 static const char* fmt_uptime(void) {
-    dmn_assert(pop_statio_time >= start_time);
+    gdnsd_assert(pop_statio_time >= start_time);
     const uint64_t interval = get_uptime_u64();
     const double dinterval = interval;
 
@@ -347,12 +347,12 @@ static void statio_fill_outbuf_csv(struct iovec* outbufs, const bool flush) {
     populate_stats(flush);
 
     int snp_rv = snprintf(outbufs[1].iov_base, data_buffer_size, csv_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
-    dmn_assert(snp_rv > 0);
+    gdnsd_assert(snp_rv > 0);
     outbufs[1].iov_len = (unsigned)snp_rv;
     outbufs[1].iov_len += gdnsd_mon_stats_out_csv(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
 
     snp_rv = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "text/plain", (unsigned)outbufs[1].iov_len);
-    dmn_assert(snp_rv > 0);
+    gdnsd_assert(snp_rv > 0);
     outbufs[0].iov_len = (unsigned)snp_rv;
 }
 
@@ -360,17 +360,17 @@ F_NONNULL
 static void statio_fill_outbuf_json(struct iovec* outbufs, const bool flush) {
     populate_stats(flush);
 
-    dmn_assert(pop_statio_time >= start_time);
+    gdnsd_assert(pop_statio_time >= start_time);
 
     int snp_rv = snprintf(outbufs[1].iov_base, data_buffer_size, json_fixed, get_uptime_u64(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
-    dmn_assert(snp_rv > 0);
+    gdnsd_assert(snp_rv > 0);
     outbufs[1].iov_len = (unsigned)snp_rv;
     outbufs[1].iov_len += gdnsd_mon_stats_out_json(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), json_footer, sizeof(json_footer) - 1U);
     outbufs[1].iov_len += (sizeof(json_footer) - 1U);
 
     snp_rv = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/json", (unsigned)outbufs[1].iov_len);
-    dmn_assert(snp_rv > 0);
+    gdnsd_assert(snp_rv > 0);
     outbufs[0].iov_len = (unsigned)snp_rv;
 }
 
@@ -387,14 +387,14 @@ static void statio_fill_outbuf_html(struct iovec* outbufs, const bool flush) {
         log_fatal("strftime() failed");
 
     int snp_rv = snprintf(outbufs[1].iov_base, data_buffer_size, html_fixed, now_char, fmt_uptime(), statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
-    dmn_assert(snp_rv > 0);
+    gdnsd_assert(snp_rv > 0);
     outbufs[1].iov_len = (unsigned)snp_rv;
     outbufs[1].iov_len += gdnsd_mon_stats_out_html(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len));
     memcpy(ADDVOID(outbufs[1].iov_base, outbufs[1].iov_len), html_footer, sizeof(html_footer) - 1U);
     outbufs[1].iov_len += (sizeof(html_footer) - 1U);
 
     snp_rv = snprintf(outbufs[0].iov_base, hdr_buffer_size, http_headers, "application/xhtml+xml", (unsigned)outbufs[1].iov_len);
-    dmn_assert(snp_rv > 0);
+    gdnsd_assert(snp_rv > 0);
     outbufs[0].iov_len = (unsigned)snp_rv;
 }
 
@@ -441,7 +441,7 @@ static void process_http_query(char* inbuffer, struct iovec* outbufs) {
     bool matched = false;
     for(unsigned i = 0; i < n_http_lookup; i++) {
         const unsigned msize = strlen(http_lookup[i].match);
-        dmn_assert(msize + 5 <= HTTP_READ_BYTES); // match + "/?f=1"
+        gdnsd_assert(msize + 5 <= HTTP_READ_BYTES); // match + "/?f=1"
         if(!memcmp(inbuffer, http_lookup[i].match, msize)) {
             const char* trailptr = &inbuffer[msize];
             // allow for trailing slash, e.g. "GET /csv/ HTTP/1.0"
@@ -492,14 +492,14 @@ static void timeout_cb(struct ev_loop* loop V_UNUSED, ev_timer* t, const int rev
             : tdata->state == WRITING_RES
                 ? "writing to"
                 : "lingering with",
-        dmn_logf_anysin(tdata->asin));
+        logf_anysin(tdata->asin));
 
     cleanup_conn_watchers(loop, tdata);
 }
 
 F_NONNULL
 static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_WRITE);
+    gdnsd_assert(revents == EV_WRITE);
 
     http_data_t* tdata = io->data;
     struct iovec* iovs = tdata->outbufs;
@@ -518,7 +518,7 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
 
     if(unlikely(write_rv < 0)) {
         if(!ERRNO_WOULDBLOCK && errno != EINTR) {
-            log_debug("HTTP writev() failed (%s), dropping response to %s", dmn_logf_errno(), dmn_logf_anysin(tdata->asin));
+            log_debug("HTTP writev() failed (%s), dropping response to %s", logf_errno(), logf_anysin(tdata->asin));
             cleanup_conn_watchers(loop, tdata);
         }
         return;
@@ -545,7 +545,7 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
         return; // we'll send the rest of iovs[1] on next EV_WRITE
     }
 
-    dmn_assert(written == iovs[1].iov_len);
+    gdnsd_assert(written == iovs[1].iov_len);
     tdata->state = READING_JUNK;
     ev_io_stop(loop, tdata->write_watcher);
     ev_io_start(loop, tdata->read_watcher);
@@ -553,32 +553,32 @@ static void write_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED
 
 F_NONNULL
 static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_READ);
+    gdnsd_assert(revents == EV_READ);
     http_data_t* tdata = io->data;
 
-    dmn_assert(tdata);
-    dmn_assert(tdata->state != WRITING_RES);
+    gdnsd_assert(tdata);
+    gdnsd_assert(tdata->state != WRITING_RES);
 
     if(tdata->state == READING_JUNK) {
         const ssize_t recv_rv = recv(io->fd, junk_buffer, JUNK_SIZE, 0);
         if(unlikely(recv_rv < 0)) {
             if(ERRNO_WOULDBLOCK || errno == EINTR)
                 return;
-            log_debug("HTTP recv() error (lingering) from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
+            log_debug("HTTP recv() error (lingering) from %s: %s", logf_anysin(tdata->asin), logf_errno());
         }
         if(recv_rv < 1)
             cleanup_conn_watchers(loop, tdata);
         return;
     }
 
-    dmn_assert(tdata->state == READING_REQ);
-    dmn_assert(tdata->read_done < HTTP_READ_BYTES);
+    gdnsd_assert(tdata->state == READING_REQ);
+    gdnsd_assert(tdata->read_done < HTTP_READ_BYTES);
     char* destination = &tdata->read_buffer[tdata->read_done];
     const size_t wanted = HTTP_READ_BYTES - tdata->read_done;
     const ssize_t recv_rv = recv(io->fd, destination, wanted, 0);
     if(unlikely(recv_rv < 0)) {
         if(!ERRNO_WOULDBLOCK && errno != EINTR) {
-            log_debug("HTTP recv() error from %s: %s", dmn_logf_anysin(tdata->asin), dmn_logf_errno());
+            log_debug("HTTP recv() error from %s: %s", logf_anysin(tdata->asin), logf_errno());
             cleanup_conn_watchers(loop, tdata);
         }
         return;
@@ -599,10 +599,10 @@ static void read_cb(struct ev_loop* loop, ev_io* io, const int revents V_UNUSED)
 
 F_NONNULL
 static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
-    dmn_assert(revents == EV_READ);
+    gdnsd_assert(revents == EV_READ);
 
-    dmn_anysin_t* asin = xmalloc(sizeof(dmn_anysin_t));
-    asin->len = DMN_ANYSIN_MAXLEN;
+    gdnsd_anysin_t* asin = xmalloc(sizeof(gdnsd_anysin_t));
+    asin->len = GDNSD_ANYSIN_MAXLEN;
 
     const int sock = accept(io->fd, &asin->sa, &asin->len);
 
@@ -625,20 +625,20 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
             case EHOSTDOWN:
             case EHOSTUNREACH:
             case ENETUNREACH:
-                log_debug("HTTP: early tcp socket death: %s", dmn_logf_errno());
+                log_debug("HTTP: early tcp socket death: %s", logf_errno());
                 break;
             default:
-                log_err("HTTP: accept() error: %s", dmn_logf_errno());
+                log_err("HTTP: accept() error: %s", logf_errno());
         }
         return;
     }
 
-    log_debug("HTTP: Received connection from %s", dmn_logf_anysin(asin));
+    log_debug("HTTP: Received connection from %s", logf_anysin(asin));
 
     if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1) {
         free(asin);
         close(sock);
-        log_err("Failed to set O_NONBLOCK on inbound HTTP socket: %s", dmn_logf_errno());
+        log_err("Failed to set O_NONBLOCK on inbound HTTP socket: %s", logf_errno());
         return;
     }
 
@@ -737,7 +737,7 @@ void statio_init(const socks_cfg_t* socks_cfg) {
     accept_watchers = xmalloc(sizeof(ev_io*) * num_lsocks);
 
     for(unsigned i = 0; i < num_lsocks; i++) {
-        const dmn_anysin_t* asin = &socks_cfg->http_addrs[i];
+        const gdnsd_anysin_t* asin = &socks_cfg->http_addrs[i];
         lsocks[i] = tcp_listen_pre_setup(asin, socks_cfg->http_timeout);
     }
 }
@@ -753,7 +753,7 @@ bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft) {
     unsigned rv = false;
     for(unsigned i = 0; i < num_lsocks; i++)
         if(!socks_sock_is_bound_to(lsocks[i], &socks_cfg->http_addrs[i]) && !soft)
-            log_fatal("Failed to bind() stats TCP socket to %s", dmn_logf_anysin(&socks_cfg->http_addrs[i]));
+            log_fatal("Failed to bind() stats TCP socket to %s", logf_anysin(&socks_cfg->http_addrs[i]));
         else
             rv = true;
     return rv;
@@ -776,7 +776,7 @@ static void final_stats_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int reven
 
 // called from main thread to feed ev_async for final stats
 void statio_final_stats(void) {
-    dmn_assert(statio_loop); dmn_assert(final_stats_async);
+    gdnsd_assert(statio_loop); gdnsd_assert(final_stats_async);
     ev_async_send(statio_loop, final_stats_async);
 }
 
@@ -799,7 +799,7 @@ void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg)
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         if(listen(lsocks[i], 128) == -1)
-            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, dmn_logf_anysin(&socks_cfg->http_addrs[i]), dmn_logf_errno());
+            log_fatal("Failed to listen(s, %i) on stats TCP socket %s: %s", 128, logf_anysin(&socks_cfg->http_addrs[i]), logf_errno());
         accept_watchers[i] = xmalloc(sizeof(ev_io));
         ev_io_init(accept_watchers[i], accept_cb, lsocks[i], EV_READ);
         ev_set_priority(accept_watchers[i], -2);

@@ -128,12 +128,12 @@ static void set_uval(zscan_t* z) {
     z->uval = strtoul(z->tstart, NULL, 10);
     z->tstart = NULL;
     if(errno)
-        parse_error("Integer conversion error: %s", dmn_logf_errno());
+        parse_error("Integer conversion error: %s", logf_errno());
 }
 
 F_NONNULL
 static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin) {
-    dmn_assert(z->zone->dname);
+    gdnsd_assert(z->zone->dname);
     if(!dname_isinzone(z->zone->dname, origin))
         parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zone->dname));
 }
@@ -146,7 +146,7 @@ static void validate_lhs_not_ooz(zscan_t* z) {
 
 F_NONNULL
 static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
-    dmn_assert(z->zone->dname);
+    gdnsd_assert(z->zone->dname);
     dname_status_t catstat;
     dname_status_t status;
 
@@ -154,7 +154,7 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
         status = dname_from_string(dname, z->tstart, len);
     }
     else {
-        dmn_assert(lhs);
+        gdnsd_assert(lhs);
         dname_copy(dname, z->origin);
         status = DNAME_VALID;
     }
@@ -179,13 +179,13 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
             catstat = dname_cat(dname, z->origin);
             if(catstat == DNAME_INVALID)
                 parse_error_noargs("illegal domainname");
-            dmn_assert(catstat == DNAME_VALID);
+            gdnsd_assert(catstat == DNAME_VALID);
             if(lhs) {
                 z->lhs_is_ooz = false;
                 gdnsd_dname_drop_zone(dname, z->zone->dname);
             }
             break;
-        default: dmn_assert(0);
+        default: gdnsd_assert(0);
     }
 }
 
@@ -206,7 +206,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
     if(len)
         newlen = dns_unescape(text_temp, z->tstart, len);
 
-    dmn_assert(newlen <= len);
+    gdnsd_assert(newlen <= len);
 
     if(newlen > 255) {
         if(!big_ok || gcfg->disable_text_autosplit)
@@ -244,12 +244,12 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
 // Input must have two bytes of text constrained to [0-9A-Fa-f]
 F_NONNULL
 static unsigned hexbyte(const char* intxt) {
-    dmn_assert(
+    gdnsd_assert(
         (intxt[0] >= '0' && intxt[0] <= '9')
         || (intxt[0] >= 'A' && intxt[0] <= 'F')
         || (intxt[0] >= 'a' && intxt[0] <= 'f')
     );
-    dmn_assert(
+    gdnsd_assert(
         (intxt[1] >= '0' && intxt[1] <= '9')
         || (intxt[1] >= 'A' && intxt[1] <= 'F')
         || (intxt[1] >= 'a' && intxt[1] <= 'f')
@@ -267,7 +267,7 @@ static unsigned hexbyte(const char* intxt) {
     else
         out |= ((intxt[1] | 0x20) - ('a' - 10));
 
-    dmn_assert(out >= 0 && out < 256);
+    gdnsd_assert(out >= 0 && out < 256);
     return (unsigned)out;
 }
 
@@ -279,7 +279,7 @@ static void mult_uval(zscan_t* z, int fc) {
         case 'h': z->uval *= 3600; break;
         case 'd': z->uval *= 86400; break;
         case 'w': z->uval *= 604800; break;
-        default: dmn_assert(0);
+        default: gdnsd_assert(0);
     }
 }
 
@@ -407,14 +407,14 @@ static void rec_rfc3597(zscan_t* z) {
 
 F_NONNULL
 static void rec_caa(zscan_t* z) {
-    dmn_assert(z->num_texts == 1); // parser-enforced
+    gdnsd_assert(z->num_texts == 1); // parser-enforced
     if(z->uv_1 > 255)
         parse_error("CAA flags byte value %u is >255", z->uv_1);
 
     validate_lhs_not_ooz(z);
 
     const unsigned prop_len = strlen(z->caa_prop);
-    dmn_assert(prop_len < 256); // parser-enforced
+    gdnsd_assert(prop_len < 256); // parser-enforced
     const unsigned value_len = (uint8_t)z->texts[0][0];
     const unsigned total_len = 2 + prop_len + value_len;
 
@@ -701,7 +701,7 @@ static void close_paren(zscan_t* z) {
 
 F_NONNULL
 static void scanner(zscan_t* z, const char* buf, const size_t bufsize) {
-    dmn_assert(bufsize);
+    gdnsd_assert(bufsize);
 
     // This avoids the unfortunately common case of files with final lines
     //   that are unterminated by bailing out early.  This also incidentally
@@ -716,7 +716,7 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize) {
 
     int cs = zone_start;
 
-DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
+GDNSD_DIAG_PUSH_IGNORED("-Wswitch-default")
 #ifndef __clang_analyzer__
     // ^ ... because the ragel-generated code for the zonefile parser is
     //   so huge that it makes analyzer runs take forever.
@@ -725,7 +725,7 @@ DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
     const char* eof = pe;
     %%{ write exec; }%%
 #endif // __clang_analyzer__
-DMN_DIAG_POP
+GDNSD_DIAG_POP
 
     if(cs == zone_error)
         parse_error_noargs("General parse error");
@@ -748,7 +748,7 @@ static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsiz
 }
 
 zscan_rfc1035_status_t zscan_rfc1035(zone_t* zone, const char* fn) {
-    dmn_assert(zone->dname);
+    gdnsd_assert(zone->dname);
     log_debug("rfc1035: Scanning zone '%s'", logf_dname(zone->dname));
 
     gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);

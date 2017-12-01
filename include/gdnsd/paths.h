@@ -26,18 +26,8 @@
 
 #pragma GCC visibility push(default)
 
-// This is just to display the compiled-in static default for e.g.
-//   commandline help output purposes
-const char* gdnsd_get_default_config_dir(void);
-
-// Every independent program which makes use of libgdnsd must call this
-// fairly early in its lifecycle, usually right after dmn_init1().
-// One should assume that everything else in the gdnsd_ namespace from
-// libgdnsd depends on this being called first to initialize the library.
-//
+// Call this at most once!
 // This does the following:
-//   0) Calls other internal initialization routines for e.g. the
-//      network and RNG portions of the library.
 //   1) If config_dir is not NULL, uses it to override the compiled-in
 //      default configuration directory.
 //   2) Parses the primary config file into a vscf data structure,
@@ -45,16 +35,18 @@ const char* gdnsd_get_default_config_dir(void);
 //   3) Sets all libgdsnsd-internal directory pathnames for use by
 //      gdnsd_resolve_path_foo(), some of which are going to be based on
 //      either the config_dir or options => foo_dir within the configuration.
-//   4) If check_create_dirs is true, it will also validate the directories'
-//      existence and in some cases create them (state, run).  This option
-//      should be true if the intent is to start a runtime gdnsd daemon, but
-//      false otherwise (e.g. simple commandline programs).
+//   4) If create_dirs is true, it will also create, if missing, the runtime
+//      "state" (e.g. /var/lib/gdnsd) and "run" (e.g. /var/run/gdnsd) dirs
 //   5) Returns the parsed vscf config object for further consumption by the
 //      caller.  The directory-related options mentioned above will already be
 //      marked as consumed for the purposes of later iterating for bad config
 //      keys.  The caller is responsible for destroying it via vscf_destroy().
 //
-vscf_data_t* gdnsd_initialize(const char* config_dir, const bool check_create_dirs);
+vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs);
+
+// This is just to display the compiled-in static default for e.g.
+//   commandline help output purposes
+const char* gdnsd_get_default_config_dir(void);
 
 // given a configfile name and an optional path prefix, return
 //  a pathname usable for e.g. open()/stat() within the gdnsd

@@ -21,7 +21,6 @@
 #include <gdnsd/vscf.h>
 
 #include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
 #include <gdnsd/file.h>
 #include <gdnsd/misc.h>
 
@@ -38,14 +37,14 @@
 #define parse_error(_fmt, ...) do {\
     if(!scnr->err_emitted) {\
         scnr->err_emitted = true;\
-        dmn_log_err("Parse error at %s line %u: " _fmt, scnr->desc, scnr->lcount, __VA_ARGS__);\
+        log_err("Parse error at %s line %u: " _fmt, scnr->desc, scnr->lcount, __VA_ARGS__);\
     }\
 } while(0)
 
 #define parse_error_noargs(_fmt) do {\
     if(!scnr->err_emitted) {\
         scnr->err_emitted = true;\
-        dmn_log_err("Parse error at %s line %u: " _fmt, scnr->desc, scnr->lcount);\
+        log_err("Parse error at %s line %u: " _fmt, scnr->desc, scnr->lcount);\
     }\
 } while(0)
 
@@ -213,7 +212,7 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
 
 F_NONNULL F_WUNUSED
 static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v) {
-    dmn_assert(scnr->cur_key);
+    gdnsd_assert(scnr->cur_key);
 
     bool rv = hash_add_val(scnr->cur_key, scnr->cur_klen, h, v);
     if(rv) {
@@ -266,7 +265,7 @@ static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked) {
             vscf_data_t* new_child = val_clone(hentry->val, ignore_marked);
             const bool add_ok V_UNUSED
                 = hash_add_val(hentry->key, hentry->klen, nh, new_child);
-            dmn_assert(add_ok);
+            gdnsd_assert(add_ok);
         }
     }
     return nh;
@@ -293,7 +292,7 @@ static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked) {
         case VSCF_HASH_T:   rv = (vscf_data_t*)hash_clone(&d->hash, ignore_marked); break;
         case VSCF_ARRAY_T:  rv = (vscf_data_t*)array_clone(&d->array, ignore_marked); break;
         case VSCF_SIMPLE_T: rv = (vscf_data_t*)simple_clone(&d->simple); break;
-        default:            dmn_assert(0);
+        default:            gdnsd_assert(0);
     }
     return rv;
 }
@@ -324,7 +323,7 @@ static unsigned unescape_string(char** outp, const char* in, unsigned len) {
 
 F_NONNULL
 static void set_key(vscf_scnr_t* scnr, const char* end) {
-    dmn_assert(scnr->tstart);
+    gdnsd_assert(scnr->tstart);
     scnr->cur_klen = unescape_string(&scnr->cur_key, scnr->tstart, end - scnr->tstart);
     scnr->tstart = NULL;
 }
@@ -332,14 +331,14 @@ static void set_key(vscf_scnr_t* scnr, const char* end) {
 F_NONNULL F_WUNUSED
 static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
     vscf_data_t* cont = scnr->cont_stack[scnr->cont_stack_top];
-    dmn_assert(cont);
+    gdnsd_assert(cont);
 
     if(cont->type == VSCF_HASH_T) {
         vscf_hash_t* h = &cont->hash;
         return scnr_hash_add_val(scnr, h, v);
     }
     else {
-        dmn_assert(cont->type == VSCF_ARRAY_T);
+        gdnsd_assert(cont->type == VSCF_ARRAY_T);
         vscf_array_t* a = &cont->array;
         array_add_val(a, v);
         return true;
@@ -348,7 +347,7 @@ static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v) {
 
 F_NONNULL F_WUNUSED
 static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end) {
-    dmn_assert(scnr->tstart);
+    gdnsd_assert(scnr->tstart);
     const unsigned rlen = end - scnr->tstart;
     vscf_simple_t* s = simple_new(scnr->tstart, rlen);
     scnr->tstart = NULL;
@@ -372,7 +371,7 @@ static bool vscf_include_file(vscf_scnr_t* scnr, const char* fn, const size_t id
             parse_error("Included file '%s' cannot be an array in this context", fn);
             return false;
         }
-        dmn_assert(vscf_is_hash(inc_data));
+        gdnsd_assert(vscf_is_hash(inc_data));
 
         // destructively merge include stuff into parent, stealing values
         for(unsigned i = 0; i < inc_data->hash.child_count; i++) {
@@ -445,7 +444,7 @@ static bool vscf_include_glob_or_dir(vscf_scnr_t* scnr, const char* glob_or_dir)
 
 F_NONNULL F_WUNUSED
 static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
-    dmn_assert(scnr->tstart);
+    gdnsd_assert(scnr->tstart);
 
     // raw scanner storage isn't NUL-terminated, so we copy to input_fn to terminate
     const unsigned infn_len = end - scnr->tstart;
@@ -454,7 +453,7 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end) {
     input_fn[infn_len] = '\0';
     scnr->tstart = NULL;
 
-    dmn_log_debug("found an include statement for '%s' within '%s'!", input_fn, scnr->desc);
+    log_debug("found an include statement for '%s' within '%s'!", input_fn, scnr->desc);
 
     // absolute path, easy
     if(input_fn[0] == '/') {
@@ -505,7 +504,7 @@ static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c) {
 
 F_NONNULL
 static void cont_stack_pop(vscf_scnr_t* scnr) {
-    dmn_assert(scnr->cont_stack_top > 0);
+    gdnsd_assert(scnr->cont_stack_top > 0);
     --scnr->cont_stack_top;
 }
 
@@ -545,7 +544,7 @@ static void val_destroy(vscf_data_t* d) {
             case VSCF_HASH_T:   hash_destroy(&d->hash); break;
             case VSCF_ARRAY_T:  array_destroy(&d->array); break;
             case VSCF_SIMPLE_T: simple_destroy(&d->simple); break;
-            default:            dmn_assert(0);
+            default:            gdnsd_assert(0);
         }
     }
 }
@@ -643,8 +642,8 @@ static void val_destroy(vscf_data_t* d) {
     }
 
     action top_array {
-        dmn_assert(scnr->cont_stack_top == 0); // outermost
-        dmn_assert(vscf_is_hash(scnr->cont_stack[0])); // default hash
+        gdnsd_assert(scnr->cont_stack_top == 0); // outermost
+        gdnsd_assert(vscf_is_hash(scnr->cont_stack[0])); // default hash
         hash_destroy((vscf_hash_t*)scnr->cont_stack[0]);
         scnr->cont_stack[0] = (vscf_data_t*)array_new();
     }
@@ -738,13 +737,13 @@ vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source
         variable eof   scnr->eof;
     }%%
 
-DMN_DIAG_PUSH_IGNORED("-Wswitch-default")
-DMN_DIAG_PUSH_IGNORED("-Wsign-conversion")
+GDNSD_DIAG_PUSH_IGNORED("-Wswitch-default")
+GDNSD_DIAG_PUSH_IGNORED("-Wsign-conversion")
     %%{
         write exec;
     }%%
-DMN_DIAG_POP
-DMN_DIAG_POP
+GDNSD_DIAG_POP
+GDNSD_DIAG_POP
 
     // Error/incomplete states
     if(scnr->cs == vscf_error) {
@@ -771,7 +770,7 @@ DMN_DIAG_POP
         retval = NULL;
     }
     else {
-        dmn_assert(scnr->cont_stack_top == 0);
+        gdnsd_assert(scnr->cont_stack_top == 0);
         retval = scnr->cont_stack[0];
     }
 
@@ -806,13 +805,13 @@ bool vscf_is_root(const vscf_data_t* d) { return d->parent == NULL; }
 vscf_data_t* vscf_get_parent(const vscf_data_t* d) { return d->parent; }
 
 unsigned vscf_simple_get_len(vscf_data_t* d) {
-    dmn_assert(vscf_is_simple(d));
+    gdnsd_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     return d->simple.len;
 }
 
 const char* vscf_simple_get_data(vscf_data_t* d) {
-    dmn_assert(vscf_is_simple(d));
+    gdnsd_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     return d->simple.val;
 }
@@ -833,12 +832,12 @@ vscf_data_t* vscf_array_get_data(vscf_data_t* d, unsigned idx) {
 }
 
 unsigned vscf_hash_get_len(const vscf_data_t* d) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     return d->hash.child_count;
 }
 
 vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, unsigned klen, bool set_mark) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     if(d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
         unsigned child_hash = key_hash(key, klen, child_mask);
@@ -856,24 +855,24 @@ vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, uns
 }
 
 const char* vscf_hash_get_key_byindex(const vscf_data_t* d, unsigned idx, unsigned* klen_ptr) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     if(idx >= d->hash.child_count) return NULL;
     if(klen_ptr) *klen_ptr = d->hash.ordered[idx]->klen;
     const char *rv = d->hash.ordered[idx]->key;
-    dmn_assert(rv);
+    gdnsd_assert(rv);
     return rv;
 }
 
 vscf_data_t* vscf_hash_get_data_byindex(const vscf_data_t* d, unsigned idx) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     if(idx >= d->hash.child_count) return NULL;
     vscf_data_t* rv = d->hash.ordered[idx]->val;
-    dmn_assert(rv);
+    gdnsd_assert(rv);
     return rv;
 }
 
 int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned klen) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     if(d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
         unsigned child_hash = key_hash(key, klen, child_mask);
@@ -889,7 +888,7 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
 }
 
 void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb_t f, void* data) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     for(unsigned i = 0; i < d->hash.child_count; i++) {
         const vscf_hentry_t* hentry = d->hash.ordered[i];
         if(!ignore_mark || !hentry->marked)
@@ -899,7 +898,7 @@ void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb
 }
 
 void vscf_hash_iterate_const(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_const_cb_t f, const void* data) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     for(unsigned i = 0; i < d->hash.child_count; i++) {
         const vscf_hentry_t* hentry = d->hash.ordered[i];
         if(!ignore_mark || !hentry->marked)
@@ -909,7 +908,7 @@ void vscf_hash_iterate_const(const vscf_data_t* d, bool ignore_mark, vscf_hash_i
 }
 
 void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f) {
-    dmn_assert(vscf_is_hash(d));
+    gdnsd_assert(vscf_is_hash(d));
     qsort(d->hash.ordered, d->hash.child_count, sizeof(vscf_hentry_t*),
         (int(*)(const void*, const void*))f
     );
@@ -918,7 +917,7 @@ void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f) {
 }
 
 bool vscf_simple_get_as_ulong(vscf_data_t* d, unsigned long* out) {
-    dmn_assert(vscf_is_simple(d));
+    gdnsd_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     if(!d->simple.len) return false;
     char* eptr;
@@ -935,7 +934,7 @@ bool vscf_simple_get_as_ulong(vscf_data_t* d, unsigned long* out) {
 }
 
 bool vscf_simple_get_as_long(vscf_data_t* d, long* out) {
-    dmn_assert(vscf_is_simple(d));
+    gdnsd_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     if(!d->simple.len) return false;
     char* eptr;
@@ -952,7 +951,7 @@ bool vscf_simple_get_as_long(vscf_data_t* d, long* out) {
 }
 
 bool vscf_simple_get_as_double(vscf_data_t* d, double* out) {
-    dmn_assert(vscf_is_simple(d));
+    gdnsd_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     if(!d->simple.len) return false;
     char* eptr;
@@ -969,7 +968,7 @@ bool vscf_simple_get_as_double(vscf_data_t* d, double* out) {
 }
 
 bool vscf_simple_get_as_bool(vscf_data_t* d, bool* out) {
-    dmn_assert(vscf_is_simple(d));
+    gdnsd_assert(vscf_is_simple(d));
     vscf_simple_ensure_val(&d->simple);
     if(d->simple.len == 4
         && (d->simple.val[0] == 'T' || d->simple.val[0] == 't')
@@ -994,7 +993,7 @@ bool vscf_simple_get_as_bool(vscf_data_t* d, bool* out) {
 }
 
 dname_status_t vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname) {
-    dmn_assert(vscf_is_simple(d));
+    gdnsd_assert(vscf_is_simple(d));
     return dname_from_string(dname, d->simple.rval, d->simple.rlen);
 }
 
@@ -1007,19 +1006,19 @@ vscf_data_t* vscf_simple_new(const char* rval, const unsigned rlen) {
 }
 
 void vscf_array_add_val(vscf_data_t* a, vscf_data_t* v) {
-    dmn_assert(vscf_is_array(a));
+    gdnsd_assert(vscf_is_array(a));
     array_add_val(&a->array, v);
 }
 
 bool vscf_hash_add_val(const char* key, const unsigned klen, vscf_data_t* h, vscf_data_t* v) {
-    dmn_assert(vscf_is_hash(h));
+    gdnsd_assert(vscf_is_hash(h));
     return hash_add_val(key, klen, &h->hash, v);
 }
 
 vscf_data_t* vscf_clone(const vscf_data_t* d, const bool ignore_marked) { return val_clone(d, ignore_marked); }
 
 void vscf_hash_inherit(const vscf_data_t* src, vscf_data_t* dest, const char* k, const bool mark_src) {
-    dmn_assert(vscf_is_hash(src)); dmn_assert(vscf_is_hash(dest));
+    gdnsd_assert(vscf_is_hash(src)); gdnsd_assert(vscf_is_hash(dest));
 
     const vscf_data_t* src_val = vscf_hash_get_data_bystringkey(src, k, mark_src);
     if(src_val && !vscf_hash_get_data_bystringkey(dest, k, false))
@@ -1027,7 +1026,7 @@ void vscf_hash_inherit(const vscf_data_t* src, vscf_data_t* dest, const char* k,
 }
 
 void vscf_hash_inherit_all(const vscf_data_t* src, vscf_data_t* dest, const bool skip_marked) {
-    dmn_assert(vscf_is_hash(src)); dmn_assert(vscf_is_hash(dest));
+    gdnsd_assert(vscf_is_hash(src)); gdnsd_assert(vscf_is_hash(dest));
 
     const unsigned src_len = vscf_hash_get_len(src);
     for(unsigned i = 0; i < src_len; i++)
@@ -1036,7 +1035,7 @@ void vscf_hash_inherit_all(const vscf_data_t* src, vscf_data_t* dest, const bool
 }
 
 bool vscf_hash_bequeath_all(const vscf_data_t* src, const char* k, const bool mark_src, const bool skip_marked) {
-    dmn_assert(vscf_is_hash(src));
+    gdnsd_assert(vscf_is_hash(src));
 
     bool rv = false;
 

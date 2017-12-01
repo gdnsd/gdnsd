@@ -164,8 +164,8 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wthis-does-not-exist \
 ],[CFLAGS],[$CLANG_WERROR])
 
-# include libdmn configure stuff
-m4_include([libgdnsd/libdmn.m4])
+# include libgdnsd configure stuff
+m4_include([libgdnsd/libgdnsd.m4])
 
 # include libgdmaps configure stuff
 m4_include([libgdmaps/libgdmaps.m4])

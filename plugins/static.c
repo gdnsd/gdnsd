@@ -33,7 +33,7 @@ typedef struct {
     const char* name;
     bool is_addr;
     union {
-        dmn_anysin_t addr;
+        gdnsd_anysin_t addr;
         uint8_t *dname;
     };
 } static_resource_t;
@@ -71,7 +71,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
 void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED) {
     if(!config)
         log_fatal("static plugin requires a 'plugins' configuration stanza");
-    dmn_assert(vscf_get_type(config) == VSCF_HASH_T);
+    gdnsd_assert(vscf_get_type(config) == VSCF_HASH_T);
 
     num_resources = vscf_hash_get_len(config);
     resources = xmalloc(num_resources * sizeof(static_resource_t));
@@ -108,13 +108,13 @@ gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const uint8_t* orig
     // this (DYNA->CNAME) should be caught during map_res
     //   and cause the zonefile to fail to load
     if(!origin)
-        dmn_assert(resources[resnum].is_addr);
+        gdnsd_assert(resources[resnum].is_addr);
 
     if(resources[resnum].is_addr) {
         gdnsd_result_add_anysin(result, &resources[resnum].addr);
     }
     else {
-        dmn_assert(origin);
+        gdnsd_assert(origin);
         gdnsd_result_add_cname(result, resources[resnum].dname, origin);
     }
 
@@ -167,7 +167,7 @@ void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
 }
 
 static void add_mon_any(const char* svc_name, const unsigned idx) {
-    dmn_assert(svc_name);
+    gdnsd_assert(svc_name);
 
     static_svc_t* this_svc = NULL;
 
@@ -177,7 +177,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
             break;
         }
     }
-    dmn_assert(this_svc);
+    gdnsd_assert(this_svc);
 
     static_mons = xrealloc(static_mons, sizeof(static_mon_t*) * ++num_mons);
     static_mon_t* this_mon = static_mons[num_mons - 1] = xmalloc(sizeof(static_mon_t));
@@ -185,7 +185,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
     this_mon->idx = idx;
 }
 
-void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx) {
     add_mon_any(svc_name, idx);
 }
 

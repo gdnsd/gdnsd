@@ -42,7 +42,7 @@ static const gdnsd_sttl_t GDNSD_STTL_TTL_MAX       = ((1U << 28U) - 1U);
 // ^ identical to above, but better semantics when reading code
 
 // the only hard rule on this data type is zero in the reserved bits for now
-#define assert_valid_sttl(_x) dmn_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
+#define assert_valid_sttl(_x) gdnsd_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
 
 #pragma GCC visibility push(default)
 
@@ -80,7 +80,7 @@ void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl);
 // called during load_config to register address healthchecks, returns
 //   an index to check state with...
 F_NONNULL
-unsigned gdnsd_mon_addr(const char* svctype_name, const dmn_anysin_t* addr);
+unsigned gdnsd_mon_addr(const char* svctype_name, const gdnsd_anysin_t* addr);
 
 // as above for a CNAME
 F_NONNULL

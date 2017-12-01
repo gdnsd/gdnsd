@@ -22,7 +22,6 @@
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
 #include <gdnsd/misc.h>
 
 #include <inttypes.h>
@@ -201,7 +200,7 @@ gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restr
 //  could cause crashes.
 F_NONNULL F_UNUSED
 static void gdnsd_dname_terminate(uint8_t* dname) {
-    dmn_assert(*dname);
+    gdnsd_assert(*dname);
     dname[*dname] = 0;
 }
 
@@ -235,7 +234,7 @@ static unsigned gdnsd_dname_hash_static(const uint8_t *input) {
 //  it could crash.
 F_NONNULL F_UNUSED
 static bool gdnsd_dname_is_partial(const uint8_t* dname) {
-    dmn_assert(*dname);
+    gdnsd_assert(*dname);
     return dname[*dname] == 255;
 }
 
@@ -244,7 +243,7 @@ static bool gdnsd_dname_is_partial(const uint8_t* dname) {
 //  you cannot perform operations like dname_cat() on this directly.
 F_WUNUSED F_NONNULL F_UNUSED
 static uint8_t* gdnsd_dname_trim(uint8_t* dname) {
-    dmn_assert(*dname);
+    gdnsd_assert(*dname);
     return xrealloc(dname, *dname + 1U);
 }
 
@@ -253,7 +252,7 @@ static uint8_t* gdnsd_dname_trim(uint8_t* dname) {
 F_NONNULL F_UNUSED
 static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
     const unsigned len = *source;
-    dmn_assert(len); dmn_assert(len < 256U);
+    gdnsd_assert(len); gdnsd_assert(len < 256U);
     memcpy(dest, source, len + 1U);
 }
 
@@ -262,7 +261,7 @@ static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
 //  to 256 bytes or to the exact amount necessary to hold the data.
 F_WUNUSED F_NONNULL F_UNUSED
 static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact) {
-    dmn_assert(*dname);
+    gdnsd_assert(*dname);
     uint8_t* out = xmalloc(exact ? (*dname + 1U) : 256U);
     gdnsd_dname_copy(out, dname);
     return out;
@@ -278,8 +277,8 @@ static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact) {
 //  including the difference between VALID and PARTIAL.
 F_NONNULL F_PURE F_UNUSED
 static int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2) {
-    dmn_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
-    dmn_assert(gdnsd_dname_status(dn2) != DNAME_INVALID);
+    gdnsd_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
+    gdnsd_assert(gdnsd_dname_status(dn2) != DNAME_INVALID);
     const uint8_t len1 = *dn1++;
     const uint8_t len2 = *dn2++;
     int rv = len1 - len2;
@@ -304,14 +303,14 @@ static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2) {
 // dname and zone must be DNAME_VALID (fully-qualified).
 F_NONNULL F_PURE F_UNUSED
 static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
-    dmn_assert(gdnsd_dname_status(parent) == DNAME_VALID);
-    dmn_assert(gdnsd_dname_status(child) == DNAME_VALID);
+    gdnsd_assert(gdnsd_dname_status(parent) == DNAME_VALID);
+    gdnsd_assert(gdnsd_dname_status(child) == DNAME_VALID);
 
     bool rv = false;
     const unsigned plen = *parent++;
     const unsigned clen = *child++;
-    dmn_assert(plen); // implied by DNAME_VALID check above
-    dmn_assert(clen); // implied by DNAME_VALID check above
+    gdnsd_assert(plen); // implied by DNAME_VALID check above
+    gdnsd_assert(clen); // implied by DNAME_VALID check above
 
     if(plen <= clen) { // if child shorter than parent, cannot be isinzone
         // child_pstart is the hypothetical location of
@@ -353,11 +352,11 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
 //   zone.
 F_NONNULL F_UNUSED
 static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot) {
-    dmn_assert(gdnsd_dname_status(dname) == DNAME_VALID);
-    dmn_assert(gdnsd_dname_status(zroot) == DNAME_VALID);
-    dmn_assert((*dname) >= (*zroot));
+    gdnsd_assert(gdnsd_dname_status(dname) == DNAME_VALID);
+    gdnsd_assert(gdnsd_dname_status(zroot) == DNAME_VALID);
+    gdnsd_assert((*dname) >= (*zroot));
     const unsigned newterm = (*dname) - ((*zroot) - 1U);
-    dmn_assert(dname[newterm] == zroot[1]);
+    gdnsd_assert(dname[newterm] == zroot[1]);
     dname[0] = newterm;
     dname[newterm] = 0;
 }
@@ -366,7 +365,7 @@ static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot) {
 // Argument must be DNAME_VALID or DNAME_PARTIAL
 F_NONNULL F_PURE F_UNUSED
 static bool gdnsd_dname_iswild(const uint8_t* dname) {
-    dmn_assert(gdnsd_dname_status(dname) != DNAME_INVALID);
+    gdnsd_assert(gdnsd_dname_status(dname) != DNAME_INVALID);
     if(dname[1] == 1 && dname[2] == '*')
         return true;
     return false;

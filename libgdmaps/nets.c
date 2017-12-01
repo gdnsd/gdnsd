@@ -34,7 +34,7 @@
 
 F_NONNULL F_PURE
 static bool v6_subnet_of(const uint8_t* check, const unsigned check_mask, const uint8_t* v4, const unsigned v4_mask) {
-    dmn_assert(!(v4_mask & 7)); // all v4_mask are whole byte masks
+    gdnsd_assert(!(v4_mask & 7)); // all v4_mask are whole byte masks
 
     bool rv = false;
 
@@ -46,7 +46,7 @@ static bool v6_subnet_of(const uint8_t* check, const unsigned check_mask, const 
 
 F_NONNULL F_PURE
 static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask) {
-    dmn_assert(mask < 129);
+    gdnsd_assert(mask < 129);
 
     return (
           v6_subnet_of(ipv6, mask, start_v4mapped, 96)
@@ -79,7 +79,7 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
             break;
         }
         *mask_str++ = '\0';
-        dmn_anysin_t tempsin;
+        gdnsd_anysin_t tempsin;
         int addr_err = gdnsd_anysin_getaddrinfo(net_str, mask_str, &tempsin);
         if(addr_err) {
             log_err("plugin_geoip: map '%s': nets entry '%s/%s' does not parse as addr/mask: %s", map_name, net_str, mask_str, gai_strerror(addr_err));
@@ -106,7 +106,7 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
             }
         }
         else {
-            dmn_assert(tempsin.sa.sa_family == AF_INET);
+            gdnsd_assert(tempsin.sa.sa_family == AF_INET);
             mask = ntohs(tempsin.sin.sin_port) + 96U;
             if(mask > 128) {
                 log_err("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv4 mask (>32)", map_name, net_str, mask_str);
@@ -120,7 +120,7 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
         // get dclist integer from rhs
         vscf_data_t* dc_cfg = vscf_hash_get_data_byindex(nets_cfg, i);
         const uint32_t dclist = dclists_find_or_add_vscf(dclists, dc_cfg, map_name, false);
-        dmn_assert(dclist <= DCLIST_MAX); // auto not allowed here
+        gdnsd_assert(dclist <= DCLIST_MAX); // auto not allowed here
         nlist_append(nl, ipv6, mask, dclist);
     }
 
@@ -131,7 +131,7 @@ nlist_t* nets_make_list(vscf_data_t* nets_cfg, dclists_t* dclists, const char* m
     nlist_t* nl = nlist_new(map_name, false);
 
     if(nets_cfg) {
-        dmn_assert(vscf_is_hash(nets_cfg));
+        gdnsd_assert(vscf_is_hash(nets_cfg));
         if(nets_parse(nets_cfg, dclists, map_name, nl)) {
             nlist_destroy(nl);
             nl = NULL;

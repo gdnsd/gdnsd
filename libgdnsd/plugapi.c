@@ -66,31 +66,31 @@ void gdnsd_dyn_addr_max(unsigned v4, unsigned v6) {
         addrlimit_v6 = v6;
 }
 
-void gdnsd_result_add_anysin(dyn_result_t* result, const dmn_anysin_t* asin) {
-    dmn_assert(!result->is_cname);
+void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* asin) {
+    gdnsd_assert(!result->is_cname);
     if(asin->sa.sa_family == AF_INET6) {
-        dmn_assert(result->count_v6 < addrlimit_v6);
+        gdnsd_assert(result->count_v6 < addrlimit_v6);
         memcpy(&result->storage[v6_offset + (result->count_v6++ * 16U)], asin->sin6.sin6_addr.s6_addr, 16);
     }
     else {
-        dmn_assert(asin->sa.sa_family == AF_INET);
-        dmn_assert(result->count_v4 < addrlimit_v4);
+        gdnsd_assert(asin->sa.sa_family == AF_INET);
+        gdnsd_assert(result->count_v4 < addrlimit_v4);
         result->v4[result->count_v4++] = asin->sin.sin_addr.s_addr;
     }
 }
 
 void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const uint8_t* origin) {
-    dmn_assert(dname_status(dname) != DNAME_INVALID);
-    dmn_assert(dname_status(origin) == DNAME_VALID);
-    dmn_assert(!result->is_cname);
-    dmn_assert(!result->count_v4);
-    dmn_assert(!result->count_v6);
+    gdnsd_assert(dname_status(dname) != DNAME_INVALID);
+    gdnsd_assert(dname_status(origin) == DNAME_VALID);
+    gdnsd_assert(!result->is_cname);
+    gdnsd_assert(!result->count_v4);
+    gdnsd_assert(!result->count_v6);
 
     result->is_cname = true;
     dname_copy(result->storage, dname);
     if(dname_is_partial(result->storage))
         dname_cat(result->storage, origin);
-    dmn_assert(dname_status(result->storage) == DNAME_VALID);
+    gdnsd_assert(dname_status(result->storage) == DNAME_VALID);
 }
 
 void gdnsd_result_wipe(dyn_result_t* result) {
@@ -121,7 +121,7 @@ static plugin_t** plugins = NULL;
 static const char** psearch = NULL;
 
 void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array) {
-    dmn_assert(!psearch); // only called once
+    gdnsd_assert(!psearch); // only called once
 
     // Create a plugin search path array
     unsigned psearch_count = psearch_array
@@ -153,7 +153,7 @@ plugin_t* gdnsd_plugin_find(const char* pname) {
 
 F_NONNULL
 static plugin_t* plugin_allocate(const char* pname) {
-    dmn_assert(!gdnsd_plugin_find(pname));
+    gdnsd_assert(!gdnsd_plugin_find(pname));
 
     const unsigned this_idx = num_plugins++;
     log_debug("Assigning slot #%u to plugin '%s'", this_idx, pname);
@@ -167,7 +167,7 @@ static plugin_t* plugin_allocate(const char* pname) {
 
 F_NONNULL
 static void* plugin_dlopen(const char* pname) {
-    dmn_assert(psearch);
+    gdnsd_assert(psearch);
 
     struct stat plugstat;
     const char* try_path;
@@ -201,7 +201,7 @@ static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sy
 }
 
 static plugin_t* gdnsd_plugin_load(const char* pname) {
-    dmn_assert(psearch);
+    gdnsd_assert(psearch);
 
     plugin_t* plug = plugin_allocate(pname);
     void* pptr = plugin_dlopen(pname);

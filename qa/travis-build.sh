@@ -22,7 +22,7 @@ case "$GDNSD_TRAVIS_BUILD" in
         make -j$TEST_CPUS check
     ;;
     coveralls)
-        CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage -fno-omit-frame-pointer" CPPFLAGS="-DDMN_NO_UNREACH_BUILTIN -DDMN_NO_FATAL_COVERAGE -DDMN_COVERTEST_EXIT" ./configure --without-hardening
+        CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage -fno-omit-frame-pointer" CPPFLAGS="-DGDNSD_NO_UNREACH_BUILTIN -DGDNSD_NO_FATAL_COVERAGE -DGDNSD_COVERTEST_EXIT" ./configure --without-hardening
         make -j$TEST_CPUS
         lcov -c -i -d . -o gdnsd-base.info
         make check

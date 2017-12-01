@@ -37,7 +37,7 @@ static unsigned v4_max = 0;
 static unsigned v6_max = 0;
 
 typedef struct {
-    dmn_anysin_t addr;
+    gdnsd_anysin_t addr;
     unsigned* indices;
 } addrstate_t;
 
@@ -73,10 +73,10 @@ static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d 
 // also works for direct config, even though some of the work is redundant.
 F_NONNULL
 static vscf_data_t* addrs_hash_from_array(vscf_data_t* ary, const char* resname, const char* stanza) {
-    dmn_assert(!vscf_is_hash(ary));
+    gdnsd_assert(!vscf_is_hash(ary));
 
     vscf_data_t* parent = vscf_get_parent(ary);
-    dmn_assert(vscf_is_hash(parent));
+    gdnsd_assert(vscf_is_hash(parent));
 
     vscf_data_t* newhash = vscf_hash_new();
     const unsigned alen = vscf_array_get_len(ary);
@@ -242,7 +242,7 @@ static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg) {
     if(!vscf_is_simple(first_cfg))
         log_fatal("plugin_multifo: resource '%s' (%s): The value of '%s' must be an IP address in string form", res->name, stanza, first_name);
     const char* addr_txt = vscf_simple_get_data(first_cfg);
-    dmn_anysin_t temp_asin;
+    gdnsd_anysin_t temp_asin;
     const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &temp_asin);
     if(addr_err)
         log_fatal("plugin_multifo: resource %s (%s): failed to parse address '%s' for '%s': %s", res->name, stanza, addr_txt, first_name, gai_strerror(addr_err));
@@ -252,7 +252,7 @@ static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg) {
         config_addrs(res->name, stanza, res->aset_v6, true, auto_cfg);
     }
     else {
-        dmn_assert(temp_asin.sa.sa_family == AF_INET);
+        gdnsd_assert(temp_asin.sa.sa_family == AF_INET);
         res->aset_v4 = xcalloc(1, sizeof(addrset_t));
         config_addrs(res->name, stanza, res->aset_v4, false, auto_cfg);
     }
@@ -310,7 +310,7 @@ void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads 
     if(!config)
         log_fatal("multifo plugin requires a 'plugins' configuration stanza");
 
-    dmn_assert(vscf_is_hash(config));
+    gdnsd_assert(vscf_is_hash(config));
 
     num_resources = vscf_hash_get_len(config);
 
@@ -344,7 +344,7 @@ int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED) 
 
 F_NONNULL
 static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result, const bool isv6) {
-    dmn_assert(aset->count);
+    gdnsd_assert(aset->count);
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
     unsigned notdown = 0;
@@ -398,7 +398,7 @@ gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const uint8_t* origin V_UNU
         }
     }
     else {
-        dmn_assert(res->aset_v6);
+        gdnsd_assert(res->aset_v6);
         rv = resolve(sttl_tbl, res->aset_v6, result, true);
     }
 

@@ -40,7 +40,7 @@ gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const uint8_t* origin
         gdnsd_result_add_cname(result, cntmp, origin);
     }
     else {
-        dmn_anysin_t tmpsin;
+        gdnsd_anysin_t tmpsin;
         gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
         gdnsd_result_add_anysin(result, &tmpsin);
         gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
@@ -71,10 +71,10 @@ static null_mon_t** null_mons = NULL;
 
 F_NONNULL
 static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
 
     null_mon_t* mon = t->data;
-    dmn_assert(mon);
+    gdnsd_assert(mon);
     gdnsd_mon_state_updater(mon->idx, false);
 }
 
@@ -86,7 +86,7 @@ void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, co
 }
 
 static void add_mon_any(const char* svc_name, const unsigned idx) {
-    dmn_assert(svc_name);
+    gdnsd_assert(svc_name);
 
     null_svc_t* this_svc = NULL;
 
@@ -97,7 +97,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
         }
     }
 
-    dmn_assert(this_svc);
+    gdnsd_assert(this_svc);
     null_mons = xrealloc(null_mons, sizeof(null_mon_t*) * ++num_mons);
     null_mon_t* this_mon = null_mons[num_mons - 1] = xmalloc(sizeof(null_mon_t));
     this_mon->svc = this_svc;
@@ -107,7 +107,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
     this_mon->interval_watcher->data = this_mon;
 }
 
-void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx) {
     add_mon_any(svc_name, idx);
 }
 

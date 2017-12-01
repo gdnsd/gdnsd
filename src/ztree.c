@@ -143,7 +143,7 @@ static ztree_t* ztree_node_find_child_writer(const ztree_t* node, const uint8_t*
     ztchildren_t* children;
     children = node->children;
     if(children) {
-        dmn_assert(children->alloc);
+        gdnsd_assert(children->alloc);
         const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
         unsigned slot = ltree_hash(label, child_mask);
@@ -163,7 +163,7 @@ static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label)
     ztchildren_t* children;
     children = gdnsd_prcu_rdr_deref(node->children);
     if(children) {
-        dmn_assert(children->alloc);
+        gdnsd_assert(children->alloc);
         const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
         unsigned slot = ltree_hash(label, child_mask);
@@ -248,7 +248,7 @@ F_NONNULL
 static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label) {
     ztree_node_check_grow(node);
     ztchildren_t* children = node->children;
-    dmn_assert(children);
+    gdnsd_assert(children);
 
     ztree_t* rv;
 
@@ -297,7 +297,7 @@ static void ztree_atexit(void) {
 void ztree_init(const bool check_only) {
     log_info("Loading zone data...");
 
-    dmn_assert(!ztree_root);
+    gdnsd_assert(!ztree_root);
     ztree_root = xcalloc(1, sizeof(ztree_t));
     gdnsd_atexit_debug(ztree_atexit);
 
@@ -311,7 +311,7 @@ void ztree_init(const bool check_only) {
 // insertion sort for mostly-sorted arrays
 F_NONNULL
 static void zones_sort(zone_t** list, const unsigned len) {
-    dmn_assert(len);
+    gdnsd_assert(len);
     for(unsigned i = 1; i < len; i++) {
         zone_t* temp = list[i];
         int j = (int)i - 1;
@@ -355,7 +355,7 @@ static void ztree_report_revealed_subzones(const ztree_t* zt, const uint8_t* par
 
 F_NONNULLX(1)
 static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const bool in_txn) {
-    dmn_assert((uintptr_t)z_old | (uintptr_t)z_new); // (NULL,NULL) illegal
+    gdnsd_assert((uintptr_t)z_old | (uintptr_t)z_new); // (NULL,NULL) illegal
 
     // when replacing, the old and new zone names must be the same, as
     //  well as the ->src strings (because it's not up to the zsrc code
@@ -363,8 +363,8 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
     //  if ->src changes the zsrc code should treat it as a separate
     //  entity).
     if(z_old && z_new) {
-        dmn_assert(!dname_cmp(z_old->dname, z_new->dname));
-        dmn_assert(!strcmp(z_old->src, z_new->src));
+        gdnsd_assert(!dname_cmp(z_old->dname, z_new->dname));
+        gdnsd_assert(!strcmp(z_old->src, z_new->src));
     }
 
     ztree_t* this_zt;
@@ -372,7 +372,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
     zone_t** old_list = NULL;
 
     if(!z_old) { // insert
-        dmn_assert(z_new);
+        gdnsd_assert(z_new);
         log_debug("ztree_update: inserting new data for zone %s from src %s", logf_dname(z_new->dname), z_new->src);
         const uint8_t* lstack[127];
         unsigned lcount = dname_to_lstack(z_new->dname, lstack);
@@ -382,7 +382,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             if(this_zt->zones)
                 hiding_zone = this_zt->zones[0]->dname;
             this_zt = ztree_node_find_or_add_child(this_zt, lstack[--lcount]);
-            dmn_assert(this_zt);
+            gdnsd_assert(this_zt);
         }
 
         const zone_t* old_head = NULL;
@@ -427,11 +427,11 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
             if(this_zt->zones)
                 hiding_zone = this_zt->zones[0]->dname;
             this_zt = ztree_node_find_child_writer(this_zt, lstack[--lcount]);
-            dmn_assert(this_zt);
+            gdnsd_assert(this_zt);
         }
 
         old_list = this_zt->zones;
-        dmn_assert(this_zt->zones); // z_old must already exist, or programmer error
+        gdnsd_assert(this_zt->zones); // z_old must already exist, or programmer error
 
         const unsigned old_len = this_zt->zones_len;
         if(!z_new) { // delete case
@@ -460,9 +460,9 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
                 //   and the list must still contain at least one entry
                 // XXX - re-write the above in a clearer way, and/or
                 //    somehow assert the lack of duplicates in the original list?
-                dmn_assert(this_zt->zones_len);
-                dmn_assert(i == this_zt->zones_len);
-                dmn_assert(new_list[0]);
+                gdnsd_assert(this_zt->zones_len);
+                gdnsd_assert(i == this_zt->zones_len);
+                gdnsd_assert(new_list[0]);
 
                 if(old_head == z_old)
                     log_info("Zone %s: authoritative source %s with serial %u removed (extant source %s with serial %u promoted to authoritative)", logf_dname(z_old->dname), z_old->src, z_old->serial, new_list[0]->src, new_list[0]->serial);
@@ -509,14 +509,14 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
 }
 
 void ztree_update(zone_t* z_old, zone_t* z_new) {
-    dmn_assert(ztree_root);
-    dmn_assert(!new_root); // no txn currently ongoing
+    gdnsd_assert(ztree_root);
+    gdnsd_assert(!new_root); // no txn currently ongoing
     _ztree_update(ztree_root, z_old, z_new, false);
 }
 
 void ztree_txn_update(zone_t* z_old, zone_t* z_new) {
-    dmn_assert(ztree_root);
-    dmn_assert(new_root); // pending txn
+    gdnsd_assert(ztree_root);
+    gdnsd_assert(new_root); // pending txn
     _ztree_update(new_root, z_old, z_new, true);
 }
 
@@ -572,23 +572,23 @@ static void ztree_destroy_clone(ztree_t* ztclone) {
 }
 
 void ztree_txn_start(void) {
-    dmn_assert(ztree_root);
-    dmn_assert(!new_root); // no txn currently ongoing
+    gdnsd_assert(ztree_root);
+    gdnsd_assert(!new_root); // no txn currently ongoing
     new_root = ztree_clone(ztree_root);
     log_info("Multi-zone update transaction starting ...");
 }
 
 void ztree_txn_abort(void) {
-    dmn_assert(ztree_root);
-    dmn_assert(new_root);
+    gdnsd_assert(ztree_root);
+    gdnsd_assert(new_root);
     ztree_destroy_clone(new_root);
     new_root = NULL;
     log_info("Multi-zone update transaction aborted");
 }
 
 void ztree_txn_end(void) {
-    dmn_assert(ztree_root);
-    dmn_assert(new_root);
+    gdnsd_assert(ztree_root);
+    gdnsd_assert(new_root);
     ztree_t* old_root = ztree_root;
     gdnsd_prcu_upd_lock();
     gdnsd_prcu_upd_assign(ztree_root, new_root);

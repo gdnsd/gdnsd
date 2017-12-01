@@ -83,19 +83,19 @@ void nlist_destroy(nlist_t* nl) {
 #ifndef NDEBUG
 F_NONNULL
 static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask) {
-    dmn_assert(mask < 129);
+    gdnsd_assert(mask < 129);
 
     if(likely(mask)) {
         const unsigned revmask = 128 - mask;
         const unsigned byte_mask = ~(0xFFu << (revmask & 7)) & 0xFF;
         unsigned bbyte = 15 - (revmask >> 3);
 
-        dmn_assert(!(ipv6[bbyte] & byte_mask));
+        gdnsd_assert(!(ipv6[bbyte] & byte_mask));
         while(++bbyte < 16)
-            dmn_assert(!ipv6[bbyte]);
+            gdnsd_assert(!ipv6[bbyte]);
     }
     else {
-        dmn_assert(!memcmp(ipv6, &ip6_zero, 16));
+        gdnsd_assert(!memcmp(ipv6, &ip6_zero, 16));
     }
 }
 #else
@@ -104,7 +104,7 @@ static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask) {
 
 F_NONNULL
 static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned mask) {
-    dmn_assert(mask < 129);
+    gdnsd_assert(mask < 129);
 
     bool maskbad = false;
 
@@ -148,10 +148,10 @@ static int net_sorter(const void* a_void, const void* b_void) {
 
 F_NONNULL F_PURE
 static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned mask) {
-    dmn_assert(mask < 128U); // 2x128 would call here w/ 127...
+    gdnsd_assert(mask < 128U); // 2x128 would call here w/ 127...
 
     const unsigned bytes = mask >> 3;
-    dmn_assert(bytes < 16U);
+    gdnsd_assert(bytes < 16U);
 
     const unsigned bytemask = (0xFF00u >> (mask & 7)) & 0xFF;
     return !memcmp(v6a, v6b, bytes)
@@ -220,7 +220,7 @@ static bool net_eq(const net_t* na, const net_t* nb) {
 //   on a sorted nlist, then sort the result.
 F_NONNULL
 static bool nlist_normalize_1pass(nlist_t* nl) {
-    dmn_assert(nl->count);
+    gdnsd_assert(nl->count);
 
     bool rv = false;
 
@@ -279,7 +279,7 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge) {
 
         // optimize storage space
         if(nl->count != nl->alloc) {
-            dmn_assert(nl->count < nl->alloc);
+            gdnsd_assert(nl->count < nl->alloc);
             nl->alloc = nl->count;
             nl->nets = xrealloc(nl->nets, nl->alloc * sizeof(net_t));
         }
@@ -295,8 +295,8 @@ void nlist_finish(nlist_t* nl) {
         // assert normalization in debug builds via clone->normalize->compare
         nlist_t* nlc = nlist_clone(nl);
         nlist_normalize(nlc, false);
-        dmn_assert(nlc->count == nl->count);
-        dmn_assert(!memcmp(nlc->nets, nl->nets, sizeof(net_t) * nlc->count));
+        gdnsd_assert(nlc->count == nl->count);
+        gdnsd_assert(!memcmp(nlc->nets, nl->nets, sizeof(net_t) * nlc->count));
         nlist_destroy(nlc);
 #endif
     }
@@ -307,8 +307,8 @@ void nlist_finish(nlist_t* nl) {
 
 F_NONNULL F_PURE
 static bool net_subnet_of(const net_t* sub, const net_t* super) {
-    dmn_assert(sub->mask < 129);
-    dmn_assert(super->mask < 129);
+    gdnsd_assert(sub->mask < 129);
+    gdnsd_assert(super->mask < 129);
 
     bool rv = false;
     if(sub->mask >= super->mask) {
@@ -325,8 +325,8 @@ static bool net_subnet_of(const net_t* sub, const net_t* super) {
 
 F_NONNULL
 static nlist_t* nlist_merge(const nlist_t* nl_a, const nlist_t* nl_b) {
-    dmn_assert(nl_a->normalized);
-    dmn_assert(nl_b->normalized);
+    gdnsd_assert(nl_a->normalized);
+    gdnsd_assert(nl_b->normalized);
 
     nlist_t* merged = nlist_new(nl_a->map_name, false);
 
@@ -373,7 +373,7 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
 
 F_NONNULL
 static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* nt, net_t tree_net, const unsigned nt_idx, const bool direction) {
-    dmn_assert(tree_net.mask < 129 && tree_net.mask > 0);
+    gdnsd_assert(tree_net.mask < 129 && tree_net.mask > 0);
 
     const net_t* nl = *nlp;
     unsigned cnode;
@@ -420,7 +420,7 @@ static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* n
 
 F_NONNULL
 static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt, net_t tree_net) {
-    dmn_assert(tree_net.mask < 128);
+    gdnsd_assert(tree_net.mask < 128);
     tree_net.mask++; // now mask for zero/one stubs
 
     const unsigned nt_idx = ntree_add_node(nt);
@@ -440,7 +440,7 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
 }
 
 ntree_t* nlist_xlate_tree(const nlist_t* nl) {
-    dmn_assert(nl->normalized);
+    gdnsd_assert(nl->normalized);
 
     ntree_t* nt = ntree_new();
     const net_t* nlnet = &nl->nets[0];
@@ -465,7 +465,7 @@ ntree_t* nlist_xlate_tree(const nlist_t* nl) {
     nxt_rec(&nlnet, nlnet_end, nt, tree_net);
 
     // assert that the whole list was consumed
-    dmn_assert(nlnet == nlnet_end);
+    gdnsd_assert(nlnet == nlnet_end);
 
     // finalize the tree
     ntree_finish(nt);

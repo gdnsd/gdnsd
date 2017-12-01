@@ -29,9 +29,7 @@
 #include <inttypes.h>
 
 typedef struct {
-    const char*    username;
     const uint8_t* chaos;
-    bool     weaker_security;
     bool     include_optional_ns;
     bool     realtime_stats;
     bool     lock_mem;
@@ -41,7 +39,6 @@ typedef struct {
     bool     zones_strict_startup;
     bool     zones_rfc1035_auto;
     bool     any_mitigation;
-    int      priority;
     unsigned chaos_len;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;

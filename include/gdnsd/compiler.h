@@ -20,16 +20,20 @@
 #ifndef GDNSD_COMPILER_H
 #define GDNSD_COMPILER_H
 
-#include <gdnsd/dmn.h>
-
 // Compiler features we can take advantage of
 
 #if defined __GNUC__ && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
 #  error Your GCC is way too old (< 3.4)...
 #endif
 
-// Basic features common to clang and gcc
+#define PRAG_(x) _Pragma(#x)
+
+// Basic features common to clang and gcc-3.4+
 #if defined __clang__ || defined __GNUC__
+#  define F_PRINTF(X,Y)   __attribute__((__format__(__printf__, X, Y)))
+#  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
+#  define F_NONNULL       __attribute__((__nonnull__))
+#  define F_NORETURN      __attribute__((__noreturn__))
 #  define HAVE_BUILTIN_CLZ 1
 #  define likely(_x)      __builtin_expect(!!(_x), 1)
 #  define unlikely(_x)    __builtin_expect(!!(_x), 0)
@@ -38,16 +42,25 @@
 #  define F_CONST         __attribute__((__const__))
 #  define F_PURE          __attribute__((__pure__))
 #  define F_MALLOC        __attribute__((__malloc__)) __attribute__((__warn_unused_result__))
-#  define F_NORETURN      __attribute__((__noreturn__))
 #  define F_NOINLINE      __attribute__((__noinline__))
-#  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
-#  define F_NONNULL       __attribute__((__nonnull__))
 #  define F_WUNUSED       __attribute__((__warn_unused_result__))
 #  define F_DEPRECATED    __attribute__((__deprecated__))
 #endif
 
 // Newer features
 #ifdef __clang__
+#  define GDNSD_DIAG_PUSH_IGNORED(x) _Pragma("clang diagnostic push") \
+                                   PRAG_(clang diagnostic ignored x)
+#  define GDNSD_DIAG_POP             _Pragma("clang diagnostic pop")
+#  if __has_builtin(__builtin_unreachable)
+#    define GDNSD_HAVE_UNREACH_BUILTIN 1
+#  endif
+#  if __has_attribute(cold)
+#    define F_COLD __attribute__((__cold__))
+#  endif
+#  if __has_attribute(returns_nonnull)
+#    define F_RETNN         __attribute__((__returns_nonnull__))
+#  endif
 #  if __has_attribute(hot)
 #    define F_HOT           __attribute__((__hot__))
 #  endif
@@ -61,19 +74,50 @@
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
 #    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
 #    define F_HOT           __attribute__((__hot__))
+#    define F_COLD __attribute__((__cold__))
+#  endif
+#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
+#    define GDNSD_HAVE_UNREACH_BUILTIN 1
+#  endif
+#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
+#    define GDNSD_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push") \
+                                     PRAG_(GCC diagnostic ignored x)
+#    define GDNSD_DIAG_POP             _Pragma("GCC diagnostic pop")
 #  endif
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
+#    define F_RETNN         __attribute__((__returns_nonnull__))
 #    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
 #  endif
 #endif
 
 // defaults for unknown compilers and things left unset above
+#ifndef F_PRINTF
+#  define F_PRINTF(X,Y)
+#endif
+#ifndef F_NONNULLX
+#  define F_NONNULLX(...)
+#endif
+#ifndef F_NONNULL
+#  define F_NONNULL
+#endif
 #ifndef F_NORETURN
 #  if __STDC_VERSION__ >= 201112L // C11
 #    define F_NORETURN _Noreturn
 #  else
 #    define F_NORETURN
 #  endif
+#endif
+#ifndef F_COLD
+#  define F_COLD
+#endif
+#ifndef GDNSD_DIAG_PUSH_IGNORED
+#  define GDNSD_DIAG_PUSH_IGNORED(_x)
+#endif
+#ifndef GDNSD_DIAG_POP
+#  define GDNSD_DIAG_POP
+#endif
+#ifndef   F_RETNN
+#  define F_RETNN
 #endif
 #ifndef likely
 #  define likely(_x) (!!(_x))
@@ -98,12 +142,6 @@
 #endif
 #ifndef   F_NOINLINE
 #  define F_NOINLINE
-#endif
-#ifndef   F_NONNULLX
-#  define F_NONNULLX(...)
-#endif
-#ifndef   F_NONNULL
-#  define F_NONNULL
 #endif
 #ifndef   F_WUNUSED
 #  define F_WUNUSED

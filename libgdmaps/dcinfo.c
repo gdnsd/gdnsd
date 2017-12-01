@@ -155,7 +155,7 @@ unsigned dcinfo_get_limit(const dcinfo_t* info) {
 }
 
 const double* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum) {
-    dmn_assert(dcnum < info->num_dcs);
+    gdnsd_assert(dcnum < info->num_dcs);
     return &info->coords[dcnum * 2];
 }
 
@@ -175,6 +175,6 @@ const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum) {
 }
 
 unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum) {
-    dmn_assert(dcnum && dcnum <= info->num_dcs);
+    gdnsd_assert(dcnum && dcnum <= info->num_dcs);
     return info->indices[dcnum - 1];
 }

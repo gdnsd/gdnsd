@@ -58,7 +58,7 @@ int plugin_reflect_map_res(const char* resname, const uint8_t* origin V_UNUSED) 
 }
 
 gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result) {
-    dmn_assert(resnum < NUM_RTYPES);
+    gdnsd_assert(resnum < NUM_RTYPES);
 
     if(resnum == RESPONSE_BOTH || resnum == RESPONSE_DNS || (resnum == RESPONSE_BEST && !cinfo->edns_client_mask)) {
         gdnsd_result_add_anysin(result, &cinfo->dns_source);
@@ -70,7 +70,7 @@ gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const uint8_t* origin V_UNU
         gdnsd_result_add_scope_mask(result, cinfo->edns_client_mask);
     }
     else if(!cinfo->edns_client_mask && resnum == RESPONSE_EDNS) {
-        dmn_anysin_t tmpsin;
+        gdnsd_anysin_t tmpsin;
         gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
         gdnsd_result_add_anysin(result, &tmpsin);
     }

@@ -157,12 +157,6 @@ our $DNS_SPORT6 = $DNS_PORT + 4;
 
 our $saved_pid;
 
-# If user runs testsuite as root, we try to set the privdrop
-#   user to nobody as a more-reliable choice.  Failing that,
-#   hopefully they read the large warning at the start of
-#   the testsuite output...
-our $PRIVDROP_USER = ($> == 0) ? 'nobody' : '';
-
 # Where to find the gdnsd binary during "installcheck" vs "check"
 our $GDNSD_BIN = $ENV{INSTALLCHECK_SBINDIR}
     ? "$ENV{INSTALLCHECK_SBINDIR}/gdnsd"
@@ -330,20 +324,10 @@ sub proc_tmpl {
         $std_opts .= qq{        zones_rfc1035_auto = false\n};
     }
 
-    if($PRIVDROP_USER) {
-        $std_opts .= qq{username = $PRIVDROP_USER\n};
-    }
-
     while(<$in_fh>) {
         s/\@std_testsuite_options\@/$std_opts/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
-        # if the test uses the extmon helper from source dir, pre-execute it
-        #   now to do libtool stuff before privdrop, in case of testsuite
-        #   running as root.  Otherwise on first execution libtool tries to
-        #   write to the builddir as as the privdrop user.
-        if(s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g && $PRIVDROP_USER && $EXTMON_BIN) {
-            system("$EXTMON_BIN >/dev/null 2>&1");
-        }
+        s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
         print $out_fh $_;
     }
 
@@ -417,8 +401,8 @@ sub spawn_daemon_setup {
 
 sub spawn_daemon_execute {
     my $exec_line = $TEST_RUNNER
-        ? qq{$TEST_RUNNER $GDNSD_BIN -Dxfc $OUTDIR/etc start}
-        : qq{$GDNSD_BIN -Dxfc $OUTDIR/etc start};
+        ? qq{$TEST_RUNNER $GDNSD_BIN -Dc $OUTDIR/etc start}
+        : qq{$GDNSD_BIN -Dc $OUTDIR/etc start};
 
     my $daemon_out = $OUTDIR . '/gdnsd.out';
 

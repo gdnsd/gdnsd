@@ -59,7 +59,7 @@ typedef struct {
     service_type_t* type;
     char* cname; // normalized text form of addr or dname below
     union {
-        dmn_anysin_t addr;
+        gdnsd_anysin_t addr;
         const uint8_t* dname; // dname-form of a CNAME
     };
     unsigned n_failure;
@@ -102,8 +102,8 @@ static ev_timer* sttl_update_timer = NULL;
 
 F_NONNULL
 static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(w == sttl_update_timer);
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(w == sttl_update_timer);
+    gdnsd_assert(revents == EV_TIMER);
 
     // prcu-swap of the two tables
     gdnsd_sttl_t* saved_old_consumer = smgr_sttl_consumer_;
@@ -144,9 +144,9 @@ const char* gdnsd_logf_sttl(const gdnsd_sttl_t s) {
     else
         snp_rv = snprintf(tmpbuf, 15, "%s/%u", state, ttl);
 
-    dmn_assert(snp_rv >= 4 && snp_rv <= 14);
+    gdnsd_assert(snp_rv >= 4 && snp_rv <= 14);
     const unsigned snp_len = (unsigned)snp_rv;
-    char* out = dmn_fmtbuf_alloc(snp_len + 1U);
+    char* out = gdnsd_fmtbuf_alloc(snp_len + 1U);
     memcpy(out, tmpbuf, snp_len + 1U);
     return out;
 }
@@ -199,7 +199,7 @@ bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned
 F_NONNULL
 static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdnsd_sttl_t update_val) {
     assert_valid_sttl(update_val);
-    dmn_assert(update_val & GDNSD_STTL_FORCED);
+    gdnsd_assert(update_val & GDNSD_STTL_FORCED);
 
     bool success = true;
     bool matched = false;
@@ -226,7 +226,7 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
 
 F_NONNULL
 static bool admin_process_hash(vscf_data_t* raw, const bool check_only) {
-    dmn_assert(vscf_is_hash(raw));
+    gdnsd_assert(vscf_is_hash(raw));
 
     bool success = true;
 
@@ -276,7 +276,7 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only) {
             else if(smgr_sttl[i] & GDNSD_STTL_FORCED) { // was forced before, isn't now
                 log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
                 smgr_sttl[i] = smgrs[i].real_sttl;
-                dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
+                gdnsd_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
                 affected = true;
             }
         }
@@ -329,7 +329,7 @@ static void admin_deleted_file(const char* pathname) {
         if(smgr_sttl[i] & GDNSD_STTL_FORCED) {
             log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
             smgr_sttl[i] = smgrs[i].real_sttl;
-            dmn_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
+            gdnsd_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
             affected = true;
         }
     }
@@ -339,7 +339,7 @@ static void admin_deleted_file(const char* pathname) {
 
 F_NONNULL
 static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
     ev_timer_stop(loop, w);
     if(admin_file_watcher->attr.st_nlink)
         admin_process_file(admin_file_watcher->path, false);
@@ -349,7 +349,7 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 
 F_NONNULL
 static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(revents == EV_STAT);
+    gdnsd_assert(revents == EV_STAT);
     if(testsuite_nodelay)
         admin_timer_cb(loop, admin_quiesce_timer, EV_TIMER);
     else
@@ -393,7 +393,7 @@ void gdnsd_mon_check_admin_file(void) {
     }
     else if(errno != ENOENT) {
         log_fatal("Error checking admin_state pathname '%s': %s",
-            pathname, dmn_logf_errno());
+            pathname, logf_errno());
     }
 
     free(pathname);
@@ -446,8 +446,8 @@ void gdnsd_mon_start(struct ev_loop* mloop) {
 // We only have to check the address, because the port
 //  is determined by service type.
 F_NONNULL
-static bool addr_eq(const dmn_anysin_t* a, const dmn_anysin_t* b) {
-    dmn_assert(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
+static bool addr_eq(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b) {
+    gdnsd_assert(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
 
     bool rv = false;
     if(a->sa.sa_family == b->sa.sa_family) {
@@ -460,11 +460,11 @@ static bool addr_eq(const dmn_anysin_t* a, const dmn_anysin_t* b) {
 }
 
 F_NONNULLX(1)
-static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, const char* cname, const uint8_t* dname) {
+static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, const char* cname, const uint8_t* dname) {
     if(addr)
-        dmn_assert(!cname && !dname);
+        gdnsd_assert(!cname && !dname);
     else
-        dmn_assert(cname && dname);
+        gdnsd_assert(cname && dname);
 
     // first, sort out what svctype_name actually means to us
     service_type_t* this_svc = NULL;
@@ -477,7 +477,7 @@ static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, co
 
     if(!this_svc)
         log_fatal("Invalid service type '%s' in monitoring request for '%s'",
-            svctype_name, addr ? dmn_logf_anysin_noport(addr) : cname);
+            svctype_name, addr ? logf_anysin_noport(addr) : cname);
 
     // next, check if this is a duplicate of a request issued earlier
     //   by some other plugin/resource, in which case we can just give
@@ -507,13 +507,13 @@ static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, co
     if(addr) {
         if(this_svc->plugin && !this_svc->plugin->add_mon_addr)
             log_fatal("Service type '%s' does not support address monitoring for '%s'",
-                svctype_name, dmn_logf_anysin_noport(addr));
+                svctype_name, logf_anysin_noport(addr));
 
         // construct desc for this new unique monitor
         char addr_str[INET6_ADDRSTRLEN];
-        int name_err = dmn_anysin2str_noport(addr, addr_str);
+        int name_err = gdnsd_anysin2str_noport(addr, addr_str);
         // this should basically never happen since the same family of functions will
-        //   have already converted it from dmn_anysin_t -> text earlier, but if it does,
+        //   have already converted it from gdnsd_anysin_t -> text earlier, but if it does,
         //   we really don't have much we can do about logging it informatively...
         if(name_err)
             log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
@@ -522,7 +522,7 @@ static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, co
         this_smgr->is_cname = false;
         this_smgr->cname = strdup(addr_str);
         gdnsd_downcase_str(this_smgr->cname);
-        memcpy(&this_smgr->addr, addr, sizeof(dmn_anysin_t));
+        memcpy(&this_smgr->addr, addr, sizeof(gdnsd_anysin_t));
     }
     else { // cname
         if(this_svc->plugin && !this_svc->plugin->add_mon_cname)
@@ -552,7 +552,7 @@ static unsigned mon_thing(const char* svctype_name, const dmn_anysin_t* addr, co
 
 // Called from plugins once per monitored service type+IP combination
 //  to request monitoring and initialize various data/state.
-unsigned gdnsd_mon_addr(const char* svctype_name, const dmn_anysin_t* addr) {
+unsigned gdnsd_mon_addr(const char* svctype_name, const gdnsd_anysin_t* addr) {
     return mon_thing(svctype_name, addr, NULL, NULL);
 }
 
@@ -648,18 +648,18 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg) {
     if(!need_p2)
         return;
 
-    dmn_assert(num_svc_types > 1); // up, down always exist
+    gdnsd_assert(num_svc_types > 1); // up, down always exist
 
     for(unsigned i = 0; i < (num_svc_types - 2); i++) {
-        dmn_assert(svctypes_cfg);
+        gdnsd_assert(svctypes_cfg);
         service_type_t* this_svc = &service_types[i];
 
         // assert same ordering as _p1
-        dmn_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, i, NULL)));
-        dmn_assert(this_svc->plugin);
+        gdnsd_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, i, NULL)));
+        gdnsd_assert(this_svc->plugin);
 
         vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
-        dmn_assert(svctype_cfg);
+        gdnsd_assert(svctype_cfg);
 
         this_svc->up_thresh = DEF_UP_THRESH;
         this_svc->ok_thresh = DEF_OK_THRESH;
@@ -696,11 +696,11 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg) {
         if(this_smgr->type) { // virtuals (mon_admin) get no service_type at all
             if(this_smgr->type->plugin) { // down/up get no plugin
                 if(this_smgr->is_cname) {
-                    dmn_assert(this_smgr->type->plugin->add_mon_cname);
+                    gdnsd_assert(this_smgr->type->plugin->add_mon_cname);
                     this_smgr->type->plugin->add_mon_cname(this_smgr->desc, this_smgr->type->name, this_smgr->cname, i);
                 }
                 else {
-                    dmn_assert(this_smgr->type->plugin->add_mon_addr);
+                    gdnsd_assert(this_smgr->type->plugin->add_mon_addr);
                     this_smgr->type->plugin->add_mon_addr(this_smgr->desc, this_smgr->type->name, this_smgr->cname, &this_smgr->addr, i);
                 }
             }
@@ -710,12 +710,12 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg) {
 
 F_NONNULL
 static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
-    dmn_assert(idx < num_smgrs);
+    gdnsd_assert(idx < num_smgrs);
 
     // Note that the updater interfaces from monitoring plugins cannot set
     //  the FORCED bit - only the admin-state interface can do that.
     assert_valid_sttl(new_sttl);
-    dmn_assert(!(new_sttl & GDNSD_STTL_FORCED));
+    gdnsd_assert(!(new_sttl & GDNSD_STTL_FORCED));
 
     if(initial_round) {
         log_info("state of '%s' initialized to %s", smgr->desc, logf_sttl(new_sttl));
@@ -743,12 +743,12 @@ static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl) {
 }
 
 void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl) {
-    dmn_assert(idx < num_smgrs);
+    gdnsd_assert(idx < num_smgrs);
     raw_sttl_update(&smgrs[idx], idx, new_sttl);
 }
 
 void gdnsd_mon_state_updater(unsigned idx, const bool latest) {
-    dmn_assert(idx < num_smgrs);
+    gdnsd_assert(idx < num_smgrs);
     smgr_t* smgr = &smgrs[idx];
 
     // a bit spammy to leave in all debug builds, but handy at times...
@@ -763,8 +763,8 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest) {
     //   been demonstrated.  For now, just going with pretending initial
     //   state is stable.
     if(initial_round) {
-        dmn_assert(!smgr->n_failure);
-        dmn_assert(!smgr->n_success);
+        gdnsd_assert(!smgr->n_failure);
+        gdnsd_assert(!smgr->n_success);
         down = !latest;
     }
     else {
@@ -922,7 +922,7 @@ static const char* class_str_map[2][2][2] = {
 
 F_NONNULL
 static void get_state_texts(const unsigned i, const char** cur_state_out, const char** real_state_out) {
-    dmn_assert(i < num_smgrs);
+    gdnsd_assert(i < num_smgrs);
 
     *cur_state_out = state_str_map
         [!!smgrs[i].type]
@@ -936,7 +936,7 @@ static void get_state_texts(const unsigned i, const char** cur_state_out, const 
 
 F_NONNULL
 static void get_class_texts(const unsigned i, const char** cur_class_out, const char** real_class_out) {
-    dmn_assert(i < num_smgrs);
+    gdnsd_assert(i < num_smgrs);
 
     *cur_class_out = class_str_map
         [!!smgrs[i].type]
@@ -952,7 +952,7 @@ static void get_class_texts(const unsigned i, const char** cur_class_out, const 
 //  how many characters we added to the buf.
 unsigned gdnsd_mon_stats_out_html(char* buf) {
     if(!num_smgrs) return 0;
-    dmn_assert(max_stats_len);
+    gdnsd_assert(max_stats_len);
 
     const char* const buf_start = buf;
     unsigned avail = max_stats_len;
@@ -971,7 +971,7 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
         get_state_texts(i, &cur_st, &real_st);
         get_class_texts(i, &cur_class, &real_class);
         const int snp_rv = snprintf(buf, avail, http_tmpl, smgrs[i].desc, cur_class, cur_st, real_class, real_st);
-        dmn_assert(snp_rv > 0);
+        gdnsd_assert(snp_rv > 0);
         const unsigned written = (unsigned)snp_rv;
         if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (html mon data)");
@@ -992,7 +992,7 @@ unsigned gdnsd_mon_stats_out_html(char* buf) {
 //  how many characters we added to the buf.
 unsigned gdnsd_mon_stats_out_csv(char* buf) {
     if(!num_smgrs) return 0;
-    dmn_assert(max_stats_len);
+    gdnsd_assert(max_stats_len);
 
     const char* const buf_start = buf;
     unsigned avail = max_stats_len;
@@ -1008,7 +1008,7 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
         const char* real_st;
         get_state_texts(i, &cur_st, &real_st);
         const int snp_rv = snprintf(buf, avail, csv_tmpl, smgrs[i].desc, cur_st, real_st);
-        dmn_assert(snp_rv > 0);
+        gdnsd_assert(snp_rv > 0);
         const unsigned written = (unsigned)snp_rv;
         if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (csv data)");
@@ -1020,7 +1020,7 @@ unsigned gdnsd_mon_stats_out_csv(char* buf) {
 }
 
 unsigned gdnsd_mon_stats_out_json(char* buf) {
-    dmn_assert(max_stats_len);
+    gdnsd_assert(max_stats_len);
     unsigned avail = max_stats_len;
 
     const char* const buf_start = buf;
@@ -1047,7 +1047,7 @@ unsigned gdnsd_mon_stats_out_json(char* buf) {
         const char* real_st;
         get_state_texts(i, &cur_st, &real_st);
         const int snp_rv = snprintf(buf, avail, json_tmpl, smgrs[i].desc, cur_st, real_st);
-        dmn_assert(snp_rv > 0);
+        gdnsd_assert(snp_rv > 0);
         const unsigned written = (unsigned)snp_rv;
         if(written >= avail)
             log_fatal("BUG: monio stats buf miscalculated (json mon data)");

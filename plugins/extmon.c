@@ -35,11 +35,6 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-// hopefully everyone defines this
-#ifndef NSIG
-#  define NSIG 100
-#endif
-
 typedef struct {
     char* name;
     char** args;
@@ -112,8 +107,8 @@ static void bump_local_timeout(struct ev_loop* loop, mon_t* mon) {
 }
 
 static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w); dmn_assert(revents == EV_READ);
-    dmn_assert(w->fd == helper_read_fd);
+    gdnsd_assert(loop); gdnsd_assert(w); gdnsd_assert(revents == EV_READ);
+    gdnsd_assert(w->fd == helper_read_fd);
 
     while(1) { // loop on all immediately-available results
         uint32_t data;
@@ -123,7 +118,7 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
                 if(ERRNO_WOULDBLOCK || errno == EINTR)
                     return;
                 else
-                    log_err("plugin_extmon: pipe read() failed: %s", dmn_logf_strerror(errno));
+                    log_err("plugin_extmon: pipe read() failed: %s", logf_errno());
             }
             else if(read_rv != 0) {
                 log_err("plugin_extmon: BUG: short pipe read for mon results");
@@ -174,11 +169,11 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 // This fires if it's been way too long since helper
 //   updated us about a given monitored resource
 static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
-    dmn_assert(loop); dmn_assert(w);
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(loop); gdnsd_assert(w);
+    gdnsd_assert(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
-    dmn_assert(this_mon->local_timeout == w);
+    gdnsd_assert(this_mon->local_timeout == w);
 
     log_info("plugin_extmon: '%s': helper is very late for a status update, locally applying a negative update...", this_mon->desc);
     gdnsd_mon_state_updater(this_mon->idx, false);
@@ -187,7 +182,7 @@ static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UN
     }
     else {
         ev_timer_stop(loop, w);
-        dmn_assert(!this_mon->seen_once);
+        gdnsd_assert(!this_mon->seen_once);
         this_mon->seen_once = true;
         if(++init_phase_count == num_mons)
             ev_io_stop(loop, helper_read_watcher);
@@ -248,9 +243,9 @@ static void spawn_helper(void) {
     int writepipe[2];
     int readpipe[2];
     if(pipe(writepipe))
-        log_fatal("plugin_extmon: pipe() failed: %s", dmn_logf_strerror(errno));
+        log_fatal("plugin_extmon: pipe() failed: %s", logf_errno());
     if(pipe(readpipe))
-        log_fatal("plugin_extmon: pipe() failed: %s", dmn_logf_strerror(errno));
+        log_fatal("plugin_extmon: pipe() failed: %s", logf_errno());
 
     // Before forking, block all signals and save the old mask
     //   to avoid a race condition where local sighandlers execute
@@ -264,32 +259,39 @@ static void spawn_helper(void) {
 
     helper_pid = fork();
     if(helper_pid == -1)
-        log_fatal("plugin_extmon: fork() failed: %s", dmn_logf_strerror(errno));
+        log_fatal("plugin_extmon: fork() failed: %s", logf_errno());
 
     if(!helper_pid) { // child
-        // reset all signal handlers to default before unblocking
+        // reset to default any signal handlers that we actually listen to in
+        // the main process, but don't disturb others (e.g. PIPE/HUP) that may
+        // be set to SIG_IGN, which is automatically maintained through both
+        // fork and exec
         struct sigaction defaultme;
         sigemptyset(&defaultme.sa_mask);
         defaultme.sa_handler = SIG_DFL;
         defaultme.sa_flags = 0;
-
-        // we really don't care about error retvals here
-        for(int i = 0; i < NSIG; i++)
-            (void)sigaction(i, &defaultme, NULL);
-
-        // unblock all
-        sigset_t no_sigs;
-        sigemptyset(&no_sigs);
-        if(pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
-            log_fatal("pthread_sigmask() failed");
+        if(sigaction(SIGTERM, &defaultme, NULL))
+            log_fatal("sigaction() failed: %s", logf_errno());
+        if(sigaction(SIGINT, &defaultme, NULL))
+            log_fatal("sigaction() failed: %s", logf_errno());
+        if(sigaction(SIGUSR1, &defaultme, NULL))
+            log_fatal("sigaction() failed: %s", logf_errno());
 
         close(writepipe[1]);
         close(readpipe[0]);
         const char* child_read_fdstr = num_to_str(writepipe[0]);
         const char* child_write_fdstr = num_to_str(readpipe[1]);
-        execl(helper_path, helper_path, dmn_get_debug() ? "Y" : "N", dmn_get_syslog_alive() ? "S" : "X",
-            child_read_fdstr, child_write_fdstr, NULL);
-        log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, dmn_logf_strerror(errno));
+        const char* dbg = gdnsd_log_get_debug() ? "Y" : "N";
+        const char* lm = gdnsd_log_get_syslog() ? "L" : "E";
+
+        // unblock all the signals from earlier
+        sigset_t no_sigs;
+        sigemptyset(&no_sigs);
+        if(pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
+            log_fatal("pthread_sigmask() failed");
+
+        execl(helper_path, helper_path, dbg, lm, child_read_fdstr, child_write_fdstr, NULL);
+        log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, logf_errno());
     }
 
     // restore previous signal mask from before fork in parent
@@ -297,7 +299,7 @@ static void spawn_helper(void) {
         log_fatal("pthread_sigmask() failed");
 
     // parent;
-    dmn_assert(helper_pid);
+    gdnsd_assert(helper_pid);
     gdnsd_register_child_pid(helper_pid);
 
     close(writepipe[0]);
@@ -330,7 +332,7 @@ static void spawn_helper(void) {
     // done sending stuff, close writepipe and go nonblock on read side for eventloop
     close(helper_write_fd);
     if(fcntl(helper_read_fd, F_SETFL, (fcntl(helper_read_fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
-        log_fatal("plugin_extmon: Failed to set O_NONBLOCK on pipe: %s", dmn_logf_errno());
+        log_fatal("plugin_extmon: Failed to set O_NONBLOCK on pipe: %s", logf_errno());
 }
 
 static bool bad_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, void* data V_UNUSED) {
@@ -414,7 +416,7 @@ void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
 }
 
 static void add_mon_any(const char* desc, const char* svc_name, const char* thing, const unsigned idx) {
-    dmn_assert(desc); dmn_assert(svc_name); dmn_assert(thing);
+    gdnsd_assert(desc); gdnsd_assert(svc_name); gdnsd_assert(thing);
 
     mons = xrealloc(mons, (num_mons + 1) * sizeof(mon_t));
     mon_t* this_mon = &mons[num_mons++];
@@ -428,14 +430,14 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
             break;
         }
     }
-    dmn_assert(this_mon->svc);
+    gdnsd_assert(this_mon->svc);
 
     this_mon->thing = strdup(thing);
     this_mon->local_timeout = NULL;
     this_mon->seen_once = false;
 }
 
-void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx) {
     add_mon_any(desc, svc_name, cname, idx);
 }
 
@@ -444,7 +446,7 @@ void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, const c
 }
 
 void plugin_extmon_init_monitors(struct ev_loop* mon_loop) {
-    dmn_assert(helper_path);
+    gdnsd_assert(helper_path);
     if(num_mons) {
         spawn_helper();
         helper_read_watcher = xmalloc(sizeof(ev_io));

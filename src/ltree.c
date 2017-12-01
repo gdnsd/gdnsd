@@ -59,7 +59,7 @@ static const uint8_t ooz_glue_label[1] = { 0 };
 // this logs the lstack labels as a partial domainname (possibly empty),
 // intended to be completed with the zone name via the macro below
 static const char* _logf_lstack(const uint8_t** lstack, unsigned depth) {
-    char* dnbuf = dmn_fmtbuf_alloc(1024);
+    char* dnbuf = gdnsd_fmtbuf_alloc(1024);
     char* dnptr = dnbuf;
 
     while(depth--) {
@@ -178,7 +178,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
     const uint32_t child_hash = ltree_hash(child_label, child_mask);
 
     if(!node->child_table) {
-        dmn_assert(!node->child_hash_mask);
+        gdnsd_assert(!node->child_hash_mask);
         node->child_table = xcalloc(2, sizeof(ltree_node_t*));
     }
 
@@ -207,8 +207,8 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
 //     known as "www.example.com." should be just "www."
 F_NONNULL
 static ltree_node_t* ltree_find_or_add_dname(const zone_t* zone, const uint8_t* dname) {
-    dmn_assert(zone->root); dmn_assert(zone->dname);
-    dmn_assert(dname_status(dname) == DNAME_VALID);
+    gdnsd_assert(zone->root); gdnsd_assert(zone->dname);
+    gdnsd_assert(dname_status(dname) == DNAME_VALID);
 
     // Construct a label stack from dname
     const uint8_t* lstack[127];
@@ -617,7 +617,7 @@ static bool naptr_validate_flags(const uint8_t* zone_dname, const uint8_t* dname
 }
 
 bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned num_texts V_UNUSED, uint8_t** texts) {
-    dmn_assert(num_texts == 3);
+    gdnsd_assert(num_texts == 3);
 
     if(order > 65535U)
         log_zfatal("Name '%s%s': NAPTR order value %u too large", logf_dname(dname), logf_dname(zone->dname), order);
@@ -643,7 +643,7 @@ bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t
 // We copy the array of pointers, but alias the actual data (which is malloc'd for
 //   us per call in the parser).
 bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl) {
-    dmn_assert(num_texts);
+    gdnsd_assert(num_texts);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -755,7 +755,7 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
 
 F_NONNULL
 static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const zone_t* zone, ltree_node_t** node_out) {
-    dmn_assert(*dname != 0); dmn_assert(*dname != 2); // these are always illegal dnames
+    gdnsd_assert(*dname != 0); gdnsd_assert(*dname != 2); // these are always illegal dnames
 
     ltree_dname_status_t rval = DNAME_NOAUTH;
     ltree_node_t* rv_node = NULL;
@@ -816,7 +816,7 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
 //         false, the target points at an authoritative name in the same zone which doesn't exist
 F_NONNULL
 static bool set_valid_addr(const uint8_t* dname, const zone_t* zone, ltree_rrset_addr_t** addr_out) {
-    dmn_assert(*dname);
+    gdnsd_assert(*dname);
 
     ltree_node_t* node;
     const ltree_dname_status_t status = ltree_search_dname_zone(dname, zone, &node);
@@ -835,7 +835,7 @@ static bool set_valid_addr(const uint8_t* dname, const zone_t* zone, ltree_rrset
 //   (in upper or lower case form).
 F_NONNULL F_PURE
 static bool binstr_hasichr(const uint8_t* bstr, const uint8_t c) {
-    dmn_assert(c > 0x40 && c < 0x5B);
+    gdnsd_assert(c > 0x40 && c < 0x5B);
     unsigned len = *bstr++;
     while(len--) {
         if(((*bstr++) & (~0x20)) == c)
@@ -885,7 +885,7 @@ static bool p1_proc_cname(const zone_t* zone, const ltree_rrset_cname_t* node_cn
 
 F_WUNUSED F_NONNULL
 static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t* this_ns, const uint8_t** lstack, const unsigned depth) {
-    dmn_assert(!this_ns->ad);
+    gdnsd_assert(!this_ns->ad);
 
     ltree_node_t* ns_target = NULL;
     ltree_rrset_addr_t* target_addr = NULL;
@@ -897,9 +897,9 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
         if(ooz) {
             ns_target = ltree_node_find_child(ooz, this_ns->dname);
             if(ns_target) {
-                dmn_assert(!ns_target->child_table);
-                dmn_assert(ns_target->rrsets);
-                dmn_assert(ns_target->rrsets->gen.type == DNS_TYPE_A);
+                gdnsd_assert(!ns_target->child_table);
+                gdnsd_assert(ns_target->rrsets);
+                gdnsd_assert(ns_target->rrsets->gen.type == DNS_TYPE_A);
                 target_addr = &ns_target->rrsets->addr;
             }
         }
@@ -907,7 +907,7 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
     else {
         // if !NOAUTH, target must be in auth or deleg space for this
         //   same zone, and we *must* have a legal address for it
-        dmn_assert(ns_status == DNAME_AUTH || ns_status == DNAME_DELEG);
+        gdnsd_assert(ns_status == DNAME_AUTH || ns_status == DNAME_DELEG);
         if(!ns_target || !(target_addr = ltree_node_get_rrset_addr(ns_target)))
             log_zfatal("Missing A and/or AAAA records for target nameserver in '%s%s NS %s'",
                 logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
@@ -915,7 +915,7 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
 
     // use target_addr found via either path above
     if(target_addr) {
-        dmn_assert(ns_target);
+        gdnsd_assert(ns_target);
         this_ns->ad = target_addr;
         // treat as glue if NS for delegation, and addr is in delegation or ooz
         if(ns_status != DNAME_AUTH) {
@@ -968,7 +968,7 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     }
 
     if(in_deleg) {
-        dmn_assert(depth > 0);
+        gdnsd_assert(depth > 0);
         if(lstack[depth - 1][0] == 1 && lstack[depth - 1][1] == '*')
             log_zfatal("Domainname '%s%s': Wildcards not allowed for delegation/glue data", logf_lstack(lstack, depth, zone->dname));
 
@@ -1035,17 +1035,17 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg) {
     if(in_deleg) {
-        dmn_assert(!ltree_node_get_rrset_cname(node));
-        dmn_assert(!ltree_node_get_rrset_dync(node));
+        gdnsd_assert(!ltree_node_get_rrset_cname(node));
+        gdnsd_assert(!ltree_node_get_rrset_dync(node));
         if(ltree_node_get_rrset_addr(node) && !(node->flags & LTNFLAG_GUSED))
             log_zwarn("Delegation glue address(es) at domainname '%s%s' are unused and ignored", logf_lstack(lstack, depth, zone->dname));
         if(node->flags & LTNFLAG_DELEG) {
             ltree_rrset_ns_t* ns = ltree_node_get_rrset_ns(node);
-            dmn_assert(ns);
+            gdnsd_assert(ns);
             const unsigned nsct = ns->gen.count;
             ltree_rdata_ns_t* nsrd = ns->rdata;
-            dmn_assert(nsct);
-            dmn_assert(nsrd);
+            gdnsd_assert(nsct);
+            gdnsd_assert(nsrd);
             unsigned num_glue = 0;
             for(unsigned i = 0; i < nsct; i++) {
                 if(AD_IS_GLUE(nsrd[i].ad))
@@ -1062,7 +1062,7 @@ static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* no
 F_WUNUSED F_NONNULLX(1, 2, 3)
 static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool), const uint8_t** lstack, ltree_node_t* node, const zone_t* zone, const unsigned depth, bool in_deleg) {
     if(node->flags & LTNFLAG_DELEG) {
-        dmn_assert(node->label);
+        gdnsd_assert(node->label);
         if(in_deleg)
             log_zfatal("Delegation '%s%s' is within another delegation", logf_lstack(lstack, depth, zone->dname));
         in_deleg = true;
@@ -1116,13 +1116,13 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone) {
         }
     }
 
-    dmn_assert(!zroot->label); // zone roots don't get a label
+    gdnsd_assert(!zroot->label); // zone roots don't get a label
     if(!zroot_soa)
         log_zfatal("Zone '%s' has no SOA record", logf_dname(zone->dname));
     if(!zroot_ns)
         log_zfatal("Zone '%s' has no NS records", logf_dname(zone->dname));
     bool ok = false;
-    dmn_assert(zroot_ns->gen.count);
+    gdnsd_assert(zroot_ns->gen.count);
     if(zroot_ns->gen.count < 2)
         log_zwarn("Zone '%s' only has one NS record, this is (probably) bad practice", logf_dname(zone->dname));
     for(unsigned i = 0; i < zroot_ns->gen.count; i++) {
@@ -1146,9 +1146,9 @@ static bool ltree_postproc_zroot_phase2(const zone_t* zone) {
         for(unsigned i = 0; i <= ooz->child_hash_mask; i++) {
             ltree_node_t* ooz_node = ooz->child_table[i];
             while(ooz_node) {
-                dmn_assert(ooz_node->rrsets);
-                dmn_assert(ooz_node->rrsets->gen.type == DNS_TYPE_A);
-                dmn_assert(!ooz_node->rrsets->gen.next);
+                gdnsd_assert(ooz_node->rrsets);
+                gdnsd_assert(ooz_node->rrsets->gen.type == DNS_TYPE_A);
+                gdnsd_assert(!ooz_node->rrsets->gen.next);
                 fix_addr_limits(&ooz_node->rrsets->addr);
                 if(!(ooz_node->flags & LTNFLAG_GUSED))
                     log_zwarn("In zone '%s', explicit out-of-zone glue address(es) at domainname '%s' are unused and ignored", logf_dname(zone->dname), logf_dname(ooz_node->label));
@@ -1177,17 +1177,17 @@ static void ltree_fix_masks(ltree_node_t* node) {
 
 // common processing for zones
 void ltree_init_zone(zone_t* zone) {
-    dmn_assert(zone->dname);
-    dmn_assert(zone->arena);
-    dmn_assert(!zone->root);
+    gdnsd_assert(zone->dname);
+    gdnsd_assert(zone->arena);
+    gdnsd_assert(!zone->root);
 
     zone->root = ltree_node_new(zone->arena, NULL, 0);
 }
 
 bool ltree_postproc_zone(zone_t* zone) {
-    dmn_assert(zone->dname);
-    dmn_assert(zone->arena);
-    dmn_assert(zone->root);
+    gdnsd_assert(zone->dname);
+    gdnsd_assert(zone->arena);
+    gdnsd_assert(zone->root);
 
     ltree_fix_masks(zone->root);
 
@@ -1225,14 +1225,14 @@ void ltree_destroy(ltree_node_t* node) {
         switch(rrset->gen.type) {
             case DNS_TYPE_A:
                 if(rrset->addr.count_v6) {
-                    dmn_assert(rrset->addr.addrs.v6);
+                    gdnsd_assert(rrset->addr.addrs.v6);
                     free(rrset->addr.addrs.v6);
                     if(rrset->addr.addrs.v4)
                         free(rrset->addr.addrs.v4);
                 }
                 else if(rrset->gen.count && rrset->gen.count > LTREE_V4A_SIZE) {
-                    dmn_assert(!rrset->addr.addrs.v6);
-                    dmn_assert(rrset->addr.addrs.v4);
+                    gdnsd_assert(!rrset->addr.addrs.v6);
+                    gdnsd_assert(rrset->addr.addrs.v4);
                     free(rrset->addr.addrs.v4);
                 }
                 break;

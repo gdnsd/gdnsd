@@ -22,7 +22,6 @@
 
 #include <config.h>
 
-#include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/plugapi.h>
@@ -33,6 +32,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <stdlib.h>
@@ -52,7 +52,7 @@ static void usage(const char* argv0) {
 
 F_NONNULL
 static void do_lookup(const char* map_name, const char* ip_arg) {
-    dmn_assert(gdmaps);
+    gdnsd_assert(gdmaps);
 
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if(rv < 0) {
@@ -75,14 +75,14 @@ static void do_lookup(const char* map_name, const char* ip_arg) {
     }
 
     // To void gdmaps fallback pitfalls
-    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(dmn_anysin_t));
+    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(gdnsd_anysin_t));
 
     // w/ edns_client_mask set, scope_mask should *always* be set by gdmaps_lookup();
     // (and regardless, dclist should also always be set and contain something)
     unsigned scope_mask = 175U;
     const uint8_t* dclist = gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope_mask);
-    dmn_assert(scope_mask != 175U);
-    dmn_assert(dclist);
+    gdnsd_assert(scope_mask != 175U);
+    gdnsd_assert(dclist);
 
     // Scope was set to Source.  Since we always query as edns, this implies
     //  the database was V4-only and the address input was a non-v4-compat v6 address,
@@ -90,23 +90,23 @@ static void do_lookup(const char* map_name, const char* ip_arg) {
     if(scope_mask == 150U) {
         printf(
             "%s => %s => %s\n",
-            map_name, dmn_logf_anysin_noport(&cinfo.edns_client),
+            map_name, logf_anysin_noport(&cinfo.edns_client),
             gdmaps_logf_dclist(gdmaps, map_idx, dclist)
         );
     }
     else {
         printf(
             "%s => %s/%u => %s\n",
-            map_name, dmn_logf_anysin_noport(&cinfo.edns_client), scope_mask,
+            map_name, logf_anysin_noport(&cinfo.edns_client), scope_mask,
             gdmaps_logf_dclist(gdmaps, map_idx, dclist)
         );
     }
 
-    dmn_fmtbuf_reset();
+    gdnsd_fmtbuf_reset();
 }
 
 static void do_repl(void) {
-    dmn_assert(gdmaps);
+    gdnsd_assert(gdmaps);
 
     char linebuf[256];
     char map_name[128];
@@ -119,7 +119,7 @@ static void do_repl(void) {
         }
         if(!fgets(linebuf, 255, stdin)) {
             if(!feof(stdin))
-                log_err("fgets(stdin) failed: %s", dmn_logf_strerror(ferror(stdin)));
+                log_err("fgets(stdin) failed: %s", logf_strerror(ferror(stdin)));
             if(have_tty)
                 fputs("\n", stdout);
             return;
@@ -161,10 +161,7 @@ static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root) {
 }
 
 static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir) {
-
-    dmn_init1(false, true, false, "gdmaps_test");
-
-    vscf_data_t* cfg_root = gdnsd_initialize(input_cfgdir, false);
+    vscf_data_t* cfg_root = gdnsd_init_paths(input_cfgdir, false);
     if(!cfg_root)
         log_fatal("gdnsd_geoip_test cannot proceed without an actual config file");
     vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
@@ -177,6 +174,7 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir) {
 }
 
 int main(int argc, char* argv[]) {
+    umask(022);
     const char* input_cfgdir = NULL;
     const char* map_name = NULL;
     const char* ip_arg = NULL;
@@ -211,7 +209,7 @@ int main(int argc, char* argv[]) {
     gdmaps = gdmaps_standalone_init(input_cfgdir);
 
     if(map_name) {
-        dmn_assert(ip_arg);
+        gdnsd_assert(ip_arg);
         do_lookup(map_name, ip_arg);
     }
     else {

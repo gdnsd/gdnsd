@@ -177,8 +177,8 @@ F_NONNULL
 static void zfhash_grow(void) {
     if(unlikely(!zfhash_alloc)) {
         // initial call on empty hash
-        dmn_assert(!zfhash);
-        dmn_assert(!zfhash_count);
+        gdnsd_assert(!zfhash);
+        gdnsd_assert(!zfhash_count);
         zfhash_alloc = 16;
         zfhash = xcalloc(16, sizeof(*zfhash));
         return;
@@ -210,8 +210,8 @@ static void zfhash_grow(void) {
 // called must use zfhash_find() first!
 F_NONNULL
 static void zfhash_add(zfile_t* zf) {
-    dmn_assert(zf->fn);
-    dmn_assert(zf->full_fn);
+    gdnsd_assert(zf->fn);
+    gdnsd_assert(zf->full_fn);
 
     // Max 25% load
     if(unlikely(zfhash_count >= (zfhash_alloc >> 2)))
@@ -230,8 +230,8 @@ static void zfhash_add(zfile_t* zf) {
 
 F_NONNULL
 static void zfhash_del(zfile_t* zf) {
-    dmn_assert(zf->fn);
-    dmn_assert(zf->full_fn);
+    gdnsd_assert(zf->fn);
+    gdnsd_assert(zf->full_fn);
 
     const unsigned hash_mask = zfhash_alloc - 1;
     unsigned slot = zf->hash & hash_mask;
@@ -298,7 +298,7 @@ static char* make_zone_name(const char* zf_name) {
 
 F_NONNULL
 static zone_t* zone_from_zf(zfile_t* zf, bool* retry_me) {
-    dmn_assert(!*retry_me);
+    gdnsd_assert(!*retry_me);
 
     char* name = make_zone_name(zf->fn);
     if(!name)
@@ -324,10 +324,10 @@ static zone_t* zone_from_zf(zfile_t* zf, bool* retry_me) {
 
 F_NONNULL
 static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
 
     zfile_t* zf = timer->data;
-    dmn_assert(zf->pending_event == timer);
+    gdnsd_assert(zf->pending_event == timer);
 
     // check lstat() again for a new change during quiesce period
     statcmp_t newstat;
@@ -339,7 +339,7 @@ static void quiesce_check(struct ev_loop* loop, ev_timer* timer, int revents V_U
         if(statcmp_nx(&newstat)) {
             if(zf->zone) {
                 log_debug("rfc1035: zonefile '%s' quiesce timer: acting on deletion, removing zone data from runtime...", zf->fn);
-                dmn_assert(!statcmp_nx(&zf->loaded));
+                gdnsd_assert(!statcmp_nx(&zf->loaded));
                 ztree_update(zf->zone, NULL);
             }
             else {
@@ -425,7 +425,7 @@ static void process_zonefile(const char* zfn, struct ev_loop* loop, const double
     else {
         // else we don't need this new copy of the full fn,
         //   it's already there in the current_zft
-        dmn_assert(!current_zft || !strcmp(current_zft->full_fn, full_fn));
+        gdnsd_assert(!current_zft || !strcmp(current_zft->full_fn, full_fn));
         free(full_fn);
     }
 
@@ -475,7 +475,7 @@ static void unload_zones(void) {
 static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
     DIR* zdhandle = opendir(rfc1035_dir);
     if(!zdhandle) {
-        log_err("rfc1035: Cannot open zones directory '%s': %s", rfc1035_dir, dmn_logf_strerror(errno));
+        log_err("rfc1035: Cannot open zones directory '%s': %s", rfc1035_dir, logf_errno());
     }
     else {
         struct dirent* result = NULL;
@@ -488,11 +488,11 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
                     process_zonefile(result->d_name, loop, initial_quiesce_time, true);
             }
             else if(errno) {
-                log_fatal("rfc1035: readdir(%s) failed: %s", rfc1035_dir, dmn_logf_errno());
+                log_fatal("rfc1035: readdir(%s) failed: %s", rfc1035_dir, logf_errno());
             }
         } while(result);
         if(closedir(zdhandle))
-            log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, dmn_logf_strerror(errno));
+            log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, logf_errno());
     }
 }
 
@@ -504,7 +504,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
 //  process_zonefile() to be picked up as deletions.
 F_NONNULL
 static void check_missing(struct ev_loop* loop) {
-    dmn_assert(generation);
+    gdnsd_assert(generation);
 
     for(unsigned i = 0; i < zfhash_alloc; i++) {
         zfile_t* zf = zfhash[i];
@@ -526,7 +526,7 @@ static void do_scandir(struct ev_loop* loop) {
 
 F_NONNULL
 static void periodic_scan(struct ev_loop* loop, ev_timer* rtimer V_UNUSED, int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
     do_scandir(loop);
 }
 
@@ -544,7 +544,7 @@ static ev_timer* reload_timer = NULL;
             strcat(optr, "|" #_x); \
     }
 static const char* logf_inmask(uint32_t mask) {
-    char* output = dmn_fmtbuf_alloc(256);
+    char* output = gdnsd_fmtbuf_alloc(256);
     char* optr = output;
     optr[0] = 0;
 
@@ -587,13 +587,13 @@ static bool inotify_setup(const bool initial) {
         if(inot.main_fd < 0) {
             // initial ENOSYS is reported here as well for 2.6.36+ hosts that
             //   don't implement the syscall for whatever architecture.
-            log_err("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", dmn_logf_errno());
+            log_err("rfc1035: inotify_init1(IN_NONBLOCK) failed: %s", logf_errno());
             rv = true; // failure
         }
         else {
             inot.watch_desc = inotify_add_watch(inot.main_fd, rfc1035_dir, INL_MASK);
             if(inot.watch_desc < 0) {
-                log_err("rfc1035: inotify_add_watch(%s) failed: %s", rfc1035_dir, dmn_logf_errno());
+                log_err("rfc1035: inotify_add_watch(%s) failed: %s", rfc1035_dir, logf_errno());
                 close(inot.main_fd);
                 rv = true; // failure
             }
@@ -632,7 +632,7 @@ static void inotify_initial_setup(void) {
 F_NONNULL
 static void initial_run(struct ev_loop* loop) {
     if(!inotify_initial_failure) {
-        dmn_assert(inot.io_watcher);
+        gdnsd_assert(inot.io_watcher);
         ev_io_start(loop, inot.io_watcher);
     }
     else {
@@ -644,8 +644,8 @@ static void initial_run(struct ev_loop* loop) {
 
 F_NONNULL
 static void inotify_fallback_scan(struct ev_loop* loop, ev_timer* rtimer, int revents) {
-    dmn_assert(revents == EV_TIMER);
-    dmn_assert(!inotify_initial_failure);
+    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assert(!inotify_initial_failure);
 
     bool setup_failure = inotify_setup(false);
     periodic_scan(loop, rtimer, revents);
@@ -658,7 +658,7 @@ static void inotify_fallback_scan(struct ev_loop* loop, ev_timer* rtimer, int re
 
 F_NONNULL
 static void handle_inotify_failure(struct ev_loop* loop) {
-    dmn_assert(!inotify_initial_failure);
+    gdnsd_assert(!inotify_initial_failure);
 
     log_warn("rfc1035: inotify failed, using fallback scandir() method until recovery");
 
@@ -679,12 +679,12 @@ static void handle_inotify_failure(struct ev_loop* loop) {
 //   place and/or moving open files around while they're being written to.
 F_NONNULLX(1)
 static bool inot_process_event(struct ev_loop* loop, const char* fname, uint32_t emask) {
-    dmn_assert(!inotify_initial_failure);
+    gdnsd_assert(!inotify_initial_failure);
 
     bool rv = false;
 
     if(!fname) { // directory-level event for top-level zones dir
-        dmn_assert(emask & IN_ISDIR);
+        gdnsd_assert(emask & IN_ISDIR);
         log_debug("rfc1035: inotified for directory event: %s", logf_inmask(emask));
         if(emask & (IN_Q_OVERFLOW|IN_IGNORED|IN_UNMOUNT|IN_DELETE_SELF|IN_MOVE_SELF)) {
             log_err("rfc1035: inotify watcher stopping due to directory-level event %s", logf_inmask(emask));
@@ -712,8 +712,8 @@ static bool inot_process_event(struct ev_loop* loop, const char* fname, uint32_t
 }
 
 static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
-    dmn_assert(revents == EV_READ);
-    dmn_assert(!inotify_initial_failure);
+    gdnsd_assert(revents == EV_READ);
+    gdnsd_assert(!inotify_initial_failure);
 
     uint8_t evtbuf[inotify_bufsize];
 
@@ -722,7 +722,7 @@ static void inot_reader(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
         if(read_rv < 1) {
             if(!read_rv || !ERRNO_WOULDBLOCK) {
                 if(read_rv)
-                    log_err("rfc1035: read() of inotify file descriptor failed: %s", dmn_logf_errno());
+                    log_err("rfc1035: read() of inotify file descriptor failed: %s", logf_errno());
                 else
                     log_err("rfc1035: Got EOF on inotify file descriptor!");
                 handle_inotify_failure(loop);
@@ -770,7 +770,7 @@ static void initial_run(struct ev_loop* loop) {
 /*************************/
 
 void zsrc_rfc1035_load_zones(const bool check_only V_UNUSED) {
-    dmn_assert(!rfc1035_dir);
+    gdnsd_assert(!rfc1035_dir);
 
     rfc1035_dir = gdnsd_resolve_path_cfg("zones/", NULL);
 
@@ -812,7 +812,7 @@ static void sigusr1_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V
 
 // called from main thread to feed ev_async
 void zsrc_rfc1035_sigusr1(void) {
-    dmn_assert(zones_loop); dmn_assert(sigusr1_waker);
+    gdnsd_assert(zones_loop); gdnsd_assert(sigusr1_waker);
     ev_async_send(zones_loop, sigusr1_waker);
 }
 

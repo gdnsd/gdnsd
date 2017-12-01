@@ -20,9 +20,6 @@
 #include <config.h>
 #include <gdnsd/paths.h>
 
-#include "misc.h"
-#include "net.h"
-
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/log.h>
@@ -48,30 +45,21 @@ const char* gdnsd_get_default_config_dir(void) { return GDNSD_DEFPATH_CONFIG; }
 // ---------------------------
 // Init-time stuff
 
+// fails fatally if pathname doesn't exist and mkdir fails, or if pathname exists but is not a dir
+// "mode" is only used if we have to mkdir, is not checked or enforced on existing dirs.
 F_NONNULL
-static char* gdnsd_realdir(const char* dpath, const char* desc, const bool create, mode_t def_mode) {
+static void gdnsd_ensure_dir(const char* dpath, const char* desc, mode_t def_mode) {
     struct stat st;
     int stat_rv = stat(dpath, &st);
 
     if(stat_rv) {
-        // if we can't create and doesn't exist, let the error fall through to whoever uses it...
-        if(!create)
-            return strdup(dpath);
         if(mkdir(dpath, def_mode))
-            log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, dmn_logf_strerror(errno));
+            log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, logf_errno());
         log_info("Created %s directory %s", desc, dpath);
     }
     else if(!S_ISDIR(st.st_mode)) {
         log_fatal("%s directory '%s' is not a directory (but should be)!", desc, dpath);
     }
-
-    char* out = realpath(dpath, NULL);
-    if(!out)
-        log_fatal("Validation of %s directory '%s' failed: %s",
-            desc, dpath, dmn_logf_strerror(errno));
-    if(strcmp(dpath, out))
-        log_info("%s directory '%s' cleaned up as '%s'", desc, dpath, out);
-    return out;
 }
 
 typedef enum {
@@ -88,17 +76,17 @@ static vscf_data_t* conf_load_vscf(const char* cfg_file) {
 
     struct stat cfg_stat;
     if(!stat(cfg_file, &cfg_stat)) {
-        log_info("Loading configuration from '%s'", cfg_file);
+        log_debug("Loading configuration from '%s'", cfg_file);
         out = vscf_scan_filename(cfg_file);
         if(!out)
             log_fatal("Loading configuration from '%s' failed", cfg_file);
         if(!vscf_is_hash(out)) {
-            dmn_assert(vscf_is_array(out));
+            gdnsd_assert(vscf_is_array(out));
             log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", cfg_file);
         }
     }
     else {
-        log_info("No config file at '%s', using defaults", cfg_file);
+        log_warn("No config file at '%s', using defaults", cfg_file);
     }
 
     return out;
@@ -114,21 +102,15 @@ static vscf_data_t* conf_load_vscf(const char* cfg_file) {
         } \
     } while(0)
 
-vscf_data_t* gdnsd_initialize(const char* config_dir, const bool check_create_dirs) {
+vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs) {
     static bool has_run = false;
     if(has_run)
-        log_fatal("BUG: gdnsd_initialize() should only be called once!");
+        log_fatal("BUG: gdnsd_init_paths() should only be called once!");
     else
         has_run = true;
 
-    // Initialize other areas of libgdnsd
-    gdnsd_init_net();
-    gdnsd_rand_meta_init();
-
     // set up config dir
-    if(!config_dir)
-        config_dir = GDNSD_DEFPATH_CONFIG;
-    gdnsd_dirs[CFG] = gdnsd_realdir(config_dir, "config", false, 0);
+    gdnsd_dirs[CFG] = config_dir ? strdup(config_dir) : GDNSD_DEFPATH_CONFIG;
 
     // parse config file
     char* cfg_file = gdnsd_resolve_path_cfg("config", NULL);
@@ -158,13 +140,11 @@ vscf_data_t* gdnsd_initialize(const char* config_dir, const bool check_create_di
     }
 
     // set them up
-    if(check_create_dirs) {
-        gdnsd_dirs[RUN] = gdnsd_realdir(run_dir, "run", true, 0750);
-        gdnsd_dirs[STATE] = gdnsd_realdir(state_dir, "state", true, 0755);
-    }
-    else {
-        gdnsd_dirs[RUN] = strdup(run_dir);
-        gdnsd_dirs[STATE] = strdup(state_dir);
+    gdnsd_dirs[RUN] = strdup(run_dir);
+    gdnsd_dirs[STATE] = strdup(state_dir);
+    if(create_dirs) {
+        gdnsd_ensure_dir(run_dir, "run", 0750);
+        gdnsd_ensure_dir(state_dir, "state", 0755);
     }
 
     // This is just fixed at compiletime, period
@@ -177,7 +157,7 @@ vscf_data_t* gdnsd_initialize(const char* config_dir, const bool check_create_di
 // Runtime stuff
 
 static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx) {
-    dmn_assert(gdnsd_dirs[p]);
+    gdnsd_assert(gdnsd_dirs[p]);
 
     char* out = NULL;
 

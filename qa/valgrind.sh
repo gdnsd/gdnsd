@@ -7,7 +7,7 @@ fi
 set -x
 set -e
 mkdir -p _vginst
-CPPFLAGS="-DDMN_COVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --without-hardening --prefix=${PWD}/_vginst --with-systemdsystemunitdir=${PWD}/_vginst
+CPPFLAGS="-DGDNSD_COVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --without-hardening --prefix=${PWD}/_vginst --with-systemdsystemunitdir=${PWD}/_vginst
 make clean
 make install
 TEST_RUNNER="libtool --mode=execute valgrind --trace-children=yes --trace-children-skip=/bin/true,/bin/false,/bin/sh --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make installcheck

@@ -67,8 +67,8 @@ typedef struct {
 
 F_MALLOC
 static dnhash_t* dnhash_new(void) {
-    dmn_assert(INIT_DNHASH_MASK);
-    dmn_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK)); // 2^n-1
+    gdnsd_assert(INIT_DNHASH_MASK);
+    gdnsd_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK)); // 2^n-1
 
     dnhash_t* rv = xmalloc(sizeof(dnhash_t));
     rv->count = 0;
@@ -79,8 +79,8 @@ static dnhash_t* dnhash_new(void) {
 
 F_NONNULL
 static void dnhash_destroy(dnhash_t* dnhash) {
-    dmn_assert(dnhash->table);
-    dmn_assert(dnhash->mask);
+    gdnsd_assert(dnhash->table);
+    gdnsd_assert(dnhash->mask);
     free(dnhash->table);
     free(dnhash);
 }
@@ -88,9 +88,9 @@ static void dnhash_destroy(dnhash_t* dnhash) {
 // grow a dnhash_t's hashtable size by doubling
 F_NONNULL
 static void dnhash_grow(dnhash_t* dnhash) {
-    dmn_assert(dnhash->count);
+    gdnsd_assert(dnhash->count);
     // assert that dnhash->mask is still 2^n-1 and >0
-    dmn_assert(dnhash->mask); dmn_assert(!((dnhash->mask + 1U) & dnhash->mask));
+    gdnsd_assert(dnhash->mask); gdnsd_assert(!((dnhash->mask + 1U) & dnhash->mask));
 
     const uint8_t** old_table = dnhash->table;
     const unsigned old_mask = dnhash->mask;
@@ -123,7 +123,7 @@ struct _ltarena {
 };
 
 static void* make_pool(void) {
-    dmn_assert(!(POOL_SIZE & 3U)); // multiple of four
+    gdnsd_assert(!(POOL_SIZE & 3U)); // multiple of four
 
     void* p;
     if(RED_SIZE) {
@@ -177,22 +177,22 @@ void lta_destroy(ltarena_t* lta) {
 
 F_MALLOC F_NONNULL
 static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
-    dmn_assert(size);
-    dmn_assert(lta->dnhash); // not closed
+    gdnsd_assert(size);
+    gdnsd_assert(lta->dnhash); // not closed
 
     // Currently, all allocations obey this assertion.
     // Only labels + dnames are stored here, which max out at 256
-    dmn_assert(size <= 256);
+    gdnsd_assert(size <= 256);
 
     // the requested size + redzones on either end, giving the total
     //   this allocation will steal from the pool
     const unsigned size_plus_red = size + RED_SIZE + RED_SIZE;
 
     // this could be a compile-time check, just stuffing here instead for now
-    dmn_assert(POOL_SIZE >= (256 + RED_SIZE + RED_SIZE));
+    gdnsd_assert(POOL_SIZE >= (256 + RED_SIZE + RED_SIZE));
 
     // This logically follows from the above asserts, but JIC
-    dmn_assert(size_plus_red <= POOL_SIZE);
+    gdnsd_assert(size_plus_red <= POOL_SIZE);
 
     // handle pool switch if we're out of room
     //   + take care to extend the pools array if necc.
@@ -228,7 +228,7 @@ uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label) {
 //   properly a just method of ltarena_t in that sense.
 const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
     dnhash_t* dnhash = lta->dnhash;
-    dmn_assert(dnhash); // not closed
+    gdnsd_assert(dnhash); // not closed
 
     const unsigned hmask = dnhash->mask;
     const uint8_t** table = dnhash->table;

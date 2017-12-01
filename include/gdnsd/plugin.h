@@ -26,7 +26,6 @@
 // Include all of the libgdnsd stuff for convenience
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/net.h>
@@ -80,7 +79,7 @@ void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
 F_NONNULL
 void SYM_ADD_SVC(GDNSD_PLUGIN_NAME)(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);
 F_NONNULL
-void SYM_ADD_MON_ADDR(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr, const unsigned idx);
+void SYM_ADD_MON_ADDR(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr, const unsigned idx);
 F_NONNULL
 void SYM_ADD_MON_CNAME(GDNSD_PLUGIN_NAME)(const char* desc, const char* svc_name, const char* cname, const unsigned idx);
 F_NONNULL

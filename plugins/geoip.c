@@ -56,7 +56,7 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
 
 F_NONNULL
 static bool top_config_hook(vscf_data_t* top_config) {
-    dmn_assert(vscf_is_hash(top_config));
+    gdnsd_assert(vscf_is_hash(top_config));
 
     vscf_data_t* maps = vscf_hash_get_data_byconstkey(top_config, "maps", true);
     if(!maps)
@@ -79,18 +79,18 @@ static bool top_config_hook(vscf_data_t* top_config) {
 }
 
 static void bottom_config_hook(void) {
-    dmn_assert(gdmaps);
+    gdnsd_assert(gdmaps);
     gdmaps_load_databases(gdmaps);
 }
 
 void plugin_geoip_pre_run(void) {
-    dmn_assert(gdmaps);
+    gdnsd_assert(gdmaps);
     gdmaps_setup_watchers(gdmaps);
 }
 
 F_NONNULL
 static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo, unsigned* scope_out) {
-    dmn_assert(gdmaps);
+    gdnsd_assert(gdmaps);
     return gdmaps_lookup(gdmaps, mapnum, cinfo, scope_out);
 }
 

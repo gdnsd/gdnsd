@@ -1,4 +1,4 @@
-/* Copyright © 2014 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -17,9 +17,18 @@
  *
  */
 
-#ifndef GDNSD_NET_PRIV_H
-#define GDNSD_NET_PRIV_H
+#ifndef GDNSD_DAEMON_H
+#define GDNSD_DAEMON_H
 
-void gdnsd_init_net(void);
+#include <stdbool.h>
 
-#endif // GDNSD_NET_PRIV_H
+// This ignores SIGPIPE and detects systemd, which in turn affects log output
+// and enables ready notification below).
+// If "daemonize" is set, also does traditional daemonization and ignores
+// SIGHUP in the final process.
+void gdnsd_init_daemon(const bool daemonize);
+
+// Notify systemd (if applicable) or fg process that a daemon is fully online and ready
+void gdnsd_daemon_notify_ready(void);
+
+#endif // GDNSD_DAEMON_H

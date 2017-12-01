@@ -15,7 +15,7 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     # only 'checkconf', 'start', 'restart', 'condrestart' invoke plugin callbacks at all
     [RM] void plugin_foo_load_config(vscf_data_t* pc, const unsigned num_threads)
     [ M] void plugin_foo_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
-    [ M] void plugin_foo_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const dmn_anysin_t* addr, const unsigned idx);
+    [ M] void plugin_foo_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr, const unsigned idx);
     [ M] void plugin_foo_add_mon_cname(const char* desc, const char* svc_name, const char* cname, const unsigned idx);
     # only 'start', 'restart', and 'condrestart' continue past this point
     [ M] void plugin_foo_init_monitors(struct ev_loop* mon_loop)
@@ -420,7 +420,7 @@ return.
 =item debugging
 
 Build your plugin with C<-DNDEBUG> unless you're actually debugging
-development code, and make liberal use of C<dmn_assert()> and
+development code, and make liberal use of C<gdnsd_assert()> and
 C<log_debug()> where applicable.
 
 =item prototypes and headers

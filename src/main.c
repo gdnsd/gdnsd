@@ -22,6 +22,7 @@
 
 #include "conf.h"
 #include "socks.h"
+#include "daemon.h"
 #include "dnsio_tcp.h"
 #include "dnsio_udp.h"
 #include "dnspacket.h"
@@ -35,6 +36,7 @@
 #include <gdnsd-prot/mon.h>
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
+#include <gdnsd/net.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/misc.h>
@@ -84,34 +86,29 @@ static void atexit_debug_execute(void) { }
 #endif
 
 F_NONNULL F_NORETURN
-static void syserr_for_ev(const char* msg) { log_fatal("%s: %s", msg, dmn_logf_errno()); }
+static void syserr_for_ev(const char* msg) { log_fatal("%s: %s", msg, logf_errno()); }
 
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
+    const char* def_cfdir = gdnsd_get_default_config_dir();
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-        "Usage: %s [-fsSxD] [-c %s] <action>\n"
+        "Usage: %s [-c %s] [-D] [-l] [-S] [-s] <action>\n"
+        "  -c - Configuration directory, default '%s'\n"
         "  -D - Enable verbose debug output\n"
-        "  -f - Foreground mode for [re]start actions\n"
-        "  -s - Force 'zones_strict_startup = true' for this invocation\n"
+        "  -l - Send logs to syslog rather than stderr\n"
         "  -S - Force 'zones_strict_data = true' for this invocation\n"
-        "  -c - Configuration directory\n"
-        "  -x - No syslog output (must use -f with this if [re]start)\n"
+        "  -s - Force 'zones_strict_startup = true' for this invocation\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
-        "  start - Start " PACKAGE_NAME " as a regular daemon\n"
-        "  stop - Stops a running daemon previously started by 'start'\n"
-        "  reload-zones - Send SIGUSR1 to running daemon for zone data reload\n"
-        "  restart - Equivalent to checkconf && stop && start, but faster\n"
-        "  condrestart - Does 'restart' action only if already running\n"
-        "  try-restart - Aliases 'condrestart'\n"
-        "  status - Checks the status of the running daemon\n"
+        "  start - Start as a regular foreground process\n"
+        "  daemonize - Start as a background daemon (implies -l)\n"
         "\nFeatures: " BUILD_FEATURES
         "\nBuild Info: " BUILD_INFO
         "\nBug report URL: " PACKAGE_BUGREPORT
         "\nGeneral info URL: " PACKAGE_URL
         "\n",
-        argv0, gdnsd_get_default_config_dir()
+        argv0, def_cfdir, def_cfdir
     );
     exit(2);
 }
@@ -129,7 +126,7 @@ static void* zone_data_runtime(void* unused V_UNUSED) {
 
     ev_run(zdata_loop, 0);
 
-    dmn_assert(0); // should never be reached as loop never terminates
+    gdnsd_assert(0); // should never be reached as loop never terminates
     ev_loop_destroy(zdata_loop);
     return NULL;
 }
@@ -145,7 +142,7 @@ static void* mon_runtime(void* scfg_asvoid) {
     statio_start(mon_loop, socks_cfg);
     ev_run(mon_loop, 0);
 
-    dmn_assert(0); // should never be reached as loop never terminates
+    gdnsd_assert(0); // should never be reached as loop never terminates
     ev_loop_destroy(mon_loop);
     return NULL;
 }
@@ -177,13 +174,13 @@ static void start_threads(socks_cfg_t* socks_cfg) {
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, t);
         if(pthread_err)
             log_fatal("pthread_create() of DNS thread %u (for %s:%s) failed: %s",
-                i, t->is_udp ? "UDP" : "TCP", dmn_logf_anysin(&t->ac->addr), dmn_logf_strerror(pthread_err));
+                i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_strerror(pthread_err));
     }
 
     pthread_t zone_data_threadid;
     pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
     if(pthread_err)
-        log_fatal("pthread_create() of zone data thread failed: %s", dmn_logf_strerror(pthread_err));
+        log_fatal("pthread_create() of zone data thread failed: %s", logf_strerror(pthread_err));
 
     // This waits for all of the stat structures to be allocated
     //  by the i/o threads before continuing on.  They must be ready
@@ -194,7 +191,7 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     pthread_t mon_threadid;
     pthread_err = pthread_create(&mon_threadid, &attribs, &mon_runtime, socks_cfg);
     if(pthread_err)
-        log_fatal("pthread_create() of monitoring thread failed: %s", dmn_logf_strerror(pthread_err));
+        log_fatal("pthread_create() of monitoring thread failed: %s", logf_strerror(pthread_err));
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
@@ -203,128 +200,33 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     pthread_attr_destroy(&attribs);
 }
 
-static void memlock_rlimits(const bool started_as_root) {
-#ifdef RLIMIT_MEMLOCK
-    struct rlimit rlim;
-    if(getrlimit(RLIMIT_MEMLOCK, &rlim))
-        log_fatal("getrlimit(RLIMIT_MEMLOCK) failed: %s", dmn_logf_errno());
-
-    if(rlim.rlim_cur != RLIM_INFINITY) {
-        if(!started_as_root) {
-            // First, raise _cur to _max, which should never fail
-            if(rlim.rlim_cur != rlim.rlim_max) {
-                rlim.rlim_cur = rlim.rlim_max;
-                if(setrlimit(RLIMIT_MEMLOCK, &rlim))
-                    log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = max) "
-                        "failed: %s", dmn_logf_errno());
-            }
-
-            unsigned long long rc_printable = rlim.rlim_cur;
-
-            if(rlim.rlim_cur < 1048576)
-                log_fatal("Not started as root, lock_mem was set, "
-                    "and the rlimit for locked memory is unreasonably "
-                    "low (%llu bytes), failing", rc_printable);
-
-            log_info("The rlimit for locked memory is %llu MB, and the "
-                "daemon can't do anything about that since it wasn't "
-                "started as root.  This may or may not be too small at "
-                "runtime, leading to failure.  You have been warned.",
-                (rc_printable >> 20));
-        }
-        else {
-            // Luckily, root can do as he pleases with the ulimits, but
-            //  we'll do it in two steps just in case any platforms
-            //  are braindead about it.  This does open a hole in the
-            //  sense that if someone were to remotely take control
-            //  of the daemon via exploit, they can now lock large
-            //  amounts of memory even though the daemon has dropped
-            //  privileges for most other dangerous operations.
-            //  The other alternatives are trying to pre-calculate
-            //  all future memory usage (possible, but a PITA to
-            //  maintain), or simply letting the code fail post-
-            //  daemonization in an unfortunately rather common case.
-            // Another option would be to offer a configfile parameter
-            //  for the rlimit value in this case.
-            // If the daemon gets compromised, even with privdrop,
-            //  memlock is probably the least of your worries anyways.
-            rlim.rlim_max = RLIM_INFINITY;
-            if(setrlimit(RLIMIT_MEMLOCK, &rlim))
-                log_fatal("setrlimit(RLIMIT_MEMLOCK, max = INF) "
-                    "failed: %s", dmn_logf_errno());
-
-            rlim.rlim_cur = RLIM_INFINITY;
-            if(setrlimit(RLIMIT_MEMLOCK, &rlim))
-                log_fatal("setrlimit(RLIMIT_MEMLOCK, cur = INF, "
-                    "max = INF) failed: %s", dmn_logf_errno());
-        }
-    }
-#endif
-}
-
 typedef enum {
-    ACT_CHECKCFG   = 0,
+    ACT_UNDEF = 0,
+    ACT_CHECKCONF,
     ACT_START,
-    ACT_STOP,
-    ACT_RELOADZ,
-    ACT_RESTART,
-    ACT_CRESTART, // downgrades to ACT_RESTART after checking...
-    ACT_STATUS,
-    ACT_UNDEF
-} action_t;
-
-typedef struct {
-    const char* cmdstring;
-    action_t action;
-} actmap_t;
-
-static actmap_t actionmap[] = {
-    { "checkconf",    ACT_CHECKCFG },
-    { "start",        ACT_START },
-    { "stop",         ACT_STOP },
-    { "reload-zones", ACT_RELOADZ },
-    { "restart",      ACT_RESTART },
-    { "condrestart",  ACT_CRESTART },
-    { "try-restart",  ACT_CRESTART },
-    { "status",       ACT_STATUS },
-};
-
-F_NONNULL F_PURE
-static action_t match_action(const char* arg) {
-    unsigned i;
-    for(i = 0; i < ARRAY_SIZE(actionmap); i++)
-        if(!strcasecmp(actionmap[i].cmdstring, arg))
-            return actionmap[i].action;
-    return ACT_UNDEF;
-}
+    ACT_DAEMONIZE
+} cmdline_action_t;
 
 typedef struct {
     const char* cfg_dir;
     bool force_zss;
     bool force_zsd;
-    bool debug;
-    bool foreground;
-    bool use_syslog;
+    cmdline_action_t action;
 } cmdline_opts_t;
 
 F_NONNULL
-static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
-    action_t action = ACT_UNDEF;
-
+static void parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
     int optchar;
-    while((optchar = getopt(argc, argv, "c:xDfsS"))) {
+    while((optchar = getopt(argc, argv, "c:DlsS"))) {
         switch(optchar) {
             case 'c':
                 copts->cfg_dir = optarg;
                 break;
-            case 'x':
-                copts->use_syslog = false;
-                break;
             case 'D':
-                copts->debug = true;
+                gdnsd_log_set_debug(true);
                 break;
-            case 'f':
-                copts->foreground = true;
+            case 'l':
+                gdnsd_log_set_syslog(true);
                 break;
             case 's':
                 copts->force_zss = true;
@@ -333,112 +235,46 @@ static action_t parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
                 copts->force_zsd = true;
                 break;
             case -1:
-                if(optind != (argc - 1))
-                    usage(argv[0]);
-                action = match_action(argv[optind]);
-                if(action == ACT_UNDEF)
-                    usage(argv[0]);
-                return action;
+                if(optind == (argc - 1)) {
+                    if(!strcasecmp("checkconf", argv[optind])) {
+                        copts->action = ACT_CHECKCONF;
+                        return;
+                    } else if(!strcasecmp("start", argv[optind])) {
+                        copts->action = ACT_START;
+                        return;
+                    } else if(!strcasecmp("daemonize", argv[optind])) {
+                        copts->action = ACT_DAEMONIZE;
+                        gdnsd_log_set_syslog(true);
+                        return;
+                    }
+                }
+                // fall-through
             default:
                 usage(argv[0]);
         }
     }
-
     usage(argv[0]);
 }
 
 int main(int argc, char** argv) {
+    umask(022);
     // Parse args, getting the config path
     //   returning the action.  Exits on cmdline errors,
-    //   does not use libdmn assert/log stuff.
+    //   does not use assert/log stuff.
     cmdline_opts_t copts = {
         .cfg_dir = NULL,
         .force_zss = false,
         .force_zsd = false,
-        .debug = false,
-        .foreground = false,
-        .use_syslog = true,
+        .action = ACT_UNDEF
     };
-    action_t action = parse_args(argc, argv, &copts);
 
-    // basic action-based parameters
-    bool will_start;
-    switch(action) {
-        case ACT_START:
-        case ACT_RESTART:
-        case ACT_CRESTART:
-            will_start = true;
-            break;
-        case ACT_CHECKCFG:
-        case ACT_STOP:
-        case ACT_RELOADZ:
-        case ACT_STATUS:
-        case ACT_UNDEF:
-        default:
-            will_start = false;
-            break;
-    }
+    parse_args(argc, argv, &copts);
+    gdnsd_assert(copts.action != ACT_UNDEF);
 
-    // All simple/check actions are implicitly foreground invocations
-    if(!will_start)
-        copts.foreground = true;
-
-    // Do not allow disabling syslog when attempting to daemonize
-    //   without the foreground flag, as this would result in
-    //   complete silence over all messaging channels
-    if(!copts.use_syslog && !copts.foreground)
-        usage(argv[0]);
-
-    // init1 lets us start using dmn log funcs for config errors, etc
-    dmn_init1(copts.debug, copts.foreground, copts.use_syslog, PACKAGE_NAME);
-
-    // Initialize libgdnsd and get parsed config
-    vscf_data_t* cfg_root = gdnsd_initialize(copts.cfg_dir, will_start);
-
-    // init2() lets us do daemon actions
-    char* rundir = gdnsd_resolve_path_run(NULL, NULL);
-    dmn_init2(rundir);
-    free(rundir);
-
-    // Take action
-    if(action == ACT_STATUS) {
-        const pid_t oldpid = dmn_status();
-        if(!oldpid) {
-            log_info("status: not running");
-            exit(3);
-        }
-        log_info("status: running at pid %li", (long)oldpid);
-        exit(0);
-    }
-    else if(action == ACT_STOP) {
-        exit(dmn_stop() ? 1 : 0);
-    }
-    else if(action == ACT_RELOADZ) {
-        exit(dmn_signal(SIGUSR1));
-    }
-
-    // from here out, we can only be doing checkcfg or [re]start
-    dmn_assert(
-           action == ACT_START
-        || action == ACT_RESTART
-        || action == ACT_CRESTART
-        || action == ACT_CHECKCFG
-    );
-
-    if(action != ACT_CHECKCFG) {
-        const pid_t oldpid = dmn_status();
-        if(action == ACT_START && oldpid) {
-            log_err("start: already running at pid %li", (long)oldpid);
-            exit(1);
-        }
-        else if(action == ACT_CRESTART) {
-            if(!oldpid) {
-                log_info("condrestart: not running, will not restart");
-                exit(0);
-            }
-            action = ACT_RESTART;
-        }
-    }
+    // Initialize libgdnsd basic paths/config stuff
+    if(copts.action != ACT_CHECKCONF)
+        gdnsd_init_daemon(copts.action == ACT_DAEMONIZE);
+    vscf_data_t* cfg_root = gdnsd_init_paths(copts.cfg_dir, copts.action != ACT_CHECKCONF);
 
     // Load full configuration and expose through the globals
     socks_cfg_t* socks_cfg = socks_conf_load(cfg_root);
@@ -447,23 +283,14 @@ int main(int argc, char** argv) {
     gcfg = cfg;
     vscf_destroy(cfg_root);
 
-    // Set up and validate privdrop info if necc
-    dmn_init3(cfg->username, (action == ACT_RESTART));
-
-    // Load zone data (final step if ACT_CHECKCFG)
-    ztree_init(action == ACT_CHECKCFG);
-    if(action == ACT_CHECKCFG)
+    // Load zone data (final step if checkconf)
+    ztree_init(copts.action == ACT_CHECKCONF);
+    if(copts.action == ACT_CHECKCONF)
         exit(0);
 
-    // from here out, all actions are attempting startup...
-    dmn_assert(action == ACT_START || action == ACT_RESTART);
-
-    // Did we start as root?  This determines how we handle memlock/setpriority
-    const bool started_as_root = !geteuid();
-
-    // Check/set rlimits for mlockall() if necessary and possible
-    if(cfg->lock_mem)
-        memlock_rlimits(started_as_root);
+    // Initialize the network and PRNG bits of libgdnsd for runtime operation
+    gdnsd_init_net();
+    gdnsd_init_rand();
 
     // Initialize DNS listening sockets, but do not bind() them yet
     socks_dns_lsocks_init(socks_cfg);
@@ -471,32 +298,15 @@ int main(int argc, char** argv) {
     // init the stats summing/output code + listening sockets (again no bind yet)
     statio_init(socks_cfg);
 
-    // set up our pcall for socket binding later
-    unsigned bind_socks_funcidx = dmn_add_pcall(socks_helper_bind_all);
-
-    dmn_fork();
-
-    // If root, or if user explicitly set a priority...
-    if(started_as_root || cfg->priority != -21) {
-        // If root and no explicit value, use -11
-        if(started_as_root && cfg->priority == -21)
-            cfg->priority = -11;
-        if(setpriority(PRIO_PROCESS, (id_t)getpid(), cfg->priority))
-            log_warn("setpriority(%i) failed: %s", cfg->priority, dmn_logf_errno());
-    }
-
     // Lock whole daemon into memory, including
     //  all future allocations.
     if(cfg->lock_mem)
         if(mlockall(MCL_CURRENT | MCL_FUTURE))
             log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)",
-                dmn_logf_errno());
+                logf_errno());
 
     // Initialize dnspacket stuff
     dnspacket_global_setup(socks_cfg);
-
-    // drop privs
-    dmn_secure(cfg->weaker_security);
 
     // Set up libev error callback
     ev_set_syserr_cb(&syserr_for_ev);
@@ -513,32 +323,11 @@ int main(int argc, char** argv) {
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
 
-    // ask the helper (which is still root) to bind our sockets,
-    //   this blocks until completion.  This uses SO_REUSEPORT
-    //   if available.  If the previous instance also uses SO_REUSEPORT
-    //   (gdnsd 2.x), then we should get success here and overlapping
-    //   sockets before we kill the old daemon.
-    dmn_pcall(bind_socks_funcidx);
+    // Bind sockets
+    socks_helper_bind_all();
 
     // validate the results of the above, softly
-    bool first_binds_failed = socks_daemon_check_all(socks_cfg, true);
-
-    // if the first binds didn't work (probably lack of SO_REUSEPORT,
-    //   either in general or just in the old 1.x daemon we're taking over),
-    //   we have to stop the old daemon before binding again.
-    if(first_binds_failed) {
-        // Kills old daemon on the way, if we're restarting
-        dmn_acquire_pidfile();
-
-        // This re-attempts binding any specific sockets that failed the
-        //   first time around, e.g. in non-SO_REUSEPORT cases where we
-        //   had to wait on daemon death above
-        dmn_pcall(bind_socks_funcidx);
-
-        // hard check this time - this function will fail fatally
-        //   if any sockets can't be acquired.
-        socks_daemon_check_all(socks_cfg, false);
-    }
+    socks_daemon_check_all(socks_cfg, false);
 
     // Start up all of the UDP and TCP threads, each of
     // which has all signals blocked and has its own
@@ -550,19 +339,12 @@ int main(int argc, char** argv) {
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
 
-    // If we succeeded at SO_REUSEPORT takeover earlier on the first
-    //   bind() attempts, we still need to kill the old daemon (if restarting)
-    //   at this point, since we didn't earlier for availability overlap.
-    if(!first_binds_failed)
-        dmn_acquire_pidfile();
-
     // The signals we'll listen for below
     sigset_t mainthread_sigs;
     sigemptyset(&mainthread_sigs);
     sigaddset(&mainthread_sigs, SIGINT);
     sigaddset(&mainthread_sigs, SIGTERM);
     sigaddset(&mainthread_sigs, SIGUSR1);
-    sigaddset(&mainthread_sigs, SIGHUP);
 
     // Block the relevant signals before entering the sigwait() loop
     sigset_t sigmask_prev;
@@ -570,18 +352,17 @@ int main(int argc, char** argv) {
     if(pthread_sigmask(SIG_BLOCK, &mainthread_sigs, &sigmask_prev))
         log_fatal("pthread_sigmask() failed");
 
-    // Report success back to whoever invoked "start" or "restart" command...
-    //  (or in the foreground case, kill our helper process)
-    // we do this under blocking so that there's no racing with someone
-    //  expecting correct signal actions after the starter exits
-    dmn_finish();
+    // We wait to notify 3rd parties (e.g. systemd, or fg process if
+    // daemonizing) that we're ready until after the block above, so that they
+    // can reliably get the right signal actions from this point forward
+    gdnsd_daemon_notify_ready();
 
     int killed_by = 0;
     while(!killed_by) {
         int rcvd_sig = 0;
         int sw_rv;
         if((sw_rv = sigwait(&mainthread_sigs, &rcvd_sig)))
-            log_fatal("sigwait() failed with error %s", dmn_logf_strerror(sw_rv));
+            log_fatal("sigwait() failed with error %s", logf_strerror(sw_rv));
 
         switch(rcvd_sig) {
             case SIGTERM:
@@ -597,21 +378,14 @@ int main(int argc, char** argv) {
                 zsrc_djb_sigusr1();
                 zsrc_rfc1035_sigusr1();
                 break;
-            case SIGHUP:
-                log_info("Received HUP signal (ignored; does nothing in this version!)");
-                break;
             default:
-                dmn_assert(0);
+                gdnsd_assert(0);
                 break;
         }
     }
 
     // Ask statio thread to send final stats to the log
     statio_final_stats();
-
-    // let newer versions of systemd know what's going on
-    //  in the case the int/term sig came from outside
-    dmn_sd_notify("STOPPING=1", true);
 
     // get rid of child procs (e.g. extmon helper)
     gdnsd_kill_registered_children();
@@ -626,7 +400,7 @@ int main(int argc, char** argv) {
     if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
         log_fatal("pthread_sigmask() failed");
 
-#ifdef DMN_COVERTEST_EXIT
+#ifdef GDNSD_COVERTEST_EXIT
     // We have to use exit() when testing coverage, as raise()
     //   skips over writing out gcov data
     exit(0);
@@ -637,5 +411,5 @@ int main(int argc, char** argv) {
 #endif
 
     // raise should not return
-    dmn_assert(0);
+    gdnsd_assert(0);
 }

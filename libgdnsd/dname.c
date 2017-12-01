@@ -20,7 +20,6 @@
 #include <config.h>
 #include <gdnsd/dname.h>
 
-#include <gdnsd/dmn.h>
 #include <gdnsd/compiler.h>
 #include <gdnsd/misc.h>
 
@@ -31,7 +30,7 @@
 /* The semantics of these functions are described in gdnsd/dname.h ... */
 
 unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const unsigned len) {
-    dmn_assert(len);
+    gdnsd_assert(len);
 
     char* optr = out;
     for(unsigned i = 0; i < len; i++) {
@@ -93,7 +92,7 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
     //  (rest of the code can't handle len == 0)
     if(!len) {
         *dname_cursor = 255;
-        dmn_assert(dname_status(dname) == DNAME_PARTIAL);
+        gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
         return DNAME_PARTIAL;
     }
 
@@ -177,12 +176,12 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
         if(end_of_input) {
             if(cursor_has_dot) {
                 *dname_cursor = 0;
-                dmn_assert(dname_status(dname) == DNAME_VALID);
+                gdnsd_assert(dname_status(dname) == DNAME_VALID);
                 return DNAME_VALID;
             }
             else {
                 *dname_cursor = 255;
-                dmn_assert(dname_status(dname) == DNAME_PARTIAL);
+                gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
                 return DNAME_PARTIAL;
             }
         }
@@ -193,7 +192,7 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
 }
 
 unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str) {
-    dmn_assert(dname_status(dname) != DNAME_INVALID);
+    gdnsd_assert(dname_status(dname) != DNAME_INVALID);
 
     const char* str_base = str; // for output length later
     dname++; // skip overall length byte, we don't use it here
@@ -222,13 +221,13 @@ unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str
         str--;
     *str++ = '\0';
 
-    dmn_assert(str > str_base);
+    gdnsd_assert(str > str_base);
     return (unsigned)(str - str_base);
 }
 
 gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2) {
-    dmn_assert(dname_status(dn1) != DNAME_INVALID);
-    dmn_assert(dname_status(dn2) != DNAME_INVALID);
+    gdnsd_assert(dname_status(dn1) != DNAME_INVALID);
+    gdnsd_assert(dname_status(dn2) != DNAME_INVALID);
 
     gdnsd_dname_status_t rv = DNAME_INVALID;
     const unsigned dn1_len = *dn1;
@@ -266,7 +265,7 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
     if(&dname[oal] > dnptr)
         return DNAME_INVALID;
 
-    dmn_assert(&dname[oal] == dnptr);
+    gdnsd_assert(&dname[oal] == dnptr);
 
     return llen ? DNAME_PARTIAL : DNAME_VALID;
 }

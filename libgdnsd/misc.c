@@ -20,7 +20,6 @@
 #include <config.h>
 #include <gdnsd/misc.h>
 #include <gdnsd-prot/misc.h>
-#include "misc.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -151,10 +150,10 @@ static const unsigned THROW_MASK = 0xFFFF;
 
 // Must be called early, before any consumers of the public PRNG
 //  init interfaces from C<gdnsd/misc.h>
-void gdnsd_rand_meta_init(void) {
+void gdnsd_init_rand(void) {
     static bool has_run = false;
     if(has_run)
-        log_fatal("BUG: gdnsd_rand_meta_init() should only be called once!");
+        log_fatal("BUG: gdnsd_init_rand() should only be called once!");
     else
         has_run = true;
 
@@ -240,7 +239,7 @@ gdnsd_rstate32_t* gdnsd_rand32_init(void) {
 // fold X.Y.Z to a single uint32_t, same as <linux/version.h>
 F_CONST
 static uint32_t _version_fold(const unsigned x, const unsigned y, const unsigned z) {
-    dmn_assert(x < 65536); dmn_assert(y < 256); dmn_assert(z < 256);
+    gdnsd_assert(x < 65536); gdnsd_assert(y < 256); gdnsd_assert(z < 256);
     return (x << 16) + (y << 8) + z;
 }
 
@@ -270,7 +269,7 @@ size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {
     long name_max = fpathconf(dirfd(d), _PC_NAME_MAX);
     if(name_max < 0)
         log_fatal("fpathconf(%s, _PC_NAME_MAX) failed: %s",
-            dirname, dmn_logf_errno());
+            dirname, logf_errno());
     if(name_max < NAME_MAX)
         name_max = NAME_MAX;
     const size_t name_end = offsetof(struct dirent, d_name) + (size_t)name_max + 1U;
@@ -283,7 +282,7 @@ static pid_t* children = NULL;
 static unsigned n_children = 0;
 
 void gdnsd_register_child_pid(pid_t child) {
-    dmn_assert(child);
+    gdnsd_assert(child);
     children = xrealloc(children, sizeof(pid_t) * (n_children + 1));
     children[n_children++] = child;
 }
@@ -300,7 +299,7 @@ static unsigned _attempt_reap(unsigned attempts) {
             if(errno == ECHILD)
                 break;
             else
-                log_fatal("waitpid(-1, NULL, WNOHANG) failed: %s", dmn_logf_errno());
+                log_fatal("waitpid(-1, NULL, WNOHANG) failed: %s", logf_errno());
         }
         if(wprv) {
             log_debug("waitpid() reaped %li", (long)wprv);
@@ -348,9 +347,9 @@ void gdnsd_kill_registered_children(void) {
 }
 
 unsigned gdnsd_uscale_ceil(unsigned v, double s) {
-    dmn_assert(s >= 0.0);
-    dmn_assert(s <= 1.0);
+    gdnsd_assert(s >= 0.0);
+    gdnsd_assert(s <= 1.0);
     const double sv = ceil(v * s);
-    dmn_assert(sv <= (double)v);
+    gdnsd_assert(sv <= (double)v);
     return (unsigned)sv;
 }

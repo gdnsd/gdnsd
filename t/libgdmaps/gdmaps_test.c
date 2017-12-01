@@ -20,7 +20,6 @@
 #include <config.h>
 #include "gdmaps_test.h"
 
-#include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
@@ -81,8 +80,7 @@ void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, cons
 }
 
 void gdmaps_test_init(const char* cfg_dir) {
-    dmn_init1(false, true, false, "gdmaps_test");
-    gdnsd_initialize(cfg_dir, false);
+    gdnsd_init_paths(cfg_dir, false);
 }
 
 gdmaps_t* gdmaps_test_load(const char* cfg_data) {

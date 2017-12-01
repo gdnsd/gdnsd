@@ -146,7 +146,7 @@ static uint8_t *parse_dname(zscan_t *z, uint8_t *dname, field_t *f) {
             if(dname_cat(dname, dname_root) == DNAME_INVALID)
                 parse_error("'%.*s' is not a valid name", FIELD_FMT(f));
             break;
-        default: dmn_assert(0);
+        default: gdnsd_assert(0);
     }
     return dname;
 }
@@ -155,7 +155,7 @@ F_NONNULL
 static uint8_t *make_dname_relative(uint8_t* dname, const uint8_t* parent_dname) {
     *dname -= *parent_dname - 1;
     dname[*dname] = 0;
-    dmn_assert(dname_status(dname) == DNAME_VALID);
+    gdnsd_assert(dname_status(dname) == DNAME_VALID);
     return dname;
 }
 
@@ -179,7 +179,7 @@ static uint8_t *expand_dname(zscan_t *z, uint8_t *dname, field_t *f, const uint8
         case DNAME_INVALID:
             parse_error("unable to expand '%.*s' as to valid domain name", FIELD_FMT(f));
             break;
-        default: dmn_assert(0);
+        default: gdnsd_assert(0);
     }
 
     return dname;
@@ -467,7 +467,7 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
 
     z->file = fopen(z->full_fn, "rt");
     if(z->file == NULL)
-        parse_error("Cannot open zone file '%s' for reading: %s", z->full_fn, dmn_logf_errno());
+        parse_error("Cannot open zone file '%s' for reading: %s", z->full_fn, logf_errno());
 
     while ((len = getline(&z->line, &z->allocated, z->file)) != -1) {
         z->lcount++;
@@ -523,7 +523,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
         if(errno == ENOENT)
             log_debug("djb: directory '%s' does not exist", z->path);
         else
-            log_err("djb: cannot open directory '%s': %s", z->path, dmn_logf_errno());
+            log_err("djb: cannot open directory '%s': %s", z->path, logf_errno());
         return true;
     }
 
@@ -533,7 +533,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
         struct dirent* e = readdir(dir);
         if(!e) {
             if(errno)
-                log_fatal("djb: readdir(%s) failed: %s", z->path, dmn_logf_errno());
+                log_fatal("djb: readdir(%s) failed: %s", z->path, logf_errno());
             else
                 break;
         }
@@ -543,7 +543,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
         struct stat st;
         z->full_fn = gdnsd_str_combine(z->path, e->d_name, &z->fn);
         if (stat(z->full_fn, &st)) {
-            log_err("djb: cannot stat file '%s': %s", z->full_fn, dmn_logf_errno());
+            log_err("djb: cannot stat file '%s': %s", z->full_fn, logf_errno());
             parse_abort();
         }
         if((st.st_mode & S_IFMT) != S_IFREG) {

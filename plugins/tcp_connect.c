@@ -55,7 +55,7 @@ typedef struct {
     ev_io* connect_watcher;
     ev_timer* timeout_watcher;
     ev_timer* interval_watcher;
-    dmn_anysin_t addr;
+    gdnsd_anysin_t addr;
     unsigned idx;
     tcp_state_t tcp_state;
     int sock;
@@ -68,11 +68,11 @@ static tcp_events_t** mons = NULL;
 
 F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
 
-    dmn_assert(md);
+    gdnsd_assert(md);
 
     if(md->tcp_state != TCP_STATE_WAITING) {
         log_warn("plugin_tcp_connect: A monitoring request attempt seems to have "
@@ -82,9 +82,9 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
         return;
     }
 
-    dmn_assert(md->sock == -1);
-    dmn_assert(!ev_is_active(md->connect_watcher));
-    dmn_assert(!ev_is_active(md->timeout_watcher) && !ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(md->sock == -1);
+    gdnsd_assert(!ev_is_active(md->connect_watcher));
+    gdnsd_assert(!ev_is_active(md->timeout_watcher) && !ev_is_pending(md->timeout_watcher));
 
     log_debug("plugin_tcp_connect: Starting state poll of %s", md->desc);
 
@@ -92,12 +92,12 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
     const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
     if(sock == -1) {
-        log_err("plugin_tcp_connect: Failed to create monitoring socket: %s", dmn_logf_errno());
+        log_err("plugin_tcp_connect: Failed to create monitoring socket: %s", logf_errno());
         return;
     }
 
     if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1) {
-        log_err("plugin_tcp_connect: Failed to set O_NONBLOCK on monitoring socket: %s", dmn_logf_errno());
+        log_err("plugin_tcp_connect: Failed to set O_NONBLOCK on monitoring socket: %s", logf_errno());
         close(sock);
         return;
     }
@@ -125,7 +125,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
                 log_debug("plugin_tcp_connect: State poll of %s failed very quickly", md->desc);
                 break;
             default:
-                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_errno());
+                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
         }
     }
     else {
@@ -138,15 +138,15 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
 F_NONNULL
 static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_WRITE);
+    gdnsd_assert(revents == EV_WRITE);
 
     tcp_events_t* md = io->data;
 
-    dmn_assert(md);
-    dmn_assert(md->tcp_state == TCP_STATE_CONNECTING);
-    dmn_assert(ev_is_active(md->connect_watcher));
-    dmn_assert(ev_is_active(md->timeout_watcher) || ev_is_pending(md->timeout_watcher));
-    dmn_assert(md->sock > -1);
+    gdnsd_assert(md);
+    gdnsd_assert(md->tcp_state == TCP_STATE_CONNECTING);
+    gdnsd_assert(ev_is_active(md->connect_watcher));
+    gdnsd_assert(ev_is_active(md->timeout_watcher) || ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(md->sock > -1);
 
     // nonblocking connect() just finished, need to check status
     bool success = false;
@@ -162,10 +162,10 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
             case EHOSTUNREACH:
             case EHOSTDOWN:
             case ENETUNREACH:
-                log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->desc, dmn_logf_strerror(so_error));
+                log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->desc, logf_strerror(so_error));
                 break;
             default:
-                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", dmn_logf_strerror(so_error));
+                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_strerror(so_error));
         }
     }
     else {
@@ -183,14 +183,14 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
 
 F_NONNULL
 static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
-    dmn_assert(revents == EV_TIMER);
+    gdnsd_assert(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
 
-    dmn_assert(md);
-    dmn_assert(md->sock > -1);
-    dmn_assert(md->tcp_state == TCP_STATE_CONNECTING);
-    dmn_assert(ev_is_active(md->connect_watcher));
+    gdnsd_assert(md);
+    gdnsd_assert(md->sock > -1);
+    gdnsd_assert(md->tcp_state == TCP_STATE_CONNECTING);
+    gdnsd_assert(ev_is_active(md->connect_watcher));
 
     log_debug("plugin_tcp_connect: State poll of %s timed out", md->desc);
     ev_io_stop(loop, md->connect_watcher);
@@ -231,7 +231,7 @@ void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     this_svc->interval = interval;
 }
 
-void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const dmn_anysin_t* addr, const unsigned idx) {
+void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx) {
     tcp_events_t* this_mon = xcalloc(1, sizeof(tcp_events_t));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
@@ -243,14 +243,14 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
         }
     }
 
-    dmn_assert(this_mon->tcp_svc);
+    gdnsd_assert(this_mon->tcp_svc);
 
-    memcpy(&this_mon->addr, addr, sizeof(dmn_anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(gdnsd_anysin_t));
     if(this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->tcp_svc->port);
     }
     else {
-        dmn_assert(this_mon->addr.sa.sa_family == AF_INET6);
+        gdnsd_assert(this_mon->addr.sa.sa_family == AF_INET6);
         this_mon->addr.sin6.sin6_port = htons(this_mon->tcp_svc->port);
     }
 
@@ -276,7 +276,7 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
 void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
     for(unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = mons[i]->interval_watcher;
-        dmn_assert(mons[i]->sock == -1);
+        gdnsd_assert(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
     }
@@ -285,7 +285,7 @@ void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
 void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop) {
     for(unsigned i = 0; i < num_mons; i++) {
         tcp_events_t* mon = mons[i];
-        dmn_assert(mon->sock == -1);
+        gdnsd_assert(mon->sock == -1);
         const unsigned ival = mon->tcp_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
         ev_timer* ival_watcher = mon->interval_watcher;

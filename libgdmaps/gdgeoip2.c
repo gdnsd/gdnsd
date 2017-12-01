@@ -118,7 +118,7 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
     geoip2_t* db = xcalloc(1, sizeof(*db));
     int status = MMDB_open(pathname, MMDB_MODE_MMAP, &db->mmdb);
     if(status != MMDB_SUCCESS) {
-        dmn_log_err("plugin_geoip: map '%s': Failed to open GeoIP2 database '%s': %s",
+        log_err("plugin_geoip: map '%s': Failed to open GeoIP2 database '%s': %s",
             map_name, pathname, MMDB_strerror(status));
         free(db);
         return NULL;
@@ -134,7 +134,7 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
     //   should be backwards compatible, so we only need to check
     //   the major version here.
     if(meta->binary_format_major_version != 2U) {
-        dmn_log_err("plugin_geoip: map '%s': GeoIP2 database '%s' has"
+        log_err("plugin_geoip: map '%s': GeoIP2 database '%s' has"
             " unsupported binfmt major version %" PRIu16,
             map_name, pathname, meta->binary_format_major_version
         );
@@ -146,7 +146,7 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
     //   built-in assumptions based on record_size of 32 or less,
     //   yet the spec allows for larger in the future.
     if(meta->record_size > 32U) {
-        dmn_log_err("plugin_geoip: map '%s': GeoIP2 database '%s' has"
+        log_err("plugin_geoip: map '%s': GeoIP2 database '%s' has"
             " unsupported record_size %" PRIu16,
             map_name, pathname, meta->record_size
         );
@@ -155,7 +155,7 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
     }
 
     if(meta->ip_version != 4U && meta->ip_version != 6U) {
-        dmn_log_err("plugin_geoip: map '%s': GeoIP2 database '%s' has"
+        log_err("plugin_geoip: map '%s': GeoIP2 database '%s' has"
             " unsupported ip_version %" PRIu16,
             map_name, pathname, meta->ip_version
         );
@@ -174,20 +174,20 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
     if(db->is_city) {
         // 1546300799 == 2018-12-31T23:59:59
         if(city_auto_mode && strstr(meta->database_type, "GeoLite2") && meta->build_epoch > (uint64_t)1546300799LLU) {
-            dmn_log_err("plugin_geoip: map '%s': GeoIP2 DB '%s' appears to be a post-2018 GeoLite2-City database, which will not work with auto_dc_coords as configured because these databases lack the latitude and longitude data present in the commercial version.  See the auto_dc_coords section of the gdnsd-plugin-geoip documentation for more details.", map_name, pathname);
+            log_err("plugin_geoip: map '%s': GeoIP2 DB '%s' appears to be a post-2018 GeoLite2-City database, which will not work with auto_dc_coords as configured because these databases lack the latitude and longitude data present in the commercial version.  See the auto_dc_coords section of the gdnsd-plugin-geoip documentation for more details.", map_name, pathname);
             geoip2_destroy(db);
             return NULL;
         }
     } else {
         if(city_auto_mode) {
-            dmn_log_err("plugin_geoip: map '%s': GeoIP2 DB '%s' is not a City-level"
+            log_err("plugin_geoip: map '%s': GeoIP2 DB '%s' is not a City-level"
                 " database and this map uses auto_dc_coords",
                 map_name, pathname);
             geoip2_destroy(db);
             return NULL;
         }
         if(!strstr(meta->database_type, "Country"))
-            dmn_log_warn("plugin_geoip: map '%s': Assuming GeoIP2 database '%s'"
+            log_warn("plugin_geoip: map '%s': Assuming GeoIP2 database '%s'"
                 " has standard MaxMind Country data, but type is actually '%s'",
                 map_name, pathname, meta->database_type
             );
@@ -216,7 +216,7 @@ static const char* GEOIP2_PATH_CITY[] = { "city", "names", "en", NULL };
         }\
     }\
     else if(mmrv_ != MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR) {\
-        dmn_log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2 data (%s)",\
+        log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2 data (%s)",\
             state->db->map_name, MMDB_strerror(mmrv_));\
         siglongjmp(state->db->jbuf, 1);\
     }\
@@ -270,7 +270,7 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level) {
     }
 
     // used to search/fetch subdivision array elements
-    dmn_assert(level >= 2U && level <= 11U);
+    gdnsd_assert(level >= 2U && level <= 11U);
     const unsigned subd_level = level - 2U;
     const char idx[2] = { '0' + subd_level, '\0' };
     const char* path_subd[] = { "subdivisions", &idx[0], "iso_code", NULL };
@@ -290,7 +290,7 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level) {
         state->out_of_data = true;
     }
     else {
-        dmn_log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2City subdivision data (%s)",
+        log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2City subdivision data (%s)",
             state->db->map_name, MMDB_strerror(mmrv));
         siglongjmp(state->db->jbuf, 1);
     }
@@ -306,7 +306,7 @@ static const char* GEOIP2_PATH_LON[] = { "location", "longitude", NULL };
         d_set = true;\
     }\
     else if(mmrv_ != MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR) {\
-        dmn_log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2City location data (%s)",\
+        log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2City location data (%s)",\
             state.db->map_name, MMDB_strerror(mmrv_));\
         siglongjmp(state.db->jbuf, 1);\
     }\
@@ -315,7 +315,7 @@ static const char* GEOIP2_PATH_LON[] = { "location", "longitude", NULL };
 F_NONNULL
 static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
     // lack of both would be pointless, and is checked at outer scope
-    dmn_assert(db->dcmap || db->city_auto_mode);
+    gdnsd_assert(db->dcmap || db->city_auto_mode);
 
     geoip2_dcmap_cb_data_t state = {
         .db = db,
@@ -341,11 +341,11 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
 
     if(db->dcmap) {
         dclist = dcmap_lookup_loc_callback(db->dcmap, geoip2_dcmap_cb, &state);
-        dmn_assert(dclist == DCLIST_AUTO || dclist <= DCLIST_MAX);
+        gdnsd_assert(dclist == DCLIST_AUTO || dclist <= DCLIST_MAX);
     }
 
     if(dclist == DCLIST_AUTO) {
-        dmn_assert(db->city_auto_mode && db->is_city);
+        gdnsd_assert(db->city_auto_mode && db->is_city);
         dclist = 0; // default to the default dclist
 
         MMDB_entry_data_s val;
@@ -361,8 +361,8 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
         }
     }
 
-    dmn_assert(dclist != DCLIST_AUTO);
-    dmn_assert(dclist <= DCLIST_MAX);
+    gdnsd_assert(dclist != DCLIST_AUTO);
+    gdnsd_assert(dclist <= DCLIST_MAX);
     return dclist;
 }
 
@@ -381,17 +381,17 @@ static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry) {
 
     const uint32_t dclist = geoip2_get_dclist(db, db_entry);
     db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
-    dmn_assert(db->offset_cache[ndx]);
+    gdnsd_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
     db->offset_cache[ndx][bucket_size + 1].dclist = UINT32_MAX;
-    dmn_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
+    gdnsd_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
     return dclist;
 }
 
 F_NONNULL
 static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr ip, unsigned depth, const uint32_t node_num) {
-    dmn_assert(depth < 129U);
+    gdnsd_assert(depth < 129U);
 
     if(!depth) {
         log_err("plugin_geoip: map '%s': GeoIP2 database '%s': Error while traversing tree nodes: depth too low", db->map_name, db->pathname);
@@ -435,7 +435,7 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
                 geoip2_get_dclist_cached(db, &node.left_record_entry));
             break;
         default:
-            dmn_log_err("plugin_geoip: map %s: GeoIP2 data invalid left of node %u", db->map_name, node_num);
+            log_err("plugin_geoip: map %s: GeoIP2 data invalid left of node %u", db->map_name, node_num);
             siglongjmp(db->jbuf, 1);
     }
 
@@ -453,7 +453,7 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
                 geoip2_get_dclist_cached(db, &node.right_record_entry));
             break;
         default:
-            dmn_log_err("plugin_geoip: map %s: GeoIP2 data invalid right of node %u", db->map_name, node_num);
+            log_err("plugin_geoip: map %s: GeoIP2 data invalid right of node %u", db->map_name, node_num);
             siglongjmp(db->jbuf, 1);
     }
 
@@ -542,7 +542,7 @@ void gdgeoip2_init(void) {
 #else // HAVE_GEOIP2
 
 nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists V_UNUSED, const dcmap_t* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED, const bool city_no_region V_UNUSED) {
-    dmn_assert(pathname); dmn_assert(map_name); dmn_assert(dclists);
+    gdnsd_assert(pathname); gdnsd_assert(map_name); gdnsd_assert(dclists);
     log_fatal("plugin_geoip: map '%s': GeoIP2 support needed by '%s' not included in this build!", map_name, pathname);
     return NULL; // unreachable
 }

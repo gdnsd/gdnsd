@@ -32,60 +32,60 @@
 #define ALLOC_MAX 2147483647LLU
 
 void* gdnsd_xmalloc(size_t size) {
-    dmn_assert(size);
+    gdnsd_assert(size);
 
     if(size > ALLOC_MAX)
         log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
-            size, dmn_logf_bt());
+            size, logf_bt());
 
     void* rv = malloc(size);
     if(!rv)
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
-            size, dmn_logf_errno(), dmn_logf_bt());
+            size, logf_errno(), logf_bt());
     return rv;
 }
 
 void* gdnsd_xcalloc(size_t nmemb, size_t size) {
-    dmn_assert(size);
-    dmn_assert(nmemb);
+    gdnsd_assert(size);
+    gdnsd_assert(nmemb);
 
     if(size > ALLOC_MAX || (uint64_t)size * (uint64_t)nmemb > ALLOC_MAX)
         log_fatal("Bad allocation request for %zu * %zu bytes! backtrace:%s",
-            nmemb, size, dmn_logf_bt());
+            nmemb, size, logf_bt());
 
     void* rv = calloc(nmemb, size);
     if(!rv)
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
-            size * nmemb, dmn_logf_errno(), dmn_logf_bt());
+            size * nmemb, logf_errno(), logf_bt());
     return rv;
 }
 
 void* gdnsd_xrealloc(void* ptr, size_t size) {
-    dmn_assert(size);
+    gdnsd_assert(size);
 
     if(size > ALLOC_MAX)
         log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
-            size, dmn_logf_bt());
+            size, logf_bt());
 
     void* rv = realloc(ptr, size);
     if(!rv)
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
-            size, dmn_logf_errno(), dmn_logf_bt());
+            size, logf_errno(), logf_bt());
     return rv;
 }
 
 void* gdnsd_xpmalign(size_t alignment, size_t size) {
-    dmn_assert(alignment);
-    dmn_assert(size);
+    gdnsd_assert(alignment);
+    gdnsd_assert(size);
 
     if(size > ALLOC_MAX)
         log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
-            size, dmn_logf_bt());
+            size, logf_bt());
 
     void* rv = NULL;
     const int pmrv = posix_memalign(&rv, alignment, size);
     if(pmrv || !rv)
         log_fatal("Cannot allocate %zu bytes aligned to %zu (%s)! backtrace:%s",
-            size, alignment, dmn_logf_strerror(pmrv), dmn_logf_bt());
+            size, alignment, logf_strerror(pmrv), logf_bt());
     return rv;
 }

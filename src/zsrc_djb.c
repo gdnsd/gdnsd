@@ -115,7 +115,7 @@ static void sigusr1_cb(struct ev_loop* loop V_UNUSED, ev_async* w V_UNUSED, int 
 
 // called from main thread to feed ev_async
 void zsrc_djb_sigusr1(void) {
-    dmn_assert(zones_loop); dmn_assert(sigusr1_waker);
+    gdnsd_assert(zones_loop); gdnsd_assert(sigusr1_waker);
     ev_async_send(zones_loop, sigusr1_waker);
 }
 

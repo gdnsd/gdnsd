@@ -46,7 +46,7 @@ static const char* which_str[2] = {
 };
 
 typedef struct {
-    dmn_anysin_t addrs[2];
+    gdnsd_anysin_t addrs[2];
     unsigned num_svcs;
     unsigned* indices[2];
 } addrstate_t;
@@ -154,7 +154,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
             res->addrs_v4 = as;
         }
         else {
-            dmn_assert(which == A_IPv6);
+            gdnsd_assert(which == A_IPv6);
             res->addrs_v6 = as;
         }
     }
@@ -185,7 +185,7 @@ void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_threads
     if(!config)
         log_fatal("simplefo plugin requires a 'plugins' configuration stanza");
 
-    dmn_assert(vscf_get_type(config) == VSCF_HASH_T);
+    gdnsd_assert(vscf_get_type(config) == VSCF_HASH_T);
 
     num_resources = vscf_hash_get_len(config);
 
@@ -266,7 +266,7 @@ gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const uint8_t* origin V_UN
         }
     }
     else {
-        dmn_assert(res->addrs_v6);
+        gdnsd_assert(res->addrs_v6);
         rv = resolve_addr(sttl_tbl, res->addrs_v6, result);
     }
 

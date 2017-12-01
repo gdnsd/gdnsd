@@ -22,7 +22,7 @@
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -55,7 +55,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     int fd = open(fn, O_RDONLY | O_CLOEXEC);
 
     if(fd < 0) {
-        dmn_log_err("Cannot open '%s' for reading: %s", fn, dmn_logf_errno());
+        log_err("Cannot open '%s' for reading: %s", fn, logf_errno());
         return NULL;
     }
 
@@ -68,7 +68,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
         // F_OFD_SETLK support, but runtime kernel doesn't have it.
         if(errno != EINVAL
             || (F_OFD_SETLK != F_SETLK && fcntl(fd, F_SETLK, &locker))) {
-                dmn_log_err("Cannot get readlock on '%s': %s", fn, dmn_logf_errno());
+                log_err("Cannot get readlock on '%s': %s", fn, logf_errno());
                 close(fd);
                 return NULL;
         }
@@ -76,7 +76,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
 
     struct stat st;
     if(fstat(fd, &st) < 0) {
-        dmn_log_err("Cannot fstat '%s': %s", fn, dmn_logf_errno());
+        log_err("Cannot fstat '%s': %s", fn, logf_errno());
         close(fd);
         return NULL;
     }
@@ -84,7 +84,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     // S_ISREG won't fail on symlink here, because this is fstat()
     //   and the earlier open() didn't use O_NOFOLLOW.
     if(!S_ISREG(st.st_mode) || st.st_size < 0) {
-        dmn_log_err("'%s' is not a regular file", fn);
+        log_err("'%s' is not a regular file", fn);
         close(fd);
         return NULL;
     }
@@ -95,7 +95,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     if(len) {
         mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
         if(mapbuf == MAP_FAILED) {
-            dmn_log_err("Cannot mmap '%s': %s", fn, dmn_logf_errno());
+            log_err("Cannot mmap '%s': %s", fn, logf_errno());
             close(fd);
             // cppcheck-suppress memleak (MAP_FAILED is not a leak :P)
             return NULL;
@@ -125,29 +125,29 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
 }
 
 const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap) {
-    dmn_assert(fmap->buf);
+    gdnsd_assert(fmap->buf);
     return fmap->buf;
 }
 
 size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap) {
-    dmn_assert(fmap->buf);
+    gdnsd_assert(fmap->buf);
     return fmap->len;
 }
 
 bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap) {
-    dmn_assert(fmap->buf);
+    gdnsd_assert(fmap->buf);
 
     bool rv = false; // true == error
     if(fmap->fd >= 0) {
-        dmn_assert(fmap->len);
+        gdnsd_assert(fmap->len);
         if(munmap(fmap->buf, fmap->len) || close(fmap->fd)) {
-            dmn_log_err("Cannot munmap()/close() '%s': %s",
-                fmap->fn, dmn_logf_errno());
+            log_err("Cannot munmap()/close() '%s': %s",
+                fmap->fn, logf_errno());
             rv = true;
         }
     }
     else {
-        dmn_assert(!fmap->len);
+        gdnsd_assert(!fmap->len);
         free(fmap->buf);
     }
 

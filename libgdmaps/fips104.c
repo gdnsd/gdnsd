@@ -23,7 +23,6 @@
 #include "fips104.h"
 
 #include <gdnsd/alloc.h>
-#include <gdnsd/dmn.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/misc.h>
@@ -55,7 +54,7 @@ struct _fips_t {
 // keys are a uint32_t made of 4 bytes: CCRR (Country/Region)
 F_CONST
 static unsigned fips_hash(uint32_t key) {
-   dmn_assert(key);
+   gdnsd_assert(key);
    return gdnsd_lookup2((const uint8_t*)&key, 4) & FIPS_HASH_MASK;
 }
 
@@ -99,7 +98,7 @@ static void fips_parse(fips_t* fips, FILE* file) {
 /**** public interface ****/
 
 const char* fips_lookup(const fips_t* fips, const uint32_t key) {
-    dmn_assert(key);
+    gdnsd_assert(key);
 
     unsigned jmpby = 1;
     unsigned slotnum = fips_hash(key);
@@ -115,10 +114,10 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 fips_t* fips_init(const char* pathname) {
     FILE* file = fopen(pathname, "r");
     if(!file)
-        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", pathname, dmn_logf_errno());
+        log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", pathname, logf_errno());
     fips_t* fips = xcalloc(1, sizeof(fips_t));
     fips_parse(fips, file);
     if(fclose(file))
-        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", pathname, dmn_logf_errno());
+        log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", pathname, logf_errno());
     return fips;
 }

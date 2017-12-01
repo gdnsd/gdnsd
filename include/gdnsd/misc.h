@@ -21,7 +21,7 @@
 #define GDNSD_MISC_H
 
 #include <gdnsd/compiler.h>
-#include <gdnsd/dmn.h>
+#include <gdnsd/log.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -79,6 +79,9 @@ void gdnsd_thread_setname(const char* n);
 // Returns true if running on Linux with a kernel version >= x.y.z
 // Returns false for non-Linux systems, or Linux kernels older than specified.
 bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z);
+
+// Global PRNG init, once per process, done early before launching threads
+void gdnsd_init_rand(void);
 
 // State initializers for gdnsd_randXX_get() below
 gdnsd_rstate32_t* gdnsd_rand32_init(void);
@@ -210,7 +213,7 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
 
 F_PURE F_UNUSED F_WUNUSED
 static uint32_t gdnsd_lookup2(const uint8_t *k, uint32_t len) {
-    dmn_assert(k || !len);
+    gdnsd_assert(k || !len);
 
     const uint32_t orig_len = len;
 

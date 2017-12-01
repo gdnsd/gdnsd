@@ -29,7 +29,7 @@
 #include "tap.h"
 
 // for diag push stuff
-#include <gdnsd/dmn.h>
+#include <gdnsd/compiler.h>
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -75,7 +75,7 @@ _expected_tests(unsigned int tests)
 	e_tests = tests;
 }
 
-DMN_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
+GDNSD_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 static void
 diagv(const char *fmt, va_list ap)
 {
@@ -83,7 +83,7 @@ diagv(const char *fmt, va_list ap)
 	vfprintf(stdout, fmt, ap);
 	fputs("\n", stdout);
 }
-DMN_DIAG_POP
+GDNSD_DIAG_POP
 
 static void
 _diag(const char *fmt, ...)

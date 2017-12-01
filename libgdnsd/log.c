@@ -18,12 +18,11 @@
  */
 
 #include <config.h>
-#include <gdnsd/log.h>
 
+#include <gdnsd/log.h>
 #include <gdnsd/compiler.h>
 #include <gdnsd/net.h>
 #include <gdnsd/stats.h>
-#include <gdnsd/dmn.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/dname.h>
 
@@ -35,16 +34,220 @@
 #include <syslog.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <stddef.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
+
+#ifdef HAVE_LIBUNWIND
+#  define UNW_LOCAL_ONLY
+#  include <libunwind.h>
+#endif
+
+/***********************************************************
+***** Constants ********************************************
+***********************************************************/
+
+// Text log message prefixes when using stderr
+static const char PFX_DEBUG[] = "debug: ";
+static const char PFX_INFO[] = "info: ";
+static const char PFX_WARNING[] = "warning: ";
+static const char PFX_ERR[] = "error: ";
+static const char PFX_CRIT[] = "fatal: ";
+static const char PFX_UNKNOWN[] = "???: ";
+
+// Max length of an errno string (for our buffer purposes)
+static const size_t GDNSD_ERRNO_MAXLEN = 256U;
+
+/***********************************************************
+***** Static process-global data ***************************
+***********************************************************/
+
+static bool do_dbg = false;
+static bool do_syslog = false;
+
+/***********************************************************
+***** Logging **********************************************
+***********************************************************/
+
+void gdnsd_log_set_debug(bool debug) { do_dbg = debug; }
+bool gdnsd_log_get_debug(void) { return do_dbg; }
+void gdnsd_log_set_syslog(bool set_syslog) {
+    if(!do_syslog && set_syslog)
+        openlog(PACKAGE_NAME, LOG_NDELAY|LOG_PID, LOG_DAEMON);
+    do_syslog = set_syslog;
+}
+bool gdnsd_log_get_syslog(void) { return do_syslog; }
+
+// 4K is the limit for all strings formatted by the log formatters to use in a
+// single log message.  In other words, for any invocation like:
+// log_warn("...", logf_dname(x), logf_strerror(y))
+// The space allocated by logf_dname() + logf_strerror() must be <= 4096.
+#define FMTBUF_SIZE 4096U
+// _fmtbuf_common is private to the two functions below it
+static char* _fmtbuf_common(const size_t size) {
+    static __thread size_t buf_used = 0;
+    static __thread char buf[FMTBUF_SIZE];
+
+    char* rv = NULL;
+
+    // Allocate a chunk from the per-thread format buffer
+    if(size) {
+        if((FMTBUF_SIZE - buf_used) >= size) {
+            rv = &buf[buf_used];
+            buf_used += size;
+        }
+    }
+    // Reset (free allocations within) the format buffer,
+    else {
+        buf_used = 0;
+    }
+
+    return rv;
+}
+#undef FMTBUF_SIZE
+
+// Public (including this file) interfaces to _fmtbuf_common()
+
+char* gdnsd_fmtbuf_alloc(const size_t size) {
+    if(!size)
+        log_fatal("BUG: fmtbuf alloc of zero bytes");
+    char* rv = _fmtbuf_common(size);
+    if(!rv)
+        log_fatal("BUG: format buffer exhausted");
+    return rv;
+}
+
+void gdnsd_fmtbuf_reset(void) {
+    _fmtbuf_common(0);
+}
+
+// gdnsd_logf_strerror(), which hides GNU or POSIX strerror_r() thread-safe
+//  errno->string translation behind a more strerror()-like interface
+//  using gdnsd_fmtbuf_alloc()
+const char* gdnsd_logf_strerror(const int errnum) {
+    char tmpbuf[GDNSD_ERRNO_MAXLEN];
+    const char* tmpbuf_ptr;
+
+#ifdef STRERROR_R_CHAR_P
+    // GNU-style
+    tmpbuf_ptr = strerror_r(errnum, tmpbuf, GDNSD_ERRNO_MAXLEN);
+#else
+    // POSIX style (+ older glibc bug-compat)
+    int rv = strerror_r(errnum, tmpbuf, GDNSD_ERRNO_MAXLEN);
+    if(rv) {
+        if(rv == EINVAL || (rv < 0 && errno == EINVAL))
+            snprintf(tmpbuf, GDNSD_ERRNO_MAXLEN, "Invalid errno: %i", errnum);
+        else
+            log_fatal("strerror_r(,,%zu) failed", GDNSD_ERRNO_MAXLEN);
+    }
+    tmpbuf_ptr = tmpbuf;
+#endif
+
+    const unsigned len = strlen(tmpbuf_ptr) + 1;
+    char* buf = gdnsd_fmtbuf_alloc(len);
+    memcpy(buf, tmpbuf_ptr, len);
+    return buf;
+}
+
+GDNSD_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
+
+void gdnsd_loggerv(int level, const char* fmt, va_list ap) {
+    if(do_syslog) {
+        vsyslog(level, fmt, ap);
+        gdnsd_fmtbuf_reset();
+        return;
+    }
+
+    const char* pfx;
+
+    switch(level) {
+        case LOG_DEBUG: pfx = PFX_DEBUG; break;
+        case LOG_INFO: pfx = PFX_INFO; break;
+        case LOG_WARNING: pfx = PFX_WARNING; break;
+        case LOG_ERR: pfx = PFX_ERR; break;
+        case LOG_CRIT: pfx = PFX_CRIT; break;
+        default: pfx = PFX_UNKNOWN; break;
+    }
+
+    const size_t pfxlen = strlen(pfx);
+    const size_t fmtlen = strlen(fmt);
+    const size_t fsz = fmtlen + pfxlen + 2;
+    char f[fsz];
+    memcpy(f, pfx, pfxlen);
+    memcpy(&f[pfxlen], fmt, fmtlen);
+    f[fsz - 2] = '\n';
+    f[fsz - 1] = '\0';
+
+    va_list apcpy;
+    va_copy(apcpy, ap);
+    vdprintf(STDERR_FILENO, f, apcpy);
+    va_end(apcpy);
+
+    gdnsd_fmtbuf_reset();
+}
+
+void gdnsd_logger(int level, const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    gdnsd_loggerv(level, fmt, ap);
+    va_end(ap);
+}
+
+GDNSD_DIAG_POP
+
+const char* gdnsd_logf_bt(void) {
+#ifdef HAVE_LIBUNWIND
+    static const unsigned bt_size = 1024U;
+    static const unsigned bt_max_name = 60U;
+
+    char* tbuf = gdnsd_fmtbuf_alloc(bt_size);
+    unsigned tbuf_pos = 0;
+    tbuf[tbuf_pos] = '\0'; // in case no output below
+
+    unw_cursor_t cursor;
+    unw_context_t uc;
+    unw_getcontext(&uc);
+    unw_init_local(&cursor, &uc);
+
+    while(unw_step(&cursor) > 0 && tbuf_pos < bt_size) {
+        unw_word_t ip = 0;
+        unw_word_t sp = 0;
+        unw_word_t offset = 0;
+        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+        if(!ip)
+            break;
+        unw_get_reg(&cursor, UNW_REG_SP, &sp);
+
+        char cbuf[bt_max_name];
+        cbuf[0] = '\0'; // in case no output below
+        (void)unw_get_proc_name(&cursor, cbuf, bt_max_name, &offset);
+
+        int snp_rv = snprintf(&tbuf[tbuf_pos],
+            (bt_size - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
+            (unsigned long)ip, (unsigned long)sp,
+            cbuf, (unsigned long)offset);
+        if(snp_rv < 0)
+            break;
+        tbuf_pos += (unsigned)snp_rv;
+    }
+    return tbuf;
+#else
+    return "(no libunwind)";
+#endif
+}
 
 static const char generic_nullstr[] = "(null)";
 
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
-    dmn_anysin_t tempsin;
-    memset(&tempsin, 0, sizeof(dmn_anysin_t));
+    gdnsd_anysin_t tempsin;
+    memset(&tempsin, 0, sizeof(gdnsd_anysin_t));
     tempsin.sin.sin_family = AF_INET6;
     memcpy(tempsin.sin6.sin6_addr.s6_addr, ipv6, 16);
     tempsin.len = sizeof(struct sockaddr_in6);
-    return dmn_logf_anysin_noport(&tempsin);
+    return gdnsd_logf_anysin_noport(&tempsin);
 }
 
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a) {
@@ -57,7 +260,7 @@ const char* gdnsd_logf_dname(const uint8_t* dname) {
 
     char tmpbuf[1024];
     const unsigned len = gdnsd_dname_to_string(dname, tmpbuf);
-    char* dnbuf = dmn_fmtbuf_alloc(len);
+    char* dnbuf = gdnsd_fmtbuf_alloc(len);
     memcpy(dnbuf, tmpbuf, len);
     return dnbuf;
 }
