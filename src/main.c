@@ -278,7 +278,6 @@ int main(int argc, char** argv) {
 
     // Load full configuration and expose through the globals
     socks_cfg_t* socks_cfg = socks_conf_load(cfg_root);
-    scfg = socks_cfg;
     cfg_t* cfg = conf_load(cfg_root, socks_cfg, copts.force_zss, copts.force_zsd);
     gcfg = cfg;
     vscf_destroy(cfg_root);
@@ -324,10 +323,7 @@ int main(int argc, char** argv) {
     gdnsd_plugins_action_pre_run();
 
     // Bind sockets
-    socks_helper_bind_all();
-
-    // validate the results of the above, softly
-    socks_daemon_check_all(socks_cfg, false);
+    socks_bind_all(socks_cfg);
 
     // Start up all of the UDP and TCP threads, each of
     // which has all signals blocked and has its own

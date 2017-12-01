@@ -524,16 +524,6 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    if(!t->bind_success) {
-        gdnsd_assert(t->ac->autoscan); // other cases would fail fatally earlier
-        log_warn("Could not bind UDP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(&t->ac->addr));
-        //  we come here to  spawn the thread and do the dnspacket_context_setup() properly and
-        //  then exit the iothread.  The rest of the code will see this as a thread that
-        //  simply never gets requests.  This way we don't have to adjust stats arrays for
-        //  the missing thread, etc.
-        pthread_exit(NULL);
-    }
-
     const bool need_cmsg = needs_cmsg(&addrconf->addr);
 
     gdnsd_prcu_rdr_thread_start();

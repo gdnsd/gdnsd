@@ -685,7 +685,7 @@ static void accept_cb(struct ev_loop* loop, ev_io* io, int revents V_UNUSED) {
 #endif
 }
 
-void statio_init(const socks_cfg_t* socks_cfg) {
+void statio_init(socks_cfg_t* socks_cfg) {
     start_time = time(NULL);
 
     // initial flush history
@@ -732,7 +732,7 @@ void statio_init(const socks_cfg_t* socks_cfg) {
     max_http_clients = socks_cfg->max_http_clients;
     http_timeout = socks_cfg->http_timeout;
     num_dns_threads = socks_cfg->num_dns_threads;
-    lsocks = xmalloc(sizeof(int) * num_lsocks);
+    lsocks = socks_cfg->http_socks = xmalloc(sizeof(int) * num_lsocks);
     lsocks_bound = xcalloc(num_lsocks, sizeof(bool));
     accept_watchers = xmalloc(sizeof(ev_io*) * num_lsocks);
 
@@ -740,23 +740,6 @@ void statio_init(const socks_cfg_t* socks_cfg) {
         const gdnsd_anysin_t* asin = &socks_cfg->http_addrs[i];
         lsocks[i] = tcp_listen_pre_setup(asin, socks_cfg->http_timeout);
     }
-}
-
-void statio_bind_socks(void) {
-    for(unsigned i = 0; i < num_lsocks; i++)
-        if(!lsocks_bound[i])
-            if(!socks_helper_bind("TCP stats", lsocks[i], &scfg->http_addrs[i], false))
-                lsocks_bound[i] = true;
-}
-
-bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft) {
-    unsigned rv = false;
-    for(unsigned i = 0; i < num_lsocks; i++)
-        if(!socks_sock_is_bound_to(lsocks[i], &socks_cfg->http_addrs[i]) && !soft)
-            log_fatal("Failed to bind() stats TCP socket to %s", logf_anysin(&socks_cfg->http_addrs[i]));
-        else
-            rv = true;
-    return rv;
 }
 
 // called within our thread/loop to do the final stats output

@@ -381,9 +381,8 @@ void* dnsio_tcp_start(void* thread_asvoid) {
 
     const dns_addr_t* addrconf = t->ac;
 
-    if(t->bind_success)
-        if(listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
-            log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(&addrconf->addr), logf_errno());
+    if(listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
+        log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(&addrconf->addr), logf_errno());
 
     tcpdns_thread_t* ctx = xmalloc(sizeof(tcpdns_thread_t));
     ctx->stats = dnspacket_stats_init(t->threadnum, false);
@@ -394,16 +393,6 @@ void* dnsio_tcp_start(void* thread_asvoid) {
     ctx->num_conn_watchers = 0;
     ctx->timeout = addrconf->tcp_timeout;
     ctx->max_clients = addrconf->tcp_clients_per_thread;
-
-    if(!t->bind_success) {
-        gdnsd_assert(t->ac->autoscan); // other cases would fail fatally earlier
-        log_warn("Could not bind TCP DNS socket %s, configured by automatic interface scanning.  Will ignore this listen address.", logf_anysin(&t->ac->addr));
-        //  we come here to  spawn the thread and do the dnspacket_context_setup() properly and
-        //  then exit the iothread.  The rest of the code will see this as a thread that
-        //  simply never gets requests.  This way we don't have to adjust stats arrays for
-        //  the missing thread, etc.
-        pthread_exit(NULL);
-    }
 
     struct ev_io* accept_watcher = ctx->accept_watcher = xmalloc(sizeof(struct ev_io));
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);

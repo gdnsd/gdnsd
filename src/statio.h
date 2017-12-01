@@ -29,10 +29,7 @@
 #include <ev.h>
 
 F_NONNULL
-void statio_init(const socks_cfg_t* socks_cfg);
-void statio_bind_socks(void);
-F_NONNULL
-bool statio_check_socks(const socks_cfg_t* socks_cfg, bool soft);
+void statio_init(socks_cfg_t* socks_cfg);
 
 F_NONNULL
 void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg);

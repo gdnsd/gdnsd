@@ -41,14 +41,9 @@
 #include <netinet/udp.h>
 #include <netinet/tcp.h>
 
-// Global access, only used in a few places, probably
-//   will be removable after future refactors
-socks_cfg_t* scfg = NULL;
-
 // The "default defaults" for various address-level things
 static const unsigned http_port_def_default = 3506U;
 static const dns_addr_t addr_defs_defaults = {
-    .autoscan = false,
     .dns_port = 53U,
     .udp_recv_width = 8U,
     .udp_rcvbuf = 0U,
@@ -132,21 +127,6 @@ static void process_http_listen(socks_cfg_t* socks_cfg, vscf_data_t* http_listen
     }
 }
 
-F_NONNULL F_PURE
-static bool dns_addr_is_dupe(const socks_cfg_t* socks_cfg, const gdnsd_anysin_t* new_addr) {
-    gdnsd_assert(new_addr->sa.sa_family == AF_INET6 || new_addr->sa.sa_family == AF_INET);
-
-    for(unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-        if(socks_cfg->dns_addrs[i].addr.sa.sa_family == new_addr->sa.sa_family) {
-            gdnsd_assert(new_addr->len == socks_cfg->dns_addrs[i].addr.len);
-            if(!memcmp(new_addr, &socks_cfg->dns_addrs[i].addr, new_addr->len))
-                return true;
-        }
-    }
-
-    return false;
-}
-
 F_NONNULL
 static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) {
     socks_cfg->num_dns_addrs = 2;
@@ -159,70 +139,17 @@ static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) 
     make_addr("::", addr_defs->dns_port, &ac_v6->addr);
 }
 
-F_NONNULL
-static void dns_listen_scan(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) {
-    gdnsd_anysin_t temp_asin;
-
-    struct ifaddrs* ifap;
-    if(getifaddrs(&ifap))
-        log_fatal("getifaddrs() for 'listen => scan' failed: %s", logf_errno());
-
-    socks_cfg->num_dns_addrs = 0;
-    for(;ifap;ifap = ifap->ifa_next) {
-        if(!ifap->ifa_addr)
-            continue;
-
-        if(ifap->ifa_addr->sa_family == AF_INET6) {
-            memcpy(&temp_asin.sin6, ifap->ifa_addr, sizeof(struct sockaddr_in6));
-            temp_asin.len = sizeof(struct sockaddr_in6);
-        }
-        else if(ifap->ifa_addr->sa_family == AF_INET) {
-            memcpy(&temp_asin.sin, ifap->ifa_addr, sizeof(struct sockaddr_in));
-            temp_asin.len = sizeof(struct sockaddr_in);
-        }
-        else { // unknown family...
-            continue;
-        }
-
-        if(gdnsd_anysin_is_anyaddr(&temp_asin))
-            continue;
-
-        if(temp_asin.sa.sa_family == AF_INET6)
-            temp_asin.sin6.sin6_port = htons(addr_defs->dns_port);
-        else
-            temp_asin.sin.sin_port = htons(addr_defs->dns_port);
-
-        if(dns_addr_is_dupe(socks_cfg, &temp_asin))
-            continue;
-
-        socks_cfg->dns_addrs = xrealloc(socks_cfg->dns_addrs, (socks_cfg->num_dns_addrs + 1) * sizeof(dns_addr_t));
-        dns_addr_t* addrconf = &socks_cfg->dns_addrs[socks_cfg->num_dns_addrs++];
-        memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
-        memcpy(&addrconf->addr, &temp_asin, sizeof(gdnsd_anysin_t));
-        addrconf->autoscan = true;
-    }
-
-    freeifaddrs(ifap);
-
-    if(!socks_cfg->num_dns_addrs)
-        log_fatal("automatic interface scanning via 'listen => scan' found no valid addresses to listen on");
-}
-
 F_NONNULLX(1,3)
 static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs) {
     if(!listen_opt) {
         dns_listen_any(socks_cfg, addr_defs);
         return;
     }
+
     if(vscf_is_simple(listen_opt)) {
         const char* simple_str = vscf_simple_get_data(listen_opt);
         if(!strcmp(simple_str, "any")) {
             dns_listen_any(socks_cfg, addr_defs);
-            return;
-        }
-        else if(!strcmp(simple_str, "scan")) {
-            log_warn("The 'listen => scan' interface-scanning mode is being deprecated and will likely disappear in a future release! If 'listen => any' does not work as a replacement for your use-case, *please* file a bug at " PACKAGE_BUGREPORT);
-            dns_listen_scan(socks_cfg, addr_defs);
             return;
         }
     }
@@ -330,9 +257,6 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
     vscf_data_t* listen_opt = NULL;
     vscf_data_t* http_listen_opt = NULL;
 
-    // These are initially populated with static defaults, then updated
-    //   with global options to become the defaults for per-address-level
-    //   settings within process_(http_)listen()
     unsigned http_port_def = http_port_def_default;
     dns_addr_t addr_defs;
     memcpy(&addr_defs, &addr_defs_defaults, sizeof(addr_defs));
@@ -372,103 +296,70 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
     return socks_cfg;
 }
 
-bool socks_helper_bind(const char* desc, const int sock, const gdnsd_anysin_t* asin, bool no_freebind V_UNUSED) {
+F_NONNULL
+static void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asin) {
+    int bind_errno = 0;
+
+    // Immediate, simple success
     if(!bind(sock, &asin->sa, asin->len))
-        return false;
+        return;
+    bind_errno = errno;
 
-    // first bind() attempt failed...
-    if(errno == EADDRNOTAVAIL) {
-        // in the case of non-ANY addresses not from scanning, where the OS has
-        //   support for freebind/bindany, try to use that (and warn) before
-        //   falling through to various failure modes
 #if defined IP_FREEBIND || (defined IP_BINDANY && defined IPV6_BINDANY) || defined SO_BINDANY
-        if(!no_freebind && !gdnsd_anysin_is_anyaddr(asin)) {
+    // first bind() attempt failed.  in the case of non-ANY addresses, where
+    // the OS has support for freebind/bindany, try it before failing hard
+    if(errno == EADDRNOTAVAIL && !gdnsd_anysin_is_anyaddr(asin)) {
+        const int opt_one = 1;
+
 # if defined IP_FREEBIND
-            // Linux
-            const int bindlev = IPPROTO_IP;
-            const int bindopt = IP_FREEBIND;
-            const char* bindtxt = "IP_FREEBIND";
+        // Linux
+        const int bindlev = IPPROTO_IP;
+        const int bindopt = IP_FREEBIND;
+        const char* bindtxt = "IP_FREEBIND";
 # elif defined IP_BINDANY && defined IPV6_BINDANY
-            // FreeBSD, untested
-            const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
-            const int bindlev = isv6 ? IPPROTO_IPV6 : IPPROTO_IP;
-            const int bindopt = isv6 ? IPV6_BINDANY : IP_BINDANY;
-            const char* bindtxt = isv6 ? "IPV6_BINDANY" : "IP_BINDANY";
+        // FreeBSD, untested
+        const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
+        const int bindlev = isv6 ? IPPROTO_IPV6 : IPPROTO_IP;
+        const int bindopt = isv6 ? IPV6_BINDANY : IP_BINDANY;
+        const char* bindtxt = isv6 ? "IPV6_BINDANY" : "IP_BINDANY";
 # elif defined SO_BINDANY
-            // OpenBSD equiv?
-            const int bindlev = SOL_SOCKET;
-            const int bindopt = SO_BINDANY;
-            const char* bindtxt = "SO_BINDANY";
+        // OpenBSD equiv?
+        const int bindlev = SOL_SOCKET;
+        const int bindopt = SO_BINDANY;
+        const char* bindtxt = "SO_BINDANY";
 # endif
-            const int opt_one = 1;
-            if(setsockopt(sock, bindlev, bindopt, &opt_one, sizeof opt_one) == -1) {
-                log_warn("Failed to set %s on %s socket %s: %s", bindtxt, desc, logf_anysin(asin), logf_errno());
-            }
-            else {
-                if(!bind(sock, &asin->sa, asin->len)) {
-                    log_warn("%s socket %s bound via %s, address may not (yet!) exist on the host", desc, logf_anysin(asin), bindtxt);
-                    return false;
-                }
-            }
-        }
-#endif
-    }
 
-    return true;
-}
-
-// helper process: bind all sockets (udp/tcp dns + statio)
-void socks_helper_bind_all(void) {
-    for(unsigned i = 0; i < scfg->num_dns_threads; i++) {
-        dns_thread_t* t = &scfg->dns_threads[i];
-        if(!t->bind_success)
-            if(!socks_helper_bind(t->is_udp ? "UDP DNS" : "TCP DNS", t->sock, &t->ac->addr, t->ac->autoscan))
-                t->bind_success = true;
-    }
-    statio_bind_socks();
-}
-
-bool socks_sock_is_bound_to(const int sock, const gdnsd_anysin_t* addr) {
-    bool rv = false;
-
-    gdnsd_anysin_t bound_to = { .len = GDNSD_ANYSIN_MAXLEN };
-    if(getsockname(sock, &bound_to.sa, &bound_to.len))
-        log_fatal("getsockname() failed: %s", logf_errno());
-    if(addr->sa.sa_family == bound_to.sa.sa_family) {
-        if(addr->sa.sa_family == AF_INET) {
-            if(addr->sin.sin_addr.s_addr == bound_to.sin.sin_addr.s_addr
-                && addr->sin.sin_port == bound_to.sin.sin_port)
-                    rv = true;
+        if(setsockopt(sock, bindlev, bindopt, &opt_one, sizeof opt_one) == -1) {
+            // Don't even re-attempt the bind if we can't set the option, just
+            // warn about the setsockopt() and fail out at the bottom with the
+            // original errno from bind():
+            log_warn("Failed to set %s on %s socket %s: %s", bindtxt, desc, logf_anysin(asin), logf_errno());
         }
         else {
-            gdnsd_assert(addr->sa.sa_family == AF_INET6);
-            if(!memcmp(&addr->sin6.sin6_addr.s6_addr, &bound_to.sin6.sin6_addr.s6_addr, 16)
-                && addr->sin6.sin6_port == bound_to.sin6.sin6_port)
-                    rv = true;
+            if(!bind(sock, &asin->sa, asin->len)) {
+                // Success, after setting IP_FREEBIND or similar
+                log_warn("%s socket %s bound via %s, address may not (yet!) exist on the host", desc, logf_anysin(asin), bindtxt);
+                return;
+            }
+            // Second attempt failed, update bind_errno and fail out below
+            bind_errno = errno;
         }
     }
+#endif
 
-    return rv;
+    // If initial bind attempt failed, and the above freebind stuff either
+    // failed or isn't available, fail hard:
+    log_fatal("bind() failed for %s socket %s: %s", desc, logf_anysin(asin), logf_strerror(bind_errno));
 }
 
-bool socks_daemon_check_all(socks_cfg_t* socks_cfg, bool soft) {
-    bool rv = false;
-    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &socks_cfg->dns_threads[i];
-        const char* ptxt = t->is_udp ? "UDP" : "TCP";
-        if(!t->bind_success) {
-            if(!socks_sock_is_bound_to(t->sock, &t->ac->addr)) {
-                if(!t->ac->autoscan && !soft)
-                    log_fatal("Failed to bind() %s DNS socket to %s", ptxt, logf_anysin(&t->ac->addr));
-                rv = true;
-            }
-            else {
-                t->bind_success = true;
-            }
-        }
+// bind all sockets (udp/tcp dns + statio)
+void socks_bind_all(socks_cfg_t* scfg) {
+    for(unsigned i = 0; i < scfg->num_dns_threads; i++) {
+        dns_thread_t* t = &scfg->dns_threads[i];
+        socks_bind_sock(t->is_udp ? "UDP DNS" : "TCP DNS", t->sock, &t->ac->addr);
     }
-    rv |= statio_check_socks(socks_cfg, soft);
-    return rv;
+    for(unsigned i = 0; i < scfg->num_http_addrs; i++)
+        socks_bind_sock("TCP stats", scfg->http_socks[i], &scfg->http_addrs[i]);
 }
 
 void socks_dns_lsocks_init(socks_cfg_t* socks_cfg) {

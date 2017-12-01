@@ -20,6 +20,9 @@
     * The documentation includes more details on adapting systemd and/or
       traditional sysvinit to the above two changes, and the git repo contains
       an example systemd unit file.
+    * The "listen => scan" option, which scanned interfaces for IPs to bind to,
+      has been removed completely.  It was deprecated with runtime warnings and
+      removed from the documentation back in v2.2.0
 
 2.4.0 - 2018-02-15
     * plugin_multifo: added "ignore_health" parameter. If "ignore_health" is
