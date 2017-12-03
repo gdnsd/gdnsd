@@ -219,12 +219,6 @@ static statio_t statio;
 // All ?f=1 clients share one state, so don't have two independent ones!
 static statio_t flush_hist; // copy of raw stats accum from last f=1
 
-// coordination for final stats output
-static ev_async* final_stats_async = NULL;
-static pthread_mutex_t final_stats_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t final_stats_cond = PTHREAD_COND_INITIALIZER;
-static bool final_stats_done = false;
-
 static void accumulate_statio(unsigned threadnum) {
     dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
     gdnsd_assert(this_stats);
@@ -335,7 +329,7 @@ static const char* fmt_uptime(void) {
     return ival_buf;
 }
 
-static void statio_log_stats(void) {
+void statio_log_stats(void) {
     populate_stats(false);
     log_info(log_dns, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub);
     log_info(log_udp, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc);
@@ -742,43 +736,10 @@ void statio_init(socks_cfg_t* socks_cfg) {
     }
 }
 
-// called within our thread/loop to do the final stats output
-F_NONNULL
-static void final_stats_cb(struct ev_loop* loop, ev_async* w V_UNUSED, int revents V_UNUSED) {
-    // stop further periodic log output and do final output
-    if(log_watcher)
-        ev_timer_stop(loop, log_watcher);
-    statio_log_stats();
-
-    // let mainthread return from statio_final_stats_wait()
-    pthread_mutex_lock(&final_stats_mutex);
-    final_stats_done = true;
-    pthread_cond_signal(&final_stats_cond);
-    pthread_mutex_unlock(&final_stats_mutex);
-}
-
-// called from main thread to feed ev_async for final stats
-void statio_final_stats(void) {
-    gdnsd_assert(statio_loop); gdnsd_assert(final_stats_async);
-    ev_async_send(statio_loop, final_stats_async);
-}
-
-// called from main thread to wait on final_stats_cb() completion
-void statio_final_stats_wait(void) {
-    pthread_mutex_lock(&final_stats_mutex);
-    while(!final_stats_done)
-        pthread_cond_wait(&final_stats_cond, &final_stats_mutex);
-    pthread_mutex_unlock(&final_stats_mutex);
-}
-
 void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg) {
     statio_loop = statio_loop_arg;
     if(log_watcher)
         ev_timer_start(statio_loop, log_watcher);
-
-    final_stats_async = xmalloc(sizeof(ev_async));
-    ev_async_init(final_stats_async, final_stats_cb);
-    ev_async_start(statio_loop, final_stats_async);
 
     for(unsigned i = 0; i < num_lsocks; i++) {
         if(listen(lsocks[i], 128) == -1)

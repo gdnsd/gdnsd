@@ -34,10 +34,7 @@ void statio_init(socks_cfg_t* socks_cfg);
 F_NONNULL
 void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg);
 
-// main thread calls this to issue final stats output
-void statio_final_stats(void);
-
-// main thread calls this to wait on completion of the above
-void statio_final_stats_wait(void);
+// main thread calls this to explicitly log stats at shutdown
+void statio_log_stats(void);
 
 #endif // GDSND_STATIO_H

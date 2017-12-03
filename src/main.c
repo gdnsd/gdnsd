@@ -56,9 +56,16 @@
 #include <pwd.h>
 #include <time.h>
 
-// ev loop used for monitoring and statio
-// (which shared a thread as well)
-static struct ev_loop* mon_loop = NULL;
+// Signal we were killed by, for final raise()
+static int killed_by = 0;
+
+// primary/default libev loop for main thread
+static struct ev_loop* def_loop = NULL;
+
+// libev watchers for signals+async
+static ev_signal* sig_int = NULL;
+static ev_signal* sig_term = NULL;
+static ev_signal* sig_usr1 = NULL;
 
 // custom atexit-like stuff, only for resource
 //   de-allocation in debug builds to check for leaks
@@ -87,6 +94,41 @@ static void atexit_debug_execute(void) { }
 
 F_NONNULL F_NORETURN
 static void syserr_for_ev(const char* msg) { log_fatal("%s: %s", msg, logf_errno()); }
+
+F_NONNULL
+static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int revents V_UNUSED) {
+    gdnsd_assert(revents == EV_SIGNAL);
+    gdnsd_assert(w->signum == SIGTERM || w->signum == SIGINT);
+
+    log_info("Received terminating signal %i", w->signum);
+    killed_by = w->signum;
+    ev_break(loop, EVBREAK_ALL);
+}
+
+F_NONNULL
+static void usr1_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w V_UNUSED, const int revents V_UNUSED) {
+    gdnsd_assert(revents == EV_SIGNAL);
+    gdnsd_assert(w->signum == SIGUSR1);
+
+    log_info("Received USR1 signal");
+    zsrc_djb_sigusr1();
+    zsrc_rfc1035_sigusr1();
+}
+
+// Set up our terminal signal handlers via libev
+static void setup_signals(void) {
+    sig_int = malloc(sizeof(ev_signal));
+    ev_signal_init(sig_int, terminal_signal, SIGINT);
+    ev_signal_start(def_loop, sig_int);
+
+    sig_term = malloc(sizeof(ev_signal));
+    ev_signal_init(sig_term, terminal_signal, SIGTERM);
+    ev_signal_start(def_loop, sig_term);
+
+    sig_usr1 = malloc(sizeof(ev_signal));
+    ev_signal_init(sig_usr1, usr1_signal, SIGUSR1);
+    ev_signal_start(def_loop, sig_usr1);
+}
 
 F_NONNULL F_NORETURN
 static void usage(const char* argv0) {
@@ -131,22 +173,6 @@ static void* zone_data_runtime(void* unused V_UNUSED) {
     return NULL;
 }
 
-// thread entry point for monitoring (+statio) thread
-F_NONNULL
-static void* mon_runtime(void* scfg_asvoid) {
-    const socks_cfg_t* socks_cfg = scfg_asvoid;
-
-    gdnsd_thread_setname("gdnsd-mon");
-
-    // mon_start already queued up its events in mon_loop earlier...
-    statio_start(mon_loop, socks_cfg);
-    ev_run(mon_loop, 0);
-
-    gdnsd_assert(0); // should never be reached as loop never terminates
-    ev_loop_destroy(mon_loop);
-    return NULL;
-}
-
 F_NONNULL
 static void start_threads(socks_cfg_t* socks_cfg) {
     // Block all signals using the pthreads interface while starting threads,
@@ -181,17 +207,6 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
     if(pthread_err)
         log_fatal("pthread_create() of zone data thread failed: %s", logf_strerror(pthread_err));
-
-    // This waits for all of the stat structures to be allocated
-    //  by the i/o threads before continuing on.  They must be ready
-    //  before the monitoring thread starts below, as it will read
-    //  those stat structures
-    dnspacket_wait_stats(socks_cfg);
-
-    pthread_t mon_threadid;
-    pthread_err = pthread_create(&mon_threadid, &attribs, &mon_runtime, socks_cfg);
-    if(pthread_err)
-        log_fatal("pthread_create() of monitoring thread failed: %s", logf_strerror(pthread_err));
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
@@ -310,14 +325,17 @@ int main(int argc, char** argv) {
     // Set up libev error callback
     ev_set_syserr_cb(&syserr_for_ev);
 
-    // Construct the monitoring loop, for monitors + statio,
-    //   which will be executed in another thread for runtime
-    mon_loop = ev_loop_new(EVFLAG_AUTO);
-    if(!mon_loop)
-        log_fatal("Could not initialize the mon libev loop");
+    // default ev loop in main process to handle statio, monitors, control
+    // socket, signals, etc.
+    def_loop = ev_default_loop(EVFLAG_AUTO);
+    if(!def_loop)
+        log_fatal("Could not initialize the default libev loop");
 
     // set up monitoring, which expects an initially empty loop
-    gdnsd_mon_start(mon_loop);
+    gdnsd_mon_start(def_loop);
+
+    // main thread signal handlers
+    setup_signals();
 
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
@@ -329,59 +347,34 @@ int main(int argc, char** argv) {
     // which has all signals blocked and has its own
     // event loop (libev for TCP, manual blocking loop for UDP)
     // Also starts the zone data reload thread
-    // and the statio+monitoring thread
     start_threads(socks_cfg);
+
+    // actually set up libev hooks + listen on sockets for statio
+    statio_start(def_loop, socks_cfg);
+
+    // This waits for all of the stat structures to be allocated
+    //  by the i/o threads before continuing on.  They must be ready
+    //  before ev_run() below, because statio event handlers hit them.
+    dnspacket_wait_stats(socks_cfg);
 
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
-
-    // The signals we'll listen for below
-    sigset_t mainthread_sigs;
-    sigemptyset(&mainthread_sigs);
-    sigaddset(&mainthread_sigs, SIGINT);
-    sigaddset(&mainthread_sigs, SIGTERM);
-    sigaddset(&mainthread_sigs, SIGUSR1);
-
-    // Block the relevant signals before entering the sigwait() loop
-    sigset_t sigmask_prev;
-    sigemptyset(&sigmask_prev);
-    if(pthread_sigmask(SIG_BLOCK, &mainthread_sigs, &sigmask_prev))
-        log_fatal("pthread_sigmask() failed");
 
     // We wait to notify 3rd parties (e.g. systemd, or fg process if
     // daemonizing) that we're ready until after the block above, so that they
     // can reliably get the right signal actions from this point forward
     gdnsd_daemon_notify_ready();
 
-    int killed_by = 0;
-    while(!killed_by) {
-        int rcvd_sig = 0;
-        int sw_rv;
-        if((sw_rv = sigwait(&mainthread_sigs, &rcvd_sig)))
-            log_fatal("sigwait() failed with error %s", logf_strerror(sw_rv));
+    ev_run(def_loop, 0);
 
-        switch(rcvd_sig) {
-            case SIGTERM:
-                log_info("Received TERM signal, exiting...");
-                killed_by = SIGTERM;
-                break;
-            case SIGINT:
-                log_info("Received INT signal, exiting...");
-                killed_by = SIGINT;
-                break;
-            case SIGUSR1:
-                log_info("Received USR1 signal");
-                zsrc_djb_sigusr1();
-                zsrc_rfc1035_sigusr1();
-                break;
-            default:
-                gdnsd_assert(0);
-                break;
-        }
-    }
+    // Stop the terminal signal handlers
+    ev_signal_stop(def_loop, sig_term);
+    ev_signal_stop(def_loop, sig_int);
 
-    // Ask statio thread to send final stats to the log
-    statio_final_stats();
+    // If we didn't get a signal (maybe future controlsock shutdown?),
+    // set killed_by to SIGTERM for raise() later
+    if(!killed_by)
+        killed_by = SIGTERM;
 
     // get rid of child procs (e.g. extmon helper)
     gdnsd_kill_registered_children();
@@ -389,12 +382,8 @@ int main(int argc, char** argv) {
     // deallocate resources in debug mode
     atexit_debug_execute();
 
-    // wait for stats thread to finish logging request
-    statio_final_stats_wait();
-
-    // Restore normal signal mask
-    if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
-        log_fatal("pthread_sigmask() failed");
+    // Log final stats
+    statio_log_stats();
 
 #ifdef GDNSD_COVERTEST_EXIT
     // We have to use exit() when testing coverage, as raise()

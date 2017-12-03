@@ -287,44 +287,30 @@ void gdnsd_register_child_pid(pid_t child) {
     children[n_children++] = child;
 }
 
-static unsigned _attempt_reap(unsigned attempts) {
-    unsigned n_children_remain = 0;
-    for(unsigned i = 0; i < n_children; i++)
-        if(children[i])
-            n_children_remain++;
+static unsigned _wait_for_children(unsigned attempts) {
+    unsigned remaining = n_children;
 
-    while(attempts) {
-        pid_t wprv = waitpid(-1, NULL, WNOHANG);
-        if(wprv < 0) {
-            if(errno == ECHILD)
-                break;
-            else
-                log_fatal("waitpid(-1, NULL, WNOHANG) failed: %s", logf_errno());
-        }
-        if(wprv) {
-            log_debug("waitpid() reaped %li", (long)wprv);
-            for(unsigned i = 0; i < n_children; i++) {
-                if(children[i] == wprv) {
-                    children[i] = 0;
-                    n_children_remain--;
-                }
-            }
-            if(!n_children_remain)
-                break;
-        }
+    while(remaining && attempts) {
         const struct timespec ms_10 = { 0, 10000000 };
         nanosleep(&ms_10, NULL);
+
+        remaining = 0;
+        for(unsigned i = 0; i < n_children; i++) {
+            if(children[i]) {
+                if(kill(children[i], 0))
+                    remaining++;
+                else
+                    children[i] = 0;
+            }
+        }
         attempts--;
     }
 
-    if(n_children_remain && attempts) { // implies ECHILD
-        log_err("BUG? waitpid() says no children remain, but we expected %u more", n_children_remain);
-        return 0;
-    }
-
-    return n_children_remain;
+    return remaining;
 }
 
+// The main thread's libev loop will auto-reap child processes for us, we just
+// have to wait for the reaps to occur.
 void gdnsd_kill_registered_children(void) {
     if(!n_children)
         return;
@@ -333,7 +319,7 @@ void gdnsd_kill_registered_children(void) {
         log_info("Sending SIGTERM to child process %li", (long)children[i]);
         kill(children[i], SIGTERM);
     }
-    unsigned notdone = _attempt_reap(1000); // 10s
+    unsigned notdone = _wait_for_children(1000); // 10s
 
     if(notdone) {
         for(unsigned i = 0; i < n_children; i++) {
@@ -342,7 +328,7 @@ void gdnsd_kill_registered_children(void) {
                 kill(children[i], SIGKILL);
             }
         }
-        _attempt_reap(500); // 5s max
+        _wait_for_children(500); // 5s max
     }
 }
 
