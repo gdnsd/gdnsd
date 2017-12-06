@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <!--
+    This is an example of loading gdnsd's JSON-format stats output directly via
+    javascript and displaying it with some style.  This example is rudimentary
+    and roughly mirrors the look and feel of the old built-in gdnsd HTTP stats
+    server.  It reloads the data every 15 seconds, and assumes you've created
+    some mechanism to export a "stats.json" file in the same directory as this
+    html file (such as a cronjob executing "gdnsdctl stats >/foo/stats.json"),
+    and that both can be read by the (external) HTTP server.  Obviously, you
+    could use nicer css, scripts, and/or libraries for loading the data and
+    giving it a better UI.
+  --!>
+  <title>gdnsd</title>
+  <style type='text/css'>
+    .bold { font-weight: bold }
+    .big { font-size: 1.25em; }
+    table { border-width: 2px; border-style: ridge; margin: 0.25em; padding: 1px }
+    th,td { border-width: 2px; border-style: inset }
+    th { background: #CCF; font-weight: bold }
+    td.UP { background: #AFA }
+    td.DOWN { background: #FAA }
+  </style>
+  <script type='text/javascript'>
+
+    function loadJSON(path, callback) {
+      var xobj = new XMLHttpRequest();
+      xobj.overrideMimeType("application/json");
+      xobj.open('GET', path, true);
+      xobj.onreadystatechange = function () {
+        if (xobj.readyState == 4 && xobj.status == "200") {
+          callback(xobj.responseText);
+        }
+      };
+      xobj.send(null);
+    }
+
+    function stats_table(data, table, prefix) {
+        table.innerHTML = '';
+        var hrow = table.appendChild(document.createElement('tr'));
+        var drow = table.appendChild(document.createElement('tr'));
+        for(var k in data) {
+            var hth = hrow.appendChild(document.createElement('th'));
+            hth.innerText = prefix + k;
+            var dtd = drow.appendChild(document.createElement('td'));
+            dtd.innerText = data[k];
+        }
+    }
+
+    function services_table(data, table) {
+        table.innerHTML = '';
+        if(!data) return;
+        var hrow = table.appendChild(document.createElement('tr'));
+        var th1 = hrow.appendChild(document.createElement('th'));
+        th1.innerText = 'Service';
+        var th2 = hrow.appendChild(document.createElement('th'));
+        th2.innerText = 'State';
+        var th3 = hrow.appendChild(document.createElement('th'));
+        th3.innerText = 'Real State';
+        for(var s in data) {
+            var drow = table.appendChild(document.createElement('tr'));
+            var td1 = drow.appendChild(document.createElement('td'));
+            td1.innerText = data[s]['service'];
+            var td2 = drow.appendChild(document.createElement('td'));
+            td2.innerText = data[s]['state'];
+            td2.className = data[s]['state'];
+            var td3 = drow.appendChild(document.createElement('td'));
+            td3.innerText = data[s]['real_state'];
+            td3.className = data[s]['real_state'];
+        }
+    }
+
+    function load_stats() {
+      loadJSON('stats.json', function(response) {
+        var d = new Date();
+        var stats = JSON.parse(response);
+        stats_table(stats.stats, document.getElementById('stats'), ''    );
+        stats_table(stats.udp,   document.getElementById('udp'),   'udp_');
+        stats_table(stats.tcp,   document.getElementById('tcp'),   'tcp_');
+        services_table(stats['services'], document.getElementById('services'));
+        document.getElementById('uptime').innerText = stats.uptime;
+        document.getElementById('curdate').innerText = d.toUTCString();
+      });
+      window.setTimeout(load_stats, 15000);
+    }
+
+    load_stats();
+  </script>
+</head>
+<body>
+  <h2>gdnsd</h2>
+  <p class='big'><span class='bold'>Current Time: </span><span id='curdate'></span></p>
+  <p class='big'><span class='bold'>Uptime: </span><span id='uptime'></p>
+  <p><span class='bold big'>Stats:</span></p>
+  <table id='stats'>
+  </table>
+  <table id='udp'>
+  </table>
+  <table id='tcp'>
+  </table>
+  <p><span class='bold big'>Monitored Service States:</span></p>
+  <table id='services'>
+  </table>
+</body>
+</html>

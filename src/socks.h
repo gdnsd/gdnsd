@@ -49,13 +49,8 @@ typedef struct {
 typedef struct {
     dns_addr_t* dns_addrs;
     dns_thread_t* dns_threads;
-    gdnsd_anysin_t* http_addrs;
-    int* http_socks;
     unsigned num_dns_addrs;
     unsigned num_dns_threads;
-    unsigned num_http_addrs;
-    unsigned http_timeout;
-    unsigned max_http_clients;
 } socks_cfg_t;
 
 socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root);
@@ -64,6 +59,6 @@ F_NONNULL
 void socks_dns_lsocks_init(socks_cfg_t* socks_cfg);
 
 F_NONNULL
-void socks_bind_all(socks_cfg_t* socks_cfg);
+void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asin);
 
 #endif // GDNSD_SOCKS_H

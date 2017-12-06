@@ -48,7 +48,7 @@ static bool csc_get_status(csc_t* csc) {
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_INFO;
-    if(csc_txn(csc, &req, &resp) || resp.key != RESP_ACK)
+    if(csc_txn(csc, &req, &resp))
         return true;
 
     csc->server_pid = (pid_t)resp.d;
@@ -108,6 +108,33 @@ bool csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp) {
         return true;
     }
 
+    if(resp->key != RESP_ACK)
+        return true;
+
+    return false;
+}
+
+bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data) {
+    if(csc_txn(csc, req, resp))
+        return true;
+
+    gdnsd_assert(resp->d);
+    const size_t total = resp->d;
+    char* rd = xmalloc(total);
+    size_t done = 0;
+
+    while(done < total) {
+        const size_t wanted = total - done;
+        const ssize_t pktlen = recv(csc->fd, &rd[done], wanted, 0);
+        if(pktlen < 0) {
+            free(rd);
+            log_err("%zu-byte recv() failed: %s", wanted, logf_errno());
+            return true;
+        }
+        done += (size_t)pktlen;
+    }
+
+    *resp_data = rd;
     return false;
 }
 
@@ -115,7 +142,7 @@ bool csc_stop_server(csc_t* csc) {
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STOP;
-    if(csc_txn(csc, &req, &resp) || resp.key != RESP_ACK) {
+    if(csc_txn(csc, &req, &resp)) {
         log_err("Server stop transaction failed");
         return true;
     }

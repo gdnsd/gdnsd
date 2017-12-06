@@ -15,6 +15,7 @@ gdnsd - An authoritative DNS daemon
     reload - Full reload (code, config, data) of the running daemon
     status - Checks the running daemon's status
     stats - Dumps JSON statistics from the running daemon
+    states - Dumps JSON monitored states
 
 =head1 DESCRIPTION
 

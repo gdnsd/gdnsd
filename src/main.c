@@ -312,11 +312,8 @@ int main(int argc, char** argv) {
     if(!css)
         log_fatal("Another instance is already running and has the control socket locked!");
 
-    // Initialize DNS listening sockets, but do not bind() them yet
-    socks_dns_lsocks_init(socks_cfg);
-
-    // init the stats summing/output code + listening sockets (again no bind yet)
-    statio_init(socks_cfg);
+    // init the stats code
+    statio_init(socks_cfg->num_dns_threads);
 
     // Lock whole daemon into memory, including
     //  all future allocations.
@@ -346,11 +343,8 @@ int main(int argc, char** argv) {
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
 
-    // Bind sockets
-    socks_bind_all(socks_cfg);
-
-    // actually set up libev hooks + listen on sockets for statio
-    statio_start(def_loop, socks_cfg);
+    // Initialize+bind DNS listening sockets
+    socks_dns_lsocks_init(socks_cfg);
 
     // Start up all of the UDP and TCP threads, each of
     // which has all signals blocked and has its own
@@ -385,9 +379,6 @@ int main(int argc, char** argv) {
 
     // deallocate resources in debug mode
     atexit_debug_execute();
-
-    // Log final stats
-    statio_log_stats();
 
     log_info("Exiting");
 

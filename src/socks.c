@@ -20,7 +20,6 @@
 #include <config.h>
 #include "socks.h"
 
-#include "statio.h"
 #include "dnsio_udp.h"
 #include "dnsio_tcp.h"
 
@@ -42,7 +41,6 @@
 #include <netinet/tcp.h>
 
 // The "default defaults" for various address-level things
-static const unsigned http_port_def_default = 3506U;
 static const dns_addr_t addr_defs_defaults = {
     .dns_port = 53U,
     .udp_recv_width = 8U,
@@ -57,12 +55,8 @@ static const dns_addr_t addr_defs_defaults = {
 static const socks_cfg_t socks_cfg_defaults = {
     .dns_addrs = NULL,
     .dns_threads = NULL,
-    .http_addrs = NULL,
     .num_dns_addrs = 0U,
     .num_dns_threads = 0U,
-    .num_http_addrs = 0U,
-    .max_http_clients = 128U,
-    .http_timeout = 5U,
 };
 
 // Generic iterator for catching bad config hash keys in various places below
@@ -106,26 +100,6 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, gdnsd_anys
             _store = (unsigned) _val; \
         } \
     } while(0)
-
-F_NONNULLX(1)
-static void process_http_listen(socks_cfg_t* socks_cfg, vscf_data_t* http_listen_opt, const unsigned def_http_port) {
-    if(!http_listen_opt || !vscf_array_get_len(http_listen_opt)) {
-        socks_cfg->num_http_addrs = 2;
-        socks_cfg->http_addrs = xcalloc(socks_cfg->num_http_addrs, sizeof(gdnsd_anysin_t));
-        make_addr("0.0.0.0", def_http_port, socks_cfg->http_addrs);
-        make_addr("::", def_http_port, &socks_cfg->http_addrs[1]);
-    }
-    else {
-        socks_cfg->num_http_addrs = vscf_array_get_len(http_listen_opt);
-        socks_cfg->http_addrs = xcalloc(socks_cfg->num_http_addrs, sizeof(gdnsd_anysin_t));
-        for(unsigned i = 0; i < socks_cfg->num_http_addrs; i++) {
-            vscf_data_t* lspec = vscf_array_get_data(http_listen_opt, i);
-            if(!vscf_is_simple(lspec))
-                log_fatal("Config option 'http_listen': all listen specs must be strings");
-            make_addr(vscf_simple_get_data(lspec), def_http_port, &socks_cfg->http_addrs[i]);
-        }
-    }
-}
 
 F_NONNULL
 static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs) {
@@ -255,17 +229,12 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
     memcpy(socks_cfg, &socks_cfg_defaults, sizeof(*socks_cfg));
 
     vscf_data_t* listen_opt = NULL;
-    vscf_data_t* http_listen_opt = NULL;
 
-    unsigned http_port_def = http_port_def_default;
     dns_addr_t addr_defs;
     memcpy(&addr_defs, &addr_defs_defaults, sizeof(addr_defs));
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
-        CFG_OPT_UINT_ALTSTORE(options, max_http_clients, 1LU, 65535LU, socks_cfg->max_http_clients);
-        CFG_OPT_UINT_ALTSTORE(options, http_timeout, 3LU, 60LU, socks_cfg->http_timeout);
-        CFG_OPT_UINT_ALTSTORE(options, http_port, 1LU, 65535LU, http_port_def);
         CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
         CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
@@ -287,17 +256,14 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
         }
 
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
-        http_listen_opt = vscf_hash_get_data_byconstkey(options, "http_listen", true);
     }
 
-    process_http_listen(socks_cfg, http_listen_opt, http_port_def);
     process_listen(socks_cfg, listen_opt, &addr_defs);
 
     return socks_cfg;
 }
 
-F_NONNULL
-static void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asin) {
+void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asin) {
     int bind_errno = 0;
 
     // Immediate, simple success
@@ -350,16 +316,6 @@ static void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin
     // If initial bind attempt failed, and the above freebind stuff either
     // failed or isn't available, fail hard:
     log_fatal("bind() failed for %s socket %s: %s", desc, logf_anysin(asin), logf_strerror(bind_errno));
-}
-
-// bind all sockets (udp/tcp dns + statio)
-void socks_bind_all(socks_cfg_t* scfg) {
-    for(unsigned i = 0; i < scfg->num_dns_threads; i++) {
-        dns_thread_t* t = &scfg->dns_threads[i];
-        socks_bind_sock(t->is_udp ? "UDP DNS" : "TCP DNS", t->sock, &t->ac->addr);
-    }
-    for(unsigned i = 0; i < scfg->num_http_addrs; i++)
-        socks_bind_sock("TCP stats", scfg->http_socks[i], &scfg->http_addrs[i]);
 }
 
 void socks_dns_lsocks_init(socks_cfg_t* socks_cfg) {

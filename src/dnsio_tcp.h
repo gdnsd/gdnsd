@@ -28,13 +28,6 @@
 F_NONNULL
 void* dnsio_tcp_start(void* thread_asvoid);
 
-// Retval is socket. This is common code re-used by the statio listener as well,
-//  the socket is created and set for non-block, TCP_DEFER_ACCEPT if available, IPV6_V6ONLY
-//  if the sockaddr in "asin" is V6, and SO_REUSEADDR.  The socket is fully ready
-//  for bind()+listen() when returned.
-F_NONNULL
-int tcp_listen_pre_setup(const gdnsd_anysin_t* asin, const unsigned timeout V_UNUSED);
-
 F_NONNULL
 void tcp_dns_listen_setup(dns_thread_t* t);
 

@@ -269,6 +269,7 @@ void udp_sock_setup(dns_thread_t* t) {
     else
         udp_sock_opts_v4(sock, gdnsd_anysin_is_anyaddr(asin));
 
+    socks_bind_sock("UDP DNS", sock, asin);
     t->sock = sock;
 }
 

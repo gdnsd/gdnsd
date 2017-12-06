@@ -21,12 +21,14 @@
 #include "css.h"
 #include "cs.h"
 #include "main.h"
+#include "statio.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/net.h>
+#include <gdnsd-prot/mon.h>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -47,7 +49,8 @@ static const mode_t CSOCK_PERMS = (S_IRUSR|S_IWUSR); // 0600
 typedef enum {
     READING_REQ,
     WAITING_SERVER,
-    WRITING_RESP
+    WRITING_RESP,
+    WRITING_RESP_DATA
 } css_cstate_t;
 
 struct css_conn_s_;
@@ -59,9 +62,12 @@ struct css_conn_s_ {
     css_t* css;
     csbuf_t rbuf;
     csbuf_t wbuf;
+    char* resp_data;
     ev_io* w_read;
     ev_io* w_write;
     int fd;
+    size_t resp_size;
+    size_t resp_size_done;
     css_cstate_t state;
 };
 
@@ -83,6 +89,8 @@ static void css_conn_cleanup(css_conn_t* c) {
     gdnsd_assert(css);
 
     // stop/free io-related things
+    if(c->resp_data)
+        free(c->resp_data);
     ev_io_stop(css->loop, c->w_read);
     ev_io_stop(css->loop, c->w_write);
     free(c->w_read);
@@ -122,35 +130,79 @@ static bool respond_blocking_ack(css_conn_t* c) {
 }
 
 F_NONNULL
+static void css_conn_write_data(css_conn_t* c) {
+    gdnsd_assert(c->state == WRITING_RESP_DATA);
+    gdnsd_assert(c->resp_data);
+    gdnsd_assert(c->resp_size);
+    size_t wanted = c->resp_size - c->resp_size_done;
+    gdnsd_assert(wanted > 0);
+    ssize_t pktlen = send(c->fd, &c->resp_data[c->resp_size_done], wanted, MSG_DONTWAIT);
+    if(pktlen < 0) {
+        if(ERRNO_WOULDBLOCK)
+            return;
+        log_err("control socket write of %zu bytes failed with retval %zi, closing: %s", wanted, pktlen, logf_errno());
+        css_conn_cleanup(c);
+        return;
+    }
+
+    c->resp_size_done += (size_t)pktlen;
+    if(c->resp_size_done == c->resp_size) {
+        free(c->resp_data);
+        c->resp_data = NULL;
+        c->resp_size = 0;
+        c->resp_size_done = 0;
+        ev_io_stop(c->css->loop, c->w_write);
+        ev_io_start(c->css->loop, c->w_read);
+        c->state = READING_REQ;
+    }
+}
+
+F_NONNULL
 static void css_conn_write(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
     gdnsd_assert(revents == EV_WRITE);
     css_conn_t* c = w->data;
     css_t* css = c->css;
     gdnsd_assert(c); gdnsd_assert(css);
-    gdnsd_assert(c->state == WRITING_RESP);
+    gdnsd_assert(c->state == WRITING_RESP || c->state == WRITING_RESP_DATA);
 
-    ssize_t pktlen = send(c->fd, c->wbuf.raw, 8, MSG_DONTWAIT);
-    if(pktlen != 8) {
-        if(pktlen < 0 && ERRNO_WOULDBLOCK)
+    if(c->state == WRITING_RESP) {
+        ssize_t pktlen = send(c->fd, c->wbuf.raw, 8, MSG_DONTWAIT);
+        if(pktlen != 8) {
+            if(pktlen < 0 && ERRNO_WOULDBLOCK)
+                return;
+            log_err("control socket write of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
+            css_conn_cleanup(c);
             return;
-        log_err("control socket write of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
-        css_conn_cleanup(c);
-        return;
+        }
+        if(c->resp_data) {
+            c->state = WRITING_RESP_DATA;
+        } else {
+            ev_io_stop(loop, c->w_write);
+            ev_io_start(loop, c->w_read);
+            c->state = READING_REQ;
+            return;
+        }
     }
 
-    ev_io_stop(loop, c->w_write);
-    ev_io_start(loop, c->w_read);
-    c->state = READING_REQ;
+    css_conn_write_data(c);
 }
 
-F_NONNULL
-static void respond(css_conn_t* c, const char key, const uint32_t v, const uint32_t d) {
+// If "resp_data" is set, it's a buffer of extended response data to send after
+// the initial 8-byte response (and then free once sent), and "d" contains the
+// length of the data.
+F_NONNULLX(1)
+static void respond(css_conn_t* c, const char key, const uint32_t v, const uint32_t d, char* resp_data) {
     gdnsd_assert(c->css);
     gdnsd_assert(c->state == WAITING_SERVER);
     gdnsd_assert(v <= 0xFFFFFF);
     c->wbuf.key = key;
     csbuf_set_v(&c->wbuf, v);
     c->wbuf.d = d;
+    if(resp_data) {
+        c->resp_data = resp_data;
+        c->resp_size = d;
+        c->resp_size_done = 0;
+    }
     c->state = WRITING_RESP;
     ev_io_start(c->css->loop, c->w_write);
 }
@@ -178,9 +230,15 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) 
     ev_io_stop(loop, c->w_read);
     c->state = WAITING_SERVER;
 
+    double nowish;
+    size_t stats_size;
+    size_t states_size;
+    char* stats_msg;
+    char* states_msg;
+
     switch(c->rbuf.key) {
         case REQ_INFO:
-            respond(c, RESP_ACK, css->status_v, css->status_d);
+            respond(c, RESP_ACK, css->status_v, css->status_d, NULL);
             break;
         case REQ_STOP:
             log_info("Received stop request over control socket");
@@ -190,6 +248,19 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) 
             // the daemon exiting just before the PID vanishes...
             if(!respond_blocking_ack(c))
                 c->fd = -1;
+            break;
+        case REQ_STAT:
+            nowish = ev_now(loop);
+            stats_size = 0;
+            stats_msg = statio_get_json((time_t)nowish, &stats_size);
+            gdnsd_assert(stats_size <= UINT32_MAX);
+            respond(c, RESP_ACK, 0, (uint32_t)stats_size, stats_msg);
+            break;
+        case REQ_STATE:
+            states_size = 0;
+            states_msg = gdnsd_mon_states_get_json(&states_size);
+            gdnsd_assert(states_size <= UINT32_MAX);
+            respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg);
             break;
         default:
             log_err("Invalid request from control socket, closing");

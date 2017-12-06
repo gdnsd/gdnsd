@@ -60,6 +60,7 @@ static void usage(const char* argv0) {
             "  reload - Full reload (code, config, data) of the running daemon\n"
             "  status - Checks the running daemon's status\n"
             "  stats - Dumps JSON statistics from the running daemon\n"
+            "  states - Dumps JSON monitored states\n"
             "\nFeatures: " BUILD_FEATURES
             "\nBuild Info: " BUILD_INFO
             "\nBug report URL: " PACKAGE_BUGREPORT
@@ -104,9 +105,29 @@ static int action_status(csc_t* csc) {
 }
 
 F_NONNULL
-static int action_stats(csc_t* csc V_UNUSED) {
-    log_fatal("XXX Not yet implemented");
-    return(0);
+static int action_stats(csc_t* csc) {
+    char* resp_data;
+    csbuf_t req, resp;
+    memset(&req, 0, sizeof(req));
+    req.key = REQ_STAT;
+    if(csc_txn_getdata(csc, &req, &resp, &resp_data))
+        return 1;
+    fwrite(resp_data, 1, resp.d, stdout);
+    free(resp_data);
+    return 0;
+}
+
+F_NONNULL
+static int action_states(csc_t* csc) {
+    char* resp_data;
+    csbuf_t req, resp;
+    memset(&req, 0, sizeof(req));
+    req.key = REQ_STATE;
+    if(csc_txn_getdata(csc, &req, &resp, &resp_data))
+        return 1;
+    fwrite(resp_data, 1, resp.d, stdout);
+    free(resp_data);
+    return 0;
 }
 
 /**** Commandline parsing and action selection ****/
@@ -122,6 +143,7 @@ static struct {
     { "reload",       action_reload  },
     { "status",       action_status  },
     { "stats",        action_stats   },
+    { "states",       action_states  },
 };
 
 F_NONNULL F_PURE F_RETNN

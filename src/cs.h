@@ -55,9 +55,11 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v) {
 }
 
 // Legal values for "key"
-#define REQ_INFO 'I'
-#define REQ_STOP 'X'
-#define RESP_ACK 'A'
-#define RESP_NAK 'N'
+#define REQ_INFO  'I'
+#define REQ_STAT  'S'
+#define REQ_STATE 'E'
+#define REQ_STOP  'X'
+#define RESP_ACK  'A'
+#define RESP_NAK  'N'
 
 #endif // GDNSD_CS_H

@@ -31,7 +31,6 @@
 typedef struct {
     const uint8_t* chaos;
     bool     include_optional_ns;
-    bool     realtime_stats;
     bool     lock_mem;
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
@@ -44,7 +43,6 @@ typedef struct {
     unsigned max_ncache_ttl;
     unsigned max_ttl;
     unsigned min_ttl;
-    unsigned log_stats;
     unsigned max_response;
     unsigned max_edns_response;
     unsigned max_cname_depth;

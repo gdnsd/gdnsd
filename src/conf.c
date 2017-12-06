@@ -46,7 +46,6 @@ static const char chaos_def[] = "gdnsd";
 static const cfg_t cfg_defaults = {
     .chaos = NULL,
     .include_optional_ns = false,
-    .realtime_stats = false,
     .lock_mem = false,
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
@@ -59,7 +58,6 @@ static const cfg_t cfg_defaults = {
     .max_ncache_ttl = 10800U,
     .max_ttl = 3600000U,
     .min_ttl = 5U,
-    .log_stats = 3600U,
     .max_response = 16384U,
     .max_edns_response = 1410U,
     .max_cname_depth = 16U,
@@ -142,20 +140,6 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
         } \
     } while(0)
 
-#define CFG_OPT_UINT_NOMIN(_opt_set, _gconf_loc, _max) \
-    do { \
-        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
-            unsigned long _val; \
-            if(!vscf_is_simple(_opt_setting) \
-            || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
-                log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val > _max) \
-                log_fatal("Config option %s: Value out of range (0, %lu)", #_gconf_loc, _max); \
-            cfg->_gconf_loc = (unsigned) _val; \
-        } \
-    } while(0)
-
 #define CFG_OPT_DBL(_opt_set, _gconf_loc, _min, _max) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
@@ -216,12 +200,10 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if(options) {
         CFG_OPT_BOOL(options, include_optional_ns);
-        CFG_OPT_BOOL(options, realtime_stats);
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
         CFG_OPT_BOOL(options, any_mitigation);
-        CFG_OPT_UINT_NOMIN(options, log_stats, 86400LU);
 
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);

@@ -5,7 +5,6 @@ gdnsd.config - gdnsd configuration file
 =head1 SYNOPSIS
 
   options => {
-    log_stats => 86400
     tcp_timeout => 15 ; zonefile-style comment
     include_optional_ns => true
     listen => [ 127.0.0.1, 192.0.2.1 ]
@@ -414,20 +413,6 @@ using filenames of the form C<plugin_${name}.so>.  If you define this
 parameter, all paths in this list will be searched in the given order
 for plugins *before* trying the default, fixed search path.
 
-=item B<realtime_stats>
-
-Boolean, default false.  Normally the daemon self-imposes a limit of
-not recalculating the daemon-wide statistics more often than once per
-second.  This improves efficiency in the case that the polling traffic
-on our HTTP interface gets high.
-
-For most uses the default should be fine.  If you set this option to
-true, the stats will be recalculated on the spot for every stats
-request.  The test suite uses this so that it can double-check
-statistics counters between every request it sends.  I don't imagine
-anyone else will need to use this option, and it could even be
-determinental to performance on SMP machines.
-
 =item B<max_response>
 
 Integer, default 16384, min 4096, max 64000.  This number is used to
@@ -534,14 +519,6 @@ contains the string defined here.  This is something like BIND's
 version reporting, which responds to "version.bind" queries in the
 C<CH> class, and is what a client will see if they use such a query
 against a gdnsd server.
-
-=item B<log_stats>
-
-Integer, default 3600, min 0, max 86400.  The current stats counters
-will be emitted as log output (e.g. to syslog) every C<log_stats>
-seconds.  If set to zero, periodic stats logging is disabled.
-Regardless of this setting, stats counters are always emitted to the log
-once at the time of daemon shutdown.
 
 =item B<run_dir>
 

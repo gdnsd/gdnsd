@@ -52,6 +52,12 @@ const char* csc_get_server_version(const csc_t* csc);
 F_NONNULL
 bool csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp);
 
+// As above, but expects server's resp.d to contain a length of followup data,
+// which will be received and placed in newly-allocated storage at *resp_data
+// for the caller to consume and free
+F_NONNULL
+bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data);
+
 // built in server "stop" management.
 F_NONNULL
 bool csc_stop_server(csc_t* csc);

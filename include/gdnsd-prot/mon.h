@@ -56,14 +56,9 @@ void gdnsd_mon_check_admin_file(void);
 F_NONNULL
 void gdnsd_mon_start(struct ev_loop* mon_loop);
 
-// statio.c calls these
-unsigned gdnsd_mon_stats_get_max_len(void);
+// JSON monitored-state output for control socket
 F_NONNULL
-unsigned gdnsd_mon_stats_out_csv(char* buf);
-F_NONNULL
-unsigned gdnsd_mon_stats_out_json(char* buf);
-F_NONNULL
-unsigned gdnsd_mon_stats_out_html(char* buf);
+char* gdnsd_mon_states_get_json(size_t* len);
 
 #pragma GCC visibility pop
 

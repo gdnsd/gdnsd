@@ -2,12 +2,10 @@
 #  dealing with large additional record counts and/or
 #  dnames being encoded/repeated past the 16K mark,
 #  which affects compression.
-# Also covers a few EDNS cases at the bottom, and
-#  tests JSON stats with flushing
+# Also covers a few EDNS cases at the bottom
 
 use _GDT ();
-use JSON::PP;
-use Test::More tests => 14;
+use Test::More tests => 12;
 
 $optrr = Net::DNS::RR->new(
     type => "OPT",
@@ -968,33 +966,6 @@ _GDT->test_dns(
             'ns2.example.com 86400 A 192.0.2.2',
         ],
     );
-}
-
-my $_useragent;
-sub get_json_flushed_stats {
-    $_useragent ||= LWP::UserAgent->new(
-        protocols_allowed => ['http'],
-        requests_redirectable => [],
-        max_size => 10240,
-        timeout => 3,
-    );
-    my $response = $_useragent->get("http://127.0.0.1:${_GDT::HTTP_PORT}/json?f=1");
-    if(!$response) {
-        die "JSON stats fetch: No response...";
-    }
-    elsif($response->code != 200) {
-        die "JSON stats fetch: Response code was not 200. Response dump:\n" . $response->as_string("\n");
-    }
-
-    my $data = decode_json($response->content);
-    return $data;
-}
-
-{
-    my $stats1 = get_json_flushed_stats();
-    Test::More::is($stats1->{stats}->{noerror}, 20, "Correct noerror stat via JSON");
-    my $stats2 = get_json_flushed_stats();
-    Test::More::is($stats2->{stats}->{noerror}, 0, "Zero noerror stat post-flush via JSON");
 }
 
 _GDT->test_kill_daemon($pid);

@@ -323,7 +323,13 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 #define SOL_TCP IPPROTO_TCP
 #endif
 
-int tcp_listen_pre_setup(const gdnsd_anysin_t* asin, const unsigned timeout V_UNUSED) {
+void tcp_dns_listen_setup(dns_thread_t* t) {
+    const dns_addr_t* addrconf = t->ac;
+    gdnsd_assert(addrconf);
+
+    const gdnsd_anysin_t* asin = &addrconf->addr;
+    gdnsd_assert(asin);
+
     const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || asin->sa.sa_family == AF_INET);
 
@@ -346,7 +352,7 @@ int tcp_listen_pre_setup(const gdnsd_anysin_t* asin, const unsigned timeout V_UN
 #endif
 
 #ifdef TCP_DEFER_ACCEPT
-    const int opt_timeout = (int)timeout;
+    const int opt_timeout = (int)addrconf->tcp_timeout;
     if(setsockopt(sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof opt_timeout) == -1)
         log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", logf_errno());
 #endif
@@ -355,14 +361,8 @@ int tcp_listen_pre_setup(const gdnsd_anysin_t* asin, const unsigned timeout V_UN
         if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
             log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
 
-    return sock;
-}
-
-void tcp_dns_listen_setup(dns_thread_t* t) {
-    const dns_addr_t* addrconf = t->ac;
-    gdnsd_assert(addrconf);
-
-    t->sock = tcp_listen_pre_setup(&addrconf->addr, addrconf->tcp_timeout);
+    socks_bind_sock("TCP DNS", sock, asin);
+    t->sock = sock;
 }
 
 static void prcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {

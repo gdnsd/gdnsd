@@ -20,21 +20,13 @@
 #ifndef GDSND_STATIO_H
 #define GDSND_STATIO_H
 
-#include "socks.h"
-
 #include <gdnsd/compiler.h>
-
-#include <stdbool.h>
-
-#include <ev.h>
+#include <sys/types.h>
 
 F_NONNULL
-void statio_init(socks_cfg_t* socks_cfg);
+void statio_init(unsigned arg_num_dns_threads);
 
 F_NONNULL
-void statio_start(struct ev_loop* statio_loop_arg, const socks_cfg_t* socks_cfg);
-
-// main thread calls this to explicitly log stats at shutdown
-void statio_log_stats(void);
+char* statio_get_json(time_t nowish, size_t* len);
 
 #endif // GDSND_STATIO_H
