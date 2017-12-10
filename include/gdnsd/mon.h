@@ -58,6 +58,7 @@ bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned
 // where (FORCED) is only present on the forced flag,
 //   and the special TTLs 0 and 268435455 are given
 //   as the strings "MIN" and "MAX" for clarity.
+F_RETNN
 const char* gdnsd_logf_sttl(const gdnsd_sttl_t s);
 #define logf_sttl gdnsd_logf_sttl
 

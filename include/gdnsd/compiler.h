@@ -20,6 +20,8 @@
 #ifndef GDNSD_COMPILER_H
 #define GDNSD_COMPILER_H
 
+#include <gdnsd/dmn.h>
+
 // Compiler features we can take advantage of
 
 #if defined __GNUC__ && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
@@ -55,9 +57,6 @@
 #  if __has_attribute(alloc_align)
 #    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
 #  endif
-#  if __has_attribute(returns_nonnull)
-#    define F_RETNN         __attribute__((__returns_nonnull__))
-#  endif
 #elif defined __GNUC__
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
 #    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
@@ -65,7 +64,6 @@
 #  endif
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
 #    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
-#    define F_RETNN         __attribute__((__returns_nonnull__))
 #  endif
 #endif
 
@@ -121,9 +119,6 @@
 #endif
 #ifndef   F_ALLOCAL
 #  define F_ALLOCAL(_x)
-#endif
-#ifndef   F_RETNN
-#  define F_RETNN
 #endif
 
 // This is a GCC-ism which also seems to be supported

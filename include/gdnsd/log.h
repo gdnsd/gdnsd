@@ -40,8 +40,11 @@
 #pragma GCC visibility push(default)
 
 // libdmn custom log formatters for raw ipv6 data and dnames
+F_RETNN
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6);
+F_RETNN
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
+F_RETNN
 const char* gdnsd_logf_dname(const uint8_t* dname);
 
 #pragma GCC visibility pop

@@ -62,20 +62,6 @@
 #  define fflush_unlocked fflush
 #endif
 
-// These control the growth of the log formatting-buffer space
-// These define the buffer count, size of first buffer, and shift
-//   value for the size increases.
-// At these settings (4, 8, 2), the buffer sizes are:
-//   256, 1024, 4096, 16384
-// This means the program will abort with a buffer exhaustion
-//   message if someone tries to log a message containing
-//   >~21K of custom-formatted strings (or less if they're
-//   chunky, because we don't split allocations across
-//   buffer boundaries).
-#define FMTBUF_CT     4U
-#define FMTBUF_START  8U
-#define FMTBUF_STEP   2U
-
 /***********************************************************
 ***** Constants ********************************************
 ***********************************************************/
@@ -220,55 +206,46 @@ static unsigned num_pcalls = 0;
 ***** Logging **********************************************
 ***********************************************************/
 
-// private to the two functions below it
-static char* _fmtbuf_common(const unsigned size) {
-    // This is our log-formatting buffer.  It holds multiple buffers
-    //   of increasing size (see constants above) which are allocated
-    //   per-thread as-needed, permanently for the life of the thread.
-    static __thread struct {
-        unsigned used[FMTBUF_CT];
-        char* bufs[FMTBUF_CT];
-    } fmtbuf = {{0},{NULL}};
+// 4K is the limit for all strings formatted by the log formatters to use in a
+// single log message.  In other words, for any invocation like:
+// log_warn("...", logf_dname(x), logf_strerror(y))
+// The space allocated by logf_dname() + logf_strerror() must be <= 4096.
+#define FMTBUF_SIZE 4096U
+// _fmtbuf_common is private to the two functions below it
+static char* _fmtbuf_common(const size_t size) {
+    static __thread size_t buf_used = 0;
+    static __thread char buf[FMTBUF_SIZE];
 
     char* rv = NULL;
 
     // Allocate a chunk from the per-thread format buffer
     if(size) {
-        unsigned bsize = 1U << FMTBUF_START;
-        for(unsigned i = 0; i < FMTBUF_CT; i++) {
-            if(!fmtbuf.bufs[i]) {
-                fmtbuf.bufs[i] = malloc(bsize);
-                if(!fmtbuf.bufs[i])
-                    dmn_log_fatal("allocation failure in fmtbuf_alloc!");
-            }
-            if((bsize - fmtbuf.used[i]) >= size) {
-                rv = &fmtbuf.bufs[i][fmtbuf.used[i]];
-                fmtbuf.used[i] += size;
-                break;
-            }
-            bsize <<= FMTBUF_STEP;
+        if((FMTBUF_SIZE - buf_used) >= size) {
+            rv = &buf[buf_used];
+            buf_used += size;
         }
     }
     // Reset (free allocations within) the format buffer,
     else {
-        for(unsigned i = 0; i < FMTBUF_CT; i++)
-            fmtbuf.used[i] = 0;
+        buf_used = 0;
     }
 
     return rv;
 }
+#undef FMTBUF_SIZE
 
 // Public (including this file) interfaces to _fmtbuf_common()
-char* dmn_fmtbuf_alloc(const unsigned size) {
+
+char* dmn_fmtbuf_alloc(const size_t size) {
     phase_check(0, 0, 0);
-    char* rv = NULL;
-    if(size) {
-        rv = _fmtbuf_common(size);
-        if(!rv)
-            dmn_log_fatal("BUG: format buffer exhausted");
-    }
+    if(!size)
+        dmn_log_fatal("BUG: fmtbuf alloc of zero bytes");
+    char* rv = _fmtbuf_common(size);
+    if(!rv)
+        dmn_log_fatal("BUG: format buffer exhausted");
     return rv;
 }
+
 void dmn_fmtbuf_reset(void) {
     phase_check(0, 0, 0);
     _fmtbuf_common(0);

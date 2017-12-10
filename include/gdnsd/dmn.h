@@ -56,6 +56,9 @@
 #  if __has_attribute(cold)
 #    define DMN_F_COLD __attribute__((__cold__))
 #  endif
+#  if __has_attribute(returns_nonnull)
+#    define F_RETNN         __attribute__((__returns_nonnull__))
+#  endif
 #  define DMN_DIAG_PUSH_IGNORED(x) _Pragma("clang diagnostic push") \
                                    PRAG_(clang diagnostic ignored x)
 #  define DMN_DIAG_POP             _Pragma("clang diagnostic pop")
@@ -70,6 +73,9 @@
 #    define DMN_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push") \
                                      PRAG_(GCC diagnostic ignored x)
 #    define DMN_DIAG_POP             _Pragma("GCC diagnostic pop")
+#  endif
+#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
+#    define F_RETNN         __attribute__((__returns_nonnull__))
 #  endif
 #endif
 
@@ -93,6 +99,9 @@
 #endif
 #ifndef DMN_DIAG_POP
 #  define DMN_DIAG_POP
+#endif
+#ifndef   F_RETNN
+#  define F_RETNN
 #endif
 
 /***
@@ -289,6 +298,7 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
 //  when you call a logging function above.
 // Your custom formatter can use only log_fatal() to signal
 //  bugs, but probably should avoid using custom formatters itself.
+// "size" is not allowed to be zero, and this function never returns NULL
 // Example:
 //
 //  const char* my_int_formatter(int foo) {
@@ -300,8 +310,8 @@ void dmn_sd_notify(const char* notify_msg, const bool optional);
 //
 //  dmn_log_warn("The integer had value %s!", my_int_formatter(someint));
 //
-// if size==0, the retval will be NULL
-char* dmn_fmtbuf_alloc(const unsigned size);
+F_RETNN
+char* dmn_fmtbuf_alloc(const size_t size);
 
 // Reset (free allocations within) the format buffer.  Do not use this
 //  with the normal log functions.  If you use the fmtbuf-based formatters
@@ -313,10 +323,12 @@ void dmn_fmtbuf_reset(void);
 //  of the above logging functions.  This is built on dmn_fmtbuf_alloc()
 //  above and takes care of the difference between the GNU
 //  and POSIX strerror_r() variants.
+F_RETNN
 const char* dmn_logf_strerror(const int errnum);
 #define dmn_logf_errno() dmn_logf_strerror(errno)
 
 // Adds a strack trace to the log message, iff built w/ libunwind
+F_RETNN
 const char* dmn_logf_bt(void);
 
 /******** network utility stuff ***********/
@@ -383,7 +395,9 @@ DMN_F_NONNULLX(2)
 int dmn_anysin2str_noport(const dmn_anysin_t* asin, char* buf);
 
 // Log-formatters for dmn_anysin_t + dmn_log_*(), which use the above...
+F_RETNN
 const char* dmn_logf_anysin(const dmn_anysin_t* asin);
+F_RETNN
 const char* dmn_logf_anysin_noport(const dmn_anysin_t* asin);
 
 #pragma GCC visibility pop
