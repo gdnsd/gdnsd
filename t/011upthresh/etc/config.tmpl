@@ -55,4 +55,17 @@ plugins => {
       four = [ 127.0.0.1, 10 ]
     }
   }
+  # metafo with multifo underneath using "ignore_health"
+  metafo => {
+    service_types => up
+    resources => {
+      meta_multi_ignore_health => {
+        datacenters => [ DCA, DCB ]
+        dcmap => {
+          DCA => { lb01 => 192.0.2.70, lb02 => 192.0.2.71, lb03 => 192.0.2.72, ignore_health => true }
+          DCB => { lb01 => 192.0.2.80, lb02 => 192.0.2.81, lb03 => 192.0.2.82 }
+        }
+      }
+    }
+  }
 }

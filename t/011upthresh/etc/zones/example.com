@@ -14,3 +14,4 @@ m3dn  DYNA multifo!multi_3dead_normal
 m3dl  DYNA multifo!multi_3dead_lowthresh
 wlow  DYNA weighted!w_low
 wnorm DYNA weighted!w_norm
+mmih  DYNA metafo!meta_multi_ignore_health

@@ -46,6 +46,7 @@ typedef struct {
     unsigned num_svcs;
     unsigned count;
     unsigned up_thresh;
+    bool ignore_health;
 } addrset_t;
 
 typedef struct {
@@ -91,6 +92,7 @@ static vscf_data_t* addrs_hash_from_array(vscf_data_t* ary, const char* resname,
 
     vscf_hash_inherit(parent, newhash, "up_thresh", false);
     vscf_hash_inherit(parent, newhash, "service_types", false);
+    vscf_hash_inherit(parent, newhash, "ignore_health", false);
     return newhash;
 }
 
@@ -177,6 +179,14 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
             log_fatal("plugin_multifo: resource %s (%s): 'up_thresh' must be a floating point value in the range (0.0 - 1.0]", resname, stanza);
     }
 
+    aset->ignore_health = false;
+    vscf_data_t* ignore_health_cfg = vscf_hash_get_data_byconstkey(cfg, "ignore_health", true);
+    if(ignore_health_cfg) {
+        num_addrs--;
+        if(!vscf_is_simple(ignore_health_cfg) || !vscf_simple_get_as_bool(ignore_health_cfg, &aset->ignore_health))
+            log_fatal("plugin_multifo: resource %s (%s): 'ignore_health' must have a boolean value", resname, stanza);
+    }
+
     if(!num_addrs)
         log_fatal("plugin_multifo: resource '%s' (%s): must define one or more 'desc => IP' mappings, either directly or inside a subhash named 'addrs'", resname, stanza);
 
@@ -219,6 +229,7 @@ static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg) {
     // mark parameters
     vscf_hash_get_data_byconstkey(auto_cfg, "up_thresh", true);
     vscf_hash_get_data_byconstkey(auto_cfg, "service_types", true);
+    vscf_hash_get_data_byconstkey(auto_cfg, "ignore_health", true);
 
     // clone down to just address-label keys
     vscf_data_t* auto_cfg_noparams = vscf_clone(auto_cfg, true);
@@ -265,6 +276,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         // inherit params downhill if applicable
         vscf_hash_bequeath_all(opts, "up_thresh", true, false);
         vscf_hash_bequeath_all(opts, "service_types", true, false);
+        vscf_hash_bequeath_all(opts, "ignore_health", true, false);
 
         addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
         addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
@@ -307,6 +319,8 @@ void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads 
         num_resources--;
     if(vscf_hash_bequeath_all(config, "service_types", true, false))
         num_resources--;
+    if(vscf_hash_bequeath_all(config, "ignore_health", true, false))
+        num_resources--;
 
     resources = xcalloc(num_resources, sizeof(res_t));
     unsigned residx = 0;
@@ -333,26 +347,31 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     dmn_assert(aset->count);
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
-    unsigned added = 0;
+    unsigned notdown = 0;
     for(unsigned i = 0; i < aset->count; i++) {
         const addrstate_t* as = &aset->as[i];
         const gdnsd_sttl_t as_sttl = gdnsd_sttl_min(sttl_tbl, as->indices, aset->num_svcs);
         rv = gdnsd_sttl_min2(rv, as_sttl);
         if(!(as_sttl & GDNSD_STTL_DOWN)) {
             gdnsd_result_add_anysin(result, &as->addr);
-            added++;
+            notdown++;
+        }
+        else if(aset->ignore_health) {
+            gdnsd_result_add_anysin(result, &as->addr);
         }
     }
 
     // if up_thresh was not met, signal upstream failure through rv and add all addresses
-    if(added < aset->up_thresh) {
+    if(notdown < aset->up_thresh) {
         rv |= GDNSD_STTL_DOWN;
-        if(isv6)
-            gdnsd_result_wipe_v6(result);
-        else
-            gdnsd_result_wipe_v4(result);
-        for(unsigned i = 0; i < aset->count; i++)
-            gdnsd_result_add_anysin(result, &aset->as[i].addr);
+        if(!aset->ignore_health) {
+            if(isv6)
+                gdnsd_result_wipe_v6(result);
+            else
+                gdnsd_result_wipe_v4(result);
+            for(unsigned i = 0; i < aset->count; i++)
+                gdnsd_result_add_anysin(result, &aset->as[i].addr);
+        }
     }
     // else force non-down response in retval, even if "rv" currently has the down flag from
     //   the min/min2 operations on the individual addrs
