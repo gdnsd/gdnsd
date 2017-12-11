@@ -56,10 +56,10 @@ RR-sets.
 
 =head1 TOP-LEVEL PLUGIN CONFIG
 
-At the top level of the plugin's configuration stanza, two special
-parameters C<up_thresh> and C<service_types> are supported. These set
-default per-resource options of the same name for any resources which do
-not define them explicitly.
+At the top level of the plugin's configuration stanza, three special
+parameters C<up_thresh>, C<service_types>, and C<ignore_health> are supported.
+These set default per-resource options of the same name for any resources which
+do not define them explicitly.
 
 The rest of the hash entries at the top level are the names of the
 resources you define.  Each resource gets a configuration hash of its own
@@ -73,8 +73,9 @@ specify a set of C<label =E<gt> address> pairs which are all the same
 family (IPv4 or IPv6), or you can use the sub-stanzas C<addrs_v4> and/or
 C<addrs_v6> to specify one or both families in the same resource.
 
-The C<up_thresh> and C<service_types> parameters are inherited through
-every level, and can be overridden at any level (even per-address-family):
+The C<up_thresh>, C<service_types>, and C<ignore_health> parameters are
+inherited through every level, and can be overridden at any level (even
+per-address-family):
 
 =over 4
 
@@ -91,16 +92,24 @@ provided, all will be monitored for each address, and the net monitored
 state will be the minimum (worst) of the set.  See L<gdnsd.config(8)> for
 more details on service_types.
 
+=item B<ignore_health>
+
+Boolean, default false.  If set to true, the health of individual addresses
+will not affect whether multifo adds them to the set of output addresses, but
+it will still be checked and used for the C<up_thresh> calculation which is
+consumed by meta-plugins like geoip and metafo, which might use that
+information to fail over to a completely different datacenter as a result.
+
 =back
 
 =head1 SHORTCUT CONFIG
 
-If you have no parameters (service_types, up_thresh) to configure in a
-given stanza (single-family direct resource config, or addrs_v[46]), and do
-not care about the descriptive per-address labels used in monitoring, you
-can replace the hash with an array of addresses.  The labels will be
-generated for you as a series of integers starting with C<1>.  For example,
-the following are equivalent:
+If you have no parameters (service_types, up_thresh, ignore_health) to
+configure in a given stanza (single-family direct resource config, or
+addrs_v[46]), and do not care about the descriptive per-address labels used in
+monitoring, you can replace the hash with an array of addresses.  The labels
+will be generated for you as a series of integers starting with C<1>.  For
+example, the following are equivalent:
 
    res1 => { addrs_v4 => [ 192.0.2.1, 192.0.2.2 ] }
    res1 => { addrs_v4 => { 1 => 192.0.2.1, 2 => 192.0.2.2 } }
@@ -116,7 +125,12 @@ determine the set of response addresses for that address family: 1) Add all
 non-DOWN addresses to the result set.  2) If the set of non-DOWN addresses
 fail the up_thresh check, add *all* addresses to the result set as a
 fallback.  3) If any address is in the DOWN state, cut the
-zonefile-specified TTL in half
+zonefile-specified TTL in half.
+
+If C<ignore_health> is true, all addresses are added to the result set
+regardless of health, but the up_thresh and TTL effects still happen, and the
+final resource-level state still reflects the overall state as it would without
+C<ignore_health>.
 
 This process is repeated independently for each of the IPv4 and IPv6
 address subsets, in the case that a resource has both address families
