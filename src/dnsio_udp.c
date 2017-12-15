@@ -483,10 +483,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             mmsg_rv = sendmmsg(fd, dgrams, pkts, 0);
             if(unlikely(mmsg_rv < 0)) {
                 stats_own_inc(&stats->udp.sendfail);
-                int sockerr = 0;
-                socklen_t sock_len = sizeof(sockerr);
-                (void)getsockopt(fd, SOL_SOCKET, SO_ERROR, &sockerr, &sock_len);
-                log_err("UDP sendmmsg() failed: %s", dmn_logf_strerror(sockerr));
+                log_err("UDP sendmmsg() failed: %s", dmn_logf_errno());
             }
         }
         else {
