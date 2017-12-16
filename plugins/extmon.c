@@ -242,10 +242,10 @@ static void send_cmd(const unsigned idx, const mon_t* mon) {
 static void spawn_helper(void) {
     int writepipe[2];
     int readpipe[2];
-    if(pipe(writepipe))
-        log_fatal("plugin_extmon: pipe() failed: %s", logf_errno());
-    if(pipe(readpipe))
-        log_fatal("plugin_extmon: pipe() failed: %s", logf_errno());
+    if(pipe2(writepipe, O_CLOEXEC))
+        log_fatal("plugin_extmon: pipe2() failed: %s", logf_errno());
+    if(pipe2(readpipe, O_CLOEXEC))
+        log_fatal("plugin_extmon: pipe2() failed: %s", logf_errno());
 
     // Before forking, block all signals and save the old mask
     //   to avoid a race condition where local sighandlers execute
@@ -281,6 +281,12 @@ static void spawn_helper(void) {
 
         close(writepipe[1]);
         close(readpipe[0]);
+        // Clear FD_CLOEXEC on the 2x FDs we intend to pass off through execl() below:
+        if(fcntl(writepipe[0], F_SETFD, 0))
+            log_fatal("Failed to clear FD_CLOEXEC on child reader fd: %s", logf_errno());
+        if(fcntl(readpipe[1], F_SETFD, 0))
+            log_fatal("Failed to clear FD_CLOEXEC on child writer fd: %s", logf_errno());
+
         const char* child_read_fdstr = num_to_str(writepipe[0]);
         const char* child_write_fdstr = num_to_str(readpipe[1]);
         const char* dbg = gdnsd_log_get_debug() ? "Y" : "N";

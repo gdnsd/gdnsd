@@ -299,7 +299,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     gdnsd_anysin_t* asin = xmalloc(sizeof(gdnsd_anysin_t));
     asin->len = GDNSD_ANYSIN_MAXLEN;
 
-    const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK);
+    const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
     if(unlikely(sock < 0)) {
         free(asin);

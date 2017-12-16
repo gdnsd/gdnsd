@@ -122,7 +122,7 @@ typedef union {
 //   none of them are all-zeros at the u32 level.
 F_NONNULL
 static bool get_urand_data(urand_data_t* rdata) {
-    int urfd = open("/dev/urandom", O_RDONLY);
+    int urfd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
     if(urfd < 0)
         return false;
 

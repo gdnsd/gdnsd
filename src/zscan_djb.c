@@ -463,7 +463,7 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
     z->lcount = 0;
     log_debug("Scanning djbzone file '%s'", z->fn);
 
-    z->file = fopen(z->full_fn, "rt");
+    z->file = fopen(z->full_fn, "rte");
     if(z->file == NULL)
         parse_error("Cannot open zone file '%s' for reading: %s", z->full_fn, logf_errno());
 

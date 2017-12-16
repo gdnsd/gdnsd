@@ -59,9 +59,9 @@ static bool csc_get_status(csc_t* csc) {
 }
 
 csc_t* csc_new(const unsigned timeout) {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if(fd < 0)
-        log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", logf_errno());
+        log_fatal("Creating AF_UNIX socket failed: %s", logf_errno());
 
     const struct timeval tmout = { .tv_sec = timeout, .tv_usec = 0 };
     if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout, sizeof(tmout)))

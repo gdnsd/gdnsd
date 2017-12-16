@@ -112,7 +112,7 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
 }
 
 fips_t* fips_init(const char* pathname) {
-    FILE* file = fopen(pathname, "r");
+    FILE* file = fopen(pathname, "re");
     if(!file)
         log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", pathname, logf_errno());
     fips_t* fips = xcalloc(1, sizeof(fips_t));

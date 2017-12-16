@@ -312,7 +312,7 @@ static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UN
     css_t* css = w->data;
     gdnsd_assert(css);
 
-    const int fd = accept4(w->fd, NULL, NULL, SOCK_NONBLOCK);
+    const int fd = accept4(w->fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
     if(unlikely(fd < 0)) {
         switch(errno) {
@@ -387,9 +387,9 @@ css_t* css_new(void) {
         log_fatal("BUG: Cannot parse our own package version");
     css->status_v = csbuf_make_v(x, y, z);
 
-    css->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    css->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     if(css->fd < 0)
-        log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", logf_errno());
+        log_fatal("Creating AF_UNIX socket failed: %s", logf_errno());
 
     css->w_accept = xmalloc(sizeof(*css->w_accept));
     ev_io_init(css->w_accept, css_accept, css->fd, EV_READ);
