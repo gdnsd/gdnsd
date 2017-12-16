@@ -97,15 +97,9 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     do {
         const bool isv6 = md->addr.sa.sa_family == AF_INET6;
 
-        const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
+        const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK, gdnsd_getproto_tcp());
         if(sock < 0) {
             log_err("plugin_http_status: Failed to create monitoring socket: %s", logf_errno());
-            break;
-        }
-
-        if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1) {
-            log_err("plugin_http_status: Failed to set O_NONBLOCK on monitoring socket: %s", logf_errno());
-            close(sock);
             break;
         }
 

@@ -76,10 +76,6 @@ char* gdnsd_str_combine_n(const unsigned count, ...);
 // set thread name (via pthread_setname_np or similar)
 void gdnsd_thread_setname(const char* n);
 
-// Returns true if running on Linux with a kernel version >= x.y.z
-// Returns false for non-Linux systems, or Linux kernels older than specified.
-bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z);
-
 // Global PRNG init, once per process, done early before launching threads
 void gdnsd_init_rand(void);
 

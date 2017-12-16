@@ -182,12 +182,12 @@ AC_SUBST([MATH_LIB])
 # posix_madvise to readahead on zonefiles
 AC_CHECK_FUNCS([posix_madvise])
 
-# *mmsg for Linux
-HAS_SENDMMSG=1
-AC_CHECK_DECLS([sendmmsg, recvmmsg],,[HAS_SENDMMSG=0],[[#include <sys/socket.h>]])
-AC_CHECK_FUNCS([sendmmsg recvmmsg],,[HAS_SENDMMSG=0])
-if test $HAS_SENDMMSG -eq 1; then
-    AC_DEFINE([USE_SENDMMSG],1,[Linux sendmmsg is usable])
+# Linux, FreeBSD, and NetBSD all have this these days
+USE_MMSG=1
+AC_CHECK_DECLS([sendmmsg, recvmmsg, MSG_WAITFORONE],,[USE_MMSG=0],[[#include <sys/socket.h>]])
+AC_CHECK_FUNCS([sendmmsg recvmmsg],,[USE_MMSG=0])
+if test $USE_MMSG -eq 1; then
+    AC_DEFINE([USE_MMSG],1,[recvmmsg and sendmmsg look usable])
 fi
 
 # Network Stuff

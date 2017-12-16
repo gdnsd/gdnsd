@@ -77,18 +77,33 @@
 // prime at us (3109367) and ms (3109) resolution for the same reasons.
 #define MAX_SHUTDOWN_DELAY_S 3
 
+// This flag is set true early in dnsio_udp_init() only in the case that the
+// runtime check passes (in addition to the configure-time check that handles
+// the USE_MMSG define).
+#ifdef USE_MMSG
+static bool use_mmsg = false;
+#endif
+
 static __thread volatile sig_atomic_t thread_shutdown = 0;
 static void sighand_stop(int s V_UNUSED) { thread_shutdown = 1; }
 
 void dnsio_udp_init(void) {
+#ifdef USE_MMSG
+    errno = 0;
+    sendmmsg(-1, 0, 0, 0);
+    if (errno != ENOSYS) {
+        errno = 0;
+        recvmmsg(-1, 0, 0, 0, 0);
+        use_mmsg = (errno != ENOSYS);
+    }
+    errno = 0;
+#endif
     struct sigaction sa;
     sa.sa_handler = sighand_stop;
     sigfillset(&sa.sa_mask);
     sa.sa_flags = 0;
     sigaction(SIGUSR2, &sa, 0);
 }
-
-static bool has_mmsg(void);
 
 static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr) {
     const int opt_one V_UNUSED = 1;
@@ -249,27 +264,24 @@ void udp_sock_setup(dns_thread_t* t) {
 
     const gdnsd_anysin_t* asin = &addrconf->addr;
 
-    // mod udp_recv_width down to 1 when unsupported, makes other logic simpler
-    // XXX fix this so addrconf can be const?????
-    if(!has_mmsg() && addrconf->udp_recv_width > 1)
-        addrconf->udp_recv_width = 1;
-
     const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || asin->sa.sa_family == AF_INET);
 
-    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM, gdnsd_getproto_udp());
-    if(sock == -1) log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());
-    if(fcntl(sock, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on UDP socket: %s", logf_errno());
+    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM | SOCK_CLOEXEC, gdnsd_getproto_udp());
+    if(sock == -1)
+        log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());
 
     const int opt_one = 1;
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", logf_errno());
 
-#ifdef SO_REUSEPORT
-    if(gdnsd_reuseport_ok())
-        if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
-            log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+        log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
+
+#ifdef USE_MMSG
+    const unsigned negotiate_width = use_mmsg ? addrconf->udp_recv_width : 1;
+#else
+    const unsigned negotiate_width = 1;
 #endif
 
     if(addrconf->udp_rcvbuf) {
@@ -279,7 +291,7 @@ void udp_sock_setup(dns_thread_t* t) {
                 logf_anysin(asin), logf_errno());
     }
     else {
-        negotiate_udp_buffer(sock, SO_RCVBUF, DNS_RECV_SIZE, addrconf->udp_recv_width, asin);
+        negotiate_udp_buffer(sock, SO_RCVBUF, DNS_RECV_SIZE, negotiate_width, asin);
     }
 
     if(addrconf->udp_sndbuf) {
@@ -289,7 +301,7 @@ void udp_sock_setup(dns_thread_t* t) {
                 logf_anysin(asin), logf_errno());
     }
     else {
-        negotiate_udp_buffer(sock, SO_SNDBUF, gcfg->max_edns_response, addrconf->udp_recv_width, asin);
+        negotiate_udp_buffer(sock, SO_SNDBUF, gcfg->max_edns_response, negotiate_width, asin);
     }
 
     if(isv6)
@@ -417,18 +429,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 #endif
 }
 
-#ifdef USE_SENDMMSG
-
-// check for linux 3.0+ for sendmmsg() (implies recvmmsg w/ MSG_WAITFORONE)
-static bool has_mmsg(void) {
-    bool rv = gdnsd_linux_min_version(3, 0, 0);
-    if(rv) {
-        /* this causes no harm and exits immediately */
-        sendmmsg(-1, 0, 0, 0);
-        rv = (errno != ENOSYS);
-    }
-    return rv;
-}
+#ifdef USE_MMSG
 
 F_HOT F_NONNULL
 static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
@@ -577,11 +578,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
 #endif
 }
 
-#else // USE_SENDMMSG
-
-static bool has_mmsg(void) { return false; }
-
-#endif // USE_SENDMMSG
+#endif // USE_MMSG
 
 // We need to use cmsg stuff in the case of any IPv6 address (at minimum,
 //  to copy the flow label correctly, if not the interface + source addr),
@@ -619,8 +616,8 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     gdnsd_prcu_rdr_thread_start();
 
-#ifdef USE_SENDMMSG
-    if(addrconf->udp_recv_width > 1) {
+#ifdef USE_MMSG
+    if(use_mmsg && addrconf->udp_recv_width > 1) {
         log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
             addrconf->udp_recv_width, logf_anysin(&addrconf->addr));
         mainloop_mmsg(addrconf->udp_recv_width, t->sock, dnsp_ctx, stats, need_cmsg);

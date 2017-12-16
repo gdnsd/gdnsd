@@ -236,34 +236,6 @@ gdnsd_rstate32_t* gdnsd_rand32_init(void) {
     return newstate;
 }
 
-// fold X.Y.Z to a single uint32_t, same as <linux/version.h>
-F_CONST
-static uint32_t _version_fold(const unsigned x, const unsigned y, const unsigned z) {
-    gdnsd_assert(x < 65536); gdnsd_assert(y < 256); gdnsd_assert(z < 256);
-    return (x << 16) + (y << 8) + z;
-}
-
-bool gdnsd_linux_min_version(const unsigned x, const unsigned y, const unsigned z) {
-    bool rv = false;
-    struct utsname uts;
-    if(!uname(&uts) && !strcmp("Linux", uts.sysname)) {
-        const uint32_t vers_wanted = _version_fold(x, y, z);
-        uint32_t vers_have = _version_fold(0, 0, 0);
-
-        unsigned sys_x, sys_y, sys_z;
-        if(sscanf(uts.release, "%5u.%3u.%3u", &sys_x, &sys_y, &sys_z) == 3) {
-            vers_have = _version_fold(sys_x, sys_y, sys_z);
-        } else if(sscanf(uts.release, "%5u.%3u", &sys_x, &sys_y) == 2) {
-            /* no patch version number, e.g. 3.2 */
-            vers_have = _version_fold(sys_x, sys_y, 0);
-        }
-
-        if(vers_have >= vers_wanted)
-            rv = true;
-    }
-    return rv;
-}
-
 size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {
     errno = 0;
     long name_max = fpathconf(dirfd(d), _PC_NAME_MAX);

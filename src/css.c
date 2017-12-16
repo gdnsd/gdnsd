@@ -312,7 +312,7 @@ static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UN
     css_t* css = w->data;
     gdnsd_assert(css);
 
-    const int fd = accept(w->fd, NULL, NULL);
+    const int fd = accept4(w->fd, NULL, NULL, SOCK_NONBLOCK);
 
     if(unlikely(fd < 0)) {
         switch(errno) {
@@ -387,7 +387,7 @@ css_t* css_new(void) {
         log_fatal("BUG: Cannot parse our own package version");
     css->status_v = csbuf_make_v(x, y, z);
 
-    css->fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    css->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if(css->fd < 0)
         log_fatal("socket(AF_UNIX, SOCK_STREAM, 0) failed: %s", logf_errno());
 
@@ -407,8 +407,6 @@ css_t* css_new(void) {
         log_fatal("Failed to chmod(%s, 0%o): %s", sock_path, CSOCK_PERMS, logf_errno());
     if(listen(css->fd, 100))
         log_fatal("Failed to listen() on control socket %s: %s", sock_path, logf_errno());
-    if(fcntl(css->fd, F_SETFL, (fcntl(css->fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
-        log_fatal("Failed to set O_NONBLOCK on control socket %s: %s", sock_path, logf_errno());
 
     free(sock_path);
     return css;

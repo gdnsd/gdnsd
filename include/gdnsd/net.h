@@ -55,10 +55,6 @@ int gdnsd_getproto_udp(void);
 F_PURE
 int gdnsd_getproto_tcp(void);
 
-// Whether SO_REUSEPORT seems to be a runtime-valid sockopt
-F_PURE
-bool gdnsd_reuseport_ok(void);
-
 /* Socket union type */
 // note anonymous union here, which gcc has supported
 //  forever, and is now becoming standard in C11

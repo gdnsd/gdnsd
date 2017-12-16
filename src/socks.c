@@ -148,17 +148,6 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_threads, 1024LU, addrconf->tcp_threads);
 
-            if(!gdnsd_reuseport_ok()) {
-                if(addrconf->udp_threads > 1) {
-                    log_warn("DNS listen address '%s': option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", lspec, addrconf->udp_threads);
-                    addrconf->udp_threads = 1;
-                }
-                if(addrconf->tcp_threads > 1) {
-                    log_warn("DNS listen address '%s': option 'tcp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", lspec, addrconf->tcp_threads);
-                    addrconf->tcp_threads = 1;
-                }
-            }
-
             make_addr(lspec, addrconf->dns_port, &addrconf->addr);
             vscf_hash_iterate_const(addr_opts, true, bad_key, "per-address listen option");
         }
@@ -243,17 +232,6 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root) {
         CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, addr_defs.tcp_timeout);
         CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
         CFG_OPT_UINT_ALTSTORE_NOMIN(options, tcp_threads, 1024LU, addr_defs.tcp_threads);
-
-        if(!gdnsd_reuseport_ok()) {
-            if(addr_defs.udp_threads > 1) {
-                log_warn("The global option 'udp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", addr_defs.udp_threads);
-                addr_defs.udp_threads = 1;
-            }
-            if(addr_defs.tcp_threads > 1) {
-                log_warn("The global option 'tcp_threads' was reduced from the configured value of %u to 1 for lack of SO_REUSEPORT support", addr_defs.tcp_threads);
-                addr_defs.tcp_threads = 1;
-            }
-        }
 
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
     }

@@ -36,7 +36,6 @@
 
 static int tcp_proto = 0;
 static int udp_proto = 0;
-static bool reuseport_ok = false;
 
 void gdnsd_init_net(void) {
     static bool has_run = false;
@@ -58,16 +57,6 @@ void gdnsd_init_net(void) {
     if(!pe)
         log_fatal("getprotobyname('udp') failed");
     udp_proto = pe->p_proto;
-
-#ifdef SO_REUSEPORT
-    const int sock_rp = socket(PF_INET, SOCK_DGRAM, udp_proto);
-    if(sock_rp > -1) {
-        const int opt_one = 1;
-        if(!setsockopt(sock_rp, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one))
-            reuseport_ok = true;
-        close(sock_rp);
-    }
-#endif
 }
 
 void sun_set_path(struct sockaddr_un* a, const char* path) {
@@ -81,7 +70,6 @@ void sun_set_path(struct sockaddr_un* a, const char* path) {
 
 int gdnsd_getproto_udp(void) { return udp_proto; }
 int gdnsd_getproto_tcp(void) { return tcp_proto; }
-bool gdnsd_reuseport_ok(void) { return reuseport_ok; }
 
 int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_anysin_t* result) {
     struct addrinfo* ainfo = NULL;

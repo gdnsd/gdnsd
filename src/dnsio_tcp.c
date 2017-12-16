@@ -299,7 +299,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     gdnsd_anysin_t* asin = xmalloc(sizeof(gdnsd_anysin_t));
     asin->len = GDNSD_ANYSIN_MAXLEN;
 
-    const int sock = accept(io->fd, &asin->sa, &asin->len);
+    const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK);
 
     if(unlikely(sock < 0)) {
         free(asin);
@@ -329,13 +329,6 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     }
 
     log_devdebug("Received TCP DNS connection from %s", logf_anysin(asin));
-
-    if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1) {
-        free(asin);
-        close(sock);
-        log_err("Failed to set O_NONBLOCK on inbound TCP DNS socket: %s", logf_errno());
-        return;
-    }
 
     tcpdns_thread_t* ctx = io->data;
 
@@ -393,23 +386,16 @@ void tcp_dns_listen_setup(dns_thread_t* t) {
     const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || asin->sa.sa_family == AF_INET);
 
-    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM, gdnsd_getproto_tcp());
-    if(sock < 0) log_fatal("Failed to create IPv%c TCP socket: %s", isv6 ? '6' : '4', logf_errno());
-    if(fcntl(sock, F_SETFD, FD_CLOEXEC))
-        log_fatal("Failed to set FD_CLOEXEC on TCP socket: %s", logf_errno());
-
-    if(fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0)) | O_NONBLOCK) == -1)
-        log_fatal("Failed to set O_NONBLOCK on TCP socket: %s", logf_errno());
+    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, gdnsd_getproto_tcp());
+    if(sock < 0)
+        log_fatal("Failed to create IPv%c TCP socket: %s", isv6 ? '6' : '4', logf_errno());
 
     const int opt_one = 1;
     if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", logf_errno());
 
-#ifdef SO_REUSEPORT
-    if(gdnsd_reuseport_ok())
-        if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
-            log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
-#endif
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+        log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
 
 #ifdef TCP_DEFER_ACCEPT
     const int opt_timeout = (int)addrconf->tcp_timeout;
