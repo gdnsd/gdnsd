@@ -2,9 +2,6 @@
 # truly global things
 #=====================================
 
-# Where we keep m4 files for aclocal
-ACLOCAL_AMFLAGS = -I m4
-
 # Common header path for libgdnsd's public gdnsd/*.h
 AM_CPPFLAGS = -I$(srcdir)/include
 

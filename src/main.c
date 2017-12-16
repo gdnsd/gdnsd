@@ -109,7 +109,7 @@ static void usage(const char* argv0) {
         "\nFeatures: " BUILD_FEATURES
         "\nBuild Info: " BUILD_INFO
         "\nBug report URL: " PACKAGE_BUGREPORT
-        "\nGeneral info URL: " PKG_URL
+        "\nGeneral info URL: " PACKAGE_URL
         "\n",
         argv0, gdnsd_get_default_config_dir()
     );
