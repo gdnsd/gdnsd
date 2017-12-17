@@ -9,4 +9,4 @@ set -x
 set -e
 CFLAGS="-std=gnu99" ./configure --enable-developer --without-hardening
 make clean
-scan-build make
+scan-build --status-bugs make

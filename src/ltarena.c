@@ -141,8 +141,8 @@ static void* make_pool(void) {
 
     // let valgrind know what's going on, if running
     //   and we're a debug build
-    NOWARN_VALGRIND_MAKE_MEM_NOACCESS(p, POOL_SIZE);
-    NOWARN_VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1U);
+    VALGRIND_MAKE_MEM_NOACCESS(p, POOL_SIZE);
+    VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1U);
 
     return p;
 }
@@ -168,7 +168,7 @@ void lta_destroy(ltarena_t* lta) {
     lta_close(lta);
     unsigned whichp = lta->pool + 1U;
     while(whichp--) {
-        NOWARN_VALGRIND_DESTROY_MEMPOOL(lta->pools[whichp]);
+        VALGRIND_DESTROY_MEMPOOL(lta->pools[whichp]);
         free(lta->pools[whichp]);
     }
     free(lta->pools);
@@ -210,7 +210,7 @@ static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
     lta->poffs += size_plus_red;
 
     // mark the allocation for valgrind and zero it if doing redzone stuff
-    NOWARN_VALGRIND_MEMPOOL_ALLOC(lta->pools[lta->pool], rval, size);
+    VALGRIND_MEMPOOL_ALLOC(lta->pools[lta->pool], rval, size);
     if(RED_SIZE)
         memset(rval, 0, size);
 

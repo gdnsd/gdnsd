@@ -5,7 +5,7 @@ options => {
 service_types => {
     ext_down => {
         plugin => extmon
-        cmd => [ "/bin/sh", "-c", "exit 1" ],
+        cmd => [ "/bin/false" ],
         timeout = 1
         interval = 2
         up_thresh = 20
@@ -14,7 +14,7 @@ service_types => {
     }
     ext_up => {
         plugin => extmon
-        cmd => [ "/bin/sh", "-c", "exit 0" ],
+        cmd => [ "/bin/true" ],
         timeout = 1
         interval = 2
         up_thresh = 20

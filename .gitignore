@@ -27,6 +27,9 @@
 # Testsuite input/output directories
 /t/testout/
 
+# Installation directory for valgrind testing
+/_vginst
+
 # lcov html output from qa/coverage.sh
 /lcovout/
 
