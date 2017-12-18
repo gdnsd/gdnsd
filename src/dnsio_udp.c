@@ -170,8 +170,17 @@ static void udp_sock_opts_v6(const int sock) {
         log_fatal("Failed to set IPV6_MTU on UDP socket: %s", logf_errno());
 #endif
 
-    if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof opt_one) == -1)
-        log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", logf_errno());
+    // Guard IPV6_V6ONLY with a getsockopt(), because Linux fails here if a
+    // socket is already bound (in which case we also should've already set
+    // this in the previous daemon instance), because it affects how binding
+    // works...
+    int opt_v6o = 0;
+    socklen_t opt_v6o_len = sizeof(opt_v6o);
+    if(getsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_v6o, &opt_v6o_len) == -1)
+        log_fatal("Failed to get IPV6_V6ONLY on UDP socket: %s", logf_errno());
+    if(!opt_v6o)
+        if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof opt_one) == -1)
+            log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", logf_errno());
 
 #if defined IPV6_MTU_DISCOVER && defined IPV6_PMTUDISC_DONT
     const int mtu_type = IPV6_PMTUDISC_DONT;
@@ -267,15 +276,19 @@ void udp_sock_setup(dns_thread_t* t) {
     const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || asin->sa.sa_family == AF_INET);
 
-    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM | SOCK_CLOEXEC, gdnsd_getproto_udp());
-    if(sock == -1)
-        log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());
+    bool need_bind = false;
+    if(t->sock == -1) { // not acquired via takeover
+        t->sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM | SOCK_CLOEXEC, gdnsd_getproto_udp());
+        if(t->sock == -1)
+            log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());
+        need_bind = true;
+    }
 
     const int opt_one = 1;
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
+    if(setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", logf_errno());
 
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+    if(setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
 
 #ifdef USE_MMSG
@@ -286,31 +299,31 @@ void udp_sock_setup(dns_thread_t* t) {
 
     if(addrconf->udp_rcvbuf) {
         int opt_size = (int)addrconf->udp_rcvbuf;
-        if(setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
+        if(setsockopt(t->sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_RCVBUF to %i for UDP socket %s: %s", opt_size,
                 logf_anysin(asin), logf_errno());
     }
     else {
-        negotiate_udp_buffer(sock, SO_RCVBUF, DNS_RECV_SIZE, negotiate_width, asin);
+        negotiate_udp_buffer(t->sock, SO_RCVBUF, DNS_RECV_SIZE, negotiate_width, asin);
     }
 
     if(addrconf->udp_sndbuf) {
         int opt_size = (int)addrconf->udp_sndbuf;
-        if(setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
+        if(setsockopt(t->sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_SNDBUF to %i for UDP socket %s: %s", opt_size,
                 logf_anysin(asin), logf_errno());
     }
     else {
-        negotiate_udp_buffer(sock, SO_SNDBUF, gcfg->max_edns_response, negotiate_width, asin);
+        negotiate_udp_buffer(t->sock, SO_SNDBUF, gcfg->max_edns_response, negotiate_width, asin);
     }
 
     if(isv6)
-        udp_sock_opts_v6(sock);
+        udp_sock_opts_v6(t->sock);
     else
-        udp_sock_opts_v4(sock, gdnsd_anysin_is_anyaddr(asin));
+        udp_sock_opts_v4(t->sock, gdnsd_anysin_is_anyaddr(asin));
 
-    socks_bind_sock("UDP DNS", sock, asin);
-    t->sock = sock;
+    if(need_bind)
+        socks_bind_sock("UDP DNS", t->sock, asin);
 }
 
 static unsigned get_pgsz(void) {

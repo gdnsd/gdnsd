@@ -58,9 +58,22 @@ bool csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp);
 F_NONNULL
 bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data);
 
+// As above, but expects server's resp.v to contain a count of file descriptors
+// sent over SCM_RIGHTS, which will be received and placed in newly-allocated
+// storage at *resp_fds for the caller to consume and free.
+F_NONNULL
+bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds);
+
 // built in server "stop" management.
 F_NONNULL
 bool csc_stop_server(csc_t* csc);
+
+// When the server ACKs a "stop" request above, it only tells us it intends to
+// shut down.  We witness its shutdown by watching the daemon's exit auto-close
+// our control socket, and then watching for the daemon's PID to go away.  This
+// function does all of that waiting and watching.
+F_NONNULL
+bool csc_wait_stopping_server(csc_t* csc);
 
 // destructs the control socket handle
 F_NONNULL

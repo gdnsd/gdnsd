@@ -31,6 +31,7 @@
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
 #include "css.h"
+#include "csc.h"
 
 #include <gdnsd-prot/plugapi.h>
 #include <gdnsd-prot/misc.h>
@@ -149,10 +150,14 @@ F_NONNULL
 static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int revents V_UNUSED) {
     gdnsd_assert(revents == EV_SIGNAL);
     gdnsd_assert(w->signum == SIGTERM || w->signum == SIGINT);
-
-    log_info("Received terminating signal %i", w->signum);
-    killed_by = w->signum;
-    ev_break(loop, EVBREAK_ALL);
+    css_t* css = w->data;
+    if(!css_stop_ok(css)) {
+        log_err("Ignoring terminating signal %i because a takeover or replacement attempt is in progress!", w->signum);
+    } else {
+        log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
+        killed_by = w->signum;
+        ev_break(loop, EVBREAK_ALL);
+    }
 }
 
 F_NONNULL
@@ -177,13 +182,15 @@ void notify_reload_zones_done(void) {
 
 // Set up our terminal signal handlers via libev
 F_NONNULL
-static void setup_signals(void) {
+static void setup_signals(css_t* css) {
     sig_int = malloc(sizeof(ev_signal));
     ev_signal_init(sig_int, terminal_signal, SIGINT);
+    sig_int->data = css;
     ev_signal_start(def_loop, sig_int);
 
     sig_term = malloc(sizeof(ev_signal));
     ev_signal_init(sig_term, terminal_signal, SIGTERM);
+    sig_term->data = css;
     ev_signal_start(def_loop, sig_term);
 }
 
@@ -199,11 +206,12 @@ static void usage(const char* argv0) {
     const char* def_cfdir = gdnsd_get_default_config_dir();
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-        "Usage: %s [-c %s] [-D] [-l] [-S] <action>\n"
+        "Usage: %s [-c %s] [-D] [-l] [-S] [-T] <action>\n"
         "  -c - Configuration directory, default '%s'\n"
         "  -D - Enable verbose debug output\n"
         "  -l - Send logs to syslog rather than stderr\n"
         "  -S - Force 'zones_strict_data = true' for this invocation\n"
+        "  -T - Allow downtime-less takeover of another instance\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
         "  start - Start as a regular foreground process\n"
@@ -281,13 +289,14 @@ typedef enum {
 typedef struct {
     const char* cfg_dir;
     bool force_zsd;
+    bool takeover_ok;
     cmdline_action_t action;
 } cmdline_opts_t;
 
 F_NONNULL
 static void parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
     int optchar;
-    while((optchar = getopt(argc, argv, "c:DlS"))) {
+    while((optchar = getopt(argc, argv, "c:DlST"))) {
         switch(optchar) {
             case 'c':
                 copts->cfg_dir = optarg;
@@ -300,6 +309,9 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
                 break;
             case 'S':
                 copts->force_zsd = true;
+                break;
+            case 'T':
+                copts->takeover_ok = true;
                 break;
             case -1:
                 if(optind == (argc - 1)) {
@@ -331,6 +343,7 @@ int main(int argc, char** argv) {
     cmdline_opts_t copts = {
         .cfg_dir = NULL,
         .force_zsd = false,
+        .takeover_ok = false,
         .action = ACT_UNDEF
     };
 
@@ -361,19 +374,24 @@ int main(int argc, char** argv) {
     gdnsd_init_rand();
 
     // init locked control socket, can fail if concurrent daemon...
-    css_t* css = css_new();
-    if(!css)
-        log_fatal("Another instance is already running and has the control socket locked!");
+    csc_t* csc = NULL;
+    css_t* css = css_new(argv[0], socks_cfg, NULL);
+    if(!css) {
+        if(!copts.takeover_ok)
+            log_fatal("Another instance is running and has the control socket locked!");
+        log_info("Another instance is running, connecting to control socket for takeover");
+        csc = csc_new(13);
+        log_info("Connected to existing instance v%s at pid %li",
+                 csc_get_server_version(csc), (long)csc_get_server_pid(csc));
+    }
 
     // init the stats code
     statio_init(socks_cfg->num_dns_threads);
 
-    // Lock whole daemon into memory, including
-    //  all future allocations.
+    // Lock whole daemon into memory, including all future allocations.
     if(cfg->lock_mem)
         if(mlockall(MCL_CURRENT | MCL_FUTURE))
-            log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)",
-                logf_errno());
+            log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
 
     // Initialize dnspacket stuff
     dnspacket_global_setup(socks_cfg);
@@ -390,11 +408,22 @@ int main(int argc, char** argv) {
     // set up monitoring, which expects an initially empty loop
     gdnsd_mon_start(def_loop);
 
-    // main thread signal handlers
-    setup_signals();
-
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
+
+    // Now that we're past potentially long-running operations like initial
+    // monitoring and plugin pre_run actions, initiate the takeover operation
+    // over the control socket connection.  During those long-running
+    // operations, another starting daemon could beat us in a race here and
+    // we'll be denied (unless we were initiated by "replace" fork->execve,
+    // which gaurantees us winning and denies racers), or some other control
+    // socket client could have requested the old server to stop, either of
+    // which will cause failure here.
+    if(!css)
+        css = css_new(argv[0], socks_cfg, &csc);
+
+    // main thread signal handlers
+    setup_signals(css);
 
     // Initialize+bind DNS listening sockets
     socks_dns_lsocks_init(socks_cfg);
@@ -402,23 +431,34 @@ int main(int argc, char** argv) {
     // Start up all of the UDP and TCP i/o threads
     start_threads(socks_cfg);
 
-    // This waits for all of the stat structures to be allocated
-    //  by the i/o threads before continuing on.  They must be ready
-    //  before ev_run() below, because statio event handlers hit them.
+    // This waits for all of the stat structures to be allocated by the i/o
+    //  threads before continuing on.  They must be ready before ev_run()
+    //  below, because statio event handlers hit them.
+    // This also incidentally waits for all TCP threads to have hit their
+    //  listen() call as well, whereas UDP is already at least buffering queued
+    //  requests at the socket layer from the time it's bound.
     dnspacket_wait_stats(socks_cfg);
+
+    // Notify the user that the listeners are up
+    log_info("DNS listeners started");
+
+    // Notify 3rd parties of readiness (systemd, or fg process if daemonizing)
+    gdnsd_daemon_notify_ready();
+
+    // Stop old daemon after establishing the new one's listeners
+    if(csc) {
+        if(!csc_stop_server(csc))
+            csc_wait_stopping_server(csc);
+        csc_delete(csc);
+        csc = NULL;
+    }
 
     // Set up zone reload mechanism and control socket handlers in the loop
     setup_reload_zones(css);
     css_start(css, def_loop);
 
-    // Notify the user that the listeners are up
-    log_info("DNS listeners started");
-
-    // We wait to notify 3rd parties (e.g. systemd, or fg process if
-    // daemonizing) that we're ready until after the block above, so that they
-    // can reliably get the right signal actions from this point forward
-    gdnsd_daemon_notify_ready();
-
+    // The daemon stays in this libev loop for life,
+    // until there's a reason to cleanly exit
     ev_run(def_loop, 0);
 
     // request i/o threads to exit
@@ -444,8 +484,6 @@ int main(int argc, char** argv) {
 
     // deallocate resources in debug mode
     atexit_debug_execute();
-
-    log_info("Exiting");
 
     // We delete this last, because in the case of "gdnsdctl stop" this is
     // where the active connection to gdnsdctl will be broken, sending it into

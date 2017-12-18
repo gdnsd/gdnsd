@@ -386,29 +386,43 @@ void tcp_dns_listen_setup(dns_thread_t* t) {
     const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || asin->sa.sa_family == AF_INET);
 
-    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, gdnsd_getproto_tcp());
-    if(sock < 0)
-        log_fatal("Failed to create IPv%c TCP socket: %s", isv6 ? '6' : '4', logf_errno());
+    bool need_bind = false;
+    if(t->sock == -1) { // not acquired via takeover
+        t->sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, gdnsd_getproto_tcp());
+        if(t->sock < 0)
+            log_fatal("Failed to create IPv%c TCP socket: %s", isv6 ? '6' : '4', logf_errno());
+        need_bind = true;
+    }
 
     const int opt_one = 1;
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
+    if(setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", logf_errno());
 
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+    if(setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
         log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
 
 #ifdef TCP_DEFER_ACCEPT
     const int opt_timeout = (int)addrconf->tcp_timeout;
-    if(setsockopt(sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof opt_timeout) == -1)
+    if(setsockopt(t->sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof opt_timeout) == -1)
         log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", logf_errno());
 #endif
 
-    if(isv6)
-        if(setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
+    if(isv6) {
+        // Guard IPV6_V6ONLY with a getsockopt(), because Linux fails here if a
+        // socket is already bound (in which case we also should've already set
+        // this in the previous daemon instance), because it affects how binding
+        // works...
+        int opt_v6o = 0;
+        socklen_t opt_v6o_len = sizeof(opt_v6o);
+        if(getsockopt(t->sock, SOL_IPV6, IPV6_V6ONLY, &opt_v6o, &opt_v6o_len) == -1)
+            log_fatal("Failed to get IPV6_V6ONLY on TCP socket: %s", logf_errno());
+        if(!opt_v6o)
+            if(setsockopt(t->sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof opt_one) == -1)
+                log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
+    }
 
-    socks_bind_sock("TCP DNS", sock, asin);
-    t->sock = sock;
+    if(need_bind)
+        socks_bind_sock("TCP DNS", t->sock, asin);
 }
 
 static void prcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED) {

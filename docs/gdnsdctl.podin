@@ -12,7 +12,7 @@ gdnsd - An authoritative DNS daemon
   Actions:
     stop - Stops the running daemon
     reload-zones - Reload the running daemon's zone data
-    reload - Full reload (code, config, data) of the running daemon
+    replace - Ask daemon to spawn a takeover replacement of itself (updates code, config, zone data)
     status - Checks the running daemon's status
     stats - Dumps JSON statistics from the running daemon
     states - Dumps JSON monitored states

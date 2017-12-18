@@ -215,6 +215,16 @@ my %stats_accum = (
     tcp_sendfail => 0,
 );
 
+sub reset_stats {
+    # reset stats if daemon run multiple times in one testfile
+    foreach my $k (keys %stats_accum) { $stats_accum{$k} = 0; }
+}
+
+sub reset_csock {
+    $csock = IO::Socket::UNIX->new($CSOCK_PATH)
+        or die "hard-fail: cannot open runtime control socket $CSOCK_PATH: $!";
+}
+
 sub _get_daemon_json_stats {
     my $req = "S\0\0\0\0\0\0\0";
     if(8 == syswrite($csock, $req, 8)) {
@@ -432,8 +442,7 @@ sub spawn_daemon_execute {
 sub test_spawn_daemon {
     my $class = shift;
 
-    # reset stats if daemon run multiple times in one testfile
-    foreach my $k (keys %stats_accum) { $stats_accum{$k} = 0; }
+    reset_stats();
 
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $pid = eval{
@@ -467,8 +476,7 @@ sub test_spawn_daemon_setup {
 sub test_spawn_daemon_execute {
     my $class = shift;
 
-    # reset stats if daemon run multiple times in one testfile
-    foreach my $k (keys %stats_accum) { $stats_accum{$k} = 0; }
+    reset_stats();
 
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $pid = eval{

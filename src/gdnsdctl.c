@@ -57,7 +57,7 @@ static void usage(const char* argv0) {
             "Actions:\n"
             "  stop - Stops the running daemon\n"
             "  reload-zones - Reload the running daemon's zone data\n"
-            "  reload - Full reload (code, config, data) of the running daemon\n"
+            "  replace - Ask daemon to spawn a takeover replacement of itself (updates code, config, zone data)\n"
             "  status - Checks the running daemon's status\n"
             "  stats - Dumps JSON statistics from the running daemon\n"
             "  states - Dumps JSON monitored states\n"
@@ -78,8 +78,8 @@ static void usage(const char* argv0) {
 
 F_NONNULL
 static int action_stop(csc_t* csc) {
-    csc_stop_server(csc);
-    return 0;
+    return csc_stop_server(csc)
+        || csc_wait_stopping_server(csc);
 }
 
 F_NONNULL
@@ -96,9 +96,29 @@ static int action_reloadz(csc_t* csc) {
 }
 
 F_NONNULL
-static int action_reload(csc_t* csc V_UNUSED) {
-    // XXX reload should be synchronous...
-    log_fatal("XXX Not yet implemented");
+static int action_replace(csc_t* csc) {
+    const pid_t s_pid = csc_get_server_pid(csc);
+    const char* s_vers = csc_get_server_version(csc);
+    log_info("Existing daemon: version %s running at pid %li", s_vers, (long)s_pid);
+
+    csbuf_t req, resp;
+    memset(&req, 0, sizeof(req));
+    req.key = REQ_REPL;
+    if(csc_txn(csc, &req, &resp)) {
+        log_err("Replace command to old daemon failed");
+        return 1;
+    }
+
+    if(csc_wait_stopping_server(csc)) {
+        log_err("Replace command to old daemon succeeded, but old daemon never finished exiting...");
+        return 1;
+    }
+
+    csc_t* csc2 = csc_new(opt_timeo);
+    const pid_t s2_pid = csc_get_server_pid(csc2);
+    const char* s2_vers = csc_get_server_version(csc2);
+    log_info("Replacement daemon: version %s running at pid %li", s2_vers, (long)s2_pid);
+    csc_delete(csc2);
     return 0;
 }
 
@@ -146,7 +166,7 @@ static struct {
 } actionmap[] = {
     { "stop",         action_stop    },
     { "reload-zones", action_reloadz },
-    { "reload",       action_reload  },
+    { "replace",      action_replace },
     { "status",       action_status  },
     { "stats",        action_stats   },
     { "states",       action_states  },

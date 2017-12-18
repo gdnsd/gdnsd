@@ -193,12 +193,14 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             t->ac = a;
             t->is_udp = true;
             t->threadnum = tnum++;
+            t->sock = -1;
         }
         for(unsigned j = 0; j < a->tcp_threads; j++) {
             dns_thread_t* t = &socks_cfg->dns_threads[tnum];
             t->ac = a;
             t->is_udp = false;
             t->threadnum = tnum++;
+            t->sock = -1;
         }
         if(!(a->udp_threads + a->tcp_threads))
             log_warn("DNS listen address %s explicitly configured with no UDP or TCP threads - nothing is actually listening on this address!",

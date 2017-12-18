@@ -20,8 +20,12 @@
       The commandline flags "x" and "f" are gone.  A new commandline flag "-l"
       sends all logs to syslog instead of the default stderr (and is implied by
       the new "daemonize" verb).
+    * A new commandline flag "-T" allows gdnsd daemons to smoothly takeover
+      service from one another without losing requests.  This is intended for
+      initscript/tool usage more than end-users, and handles both code and
+      configuration update situations.  See also "gdnsdctl replace" below.
     * The documentation includes more details on adapting systemd and/or
-      traditional sysvinit to the above two changes, and the git repo contains
+      traditional sysvinit to the above few changes, and the git repo contains
       an example systemd unit file.
     * The "listen => scan" option, which scanned interfaces for IPs to bind to,
       has been removed completely.  It was deprecated with runtime warnings and
@@ -40,7 +44,15 @@
     * A unix control socket interface was added, and a new program "gdnsdctl"
       added as the canonical client of this socket.  Control operations are
       synchronous and report status back via exit codes as well.  "gdnsdctl"
-      implements "stop", "reload-zones", "stats", "state", and "status".
+      basic operations include "stop", "reload-zones", "stats", "state",
+      and "status".
+    * "gdnsdctl replace" is also implemented, which commands gdnsd to spawn a
+      new copy of the (possibly updated) executable, which uses the new "-T"
+      flag to takeover operations from the existing copy, possibly loading a
+      newer binary and/or different configuration while doing so.  Because the
+      new daemon is a child process of the existing one, certain process(group)
+      -level attributes are preserved, allowing compatibility with e.g. systemd
+      unit operations.
 
 2.4.0 - 2018-02-15
     * plugin_multifo: added "ignore_health" parameter. If "ignore_health" is

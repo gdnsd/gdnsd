@@ -22,6 +22,9 @@
 
 #include <gdnsd/compiler.h>
 
+#include "csc.h"
+#include "socks.h"
+
 #include <stdbool.h>
 #include <inttypes.h>
 #include <sys/types.h>
@@ -47,12 +50,23 @@ struct css_s_;
 typedef struct css_s_ css_t;
 
 // Create a new control socket server:
-// * Most errors are fatal, but in the special case that we detect the socket
-// is already locked by another daemon instance, this function returns NULL
-F_NONNULL
-css_t* css_new(void);
+// * argv0 is the original argv[0] of gdnsd, intended to use for spawning a
+// replacement.
+// * Most errors are fatal, but in the special case that "csc" is NULL and we
+// detect the socket is already locked by another daemon instance, this
+// function returns NULL.
+// * If csc_p is non-NULL, *csc_p must also be non-NULL, and we will attempt
+// graceful takeover from the running daemon connected to *csc_p if the control
+// socket lock is still held, and fall back to attempting non-takeover startup
+// if it is not held.  Either way, either a valid "css" will be returned or
+// this function will fail fatally.  If the csc connection was used for
+// takeover, *csc will retain its original value.  If it was not used (we were
+// able to obtain the lock normally), csc will be closed/deleted and *csc_p set
+// to NULL.
+F_NONNULLX(1,2)
+css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p);
 
-// Start accepting connections within libev loop "loop"
+// Start accepting connections within libev loop "loop".
 F_NONNULL
 void css_start(css_t* css, struct ev_loop* loop);
 
@@ -61,6 +75,10 @@ void css_start(css_t* css, struct ev_loop* loop);
 // more waiters queued up during the reload, so main.c needs to start yet
 // another reload operation.
 bool css_notify_zone_reloaders(css_t* css, const bool failed);
+
+// Check whether a stop (e.g. via signal) is currently ok or not (due to
+// impending replacement/takeover operation)
+bool css_stop_ok(css_t* css);
 
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL

@@ -60,7 +60,18 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v) {
 #define REQ_STATE 'E'
 #define REQ_STOP  'X'
 #define REQ_ZREL  'Z'
+#define REQ_TAKE  'T'
+#define REQ_REPL  'R'
 #define RESP_ACK  'A'
 #define RESP_NAK  'N'
+
+// AFAIK there's no portable way to know the max FDs that can be sent in an
+// SCM_RIGHTS message.  I only know the Linux limit for sure, so in the
+// non-Linux case I'm picking a fairly conservative value of 32 for now.
+#ifdef __linux__
+#  define SCM_MAX_FDS 253U
+#else
+#  define SCM_MAX_FDS 32U
+#endif
 
 #endif // GDNSD_CS_H

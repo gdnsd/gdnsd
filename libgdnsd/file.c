@@ -44,9 +44,10 @@ struct gdnsd_fmap_s_ {
 //   pathname that an explicit user of this interface held a lock on, because
 //   with traditional F_SETLK the library's independent lock release will also
 //   release the lock we set here :/
-// However, we're not relying on the distinctions about fork() inheritance, as
-//   no part of gdnsd should be forking while an fmap is open.  Therefore,
-//   regular F_SETLK is acceptable on systems that lack F_OFD_SETLK.
+// However, we're not relying on the distinctions about fork() inheritance.  We
+//   do fork while these are open, but in all such cases it's to quickly exit
+//   and/or exec, and everything's O_CLOEXEC.  Therefore, regular F_SETLK is
+//   acceptable on systems that lack F_OFD_SETLK.
 #ifndef F_OFD_SETLK
 #define F_OFD_SETLK F_SETLK
 #endif

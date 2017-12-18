@@ -102,10 +102,13 @@ install-exec-hook-top:
 bin_PROGRAMS += src/gdnsdctl
 sbin_PROGRAMS += src/gdnsd
 
-src_gdnsdctl_SOURCES = src/gdnsdctl.c src/csc.c src/csc.h
+noinst_LTLIBRARIES += src/libcsc.la
+src_libcsc_la_SOURCES = src/csc.c src/csc.h
+
+src_gdnsdctl_SOURCES = src/gdnsdctl.c
 src_gdnsdctl_CFLAGS = $(CFLAGS_PIE)
 src_gdnsdctl_LDFLAGS = $(LDLAGS_PIE)
-src_gdnsdctl_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
+src_gdnsdctl_LDADD = src/libcsc.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 src_gdnsd_SOURCES = \
 	src/main.c \
@@ -148,7 +151,7 @@ src_gdnsd_SOURCES = \
 src_gdnsd_CPPFLAGS = -I$(srcdir)/src $(AM_CPPFLAGS)
 src_gdnsd_CFLAGS = $(CFLAGS_PIE)
 src_gdnsd_LDFLAGS = $(LDFLAGS_PIE)
-src_gdnsd_LDADD = libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
+src_gdnsd_LDADD = src/libcsc.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 nodist_src_gdnsd_SOURCES = src/zscan_rfc1035.c
 src/zscan_rfc1035.c: src/zscan_rfc1035.rl
