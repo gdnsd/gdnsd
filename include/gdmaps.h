@@ -27,7 +27,7 @@
 
 typedef struct _gdmaps_t gdmaps_t;
 
-F_NONNULL F_MALLOC
+F_NONNULL F_WUNUSED
 gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg);
 F_NONNULL
 void gdmaps_load_databases(gdmaps_t* gdmaps);

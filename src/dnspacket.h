@@ -76,9 +76,9 @@ typedef struct {
 F_HOT F_NONNULL
 unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const dmn_anysin_t* asin, uint8_t* packet, const unsigned packet_len);
 
-F_MALLOC
+F_WUNUSED
 dnspacket_stats_t* dnspacket_stats_init(const unsigned this_threadnum, const bool is_udp);
-F_MALLOC
+F_WUNUSED
 void* dnspacket_ctx_init(const bool is_udp);
 
 F_NONNULL

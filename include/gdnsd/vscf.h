@@ -212,7 +212,7 @@ vscf_data_t* vscf_array_new(void);
 //    account for any 0-termination that is present.  Embedded
 //    nuls are fine.
 // rval storage is copied, you own the original
-F_NONNULL F_MALLOC
+F_NONNULL F_WUNUSED
 vscf_data_t* vscf_simple_new(const char* rval, const unsigned rlen);
 F_NONNULL
 void vscf_array_add_val(vscf_data_t* a, vscf_data_t* v);

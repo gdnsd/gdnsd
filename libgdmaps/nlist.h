@@ -35,7 +35,7 @@ typedef struct _nlist nlist_t;
 // This allows for significant optimizations in GeoIP input case,
 //   as GeoIP's data structure implies these gaurantees when walked
 //   in order for _append().
-F_NONNULL F_MALLOC
+F_NONNULL F_WUNUSED
 nlist_t* nlist_new(const char* map_name, const bool pre_norm);
 
 F_NONNULL

@@ -54,9 +54,9 @@ typedef enum {
 #define DCLIST_AUTO 0x7FFFFFFF
 #define DCLIST_MAX  0x7FFFFFFE
 
-F_NONNULL F_MALLOC
+F_NONNULL F_WUNUSED
 dclists_t* dclists_new(const dcinfo_t* info);
-F_NONNULL F_MALLOC
+F_NONNULL F_WUNUSED
 dclists_t* dclists_clone(const dclists_t* old);
 F_NONNULL F_PURE
 unsigned dclists_get_count(const dclists_t* lists);
