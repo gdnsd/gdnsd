@@ -32,7 +32,7 @@ static const double DEG2RAD = 0.017453292519943295769236907684886;
 
 typedef struct _dcinfo dcinfo_t;
 
-F_NONNULLX(1, 4) F_MALLOC
+F_NONNULLX(1, 4) F_WUNUSED
 dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name);
 F_NONNULL F_PURE
 unsigned dcinfo_get_count(const dcinfo_t* info);

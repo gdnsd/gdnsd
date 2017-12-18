@@ -32,7 +32,7 @@
 typedef struct _ltarena ltarena_t;
 
 // Allocate a new arena
-F_MALLOC
+F_WUNUSED
 ltarena_t* lta_new(void);
 
 // This is like a strdup() that allocates from an lta arena
