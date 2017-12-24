@@ -210,7 +210,9 @@ static void ztree_node_check_grow(ztree_t* node) {
         ztchildren_t* children = xcalloc(1, sizeof(ztchildren_t));
         children->store = xcalloc(16, sizeof(ztree_t*));
         children->alloc = 16;
+        gdnsd_prcu_upd_lock();
         gdnsd_prcu_upd_assign(node->children, children);
+        gdnsd_prcu_upd_unlock();
     }
     // max load is 25%
     else if(old_children->count >= (old_children->alloc >> 2)) {
@@ -266,7 +268,9 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
         const unsigned lsz = *label + 1U;
         rv->label = xmalloc(lsz);
         memcpy(rv->label, label, lsz);
+        gdnsd_prcu_upd_lock();
         gdnsd_prcu_upd_assign(children->store[slot], rv);
+        gdnsd_prcu_upd_unlock();
         children->count++;
     }
 
