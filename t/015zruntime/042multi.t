@@ -15,7 +15,7 @@ _GDT->test_dns(
 # insert 3rd variant of example.com as EXAMPLE.COM
 _GDT->insert_altzone('example.com-3', '\069xample.com');
 _GDT->send_sigusr1_unless_inotify();
-_GDT->test_log_output('Zone example.com.: source rfc1035:\069xample.com with serial 3 loaded as authoritative (supercedes extant source rfc1035:example.com with serial 1)');
+_GDT->test_log_output('Zone example.com.: source rfc1035:\069xample.com with serial 3 loaded as authoritative (supersedes extant source rfc1035:example.com with serial 1)');
 _GDT->test_dns(
     qname => 'ns1.example.com', qtype => 'A',
     answer => 'ns1.example.com 86400 A 192.0.2.13',
