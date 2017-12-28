@@ -148,7 +148,7 @@ are calculated without any knowledge of the resources that use them.  If a
 specific network or location maps to a list of datacenters which contains none
 of the defined datacenters for a given resource, the results of runtime
 queries for that resource from that location or network will be the empty set
-(no answer records at all).  This is virtually gauranteed to happen in "City
+(no answer records at all).  This is virtually guaranteed to happen in "City
 Auto Mode" if the number of undefined datacenters in a resource is greater
 than or equal to the map's C<auto_dc_limit>.
 

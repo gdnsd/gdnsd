@@ -126,7 +126,7 @@ like anti-flap measures.
 
 =item B<max_proc>
 
-Interger, default 0 (unlimited).
+Integer, default 0 (unlimited).
 
 The maximum number of concurrent processes to spawn.
 

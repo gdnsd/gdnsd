@@ -406,7 +406,7 @@ static void _ztree_update(ztree_t* root, zone_t* z_old, zone_t* z_new, const boo
 
         if(z_new == new_list[0]) {
             if(old_head)
-                log_info("Zone %s: source %s with serial %u loaded as authoritative (supercedes extant source %s with serial %u)", logf_dname(z_new->dname), z_new->src, z_new->serial, old_head->src, old_head->serial);
+                log_info("Zone %s: source %s with serial %u loaded as authoritative (supersedes extant source %s with serial %u)", logf_dname(z_new->dname), z_new->src, z_new->serial, old_head->src, old_head->serial);
             else
                 log_info("Zone %s: source %s with serial %u loaded as authoritative", logf_dname(z_new->dname), z_new->src, z_new->serial);
         }
