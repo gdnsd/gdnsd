@@ -1,17 +1,7 @@
 # Valgrind suppression data
-
-# valgrind+glibc DSO+TLS thread issue
-{
-  dso_tls_glibc
-  Memcheck:Leak
-  ...
-  fun:init_rand
-  fun:plugin_weighted_iothread_init
-}
-
-# also, we don't explicitly terminate threads in the normal case,
-#  and valgrind has a bug where it treats creation with the detached
-#  attribute differently from create()->detach()
+# This remaining suppression should only be necessary for plugin_geoip's use of
+# a persistent, detached thread at this point.  Will re-design around that (and
+# other stuff) later...
 {
   pthreads_detached
   Memcheck:Leak

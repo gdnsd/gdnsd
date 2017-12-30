@@ -276,6 +276,8 @@ static void spawn_helper(void) {
             log_fatal("sigaction() failed: %s", logf_errno());
         if(sigaction(SIGCHLD, &defaultme, NULL))
             log_fatal("sigaction() failed: %s", logf_errno());
+        if(sigaction(SIGUSR2, &defaultme, NULL))
+            log_fatal("sigaction() failed: %s", logf_errno());
 
         close(writepipe[1]);
         close(readpipe[0]);

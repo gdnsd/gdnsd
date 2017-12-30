@@ -24,10 +24,12 @@
 
 #include <gdnsd/compiler.h>
 
+void dnsio_udp_init(void);
+
 F_NONNULL
 void udp_sock_setup(dns_thread_t* t);
 
-F_NONNULL F_NORETURN
+F_NONNULL
 void* dnsio_udp_start(void* thread_asvoid);
 
 #endif // GDNSD_DNSIO_UDP_H

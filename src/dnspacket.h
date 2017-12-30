@@ -76,10 +76,15 @@ typedef struct {
 F_HOT F_NONNULL
 unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len);
 
-F_WUNUSED
-dnspacket_stats_t* dnspacket_stats_init(const unsigned this_threadnum, const bool is_udp);
-F_WUNUSED
-void* dnspacket_ctx_init(const bool is_udp);
+F_NONNULL F_WUNUSED
+void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp);
+
+#ifndef NDEBUG
+F_NONNULL
+void dnspacket_ctx_debug_cleanup(void* ctxv);
+#else
+#define dnspacket_ctx_debug_cleanup(x) ((void)0)
+#endif
 
 F_NONNULL
 void dnspacket_global_setup(const socks_cfg_t* socks_cfg);

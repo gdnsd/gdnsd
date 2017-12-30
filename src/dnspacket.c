@@ -87,6 +87,9 @@ typedef struct {
     // allocated at startup, memset to zero before each callback
     dyn_result_t* dyn;
 
+    // stats reference, carried in by dnsio calling process_dns_query
+    dnspacket_stats_t* stats;
+
 // From this point (answer_addr_rrset) on, all of this gets reset to zero
 //  at the start of each request...
 
@@ -150,7 +153,7 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg) {
     pthread_mutex_unlock(&stats_init_mutex);
 }
 
-void* dnspacket_ctx_init(const bool is_udp) {
+void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp) {
     dnsp_ctx_t* ctx = xcalloc(1, sizeof(dnsp_ctx_t));
 
     ctx->rand_state = gdnsd_rand32_init();
@@ -161,23 +164,32 @@ void* dnspacket_ctx_init(const bool is_udp) {
     ctx->addtl_store = xmalloc(gcfg->max_response);
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
 
-    return ctx;
-}
-
-dnspacket_stats_t* dnspacket_stats_init(const unsigned this_threadnum, const bool is_udp) {
+    gdnsd_plugins_action_iothread_init();
 
     pthread_mutex_lock(&stats_init_mutex);
-
-    dnspacket_stats_t* stats = dnspacket_stats[this_threadnum] = xcalloc(1, sizeof(dnspacket_stats_t));
-    stats->is_udp = is_udp;
-    gdnsd_plugins_action_iothread_init(this_threadnum);
-    stats_initialized++;
-
+    ctx->stats = dnspacket_stats[stats_initialized++] = xcalloc(1, sizeof(dnspacket_stats_t));
+    ctx->stats->is_udp = is_udp;
     pthread_cond_signal(&stats_init_cond);
     pthread_mutex_unlock(&stats_init_mutex);
 
-    return stats;
+    *stats_out = ctx->stats;
+    return ctx;
 }
+
+#ifndef NDEBUG
+void dnspacket_ctx_debug_cleanup(void* ctxv) {
+    gdnsd_plugins_action_iothread_debug_cleanup();
+
+    dnsp_ctx_t* ctx = (dnsp_ctx_t*)ctxv;
+    free(ctx->dyn);
+    free(ctx->addtl_store);
+    free(ctx->dync_store);
+    free(ctx->comptargets);
+    free(ctx->addtl_rrsets);
+    free(ctx->rand_state);
+    free(ctx);
+}
+#endif
 
 F_NONNULL
 static void reset_context(dnsp_ctx_t* ctx) {

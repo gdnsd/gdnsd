@@ -43,6 +43,7 @@
 #include <pthread.h>
 #include <sys/time.h>
 #include <time.h>
+#include <signal.h>
 
 #ifndef SOL_IPV6
 #define SOL_IPV6 IPPROTO_IPV6
@@ -53,12 +54,39 @@
 #endif
 
 // RCU perf magic value:
-// This is the longest time for which we'll delay writers
-//   in rcu_synchronize() (e.g. geoip/zonefile data reloaders
-//   waiting to reclaim dead data) in the worst case.  The
-//   current value is ~47ms and is unlikely to fall into strange
-//   multiplicative patterns of coincidence.
-#define PRCU_DELAY_US 47317
+// This is the longest time for which we'll delay writers in rcu_synchronize()
+// (e.g. geoip/zonefile data reloaders waiting to reclaim dead data) in the
+// worst case.  Note the current value is a prime number of us, and also a
+// prime number of ms at lower resolution.  This is to help avoid getting into
+// ugly patterns.
+#define MAX_PRCU_DELAY_US 109367
+
+// Similar to the above, this is added to the above amount as the maximum we'll
+// artificially delay a thread shutdown request on daemon termination, in a
+// corner-case race condition.  Normally, SIGUSR2 will interrupt recvmsg() and
+// we'll immediately catch the thread_shutdown!=0 condition at the top of the
+// runtime loop, exiting fairly quickly.  However, it's rarely possible that
+// the interrupt arrives in the short time interval between checking the
+// variable at the top and entry into a long-delay recvmsg() call shortly
+// afterwards.  The long delay value is set by this parameter.  The tradeoff
+// pressure against making this smaller to keep the maximum shutdown delay
+// shorter is that an idle dnsio_udp thread that's receiving no traffic will
+// wake up once per this interval "pointlessly" by returning from recvmsg()
+// with EAGAIN then re-entering recvmsg() again.
+// Note that when combined with the above number, this number is also still
+// prime at us (3109367) and ms (3109) resolution for the same reasons.
+#define MAX_SHUTDOWN_DELAY_S 3
+
+static __thread volatile sig_atomic_t thread_shutdown = 0;
+static void sighand_stop(int s V_UNUSED) { thread_shutdown = 1; }
+
+void dnsio_udp_init(void) {
+    struct sigaction sa;
+    sa.sa_handler = sighand_stop;
+    sigfillset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGUSR2, &sa, 0);
+}
 
 static bool has_mmsg(void);
 
@@ -284,7 +312,7 @@ static unsigned get_pgsz(void) {
 // A reasonable guess for v4/v6 dstaddr pktinfo + cmsg header?
 #define CMSG_BUFSIZE 256
 
-F_HOT F_NORETURN F_NONNULL
+F_HOT F_NONNULL
 static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
     const unsigned pgsz = get_pgsz();
@@ -305,50 +333,64 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     msg_hdr.msg_iovlen     = 1;
     msg_hdr.msg_control    = use_cmsg ? cmsg_buf : NULL;
 
+    const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
 #if GDNSD_B_QSBR
-    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
-    const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
+    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
     if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
     bool is_online = true;
+#else
+    if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long)))
+        log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
 #endif
 
     while(1) {
-        ssize_t recvmsg_rv;
+        if(unlikely(thread_shutdown))
+            break;
 
         iov.iov_len = DNS_RECV_SIZE;
         msg_hdr.msg_controllen = cmsg_size;
         msg_hdr.msg_namelen    = GDNSD_ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
 
+        ssize_t recvmsg_rv;
+
 #if GDNSD_B_QSBR
         if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-            if(unlikely(recvmsg_rv < 0 && ERRNO_WOULDBLOCK)) {
-                gdnsd_prcu_rdr_offline();
-                is_online = false;
-                (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
-                continue;
+            if(unlikely(recvmsg_rv < 0)) {
+                if(errno == EINTR)
+                    continue;
+                if(ERRNO_WOULDBLOCK) {
+                    gdnsd_prcu_rdr_offline();
+                    is_online = false;
+                    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long));
+                    continue;
+                }
             }
         }
         else {
             recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
+            if(unlikely(recvmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
+                continue;
             (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
             gdnsd_prcu_rdr_online();
         }
 #else
         recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
+        if(unlikely(recvmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
+            continue;
 #endif
 
         if(unlikely(
                (asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
             || (asin.sa.sa_family == AF_INET6 && !asin.sin6.sin6_port)
-            || recvmsg_rv < 0
         )) {
-                if(recvmsg_rv < 0)
-                    log_err("UDP recvmsg() error: %s", logf_errno());
+                stats_own_inc(&stats->dropped);
+        } else if(unlikely(recvmsg_rv < 0)) {
+                log_err("UDP recvmsg() error: %s", logf_errno());
                 stats_own_inc(&stats->udp.recvfail);
         }
         else {
@@ -356,14 +398,23 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
             asin.len = msg_hdr.msg_namelen;
             iov.iov_len = process_dns_query(dnsp_ctx, stats, &asin, buf, buf_in_len);
             if(likely(iov.iov_len)) {
-                const int sent = sendmsg(fd, &msg_hdr, 0);
-                if(sent < 0) {
-                    stats_own_inc(&stats->udp.sendfail);
-                    log_err("UDP sendmsg() of %zu bytes failed with retval %i for client %s: %s", iov.iov_len, sent, logf_anysin(&asin), logf_errno());
+                while(1) {
+                    int sent = sendmsg(fd, &msg_hdr, 0);
+                    if(unlikely(sent < 0)) {
+                        if(errno == EINTR || ERRNO_WOULDBLOCK)
+                            continue;
+                        stats_own_inc(&stats->udp.sendfail);
+                        log_err("UDP sendmsg() of %zu bytes to client %s failed: %s", iov.iov_len, logf_anysin(&asin), logf_errno());
+                    }
+                    break;
                 }
             }
         }
     }
+
+#ifndef NDEBUG
+    free(buf);
+#endif
 }
 
 #ifdef USE_SENDMMSG
@@ -379,7 +430,7 @@ static bool has_mmsg(void) {
     return rv;
 }
 
-F_HOT F_NORETURN F_NONNULL
+F_HOT F_NONNULL
 static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg) {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
 
@@ -398,16 +449,20 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     for(unsigned i = 0; i < width; i++)
         iov[i][0].iov_base = buf[i] = gdnsd_xpmalign(pgsz, max_rounded);
 
+    const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
 #if GDNSD_B_QSBR
-    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = PRCU_DELAY_US };
-    const struct timeval tmout_inf   = { .tv_sec = 0, .tv_usec = 0 };
+    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
     if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
     bool is_online = true;
+#else
+    if(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long)))
+        log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
 #endif
 
     while(1) {
-        int mmsg_rv;
+        if(unlikely(thread_shutdown))
+            break;
 
         /* Set up msg_hdr stuff: moving initialization inside of the loop was
              necessitated by the memmove() below */
@@ -422,76 +477,104 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             dgrams[i].msg_hdr.msg_flags      = 0;
         }
 
+        int mmsg_rv;
+
 #if GDNSD_B_QSBR
         if(likely(is_online)) {
             gdnsd_prcu_rdr_quiesce();
             mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
-            if(unlikely(mmsg_rv < 0 && ERRNO_WOULDBLOCK)) {
-                gdnsd_prcu_rdr_offline();
-                is_online = false;
-                (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_inf, sizeof(tmout_inf));
-                continue;
+            if(unlikely(mmsg_rv < 0)) {
+                if(errno == EINTR)
+                    continue;
+                if(ERRNO_WOULDBLOCK) {
+                    gdnsd_prcu_rdr_offline();
+                    is_online = false;
+                    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long));
+                    continue;
+                }
             }
         }
         else {
             mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+            if(unlikely(mmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
+                continue;
             (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
             gdnsd_prcu_rdr_online();
         }
 #else
         mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+        if(unlikely(mmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
+            continue;
 #endif
 
-        gdnsd_assert(mmsg_rv != 0); // Because we block and we don't have signals
-        if(likely(mmsg_rv > 0)) {
-            unsigned pkts = (unsigned)mmsg_rv;
-            gdnsd_assert(pkts <= width);
-            for(unsigned i = 0; i < pkts; i++) {
-                if(unlikely((asin[i].sa.sa_family == AF_INET && !asin[i].sin.sin_port)
-                    || (asin[i].sa.sa_family == AF_INET6 && !asin[i].sin6.sin6_port))) {
-                        stats_own_inc(&stats->udp.recvfail);
-                        iov[i][0].iov_len = 0; // skip send, still need memmove below
-                }
-                else {
-                    asin[i].len = dgrams[i].msg_hdr.msg_namelen;
-                    iov[i][0].iov_len = process_dns_query(dnsp_ctx, stats, &asin[i], buf[i], dgrams[i].msg_len);
-                }
-            }
-
-            /* This block adjusts the array of mmsg entries to account for skips where
-             *   process_query() decided we don't owe the sender a response packet.
-             */
-            /* This could be far simpler if sendmmsg() had an interface for skipping packets,
-             *   e.g. a msg_flags flag that indicates the sendmmsg() internal loop should take
-             *   no action for this entry, but still count it in the total number of successes
-             */
-            unsigned i = 0;
-            while(i < pkts) {
-                if(unlikely(!dgrams[i].msg_hdr.msg_iov[0].iov_len)) {
-                    const unsigned next = i + 1;
-                    if(next < pkts)
-                        memmove(&dgrams[i], &dgrams[next], sizeof(struct mmsghdr) * (pkts - next));
-                    pkts--;
-                }
-                else {
-                    i++;
-                }
-            }
-            if(unlikely(!pkts))
-                continue;
-
-            mmsg_rv = sendmmsg(fd, dgrams, pkts, 0);
-            if(unlikely(mmsg_rv < 0)) {
-                stats_own_inc(&stats->udp.sendfail);
-                log_err("UDP sendmmsg() failed: %s", logf_errno());
-            }
-        }
-        else {
+        gdnsd_assert(mmsg_rv != 0);
+        if(unlikely(mmsg_rv < 0)) {
             stats_own_inc(&stats->udp.recvfail);
             log_err("UDP recvmmsg() error: %s", logf_errno());
+            continue;
+        }
+
+        unsigned pkts = (unsigned)mmsg_rv;
+        gdnsd_assert(pkts <= width);
+        for(unsigned i = 0; i < pkts; i++) {
+            if(unlikely((asin[i].sa.sa_family == AF_INET && !asin[i].sin.sin_port)
+                || (asin[i].sa.sa_family == AF_INET6 && !asin[i].sin6.sin6_port))) {
+                    // immediately fail with no log output for packets with source port zero
+                    stats_own_inc(&stats->dropped);
+                    iov[i][0].iov_len = 0; // skip send, still need memmove below
+            }
+            else {
+                asin[i].len = dgrams[i].msg_hdr.msg_namelen;
+                iov[i][0].iov_len = process_dns_query(dnsp_ctx, stats, &asin[i], buf[i], dgrams[i].msg_len);
+            }
+        }
+
+        /* This block adjusts the array of mmsg entries to account for skips where
+         *   process_query() (or source port zero) decided we don't owe the
+         *   sender a response packet.
+         */
+        /* This could be far simpler if sendmmsg() had an interface for skipping packets,
+         *   e.g. a msg_flags flag that indicates the sendmmsg() internal loop should take
+         *   no action for this entry, but still count it in the total number of successes
+         */
+        unsigned i = 0;
+        while(i < pkts) {
+            if(unlikely(!dgrams[i].msg_hdr.msg_iov[0].iov_len)) {
+                const unsigned next = i + 1;
+                if(next < pkts)
+                    memmove(&dgrams[i], &dgrams[next], sizeof(struct mmsghdr) * (pkts - next));
+                pkts--;
+            }
+            else {
+                i++;
+            }
+        }
+
+        struct mmsghdr* dgptr = dgrams;
+        while(pkts) {
+            mmsg_rv = sendmmsg(fd, dgptr, pkts, 0);
+            gdnsd_assert(mmsg_rv != 0); // not possible, sendmmsg returns >0 or -1+errno
+            if(unlikely(mmsg_rv < 0)) {
+                if(errno == EINTR || ERRNO_WOULDBLOCK)
+                    continue; // retry same sendmmsg() call
+                stats_own_inc(&stats->udp.sendfail);
+                log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
+                mmsg_rv = 1; // count as one packet "handled", so we
+                             // don't re-send the erroring packet
+            }
+            gdnsd_assert(mmsg_rv >= 1);
+            gdnsd_assert(mmsg_rv <= (int)pkts);
+            const unsigned sent = (unsigned)mmsg_rv;
+            dgptr += sent; // skip past the handled packets
+            pkts -= sent; // drop the count of all handled packets
         }
     }
+
+#ifndef NDEBUG
+    for(unsigned i = 0; i < width; i++)
+        free(buf[i]);
+#endif
 }
 
 #else // USE_SENDMMSG
@@ -511,7 +594,6 @@ static bool needs_cmsg(const gdnsd_anysin_t* asin) {
         : false;
 }
 
-F_NORETURN
 void* dnsio_udp_start(void* thread_asvoid) {
     gdnsd_thread_setname("gdnsd-io-udp");
 
@@ -520,10 +602,18 @@ void* dnsio_udp_start(void* thread_asvoid) {
 
     const dns_addr_t* addrconf = t->ac;
 
-    dnspacket_stats_t* stats = dnspacket_stats_init(t->threadnum, true);
-    void* dnsp_ctx = dnspacket_ctx_init(true);
+    dnspacket_stats_t* stats;
+    void* dnsp_ctx = dnspacket_ctx_init(&stats, true);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+    // main thread blocks all sigs when spawning both tcp and udp io threads.
+    // for dnsio_udp, unblock SIGUSR2, which we use to stop cleanly
+    sigset_t sigmask_dnsio_udp;
+    sigfillset(&sigmask_dnsio_udp);
+    sigdelset(&sigmask_dnsio_udp, SIGUSR2);
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_dnsio_udp, NULL))
+        log_fatal("pthread_sigmask() failed");
 
     const bool need_cmsg = needs_cmsg(&addrconf->addr);
 
@@ -540,4 +630,10 @@ void* dnsio_udp_start(void* thread_asvoid) {
     {
         mainloop(t->sock, dnsp_ctx, stats, need_cmsg);
     }
+
+    gdnsd_prcu_rdr_thread_end();
+#ifndef NDEBUG
+    dnspacket_ctx_debug_cleanup(dnsp_ctx);
+#endif
+    return NULL;
 }

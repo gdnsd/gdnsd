@@ -304,6 +304,8 @@ sub proc_tmpl {
         plugin_search_path = $PLUGIN_PATH
         run_dir = $OUTDIR/run/gdnsd
         state_dir = $OUTDIR/var/lib/gdnsd
+        udp_threads = 2
+        tcp_threads = 2
     };
 
     while(<$in_fh>) {

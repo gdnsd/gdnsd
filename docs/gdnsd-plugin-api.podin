@@ -20,8 +20,8 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     # only 'start', 'restart', and 'condrestart' continue past this point
     [ M] void plugin_foo_init_monitors(struct ev_loop* mon_loop)
     [ M] void plugin_foo_start_monitors(struct ev_loop* mon_loop)
-    [R ] void plugin_foo_pre_run()
-    [R ] void plugin_foo_iothread_init(unsigned threadnum)
+    [R ] void plugin_foo_pre_run(void)
+    [R ] void plugin_foo_iothread_init(void)
 
     -- runtime stuff (called from main or zonefile thread)
     --   (you won't get parallel calls to this, and in general it should be a readonly
@@ -32,6 +32,7 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     [R ] gdnsd_sttl_t plugin_foo_resolve(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result)
 
     -- cleanup stuff:
+    [R ] void plugin_foo_iothread_debug_cleanup(void)
     [RM] void plugin_foo_exit(void)
 
 =head1 WARNING
@@ -287,11 +288,9 @@ and we enter runtime operations.
 
 After pre_run, gdnsd will spawn the runtime DNS I/O threads.  For each
 such thread, the callback C<plugin_foo_iothread_init> will be called
-from within each I/O thread with the global thread number as the only
-argument (0 through num_threads-1, where num_threads was provided to
-you back at C<plugin_foo_load_config()> time).  This would be the ideal
-time to xmalloc() writable per-thread data structures from within the
-threads themselves, so that a thread-aware malloc can avoid false sharing.
+from within each I/O thread.  This would be the ideal time to xmalloc()
+writable per-thread data structures from within the threads themselves,
+so that a thread-aware malloc can avoid false sharing.
 
 =head2 RUNTIME
 
@@ -353,22 +352,35 @@ dynamically reloaded.  These should be readonly operations so there
 shouldn't be any locking concerns.  It's important that these calls
 never fail fatally.  Simply log an error and return -1.
 
+=head1 CLEANUP
+
+As iothreads exit during daemon shutdown, in a developer debug build,
+each iothread will invoke the optional
+C<plugin_foo_iothread_debug_cleanup()>, which should deallocate
+resources acquired per-thread in C<plugin_foo_iothread_init>.
+
 At the time of daemon exit, C<plugin_foo_exit()> may be called in developer
 builds as a hook to e.g. unwind complex runtime memory allocation routines
-for valgrind verification.  It's never called in regular production builds.
+for valgrind verification.
+
+These are never called in regular production builds, where we usually
+just exit quickly and let the operating systems de-allocate our
+resources in bulk.  In developer builds, however, these are important so
+for avoiding false positives in QA tests that look for memory leaks.
 
 =head1 THREADING
 
-gdnsd uses POSIX threads.  Only the runtime resolve callbacks
-C<plugin_foo_map_res> and C<plugin_foo_resolve> need to to concern themselves
-with thread safety.  They can and will be called from multiple POSIX threads
-simultaneously for runtime requests.
+gdnsd uses POSIX threads.  The only runtime resolve callbacks which need
+to to concern themselves with thread safety are C<plugin_foo_map_res>
+and C<plugin_foo_resolve>.  They can and will be called from multiple
+POSIX threads simultaneously for runtime requests.
 
 The simplest (but least-performant) way to ensure thread-safety would
 be to wrap the contents of this function in a pthread mutex.
 However, for most imaginable cases, it should be trivial to structure
 your data and code such that this function can be both lock-free and
-thread-safe.
+thread-safe, especially with the aid of C<plugin_foo_iothread_init> at
+startup time.
 
 =head1 CORE API DETAILS
 

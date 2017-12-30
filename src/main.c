@@ -220,6 +220,13 @@ static void usage(const char* argv0) {
 
 F_NONNULL
 static void start_threads(socks_cfg_t* socks_cfg) {
+    dnsio_udp_init();
+    unsigned num_tcp_threads = 0;
+    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++)
+        if(!socks_cfg->dns_threads[i].is_udp)
+            num_tcp_threads++;
+    dnsio_tcp_init(num_tcp_threads);
+
     // Block all signals using the pthreads interface while starting threads,
     //  which causes them to inherit the same mask.
     sigset_t sigmask_all;
@@ -229,10 +236,10 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     if(pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
         log_fatal("pthread_sigmask() failed");
 
-    // system scope scheduling, non-joinable threads
+    // system scope scheduling, joinable threads
     pthread_attr_t attribs;
     pthread_attr_init(&attribs);
-    pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_DETACHED);
+    pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_JOINABLE);
     pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
 
     int pthread_err;
@@ -253,6 +260,15 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
         log_fatal("pthread_sigmask() failed");
     pthread_attr_destroy(&attribs);
+}
+
+static void request_io_threads_stop(socks_cfg_t* socks_cfg) {
+    dnsio_tcp_request_threads_stop();
+    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+        dns_thread_t* t = &socks_cfg->dns_threads[i];
+        if(t->is_udp)
+            pthread_kill(t->threadid, SIGUSR2);
+    }
 }
 
 typedef enum {
@@ -383,10 +399,7 @@ int main(int argc, char** argv) {
     // Initialize+bind DNS listening sockets
     socks_dns_lsocks_init(socks_cfg);
 
-    // Start up all of the UDP and TCP threads, each of
-    // which has all signals blocked and has its own
-    // event loop (libev for TCP, manual blocking loop for UDP)
-    // Also starts the zone data reload thread
+    // Start up all of the UDP and TCP i/o threads
     start_threads(socks_cfg);
 
     // This waits for all of the stat structures to be allocated
@@ -408,12 +421,26 @@ int main(int argc, char** argv) {
 
     ev_run(def_loop, 0);
 
+    // request i/o threads to exit
+    request_io_threads_stop(socks_cfg);
+
     // Stop the terminal signal handlers
     ev_signal_stop(def_loop, sig_term);
     ev_signal_stop(def_loop, sig_int);
 
     // get rid of child procs (e.g. extmon helper)
     gdnsd_kill_registered_children();
+
+    // wait for i/o threads to exit
+    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+        dns_thread_t* t = &socks_cfg->dns_threads[i];
+        void* raw_exit_status = (void*)42U;
+        int pthread_err = pthread_join(t->threadid, &raw_exit_status);
+        if(pthread_err)
+            log_err("pthread_join() of DNS thread failed: %s", logf_strerror(pthread_err));
+        if(raw_exit_status != NULL)
+            log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
+    }
 
     // deallocate resources in debug mode
     atexit_debug_execute();

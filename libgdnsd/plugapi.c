@@ -232,6 +232,7 @@ static plugin_t* gdnsd_plugin_load(const char* pname) {
     PSETFUNC(map_res)
     PSETFUNC(pre_run)
     PSETFUNC(iothread_init)
+    PSETFUNC(iothread_debug_cleanup)
     PSETFUNC(resolve)
     PSETFUNC(exit)
     PSETFUNC(add_svctype)
@@ -280,10 +281,16 @@ void gdnsd_plugins_action_pre_run(void) {
             plugins[i]->pre_run();
 }
 
-void gdnsd_plugins_action_iothread_init(const unsigned threadnum) {
+void gdnsd_plugins_action_iothread_init(void) {
     for(unsigned i = 0; i < num_plugins; i++)
         if(plugins[i]->iothread_init)
-            plugins[i]->iothread_init(threadnum);
+            plugins[i]->iothread_init();
+}
+
+void gdnsd_plugins_action_iothread_debug_cleanup(void) {
+    for(unsigned i = 0; i < num_plugins; i++)
+        if(plugins[i]->iothread_debug_cleanup)
+            plugins[i]->iothread_debug_cleanup();
 }
 
 void gdnsd_plugins_action_exit(void) {

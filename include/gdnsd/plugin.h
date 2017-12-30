@@ -54,6 +54,7 @@
 #define SYM_MAP_RES(x)       __PASTE3(plugin_, x, _map_res)
 #define SYM_PRE_RUN(x)       __PASTE3(plugin_, x, _pre_run)
 #define SYM_IOTH_INIT(x)     __PASTE3(plugin_, x, _iothread_init)
+#define SYM_IOTH_DCLN(x)     __PASTE3(plugin_, x, _iothread_debug_cleanup)
 #define SYM_RESOLVE(x)       __PASTE3(plugin_, x, _resolve)
 #define SYM_EXIT(x)          __PASTE3(plugin_, x, _exit)
 #define SYM_ADD_SVC(x)       __PASTE3(plugin_, x, _add_svctype)
@@ -72,7 +73,8 @@ void SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(vscf_data_t* config, const unsigned num_
 int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
 F_NONNULL
 void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(void);
-void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(unsigned threadnum);
+void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(void);
+void SYM_IOTH_DCLN(GDNSD_PLUGIN_NAME)(void);
 F_NONNULLX(3,4)
 gdnsd_sttl_t SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
@@ -94,6 +96,7 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef SYM_MAP_RES
 #undef SYM_PRE_RUN
 #undef SYM_IOTH_INIT
+#undef SYM_IOTH_DCLN
 #undef SYM_RESOLVE
 #undef SYM_EXIT
 #undef SYM_ADD_SVC

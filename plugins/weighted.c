@@ -695,7 +695,8 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* origin) {
     map_res_err("plugin_weighted: unknown resource '%s'", resname);
 }
 
-void plugin_weighted_iothread_init(const unsigned threadnum V_UNUSED) { init_rand(); }
+void plugin_weighted_iothread_init(void) { init_rand(); }
+void plugin_weighted_iothread_debug_cleanup(void) { free(rstate); }
 
 F_NONNULL
 static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, const uint8_t* origin, dyn_result_t* result) {

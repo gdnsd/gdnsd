@@ -72,7 +72,8 @@ void gdnsd_plugins_configure_all(const unsigned num_threads);
 
 // action iterators
 void gdnsd_plugins_action_pre_run(void);
-void gdnsd_plugins_action_iothread_init(const unsigned threadnum);
+void gdnsd_plugins_action_iothread_init(void);
+void gdnsd_plugins_action_iothread_debug_cleanup(void);
 void gdnsd_plugins_action_exit(void);
 
 #pragma GCC visibility pop

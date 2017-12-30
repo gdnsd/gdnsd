@@ -48,19 +48,29 @@ typedef enum {
     WRITING,
 } tcpdns_state_t;
 
+struct tcpdns_conn;
+typedef struct tcpdns_conn tcpdns_conn_t;
+
 // per-thread state
 typedef struct {
     dnspacket_stats_t* stats;
     void* dnsp_ctx;
+    struct ev_loop* loop;
     ev_io* accept_watcher;
+    ev_prepare* prep_watcher;
+    ev_async* stop_watcher;
+    tcpdns_conn_t* conns; // doubly-linked-list
     unsigned timeout;
     unsigned max_clients;
     unsigned num_conn_watchers;
     bool prcu_online;
+    bool shutting_down;
 } tcpdns_thread_t;
 
 // per-connection state
-typedef struct {
+struct tcpdns_conn {
+    tcpdns_conn_t* next; // doubly-linked-list
+    tcpdns_conn_t* prev; // doubly-linked-list
     tcpdns_thread_t* ctx;
     gdnsd_anysin_t* asin;
     uint8_t* buffer;
@@ -70,7 +80,32 @@ typedef struct {
     unsigned size;
     unsigned size_done;
     tcpdns_state_t state;
-} tcpdns_conn_t;
+};
+
+static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
+static tcpdns_thread_t** registry = NULL;
+static size_t registry_size = 0;
+static size_t registry_init = 0;
+
+void dnsio_tcp_init(unsigned num_threads) {
+    registry_size = (size_t)num_threads;
+    registry = xcalloc(registry_size, sizeof(*registry));
+}
+
+void dnsio_tcp_request_threads_stop(void) {
+    gdnsd_assert(registry_size == registry_init);
+    for(unsigned i = 0; i < registry_init; i++) {
+        tcpdns_thread_t* ctx = registry[i];
+        ev_async_send(ctx->loop, ctx->stop_watcher);
+    }
+}
+
+static void register_thread(tcpdns_thread_t* ctx) {
+    pthread_mutex_lock(&registry_lock);
+    gdnsd_assert(registry_init < registry_size);
+    registry[registry_init++] = ctx;
+    pthread_mutex_unlock(&registry_lock);
+}
 
 F_NONNULL
 static void cleanup_conn_watchers(struct ev_loop* loop, tcpdns_conn_t* tdata) {
@@ -85,10 +120,36 @@ static void cleanup_conn_watchers(struct ev_loop* loop, tcpdns_conn_t* tdata) {
     if(tdata->write_watcher) free(tdata->write_watcher);
     free(tdata->asin);
 
-    if(tdata->ctx->num_conn_watchers-- == tdata->ctx->max_clients)
-        ev_io_start(loop, tdata->ctx->accept_watcher);
+    if(tdata->ctx->num_conn_watchers-- == tdata->ctx->max_clients) {
+        if (!tdata->ctx->shutting_down)
+            ev_io_start(loop, tdata->ctx->accept_watcher);
+    }
+
+    // doubly-linked list removal
+    if (tdata->prev)
+        tdata->prev->next = tdata->next;
+    else
+        tdata->ctx->conns = tdata->next;
+    if (tdata->next)
+        tdata->next->prev = tdata->prev;
 
     free(tdata);
+}
+
+F_NONNULL
+static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED) {
+    gdnsd_assert(revents == EV_ASYNC);
+    tcpdns_thread_t* ctx = w->data;
+    ev_async_stop(loop, ctx->stop_watcher);
+    ev_io_stop(loop, ctx->accept_watcher);
+    ctx->shutting_down = true;
+    tcpdns_conn_t* c = ctx->conns;
+    while (c) {
+        tcpdns_conn_t* c_next = c->next;
+        if (c->state == READING_INITIAL)
+            cleanup_conn_watchers(loop, c);
+        c = c_next;
+    }
 }
 
 F_NONNULL
@@ -127,13 +188,20 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
     else { // we sent something...
         tdata->size_done += (size_t)send_rv;
         if(likely(tdata->size_done == tdata->size)) {
-            ev_timer_again(loop, tdata->timeout_watcher);
-            tdata->state = READING_INITIAL;
-            if(tdata->write_watcher)
-                ev_io_stop(loop, tdata->write_watcher);
-            ev_io_start(loop, tdata->read_watcher);
-            tdata->size_done = 0;
-            tdata->size = 0;
+            if(tdata->ctx->shutting_down) {
+                // if shutting down, take the opportunity to close cleanly
+                // after sending a response, instead of waiting for another
+                // request on this connection
+                cleanup_conn_watchers(loop, tdata);
+            } else {
+                ev_timer_again(loop, tdata->timeout_watcher);
+                tdata->state = READING_INITIAL;
+                if(tdata->write_watcher)
+                    ev_io_stop(loop, tdata->write_watcher);
+                ev_io_start(loop, tdata->read_watcher);
+                tdata->size_done = 0;
+                tdata->size = 0;
+            }
             return;
         }
     }
@@ -166,12 +234,8 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
     if(pktlen < 1) {
         if(unlikely(pktlen == -1 || tdata->size_done)) {
             if(pktlen == -1) {
-                if(ERRNO_WOULDBLOCK) {
-#                   ifdef TCP_DEFER_ACCEPT
-                        ev_io_start(loop, tdata->read_watcher);
-#                   endif
+                if(ERRNO_WOULDBLOCK)
                     return;
-                }
                 log_devdebug("TCP DNS recv() from %s: %s", logf_anysin(tdata->asin), logf_errno());
             }
             else if(tdata->size_done) {
@@ -198,12 +262,8 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* io, const int revents 
         }
     }
 
-    if(unlikely(tdata->size_done < tdata->size)) {
-#       ifdef TCP_DEFER_ACCEPT
-            ev_io_start(loop, tdata->read_watcher);
-#       endif
+    if(unlikely(tdata->size_done < tdata->size))
         return;
-    }
 
     //  Process the query and start the writer
     if(!tdata->ctx->prcu_online) {
@@ -283,6 +343,14 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
         ev_io_stop(loop, ctx->accept_watcher);
 
     tcpdns_conn_t* tdata = xcalloc(1, sizeof(tcpdns_conn_t));
+    // doubly-linked list handling:
+    if (ctx->conns) {
+        gdnsd_assert(!ctx->conns->prev);
+        ctx->conns->prev = tdata;
+        tdata->next = ctx->conns;
+    }
+    ctx->conns = tdata;
+
     tdata->buffer = xmalloc(gcfg->max_response + 2);
     tdata->state = READING_INITIAL;
     tdata->asin = asin;
@@ -293,6 +361,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     read_watcher->data = tdata;
     ev_io_init(read_watcher, tcp_read_handler, sock, EV_READ);
     ev_set_priority(read_watcher, 0);
+    ev_io_start(loop, read_watcher);
 
     ev_timer* timeout_watcher = xmalloc(sizeof(ev_timer));
     timeout_watcher->data = tdata;
@@ -300,15 +369,6 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     ev_timer_init(timeout_watcher, tcp_timeout_handler, 0, ctx->timeout);
     ev_set_priority(timeout_watcher, -1);
     ev_timer_again(loop, timeout_watcher);
-
-#ifdef TCP_DEFER_ACCEPT
-    // Since we use DEFER_ACCEPT, the request is likely already
-    //  queued and available at this point, so start read()-ing
-    //  without going through the event loop
-    tcp_read_handler(loop, tdata->read_watcher, EV_READ);
-#else
-    ev_io_start(loop, read_watcher);
-#endif
 }
 
 #ifndef SOL_IPV6
@@ -381,37 +441,60 @@ void* dnsio_tcp_start(void* thread_asvoid) {
 
     const dns_addr_t* addrconf = t->ac;
 
+    tcpdns_thread_t* ctx = xmalloc(sizeof(tcpdns_thread_t));
+    register_thread(ctx);
+
     if(listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
         log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(&addrconf->addr), logf_errno());
 
-    tcpdns_thread_t* ctx = xmalloc(sizeof(tcpdns_thread_t));
-    ctx->stats = dnspacket_stats_init(t->threadnum, false);
-    ctx->dnsp_ctx = dnspacket_ctx_init(false);
+    ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
+    ctx->conns = NULL;
     ctx->num_conn_watchers = 0;
     ctx->timeout = addrconf->tcp_timeout;
     ctx->max_clients = addrconf->tcp_clients_per_thread;
+    ctx->shutting_down = false;
 
     struct ev_io* accept_watcher = ctx->accept_watcher = xmalloc(sizeof(struct ev_io));
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
     ev_set_priority(accept_watcher, -2);
     accept_watcher->data = ctx;
 
-    struct ev_loop* loop = ev_loop_new(EVFLAG_AUTO);
+    struct ev_prepare* prep_watcher = ctx->prep_watcher = xmalloc(sizeof(struct ev_prepare));
+    ev_prepare_init(prep_watcher, prcu_offline);
+    prep_watcher->data = ctx;
+
+    struct ev_async* stop_watcher = ctx->stop_watcher = xmalloc(sizeof(struct ev_async));
+    ev_async_init(stop_watcher, stop_handler);
+    ev_set_priority(stop_watcher, 2);
+    stop_watcher->data = ctx;
+
+    struct ev_loop* loop = ctx->loop = ev_loop_new(EVFLAG_AUTO);
     if(!loop) log_fatal("ev_loop_new() failed");
 
+    ev_async_start(loop, stop_watcher);
     ev_io_start(loop, accept_watcher);
+    ev_prepare_start(loop, prep_watcher);
+    ev_unref(loop); // prepare should not hold a ref, but should run to the end
 
     gdnsd_prcu_rdr_thread_start();
     ctx->prcu_online = true;
 
-    struct ev_prepare* prep_watcher = xmalloc(sizeof(struct ev_prepare));
-    ev_prepare_init(prep_watcher, prcu_offline);
-    prep_watcher->data = ctx;
-    ev_prepare_start(loop, prep_watcher);
     ev_run(loop, 0);
+
+    gdnsd_prcu_rdr_thread_end();
+
+    // de-allocate explicitly when debugging, for leaks
+#ifndef NDEBUG
+    free(stop_watcher);
+    free(prep_watcher);
+    free(accept_watcher);
+    ev_loop_destroy(loop);
+    dnspacket_ctx_debug_cleanup(ctx->dnsp_ctx);
+    free(ctx);
+#endif
 
     return NULL;
 }
