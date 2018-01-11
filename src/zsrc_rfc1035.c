@@ -481,6 +481,7 @@ static void scan_dir(struct ev_loop* loop, double initial_quiesce_time) {
         struct dirent* result = NULL;
         do {
             errno = 0;
+            // cppcheck-suppress readdirCalled
             result = readdir(zdhandle);
             if(likely(result)) {
                 if(result->d_name[0] != '.')

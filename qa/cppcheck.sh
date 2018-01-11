@@ -71,6 +71,6 @@ set -e
 for plat in unix64 unix32; do
   cppcheck -j4 --platform=$plat --std=c99 --std=posix \
     --enable=warning,performance,portability,information,style,missingInclude \
-    --inline-suppr --force --quiet --error-exitcode=42 \
+    --inline-suppr --max-configs=999 --quiet --error-exitcode=42 \
     $INCDIRS $SKIPFILES $DEFS .
 done

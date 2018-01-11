@@ -529,6 +529,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
 
     while(1) {
         errno = 0;
+        // cppcheck-suppress readdirCalled
         struct dirent* e = readdir(dir);
         if(!e) {
             if(errno)
