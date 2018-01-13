@@ -83,9 +83,15 @@ static int action_stop(csc_t* csc) {
 }
 
 F_NONNULL
-static int action_reloadz(csc_t* csc V_UNUSED) {
-    // XXX reloadz should be synchronous - this works but is async
-    kill(csc_get_server_pid(csc), SIGUSR1);
+static int action_reloadz(csc_t* csc) {
+    csbuf_t req, resp;
+    memset(&req, 0, sizeof(req));
+    req.key = REQ_ZREL;
+    if(csc_txn(csc, &req, &resp)) {
+        log_err("Reload transaction failed!");
+        return 1;
+    }
+    log_info("Zone data reloaded");
     return 0;
 }
 

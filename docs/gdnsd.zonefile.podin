@@ -85,12 +85,7 @@ via this mechanism.
 
 C<$ADDR_LIMIT_V6> same as above, but for IPv6 C<AAAA> rrsets.
 
-The RFC-standard C<$INCLUDE> directive is not supported because
-it would greatly complicate the detection of zone update
-transactions with our current filesystem-based change detection
-scheme.  Most legitimate uses of C<$INCLUDE> to reduce redundancy
-should be replaced with a zonefile-generating script instead,
-perhaps using a template system.
+The RFC-standard C<$INCLUDE> directive is not currently supported.
 
 BIND's C<$GENERATE> extension is not supported at this time, but
 there's no fundamental reason it couldn't be added at a later

@@ -68,7 +68,6 @@ typedef struct {
 
 typedef struct {
     /* variables preserved across files */
-    uint64_t mtime;
     zscan_djb_zonedata_t* zonedata;
     const char* path;
     uint8_t** texts;
@@ -91,7 +90,7 @@ static const uint8_t dname_ns[]   = {4,2,'n','s',255};
 static const uint8_t dname_mx[]   = {4,2,'m','x',255};
 static const uint8_t dname_srv[]  = {5,3,'s','r','v',255};
 
-void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t *zone) {
+static void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t *zone) {
     zscan_djb_zonedata_t* nzd = xmalloc(sizeof(zscan_djb_zonedata_t));
     nzd->zone = zone;
     nzd->marked = 0;
@@ -100,7 +99,7 @@ void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t *zone) {
 }
 
 F_PURE
-zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t* zd, const uint8_t* dname, int exact) {
+static zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t* zd, const uint8_t* dname, int exact) {
     zscan_djb_zonedata_t* best = NULL;
 
     for (; zd; zd = zd->next) {
@@ -291,12 +290,11 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         TTDCHECK(9);
         LOCCHECK(10);
         zone->serial = parse_int(z, &field[3]);
-        zone->mtime = z->mtime;
         if (ltree_add_rec_soa(zone, dname,
                               parse_dname(z, dname2, &field[1]),
                               parse_dname(z, email, &field[2]),
                               parse_ttl(z, &field[8], TTL_NEGATIVE),
-                              zone->serial ?: extended_mtime_secs(z->mtime), /* serial */
+                              zone->serial,
                               parse_int(z, &field[4]) ?:    16384, /* refresh */
                               parse_int(z, &field[5]) ?:     2048, /* retry */
                               parse_int(z, &field[6]) ?:  1048576, /* expire */
@@ -520,11 +518,14 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
 
     dir = opendir(z->path);
     if (dir == NULL) {
-        if(errno == ENOENT)
+        if(errno == ENOENT) {
             log_debug("djb: directory '%s' does not exist", z->path);
-        else
+        }
+        else {
             log_err("djb: cannot open directory '%s': %s", z->path, logf_errno());
-        return true;
+            failed = true;
+        }
+        return failed;
     }
 
     while(1) {
@@ -551,9 +552,6 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
             z->fn = z->full_fn = NULL;
             continue;
         }
-        uint64_t emtime = get_extended_mtime(&st);
-        if (emtime > z->mtime)
-            z->mtime = emtime;
 
         sij_func_t sij = &_scan_isolate_jmp;
         failed = sij(z, cb);

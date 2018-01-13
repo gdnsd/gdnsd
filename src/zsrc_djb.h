@@ -20,17 +20,13 @@
 #ifndef GDNSD_ZSRC_DJB_H
 #define GDNSD_ZSRC_DJB_H
 
+#include "ztree.h"
+
 #include <gdnsd/compiler.h>
 
 #include <stdbool.h>
 
-#include <ev.h>
-
-void zsrc_djb_load_zones(const bool check_only);
-
-F_NONNULL
-void zsrc_djb_runtime_init(struct ev_loop* loop);
-
-void zsrc_djb_sigusr1(void);
+void zsrc_djb_init(void);
+bool zsrc_djb_load_zones(ztree_t* tree);
 
 #endif // GDNSD_ZSRC_DJB_H

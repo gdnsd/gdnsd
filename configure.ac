@@ -182,11 +182,6 @@ AC_SUBST([MATH_LIB])
 # posix_madvise to readahead on zonefiles
 AC_CHECK_FUNCS([posix_madvise])
 
-# high-precision mtime from struct stat
-AC_CHECK_MEMBERS([struct stat.st_mtim.tv_nsec])
-AC_CHECK_MEMBERS([struct stat.st_mtimespec.tv_nsec])
-AC_CHECK_MEMBERS([struct stat.st_mtimensec])
-
 # *mmsg for Linux
 HAS_SENDMMSG=1
 AC_CHECK_DECLS([sendmmsg, recvmmsg],,[HAS_SENDMMSG=0],[[#include <sys/socket.h>]])
@@ -316,17 +311,6 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
 # end pthread_setname stuff
 #---------------------------------------------
 
-# == inotify stuff ==
-# inotify_init1() is Linux 2.6.27+ and glibc 2.9
-# We also use Linux 2.6.36+ / glibc 2.13 IN_EXCL_UNLINK, but we
-#   fix that with a manual ifndef for the define and a runtime
-#   kernel version check for the support
-USE_INOTIFY=1
-AC_CHECK_FUNCS([inotify_init1],,[USE_INOTIFY=0])
-if test $USE_INOTIFY -eq 1; then
-    AC_DEFINE([USE_INOTIFY], 1, [Linux 2.6.36+ inotify support])
-fi
-
 # Basic perl 5.10.1+
 AC_ARG_VAR([PERL],[path to Perl 5.10.1 or higher])
 if test "x$ac_cv_env_PERL_set" != "xset"; then
@@ -446,7 +430,6 @@ AC_SUBST([LIBGDNSD_LIBS])
 B_FEAT="prod"
 if test "x$developer" != xno;    then B_FEAT="dev";             fi
 if test "x$HAS_SENDMMSG" = x1;   then B_FEAT="$B_FEAT mmsg";    fi
-if test "x$USE_INOTIFY" = x1;    then B_FEAT="$B_FEAT inotify"; fi
 if test "x$HAVE_LIBUNWIND" = x1; then B_FEAT="$B_FEAT unwind";  fi
 if test "x$HAVE_GEOIP2" = x1;    then B_FEAT="$B_FEAT geoip2";  fi
 if test "x$GDNSD_B_QSBR" = x1;   then B_FEAT="$B_FEAT urcu";    fi

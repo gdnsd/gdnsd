@@ -27,7 +27,7 @@
 //   the data loaded from the file to generate the result.
 // In "direct" mode, the state/TTL in the file is copied directly as a final
 //   state and TTL for mon-plugin/status-output usage, and updates are loaded
-//   immediately if possible (e.g. inotify).
+//   as soon as reasonably possible
 // In "monitor" mode, any TTLs in the file are ignored, the file is strictly only
 //   reloaded on specified monitoring intervals, and the UP/DOWN data from the
 //   file feeds into normal anti-flap/TTL calculations, as we do with standard

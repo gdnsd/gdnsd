@@ -56,6 +56,12 @@ css_t* css_new(void);
 F_NONNULL
 void css_start(css_t* css, struct ev_loop* loop);
 
+// After zone reloading completes in main.c, it calls here to notify waiting
+// control socket clients of success/fail.  Return value of true indicates that
+// more waiters queued up during the reload, so main.c needs to start yet
+// another reload operation.
+bool css_notify_zone_reloaders(css_t* css, const bool failed);
+
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL
 void css_delete(css_t* css);

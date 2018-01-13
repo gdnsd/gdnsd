@@ -20,17 +20,15 @@
 #ifndef GDNSD_ZSRC_RFC1035_H
 #define GDNSD_ZSRC_RFC1035_H
 
+#include "ztree.h"
+
 #include <gdnsd/compiler.h>
 
 #include <stdbool.h>
 
-#include <ev.h>
-
-void zsrc_rfc1035_load_zones(const bool check_only);
+void zsrc_rfc1035_init(void);
 
 F_NONNULL
-void zsrc_rfc1035_runtime_init(struct ev_loop* loop);
-
-void zsrc_rfc1035_sigusr1(void);
+bool zsrc_rfc1035_load_zones(ztree_t* tree);
 
 #endif // GDNSD_ZSRC_RFC1035_H

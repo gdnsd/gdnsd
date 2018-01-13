@@ -22,6 +22,7 @@
 #include "cs.h"
 #include "main.h"
 #include "statio.h"
+#include "main.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
@@ -71,6 +72,24 @@ struct css_conn_s_ {
     css_cstate_t state;
 };
 
+typedef struct {
+    css_conn_t** q;
+    size_t len;
+} conn_queue_t;
+
+static void conn_queue_add(conn_queue_t* queue, css_conn_t* c) {
+    queue->q = xrealloc(queue->q, ((queue->len + 1) * sizeof(*queue->q)));
+    queue->q[queue->len++] = c;
+}
+
+static void conn_queue_clear(conn_queue_t* queue) {
+    queue->len = 0;
+    if(queue->q) {
+        free(queue->q);
+        queue->q = NULL;
+    }
+}
+
 struct css_s_ {
     int fd;
     int lock_fd;
@@ -81,7 +100,15 @@ struct css_s_ {
     struct ev_loop* loop;
     char* path;
     css_conn_t* clients;
+    conn_queue_t* reload_zones_queued;
+    conn_queue_t* reload_zones_active;
 };
+
+static void swap_reload_zones_queues(css_t* css) {
+    conn_queue_t* x = css->reload_zones_queued;
+    css->reload_zones_queued = css->reload_zones_active;
+    css->reload_zones_active = x;
+}
 
 F_NONNULL
 static void css_conn_cleanup(css_conn_t* c) {
@@ -262,6 +289,17 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) 
             gdnsd_assert(states_size <= UINT32_MAX);
             respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg);
             break;
+        case REQ_ZREL:
+            // always enqueue new clients to the "queued" queue.  no need to
+            // check for duplicate clients, because clients are serial
+            conn_queue_add(css->reload_zones_queued, c);
+            // If there is no "active" queue, then there is no other zones
+            // reload in progress, so swap the queues and start a reload
+            if(!css->reload_zones_active->len) {
+                swap_reload_zones_queues(css);
+                spawn_async_zones_reloader_thread();
+            }
+            break;
         default:
             log_err("Invalid request from control socket, closing");
             css_conn_cleanup(c);
@@ -341,6 +379,8 @@ css_t* css_new(void) {
 
     css_t* css = xcalloc(1, sizeof(*css));
     css->lock_fd = lock_fd;
+    css->reload_zones_queued = xcalloc(1, sizeof(*css->reload_zones_queued));
+    css->reload_zones_active = xcalloc(1, sizeof(*css->reload_zones_active));
     css->status_d = (uint32_t)getpid();
     uint8_t x, y, z;
     if(3 != sscanf(PACKAGE_VERSION, "%hhu.%hhu.%hhu", &x, &y, &z))
@@ -379,6 +419,24 @@ void css_start(css_t* css, struct ev_loop* loop) {
     ev_io_start(css->loop, css->w_accept);
 }
 
+bool css_notify_zone_reloaders(css_t* css, const bool failed) {
+    // Notify log and all waiting control sock clients of success/fail
+    for(size_t i = 0; i < css->reload_zones_active->len; i++)
+        respond(css->reload_zones_active->q[i],
+                failed ? RESP_NAK : RESP_ACK, 0, 0, NULL);
+
+    // clear out the queue of clients waiting for reload status
+    conn_queue_clear(css->reload_zones_active);
+
+    // Swap queues, and spawn another new update thread if more waiting clients
+    // piled up during the previous reload
+    swap_reload_zones_queues(css);
+
+    // If the new active queue already had waiters,
+    // return true to start another reload
+    return !!css->reload_zones_active->len;
+}
+
 void css_delete(css_t* css) {
     // clean out active connections...
     css_conn_t* c = css->clients;
@@ -388,6 +446,12 @@ void css_delete(css_t* css) {
         c = next;
     };
     gdnsd_assert(!css->num_clients);
+
+    // free up the reload queues
+    conn_queue_clear(css->reload_zones_queued);
+    free(css->reload_zones_queued);
+    conn_queue_clear(css->reload_zones_active);
+    free(css->reload_zones_active);
 
     ev_io_stop(css->loop, css->w_accept);
     free(css->w_accept);

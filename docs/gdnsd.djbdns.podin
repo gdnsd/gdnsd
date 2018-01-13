@@ -27,10 +27,9 @@ the F<djbdns> subdirectory of the daemon config directory,
 default F<@GDNSD_DEFPATH_CONFIG@/djbdns/>.  Each file can contain
 multiple zones (identified by C<Z> records).
 
-At this time, unlike the RFC1035 zone data backend, the djbdns
-backend does not support automatic reloading of updates based on
-filesystem notification.  It only explicitly reloads any
-changed data on C<SIGUSR1> / C<gdnsd reload-zones>.
+Zone data reloads are transactional for the entire dataset via
+C<gdnsdctl reload-zones> in the same way as the RFC1035 zone data
+backend.
 
 =head1 SUPPORTED RECORD TYPES
 

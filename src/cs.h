@@ -59,6 +59,7 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v) {
 #define REQ_STAT  'S'
 #define REQ_STATE 'E'
 #define REQ_STOP  'X'
+#define REQ_ZREL  'Z'
 #define RESP_ACK  'A'
 #define RESP_NAK  'N'
 

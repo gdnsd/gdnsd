@@ -35,8 +35,6 @@ typedef struct {
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
     bool     zones_strict_data;
-    bool     zones_strict_startup;
-    bool     zones_rfc1035_auto;
     bool     any_mitigation;
     unsigned chaos_len;
     unsigned zones_default_ttl;
@@ -47,13 +45,11 @@ typedef struct {
     unsigned max_edns_response;
     unsigned max_cname_depth;
     unsigned max_addtl_rrsets;
-    unsigned zones_rfc1035_auto_interval;
-    double zones_rfc1035_quiesce;
 } cfg_t;
 
 extern const cfg_t* gcfg;
 
 F_NONNULLX(2)
-cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zss, const bool force_zsd);
+cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zsd);
 
 #endif // GDNSD_CONF_H

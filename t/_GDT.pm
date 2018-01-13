@@ -238,6 +238,16 @@ sub _get_daemon_json_stats {
     die "Cannot get daemon stats!";
 }
 
+sub daemon_reload_zones {
+    if(8 == syswrite($csock, "Z\0\0\0\0\0\0\0", 8)) {
+        my $resp;
+        if(8 == sysread($csock, $resp, 8)) {
+            return if(substr($resp, 0, 1) eq "A");
+        }
+    }
+    die "Zones reload operation failed";
+}
+
 sub check_stats_inner {
     my ($class, %to_check) = @_;
 
@@ -294,15 +304,7 @@ sub proc_tmpl {
         plugin_search_path = $PLUGIN_PATH
         run_dir = $OUTDIR/run/gdnsd
         state_dir = $OUTDIR/var/lib/gdnsd
-        zones_rfc1035_quiesce = 1.02
     };
-
-    if($ENV{USE_ZONES_AUTO}) {
-        $std_opts .= qq{        zones_rfc1035_auto = true\n};
-    }
-    else {
-        $std_opts .= qq{        zones_rfc1035_auto = false\n};
-    }
 
     while(<$in_fh>) {
         s/\@std_testsuite_options\@/$std_opts/g;
@@ -346,7 +348,6 @@ sub recursive_templated_copy {
 }
 
 our $GDOUT_FH; # open fh on gdnsd.out for test_log_output()
-our $INOTIFY_ENABLED = 0;
 
 sub daemon_abort {
     my $log_fn = shift;
@@ -414,7 +415,6 @@ sub spawn_daemon_execute {
                 or die "Cannot open '$daemon_out' for reading: $!";
             my $is_listening;
             while(<$GDOUT_FH>) {
-                $INOTIFY_ENABLED = 1 if /\brfc1035: will use inotify for zone change detection$/;
                 daemon_abort($daemon_out) if /\bfatal: /; # don't wait around if we see a fatal log entry...
                 return $pid if /\bDNS listeners started$/;
             }
@@ -523,13 +523,6 @@ sub test_run_gdnsdctl {
 }
 
 ##### START RELOAD STUFF
-
-sub send_sigusr1_unless_inotify {
-    if(!$INOTIFY_ENABLED) {
-        kill('SIGUSR1', $saved_pid)
-            or die "Cannot send SIGUSR1 to gdnsd at pid $saved_pid";
-    }
-}
 
 sub test_log_output {
     my ($class, $texts_in) = @_;

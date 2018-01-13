@@ -66,7 +66,7 @@ static struct ev_loop* def_loop = NULL;
 // libev watchers for signals+async
 static ev_signal* sig_int = NULL;
 static ev_signal* sig_term = NULL;
-static ev_signal* sig_usr1 = NULL;
+static ev_async* async_reloadz = NULL;
 
 // custom atexit-like stuff, only for resource
 //   de-allocation in debug builds to check for leaks
@@ -96,6 +96,55 @@ static void atexit_debug_execute(void) { }
 F_NONNULL F_NORETURN
 static void syserr_for_ev(const char* msg) { log_fatal("%s: %s", msg, logf_errno()); }
 
+static pthread_t zones_reloader_threadid;
+
+static bool join_zones_reloader_thread(void) {
+    void* raw_exit_status = (void*)42U;
+    int pthread_err = pthread_join(zones_reloader_threadid, &raw_exit_status);
+    if(pthread_err)
+        log_err("pthread_join() of zone data loading thread failed: %s", logf_strerror(pthread_err));
+    return !!raw_exit_status;
+}
+
+// Spawns a new thread to reload zone data.  Initial loading at startup sets
+// the "initial" flag for the thread, which means it doesn't send an async
+// notification back to us on completion, as we'll be waiting for it
+// synchronously in this case.
+static void spawn_zones_reloader_thread(const bool initial) {
+    // Block all signals using the pthreads interface while starting threads,
+    //  which causes them to inherit the same mask.
+    sigset_t sigmask_all;
+    sigfillset(&sigmask_all);
+    sigset_t sigmask_prev;
+    sigemptyset(&sigmask_prev);
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
+        log_fatal("pthread_sigmask() failed");
+
+    pthread_attr_t attribs;
+    pthread_attr_init(&attribs);
+    pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
+
+    int pthread_err = pthread_create(&zones_reloader_threadid, &attribs, &ztree_zones_reloader_thread, (void*)initial);
+    if(pthread_err)
+        log_fatal("pthread_create() of zone data thread failed: %s", logf_strerror(pthread_err));
+
+    // Restore the original mask in the main thread, so
+    //  we can continue handling signals like normal
+    if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
+        log_fatal("pthread_sigmask() failed");
+    pthread_attr_destroy(&attribs);
+}
+
+static bool initialize_zones(void) {
+    spawn_zones_reloader_thread(true);
+    return join_zones_reloader_thread();
+}
+
+void spawn_async_zones_reloader_thread(void) {
+    spawn_zones_reloader_thread(false);
+}
+
 F_NONNULL
 static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int revents V_UNUSED) {
     gdnsd_assert(revents == EV_SIGNAL);
@@ -107,16 +156,27 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int
 }
 
 F_NONNULL
-static void usr1_signal(struct ev_loop* loop V_UNUSED, struct ev_signal *w V_UNUSED, const int revents V_UNUSED) {
-    gdnsd_assert(revents == EV_SIGNAL);
-    gdnsd_assert(w->signum == SIGUSR1);
+static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async *a V_UNUSED, const int revents V_UNUSED) {
+    gdnsd_assert(revents == EV_ASYNC);
+    css_t* css = a->data;
+    const bool failed = join_zones_reloader_thread();
 
-    log_info("Received USR1 signal");
-    zsrc_djb_sigusr1();
-    zsrc_rfc1035_sigusr1();
+    if(failed)
+        log_err("Reloading zone data failed");
+    else
+        log_info("Reloading zone data successful");
+
+    if(css_notify_zone_reloaders(css, failed))
+       spawn_async_zones_reloader_thread();
+}
+
+// called by ztree reloader thread just before it exits
+void notify_reload_zones_done(void) {
+    ev_async_send(def_loop, async_reloadz);
 }
 
 // Set up our terminal signal handlers via libev
+F_NONNULL
 static void setup_signals(void) {
     sig_int = malloc(sizeof(ev_signal));
     ev_signal_init(sig_int, terminal_signal, SIGINT);
@@ -125,10 +185,13 @@ static void setup_signals(void) {
     sig_term = malloc(sizeof(ev_signal));
     ev_signal_init(sig_term, terminal_signal, SIGTERM);
     ev_signal_start(def_loop, sig_term);
+}
 
-    sig_usr1 = malloc(sizeof(ev_signal));
-    ev_signal_init(sig_usr1, usr1_signal, SIGUSR1);
-    ev_signal_start(def_loop, sig_usr1);
+static void setup_reload_zones(css_t* css) {
+    async_reloadz = malloc(sizeof(ev_async));
+    ev_async_init(async_reloadz, reload_zones_done);
+    async_reloadz->data = css;
+    ev_async_start(def_loop, async_reloadz);
 }
 
 F_NONNULL F_NORETURN
@@ -136,12 +199,11 @@ static void usage(const char* argv0) {
     const char* def_cfdir = gdnsd_get_default_config_dir();
     fprintf(stderr,
         PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-        "Usage: %s [-c %s] [-D] [-l] [-S] [-s] <action>\n"
+        "Usage: %s [-c %s] [-D] [-l] [-S] <action>\n"
         "  -c - Configuration directory, default '%s'\n"
         "  -D - Enable verbose debug output\n"
         "  -l - Send logs to syslog rather than stderr\n"
         "  -S - Force 'zones_strict_data = true' for this invocation\n"
-        "  -s - Force 'zones_strict_startup = true' for this invocation\n"
         "Actions:\n"
         "  checkconf - Checks validity of config and zone files\n"
         "  start - Start as a regular foreground process\n"
@@ -156,24 +218,6 @@ static void usage(const char* argv0) {
     exit(2);
 }
 
-// thread entry point for zone data reloader thread
-static void* zone_data_runtime(void* unused V_UNUSED) {
-    gdnsd_thread_setname("gdnsd-zones");
-
-    struct ev_loop* zdata_loop = ev_loop_new(EVFLAG_AUTO);
-    if(!zdata_loop)
-        log_fatal("Could not initialize the zone data libev loop");
-
-    zsrc_djb_runtime_init(zdata_loop);
-    zsrc_rfc1035_runtime_init(zdata_loop);
-
-    ev_run(zdata_loop, 0);
-
-    gdnsd_assert(0); // should never be reached as loop never terminates
-    ev_loop_destroy(zdata_loop);
-    return NULL;
-}
-
 F_NONNULL
 static void start_threads(socks_cfg_t* socks_cfg) {
     // Block all signals using the pthreads interface while starting threads,
@@ -185,7 +229,7 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     if(pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
         log_fatal("pthread_sigmask() failed");
 
-    // system scope scheduling, joinable threads
+    // system scope scheduling, non-joinable threads
     pthread_attr_t attribs;
     pthread_attr_init(&attribs);
     pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_DETACHED);
@@ -204,11 +248,6 @@ static void start_threads(socks_cfg_t* socks_cfg) {
                 i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_strerror(pthread_err));
     }
 
-    pthread_t zone_data_threadid;
-    pthread_err = pthread_create(&zone_data_threadid, &attribs, &zone_data_runtime, NULL);
-    if(pthread_err)
-        log_fatal("pthread_create() of zone data thread failed: %s", logf_strerror(pthread_err));
-
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
     if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
@@ -225,7 +264,6 @@ typedef enum {
 
 typedef struct {
     const char* cfg_dir;
-    bool force_zss;
     bool force_zsd;
     cmdline_action_t action;
 } cmdline_opts_t;
@@ -233,7 +271,7 @@ typedef struct {
 F_NONNULL
 static void parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
     int optchar;
-    while((optchar = getopt(argc, argv, "c:DlsS"))) {
+    while((optchar = getopt(argc, argv, "c:DlS"))) {
         switch(optchar) {
             case 'c':
                 copts->cfg_dir = optarg;
@@ -243,9 +281,6 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
                 break;
             case 'l':
                 gdnsd_log_set_syslog(true);
-                break;
-            case 's':
-                copts->force_zss = true;
                 break;
             case 'S':
                 copts->force_zsd = true;
@@ -279,7 +314,6 @@ int main(int argc, char** argv) {
     //   does not use assert/log stuff.
     cmdline_opts_t copts = {
         .cfg_dir = NULL,
-        .force_zss = false,
         .force_zsd = false,
         .action = ACT_UNDEF
     };
@@ -294,12 +328,15 @@ int main(int argc, char** argv) {
 
     // Load full configuration and expose through the globals
     socks_cfg_t* socks_cfg = socks_conf_load(cfg_root);
-    cfg_t* cfg = conf_load(cfg_root, socks_cfg, copts.force_zss, copts.force_zsd);
+    cfg_t* cfg = conf_load(cfg_root, socks_cfg, copts.force_zsd);
     gcfg = cfg;
     vscf_destroy(cfg_root);
 
-    // Load zone data (final step if checkconf)
-    ztree_init(copts.action == ACT_CHECKCONF);
+    // Load zone data (final step if checkconf) synchronously
+    ztree_init();
+    if(initialize_zones())
+        log_fatal("Initial load of zone data failed");
+
     if(copts.action == ACT_CHECKCONF)
         exit(0);
 
@@ -357,7 +394,8 @@ int main(int argc, char** argv) {
     //  before ev_run() below, because statio event handlers hit them.
     dnspacket_wait_stats(socks_cfg);
 
-    // Set up control socket handlers in the loop
+    // Set up zone reload mechanism and control socket handlers in the loop
+    setup_reload_zones(css);
     css_start(css, def_loop);
 
     // Notify the user that the listeners are up

@@ -32,63 +32,27 @@ typedef struct _zone_struct zone_t;
 #include <sys/types.h>
 #include <sys/stat.h>
 
-// high-res mtime stuff, for zsrc_*.c to use internally...
-#if defined HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
-#  define get_mtimens(_xst) ((_xst).st_mtim.tv_nsec)
-#elif defined HAVE_STRUCT_STAT_ST_MTIMESPEC_TV_NSEC
-#  define get_mtimens(_xst) ((_xst).st_mtimespec.tv_nsec)
-#elif defined HAVE_STRUCT_STAT_ST_MTIMENSEC
-#  define get_mtimens(_xst) ((_xst).st_mtimensec)
-#else
-#  define get_mtimens(_xst) 0
-#endif
-
-F_UNUSED F_NONNULL
-static uint64_t get_extended_mtime(const struct stat* st) {
-    return (((uint64_t)st->st_mtime) * 1000000000ULL)
-        + (uint64_t)get_mtimens(*st);
-}
-
-F_UNUSED F_CONST
-static uint64_t extended_mtime_secs(const uint64_t emtime) {
-    return emtime / 1000000000ULL;
-}
-
 struct _zone_struct {
     unsigned hash;        // hash of dname
     unsigned serial;      // SOA serial from zone data
-    uint64_t mtime;       // mod time of source as uint64_t nanoseconds unix-time
-                          //    (use get_extended_mtime() above if src is struct stat!)
     char* src;            // string description of src, e.g. "rfc1035:example.com"
     const uint8_t* dname; // zone name as a dname (stored in ->arena)
     ltarena_t* arena;     // arena for dname/label storage
     ltree_node_t* root;   // the zone root
-    zone_t* next;         // init to NULL, owned by ztree...
 };
 
-// Singleton init, loads zones from providers as well
-void ztree_init(const bool check_only);
+// The tree data structure that will hold the zone_t's
+struct _ztree_struct;
+typedef struct _ztree_struct ztree_t;
+
+// Initialize once at startup
+void ztree_init(void);
+
+F_NONNULL
+bool ztree_insert_zone(ztree_t* tree, zone_t* new_zone);
+void* ztree_zones_reloader_thread(void* init_asvoid);
 
 // --- zsrc_* interfaces ---
-
-// Single-zone transaction:
-//  if(z_old && !z_new) -> delete z_old from ztree
-//  if(!z_old && z_new) -> insert z_new into ztree
-//  if(z_old && z_new) -> replace z_old with z_new in ztree
-//  if(!z_old && !z_new) -> illegal
-void ztree_update(zone_t* z_old, zone_t* z_new);
-
-// Multi-zone transaction. As above, but there are rules:
-//  1) txn_update() can only happen inbetween txn_start()/txn_end()
-//  2) You must txn_end() or txn_abort(), do not leave a txn hanging
-//  3) regular zlist_update() not allowed during txn.
-//  4) Updates will not appear for runtime until after txn_end() returns
-//  5) You cannot delete any referenced zone_t's (z_old arguments)
-//     until after txn_end() returns.
-void ztree_txn_start(void);
-void ztree_txn_update(zone_t* z_old, zone_t* z_new);
-void ztree_txn_abort(void);
-void ztree_txn_end(void);
 
 // These are for zsrc_* code to create/delete detached zone_t's used
 //   in ztree_update() calls.
@@ -108,6 +72,7 @@ void zone_delete(zone_t* zone);
 // auth_depth_out is mostly useful for dnspacket.c, it tells you
 //   how many bytes into the dname the authoritative zone name
 //   starts at.
+// PRCU: executing thread must be registered, online and have reader-lock
 F_HOT F_NONNULL
 zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out);
 

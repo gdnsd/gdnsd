@@ -747,15 +747,17 @@ static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsiz
     return true;
 }
 
-zscan_rfc1035_status_t zscan_rfc1035(zone_t* zone, const char* fn) {
+bool zscan_rfc1035(zone_t* zone, const char* fn) {
     gdnsd_assert(zone->dname);
     log_debug("rfc1035: Scanning zone '%s'", logf_dname(zone->dname));
 
-    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
-    if(!fmap)
-        return ZSCAN_RFC1035_FAILED_FILE;
+    bool rv = false; // success by default
 
-    zscan_rfc1035_status_t rv = ZSCAN_RFC1035_SUCCESS;
+    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
+    if(!fmap) {
+        rv = true;
+        return rv;
+    }
 
     const size_t bufsize = gdnsd_fmap_get_len(fmap);
     const char* buf = gdnsd_fmap_get_buf(fmap);
@@ -769,10 +771,10 @@ zscan_rfc1035_status_t zscan_rfc1035(zone_t* zone, const char* fn) {
 
     sij_func_t sij = &_scan_isolate_jmp;
     if(sij(z, buf, bufsize))
-        rv = ZSCAN_RFC1035_FAILED_PARSE;
+        rv = true;
 
     if(gdnsd_fmap_delete(fmap))
-        rv = ZSCAN_RFC1035_FAILED_FILE;
+        rv = true;
 
     if(z->texts) {
         for(unsigned i = 0; i < z->num_texts; i++)

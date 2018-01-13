@@ -25,4 +25,10 @@
 F_NONNULL
 void gdnsd_atexit_debug(void (*f)(void));
 
+// css calls this to start an async zone data reload operation
+void spawn_async_zones_reloader_thread(void);
+
+// ztree calls this on reload completion
+void notify_reload_zones_done(void);
+
 #endif // GDNSD_MAIN

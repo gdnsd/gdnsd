@@ -31,8 +31,6 @@ typedef struct _zscan_djb_zonedata {
     struct _zscan_djb_zonedata* next;
 } zscan_djb_zonedata_t;
 
-void zscan_djbzone_add(zscan_djb_zonedata_t**, zone_t *zone);
-zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t*, const uint8_t*, int);
 void zscan_djbzone_free(zscan_djb_zonedata_t**);
 
 F_WUNUSED F_NONNULL

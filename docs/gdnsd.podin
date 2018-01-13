@@ -4,12 +4,11 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsd [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-S] [-s] <action>
+  Usage: gdnsd [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-S] <action>
     -c - Configuration directory (default @GDNSD_DEFPATH_CONFIG@)
     -D - Enable verbose debug output
     -l - Send logs to syslog rather than stderr
     -S - Force 'zones_strict_data = true' for this invocation
-    -s - Force 'zones_strict_startup = true' for this invocation
   Actions:
     checkconf - Checks validity of config and zone files
     start - Start as a regular foreground process
@@ -24,13 +23,10 @@ B<gdnsd> is very fast, light, and pluggable authoritative DNS daemon.
 The primary configuration file is the file named F<config> in the
 configuration directory.
 
-Note that the configuration file does not have to exist for successful
-startup.  Without a configuration file, gdnsd will load all of the zones
-in the zones directory and listen on port 53 of C<0.0.0.0> and C<::>
-using default settings.  It will also, by default, automatically process
-changes (add/delete/update) to the set of zonefiles present in the zones
-directory, which defaults to the F<zones/> subdirectory of the configuration
-directory (C<@GDNSD_DEFPATH_CONFIG@/zones/>).
+Note that the configuration file does not have to exist for successful startup.
+Without a configuration file, gdnsd will load all of the zones in the zones
+directory (default C<@GDNSD_DEFPATH_CONFIG@/zones/>) and listen on port 53 of
+C<0.0.0.0> and C<::> using default settings.
 
 =head1 COMMANDLINE OPTION FLAGS
 
@@ -38,7 +34,9 @@ directory (C<@GDNSD_DEFPATH_CONFIG@/zones/>).
 
 =item B<-c>
 
-Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.
+Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.  The
+zones directory, if not explicitly configured in the main configuration file,
+defaults the F<zones/> subdirectory of the configuration directory.
 
 =item B<-D>
 
@@ -53,12 +51,6 @@ systemd service as well, to capture priority information.
 =item B<-S>
 
 Forces the C<zones_strict_data> configuration option to true for
-this invocation, regardless of the setting in the config file.  This is
-mostly useful for validation during the C<checkconf> option.
-
-=item B<-s>
-
-Forces the C<zones_strict_startup> configuration option to true for
 this invocation, regardless of the setting in the config file.  This is
 mostly useful for validation during the C<checkconf> option.
 
@@ -131,7 +123,7 @@ defaults for a production deployment.
 =head1 ZONE FILES - RFC1035
 
 The directory for standard RFC1035 zone files (the default
-zone data backend) is the subdirectory named C<zones> in the
+zone data backend) is the subdirectory named F<zones/> in the
 configuration directory, so the default would be
 F<@GDNSD_DEFPATH_CONFIG@/zones/>.
 
@@ -146,15 +138,6 @@ In general there should be exactly one file per zone, and the
 filename should match the zone name.  Filenames beginning with
 C<.> are ignored.  All zone file must be regular files
 (as opposed to directories, symlinks, sockets, etc).
-
-By default, the zones directory is handled dynamically: as files
-are added, modified, and deleted in this directory, zone data will
-automatically update at runtime.  This feature can be disabled
-(such that an explicit SIGUSR1 or C<gdnsd reload-zones> is required to
-re-scan for changes) in the config file via the directive
-C<zones_rfc1035_auto> (see L<gdnsd.config(5)>).  It is legal for
-the directory to be empty at startup, which results in all queries
-returning C<REFUSED>.
 
 In order to better support the special case of RFC 2137 -style
 classless in-addr.arpa delegation zones (which contain forward
@@ -180,29 +163,10 @@ and F<example.com.> are functionally equivalent.
 
 Duplicate zones (e.g. having both of the above representations of
 C<example.com> present in the zones directory, and/or adding a
-different case-mapping such as F<EXample.Com>) are handled by
-loading both and giving runtime lookup priority to one of the copies
-based on a couple of simple rules: the highest C<serial> wins,
-and if more than one file has the highest serial, the highest
-filesystem C<mtime> value wins.  If the primary copy is later
-removed, any remaining copy of the zone will be promoted for
-runtime lookups according to that same ordering.
+different case-mapping such as F<EXample.Com>) are illegal.
 
 Subzones (e.g. having zonefiles for both C<example.com> and
-C<subz.example.com>) are only marginally supported.  The child zone
-will be loaded into memory, but its data won't be available for
-lookup, as it is suppressed by the existence of the parent zone.
-If the parent zone is later removed, the subzone data will become
-available.  Logically, it is not possible for a single server to
-be authoritative for both a subzone and its parent zone at the
-same time, as each "role" (parent and child) requires different
-responses to requests for data within the child zone.  gdnsd
-choses to default to the "parent" role in these conflict cases.
-
-Tools which are used to update zonefiles while gdnsd is running should always
-use atomic operations (C<rename()>, C<unlink()>, C<link()>) to alter the zone
-files.  See the documentation for C<zones_rfc1035_quiesce> in
-L<gdnsd.config(5)> for more details about this.
+C<subz.example.com>) are also illegal.
 
 =head1 ZONE FILES - DJBDNS
 
@@ -211,10 +175,24 @@ in the F<djbdns> subdirectory of the config directory
 (default F<@GDNSD_DEFPATH_CONFIG@/djbdns/>.  For more information
 see L<gdnsd.djbdns(5)>.
 
-If the same zone is specified via more than one zone data backend
-(e.g. rfc1035 + djbdns), the same rules shown in the above section
-apply: both will be loaded and managed, but only one will be used
-for queries at any given time (based on mtime/serial).
+If the same zone is specified via more than one zone data backend (e.g. rfc1035
++ djbdns), it will be an error and loading zone data will fail.  Similarly, it
+is illegal for the combined set of zones to contain subzones.
+
+=head1 ZONE FILES - RELOADING
+
+C<gdnsdctl reload-zones> triggers re-loading all zone data from all
+backends (currently just rfc1035 + djbdns).  The reload operation is
+done in a separate thread from the main server and doesn't interrupt
+DNS request flow.
+
+C<gdnsdctl> will wait for the server to complete the load operation
+and report back the success or failure of the reload transaction via
+stdout and its process exit status.
+
+If any failure occurs during the reload operation, the entire reload
+transaction is discarded with no effect on the previous runtime data
+still in use to answer ongoing queries.
 
 =head1 DIRECTORIES
 
@@ -332,10 +310,6 @@ aborting execution.
 
 Causes the daemon to exit gracefully with accompanying log output.  The exit
 status will reflect the terminating signal appropriately.
-
-=item B<SIGUSR1>
-
-Causes the daemon to attempt to load any new changes to the zone data.
 
 =item B<SIGPIPE>
 
