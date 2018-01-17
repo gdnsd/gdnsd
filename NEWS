@@ -1,3 +1,11 @@
+2.99.1 - Not a real release, placeholder for alpha-level 3.x work
+    * 3.x-realistic branch: In the interest of getting to some kind of finish
+      line, I've pared down the potential changes from the 3.x-prototype
+      branches, mostly leaving out the latter parts of that work which intruded
+      heavily on zonefile compatibility and still required a lot more followup
+      work (packet sizing checks, zone linter, etc).  Those commits will
+      probably form the basis of a future 4.x branch.
+
 2.4.0 - 2018-02-15
     * plugin_multifo: added "ignore_health" parameter. If "ignore_health" is
       true, all addresses are added to the result set regardless of health, but
