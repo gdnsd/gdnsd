@@ -108,23 +108,23 @@ typedef struct S_PACKED {
 #define EDNS_CLIENTSUB_OPTCODE 0x0008
 
 /* DNS RR Types */
-#define DNS_TYPE_A	1
-#define DNS_TYPE_NS	2
-#define DNS_TYPE_CNAME	5
-#define DNS_TYPE_SOA	6
-#define DNS_TYPE_PTR	12
-#define DNS_TYPE_MX	15
-#define DNS_TYPE_TXT	16
-#define DNS_TYPE_AAAA	28
-#define DNS_TYPE_SRV	33
-#define DNS_TYPE_NAPTR	35
-#define DNS_TYPE_OPT	41
-#define DNS_TYPE_IXFR   251
-#define DNS_TYPE_AXFR   252
-#define DNS_TYPE_ANY    255
+#define DNS_TYPE_A 1
+#define DNS_TYPE_NS 2
+#define DNS_TYPE_CNAME 5
+#define DNS_TYPE_SOA 6
+#define DNS_TYPE_PTR 12
+#define DNS_TYPE_MX 15
+#define DNS_TYPE_TXT 16
+#define DNS_TYPE_AAAA 28
+#define DNS_TYPE_SRV 33
+#define DNS_TYPE_NAPTR 35
+#define DNS_TYPE_OPT 41
+#define DNS_TYPE_IXFR 251
+#define DNS_TYPE_AXFR 252
+#define DNS_TYPE_ANY 255
 
-#define DNS_CLASS_IN	1
-#define DNS_CLASS_ANY	255
+#define DNS_CLASS_IN 1
+#define DNS_CLASS_ANY 255
 
 // Our own synthetic 'type' for DYNC
 //   Note that current standards mark
@@ -138,9 +138,9 @@ typedef struct S_PACKED {
 /* Network-order TYPE+CLASS as a 32-bit uint */
 
 #ifdef WORDS_BIGENDIAN
-#define _mkrrf(_t,_c) (((_t)<<16)|(_c))
+#define _mkrrf(_t, _c) (((_t) << 16) | (_c))
 #else
-#define _mkrrf(_t,_c) (((_t)<<8)|((_c)<<24))
+#define _mkrrf(_t, _c) (((_t) << 8) | ((_c) << 24))
 #endif
 
 static const uint32_t DNS_RRFIXED_A     = _mkrrf(DNS_TYPE_A, DNS_CLASS_IN);

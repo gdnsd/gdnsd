@@ -53,7 +53,10 @@ static mon_t* mons = NULL;
 static unsigned num_proc = 0;
 
 F_NONNULL F_NORETURN
-static void syserr_for_ev(const char* msg) { log_fatal("%s: %s", msg, logf_errno()); }
+static void syserr_for_ev(const char* msg)
+{
+    log_fatal("%s: %s", msg, logf_errno());
+}
 
 static int plugin_read_fd = -1;
 static int plugin_write_fd = -1;
@@ -75,23 +78,27 @@ static unsigned sendq_head = 0;
 
 // must be power of 2!
 #define SENDQ_INITSIZE 16
-static void sendq_init(void) {
+static void sendq_init(void)
+{
     sendq = xmalloc(SENDQ_INITSIZE * sizeof(uint32_t));
     sendq_alloc = SENDQ_INITSIZE;
 }
 
-static bool sendq_empty(void) { return !sendq_len; }
+static bool sendq_empty(void)
+{
+    return !sendq_len;
+}
 
-static void sendq_enq(uint32_t new_data) {
-    if(likely(sendq_len < sendq_alloc)) {
+static void sendq_enq(uint32_t new_data)
+{
+    if (likely(sendq_len < sendq_alloc)) {
         sendq[(sendq_head + sendq_len) & (sendq_alloc - 1)] = new_data;
-    }
-    else {
+    } else {
         // buffer too small, upsize first (we never downsize)
         const unsigned old_mask = sendq_alloc - 1;
         sendq_alloc <<= 1;
         uint32_t* newq = xmalloc(sendq_alloc * sizeof(uint32_t));
-        for(unsigned i = 0; i < sendq_len; i++)
+        for (unsigned i = 0; i < sendq_len; i++)
             newq[i] = sendq[(sendq_head + i) & old_mask];
         newq[sendq_len] = new_data;
         free(sendq);
@@ -111,12 +118,14 @@ static void sendq_enq(uint32_t new_data) {
 //   _peek()'s return is a literal value and thus there's
 //   no good way to signal emptiness from it.
 
-static uint32_t sendq_deq_peek(void) {
+static uint32_t sendq_deq_peek(void)
+{
     gdnsd_assert(!sendq_empty());
     return sendq[sendq_head];
 }
 
-static void sendq_deq_commit(void) {
+static void sendq_deq_commit(void)
+{
     gdnsd_assert(!sendq_empty());
     sendq_head++;
     sendq_head &= (sendq_alloc - 1);
@@ -125,8 +134,11 @@ static void sendq_deq_commit(void) {
 
 /*************************************************************************/
 
-static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
-    gdnsd_assert(loop); gdnsd_assert(w); gdnsd_assert(revents == EV_TIMER);
+static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
+{
+    gdnsd_assert(loop);
+    gdnsd_assert(w);
+    gdnsd_assert(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
     gdnsd_assert(this_mon->result_pending);
@@ -139,7 +151,7 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     //   and restart the child watcher for a new child, effectively
     //   giving up on waitpid() of this child.  Not much else we
     //   could do in that case anyways.
-    if(!killed_by) {
+    if (!killed_by) {
         sendq_enq(emc_encode_mon(this_mon->cmd->idx, true));
         ev_io_start(loop, plugin_write_watcher);
     }
@@ -149,8 +161,11 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     this_mon->result_pending = false;
 }
 
-static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED) {
-    gdnsd_assert(loop); gdnsd_assert(w); gdnsd_assert(revents == EV_CHILD);
+static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED)
+{
+    gdnsd_assert(loop);
+    gdnsd_assert(w);
+    gdnsd_assert(revents == EV_CHILD);
 
     ev_child_stop(loop, w); // always single-shot
 
@@ -160,12 +175,11 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
 
     bool failed = true;
     int status = w->rstatus;
-    if(WIFEXITED(status)) {
-        if(!WEXITSTATUS(status))
-           failed = false;
-    }
-    else {
-        if(WIFSIGNALED(status))
+    if (WIFEXITED(status)) {
+        if (!WEXITSTATUS(status))
+            failed = false;
+    } else {
+        if (WIFSIGNALED(status))
             log_warn("Monitor child process for '%s' terminated by signal %i", this_mon->cmd->desc, WTERMSIG(status));
         else
             log_warn("Monitor child process for '%s' terminated abnormally...", this_mon->cmd->desc);
@@ -173,8 +187,8 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
 
     // If timeout already sent a failure, don't double-send
     //   here when we reap the SIGKILL'd child
-    if(this_mon->result_pending) {
-        if(!killed_by) {
+    if (this_mon->result_pending) {
+        if (!killed_by) {
             sendq_enq(emc_encode_mon(this_mon->cmd->idx, failed));
             ev_io_start(loop, plugin_write_watcher);
         }
@@ -185,8 +199,11 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
     }
 }
 
-static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
-    gdnsd_assert(loop); gdnsd_assert(w); gdnsd_assert(revents == EV_TIMER);
+static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
+{
+    gdnsd_assert(loop);
+    gdnsd_assert(w);
+    gdnsd_assert(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
     gdnsd_assert(!this_mon->result_pending);
@@ -208,14 +225,14 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
     sigfillset(&all_sigs);
     sigset_t saved_mask;
     sigemptyset(&saved_mask);
-    if(pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask))
+    if (pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask))
         log_fatal("pthread_sigmask() failed");
 
     this_mon->cmd_pid = fork();
-    if(this_mon->cmd_pid == -1)
+    if (this_mon->cmd_pid == -1)
         log_fatal("fork() failed: %s", logf_errno());
 
-    if(!this_mon->cmd_pid) { // child
+    if (!this_mon->cmd_pid) { // child
         // reset to default any signal handlers that we actually listen to in
         // the helper process, as well as PIPE and HUP that we may be ignoring
         // in the main daemon and thus also the helper.
@@ -223,21 +240,21 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         sigemptyset(&defaultme.sa_mask);
         defaultme.sa_handler = SIG_DFL;
         defaultme.sa_flags = 0;
-        if(sigaction(SIGTERM, &defaultme, NULL))
+        if (sigaction(SIGTERM, &defaultme, NULL))
             log_fatal("sigaction() failed: %s", logf_errno());
-        if(sigaction(SIGINT, &defaultme, NULL))
+        if (sigaction(SIGINT, &defaultme, NULL))
             log_fatal("sigaction() failed: %s", logf_errno());
-        if(sigaction(SIGPIPE, &defaultme, NULL))
+        if (sigaction(SIGPIPE, &defaultme, NULL))
             log_fatal("sigaction() failed: %s", logf_errno());
-        if(sigaction(SIGHUP, &defaultme, NULL))
+        if (sigaction(SIGHUP, &defaultme, NULL))
             log_fatal("sigaction() failed: %s", logf_errno());
-        if(sigaction(SIGCHLD, &defaultme, NULL))
+        if (sigaction(SIGCHLD, &defaultme, NULL))
             log_fatal("sigaction() failed: %s", logf_errno());
 
         // unblock all
         sigset_t no_sigs;
         sigemptyset(&no_sigs);
-        if(pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
+        if (pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
             log_fatal("pthread_sigmask() failed");
 
         // technically, we could go ahead and close off stdout/stderr
@@ -249,7 +266,7 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
     num_proc++;
 
     // restore previous signal mask from before fork in parent
-    if(pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
+    if (pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
         log_fatal("pthread_sigmask() failed");
 
     this_mon->result_pending = true;
@@ -259,29 +276,30 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
     ev_child_start(loop, this_mon->child_watcher);
 }
 
-static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
-    gdnsd_assert(loop); gdnsd_assert(w); gdnsd_assert(revents == EV_WRITE);
+static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
+{
+    gdnsd_assert(loop);
+    gdnsd_assert(w);
+    gdnsd_assert(revents == EV_WRITE);
 
     gdnsd_assert(plugin_write_fd > -1);
-    while(!sendq_empty()) {
+    while (!sendq_empty()) {
         const uint32_t data = sendq_deq_peek();
         ssize_t write_rv = write(plugin_write_fd, &data, 4);
-        if(write_rv != 4) {
-            if(write_rv < 0) {
-                if(ERRNO_WOULDBLOCK)
+        if (write_rv != 4) {
+            if (write_rv < 0) {
+                if (ERRNO_WOULDBLOCK) {
                     return; // pipe full, wait for more libev notification of write-ready
-                else if(errno == EINTR)
+                } else if (errno == EINTR) {
                     continue; // try this write again immediately
-                else {
+                } else {
                     ev_break(loop, EVBREAK_ALL);
                     return;
                 }
-            }
-            else if(write_rv == 0) {
+            } else if (write_rv == 0) {
                 ev_break(loop, EVBREAK_ALL);
                 return;
-            }
-            else {
+            } else {
                 log_fatal("BUG: atomic pipe write of 4 bytes was not atomic, retval was %zi", write_rv);
             }
         }
@@ -289,17 +307,18 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
     }
     ev_io_stop(loop, w); // queue now empty
 
-    if(killed_by) { // we've sent our final message, close
+    if (killed_by) { // we've sent our final message, close
         close(plugin_write_fd);
         plugin_write_fd = -1;
     }
 }
 
 F_NONNULL
-static void die_gracefully(struct ev_loop* loop) {
+static void die_gracefully(struct ev_loop* loop)
+{
     gdnsd_assert(killed_by);
     static bool done_once = false;
-    if(!done_once) { // avoid repetition
+    if (!done_once) { // avoid repetition
         done_once = true;
         // send friendly death message to plugin
         sendq_enq(emc_encode_exit());
@@ -307,10 +326,10 @@ static void die_gracefully(struct ev_loop* loop) {
         // kill interval timers for future invocations
         //   and immediately clamp the remaining timeout
         //   for any running commands to 2.0s.
-        for(unsigned i = 0; i < num_mons; i++) {
+        for (unsigned i = 0; i < num_mons; i++) {
             ev_timer_stop(loop, mons[i].interval_timer);
-            if(ev_is_active(mons[i].cmd_timeout)) {
-                if(ev_timer_remaining(loop, mons[i].cmd_timeout) > 2.0) {
+            if (ev_is_active(mons[i].cmd_timeout)) {
+                if (ev_timer_remaining(loop, mons[i].cmd_timeout) > 2.0) {
                     ev_timer_stop(loop, mons[i].cmd_timeout);
                     ev_timer_set(mons[i].cmd_timeout, 2.0, 0.);
                     ev_timer_start(loop, mons[i].cmd_timeout);
@@ -321,37 +340,39 @@ static void die_gracefully(struct ev_loop* loop) {
 }
 
 F_NONNULL
-static void sig_cb(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED) {
+static void sig_cb(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_SIGNAL);
-    switch(w->signum) {
-        case SIGINT:
-        case SIGTERM:
-            killed_by = w->signum;
-            log_info("Got terminal signal %i, starting graceful exit", killed_by);
-            die_gracefully(loop);
-            break;
-        default:
-            gdnsd_assert(0);
+    switch (w->signum) {
+    case SIGINT:
+    case SIGTERM:
+        killed_by = w->signum;
+        log_info("Got terminal signal %i, starting graceful exit", killed_by);
+        die_gracefully(loop);
+        break;
+    default:
+        gdnsd_assert(0);
     }
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     // Bail out early if we don't have the right argument
     //   count, and try to tell the user not to run us
     //   if stderr happens to be hooked up to a terminal
-    if(argc != 5)
+    if (argc != 5)
         log_fatal("This binary is not for human execution!");
 
     // argv[1-2] tells us how to mirror the main daemon's log output settings
-    if(!strcmp(argv[1], "Y"))
+    if (!strcmp(argv[1], "Y"))
         gdnsd_log_set_debug(true);
-    if(!strcmp(argv[2], "L"))
+    if (!strcmp(argv[2], "L"))
         gdnsd_log_set_syslog(true);
 
     // regardless, we seal off stdin now.  We don't need it,
     //   and this way we don't have to deal with it when
     //   execv()-ing child commands later.
-    if(!freopen("/dev/null", "r", stdin))
+    if (!freopen("/dev/null", "r", stdin))
         log_fatal("Cannot open /dev/null: %s", logf_errno());
 
     // Also unconditionally unset NOTIFY_SOCKET here so that children
@@ -362,53 +383,53 @@ int main(int argc, char** argv) {
     plugin_read_fd = atoi(argv[3]);
     plugin_write_fd = atoi(argv[4]);
 
-    if(plugin_read_fd < 3 || plugin_read_fd > 1000
-        || plugin_write_fd < 3 || plugin_write_fd > 1000)
+    if (plugin_read_fd < 3 || plugin_read_fd > 1000
+            || plugin_write_fd < 3 || plugin_write_fd > 1000)
         log_fatal("Invalid pipe descriptors!");
 
-    if(emc_read_exact(plugin_read_fd, "HELO"))
+    if (emc_read_exact(plugin_read_fd, "HELO"))
         log_fatal("Failed to read HELO from plugin");
-    if(emc_write_string(plugin_write_fd, "HELO_ACK", 8))
+    if (emc_write_string(plugin_write_fd, "HELO_ACK", 8))
         log_fatal("Failed to write HELO_ACK to plugin");
 
     uint8_t ccount_buf[7];
-    if(emc_read_nbytes(plugin_read_fd, 7, ccount_buf)
-        || strncmp((char*)ccount_buf, "CMDS:", 5))
+    if (emc_read_nbytes(plugin_read_fd, 7, ccount_buf)
+            || strncmp((char*)ccount_buf, "CMDS:", 5))
         log_fatal("Failed to read command count from plugin");
     num_mons = ((unsigned)ccount_buf[5] << 8) + ccount_buf[6];
-    if(!num_mons)
+    if (!num_mons)
         log_fatal("Received command count of zero from plugin");
     mons = xcalloc(num_mons, sizeof(mon_t));
 
-    if(emc_write_string(plugin_write_fd, "CMDS_ACK", 8))
+    if (emc_write_string(plugin_write_fd, "CMDS_ACK", 8))
         log_fatal("Failed to write CMDS_ACK to plugin");
 
     // Note, it's merely a happy coincidence that our mons[]
     //   indices exactly match cmd->idx numbers.  Always use
     //   the cmd->idx numbers as the official index when talking
     //   to the main daemon!
-    for(unsigned i = 0; i < num_mons; i++) {
+    for (unsigned i = 0; i < num_mons; i++) {
         mons[i].cmd = emc_read_command(plugin_read_fd);
-        if(!mons[i].cmd)
+        if (!mons[i].cmd)
             log_fatal("Failed to read command %u from plugin", i);
-        if(i != mons[i].cmd->idx)
+        if (i != mons[i].cmd->idx)
             log_fatal("BUG: plugin index issues, %u vs %u", i, mons[i].cmd->idx);
-        if(emc_write_string(plugin_write_fd, "CMD_ACK", 7))
+        if (emc_write_string(plugin_write_fd, "CMD_ACK", 7))
             log_fatal("Failed to write CMD_ACK for command %u to plugin", i);
     }
 
-    if(emc_read_exact(plugin_read_fd, "END_CMDS"))
+    if (emc_read_exact(plugin_read_fd, "END_CMDS"))
         log_fatal("Failed to read END_CMDS from plugin");
-    if(emc_write_string(plugin_write_fd, "END_CMDS_ACK", 12))
+    if (emc_write_string(plugin_write_fd, "END_CMDS_ACK", 12))
         log_fatal("Failed to write END_CMDS_ACK to plugin");
 
     // done with the serial setup, close the readpipe and go nonblocking on write for eventloop...
     close(plugin_read_fd);
-    if(fcntl(plugin_write_fd, F_SETFL, (fcntl(plugin_write_fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
+    if (fcntl(plugin_write_fd, F_SETFL, (fcntl(plugin_write_fd, F_GETFL, 0)) | O_NONBLOCK) == -1)
         log_fatal("Failed to set O_NONBLOCK on pipe: %s", logf_errno());
 
     // CLOEXEC the write fd so child scripts can't mess with it
-    if(fcntl(plugin_write_fd, F_SETFD, FD_CLOEXEC))
+    if (fcntl(plugin_write_fd, F_SETFD, FD_CLOEXEC))
         log_fatal("Failed to set FD_CLOEXEC on plugin write fd: %s", logf_errno());
 
     // init results-sending queue
@@ -419,7 +440,8 @@ int main(int argc, char** argv) {
 
     // Construct the default loop for the main thread
     struct ev_loop* def_loop = ev_default_loop(EVFLAG_AUTO);
-    if(!def_loop) log_fatal("Could not initialize the default libev loop");
+    if (!def_loop)
+        log_fatal("Could not initialize the default libev loop");
 
     // Catch SIGINT/TERM, and do not let them prevent loop exit
     sigterm_watcher = xmalloc(sizeof(ev_signal));
@@ -438,7 +460,7 @@ int main(int argc, char** argv) {
 
     // set up interval watchers for each monitor, initially for immediate firing
     //   for the daemon's monitoring init cycle, then repeating every interval.
-    for(unsigned i = 0; i < num_mons; i++) {
+    for (unsigned i = 0; i < num_mons; i++) {
         mon_t* this_mon = &mons[i];
         this_mon->interval_timer = xmalloc(sizeof(ev_timer));
         ev_timer_init(this_mon->interval_timer, mon_interval_cb, 0., this_mon->cmd->interval);
@@ -466,25 +488,25 @@ int main(int argc, char** argv) {
     // on unexpected pipe close and (b) anything else going wrong
     // during graceful shutdown.
     bool needs_wait = false;
-    for(unsigned i = 0; i < num_mons; i++) {
-        if(mons[i].cmd_pid) {
+    for (unsigned i = 0; i < num_mons; i++) {
+        if (mons[i].cmd_pid) {
             log_debug("not-so-graceful shutdown: sending SIGKILL to %li", (long)mons[i].cmd_pid);
             kill(mons[i].cmd_pid, SIGKILL);
             needs_wait = true;
         }
     }
 
-    if(needs_wait) {
+    if (needs_wait) {
         unsigned i = 500; // 5s for OS to give us all the SIGKILL'd zombies
-        while(i--) {
+        while (i--) {
             pid_t wprv = waitpid(-1, NULL, WNOHANG);
-            if(wprv < 0) {
-                if(errno == ECHILD)
+            if (wprv < 0) {
+                if (errno == ECHILD)
                     break;
                 else
                     log_fatal("waitpid(-1, NULL, WNOHANG) failed: %s", logf_errno());
             }
-            if(wprv)
+            if (wprv)
                 log_debug("not-so-graceful shutdown: waitpid reaped %li", (long)wprv);
             const struct timespec ms_10 = { 0, 10000000 };
             nanosleep(&ms_10, NULL);
@@ -492,15 +514,14 @@ int main(int argc, char** argv) {
     }
 
     // Bye!
-    if(killed_by) {
+    if (killed_by) {
         log_info("gdnsd_extmon_helper exiting gracefully due to signal %i", killed_by);
 #ifdef COVERTEST_EXIT
         exit(0);
 #else
         raise(killed_by);
 #endif
-    }
-    else {
+    } else {
         log_info("gdnsd_extmon_helper exiting un-gracefully");
         exit(42);
     }

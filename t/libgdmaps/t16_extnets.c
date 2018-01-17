@@ -23,6 +23,7 @@
 #include "gdmaps_test.h"
 #include <tap.h>
 
+// *INDENT-OFF*
 static const char cfg[] = QUOTE(
    my_prod_map => {
     geoip_db => GeoIPv6-20111210.dat,
@@ -34,12 +35,14 @@ static const char cfg[] = QUOTE(
     nets => extnets.nets
    }
 );
+// *INDENT-ON*
 
 gdmaps_t* gdmaps = NULL;
 
-int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+int main(int argc V_UNUSED, char* argv[] V_UNUSED)
+{
     gdmaps_test_init(getenv("TEST_CFDIR"));
-    if(!gdmaps_test_db_exists("GeoIPv6-20111210.dat")) {
+    if (!gdmaps_test_db_exists("GeoIPv6-20111210.dat")) {
         plan_skip_all("Missing database");
         exit(exit_status());
     }

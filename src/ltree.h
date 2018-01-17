@@ -123,7 +123,7 @@ typedef struct _ltree_rdata_ptr_struct ltree_rdata_ptr_t;
 typedef struct _ltree_rdata_mx_struct ltree_rdata_mx_t;
 typedef struct _ltree_rdata_srv_struct ltree_rdata_srv_t;
 typedef struct _ltree_rdata_naptr_struct ltree_rdata_naptr_t;
-typedef uint8_t* * ltree_rdata_txt_t;
+typedef uint8_t** ltree_rdata_txt_t;
 typedef struct _ltree_rdata_rfc3597_struct ltree_rdata_rfc3597_t;
 
 typedef union  _ltree_rrset_union ltree_rrset_t;
@@ -201,8 +201,8 @@ struct _ltree_rrset_gen_struct {
 #endif
 
 // The rules for interpreting the structure:
-//   if(!count_v6 && gen.count <= LTREE_V4A_SIZE) {
-//       if(!gen.count)
+//   if (!count_v6 && gen.count <= LTREE_V4A_SIZE) {
+//       if (!gen.count)
 //           use .dyn, this is a DYNA
 //       else
 //           use v4a for direct IPv4 address data
@@ -306,16 +306,18 @@ union _ltree_rrset_union {
     ltree_rrset_rfc3597_t rfc3597;
 };
 
-// For ltree_node_t.flags
-#define LTNFLAG_DELEG 0x1 // This is the exact start of a delegated zone.
-                          // These nodes *must* have an NS rrset (that's how they're
-                          //  detected in the first place), and otherwise can only have
-                          //  addr rrsets, and child nodes which contain only addr rrsets
-                          //  (for NS glue)
-#define LTNFLAG_GUSED 0x2 // For nodes at or below DELEG points which contain addresses, this
-                          //  is set when the glue is used, and later checked for "glue unused"
-                          //  warnings.  Also re-used in the same manner for out-of-zone glue,
-                          //  which is stored under a special child node of the zone root.
+// For ltree_node_t.flags:
+// This is the exact start of a delegated zone.
+// These nodes *must* have an NS rrset (that's how they're
+//  detected in the first place), and otherwise can only have
+//  addr rrsets, and child nodes which contain only addr rrsets
+//  (for NS glue)
+#define LTNFLAG_DELEG 0x1
+// For nodes at or below DELEG points which contain addresses, this
+//  is set when the glue is used, and later checked for "glue unused"
+//  warnings.  Also re-used in the same manner for out-of-zone glue,
+//  which is stored under a special child node of the zone root.
+#define LTNFLAG_GUSED 0x2
 
 struct _ltree_node_struct {
     uint32_t flags;
@@ -327,7 +329,7 @@ struct _ltree_node_struct {
     uint32_t child_hash_mask;
     const uint8_t* label;
     ltree_node_t* next;         // next node in this child_table hash slot
-    ltree_node_t* * child_table; // The table of children.
+    ltree_node_t** child_table; // The table of children.
     ltree_rrset_t* rrsets;     // The list of rrsets
 };
 
@@ -379,22 +381,24 @@ typedef enum {
 // this hash wrapper is for labels encoded as one length-byte followed
 //  by N characters.  Thus the label "www" is "\003www" (4 bytes)
 F_UNUSED F_PURE F_WUNUSED F_NONNULL F_UNUSED
-static uint32_t ltree_hash(const uint8_t* input, const uint32_t hash_mask) {
-   const unsigned len = *input++;
-   return gdnsd_lookup2(input, len) & hash_mask;
+static uint32_t ltree_hash(const uint8_t* input, const uint32_t hash_mask)
+{
+    const unsigned len = *input++;
+    return gdnsd_lookup2(input, len) & hash_mask;
 }
 
 // "lstack" must be allocated to 127 pointers
 // "dname" must be valid
 // retval is label count (not including zero-width root label)
 F_UNUSED F_WUNUSED F_NONNULL
-static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack) {
+static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack)
+{
     gdnsd_assert(dname_status(dname) == DNAME_VALID);
 
     dname++; // skip overall len byte
     unsigned lcount = 0;
     unsigned llen; // current label len
-    while((llen = *dname)) {
+    while ((llen = *dname)) {
         gdnsd_assert(lcount < 127);
         lstack[lcount++] = dname++;
         dname += llen;

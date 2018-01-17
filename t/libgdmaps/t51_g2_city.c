@@ -23,6 +23,7 @@
 #include "gdmaps_test.h"
 #include <tap.h>
 
+// *INDENT-OFF*
 static const char cfg[] = QUOTE(
    my_prod_map => {
     geoip2_db => GeoLite2-City-20141008.mmdb,
@@ -33,16 +34,18 @@ static const char cfg[] = QUOTE(
     }
    }
 );
+// *INDENT-ON*
 
 gdmaps_t* gdmaps = NULL;
 
-int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+int main(int argc V_UNUSED, char* argv[] V_UNUSED)
+{
     gdmaps_test_init(getenv("TEST_CFDIR"));
 #ifndef HAVE_GEOIP2
     plan_skip_all("No GeoIP2 support");
     exit(exit_status());
 #endif
-    if(!gdmaps_test_db_exists("GeoLite2-City-20141008.mmdb")) {
+    if (!gdmaps_test_db_exists("GeoLite2-City-20141008.mmdb")) {
         plan_skip_all("Missing database");
         exit(exit_status());
     }

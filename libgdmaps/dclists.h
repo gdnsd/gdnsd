@@ -31,9 +31,9 @@
 typedef struct _dclists dclists_t;
 
 typedef enum {
-   KILL_NO_LISTS,
-   KILL_ALL_LISTS,
-   KILL_NEW_LISTS
+    KILL_NO_LISTS,
+    KILL_ALL_LISTS,
+    KILL_NEW_LISTS
 } dclists_destroy_depth_t;
 
 // At the nlist/ntree layer, a uint32_t node reference has the high bit set

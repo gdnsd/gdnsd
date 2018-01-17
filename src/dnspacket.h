@@ -32,45 +32,45 @@
 
 // dnspacket-layer statistics, per-thread
 typedef struct {
-  bool is_udp;
+    bool is_udp;
 
-  // Per-protocol stats
-  union {
-    struct { // UDP stats
-      stats_t recvfail;
-      stats_t sendfail;
-      stats_t tc;
-      stats_t edns_big;
-      stats_t edns_tc;
-    } udp;
-    struct { // TCP stats
-      stats_t recvfail;
-      stats_t sendfail;
-    } tcp;
-  };
+    // Per-protocol stats
+    union {
+        struct { // UDP stats
+            stats_t recvfail;
+            stats_t sendfail;
+            stats_t tc;
+            stats_t edns_big;
+            stats_t edns_tc;
+        } udp;
+        struct { // TCP stats
+            stats_t recvfail;
+            stats_t sendfail;
+        } tcp;
+    };
 
-  // DNS layer stats, first 6 directly correspond to RCODEs
-  // All 7, summed, represent the total count
-  //  of requests received by the DNS layer.  Note that
-  //  some of the earlier UDP/TCP-specific failures never make it to
-  //  to the DNS layer.
-  stats_t noerror;
-  stats_t refused;
-  stats_t nxdomain;
-  stats_t notimp;
-  stats_t badvers;
-  stats_t formerr;
-  stats_t dropped; // no response sent at all, horribly badly formatted
+    // DNS layer stats, first 6 directly correspond to RCODEs
+    // All 7, summed, represent the total count
+    //  of requests received by the DNS layer.  Note that
+    //  some of the earlier UDP/TCP-specific failures never make it to
+    //  to the DNS layer.
+    stats_t noerror;
+    stats_t refused;
+    stats_t nxdomain;
+    stats_t notimp;
+    stats_t badvers;
+    stats_t formerr;
+    stats_t dropped; // no response sent at all, horribly badly formatted
 
-  // Count of requests over IPv6.  The only valid relation to other stats
-  // is that you could compare it to the 7-stat sum above for a percentage
-  stats_t v6;
+    // Count of requests over IPv6.  The only valid relation to other stats
+    // is that you could compare it to the 7-stat sum above for a percentage
+    stats_t v6;
 
-  // Again, could be counted as a percentage of the 7-stat sum above
-  stats_t edns;
+    // Again, could be counted as a percentage of the 7-stat sum above
+    stats_t edns;
 
-  // A percentage of "edns" above:
-  stats_t edns_clientsub;
+    // A percentage of "edns" above:
+    stats_t edns_clientsub;
 } dnspacket_stats_t;
 
 F_HOT F_NONNULL

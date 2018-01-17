@@ -117,7 +117,7 @@ void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope);
 
 /**** Typedefs for plugin callbacks ****/
 
-typedef unsigned (*gdnsd_apiv_cb_t)(void);
+typedef unsigned(*gdnsd_apiv_cb_t)(void);
 typedef void (*gdnsd_load_config_cb_t)(vscf_data_t* pc, const unsigned num_threads);
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_pre_run_cb_t)(void);
@@ -165,7 +165,7 @@ plugin_t* gdnsd_plugin_find(const char* plugin_name);
     do {\
         log_err(__VA_ARGS__);\
         return -1;\
-    } while(0)
+    } while (0)
 
 #pragma GCC visibility pop
 

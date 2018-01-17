@@ -39,37 +39,39 @@ static const char* response_text[NUM_RTYPES] = {
     "both"
 };
 
-void plugin_reflect_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED) {
+void plugin_reflect_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
+{
     gdnsd_dyn_addr_max(2, 2); // up to two (dns+edns) in any address family
 }
 
 // resource names (and numbers) are used by this plugin to choose
 //  one of four response types above, defaulting to "best".
-int plugin_reflect_map_res(const char* resname, const uint8_t* origin V_UNUSED) {
-    if(!resname)
+int plugin_reflect_map_res(const char* resname, const uint8_t* origin V_UNUSED)
+{
+    if (!resname)
         return RESPONSE_BEST;
 
-    for(unsigned i = 0; i < NUM_RTYPES; i++)
-        if(!strcasecmp(resname, response_text[i]))
+    for (unsigned i = 0; i < NUM_RTYPES; i++)
+        if (!strcasecmp(resname, response_text[i]))
             return (int)i;
 
     log_err("plugin_reflect: resource name '%s' invalid (must be one of 'dns', 'edns', 'best', 'both')", resname);
     return -1;
 }
 
-gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result) {
+gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result)
+{
     gdnsd_assert(resnum < NUM_RTYPES);
 
-    if(resnum == RESPONSE_BOTH || resnum == RESPONSE_DNS || (resnum == RESPONSE_BEST && !cinfo->edns_client_mask)) {
+    if (resnum == RESPONSE_BOTH || resnum == RESPONSE_DNS || (resnum == RESPONSE_BEST && !cinfo->edns_client_mask)) {
         gdnsd_result_add_anysin(result, &cinfo->dns_source);
         gdnsd_result_add_scope_mask(result, cinfo->edns_client_mask);
     }
 
-    if(cinfo->edns_client_mask && resnum != RESPONSE_DNS) {
+    if (cinfo->edns_client_mask && resnum != RESPONSE_DNS) {
         gdnsd_result_add_anysin(result, &cinfo->edns_client);
         gdnsd_result_add_scope_mask(result, cinfo->edns_client_mask);
-    }
-    else if(!cinfo->edns_client_mask && resnum == RESPONSE_EDNS) {
+    } else if (!cinfo->edns_client_mask && resnum == RESPONSE_EDNS) {
         gdnsd_anysin_t tmpsin;
         gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
         gdnsd_result_add_anysin(result, &tmpsin);

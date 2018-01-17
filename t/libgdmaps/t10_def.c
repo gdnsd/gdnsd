@@ -23,6 +23,7 @@
 #include "gdmaps_test.h"
 #include <tap.h>
 
+// *INDENT-OFF*
 static const char cfg[] = QUOTE(
    // somewhat-pointless defaulting
    my_prod_map => {
@@ -30,12 +31,14 @@ static const char cfg[] = QUOTE(
     datacenters => [ us, ie, sg, tr, br ]
    }
 );
+// *INDENT-ON*
 
 gdmaps_t* gdmaps = NULL;
 
-int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+int main(int argc V_UNUSED, char* argv[] V_UNUSED)
+{
     gdmaps_test_init(getenv("TEST_CFDIR"));
-    if(!gdmaps_test_db_exists("GeoLiteCity-20111210.dat")) {
+    if (!gdmaps_test_db_exists("GeoLiteCity-20111210.dat")) {
         plan_skip_all("Missing database");
         exit(exit_status());
     }

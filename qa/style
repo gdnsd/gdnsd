@@ -1,0 +1,2 @@
+#!/bin/sh
+git grep -z --full-name -l '.' '*.[ch]' '*.rl' '*.inc'|grep -zv '^t/libtap'|xargs -0 astyle -q -n --options=.astylerc

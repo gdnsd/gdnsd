@@ -53,43 +53,46 @@ struct _fips_t {
 
 // keys are a uint32_t made of 4 bytes: CCRR (Country/Region)
 F_CONST
-static unsigned fips_hash(uint32_t key) {
-   gdnsd_assert(key);
-   return gdnsd_lookup2((const uint8_t*)&key, 4) & FIPS_HASH_MASK;
+static unsigned fips_hash(uint32_t key)
+{
+    gdnsd_assert(key);
+    return gdnsd_lookup2((const uint8_t*)&key, 4) & FIPS_HASH_MASK;
 }
 
 // It is assumed there are no duplicates in the input data.
 F_NONNULL
-static void fips_hash_add(fips_t* fips, const uint32_t key, const char* val) {
+static void fips_hash_add(fips_t* fips, const uint32_t key, const char* val)
+{
     unsigned jmpby = 1;
     unsigned slotnum = fips_hash(key);
-    while(fips->table[slotnum].key)
+    while (fips->table[slotnum].key)
         slotnum = (slotnum + jmpby++) & FIPS_HASH_MASK;
     fips->table[slotnum].key = key;
     fips->table[slotnum].val = strdup(val);
 }
 
 F_NONNULL
-static void fips_parse(fips_t* fips, FILE* file) {
+static void fips_parse(fips_t* fips, FILE* file)
+{
     unsigned line = 0;
-    while(1) {
+    while (1) {
         char ccrr[5];
         char rname[81];
 
         line++;
         const int fsf_rv = fscanf(file, "%2[A-Z0-9],%2[A-Z0-9],\"%80[^\"\n]\"\n",
-            ccrr, ccrr + 2, rname);
+                                  ccrr, ccrr + 2, rname);
 
-        if(fsf_rv != 3) {
-            if(fsf_rv != EOF)
+        if (fsf_rv != 3) {
+            if (fsf_rv != EOF)
                 log_fatal("plugin_geoip: parse error in FIPS region name data, line %u", line);
             return;
         }
 
         uint32_t key = ((unsigned)ccrr[0])
-            + ((unsigned)ccrr[1] << 8U)
-            + ((unsigned)ccrr[2] << 16U)
-            + ((unsigned)ccrr[3] << 24U);
+                       + ((unsigned)ccrr[1] << 8U)
+                       + ((unsigned)ccrr[2] << 16U)
+                       + ((unsigned)ccrr[3] << 24U);
 
         fips_hash_add(fips, key, rname);
     }
@@ -97,13 +100,14 @@ static void fips_parse(fips_t* fips, FILE* file) {
 
 /**** public interface ****/
 
-const char* fips_lookup(const fips_t* fips, const uint32_t key) {
+const char* fips_lookup(const fips_t* fips, const uint32_t key)
+{
     gdnsd_assert(key);
 
     unsigned jmpby = 1;
     unsigned slotnum = fips_hash(key);
-    while(fips->table[slotnum].key) {
-        if(fips->table[slotnum].key == key)
+    while (fips->table[slotnum].key) {
+        if (fips->table[slotnum].key == key)
             return fips->table[slotnum].val;
         slotnum = (slotnum + jmpby++) & FIPS_HASH_MASK;
     }
@@ -111,13 +115,14 @@ const char* fips_lookup(const fips_t* fips, const uint32_t key) {
     return NULL;
 }
 
-fips_t* fips_init(const char* pathname) {
+fips_t* fips_init(const char* pathname)
+{
     FILE* file = fopen(pathname, "re");
-    if(!file)
+    if (!file)
         log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", pathname, logf_errno());
     fips_t* fips = xcalloc(1, sizeof(fips_t));
     fips_parse(fips, file);
-    if(fclose(file))
+    if (fclose(file))
         log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", pathname, logf_errno());
     return fips;
 }

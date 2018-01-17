@@ -23,6 +23,7 @@
 #include "gdmaps_test.h"
 #include <tap.h>
 
+// *INDENT-OFF*
 static const char cfg[] = QUOTE(
    my_prod_map => {
     geoip_db => GeoIPv6-20111210.dat,
@@ -35,19 +36,21 @@ static const char cfg[] = QUOTE(
      192.0.2.128/25 => [ dc02 ],
      10.0.10.0/24 => dc01,
      10.0.0.0/8 => dc02,
-     2222:1111::/32 => dc01,
+     "2222:1111::/32" => dc01, // quotes to avoid confusing astyle
      2222::/16 => dc02,
      // this cuts into the middle of a known 'US' chunk in the GeoIPv6 data
-     2600:3c02::/32 => dc02,
+     "2600:3c02::/32" => dc02, // quotes to avoid confusing astyle
     }
    }
 );
+// *INDENT-ON*
 
 gdmaps_t* gdmaps = NULL;
 
-int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+int main(int argc V_UNUSED, char* argv[] V_UNUSED)
+{
     gdmaps_test_init(getenv("TEST_CFDIR"));
-    if(!gdmaps_test_db_exists("GeoIPv6-20111210.dat")) {
+    if (!gdmaps_test_db_exists("GeoIPv6-20111210.dat")) {
         plan_skip_all("Missing database");
         exit(exit_status());
     }

@@ -37,17 +37,20 @@ typedef union {
 } csbuf_t;
 
 F_UNUSED F_CONST
-static uint32_t csbuf_make_v(uint8_t v0, uint8_t v1, uint8_t v2) {
+static uint32_t csbuf_make_v(uint8_t v0, uint8_t v1, uint8_t v2)
+{
     return (uint32_t) v0 << 16 | (uint32_t) v1 << 8 | (uint32_t) v2;
 }
 
 F_UNUSED
-static uint32_t csbuf_get_v(const csbuf_t* c) {
+static uint32_t csbuf_get_v(const csbuf_t* c)
+{
     return csbuf_make_v(c->v0, c->v1, c->v2);
 }
 
 F_UNUSED
-static void csbuf_set_v(csbuf_t* c, const uint32_t v) {
+static void csbuf_set_v(csbuf_t* c, const uint32_t v)
+{
     gdnsd_assert(!(v & 0xFF000000));
     c->v0 = v >> 16;
     c->v1 = v >> 8;

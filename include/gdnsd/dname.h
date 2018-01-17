@@ -209,14 +209,16 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
 //  and thus harmless on names which are already DNAME_VALID.  Invalid input
 //  could cause crashes.
 F_NONNULL F_UNUSED
-static void gdnsd_dname_terminate(uint8_t* dname) {
+static void gdnsd_dname_terminate(uint8_t* dname)
+{
     gdnsd_assert(*dname);
     dname[*dname] = 0;
 }
 
 // Return a hash for a dname, may crash on invalid input!
 F_PURE F_NONNULL F_UNUSED
-static unsigned gdnsd_dname_hash(const uint8_t *input) {
+static unsigned gdnsd_dname_hash(const uint8_t* input)
+{
     const uint32_t len = *input++ - 1U;
     return gdnsd_lookup2(input, len);
 }
@@ -226,7 +228,8 @@ static unsigned gdnsd_dname_hash(const uint8_t *input) {
 //  between the partial and fully-qualfied cases.  If the input is invalid,
 //  it could crash.
 F_NONNULL F_UNUSED
-static bool gdnsd_dname_is_partial(const uint8_t* dname) {
+static bool gdnsd_dname_is_partial(const uint8_t* dname)
+{
     gdnsd_assert(*dname);
     return dname[*dname] == 255;
 }
@@ -235,7 +238,8 @@ static bool gdnsd_dname_is_partial(const uint8_t* dname) {
 //  originally allocated with xmalloc() or equivalent.  Note that after trimming
 //  you cannot perform operations like dname_cat() on this directly.
 F_WUNUSED F_NONNULL F_UNUSED
-static uint8_t* gdnsd_dname_trim(uint8_t* dname) {
+static uint8_t* gdnsd_dname_trim(uint8_t* dname)
+{
     gdnsd_assert(*dname);
     return xrealloc(dname, *dname + 1U);
 }
@@ -243,9 +247,11 @@ static uint8_t* gdnsd_dname_trim(uint8_t* dname) {
 // Copy "source" dname to the storage at dest, which must be allocated
 //  large enough (256 max).
 F_NONNULL F_UNUSED
-static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
+static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source)
+{
     const unsigned len = *source;
-    gdnsd_assert(len); gdnsd_assert(len < 256U);
+    gdnsd_assert(len);
+    gdnsd_assert(len < 256U);
     memcpy(dest, source, len + 1U);
 }
 
@@ -253,7 +259,8 @@ static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source) {
 // The second argument "exact" determines whether the new copy will be allocated
 //  to 256 bytes or to the exact amount necessary to hold the data.
 F_WUNUSED F_NONNULL F_UNUSED
-static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact) {
+static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact)
+{
     gdnsd_assert(*dname);
     uint8_t* out = xmalloc(exact ? (*dname + 1U) : 256U);
     gdnsd_dname_copy(out, dname);
@@ -269,24 +276,26 @@ static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact) {
 // Equality (0) will only be returned on a complete match,
 //  including the difference between VALID and PARTIAL.
 F_NONNULL F_PURE F_UNUSED
-static int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2) {
+static int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2)
+{
     gdnsd_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
     gdnsd_assert(gdnsd_dname_status(dn2) != DNAME_INVALID);
     const uint8_t len1 = *dn1++;
     const uint8_t len2 = *dn2++;
     int rv = len1 - len2;
-    if(!rv)
+    if (!rv)
         rv = memcmp(dn1, dn2, len1);
     return rv;
 }
 
 // As above but for labels (no dname_status() assertion)
 F_NONNULL F_PURE F_UNUSED
-static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2) {
+static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2)
+{
     const uint8_t len1 = *label1++;
     const uint8_t len2 = *label2++;
     int rv = len1 - len2;
-    if(!rv)
+    if (!rv)
         rv = memcmp(label1, label2, len1);
     return rv;
 }
@@ -295,7 +304,8 @@ static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2) {
 // returns true if they are identical
 // dname and zone must be DNAME_VALID (fully-qualified).
 F_NONNULL F_PURE F_UNUSED
-static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
+static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child)
+{
     gdnsd_assert(gdnsd_dname_status(parent) == DNAME_VALID);
     gdnsd_assert(gdnsd_dname_status(child) == DNAME_VALID);
 
@@ -305,11 +315,11 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
     gdnsd_assert(plen); // implied by DNAME_VALID check above
     gdnsd_assert(clen); // implied by DNAME_VALID check above
 
-    if(plen <= clen) { // if child shorter than parent, cannot be isinzone
+    if (plen <= clen) { // if child shorter than parent, cannot be isinzone
         // child_pstart is the hypothetical location of
         //   the trailing "parent" in "child" if isinzone
         const uint8_t* child_pstart = child + (clen - plen);
-        if(!memcmp(child_pstart, parent, plen)) { // basic trailing ~match
+        if (!memcmp(child_pstart, parent, plen)) { // basic trailing ~match
             // There are corner cases that can fool the quick memcmp check
             //   into a false positive.  Basically, picture www.xfoo.com vs
             //   foo.com, where 'x' happens to be the integer value 3 (the
@@ -318,8 +328,8 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
             //   in the ASCII range for numerals, so we must iterate
             //   child's actual labels and make sure that one of them falls
             //   exactly on child_pstart.
-            while(*child) { // not reached the terminal \0
-                if(child == child_pstart) { // definite match
+            while (*child) { // not reached the terminal \0
+                if (child == child_pstart) { // definite match
                     rv = true;
                     break;
                 }
@@ -329,7 +339,7 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
             }
             // the above misses the case of both parent and child being the
             //   root zone of the DNS, and this catches it.
-            if(plen == 1)
+            if (plen == 1)
                 rv = true;
         }
     }
@@ -344,7 +354,8 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child) {
 //   during zonefile scanning, since insertion is rooted at the top of the
 //   zone.
 F_NONNULL F_UNUSED
-static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot) {
+static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot)
+{
     gdnsd_assert(gdnsd_dname_status(dname) == DNAME_VALID);
     gdnsd_assert(gdnsd_dname_status(zroot) == DNAME_VALID);
     gdnsd_assert((*dname) >= (*zroot));
@@ -357,9 +368,10 @@ static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot) {
 // Returns true if dname is a wildcard name (first label is a lone "*").
 // Argument must be DNAME_VALID or DNAME_PARTIAL
 F_NONNULL F_PURE F_UNUSED
-static bool gdnsd_dname_iswild(const uint8_t* dname) {
+static bool gdnsd_dname_iswild(const uint8_t* dname)
+{
     gdnsd_assert(gdnsd_dname_status(dname) != DNAME_INVALID);
-    if(dname[1] == 1 && dname[2] == '*')
+    if (dname[1] == 1 && dname[2] == '*')
         return true;
     return false;
 }

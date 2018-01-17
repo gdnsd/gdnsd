@@ -29,13 +29,12 @@
 #include <stdbool.h>
 
 struct dyn_result {
-    unsigned edns_scope_mask; // inits to zero
-                              //   should remain zero for global results
-                              //   should be set to cinfo->edns_client_mask if result depends only on cinfo->dns_source
-                              //   if result uses cinfo->edns_source, set as appropriate...
-    bool     is_cname;        // storage contains a CNAME in dname format, assert count_v[46] == 0
-    unsigned count_v4;        // count of IPv4 in v4[], assert !is_cname
-    unsigned count_v6;        // count of IPv6 starting at &storage[v6_offset], assert !is_cname
+    // edns_scope_mask inits to zero,  should remain zero for global results,
+    // and should be set to cinfo->edns_client_mask if result depends only on cinfo->dns_source
+    unsigned edns_scope_mask;
+    bool     is_cname; // storage contains a CNAME in dname format, assert count_v[46] == 0
+    unsigned count_v4; // count of IPv4 in v4[], assert !is_cname
+    unsigned count_v6; // count of IPv6 starting at &storage[v6_offset], assert !is_cname
     union {
         uint32_t v4[0];
         uint8_t  storage[0];

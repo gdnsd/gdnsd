@@ -37,8 +37,7 @@
 // We initially reserve room in the ltarena object to track
 //   8 pools, which expands by doubling to support far more
 //   pools than needed by even the largest zones in existence.
-#define POOL_SIZE 512U // *must* be >= (256 + (red_size*2)),
-                       //    && multiple of 4
+#define POOL_SIZE 512U // *must* be >= (256 + (red_size*2)) && multiple of 4
 #define INIT_POOLS_ALLOC 4U // *must* be 2^n && > 0
 
 // Normally, our pools are initialized to all-zeros for us
@@ -66,7 +65,8 @@ typedef struct {
 } dnhash_t;
 
 F_MALLOC
-static dnhash_t* dnhash_new(void) {
+static dnhash_t* dnhash_new(void)
+{
     gdnsd_assert(INIT_DNHASH_MASK);
     gdnsd_assert(!((INIT_DNHASH_MASK + 1U) & INIT_DNHASH_MASK)); // 2^n-1
 
@@ -78,7 +78,8 @@ static dnhash_t* dnhash_new(void) {
 }
 
 F_NONNULL
-static void dnhash_destroy(dnhash_t* dnhash) {
+static void dnhash_destroy(dnhash_t* dnhash)
+{
     gdnsd_assert(dnhash->table);
     gdnsd_assert(dnhash->mask);
     free(dnhash->table);
@@ -87,21 +88,23 @@ static void dnhash_destroy(dnhash_t* dnhash) {
 
 // grow a dnhash_t's hashtable size by doubling
 F_NONNULL
-static void dnhash_grow(dnhash_t* dnhash) {
+static void dnhash_grow(dnhash_t* dnhash)
+{
     gdnsd_assert(dnhash->count);
     // assert that dnhash->mask is still 2^n-1 and >0
-    gdnsd_assert(dnhash->mask); gdnsd_assert(!((dnhash->mask + 1U) & dnhash->mask));
+    gdnsd_assert(dnhash->mask);
+    gdnsd_assert(!((dnhash->mask + 1U) & dnhash->mask));
 
     const uint8_t** old_table = dnhash->table;
     const unsigned old_mask = dnhash->mask;
     const unsigned new_mask = (old_mask << 1U) | 1U;
     const uint8_t** new_table = xcalloc(new_mask + 1U, sizeof(uint8_t*));
-    for(unsigned i = 0; i <= old_mask; i++) {
+    for (unsigned i = 0; i <= old_mask; i++) {
         const uint8_t* item = old_table[i];
-        if(item) {
+        if (item) {
             unsigned jmpby = 1U;
             unsigned new_slot = dname_hash(item) & new_mask;
-            while(new_table[new_slot]) {
+            while (new_table[new_slot]) {
                 new_slot += jmpby++;
                 new_slot &= new_mask;
             }
@@ -122,19 +125,19 @@ struct _ltarena {
     dnhash_t* dnhash;
 };
 
-static void* make_pool(void) {
+static void* make_pool(void)
+{
     gdnsd_assert(!(POOL_SIZE & 3U)); // multiple of four
 
     void* p;
-    if(RED_SIZE) {
+    if (RED_SIZE) {
         // malloc + fill in deadbeef if using redzones
         p = xmalloc(POOL_SIZE);
         uint32_t* p32 = p;
         unsigned idx = POOL_SIZE >> 2U;
-        while(idx--)
+        while (idx--)
             p32[idx] = 0xDEADBEEF;
-    }
-    else {
+    } else {
         // get mem from calloc
         p = xcalloc(1, POOL_SIZE);
     }
@@ -147,7 +150,8 @@ static void* make_pool(void) {
     return p;
 }
 
-ltarena_t* lta_new(void) {
+ltarena_t* lta_new(void)
+{
     ltarena_t* rv = xcalloc(1, sizeof(ltarena_t));
     rv->palloc = INIT_POOLS_ALLOC;
     rv->pools = xmalloc(INIT_POOLS_ALLOC * sizeof(uint8_t*));
@@ -156,18 +160,20 @@ ltarena_t* lta_new(void) {
     return rv;
 }
 
-void lta_close(ltarena_t* lta) {
-    if(lta->dnhash) {
+void lta_close(ltarena_t* lta)
+{
+    if (lta->dnhash) {
         dnhash_destroy(lta->dnhash);
         lta->dnhash = NULL;
         lta->pools = xrealloc(lta->pools, (lta->pool + 1) * sizeof(uint8_t*));
     }
 }
 
-void lta_destroy(ltarena_t* lta) {
+void lta_destroy(ltarena_t* lta)
+{
     lta_close(lta);
     unsigned whichp = lta->pool + 1U;
-    while(whichp--) {
+    while (whichp--) {
         VALGRIND_DESTROY_MEMPOOL(lta->pools[whichp]);
         free(lta->pools[whichp]);
     }
@@ -176,7 +182,8 @@ void lta_destroy(ltarena_t* lta) {
 }
 
 F_MALLOC F_NONNULL
-static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
+static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size)
+{
     gdnsd_assert(size);
     gdnsd_assert(lta->dnhash); // not closed
 
@@ -196,8 +203,8 @@ static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
 
     // handle pool switch if we're out of room
     //   + take care to extend the pools array if necc.
-    if(unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
-        if(unlikely(++lta->pool == lta->palloc)) {
+    if (unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
+        if (unlikely(++lta->pool == lta->palloc)) {
             lta->palloc <<= 1U;
             lta->pools = xrealloc(lta->pools, lta->palloc * sizeof(uint8_t*));
         }
@@ -211,13 +218,14 @@ static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size) {
 
     // mark the allocation for valgrind and zero it if doing redzone stuff
     VALGRIND_MEMPOOL_ALLOC(lta->pools[lta->pool], rval, size);
-    if(RED_SIZE)
+    if (RED_SIZE)
         memset(rval, 0, size);
 
     return rval;
 }
 
-uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label) {
+uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label)
+{
     const unsigned sz = *label + 1U;
     uint8_t* rv = lta_malloc(lta, sz);
     memcpy(rv, label, sz);
@@ -226,7 +234,8 @@ uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label) {
 
 // this mixes internal access to dnhash_t as well, so it's not
 //   properly a just method of ltarena_t in that sense.
-const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
+const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname)
+{
     dnhash_t* dnhash = lta->dnhash;
     gdnsd_assert(dnhash); // not closed
 
@@ -234,8 +243,8 @@ const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
     const uint8_t** table = dnhash->table;
     uint32_t jmpby = 1U;
     uint32_t slotnum = dname_hash(dname) & hmask;
-    while(table[slotnum]) {
-        if(!gdnsd_dname_cmp(dname, table[slotnum]))
+    while (table[slotnum]) {
+        if (!gdnsd_dname_cmp(dname, table[slotnum]))
             return table[slotnum];
         slotnum += jmpby++;
         slotnum &= hmask;
@@ -246,7 +255,7 @@ const uint8_t* lta_dnamedup(ltarena_t* lta, const uint8_t* dname) {
     table[slotnum] = retval;
     memcpy(retval, dname, dnlen);
 
-    if(++dnhash->count > (dnhash->mask >> 1U))
+    if (++dnhash->count > (dnhash->mask >> 1U))
         dnhash_grow(dnhash);
 
     return retval;

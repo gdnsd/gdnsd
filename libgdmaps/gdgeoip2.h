@@ -30,7 +30,7 @@
 
 void gdgeoip2_init(void);
 
-F_NONNULLX(1,2,3)
+F_NONNULLX(1, 2, 3)
 nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode, const bool city_no_region);
 
 #endif // GDGEOIP2_H

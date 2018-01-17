@@ -1,0 +1,8 @@
+#!/bin/sh
+OUTLIST=`git grep -z --full-name -l '.' '*.[ch]' '*.rl' '*.inc'|grep -zv '^t/libtap'|xargs -0 astyle --dry-run -Q -n --options=.astylerc`
+if [ "${OUTLIST}x" != "x" ]; then
+    echo "${OUTLIST}"
+    exit 1
+else
+    exit 0
+fi

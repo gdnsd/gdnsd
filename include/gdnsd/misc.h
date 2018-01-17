@@ -55,7 +55,7 @@ void gdnsd_register_child_pid(pid_t child);
 // retval is the new string
 // if s2_offs is not NULL, *s2_offs will be set
 //   to the offset of the copy of s2 within the retval.
-F_MALLOC F_NONNULLX(1,2)
+F_MALLOC F_NONNULLX(1, 2)
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
 
 // allocate a new string and concatenate all "count" strings
@@ -82,17 +82,19 @@ unsigned gdnsd_uscale_ceil(unsigned v, double s);
 
 // downcase an array of bytes of known length
 F_NONNULL F_UNUSED
-static void gdnsd_downcase_bytes(char* bytes, unsigned len) {
-    for(unsigned i = 0; i < len; i++)
-        if(unlikely((bytes[i] < 0x5B) && (bytes[i] > 0x40)))
+static void gdnsd_downcase_bytes(char* bytes, unsigned len)
+{
+    for (unsigned i = 0; i < len; i++)
+        if (unlikely((bytes[i] < 0x5B) && (bytes[i] > 0x40)))
             bytes[i] |= 0x20;
 }
 
 // downcase an asciiz string
 F_NONNULL F_UNUSED
-static void gdnsd_downcase_str(char* str) {
-    while(*str) {
-        if(unlikely((*str < 0x5B) && (*str > 0x40)))
+static void gdnsd_downcase_str(char* str)
+{
+    while (*str) {
+        if (unlikely((*str < 0x5B) && (*str > 0x40)))
             *str |= 0x20;
         str++;
     }
@@ -136,7 +138,8 @@ static void gdnsd_downcase_str(char* str) {
 
 // This is JLKISS64
 F_NONNULL F_UNUSED
-static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs) {
+static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs)
+{
     rs->x = 1490024343005336237ULL * rs->x + 123456789;
 
     uint64_t y = rs->y;
@@ -158,7 +161,8 @@ static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs) {
 
 // This is JKISS32
 F_NONNULL F_UNUSED
-static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
+static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs)
+{
     uint32_t y = rs->y;
     y ^= y << 5;
     y ^= y >> 7;
@@ -185,7 +189,7 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
 //   which is in the public domain.
 // It's just been reformatted/styled to match my code.
 
-#define mix(a,b,c) { \
+#define mix(a, b, c) { \
     a -= b; a -= c; a ^= (c>>13); \
     b -= c; b -= a; b ^= (a<<8);  \
     c -= a; c -= b; c ^= (b>>13); \
@@ -198,7 +202,8 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs) {
 }
 
 F_PURE F_UNUSED F_WUNUSED
-static uint32_t gdnsd_lookup2(const uint8_t *k, uint32_t len) {
+static uint32_t gdnsd_lookup2(const uint8_t* k, uint32_t len)
+{
     gdnsd_assert(k || !len);
 
     const uint32_t orig_len = len;
@@ -207,38 +212,51 @@ static uint32_t gdnsd_lookup2(const uint8_t *k, uint32_t len) {
     uint32_t b = 0x9e3779b9;
     uint32_t c = 0xdeadbeef;
 
-    while(len >= 12) {
-        a += (k[0] + ((uint32_t)k[1]  << 8)
-                   + ((uint32_t)k[2]  << 16)
-                   + ((uint32_t)k[3]  << 24));
-        b += (k[4] + ((uint32_t)k[5]  << 8)
-                   + ((uint32_t)k[6]  << 16)
-                   + ((uint32_t)k[7]  << 24));
-        c += (k[8] + ((uint32_t)k[9]  << 8)
-                   + ((uint32_t)k[10] << 16)
-                   + ((uint32_t)k[11] << 24));
-        mix(a,b,c);
-        k += 12; len -= 12;
+    while (len >= 12) {
+        a += (k[0] + ((uint32_t)k[1] << 8)
+              + ((uint32_t)k[2] << 16)
+              + ((uint32_t)k[3] << 24));
+        b += (k[4] + ((uint32_t)k[5] << 8)
+              + ((uint32_t)k[6] << 16)
+              + ((uint32_t)k[7] << 24));
+        c += (k[8] + ((uint32_t)k[9] << 8)
+              + ((uint32_t)k[10] << 16)
+              + ((uint32_t)k[11] << 24));
+        mix(a, b, c);
+        k += 12;
+        len -= 12;
     }
 
     c += orig_len;
 
-    switch(len) {
-        case 11: c += ((uint32_t)k[10] << 24);
-        case 10: c += ((uint32_t)k[9]  << 16);
-        case 9 : c += ((uint32_t)k[8]  << 8);
-        case 8 : b += ((uint32_t)k[7]  << 24);
-        case 7 : b += ((uint32_t)k[6]  << 16);
-        case 6 : b += ((uint32_t)k[5]  << 8);
-        case 5 : b += k[4];
-        case 4 : a += ((uint32_t)k[3]  << 24);
-        case 3 : a += ((uint32_t)k[2]  << 16);
-        case 2 : a += ((uint32_t)k[1]  << 8);
-        case 1 : a += k[0];
-        default: break;
+    switch (len) {
+    case 11:
+        c += ((uint32_t)k[10] << 24);
+    case 10:
+        c += ((uint32_t)k[9] << 16);
+    case 9:
+        c += ((uint32_t)k[8] << 8);
+    case 8:
+        b += ((uint32_t)k[7] << 24);
+    case 7:
+        b += ((uint32_t)k[6] << 16);
+    case 6:
+        b += ((uint32_t)k[5] << 8);
+    case 5:
+        b += k[4];
+    case 4:
+        a += ((uint32_t)k[3] << 24);
+    case 3:
+        a += ((uint32_t)k[2] << 16);
+    case 2:
+        a += ((uint32_t)k[1] << 8);
+    case 1:
+        a += k[0];
+    default:
+        break;
     }
 
-    mix(a,b,c);
+    mix(a, b, c);
     return c;
 }
 

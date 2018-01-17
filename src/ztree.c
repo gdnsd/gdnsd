@@ -49,30 +49,32 @@ static ztree_t* ztree_root = NULL;
 
 /****** zone_t code ********/
 
-void zone_delete(zone_t* zone) {
-    if(zone->root)
+void zone_delete(zone_t* zone)
+{
+    if (zone->root)
         ltree_destroy(zone->root);
     lta_destroy(zone->arena);
     free(zone->src);
     free(zone);
 }
 
-zone_t* zone_new(const char* zname, const char* source) {
+zone_t* zone_new(const char* zname, const char* source)
+{
     // Convert to terminated-dname format and check for problems
     uint8_t dname[256];
     dname_status_t status = dname_from_string(dname, zname, strlen(zname));
 
-    if(status == DNAME_INVALID) {
+    if (status == DNAME_INVALID) {
         log_err("Zone name '%s' is illegal", zname);
         return NULL;
     }
 
-    if(dname_iswild(dname)) {
+    if (dname_iswild(dname)) {
         log_err("Zone '%s': Wildcard zone names not allowed", logf_dname(dname));
         return NULL;
     }
 
-    if(status == DNAME_PARTIAL)
+    if (status == DNAME_PARTIAL)
         dname_terminate(dname);
 
     zone_t* z = xcalloc(1, sizeof(zone_t));
@@ -85,7 +87,8 @@ zone_t* zone_new(const char* zname, const char* source) {
     return z;
 }
 
-bool zone_finalize(zone_t* zone) {
+bool zone_finalize(zone_t* zone)
+{
     lta_close(zone->arena);
     return ltree_postproc_zone(zone);
 }
@@ -93,16 +96,17 @@ bool zone_finalize(zone_t* zone) {
 /******* ztree code *********/
 
 F_NONNULL
-static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label) {
+static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label)
+{
     ztree_t* rv = NULL;
     ztchildren_t* children = node->children;
-    if(children) {
+    if (children) {
         gdnsd_assert(children->alloc);
         const unsigned child_mask = children->alloc - 1;
         unsigned jmpby = 1;
         unsigned slot = ltree_hash(label, child_mask);
-        while((rv = children->store[slot])
-          && gdnsd_label_cmp(label, rv->label)) {
+        while ((rv = children->store[slot])
+                && gdnsd_label_cmp(label, rv->label)) {
             slot += jmpby++;
             slot &= child_mask;
         }
@@ -115,18 +119,19 @@ static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label)
 //   logically contains this dname, IFF one exists, for runtime
 //   lookup purposes
 // PRCU: executing thread must be registered, online and have reader-lock
-zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
+zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out)
+{
     zone_t* rv = NULL;
 
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(dname, lstack);
     ztree_t* current = gdnsd_prcu_rdr_deref(ztree_root);
-    while(current && !(rv = current->zone) && lcount)
+    while (current && !(rv = current->zone) && lcount)
         current = ztree_node_find_child(current, lstack[--lcount]);
 
-    if(rv) {
+    if (rv) {
         unsigned auth_depth = lcount;
-        while(lcount--)
+        while (lcount--)
             auth_depth += lstack[lcount][0];
         *auth_depth_out = auth_depth;
     }
@@ -137,28 +142,28 @@ zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out) {
 // Doubles the size of the childtable in a ztree node,
 //   or initializes to 16 slots.
 F_NONNULL
-static void ztree_node_check_grow(ztree_t* node) {
+static void ztree_node_check_grow(ztree_t* node)
+{
     ztchildren_t* old_children = node->children;
-    if(!old_children) {
+    if (!old_children) {
         ztchildren_t* children = xcalloc(1, sizeof(ztchildren_t));
         children->store = xcalloc(16, sizeof(ztree_t*));
         children->alloc = 16;
         node->children = children;
-    }
-    // max load is 25%
-    else if(old_children->count >= (old_children->alloc >> 2)) {
+    } else if (old_children->count >= (old_children->alloc >> 2)) {
+        // max load is 25%
         const unsigned new_alloc = old_children->alloc << 1; // double
         const unsigned new_hash_mask = new_alloc - 1;
         ztchildren_t* new_children = xcalloc(1, sizeof(ztchildren_t));
         new_children->store = xcalloc(new_alloc, sizeof(ztree_t*));
         new_children->alloc = new_alloc;
-        for(unsigned i = 0; i < old_children->alloc; i++) {
+        for (unsigned i = 0; i < old_children->alloc; i++) {
             ztree_t* entry = old_children->store[i];
-            if(entry) {
+            if (entry) {
                 new_children->count++;
                 unsigned jmpby = 1;
                 unsigned slot = ltree_hash(entry->label, new_hash_mask);
-                while(new_children->store[slot]) {
+                while (new_children->store[slot]) {
                     slot += jmpby++;
                     slot &= new_hash_mask;
                 }
@@ -174,7 +179,8 @@ static void ztree_node_check_grow(ztree_t* node) {
 // search the children of one node for a given label, creating a new
 //  child node if it doesn't exist.
 F_NONNULL
-static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label) {
+static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label)
+{
     ztree_node_check_grow(node);
     ztchildren_t* children = node->children;
     gdnsd_assert(children);
@@ -184,15 +190,15 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
     const unsigned child_mask = children->alloc - 1;
     unsigned jmpby = 1;
     unsigned slot = ltree_hash(label, child_mask);
-    while((rv = children->store[slot])
-      && gdnsd_label_cmp(label, rv->label)) {
+    while ((rv = children->store[slot])
+            && gdnsd_label_cmp(label, rv->label)) {
         slot += jmpby++;
         slot &= child_mask;
     }
 
     // came to an empty slot with no match along the way,
     //   so create a new node at this slot...
-    if(!rv) {
+    if (!rv) {
         rv = xcalloc(1, sizeof(ztree_t));
         const unsigned lsz = *label + 1U;
         rv->label = xmalloc(lsz);
@@ -205,29 +211,31 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
 }
 
 F_NONNULL
-static void ztree_destroy(ztree_t* node) {
+static void ztree_destroy(ztree_t* node)
+{
     ztchildren_t* children = node->children;
-    if(children) {
-        for(unsigned i = 0; i < children->alloc; i++) {
+    if (children) {
+        for (unsigned i = 0; i < children->alloc; i++) {
             ztree_t* child = children->store[i];
-            if(child)
+            if (child)
                 ztree_destroy(child);
         }
         free(children->store);
         free(children);
     }
-    if(node->zone)
+    if (node->zone)
         zone_delete(node->zone);
     free(node->label);
     free(node);
 }
 
-bool ztree_insert_zone(ztree_t* tree, zone_t* new_zone) {
+bool ztree_insert_zone(ztree_t* tree, zone_t* new_zone)
+{
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(new_zone->dname, lstack);
 
-    while(lcount) {
-        if(tree->zone) {
+    while (lcount) {
+        if (tree->zone) {
             log_err("Zone '%s' is a sub-zone of existing zone '%s'", logf_dname(new_zone->dname), logf_dname(tree->zone->dname));
             return true;
         }
@@ -235,12 +243,12 @@ bool ztree_insert_zone(ztree_t* tree, zone_t* new_zone) {
         gdnsd_assert(tree);
     }
 
-    if(tree->zone) {
+    if (tree->zone) {
         log_err("Zone '%s' is a duplicate of an existing zone", logf_dname(new_zone->dname));
         return true;
     }
 
-    if(tree->children) {
+    if (tree->children) {
         log_err("Zone '%s' is a super-zone of one or more existing zones", logf_dname(new_zone->dname));
         return true;
     }
@@ -250,12 +258,13 @@ bool ztree_insert_zone(ztree_t* tree, zone_t* new_zone) {
     return false;
 }
 
-void* ztree_zones_reloader_thread(void* init_asvoid) {
+void* ztree_zones_reloader_thread(void* init_asvoid)
+{
     const bool init = (bool)init_asvoid;
     gdnsd_thread_setname("gdnsd-zreload");
     uintptr_t rv = 0;
 
-    if(init)
+    if (init)
         gdnsd_assert(!ztree_root);
 
     ztree_t* new_ztree = xcalloc(1, sizeof(ztree_t));
@@ -264,9 +273,9 @@ void* ztree_zones_reloader_thread(void* init_asvoid) {
     const bool djb_failed = zsrc_djb_load_zones(new_ztree);
     const bool rfc1035_failed = zsrc_rfc1035_load_zones(new_ztree);
 
-    if(rfc1035_failed || djb_failed) {
+    if (rfc1035_failed || djb_failed) {
         rv = 1; // the zsrc already logged why
-    } else if(!new_ztree->children && !new_ztree->zone) {
+    } else if (!new_ztree->children && !new_ztree->zone) {
         log_err("No zone data found for any zones from any source");
         rv = 1;
     } else {
@@ -274,17 +283,18 @@ void* ztree_zones_reloader_thread(void* init_asvoid) {
         gdnsd_prcu_upd_lock();
         gdnsd_prcu_upd_assign(ztree_root, new_ztree);
         gdnsd_prcu_upd_unlock();
-        if(old_ztree)
+        if (old_ztree)
             ztree_destroy(old_ztree);
     }
 
-    if(!init)
+    if (!init)
         notify_reload_zones_done();
 
     return (void*)rv;
 }
 
-void ztree_init(void) {
+void ztree_init(void)
+{
     zsrc_djb_init();
     zsrc_rfc1035_init();
 }

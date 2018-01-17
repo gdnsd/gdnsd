@@ -61,34 +61,42 @@ extmon_cmd_t* emc_read_command(const int fd);
 // they only flow in the helper->plugin direction
 
 F_CONST F_UNUSED
-static uint32_t emc_encode_mon(const unsigned idx, const bool failed) {
+static uint32_t emc_encode_mon(const unsigned idx, const bool failed)
+{
     gdnsd_assert(idx < 0x10000);
     return (idx << 16)
-        | (failed
-            ? (((unsigned)'F' << 8) | (unsigned)'A')
-            : (((unsigned)'O' << 8) | (unsigned)'K')
-        );
+           | (failed
+              ? (((unsigned)'F' << 8) | (unsigned)'A')
+              : (((unsigned)'O' << 8) | (unsigned)'K')
+             );
 }
 
 // send/recv helper-exit
 F_CONST F_UNUSED
-static uint32_t emc_encode_exit(void) { return 0xFFFFFFFF; }
+static uint32_t emc_encode_exit(void)
+{
+    return 0xFFFFFFFF;
+}
 F_CONST F_UNUSED
-static bool emc_decode_is_exit(const uint32_t data) { return !!(data == 0xFFFFFFFF); }
+static bool emc_decode_is_exit(const uint32_t data)
+{
+    return !!(data == 0xFFFFFFFF);
+}
 
 F_CONST F_UNUSED
-static unsigned emc_decode_mon_idx(const uint32_t data) {
+static unsigned emc_decode_mon_idx(const uint32_t data)
+{
     return (data >> 16);
 }
 
 F_UNUSED
-static bool emc_decode_mon_failed(const uint32_t data) {
+static bool emc_decode_mon_failed(const uint32_t data)
+{
     const unsigned failflag = data & 0xFFFF;
     bool rv = true;
-    if(failflag == (((unsigned)'O' << 8) | (unsigned)'K')) {
+    if (failflag == (((unsigned)'O' << 8) | (unsigned)'K')) {
         rv = false;
-    }
-    else if(failflag != (((unsigned)'F' << 8) | (unsigned)'A')) {
+    } else if (failflag != (((unsigned)'F' << 8) | (unsigned)'A')) {
         log_err("plugin_extmon: BUG: Invalid monitoring result %x!", data);
     }
     return rv;

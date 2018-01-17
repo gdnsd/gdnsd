@@ -47,7 +47,7 @@
  * is implemented in the header file directly.
  */
 
-#define __PASTE3(a,b,c) a##b##c
+#define __PASTE3(a, b, c) a##b##c
 
 #define SYM_GET_APIV(x)      __PASTE3(plugin_, x, _get_api_version)
 #define SYM_LOAD_CONFIG(x)   __PASTE3(plugin_, x, _load_config)
@@ -67,7 +67,10 @@
 
 F_CONST
 uint32_t SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
-uint32_t SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void) { return GDNSD_PLUGIN_API_VERSION; }
+uint32_t SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void)
+{
+    return GDNSD_PLUGIN_API_VERSION;
+}
 
 void SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(vscf_data_t* config, const unsigned num_threads);
 int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
@@ -75,7 +78,7 @@ F_NONNULL
 void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(void);
 void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(void);
 void SYM_IOTH_DCLN(GDNSD_PLUGIN_NAME)(void);
-F_NONNULLX(3,4)
+F_NONNULLX(3, 4)
 gdnsd_sttl_t SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
 F_NONNULL

@@ -63,9 +63,10 @@ static const cfg_t cfg_defaults = {
 };
 
 F_NONNULL
-static void set_chaos(cfg_t* cfg, const char* data) {
+static void set_chaos(cfg_t* cfg, const char* data)
+{
     const unsigned dlen = strlen(data);
-    if(dlen > 254)
+    if (dlen > 254)
         log_fatal("Option 'chaos_response' must be a string less than 255 characters long");
 
     const unsigned overall_len = chaos_prefix_len + 3 + dlen;
@@ -79,31 +80,35 @@ static void set_chaos(cfg_t* cfg, const char* data) {
     cfg->chaos_len = overall_len;
 }
 
-static void plugins_cleanup(void) {
+static void plugins_cleanup(void)
+{
     gdnsd_plugins_action_exit();
 }
 
 // Generic iterator for catching bad config hash keys in various places below
 F_NONNULL
-static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* which_asvoid) {
+static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* which_asvoid)
+{
     const char* which = which_asvoid;
     log_fatal("Invalid %s key '%s'", which, key);
 }
 
 F_NONNULLX(2)
-static void plugin_load_and_configure(const unsigned num_dns_threads, const char* name, vscf_data_t* pconf) {
-    if(pconf && !vscf_is_hash(pconf))
+static void plugin_load_and_configure(const unsigned num_dns_threads, const char* name, vscf_data_t* pconf)
+{
+    if (pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
     plugin_t* plugin = gdnsd_plugin_find_or_load(name);
-    if(plugin->load_config) {
+    if (plugin->load_config) {
         plugin->load_config(pconf, num_dns_threads);
         plugin->config_loaded = true;
     }
 }
 
 F_NONNULL
-static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, const void* scfg_asvoid) {
+static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_data_t* pconf, const void* scfg_asvoid)
+{
     const socks_cfg_t* socks_cfg = scfg_asvoid;
     plugin_load_and_configure(socks_cfg->num_dns_threads, name, pconf);
     return true;
@@ -115,76 +120,77 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
 #define CFG_OPT_BOOL(_opt_set, _gconf_loc) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
-            if(!vscf_is_simple(_opt_setting) \
+        if (_opt_setting) { \
+            if (!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_bool(_opt_setting, &cfg->_gconf_loc)) \
                 log_fatal("Config option %s: Value must be 'true' or 'false'", #_gconf_loc); \
         } \
-    } while(0)
+    } while (0)
 
 #define CFG_OPT_UINT(_opt_set, _gconf_loc, _min, _max) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
+        if (_opt_setting) { \
             unsigned long _val; \
-            if(!vscf_is_simple(_opt_setting) \
+            if (!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
                 log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
-            if(_val < _min || _val > _max) \
+            if (_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%lu, %lu)", #_gconf_loc, _min, _max); \
             cfg->_gconf_loc = (unsigned) _val; \
         } \
-    } while(0)
+    } while (0)
 
 #define CFG_OPT_DBL(_opt_set, _gconf_loc, _min, _max) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
+        if (_opt_setting) { \
             double _val; \
-            if(!vscf_is_simple(_opt_setting) \
+            if (!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_double(_opt_setting, &_val)) \
                 log_fatal("Config option %s: Value must be a valid floating-point number", #_gconf_loc); \
-            if(_val < _min || _val > _max) \
+            if (_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%.3g, %.3g)", #_gconf_loc, _min, _max); \
             cfg->_gconf_loc = _val; \
         } \
-    } while(0)
+    } while (0)
 
 #define CFG_OPT_INT(_opt_set, _gconf_loc, _min, _max) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
+        if (_opt_setting) { \
             long _val; \
-            if(!vscf_is_simple(_opt_setting) \
+            if (!vscf_is_simple(_opt_setting) \
             || !vscf_simple_get_as_long(_opt_setting, &_val)) \
                 log_fatal("Config option %s: Value must be an integer", #_gconf_loc); \
-            if(_val < _min || _val > _max) \
+            if (_val < _min || _val > _max) \
                 log_fatal("Config option %s: Value out of range (%li, %li)", #_gconf_loc, _min, _max); \
             cfg->_gconf_loc = (int) _val; \
         } \
-    } while(0)
+    } while (0)
 
 #define CFG_OPT_STR(_opt_set, _gconf_loc) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
-        if(_opt_setting) { \
-            if(!vscf_is_simple(_opt_setting)) \
+        if (_opt_setting) { \
+            if (!vscf_is_simple(_opt_setting)) \
                 log_fatal("Config option %s: Wrong type (should be string)", #_gconf_loc); \
             cfg->_gconf_loc = strdup(vscf_simple_get_data(_opt_setting)); \
         } \
-    } while(0)
+    } while (0)
 
 #define CFG_OPT_STR_NOCOPY(_opt_set, _name, _store_at) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_name, true); \
-        if(_opt_setting) { \
-            if(!vscf_is_simple(_opt_setting)) \
+        if (_opt_setting) { \
+            if (!vscf_is_simple(_opt_setting)) \
                 log_fatal("Config option %s: Wrong type (should be string)", #_name); \
             _store_at = vscf_simple_get_data(_opt_setting); \
         } \
-    } while(0)
+    } while (0)
 
-cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zsd) {
+cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zsd)
+{
     gdnsd_assert(!cfg_root || vscf_is_hash(cfg_root));
 
     cfg_t* cfg = xmalloc(sizeof(*cfg));
@@ -194,7 +200,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     const char* chaos_data = chaos_def;
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
-    if(options) {
+    if (options) {
         CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
@@ -204,14 +210,14 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
         CFG_OPT_UINT(options, max_ttl, 3600LU, (unsigned long)GDNSD_STTL_TTL_MAX);
-        if(cfg->max_ttl < cfg->min_ttl)
+        if (cfg->max_ttl < cfg->min_ttl)
             log_fatal("The global option 'max_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ttl, cfg->min_ttl);
         CFG_OPT_UINT(options, max_ncache_ttl, 10LU, 86400LU);
-        if(cfg->max_ncache_ttl < cfg->min_ttl)
+        if (cfg->max_ncache_ttl < cfg->min_ttl)
             log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ncache_ttl, cfg->min_ttl);
         CFG_OPT_UINT(options, max_response, 4096LU, 64000LU);
         CFG_OPT_UINT(options, max_edns_response, 512LU, 64000LU);
-        if(cfg->max_edns_response > cfg->max_response) {
+        if (cfg->max_edns_response > cfg->max_response) {
             log_warn("The global option 'max_edns_response' was reduced from %u to the max_response size of %u", cfg->max_edns_response, cfg->max_response);
             cfg->max_edns_response = cfg->max_response;
         }
@@ -228,15 +234,15 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     }
 
     // if cmdline forced, override any default or config setting
-    if(force_zsd)
+    if (force_zsd)
         cfg->zones_strict_data = true;
 
     // set response string for CHAOS queries
     set_chaos(cfg, chaos_data);
 
     vscf_data_t* stypes_cfg = cfg_root
-        ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
-        : NULL;
+                              ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
+                              : NULL;
 
     // setup plugin searching...
     gdnsd_plugins_set_search_path(psearch_array);
@@ -246,21 +252,21 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
 
     // Load plugins
     vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
-    if(plugins_hash) {
-        if(!vscf_is_hash(plugins_hash))
+    if (plugins_hash) {
+        if (!vscf_is_hash(plugins_hash))
             log_fatal("Config setting 'plugins' must have a hash value");
         // plugin_geoip is considered a special-case meta-plugin.  If it's present,
         //   it always gets loaded before others.  This is because it can create
         //   resource config for other plugins.  This is a poor way to do it, but I imagine
         //   the list of meta-plugins will remain short and in-tree.
         vscf_data_t* geoplug = vscf_hash_get_data_byconstkey(plugins_hash, "geoip", true);
-        if(geoplug)
+        if (geoplug)
             plugin_load_and_configure(socks_cfg->num_dns_threads, "geoip", geoplug);
         // ditto for "metafo"
         // Technically, geoip->metafo synthesis will work, but not metafo->geoip synthesis.
         // Both can reference each other directly (%plugin!resource)
         vscf_data_t* metaplug = vscf_hash_get_data_byconstkey(plugins_hash, "metafo", true);
-        if(metaplug)
+        if (metaplug)
             plugin_load_and_configure(socks_cfg->num_dns_threads, "metafo", metaplug);
         vscf_hash_iterate_const(plugins_hash, true, load_plugin_iter, socks_cfg);
     }
@@ -280,7 +286,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     gdnsd_atexit_debug(plugins_cleanup);
 
     // Throw an error if there are any other unretrieved root config keys
-    if(cfg_root)
+    if (cfg_root)
         vscf_hash_iterate_const(cfg_root, true, bad_key, "top-level config");
 
     // admin_state checking, can fail fatally

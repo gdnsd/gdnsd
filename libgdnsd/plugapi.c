@@ -39,47 +39,53 @@ static unsigned addrlimit_v4 = 12U;
 static unsigned addrlimit_v6 = 12U;
 static unsigned v6_offset = 12U * 4U;
 
-unsigned gdnsd_result_get_v6_offset(void) { return v6_offset; }
+unsigned gdnsd_result_get_v6_offset(void)
+{
+    return v6_offset;
+}
 
-unsigned gdnsd_result_get_alloc(void) {
+unsigned gdnsd_result_get_alloc(void)
+{
     unsigned storage = (addrlimit_v4 * 4U) + (addrlimit_v6 * 16U);
-    if(storage < 256U)
+    if (storage < 256U)
         storage = 256U; // true minimum set by CNAME storage
     return sizeof(dyn_result_t) + storage;
 }
 
-void gdnsd_dyn_addr_max(unsigned v4, unsigned v6) {
+void gdnsd_dyn_addr_max(unsigned v4, unsigned v6)
+{
     // Note these limits are somewhat arbitrary (with some thought towards 16K-ish limits), but:
     //   (a) I can't imagine reasonable use-cases hitting them in practice at this time
     //   (b) There may be other implications for very large values that need to be addressed
     //     before lifting these limits (e.g. auto-raising max packet size?)
-    if(v4 > 512U)
+    if (v4 > 512U)
         log_fatal("gdnsd cannot cope with plugin configurations which add >512 IPv4 addresses to a single result!");
-    if(v6 > 512U)
+    if (v6 > 512U)
         log_fatal("gdnsd cannot cope with plugin configurations which add >512 IPv6 addresses to a single result!");
 
-    if(v4 > addrlimit_v4) {
+    if (v4 > addrlimit_v4) {
         addrlimit_v4 = v4;
         v6_offset = v4 * 4U;
     }
-    if(v6 > addrlimit_v6)
+    if (v6 > addrlimit_v6)
         addrlimit_v6 = v6;
 }
 
-void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* asin) {
+void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* asin)
+{
     gdnsd_assert(!result->is_cname);
-    if(asin->sa.sa_family == AF_INET6) {
+    if (asin->sa.sa_family == AF_INET6) {
         gdnsd_assert(result->count_v6 < addrlimit_v6);
         memcpy(&result->storage[v6_offset + (result->count_v6++ * 16U)], asin->sin6.sin6_addr.s6_addr, 16);
-    }
-    else {
+    } else {
         gdnsd_assert(asin->sa.sa_family == AF_INET);
         gdnsd_assert(result->count_v4 < addrlimit_v4);
         result->v4[result->count_v4++] = asin->sin.sin_addr.s_addr;
     }
 }
 
-void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const uint8_t* origin) {
+void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const uint8_t* origin)
+{
     gdnsd_assert(dname_status(dname) != DNAME_INVALID);
     gdnsd_assert(dname_status(origin) == DNAME_VALID);
     gdnsd_assert(!result->is_cname);
@@ -88,31 +94,36 @@ void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const ui
 
     result->is_cname = true;
     dname_copy(result->storage, dname);
-    if(dname_is_partial(result->storage))
+    if (dname_is_partial(result->storage))
         dname_cat(result->storage, origin);
     gdnsd_assert(dname_status(result->storage) == DNAME_VALID);
 }
 
-void gdnsd_result_wipe(dyn_result_t* result) {
+void gdnsd_result_wipe(dyn_result_t* result)
+{
     result->is_cname = false;
     result->count_v4 = 0;
     result->count_v6 = 0;
 }
 
-void gdnsd_result_wipe_v4(dyn_result_t* result) {
+void gdnsd_result_wipe_v4(dyn_result_t* result)
+{
     result->count_v4 = 0;
 }
 
-void gdnsd_result_wipe_v6(dyn_result_t* result) {
+void gdnsd_result_wipe_v6(dyn_result_t* result)
+{
     result->count_v6 = 0;
 }
 
-void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope) {
-    if(scope > result->edns_scope_mask)
+void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope)
+{
+    if (scope > result->edns_scope_mask)
         result->edns_scope_mask = scope;
 }
 
-void gdnsd_result_reset_scope_mask(dyn_result_t* result) {
+void gdnsd_result_reset_scope_mask(dyn_result_t* result)
+{
     result->edns_scope_mask = 0;
 }
 
@@ -120,18 +131,19 @@ static unsigned num_plugins = 0;
 static plugin_t** plugins = NULL;
 static const char** psearch = NULL;
 
-void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array) {
+void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array)
+{
     gdnsd_assert(!psearch); // only called once
 
     // Create a plugin search path array
     unsigned psearch_count = psearch_array
-        ? vscf_array_get_len(psearch_array)
-        : 0;
+                             ? vscf_array_get_len(psearch_array)
+                             : 0;
 
     psearch = xmalloc((psearch_count + 2) * sizeof(const char*));
-    for(unsigned i = 0; i < psearch_count; i++) {
+    for (unsigned i = 0; i < psearch_count; i++) {
         vscf_data_t* psd = vscf_array_get_data(psearch_array, i);
-        if(!vscf_is_simple(psd))
+        if (!vscf_is_simple(psd))
             log_fatal("Plugin search paths must be strings");
         psearch[i] = strdup(vscf_simple_get_data(psd));
     }
@@ -140,11 +152,12 @@ void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array) {
     psearch[psearch_count] = NULL;
 }
 
-plugin_t* gdnsd_plugin_find(const char* pname) {
+plugin_t* gdnsd_plugin_find(const char* pname)
+{
     const unsigned nplug = num_plugins;
-    for(unsigned i = 0; i < nplug; i++) {
+    for (unsigned i = 0; i < nplug; i++) {
         plugin_t* p = plugins[i];
-        if(!strcmp(pname, p->name))
+        if (!strcmp(pname, p->name))
             return p;
     }
 
@@ -152,7 +165,8 @@ plugin_t* gdnsd_plugin_find(const char* pname) {
 }
 
 F_NONNULL
-static plugin_t* plugin_allocate(const char* pname) {
+static plugin_t* plugin_allocate(const char* pname)
+{
     gdnsd_assert(!gdnsd_plugin_find(pname));
 
     const unsigned this_idx = num_plugins++;
@@ -166,18 +180,19 @@ static plugin_t* plugin_allocate(const char* pname) {
 }
 
 F_NONNULL
-static void* plugin_dlopen(const char* pname) {
+static void* plugin_dlopen(const char* pname)
+{
     gdnsd_assert(psearch);
 
     struct stat plugstat;
     const char* try_path;
     const char** psptr = psearch;
-    while((try_path = *psptr++)) {
+    while ((try_path = *psptr++)) {
         char* pp = gdnsd_str_combine_n(4, try_path, "/plugin_", pname, ".so");
         log_debug("Looking for plugin '%s' at pathname '%s'", pname, pp);
-        if(0 == stat(pp, &plugstat) && S_ISREG(plugstat.st_mode)) {
+        if (0 == stat(pp, &plugstat) && S_ISREG(plugstat.st_mode)) {
             void* phandle = dlopen(pp, RTLD_NOW | RTLD_LOCAL);
-            if(!phandle)
+            if (!phandle)
                 log_fatal("Failed to dlopen() the '%s' plugin from path '%s' (%s).  The plugin may need to be recompiled due to binary compatibility issues", pname, pp, dlerror());
             free(pp);
             return phandle;
@@ -191,7 +206,8 @@ static void* plugin_dlopen(const char* pname) {
 typedef void(*gen_func_ptr)(void);
 
 F_NONNULL
-static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sym_suffix) {
+static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sym_suffix)
+{
     // If you see an aliasing warning here, it's ok to ignore it
     char* symname = gdnsd_str_combine_n(4, "plugin_", pname, "_", sym_suffix);
     gen_func_ptr rval;
@@ -200,13 +216,14 @@ static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sy
     return rval;
 }
 
-static plugin_t* gdnsd_plugin_load(const char* pname) {
+static plugin_t* gdnsd_plugin_load(const char* pname)
+{
     gdnsd_assert(psearch);
 
     plugin_t* plug = plugin_allocate(pname);
     void* pptr = plugin_dlopen(pname);
     const gdnsd_apiv_cb_t apiv = (gdnsd_apiv_cb_t)plugin_dlsym(pptr, pname, "get_api_version");
-    if(!apiv)
+    if (!apiv)
         log_fatal("Plugin '%s' does not appear to be a valid gdnsd plugin", pname);
 
     // The raw number for the API version is now split into two 16-bit chunks:
@@ -214,17 +231,17 @@ static plugin_t* gdnsd_plugin_load(const char* pname) {
     //    the top 16 bits are build option flags that affect binary compatibility
     //      (these come from <gdnsd/bopt.h> for 3rd party plugins)
     const uint32_t this_version = apiv();
-    if(this_version != GDNSD_PLUGIN_API_VERSION) {
+    if (this_version != GDNSD_PLUGIN_API_VERSION) {
         unsigned apiv_vers = GDNSD_PLUGIN_API_VERSION & 0xFFFF;
         unsigned apiv_bopt = GDNSD_PLUGIN_API_VERSION >> 16;
         unsigned this_vers = this_version & 0xFFFF;
         unsigned this_bopt = this_version >> 16;
-        if(apiv_vers != this_vers)
+        if (apiv_vers != this_vers)
             log_fatal("Plugin '%s' needs to be recompiled! (wanted API version %u, got %u)",
-                pname, apiv_vers, this_vers);
+                      pname, apiv_vers, this_vers);
         else
             log_fatal("Plugin '%s' needs to be recompiled! (wanted build options %x, got %x)",
-                pname, apiv_bopt, this_bopt);
+                      pname, apiv_bopt, this_bopt);
     }
 
 #   define PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
@@ -247,54 +264,62 @@ static plugin_t* gdnsd_plugin_load(const char* pname) {
     return plug;
 }
 
-plugin_t* gdnsd_plugin_find_or_load(const char* pname) {
+plugin_t* gdnsd_plugin_find_or_load(const char* pname)
+{
     plugin_t* p = gdnsd_plugin_find(pname);
     return p ? p : gdnsd_plugin_load(pname);
 }
 
 // The action iterators...
 
-void gdnsd_plugins_configure_all(const unsigned num_threads) {
-    for(unsigned i = 0; i < num_plugins; i++) {
-        if(plugins[i]->load_config && !plugins[i]->config_loaded) {
+void gdnsd_plugins_configure_all(const unsigned num_threads)
+{
+    for (unsigned i = 0; i < num_plugins; i++) {
+        if (plugins[i]->load_config && !plugins[i]->config_loaded) {
             plugins[i]->load_config(NULL, num_threads);
             plugins[i]->config_loaded = true;
         }
     }
 }
 
-void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop) {
-    for(unsigned i = 0; i < num_plugins; i++)
-        if(plugins[i]->init_monitors)
+void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop)
+{
+    for (unsigned i = 0; i < num_plugins; i++)
+        if (plugins[i]->init_monitors)
             plugins[i]->init_monitors(mon_loop);
 }
 
-void gdnsd_plugins_action_start_monitors(struct ev_loop* mon_loop) {
-    for(unsigned i = 0; i < num_plugins; i++)
-        if(plugins[i]->start_monitors)
+void gdnsd_plugins_action_start_monitors(struct ev_loop* mon_loop)
+{
+    for (unsigned i = 0; i < num_plugins; i++)
+        if (plugins[i]->start_monitors)
             plugins[i]->start_monitors(mon_loop);
 }
 
-void gdnsd_plugins_action_pre_run(void) {
-    for(unsigned i = 0; i < num_plugins; i++)
-        if(plugins[i]->pre_run)
+void gdnsd_plugins_action_pre_run(void)
+{
+    for (unsigned i = 0; i < num_plugins; i++)
+        if (plugins[i]->pre_run)
             plugins[i]->pre_run();
 }
 
-void gdnsd_plugins_action_iothread_init(void) {
-    for(unsigned i = 0; i < num_plugins; i++)
-        if(plugins[i]->iothread_init)
+void gdnsd_plugins_action_iothread_init(void)
+{
+    for (unsigned i = 0; i < num_plugins; i++)
+        if (plugins[i]->iothread_init)
             plugins[i]->iothread_init();
 }
 
-void gdnsd_plugins_action_iothread_debug_cleanup(void) {
-    for(unsigned i = 0; i < num_plugins; i++)
-        if(plugins[i]->iothread_debug_cleanup)
+void gdnsd_plugins_action_iothread_debug_cleanup(void)
+{
+    for (unsigned i = 0; i < num_plugins; i++)
+        if (plugins[i]->iothread_debug_cleanup)
             plugins[i]->iothread_debug_cleanup();
 }
 
-void gdnsd_plugins_action_exit(void) {
-    for(unsigned i = 0; i < num_plugins; i++)
-        if(plugins[i]->exit)
+void gdnsd_plugins_action_exit(void)
+{
+    for (unsigned i = 0; i < num_plugins; i++)
+        if (plugins[i]->exit)
             plugins[i]->exit();
 }

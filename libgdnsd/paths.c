@@ -40,7 +40,10 @@
 /* paths */
 
 // Anytime
-const char* gdnsd_get_default_config_dir(void) { return GDNSD_DEFPATH_CONFIG; }
+const char* gdnsd_get_default_config_dir(void)
+{
+    return GDNSD_DEFPATH_CONFIG;
+}
 
 // ---------------------------
 // Init-time stuff
@@ -48,16 +51,16 @@ const char* gdnsd_get_default_config_dir(void) { return GDNSD_DEFPATH_CONFIG; }
 // fails fatally if pathname doesn't exist and mkdir fails, or if pathname exists but is not a dir
 // "mode" is only used if we have to mkdir, is not checked or enforced on existing dirs.
 F_NONNULL
-static void gdnsd_ensure_dir(const char* dpath, const char* desc, mode_t def_mode) {
+static void gdnsd_ensure_dir(const char* dpath, const char* desc, mode_t def_mode)
+{
     struct stat st;
     int stat_rv = stat(dpath, &st);
 
-    if(stat_rv) {
-        if(mkdir(dpath, def_mode))
+    if (stat_rv) {
+        if (mkdir(dpath, def_mode))
             log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, logf_errno());
         log_info("Created %s directory %s", desc, dpath);
-    }
-    else if(!S_ISDIR(st.st_mode)) {
+    } else if (!S_ISDIR(st.st_mode)) {
         log_fatal("%s directory '%s' is not a directory (but should be)!", desc, dpath);
     }
 }
@@ -71,21 +74,21 @@ typedef enum {
 
 static const char* gdnsd_dirs[4] = { NULL, NULL, NULL, NULL };
 
-static vscf_data_t* conf_load_vscf(const char* cfg_file) {
+static vscf_data_t* conf_load_vscf(const char* cfg_file)
+{
     vscf_data_t* out = NULL;
 
     struct stat cfg_stat;
-    if(!stat(cfg_file, &cfg_stat)) {
+    if (!stat(cfg_file, &cfg_stat)) {
         log_debug("Loading configuration from '%s'", cfg_file);
         out = vscf_scan_filename(cfg_file);
-        if(!out)
+        if (!out)
             log_fatal("Loading configuration from '%s' failed", cfg_file);
-        if(!vscf_is_hash(out)) {
+        if (!vscf_is_hash(out)) {
             gdnsd_assert(vscf_is_array(out));
             log_fatal("Config file '%s' cannot be an '[ array ]' at the top level", cfg_file);
         }
-    }
-    else {
+    } else {
         log_warn("No config file at '%s', using defaults", cfg_file);
     }
 
@@ -95,16 +98,17 @@ static vscf_data_t* conf_load_vscf(const char* cfg_file) {
 #define CFG_DIR(_opt_set, _name) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_name, true); \
-        if(_opt_setting) { \
-            if(!vscf_is_simple(_opt_setting)) \
+        if (_opt_setting) { \
+            if (!vscf_is_simple(_opt_setting)) \
                 log_fatal("Config option %s: Wrong type (should be string)", #_name); \
             _name = vscf_simple_get_data(_opt_setting); \
         } \
-    } while(0)
+    } while (0)
 
-vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs) {
+vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs)
+{
     static bool has_run = false;
-    if(has_run)
+    if (has_run)
         log_fatal("BUG: gdnsd_init_paths() should only be called once!");
     else
         has_run = true;
@@ -119,7 +123,7 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs) {
 
 #ifndef NDEBUG
     // in developer debug builds, exercise clone+destroy
-    if(cfg_root) {
+    if (cfg_root) {
         vscf_data_t* temp_cfg = vscf_clone(cfg_root, false);
         vscf_destroy(cfg_root);
         cfg_root = temp_cfg;
@@ -129,10 +133,10 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs) {
     // find run/state paths, possibly using config input
     const char* run_dir = GDNSD_DEFPATH_RUN;
     const char* state_dir = GDNSD_DEFPATH_STATE;
-    if(cfg_root) {
+    if (cfg_root) {
         vscf_data_t* options = vscf_hash_get_data_byconstkey(cfg_root, "options", true);
-        if(options) {
-            if(!vscf_is_hash(options))
+        if (options) {
+            if (!vscf_is_hash(options))
                 log_fatal("Config key 'options': wrong type (must be hash)");
             CFG_DIR(options, run_dir);
             CFG_DIR(options, state_dir);
@@ -142,7 +146,7 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs) {
     // set them up
     gdnsd_dirs[RUN] = strdup(run_dir);
     gdnsd_dirs[STATE] = strdup(state_dir);
-    if(create_dirs) {
+    if (create_dirs) {
         gdnsd_ensure_dir(run_dir, "run", 0750);
         gdnsd_ensure_dir(state_dir, "state", 0755);
     }
@@ -156,22 +160,21 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs) {
 // ---------------------------
 // Runtime stuff
 
-static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx) {
+static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx)
+{
     gdnsd_assert(gdnsd_dirs[p]);
 
     char* out = NULL;
 
-    if(inpath && inpath[0] == '/') {
+    if (inpath && inpath[0] == '/') {
         out = strdup(inpath);
-    }
-    else if(pfx) {
-        if(inpath)
+    } else if (pfx) {
+        if (inpath)
             out = gdnsd_str_combine_n(5, gdnsd_dirs[p], "/", pfx, "/", inpath);
         else
             out = gdnsd_str_combine_n(3, gdnsd_dirs[p], "/", pfx);
-    }
-    else {
-        if(inpath)
+    } else {
+        if (inpath)
             out = gdnsd_str_combine_n(3, gdnsd_dirs[p], "/", inpath);
         else
             out = strdup(gdnsd_dirs[p]);
@@ -180,18 +183,22 @@ static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const ch
     return out;
 }
 
-char* gdnsd_resolve_path_run(const char* inpath, const char* pfx) {
+char* gdnsd_resolve_path_run(const char* inpath, const char* pfx)
+{
     return gdnsd_resolve_path(RUN, inpath, pfx);
 }
 
-char* gdnsd_resolve_path_state(const char* inpath, const char* pfx) {
+char* gdnsd_resolve_path_state(const char* inpath, const char* pfx)
+{
     return gdnsd_resolve_path(STATE, inpath, pfx);
 }
 
-char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx) {
+char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx)
+{
     return gdnsd_resolve_path(CFG, inpath, pfx);
 }
 
-char* gdnsd_resolve_path_libexec(const char* inpath, const char* pfx) {
+char* gdnsd_resolve_path_libexec(const char* inpath, const char* pfx)
+{
     return gdnsd_resolve_path(LIBEXEC, inpath, pfx);
 }

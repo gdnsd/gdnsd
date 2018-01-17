@@ -23,6 +23,7 @@
 #include "gdmaps_test.h"
 #include <tap.h>
 
+// *INDENT-OFF*
 static const char cfg[] = QUOTE(
    my_prod_map => {
     datacenters => [ dc01, dc02 ],
@@ -33,10 +34,12 @@ static const char cfg[] = QUOTE(
     }
    }
 );
+// *INDENT-ON*
 
 gdmaps_t* gdmaps = NULL;
 
-int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+int main(int argc V_UNUSED, char* argv[] V_UNUSED)
+{
     gdmaps_test_init(getenv("TEST_CFDIR"));
     plan_tests(LOOKUP_CHECK_NTESTS * 17);
     gdmaps = gdmaps_test_load(cfg);

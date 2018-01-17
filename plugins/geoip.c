@@ -32,69 +32,77 @@
 static gdmaps_t* gdmaps;
 
 F_NONNULL
-static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name) {
+static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
+{
     // Get 'map' name, convert to gdmaps index
     vscf_data_t* map_cfg = vscf_hash_get_data_byconstkey(res_cfg, "map", true);
-    if(!map_cfg)
+    if (!map_cfg)
         log_fatal("plugin_geoip: resource '%s': required key 'map' is missing", res_name);
-    if(!vscf_is_simple(map_cfg))
+    if (!vscf_is_simple(map_cfg))
         log_fatal("plugin_geoip: resource '%s': 'map' must be a string", res_name);
     const char* map_name = vscf_simple_get_data(map_cfg);
     const int rv = gdmaps_name2idx(gdmaps, map_name);
-    if(rv < 0)
+    if (rv < 0)
         log_fatal("plugin_geoip: resource '%s': map '%s' does not exist", res_name, map_name);
     return (unsigned)rv;
 }
 
-static unsigned map_get_len(const unsigned mapnum) {
+static unsigned map_get_len(const unsigned mapnum)
+{
     return gdmaps_get_dc_count(gdmaps, mapnum);
 }
 
-static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
+static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname)
+{
     return gdmaps_dcname2num(gdmaps, mapnum, dcname);
 }
 
 F_NONNULL
-static bool top_config_hook(vscf_data_t* top_config) {
+static bool top_config_hook(vscf_data_t* top_config)
+{
     gdnsd_assert(vscf_is_hash(top_config));
 
     vscf_data_t* maps = vscf_hash_get_data_byconstkey(top_config, "maps", true);
-    if(!maps)
+    if (!maps)
         log_fatal("plugin_geoip: config has no 'maps' stanza");
-    if(!vscf_is_hash(maps))
+    if (!vscf_is_hash(maps))
         log_fatal("plugin_geoip: 'maps' stanza must be a hash");
-    if(!vscf_hash_get_len(maps))
+    if (!vscf_hash_get_len(maps))
         log_fatal("plugin_geoip: 'maps' stanza must contain one or more maps");
 
     gdmaps = gdmaps_new(maps);
 
     bool undef_dc_ok = false;
     vscf_data_t* undef_dc_ok_vscf = vscf_hash_get_data_byconstkey(top_config, "undefined_datacenters_ok", true);
-    if(undef_dc_ok_vscf) {
-        if(!vscf_is_simple(undef_dc_ok_vscf) || !vscf_simple_get_as_bool(undef_dc_ok_vscf, &undef_dc_ok))
+    if (undef_dc_ok_vscf) {
+        if (!vscf_is_simple(undef_dc_ok_vscf) || !vscf_simple_get_as_bool(undef_dc_ok_vscf, &undef_dc_ok))
             log_fatal("plugin_geoip: 'undef_dc_ok' must be a boolean value ('true' or 'false')");
     }
 
     return undef_dc_ok;
 }
 
-static void bottom_config_hook(void) {
+static void bottom_config_hook(void)
+{
     gdnsd_assert(gdmaps);
     gdmaps_load_databases(gdmaps);
 }
 
-void plugin_geoip_pre_run(void) {
+void plugin_geoip_pre_run(void)
+{
     gdnsd_assert(gdmaps);
     gdmaps_setup_watchers(gdmaps);
 }
 
 F_NONNULL
-static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo, unsigned* scope_out) {
+static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo, unsigned* scope_out)
+{
     gdnsd_assert(gdmaps);
     return gdmaps_lookup(gdmaps, mapnum, cinfo, scope_out);
 }
 
-static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum) {
+static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum)
+{
     return gdmaps_map_mon_idx(gdmaps, mapnum, dcnum);
 }
 

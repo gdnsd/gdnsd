@@ -37,7 +37,8 @@
 
 static char* djb_dir = NULL;
 
-bool zsrc_djb_load_zones(ztree_t* tree) {
+bool zsrc_djb_load_zones(ztree_t* tree)
+{
     gdnsd_assert(djb_dir);
 
     zscan_djb_zonedata_t* zonedata = NULL;
@@ -46,9 +47,9 @@ bool zsrc_djb_load_zones(ztree_t* tree) {
 
     if (zscan_djb(djb_dir, &zonedata)) {
         failed = true;
-    } else if(zonedata) {
+    } else if (zonedata) {
         for (zscan_djb_zonedata_t* cur = zonedata; cur; cur = cur->next) {
-            if(ztree_insert_zone(tree, cur->zone)) {
+            if (ztree_insert_zone(tree, cur->zone)) {
                 failed = true;
                 break;
             }
@@ -56,7 +57,7 @@ bool zsrc_djb_load_zones(ztree_t* tree) {
         }
     }
 
-    if(failed)
+    if (failed)
         log_err("zsrc_djb: failed to load zone data");
     else
         log_info("zsrc_djb: loaded %d zones from %s...", num_zones, djb_dir);
@@ -65,6 +66,7 @@ bool zsrc_djb_load_zones(ztree_t* tree) {
     return failed;
 }
 
-void zsrc_djb_init(void) {
+void zsrc_djb_init(void)
+{
     djb_dir = gdnsd_resolve_path_cfg("djbdns/", NULL);
 }

@@ -182,19 +182,19 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
  *  error.
  */
 typedef bool (*vscf_hash_iter_cb_t)(const char* key, unsigned klen, vscf_data_t* d, void* data);
-F_NONNULLX(1,3)
+F_NONNULLX(1, 3)
 void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb_t f, void* data);
 
 // As above with a "const void*" for the data argument, to avoid dangerous const-casting
 typedef bool (*vscf_hash_iter_const_cb_t)(const char* key, unsigned klen, vscf_data_t* d, const void* data);
-F_NONNULLX(1,3)
+F_NONNULLX(1, 3)
 void vscf_hash_iterate_const(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_const_cb_t f, const void* data);
 
 // Re-sort hash keys from default order (order defined in config file) to an arbitrary
 //  order of your choosing, using a qsort()-like compare callback.  Calls to vscf_hash_iterate
 //  after vscf_hash_sort will iterate in the new sort order.  Not thread-safe (all access to
 //  a given hash should be locked if it's being sorted in a threaded environment).
-typedef int (*vscf_key_cmp_cb_t)(const vscf_key_t* const * const a, const vscf_key_t* const * const b);
+typedef int (*vscf_key_cmp_cb_t)(const vscf_key_t* const* const a, const vscf_key_t* const* const b);
 F_NONNULL
 void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f);
 

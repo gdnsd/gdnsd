@@ -63,57 +63,58 @@ struct _dcinfo {
 //  names go into a hash requiring uniqueness, and the count is required
 //  to match (ditto for auto_dc_coords never succeeding with dupes in the
 //  datacenters list).
-dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name) {
+dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name)
+{
     dcinfo_t* info = xmalloc(sizeof(dcinfo_t));
 
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
     unsigned num_auto = num_dcs;
-    if(!num_dcs)
+    if (!num_dcs)
         log_fatal("plugin_geoip: map '%s': 'datacenters' must be an array of one or more strings", map_name);
-    if(num_dcs > 254)
+    if (num_dcs > 254)
         log_fatal("plugin_geoip: map '%s': %u datacenters is too many, this code only supports up to 254", map_name, num_dcs);
 
     info->names = xmalloc(sizeof(char*) * num_dcs);
     info->indices = xmalloc(sizeof(unsigned) * num_dcs);
     info->num_dcs = num_dcs;
-    for(unsigned i = 0; i < num_dcs; i++) {
+    for (unsigned i = 0; i < num_dcs; i++) {
         vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
-        if(!dcname_cfg || !vscf_is_simple(dcname_cfg))
+        if (!dcname_cfg || !vscf_is_simple(dcname_cfg))
             log_fatal("plugin_geoip: map '%s': 'datacenters' must be an array of one or more strings", map_name);
         info->names[i] = strdup(vscf_simple_get_data(dcname_cfg));
-        if(!strcmp(info->names[i], "auto"))
+        if (!strcmp(info->names[i], "auto"))
             log_fatal("plugin_geoip: map '%s': datacenter name 'auto' is illegal", map_name);
         char* map_mon_desc = gdnsd_str_combine_n(4, "geoip/", map_name, "/", info->names[i]);
         info->indices[i] = gdnsd_mon_admin(map_mon_desc);
         free(map_mon_desc);
     }
 
-    if(dc_auto_cfg) {
-        if(!vscf_is_hash(dc_auto_cfg))
+    if (dc_auto_cfg) {
+        if (!vscf_is_hash(dc_auto_cfg))
             log_fatal("plugin_geoip: map '%s': auto_dc_coords must be a key-value hash", map_name);
         num_auto = vscf_hash_get_len(dc_auto_cfg);
         info->coords = xmalloc(num_dcs * sizeof(*info->coords));
-        for(unsigned i = 0; i < num_dcs; i++) {
+        for (unsigned i = 0; i < num_dcs; i++) {
             info->coords[i].lat = (double)NAN;
             info->coords[i].lon = (double)NAN;
             info->coords[i].cos_lat = (double)NAN;
         }
-        for(unsigned i = 0; i < num_auto; i++) {
+        for (unsigned i = 0; i < num_auto; i++) {
             const char* dcname = vscf_hash_get_key_byindex(dc_auto_cfg, i, NULL);
             unsigned dcidx;
-            for(dcidx = 0; dcidx < num_dcs; dcidx++) {
-                if(!strcmp(dcname, info->names[dcidx]))
+            for (dcidx = 0; dcidx < num_dcs; dcidx++) {
+                if (!strcmp(dcname, info->names[dcidx]))
                     break;
             }
-            if(dcidx == num_dcs)
+            if (dcidx == num_dcs)
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' not matched from 'datacenters' list", map_name, dcname);
-            if(!isnan(info->coords[dcidx].lat))
+            if (!isnan(info->coords[dcidx].lat))
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' defined twice", map_name, dcname);
             vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
             vscf_data_t* lat_cfg;
             vscf_data_t* lon_cfg;
             double lat, lon;
-            if(
+            if (
                 !vscf_is_array(coord_cfg) || vscf_array_get_len(coord_cfg) != 2
                 || !(lat_cfg = vscf_array_get_data(coord_cfg, 0))
                 || !(lon_cfg = vscf_array_get_data(coord_cfg, 1))
@@ -129,55 +130,59 @@ dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t*
             info->coords[dcidx].lon = lon * DEG2RAD;
             info->coords[dcidx].cos_lat = cos(lat * DEG2RAD);
         }
-    }
-    else {
+    } else {
         info->coords = NULL;
     }
 
-    if(dc_auto_limit_cfg) {
+    if (dc_auto_limit_cfg) {
         unsigned long auto_limit_ul;
-        if(!vscf_is_simple(dc_auto_limit_cfg) || !vscf_simple_get_as_ulong(dc_auto_limit_cfg, &auto_limit_ul))
+        if (!vscf_is_simple(dc_auto_limit_cfg) || !vscf_simple_get_as_ulong(dc_auto_limit_cfg, &auto_limit_ul))
             log_fatal("plugin_geoip: map '%s': auto_dc_limit must be a single unsigned integer value", map_name);
-        if(auto_limit_ul > num_auto || !auto_limit_ul)
+        if (auto_limit_ul > num_auto || !auto_limit_ul)
             auto_limit_ul = num_auto;
         info->auto_limit = auto_limit_ul;
-    }
-    else {
+    } else {
         info->auto_limit = (num_auto > 3) ? 3 : num_auto;
     }
 
     return info;
 }
 
-unsigned dcinfo_get_count(const dcinfo_t* info) {
+unsigned dcinfo_get_count(const dcinfo_t* info)
+{
     return info->num_dcs;
 }
 
-unsigned dcinfo_get_limit(const dcinfo_t* info) {
+unsigned dcinfo_get_limit(const dcinfo_t* info)
+{
     return info->auto_limit;
 }
 
-const dcinfo_coords_t* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum) {
+const dcinfo_coords_t* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum)
+{
     gdnsd_assert(dcnum < info->num_dcs);
     return &info->coords[dcnum];
 }
 
-unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname) {
-    if(dcname)
-        for(unsigned i = 0; i < info->num_dcs; i++)
-            if(!strcmp(dcname, info->names[i]))
+unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname)
+{
+    if (dcname)
+        for (unsigned i = 0; i < info->num_dcs; i++)
+            if (!strcmp(dcname, info->names[i]))
                 return i + 1;
     return 0;
 }
 
-const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum) {
-    if(!dcnum || dcnum > info->num_dcs)
+const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum)
+{
+    if (!dcnum || dcnum > info->num_dcs)
         return NULL;
 
     return info->names[dcnum - 1];
 }
 
-unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum) {
+unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum)
+{
     gdnsd_assert(dcnum && dcnum <= info->num_dcs);
     return info->indices[dcnum - 1];
 }

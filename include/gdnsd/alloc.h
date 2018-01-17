@@ -35,7 +35,7 @@
 F_MALLOC F_ALLOCSZ(1) F_RETNN
 void* gdnsd_xmalloc(size_t size);
 
-F_MALLOC F_ALLOCSZ(1,2) F_RETNN
+F_MALLOC F_ALLOCSZ(1, 2) F_RETNN
 void* gdnsd_xcalloc(size_t nmemb, size_t size);
 
 F_ALLOCSZ(2) F_WUNUSED F_RETNN

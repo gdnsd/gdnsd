@@ -102,7 +102,8 @@ extern gdnsd_sttl_t* smgr_sttl_consumer_;
 // State-fetching (one table call per resolve invocation, reused
 //   for as many index fetches as necc)
 F_UNUSED
-static const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void) {
+static const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void)
+{
     return gdnsd_prcu_rdr_deref(smgr_sttl_consumer_);
 }
 
@@ -117,7 +118,8 @@ static const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void) {
 //   combining the state-bits, such that the output forced-bit is only copied if
 //   the forcing had an effect (e.g. forced-down + unforced-down = unforced-down)
 F_PURE F_UNUSED
-static gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_sttl_t b) {
+static gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_sttl_t b)
+{
     const gdnsd_sttl_t a_ttl = a & GDNSD_STTL_TTL_MASK;
     const gdnsd_sttl_t b_ttl = b & GDNSD_STTL_TTL_MASK;
     const gdnsd_sttl_t state = (a | b) & (GDNSD_STTL_DOWN | GDNSD_STTL_FORCED);
@@ -128,9 +130,10 @@ static gdnsd_sttl_t gdnsd_sttl_min2(const gdnsd_sttl_t a, const gdnsd_sttl_t b) 
 //   several different service_type checks against a single IP for
 //   a single resource.
 F_NONNULLX(1) F_PURE F_UNUSED
-static gdnsd_sttl_t gdnsd_sttl_min(const gdnsd_sttl_t* sttl_tbl, const unsigned* idx_ary, const unsigned idx_ary_len) {
+static gdnsd_sttl_t gdnsd_sttl_min(const gdnsd_sttl_t* sttl_tbl, const unsigned* idx_ary, const unsigned idx_ary_len)
+{
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
-    for(unsigned i = 0; i < idx_ary_len; i++)
+    for (unsigned i = 0; i < idx_ary_len; i++)
         rv = gdnsd_sttl_min2(rv, sttl_tbl[idx_ary[i]]);
     return rv;
 }

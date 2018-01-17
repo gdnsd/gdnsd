@@ -63,7 +63,7 @@ typedef struct css_s_ css_t;
 // takeover, *csc will retain its original value.  If it was not used (we were
 // able to obtain the lock normally), csc will be closed/deleted and *csc_p set
 // to NULL.
-F_NONNULLX(1,2)
+F_NONNULLX(1, 2)
 css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p);
 
 // Start accepting connections within libev loop "loop".

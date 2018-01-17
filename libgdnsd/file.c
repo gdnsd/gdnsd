@@ -37,15 +37,16 @@ struct gdnsd_fmap_s_ {
     size_t len;
 };
 
-gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
+gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
+{
     const int fd = open(fn, O_RDONLY | O_CLOEXEC);
-    if(fd < 0) {
+    if (fd < 0) {
         log_err("Cannot open '%s' for reading: %s", fn, logf_errno());
         return NULL;
     }
 
     struct stat st;
-    if(fstat(fd, &st) < 0) {
+    if (fstat(fd, &st) < 0) {
         log_err("Cannot fstat '%s': %s", fn, logf_errno());
         close(fd);
         return NULL;
@@ -53,7 +54,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
 
     // S_ISREG won't fail on symlink here, because this is fstat()
     //   and the earlier open() didn't use O_NOFOLLOW.
-    if(!S_ISREG(st.st_mode) || st.st_size < 0) {
+    if (!S_ISREG(st.st_mode) || st.st_size < 0) {
         log_err("'%s' is not a regular file", fn);
         close(fd);
         return NULL;
@@ -62,20 +63,19 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     const size_t len = (size_t)st.st_size;
     char* mapbuf = NULL;
 
-    if(len) {
+    if (len) {
         mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
-        if(mapbuf == MAP_FAILED) {
+        if (mapbuf == MAP_FAILED) {
             log_err("Cannot mmap '%s': %s", fn, logf_errno());
             close(fd);
             // cppcheck-suppress memleak (MAP_FAILED is not a leak :P)
             return NULL;
         }
 #ifdef HAVE_POSIX_MADVISE
-        if(seq && len > 8192) // why waste the syscall on small files?
+        if (seq && len > 8192) // why waste the syscall on small files?
             (void)posix_madvise(mapbuf, len, POSIX_MADV_SEQUENTIAL);
 #endif
-    }
-    else {
+    } else {
         // mmap doesn't always work for zero-length files, and we also
         //   don't want callers to have to care about cases where this call
         //   was successful but the buffer pointer is NULL due to len == 0,
@@ -93,17 +93,20 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     return fmap;
 }
 
-const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap) {
+const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap)
+{
     gdnsd_assert(fmap->buf);
     return fmap->buf;
 }
 
-size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap) {
+size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap)
+{
     gdnsd_assert(fmap->buf);
     return fmap->len;
 }
 
-bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap) {
+bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap)
+{
     gdnsd_assert(fmap->buf);
 
     bool rv = false; // true == error

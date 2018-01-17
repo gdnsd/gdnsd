@@ -53,7 +53,7 @@ static const char base_lock[] = "control.lock";
 
 static const unsigned max_clients = 100U;
 
-static const mode_t CSOCK_PERMS = (S_IRUSR|S_IWUSR); // 0600
+static const mode_t CSOCK_PERMS = (S_IRUSR | S_IWUSR); // 0600
 
 typedef enum {
     READING_REQ,
@@ -86,14 +86,16 @@ typedef struct {
     size_t len;
 } conn_queue_t;
 
-static void conn_queue_add(conn_queue_t* queue, css_conn_t* c) {
+static void conn_queue_add(conn_queue_t* queue, css_conn_t* c)
+{
     queue->q = xrealloc(queue->q, ((queue->len + 1) * sizeof(*queue->q)));
     queue->q[queue->len++] = c;
 }
 
-static void conn_queue_clear(conn_queue_t* queue) {
+static void conn_queue_clear(conn_queue_t* queue)
+{
     queue->len = 0;
-    if(queue->q) {
+    if (queue->q) {
         free(queue->q);
         queue->q = NULL;
     }
@@ -121,48 +123,51 @@ struct css_s_ {
     pid_t replacement_pid;
 };
 
-static void swap_reload_zones_queues(css_t* css) {
+static void swap_reload_zones_queues(css_t* css)
+{
     conn_queue_t* x = css->reload_zones_queued;
     css->reload_zones_queued = css->reload_zones_active;
     css->reload_zones_active = x;
 }
 
 F_NONNULL
-static void css_conn_cleanup(css_conn_t* c) {
+static void css_conn_cleanup(css_conn_t* c)
+{
     css_t* css = c->css;
     gdnsd_assert(css);
 
-    if(c == css->replace_conn)
+    if (c == css->replace_conn)
         css->replace_conn = NULL;
-    if(c == css->takeover_conn)
+    if (c == css->takeover_conn)
         css->takeover_conn = NULL;
 
     // stop/free io-related things
-    if(c->resp_data)
+    if (c->resp_data)
         free(c->resp_data);
     ev_io_stop(css->loop, c->w_read);
     ev_io_stop(css->loop, c->w_write);
     free(c->w_read);
     free(c->w_write);
-    if(c->fd >= 0)
+    if (c->fd >= 0)
         close(c->fd);
 
     // remove from linked list
-    if(c == css->clients)
+    if (c == css->clients)
         css->clients = c->next;
-    if(c->prev)
+    if (c->prev)
         c->prev->next = c->next;
-    if(c->next)
+    if (c->next)
         c->next->prev = c->prev;
     free(c);
 
     // if we were at the maximum, start accepting connections again
-    if(css->num_clients-- == max_clients)
+    if (css->num_clients-- == max_clients)
         ev_io_start(css->loop, css->w_accept);
 }
 
 F_NONNULL
-static bool respond_blocking_ack(css_conn_t* c) {
+static bool respond_blocking_ack(css_conn_t* c)
+{
     gdnsd_assert(c->css);
     gdnsd_assert(c->state == WAITING_SERVER);
     c->wbuf.key = RESP_ACK;
@@ -170,7 +175,7 @@ static bool respond_blocking_ack(css_conn_t* c) {
     c->wbuf.d = 0;
     c->state = WRITING_RESP;
     ssize_t pktlen = send(c->fd, c->wbuf.raw, 8, 0);
-    if(pktlen != 8) {
+    if (pktlen != 8) {
         log_err("blocking control socket write of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
         css_conn_cleanup(c);
         return true;
@@ -179,15 +184,16 @@ static bool respond_blocking_ack(css_conn_t* c) {
 }
 
 F_NONNULL
-static void css_conn_write_data(css_conn_t* c) {
+static void css_conn_write_data(css_conn_t* c)
+{
     gdnsd_assert(c->state == WRITING_RESP_DATA);
     gdnsd_assert(c->resp_data);
     gdnsd_assert(c->resp_size);
     size_t wanted = c->resp_size - c->resp_size_done;
     gdnsd_assert(wanted > 0);
     ssize_t pktlen = send(c->fd, &c->resp_data[c->resp_size_done], wanted, MSG_DONTWAIT);
-    if(pktlen < 0) {
-        if(ERRNO_WOULDBLOCK)
+    if (pktlen < 0) {
+        if (ERRNO_WOULDBLOCK)
             return;
         log_err("control socket write of %zu bytes failed with retval %zi, closing: %s", wanted, pktlen, logf_errno());
         css_conn_cleanup(c);
@@ -195,7 +201,7 @@ static void css_conn_write_data(css_conn_t* c) {
     }
 
     c->resp_size_done += (size_t)pktlen;
-    if(c->resp_size_done == c->resp_size) {
+    if (c->resp_size_done == c->resp_size) {
         free(c->resp_data);
         c->resp_data = NULL;
         c->resp_size = 0;
@@ -207,7 +213,8 @@ static void css_conn_write_data(css_conn_t* c) {
 }
 
 F_NONNULL
-static bool css_conn_write_resp(css_conn_t* c) {
+static bool css_conn_write_resp(css_conn_t* c)
+{
     gdnsd_assert(c->state == WRITING_RESP || c->state == WRITING_RESP_FDS);
 
     union {
@@ -221,9 +228,9 @@ static bool css_conn_write_resp(css_conn_t* c) {
     msg.msg_iovlen = 1;
 
     size_t send_fd_count = SCM_MAX_FDS;
-    if(c->state == WRITING_RESP_FDS) {
+    if (c->state == WRITING_RESP_FDS) {
         const size_t fd_todo = c->resp_size - c->resp_size_done;
-        if(fd_todo < SCM_MAX_FDS)
+        if (fd_todo < SCM_MAX_FDS)
             send_fd_count = fd_todo;
         const size_t send_fd_len = sizeof(int) * send_fd_count;
         memset(u.cmsg_buf, 0, sizeof(u.cmsg_buf));
@@ -238,21 +245,21 @@ static bool css_conn_write_resp(css_conn_t* c) {
     }
 
     ssize_t pktlen = sendmsg(c->fd, &msg, MSG_DONTWAIT);
-    if(pktlen != 8) {
-        if(pktlen < 0 && ERRNO_WOULDBLOCK)
+    if (pktlen != 8) {
+        if (pktlen < 0 && ERRNO_WOULDBLOCK)
             return false;
         log_err("control socket write of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
         css_conn_cleanup(c);
         return false;
     }
 
-    if(c->state == WRITING_RESP_FDS) {
+    if (c->state == WRITING_RESP_FDS) {
         c->resp_size_done += send_fd_count;
-        if(c->resp_size_done < c->resp_size)
+        if (c->resp_size_done < c->resp_size)
             return false;
         c->resp_size = 0;
         c->resp_size_done = 0;
-    } else if(c->resp_data) {
+    } else if (c->resp_data) {
         c->state = WRITING_RESP_DATA;
         return true;
     }
@@ -264,15 +271,16 @@ static bool css_conn_write_resp(css_conn_t* c) {
 }
 
 F_NONNULL
-static void css_conn_write(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED) {
+static void css_conn_write(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_WRITE);
     css_conn_t* c = w->data;
     gdnsd_assert(c);
     gdnsd_assert(c->state == WRITING_RESP || c->state == WRITING_RESP_FDS || c->state == WRITING_RESP_DATA);
 
 
-    if(c->state != WRITING_RESP_DATA)
-        if(!css_conn_write_resp(c))
+    if (c->state != WRITING_RESP_DATA)
+        if (!css_conn_write_resp(c))
             return;
     css_conn_write_data(c);
 }
@@ -283,7 +291,8 @@ static void css_conn_write(struct ev_loop* loop V_UNUSED, ev_io* w, int revents 
 // If "send_fds" is set, send the SCM_RIGHTS fd list response for "takeover".
 // "send_fds" requires: key=RESP_ACK, v=0, d=0, data=NULL
 F_NONNULLX(1)
-static void respond(css_conn_t* c, const char key, const uint32_t v, const uint32_t d, char* data, bool send_fds) {
+static void respond(css_conn_t* c, const char key, const uint32_t v, const uint32_t d, char* data, bool send_fds)
+{
     gdnsd_assert(c->css);
     gdnsd_assert(c->state == WAITING_SERVER);
     gdnsd_assert(v <= 0xFFFFFF);
@@ -293,12 +302,11 @@ static void respond(css_conn_t* c, const char key, const uint32_t v, const uint3
     csbuf_set_v(&c->wbuf, v);
     c->wbuf.d = d;
     c->state = WRITING_RESP;
-
-    if(data) {
+    if (data) {
         c->resp_data = data;
         c->resp_size = d;
         c->resp_size_done = 0;
-    } else if(send_fds) {
+    } else if (send_fds) {
         gdnsd_assert(key == RESP_ACK);
         gdnsd_assert(!v);
         gdnsd_assert(!d);
@@ -311,12 +319,14 @@ static void respond(css_conn_t* c, const char key, const uint32_t v, const uint3
     ev_io_start(c->css->loop, c->w_write);
 }
 
-bool css_stop_ok(css_t* css) {
+bool css_stop_ok(css_t* css)
+{
     return !css->replacement_pid;
 }
 
 F_NONNULL
-static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED) {
+static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_TIMER);
     css_t* css = w->data;
     gdnsd_assert(css);
@@ -325,15 +335,15 @@ static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_
     // libev's default SIGCHLD handler auto-reaps for us
     // If the process that was attempting a takeover operation died, and we're
     // still here, so we have some cleanup to do...
-    if(kill(css->replacement_pid, 0)) {
+    if (kill(css->replacement_pid, 0)) {
         log_err("Attempted takeover daemon at pid %li died, re-setting takeover states",
                 (long)css->replacement_pid);
         ev_timer_stop(loop, w);
 
-        if(css->replace_conn)
+        if (css->replace_conn)
             respond(css->replace_conn, RESP_NAK, 0, 0, NULL, false);
 
-        if(css->takeover_conn)
+        if (css->takeover_conn)
             css_conn_cleanup(css->takeover_conn);
 
         // re-set our states so that further stop/takeover/replace actions can happen
@@ -362,7 +372,8 @@ static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_
 // we'll also have to set up a pipe() to communicate the final PID back to the
 // parent from the middle process.
 // Thanks, systemd :P
-static pid_t spawn_replacement(const char* argv0) {
+static pid_t spawn_replacement(const char* argv0)
+{
     // Before forking, block all signals and save the old mask
     //   to avoid a race condition where local sighandlers execute
     //   in the child between fork and exec().
@@ -370,24 +381,24 @@ static pid_t spawn_replacement(const char* argv0) {
     sigfillset(&all_sigs);
     sigset_t saved_mask;
     sigemptyset(&saved_mask);
-    if(pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask))
+    if (pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask))
         log_fatal("pthread_sigmask() failed");
 
     int pipefd[2];
-    if(pipe2(pipefd, O_CLOEXEC))
+    if (pipe2(pipefd, O_CLOEXEC))
         log_fatal("pipe() failed: %s", logf_errno());
 
     pid_t middle_pid = fork();
-    if(middle_pid == -1)
+    if (middle_pid == -1)
         log_fatal("fork() failed: %s", logf_errno());
 
-    if(!middle_pid) { // middle-child
+    if (!middle_pid) { // middle-child
         close(pipefd[PIPE_RD]);
         pid_t replacement_pid = fork();
-        if(replacement_pid == -1)
+        if (replacement_pid == -1)
             log_fatal("fork() failed: %s", logf_errno());
 
-        if(!replacement_pid) { // final-child
+        if (!replacement_pid) { // final-child
             close(pipefd[PIPE_WR]);
             // reset to default any signal handlers that we actually listen to in
             // the main process, but don't disturb others (e.g. PIPE/HUP) that may
@@ -397,28 +408,28 @@ static pid_t spawn_replacement(const char* argv0) {
             sigemptyset(&defaultme.sa_mask);
             defaultme.sa_handler = SIG_DFL;
             defaultme.sa_flags = 0;
-            if(sigaction(SIGTERM, &defaultme, NULL))
+            if (sigaction(SIGTERM, &defaultme, NULL))
                 log_fatal("sigaction() failed: %s", logf_errno());
-            if(sigaction(SIGINT, &defaultme, NULL))
+            if (sigaction(SIGINT, &defaultme, NULL))
                 log_fatal("sigaction() failed: %s", logf_errno());
-            if(sigaction(SIGCHLD, &defaultme, NULL))
+            if (sigaction(SIGCHLD, &defaultme, NULL))
                 log_fatal("sigaction() failed: %s", logf_errno());
-            if(sigaction(SIGUSR2, &defaultme, NULL))
+            if (sigaction(SIGUSR2, &defaultme, NULL))
                 log_fatal("sigaction() failed: %s", logf_errno());
 
             // Set up the more-complicated exec args
             char* cfpath = gdnsd_resolve_path_cfg(NULL, NULL);
             char flags[5] = { '-', 'T', '\0', '\0', '\0' };
             unsigned fidx = 2;
-            if(gdnsd_log_get_debug())
+            if (gdnsd_log_get_debug())
                 flags[fidx++] = 'D';
-            if(gdnsd_log_get_syslog())
+            if (gdnsd_log_get_syslog())
                 flags[fidx++] = 'l';
 
             // unblock all
             sigset_t no_sigs;
             sigemptyset(&no_sigs);
-            if(pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
+            if (pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
                 log_fatal("pthread_sigmask() failed");
 
             execlp(argv0, argv0, "-c", cfpath, flags, "start", NULL);
@@ -427,7 +438,7 @@ static pid_t spawn_replacement(const char* argv0) {
 
         // --- middle-parent code
         uint32_t sendpid = (uint32_t)replacement_pid;
-        if(write(pipefd[PIPE_WR], &sendpid, 4) != 4)
+        if (write(pipefd[PIPE_WR], &sendpid, 4) != 4)
             log_fatal("write() of PID during replacement spawn failed: %s", logf_errno());
         _exit(0);
     }
@@ -436,47 +447,49 @@ static pid_t spawn_replacement(const char* argv0) {
 
     uint32_t recvpid;
     close(pipefd[PIPE_WR]);
-    if(read(pipefd[PIPE_RD], &recvpid, 4) != 4)
+    if (read(pipefd[PIPE_RD], &recvpid, 4) != 4)
         log_fatal("read() of PID during replacement spawn failed: %s", logf_errno());
     close(pipefd[PIPE_RD]);
     pid_t replacement_pid = (pid_t)recvpid;
 
     int status;
     pid_t wp_rv = waitpid(middle_pid, &status, 0);
-    if(wp_rv < 0) {
+    if (wp_rv < 0) {
         // We can assume ECHILD means the libev SIGCHLD handler beat us to waitpid()
-        if(errno != ECHILD)
+        if (errno != ECHILD)
             log_fatal("waitpid(%li) for temporary middle process during replacement spawn failed: %s",
                       (long)middle_pid, logf_errno());
     } else {
-        if(wp_rv != middle_pid)
+        if (wp_rv != middle_pid)
             log_fatal("waitpid(%li) for temporary middle process during replacement spawn caught process %li instead",
                       (long)middle_pid, (long)wp_rv);
-        if(status)
+        if (status)
             log_err("waitpid(%li) for temporary middle process during replacement spawn returned bad status %i",
                     (long)middle_pid, status);
     }
 
     // restore previous signal mask from before fork
-    if(pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
+    if (pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
         log_fatal("pthread_sigmask() failed");
 
     return replacement_pid;
 }
 
 F_NONNULL
-static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) {
+static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_READ);
     css_conn_t* c = w->data;
     css_t* css = c->css;
-    gdnsd_assert(c); gdnsd_assert(css);
+    gdnsd_assert(c);
+    gdnsd_assert(css);
     gdnsd_assert(c->state == READING_REQ);
 
     const ssize_t pktlen = recv(c->fd, c->rbuf.raw, 8, MSG_DONTWAIT);
-    if(pktlen != 8) {
-        if(pktlen < 0 && ERRNO_WOULDBLOCK)
+    if (pktlen != 8) {
+        if (pktlen < 0 && ERRNO_WOULDBLOCK)
             return;
-        if(pktlen == 0)
+        if (pktlen == 0)
             log_devdebug("control socket client disconnected cleanly during read");
         else
             log_err("control socket read of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
@@ -494,107 +507,108 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED) 
     char* states_msg;
     pid_t take_pid;
 
-    switch(c->rbuf.key) {
-        case REQ_INFO:
-            respond(c, RESP_ACK, css->status_v, css->status_d, NULL, false);
+    switch (c->rbuf.key) {
+    case REQ_INFO:
+        respond(c, RESP_ACK, css->status_v, css->status_d, NULL, false);
+        break;
+    case REQ_STOP:
+        if (css->replacement_pid && c != css->takeover_conn) {
+            log_err("Denying control socket client request 'stop' because a 'takeover' or 'replace' attempt is in progress!");
+            respond(c, RESP_NAK, 0, 0, NULL, false);
             break;
-        case REQ_STOP:
-            if(css->replacement_pid && c != css->takeover_conn) {
-                log_err("Denying control socket client request 'stop' because a 'takeover' or 'replace' attempt is in progress!");
-                respond(c, RESP_NAK, 0, 0, NULL, false);
-                break;
-            }
-            log_info("Exiting cleanly due to control socket client request");
-            ev_break(loop, EVBREAK_ALL);
-            // Setting fd = -1 prevents further writes and prevents closing
-            // during css_delete(), so that socket close can be used to witness
-            // the daemon exiting just before the PID vanishes...
-            if(!respond_blocking_ack(c))
-                c->fd = -1;
-            if(css->replace_conn)
-                if(!respond_blocking_ack(css->replace_conn))
-                    css->replace_conn->fd = -1;
+        }
+        log_info("Exiting cleanly due to control socket client request");
+        ev_break(loop, EVBREAK_ALL);
+        // Setting fd = -1 prevents further writes and prevents closing
+        // during css_delete(), so that socket close can be used to witness
+        // the daemon exiting just before the PID vanishes...
+        if (!respond_blocking_ack(c))
+            c->fd = -1;
+        if (css->replace_conn)
+            if (!respond_blocking_ack(css->replace_conn))
+                css->replace_conn->fd = -1;
+        break;
+    case REQ_STAT:
+        nowish = ev_now(loop);
+        stats_size = 0;
+        stats_msg = statio_get_json((time_t)nowish, &stats_size);
+        gdnsd_assert(stats_size <= UINT32_MAX);
+        respond(c, RESP_ACK, 0, (uint32_t)stats_size, stats_msg, false);
+        break;
+    case REQ_STATE:
+        states_size = 0;
+        states_msg = gdnsd_mon_states_get_json(&states_size);
+        gdnsd_assert(states_size <= UINT32_MAX);
+        respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg, false);
+        break;
+    case REQ_ZREL:
+        conn_queue_add(css->reload_zones_queued, c);
+        if (!css->reload_zones_active->len) {
+            swap_reload_zones_queues(css);
+            spawn_async_zones_reloader_thread();
+        }
+        break;
+    case REQ_REPL:
+        if (css->replacement_pid) {
+            log_warn("Denying socket client attempt at 'replace' while another 'takeover' or 'replace' already in progress");
+            respond(c, RESP_NAK, 0, 0, NULL, false);
             break;
-        case REQ_STAT:
-            nowish = ev_now(loop);
-            stats_size = 0;
-            stats_msg = statio_get_json((time_t)nowish, &stats_size);
-            gdnsd_assert(stats_size <= UINT32_MAX);
-            respond(c, RESP_ACK, 0, (uint32_t)stats_size, stats_msg, false);
+        }
+        log_info("Accepting socket client replace command, spawning replacement server...");
+        gdnsd_assert(!css->takeover_conn);
+        gdnsd_assert(!css->replace_conn);
+        css->replace_conn = c;
+        css->replacement_pid = spawn_replacement(css->argv0);
+        log_info("Replacement server started at pid %li", (long)css->replacement_pid);
+        ev_timer_start(css->loop, css->w_takeover);
+        break;
+    case REQ_TAKE:
+        take_pid = (pid_t)c->rbuf.d;
+        if (css->replacement_pid && take_pid != css->replacement_pid) {
+            log_warn("Denying socket client attempt at 'takeover' while another 'takeover' or 'replace' is already in progress");
+            respond(c, RESP_NAK, 0, 0, NULL, false);
             break;
-        case REQ_STATE:
-            states_size = 0;
-            states_msg = gdnsd_mon_states_get_json(&states_size);
-            gdnsd_assert(states_size <= UINT32_MAX);
-            respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg, false);
-            break;
-        case REQ_ZREL:
-            conn_queue_add(css->reload_zones_queued, c);
-            if(!css->reload_zones_active->len) {
-                swap_reload_zones_queues(css);
-                spawn_async_zones_reloader_thread();
-            }
-            break;
-        case REQ_REPL:
-            if(css->replacement_pid) {
-                log_warn("Denying socket client attempt at 'replace' while another 'takeover' or 'replace' already in progress");
-                respond(c, RESP_NAK, 0, 0, NULL, false);
-                break;
-            }
-            log_info("Accepting socket client replace command, spawning replacement server...");
-            gdnsd_assert(!css->takeover_conn);
-            gdnsd_assert(!css->replace_conn);
-            css->replace_conn = c;
-            css->replacement_pid = spawn_replacement(css->argv0);
-            log_info("Replacement server started at pid %li", (long)css->replacement_pid);
-            ev_timer_start(css->loop, css->w_takeover);
-            break;
-        case REQ_TAKE:
-            take_pid = (pid_t)c->rbuf.d;
-            if(css->replacement_pid && take_pid != css->replacement_pid) {
-                log_warn("Denying socket client attempt at 'takeover' while another 'takeover' or 'replace' is already in progress");
-                respond(c, RESP_NAK, 0, 0, NULL, false);
-                break;
-            }
-            log_info("Accepting socket client takeover attempt from pid %li", (long)take_pid);
-            css->replacement_pid = take_pid;
-            ev_timer_start(css->loop, css->w_takeover);
-            gdnsd_assert(!css->takeover_conn);
-            css->takeover_conn = c;
-            ev_io_stop(css->loop, css->w_accept); // there can be only one
-            respond(c, RESP_ACK, 0, 0, NULL, true);
-            break;
-        default:
-            log_err("Invalid request from control socket, closing");
-            css_conn_cleanup(c);
+        }
+        log_info("Accepting socket client takeover attempt from pid %li", (long)take_pid);
+        css->replacement_pid = take_pid;
+        ev_timer_start(css->loop, css->w_takeover);
+        gdnsd_assert(!css->takeover_conn);
+        css->takeover_conn = c;
+        ev_io_stop(css->loop, css->w_accept); // there can be only one
+        respond(c, RESP_ACK, 0, 0, NULL, true);
+        break;
+    default:
+        log_err("Invalid request from control socket, closing");
+        css_conn_cleanup(c);
     }
 }
 
 F_NONNULL
-static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED) {
+static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_READ);
     css_t* css = w->data;
     gdnsd_assert(css);
 
     const int fd = accept4(w->fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
-    if(unlikely(fd < 0)) {
-        switch(errno) {
-            case EAGAIN:
+    if (unlikely(fd < 0)) {
+        switch (errno) {
+        case EAGAIN:
 #if EWOULDBLOCK != EAGAIN
-            case EWOULDBLOCK:
+        case EWOULDBLOCK:
 #endif
-            case EINTR:
-                break;
-            default:
-                log_err("control socket early connection failure: %s", logf_errno());
-                break;
+        case EINTR:
+            break;
+        default:
+            log_err("control socket early connection failure: %s", logf_errno());
+            break;
         }
         return;
     }
 
     // if we now have max_clients connected, stop accepting new ones
-    if(++css->num_clients == max_clients)
+    if (++css->num_clients == max_clients)
         ev_io_stop(css->loop, css->w_accept);
 
     // set up the per-connection state and start reading requests...
@@ -613,47 +627,48 @@ static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UN
     ev_io_start(css->loop, c->w_read);
 
     // insert into front of linked list
-    if(css->clients) {
+    if (css->clients) {
         c->next = css->clients;
         css->clients->prev = c;
     }
     css->clients = c;
 }
 
-static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd) {
+static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
+{
     gdnsd_anysin_t fd_sin;
     memset(&fd_sin, 0, sizeof(fd_sin));
     fd_sin.len = GDNSD_ANYSIN_MAXLEN;
 
-    if(getsockname(fd, &fd_sin.sa, &fd_sin.len) || fd_sin.len > GDNSD_ANYSIN_MAXLEN) {
-        if(errno == EBADF)
+    if (getsockname(fd, &fd_sin.sa, &fd_sin.len) || fd_sin.len > GDNSD_ANYSIN_MAXLEN) {
+        if (errno == EBADF)
             log_err("Socket takeover: Ignoring invalid file descriptor %i", fd);
-        else if(fd_sin.len > GDNSD_ANYSIN_MAXLEN)
+        else if (fd_sin.len > GDNSD_ANYSIN_MAXLEN)
             log_err("Socket takeover: getsockname(%i) returned oversize address, closing", fd);
         else
             log_err("Socket takeover: getsockname(%i) failed, closing: %s", fd, logf_errno());
-        if(errno != EBADF)
+        if (errno != EBADF)
             close(fd);
         return;
     }
 
     int fd_sin_type = 0;
     socklen_t fd_sin_type_size = sizeof(fd_sin_type);
-    if(getsockopt(fd, SOL_SOCKET, SO_TYPE, &fd_sin_type, &fd_sin_type_size)
-        || fd_sin_type_size != sizeof(fd_sin_type)
-        || (fd_sin_type != SOCK_DGRAM && fd_sin_type != SOCK_STREAM)) {
-            log_err("Socket takeover: cannot get type of fd %i @ %s, closing: %s", fd, logf_anysin(&fd_sin), logf_errno());
-            close(fd);
-            return;
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &fd_sin_type, &fd_sin_type_size)
+            || fd_sin_type_size != sizeof(fd_sin_type)
+            || (fd_sin_type != SOCK_DGRAM && fd_sin_type != SOCK_STREAM)) {
+        log_err("Socket takeover: cannot get type of fd %i @ %s, closing: %s", fd, logf_anysin(&fd_sin), logf_errno());
+        close(fd);
+        return;
     }
     const bool fd_sin_is_udp = (fd_sin_type == SOCK_DGRAM);
 
-    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         dns_thread_t* dt = &socks_cfg->dns_threads[i];
-        if(dt->sock == -1 && dt->is_udp == fd_sin_is_udp
-            && !memcmp(&dt->ac->addr, &fd_sin, sizeof(fd_sin))) {
-                dt->sock = fd;
-                return;
+        if (dt->sock == -1 && dt->is_udp == fd_sin_is_udp
+                && !memcmp(&dt->ac->addr, &fd_sin, sizeof(fd_sin))) {
+            dt->sock = fd;
+            return;
         }
     }
 
@@ -661,9 +676,10 @@ static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd) {
     close(fd);
 }
 
-static void socks_import_fds(socks_cfg_t* socks_cfg, const int* fds, const size_t nfds) {
+static void socks_import_fds(socks_cfg_t* socks_cfg, const int* fds, const size_t nfds)
+{
     log_info("Socket takeover: got %zu DNS sockets", nfds);
-    for(size_t i = 0; i < nfds; i++)
+    for (size_t i = 0; i < nfds; i++)
         socks_import_fd(socks_cfg, fds[i]);
 }
 
@@ -671,9 +687,10 @@ static void socks_import_fds(socks_cfg_t* socks_cfg, const int* fds, const size_
  * Public interfaces *
  *********************/
 
-css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p) {
+css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
+{
     csc_t* csc = NULL;
-    if(csc_p) {
+    if (csc_p) {
         csc = *csc_p;
         gdnsd_assert(csc);
     }
@@ -681,19 +698,19 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p) {
     int sock_fd = -1;
     char* lock_path = gdnsd_resolve_path_run(base_lock, NULL);
     int lock_fd = open(lock_path, O_RDONLY | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR);
-    if(lock_fd < 0)
+    if (lock_fd < 0)
         log_fatal("cannot open control sock lock at %s: %s", lock_path, logf_errno());
 
-    if(flock(lock_fd, LOCK_EX | LOCK_NB)) {
-        if(errno != EWOULDBLOCK)
+    if (flock(lock_fd, LOCK_EX | LOCK_NB)) {
+        if (errno != EWOULDBLOCK)
             log_fatal("cannot lock control sock lock at %s: %s", lock_path, logf_errno());
         close(lock_fd);
         lock_fd = -1;
-        if(!csc) {
+        if (!csc) {
             free(lock_path);
             return NULL;
         }
-    } else if(csc) {
+    } else if (csc) {
         log_warn("Existing daemon at %li appears to have exited while we were starting, resuming normal non-takeover startup!",
                  (long)csc_get_server_pid(csc));
         csc_delete(csc);
@@ -703,17 +720,17 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p) {
 
     free(lock_path);
 
-    if(csc) {
+    if (csc) {
         log_info("Executing actual takeover of v%s running at pid %li",
-            csc_get_server_version(csc),
-            (long)csc_get_server_pid(csc)
-        );
+                 csc_get_server_version(csc),
+                 (long)csc_get_server_pid(csc)
+                );
         csbuf_t req, resp;
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAKE;
         req.d = (uint32_t)getpid();
         int* resp_fds = NULL;
-        if(csc_txn_getfds(csc, &req, &resp, &resp_fds))
+        if (csc_txn_getfds(csc, &req, &resp, &resp_fds))
             log_fatal("Takeover request failed");
         log_info("Takeover request accepted");
         gdnsd_assert(resp_fds);
@@ -735,28 +752,28 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p) {
     css->reload_zones_active = xcalloc(1, sizeof(*css->reload_zones_active));
     css->status_d = (uint32_t)getpid();
     uint8_t x, y, z;
-    if(3 != sscanf(PACKAGE_VERSION, "%hhu.%hhu.%hhu", &x, &y, &z))
+    if (3 != sscanf(PACKAGE_VERSION, "%hhu.%hhu.%hhu", &x, &y, &z))
         log_fatal("BUG: Cannot parse our own package version");
     css->status_v = csbuf_make_v(x, y, z);
 
-    if(sock_fd > -1) {
+    if (sock_fd > -1) {
         css->fd = sock_fd;
     } else {
         css->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-        if(css->fd < 0)
+        if (css->fd < 0)
             log_fatal("Creating AF_UNIX socket failed: %s", logf_errno());
 
         char* sock_path = gdnsd_resolve_path_run(base_sock, NULL);
         struct sockaddr_un addr;
         sun_set_path(&addr, sock_path);
-        if(unlink(sock_path) && errno != ENOENT)
+        if (unlink(sock_path) && errno != ENOENT)
             log_fatal("unlink(%s) failed: %s", sock_path, logf_errno());
-        if(bind(css->fd, (struct sockaddr*)&addr, sizeof(addr)))
+        if (bind(css->fd, (struct sockaddr*)&addr, sizeof(addr)))
             log_fatal("bind() of unix domain socket %s failed: %s", sock_path, logf_errno());
 
-        if(chmod(sock_path, CSOCK_PERMS))
+        if (chmod(sock_path, CSOCK_PERMS))
             log_fatal("Failed to chmod(%s, 0%o): %s", sock_path, CSOCK_PERMS, logf_errno());
-        if(listen(css->fd, 100))
+        if (listen(css->fd, 100))
             log_fatal("Failed to listen() on control socket %s: %s", sock_path, logf_errno());
         free(sock_path);
     }
@@ -772,7 +789,8 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p) {
     return css;
 }
 
-void css_start(css_t* css, struct ev_loop* loop) {
+void css_start(css_t* css, struct ev_loop* loop)
+{
     css->loop = loop;
     ev_io_start(css->loop, css->w_accept);
     gdnsd_assert(css->socks_cfg->num_dns_threads);
@@ -781,13 +799,14 @@ void css_start(css_t* css, struct ev_loop* loop) {
     css->handoff_fds = xmalloc(sizeof(int*) * css->handoff_fds_count);
     css->handoff_fds[0] = css->lock_fd;
     css->handoff_fds[1] = css->fd;
-    for(unsigned i = 0; i < css->socks_cfg->num_dns_threads; i++)
+    for (unsigned i = 0; i < css->socks_cfg->num_dns_threads; i++)
         css->handoff_fds[i + 2] = css->socks_cfg->dns_threads[i].sock;
 }
 
-bool css_notify_zone_reloaders(css_t* css, const bool failed) {
+bool css_notify_zone_reloaders(css_t* css, const bool failed)
+{
     // Notify log and all waiting control sock clients of success/fail
-    for(size_t i = 0; i < css->reload_zones_active->len; i++)
+    for (size_t i = 0; i < css->reload_zones_active->len; i++)
         respond(css->reload_zones_active->q[i],
                 failed ? RESP_NAK : RESP_ACK, 0, 0, NULL, NULL);
 
@@ -803,10 +822,11 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed) {
     return !!css->reload_zones_active->len;
 }
 
-void css_delete(css_t* css) {
+void css_delete(css_t* css)
+{
     // clean out active connections...
     css_conn_t* c = css->clients;
-    while(c) {
+    while (c) {
         css_conn_t* next = c->next;
         css_conn_cleanup(c);
         c = next;
@@ -819,7 +839,7 @@ void css_delete(css_t* css) {
     conn_queue_clear(css->reload_zones_active);
     free(css->reload_zones_active);
 
-    if(css->handoff_fds)
+    if (css->handoff_fds)
         free(css->handoff_fds);
     ev_io_stop(css->loop, css->w_accept);
     free(css->w_accept);

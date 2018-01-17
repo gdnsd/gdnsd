@@ -77,14 +77,16 @@ static ev_async* async_reloadz = NULL;
 static void (**exitfuncs)(void) = NULL;
 static unsigned exitfuncs_pending = 0;
 
-void gdnsd_atexit_debug(void (*f)(void)) {
+void gdnsd_atexit_debug(void (*f)(void))
+{
     exitfuncs = xrealloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(void (*)(void)));
     exitfuncs[exitfuncs_pending++] = f;
 }
 
-static void atexit_debug_execute(void) {
-    while(exitfuncs_pending--)
-       exitfuncs[exitfuncs_pending]();
+static void atexit_debug_execute(void)
+{
+    while (exitfuncs_pending--)
+        exitfuncs[exitfuncs_pending]();
 }
 
 #else
@@ -95,14 +97,18 @@ static void atexit_debug_execute(void) { }
 #endif
 
 F_NONNULL F_NORETURN
-static void syserr_for_ev(const char* msg) { log_fatal("%s: %s", msg, logf_errno()); }
+static void syserr_for_ev(const char* msg)
+{
+    log_fatal("%s: %s", msg, logf_errno());
+}
 
 static pthread_t zones_reloader_threadid;
 
-static bool join_zones_reloader_thread(void) {
+static bool join_zones_reloader_thread(void)
+{
     void* raw_exit_status = (void*)42U;
     int pthread_err = pthread_join(zones_reloader_threadid, &raw_exit_status);
-    if(pthread_err)
+    if (pthread_err)
         log_err("pthread_join() of zone data loading thread failed: %s", logf_strerror(pthread_err));
     return !!raw_exit_status;
 }
@@ -111,14 +117,15 @@ static bool join_zones_reloader_thread(void) {
 // the "initial" flag for the thread, which means it doesn't send an async
 // notification back to us on completion, as we'll be waiting for it
 // synchronously in this case.
-static void spawn_zones_reloader_thread(const bool initial) {
+static void spawn_zones_reloader_thread(const bool initial)
+{
     // Block all signals using the pthreads interface while starting threads,
     //  which causes them to inherit the same mask.
     sigset_t sigmask_all;
     sigfillset(&sigmask_all);
     sigset_t sigmask_prev;
     sigemptyset(&sigmask_prev);
-    if(pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
         log_fatal("pthread_sigmask() failed");
 
     pthread_attr_t attribs;
@@ -127,31 +134,34 @@ static void spawn_zones_reloader_thread(const bool initial) {
     pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
 
     int pthread_err = pthread_create(&zones_reloader_threadid, &attribs, &ztree_zones_reloader_thread, (void*)initial);
-    if(pthread_err)
+    if (pthread_err)
         log_fatal("pthread_create() of zone data thread failed: %s", logf_strerror(pthread_err));
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
-    if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
         log_fatal("pthread_sigmask() failed");
     pthread_attr_destroy(&attribs);
 }
 
-static bool initialize_zones(void) {
+static bool initialize_zones(void)
+{
     spawn_zones_reloader_thread(true);
     return join_zones_reloader_thread();
 }
 
-void spawn_async_zones_reloader_thread(void) {
+void spawn_async_zones_reloader_thread(void)
+{
     spawn_zones_reloader_thread(false);
 }
 
 F_NONNULL
-static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int revents V_UNUSED) {
+static void terminal_signal(struct ev_loop* loop, struct ev_signal* w, const int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_SIGNAL);
     gdnsd_assert(w->signum == SIGTERM || w->signum == SIGINT);
     css_t* css = w->data;
-    if(!css_stop_ok(css)) {
+    if (!css_stop_ok(css)) {
         log_err("Ignoring terminating signal %i because a takeover or replacement attempt is in progress!", w->signum);
     } else {
         log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
@@ -161,28 +171,31 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal *w, const int
 }
 
 F_NONNULL
-static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async *a V_UNUSED, const int revents V_UNUSED) {
+static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a V_UNUSED, const int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_ASYNC);
     css_t* css = a->data;
     const bool failed = join_zones_reloader_thread();
 
-    if(failed)
+    if (failed)
         log_err("Reloading zone data failed");
     else
         log_info("Reloading zone data successful");
 
-    if(css_notify_zone_reloaders(css, failed))
-       spawn_async_zones_reloader_thread();
+    if (css_notify_zone_reloaders(css, failed))
+        spawn_async_zones_reloader_thread();
 }
 
 // called by ztree reloader thread just before it exits
-void notify_reload_zones_done(void) {
+void notify_reload_zones_done(void)
+{
     ev_async_send(def_loop, async_reloadz);
 }
 
 // Set up our terminal signal handlers via libev
 F_NONNULL
-static void setup_signals(css_t* css) {
+static void setup_signals(css_t* css)
+{
     sig_int = malloc(sizeof(ev_signal));
     ev_signal_init(sig_int, terminal_signal, SIGINT);
     sig_int->data = css;
@@ -194,7 +207,8 @@ static void setup_signals(css_t* css) {
     ev_signal_start(def_loop, sig_term);
 }
 
-static void setup_reload_zones(css_t* css) {
+static void setup_reload_zones(css_t* css)
+{
     async_reloadz = malloc(sizeof(ev_async));
     ev_async_init(async_reloadz, reload_zones_done);
     async_reloadz->data = css;
@@ -202,36 +216,38 @@ static void setup_reload_zones(css_t* css) {
 }
 
 F_NONNULL F_NORETURN
-static void usage(const char* argv0) {
+static void usage(const char* argv0)
+{
     const char* def_cfdir = gdnsd_get_default_config_dir();
     fprintf(stderr,
-        PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-        "Usage: %s [-c %s] [-D] [-l] [-S] [-T] <action>\n"
-        "  -c - Configuration directory, default '%s'\n"
-        "  -D - Enable verbose debug output\n"
-        "  -l - Send logs to syslog rather than stderr\n"
-        "  -S - Force 'zones_strict_data = true' for this invocation\n"
-        "  -T - Allow downtime-less takeover of another instance\n"
-        "Actions:\n"
-        "  checkconf - Checks validity of config and zone files\n"
-        "  start - Start as a regular foreground process\n"
-        "  daemonize - Start as a background daemon (implies -l)\n"
-        "\nFeatures: " BUILD_FEATURES
-        "\nBuild Info: " BUILD_INFO
-        "\nBug report URL: " PACKAGE_BUGREPORT
-        "\nGeneral info URL: " PACKAGE_URL
-        "\n",
-        argv0, def_cfdir, def_cfdir
-    );
+            PACKAGE_NAME " version " PACKAGE_VERSION "\n"
+            "Usage: %s [-c %s] [-D] [-l] [-S] [-T] <action>\n"
+            "  -c - Configuration directory, default '%s'\n"
+            "  -D - Enable verbose debug output\n"
+            "  -l - Send logs to syslog rather than stderr\n"
+            "  -S - Force 'zones_strict_data = true' for this invocation\n"
+            "  -T - Allow downtime-less takeover of another instance\n"
+            "Actions:\n"
+            "  checkconf - Checks validity of config and zone files\n"
+            "  start - Start as a regular foreground process\n"
+            "  daemonize - Start as a background daemon (implies -l)\n"
+            "\nFeatures: " BUILD_FEATURES
+            "\nBuild Info: " BUILD_INFO
+            "\nBug report URL: " PACKAGE_BUGREPORT
+            "\nGeneral info URL: " PACKAGE_URL
+            "\n",
+            argv0, def_cfdir, def_cfdir
+           );
     exit(2);
 }
 
 F_NONNULL
-static void start_threads(socks_cfg_t* socks_cfg) {
+static void start_threads(socks_cfg_t* socks_cfg)
+{
     dnsio_udp_init();
     unsigned num_tcp_threads = 0;
-    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++)
-        if(!socks_cfg->dns_threads[i].is_udp)
+    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++)
+        if (!socks_cfg->dns_threads[i].is_udp)
             num_tcp_threads++;
     dnsio_tcp_init(num_tcp_threads);
 
@@ -241,7 +257,7 @@ static void start_threads(socks_cfg_t* socks_cfg) {
     sigfillset(&sigmask_all);
     sigset_t sigmask_prev;
     sigemptyset(&sigmask_prev);
-    if(pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_all, &sigmask_prev))
         log_fatal("pthread_sigmask() failed");
 
     // system scope scheduling, joinable threads
@@ -252,29 +268,30 @@ static void start_threads(socks_cfg_t* socks_cfg) {
 
     int pthread_err;
 
-    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         dns_thread_t* t = &socks_cfg->dns_threads[i];
-        if(t->is_udp)
+        if (t->is_udp)
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, t);
         else
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, t);
-        if(pthread_err)
+        if (pthread_err)
             log_fatal("pthread_create() of DNS thread %u (for %s:%s) failed: %s",
-                i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_strerror(pthread_err));
+                      i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_strerror(pthread_err));
     }
 
     // Restore the original mask in the main thread, so
     //  we can continue handling signals like normal
-    if(pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_prev, NULL))
         log_fatal("pthread_sigmask() failed");
     pthread_attr_destroy(&attribs);
 }
 
-static void request_io_threads_stop(socks_cfg_t* socks_cfg) {
+static void request_io_threads_stop(socks_cfg_t* socks_cfg)
+{
     dnsio_tcp_request_threads_stop();
-    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         dns_thread_t* t = &socks_cfg->dns_threads[i];
-        if(t->is_udp)
+        if (t->is_udp)
             pthread_kill(t->threadid, SIGUSR2);
     }
 }
@@ -294,48 +311,50 @@ typedef struct {
 } cmdline_opts_t;
 
 F_NONNULL
-static void parse_args(const int argc, char** argv, cmdline_opts_t* copts) {
+static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
+{
     int optchar;
-    while((optchar = getopt(argc, argv, "c:DlST"))) {
-        switch(optchar) {
-            case 'c':
-                copts->cfg_dir = optarg;
-                break;
-            case 'D':
-                gdnsd_log_set_debug(true);
-                break;
-            case 'l':
-                gdnsd_log_set_syslog(true);
-                break;
-            case 'S':
-                copts->force_zsd = true;
-                break;
-            case 'T':
-                copts->takeover_ok = true;
-                break;
-            case -1:
-                if(optind == (argc - 1)) {
-                    if(!strcasecmp("checkconf", argv[optind])) {
-                        copts->action = ACT_CHECKCONF;
-                        return;
-                    } else if(!strcasecmp("start", argv[optind])) {
-                        copts->action = ACT_START;
-                        return;
-                    } else if(!strcasecmp("daemonize", argv[optind])) {
-                        copts->action = ACT_DAEMONIZE;
-                        gdnsd_log_set_syslog(true);
-                        return;
-                    }
+    while ((optchar = getopt(argc, argv, "c:DlST"))) {
+        switch (optchar) {
+        case 'c':
+            copts->cfg_dir = optarg;
+            break;
+        case 'D':
+            gdnsd_log_set_debug(true);
+            break;
+        case 'l':
+            gdnsd_log_set_syslog(true);
+            break;
+        case 'S':
+            copts->force_zsd = true;
+            break;
+        case 'T':
+            copts->takeover_ok = true;
+            break;
+        case -1:
+            if (optind == (argc - 1)) {
+                if (!strcasecmp("checkconf", argv[optind])) {
+                    copts->action = ACT_CHECKCONF;
+                    return;
+                } else if (!strcasecmp("start", argv[optind])) {
+                    copts->action = ACT_START;
+                    return;
+                } else if (!strcasecmp("daemonize", argv[optind])) {
+                    copts->action = ACT_DAEMONIZE;
+                    gdnsd_log_set_syslog(true);
+                    return;
                 }
-                // fall-through
-            default:
-                usage(argv[0]);
+            }
+        // fall-through
+        default:
+            usage(argv[0]);
         }
     }
     usage(argv[0]);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv)
+{
     umask(022);
     // Parse args, getting the config path
     //   returning the action.  Exits on cmdline errors,
@@ -351,7 +370,7 @@ int main(int argc, char** argv) {
     gdnsd_assert(copts.action != ACT_UNDEF);
 
     // Initialize libgdnsd basic paths/config stuff
-    if(copts.action != ACT_CHECKCONF)
+    if (copts.action != ACT_CHECKCONF)
         gdnsd_init_daemon(copts.action == ACT_DAEMONIZE);
     vscf_data_t* cfg_root = gdnsd_init_paths(copts.cfg_dir, copts.action != ACT_CHECKCONF);
 
@@ -363,10 +382,10 @@ int main(int argc, char** argv) {
 
     // Load zone data (final step if checkconf) synchronously
     ztree_init();
-    if(initialize_zones())
+    if (initialize_zones())
         log_fatal("Initial load of zone data failed");
 
-    if(copts.action == ACT_CHECKCONF)
+    if (copts.action == ACT_CHECKCONF)
         exit(0);
 
     // Initialize the network and PRNG bits of libgdnsd for runtime operation
@@ -376,8 +395,8 @@ int main(int argc, char** argv) {
     // init locked control socket, can fail if concurrent daemon...
     csc_t* csc = NULL;
     css_t* css = css_new(argv[0], socks_cfg, NULL);
-    if(!css) {
-        if(!copts.takeover_ok)
+    if (!css) {
+        if (!copts.takeover_ok)
             log_fatal("Another instance is running and has the control socket locked!");
         log_info("Another instance is running, connecting to control socket for takeover");
         csc = csc_new(13);
@@ -389,8 +408,8 @@ int main(int argc, char** argv) {
     statio_init(socks_cfg->num_dns_threads);
 
     // Lock whole daemon into memory, including all future allocations.
-    if(cfg->lock_mem)
-        if(mlockall(MCL_CURRENT | MCL_FUTURE))
+    if (cfg->lock_mem)
+        if (mlockall(MCL_CURRENT | MCL_FUTURE))
             log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
 
     // Initialize dnspacket stuff
@@ -402,7 +421,7 @@ int main(int argc, char** argv) {
     // default ev loop in main process to handle statio, monitors, control
     // socket, signals, etc.
     def_loop = ev_default_loop(EVFLAG_AUTO);
-    if(!def_loop)
+    if (!def_loop)
         log_fatal("Could not initialize the default libev loop");
 
     // set up monitoring, which expects an initially empty loop
@@ -419,7 +438,7 @@ int main(int argc, char** argv) {
     // which gaurantees us winning and denies racers), or some other control
     // socket client could have requested the old server to stop, either of
     // which will cause failure here.
-    if(!css)
+    if (!css)
         css = css_new(argv[0], socks_cfg, &csc);
 
     // main thread signal handlers
@@ -446,8 +465,8 @@ int main(int argc, char** argv) {
     gdnsd_daemon_notify_ready();
 
     // Stop old daemon after establishing the new one's listeners
-    if(csc) {
-        if(!csc_stop_server(csc))
+    if (csc) {
+        if (!csc_stop_server(csc))
             csc_wait_stopping_server(csc);
         csc_delete(csc);
         csc = NULL;
@@ -472,13 +491,13 @@ int main(int argc, char** argv) {
     gdnsd_kill_registered_children();
 
     // wait for i/o threads to exit
-    for(unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         dns_thread_t* t = &socks_cfg->dns_threads[i];
         void* raw_exit_status = (void*)42U;
         int pthread_err = pthread_join(t->threadid, &raw_exit_status);
-        if(pthread_err)
+        if (pthread_err)
             log_err("pthread_join() of DNS thread failed: %s", logf_strerror(pthread_err));
-        if(raw_exit_status != NULL)
+        if (raw_exit_status != NULL)
             log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
     }
 
@@ -497,7 +516,7 @@ int main(int argc, char** argv) {
 #else
     // kill self with same signal, so that our exit status is correct
     //   for any parent/manager/whatever process that may be watching
-    if(killed_by)
+    if (killed_by)
         raise(killed_by);
     else
         exit(0);

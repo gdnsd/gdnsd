@@ -28,31 +28,31 @@
 #include <stdbool.h>
 
 typedef struct {
-   unsigned num_dcs; // count (e.g. 3)
-   uint8_t* dc_list; // 1-based numeric indices (e.g. "\1\2\3\0")
-                     //   this is always ordered in the metafo case
-   char** dc_names;  // array of names, 1-based
+    unsigned num_dcs; // count (e.g. 3)
+    uint8_t* dc_list; // 1-based numeric indices (e.g. "\1\2\3\0"), this is always ordered in the metafo case
+    char** dc_names;  // array of names, 1-based
 } dclist_t;
 
 static unsigned num_dclists = 0;
 static dclist_t** dclists = NULL; // one per resource in metafo case
 
 F_NONNULL
-static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name) {
+static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
+{
     // Get 'dclist' name, convert, store, return 0-based dclist index
     vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(res_cfg, "datacenters", true);
-    if(!dc_cfg)
+    if (!dc_cfg)
         log_fatal("plugin_metafo: resource '%s': required key 'datacenters' is missing", res_name);
     dclist_t* dcl = xmalloc(sizeof(dclist_t));
-    if(vscf_is_hash(dc_cfg) || !(dcl->num_dcs = vscf_array_get_len(dc_cfg)))
+    if (vscf_is_hash(dc_cfg) || !(dcl->num_dcs = vscf_array_get_len(dc_cfg)))
         log_fatal("plugin_metafo: resource '%s': 'datacenters' must be an array of one or more datacenter name strings", res_name);
 
     uint8_t* dclptr = dcl->dc_list = xmalloc(dcl->num_dcs + 1);
     dcl->dc_names = xmalloc((dcl->num_dcs + 1) * sizeof(char*));
     dcl->dc_names[0] = NULL; // index zero is invalid
-    for(unsigned i = 0; i < dcl->num_dcs; i++) {
+    for (unsigned i = 0; i < dcl->num_dcs; i++) {
         vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
-        if(!dcname_cfg || !vscf_is_simple(dcname_cfg))
+        if (!dcname_cfg || !vscf_is_simple(dcname_cfg))
             log_fatal("plugin_metafo: resource '%s': 'datacenters' must be an array of one or more datacenter name strings", res_name);
         const unsigned dcidx = i + 1;
         *dclptr++ = dcidx;
@@ -66,26 +66,29 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name) {
     return rv_idx;
 }
 
-static unsigned map_get_len(const unsigned mapnum) {
+static unsigned map_get_len(const unsigned mapnum)
+{
     gdnsd_assert(mapnum < num_dclists);
     gdnsd_assert(dclists[mapnum]->num_dcs);
     return dclists[mapnum]->num_dcs;
 }
 
 F_NONNULL F_PURE
-static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname) {
+static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname)
+{
     gdnsd_assert(mapnum < num_dclists);
 
     dclist_t* this_map = dclists[mapnum];
-    for(unsigned i = 1; i <= this_map->num_dcs; i++)
-        if(!strcmp(dcname, this_map->dc_names[i]))
+    for (unsigned i = 1; i <= this_map->num_dcs; i++)
+        if (!strcmp(dcname, this_map->dc_names[i]))
             return i;
 
     return 0;
 }
 
 F_NONNULL
-static bool top_config_hook(vscf_data_t* top_config V_UNUSED) {
+static bool top_config_hook(vscf_data_t* top_config V_UNUSED)
+{
     gdnsd_assert(vscf_is_hash(top_config));
     return false;
 }
@@ -93,7 +96,8 @@ static bool top_config_hook(vscf_data_t* top_config V_UNUSED) {
 static void bottom_config_hook(void) { }
 
 F_NONNULL
-static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo V_UNUSED, unsigned* scope_out V_UNUSED) {
+static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo V_UNUSED, unsigned* scope_out V_UNUSED)
+{
     gdnsd_assert(mapnum < num_dclists);
     return dclists[mapnum]->dc_list;
 }

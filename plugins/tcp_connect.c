@@ -67,18 +67,19 @@ static tcp_svc_t* service_types = NULL;
 static tcp_events_t** mons = NULL;
 
 F_NONNULL
-static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
+static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
 
     gdnsd_assert(md);
 
-    if(md->tcp_state != TCP_STATE_WAITING) {
+    if (md->tcp_state != TCP_STATE_WAITING) {
         log_warn("plugin_tcp_connect: A monitoring request attempt seems to have "
-            "lasted longer than the monitoring interval. "
-            "Skipping this round of monitoring - are you "
-            "starved for CPU time?");
+                 "lasted longer than the monitoring interval. "
+                 "Skipping this round of monitoring - are you "
+                 "starved for CPU time?");
         return;
     }
 
@@ -91,38 +92,37 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     const bool isv6 = md->addr.sa.sa_family == AF_INET6;
 
     const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, gdnsd_getproto_tcp());
-    if(sock == -1) {
+    if (sock == -1) {
         log_err("plugin_tcp_connect: Failed to create monitoring socket: %s", logf_errno());
         return;
     }
 
     bool success = false;
-    if(likely(connect(sock, &md->addr.sa, md->addr.len) == -1)) {
-        switch(errno) {
-            case EINPROGRESS:
-                // this is the normal case, where nonblock connect
-                //   wants us to wait for writability...
-                md->sock = sock;
-                md->tcp_state = TCP_STATE_CONNECTING;
-                ev_io_set(md->connect_watcher, sock, EV_WRITE);
-                ev_io_start(loop, md->connect_watcher);
-                ev_timer_set(md->timeout_watcher, md->tcp_svc->timeout, 0);
-                ev_timer_start(loop, md->timeout_watcher);
-                return; // don't do socket/status finishing actions below...
-            case EPIPE:
-            case ECONNREFUSED:
-            case ETIMEDOUT:
-            case EHOSTUNREACH:
-            case EHOSTDOWN:
-            case ENETUNREACH:
-                // fast remote failures, e.g. when remote is local, I hope
-                log_debug("plugin_tcp_connect: State poll of %s failed very quickly", md->desc);
-                break;
-            default:
-                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
+    if (likely(connect(sock, &md->addr.sa, md->addr.len) == -1)) {
+        switch (errno) {
+        case EINPROGRESS:
+            // this is the normal case, where nonblock connect
+            //   wants us to wait for writability...
+            md->sock = sock;
+            md->tcp_state = TCP_STATE_CONNECTING;
+            ev_io_set(md->connect_watcher, sock, EV_WRITE);
+            ev_io_start(loop, md->connect_watcher);
+            ev_timer_set(md->timeout_watcher, md->tcp_svc->timeout, 0);
+            ev_timer_start(loop, md->timeout_watcher);
+            return; // don't do socket/status finishing actions below...
+        case EPIPE:
+        case ECONNREFUSED:
+        case ETIMEDOUT:
+        case EHOSTUNREACH:
+        case EHOSTDOWN:
+        case ENETUNREACH:
+            // fast remote failures, e.g. when remote is local, I hope
+            log_debug("plugin_tcp_connect: State poll of %s failed very quickly", md->desc);
+            break;
+        default:
+            log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
         }
-    }
-    else {
+    } else {
         success = true;
     }
 
@@ -131,7 +131,8 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 }
 
 F_NONNULL
-static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED) {
+static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_WRITE);
 
     tcp_events_t* md = io->data;
@@ -148,21 +149,20 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     int so_error = 0;
     socklen_t so_error_len = sizeof(so_error);
     (void)getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
-    if(unlikely(so_error)) {
-        switch(so_error) {
-            case EPIPE:
-            case ECONNREFUSED:
-            case ETIMEDOUT:
-            case EHOSTUNREACH:
-            case EHOSTDOWN:
-            case ENETUNREACH:
-                log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->desc, logf_strerror(so_error));
-                break;
-            default:
-                log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_strerror(so_error));
+    if (unlikely(so_error)) {
+        switch (so_error) {
+        case EPIPE:
+        case ECONNREFUSED:
+        case ETIMEDOUT:
+        case EHOSTUNREACH:
+        case EHOSTDOWN:
+        case ENETUNREACH:
+            log_debug("plugin_tcp_connect: State poll of %s failed quickly: %s", md->desc, logf_strerror(so_error));
+            break;
+        default:
+            log_err("plugin_tcp_connect: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_strerror(so_error));
         }
-    }
-    else {
+    } else {
         success = true;
     }
 
@@ -176,7 +176,8 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
 }
 
 F_NONNULL
-static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED) {
+static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
@@ -198,18 +199,19 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
     do { \
         vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
-        if(_data) { \
+        if (_data) { \
             unsigned long _val; \
-            if(!vscf_is_simple(_data) \
+            if (!vscf_is_simple(_data) \
             || !vscf_simple_get_as_ulong(_data, &_val)) \
                 log_fatal("plugin_tcp_connect: Service type '%s': option '%s': Value must be a positive integer", _typnam, #_loc); \
-            if(_val < _min || _val > _max) \
+            if (_val < _min || _val > _max) \
                 log_fatal("plugin_tcp_connect: Service type '%s': option '%s': Value out of range (%lu, %lu)", _typnam, #_loc, _min, _max); \
             _loc = (unsigned) _val; \
         } \
-    } while(0)
+    } while (0)
 
-void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout) {
+void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
+{
     service_types = xrealloc(service_types, (num_tcp_svcs + 1) * sizeof(tcp_svc_t));
     tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
 
@@ -217,7 +219,7 @@ void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     unsigned port = 0U;
 
     SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
-    if(!port)
+    if (!port)
         log_fatal("plugin_tcp_connect: service type '%s' must have a 'port' parameter", name);
 
     this_svc->port = port;
@@ -225,13 +227,14 @@ void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     this_svc->interval = interval;
 }
 
-void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx) {
+void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
+{
     tcp_events_t* this_mon = xcalloc(1, sizeof(tcp_events_t));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
 
-    for(unsigned i = 0; i < num_tcp_svcs; i++) {
-        if(!strcmp(service_types[i].name, svc_name)) {
+    for (unsigned i = 0; i < num_tcp_svcs; i++) {
+        if (!strcmp(service_types[i].name, svc_name)) {
             this_mon->tcp_svc = &service_types[i];
             break;
         }
@@ -240,10 +243,9 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
     gdnsd_assert(this_mon->tcp_svc);
 
     memcpy(&this_mon->addr, addr, sizeof(gdnsd_anysin_t));
-    if(this_mon->addr.sa.sa_family == AF_INET) {
+    if (this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->tcp_svc->port);
-    }
-    else {
+    } else {
         gdnsd_assert(this_mon->addr.sa.sa_family == AF_INET6);
         this_mon->addr.sin6.sin6_port = htons(this_mon->tcp_svc->port);
     }
@@ -267,8 +269,9 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
     mons[num_mons++] = this_mon;
 }
 
-void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
-    for(unsigned i = 0; i < num_mons; i++) {
+void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop)
+{
+    for (unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = mons[i]->interval_watcher;
         gdnsd_assert(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
@@ -276,8 +279,9 @@ void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop) {
     }
 }
 
-void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop) {
-    for(unsigned i = 0; i < num_mons; i++) {
+void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
+{
+    for (unsigned i = 0; i < num_mons; i++) {
         tcp_events_t* mon = mons[i];
         gdnsd_assert(mon->sock == -1);
         const unsigned ival = mon->tcp_svc->interval;

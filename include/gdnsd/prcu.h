@@ -49,23 +49,23 @@ extern pthread_rwlock_t gdnsd_prcu_rwlock_;
 #define gdnsd_prcu_rdr_offline() rcu_thread_offline()
 #define gdnsd_prcu_rdr_thread_end() rcu_unregister_thread()
 
-#define gdnsd_prcu_upd_lock() do { } while(0)
-#define gdnsd_prcu_upd_assign(d,s) rcu_assign_pointer((d),(s))
+#define gdnsd_prcu_upd_lock() do { } while (0)
+#define gdnsd_prcu_upd_assign(d, s) rcu_assign_pointer((d), (s))
 #define gdnsd_prcu_upd_unlock() synchronize_rcu()
 
 #else // !GDNSD_B_QSBR
 
-#define gdnsd_prcu_rdr_thread_start() do { } while(0)
-#define gdnsd_prcu_rdr_online() do { } while(0)
-#define gdnsd_prcu_rdr_quiesce() do { } while(0)
+#define gdnsd_prcu_rdr_thread_start() do { } while (0)
+#define gdnsd_prcu_rdr_online() do { } while (0)
+#define gdnsd_prcu_rdr_quiesce() do { } while (0)
 #define gdnsd_prcu_rdr_lock() pthread_rwlock_rdlock(&gdnsd_prcu_rwlock_)
 #define gdnsd_prcu_rdr_deref(s) (s)
 #define gdnsd_prcu_rdr_unlock() pthread_rwlock_unlock(&gdnsd_prcu_rwlock_)
-#define gdnsd_prcu_rdr_offline() do { } while(0)
-#define gdnsd_prcu_rdr_thread_end() do { } while(0)
+#define gdnsd_prcu_rdr_offline() do { } while (0)
+#define gdnsd_prcu_rdr_thread_end() do { } while (0)
 
 #define gdnsd_prcu_upd_lock() pthread_rwlock_wrlock(&gdnsd_prcu_rwlock_)
-#define gdnsd_prcu_upd_assign(d,s) (d) = (s)
+#define gdnsd_prcu_upd_assign(d, s) (d) = (s)
 #define gdnsd_prcu_upd_unlock() pthread_rwlock_unlock(&gdnsd_prcu_rwlock_)
 
 #endif // GDNSD_B_QSBR

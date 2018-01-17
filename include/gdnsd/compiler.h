@@ -30,7 +30,7 @@
 
 // Basic features common to clang and gcc-3.4+
 #if defined __clang__ || defined __GNUC__
-#  define F_PRINTF(X,Y)   __attribute__((__format__(__printf__, X, Y)))
+#  define F_PRINTF(X, Y)  __attribute__((__format__(__printf__, X, Y)))
 #  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
 #  define F_NONNULL       __attribute__((__nonnull__))
 #  define F_NORETURN      __attribute__((__noreturn__))
@@ -92,7 +92,7 @@
 
 // defaults for unknown compilers and things left unset above
 #ifndef F_PRINTF
-#  define F_PRINTF(X,Y)
+#  define F_PRINTF(X, Y)
 #endif
 #ifndef F_NONNULLX
 #  define F_NONNULLX(...)
@@ -167,12 +167,16 @@
 
 // Unaligned memory access stuff
 #include <inttypes.h>
-struct _gdnsd_una16 { uint16_t x; } S_PACKED;
-struct _gdnsd_una32 { uint32_t x; } S_PACKED;
+struct _gdnsd_una16 {
+    uint16_t x;
+} S_PACKED;
+struct _gdnsd_una32 {
+    uint32_t x;
+} S_PACKED;
 #define gdnsd_get_una16(_p) (((const struct _gdnsd_una16*)(_p))->x)
 #define gdnsd_get_una32(_p) (((const struct _gdnsd_una32*)(_p))->x)
-#define gdnsd_put_una16(_v,_p) (((struct _gdnsd_una16*)(_p))->x) = (_v)
-#define gdnsd_put_una32(_v,_p) (((struct _gdnsd_una32*)(_p))->x) = (_v)
+#define gdnsd_put_una16(_v, _p) (((struct _gdnsd_una16*)(_p))->x) = (_v)
+#define gdnsd_put_una32(_v, _p) (((struct _gdnsd_una32*)(_p))->x) = (_v)
 
 // Generic useful macros
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -182,10 +186,10 @@ struct _gdnsd_una32 { uint32_t x; } S_PACKED;
 #  include <valgrind/memcheck.h>
 #else
 #  define RUNNING_ON_VALGRIND 0
-#  define VALGRIND_MAKE_MEM_NOACCESS(x,y) ((void)(0))
-#  define VALGRIND_CREATE_MEMPOOL(x,y,z)  ((void)(0))
-#  define VALGRIND_DESTROY_MEMPOOL(x)     ((void)(0))
-#  define VALGRIND_MEMPOOL_ALLOC(x,y,z)   ((void)(0))
+#  define VALGRIND_MAKE_MEM_NOACCESS(x, y) ((void)(0))
+#  define VALGRIND_CREATE_MEMPOOL(x, y, z) ((void)(0))
+#  define VALGRIND_DESTROY_MEMPOOL(x)      ((void)(0))
+#  define VALGRIND_MEMPOOL_ALLOC(x, y, z)  ((void)(0))
 #endif
 
 #endif // GDNSD_COMPILER_H

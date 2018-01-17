@@ -41,24 +41,24 @@
 static char* rfc1035_dir = NULL;
 
 F_NONNULL
-static char* make_zone_name(const char* zf_name) {
+static char* make_zone_name(const char* zf_name)
+{
     unsigned zf_name_len = strlen(zf_name);
     char* out = NULL;
 
-    if(zf_name_len > 1004) {
+    if (zf_name_len > 1004) {
         log_err("rfc1035: Zone file name '%s' is illegal", zf_name);
-    }
-    else {
+    } else {
         // check for root zone...
-        if(unlikely(zf_name_len == 9 && !strncmp(zf_name, "ROOT_ZONE", 9))) { out = xmalloc(2);
+        if (unlikely(zf_name_len == 9 && !strncmp(zf_name, "ROOT_ZONE", 9))) {
+            out = xmalloc(2);
             out[0] = '.';
             out[1] = 0;
-        }
-        else {
+        } else {
             // convert all '@' to '/' for RFC2317 reverse delegation zones
             out = xmalloc(zf_name_len + 1);
-            for(unsigned i = 0; i <= zf_name_len; i++) {
-                if(unlikely(zf_name[i] == '@'))
+            for (unsigned i = 0; i <= zf_name_len; i++) {
+                if (unlikely(zf_name[i] == '@'))
                     out[i] = '/';
                 else
                     out[i] = zf_name[i];
@@ -70,7 +70,8 @@ static char* make_zone_name(const char* zf_name) {
 }
 
 F_NONNULL
-static bool process_zonefile(ztree_t* tree, const char* fn, const char* full_fn) {
+static bool process_zonefile(ztree_t* tree, const char* fn, const char* full_fn)
+{
     char* name = make_zone_name(fn);
     if (name) {
         char* src = gdnsd_str_combine("rfc1035:", fn, NULL);
@@ -93,12 +94,13 @@ static bool process_zonefile(ztree_t* tree, const char* fn, const char* full_fn)
 /*** Public interfaces ***/
 /*************************/
 
-bool zsrc_rfc1035_load_zones(ztree_t* tree) {
+bool zsrc_rfc1035_load_zones(ztree_t* tree)
+{
     gdnsd_assert(rfc1035_dir);
 
     DIR* zdhandle = opendir(rfc1035_dir);
-    if(!zdhandle) {
-        if(errno == ENOENT) {
+    if (!zdhandle) {
+        if (errno == ENOENT) {
             log_debug("rfc1035: Zones directory '%s' does not exist", rfc1035_dir);
             return false;
         }
@@ -130,14 +132,13 @@ bool zsrc_rfc1035_load_zones(ztree_t* tree) {
                 if (fail_return)
                     return true;
             }
-        }
-        else if(errno) {
+        } else if (errno) {
             log_err("rfc1035: readdir(%s) failed: %s", rfc1035_dir, logf_errno());
             return true;
         }
-    } while(result);
+    } while (result);
 
-    if(closedir(zdhandle)) {
+    if (closedir(zdhandle)) {
         log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, logf_errno());
         return true;
     }
@@ -146,6 +147,7 @@ bool zsrc_rfc1035_load_zones(ztree_t* tree) {
     return false;
 }
 
-void zsrc_rfc1035_init(void) {
+void zsrc_rfc1035_init(void)
+{
     rfc1035_dir = gdnsd_resolve_path_cfg("zones/", NULL);
 }

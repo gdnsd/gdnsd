@@ -47,27 +47,27 @@ bool gdnsd_log_get_syslog(void);
 
 // This is a syslog()-like interface that will log
 //  to stderr and is thread-safe
-F_COLD F_NONNULLX(2) F_PRINTF(2,3)
+F_COLD F_NONNULLX(2) F_PRINTF(2, 3)
 void gdnsd_logger(int level, const char* fmt, ...);
 
 // As above, but with a va_list interface to make it
 //  easier to integrate with your own custom wrapper code.
-F_COLD F_NONNULLX(2) F_PRINTF(2,0)
+F_COLD F_NONNULLX(2) F_PRINTF(2, 0)
 void gdnsd_loggerv(int level, const char* fmt, va_list ap);
 
 // The intended simple API for logging with 5 separate function-call-like
 // interfaces with different levels.  The _fatal variant exits after emitting
 // the logged statement, and the _debug variant's output is toggled with the
 // runtime gdnsd_log_set_debug() call (defaults off)
-#define gdnsd_log_info(...) gdnsd_logger(LOG_INFO,__VA_ARGS__)
-#define gdnsd_log_warn(...) gdnsd_logger(LOG_WARNING,__VA_ARGS__)
-#define gdnsd_log_err(...) gdnsd_logger(LOG_ERR,__VA_ARGS__)
+#define gdnsd_log_info(...) gdnsd_logger(LOG_INFO, __VA_ARGS__)
+#define gdnsd_log_warn(...) gdnsd_logger(LOG_WARNING, __VA_ARGS__)
+#define gdnsd_log_err(...) gdnsd_logger(LOG_ERR, __VA_ARGS__)
 
 // log_debug() messages will only be emitted if the runtime debug flag is set
 #define gdnsd_log_debug(...) do {\
-     if(gdnsd_log_get_debug())\
-         gdnsd_logger(LOG_DEBUG,__VA_ARGS__);\
-     } while(0)
+     if (gdnsd_log_get_debug())\
+         gdnsd_logger(LOG_DEBUG, __VA_ARGS__);\
+     } while (0)
 
 // GDNSD_NO_FATAL_COVERAGE is to allow coverage testing to skip
 //   over fatal conditions.  If your tests don't cover those
@@ -79,9 +79,9 @@ void gdnsd_loggerv(int level, const char* fmt, va_list ap);
 #  define gdnsd_log_fatal(...) ((void)(0))
 #else
 #  define gdnsd_log_fatal(...) do {\
-     gdnsd_logger(LOG_CRIT,__VA_ARGS__);\
+     gdnsd_logger(LOG_CRIT, __VA_ARGS__);\
      exit(42);\
-   } while(0)
+   } while (0)
 #endif
 
 // GDNSD_NO_UNREACH_BUILTIN is to work around gcov coverage testing, which
@@ -98,16 +98,16 @@ void gdnsd_loggerv(int level, const char* fmt, va_list ap);
 #  define gdnsd_log_devdebug(...) ((void)(0))
 #else
 #  define gdnsd_assert(expr) do {\
-     if(!(expr)) {\
-       gdnsd_logger(LOG_CRIT,"Assertion '%s' failed in %s() at %s:%i, backtrace:%s",\
+     if (!(expr)) {\
+       gdnsd_logger(LOG_CRIT, "Assertion '%s' failed in %s() at %s:%i, backtrace:%s",\
        #expr, __func__, __FILE__, __LINE__, gdnsd_logf_bt());\
        abort();\
      }\
-   } while(0)
+   } while (0)
 #  define gdnsd_log_devdebug(...) do {\
-     if(gdnsd_log_get_debug())\
-         gdnsd_logger(LOG_DEBUG,__VA_ARGS__);\
-     } while(0)
+     if (gdnsd_log_get_debug())\
+         gdnsd_logger(LOG_DEBUG, __VA_ARGS__);\
+     } while (0)
 #endif // NDEBUG
 
 //
@@ -122,9 +122,10 @@ void gdnsd_loggerv(int level, const char* fmt, va_list ap);
 // "size" is not allowed to be zero, and this function never returns NULL
 // Example:
 //
-//  const char* my_int_formatter(int foo) {
+//  const char* my_int_formatter(int foo)
+//  {
 //     char* buf = gdnsd_fmtbuf_alloc(22);
-//     if(snprintf(buf, 22, "%i", foo) >= 22)
+//     if (snprintf(buf, 22, "%i", foo) >= 22)
 //       log_fatal("BUG: Integer formatting did not fit buffer space!");
 //     return buf;
 //  }

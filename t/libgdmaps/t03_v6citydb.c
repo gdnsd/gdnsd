@@ -23,6 +23,7 @@
 #include "gdmaps_test.h"
 #include <tap.h>
 
+// *INDENT-OFF*
 static const char cfg[] = QUOTE(
    city_region_names => regioncodes-20130115.csv,
    my_prod_map => {
@@ -34,13 +35,15 @@ static const char cfg[] = QUOTE(
     }
    }
 );
+// *INDENT-ON*
 
 gdmaps_t* gdmaps = NULL;
 
-int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
+int main(int argc V_UNUSED, char* argv[] V_UNUSED)
+{
     gdmaps_test_init(getenv("TEST_CFDIR"));
-    if(!gdmaps_test_db_exists("GeoLiteCityv6-20111210.dat")
-      || !gdmaps_test_db_exists("regioncodes-20130115.csv")) {
+    if (!gdmaps_test_db_exists("GeoLiteCityv6-20111210.dat")
+            || !gdmaps_test_db_exists("regioncodes-20130115.csv")) {
         plan_skip_all("Missing database");
         exit(exit_status());
     }

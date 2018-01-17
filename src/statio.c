@@ -96,7 +96,8 @@ static statio_t statio;
 
 static size_t json_buffer_max = 0;
 
-static void accumulate_statio(unsigned threadnum) {
+static void accumulate_statio(unsigned threadnum)
+{
     dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
     gdnsd_assert(this_stats);
 
@@ -116,17 +117,16 @@ static void accumulate_statio(unsigned threadnum) {
     statio.dns_dropped  += l_dropped;
 
     const stats_uint_t this_reqs = l_noerror + l_refused + l_nxdomain
-        + l_notimp + l_badvers + l_formerr + l_dropped;
+                                   + l_notimp + l_badvers + l_formerr + l_dropped;
 
-    if(this_stats->is_udp) {
+    if (this_stats->is_udp) {
         statio.udp_reqs     += this_reqs;
         statio.udp_recvfail += stats_get(&this_stats->udp.recvfail);
         statio.udp_sendfail += stats_get(&this_stats->udp.sendfail);
         statio.udp_tc       += stats_get(&this_stats->udp.tc);
         statio.udp_edns_big += stats_get(&this_stats->udp.edns_big);
         statio.udp_edns_tc  += stats_get(&this_stats->udp.edns_tc);
-    }
-    else {
+    } else {
         statio.tcp_reqs     += this_reqs;
         statio.tcp_recvfail += stats_get(&this_stats->tcp.recvfail);
         statio.tcp_sendfail += stats_get(&this_stats->tcp.sendfail);
@@ -137,11 +137,12 @@ static void accumulate_statio(unsigned threadnum) {
     statio.dns_edns_clientsub += stats_get(&this_stats->edns_clientsub);
 }
 
-char* statio_get_json(time_t nowish, size_t* len) {
+char* statio_get_json(time_t nowish, size_t* len)
+{
     char* buf = xmalloc(json_buffer_max);
     memset(&statio, 0, sizeof(statio));
     uint64_t uptime64 = (uint64_t)nowish - (uint64_t)start_time;
-    for(unsigned i = 0; i < num_dns_threads; i++)
+    for (unsigned i = 0; i < num_dns_threads; i++)
         accumulate_statio(i);
     // fill json output buffer
     int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
@@ -151,7 +152,8 @@ char* statio_get_json(time_t nowish, size_t* len) {
     return buf;
 }
 
-void statio_init(unsigned arg_num_dns_threads) {
+void statio_init(unsigned arg_num_dns_threads)
+{
     num_dns_threads = arg_num_dns_threads;
     start_time = time(NULL);
 

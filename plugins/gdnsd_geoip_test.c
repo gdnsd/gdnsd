@@ -41,21 +41,23 @@
 static gdmaps_t* gdmaps = NULL;
 
 F_NONNULL F_NORETURN
-static void usage(const char* argv0) {
+static void usage(const char* argv0)
+{
     fprintf(stderr, "\nUsage: %s [-c %s] [map_name addr]\n"
-        "  -c\t\tgdnsd config dir, see main gdnsd(8) manpage for details\n"
-        "  map_name\tMapping name from geoip plugin config\n"
-        "  addr\t\tClient IP address to map.\n\n",
-        argv0, gdnsd_get_default_config_dir());
+            "  -c\t\tgdnsd config dir, see main gdnsd(8) manpage for details\n"
+            "  map_name\tMapping name from geoip plugin config\n"
+            "  addr\t\tClient IP address to map.\n\n",
+            argv0, gdnsd_get_default_config_dir());
     exit(1);
 }
 
 F_NONNULL
-static void do_lookup(const char* map_name, const char* ip_arg) {
+static void do_lookup(const char* map_name, const char* ip_arg)
+{
     gdnsd_assert(gdmaps);
 
     const int rv = gdmaps_name2idx(gdmaps, map_name);
-    if(rv < 0) {
+    if (rv < 0) {
         log_err("Mapping name '%s' not found in configuration", map_name);
         return;
     }
@@ -69,7 +71,7 @@ static void do_lookup(const char* map_name, const char* ip_arg) {
     cinfo.edns_client_mask = 150U;
 
     const int addr_err = gdnsd_anysin_getaddrinfo(ip_arg, NULL, &cinfo.edns_client);
-    if(addr_err) {
+    if (addr_err) {
         log_err("Could not parse address '%s': %s", ip_arg, gai_strerror(addr_err));
         return;
     }
@@ -87,14 +89,13 @@ static void do_lookup(const char* map_name, const char* ip_arg) {
     // Scope was set to Source.  Since we always query as edns, this implies
     //  the database was V4-only and the address input was a non-v4-compat v6 address,
     //  and the lookup code fell back to the default dclist (1).
-    if(scope_mask == 150U) {
+    if (scope_mask == 150U) {
         printf(
             "%s => %s => %s\n",
             map_name, logf_anysin_noport(&cinfo.edns_client),
             gdmaps_logf_dclist(gdmaps, map_idx, dclist)
         );
-    }
-    else {
+    } else {
         printf(
             "%s => %s/%u => %s\n",
             map_name, logf_anysin_noport(&cinfo.edns_client), scope_mask,
@@ -105,27 +106,28 @@ static void do_lookup(const char* map_name, const char* ip_arg) {
     gdnsd_fmtbuf_reset();
 }
 
-static void do_repl(void) {
+static void do_repl(void)
+{
     gdnsd_assert(gdmaps);
 
     char linebuf[256];
     char map_name[128];
     char ip_addr[128];
     const bool have_tty = isatty(fileno(stdin)) && isatty(fileno(stdout));
-    while(1) {
-        if(have_tty) {
+    while (1) {
+        if (have_tty) {
             fputs("> ", stdout);
             fflush(stdout);
         }
-        if(!fgets(linebuf, 255, stdin)) {
-            if(!feof(stdin))
+        if (!fgets(linebuf, 255, stdin)) {
+            if (!feof(stdin))
                 log_err("fgets(stdin) failed: %s", logf_strerror(ferror(stdin)));
-            if(have_tty)
+            if (have_tty)
                 fputs("\n", stdout);
             return;
         }
 
-        if(2 != sscanf(linebuf, "%127[^ \t\n] %127[^ \t\n]\n", map_name, ip_addr)) {
+        if (2 != sscanf(linebuf, "%127[^ \t\n] %127[^ \t\n]\n", map_name, ip_addr)) {
             log_err("Invalid input.  Please enter a map name followed by an IP address");
             continue;
         }
@@ -135,34 +137,36 @@ static void do_repl(void) {
 }
 
 F_NONNULL
-static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root) {
+static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root)
+{
     // plugins stanza
     vscf_data_t* plugins = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
-    if(!plugins)
+    if (!plugins)
         log_fatal("Config file has no plugins stanza");
-    if(!vscf_is_hash(plugins))
+    if (!vscf_is_hash(plugins))
         log_fatal("Config stanza 'plugins' must be a hash");
 
     // plugins->geoip stanza
     vscf_data_t* geoip = vscf_hash_get_data_byconstkey(plugins, "geoip", true);
-    if(!geoip)
+    if (!geoip)
         log_fatal("Config file has no geoip plugin config");
-    if(!vscf_is_hash(geoip))
+    if (!vscf_is_hash(geoip))
         log_fatal("Plugin config for 'geoip' must be a hash");
 
     // plugins->geoip->maps stanza
     vscf_data_t* maps = vscf_hash_get_data_byconstkey(geoip, "maps", true);
-    if(!maps)
+    if (!maps)
         log_fatal("Config file has no geoip maps defined");
-    if(!vscf_is_hash(maps))
+    if (!vscf_is_hash(maps))
         log_fatal("Geoip plugin config for 'maps' must be a hash");
 
     return maps;
 }
 
-static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir) {
+static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir)
+{
     vscf_data_t* cfg_root = gdnsd_init_paths(input_cfgdir, false);
-    if(!cfg_root)
+    if (!cfg_root)
         log_fatal("gdnsd_geoip_test cannot proceed without an actual config file");
     vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     gdmaps_t* rv = gdmaps_new(maps_cfg);
@@ -173,46 +177,46 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir) {
     return rv;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
     umask(022);
     const char* input_cfgdir = NULL;
     const char* map_name = NULL;
     const char* ip_arg = NULL;
 
-    switch(argc) {
-        // gdnsd_geoip_test -c x map_name ip
-        case 5:
-            if(strcmp(argv[1], "-c")) usage(argv[0]);
-            input_cfgdir = argv[2];
-            map_name = argv[3];
-            ip_arg = argv[4];
-            break;
-        // gdnsd_geoip_test map_name ip
-        //   -or-
-        // gdnsd_geoip_test -c x
-        case 3:
-            if(!strcmp(argv[1], "-c")) {
-                input_cfgdir = argv[2];
-            }
-            else {
-                map_name = argv[1];
-                ip_arg = argv[2];
-            }
-            break;
-        // no args at all
-        case 1:
-            break;
-        default:
+    switch (argc) {
+    // gdnsd_geoip_test -c x map_name ip
+    case 5:
+        if (strcmp(argv[1], "-c"))
             usage(argv[0]);
+        input_cfgdir = argv[2];
+        map_name = argv[3];
+        ip_arg = argv[4];
+        break;
+    // gdnsd_geoip_test map_name ip
+    //   -or-
+    // gdnsd_geoip_test -c x
+    case 3:
+        if (!strcmp(argv[1], "-c")) {
+            input_cfgdir = argv[2];
+        } else {
+            map_name = argv[1];
+            ip_arg = argv[2];
+        }
+        break;
+    // no args at all
+    case 1:
+        break;
+    default:
+        usage(argv[0]);
     }
 
     gdmaps = gdmaps_standalone_init(input_cfgdir);
 
-    if(map_name) {
+    if (map_name) {
         gdnsd_assert(ip_arg);
         do_lookup(map_name, ip_arg);
-    }
-    else {
+    } else {
         do_repl();
     }
 

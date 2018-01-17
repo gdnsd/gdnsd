@@ -72,14 +72,24 @@ static bool do_syslog = false;
 ***** Logging **********************************************
 ***********************************************************/
 
-void gdnsd_log_set_debug(bool debug) { do_dbg = debug; }
-bool gdnsd_log_get_debug(void) { return do_dbg; }
-void gdnsd_log_set_syslog(bool set_syslog) {
-    if(!do_syslog && set_syslog)
-        openlog(PACKAGE_NAME, LOG_NDELAY|LOG_PID, LOG_DAEMON);
+void gdnsd_log_set_debug(bool debug)
+{
+    do_dbg = debug;
+}
+bool gdnsd_log_get_debug(void)
+{
+    return do_dbg;
+}
+void gdnsd_log_set_syslog(bool set_syslog)
+{
+    if (!do_syslog && set_syslog)
+        openlog(PACKAGE_NAME, LOG_NDELAY | LOG_PID, LOG_DAEMON);
     do_syslog = set_syslog;
 }
-bool gdnsd_log_get_syslog(void) { return do_syslog; }
+bool gdnsd_log_get_syslog(void)
+{
+    return do_syslog;
+}
 
 // 4K is the limit for all strings formatted by the log formatters to use in a
 // single log message.  In other words, for any invocation like:
@@ -87,21 +97,21 @@ bool gdnsd_log_get_syslog(void) { return do_syslog; }
 // The space allocated by logf_dname() + logf_strerror() must be <= 4096.
 #define FMTBUF_SIZE 4096U
 // _fmtbuf_common is private to the two functions below it
-static char* _fmtbuf_common(const size_t size) {
+static char* _fmtbuf_common(const size_t size)
+{
     static __thread size_t buf_used = 0;
     static __thread char buf[FMTBUF_SIZE];
 
     char* rv = NULL;
 
     // Allocate a chunk from the per-thread format buffer
-    if(size) {
-        if((FMTBUF_SIZE - buf_used) >= size) {
+    if (size) {
+        if ((FMTBUF_SIZE - buf_used) >= size) {
             rv = &buf[buf_used];
             buf_used += size;
         }
-    }
-    // Reset (free allocations within) the format buffer,
-    else {
+    } else {
+        // Reset (free allocations within) the format buffer,
         buf_used = 0;
     }
 
@@ -111,23 +121,26 @@ static char* _fmtbuf_common(const size_t size) {
 
 // Public (including this file) interfaces to _fmtbuf_common()
 
-char* gdnsd_fmtbuf_alloc(const size_t size) {
-    if(!size)
+char* gdnsd_fmtbuf_alloc(const size_t size)
+{
+    if (!size)
         log_fatal("BUG: fmtbuf alloc of zero bytes");
     char* rv = _fmtbuf_common(size);
-    if(!rv)
+    if (!rv)
         log_fatal("BUG: format buffer exhausted");
     return rv;
 }
 
-void gdnsd_fmtbuf_reset(void) {
+void gdnsd_fmtbuf_reset(void)
+{
     _fmtbuf_common(0);
 }
 
 // gdnsd_logf_strerror(), which hides GNU or POSIX strerror_r() thread-safe
 //  errno->string translation behind a more strerror()-like interface
 //  using gdnsd_fmtbuf_alloc()
-const char* gdnsd_logf_strerror(const int errnum) {
+const char* gdnsd_logf_strerror(const int errnum)
+{
     char tmpbuf[GDNSD_ERRNO_MAXLEN];
     const char* tmpbuf_ptr;
 
@@ -137,8 +150,8 @@ const char* gdnsd_logf_strerror(const int errnum) {
 #else
     // POSIX style (+ older glibc bug-compat)
     int rv = strerror_r(errnum, tmpbuf, GDNSD_ERRNO_MAXLEN);
-    if(rv) {
-        if(rv == EINVAL || (rv < 0 && errno == EINVAL))
+    if (rv) {
+        if (rv == EINVAL || (rv < 0 && errno == EINVAL))
             snprintf(tmpbuf, GDNSD_ERRNO_MAXLEN, "Invalid errno: %i", errnum);
         else
             log_fatal("strerror_r(,,%zu) failed", GDNSD_ERRNO_MAXLEN);
@@ -154,8 +167,9 @@ const char* gdnsd_logf_strerror(const int errnum) {
 
 GDNSD_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 
-void gdnsd_loggerv(int level, const char* fmt, va_list ap) {
-    if(do_syslog) {
+void gdnsd_loggerv(int level, const char* fmt, va_list ap)
+{
+    if (do_syslog) {
         vsyslog(level, fmt, ap);
         gdnsd_fmtbuf_reset();
         return;
@@ -163,13 +177,25 @@ void gdnsd_loggerv(int level, const char* fmt, va_list ap) {
 
     const char* pfx;
 
-    switch(level) {
-        case LOG_DEBUG: pfx = PFX_DEBUG; break;
-        case LOG_INFO: pfx = PFX_INFO; break;
-        case LOG_WARNING: pfx = PFX_WARNING; break;
-        case LOG_ERR: pfx = PFX_ERR; break;
-        case LOG_CRIT: pfx = PFX_CRIT; break;
-        default: pfx = PFX_UNKNOWN; break;
+    switch (level) {
+    case LOG_DEBUG:
+        pfx = PFX_DEBUG;
+        break;
+    case LOG_INFO:
+        pfx = PFX_INFO;
+        break;
+    case LOG_WARNING:
+        pfx = PFX_WARNING;
+        break;
+    case LOG_ERR:
+        pfx = PFX_ERR;
+        break;
+    case LOG_CRIT:
+        pfx = PFX_CRIT;
+        break;
+    default:
+        pfx = PFX_UNKNOWN;
+        break;
     }
 
     const size_t pfxlen = strlen(pfx);
@@ -189,7 +215,8 @@ void gdnsd_loggerv(int level, const char* fmt, va_list ap) {
     gdnsd_fmtbuf_reset();
 }
 
-void gdnsd_logger(int level, const char* fmt, ...) {
+void gdnsd_logger(int level, const char* fmt, ...)
+{
     va_list ap;
     va_start(ap, fmt);
     gdnsd_loggerv(level, fmt, ap);
@@ -198,7 +225,8 @@ void gdnsd_logger(int level, const char* fmt, ...) {
 
 GDNSD_DIAG_POP
 
-const char* gdnsd_logf_bt(void) {
+const char* gdnsd_logf_bt(void)
+{
 #ifdef HAVE_LIBUNWIND
     static const unsigned bt_size = 1024U;
     static const unsigned bt_max_name = 60U;
@@ -212,12 +240,12 @@ const char* gdnsd_logf_bt(void) {
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
 
-    while(unw_step(&cursor) > 0 && tbuf_pos < bt_size) {
+    while (unw_step(&cursor) > 0 && tbuf_pos < bt_size) {
         unw_word_t ip = 0;
         unw_word_t sp = 0;
         unw_word_t offset = 0;
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
-        if(!ip)
+        if (!ip)
             break;
         unw_get_reg(&cursor, UNW_REG_SP, &sp);
 
@@ -226,10 +254,10 @@ const char* gdnsd_logf_bt(void) {
         (void)unw_get_proc_name(&cursor, cbuf, bt_max_name, &offset);
 
         int snp_rv = snprintf(&tbuf[tbuf_pos],
-            (bt_size - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
-            (unsigned long)ip, (unsigned long)sp,
-            cbuf, (unsigned long)offset);
-        if(snp_rv < 0)
+                              (bt_size - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
+                              (unsigned long)ip, (unsigned long)sp,
+                              cbuf, (unsigned long)offset);
+        if (snp_rv < 0)
             break;
         tbuf_pos += (unsigned)snp_rv;
     }
@@ -241,7 +269,8 @@ const char* gdnsd_logf_bt(void) {
 
 static const char generic_nullstr[] = "(null)";
 
-const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
+const char* gdnsd_logf_ipv6(const uint8_t* ipv6)
+{
     gdnsd_anysin_t tempsin;
     memset(&tempsin, 0, sizeof(gdnsd_anysin_t));
     tempsin.sin.sin_family = AF_INET6;
@@ -250,12 +279,14 @@ const char* gdnsd_logf_ipv6(const uint8_t* ipv6) {
     return gdnsd_logf_anysin_noport(&tempsin);
 }
 
-const char* gdnsd_logf_in6a(const struct in6_addr* in6a) {
+const char* gdnsd_logf_in6a(const struct in6_addr* in6a)
+{
     return gdnsd_logf_ipv6(in6a->s6_addr);
 }
 
-const char* gdnsd_logf_dname(const uint8_t* dname) {
-    if(!dname)
+const char* gdnsd_logf_dname(const uint8_t* dname)
+{
+    if (!dname)
         return generic_nullstr;
 
     char tmpbuf[1024];

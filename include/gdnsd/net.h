@@ -88,13 +88,13 @@ typedef struct {
 // retval is retval from getaddrinfo() itself (if non-zero, error occurred and
 //   string representation is available from gai_strerror()).
 // result is unaffected if an error occurs.
-F_NONNULLX(1,3)
+F_NONNULLX(1, 3)
 int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_anysin_t* result);
 
 // As above, but for parsing the address and port from a single string of the form addr:port,
 //   where :port is optional, and addr may be surround by [] (to help with ipv6 [::1]:53 issues).
 // Port defaults to unsigned arg "def_port" if not specified in the input string.
-F_NONNULLX(1,3)
+F_NONNULLX(1, 3)
 int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gdnsd_anysin_t* result);
 
 // Check if the sockaddr is the V4 or V6 ANY-address (0.0.0.0, or ::)

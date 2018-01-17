@@ -39,7 +39,7 @@ typedef enum {
     V4O_SECONDARY, // v4_overlay in effect, and this is the secondary (must be IPv4)
 } gdgeoip_v4o_t;
 
-F_NONNULLX(1,2,3)
+F_NONNULLX(1, 2, 3)
 nlist_t* gdgeoip_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const fips_t* fips, const gdgeoip_v4o_t v4o_flag, const bool city_auto_mode, const bool city_no_city);
 
 #endif // GDGEOIP_H

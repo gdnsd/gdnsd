@@ -41,15 +41,15 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount,__VA_ARGS__);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt, logf_dname(z->zone->dname), z->lcount, __VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
-    } while(0)
+    } while (0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt,logf_dname(z->zone->dname),z->lcount);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt, logf_dname(z->zone->dname), z->lcount);\
         siglongjmp(z->jbuf, 1);\
-    } while(0)
+    } while (0)
 
 typedef struct {
     uint8_t  ipv6[16];
@@ -93,7 +93,8 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize);
 /******** IP Addresses ********/
 
 F_NONNULL
-static void set_ipv4(zscan_t* z, const char* end) {
+static void set_ipv4(zscan_t* z, const char* end)
+{
     char txt[16];
     unsigned len = end - z->tstart;
     memcpy(txt, z->tstart, len);
@@ -101,14 +102,15 @@ static void set_ipv4(zscan_t* z, const char* end) {
     z->tstart = NULL;
     struct in_addr addr;
     int status = inet_pton(AF_INET, txt, &addr);
-    if(status > 0)
+    if (status > 0)
         z->ipv4 = addr.s_addr;
     else
         parse_error("IPv4 address '%s' invalid", txt);
 }
 
 F_NONNULL
-static void set_ipv6(zscan_t* z, const char* end) {
+static void set_ipv6(zscan_t* z, const char* end)
+{
     char txt[INET6_ADDRSTRLEN + 1];
     unsigned len = end - z->tstart;
     memcpy(txt, z->tstart, len);
@@ -116,121 +118,127 @@ static void set_ipv6(zscan_t* z, const char* end) {
     z->tstart = NULL;
     struct in6_addr v6a;
     int status = inet_pton(AF_INET6, txt, &v6a);
-    if(status > 0)
+    if (status > 0)
         memcpy(z->ipv6, v6a.s6_addr, 16);
     else
         parse_error("IPv6 address '%s' invalid", txt);
 }
 
 F_NONNULL
-static void set_uval(zscan_t* z) {
+static void set_uval(zscan_t* z)
+{
     errno = 0;
     z->uval = strtoul(z->tstart, NULL, 10);
     z->tstart = NULL;
-    if(errno)
+    if (errno)
         parse_error("Integer conversion error: %s", logf_errno());
 }
 
 F_NONNULL
-static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin) {
+static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin)
+{
     gdnsd_assert(z->zone->dname);
-    if(!dname_isinzone(z->zone->dname, origin))
+    if (!dname_isinzone(z->zone->dname, origin))
         parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zone->dname));
 }
 
 F_NONNULL
-static void validate_lhs_not_ooz(zscan_t* z) {
-    if(z->lhs_is_ooz)
+static void validate_lhs_not_ooz(zscan_t* z)
+{
+    if (z->lhs_is_ooz)
         parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
 }
 
 F_NONNULL
-static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs) {
+static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
+{
     gdnsd_assert(z->zone->dname);
     dname_status_t catstat;
     dname_status_t status;
 
-    if(len) {
+    if (len) {
         status = dname_from_string(dname, z->tstart, len);
-    }
-    else {
+    } else {
         gdnsd_assert(lhs);
         dname_copy(dname, z->origin);
         status = DNAME_VALID;
     }
 
-    switch(status) {
-        case DNAME_INVALID:
-            parse_error_noargs("unparseable domainname");
-            break;
-        case DNAME_VALID:
-            if(lhs) {
-                const bool inzone = dname_isinzone(z->zone->dname, dname);
-                z->lhs_is_ooz = !inzone;
-                // in-zone LHS dnames are made relative to zroot
-                if(inzone)
-                    gdnsd_dname_drop_zone(dname, z->zone->dname);
-            }
-            break;
-        case DNAME_PARTIAL:
-            // even though in the lhs case we commonly trim
-            //   back most or all of z->origin from dname, we
-            //   still have to construct it just for validity checks
-            catstat = dname_cat(dname, z->origin);
-            if(catstat == DNAME_INVALID)
-                parse_error_noargs("illegal domainname");
-            gdnsd_assert(catstat == DNAME_VALID);
-            if(lhs) {
-                z->lhs_is_ooz = false;
+    switch (status) {
+    case DNAME_INVALID:
+        parse_error_noargs("unparseable domainname");
+        break;
+    case DNAME_VALID:
+        if (lhs) {
+            const bool inzone = dname_isinzone(z->zone->dname, dname);
+            z->lhs_is_ooz = !inzone;
+            // in-zone LHS dnames are made relative to zroot
+            if (inzone)
                 gdnsd_dname_drop_zone(dname, z->zone->dname);
-            }
-            break;
-        default: gdnsd_assert(0);
+        }
+        break;
+    case DNAME_PARTIAL:
+        // even though in the lhs case we commonly trim
+        //   back most or all of z->origin from dname, we
+        //   still have to construct it just for validity checks
+        catstat = dname_cat(dname, z->origin);
+        if (catstat == DNAME_INVALID)
+            parse_error_noargs("illegal domainname");
+        gdnsd_assert(catstat == DNAME_VALID);
+        if (lhs) {
+            z->lhs_is_ooz = false;
+            gdnsd_dname_drop_zone(dname, z->zone->dname);
+        }
+        break;
+    default:
+        gdnsd_assert(0);
     }
 }
 
 /********** TXT ******************/
 
 F_NONNULL
-static void text_start(zscan_t* z) {
+static void text_start(zscan_t* z)
+{
     z->num_texts = 0;
     z->texts = NULL;
 }
 
 F_NONNULL
-static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
+static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
+{
 
     char text_temp[len + 1];
     text_temp[0] = 0;
     unsigned newlen = len;
-    if(len)
+    if (len)
         newlen = dns_unescape(text_temp, z->tstart, len);
 
     gdnsd_assert(newlen <= len);
 
-    if(newlen > 255) {
-        if(!big_ok || gcfg->disable_text_autosplit)
+    if (newlen > 255) {
+        if (!big_ok || gcfg->disable_text_autosplit)
             parse_error_noargs("Text chunk too long (>255 unescaped)");
-        if(newlen > 65500) parse_error_noargs("Text chunk too long (>65500 unescaped)");
+        if (newlen > 65500)
+            parse_error_noargs("Text chunk too long (>65500 unescaped)");
         unsigned remainder = newlen % 255;
         unsigned num_whole_chunks = (newlen - remainder) / 255;
         const char* zptr = text_temp;
         const unsigned new_alloc = 1 + z->num_texts + num_whole_chunks + (remainder ? 1 : 0);
         z->texts = xrealloc(z->texts, new_alloc * sizeof(uint8_t*));
-        for(unsigned i = 0; i < num_whole_chunks; i++) {
+        for (unsigned i = 0; i < num_whole_chunks; i++) {
             uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(256);
             *chunk++ = 255;
             memcpy(chunk, zptr, 255);
             zptr += 255;
         }
-        if(remainder) {
+        if (remainder) {
             uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(remainder + 1);
             *chunk++ = remainder;
             memcpy(chunk, zptr, remainder);
         }
         z->texts[z->num_texts] = NULL;
-    }
-    else {
+    } else {
         z->texts = xrealloc(z->texts, (z->num_texts + 2) * sizeof(uint8_t*));
         uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(newlen + 1);
         *chunk++ = newlen;
@@ -243,7 +251,8 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok) {
 
 // Input must have two bytes of text constrained to [0-9A-Fa-f]
 F_NONNULL
-static unsigned hexbyte(const char* intxt) {
+static unsigned hexbyte(const char* intxt)
+{
     gdnsd_assert(
         (intxt[0] >= '0' && intxt[0] <= '9')
         || (intxt[0] >= 'A' && intxt[0] <= 'F')
@@ -257,12 +266,12 @@ static unsigned hexbyte(const char* intxt) {
 
     int out;
 
-    if(intxt[0] <= '9')
+    if (intxt[0] <= '9')
         out = (intxt[0] - '0') << 4;
     else
         out = ((intxt[0] | 0x20) - ('a' - 10)) << 4;
 
-    if(intxt[1] <= '9')
+    if (intxt[1] <= '9')
         out |= (intxt[1] - '0');
     else
         out |= ((intxt[1] | 0x20) - ('a' - 10));
@@ -272,21 +281,32 @@ static unsigned hexbyte(const char* intxt) {
 }
 
 F_NONNULL
-static void mult_uval(zscan_t* z, int fc) {
+static void mult_uval(zscan_t* z, int fc)
+{
     fc |= 0x20;
-    switch(fc) {
-        case 'm': z->uval *= 60; break;
-        case 'h': z->uval *= 3600; break;
-        case 'd': z->uval *= 86400; break;
-        case 'w': z->uval *= 604800; break;
-        default: gdnsd_assert(0);
+    switch (fc) {
+    case 'm':
+        z->uval *= 60;
+        break;
+    case 'h':
+        z->uval *= 3600;
+        break;
+    case 'd':
+        z->uval *= 86400;
+        break;
+    case 'w':
+        z->uval *= 604800;
+        break;
+    default:
+        gdnsd_assert(0);
     }
 }
 
 F_NONNULL
-static void set_dyna(zscan_t* z, const char* fpc) {
+static void set_dyna(zscan_t* z, const char* fpc)
+{
     unsigned dlen = fpc - z->tstart;
-    if(dlen > 255)
+    if (dlen > 255)
         parse_error_noargs("DYNA/DYNC plugin!resource string cannot exceed 255 chars");
     memcpy(z->rhs_dyn, z->tstart, dlen);
     z->rhs_dyn[dlen] = 0;
@@ -294,9 +314,10 @@ static void set_dyna(zscan_t* z, const char* fpc) {
 }
 
 F_NONNULL
-static void set_caa_prop(zscan_t* z, const char* fpc) {
+static void set_caa_prop(zscan_t* z, const char* fpc)
+{
     unsigned dlen = fpc - z->tstart;
-    if(dlen > 255)
+    if (dlen > 255)
         parse_error_noargs("CAA property string cannot exceed 255 chars");
     memcpy(z->caa_prop, z->tstart, dlen);
     z->caa_prop[dlen] = 0;
@@ -304,111 +325,126 @@ static void set_caa_prop(zscan_t* z, const char* fpc) {
 }
 
 F_NONNULL
-static void rec_soa(zscan_t* z) {
+static void rec_soa(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(z->lhs_dname[0] != 1)
+    if (z->lhs_dname[0] != 1)
         parse_error_noargs("SOA record can only be defined for the root of the zone");
-    if(ltree_add_rec_soa(z->zone, z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5))
+    if (ltree_add_rec_soa(z->zone, z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_a(zscan_t* z) {
-    if(ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->limit_v4, z->lhs_is_ooz))
+static void rec_a(zscan_t* z)
+{
+    if (ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->limit_v4, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_aaaa(zscan_t* z) {
-    if(ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz))
+static void rec_aaaa(zscan_t* z)
+{
+    if (ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_ns(zscan_t* z) {
+static void rec_ns(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+    if (ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_cname(zscan_t* z) {
+static void rec_cname(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+    if (ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_ptr(zscan_t* z) {
+static void rec_ptr(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+    if (ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_mx(zscan_t* z) {
+static void rec_mx(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1))
+    if (ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_srv(zscan_t* z) {
+static void rec_srv(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_srv(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3))
+    if (ltree_add_rec_srv(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void texts_cleanup(zscan_t* z) {
+static void texts_cleanup(zscan_t* z)
+{
     free(z->texts);
     z->texts = NULL;
     z->num_texts = 0;
 }
 
 F_NONNULL
-static void rec_naptr(zscan_t* z) {
+static void rec_naptr(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->num_texts, z->texts))
+    if (ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->num_texts, z->texts))
         siglongjmp(z->jbuf, 1);
     texts_cleanup(z);
 }
 
 F_NONNULL
-static void rec_txt(zscan_t* z) {
+static void rec_txt(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_txt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
+    if (ltree_add_rec_txt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
         siglongjmp(z->jbuf, 1);
     texts_cleanup(z);
 }
 
 F_NONNULL
-static void rec_dyna(zscan_t* z) {
-    if(ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
+static void rec_dyna(zscan_t* z)
+{
+    if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_dync(zscan_t* z) {
+static void rec_dync(zscan_t* z)
+{
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->origin, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
+    if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->origin, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_rfc3597(zscan_t* z) {
-    if(z->rfc3597_data_written < z->rfc3597_data_len)
+static void rec_rfc3597(zscan_t* z)
+{
+    if (z->rfc3597_data_written < z->rfc3597_data_len)
         parse_error("RFC3597 generic RR claimed rdata length of %u, but only %u bytes of data present", z->rfc3597_data_len, z->rfc3597_data_written);
     validate_lhs_not_ooz(z);
-    if(ltree_add_rec_rfc3597(z->zone, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data))
+    if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data))
         siglongjmp(z->jbuf, 1);
     z->rfc3597_data = NULL;
 }
 
 F_NONNULL
-static void rec_caa(zscan_t* z) {
+static void rec_caa(zscan_t* z)
+{
     gdnsd_assert(z->num_texts == 1); // parser-enforced
-    if(z->uv_1 > 255)
+    if (z->uv_1 > 255)
         parse_error("CAA flags byte value %u is >255", z->uv_1);
 
     validate_lhs_not_ooz(z);
@@ -427,53 +463,60 @@ static void rec_caa(zscan_t* z) {
     memcpy(caa_write, &z->texts[0][1], value_len);
     free(z->texts[0]);
 
-    if(ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata))
+    if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata))
         siglongjmp(z->jbuf, 1);
     texts_cleanup(z);
 }
 
 F_NONNULL
-static void rfc3597_data_setup(zscan_t* z) {
+static void rfc3597_data_setup(zscan_t* z)
+{
     z->rfc3597_data_len = z->uval;
     z->rfc3597_data_written = 0;
     z->rfc3597_data = xmalloc(z->uval);
 }
 
 F_NONNULL
-static void rfc3597_octet(zscan_t* z) {
-    if(z->rfc3597_data_written == z->rfc3597_data_len)
-       parse_error_noargs("RFC3597 generic RR: more rdata is present than the indicated length");
+static void rfc3597_octet(zscan_t* z)
+{
+    if (z->rfc3597_data_written == z->rfc3597_data_len)
+        parse_error_noargs("RFC3597 generic RR: more rdata is present than the indicated length");
     z->rfc3597_data[z->rfc3597_data_written++] = hexbyte(z->tstart);
 }
 
 F_NONNULL
-static void set_limit_v4(zscan_t* z) {
-    if(z->uval > 65535)
+static void set_limit_v4(zscan_t* z)
+{
+    if (z->uval > 65535)
         parse_error("$ADDR_LIMIT_V4 value %u out of range (0-65535)", z->uval);
     z->limit_v4 = z->uval;
 }
 
 F_NONNULL
-static void set_limit_v6(zscan_t* z) {
-    if(z->uval > 65535)
+static void set_limit_v6(zscan_t* z)
+{
+    if (z->uval > 65535)
         parse_error("$ADDR_LIMIT_V6 value %u out of range (0-65535)", z->uval);
     z->limit_v6 = z->uval;
 }
 
 F_NONNULL
-static void open_paren(zscan_t* z) {
-    if(z->in_paren)
+static void open_paren(zscan_t* z)
+{
+    if (z->in_paren)
         parse_error_noargs("Parenthetical error: double-open");
     z->in_paren = true;
 }
 
 F_NONNULL
-static void close_paren(zscan_t* z) {
-    if(!z->in_paren)
+static void close_paren(zscan_t* z)
+{
+    if (!z->in_paren)
         parse_error_noargs("Parenthetical error: unnecessary close");
     z->in_paren = false;
 }
 
+// *INDENT-OFF*
 %%{
     machine zone;
 
@@ -698,16 +741,18 @@ static void close_paren(zscan_t* z) {
 
     write data;
 }%%
+// *INDENT-ON*
 
 F_NONNULL
-static void scanner(zscan_t* z, const char* buf, const size_t bufsize) {
+static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
+{
     gdnsd_assert(bufsize);
 
     // This avoids the unfortunately common case of files with final lines
     //   that are unterminated by bailing out early.  This also incidentally
     //   but importantly protects from set_uval()'s strtoul running off the
     //   end of the buffer if we were parsing an integer at that point.
-    if(buf[bufsize - 1] != '\n') {
+    if (buf[bufsize - 1] != '\n') {
         parse_error_noargs("No newline at end of file");
         return;
     }
@@ -716,20 +761,22 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize) {
 
     int cs = zone_start;
 
-GDNSD_DIAG_PUSH_IGNORED("-Wswitch-default")
+    GDNSD_DIAG_PUSH_IGNORED("-Wswitch-default")
 #ifndef __clang_analyzer__
     // ^ ... because the ragel-generated code for the zonefile parser is
     //   so huge that it makes analyzer runs take forever.
     const char* p = buf;
     const char* pe = buf + bufsize;
     const char* eof = pe;
-    %%{ write exec; }%%
+    // *INDENT-OFF*
+    %% write exec;
+    // *INDENT-ON*
 #endif // __clang_analyzer__
-GDNSD_DIAG_POP
+    GDNSD_DIAG_POP
 
-    if(cs == zone_error)
+    if (cs == zone_error)
         parse_error_noargs("General parse error");
-    else if(cs < zone_first_final)
+    else if (cs < zone_first_final)
         parse_error_noargs("Trailing incomplete or unparseable record at end of file");
 }
 
@@ -737,24 +784,26 @@ GDNSD_DIAG_POP
 //   function pointer to eliminate the possibility of
 //   inlining on non-gcc compilers, I hope) to avoid issues with
 //   setjmp and all of the local auto variables in zscan_rfc1035() below.
-typedef bool (*sij_func_t)(zscan_t*,const char*,const unsigned);
+typedef bool (*sij_func_t)(zscan_t*, const char*, const unsigned);
 F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsize) {
-    if(!sigsetjmp(z->jbuf, 0)) {
+static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsize)
+{
+    if (!sigsetjmp(z->jbuf, 0)) {
         scanner(z, buf, bufsize);
         return false;
     }
     return true;
 }
 
-bool zscan_rfc1035(zone_t* zone, const char* fn) {
+bool zscan_rfc1035(zone_t* zone, const char* fn)
+{
     gdnsd_assert(zone->dname);
     log_debug("rfc1035: Scanning zone '%s'", logf_dname(zone->dname));
 
     bool rv = false; // success by default
 
     gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
-    if(!fmap) {
+    if (!fmap) {
         rv = true;
         return rv;
     }
@@ -770,19 +819,19 @@ bool zscan_rfc1035(zone_t* zone, const char* fn) {
     z->lhs_dname[0] = 1; // set lhs to relative origin initially
 
     sij_func_t sij = &_scan_isolate_jmp;
-    if(sij(z, buf, bufsize))
+    if (sij(z, buf, bufsize))
         rv = true;
 
-    if(gdnsd_fmap_delete(fmap))
+    if (gdnsd_fmap_delete(fmap))
         rv = true;
 
-    if(z->texts) {
-        for(unsigned i = 0; i < z->num_texts; i++)
-            if(z->texts[i])
+    if (z->texts) {
+        for (unsigned i = 0; i < z->num_texts; i++)
+            if (z->texts[i])
                 free(z->texts[i]);
         free(z->texts);
     }
-    if(z->rfc3597_data)
+    if (z->rfc3597_data)
         free(z->rfc3597_data);
     free(z);
 

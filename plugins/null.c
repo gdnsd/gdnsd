@@ -25,21 +25,23 @@
 #include <string.h>
 #include <inttypes.h>
 
-void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED) {
+void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
+{
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
 }
 
-int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UNUSED) {
+int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UNUSED)
+{
     return 0;
 }
 
-gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result) {
-    if(origin) {
+gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+{
+    if (origin) {
         uint8_t cntmp[256];
         gdnsd_dname_from_string(cntmp, "invalid.", 8);
         gdnsd_result_add_cname(result, cntmp, origin);
-    }
-    else {
+    } else {
         gdnsd_anysin_t tmpsin;
         gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
         gdnsd_result_add_anysin(result, &tmpsin);
@@ -70,7 +72,8 @@ static null_svc_t** null_svcs = NULL;
 static null_mon_t** null_mons = NULL;
 
 F_NONNULL
-static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, const int revents V_UNUSED) {
+static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, const int revents V_UNUSED)
+{
     gdnsd_assert(revents == EV_TIMER);
 
     null_mon_t* mon = t->data;
@@ -78,20 +81,22 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
     gdnsd_mon_state_updater(mon->idx, false);
 }
 
-void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED) {
+void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED)
+{
     null_svcs = xrealloc(null_svcs, sizeof(null_svc_t*) * ++num_svcs);
     null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(null_svc_t));
     this_svc->name = strdup(name);
     this_svc->interval = interval;
 }
 
-static void add_mon_any(const char* svc_name, const unsigned idx) {
+static void add_mon_any(const char* svc_name, const unsigned idx)
+{
     gdnsd_assert(svc_name);
 
     null_svc_t* this_svc = NULL;
 
-    for(unsigned i = 0; i < num_svcs; i++) {
-        if(!strcmp(svc_name, null_svcs[i]->name)) {
+    for (unsigned i = 0; i < num_svcs; i++) {
+        if (!strcmp(svc_name, null_svcs[i]->name)) {
             this_svc = null_svcs[i];
             break;
         }
@@ -107,24 +112,28 @@ static void add_mon_any(const char* svc_name, const unsigned idx) {
     this_mon->interval_watcher->data = this_mon;
 }
 
-void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx) {
+void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+{
     add_mon_any(svc_name, idx);
 }
 
-void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx) {
+void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx)
+{
     add_mon_any(svc_name, idx);
 }
 
-void plugin_null_init_monitors(struct ev_loop* mon_loop) {
-    for(unsigned i = 0; i < num_mons; i++) {
+void plugin_null_init_monitors(struct ev_loop* mon_loop)
+{
+    for (unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = null_mons[i]->interval_watcher;
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
     }
 }
 
-void plugin_null_start_monitors(struct ev_loop* mon_loop) {
-    for(unsigned i = 0; i < num_mons; i++) {
+void plugin_null_start_monitors(struct ev_loop* mon_loop)
+{
+    for (unsigned i = 0; i < num_mons; i++) {
         null_mon_t* mon = null_mons[i];
         const unsigned ival = mon->svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);

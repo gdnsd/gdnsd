@@ -44,19 +44,19 @@
     siglongjmp(z->jbuf, 1)
 
 #define parse_warn(_fmt, ...) \
-    log_warn("djb: %s: parse error at line %i: " _fmt,z->fn,z->lcount,__VA_ARGS__);\
+    log_warn("djb: %s: parse error at line %i: " _fmt, z->fn, z->lcount, __VA_ARGS__);\
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("djb: %s: parse error at line %i: " _fmt,z->fn,z->lcount);\
+        log_err("djb: %s: parse error at line %i: " _fmt, z->fn, z->lcount);\
         parse_abort();\
-    } while(0)
+    } while (0)
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("djb: %s: parse error at line %i: " _fmt,z->fn,z->lcount,__VA_ARGS__);\
+        log_err("djb: %s: parse error at line %i: " _fmt, z->fn, z->lcount, __VA_ARGS__);\
         parse_abort();\
-    } while(0)
+    } while (0)
 
 typedef struct {
     char* ptr;
@@ -64,7 +64,7 @@ typedef struct {
 } field_t;
 
 // for: %.*s
-#define FIELD_FMT(_f) (int)(_f)->len,(_f)->ptr
+#define FIELD_FMT(_f) (int)(_f)->len, (_f)->ptr
 
 typedef struct {
     /* variables preserved across files */
@@ -85,12 +85,13 @@ typedef struct {
     sigjmp_buf jbuf;
 } zscan_t;
 
-static const uint8_t dname_root[] = {1,0};
-static const uint8_t dname_ns[]   = {4,2,'n','s',255};
-static const uint8_t dname_mx[]   = {4,2,'m','x',255};
-static const uint8_t dname_srv[]  = {5,3,'s','r','v',255};
+static const uint8_t dname_root[] = {1, 0};
+static const uint8_t dname_ns[]   = {4, 2, 'n', 's', 255};
+static const uint8_t dname_mx[]   = {4, 2, 'm', 'x', 255};
+static const uint8_t dname_srv[]  = {5, 3, 's', 'r', 'v', 255};
 
-static void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t *zone) {
+static void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t* zone)
+{
     zscan_djb_zonedata_t* nzd = xmalloc(sizeof(zscan_djb_zonedata_t));
     nzd->zone = zone;
     nzd->marked = 0;
@@ -99,7 +100,8 @@ static void zscan_djbzone_add(zscan_djb_zonedata_t** zd, zone_t *zone) {
 }
 
 F_PURE
-static zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t* zd, const uint8_t* dname, int exact) {
+static zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t* zd, const uint8_t* dname, int exact)
+{
     zscan_djb_zonedata_t* best = NULL;
 
     for (; zd; zd = zd->next) {
@@ -119,7 +121,8 @@ static zscan_djb_zonedata_t* zscan_djbzone_get(zscan_djb_zonedata_t* zd, const u
     return best;
 }
 
-void zscan_djbzone_free(zscan_djb_zonedata_t** zd) {
+void zscan_djbzone_free(zscan_djb_zonedata_t** zd)
+{
     zscan_djb_zonedata_t* cur = *zd;
     zscan_djb_zonedata_t* next;
 
@@ -132,26 +135,29 @@ void zscan_djbzone_free(zscan_djb_zonedata_t** zd) {
 }
 
 F_NONNULL
-static uint8_t *parse_dname(zscan_t *z, uint8_t *dname, field_t *f) {
+static uint8_t* parse_dname(zscan_t* z, uint8_t* dname, field_t* f)
+{
     dname_status_t status = dname_from_string(dname, f->ptr, f->len);
 
-    switch(status) {
-        case DNAME_INVALID:
-            parse_error("'%.*s' is not a domain name", FIELD_FMT(f));
-            break;
-        case DNAME_VALID:
-            break;
-        case DNAME_PARTIAL:
-            if(dname_cat(dname, dname_root) == DNAME_INVALID)
-                parse_error("'%.*s' is not a valid name", FIELD_FMT(f));
-            break;
-        default: gdnsd_assert(0);
+    switch (status) {
+    case DNAME_INVALID:
+        parse_error("'%.*s' is not a domain name", FIELD_FMT(f));
+        break;
+    case DNAME_VALID:
+        break;
+    case DNAME_PARTIAL:
+        if (dname_cat(dname, dname_root) == DNAME_INVALID)
+            parse_error("'%.*s' is not a valid name", FIELD_FMT(f));
+        break;
+    default:
+        gdnsd_assert(0);
     }
     return dname;
 }
 
 F_NONNULL
-static uint8_t *make_dname_relative(uint8_t* dname, const uint8_t* parent_dname) {
+static uint8_t* make_dname_relative(uint8_t* dname, const uint8_t* parent_dname)
+{
     *dname -= *parent_dname - 1;
     dname[*dname] = 0;
     gdnsd_assert(dname_status(dname) == DNAME_VALID);
@@ -159,7 +165,8 @@ static uint8_t *make_dname_relative(uint8_t* dname, const uint8_t* parent_dname)
 }
 
 F_NONNULL
-static uint8_t *expand_dname(zscan_t *z, uint8_t *dname, field_t *f, const uint8_t *subzone, const uint8_t *zone) {
+static uint8_t* expand_dname(zscan_t* z, uint8_t* dname, field_t* f, const uint8_t* subzone, const uint8_t* zone)
+{
     /* fully qualified name in the primary field? */
     if (strchr(f->ptr, '.') != NULL)
         return parse_dname(z, dname, f);
@@ -169,34 +176,37 @@ static uint8_t *expand_dname(zscan_t *z, uint8_t *dname, field_t *f, const uint8
     dname_from_string(dname, f->ptr, f->len);
     dname_cat(dname, subzone);
     switch (dname_cat(dname, zone)) {
-        case DNAME_VALID:
+    case DNAME_VALID:
+        break;
+    case DNAME_PARTIAL:
+        if (dname_cat(dname, dname_root) != DNAME_INVALID)
             break;
-        case DNAME_PARTIAL:
-            if(dname_cat(dname, dname_root) != DNAME_INVALID)
-                break;
-            /* fallthrough */
-        case DNAME_INVALID:
-            parse_error("unable to expand '%.*s' as to valid domain name", FIELD_FMT(f));
-            break;
-        default: gdnsd_assert(0);
+    // fallthrough
+    case DNAME_INVALID:
+        parse_error("unable to expand '%.*s' as to valid domain name", FIELD_FMT(f));
+        break;
+    default:
+        gdnsd_assert(0);
     }
 
     return dname;
 }
 
 F_NONNULL
-static uint32_t parse_ipv4(zscan_t *z, field_t *f) {
+static uint32_t parse_ipv4(zscan_t* z, field_t* f)
+{
     struct in_addr addr;
 
-    if(inet_pton(AF_INET, f->ptr, &addr) <= 0)
+    if (inet_pton(AF_INET, f->ptr, &addr) <= 0)
         parse_error("IPv4 address '%s' invalid", f->ptr);
 
     return addr.s_addr;
 }
 
 F_NONNULL
-static unsigned parse_ttl(zscan_t *z, field_t *f, unsigned defttl) {
-    char *end;
+static unsigned parse_ttl(zscan_t* z, field_t* f, unsigned defttl)
+{
+    char* end;
     if (f->len == 0)
         return defttl;
     unsigned ttl = strtol(f->ptr, &end, 10);
@@ -206,8 +216,9 @@ static unsigned parse_ttl(zscan_t *z, field_t *f, unsigned defttl) {
 }
 
 F_NONNULL
-static unsigned parse_int(zscan_t *z, field_t *f) {
-    char *end;
+static unsigned parse_int(zscan_t* z, field_t* f)
+{
+    char* end;
     unsigned ttl = strtol(f->ptr, &end, 10);
     if (end != f->ptr + f->len)
         parse_error("Invalid integer value '%.*s'", FIELD_FMT(f));
@@ -215,19 +226,21 @@ static unsigned parse_int(zscan_t *z, field_t *f) {
 }
 
 F_NONNULL
-static void parse_txt(field_t *f) {
+static void parse_txt(field_t* f)
+{
     unsigned i;
     unsigned j;
 
     if (f->len < 2)
-      return;
+        return;
 
     j = 0;
     i = 0;
     while (i < f->len) {
         char ch = f->ptr[i++];
         if (ch == '\\') {
-            if (i >= f->len) break;
+            if (i >= f->len)
+                break;
             ch = f->ptr[i++];
             if ((ch >= '0') && (ch <= '7')) {
                 ch -= '0';
@@ -247,7 +260,8 @@ static void parse_txt(field_t *f) {
     f->ptr[j] = 0;
 }
 
-static void create_zones(zscan_t *z, char record_type, field_t *field) {
+static void create_zones(zscan_t* z, char record_type, field_t* field)
+{
     uint8_t dname[256];
 
     if (record_type != 'Z')
@@ -269,14 +283,15 @@ static void create_zones(zscan_t *z, char record_type, field_t *field) {
 #define TTDCHECK(fno) if (field[fno].len) { z->skipped++; return; }
 #define LOCCHECK(fno) if (field[fno].len) { z->skipped++; return; }
 
-static void load_zones(zscan_t *z, char record_type, field_t *field) {
+static void load_zones(zscan_t* z, char record_type, field_t* field)
+{
     uint8_t dname[256], dname2[256], email[256];
     unsigned i, ttl;
 
     parse_dname(z, dname, &field[0]);
     zscan_djb_zonedata_t* zd = zscan_djbzone_get(z->zonedata, dname, 0);
     if (!zd)
-       return;
+        return;
 
     //log_info("djb: processing '%s'", logf_dname(dname));
 
@@ -295,10 +310,10 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
                               parse_dname(z, email, &field[2]),
                               parse_ttl(z, &field[8], TTL_NEGATIVE),
                               zone->serial,
-                              parse_int(z, &field[4]) ?:    16384, /* refresh */
-                              parse_int(z, &field[5]) ?:     2048, /* retry */
-                              parse_int(z, &field[6]) ?:  1048576, /* expire */
-                              parse_int(z, &field[7]) ?:     2560  /* cache */))
+                              parse_int(z, &field[4]) ? :    16384, /* refresh */
+                              parse_int(z, &field[5]) ? :     2048, /* retry */
+                              parse_int(z, &field[6]) ? :  1048576, /* expire */
+                              parse_int(z, &field[7]) ? :     2560  /* cache */))
             parse_abort();
         break;
     case '.': /* NS + SOA (+ A) */
@@ -380,12 +395,12 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
             const char* src = field[1].ptr;
             unsigned chunks = (bytes + 254) / 255;
 
-            if(bytes > 255 && gcfg->disable_text_autosplit)
+            if (bytes > 255 && gcfg->disable_text_autosplit)
                 parse_error_noargs("Text chunk too long (>255 unescaped)");
-            if(bytes > 65500)
+            if (bytes > 65500)
                 parse_error_noargs("Text chunk too long (>65500 unescaped)");
 
-            z->texts = xrealloc(z->texts, sizeof(uint8_t *) * (chunks + 1));
+            z->texts = xrealloc(z->texts, sizeof(uint8_t*) * (chunks + 1));
             for (i = 0; i < chunks; i++) {
                 unsigned s = (bytes > 255U ? 255U : bytes);
                 z->texts[i] = xmalloc(s + 1U);
@@ -395,7 +410,7 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
                 src += s;
             }
             z->texts[i] = NULL;
-            if (ltree_add_rec_txt(zone, dname, chunks, z->texts, parse_ttl(z,&field[2], TTL_POSITIVE))) {
+            if (ltree_add_rec_txt(zone, dname, chunks, z->texts, parse_ttl(z, &field[2], TTL_POSITIVE))) {
                 for (i = 0; i < chunks; i++)
                     free(z->texts[i]);
                 parse_abort();
@@ -428,11 +443,11 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
         if (field[3].len > 255 || field[4].len > 255 || field[5].len > 255)
             parse_error_noargs("NAPTR label cannot exceed 255 chars");
 
-        z->texts = xrealloc(z->texts, 4 * sizeof(uint8_t *));
+        z->texts = xrealloc(z->texts, 4 * sizeof(uint8_t*));
         for (i = 0; i < 3; i++) {
-            z->texts[i] = xmalloc(field[3+i].len + 1);
-            z->texts[i][0] = field[3+i].len;
-            memcpy(&z->texts[i][1], field[3+i].ptr, field[3+i].len);
+            z->texts[i] = xmalloc(field[3 + i].len + 1);
+            z->texts[i][0] = field[3 + i].len;
+            memcpy(&z->texts[i][1], field[3 + i].ptr, field[3 + i].len);
         }
         z->texts[i] = NULL;
         if (ltree_add_rec_naptr(zone, dname, parse_dname(z, dname2, &field[6]), parse_ttl(z, &field[7], TTL_POSITIVE), parse_int(z, &field[1]), parse_int(z, &field[2]), 3, z->texts)) {
@@ -452,19 +467,20 @@ static void load_zones(zscan_t *z, char record_type, field_t *field) {
     }
 }
 
-typedef void (*djb_recordcb_t)(zscan_t *z, char record_type, field_t *fields);
+typedef void (*djb_recordcb_t)(zscan_t* z, char record_type, field_t* fields);
 
-static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
+static void zscan_foreach_file_record(zscan_t* z, djb_recordcb_t cb)
+{
     field_t field[15];
     ssize_t len;
     size_t i;
-    char *c;
+    char* c;
 
     z->lcount = 0;
     log_debug("Scanning djbzone file '%s'", z->fn);
 
     z->file = fopen(z->full_fn, "rte");
-    if(z->file == NULL)
+    if (z->file == NULL)
         parse_error("Cannot open zone file '%s' for reading: %s", z->full_fn, logf_errno());
 
     while ((len = getline(&z->line, &z->allocated, z->file)) != -1) {
@@ -473,8 +489,8 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
         /* Skip empty lines and comments */
         if (len == 0 || z->line[0] == '#' || z->line[0] == '-')
             continue;
-        if (z->line[len-1] == '\n') {
-            z->line[len-1] = 0;
+        if (z->line[len - 1] == '\n') {
+            z->line[len - 1] = 0;
             len--;
         }
         /* Skip empty lines and location records */
@@ -482,10 +498,10 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
             continue;
 
         for (i = 0, c = z->line + 1; i < ARRAY_SIZE(field); i++) {
-            field[i].ptr = c ?: NULL;
+            field[i].ptr = c ? : NULL;
             field[i].len = 0;
             if (c) {
-                char *n = strchr(c, ':');
+                char* n = strchr(c, ':');
                 if (n) {
                     field[i].len = n - c;
                     *n = 0;
@@ -502,43 +518,44 @@ static void zscan_foreach_file_record(zscan_t *z, djb_recordcb_t cb) {
 }
 
 // See similar in zscan_rfc1035.rl
-typedef bool (*sij_func_t)(zscan_t*,djb_recordcb_t);
+typedef bool (*sij_func_t)(zscan_t*, djb_recordcb_t);
 F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, djb_recordcb_t cb) {
-    if(!sigsetjmp(z->jbuf, 0)) {
+static bool _scan_isolate_jmp(zscan_t* z, djb_recordcb_t cb)
+{
+    if (!sigsetjmp(z->jbuf, 0)) {
         zscan_foreach_file_record(z, cb);
         return false;
     }
     return true;
 }
 
-static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
-    DIR *dir;
+static bool zscan_foreach_record(zscan_t* z, djb_recordcb_t cb)
+{
+    DIR* dir;
     bool failed = false;
 
     dir = opendir(z->path);
     if (dir == NULL) {
-        if(errno == ENOENT) {
+        if (errno == ENOENT) {
             log_debug("djb: directory '%s' does not exist", z->path);
-        }
-        else {
+        } else {
             log_err("djb: cannot open directory '%s': %s", z->path, logf_errno());
             failed = true;
         }
         return failed;
     }
 
-    while(1) {
+    while (1) {
         errno = 0;
         // cppcheck-suppress readdirCalled
         struct dirent* e = readdir(dir);
-        if(!e) {
-            if(errno)
+        if (!e) {
+            if (errno)
                 log_fatal("djb: readdir(%s) failed: %s", z->path, logf_errno());
             else
                 break;
         }
-        if(e->d_name[0] == '.')
+        if (e->d_name[0] == '.')
             continue;
 
         struct stat st;
@@ -547,7 +564,7 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
             log_err("djb: cannot stat file '%s': %s", z->full_fn, logf_errno());
             parse_abort();
         }
-        if((st.st_mode & S_IFMT) != S_IFREG) {
+        if ((st.st_mode & S_IFMT) != S_IFREG) {
             free(z->full_fn);
             z->fn = z->full_fn = NULL;
             continue;
@@ -575,14 +592,15 @@ static bool zscan_foreach_record(zscan_t *z, djb_recordcb_t cb) {
 F_WUNUSED F_NONNULL
 bool zscan_djb(const char* djb_path, zscan_djb_zonedata_t** zonedata)
 {
-    zscan_t _z, *z = &_z;
+    zscan_t _z;
+    zscan_t* z = &_z;
     memset(z, 0, sizeof(*z));
     z->path = djb_path;
 
     if (zscan_foreach_record(z, create_zones) || zscan_foreach_record(z, load_zones))
         goto error;
 
-    for (zscan_djb_zonedata_t *zd = z->zonedata; zd; zd = zd->next)
+    for (zscan_djb_zonedata_t* zd = z->zonedata; zd; zd = zd->next)
         if (zone_finalize(zd->zone))
             goto error;
 
