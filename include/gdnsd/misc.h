@@ -26,7 +26,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <dirent.h>
 #include <sys/types.h>
 
 typedef struct _gdnsd_rstate32_t {
@@ -47,15 +46,6 @@ typedef struct _gdnsd_rstate64_t {
 } gdnsd_rstate64_t;
 
 #pragma GCC visibility push(default)
-
-// Get system/filesystem-specific dirent buffer size for readdir_r() safely
-//   (dirname is just for error output)
-// readdir_r() is being deprecated in libc/POSIX in favor of assuming readdir() is
-//   thread-safe for different streams, and using your own locking for
-//   multi-thread access to the same stream.  Therefore this function is
-//   deprecated as well.
-F_NONNULL F_DEPRECATED
-size_t gdnsd_dirent_bufsize(DIR* d V_UNUSED, const char* dirname);
 
 // Register a child process that exists for the life of the daemon, so that
 //   the core can SIGTERM and reap it on clean shutdown.

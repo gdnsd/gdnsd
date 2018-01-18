@@ -37,7 +37,6 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <stddef.h>
-#include <dirent.h>
 #include <pthread.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -234,20 +233,6 @@ gdnsd_rstate32_t* gdnsd_rand32_init(void) {
     while(throw_away--)
         gdnsd_rand32_get(newstate);
     return newstate;
-}
-
-size_t gdnsd_dirent_bufsize(DIR* d, const char* dirname) {
-    errno = 0;
-    long name_max = fpathconf(dirfd(d), _PC_NAME_MAX);
-    if(name_max < 0)
-        log_fatal("fpathconf(%s, _PC_NAME_MAX) failed: %s",
-            dirname, logf_errno());
-    if(name_max < NAME_MAX)
-        name_max = NAME_MAX;
-    const size_t name_end = offsetof(struct dirent, d_name) + (size_t)name_max + 1U;
-    return name_end > sizeof(struct dirent)
-        ? name_end
-        : sizeof(struct dirent);
 }
 
 static pid_t* children = NULL;
