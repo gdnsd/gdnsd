@@ -796,7 +796,7 @@ void css_start(css_t* css, struct ev_loop* loop)
     gdnsd_assert(css->socks_cfg->num_dns_threads);
     css->handoff_fds_count = css->socks_cfg->num_dns_threads + 2U;
     gdnsd_assert(css->handoff_fds_count <= 0xFFFFFF);
-    css->handoff_fds = xmalloc(sizeof(int*) * css->handoff_fds_count);
+    css->handoff_fds = xmalloc(sizeof(*css->handoff_fds) * css->handoff_fds_count);
     css->handoff_fds[0] = css->lock_fd;
     css->handoff_fds[1] = css->fd;
     for (unsigned i = 0; i < css->socks_cfg->num_dns_threads; i++)

@@ -164,7 +164,7 @@ extmon_cmd_t* emc_read_command(const int fd)
             goto out_error;
         }
 
-        cmd = xmalloc(sizeof(extmon_cmd_t));
+        cmd = xmalloc(sizeof(*cmd));
         cmd->idx = ((unsigned)fixed_part[4] << 8) + fixed_part[5];
         cmd->timeout = ((unsigned)fixed_part[6] << 8) + fixed_part[7];
         cmd->interval = ((unsigned)fixed_part[8] << 8) + fixed_part[9];
@@ -193,7 +193,7 @@ extmon_cmd_t* emc_read_command(const int fd)
             goto out_error;
         }
 
-        cmd->args = xmalloc((n_args + 1) * sizeof(char*));
+        cmd->args = xmalloc((n_args + 1) * sizeof(*cmd->args));
         const uint8_t* current = &var_part[1];
         unsigned len_remain = var_len - 1;
         for (cmd->num_args = 0; cmd->num_args < n_args; cmd->num_args++) {

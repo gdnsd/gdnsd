@@ -128,10 +128,10 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr)
 
     if (any_addr) {
 #if defined IP_PKTINFO
-        if (setsockopt(sock, SOL_IP, IP_PKTINFO, &opt_one, sizeof opt_one) == -1)
+        if (setsockopt(sock, SOL_IP, IP_PKTINFO, &opt_one, sizeof(opt_one)) == -1)
             log_fatal("Failed to set IP_PKTINFO on UDP socket: %s", logf_errno());
 #elif defined IP_RECVDSTADDR
-        if (setsockopt(sock, SOL_IP, IP_RECVDSTADDR, &opt_one, sizeof opt_one) == -1)
+        if (setsockopt(sock, SOL_IP, IP_RECVDSTADDR, &opt_one, sizeof(opt_one)) == -1)
             log_fatal("Failed to set IP_RECVDSTADDR on UDP socket: %s", logf_errno());
 #else
         log_fatal("IPv4 any-address '0.0.0.0' not supported for DNS listening on your platform (no IP_PKTINFO or IP_RECVDSTADDR)");
@@ -141,7 +141,7 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr)
     // This is just a latency hack, it's not necessary for correct operation
 #if defined IP_TOS && defined IPTOS_LOWDELAY
     const int opt_tos = IPTOS_LOWDELAY;
-    if (setsockopt(sock, SOL_IP, IP_TOS, &opt_tos, sizeof opt_tos) == -1)
+    if (setsockopt(sock, SOL_IP, IP_TOS, &opt_tos, sizeof(opt_tos)) == -1)
         log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", logf_errno());
 #endif
 
@@ -165,14 +165,14 @@ static void udp_sock_opts_v6(const int sock)
     const int opt_one = 1;
 
 #if defined IPV6_USE_MIN_MTU
-    if (setsockopt(sock, SOL_IPV6, IPV6_USE_MIN_MTU, &opt_one, sizeof opt_one) == -1)
+    if (setsockopt(sock, SOL_IPV6, IPV6_USE_MIN_MTU, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set IPV6_USE_MIN_MTU on UDP socket: %s", logf_errno());
 #elif defined IPV6_MTU
 #    ifndef IPV6_MIN_MTU
 #      define IPV6_MIN_MTU 1280
 #    endif
     const int min_mtu = IPV6_MIN_MTU;
-    if (setsockopt(sock, SOL_IPV6, IPV6_MTU, &min_mtu, sizeof min_mtu) == -1)
+    if (setsockopt(sock, SOL_IPV6, IPV6_MTU, &min_mtu, sizeof(min_mtu)) == -1)
         log_fatal("Failed to set IPV6_MTU on UDP socket: %s", logf_errno());
 #endif
 
@@ -185,7 +185,7 @@ static void udp_sock_opts_v6(const int sock)
     if (getsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_v6o, &opt_v6o_len) == -1)
         log_fatal("Failed to get IPV6_V6ONLY on UDP socket: %s", logf_errno());
     if (!opt_v6o)
-        if (setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof opt_one) == -1)
+        if (setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
             log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", logf_errno());
 
 #if defined IPV6_MTU_DISCOVER && defined IPV6_PMTUDISC_DONT
@@ -209,10 +209,10 @@ static void udp_sock_opts_v6(const int sock)
 #endif
 
 #if defined IPV6_RECVPKTINFO
-    if (setsockopt(sock, SOL_IPV6, IPV6_RECVPKTINFO, &opt_one, sizeof opt_one) == -1)
+    if (setsockopt(sock, SOL_IPV6, IPV6_RECVPKTINFO, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", logf_errno());
 #elif defined IPV6_PKTINFO
-    if (setsockopt(sock, SOL_IPV6, IPV6_PKTINFO, &opt_one, sizeof opt_one) == -1)
+    if (setsockopt(sock, SOL_IPV6, IPV6_PKTINFO, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set IPV6_PKTINFO on UDP socket: %s", logf_errno());
 #else
 #   error IPV6_RECVPKTINFO or IPV6_PKTINFO required; this host lacks both
@@ -220,7 +220,7 @@ static void udp_sock_opts_v6(const int sock)
 
 #if defined IPV6_TCLASS && defined IPTOS_LOWDELAY
     const int opt_tos = IPTOS_LOWDELAY;
-    if (setsockopt(sock, SOL_IPV6, IPV6_TCLASS, &opt_tos, sizeof opt_tos) == -1)
+    if (setsockopt(sock, SOL_IPV6, IPV6_TCLASS, &opt_tos, sizeof(opt_tos)) == -1)
         log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", logf_errno());
 #endif
 }
@@ -293,10 +293,10 @@ void udp_sock_setup(dns_thread_t* t)
     }
 
     const int opt_one = 1;
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
+    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", logf_errno());
 
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
 
 #ifdef USE_MMSG
@@ -360,7 +360,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     struct msghdr msg_hdr;
     char cmsg_buf[cmsg_size];
     memset(cmsg_buf, 0, sizeof(cmsg_buf));
-    memset(&msg_hdr, 0, sizeof(struct msghdr));
+    memset(&msg_hdr, 0, sizeof(msg_hdr));
     msg_hdr.msg_name       = &asin.sa;
     msg_hdr.msg_iov        = &iov;
     msg_hdr.msg_iovlen     = 1;
@@ -562,7 +562,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
             if (unlikely(!dgrams[i].msg_hdr.msg_iov[0].iov_len)) {
                 const unsigned next = i + 1;
                 if (next < pkts)
-                    memmove(&dgrams[i], &dgrams[next], sizeof(struct mmsghdr) * (pkts - next));
+                    memmove(&dgrams[i], &dgrams[next], sizeof(dgrams[i]) * (pkts - next));
                 pkts--;
             } else {
                 i++;

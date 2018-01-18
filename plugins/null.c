@@ -83,8 +83,8 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 
 void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED)
 {
-    null_svcs = xrealloc(null_svcs, sizeof(null_svc_t*) * ++num_svcs);
-    null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(null_svc_t));
+    null_svcs = xrealloc(null_svcs, sizeof(*null_svcs) * ++num_svcs);
+    null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
     this_svc->name = strdup(name);
     this_svc->interval = interval;
 }
@@ -103,11 +103,11 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     }
 
     gdnsd_assert(this_svc);
-    null_mons = xrealloc(null_mons, sizeof(null_mon_t*) * ++num_mons);
-    null_mon_t* this_mon = null_mons[num_mons - 1] = xmalloc(sizeof(null_mon_t));
+    null_mons = xrealloc(null_mons, sizeof(*null_mons) * ++num_mons);
+    null_mon_t* this_mon = null_mons[num_mons - 1] = xmalloc(sizeof(*this_mon));
     this_mon->svc = this_svc;
     this_mon->idx = idx;
-    this_mon->interval_watcher = xmalloc(sizeof(ev_timer));
+    this_mon->interval_watcher = xmalloc(sizeof(*this_mon->interval_watcher));
     ev_timer_init(this_mon->interval_watcher, &null_interval_cb, 0, 0);
     this_mon->interval_watcher->data = this_mon;
 }

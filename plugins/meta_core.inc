@@ -228,7 +228,7 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
                 if (res_stypes) {
                     this_dc->num_svcs = vscf_array_get_len(res_stypes);
                     if (this_dc->num_svcs) {
-                        this_dc->indices = xmalloc(sizeof(unsigned) * this_dc->num_svcs);
+                        this_dc->indices = xmalloc(sizeof(*this_dc->indices) * this_dc->num_svcs);
                         for (unsigned i = 0; i < this_dc->num_svcs; i++) {
                             vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                             if (!vscf_is_simple(this_svc_cfg))
@@ -238,7 +238,7 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
                     }
                 } else {
                     this_dc->num_svcs = 1;
-                    this_dc->indices = xmalloc(sizeof(unsigned));
+                    this_dc->indices = xmalloc(sizeof(*this_dc->indices));
                     this_dc->indices[0] = gdnsd_mon_cname(DEFAULT_SVCNAME, textdata, dname);
                 }
             } else {
@@ -256,7 +256,7 @@ static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t*
 {
     gdnsd_assert(vscf_is_hash(dcmap_cfg));
 
-    res->dcs = xcalloc((res->num_dcs + 1), sizeof(dc_t));
+    res->dcs = xcalloc((res->num_dcs + 1), sizeof(*res->dcs));
     const unsigned num_dcs_defined = res->num_dcs_defined;
     for (unsigned i = 0; i < num_dcs_defined; i++) {
         const char* dc_name = vscf_hash_get_key_byindex(dcmap_cfg, i, NULL);
@@ -446,7 +446,7 @@ void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED)
     if (num_res > MAX_RESOURCES)
         log_fatal("plugin_" PNSTR ": Maximum number of resources (%u) exceeded", MAX_RESOURCES);
 
-    resources = xcalloc(num_res, sizeof(resource_t));
+    resources = xcalloc(num_res, sizeof(*resources));
 
     for (unsigned i = 0; i < num_res; i++) {
         resource_t* res = &resources[i];

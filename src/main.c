@@ -79,7 +79,7 @@ static unsigned exitfuncs_pending = 0;
 
 void gdnsd_atexit_debug(void (*f)(void))
 {
-    exitfuncs = xrealloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(void (*)(void)));
+    exitfuncs = xrealloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(*exitfuncs));
     exitfuncs[exitfuncs_pending++] = f;
 }
 
@@ -196,12 +196,12 @@ void notify_reload_zones_done(void)
 F_NONNULL
 static void setup_signals(css_t* css)
 {
-    sig_int = malloc(sizeof(ev_signal));
+    sig_int = malloc(sizeof(*sig_int));
     ev_signal_init(sig_int, terminal_signal, SIGINT);
     sig_int->data = css;
     ev_signal_start(def_loop, sig_int);
 
-    sig_term = malloc(sizeof(ev_signal));
+    sig_term = malloc(sizeof(*sig_term));
     ev_signal_init(sig_term, terminal_signal, SIGTERM);
     sig_term->data = css;
     ev_signal_start(def_loop, sig_term);
@@ -209,7 +209,7 @@ static void setup_signals(css_t* css)
 
 static void setup_reload_zones(css_t* css)
 {
-    async_reloadz = malloc(sizeof(ev_async));
+    async_reloadz = malloc(sizeof(*async_reloadz));
     ev_async_init(async_reloadz, reload_zones_done);
     async_reloadz->data = css;
     ev_async_start(def_loop, async_reloadz);

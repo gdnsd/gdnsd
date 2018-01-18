@@ -144,7 +144,7 @@ bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fd
                 return true;
             fds_wanted = csbuf_get_v(resp);
             gdnsd_assert(fds_wanted > 2);
-            fds = xmalloc(fds_wanted * sizeof(int));
+            fds = xmalloc(fds_wanted * sizeof(*fds));
         } else {
             // all later iterations of the loop
             gdnsd_assert(RESP_ACK == resp->key);

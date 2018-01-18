@@ -392,7 +392,7 @@ static uint32_t get_dclist_cached(geoip_db_t* db, const unsigned offset)
     }
 
     uint32_t dclist = db->dclist_get_func(db, offset);
-    db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
+    db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(*db->offset_cache[ndx]) * (bucket_size + 2));
     gdnsd_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
@@ -472,7 +472,7 @@ static bool geoip_db_close(geoip_db_t* db)
 F_NONNULLX(1, 2, 3)
 static geoip_db_t* geoip_db_open(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const fips_t* fips, const gdgeoip_v4o_t v4o_flag, const bool city_auto_mode, const bool city_no_region)
 {
-    geoip_db_t* db = xcalloc(1, sizeof(geoip_db_t));
+    geoip_db_t* db = xcalloc(1, sizeof(*db));
     db->pathname = pathname;
     db->map_name = map_name;
     db->dclists = dclists;

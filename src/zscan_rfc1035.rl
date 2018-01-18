@@ -225,7 +225,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
         unsigned num_whole_chunks = (newlen - remainder) / 255;
         const char* zptr = text_temp;
         const unsigned new_alloc = 1 + z->num_texts + num_whole_chunks + (remainder ? 1 : 0);
-        z->texts = xrealloc(z->texts, new_alloc * sizeof(uint8_t*));
+        z->texts = xrealloc(z->texts, new_alloc * sizeof(*z->texts));
         for (unsigned i = 0; i < num_whole_chunks; i++) {
             uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(256);
             *chunk++ = 255;
@@ -239,7 +239,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
         }
         z->texts[z->num_texts] = NULL;
     } else {
-        z->texts = xrealloc(z->texts, (z->num_texts + 2) * sizeof(uint8_t*));
+        z->texts = xrealloc(z->texts, (z->num_texts + 2) * sizeof(*z->texts));
         uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(newlen + 1);
         *chunk++ = newlen;
         memcpy(chunk, text_temp, newlen);
@@ -811,7 +811,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn)
     const size_t bufsize = gdnsd_fmap_get_len(fmap);
     const char* buf = gdnsd_fmap_get_buf(fmap);
 
-    zscan_t* z = xcalloc(1, sizeof(zscan_t));
+    zscan_t* z = xcalloc(1, sizeof(*z));
     z->lcount = 1;
     z->def_ttl = gcfg->zones_default_ttl;
     z->zone = zone;

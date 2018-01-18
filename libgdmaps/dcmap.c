@@ -82,7 +82,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
 {
     gdnsd_assert(vscf_is_hash(map_cfg));
 
-    dcmap_t* dcmap = xcalloc(1, sizeof(dcmap_t));
+    dcmap_t* dcmap = xcalloc(1, sizeof(*dcmap));
     unsigned nchild = vscf_hash_get_len(map_cfg);
 
     vscf_data_t* def_cfg = vscf_hash_get_data_byconstkey(map_cfg, "default", true);
@@ -118,9 +118,9 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
 
     if (nchild) {
         dcmap->num_children = nchild;
-        dcmap->child_names = xcalloc(nchild, sizeof(char*));
-        dcmap->child_dclists = xcalloc(nchild, sizeof(uint32_t));
-        dcmap->child_dcmaps = xcalloc(nchild, sizeof(dcmap_t*));
+        dcmap->child_names = xcalloc(nchild, sizeof(*dcmap->child_names));
+        dcmap->child_dclists = xcalloc(nchild, sizeof(*dcmap->child_dclists));
+        dcmap->child_dcmaps = xcalloc(nchild, sizeof(*dcmap->child_dcmaps));
         dcmap_iter_data did = {
             .child_num = 0,
             .dcmap = dcmap,

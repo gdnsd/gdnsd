@@ -77,7 +77,7 @@ static void do_lookup(const char* map_name, const char* ip_arg)
     }
 
     // To void gdmaps fallback pitfalls
-    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(gdnsd_anysin_t));
+    memcpy(&cinfo.dns_source, &cinfo.edns_client, sizeof(cinfo.dns_source));
 
     // w/ edns_client_mask set, scope_mask should *always* be set by gdmaps_lookup();
     // (and regardless, dclist should also always be set and contain something)

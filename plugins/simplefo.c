@@ -82,7 +82,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
     if (svctypes_data) {
         num_svcs = vscf_array_get_len(svctypes_data);
         if (num_svcs) {
-            svc_names = xmalloc(sizeof(char*) * num_svcs);
+            svc_names = xmalloc(sizeof(*svc_names) * num_svcs);
             for (unsigned i = 0; i < num_svcs; i++) {
                 vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
                 if (!vscf_is_simple(svctype_cfg))
@@ -92,7 +92,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
         }
     } else {
         num_svcs = 1;
-        svc_names = xmalloc(sizeof(char*));
+        svc_names = xmalloc(sizeof(*svc_names));
         svc_names[0] = DEFAULT_SVCNAME;
     }
 
@@ -116,7 +116,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
             log_fatal("plugin_simplefo: resource %s (%s): '%s' is not an IPv4 address", resname, stanza, addr_txt);
 
         if (num_svcs) {
-            as->indices[which] = xmalloc(sizeof(unsigned) * num_svcs);
+            as->indices[which] = xmalloc(sizeof(*as->indices[which]) * num_svcs);
             for (unsigned j = 0; j < num_svcs; j++)
                 as->indices[which][j] = gdnsd_mon_addr(svc_names[j], &as->addrs[which]);
         }
@@ -150,7 +150,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
     vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
     if (!addrs_v4_cfg && !addrs_v6_cfg) {
-        addrstate_t* as = xmalloc(sizeof(addrstate_t));
+        addrstate_t* as = xmalloc(sizeof(*as));
         as_af_t which = config_addrs(as, A_AUTO, resname, "direct", opts);
         if (which == A_IPv4) {
             res->addrs_v4 = as;
@@ -162,13 +162,13 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         if (addrs_v4_cfg) {
             if (!vscf_is_hash(addrs_v4_cfg))
                 log_fatal("plugin_simplefo: resource %s: The value of 'addrs_v4', if defined, must be a hash", resname);
-            addrstate_t* as = res->addrs_v4 = xmalloc(sizeof(addrstate_t));
+            addrstate_t* as = res->addrs_v4 = xmalloc(sizeof(*as));
             config_addrs(as, A_IPv4, resname, "addrs_v4", addrs_v4_cfg);
         }
         if (addrs_v6_cfg) {
             if (!vscf_is_hash(addrs_v6_cfg))
                 log_fatal("plugin_simplefo: resource %s: The value of 'addrs_v6', if defined, must be a hash", resname);
-            addrstate_t* as = res->addrs_v6 = xmalloc(sizeof(addrstate_t));
+            addrstate_t* as = res->addrs_v6 = xmalloc(sizeof(*as));
             config_addrs(as, A_IPv6, resname, "addrs_v6", addrs_v6_cfg);
         }
     }
@@ -194,7 +194,7 @@ void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_threads
     if (vscf_hash_bequeath_all(config, "service_types", true, false))
         num_resources--; // don't count parameter keys
 
-    resources = xcalloc(num_resources, sizeof(res_t));
+    resources = xcalloc(num_resources, sizeof(*resources));
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
     gdnsd_dyn_addr_max(1, 1); // simplefo only returns one address per family

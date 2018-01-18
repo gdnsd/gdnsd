@@ -216,7 +216,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* io, const int revents
 
     // Setup/Start write watcher if necc
     if (!tdata->write_watcher) {
-        ev_io* write_watcher = xmalloc(sizeof(ev_io));
+        ev_io* write_watcher = xmalloc(sizeof(*write_watcher));
         tdata->write_watcher = write_watcher;
         write_watcher->data = tdata;
         ev_io_init(write_watcher, tcp_write_handler, io->fd, EV_WRITE);
@@ -305,7 +305,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
 {
     gdnsd_assert(revents == EV_READ);
 
-    gdnsd_anysin_t* asin = xmalloc(sizeof(gdnsd_anysin_t));
+    gdnsd_anysin_t* asin = xmalloc(sizeof(*asin));
     asin->len = GDNSD_ANYSIN_MAXLEN;
 
     const int sock = accept4(io->fd, &asin->sa, &asin->len, SOCK_NONBLOCK | SOCK_CLOEXEC);
@@ -344,7 +344,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     if (++ctx->num_conn_watchers == ctx->max_clients)
         ev_io_stop(loop, ctx->accept_watcher);
 
-    tcpdns_conn_t* tdata = xcalloc(1, sizeof(tcpdns_conn_t));
+    tcpdns_conn_t* tdata = xcalloc(1, sizeof(*tdata));
     // doubly-linked list handling:
     if (ctx->conns) {
         gdnsd_assert(!ctx->conns->prev);
@@ -358,14 +358,14 @@ static void accept_handler(struct ev_loop* loop, ev_io* io, const int revents V_
     tdata->asin = asin;
     tdata->ctx = ctx;
 
-    ev_io* read_watcher = xmalloc(sizeof(ev_io));
+    ev_io* read_watcher = xmalloc(sizeof(*read_watcher));
     tdata->read_watcher = read_watcher;
     read_watcher->data = tdata;
     ev_io_init(read_watcher, tcp_read_handler, sock, EV_READ);
     ev_set_priority(read_watcher, 0);
     ev_io_start(loop, read_watcher);
 
-    ev_timer* timeout_watcher = xmalloc(sizeof(ev_timer));
+    ev_timer* timeout_watcher = xmalloc(sizeof(*timeout_watcher));
     timeout_watcher->data = tdata;
     tdata->timeout_watcher = timeout_watcher;
     ev_timer_init(timeout_watcher, tcp_timeout_handler, 0, ctx->timeout);
@@ -405,15 +405,15 @@ void tcp_dns_listen_setup(dns_thread_t* t)
     }
 
     const int opt_one = 1;
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof opt_one) == -1)
+    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", logf_errno());
 
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof opt_one) == -1)
+    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
 
 #ifdef TCP_DEFER_ACCEPT
     const int opt_timeout = (int)addrconf->tcp_timeout;
-    if (setsockopt(t->sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof opt_timeout) == -1)
+    if (setsockopt(t->sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof(opt_timeout)) == -1)
         log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", logf_errno());
 #endif
 
@@ -427,7 +427,7 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         if (getsockopt(t->sock, SOL_IPV6, IPV6_V6ONLY, &opt_v6o, &opt_v6o_len) == -1)
             log_fatal("Failed to get IPV6_V6ONLY on TCP socket: %s", logf_errno());
         if (!opt_v6o)
-            if (setsockopt(t->sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof opt_one) == -1)
+            if (setsockopt(t->sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
                 log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
     }
 
@@ -453,7 +453,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     const dns_addr_t* addrconf = t->ac;
 
-    tcpdns_thread_t* ctx = xmalloc(sizeof(tcpdns_thread_t));
+    tcpdns_thread_t* ctx = xmalloc(sizeof(*ctx));
     register_thread(ctx);
 
     if (listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
@@ -469,16 +469,16 @@ void* dnsio_tcp_start(void* thread_asvoid)
     ctx->max_clients = addrconf->tcp_clients_per_thread;
     ctx->shutting_down = false;
 
-    struct ev_io* accept_watcher = ctx->accept_watcher = xmalloc(sizeof(struct ev_io));
+    struct ev_io* accept_watcher = ctx->accept_watcher = xmalloc(sizeof(*accept_watcher));
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
     ev_set_priority(accept_watcher, -2);
     accept_watcher->data = ctx;
 
-    struct ev_prepare* prep_watcher = ctx->prep_watcher = xmalloc(sizeof(struct ev_prepare));
+    struct ev_prepare* prep_watcher = ctx->prep_watcher = xmalloc(sizeof(*prep_watcher));
     ev_prepare_init(prep_watcher, prcu_offline);
     prep_watcher->data = ctx;
 
-    struct ev_async* stop_watcher = ctx->stop_watcher = xmalloc(sizeof(struct ev_async));
+    struct ev_async* stop_watcher = ctx->stop_watcher = xmalloc(sizeof(*stop_watcher));
     ev_async_init(stop_watcher, stop_handler);
     ev_set_priority(stop_watcher, 2);
     stop_watcher->data = ctx;

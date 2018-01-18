@@ -115,7 +115,7 @@ static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSE
 
     // now copy the (new) consumer table back over the old one
     //   that we're using for future offline updates until the next swap
-    memcpy(smgr_sttl, smgr_sttl_consumer_, sizeof(gdnsd_sttl_t) * num_smgrs);
+    memcpy(smgr_sttl, smgr_sttl_consumer_, sizeof(*smgr_sttl) * num_smgrs);
 }
 
 // anything that ends up changing a value in smgr_sttl[] calls
@@ -365,9 +365,9 @@ static void admin_init(struct ev_loop* mloop)
 {
     char* pathname = gdnsd_resolve_path_state("admin_state", NULL);
 
-    admin_quiesce_timer = xmalloc(sizeof(ev_timer));
+    admin_quiesce_timer = xmalloc(sizeof(*admin_quiesce_timer));
     ev_timer_init(admin_quiesce_timer, admin_timer_cb, 0.0, 1.02);
-    admin_file_watcher = xmalloc(sizeof(ev_stat));
+    admin_file_watcher = xmalloc(sizeof(*admin_file_watcher));
     memset(&admin_file_watcher->attr, 0, sizeof(admin_file_watcher->attr));
     ev_stat_init(admin_file_watcher, admin_file_cb, pathname,
                  testsuite_nodelay ? 0.01 : 3.0);
@@ -440,7 +440,7 @@ void gdnsd_mon_start(struct ev_loop* mloop)
     initial_round = false;
 
     // set up the table-update coalescing timer
-    sttl_update_timer = xmalloc(sizeof(ev_timer));
+    sttl_update_timer = xmalloc(sizeof(*sttl_update_timer));
     ev_timer_init(sttl_update_timer, sttl_table_update, 1.0, 0.0);
 
     // trigger it once manually to invoke prcu stuff
@@ -510,7 +510,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
 
     // allocate the new smgr/sttl
     const unsigned idx = num_smgrs++;
-    smgrs = xrealloc(smgrs, sizeof(smgr_t) * num_smgrs);
+    smgrs = xrealloc(smgrs, sizeof(*smgrs) * num_smgrs);
     smgr_t* this_smgr = &smgrs[idx];
     this_smgr->type = this_svc;
 
@@ -533,7 +533,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
         this_smgr->is_cname = false;
         this_smgr->cname = strdup(addr_str);
         gdnsd_downcase_str(this_smgr->cname);
-        memcpy(&this_smgr->addr, addr, sizeof(gdnsd_anysin_t));
+        memcpy(&this_smgr->addr, addr, sizeof(this_smgr->addr));
     } else { // cname
         if (this_svc->plugin && !this_svc->plugin->add_mon_cname)
             log_fatal("Service type '%s' does not support CNAME monitoring for '%s'",
@@ -553,8 +553,8 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
     if (!strcmp(svctype_name, "down"))
         this_smgr->real_sttl |= GDNSD_STTL_DOWN;
 
-    smgr_sttl = xrealloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgr_sttl = xrealloc(smgr_sttl, sizeof(*smgr_sttl) * num_smgrs);
+    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(*smgr_sttl_consumer_) * num_smgrs);
     smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
@@ -577,11 +577,11 @@ unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname, const uint
 unsigned gdnsd_mon_admin(const char* desc)
 {
     const unsigned idx = num_smgrs++;
-    smgrs = xrealloc(smgrs, sizeof(smgr_t) * num_smgrs);
-    smgr_sttl = xrealloc(smgr_sttl, sizeof(gdnsd_sttl_t) * num_smgrs);
-    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(gdnsd_sttl_t) * num_smgrs);
+    smgrs = xrealloc(smgrs, sizeof(*smgrs) * num_smgrs);
+    smgr_sttl = xrealloc(smgr_sttl, sizeof(*smgr_sttl) * num_smgrs);
+    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(*smgr_sttl_consumer_) * num_smgrs);
     smgr_t* this_smgr = &smgrs[idx];
-    memset(this_smgr, 0, sizeof(smgr_t));
+    memset(this_smgr, 0, sizeof(*this_smgr));
     this_smgr->desc = strdup(desc);
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
     smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
@@ -622,7 +622,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
     num_svc_types = num_svc_types_cfg + 2; // "up", "down"
 
     // the last 2 service types are fixed to up and down
-    service_types = xcalloc(num_svc_types, sizeof(service_type_t));
+    service_types = xcalloc(num_svc_types, sizeof(*service_types));
     service_types[num_svc_types - 2].name = "up";
     service_types[num_svc_types - 1].name = "down";
 

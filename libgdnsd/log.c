@@ -272,7 +272,7 @@ static const char generic_nullstr[] = "(null)";
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6)
 {
     gdnsd_anysin_t tempsin;
-    memset(&tempsin, 0, sizeof(gdnsd_anysin_t));
+    memset(&tempsin, 0, sizeof(tempsin));
     tempsin.sin.sin_family = AF_INET6;
     memcpy(tempsin.sin6.sin6_addr.s6_addr, ipv6, 16);
     tempsin.len = sizeof(struct sockaddr_in6);

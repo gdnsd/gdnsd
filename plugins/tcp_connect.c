@@ -212,7 +212,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 
 void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
-    service_types = xrealloc(service_types, (num_tcp_svcs + 1) * sizeof(tcp_svc_t));
+    service_types = xrealloc(service_types, (num_tcp_svcs + 1) * sizeof(*service_types));
     tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
 
     this_svc->name = strdup(name);
@@ -229,7 +229,7 @@ void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
 
 void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
-    tcp_events_t* this_mon = xcalloc(1, sizeof(tcp_events_t));
+    tcp_events_t* this_mon = xcalloc(1, sizeof(*this_mon));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
 
@@ -242,7 +242,7 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
 
     gdnsd_assert(this_mon->tcp_svc);
 
-    memcpy(&this_mon->addr, addr, sizeof(gdnsd_anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(this_mon->addr));
     if (this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->tcp_svc->port);
     } else {
@@ -253,19 +253,19 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
     this_mon->tcp_state = TCP_STATE_WAITING;
     this_mon->sock = -1;
 
-    this_mon->connect_watcher = xmalloc(sizeof(ev_io));
+    this_mon->connect_watcher = xmalloc(sizeof(*this_mon->connect_watcher));
     ev_io_init(this_mon->connect_watcher, &mon_connect_cb, -1, 0);
     this_mon->connect_watcher->data = this_mon;
 
-    this_mon->timeout_watcher = xmalloc(sizeof(ev_timer));
+    this_mon->timeout_watcher = xmalloc(sizeof(*this_mon->timeout_watcher));
     ev_timer_init(this_mon->timeout_watcher, &mon_timeout_cb, 0, 0);
     this_mon->timeout_watcher->data = this_mon;
 
-    this_mon->interval_watcher = xmalloc(sizeof(ev_timer));
+    this_mon->interval_watcher = xmalloc(sizeof(*this_mon->interval_watcher));
     ev_timer_init(this_mon->interval_watcher, &mon_interval_cb, 0, 0);
     this_mon->interval_watcher->data = this_mon;
 
-    mons = xrealloc(mons, sizeof(tcp_events_t*) * (num_mons + 1));
+    mons = xrealloc(mons, sizeof(*mons) * (num_mons + 1));
     mons[num_mons++] = this_mon;
 }
 

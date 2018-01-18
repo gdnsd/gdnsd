@@ -99,7 +99,7 @@ int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_a
         // Zero-out the result in case of strange earlier contents,
         //  and also to gaurantee a zero port if port_txt is NULL
         //  (getaddrinfo() itself docs that it may be uninitialized)
-        memset(result, 0, sizeof(gdnsd_anysin_t));
+        memset(result, 0, sizeof(*result));
         memcpy(&result->sa, ainfo->ai_addr, ainfo->ai_addrlen);
         result->len = ainfo->ai_addrlen;
     }
@@ -172,7 +172,7 @@ bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* asin)
     gdnsd_assert(asin->sa.sa_family == AF_INET || asin->sa.sa_family == AF_INET6);
 
     if (asin->sa.sa_family == AF_INET6) {
-        if (!memcmp(&asin->sin6.sin6_addr.s6_addr, &in6addr_any, sizeof(struct in6_addr)))
+        if (!memcmp(&asin->sin6.sin6_addr.s6_addr, &in6addr_any, sizeof(in6addr_any)))
             return true;
     } else if (asin->sin.sin_addr.s_addr == INADDR_ANY) {
         return true;

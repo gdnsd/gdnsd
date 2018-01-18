@@ -106,7 +106,7 @@ F_NONNULLX(1, 2)
 static gdmap_t* gdmap_new(const char* name, vscf_data_t* map_cfg, const fips_t* fips)
 {
     // basics
-    gdmap_t* gdmap = xcalloc(1, sizeof(gdmap_t));
+    gdmap_t* gdmap = xcalloc(1, sizeof(*gdmap));
     gdmap->name = strdup(name);
     gdmap->fips = fips;
     if (!vscf_is_hash(map_cfg))
@@ -480,13 +480,13 @@ static void gdmap_setup_nets_watcher(gdmap_t* gdmap, struct ev_loop* loop)
 {
     gdnsd_assert(gdmap->nets_path);
 
-    gdmap->nets_reload_timer = xmalloc(sizeof(ev_timer));
+    gdmap->nets_reload_timer = xmalloc(sizeof(*gdmap->nets_reload_timer));
     ev_init(gdmap->nets_reload_timer, gdmap_nets_reload_timer_cb);
     ev_set_priority(gdmap->nets_reload_timer, -1);
     gdmap->nets_reload_timer->repeat = STAT_RELOAD_WAIT;
     gdmap->nets_reload_timer->data = gdmap;
 
-    gdmap->nets_stat_watcher = xmalloc(sizeof(ev_stat));
+    gdmap->nets_stat_watcher = xmalloc(sizeof(*gdmap->nets_stat_watcher));
     memset(&gdmap->nets_stat_watcher->attr, 0, sizeof(gdmap->nets_stat_watcher->attr));
     ev_stat_init(gdmap->nets_stat_watcher, gdmap_nets_reload_stat_cb, gdmap->nets_path, 0);
     ev_set_priority(gdmap->nets_stat_watcher, 0);
@@ -502,7 +502,7 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop)
     const bool v4o = !!gdmap->geoip_v4o_path;
 
     // the reload stat-quiesce timers
-    gdmap->geoip_reload_timer = xmalloc(sizeof(ev_timer));
+    gdmap->geoip_reload_timer = xmalloc(sizeof(*gdmap->geoip_reload_timer));
     ev_init(gdmap->geoip_reload_timer, gdmap_geoip_reload_timer_cb);
     ev_set_priority(gdmap->geoip_reload_timer, -1);
     gdmap->geoip_reload_timer->repeat = STAT_RELOAD_WAIT;
@@ -510,7 +510,7 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop)
 
     if (v4o) {
         gdnsd_assert(!gdmap->geoip_is_v2);
-        gdmap->geoip_v4o_reload_timer = xmalloc(sizeof(ev_timer));
+        gdmap->geoip_v4o_reload_timer = xmalloc(sizeof(*gdmap->geoip_v4o_reload_timer));
         ev_init(gdmap->geoip_v4o_reload_timer, gdmap_geoip_v4o_reload_timer_cb);
         ev_set_priority(gdmap->geoip_v4o_reload_timer, -1);
         gdmap->geoip_v4o_reload_timer->repeat = STAT_RELOAD_WAIT;
@@ -518,7 +518,7 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop)
     }
 
     // the reload stat() watchers (they share a callback differentiated on w->path)
-    gdmap->geoip_stat_watcher = xmalloc(sizeof(ev_stat));
+    gdmap->geoip_stat_watcher = xmalloc(sizeof(*gdmap->geoip_stat_watcher));
     memset(&gdmap->geoip_stat_watcher->attr, 0, sizeof(gdmap->geoip_stat_watcher->attr));
     ev_stat_init(gdmap->geoip_stat_watcher, gdmap_geoip_reload_stat_cb, gdmap->geoip_path, 0);
     ev_set_priority(gdmap->geoip_stat_watcher, 0);
@@ -526,7 +526,7 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop)
     ev_stat_start(loop, gdmap->geoip_stat_watcher);
 
     if (v4o) {
-        gdmap->geoip_v4o_stat_watcher = xmalloc(sizeof(ev_stat));
+        gdmap->geoip_v4o_stat_watcher = xmalloc(sizeof(*gdmap->geoip_v4o_stat_watcher));
         memset(&gdmap->geoip_v4o_stat_watcher->attr, 0, sizeof(gdmap->geoip_v4o_stat_watcher->attr));
         ev_stat_init(gdmap->geoip_v4o_stat_watcher, gdmap_geoip_reload_stat_cb, gdmap->geoip_v4o_path, 0);
         ev_set_priority(gdmap->geoip_v4o_stat_watcher, 0);
@@ -543,7 +543,7 @@ static void gdmap_setup_watchers(gdmap_t* gdmap, struct ev_loop* loop)
     if (gdmap->nets_path)
         gdmap_setup_nets_watcher(gdmap, loop);
 
-    gdmap->tree_update_timer = xmalloc(sizeof(ev_timer));
+    gdmap->tree_update_timer = xmalloc(sizeof(*gdmap->tree_update_timer));
     ev_init(gdmap->tree_update_timer, gdmap_tree_update_cb);
     ev_set_priority(gdmap->tree_update_timer, -2);
     gdmap->tree_update_timer->repeat = ALL_RELOAD_WAIT;
@@ -595,7 +595,7 @@ F_NONNULL
 static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
 {
     gdmaps_t* gdmaps = data;
-    gdmaps->maps = xrealloc(gdmaps->maps, sizeof(gdmap_t*) * (gdmaps->count + 1));
+    gdmaps->maps = xrealloc(gdmaps->maps, sizeof(*gdmaps->maps) * (gdmaps->count + 1));
     gdmaps->maps[gdmaps->count++] = gdmap_new(key, val, gdmaps->fips);
     return true;
 }
@@ -606,7 +606,7 @@ gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg)
 
     gdgeoip2_init();
 
-    gdmaps_t* gdmaps = xcalloc(1, sizeof(gdmaps_t));
+    gdmaps_t* gdmaps = xcalloc(1, sizeof(*gdmaps));
 
     vscf_data_t* crn_cfg = vscf_hash_get_data_byconstkey(maps_cfg, "city_region_names", true);
     if (crn_cfg) {

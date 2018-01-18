@@ -93,7 +93,7 @@ static bool testsuite_nodelay = false;
 
 void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
-    service_types = xrealloc(service_types, (num_svcs + 1) * sizeof(extf_svc_t));
+    service_types = xrealloc(service_types, (num_svcs + 1) * sizeof(*service_types));
     extf_svc_t* svc = &service_types[num_svcs++];
 
     svc->name = strdup(name);
@@ -130,7 +130,7 @@ void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_nam
 
     gdnsd_assert(svc);
 
-    svc->mons = xrealloc(svc->mons, (svc->num_mons + 1) * sizeof(extf_mon_t));
+    svc->mons = xrealloc(svc->mons, (svc->num_mons + 1) * sizeof(*svc->mons));
     extf_mon_t* mon = &svc->mons[svc->num_mons];
     mon->name = strdup(cname);
     mon->sidx = idx;
@@ -165,7 +165,7 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_
             if (!svc->direct && ((result & GDNSD_STTL_TTL_MASK) != def_ttl))
                 log_warn("plugin_extfile: Service type '%s': TTL value for '%s' in file '%s' ignored in 'monitor' mode", svc->name, matchme, svc->path);
             const extf_mon_t findme = { matchme, 0, 0 };
-            const extf_mon_t* found = bsearch(&findme, svc->mons, svc->num_mons, sizeof(extf_mon_t), moncmp);
+            const extf_mon_t* found = bsearch(&findme, svc->mons, svc->num_mons, sizeof(findme), moncmp);
             if (found)
                 results[found->midx] = result;
             else
@@ -267,10 +267,10 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop)
         // in the direct case, interval is the ev_stat time hint, and all ev_stat
         //   hits (re-)kick a 1.02s stat()-settling timer, which processes the file
         //   when it expires.
-        svc->time_watcher = xmalloc(sizeof(ev_timer));
+        svc->time_watcher = xmalloc(sizeof(*svc->time_watcher));
         ev_timer_init(svc->time_watcher, timer_cb, 0.0, 1.02);
         svc->time_watcher->data = svc;
-        svc->file_watcher = xmalloc(sizeof(ev_stat));
+        svc->file_watcher = xmalloc(sizeof(*svc->file_watcher));
         memset(&svc->file_watcher->attr, 0, sizeof(svc->file_watcher->attr));
         ev_stat_init(svc->file_watcher, file_cb, svc->path, delay);
         svc->file_watcher->data = svc;
@@ -278,7 +278,7 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop)
     } else {
         // in the monitor case, interval is a fixed repeating timer that processes
         //   the file on every expiry.
-        svc->time_watcher = xmalloc(sizeof(ev_timer));
+        svc->time_watcher = xmalloc(sizeof(*svc->time_watcher));
         ev_timer_init(svc->time_watcher, timer_cb, delay, delay);
         svc->time_watcher->data = svc;
         ev_timer_start(mon_loop, svc->time_watcher);
@@ -300,7 +300,7 @@ void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED)
         extf_svc_t* svc = &service_types[i];
         // qsort() sets up for the bsearch() in process_file at runtime
         // aftwerwards, the midx values must be rewritten to the new order
-        qsort(svc->mons, svc->num_mons, sizeof(extf_mon_t), moncmp);
+        qsort(svc->mons, svc->num_mons, sizeof(*svc->mons), moncmp);
         for (unsigned j = 0; j < svc->num_mons; j++)
             svc->mons[j].midx = j;
         process_file(svc);

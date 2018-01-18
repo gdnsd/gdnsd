@@ -379,7 +379,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     const char* vhost = NULL;
     unsigned port = 80;
 
-    service_types = xrealloc(service_types, (num_http_svcs + 1) * sizeof(http_svc_t));
+    service_types = xrealloc(service_types, (num_http_svcs + 1) * sizeof(*service_types));
     http_svc_t* this_svc = &service_types[num_http_svcs++];
 
     this_svc->name = strdup(name);
@@ -394,7 +394,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     if (ok_codes_cfg) {
         ok_codes_set = true;
         this_svc->num_ok_codes = vscf_array_get_len(ok_codes_cfg);
-        this_svc->ok_codes = xmalloc(sizeof(unsigned) * this_svc->num_ok_codes);
+        this_svc->ok_codes = xmalloc(sizeof(*this_svc->ok_codes) * this_svc->num_ok_codes);
         for (unsigned i = 0; i < this_svc->num_ok_codes; i++) {
             vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);
             unsigned long tmpcode;
@@ -409,7 +409,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     // default the ok_codes array to [ 200 ]
     if (!ok_codes_set) {
         this_svc->num_ok_codes = 1;
-        this_svc->ok_codes = xmalloc(sizeof(unsigned));
+        this_svc->ok_codes = xmalloc(sizeof(*this_svc->ok_codes));
         this_svc->ok_codes[0] = 200LU;
     }
 
@@ -421,7 +421,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
 
 void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
-    http_events_t* this_mon = xcalloc(1, sizeof(http_events_t));
+    http_events_t* this_mon = xcalloc(1, sizeof(*this_mon));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
 
@@ -434,7 +434,7 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
 
     gdnsd_assert(this_mon->http_svc);
 
-    memcpy(&this_mon->addr, addr, sizeof(gdnsd_anysin_t));
+    memcpy(&this_mon->addr, addr, sizeof(this_mon->addr));
     if (this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin.sin_port = htons(this_mon->http_svc->port);
     } else {
@@ -445,23 +445,23 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
     this_mon->hstate = HTTP_STATE_WAITING;
     this_mon->sock = -1;
 
-    this_mon->read_watcher = xmalloc(sizeof(ev_io));
+    this_mon->read_watcher = xmalloc(sizeof(*this_mon->read_watcher));
     ev_io_init(this_mon->read_watcher, &mon_read_cb, -1, 0);
     this_mon->read_watcher->data = this_mon;
 
-    this_mon->write_watcher = xmalloc(sizeof(ev_io));
+    this_mon->write_watcher = xmalloc(sizeof(*this_mon->write_watcher));
     ev_io_init(this_mon->write_watcher, &mon_write_cb, -1, 0);
     this_mon->write_watcher->data = this_mon;
 
-    this_mon->timeout_watcher = xmalloc(sizeof(ev_timer));
+    this_mon->timeout_watcher = xmalloc(sizeof(*this_mon->timeout_watcher));
     ev_timer_init(this_mon->timeout_watcher, &mon_timeout_cb, 0, 0);
     this_mon->timeout_watcher->data = this_mon;
 
-    this_mon->interval_watcher = xmalloc(sizeof(ev_timer));
+    this_mon->interval_watcher = xmalloc(sizeof(*this_mon->interval_watcher));
     ev_timer_init(this_mon->interval_watcher, &mon_interval_cb, 0, 0);
     this_mon->interval_watcher->data = this_mon;
 
-    mons = xrealloc(mons, sizeof(http_events_t*) * (num_mons + 1));
+    mons = xrealloc(mons, sizeof(*mons) * (num_mons + 1));
     mons[num_mons++] = this_mon;
 }
 

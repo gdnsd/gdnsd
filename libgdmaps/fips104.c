@@ -120,7 +120,7 @@ fips_t* fips_init(const char* pathname)
     FILE* file = fopen(pathname, "re");
     if (!file)
         log_fatal("plugin_geoip: Cannot fopen() FIPS region file '%s' for reading: %s", pathname, logf_errno());
-    fips_t* fips = xcalloc(1, sizeof(fips_t));
+    fips_t* fips = xcalloc(1, sizeof(*fips));
     fips_parse(fips, file);
     if (fclose(file))
         log_fatal("plugin_geoip: fclose() of FIPS region file '%s' failed: %s", pathname, logf_errno());

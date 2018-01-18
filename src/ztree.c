@@ -77,7 +77,7 @@ zone_t* zone_new(const char* zname, const char* source)
     if (status == DNAME_PARTIAL)
         dname_terminate(dname);
 
-    zone_t* z = xcalloc(1, sizeof(zone_t));
+    zone_t* z = xcalloc(1, sizeof(*z));
     z->arena = lta_new();
     z->dname = lta_dnamedup(z->arena, dname);
     z->hash = dname_hash(z->dname);
@@ -146,16 +146,16 @@ static void ztree_node_check_grow(ztree_t* node)
 {
     ztchildren_t* old_children = node->children;
     if (!old_children) {
-        ztchildren_t* children = xcalloc(1, sizeof(ztchildren_t));
-        children->store = xcalloc(16, sizeof(ztree_t*));
+        ztchildren_t* children = xcalloc(1, sizeof(*children));
+        children->store = xcalloc(16, sizeof(*children->store));
         children->alloc = 16;
         node->children = children;
     } else if (old_children->count >= (old_children->alloc >> 2)) {
         // max load is 25%
         const unsigned new_alloc = old_children->alloc << 1; // double
         const unsigned new_hash_mask = new_alloc - 1;
-        ztchildren_t* new_children = xcalloc(1, sizeof(ztchildren_t));
-        new_children->store = xcalloc(new_alloc, sizeof(ztree_t*));
+        ztchildren_t* new_children = xcalloc(1, sizeof(*new_children));
+        new_children->store = xcalloc(new_alloc, sizeof(*new_children->store));
         new_children->alloc = new_alloc;
         for (unsigned i = 0; i < old_children->alloc; i++) {
             ztree_t* entry = old_children->store[i];
@@ -199,7 +199,7 @@ static ztree_t* ztree_node_find_or_add_child(ztree_t* node, const uint8_t* label
     // came to an empty slot with no match along the way,
     //   so create a new node at this slot...
     if (!rv) {
-        rv = xcalloc(1, sizeof(ztree_t));
+        rv = xcalloc(1, sizeof(*rv));
         const unsigned lsz = *label + 1U;
         rv->label = xmalloc(lsz);
         memcpy(rv->label, label, lsz);
@@ -267,7 +267,7 @@ void* ztree_zones_reloader_thread(void* init_asvoid)
     if (init)
         gdnsd_assert(!ztree_root);
 
-    ztree_t* new_ztree = xcalloc(1, sizeof(ztree_t));
+    ztree_t* new_ztree = xcalloc(1, sizeof(*new_ztree));
 
     // These do not fail if their data directory doesn't exist
     const bool djb_failed = zsrc_djb_load_zones(new_ztree);

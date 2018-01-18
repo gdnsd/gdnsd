@@ -247,7 +247,7 @@ static unsigned n_children = 0;
 void gdnsd_register_child_pid(pid_t child)
 {
     gdnsd_assert(child);
-    children = xrealloc(children, sizeof(pid_t) * (n_children + 1));
+    children = xrealloc(children, sizeof(*children) * (n_children + 1));
     children[n_children++] = child;
 }
 

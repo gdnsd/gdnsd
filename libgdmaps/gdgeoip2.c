@@ -382,7 +382,7 @@ static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry)
     }
 
     const uint32_t dclist = geoip2_get_dclist(db, db_entry);
-    db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(offset_cache_item_t) * (bucket_size + 2));
+    db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(*db->offset_cache[ndx]) * (bucket_size + 2));
     gdnsd_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;

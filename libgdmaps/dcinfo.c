@@ -65,7 +65,7 @@ struct _dcinfo {
 //  datacenters list).
 dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name)
 {
-    dcinfo_t* info = xmalloc(sizeof(dcinfo_t));
+    dcinfo_t* info = xmalloc(sizeof(*info));
 
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
     unsigned num_auto = num_dcs;
@@ -74,8 +74,8 @@ dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t*
     if (num_dcs > 254)
         log_fatal("plugin_geoip: map '%s': %u datacenters is too many, this code only supports up to 254", map_name, num_dcs);
 
-    info->names = xmalloc(sizeof(char*) * num_dcs);
-    info->indices = xmalloc(sizeof(unsigned) * num_dcs);
+    info->names = xmalloc(sizeof(*info->names) * num_dcs);
+    info->indices = xmalloc(sizeof(*info->indices) * num_dcs);
     info->num_dcs = num_dcs;
     for (unsigned i = 0; i < num_dcs; i++) {
         vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);

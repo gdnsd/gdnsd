@@ -29,8 +29,8 @@ static const unsigned NT_SIZE_INIT = 128;
 
 ntree_t* ntree_new(void)
 {
-    ntree_t* newtree = xmalloc(sizeof(ntree_t));
-    newtree->store = xmalloc(NT_SIZE_INIT * sizeof(nnode_t));
+    ntree_t* newtree = xmalloc(sizeof(*newtree));
+    newtree->store = xmalloc(NT_SIZE_INIT * sizeof(*newtree->store));
     newtree->count = 0;
     newtree->alloc = NT_SIZE_INIT; // set to zero on fixation
     return newtree;
@@ -47,7 +47,7 @@ unsigned ntree_add_node(ntree_t* tree)
     gdnsd_assert(tree->alloc);
     if (tree->count == tree->alloc) {
         tree->alloc <<= 1;
-        tree->store = xrealloc(tree->store, tree->alloc * sizeof(nnode_t));
+        tree->store = xrealloc(tree->store, tree->alloc * sizeof(*tree->store));
     }
     const unsigned rv = tree->count;
     gdnsd_assert(rv < (1U << 24));
@@ -76,7 +76,7 @@ static unsigned ntree_find_v4root(const ntree_t* tree)
 void ntree_finish(ntree_t* tree)
 {
     tree->alloc = 0; // flag fixed, will fail asserts on add_node, etc now
-    tree->store = xrealloc(tree->store, tree->count * sizeof(nnode_t));
+    tree->store = xrealloc(tree->store, tree->count * sizeof(*tree->store));
     tree->ipv4 = ntree_find_v4root(tree);
 }
 
@@ -93,7 +93,7 @@ static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, con
         memset(&tempsin, 0, sizeof(tempsin));
         tempsin.len = sizeof(struct sockaddr_in6);
         tempsin.sa.sa_family = AF_INET6;
-        memcpy(&tempsin.sin6.sin6_addr, &ipv6, sizeof(struct in6_addr));
+        memcpy(&tempsin.sin6.sin6_addr, &ipv6, sizeof(tempsin.sin6.sin6_addr));
         log_debug("%s/%u -> %u", logf_anysin_noport(&tempsin), 128U - bitdepth, NN_GET_DCLIST(val));
     } else {
         gdnsd_assert(bitdepth);

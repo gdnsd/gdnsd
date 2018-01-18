@@ -43,12 +43,12 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
     vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(res_cfg, "datacenters", true);
     if (!dc_cfg)
         log_fatal("plugin_metafo: resource '%s': required key 'datacenters' is missing", res_name);
-    dclist_t* dcl = xmalloc(sizeof(dclist_t));
+    dclist_t* dcl = xmalloc(sizeof(*dcl));
     if (vscf_is_hash(dc_cfg) || !(dcl->num_dcs = vscf_array_get_len(dc_cfg)))
         log_fatal("plugin_metafo: resource '%s': 'datacenters' must be an array of one or more datacenter name strings", res_name);
 
     uint8_t* dclptr = dcl->dc_list = xmalloc(dcl->num_dcs + 1);
-    dcl->dc_names = xmalloc((dcl->num_dcs + 1) * sizeof(char*));
+    dcl->dc_names = xmalloc((dcl->num_dcs + 1) * sizeof(*dcl->dc_names));
     dcl->dc_names[0] = NULL; // index zero is invalid
     for (unsigned i = 0; i < dcl->num_dcs; i++) {
         vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
@@ -61,7 +61,7 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
     *dclptr = 0;
 
     const unsigned rv_idx = num_dclists++;
-    dclists = xrealloc(dclists, num_dclists * sizeof(dclist_t*));
+    dclists = xrealloc(dclists, num_dclists * sizeof(*dclists));
     dclists[rv_idx] = dcl;
     return rv_idx;
 }

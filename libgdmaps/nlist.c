@@ -47,8 +47,8 @@ struct _nlist {
 
 nlist_t* nlist_new(const char* map_name, const bool pre_norm)
 {
-    nlist_t* nl = xmalloc(sizeof(nlist_t));
-    nl->nets = xmalloc(sizeof(net_t) * NLIST_INITSIZE);
+    nlist_t* nl = xmalloc(sizeof(*nl));
+    nl->nets = xmalloc(sizeof(*nl->nets) * NLIST_INITSIZE);
     nl->map_name = strdup(map_name);
     nl->alloc = NLIST_INITSIZE;
     nl->count = 0;
@@ -60,13 +60,13 @@ nlist_t* nlist_new(const char* map_name, const bool pre_norm)
 F_UNUSED F_NONNULL
 static nlist_t* nlist_clone(const nlist_t* nl)
 {
-    nlist_t* nlc = xmalloc(sizeof(nlist_t));
+    nlist_t* nlc = xmalloc(sizeof(*nlc));
     nlc->map_name = strdup(nl->map_name);
     nlc->alloc = nl->alloc;
     nlc->count = nl->count;
     nlc->normalized = nl->normalized;
-    nlc->nets = xmalloc(sizeof(net_t) * nlc->alloc);
-    memcpy(nlc->nets, nl->nets, sizeof(net_t) * nlc->count);
+    nlc->nets = xmalloc(sizeof(*nlc->nets) * nlc->alloc);
+    memcpy(nlc->nets, nl->nets, sizeof(*nlc->nets) * nlc->count);
     return nlc;
 }
 
@@ -181,7 +181,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
 {
     if (unlikely(nl->count == nl->alloc)) {
         nl->alloc <<= 1U;
-        nl->nets = xrealloc(nl->nets, sizeof(net_t) * nl->alloc);
+        nl->nets = xrealloc(nl->nets, sizeof(*nl->nets) * nl->alloc);
     }
     net_t* this_net = &nl->nets[nl->count++];
     memcpy(this_net->ipv6, ipv6, 16U);
@@ -260,7 +260,7 @@ static bool nlist_normalize_1pass(nlist_t* nl)
     if (newcount != oldcount) { // merges happened above
         // the "deleted" entries have all-1's IPs and >legal masks, so they
         //   sort to the end...
-        qsort(nl->nets, oldcount, sizeof(net_t), net_sorter);
+        qsort(nl->nets, oldcount, sizeof(*nl->nets), net_sorter);
 
         // reset the count to ignore the deleted entries at the end
         nl->count = newcount;
@@ -278,7 +278,7 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge)
     if (nl->count) {
         // initial sort, unless already sorted by the merge process
         if (!post_merge)
-            qsort(nl->nets, nl->count, sizeof(net_t), net_sorter);
+            qsort(nl->nets, nl->count, sizeof(*nl->nets), net_sorter);
 
         // iterate merge+sort passes until no further merges are found
         while (nlist_normalize_1pass(nl))
@@ -288,7 +288,7 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge)
         if (nl->count != nl->alloc) {
             gdnsd_assert(nl->count < nl->alloc);
             nl->alloc = nl->count;
-            nl->nets = xrealloc(nl->nets, nl->alloc * sizeof(net_t));
+            nl->nets = xrealloc(nl->nets, nl->alloc * sizeof(*nl->nets));
         }
     }
 
@@ -304,7 +304,7 @@ void nlist_finish(nlist_t* nl)
         nlist_t* nlc = nlist_clone(nl);
         nlist_normalize(nlc, false);
         gdnsd_assert(nlc->count == nl->count);
-        gdnsd_assert(!memcmp(nlc->nets, nl->nets, sizeof(net_t) * nlc->count));
+        gdnsd_assert(!memcmp(nlc->nets, nl->nets, sizeof(*nlc->nets) * nlc->count));
         nlist_destroy(nlc);
 #endif
     } else {

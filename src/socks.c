@@ -107,12 +107,12 @@ F_NONNULL
 static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs)
 {
     socks_cfg->num_dns_addrs = 2;
-    socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(dns_addr_t));
+    socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
     dns_addr_t* ac_v4 = &socks_cfg->dns_addrs[0];
-    memcpy(ac_v4, addr_defs, sizeof(dns_addr_t));
+    memcpy(ac_v4, addr_defs, sizeof(*ac_v4));
     make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
     dns_addr_t* ac_v6 = &socks_cfg->dns_addrs[1];
-    memcpy(ac_v6, addr_defs, sizeof(dns_addr_t));
+    memcpy(ac_v6, addr_defs, sizeof(*ac_v6));
     make_addr("::", addr_defs->dns_port, &ac_v6->addr);
 }
 
@@ -134,10 +134,10 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 
     if (vscf_is_hash(listen_opt)) {
         socks_cfg->num_dns_addrs = vscf_hash_get_len(listen_opt);
-        socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(dns_addr_t));
+        socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
         for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
             dns_addr_t* addrconf = &socks_cfg->dns_addrs[i];
-            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
+            memcpy(addrconf, addr_defs, sizeof(*addrconf));
             const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
             vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
             if (!vscf_is_hash(addr_opts))
@@ -157,10 +157,10 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
         }
     } else {
         socks_cfg->num_dns_addrs = vscf_array_get_len(listen_opt);
-        socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(dns_addr_t));
+        socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
         for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
             dns_addr_t* addrconf = &socks_cfg->dns_addrs[i];
-            memcpy(addrconf, addr_defs, sizeof(dns_addr_t));
+            memcpy(addrconf, addr_defs, sizeof(*addrconf));
             vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
             if (!vscf_is_simple(lspec))
                 log_fatal("Config option 'listen': all listen specs must be strings");
@@ -187,7 +187,7 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
     if (!socks_cfg->num_dns_threads)
         log_fatal("All listen addresses configured for zero UDP and zero TCP threads - cannot continue without at least one listener!");
 
-    socks_cfg->dns_threads = xcalloc(socks_cfg->num_dns_threads, sizeof(dns_thread_t));
+    socks_cfg->dns_threads = xcalloc(socks_cfg->num_dns_threads, sizeof(*socks_cfg->dns_threads));
 
     unsigned tnum = 0;
     for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
@@ -281,7 +281,7 @@ void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asi
         const char* bindtxt = "SO_BINDANY";
 # endif
 
-        if (setsockopt(sock, bindlev, bindopt, &opt_one, sizeof opt_one) == -1) {
+        if (setsockopt(sock, bindlev, bindopt, &opt_one, sizeof(opt_one)) == -1) {
             // Don't even re-attempt the bind if we can't set the option, just
             // warn about the setsockopt() and fail out at the bottom with the
             // original errno from bind():

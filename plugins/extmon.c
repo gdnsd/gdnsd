@@ -216,7 +216,7 @@ static char* thing_xlate(const char* instr, const char* thing, const unsigned th
 
 static void send_cmd(const unsigned idx, const mon_t* mon)
 {
-    char** this_args = xmalloc(mon->svc->num_args * sizeof(char*));
+    char** this_args = xmalloc(mon->svc->num_args * sizeof(*this_args));
 
     const unsigned thing_len = strlen(mon->thing);
 
@@ -400,7 +400,7 @@ void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
     // defaults
     unsigned max_proc = 0;
 
-    svcs = xrealloc(svcs, (num_svcs + 1) * sizeof(svc_t));
+    svcs = xrealloc(svcs, (num_svcs + 1) * sizeof(*svcs));
     svc_t* this_svc = &svcs[num_svcs++];
     this_svc->name = strdup(name);
     this_svc->timeout = timeout;
@@ -416,7 +416,7 @@ void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
         log_fatal("plugin_extmon: service_type '%s': option 'cmd' cannot be an empty array", name);
     if (this_svc->num_args > 254)
         log_fatal("plugin_extmon: service_type '%s': option 'cmd' has too many arguments", name);
-    this_svc->args = xmalloc(this_svc->num_args * sizeof(const char*));
+    this_svc->args = xmalloc(this_svc->num_args * sizeof(*this_svc->args));
     for (unsigned i = 0; i < this_svc->num_args; i++) {
         vscf_data_t* arg_cfg = vscf_array_get_data(args_cfg, i);
         if (!vscf_is_simple(arg_cfg))
@@ -436,7 +436,7 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     gdnsd_assert(svc_name);
     gdnsd_assert(thing);
 
-    mons = xrealloc(mons, (num_mons + 1) * sizeof(mon_t));
+    mons = xrealloc(mons, (num_mons + 1) * sizeof(*mons));
     mon_t* this_mon = &mons[num_mons++];
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
@@ -470,13 +470,13 @@ void plugin_extmon_init_monitors(struct ev_loop* mon_loop)
     gdnsd_assert(helper_path);
     if (num_mons) {
         spawn_helper();
-        helper_read_watcher = xmalloc(sizeof(ev_io));
+        helper_read_watcher = xmalloc(sizeof(*helper_read_watcher));
         ev_io_init(helper_read_watcher, helper_read_cb, helper_read_fd, EV_READ);
         ev_set_priority(helper_read_watcher, 2);
         ev_io_start(mon_loop, helper_read_watcher);
         for (unsigned i = 0; i < num_mons; i++) {
             mon_t* this_mon = &mons[i];
-            this_mon->local_timeout = xmalloc(sizeof(ev_timer));
+            this_mon->local_timeout = xmalloc(sizeof(*this_mon->local_timeout));
             ev_timer_init(this_mon->local_timeout, local_timeout_cb, 0., 0.);
             this_mon->local_timeout->data = this_mon;
             ev_set_priority(this_mon->local_timeout, 0);

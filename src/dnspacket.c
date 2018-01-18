@@ -139,7 +139,7 @@ dnspacket_stats_t** dnspacket_stats;
 // Called from main thread before I/O threads are spawned.
 void dnspacket_global_setup(const socks_cfg_t* socks_cfg)
 {
-    dnspacket_stats = xcalloc(socks_cfg->num_dns_threads, sizeof(dnspacket_stats_t*));
+    dnspacket_stats = xcalloc(socks_cfg->num_dns_threads, sizeof(*dnspacket_stats));
     result_v6_offset = gdnsd_result_get_v6_offset();
 }
 
@@ -157,12 +157,12 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
 
 void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp)
 {
-    dnsp_ctx_t* ctx = xcalloc(1, sizeof(dnsp_ctx_t));
+    dnsp_ctx_t* ctx = xcalloc(1, sizeof(*ctx));
 
     ctx->rand_state = gdnsd_rand32_init();
     ctx->is_udp = is_udp;
-    ctx->addtl_rrsets = xmalloc(gcfg->max_addtl_rrsets * sizeof(addtl_rrset_t));
-    ctx->comptargets = xmalloc(COMPTARGETS_MAX * sizeof(comptarget_t));
+    ctx->addtl_rrsets = xmalloc(gcfg->max_addtl_rrsets * sizeof(*ctx->addtl_rrsets));
+    ctx->comptargets = xmalloc(COMPTARGETS_MAX * sizeof(*ctx->comptargets));
     ctx->dync_store = xmalloc(gcfg->max_cname_depth * 256);
     ctx->addtl_store = xmalloc(gcfg->max_response);
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
@@ -170,7 +170,7 @@ void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp)
     gdnsd_plugins_action_iothread_init();
 
     pthread_mutex_lock(&stats_init_mutex);
-    ctx->stats = dnspacket_stats[stats_initialized++] = xcalloc(1, sizeof(dnspacket_stats_t));
+    ctx->stats = dnspacket_stats[stats_initialized++] = xcalloc(1, sizeof(*ctx->stats));
     ctx->stats->is_udp = is_udp;
     pthread_cond_signal(&stats_init_cond);
     pthread_mutex_unlock(&stats_init_mutex);
@@ -843,7 +843,7 @@ F_NONNULLX(1, 2)
 static unsigned do_dyn_callback(dnsp_ctx_t* ctx, gdnsd_resolve_cb_t func, const uint8_t* origin, const unsigned res, const unsigned ttl_max_net, const unsigned ttl_min)
 {
     dyn_result_t* dr = ctx->dyn;
-    memset(dr, 0, sizeof(dyn_result_t));
+    memset(dr, 0, sizeof(*dr));
     const gdnsd_sttl_t sttl = func(res, origin, &ctx->client_info, dr);
     if (dr->edns_scope_mask > ctx->edns_client_scope_mask)
         ctx->edns_client_scope_mask = dr->edns_scope_mask;
@@ -1804,7 +1804,7 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
         ctx->dync_synth_rrset.addr.count_v6 = dr->count_v6;
         ctx->dync_synth_rrset.gen.count = dr->count_v4;
         if (!dr->count_v6 && dr->count_v4 <= LTREE_V4A_SIZE) {
-            memcpy(ctx->dync_synth_rrset.addr.v4a, dr->v4, sizeof(uint32_t) * dr->count_v4);
+            memcpy(ctx->dync_synth_rrset.addr.v4a, dr->v4, sizeof(*dr->v4) * dr->count_v4);
         } else {
             ctx->dync_synth_rrset.addr.addrs.v4 = dr->v4;
             ctx->dync_synth_rrset.addr.addrs.v6 = &dr->storage[result_v6_offset];
@@ -2031,7 +2031,7 @@ unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdn
     if (likely(status == DECODE_OK)) {
         hdr->flags2 = DNS_RCODE_NOERROR;
         if (likely(!ctx->chaos)) {
-            memcpy(&ctx->client_info.dns_source, asin, sizeof(gdnsd_anysin_t));
+            memcpy(&ctx->client_info.dns_source, asin, sizeof(*asin));
             res_offset = answer_from_db_outer(ctx, stats, lqname, res_offset);
         } else {
             ctx->ancount = 1;
