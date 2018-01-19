@@ -83,8 +83,9 @@ void* gdnsd_xpmalign(size_t alignment, size_t size) {
             size, dmn_logf_bt());
 
     void* rv = NULL;
-    if(posix_memalign(&rv, alignment, size) || !rv)
+    const int pmrv = posix_memalign(&rv, alignment, size);
+    if(pmrv || !rv)
         log_fatal("Cannot allocate %zu bytes aligned to %zu (%s)! backtrace:%s",
-            size, alignment, dmn_logf_errno(), dmn_logf_bt());
+            size, alignment, dmn_logf_strerror(pmrv), dmn_logf_bt());
     return rv;
 }
