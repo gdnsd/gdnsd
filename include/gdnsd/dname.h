@@ -195,6 +195,16 @@ unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str
 F_NONNULL
 gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2);
 
+// Check the status/validity of a dname.  The dname will be carefully parsed,
+//  and should handle any random input (although most random inputs will give
+//  DNAME_INVALID) assuming dname has at least a 256 byte memory allocation.
+// If dname is allocated to less than 256 bytes, then crashes are possible with
+//  input that looks like a name longer than the allocation.
+F_NONNULL F_PURE
+gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
+
+#pragma GCC visibility pop
+
 // Terminate a DNAME_PARTIAL name, converting it to DNAME_VALID.  Idempotent
 //  and thus harmless on names which are already DNAME_VALID.  Invalid input
 //  could cause crashes.
@@ -204,29 +214,12 @@ static void gdnsd_dname_terminate(uint8_t* dname) {
     dname[*dname] = 0;
 }
 
-// Check the status/validity of a dname.  The dname will be carefully parsed,
-//  and should handle any random input (although most random inputs will give
-//  DNAME_INVALID) assuming dname has at least a 256 byte memory allocation.
-// If dname is allocated to less than 256 bytes, then crashes are possible with
-//  input that looks like a name longer than the allocation.
-F_NONNULL F_PURE
-gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
-
-// gdnsd_dname_hash was a library function, and must remain so for un-rebuilt
-// 3rd party plugins for now.  To cleanup in next major version bump...
-F_PURE F_NONNULL
-unsigned gdnsd_dname_hash(const uint8_t* input);
-
-#pragma GCC visibility pop
-
-// This static version of the above and #define lets core code and rebuilt
-// plugins use the static version instead, which can be inlined.
+// Return a hash for a dname, may crash on invalid input!
 F_PURE F_NONNULL F_UNUSED
-static unsigned gdnsd_dname_hash_static(const uint8_t *input) {
+static unsigned gdnsd_dname_hash(const uint8_t *input) {
     const uint32_t len = *input++ - 1U;
     return gdnsd_lookup2(input, len);
 }
-#define gdnsd_dname_hash gdnsd_dname_hash_static
 
 // Check the status of a known-good dname.  It is assumed that the dname was
 //  constructed correctly by other code, and merely differentiates quickly

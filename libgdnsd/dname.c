@@ -269,10 +269,3 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname) {
 
     return llen ? DNAME_PARTIAL : DNAME_VALID;
 }
-
-// see dname.h re: static vs library variant
-#undef gdnsd_dname_hash
-uint32_t gdnsd_dname_hash(const uint8_t *k) {
-    const uint32_t len = *k++ - 1U;
-    return gdnsd_lookup2(k, len);
-}
