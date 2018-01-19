@@ -152,7 +152,7 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     bool success = false;
     int sock = md->sock;
     int so_error = 0;
-    unsigned so_error_len = sizeof(so_error);
+    socklen_t so_error_len = sizeof(so_error);
     (void)getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &so_error_len);
     if(unlikely(so_error)) {
         switch(so_error) {
