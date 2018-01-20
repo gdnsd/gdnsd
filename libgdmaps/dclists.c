@@ -166,15 +166,20 @@ uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, cons
     return dclists_find_or_add_raw(lists, newlist, map_name);
 }
 
-// Geographic distance between two lat/long points.
-// Because we only care about rough distance comparison rather than
-//  the precise values themselves, input is specified in radians
-//  and output in units of the earth's diameter.
+// "Distance" between two lat/long points.  Inputs should be pre-converted to
+// radians.  Because we only care about rough distance comparison between
+// outputs of this function for sorting purposes, it does not matter what the
+// output units are.  This is the haversine method, but we cut the calculation
+// short before the pointless (for our purposes) unit/arc conversions, and thus
+// the answer is in units of the square of half the chord length (intuitively,
+// sorting by chord or arc lengths would come out the same).
+// cos_dc_lat == cos(dc_lat), but the cos operation is precached since we'll
+// re-use the same DC coordinates here many times.
 F_CONST
-static double haversine(double lat1, double lon1, double lat2, double lon2) {
-    double a = pow(sin((lat2 - lat1) * 0.5), 2.0)
-        + cos(lat1) * cos(lat2) * pow(sin((lon2 - lon1) * 0.5), 2.0);
-    return atan2(sqrt(a), sqrt(1.0 - a));
+static double geodist(double lat, double lon, double dc_lat, double dc_lon, double cos_dc_lat) {
+    const double sin_half_dlat = sin((dc_lat - lat) * 0.5);
+    const double sin_half_dlon = sin((dc_lon - lon) * 0.5);
+    return sin_half_dlat * sin_half_dlat + cos(lat) * cos_dc_lat * sin_half_dlon * sin_half_dlon;
 }
 
 uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const double lat, const double lon) {
@@ -194,9 +199,9 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
     //  indices into 'dists'
     double dists[store_len];
     for(unsigned i = 0; i < num_dcs; i++) {
-        const double* coords = dcinfo_get_coords(lists->info, i);
-        if (!isnan(coords[0]))
-            dists[i + 1] = haversine(lat_rad, lon_rad, coords[0], coords[1]);
+        const dcinfo_coords_t* coords = dcinfo_get_coords(lists->info, i);
+        if (!isnan(coords->lat))
+            dists[i + 1] = geodist(lat_rad, lon_rad, coords->lat, coords->lon, coords->cos_lat);
         else
             dists[i + 1] = (double)+INFINITY;
     }

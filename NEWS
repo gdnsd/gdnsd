@@ -5,6 +5,7 @@
       heavily on zonefile compatibility and still required a lot more followup
       work (packet sizing checks, zone linter, etc).  Those commits will
       probably form the basis of a future 4.x branch.
+    ---- General build/daemon/functionality/configuration changes ----
     * Build now requires autoconf 2.64+ and automake 1.13+
     * Lots of source/runtime -level backwards compatibility cruft was removed,
       some of which may be added back if serviceable/popular platforms continue
@@ -53,6 +54,9 @@
       new daemon is a child process of the existing one, certain process(group)
       -level attributes are preserved, allowing compatibility with e.g. systemd
       unit operations.
+    ---- Relatively-trivial things ----
+    * Code cleaned up a ton for clarity, simplicity, and formatting.
+    * plugin_geoip distance calculations are faster and more-accurate
 
 2.4.0 - 2018-02-15
     * plugin_multifo: added "ignore_health" parameter. If "ignore_health" is

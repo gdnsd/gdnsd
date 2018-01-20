@@ -23,14 +23,22 @@
 #include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
 
+#include <math.h>
+
 // DEG2RAD converts degrees to radians.  Our auto_dc_coords input
 //   and GeoIPCity coordinate data is in degrees, and must be
 //   converted to radians before storage (auto_dc_coords) or use
-//   (GeoIPCity data), because our haversine() func takes its inputs
-//   in radian format
-static const double DEG2RAD = 0.017453292519943295769236907684886;
+//   (GeoIPCity data), because our geodist() func takes its inputs
+//   in radians
+#define DEG2RAD (M_PI / 180.0)
 
 typedef struct _dcinfo dcinfo_t;
+
+typedef struct {
+    double lat;
+    double lon;
+    double cos_lat;
+} dcinfo_coords_t;
 
 F_NONNULLX(1, 4) F_WUNUSED
 dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name);
@@ -39,7 +47,7 @@ unsigned dcinfo_get_count(const dcinfo_t* info);
 F_NONNULL F_PURE
 unsigned dcinfo_get_limit(const dcinfo_t* info);
 F_NONNULL F_PURE
-const double* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum);
+const dcinfo_coords_t* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum);
 F_NONNULLX(1) F_PURE
 unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname);
 F_NONNULL F_PURE
