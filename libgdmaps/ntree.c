@@ -30,7 +30,7 @@ static const unsigned NT_SIZE_INIT = 128;
 ntree_t* ntree_new(void)
 {
     ntree_t* newtree = xmalloc(sizeof(*newtree));
-    newtree->store = xmalloc(NT_SIZE_INIT * sizeof(*newtree->store));
+    newtree->store = xmalloc_n(NT_SIZE_INIT, sizeof(*newtree->store));
     newtree->count = 0;
     newtree->alloc = NT_SIZE_INIT; // set to zero on fixation
     return newtree;
@@ -47,7 +47,7 @@ unsigned ntree_add_node(ntree_t* tree)
     gdnsd_assert(tree->alloc);
     if (tree->count == tree->alloc) {
         tree->alloc <<= 1;
-        tree->store = xrealloc(tree->store, tree->alloc * sizeof(*tree->store));
+        tree->store = xrealloc_n(tree->store, tree->alloc, sizeof(*tree->store));
     }
     const unsigned rv = tree->count;
     gdnsd_assert(rv < (1U << 24));
@@ -76,7 +76,7 @@ static unsigned ntree_find_v4root(const ntree_t* tree)
 void ntree_finish(ntree_t* tree)
 {
     tree->alloc = 0; // flag fixed, will fail asserts on add_node, etc now
-    tree->store = xrealloc(tree->store, tree->count * sizeof(*tree->store));
+    tree->store = xrealloc_n(tree->store, tree->count, sizeof(*tree->store));
     tree->ipv4 = ntree_find_v4root(tree);
 }
 

@@ -80,7 +80,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
         //   don't want callers to have to care about cases where this call
         //   was successful but the buffer pointer is NULL due to len == 0,
         //   so allocate a 1-byte buffer containing a NUL for these cases.
-        mapbuf = xcalloc(1, 1);
+        mapbuf = xcalloc(1);
     }
 
     if (close(fd))

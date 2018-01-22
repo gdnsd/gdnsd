@@ -40,9 +40,9 @@
 
 typedef struct {
     extmon_cmd_t* cmd;
-    ev_timer* interval_timer;
-    ev_timer* cmd_timeout;
-    ev_child* child_watcher;
+    ev_timer interval_timer;
+    ev_timer cmd_timeout;
+    ev_child child_watcher;
     pid_t cmd_pid;
     bool result_pending;
 } mon_t;
@@ -60,9 +60,9 @@ static void syserr_for_ev(const char* msg)
 
 static int plugin_read_fd = -1;
 static int plugin_write_fd = -1;
-static ev_io* plugin_write_watcher = NULL;
-static ev_signal* sigterm_watcher = NULL;
-static ev_signal* sigint_watcher = NULL;
+static ev_io plugin_write_watcher;
+static ev_signal sigterm_watcher;
+static ev_signal sigint_watcher;
 static int killed_by = 0;
 
 /*************************************************************************/
@@ -80,7 +80,7 @@ static unsigned sendq_head = 0;
 #define SENDQ_INITSIZE 16
 static void sendq_init(void)
 {
-    sendq = xmalloc(SENDQ_INITSIZE * sizeof(*sendq));
+    sendq = xmalloc_n(SENDQ_INITSIZE, sizeof(*sendq));
     sendq_alloc = SENDQ_INITSIZE;
 }
 
@@ -97,7 +97,7 @@ static void sendq_enq(uint32_t new_data)
         // buffer too small, upsize first (we never downsize)
         const unsigned old_mask = sendq_alloc - 1;
         sendq_alloc <<= 1;
-        uint32_t* newq = xmalloc(sendq_alloc * sizeof(*newq));
+        uint32_t* newq = xmalloc_n(sendq_alloc, sizeof(*newq));
         for (unsigned i = 0; i < sendq_len; i++)
             newq[i] = sendq[(sendq_head + i) & old_mask];
         newq[sendq_len] = new_data;
@@ -153,7 +153,8 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     //   could do in that case anyways.
     if (!killed_by) {
         sendq_enq(emc_encode_mon(this_mon->cmd->idx, true));
-        ev_io_start(loop, plugin_write_watcher);
+        ev_io* pww = &plugin_write_watcher;
+        ev_io_start(loop, pww);
     }
     if (num_proc > 0) {
         num_proc--;
@@ -170,7 +171,8 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
     ev_child_stop(loop, w); // always single-shot
 
     mon_t* this_mon = w->data;
-    ev_timer_stop(loop, this_mon->cmd_timeout);
+    ev_timer* ct = &this_mon->cmd_timeout;
+    ev_timer_stop(loop, ct);
     this_mon->cmd_pid = 0;
 
     bool failed = true;
@@ -190,7 +192,8 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
     if (this_mon->result_pending) {
         if (!killed_by) {
             sendq_enq(emc_encode_mon(this_mon->cmd->idx, failed));
-            ev_io_start(loop, plugin_write_watcher);
+            ev_io* pww = &plugin_write_watcher;
+            ev_io_start(loop, pww);
         }
         if (num_proc > 0) {
             num_proc--;
@@ -212,9 +215,10 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         // If more than max_proc processes are running, reschedule excess
         //   checks to run 0.1 seconds later. After a few passes, this will
         //   smooth the schedule out to prevent a thundering herd.
-        ev_timer_stop(loop, this_mon->interval_timer);
-        ev_timer_set(this_mon->interval_timer, 0.1, this_mon->cmd->interval);
-        ev_timer_start(loop, this_mon->interval_timer);
+        ev_timer* it = &this_mon->interval_timer;
+        ev_timer_stop(loop, it);
+        ev_timer_set(it, 0.1, this_mon->cmd->interval);
+        ev_timer_start(loop, it);
         return;
     }
 
@@ -270,10 +274,12 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
         log_fatal("pthread_sigmask() failed");
 
     this_mon->result_pending = true;
-    ev_timer_set(this_mon->cmd_timeout, this_mon->cmd->timeout, 0);
-    ev_timer_start(loop, this_mon->cmd_timeout);
-    ev_child_set(this_mon->child_watcher, this_mon->cmd_pid, 0);
-    ev_child_start(loop, this_mon->child_watcher);
+    ev_timer* ct = &this_mon->cmd_timeout;
+    ev_timer_set(ct, this_mon->cmd->timeout, 0);
+    ev_timer_start(loop, ct);
+    ev_child* cw = &this_mon->child_watcher;
+    ev_child_set(cw, this_mon->cmd_pid, 0);
+    ev_child_start(loop, cw);
 }
 
 static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
@@ -322,17 +328,20 @@ static void die_gracefully(struct ev_loop* loop)
         done_once = true;
         // send friendly death message to plugin
         sendq_enq(emc_encode_exit());
-        ev_io_start(loop, plugin_write_watcher);
+        ev_io* pww = &plugin_write_watcher;
+        ev_io_start(loop, pww);
         // kill interval timers for future invocations
         //   and immediately clamp the remaining timeout
         //   for any running commands to 2.0s.
         for (unsigned i = 0; i < num_mons; i++) {
-            ev_timer_stop(loop, mons[i].interval_timer);
-            if (ev_is_active(mons[i].cmd_timeout)) {
-                if (ev_timer_remaining(loop, mons[i].cmd_timeout) > 2.0) {
-                    ev_timer_stop(loop, mons[i].cmd_timeout);
-                    ev_timer_set(mons[i].cmd_timeout, 2.0, 0.);
-                    ev_timer_start(loop, mons[i].cmd_timeout);
+            ev_timer* it = &mons[i].interval_timer;
+            ev_timer* ct = &mons[i].cmd_timeout;
+            ev_timer_stop(loop, it);
+            if (ev_is_active(ct)) {
+                if (ev_timer_remaining(loop, ct) > 2.0) {
+                    ev_timer_stop(loop, ct);
+                    ev_timer_set(ct, 2.0, 0.);
+                    ev_timer_start(loop, ct);
                 }
             }
         }
@@ -399,7 +408,7 @@ int main(int argc, char** argv)
     num_mons = ((unsigned)ccount_buf[5] << 8) + ccount_buf[6];
     if (!num_mons)
         log_fatal("Received command count of zero from plugin");
-    mons = xcalloc(num_mons, sizeof(*mons));
+    mons = xcalloc_n(num_mons, sizeof(*mons));
 
     if (emc_write_string(plugin_write_fd, "CMDS_ACK", 8))
         log_fatal("Failed to write CMDS_ACK to plugin");
@@ -444,40 +453,40 @@ int main(int argc, char** argv)
         log_fatal("Could not initialize the default libev loop");
 
     // Catch SIGINT/TERM, and do not let them prevent loop exit
-    sigterm_watcher = xmalloc(sizeof(*sigterm_watcher));
-    sigint_watcher = xmalloc(sizeof(*sigint_watcher));
-    ev_signal_init(sigterm_watcher, sig_cb, SIGTERM);
-    ev_signal_init(sigint_watcher, sig_cb, SIGINT);
-    ev_signal_start(def_loop, sigterm_watcher);
-    ev_signal_start(def_loop, sigint_watcher);
+    ev_signal* termw = &sigterm_watcher;
+    ev_signal_init(termw, sig_cb, SIGTERM);
+    ev_signal_start(def_loop, termw);
     ev_unref(def_loop);
+    ev_signal* intw = &sigint_watcher;
+    ev_signal_init(intw, sig_cb, SIGINT);
+    ev_signal_start(def_loop, intw);
     ev_unref(def_loop);
 
     // set up primary read/write watchers on the pipe to the daemon's plugin
-    plugin_write_watcher = xmalloc(sizeof(*plugin_write_watcher));
-    ev_io_init(plugin_write_watcher, plugin_write_cb, plugin_write_fd, EV_WRITE);
-    ev_set_priority(plugin_write_watcher, 1);
+    ev_io* pww = &plugin_write_watcher;
+    ev_io_init(pww, plugin_write_cb, plugin_write_fd, EV_WRITE);
+    ev_set_priority(pww, 1);
 
     // set up interval watchers for each monitor, initially for immediate firing
     //   for the daemon's monitoring init cycle, then repeating every interval.
     for (unsigned i = 0; i < num_mons; i++) {
         mon_t* this_mon = &mons[i];
-        this_mon->interval_timer = xmalloc(sizeof(*this_mon->interval_timer));
-        ev_timer_init(this_mon->interval_timer, mon_interval_cb, 0., this_mon->cmd->interval);
-        this_mon->interval_timer->data = this_mon;
-        ev_set_priority(this_mon->interval_timer, 0);
-        ev_timer_start(def_loop, this_mon->interval_timer);
+        ev_timer* it = &this_mon->interval_timer;
+        ev_timer_init(it, mon_interval_cb, 0., this_mon->cmd->interval);
+        it->data = this_mon;
+        ev_set_priority(it, 0);
+        ev_timer_start(def_loop, it);
 
         // initialize the other watchers in the mon_t here as well,
         //   but do not start them (the interval callback starts them each interval)
-        this_mon->cmd_timeout = xmalloc(sizeof(*this_mon->cmd_timeout));
-        ev_timer_init(this_mon->cmd_timeout, mon_timeout_cb, 0, 0);
-        ev_set_priority(this_mon->cmd_timeout, -1);
-        this_mon->cmd_timeout->data = this_mon;
+        ev_timer* ct = &this_mon->cmd_timeout;
+        ev_timer_init(ct, mon_timeout_cb, 0, 0);
+        ev_set_priority(ct, -1);
+        ct->data = this_mon;
 
-        this_mon->child_watcher = xmalloc(sizeof(*this_mon->child_watcher));
-        ev_child_init(this_mon->child_watcher, mon_child_cb, 0, 0);
-        this_mon->child_watcher->data = this_mon;
+        ev_child* cw = &this_mon->child_watcher;
+        ev_child_init(cw, mon_child_cb, 0, 0);
+        cw->data = this_mon;
     }
 
     log_info("gdnsd_extmon_helper running");

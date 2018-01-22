@@ -34,14 +34,18 @@
  * dcmap_t and related methods
  **************************************/
 
+// Exactly one of the following must be true:
+//  dclist is non-zero, indicating a direct dclist
+//  dcmap is non-null, indicating another level of depth
+typedef struct {
+    char* name;
+    dcmap_t* dcmap;
+    uint32_t dclist;
+} dcmap_child_t;
+
 struct _dcmap {
     // All 3 below are allocated to num_children entries.
-    // For each index, exactly one of the following must be true:
-    //  child_dclist[i] is non-zero, indicating a direct dclist
-    //  child_dcmap[i] is non-null, indicating another level of depth
-    char** child_names;
-    uint32_t* child_dclists;
-    dcmap_t** child_dcmaps;
+    dcmap_child_t* children;
     unsigned def_dclist; // copied from parent if not specced in cfg, required at root
     unsigned num_children;
     bool skip_level; // at this level of dcmap, skip ahead one chunk of locstr...
@@ -67,11 +71,12 @@ static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t
     else if (true_depth == 1)
         validate_country_code(key, did->map_name);
 
-    did->dcmap->child_names[did->child_num] = strdup(key);
+    dcmap_child_t* child = &did->dcmap->children[did->child_num];
+    child->name = strdup(key);
     if (vscf_is_hash(val))
-        did->dcmap->child_dcmaps[did->child_num] = dcmap_new(val, did->dclists, did->dcmap->def_dclist, true_depth + 1, did->map_name, did->allow_auto);
+        child->dcmap = dcmap_new(val, did->dclists, did->dcmap->def_dclist, true_depth + 1, did->map_name, did->allow_auto);
     else
-        did->dcmap->child_dclists[did->child_num] = dclists_find_or_add_vscf(did->dclists, val, did->map_name, did->allow_auto);
+        child->dclist = dclists_find_or_add_vscf(did->dclists, val, did->map_name, did->allow_auto);
 
     did->child_num++;
 
@@ -82,7 +87,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
 {
     gdnsd_assert(vscf_is_hash(map_cfg));
 
-    dcmap_t* dcmap = xcalloc(1, sizeof(*dcmap));
+    dcmap_t* dcmap = xcalloc(sizeof(*dcmap));
     unsigned nchild = vscf_hash_get_len(map_cfg);
 
     vscf_data_t* def_cfg = vscf_hash_get_data_byconstkey(map_cfg, "default", true);
@@ -118,9 +123,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
 
     if (nchild) {
         dcmap->num_children = nchild;
-        dcmap->child_names = xcalloc(nchild, sizeof(*dcmap->child_names));
-        dcmap->child_dclists = xcalloc(nchild, sizeof(*dcmap->child_dclists));
-        dcmap->child_dcmaps = xcalloc(nchild, sizeof(*dcmap->child_dcmaps));
+        dcmap->children = xcalloc_n(nchild, sizeof(*dcmap->children));
         dcmap_iter_data did = {
             .child_num = 0,
             .dcmap = dcmap,
@@ -142,10 +145,11 @@ uint32_t dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr)
 
     if (*locstr) {
         for (unsigned i = 0; i < dcmap->num_children; i++) {
-            if (!strcasecmp(locstr, dcmap->child_names[i])) {
-                if (dcmap->child_dcmaps[i])
-                    return dcmap_lookup_loc(dcmap->child_dcmaps[i], locstr + strlen(locstr) + 1);
-                return dcmap->child_dclists[i];
+            dcmap_child_t* child = &dcmap->children[i];
+            if (!strcasecmp(locstr, child->name)) {
+                if (child->dcmap)
+                    return dcmap_lookup_loc(child->dcmap, locstr + strlen(locstr) + 1);
+                return child->dclist;
             }
         }
     }
@@ -177,10 +181,11 @@ static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* dat
         if (!lookup[0])
             break;
         for (unsigned i = 0; i < dcmap->num_children; i++) {
-            if (!strcasecmp(lookup, dcmap->child_names[i])) {
-                if (dcmap->child_dcmaps[i])
-                    return dcmap_llc_(dcmap->child_dcmaps[i], cb, data, level);
-                return dcmap->child_dclists[i];
+            dcmap_child_t* child = &dcmap->children[i];
+            if (!strcasecmp(lookup, child->name)) {
+                if (child->dcmap)
+                    return dcmap_llc_(child->dcmap, cb, data, level);
+                return child->dclist;
             }
         }
     } while (level > 2); // >1 => post-continent, >2 => post-country
@@ -195,21 +200,13 @@ uint32_t dcmap_lookup_loc_callback(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, v
 
 void dcmap_destroy(dcmap_t* dcmap)
 {
-    if (dcmap->child_names) {
-        for (unsigned i = 0; i < dcmap->num_children; i++) {
-            if (dcmap->child_names[i])
-                free(dcmap->child_names[i]);
-        }
-        free(dcmap->child_names);
+    for (unsigned i = 0; i < dcmap->num_children; i++) {
+        dcmap_child_t* child = &dcmap->children[i];
+        if (child->name)
+            free(child->name);
+        if (child->dcmap)
+            dcmap_destroy(child->dcmap);
     }
-    if (dcmap->child_dcmaps) {
-        for (unsigned i = 0; i < dcmap->num_children; i++) {
-            if (dcmap->child_dcmaps[i])
-                dcmap_destroy(dcmap->child_dcmaps[i]);
-        }
-        free(dcmap->child_dcmaps);
-    }
-    if (dcmap->child_dclists)
-        free(dcmap->child_dclists);
+    free(dcmap->children);
     free(dcmap);
 }

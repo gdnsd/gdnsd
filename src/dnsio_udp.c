@@ -459,6 +459,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
+    uint8_t* bufs = gdnsd_xpmalign_n(pgsz, width, max_rounded);
     uint8_t* buf[width];
     struct iovec iov[width][1];
     struct mmsghdr dgrams[width];
@@ -468,7 +469,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     /* Set up packet buffers */
     memset(cmsg_buf, 0, sizeof(cmsg_buf));
     for (unsigned i = 0; i < width; i++)
-        iov[i][0].iov_base = buf[i] = gdnsd_xpmalign(pgsz, max_rounded);
+        iov[i][0].iov_base = buf[i] = &bufs[i * max_rounded];
 
     const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
 #if GDNSD_B_QSBR
@@ -590,8 +591,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     }
 
 #ifndef NDEBUG
-    for (unsigned i = 0; i < width; i++)
-        free(buf[i]);
+    free(bufs);
 #endif
 }
 

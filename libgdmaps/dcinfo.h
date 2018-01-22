@@ -32,7 +32,20 @@
 //   in radians
 #define DEG2RAD (M_PI / 180.0)
 
-typedef struct _dcinfo dcinfo_t;
+// The datacenter numbers are always 1-based, and only up to 254
+//  datacenters are supported.  The first datacenter is always #1,
+//  and in a 3-datacenter config they're 1, 2, 3.  The zero-value
+//  is used to terminate datacenter lists that are implemented
+//  as uint8_t* strings on which standard string ops work (e.g.
+//  strcmp(), strcpy()).
+// dcinfo_t holds a list of datacenters in the order
+//  specified in the config, which is the default order.  Therefore
+//  the default order, in dclist format, is e.g. for num_dcs == 3,
+//  \1\2\3\0.  It also tracks their monitoring index and coordinates.
+// dcinfo_t also holds auto_limit, which is the lesser of the
+//  configured auto_dc_limit and the actual num_dcs, so that it's
+//  always the correct limit for direct application even if num_dcs
+//  is < auto_dc_limit.
 
 typedef struct {
     double lat;
@@ -40,8 +53,20 @@ typedef struct {
     double cos_lat;
 } dcinfo_coords_t;
 
-F_NONNULLX(1, 4) F_WUNUSED
-dcinfo_t* dcinfo_new(vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name);
+typedef struct {
+    char* name;
+    dcinfo_coords_t coords;
+    unsigned mon_index;
+} dci_t;
+
+typedef struct {
+    unsigned num_dcs;    // count of datacenters
+    unsigned auto_limit; // lesser of num_dcs and dc_auto_limit cfg
+    dci_t* dcs;          // ordered list of datacenters, #num_dcs
+} dcinfo_t;
+
+F_NONNULLX(1, 2, 5)
+void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name);
 F_NONNULL F_PURE
 unsigned dcinfo_get_count(const dcinfo_t* info);
 F_NONNULL F_PURE

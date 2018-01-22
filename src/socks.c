@@ -107,7 +107,7 @@ F_NONNULL
 static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs)
 {
     socks_cfg->num_dns_addrs = 2;
-    socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
+    socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
     dns_addr_t* ac_v4 = &socks_cfg->dns_addrs[0];
     memcpy(ac_v4, addr_defs, sizeof(*ac_v4));
     make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
@@ -134,7 +134,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 
     if (vscf_is_hash(listen_opt)) {
         socks_cfg->num_dns_addrs = vscf_hash_get_len(listen_opt);
-        socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
+        socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
         for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
             dns_addr_t* addrconf = &socks_cfg->dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
@@ -157,7 +157,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
         }
     } else {
         socks_cfg->num_dns_addrs = vscf_array_get_len(listen_opt);
-        socks_cfg->dns_addrs = xcalloc(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
+        socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
         for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
             dns_addr_t* addrconf = &socks_cfg->dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
@@ -187,7 +187,7 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
     if (!socks_cfg->num_dns_threads)
         log_fatal("All listen addresses configured for zero UDP and zero TCP threads - cannot continue without at least one listener!");
 
-    socks_cfg->dns_threads = xcalloc(socks_cfg->num_dns_threads, sizeof(*socks_cfg->dns_threads));
+    socks_cfg->dns_threads = xcalloc_n(socks_cfg->num_dns_threads, sizeof(*socks_cfg->dns_threads));
 
     unsigned tnum = 0;
     for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {

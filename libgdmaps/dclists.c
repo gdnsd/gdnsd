@@ -91,7 +91,7 @@ dclists_t* dclists_clone(const dclists_t* old)
     dcl_clone->info = old->info;
     dcl_clone->count = old->count;
     dcl_clone->old_count = old->count;
-    dcl_clone->list = xmalloc(dcl_clone->count * sizeof(*dcl_clone->list));
+    dcl_clone->list = xmalloc_n(dcl_clone->count, sizeof(*dcl_clone->list));
     memcpy(dcl_clone->list, old->list, dcl_clone->count * sizeof(*dcl_clone->list));
     return dcl_clone;
 }
@@ -126,7 +126,7 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
         log_fatal("plugin_geoip: map '%s': too many unique dclists (>%u)", map_name, lists->count);
 
     const uint32_t newidx = lists->count;
-    lists->list = xrealloc(lists->list, (++lists->count) * sizeof(*lists->list));
+    lists->list = xrealloc_n(lists->list, ++lists->count, sizeof(*lists->list));
     lists->list[newidx] = (uint8_t*)strdup((const char*)newlist);
 
     gdnsd_assert(newidx <= DCLIST_MAX);

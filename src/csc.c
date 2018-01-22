@@ -78,7 +78,7 @@ csc_t* csc_new(const unsigned timeout)
     if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)))
         log_fatal("connect() to unix domain socket %s failed: %s", path, logf_errno());
 
-    csc_t* csc = xcalloc(1, sizeof(*csc));
+    csc_t* csc = xcalloc(sizeof(*csc));
     csc->fd = fd;
     csc->path = path;
     csc->timeout = timeout;
@@ -144,7 +144,7 @@ bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fd
                 return true;
             fds_wanted = csbuf_get_v(resp);
             gdnsd_assert(fds_wanted > 2);
-            fds = xmalloc(fds_wanted * sizeof(*fds));
+            fds = xmalloc_n(fds_wanted, sizeof(*fds));
         } else {
             // all later iterations of the loop
             gdnsd_assert(RESP_ACK == resp->key);

@@ -23,73 +23,93 @@
 #include <gdnsd/log.h>
 
 #include <stdlib.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <inttypes.h>
 
-// We don't expect anything to call our allocators for sizes
-//   greater than ~2GB in practice, so this makes a good sanity
-//   checkpoint for certain classes of allocation size bugs from
-//   bad math, memory bugs, and/or overflows that works well in
-//   both the 32 and 64 -bit cases.
-#define ALLOC_MAX 2147483647LLU
+// Fast ok if both numbers < half of size_t, otherwise slow division check
+// This is basically what jemalloc does, seems pretty reasonable.
+F_CONST
+static bool mul_ok(size_t n, size_t s, size_t m)
+{
+    static const size_t st_high_bits = SIZE_MAX << (sizeof(size_t) * 8 / 2);
+    return likely((st_high_bits & (n | s)) == 0) || likely(m / s == n);
+}
 
 void* gdnsd_xmalloc(size_t size)
 {
-    gdnsd_assert(size);
-
-    if (size > ALLOC_MAX)
-        log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
-                  size, logf_bt());
-
     void* rv = malloc(size);
-    if (!rv)
+    if (unlikely(!size) || unlikely(!rv))
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
                   size, logf_errno(), logf_bt());
     return rv;
 }
 
-void* gdnsd_xcalloc(size_t nmemb, size_t size)
+void* gdnsd_xmalloc_n(size_t nmemb, size_t size)
 {
-    gdnsd_assert(size);
-    gdnsd_assert(nmemb);
+    const size_t full_size = nmemb * size;
+    void* rv = malloc(full_size);
+    if (unlikely(!full_size) || unlikely(!rv) || unlikely(!mul_ok(nmemb, size, full_size)))
+        log_fatal("Cannot allocate %zu * %zu bytes (%s)! backtrace:%s",
+                  nmemb, size, logf_errno(), logf_bt());
+    return rv;
+}
 
-    if (size > ALLOC_MAX || (uint64_t)size * (uint64_t)nmemb > ALLOC_MAX)
-        log_fatal("Bad allocation request for %zu * %zu bytes! backtrace:%s",
-                  nmemb, size, logf_bt());
-
-    void* rv = calloc(nmemb, size);
-    if (!rv)
+void* gdnsd_xcalloc(size_t size)
+{
+    void* rv = calloc(1U, size);
+    if (unlikely(!size) || unlikely(!rv))
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
-                  size * nmemb, logf_errno(), logf_bt());
+                  size, logf_errno(), logf_bt());
+    return rv;
+}
+
+void* gdnsd_xcalloc_n(size_t nmemb, size_t size)
+{
+    const size_t full_size = nmemb * size;
+    void* rv = calloc(nmemb, size);
+    if (unlikely(!full_size) || unlikely(!rv) || unlikely(!mul_ok(nmemb, size, full_size)))
+        log_fatal("Cannot allocate %zu * %zu bytes (%s)! backtrace:%s",
+                  nmemb, size, logf_errno(), logf_bt());
     return rv;
 }
 
 void* gdnsd_xrealloc(void* ptr, size_t size)
 {
-    gdnsd_assert(size);
-
-    if (size > ALLOC_MAX)
-        log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
-                  size, logf_bt());
-
     void* rv = realloc(ptr, size);
-    if (!rv)
+    if (unlikely(!size) || unlikely(!rv))
         log_fatal("Cannot allocate %zu bytes (%s)! backtrace:%s",
                   size, logf_errno(), logf_bt());
     return rv;
 }
 
+void* gdnsd_xrealloc_n(void* ptr, size_t nmemb, size_t size)
+{
+    const size_t full_size = nmemb * size;
+    void* rv = realloc(ptr, full_size);
+    if (unlikely(!full_size) || unlikely(!rv) || unlikely(!mul_ok(nmemb, size, full_size)))
+        log_fatal("Cannot allocate %zu * %zu bytes (%s)! backtrace:%s",
+                  nmemb, size, logf_errno(), logf_bt());
+    return rv;
+}
+
 void* gdnsd_xpmalign(size_t alignment, size_t size)
 {
-    gdnsd_assert(alignment);
-    gdnsd_assert(size);
-
-    if (size > ALLOC_MAX)
-        log_fatal("Bad allocation request for %zu bytes! backtrace:%s",
-                  size, logf_bt());
-
     void* rv = NULL;
     const int pmrv = posix_memalign(&rv, alignment, size);
-    if (pmrv || !rv)
+    if (unlikely(!size) || unlikely(pmrv) || unlikely(!rv))
         log_fatal("Cannot allocate %zu bytes aligned to %zu (%s)! backtrace:%s",
                   size, alignment, logf_strerror(pmrv), logf_bt());
+    return rv;
+}
+
+void* gdnsd_xpmalign_n(size_t alignment, size_t nmemb, size_t size)
+{
+    const size_t full_size = nmemb * size;
+    void* rv = NULL;
+    const int pmrv = posix_memalign(&rv, alignment, full_size);
+    if (unlikely(!full_size) || unlikely(pmrv) || unlikely(!rv) || unlikely(!mul_ok(nmemb, size, full_size)))
+        log_fatal("Cannot allocate %zu * %zu bytes aligned to %zu (%s)! backtrace:%s",
+                  nmemb, size, alignment, logf_strerror(pmrv), logf_bt());
     return rv;
 }

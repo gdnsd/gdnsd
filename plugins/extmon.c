@@ -48,7 +48,7 @@ typedef struct {
 typedef struct {
     const char* desc;
     const svc_t* svc;
-    ev_timer* local_timeout;
+    ev_timer local_timeout;
     const char* thing;
     unsigned idx;
     bool seen_once;
@@ -65,7 +65,7 @@ static pid_t helper_pid = 0;
 static int helper_write_fd = -1;
 static int helper_read_fd = -1;
 
-static ev_io* helper_read_watcher = NULL;
+static ev_io helper_read_watcher;
 
 // whether we're in the init phase or runtime phase,
 //   and how many distinct mon_t have been updated
@@ -92,9 +92,12 @@ static void helper_is_dead(struct ev_loop* loop, const bool graceful)
     }
 
     close(helper_read_fd);
-    ev_io_stop(loop, helper_read_watcher);
-    for (unsigned i = 0; i < num_mons; i++)
-        ev_timer_stop(loop, mons[i].local_timeout);
+    ev_io* hrw = &helper_read_watcher;
+    ev_io_stop(loop, hrw);
+    for (unsigned i = 0; i < num_mons; i++) {
+        ev_timer* lt = &mons[i].local_timeout;
+        ev_timer_stop(loop, lt);
+    }
     helper_is_dead_flag = true;
 }
 
@@ -103,8 +106,9 @@ static void helper_is_dead(struct ev_loop* loop, const bool graceful)
 F_NONNULL
 static void bump_local_timeout(struct ev_loop* loop, mon_t* mon)
 {
-    mon->local_timeout->repeat = ((mon->svc->timeout + mon->svc->interval) << 1);
-    ev_timer_again(loop, mon->local_timeout);
+    ev_timer* lt = &mon->local_timeout;
+    lt->repeat = ((mon->svc->timeout + mon->svc->interval) << 1);
+    ev_timer_again(loop, lt);
 }
 
 static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
@@ -152,7 +156,8 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         }
 
         if (init_phase) {
-            ev_timer_stop(loop, this_mon->local_timeout);
+            ev_timer* lt = &this_mon->local_timeout;
+            ev_timer_stop(loop, lt);
             if (!this_mon->seen_once) {
                 this_mon->seen_once = true;
                 if (++init_phase_count == num_mons) {
@@ -175,7 +180,7 @@ static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UN
     gdnsd_assert(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
-    gdnsd_assert(this_mon->local_timeout == w);
+    gdnsd_assert(&this_mon->local_timeout == w);
 
     log_info("plugin_extmon: '%s': helper is very late for a status update, locally applying a negative update...", this_mon->desc);
     gdnsd_mon_state_updater(this_mon->idx, false);
@@ -185,8 +190,10 @@ static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UN
         ev_timer_stop(loop, w);
         gdnsd_assert(!this_mon->seen_once);
         this_mon->seen_once = true;
-        if (++init_phase_count == num_mons)
-            ev_io_stop(loop, helper_read_watcher);
+        if (++init_phase_count == num_mons) {
+            ev_io* hrw = &helper_read_watcher;
+            ev_io_stop(loop, hrw);
+        }
     }
 }
 
@@ -216,7 +223,7 @@ static char* thing_xlate(const char* instr, const char* thing, const unsigned th
 
 static void send_cmd(const unsigned idx, const mon_t* mon)
 {
-    char** this_args = xmalloc(mon->svc->num_args * sizeof(*this_args));
+    char** this_args = xmalloc_n(mon->svc->num_args, sizeof(*this_args));
 
     const unsigned thing_len = strlen(mon->thing);
 
@@ -400,7 +407,7 @@ void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
     // defaults
     unsigned max_proc = 0;
 
-    svcs = xrealloc(svcs, (num_svcs + 1) * sizeof(*svcs));
+    svcs = xrealloc_n(svcs, num_svcs + 1, sizeof(*svcs));
     svc_t* this_svc = &svcs[num_svcs++];
     this_svc->name = strdup(name);
     this_svc->timeout = timeout;
@@ -416,7 +423,7 @@ void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const uns
         log_fatal("plugin_extmon: service_type '%s': option 'cmd' cannot be an empty array", name);
     if (this_svc->num_args > 254)
         log_fatal("plugin_extmon: service_type '%s': option 'cmd' has too many arguments", name);
-    this_svc->args = xmalloc(this_svc->num_args * sizeof(*this_svc->args));
+    this_svc->args = xmalloc_n(this_svc->num_args, sizeof(*this_svc->args));
     for (unsigned i = 0; i < this_svc->num_args; i++) {
         vscf_data_t* arg_cfg = vscf_array_get_data(args_cfg, i);
         if (!vscf_is_simple(arg_cfg))
@@ -436,8 +443,9 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     gdnsd_assert(svc_name);
     gdnsd_assert(thing);
 
-    mons = xrealloc(mons, (num_mons + 1) * sizeof(*mons));
+    mons = xrealloc_n(mons, num_mons + 1, sizeof(*mons));
     mon_t* this_mon = &mons[num_mons++];
+    memset(this_mon, 0, sizeof(*this_mon));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
 
@@ -451,7 +459,6 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     gdnsd_assert(this_mon->svc);
 
     this_mon->thing = strdup(thing);
-    this_mon->local_timeout = NULL;
     this_mon->seen_once = false;
 }
 
@@ -470,16 +477,16 @@ void plugin_extmon_init_monitors(struct ev_loop* mon_loop)
     gdnsd_assert(helper_path);
     if (num_mons) {
         spawn_helper();
-        helper_read_watcher = xmalloc(sizeof(*helper_read_watcher));
-        ev_io_init(helper_read_watcher, helper_read_cb, helper_read_fd, EV_READ);
-        ev_set_priority(helper_read_watcher, 2);
-        ev_io_start(mon_loop, helper_read_watcher);
+        ev_io* hrw = &helper_read_watcher;
+        ev_io_init(hrw, helper_read_cb, helper_read_fd, EV_READ);
+        ev_set_priority(hrw, 2);
+        ev_io_start(mon_loop, hrw);
         for (unsigned i = 0; i < num_mons; i++) {
             mon_t* this_mon = &mons[i];
-            this_mon->local_timeout = xmalloc(sizeof(*this_mon->local_timeout));
-            ev_timer_init(this_mon->local_timeout, local_timeout_cb, 0., 0.);
-            this_mon->local_timeout->data = this_mon;
-            ev_set_priority(this_mon->local_timeout, 0);
+            ev_timer* lt = &this_mon->local_timeout;
+            ev_timer_init(lt, local_timeout_cb, 0., 0.);
+            lt->data = this_mon;
+            ev_set_priority(lt, 0);
             bump_local_timeout(mon_loop, this_mon);
         }
     }
@@ -489,7 +496,8 @@ void plugin_extmon_start_monitors(struct ev_loop* mon_loop)
 {
     if (num_mons && !helper_is_dead_flag) {
         init_phase = false;
-        ev_io_start(mon_loop, helper_read_watcher);
+        ev_io* hrw = &helper_read_watcher;
+        ev_io_start(mon_loop, hrw);
         for (unsigned i = 0; i < num_mons; i++)
             bump_local_timeout(mon_loop, &mons[i]);
     }

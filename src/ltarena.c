@@ -73,7 +73,7 @@ static dnhash_t* dnhash_new(void)
     dnhash_t* rv = xmalloc(sizeof(*rv));
     rv->count = 0;
     rv->mask = INIT_DNHASH_MASK;
-    rv->table = xcalloc(INIT_DNHASH_MASK + 1U, sizeof(*rv->table));
+    rv->table = xcalloc_n(INIT_DNHASH_MASK + 1U, sizeof(*rv->table));
     return rv;
 }
 
@@ -98,7 +98,7 @@ static void dnhash_grow(dnhash_t* dnhash)
     const uint8_t** old_table = dnhash->table;
     const unsigned old_mask = dnhash->mask;
     const unsigned new_mask = (old_mask << 1U) | 1U;
-    const uint8_t** new_table = xcalloc(new_mask + 1U, sizeof(*new_table));
+    const uint8_t** new_table = xcalloc_n(new_mask + 1U, sizeof(*new_table));
     for (unsigned i = 0; i <= old_mask; i++) {
         const uint8_t* item = old_table[i];
         if (item) {
@@ -139,7 +139,7 @@ static void* make_pool(void)
             p32[idx] = 0xDEADBEEF;
     } else {
         // get mem from calloc
-        p = xcalloc(1, POOL_SIZE);
+        p = xcalloc(POOL_SIZE);
     }
 
     // let valgrind know what's going on, if running
@@ -152,9 +152,9 @@ static void* make_pool(void)
 
 ltarena_t* lta_new(void)
 {
-    ltarena_t* rv = xcalloc(1, sizeof(*rv));
+    ltarena_t* rv = xcalloc(sizeof(*rv));
     rv->palloc = INIT_POOLS_ALLOC;
-    rv->pools = xmalloc(INIT_POOLS_ALLOC * sizeof(*rv->pools));
+    rv->pools = xmalloc_n(INIT_POOLS_ALLOC, sizeof(*rv->pools));
     rv->pools[0] = make_pool();
     rv->dnhash = dnhash_new();
     return rv;
@@ -165,7 +165,7 @@ void lta_close(ltarena_t* lta)
     if (lta->dnhash) {
         dnhash_destroy(lta->dnhash);
         lta->dnhash = NULL;
-        lta->pools = xrealloc(lta->pools, (lta->pool + 1) * sizeof(*lta->pools));
+        lta->pools = xrealloc_n(lta->pools, lta->pool + 1, sizeof(*lta->pools));
     }
 }
 
@@ -206,7 +206,7 @@ static uint8_t* lta_malloc(ltarena_t* lta, const unsigned size)
     if (unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
         if (unlikely(++lta->pool == lta->palloc)) {
             lta->palloc <<= 1U;
-            lta->pools = xrealloc(lta->pools, lta->palloc * sizeof(*lta->pools));
+            lta->pools = xrealloc_n(lta->pools, lta->palloc, sizeof(*lta->pools));
         }
         lta->pools[lta->pool] = make_pool();
         lta->poffs = 0;

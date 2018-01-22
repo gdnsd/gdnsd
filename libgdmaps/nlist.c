@@ -48,7 +48,7 @@ struct _nlist {
 nlist_t* nlist_new(const char* map_name, const bool pre_norm)
 {
     nlist_t* nl = xmalloc(sizeof(*nl));
-    nl->nets = xmalloc(sizeof(*nl->nets) * NLIST_INITSIZE);
+    nl->nets = xmalloc_n(NLIST_INITSIZE, sizeof(*nl->nets));
     nl->map_name = strdup(map_name);
     nl->alloc = NLIST_INITSIZE;
     nl->count = 0;
@@ -65,7 +65,7 @@ static nlist_t* nlist_clone(const nlist_t* nl)
     nlc->alloc = nl->alloc;
     nlc->count = nl->count;
     nlc->normalized = nl->normalized;
-    nlc->nets = xmalloc(sizeof(*nlc->nets) * nlc->alloc);
+    nlc->nets = xmalloc_n(nlc->alloc, sizeof(*nlc->nets));
     memcpy(nlc->nets, nl->nets, sizeof(*nlc->nets) * nlc->count);
     return nlc;
 }
@@ -181,7 +181,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
 {
     if (unlikely(nl->count == nl->alloc)) {
         nl->alloc <<= 1U;
-        nl->nets = xrealloc(nl->nets, sizeof(*nl->nets) * nl->alloc);
+        nl->nets = xrealloc_n(nl->nets, nl->alloc, sizeof(*nl->nets));
     }
     net_t* this_net = &nl->nets[nl->count++];
     memcpy(this_net->ipv6, ipv6, 16U);
@@ -288,7 +288,7 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge)
         if (nl->count != nl->alloc) {
             gdnsd_assert(nl->count < nl->alloc);
             nl->alloc = nl->count;
-            nl->nets = xrealloc(nl->nets, nl->alloc * sizeof(*nl->nets));
+            nl->nets = xrealloc_n(nl->nets, nl->alloc, sizeof(*nl->nets));
         }
     }
 

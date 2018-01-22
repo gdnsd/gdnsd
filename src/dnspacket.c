@@ -139,7 +139,7 @@ dnspacket_stats_t** dnspacket_stats;
 // Called from main thread before I/O threads are spawned.
 void dnspacket_global_setup(const socks_cfg_t* socks_cfg)
 {
-    dnspacket_stats = xcalloc(socks_cfg->num_dns_threads, sizeof(*dnspacket_stats));
+    dnspacket_stats = xcalloc_n(socks_cfg->num_dns_threads, sizeof(*dnspacket_stats));
     result_v6_offset = gdnsd_result_get_v6_offset();
 }
 
@@ -157,12 +157,12 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
 
 void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp)
 {
-    dnsp_ctx_t* ctx = xcalloc(1, sizeof(*ctx));
+    dnsp_ctx_t* ctx = xcalloc(sizeof(*ctx));
 
     ctx->rand_state = gdnsd_rand32_init();
     ctx->is_udp = is_udp;
-    ctx->addtl_rrsets = xmalloc(gcfg->max_addtl_rrsets * sizeof(*ctx->addtl_rrsets));
-    ctx->comptargets = xmalloc(COMPTARGETS_MAX * sizeof(*ctx->comptargets));
+    ctx->addtl_rrsets = xmalloc_n(gcfg->max_addtl_rrsets, sizeof(*ctx->addtl_rrsets));
+    ctx->comptargets = xmalloc_n(COMPTARGETS_MAX, sizeof(*ctx->comptargets));
     ctx->dync_store = xmalloc(gcfg->max_cname_depth * 256);
     ctx->addtl_store = xmalloc(gcfg->max_response);
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
@@ -170,7 +170,7 @@ void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp)
     gdnsd_plugins_action_iothread_init();
 
     pthread_mutex_lock(&stats_init_mutex);
-    ctx->stats = dnspacket_stats[stats_initialized++] = xcalloc(1, sizeof(*ctx->stats));
+    ctx->stats = dnspacket_stats[stats_initialized++] = xcalloc(sizeof(*ctx->stats));
     ctx->stats->is_udp = is_udp;
     pthread_cond_signal(&stats_init_cond);
     pthread_mutex_unlock(&stats_init_mutex);

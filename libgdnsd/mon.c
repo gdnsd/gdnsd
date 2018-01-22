@@ -93,7 +93,7 @@ static bool initial_round = false;
 static bool testsuite_nodelay = false;
 
 static struct ev_loop* mon_loop = NULL;
-static ev_timer* sttl_update_timer = NULL;
+static ev_timer sttl_update_timer;
 
 #define DEF_UP_THRESH 20
 #define DEF_OK_THRESH 10
@@ -103,7 +103,7 @@ static ev_timer* sttl_update_timer = NULL;
 F_NONNULL
 static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED)
 {
-    gdnsd_assert(w == sttl_update_timer);
+    gdnsd_assert(w == &sttl_update_timer);
     gdnsd_assert(revents == EV_TIMER);
 
     // prcu-swap of the two tables
@@ -124,11 +124,12 @@ static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSE
 //   per second, at the cost of a second of latency on updates.
 static void kick_sttl_update_timer(void)
 {
+    ev_timer* sut = &sttl_update_timer;
     if (testsuite_nodelay) {
-        sttl_table_update(mon_loop, sttl_update_timer, EV_TIMER);
-    } else if (!ev_is_active(sttl_update_timer) && !ev_is_pending(sttl_update_timer)) {
-        ev_timer_set(sttl_update_timer, 1.0, 0.0);
-        ev_timer_start(mon_loop, sttl_update_timer);
+        sttl_table_update(mon_loop, sut, EV_TIMER);
+    } else if (!ev_is_active(sut) && !ev_is_pending(sut)) {
+        ev_timer_set(sut, 1.0, 0.0);
+        ev_timer_start(mon_loop, sut);
     }
 }
 
@@ -157,8 +158,8 @@ const char* gdnsd_logf_sttl(const gdnsd_sttl_t s)
 // admin state-force stuff
 //--------------------------------------------------
 
-static ev_stat* admin_file_watcher = NULL;
-static ev_timer* admin_quiesce_timer = NULL;
+static ev_stat admin_file_watcher;
+static ev_timer admin_quiesce_timer;
 
 // shared with plugin_extfile!
 bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned def_ttl)
@@ -342,20 +343,22 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 {
     gdnsd_assert(revents == EV_TIMER);
     ev_timer_stop(loop, w);
-    if (admin_file_watcher->attr.st_nlink)
-        admin_process_file(admin_file_watcher->path, false);
+    ev_stat* afw = &admin_file_watcher;
+    if (afw->attr.st_nlink)
+        admin_process_file(afw->path, false);
     else
-        admin_deleted_file(admin_file_watcher->path);
+        admin_deleted_file(afw->path);
 }
 
 F_NONNULL
 static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_STAT);
+    ev_timer* aqt = &admin_quiesce_timer;
     if (testsuite_nodelay)
-        admin_timer_cb(loop, admin_quiesce_timer, EV_TIMER);
+        admin_timer_cb(loop, aqt, EV_TIMER);
     else
-        ev_timer_again(loop, admin_quiesce_timer);
+        ev_timer_again(loop, aqt);
 }
 
 // Note this invoked *after* the initial round of monitoring,
@@ -365,17 +368,15 @@ static void admin_init(struct ev_loop* mloop)
 {
     char* pathname = gdnsd_resolve_path_state("admin_state", NULL);
 
-    admin_quiesce_timer = xmalloc(sizeof(*admin_quiesce_timer));
-    ev_timer_init(admin_quiesce_timer, admin_timer_cb, 0.0, 1.02);
-    admin_file_watcher = xmalloc(sizeof(*admin_file_watcher));
-    memset(&admin_file_watcher->attr, 0, sizeof(admin_file_watcher->attr));
-    ev_stat_init(admin_file_watcher, admin_file_cb, pathname,
-                 testsuite_nodelay ? 0.01 : 3.0);
-    ev_stat_start(mloop, admin_file_watcher);
+    ev_timer* aqt = &admin_quiesce_timer;
+    ev_timer_init(aqt, admin_timer_cb, 0.0, 1.02);
+    ev_stat* afw = &admin_file_watcher;
+    ev_stat_init(afw, admin_file_cb, pathname, testsuite_nodelay ? 0.01 : 3.0);
+    ev_stat_start(mloop, afw);
 
     // ev_stat_start stat()'s the file for ->attr, use that
     //   to process the file initially if it exists.
-    if (admin_file_watcher->attr.st_nlink)
+    if (afw->attr.st_nlink)
         admin_process_file(pathname, false);
     else
         log_info("admin_state: state file '%s' does not yet exist at startup", pathname);
@@ -440,13 +441,13 @@ void gdnsd_mon_start(struct ev_loop* mloop)
     initial_round = false;
 
     // set up the table-update coalescing timer
-    sttl_update_timer = xmalloc(sizeof(*sttl_update_timer));
-    ev_timer_init(sttl_update_timer, sttl_table_update, 1.0, 0.0);
+    ev_timer* sut = &sttl_update_timer;
+    ev_timer_init(sut, sttl_table_update, 1.0, 0.0);
 
     // trigger it once manually to invoke prcu stuff
     //   for the initial round results to ensure there's
     //   no confusion.
-    sttl_table_update(mloop, sttl_update_timer, EV_TIMER);
+    sttl_table_update(mloop, sut, EV_TIMER);
 
     // add real watchers to the monitor loop for runtime
     //   (the loop itself begins execution later back in main.c)
@@ -510,7 +511,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
 
     // allocate the new smgr/sttl
     const unsigned idx = num_smgrs++;
-    smgrs = xrealloc(smgrs, sizeof(*smgrs) * num_smgrs);
+    smgrs = xrealloc_n(smgrs, num_smgrs, sizeof(*smgrs));
     smgr_t* this_smgr = &smgrs[idx];
     this_smgr->type = this_svc;
 
@@ -553,8 +554,8 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
     if (!strcmp(svctype_name, "down"))
         this_smgr->real_sttl |= GDNSD_STTL_DOWN;
 
-    smgr_sttl = xrealloc(smgr_sttl, sizeof(*smgr_sttl) * num_smgrs);
-    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(*smgr_sttl_consumer_) * num_smgrs);
+    smgr_sttl = xrealloc_n(smgr_sttl, num_smgrs, sizeof(*smgr_sttl));
+    smgr_sttl_consumer_ = xrealloc_n(smgr_sttl_consumer_, num_smgrs, sizeof(*smgr_sttl_consumer_));
     smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
@@ -577,9 +578,9 @@ unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname, const uint
 unsigned gdnsd_mon_admin(const char* desc)
 {
     const unsigned idx = num_smgrs++;
-    smgrs = xrealloc(smgrs, sizeof(*smgrs) * num_smgrs);
-    smgr_sttl = xrealloc(smgr_sttl, sizeof(*smgr_sttl) * num_smgrs);
-    smgr_sttl_consumer_ = xrealloc(smgr_sttl_consumer_, sizeof(*smgr_sttl_consumer_) * num_smgrs);
+    smgrs = xrealloc_n(smgrs, num_smgrs, sizeof(*smgrs));
+    smgr_sttl = xrealloc_n(smgr_sttl, num_smgrs, sizeof(*smgr_sttl));
+    smgr_sttl_consumer_ = xrealloc_n(smgr_sttl_consumer_, num_smgrs, sizeof(*smgr_sttl_consumer_));
     smgr_t* this_smgr = &smgrs[idx];
     memset(this_smgr, 0, sizeof(*this_smgr));
     this_smgr->desc = strdup(desc);
@@ -622,7 +623,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
     num_svc_types = num_svc_types_cfg + 2; // "up", "down"
 
     // the last 2 service types are fixed to up and down
-    service_types = xcalloc(num_svc_types, sizeof(*service_types));
+    service_types = xcalloc_n(num_svc_types, sizeof(*service_types));
     service_types[num_svc_types - 2].name = "up";
     service_types[num_svc_types - 1].name = "down";
 

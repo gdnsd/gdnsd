@@ -141,7 +141,7 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': values in addrs mode must be arrays of [ IPADDR, WEIGHT ], where weight must be an integer in the range 1 - " MAX_WEIGHT_STR, res_name, stanza, item_name);
 
     res_item->count = 1;
-    res_item->as = xcalloc(res_item->count, sizeof(*res_item->as));
+    res_item->as = xcalloc_n(res_item->count, sizeof(*res_item->as));
     res_item->as[0].weight = wtemp;
     res_item->max_weight = wtemp;
     res_item->weight = wtemp;
@@ -156,7 +156,7 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
     if (addrset->num_svcs) {
-        res_item->as[0].indices = xmalloc(addrset->num_svcs * sizeof(*res_item->as[0].indices));
+        res_item->as[0].indices = xmalloc_n(addrset->num_svcs, sizeof(*res_item->as[0].indices));
         for (unsigned i = 0; i < addrset->num_svcs; i++)
             res_item->as[0].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[0].addr);
     }
@@ -209,7 +209,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
         log_fatal("plugin_weighted: resource '%s' (%s): item '%s': '%s' is IPv6, was expecting IPv4", res_name, stanza, item_name, addr_txt);
 
     if (addrset->num_svcs) {
-        res_item->as[lb_idx].indices = xmalloc(addrset->num_svcs * sizeof(*res_item->as[lb_idx].indices));
+        res_item->as[lb_idx].indices = xmalloc_n(addrset->num_svcs, sizeof(*res_item->as[lb_idx].indices));
         for (unsigned i = 0; i < addrset->num_svcs; i++)
             res_item->as[lb_idx].indices[i] = gdnsd_mon_addr(addrset->svc_names[i], &res_item->as[lb_idx].addr);
     }
@@ -233,7 +233,7 @@ static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name,
         log_fatal("plugin_weighted: resource '%s' (%s), group '%s': too many addresses (max %u)", res_name, stanza, item_name, MAX_ADDRS_PER_GROUP);
 
     res_item->count = num_addrs;
-    res_item->as = xcalloc(num_addrs, sizeof(*res_item->as));
+    res_item->as = xcalloc_n(num_addrs, sizeof(*res_item->as));
 
     iaga_t iaga = {
         .addrset = addrset,
@@ -326,7 +326,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
         addrset->count--; // minus one for service_types entry
         addrset->num_svcs = vscf_array_get_len(res_stypes);
         if (addrset->num_svcs) {
-            addrset->svc_names = xmalloc(addrset->num_svcs * sizeof(*addrset->svc_names));
+            addrset->svc_names = xmalloc_n(addrset->num_svcs, sizeof(*addrset->svc_names));
             for (unsigned i = 0; i < addrset->num_svcs; i++) {
                 vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if (!vscf_is_simple(this_svc_cfg))
@@ -364,7 +364,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     if (!addrset->count)
         log_fatal("plugin_weighted: resource '%s' (%s): empty address-family sets not allowed", res_name, stanza);
 
-    addrset->items = xcalloc(addrset->count, sizeof(*addrset->items));
+    addrset->items = xcalloc_n(addrset->count, sizeof(*addrset->items));
     addrset->gmode = RES_ASET_UNKNOWN;
     addr_iter_data_t aid = {
         .item_idx = 0,
@@ -435,7 +435,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
     res_item->cname = dname;
 
     if (cnset->num_svcs) {
-        res_item->indices = xmalloc(cnset->num_svcs * sizeof(*res_item->indices));
+        res_item->indices = xmalloc_n(cnset->num_svcs, sizeof(*res_item->indices));
         for (unsigned i = 0; i < cnset->num_svcs; i++)
             res_item->indices[i] = gdnsd_mon_cname(cnset->svc_names[i], cname_txt, dname);
     }
@@ -460,7 +460,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
         cnset->count--; // minus one for service_types entry
         cnset->num_svcs = vscf_array_get_len(res_stypes);
         if (cnset->num_svcs) {
-            cnset->svc_names = xmalloc(cnset->num_svcs * sizeof(*cnset->svc_names));
+            cnset->svc_names = xmalloc_n(cnset->num_svcs, sizeof(*cnset->svc_names));
             for (unsigned i = 0; i < cnset->num_svcs; i++) {
                 vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if (!vscf_is_simple(this_svc_cfg))
@@ -494,7 +494,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
     if (!cnset->count)
         log_fatal("plugin_weighted: resource '%s' (%s): empty cname sets not allowed", res_name, stanza);
 
-    cnset->items = xcalloc(cnset->count, sizeof(*cnset->items));
+    cnset->items = xcalloc_n(cnset->count, sizeof(*cnset->items));
     cname_iter_data_t cid = {
         .cnset = cnset,
         .res_name = res_name,
@@ -546,11 +546,11 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
         if (addr_err)
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': item '%s': could not parse '%s' as an IP address: %s", res->name, first_name, lb_name, first_addr_txt, gai_strerror(addr_err));
         if (temp_sin.sa.sa_family == AF_INET6) {
-            res->addrs_v6 = xcalloc(1, sizeof(*res->addrs_v6));
+            res->addrs_v6 = xcalloc(sizeof(*res->addrs_v6));
             config_addrset(res->name, "direct", true, res->addrs_v6, res_cfg);
         } else {
             gdnsd_assert(temp_sin.sa.sa_family == AF_INET);
-            res->addrs_v4 = xcalloc(1, sizeof(*res->addrs_v4));
+            res->addrs_v4 = xcalloc(sizeof(*res->addrs_v4));
             config_addrset(res->name, "direct", false, res->addrs_v4, res_cfg);
         }
     } else if (vscf_is_array(first_cfg)) { // ungrouped address, or cnames
@@ -560,16 +560,16 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
         gdnsd_anysin_t temp_sin;
         if (gdnsd_anysin_getaddrinfo(vscf_simple_get_data(first_ac), NULL, &temp_sin)) {
             // was not a valid address, try cnames mode
-            res->cnames = xcalloc(1, sizeof(*res->cnames));
+            res->cnames = xcalloc(sizeof(*res->cnames));
             config_cnameset(res->name, "direct", res->cnames, res_cfg);
         } else {
             // was a valid address, try addrset mode
             if (temp_sin.sa.sa_family == AF_INET6) {
-                res->addrs_v6 = xcalloc(1, sizeof(*res->addrs_v6));
+                res->addrs_v6 = xcalloc(sizeof(*res->addrs_v6));
                 config_addrset(res->name, "direct", true, res->addrs_v6, res_cfg);
             } else {
                 gdnsd_assert(temp_sin.sa.sa_family == AF_INET);
-                res->addrs_v4 = xcalloc(1, sizeof(*res->addrs_v4));
+                res->addrs_v4 = xcalloc(sizeof(*res->addrs_v4));
                 config_addrset(res->name, "direct", false, res->addrs_v4, res_cfg);
             }
         }
@@ -612,12 +612,12 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
         log_fatal("plugin_weighted: resource '%s': the pointless singleton 'cnames' substanza is no longer supported; move the data up a level without it", res_name);
 
     if (addrs_v4_cfg) {
-        res->addrs_v4 = xcalloc(1, sizeof(*res->addrs_v4));
+        res->addrs_v4 = xcalloc(sizeof(*res->addrs_v4));
         config_addrset(res_name, "addrs_v4", false, res->addrs_v4, addrs_v4_cfg);
     }
 
     if (addrs_v6_cfg) {
-        res->addrs_v6 = xcalloc(1, sizeof(*res->addrs_v6));
+        res->addrs_v6 = xcalloc(sizeof(*res->addrs_v6));
         config_addrset(res_name, "addrs_v6", true, res->addrs_v6, addrs_v6_cfg);
     }
 
@@ -647,7 +647,7 @@ void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads
     if (vscf_hash_bequeath_all(config, "up_thresh", true, false))
         num_resources--; // don't count up_thresh
 
-    resources = xcalloc(num_resources, sizeof(*resources));
+    resources = xcalloc_n(num_resources, sizeof(*resources));
     unsigned idx = 0;
     vscf_hash_iterate(config, true, config_res, &idx);
 

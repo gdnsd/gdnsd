@@ -48,7 +48,7 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
         log_fatal("plugin_metafo: resource '%s': 'datacenters' must be an array of one or more datacenter name strings", res_name);
 
     uint8_t* dclptr = dcl->dc_list = xmalloc(dcl->num_dcs + 1);
-    dcl->dc_names = xmalloc((dcl->num_dcs + 1) * sizeof(*dcl->dc_names));
+    dcl->dc_names = xmalloc_n(dcl->num_dcs + 1, sizeof(*dcl->dc_names));
     dcl->dc_names[0] = NULL; // index zero is invalid
     for (unsigned i = 0; i < dcl->num_dcs; i++) {
         vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
@@ -61,7 +61,7 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
     *dclptr = 0;
 
     const unsigned rv_idx = num_dclists++;
-    dclists = xrealloc(dclists, num_dclists * sizeof(*dclists));
+    dclists = xrealloc_n(dclists, num_dclists, sizeof(*dclists));
     dclists[rv_idx] = dcl;
     return rv_idx;
 }

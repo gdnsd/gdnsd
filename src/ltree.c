@@ -116,7 +116,7 @@ static void ltree_childtable_grow(ltree_node_t* node)
 {
     const uint32_t old_max_slot = count2mask(node->child_hash_mask);
     const uint32_t new_hash_mask = (old_max_slot << 1) | 1;
-    ltree_node_t** new_table = xcalloc(new_hash_mask + 1, sizeof(*new_table));
+    ltree_node_t** new_table = xcalloc_n(new_hash_mask + 1, sizeof(*new_table));
     for (uint32_t i = 0; i <= old_max_slot; i++) {
         ltree_node_t* entry = node->child_table[i];
         while (entry) {
@@ -168,7 +168,7 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 F_NONNULLX(1)
 static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label, const uint32_t flags)
 {
-    ltree_node_t* rv = xcalloc(1, sizeof(*rv));
+    ltree_node_t* rv = xcalloc(sizeof(*rv));
     if (label)
         rv->label = lta_labeldup(arena, label);
     rv->flags = flags;
@@ -183,7 +183,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
 
     if (!node->child_table) {
         gdnsd_assert(!node->child_hash_mask);
-        node->child_table = xcalloc(2, sizeof(*node->child_table));
+        node->child_table = xcalloc_n(2, sizeof(*node->child_table));
     }
 
     ltree_node_t* child = node->child_table[child_hash];
@@ -258,7 +258,7 @@ static ltree_rrset_ ## _typ ## _t* ltree_node_add_rrset_ ## _nam (ltree_node_t* 
     ltree_rrset_t** store_at = &node->rrsets;\
     while (*store_at)\
         store_at = &(*store_at)->gen.next;\
-    ltree_rrset_ ## _typ ## _t* nrr = xcalloc(1, sizeof(*nrr));\
+    ltree_rrset_ ## _typ ## _t* nrr = xcalloc(sizeof(*nrr));\
     *store_at = (ltree_rrset_t*)nrr;\
     (*store_at)->gen.type = _dtyp;\
     return nrr;\
@@ -319,7 +319,7 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
 
         if (!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE) {
             if (rrset->gen.count == LTREE_V4A_SIZE) { // upgrade to addrs, copy old addrs
-                uint32_t* new_v4 = xmalloc(sizeof(*new_v4) * (LTREE_V4A_SIZE + 1));
+                uint32_t* new_v4 = xmalloc_n(LTREE_V4A_SIZE + 1, sizeof(*new_v4));
                 memcpy(new_v4, rrset->v4a, sizeof(*new_v4) * LTREE_V4A_SIZE);
                 new_v4[LTREE_V4A_SIZE] = addr;
                 rrset->addrs.v4 = new_v4;
@@ -329,7 +329,7 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
                 rrset->v4a[rrset->gen.count++] = addr;
             }
         } else {
-            rrset->addrs.v4 = xrealloc(rrset->addrs.v4, sizeof(*rrset->addrs.v4) * (1U + rrset->gen.count));
+            rrset->addrs.v4 = xrealloc_n(rrset->addrs.v4, 1U + rrset->gen.count, sizeof(*rrset->addrs.v4));
             rrset->addrs.v4[rrset->gen.count++] = addr;
         }
     }
@@ -372,12 +372,12 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
 
         if (!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE) {
             // was v4a-style, convert to addrs
-            uint32_t* new_v4 = xmalloc(sizeof(*new_v4) * rrset->gen.count);
+            uint32_t* new_v4 = xmalloc_n(rrset->gen.count, sizeof(*new_v4));
             memcpy(new_v4, rrset->v4a, sizeof(*new_v4) * rrset->gen.count);
             rrset->addrs.v4 = new_v4;
             rrset->addrs.v6 = NULL;
         }
-        rrset->addrs.v6 = xrealloc(rrset->addrs.v6, 16 * (1U + rrset->count_v6));
+        rrset->addrs.v6 = xrealloc_n(rrset->addrs.v6, 1U + rrset->count_v6, 16);
         memcpy(rrset->addrs.v6 + (rrset->count_v6++ * 16), addr, 16);
     }
 
@@ -519,14 +519,14 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
         rrset = ltree_node_add_rrset_ ## _nam (node);\
         rrset->gen.count = 1;\
         rrset->gen.ttl = htonl(ttl);\
-        new_rdata = rrset->rdata = xmalloc(sizeof(*new_rdata) * _szassume);\
+        new_rdata = rrset->rdata = xmalloc_n(_szassume, sizeof(*new_rdata));\
     } else {\
         if (ntohl(rrset->gen.ttl) != ttl)\
             log_zwarn("Name '%s%s': All TTLs for type %s should match (using %u)", logf_dname(dname), logf_dname(zone->dname), _pnam, ntohl(rrset->gen.ttl));\
         if (rrset->gen.count == UINT16_MAX)\
             log_zfatal("Name '%s%s': Too many RRs of type %s", logf_dname(dname), logf_dname(zone->dname), _pnam);\
         if (_szassume == 1 || rrset->gen.count >= _szassume) \
-            rrset->rdata = xrealloc(rrset->rdata, (1U + rrset->gen.count) * sizeof(*rrset->rdata));\
+            rrset->rdata = xrealloc_n(rrset->rdata, 1U + rrset->gen.count, sizeof(*rrset->rdata));\
         new_rdata = &rrset->rdata[rrset->gen.count++];\
     }\
 }
@@ -655,7 +655,7 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     INSERT_NEXT_RR(txt, txt, "TXT", 1)
-    ltree_rdata_txt_t new_rd = *new_rdata = xmalloc((num_texts + 1) * sizeof(*new_rd));
+    ltree_rdata_txt_t new_rd = *new_rdata = xmalloc_n(num_texts + 1, sizeof(*new_rd));
     for (unsigned i = 0; i <= num_texts; i++)
         new_rd[i] = texts[i];
     return false;
@@ -711,7 +711,7 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, c
     ltree_rrset_t** store_at = &node->rrsets;
     while (*store_at)
         store_at = &(*store_at)->gen.next;
-    ltree_rrset_rfc3597_t* nrr = xcalloc(1, sizeof(*nrr));
+    ltree_rrset_rfc3597_t* nrr = xcalloc(sizeof(*nrr));
     *store_at = (ltree_rrset_t*)nrr;
     (*store_at)->gen.type = rrtype;
     return nrr;
@@ -753,7 +753,7 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
             log_zwarn("Name '%s%s': All TTLs for type RFC3597 TYPE%u should match (using %u)", logf_dname(dname), logf_dname(zone->dname), rrtype, ntohl(rrset->gen.ttl));
         if (rrset->gen.count == UINT16_MAX)
             log_zfatal("Name '%s%s': Too many RFC3597 RRs of type TYPE%u", logf_dname(dname), logf_dname(zone->dname), rrtype);
-        rrset->rdata = xrealloc(rrset->rdata, (1U + rrset->gen.count) * sizeof(*rrset->rdata));
+        rrset->rdata = xrealloc_n(rrset->rdata, 1U + rrset->gen.count, sizeof(*rrset->rdata));
         new_rdata = &rrset->rdata[rrset->gen.count++];
     }
 

@@ -400,7 +400,7 @@ static void load_zones(zscan_t* z, char record_type, field_t* field)
             if (bytes > 65500)
                 parse_error_noargs("Text chunk too long (>65500 unescaped)");
 
-            z->texts = xrealloc(z->texts, sizeof(*z->texts) * (chunks + 1));
+            z->texts = xrealloc_n(z->texts, chunks + 1, sizeof(*z->texts));
             for (i = 0; i < chunks; i++) {
                 unsigned s = (bytes > 255U ? 255U : bytes);
                 z->texts[i] = xmalloc(s + 1U);
@@ -443,7 +443,7 @@ static void load_zones(zscan_t* z, char record_type, field_t* field)
         if (field[3].len > 255 || field[4].len > 255 || field[5].len > 255)
             parse_error_noargs("NAPTR label cannot exceed 255 chars");
 
-        z->texts = xrealloc(z->texts, 4 * sizeof(*z->texts));
+        z->texts = xrealloc_n(z->texts, 4, sizeof(*z->texts));
         for (i = 0; i < 3; i++) {
             z->texts[i] = xmalloc(field[3 + i].len + 1);
             z->texts[i][0] = field[3 + i].len;

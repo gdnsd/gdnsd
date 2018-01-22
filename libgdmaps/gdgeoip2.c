@@ -118,7 +118,7 @@ static void geoip2_destroy(geoip2_t* db)
 F_NONNULLX(1, 2, 3)
 static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode, const bool city_no_region)
 {
-    geoip2_t* db = xcalloc(1, sizeof(*db));
+    geoip2_t* db = xcalloc(sizeof(*db));
     int status = MMDB_open(pathname, MMDB_MODE_MMAP, &db->mmdb);
     if (status != MMDB_SUCCESS) {
         log_err("plugin_geoip: map '%s': Failed to open GeoIP2 database '%s': %s",
@@ -382,7 +382,7 @@ static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry)
     }
 
     const uint32_t dclist = geoip2_get_dclist(db, db_entry);
-    db->offset_cache[ndx] = xrealloc(db->offset_cache[ndx], sizeof(*db->offset_cache[ndx]) * (bucket_size + 2));
+    db->offset_cache[ndx] = xrealloc_n(db->offset_cache[ndx], bucket_size + 2, sizeof(*db->offset_cache[ndx]));
     gdnsd_assert(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;

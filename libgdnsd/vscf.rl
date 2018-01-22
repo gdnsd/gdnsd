@@ -141,7 +141,7 @@ static unsigned key_hash(const char* k, unsigned klen, const unsigned hash_mask)
 F_WUNUSED
 static vscf_hash_t* hash_new(void)
 {
-    vscf_hash_t* h = xcalloc(1, sizeof(*h));
+    vscf_hash_t* h = xcalloc(sizeof(*h));
     h->type = VSCF_HASH_T;
     return h;
 }
@@ -151,7 +151,7 @@ static void hash_grow(vscf_hash_t* h)
 {
     const unsigned old_hash_mask = count2mask(h->child_count);
     const unsigned new_hash_mask = (old_hash_mask << 1) | 1;
-    vscf_hentry_t** new_table = xcalloc(new_hash_mask + 1, sizeof(*new_table));
+    vscf_hentry_t** new_table = xcalloc_n(new_hash_mask + 1, sizeof(*new_table));
     for (unsigned i = 0; i <= old_hash_mask; i++) {
         vscf_hentry_t* entry = h->children[i];
         while (entry) {
@@ -175,7 +175,7 @@ static void hash_grow(vscf_hash_t* h)
     free(h->children);
 
     h->children = new_table;
-    h->ordered = xrealloc(h->ordered, (new_hash_mask + 1) * sizeof(*h->ordered));
+    h->ordered = xrealloc_n(h->ordered, new_hash_mask + 1, sizeof(*h->ordered));
 }
 
 F_NONNULL F_WUNUSED
@@ -184,8 +184,8 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
     v->parent = (vscf_data_t*)h;
 
     if (!h->children) {
-        h->children = xcalloc(2, sizeof(*h->children));
-        h->ordered = xmalloc(2 * sizeof(*h->ordered));
+        h->children = xcalloc_n(2, sizeof(*h->children));
+        h->ordered = xmalloc_n(2, sizeof(*h->ordered));
     }
 
     const unsigned child_mask = count2mask(h->child_count);
@@ -200,7 +200,7 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
         store_at = &((*store_at)->next);
     }
 
-    vscf_hentry_t* new_hentry = *store_at = xcalloc(1, sizeof(*new_hentry));
+    vscf_hentry_t* new_hentry = *store_at = xcalloc(sizeof(*new_hentry));
     new_hentry->klen = klen;
     new_hentry->key = xmalloc(klen + 1);
     memcpy(new_hentry->key, key, klen + 1);
@@ -234,7 +234,7 @@ static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v)
 F_WUNUSED
 static vscf_array_t* array_new(void)
 {
-    vscf_array_t* a = xcalloc(1, sizeof(*a));
+    vscf_array_t* a = xcalloc(sizeof(*a));
     a->type   = VSCF_ARRAY_T;
     return a;
 }
@@ -244,14 +244,14 @@ static void array_add_val(vscf_array_t* a, vscf_data_t* v)
 {
     v->parent = (vscf_data_t*)a;
     unsigned idx = a->len++;
-    a->vals = xrealloc(a->vals, a->len * sizeof(*a->vals));
+    a->vals = xrealloc_n(a->vals, a->len, sizeof(*a->vals));
     a->vals[idx] = v;
 }
 
 F_NONNULL F_WUNUSED
 static vscf_simple_t* simple_new(const char* rval, const unsigned rlen)
 {
-    vscf_simple_t* s = xcalloc(1, sizeof(*s));
+    vscf_simple_t* s = xcalloc(sizeof(*s));
     char* storage = xmalloc(rlen + 1U);
     memcpy(storage, rval, rlen);
     storage[rlen] = '\0';
@@ -523,7 +523,7 @@ static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c)
         return false;
 
     if (++scnr->cont_stack_top == scnr->cont_stack_alloc)
-        scnr->cont_stack = xrealloc(scnr->cont_stack, ++scnr->cont_stack_alloc * sizeof(*scnr->cont_stack));
+        scnr->cont_stack = xrealloc_n(scnr->cont_stack, ++scnr->cont_stack_alloc, sizeof(*scnr->cont_stack));
     scnr->cont_stack[scnr->cont_stack_top] = c;
 
     return true;
@@ -749,14 +749,14 @@ vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source
 {
     (void)vscf_en_main; // silence unused var warning from generated code
 
-    vscf_scnr_t* scnr = xcalloc(1, sizeof(*scnr));
+    vscf_scnr_t* scnr = xcalloc(sizeof(*scnr));
     scnr->lcount = 1;
     if (source_is_fn)
         scnr->fn = source;
     scnr->desc = source;
     scnr->cs = vscf_start;
     scnr->cont_stack_alloc = 2;
-    scnr->cont_stack = xmalloc(scnr->cont_stack_alloc * sizeof(*scnr->cont_stack));
+    scnr->cont_stack = xmalloc_n(scnr->cont_stack_alloc, sizeof(*scnr->cont_stack));
 
     // default container is hash, will be replaced if array
     scnr->cont_stack[0] = (vscf_data_t*)hash_new();
@@ -769,9 +769,7 @@ vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source
     %%{
         prepush {
             if (scnr->top == scnr->cs_stack_alloc)
-                scnr->cs_stack
-                    = xrealloc(scnr->cs_stack,
-                        ++scnr->cs_stack_alloc * sizeof(*scnr->cs_stack));
+                scnr->cs_stack = xrealloc_n(scnr->cs_stack, ++scnr->cs_stack_alloc, sizeof(*scnr->cs_stack));
         }
         variable stack scnr->cs_stack;
         variable top   scnr->top;

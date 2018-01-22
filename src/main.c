@@ -65,9 +65,9 @@ static int killed_by = 0;
 static struct ev_loop* def_loop = NULL;
 
 // libev watchers for signals+async
-static ev_signal* sig_int = NULL;
-static ev_signal* sig_term = NULL;
-static ev_async* async_reloadz = NULL;
+static ev_signal sig_int;
+static ev_signal sig_term;
+static ev_async async_reloadz;
 
 // custom atexit-like stuff, only for resource
 //   de-allocation in debug builds to check for leaks
@@ -79,7 +79,7 @@ static unsigned exitfuncs_pending = 0;
 
 void gdnsd_atexit_debug(void (*f)(void))
 {
-    exitfuncs = xrealloc(exitfuncs, (exitfuncs_pending + 1) * sizeof(*exitfuncs));
+    exitfuncs = xrealloc_n(exitfuncs, exitfuncs_pending + 1, sizeof(*exitfuncs));
     exitfuncs[exitfuncs_pending++] = f;
 }
 
@@ -189,30 +189,16 @@ static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a 
 // called by ztree reloader thread just before it exits
 void notify_reload_zones_done(void)
 {
-    ev_async_send(def_loop, async_reloadz);
-}
-
-// Set up our terminal signal handlers via libev
-F_NONNULL
-static void setup_signals(css_t* css)
-{
-    sig_int = malloc(sizeof(*sig_int));
-    ev_signal_init(sig_int, terminal_signal, SIGINT);
-    sig_int->data = css;
-    ev_signal_start(def_loop, sig_int);
-
-    sig_term = malloc(sizeof(*sig_term));
-    ev_signal_init(sig_term, terminal_signal, SIGTERM);
-    sig_term->data = css;
-    ev_signal_start(def_loop, sig_term);
+    ev_async* p_async_reloadz = &async_reloadz;
+    ev_async_send(def_loop, p_async_reloadz);
 }
 
 static void setup_reload_zones(css_t* css)
 {
-    async_reloadz = malloc(sizeof(*async_reloadz));
-    ev_async_init(async_reloadz, reload_zones_done);
-    async_reloadz->data = css;
-    ev_async_start(def_loop, async_reloadz);
+    ev_async* p_async_reloadz = &async_reloadz;
+    ev_async_init(p_async_reloadz, reload_zones_done);
+    p_async_reloadz->data = css;
+    ev_async_start(def_loop, p_async_reloadz);
 }
 
 F_NONNULL F_NORETURN
@@ -441,8 +427,15 @@ int main(int argc, char** argv)
     if (!css)
         css = css_new(argv[0], socks_cfg, &csc);
 
-    // main thread signal handlers
-    setup_signals(css);
+    // setup main thread signal handlers
+    ev_signal* p_sig_int = &sig_int;
+    ev_signal* p_sig_term = &sig_term;
+    ev_signal_init(p_sig_int, terminal_signal, SIGINT);
+    p_sig_int->data = css;
+    ev_signal_start(def_loop, p_sig_int);
+    ev_signal_init(p_sig_term, terminal_signal, SIGTERM);
+    p_sig_term->data = css;
+    ev_signal_start(def_loop, p_sig_term);
 
     // Initialize+bind DNS listening sockets
     socks_dns_lsocks_init(socks_cfg);
@@ -484,8 +477,8 @@ int main(int argc, char** argv)
     request_io_threads_stop(socks_cfg);
 
     // Stop the terminal signal handlers
-    ev_signal_stop(def_loop, sig_term);
-    ev_signal_stop(def_loop, sig_int);
+    ev_signal_stop(def_loop, p_sig_term);
+    ev_signal_stop(def_loop, p_sig_int);
 
     // get rid of child procs (e.g. extmon helper)
     gdnsd_kill_registered_children();

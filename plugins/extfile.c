@@ -54,8 +54,8 @@ typedef struct {
     const char* name;
     const char* path;
     extf_mon_t* mons;
-    ev_stat* file_watcher; // only used in "direct" case
-    ev_timer* time_watcher; // used in both cases, differently
+    ev_stat file_watcher; // only used in "direct" case
+    ev_timer time_watcher; // used in both cases, differently
     bool direct;
     unsigned timeout;
     unsigned interval;
@@ -93,8 +93,9 @@ static bool testsuite_nodelay = false;
 
 void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
-    service_types = xrealloc(service_types, (num_svcs + 1) * sizeof(*service_types));
+    service_types = xrealloc_n(service_types, num_svcs + 1, sizeof(*service_types));
     extf_svc_t* svc = &service_types[num_svcs++];
+    memset(svc, 0, sizeof(*svc));
 
     svc->name = strdup(name);
     svc->timeout = timeout;
@@ -130,7 +131,7 @@ void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_nam
 
     gdnsd_assert(svc);
 
-    svc->mons = xrealloc(svc->mons, (svc->num_mons + 1) * sizeof(*svc->mons));
+    svc->mons = xrealloc_n(svc->mons, svc->num_mons + 1, sizeof(*svc->mons));
     extf_mon_t* mon = &svc->mons[svc->num_mons];
     mon->name = strdup(cname);
     mon->sidx = idx;
@@ -252,10 +253,11 @@ static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED)
     gdnsd_assert(svc);
     gdnsd_assert(svc->direct);
 
+    ev_timer* tw = &svc->time_watcher;
     if (testsuite_nodelay)
-        timer_cb(loop, svc->time_watcher, EV_TIMER);
+        timer_cb(loop, tw, EV_TIMER);
     else
-        ev_timer_again(loop, svc->time_watcher);
+        ev_timer_again(loop, tw);
 }
 
 F_NONNULL
@@ -263,25 +265,23 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop)
 {
     const double delay = testsuite_nodelay ? 0.01 : svc->interval;
 
+    ev_timer* tw = &svc->time_watcher;
     if (svc->direct) {
         // in the direct case, interval is the ev_stat time hint, and all ev_stat
         //   hits (re-)kick a 1.02s stat()-settling timer, which processes the file
         //   when it expires.
-        svc->time_watcher = xmalloc(sizeof(*svc->time_watcher));
-        ev_timer_init(svc->time_watcher, timer_cb, 0.0, 1.02);
-        svc->time_watcher->data = svc;
-        svc->file_watcher = xmalloc(sizeof(*svc->file_watcher));
-        memset(&svc->file_watcher->attr, 0, sizeof(svc->file_watcher->attr));
-        ev_stat_init(svc->file_watcher, file_cb, svc->path, delay);
-        svc->file_watcher->data = svc;
-        ev_stat_start(mon_loop, svc->file_watcher);
+        ev_timer_init(tw, timer_cb, 0.0, 1.02);
+        tw->data = svc;
+        ev_stat* fw = &svc->file_watcher;
+        ev_stat_init(fw, file_cb, svc->path, delay);
+        fw->data = svc;
+        ev_stat_start(mon_loop, fw);
     } else {
         // in the monitor case, interval is a fixed repeating timer that processes
         //   the file on every expiry.
-        svc->time_watcher = xmalloc(sizeof(*svc->time_watcher));
-        ev_timer_init(svc->time_watcher, timer_cb, delay, delay);
-        svc->time_watcher->data = svc;
-        ev_timer_start(mon_loop, svc->time_watcher);
+        ev_timer_init(tw, timer_cb, delay, delay);
+        tw->data = svc;
+        ev_timer_start(mon_loop, tw);
     }
 }
 

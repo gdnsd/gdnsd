@@ -140,7 +140,7 @@ void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array)
                              ? vscf_array_get_len(psearch_array)
                              : 0;
 
-    psearch = xmalloc((psearch_count + 2) * sizeof(*psearch));
+    psearch = xmalloc_n(psearch_count + 2, sizeof(*psearch));
     for (unsigned i = 0; i < psearch_count; i++) {
         vscf_data_t* psd = vscf_array_get_data(psearch_array, i);
         if (!vscf_is_simple(psd))
@@ -171,8 +171,8 @@ static plugin_t* plugin_allocate(const char* pname)
 
     const unsigned this_idx = num_plugins++;
     log_debug("Assigning slot #%u to plugin '%s'", this_idx, pname);
-    plugins = xrealloc(plugins, num_plugins * sizeof(*plugins));
-    plugin_t* rv = plugins[this_idx] = xcalloc(1, sizeof(*rv));
+    plugins = xrealloc_n(plugins, num_plugins, sizeof(*plugins));
+    plugin_t* rv = plugins[this_idx] = xcalloc(sizeof(*rv));
     rv->name = strdup(pname);
     rv->config_loaded = false;
 

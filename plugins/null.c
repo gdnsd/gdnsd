@@ -63,7 +63,7 @@ typedef struct {
 typedef struct {
     unsigned idx;
     null_svc_t* svc;
-    ev_timer* interval_watcher;
+    ev_timer interval_watcher;
 } null_mon_t;
 
 static unsigned num_svcs = 0;
@@ -83,7 +83,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 
 void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED)
 {
-    null_svcs = xrealloc(null_svcs, sizeof(*null_svcs) * ++num_svcs);
+    null_svcs = xrealloc_n(null_svcs, ++num_svcs, sizeof(*null_svcs));
     null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
     this_svc->name = strdup(name);
     this_svc->interval = interval;
@@ -103,13 +103,13 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     }
 
     gdnsd_assert(this_svc);
-    null_mons = xrealloc(null_mons, sizeof(*null_mons) * ++num_mons);
+    null_mons = xrealloc_n(null_mons, ++num_mons, sizeof(*null_mons));
     null_mon_t* this_mon = null_mons[num_mons - 1] = xmalloc(sizeof(*this_mon));
     this_mon->svc = this_svc;
     this_mon->idx = idx;
-    this_mon->interval_watcher = xmalloc(sizeof(*this_mon->interval_watcher));
-    ev_timer_init(this_mon->interval_watcher, &null_interval_cb, 0, 0);
-    this_mon->interval_watcher->data = this_mon;
+    ev_timer* ival_watcher = &this_mon->interval_watcher;
+    ev_timer_init(ival_watcher, null_interval_cb, 0, 0);
+    ival_watcher->data = this_mon;
 }
 
 void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
@@ -125,7 +125,7 @@ void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, 
 void plugin_null_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
-        ev_timer* ival_watcher = null_mons[i]->interval_watcher;
+        ev_timer* ival_watcher = &null_mons[i]->interval_watcher;
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
     }
@@ -137,7 +137,7 @@ void plugin_null_start_monitors(struct ev_loop* mon_loop)
         null_mon_t* mon = null_mons[i];
         const unsigned ival = mon->svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
-        ev_timer* ival_watcher = mon->interval_watcher;
+        ev_timer* ival_watcher = &mon->interval_watcher;
         ev_timer_set(ival_watcher, stagger, ival);
         ev_timer_start(mon_loop, ival_watcher);
     }

@@ -23,31 +23,46 @@
 #include <gdnsd/compiler.h>
 
 #include <sys/types.h>
+#include <string.h>
 
 #pragma GCC visibility push(default)
 
-// These internally check for errors and throw
-//   fatal exceptions.  They also do not allow
-//   the use of size==0 as an alternative syntax
-//   for free() (this is checked in debug builds).
-//   These functions *never* return NULL.
+// These functions *never* return NULL.  They internally check for errors and
+// throw fatal exceptions on attempts to allocate zero bytes or >size_t bytes
+// as well as OOM and other conditions signalled by the underlying libc
+// allocators.
 
 F_MALLOC F_ALLOCSZ(1) F_RETNN
 void* gdnsd_xmalloc(size_t size);
 
 F_MALLOC F_ALLOCSZ(1, 2) F_RETNN
-void* gdnsd_xcalloc(size_t nmemb, size_t size);
+void* gdnsd_xmalloc_n(size_t nmemb, size_t size);
+
+F_MALLOC F_ALLOCSZ(1) F_RETNN
+void* gdnsd_xcalloc(size_t size);
+
+F_MALLOC F_ALLOCSZ(1, 2) F_RETNN
+void* gdnsd_xcalloc_n(size_t nmemb, size_t size);
 
 F_ALLOCSZ(2) F_WUNUSED F_RETNN
 void* gdnsd_xrealloc(void* ptr, size_t size);
 
+F_ALLOCSZ(2, 3) F_WUNUSED F_RETNN
+void* gdnsd_xrealloc_n(void* ptr, size_t nmemb, size_t size);
+
 F_MALLOC F_ALLOCSZ(2) F_ALLOCAL(1) F_RETNN
 void* gdnsd_xpmalign(size_t alignment, size_t size);
+
+F_MALLOC F_ALLOCSZ(2, 3) F_ALLOCAL(1) F_RETNN
+void* gdnsd_xpmalign_n(size_t alignment, size_t nmemb, size_t size);
 
 #pragma GCC visibility pop
 
 #define xmalloc gdnsd_xmalloc
+#define xmalloc_n gdnsd_xmalloc_n
 #define xcalloc gdnsd_xcalloc
+#define xcalloc_n gdnsd_xcalloc_n
 #define xrealloc gdnsd_xrealloc
+#define xrealloc_n gdnsd_xrealloc_n
 
 #endif // GDNSD_ALLOC_H

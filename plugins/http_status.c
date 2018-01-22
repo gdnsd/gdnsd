@@ -53,10 +53,10 @@ typedef enum {
 typedef struct {
     const char* desc;
     http_svc_t* http_svc;
-    ev_io* read_watcher;
-    ev_io* write_watcher;
-    ev_timer* timeout_watcher;
-    ev_timer* interval_watcher;
+    ev_io read_watcher;
+    ev_io write_watcher;
+    ev_timer timeout_watcher;
+    ev_timer interval_watcher;
     unsigned idx;
     gdnsd_anysin_t addr;
     char res_buf[14];
@@ -88,10 +88,12 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
         return;
     }
 
+    ev_io* w_watcher = &md->write_watcher;
+    ev_timer* t_watcher = &md->timeout_watcher;
+
     gdnsd_assert(md->sock == -1);
-    gdnsd_assert(!ev_is_active(md->read_watcher));
-    gdnsd_assert(!ev_is_active(md->write_watcher));
-    gdnsd_assert(!ev_is_active(md->timeout_watcher) && !ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(!ev_is_active(w_watcher));
+    gdnsd_assert(!ev_is_active(t_watcher) && !ev_is_pending(t_watcher));
 
     log_debug("plugin_http_status: Starting state poll of %s", md->desc);
 
@@ -128,10 +130,10 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
         md->sock = sock;
         md->hstate = HTTP_STATE_WRITING;
         md->done = 0;
-        ev_io_set(md->write_watcher, sock, EV_WRITE);
-        ev_io_start(loop, md->write_watcher);
-        ev_timer_set(md->timeout_watcher, md->http_svc->timeout, 0);
-        ev_timer_start(loop, md->timeout_watcher);
+        ev_io_set(w_watcher, sock, EV_WRITE);
+        ev_io_start(loop, w_watcher);
+        ev_timer_set(t_watcher, md->http_svc->timeout, 0);
+        ev_timer_start(loop, t_watcher);
         return;
     } while (0);
 
@@ -148,11 +150,15 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
 
     http_events_t* md = io->data;
 
+    ev_io* r_watcher = &md->read_watcher;
+    ev_io* w_watcher = &md->write_watcher;
+    ev_timer* t_watcher = &md->timeout_watcher;
+
     gdnsd_assert(md);
     gdnsd_assert(md->hstate == HTTP_STATE_WRITING);
-    gdnsd_assert(!ev_is_active(md->read_watcher));
-    gdnsd_assert(ev_is_active(md->write_watcher));
-    gdnsd_assert(ev_is_active(md->timeout_watcher) || ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(!ev_is_active(r_watcher));
+    gdnsd_assert(ev_is_active(w_watcher));
+    gdnsd_assert(ev_is_active(t_watcher) || ev_is_pending(t_watcher));
     gdnsd_assert(md->sock > -1);
 
     int sock = md->sock;
@@ -177,8 +183,8 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
             log_debug("plugin_http_status: State poll of %s failed quickly: %s", md->desc, logf_strerror(so_error));
             close(sock);
             md->sock = -1;
-            ev_io_stop(loop, md->write_watcher);
-            ev_timer_stop(loop, md->timeout_watcher);
+            ev_io_stop(loop, w_watcher);
+            ev_timer_stop(loop, t_watcher);
             md->hstate = HTTP_STATE_WAITING;
             gdnsd_mon_state_updater(md->idx, false);
             return;
@@ -212,8 +218,8 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
         shutdown(sock, SHUT_RDWR);
         close(sock);
         md->sock = -1;
-        ev_io_stop(loop, md->write_watcher);
-        ev_timer_stop(loop, md->timeout_watcher);
+        ev_io_stop(loop, w_watcher);
+        ev_timer_stop(loop, t_watcher);
         md->hstate = HTTP_STATE_WAITING;
         gdnsd_mon_state_updater(md->idx, false);
         return;
@@ -229,9 +235,9 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
 
     md->done = 0;
     md->hstate = HTTP_STATE_READING;
-    ev_io_stop(loop, md->write_watcher);
-    ev_io_set(md->read_watcher, sock, EV_READ);
-    ev_io_start(loop, md->read_watcher);
+    ev_io_stop(loop, w_watcher);
+    ev_io_set(r_watcher, sock, EV_READ);
+    ev_io_start(loop, r_watcher);
 }
 
 F_NONNULL
@@ -241,10 +247,12 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
 
     http_events_t* md = io->data;
 
+    ev_io* r_watcher = &md->read_watcher;
+    ev_timer* t_watcher = &md->timeout_watcher;
+
     gdnsd_assert(md);
     gdnsd_assert(md->hstate == HTTP_STATE_READING);
-    gdnsd_assert(ev_is_active(md->read_watcher));
-    gdnsd_assert(!ev_is_active(md->write_watcher));
+    gdnsd_assert(ev_is_active(r_watcher));
     gdnsd_assert(md->sock > -1);
 
     bool final_status = false;
@@ -292,8 +300,8 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
     shutdown(md->sock, SHUT_RDWR);
     close(md->sock);
     md->sock = -1;
-    ev_io_stop(loop, md->read_watcher);
-    ev_timer_stop(loop, md->timeout_watcher);
+    ev_io_stop(loop, r_watcher);
+    ev_timer_stop(loop, t_watcher);
     md->hstate = HTTP_STATE_WAITING;
     gdnsd_mon_state_updater(md->idx, final_status);
 }
@@ -305,18 +313,21 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 
     http_events_t* md = t->data;
 
+    ev_io* r_watcher = &md->read_watcher;
+    ev_io* w_watcher = &md->write_watcher;
+
     gdnsd_assert(md);
     gdnsd_assert(md->sock != -1);
     gdnsd_assert(
-        (md->hstate == HTTP_STATE_READING && ev_is_active(md->read_watcher))
-        || (md->hstate == HTTP_STATE_WRITING && ev_is_active(md->write_watcher))
+        (md->hstate == HTTP_STATE_READING && ev_is_active(r_watcher))
+        || (md->hstate == HTTP_STATE_WRITING && ev_is_active(w_watcher))
     );
 
     log_debug("plugin_http_status: State poll of %s timed out", md->desc);
     if (md->hstate == HTTP_STATE_READING)
-        ev_io_stop(loop, md->read_watcher);
+        ev_io_stop(loop, r_watcher);
     else if (md->hstate == HTTP_STATE_WRITING)
-        ev_io_stop(loop, md->write_watcher);
+        ev_io_stop(loop, w_watcher);
     shutdown(md->sock, SHUT_RDWR);
     close(md->sock);
     md->sock = -1;
@@ -379,7 +390,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     const char* vhost = NULL;
     unsigned port = 80;
 
-    service_types = xrealloc(service_types, (num_http_svcs + 1) * sizeof(*service_types));
+    service_types = xrealloc_n(service_types, num_http_svcs + 1, sizeof(*service_types));
     http_svc_t* this_svc = &service_types[num_http_svcs++];
 
     this_svc->name = strdup(name);
@@ -394,7 +405,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     if (ok_codes_cfg) {
         ok_codes_set = true;
         this_svc->num_ok_codes = vscf_array_get_len(ok_codes_cfg);
-        this_svc->ok_codes = xmalloc(sizeof(*this_svc->ok_codes) * this_svc->num_ok_codes);
+        this_svc->ok_codes = xmalloc_n(this_svc->num_ok_codes, sizeof(*this_svc->ok_codes));
         for (unsigned i = 0; i < this_svc->num_ok_codes; i++) {
             vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);
             unsigned long tmpcode;
@@ -421,7 +432,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
 
 void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
-    http_events_t* this_mon = xcalloc(1, sizeof(*this_mon));
+    http_events_t* this_mon = xcalloc(sizeof(*this_mon));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
 
@@ -445,30 +456,30 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
     this_mon->hstate = HTTP_STATE_WAITING;
     this_mon->sock = -1;
 
-    this_mon->read_watcher = xmalloc(sizeof(*this_mon->read_watcher));
-    ev_io_init(this_mon->read_watcher, &mon_read_cb, -1, 0);
-    this_mon->read_watcher->data = this_mon;
+    ev_io* r_watcher = &this_mon->read_watcher;
+    ev_io_init(r_watcher, mon_read_cb, -1, 0);
+    r_watcher->data = this_mon;
 
-    this_mon->write_watcher = xmalloc(sizeof(*this_mon->write_watcher));
-    ev_io_init(this_mon->write_watcher, &mon_write_cb, -1, 0);
-    this_mon->write_watcher->data = this_mon;
+    ev_io* w_watcher = &this_mon->write_watcher;
+    ev_io_init(w_watcher, mon_write_cb, -1, 0);
+    w_watcher->data = this_mon;
 
-    this_mon->timeout_watcher = xmalloc(sizeof(*this_mon->timeout_watcher));
-    ev_timer_init(this_mon->timeout_watcher, &mon_timeout_cb, 0, 0);
-    this_mon->timeout_watcher->data = this_mon;
+    ev_timer* t_watcher = &this_mon->timeout_watcher;
+    ev_timer_init(t_watcher, mon_timeout_cb, 0, 0);
+    t_watcher->data = this_mon;
 
-    this_mon->interval_watcher = xmalloc(sizeof(*this_mon->interval_watcher));
-    ev_timer_init(this_mon->interval_watcher, &mon_interval_cb, 0, 0);
-    this_mon->interval_watcher->data = this_mon;
+    ev_timer* i_watcher = &this_mon->interval_watcher;
+    ev_timer_init(i_watcher, mon_interval_cb, 0, 0);
+    i_watcher->data = this_mon;
 
-    mons = xrealloc(mons, sizeof(*mons) * (num_mons + 1));
+    mons = xrealloc_n(mons, num_mons + 1, sizeof(*mons));
     mons[num_mons++] = this_mon;
 }
 
 void plugin_http_status_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
-        ev_timer* ival_watcher = mons[i]->interval_watcher;
+        ev_timer* ival_watcher = &mons[i]->interval_watcher;
         gdnsd_assert(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
@@ -482,7 +493,7 @@ void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
         gdnsd_assert(mon->sock == -1);
         const unsigned ival = mon->http_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
-        ev_timer* ival_watcher = mon->interval_watcher;
+        ev_timer* ival_watcher = &mon->interval_watcher;
         ev_timer_set(ival_watcher, stagger, ival);
         ev_timer_start(mon_loop, ival_watcher);
     }

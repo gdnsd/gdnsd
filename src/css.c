@@ -73,8 +73,8 @@ struct css_conn_s_ {
     csbuf_t rbuf;
     csbuf_t wbuf;
     char* resp_data;
-    ev_io* w_read;
-    ev_io* w_write;
+    ev_io w_read;
+    ev_io w_write;
     int fd;
     size_t resp_size;
     size_t resp_size_done;
@@ -88,7 +88,7 @@ typedef struct {
 
 static void conn_queue_add(conn_queue_t* queue, css_conn_t* c)
 {
-    queue->q = xrealloc(queue->q, ((queue->len + 1) * sizeof(*queue->q)));
+    queue->q = xrealloc_n(queue->q, queue->len + 1, sizeof(*queue->q));
     queue->q[queue->len++] = c;
 }
 
@@ -107,13 +107,13 @@ struct css_s_ {
     unsigned num_clients;
     uint32_t status_v;
     uint32_t status_d;
-    ev_io* w_accept;
-    ev_timer* w_takeover;
+    ev_io w_accept;
+    ev_timer w_takeover;
     struct ev_loop* loop;
     char* path;
     css_conn_t* clients;
-    conn_queue_t* reload_zones_queued;
-    conn_queue_t* reload_zones_active;
+    conn_queue_t reload_zones_queued;
+    conn_queue_t reload_zones_active;
     char* argv0;
     socks_cfg_t* socks_cfg;
     css_conn_t* replace_conn;
@@ -125,9 +125,10 @@ struct css_s_ {
 
 static void swap_reload_zones_queues(css_t* css)
 {
-    conn_queue_t* x = css->reload_zones_queued;
-    css->reload_zones_queued = css->reload_zones_active;
-    css->reload_zones_active = x;
+    conn_queue_t x;
+    memcpy(&x, &css->reload_zones_queued, sizeof(x));
+    memcpy(&css->reload_zones_queued, &css->reload_zones_active, sizeof(x));
+    memcpy(&css->reload_zones_active, &x, sizeof(x));
 }
 
 F_NONNULL
@@ -144,10 +145,10 @@ static void css_conn_cleanup(css_conn_t* c)
     // stop/free io-related things
     if (c->resp_data)
         free(c->resp_data);
-    ev_io_stop(css->loop, c->w_read);
-    ev_io_stop(css->loop, c->w_write);
-    free(c->w_read);
-    free(c->w_write);
+    ev_io* w_read = &c->w_read;
+    ev_io_stop(css->loop, w_read);
+    ev_io* w_write = &c->w_write;
+    ev_io_stop(css->loop, w_write);
     if (c->fd >= 0)
         close(c->fd);
 
@@ -160,9 +161,10 @@ static void css_conn_cleanup(css_conn_t* c)
         c->next->prev = c->prev;
     free(c);
 
+    ev_io* w_accept = &css->w_accept;
     // if we were at the maximum, start accepting connections again
     if (css->num_clients-- == max_clients)
-        ev_io_start(css->loop, css->w_accept);
+        ev_io_start(css->loop, w_accept);
 }
 
 F_NONNULL
@@ -206,8 +208,10 @@ static void css_conn_write_data(css_conn_t* c)
         c->resp_data = NULL;
         c->resp_size = 0;
         c->resp_size_done = 0;
-        ev_io_stop(c->css->loop, c->w_write);
-        ev_io_start(c->css->loop, c->w_read);
+        ev_io* w_write = &c->w_write;
+        ev_io_stop(c->css->loop, w_write);
+        ev_io* w_read = &c->w_read;
+        ev_io_start(c->css->loop, w_read);
         c->state = READING_REQ;
     }
 }
@@ -264,8 +268,10 @@ static bool css_conn_write_resp(css_conn_t* c)
         return true;
     }
 
-    ev_io_stop(c->css->loop, c->w_write);
-    ev_io_start(c->css->loop, c->w_read);
+    ev_io* w_write = &c->w_write;
+    ev_io_stop(c->css->loop, w_write);
+    ev_io* w_read = &c->w_read;
+    ev_io_start(c->css->loop, w_read);
     c->state = READING_REQ;
     return false;
 }
@@ -315,8 +321,8 @@ static void respond(css_conn_t* c, const char key, const uint32_t v, const uint3
         c->resp_size = c->css->handoff_fds_count;
         c->resp_size_done = 0;
     }
-
-    ev_io_start(c->css->loop, c->w_write);
+    ev_io* w_write = &c->w_write;
+    ev_io_start(c->css->loop, w_write);
 }
 
 bool css_stop_ok(css_t* css)
@@ -352,7 +358,8 @@ static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_
         css->replace_conn = NULL;
 
         // Re-start our accept watcher
-        ev_io_start(css->loop, css->w_accept);
+        ev_io* w_accept = &css->w_accept;
+        ev_io_start(css->loop, w_accept);
     }
 }
 
@@ -497,7 +504,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         return;
     }
 
-    ev_io_stop(loop, c->w_read);
+    ev_io_stop(loop, w);
     c->state = WAITING_SERVER;
 
     double nowish;
@@ -506,6 +513,8 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     char* stats_msg;
     char* states_msg;
     pid_t take_pid;
+    ev_timer* w_takeover = &css->w_takeover;
+    ev_io* w_accept = &css->w_accept;
 
     switch (c->rbuf.key) {
     case REQ_INFO:
@@ -542,8 +551,8 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg, false);
         break;
     case REQ_ZREL:
-        conn_queue_add(css->reload_zones_queued, c);
-        if (!css->reload_zones_active->len) {
+        conn_queue_add(&css->reload_zones_queued, c);
+        if (!css->reload_zones_active.len) {
             swap_reload_zones_queues(css);
             spawn_async_zones_reloader_thread();
         }
@@ -560,7 +569,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         css->replace_conn = c;
         css->replacement_pid = spawn_replacement(css->argv0);
         log_info("Replacement server started at pid %li", (long)css->replacement_pid);
-        ev_timer_start(css->loop, css->w_takeover);
+        ev_timer_start(css->loop, w_takeover);
         break;
     case REQ_TAKE:
         take_pid = (pid_t)c->rbuf.d;
@@ -571,10 +580,10 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         }
         log_info("Accepting socket client takeover attempt from pid %li", (long)take_pid);
         css->replacement_pid = take_pid;
-        ev_timer_start(css->loop, css->w_takeover);
+        ev_timer_start(css->loop, w_takeover);
         gdnsd_assert(!css->takeover_conn);
         css->takeover_conn = c;
-        ev_io_stop(css->loop, css->w_accept); // there can be only one
+        ev_io_stop(css->loop, w_accept); // there can be only one
         respond(c, RESP_ACK, 0, 0, NULL, true);
         break;
     default:
@@ -608,23 +617,25 @@ static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UN
     }
 
     // if we now have max_clients connected, stop accepting new ones
-    if (++css->num_clients == max_clients)
-        ev_io_stop(css->loop, css->w_accept);
+    if (++css->num_clients == max_clients) {
+        ev_io* w_accept = &css->w_accept;
+        ev_io_stop(css->loop, w_accept);
+    }
 
     // set up the per-connection state and start reading requests...
-    css_conn_t* c = xcalloc(1, sizeof(*c));
+    css_conn_t* c = xcalloc(sizeof(*c));
     c->css = css;
     c->fd = fd;
-    c->w_read = xmalloc(sizeof(*c->w_read));
-    c->w_write = xmalloc(sizeof(*c->w_write));
-    ev_io_init(c->w_read, css_conn_read, fd, EV_READ);
-    ev_io_init(c->w_write, css_conn_write, fd, EV_WRITE);
-    c->w_read->data = c;
-    c->w_write->data = c;
+    ev_io* w_read = &c->w_read;
+    ev_io_init(w_read, css_conn_read, fd, EV_READ);
+    ev_io* w_write = &c->w_write;
+    ev_io_init(w_write, css_conn_write, fd, EV_WRITE);
+    w_read->data = c;
+    w_write->data = c;
 
     // set up buffer/watcher state to read input length
     c->state = READING_REQ;
-    ev_io_start(css->loop, c->w_read);
+    ev_io_start(css->loop, w_read);
 
     // insert into front of linked list
     if (css->clients) {
@@ -744,12 +755,10 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         free(resp_fds);
     }
 
-    css_t* css = xcalloc(1, sizeof(*css));
+    css_t* css = xcalloc(sizeof(*css));
     css->lock_fd = lock_fd;
     css->argv0 = strdup(argv0);
     css->socks_cfg = socks_cfg;
-    css->reload_zones_queued = xcalloc(1, sizeof(*css->reload_zones_queued));
-    css->reload_zones_active = xcalloc(1, sizeof(*css->reload_zones_active));
     css->status_d = (uint32_t)getpid();
     uint8_t x, y, z;
     if (3 != sscanf(PACKAGE_VERSION, "%hhu.%hhu.%hhu", &x, &y, &z))
@@ -778,13 +787,13 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         free(sock_path);
     }
 
-    css->w_accept = xmalloc(sizeof(*css->w_accept));
-    ev_io_init(css->w_accept, css_accept, css->fd, EV_READ);
-    css->w_accept->data = css;
+    ev_io* w_accept = &css->w_accept;
+    ev_io_init(w_accept, css_accept, css->fd, EV_READ);
+    w_accept->data = css;
 
-    css->w_takeover = xmalloc(sizeof(*css->w_takeover));
-    ev_timer_init(css->w_takeover, css_watch_takeover, 1.0, 1.0);
-    css->w_takeover->data = css;
+    ev_timer* w_takeover = &css->w_takeover;
+    ev_timer_init(w_takeover, css_watch_takeover, 1.0, 1.0);
+    w_takeover->data = css;
 
     return css;
 }
@@ -792,11 +801,12 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
 void css_start(css_t* css, struct ev_loop* loop)
 {
     css->loop = loop;
-    ev_io_start(css->loop, css->w_accept);
+    ev_io* w_accept = &css->w_accept;
+    ev_io_start(css->loop, w_accept);
     gdnsd_assert(css->socks_cfg->num_dns_threads);
     css->handoff_fds_count = css->socks_cfg->num_dns_threads + 2U;
     gdnsd_assert(css->handoff_fds_count <= 0xFFFFFF);
-    css->handoff_fds = xmalloc(sizeof(*css->handoff_fds) * css->handoff_fds_count);
+    css->handoff_fds = xmalloc_n(css->handoff_fds_count, sizeof(*css->handoff_fds));
     css->handoff_fds[0] = css->lock_fd;
     css->handoff_fds[1] = css->fd;
     for (unsigned i = 0; i < css->socks_cfg->num_dns_threads; i++)
@@ -806,12 +816,12 @@ void css_start(css_t* css, struct ev_loop* loop)
 bool css_notify_zone_reloaders(css_t* css, const bool failed)
 {
     // Notify log and all waiting control sock clients of success/fail
-    for (size_t i = 0; i < css->reload_zones_active->len; i++)
-        respond(css->reload_zones_active->q[i],
+    for (size_t i = 0; i < css->reload_zones_active.len; i++)
+        respond(css->reload_zones_active.q[i],
                 failed ? RESP_NAK : RESP_ACK, 0, 0, NULL, NULL);
 
     // clear out the queue of clients waiting for reload status
-    conn_queue_clear(css->reload_zones_active);
+    conn_queue_clear(&css->reload_zones_active);
 
     // Swap queues, and spawn another new update thread if more waiting clients
     // piled up during the previous reload
@@ -819,7 +829,7 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed)
 
     // If the new active queue already had waiters,
     // return true to start another reload
-    return !!css->reload_zones_active->len;
+    return !!css->reload_zones_active.len;
 }
 
 void css_delete(css_t* css)
@@ -834,17 +844,15 @@ void css_delete(css_t* css)
     gdnsd_assert(!css->num_clients);
 
     // free up the reload queues
-    conn_queue_clear(css->reload_zones_queued);
-    free(css->reload_zones_queued);
-    conn_queue_clear(css->reload_zones_active);
-    free(css->reload_zones_active);
+    conn_queue_clear(&css->reload_zones_queued);
+    conn_queue_clear(&css->reload_zones_active);
 
     if (css->handoff_fds)
         free(css->handoff_fds);
-    ev_io_stop(css->loop, css->w_accept);
-    free(css->w_accept);
-    ev_timer_stop(css->loop, css->w_takeover);
-    free(css->w_takeover);
+    ev_io* w_accept = &css->w_accept;
+    ev_io_stop(css->loop, w_accept);
+    ev_timer* w_takeover = &css->w_takeover;
+    ev_timer_stop(css->loop, w_takeover);
     close(css->fd);
     close(css->lock_fd); // Closing the lock fd implicitly clears the lock
     free(css->argv0);

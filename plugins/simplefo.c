@@ -82,7 +82,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
     if (svctypes_data) {
         num_svcs = vscf_array_get_len(svctypes_data);
         if (num_svcs) {
-            svc_names = xmalloc(sizeof(*svc_names) * num_svcs);
+            svc_names = xmalloc_n(num_svcs, sizeof(*svc_names));
             for (unsigned i = 0; i < num_svcs; i++) {
                 vscf_data_t* svctype_cfg = vscf_array_get_data(svctypes_data, i);
                 if (!vscf_is_simple(svctype_cfg))
@@ -116,7 +116,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
             log_fatal("plugin_simplefo: resource %s (%s): '%s' is not an IPv4 address", resname, stanza, addr_txt);
 
         if (num_svcs) {
-            as->indices[which] = xmalloc(sizeof(*as->indices[which]) * num_svcs);
+            as->indices[which] = xmalloc_n(num_svcs, sizeof(*as->indices[which]));
             for (unsigned j = 0; j < num_svcs; j++)
                 as->indices[which][j] = gdnsd_mon_addr(svc_names[j], &as->addrs[which]);
         }
@@ -194,7 +194,7 @@ void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_threads
     if (vscf_hash_bequeath_all(config, "service_types", true, false))
         num_resources--; // don't count parameter keys
 
-    resources = xcalloc(num_resources, sizeof(*resources));
+    resources = xcalloc_n(num_resources, sizeof(*resources));
     unsigned residx = 0;
     vscf_hash_iterate(config, true, config_res, &residx);
     gdnsd_dyn_addr_max(1, 1); // simplefo only returns one address per family

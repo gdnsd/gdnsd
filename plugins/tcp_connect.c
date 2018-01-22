@@ -52,9 +52,9 @@ typedef enum {
 typedef struct {
     const char* desc;
     tcp_svc_t* tcp_svc;
-    ev_io* connect_watcher;
-    ev_timer* timeout_watcher;
-    ev_timer* interval_watcher;
+    ev_io connect_watcher;
+    ev_timer timeout_watcher;
+    ev_timer interval_watcher;
     gdnsd_anysin_t addr;
     unsigned idx;
     tcp_state_t tcp_state;
@@ -83,9 +83,12 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
         return;
     }
 
+    ev_io* c_watcher = &md->connect_watcher;
+    ev_timer* t_watcher = &md->timeout_watcher;
+
     gdnsd_assert(md->sock == -1);
-    gdnsd_assert(!ev_is_active(md->connect_watcher));
-    gdnsd_assert(!ev_is_active(md->timeout_watcher) && !ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(!ev_is_active(c_watcher));
+    gdnsd_assert(!ev_is_active(t_watcher) && !ev_is_pending(t_watcher));
 
     log_debug("plugin_tcp_connect: Starting state poll of %s", md->desc);
 
@@ -105,10 +108,10 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
             //   wants us to wait for writability...
             md->sock = sock;
             md->tcp_state = TCP_STATE_CONNECTING;
-            ev_io_set(md->connect_watcher, sock, EV_WRITE);
-            ev_io_start(loop, md->connect_watcher);
-            ev_timer_set(md->timeout_watcher, md->tcp_svc->timeout, 0);
-            ev_timer_start(loop, md->timeout_watcher);
+            ev_io_set(c_watcher, sock, EV_WRITE);
+            ev_io_start(loop, c_watcher);
+            ev_timer_set(t_watcher, md->tcp_svc->timeout, 0);
+            ev_timer_start(loop, t_watcher);
             return; // don't do socket/status finishing actions below...
         case EPIPE:
         case ECONNREFUSED:
@@ -131,16 +134,17 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 }
 
 F_NONNULL
-static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED)
+static void mon_connect_cb(struct ev_loop* loop, struct ev_io* w, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_WRITE);
 
-    tcp_events_t* md = io->data;
+    tcp_events_t* md = w->data;
+    ev_timer* t_watcher = &md->timeout_watcher;
 
     gdnsd_assert(md);
     gdnsd_assert(md->tcp_state == TCP_STATE_CONNECTING);
-    gdnsd_assert(ev_is_active(md->connect_watcher));
-    gdnsd_assert(ev_is_active(md->timeout_watcher) || ev_is_pending(md->timeout_watcher));
+    gdnsd_assert(ev_is_active(w));
+    gdnsd_assert(ev_is_active(t_watcher) || ev_is_pending(t_watcher));
     gdnsd_assert(md->sock > -1);
 
     // nonblocking connect() just finished, need to check status
@@ -169,8 +173,8 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* io, const int rev
     shutdown(sock, SHUT_RDWR);
     close(sock);
     md->sock = -1;
-    ev_io_stop(loop, md->connect_watcher);
-    ev_timer_stop(loop, md->timeout_watcher);
+    ev_io_stop(loop, w);
+    ev_timer_stop(loop, t_watcher);
     md->tcp_state = TCP_STATE_WAITING;
     gdnsd_mon_state_updater(md->idx, success);
 }
@@ -181,14 +185,15 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
     gdnsd_assert(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
+    ev_io* c_watcher = &md->connect_watcher;
 
     gdnsd_assert(md);
     gdnsd_assert(md->sock > -1);
     gdnsd_assert(md->tcp_state == TCP_STATE_CONNECTING);
-    gdnsd_assert(ev_is_active(md->connect_watcher));
+    gdnsd_assert(ev_is_active(c_watcher));
 
     log_debug("plugin_tcp_connect: State poll of %s timed out", md->desc);
-    ev_io_stop(loop, md->connect_watcher);
+    ev_io_stop(loop, c_watcher);
     shutdown(md->sock, SHUT_RDWR);
     close(md->sock);
     md->sock = -1;
@@ -212,7 +217,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 
 void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
-    service_types = xrealloc(service_types, (num_tcp_svcs + 1) * sizeof(*service_types));
+    service_types = xrealloc_n(service_types, num_tcp_svcs + 1, sizeof(*service_types));
     tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
 
     this_svc->name = strdup(name);
@@ -229,7 +234,7 @@ void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
 
 void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
-    tcp_events_t* this_mon = xcalloc(1, sizeof(*this_mon));
+    tcp_events_t* this_mon = xcalloc(sizeof(*this_mon));
     this_mon->desc = strdup(desc);
     this_mon->idx = idx;
 
@@ -253,26 +258,26 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
     this_mon->tcp_state = TCP_STATE_WAITING;
     this_mon->sock = -1;
 
-    this_mon->connect_watcher = xmalloc(sizeof(*this_mon->connect_watcher));
-    ev_io_init(this_mon->connect_watcher, &mon_connect_cb, -1, 0);
-    this_mon->connect_watcher->data = this_mon;
+    ev_io* c_watcher = &this_mon->connect_watcher;
+    ev_io_init(c_watcher, mon_connect_cb, -1, 0);
+    c_watcher->data = this_mon;
 
-    this_mon->timeout_watcher = xmalloc(sizeof(*this_mon->timeout_watcher));
-    ev_timer_init(this_mon->timeout_watcher, &mon_timeout_cb, 0, 0);
-    this_mon->timeout_watcher->data = this_mon;
+    ev_timer* t_watcher = &this_mon->timeout_watcher;
+    ev_timer_init(t_watcher, mon_timeout_cb, 0, 0);
+    t_watcher->data = this_mon;
 
-    this_mon->interval_watcher = xmalloc(sizeof(*this_mon->interval_watcher));
-    ev_timer_init(this_mon->interval_watcher, &mon_interval_cb, 0, 0);
-    this_mon->interval_watcher->data = this_mon;
+    ev_timer* i_watcher = &this_mon->interval_watcher;
+    ev_timer_init(i_watcher, mon_interval_cb, 0, 0);
+    i_watcher->data = this_mon;
 
-    mons = xrealloc(mons, sizeof(*mons) * (num_mons + 1));
+    mons = xrealloc_n(mons, num_mons + 1, sizeof(*mons));
     mons[num_mons++] = this_mon;
 }
 
 void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
-        ev_timer* ival_watcher = mons[i]->interval_watcher;
+        ev_timer* ival_watcher = &mons[i]->interval_watcher;
         gdnsd_assert(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
@@ -286,7 +291,7 @@ void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
         gdnsd_assert(mon->sock == -1);
         const unsigned ival = mon->tcp_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
-        ev_timer* ival_watcher = mon->interval_watcher;
+        ev_timer* ival_watcher = &mon->interval_watcher;
         ev_timer_set(ival_watcher, stagger, ival);
         ev_timer_start(mon_loop, ival_watcher);
     }
