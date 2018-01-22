@@ -598,8 +598,6 @@ gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg)
 {
     gdnsd_assert(vscf_is_hash(maps_cfg));
 
-    gdgeoip2_init();
-
     gdmaps_t* gdmaps = xcalloc(sizeof(*gdmaps));
 
     unsigned num_maps = vscf_hash_get_len(maps_cfg);

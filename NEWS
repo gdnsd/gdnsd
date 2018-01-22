@@ -7,6 +7,7 @@
       probably form the basis of a future 4.x branch.
     ---- General build/daemon/functionality/configuration changes ----
     * Build now requires autoconf 2.64+, automake 1.13+, and liburcu
+    * GeoIP2 support now requires libmaxminddb 1.2.0 or higher
     * Lots of source/runtime -level backwards compatibility cruft was removed,
       some of which may be added back if serviceable/popular platforms continue
       to need it, at user request.

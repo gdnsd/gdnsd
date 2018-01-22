@@ -41,13 +41,6 @@
 
 #include <maxminddb.h>
 
-#ifndef MMDB_GTE_120
-// libmaxminddb broke assumptions for code which manual recurses the data with
-// the bump from 1.1.4 to 1.1.5.  We use newer/better interfaces for 1.2.0, so
-// this flag is only for 1.1.x where x > 4.
-static bool libmmdb_gt_114 = false;
-#endif
-
 typedef struct {
     unsigned offset;
     uint32_t dclist;
@@ -324,20 +317,6 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry)
         .out_of_data = false,
     };
 
-#ifndef MMDB_GTE_120
-    // In GeoIP2 <1.2.0, an offset of zero (before the modification below)
-    // means not found in the DB, so default it.
-    if (!db_entry->offset)
-        return 0;
-
-    // for 1.1.5+ (but not 1.2.0+), we must subtract
-    // MMDB_DATA_SECTION_SEPARATOR (which maxminddb.c internally defines as
-    // the value 16) from the offset before calling functions like
-    // MMDB_aget_value()
-    if (libmmdb_gt_114)
-        state.entry->offset -= 16;
-#endif
-
     uint32_t dclist = DCLIST_AUTO;
 
     if (db->dcmap) {
@@ -422,8 +401,6 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
     const unsigned new_depth = depth - 1U;
     const unsigned mask = 128U - new_depth;
 
-#ifdef MMDB_GTE_120
-
     switch (node.left_record_type) {
     case MMDB_RECORD_TYPE_SEARCH_NODE:
         geoip2_list_xlate_recurse(db, nl, ip, new_depth, node.left_record);
@@ -457,29 +434,6 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
         log_err("plugin_geoip: map %s: GeoIP2 data invalid right of node %u", db->map_name, node_num);
         siglongjmp(db->jbuf, 1);
     }
-
-#else // mmdb < 1.2.0
-
-    const uint32_t node_count = db->mmdb.metadata.node_count;
-
-    const uint32_t zero_node_num = node.left_record;
-    if (zero_node_num >= node_count) {
-        MMDB_entry_s e = { .mmdb = &db->mmdb, .offset = zero_node_num - node_count };
-        nlist_append(nl, ip.s6_addr, mask, geoip2_get_dclist_cached(db, &e));
-    } else {
-        geoip2_list_xlate_recurse(db, nl, ip, new_depth, zero_node_num);
-    }
-
-    SETBIT_v6(ip.s6_addr, mask - 1U);
-
-    const uint32_t one_node_num = node.right_record;
-    if (one_node_num >= node_count) {
-        MMDB_entry_s e = { .mmdb = &db->mmdb, .offset = one_node_num - node_count };
-        nlist_append(nl, ip.s6_addr, mask, geoip2_get_dclist_cached(db, &e));
-    } else {
-        geoip2_list_xlate_recurse(db, nl, ip, new_depth, one_node_num);
-    }
-#endif
 }
 
 F_NONNULL
@@ -521,24 +475,6 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
     return nl;
 }
 
-void gdgeoip2_init(void)
-{
-    unsigned x, y, z;
-    if (sscanf(MMDB_lib_version(), "%3u.%3u.%3u", &x, &y, &z) == 3) {
-#ifdef MMDB_GTE_120
-        if (x < 1 || (x == 1 && y < 2))
-            log_fatal("plugin_geoip: compiled against libmaxminddb >= 1.2.0, but runtime reports version %u.%u.%u", x, y, z);
-#else
-        if (x > 1 || (x == 1 && y > 1))
-            log_fatal("plugin_geoip: compiled against libmaxminddb <1.2.0, but runtime reports version %u.%u.%u", x, y, z);
-        if (x == 1 && y == 1 && z > 4)
-            libmmdb_gt_114 = true;
-#endif
-    } else {
-        log_fatal("plugin_geoip: Cannot determine runtime version of libmaxminddb");
-    }
-}
-
 #else // HAVE_GEOIP2
 
 nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists V_UNUSED, const dcmap_t* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED, const bool city_no_region V_UNUSED)
@@ -549,7 +485,5 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
     log_fatal("plugin_geoip: map '%s': GeoIP2 support needed by '%s' not included in this build!", map_name, pathname);
     return NULL; // unreachable
 }
-
-void gdgeoip2_init(void) { }
 
 #endif
