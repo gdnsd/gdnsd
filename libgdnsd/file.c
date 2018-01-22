@@ -33,46 +33,15 @@
 #include <fcntl.h>
 
 struct gdnsd_fmap_s_ {
-    char* fn;
-    int fd;
     void* buf;
     size_t len;
 };
 
-// We prefer F_OFD_SETLK because it may save us in some strange corner cases
-//   where e.g. a library used by gdnsd or a plugin locks/unlocks the same
-//   pathname that an explicit user of this interface held a lock on, because
-//   with traditional F_SETLK the library's independent lock release will also
-//   release the lock we set here :/
-// However, we're not relying on the distinctions about fork() inheritance.  We
-//   do fork while these are open, but in all such cases it's to quickly exit
-//   and/or exec, and everything's O_CLOEXEC.  Therefore, regular F_SETLK is
-//   acceptable on systems that lack F_OFD_SETLK.
-#ifndef F_OFD_SETLK
-#define F_OFD_SETLK F_SETLK
-#endif
-
 gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
-    int fd = open(fn, O_RDONLY | O_CLOEXEC);
-
+    const int fd = open(fn, O_RDONLY | O_CLOEXEC);
     if(fd < 0) {
         log_err("Cannot open '%s' for reading: %s", fn, logf_errno());
         return NULL;
-    }
-
-    struct flock locker;
-    memset(&locker, 0, sizeof(struct flock));
-    locker.l_type = F_RDLCK;
-    locker.l_whence = SEEK_SET;
-    if(fcntl(fd, F_OFD_SETLK, &locker)) {
-        // try fallback to F_SETLK on EINVAL, in case binary was built with
-        // F_OFD_SETLK support, but runtime kernel doesn't have it.
-        if(errno != EINVAL
-            || (F_OFD_SETLK != F_SETLK && fcntl(fd, F_SETLK, &locker))) {
-                log_err("Cannot get readlock on '%s': %s", fn, logf_errno());
-                close(fd);
-                return NULL;
-        }
     }
 
     struct stat st;
@@ -111,14 +80,13 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
         //   don't want callers to have to care about cases where this call
         //   was successful but the buffer pointer is NULL due to len == 0,
         //   so allocate a 1-byte buffer containing a NUL for these cases.
-        close(fd);
-        fd = -1; // signals this mode of operation for fmap_delete()
         mapbuf = xcalloc(1, 1);
     }
 
+    if (close(fd))
+        log_err("Cannot close '%s', continuing anyways: %s", fn, logf_errno());
+
     gdnsd_fmap_t* fmap = xmalloc(sizeof(*fmap));
-    fmap->fn = strdup(fn);
-    fmap->fd = fd;
     fmap->buf = mapbuf;
     fmap->len = len;
 
@@ -139,21 +107,15 @@ bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap) {
     gdnsd_assert(fmap->buf);
 
     bool rv = false; // true == error
-    if(fmap->fd >= 0) {
-        gdnsd_assert(fmap->len);
-        if(munmap(fmap->buf, fmap->len) || close(fmap->fd)) {
-            log_err("Cannot munmap()/close() '%s': %s",
-                fmap->fn, logf_errno());
+    if (fmap->len) {
+        if (munmap(fmap->buf, fmap->len)) {
+            log_err("Cannot munmap() %p: %s", fmap->buf, logf_errno());
             rv = true;
         }
-    }
-    else {
-        gdnsd_assert(!fmap->len);
+    } else {
         free(fmap->buf);
     }
 
-    free(fmap->fn);
     free(fmap);
-
     return rv;
 }
