@@ -97,7 +97,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     if(len) {
         mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
         if(mapbuf == MAP_FAILED) {
-            dmn_log_err("Cannot mmap '%s': %s\n", fn, dmn_logf_errno());
+            dmn_log_err("Cannot mmap '%s': %s", fn, logf_errno());
             close(fd);
             // cppcheck-suppress memleak (MAP_FAILED is not a leak :P)
             return NULL;
@@ -146,7 +146,7 @@ bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap) {
     if(fmap->fd >= 0) {
         dmn_assert(fmap->len);
         if(munmap(fmap->buf, fmap->len) || close(fmap->fd)) {
-            dmn_log_err("Cannot munmap()/close() '%s': %s\n",
+            dmn_log_err("Cannot munmap()/close() '%s': %s",
                 fmap->fn, dmn_logf_errno());
             rv = true;
         }
