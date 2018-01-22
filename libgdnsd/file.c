@@ -95,7 +95,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq) {
     if(len) {
         mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
         if(mapbuf == MAP_FAILED) {
-            dmn_log_err("Cannot mmap '%s': %s", fn, logf_errno());
+            dmn_log_err("Cannot mmap '%s': %s", fn, dmn_logf_errno());
             close(fd);
             // cppcheck-suppress memleak (MAP_FAILED is not a leak :P)
             return NULL;
