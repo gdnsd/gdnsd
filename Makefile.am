@@ -155,7 +155,7 @@ src_gdnsd_LDADD = src/libcsc.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 nodist_src_gdnsd_SOURCES = src/zscan_rfc1035.c
 src/zscan_rfc1035.c: src/zscan_rfc1035.rl
-	$(AM_V_GEN)$(RAGEL) -G2 -o $@ $(srcdir)/src/zscan_rfc1035.rl
+	$(AM_V_GEN)ragel -G2 -o $@ $(srcdir)/src/zscan_rfc1035.rl
 CLEANFILES += src/zscan_rfc1035.c
 EXTRA_DIST += src/zscan_rfc1035.rl
 
@@ -232,7 +232,7 @@ plugins_plugin_metafo_la_LDFLAGS  = -avoid-version -module
 #=====================================
 
 noinst_LTLIBRARIES += libgdmaps/libgdmaps.la
-libgdmaps_libgdmaps_la_LIBADD = $(MATH_LIB) $(GEOIP2_LIBS)
+libgdmaps_libgdmaps_la_LIBADD = -lm $(GEOIP2_LIBS)
 libgdmaps_libgdmaps_la_SOURCES = \
 	include/gdmaps.h \
 	libgdmaps/gdmaps.c \
@@ -316,7 +316,7 @@ libgdnsd_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_INST)
 
 nodist_libgdnsd_libgdnsd_la_SOURCES = libgdnsd/vscf.c
 libgdnsd/vscf.c: libgdnsd/vscf.rl
-	$(AM_V_GEN)$(RAGEL) -T0 -o $@ $(srcdir)/libgdnsd/vscf.rl
+	$(AM_V_GEN)ragel -T0 -o $@ $(srcdir)/libgdnsd/vscf.rl
 CLEANFILES += libgdnsd/vscf.c
 EXTRA_DIST += libgdnsd/vscf.rl
 

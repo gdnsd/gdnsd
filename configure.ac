@@ -169,15 +169,6 @@ m4_include([libgdnsd/libgdnsd.m4])
 # include libgdmaps configure stuff
 m4_include([libgdmaps/libgdmaps.m4])
 
-# explicit check on math lib.  libev also does this, but
-#  might not in the future, and we need it directly
-XLIBS=$LIBS
-LIBS=""
-AC_CHECK_LIB(m,atan2)
-MATH_LIB=$LIBS
-LIBS=$XLIBS
-AC_SUBST([MATH_LIB])
-
 # posix_madvise to readahead on zonefiles
 AC_CHECK_FUNCS([posix_madvise])
 
@@ -191,19 +182,6 @@ fi
 
 # Network Stuff
 AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion and higher to use RFC3542 IPv6 stuff])
-
-# liburcu-qsbr
-
-QSBRLIBS=
-AC_CHECK_HEADER(urcu-qsbr.h,,AC_MSG_ERROR([urcu-qsbr.h header not found]))
-XLIBS=$LIBS
-LIBS=""
-AC_CHECK_LIB([urcu-qsbr],[perror],[
-    QSBRLIBS="-lurcu-qsbr"
-],AC_MSG_ERROR([liburcu-qsbr not found]))
-LIBS=$XLIBS
-
-AC_SUBST([QSBRLIBS])
 
 # systemd unit dir for "make install" of gdnsd.service
 PKG_CHECK_VAR([SYSD_UNITDIR], [systemd], [systemdsystemunitdir])
@@ -222,23 +200,6 @@ else
 fi
 AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 AM_CONDITIONAL(DO_SYSD_UNITFILE, [test -n "$with_systemdsystemunitdir"])
-
-# libev (which shouldn't use pkg-config anyways, but has
-#   to on Fedora because they munge the header path the author intended...)
-PKG_CHECK_MODULES([LIBEV],[libev >= 4.0],
-    CPPFLAGS="${CPPFLAGS} ${LIBEV_CFLAGS}"
-,
-    # try manually...
-    XLIBS=$LIBS
-    LIBS=""
-    AC_CHECK_LIB([ev],[ev_break],,AC_MSG_ERROR([libev 4.x library not found!]))
-    AC_CHECK_DECLS([EVBREAK_ALL],,AC_MSG_ERROR([libev 4.x headers not found!]),[
-        #include <ev.h>
-    ])
-    LIBEV_LIBS=$LIBS
-    LIBS=$XLIBS
-)
-AC_SUBST([LIBEV_LIBS])
 
 #---------------------------------------------
 # pthread setname (4 non-portable variants...)
@@ -334,18 +295,6 @@ AX_PROG_PERL_MODULES(
 )
 AC_SUBST([HAVE_TESTSUITE_MODULES])
 
-# Find ragel
-AC_ARG_VAR([RAGEL],[path to ragel version 6.x])
-if test "x$ac_cv_env_RAGEL_set" != "xset"; then
-    AC_PATH_PROG([RAGEL],[ragel],[missing])
-fi
-if test "x$RAGEL" = xmissing; then
-    AC_MSG_ERROR([Ragel not found])
-else
-    $RAGEL --version|$EGREP 'Ragel State Machine Compiler version 6\.' >/dev/null \
-        || AC_MSG_ERROR([Ragel is not version 6.x])
-fi
-
 # Discover CPUs for testsuite parallelism, allowing user to override via env var.
 # I'd much rather either:
 #  (a) steal the user-supplied -jN argument from make inside of Makefile.am,
@@ -409,7 +358,7 @@ AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
 # clump up all of the libgdnsd libdeps for re-use in LDADD for
 #   binaries that link libgdnsd on platforms where libtool's
 #   automatic dep resolution is disabled
-LIBGDNSD_LIBS="$MATH_LIB $QSBRLIBS $LIBEV_LIBS $LIBADD_DLOPEN $LIBUNWIND_LIBS"
+LIBGDNSD_LIBS="-lm -lurcu-qsbr -lev $LIBADD_DLOPEN $LIBUNWIND_LIBS"
 AC_SUBST([LIBGDNSD_LIBS])
 
 # BUILD_FEATURES for cmdline output
