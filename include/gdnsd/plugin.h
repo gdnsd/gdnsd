@@ -34,7 +34,6 @@
 #include <gdnsd/plugapi.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/paths.h>
-#include <gdnsd/prcu.h>
 #include <gdnsd/stats.h>
 
 #ifndef GDNSD_PLUGIN_NAME
@@ -66,8 +65,8 @@
 #pragma GCC visibility push(default)
 
 F_CONST
-uint32_t SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
-uint32_t SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void)
+unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void);
+unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void)
 {
     return GDNSD_PLUGIN_API_VERSION;
 }

@@ -28,15 +28,6 @@
 
 #include <ev.h>
 
-// The bopts header is sort of like a "config.h" for plugin binary compat
-// It defines only features that affect binary compatibility between plugins
-// and the core code, so that plugins can be rejected as needing a recompile
-// if they were built against a compatible gdnsd version but with incompatible
-// build options.
-#ifndef GDNSD_SOURCE_TREE
-#include <gdnsd/bopts.h>
-#endif
-
 /***
  * Plugin API version, bumped on any change that's not backwards-compat.
  * This is hardcoded as the return value of plugin_foo_get_api_version()
@@ -47,12 +38,7 @@
  *   because libgdnsd is missing symbols it wants to link against that
  *   were dropped in the new API.  This is just to protect other cases).
  ***/
-
-// We have room for 16 option bits here coming from bopts.h/config.h
-#define API_B_OPT_QSBR_ ((GDNSD_B_QSBR ? 1 : 0) << 0)
-#define API_B_OPTS_ (API_B_OPT_QSBR_)
-#define API_ACTUAL_VERSION_ 17
-#define GDNSD_PLUGIN_API_VERSION (((API_B_OPTS_) << 16) | (API_ACTUAL_VERSION_))
+#define GDNSD_PLUGIN_API_VERSION 18
 
 #pragma GCC visibility push(default)
 

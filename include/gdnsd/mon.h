@@ -22,9 +22,10 @@
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/net.h>
-#include <gdnsd/prcu.h>
 
 #include <inttypes.h>
+
+#include <urcu-qsbr.h>
 
 // gdnsd_sttl_t
 //  sttl -> state+ttl
@@ -104,7 +105,7 @@ extern gdnsd_sttl_t* smgr_sttl_consumer_;
 F_UNUSED
 static const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void)
 {
-    return gdnsd_prcu_rdr_deref(smgr_sttl_consumer_);
+    return rcu_dereference(smgr_sttl_consumer_);
 }
 
 // Given two sttl values, combine them according to the following rules:

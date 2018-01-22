@@ -27,7 +27,6 @@
 
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/prcu.h>
 
 #include <netdb.h>
 #include <unistd.h>
@@ -44,6 +43,8 @@
 #include <sys/time.h>
 #include <time.h>
 #include <signal.h>
+
+#include <urcu-qsbr.h>
 
 #ifndef SOL_IPV6
 #define SOL_IPV6 IPPROTO_IPV6
@@ -367,15 +368,10 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
     msg_hdr.msg_control    = use_cmsg ? cmsg_buf : NULL;
 
     const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
-#if GDNSD_B_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
     bool is_online = true;
-#else
-    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long)))
-        log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
-#endif
 
     while (1) {
         if (unlikely(thread_shutdown))
@@ -388,15 +384,14 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 
         ssize_t recvmsg_rv;
 
-#if GDNSD_B_QSBR
         if (likely(is_online)) {
-            gdnsd_prcu_rdr_quiesce();
+            rcu_quiescent_state();
             recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
             if (unlikely(recvmsg_rv < 0)) {
                 if (errno == EINTR)
                     continue;
                 if (ERRNO_WOULDBLOCK) {
-                    gdnsd_prcu_rdr_offline();
+                    rcu_thread_offline();
                     is_online = false;
                     (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long));
                     continue;
@@ -408,13 +403,8 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
                 continue;
             (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
-            gdnsd_prcu_rdr_online();
+            rcu_thread_online();
         }
-#else
-        recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-        if (unlikely(recvmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
-            continue;
-#endif
 
         if (unlikely(
                     (asin.sa.sa_family == AF_INET && !asin.sin.sin_port)
@@ -472,15 +462,10 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
         iov[i][0].iov_base = buf[i] = &bufs[i * max_rounded];
 
     const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
-#if GDNSD_B_QSBR
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
     bool is_online = true;
-#else
-    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long)))
-        log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
-#endif
 
     while (1) {
         if (unlikely(thread_shutdown))
@@ -501,15 +486,14 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
 
         int mmsg_rv;
 
-#if GDNSD_B_QSBR
         if (likely(is_online)) {
-            gdnsd_prcu_rdr_quiesce();
+            rcu_quiescent_state();
             mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
             if (unlikely(mmsg_rv < 0)) {
                 if (errno == EINTR)
                     continue;
                 if (ERRNO_WOULDBLOCK) {
-                    gdnsd_prcu_rdr_offline();
+                    rcu_thread_offline();
                     is_online = false;
                     (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long));
                     continue;
@@ -521,13 +505,8 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
                 continue;
             (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
             is_online = true;
-            gdnsd_prcu_rdr_online();
+            rcu_thread_online();
         }
-#else
-        mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
-        if (unlikely(mmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
-            continue;
-#endif
 
         gdnsd_assert(mmsg_rv != 0);
         if (unlikely(mmsg_rv < 0)) {
@@ -633,7 +612,7 @@ void* dnsio_udp_start(void* thread_asvoid)
 
     const bool need_cmsg = needs_cmsg(&addrconf->addr);
 
-    gdnsd_prcu_rdr_thread_start();
+    rcu_register_thread();
 
 #ifdef USE_MMSG
     if (use_mmsg && addrconf->udp_recv_width > 1) {
@@ -646,7 +625,7 @@ void* dnsio_udp_start(void* thread_asvoid)
         mainloop(t->sock, dnsp_ctx, stats, need_cmsg);
     }
 
-    gdnsd_prcu_rdr_thread_end();
+    rcu_unregister_thread();
 #ifndef NDEBUG
     dnspacket_ctx_debug_cleanup(dnsp_ctx);
 #endif

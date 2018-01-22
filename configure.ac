@@ -83,7 +83,6 @@ fi
 
 # These are only for urcu header stuff currently
 AC_DEFINE([_LGPL_SOURCE], 1, [LGPL-compatible source])
-AC_DEFINE([GDNSD_SOURCE_TREE], 1, [Identifies local source vs 3rd party])
 
 harden=1
 AC_ARG_WITH([hardening],[AS_HELP_STRING([--without-hardening],
@@ -194,29 +193,16 @@ fi
 AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion and higher to use RFC3542 IPv6 stuff])
 
 # liburcu-qsbr
-KILL_QSBR=0
-AC_ARG_WITH([urcu],[AS_HELP_STRING([--without-urcu],
-    [Explicitly disable userspace-rcu detection])],[
-    if test "x$withval" = xno; then
-        KILL_QSBR=1
-    fi
-])
 
-GDNSD_B_QSBR=0
 QSBRLIBS=
-if test $KILL_QSBR -eq 0; then
-    AC_CHECK_HEADER(urcu-qsbr.h,[
-        XLIBS=$LIBS
-        LIBS=""
-        AC_CHECK_LIB([urcu-qsbr],[perror],[
-            GDNSD_B_QSBR=1
-            QSBRLIBS="-lurcu-qsbr"
-        ])
-        LIBS=$XLIBS
-    ])
-fi
-AC_DEFINE_UNQUOTED([GDNSD_B_QSBR], [$GDNSD_B_QSBR], [Use liburcu-qsbr])
-AC_SUBST([GDNSD_B_QSBR])
+AC_CHECK_HEADER(urcu-qsbr.h,,AC_MSG_ERROR([urcu-qsbr.h header not found]))
+XLIBS=$LIBS
+LIBS=""
+AC_CHECK_LIB([urcu-qsbr],[perror],[
+    QSBRLIBS="-lurcu-qsbr"
+],AC_MSG_ERROR([liburcu-qsbr not found]))
+LIBS=$XLIBS
+
 AC_SUBST([QSBRLIBS])
 
 # systemd unit dir for "make install" of gdnsd.service
@@ -432,7 +418,6 @@ if test "x$developer" != xno;    then B_FEAT="dev";             fi
 if test "x$HAS_SENDMMSG" = x1;   then B_FEAT="$B_FEAT mmsg";    fi
 if test "x$HAVE_LIBUNWIND" = x1; then B_FEAT="$B_FEAT unwind";  fi
 if test "x$HAVE_GEOIP2" = x1;    then B_FEAT="$B_FEAT geoip2";  fi
-if test "x$GDNSD_B_QSBR" = x1;   then B_FEAT="$B_FEAT urcu";    fi
 AC_DEFINE_UNQUOTED([BUILD_FEATURES], ["$B_FEAT"], [Build Features])
 
 # BUILD_INFO for cmdline output

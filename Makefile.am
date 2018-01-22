@@ -277,8 +277,7 @@ xHEADERS_INST = \
 	include/gdnsd/misc.h \
 	include/gdnsd/paths.h \
 	include/gdnsd/file.h \
-	include/gdnsd/alloc.h \
-	include/gdnsd/prcu.h
+	include/gdnsd/alloc.h
 
 # include/gdnsd-prot/foo.h define shlib interfaces private to libgdnsd + gdnsd
 # libgdnsd/foo.h define non-shlib interfaces private to libgdnsd only
@@ -291,7 +290,6 @@ xHEADERS_ALL = \
 
 libgdnsd_libgdnsd_la_SOURCES = \
 	$(xHEADERS_ALL) \
-	libgdnsd/prcu.c \
 	libgdnsd/dname.c \
 	libgdnsd/net.c \
 	libgdnsd/log.c \
@@ -316,21 +314,10 @@ libgdnsd_libgdnsd_la_LIBADD  = $(LIBGDNSD_LIBS)
 libgdnsd_libgdnsd_la_pkgincludedir = $(pkgincludedir)
 libgdnsd_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_INST)
 
-# This header is also installed for external consumption.  It replaces any
-# necessary defines that would have come from config.h in-tree, and should be
-# used sparingly for binary compat issues.  It is not included in any in-tree
-# sources.
-nodist_libgdnsd_libgdnsd_la_pkginclude_HEADERS = libgdnsd/bopts.h
-libgdnsd/bopts.h: Makefile
-	$(AM_V_GEN)echo '#ifndef GDNSD_BOPTS_H' >$@; \
-	echo '#define GDNSD_BOPTS_H' >>$@; \
-	echo '#define GDNSD_B_QSBR $(GDNSD_B_QSBR)' >>$@; \
-	echo '#endif // GDNSD_BOPTS_H' >>$@
-
 nodist_libgdnsd_libgdnsd_la_SOURCES = libgdnsd/vscf.c
 libgdnsd/vscf.c: libgdnsd/vscf.rl
 	$(AM_V_GEN)$(RAGEL) -T0 -o $@ $(srcdir)/libgdnsd/vscf.rl
-CLEANFILES += libgdnsd/vscf.c libgdnsd/bopts.h
+CLEANFILES += libgdnsd/vscf.c
 EXTRA_DIST += libgdnsd/vscf.rl
 
 #=====================================

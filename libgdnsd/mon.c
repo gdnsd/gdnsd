@@ -28,7 +28,6 @@
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/plugapi.h>
-#include <gdnsd/prcu.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
 
@@ -37,6 +36,7 @@
 #include <fnmatch.h>
 
 #include <ev.h>
+#include <urcu-qsbr.h>
 
 typedef struct {
     const char* name;
@@ -76,10 +76,10 @@ static smgr_t* smgrs = NULL;
 
 // There are two copies of the sttl table.
 // The "consumer" copy is always ready for consumption
-//   (via prcu deref) by other threads, and does not
+//   (via rcu deref) by other threads, and does not
 //   get mutated directly.  The updates flow into
 //   the non-consumer table and the tables are later
-//   prcu swapped (with the old copy updated to new values)
+//   rcu swapped (with the old copy updated to new values)
 // There are only ever the two chunks of memory that are
 //   first allocated for these, they just get swapped around
 //   and copied over each other.
@@ -106,11 +106,10 @@ static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSE
     gdnsd_assert(w == &sttl_update_timer);
     gdnsd_assert(revents == EV_TIMER);
 
-    // prcu-swap of the two tables
+    // rcu-swap of the two tables
     gdnsd_sttl_t* saved_old_consumer = smgr_sttl_consumer_;
-    gdnsd_prcu_upd_lock();
-    gdnsd_prcu_upd_assign(smgr_sttl_consumer_, smgr_sttl);
-    gdnsd_prcu_upd_unlock();
+    rcu_assign_pointer(smgr_sttl_consumer_, smgr_sttl);
+    synchronize_rcu();
     smgr_sttl = saved_old_consumer;
 
     // now copy the (new) consumer table back over the old one
@@ -444,7 +443,7 @@ void gdnsd_mon_start(struct ev_loop* mloop)
     ev_timer* sut = &sttl_update_timer;
     ev_timer_init(sut, sttl_table_update, 1.0, 0.0);
 
-    // trigger it once manually to invoke prcu stuff
+    // trigger it once manually to invoke rcu stuff
     //   for the initial round results to ensure there's
     //   no confusion.
     sttl_table_update(mloop, sut, EV_TIMER);

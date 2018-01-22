@@ -29,12 +29,13 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/prcu.h>
 
 #include <string.h>
 #include <stddef.h>
 #include <pthread.h>
 #include <time.h>
+
+#include <urcu-qsbr.h>
 
 typedef struct {
     const uint8_t* original; // Alias to the original uncompressed dname's data (not the len byte)
@@ -1831,7 +1832,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const 
     ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth;
 
-    gdnsd_prcu_rdr_lock();
+    rcu_read_lock();
 
     zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
 
@@ -1929,7 +1930,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const 
         }
     }
 
-    gdnsd_prcu_rdr_unlock();
+    rcu_read_unlock();
 
     return offset;
 }

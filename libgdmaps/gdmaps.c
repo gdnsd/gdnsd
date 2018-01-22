@@ -37,7 +37,6 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/prcu.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -52,6 +51,7 @@
 #include <pthread.h>
 
 #include <ev.h>
+#include <urcu-qsbr.h>
 
 // When an input file change is detected, we wait this long
 //  for a followup change notification before processing.  Every time we get
@@ -206,10 +206,9 @@ static void gdmap_tree_update(gdmap_t* gdmap)
     ntree_t* old_tree = gdmap->tree;
     dclists_t* old_lists = gdmap->dclists;
 
-    gdnsd_prcu_upd_lock();
-    gdnsd_prcu_upd_assign(gdmap->dclists, gdmap->dclists_pend);
-    gdnsd_prcu_upd_assign(gdmap->tree, merged);
-    gdnsd_prcu_upd_unlock();
+    rcu_assign_pointer(gdmap->dclists, gdmap->dclists_pend);
+    rcu_assign_pointer(gdmap->tree, merged);
+    synchronize_rcu();
 
     gdmap->dclists_pend = NULL;
     if (old_tree)
@@ -555,18 +554,18 @@ static const char* gdmap_get_name(const gdmap_t* gdmap)
 F_NONNULL
 static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, unsigned* scope_mask)
 {
-    // gdnsd_prcu_rdr_online() + gdnsd_prcu_rdr_lock()
+    // rcu_thread_online() + rcu_read_lock()
     //   is handled by the iothread and dns lookup code
     //   in the main daemon, in a far outer scope from
     //   this code in runtime terms.
 
     const unsigned dclist_u = ntree_lookup(
-                                  gdnsd_prcu_rdr_deref(gdmap->tree),
+                                  rcu_dereference(gdmap->tree),
                                   client,
                                   scope_mask
                               );
     const uint8_t* dclist_u8 = dclists_get_list(
-                                   gdnsd_prcu_rdr_deref(gdmap->dclists),
+                                   rcu_dereference(gdmap->dclists),
                                    dclist_u
                                );
 

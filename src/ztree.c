@@ -28,9 +28,10 @@
 #include <gdnsd/dname.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/prcu.h>
 
 #include <stdlib.h>
+
+#include <urcu-qsbr.h>
 
 typedef struct {
     ztree_t** store;
@@ -125,7 +126,7 @@ zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out)
 
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(dname, lstack);
-    ztree_t* current = gdnsd_prcu_rdr_deref(ztree_root);
+    ztree_t* current = rcu_dereference(ztree_root);
     while (current && !(rv = current->zone) && lcount)
         current = ztree_node_find_child(current, lstack[--lcount]);
 
@@ -280,9 +281,8 @@ void* ztree_zones_reloader_thread(void* init_asvoid)
         rv = 1;
     } else {
         ztree_t* old_ztree = ztree_root;
-        gdnsd_prcu_upd_lock();
-        gdnsd_prcu_upd_assign(ztree_root, new_ztree);
-        gdnsd_prcu_upd_unlock();
+        rcu_assign_pointer(ztree_root, new_ztree);
+        synchronize_rcu();
         if (old_ztree)
             ztree_destroy(old_ztree);
     }

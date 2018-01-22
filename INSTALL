@@ -12,11 +12,11 @@ If your starting point is a tarball, the following prerequisites apply:
 * Ragel 6.x: http://www.complang.org/ragel/ (or distro package)
 * Perl 5.10.1 or higher and the perl "pod2man" command for document
   generation (this may be in the package perl-podlaters)
+* liburcu aka userspace-rcu headers and libraries. Use distro pkg or
+  http://lttng.org/urcu/
 
 The following are recommended but optional:
 
-* liburcu aka userspace-rcu headers and libraries. Use distro pkg or
-  http://lttng.org/urcu/ (important for performance!)
 * libmaxminddb headers and libraries to enable MaxMind GeoIP2 database
   support: https://github.com/maxmind/libmaxminddb/releases
   Preferably version 1.2.0 or higher!

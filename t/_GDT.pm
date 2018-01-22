@@ -576,7 +576,7 @@ sub test_log_output {
     }
 
     # do a final delay under valgrind, because technically it's often
-    #   the case that we still have a prcu swap to do after the log
+    #   the case that we still have a rcu swap to do after the log
     #   message is emitted, before test results are reliable...
     if($TEST_RUNNER) {
         select(undef, undef, undef, $retry_delay);
