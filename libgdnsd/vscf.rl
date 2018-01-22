@@ -222,7 +222,7 @@ static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v)
         scnr->cur_klen = 0;
     }
     else {
-        parse_error("Duplicate hash key '%s'\n", scnr->cur_key);
+        parse_error("Duplicate hash key '%s'", scnr->cur_key);
     }
     return rv;
 }
