@@ -1,6 +1,6 @@
 SUBDIRS = libtap libgdmaps
 
-EXTRA_DIST = README-NETDNS _GDT.pm _FakeGeoIP.pm Net $(srcdir)/[0-9]*/* $(srcdir)/[0-9]*/*/*
+EXTRA_DIST = README-NETDNS _GDT.pm Net $(srcdir)/[0-9]*/* $(srcdir)/[0-9]*/*/*
 TESTOUT_DIR = $(abs_builddir)/testout
 ALLTESTS = $(srcdir)/[0-9]*/*.t
 

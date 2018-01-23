@@ -23,7 +23,6 @@
 #include "dcmap.h"
 
 #include "dclists.h"
-#include "gdgeoip.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -48,7 +47,6 @@ struct _dcmap {
     dcmap_child_t* children;
     unsigned def_dclist; // copied from parent if not specced in cfg, required at root
     unsigned num_children;
-    bool skip_level; // at this level of dcmap, skip ahead one chunk of locstr...
 };
 
 typedef struct {
@@ -65,16 +63,10 @@ static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t
 {
     dcmap_iter_data* did = data;
 
-    unsigned true_depth = did->true_depth + (did->dcmap->skip_level ? 1 : 0);
-    if (true_depth == 0)
-        validate_continent_code(key, did->map_name);
-    else if (true_depth == 1)
-        validate_country_code(key, did->map_name);
-
     dcmap_child_t* child = &did->dcmap->children[did->child_num];
     child->name = strdup(key);
     if (vscf_is_hash(val))
-        child->dcmap = dcmap_new(val, did->dclists, did->dcmap->def_dclist, true_depth + 1, did->map_name, did->allow_auto);
+        child->dcmap = dcmap_new(val, did->dclists, did->dcmap->def_dclist, did->true_depth + 1, did->map_name, did->allow_auto);
     else
         child->dclist = dclists_find_or_add_vscf(did->dclists, val, did->map_name, did->allow_auto);
 
@@ -114,13 +106,6 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
         }
     }
 
-    vscf_data_t* skip_cfg = vscf_hash_get_data_byconstkey(map_cfg, "skip_level", true);
-    if (skip_cfg) {
-        if (!vscf_is_simple(skip_cfg) || !vscf_simple_get_as_bool(skip_cfg, &dcmap->skip_level))
-            log_fatal("plugin_geoip: map '%s': 'skip_level' must be a boolean value ('true' or 'false')", map_name);
-        nchild--; // don't iterate "skip_level" later
-    }
-
     if (nchild) {
         dcmap->num_children = nchild;
         dcmap->children = xcalloc_n(nchild, sizeof(*dcmap->children));
@@ -138,25 +123,6 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
     return dcmap;
 }
 
-uint32_t dcmap_lookup_loc(const dcmap_t* dcmap, const char* locstr)
-{
-    if (*locstr && dcmap->skip_level)
-        locstr += strlen(locstr) + 1;
-
-    if (*locstr) {
-        for (unsigned i = 0; i < dcmap->num_children; i++) {
-            dcmap_child_t* child = &dcmap->children[i];
-            if (!strcasecmp(locstr, child->name)) {
-                if (child->dcmap)
-                    return dcmap_lookup_loc(child->dcmap, locstr + strlen(locstr) + 1);
-                return child->dclist;
-            }
-        }
-    }
-
-    return dcmap->def_dclist;
-}
-
 // as above, but supports abitrary levels of nesting in the map without regard
 //   to any named hierarchy, and without prefetching levels from the lookup source
 //   unless the map actually wants to see them.
@@ -165,10 +131,6 @@ static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* dat
     // map empty within this level, e.g. "US => {}" or "US => { default => [...] }"
     if (!dcmap->num_children)
         return dcmap->def_dclist;
-
-    // if skip_level, throw away one level of result from callback
-    if (dcmap->skip_level)
-        cb(data, NULL, level++);
 
     // This will potentially execute multiple callbacks to search several
     //   levels deep in the network record for a match, but only once we've

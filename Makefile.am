@@ -248,12 +248,8 @@ libgdmaps_libgdmaps_la_SOURCES = \
 	libgdmaps/ntree.h \
 	libgdmaps/nets.c \
 	libgdmaps/nets.h \
-	libgdmaps/gdgeoip.c \
-	libgdmaps/gdgeoip.h \
 	libgdmaps/gdgeoip2.c \
-	libgdmaps/gdgeoip2.h \
-	libgdmaps/fips104.c \
-	libgdmaps/fips104.h
+	libgdmaps/gdgeoip2.h
 
 #=====================================
 # libgdnsd/

@@ -184,6 +184,8 @@ int main(int argc, char* argv[])
     const char* map_name = NULL;
     const char* ip_arg = NULL;
 
+    gdnsd_log_set_debug(true);
+
     switch (argc) {
     // gdnsd_geoip_test -c x map_name ip
     case 5:

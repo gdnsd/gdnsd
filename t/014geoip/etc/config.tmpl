@@ -7,7 +7,7 @@ plugins => {
   undefined_datacenters_ok => true
   maps => {
    map1 => {
-    geoip_db => "FakeGeoIP.dat"
+    geoip2_db => "FakeCountry.mmdb"
     datacenters => [ na, eu, ap, sa ]
     map => {
      NA => [ na, sa ]
@@ -20,19 +20,19 @@ plugins => {
     }
    }
    map2 => {
-    geoip_db => "FakeGeoIP.dat"
+    geoip2_db => "FakeCountry.mmdb"
     datacenters => [ dc1, dc2, dc3 ]
     map => {
      NA => { US => [ dc2 ] }
     }
    }
    map-empty => {
-    geoip_db => "FakeGeoIP.dat"
+    geoip2_db => "FakeCountry.mmdb"
     datacenters => [ dc1, dc2 ]
     map => { NA => { US => [] } }
    }
    map-undef => {
-    geoip_db => "FakeGeoIP.dat"
+    geoip2_db => "FakeCountry.mmdb"
     datacenters => [ DC-A, DC-B, DC-C ]
     map => {
      NA => { US => [ DC-A ] }

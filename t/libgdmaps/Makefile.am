@@ -18,30 +18,11 @@ TESTLIST = \
 	t58_g2_missingcoords \
 	t59_g2_extnets \
 	t60_g2_gn_corner \
-	t00_v4db \
-	t01_v6db \
-	t02_v4citydb \
-	t03_v6citydb \
-	t04_v64db \
-	t05_v64citydb \
-	t06_v4nets \
-	t07_v6nets \
-	t08_cityauto \
-	t09_complex \
-	t10_def \
-	t11_def2 \
-	t12_defnone \
-	t13_castatdef \
-	t14_missingcoords \
 	t15_nogeo \
-	t16_extnets \
 	t17_extn_empty \
 	t18_extn_all \
-	t19_extn_allg \
-	t20_extn_allgs \
 	t21_extn_subs \
-	t22_nets_corner \
-	t23_gn_corner
+	t22_nets_corner
 
 #====================================================================
 # START TEST DATA STUFF
@@ -59,23 +40,16 @@ TDATA_NOXZ = \
 	tdata/extnets.nets \
 	tdata/extn_empty.nets \
 	tdata/extn_all.nets \
-	tdata/extn_allgs.nets \
 	tdata/extn_subs.nets \
 	tdata/nets_corner.nets \
 	tdata/gn_corner.nets
 
 # These are not and optional
-TDATA_XZ = \
-	gdnsd-geoip-testdata/GeoLiteCityv6-20111210.dat.xz \
-	gdnsd-geoip-testdata/GeoLiteCity-20111210.dat.xz \
-	gdnsd-geoip-testdata/GeoLite2-City-20141008.mmdb.xz \
-	gdnsd-geoip-testdata/GeoLite2-Country-20141008.mmdb.xz \
-	gdnsd-geoip-testdata/GeoIPv6-20111210.dat.xz \
-	gdnsd-geoip-testdata/GeoIP-20111210.dat.xz \
-	gdnsd-geoip-testdata/regioncodes-20130115.csv.xz
+TDATA_XZ = gdnsd-geoip-testdata-v3/GeoLite2-City-20141008.mmdb.xz \
+	gdnsd-geoip-testdata-v3/GeoLite2-Country-20141008.mmdb.xz
 
 TDATA_FINAL_NOXZ = $(TDATA_NOXZ:tdata/%=etc/geoip/%)
-TDATA_FINAL_XZ = $(TDATA_XZ:gdnsd-geoip-testdata/%.xz=etc/geoip/%)
+TDATA_FINAL_XZ = $(TDATA_XZ:gdnsd-geoip-testdata-v3/%.xz=etc/geoip/%)
 TDATA_FINAL = $(TDATA_FINAL_NOXZ)
 TDATA_LINK = $(TDATA_NOXZ)
 
@@ -134,7 +108,7 @@ check-local: $(check_PROGRAMS) $(TDATA_FINAL) check-warn
 .PHONY: check-warn
 check-warn:
 	@if test -e $(top_srcdir)/.git; then \
-		if test ! -e $(srcdir)/gdnsd-geoip-testdata/README.md; then \
+		if test ! -e $(srcdir)/gdnsd-geoip-testdata-v3/README.md; then \
 			echo "=== To fetch the missing databases below (optional), 'git submodule update --init' and re-configure"; \
 		fi; \
 		echo $(XZ_WARN); \

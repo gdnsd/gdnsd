@@ -56,7 +56,6 @@ typedef struct {
     bool is_city;
     bool is_v4;
     bool city_auto_mode;
-    bool city_no_region;
     sigjmp_buf jbuf;
     offset_cache_item_t* offset_cache[OFFSET_CACHE_SIZE];
 } geoip2_t;
@@ -109,7 +108,7 @@ static void geoip2_destroy(geoip2_t* db)
 }
 
 F_NONNULLX(1, 2, 3)
-static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode, const bool city_no_region)
+static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode)
 {
     geoip2_t* db = xcalloc(sizeof(*db));
     int status = MMDB_open(pathname, MMDB_MODE_MMAP, &db->mmdb);
@@ -191,7 +190,6 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
 
     db->is_v4 = meta->ip_version == 4U;
     db->city_auto_mode = city_auto_mode;
-    db->city_no_region = city_no_region;
     db->pathname = strdup(pathname);
     db->map_name = strdup(map_name);
     db->dclists = dclists;
@@ -244,12 +242,6 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level)
         // No further data for Country-level databases
         if (!state->db->is_city)
             state->out_of_data = true;
-        return;
-    }
-
-    if (state->db->city_no_region) {
-        mmdb_lookup_utf8_(GEOIP2_PATH_CITY);
-        state->out_of_data = true;
         return;
     }
 
@@ -457,11 +449,11 @@ static void isolate_jmp(geoip2_t* db, nlist_t** nl)
     }
 }
 
-nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode, const bool city_no_region)
+nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode)
 {
     nlist_t* nl = NULL;
 
-    geoip2_t* db = geoip2_new(pathname, map_name, dclists, dcmap, city_auto_mode, city_no_region);
+    geoip2_t* db = geoip2_new(pathname, map_name, dclists, dcmap, city_auto_mode);
     if (db) {
         if (!city_auto_mode && !dcmap) {
             log_warn("plugin_geoip: map %s: not processing GeoIP2 database '%s': no auto_dc_coords and no actual 'map', therefore nothing to do", map_name, pathname);
@@ -477,7 +469,7 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
 
 #else // HAVE_GEOIP2
 
-nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists V_UNUSED, const dcmap_t* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED, const bool city_no_region V_UNUSED)
+nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists V_UNUSED, const dcmap_t* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED)
 {
     gdnsd_assert(pathname);
     gdnsd_assert(map_name);

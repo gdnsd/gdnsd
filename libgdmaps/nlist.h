@@ -58,8 +58,6 @@ F_NONNULL
 ntree_t* nlist_xlate_tree(const nlist_t* nl_a);
 F_NONNULL
 ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b);
-F_NONNULL
-ntree_t* nlist_merge3_tree(const nlist_t* nl_a, const nlist_t* nl_b, const nlist_t* nl_c);
 
 // Just for debugging...
 F_NONNULL

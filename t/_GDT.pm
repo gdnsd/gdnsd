@@ -372,7 +372,7 @@ sub daemon_abort {
 }
 
 sub spawn_daemon_setup {
-    my ($class, $etcsrc, $geoip_data) = @_;
+    my ($class, $etcsrc) = @_;
 
     $etcsrc ||= "etc";
 
@@ -380,13 +380,6 @@ sub spawn_daemon_setup {
 
     foreach my $d ($OUTDIR, "${OUTDIR}/etc", "${OUTDIR}/run", "${OUTDIR}/var", "${OUTDIR}/var/lib", "${OUTDIR}/var/lib/gdnsd") {
         mkdir $d or die "Cannot create directory $d: $!";
-    }
-
-    if($geoip_data) {
-        require _FakeGeoIP;
-        my $gdir = "$OUTDIR/etc/geoip";
-        mkdir $gdir or die "Cannot create directory $gdir: $!";
-        _FakeGeoIP::make_fake_geoip($gdir . "/FakeGeoIP.dat", $geoip_data);
     }
 
     recursive_templated_copy("${FindBin::Bin}/${etcsrc}", "${OUTDIR}/etc");

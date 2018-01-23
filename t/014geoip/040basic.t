@@ -21,10 +21,7 @@ my @etcdirs = (qw/etc etc2/);
 
 foreach my $etcdir (@etcdirs) { # loop ends at bottom of file
 
-my $pid = _GDT->test_spawn_daemon($etcdir, q{
-    0.0.0.0/1 => US
-    128.0.0.0/1 => FR
-});
+my $pid = _GDT->test_spawn_daemon($etcdir);
 
 _GDT->test_dns(
     qname => 'example.com', qtype => 'NS',

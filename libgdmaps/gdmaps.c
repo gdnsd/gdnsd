@@ -22,14 +22,12 @@
 #include <config.h>
 #include <gdmaps.h>
 
-#include "fips104.h"
 #include "dcinfo.h"
 #include "dclists.h"
 #include "dcmap.h"
 #include "nlist.h"
 #include "ntree.h"
 #include "nets.h"
-#include "gdgeoip.h"
 #include "gdgeoip2.h"
 
 #include <gdnsd/alloc.h>
@@ -69,9 +67,7 @@
 typedef struct {
     char* name;
     char* geoip_path;
-    char* geoip_v4o_path;
     char* nets_path;
-    const fips_t* fips;
     dcinfo_t dcinfo; // basic datacenter list/info
     dcmap_t* dcmap; // map of locinfo -> dclist
     dclists_t* dclists; // corresponds to ->tree
@@ -79,18 +75,13 @@ typedef struct {
     // ->dclists when ->tree is updated, NULL when no pending update(s) are outstanding
     dclists_t* dclists_pend;
     nlist_t* geoip_list; // optional main geoip db
-    nlist_t* geoip_v4o_list; // optional v4 overlay
     nlist_t* nets_list; // net overrides, optional
     ntree_t* tree; // merged->translated from the lists above
     ev_stat geoip_stat_watcher;
-    ev_stat geoip_v4o_stat_watcher;
     ev_stat nets_stat_watcher;
     ev_timer geoip_reload_timer;
-    ev_timer geoip_v4o_reload_timer;
     ev_timer nets_reload_timer;
     ev_timer tree_update_timer;
-    bool geoip_is_v2;
-    bool city_no_region;
     bool city_auto_mode;
 } gdmap_t;
 
@@ -103,11 +94,10 @@ static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* 
 }
 
 F_NONNULLX(1, 2, 3)
-static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, const fips_t* fips)
+static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg)
 {
     // basics
     gdmap->name = strdup(name);
-    gdmap->fips = fips;
     if (!vscf_is_hash(map_cfg))
         log_fatal("plugin_geoip: value for map '%s' must be a hash", name);
 
@@ -121,33 +111,12 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, c
     dcinfo_init(&gdmap->dcinfo, dc_cfg, dc_auto_cfg, dc_auto_limit_cfg, name);
     gdmap->dclists_pend = dclists_new(&gdmap->dcinfo);
 
-    // geoip_db config
-    vscf_data_t* gdb_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db", true);
-    if (gdb_cfg) {
-        if (!vscf_is_simple(gdb_cfg) || !vscf_simple_get_len(gdb_cfg))
-            log_fatal("plugin_geoip: map '%s': 'geoip_db' must have a non-empty string value", name);
-        gdmap->geoip_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(gdb_cfg), "geoip");
-    }
-
-    // geoip_db_v4_overlay config
-    vscf_data_t* gdb_v4o_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip_db_v4_overlay", true);
-    if (gdb_v4o_cfg) {
-        if (!gdb_cfg)
-            log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' requires an IPv6 'geoip_db'", name);
-        if (!vscf_is_simple(gdb_v4o_cfg) || !vscf_simple_get_len(gdb_v4o_cfg))
-            log_fatal("plugin_geoip: map '%s': 'geoip_db_v4_overlay' must have a non-empty string value", name);
-        gdmap->geoip_v4o_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(gdb_v4o_cfg), "geoip");
-    }
-
     // geoip2 config
     vscf_data_t* gdb2_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip2_db", true);
     if (gdb2_cfg) {
         if (!vscf_is_simple(gdb2_cfg) || !vscf_simple_get_len(gdb2_cfg))
             log_fatal("plugin_geoip: map '%s': 'geoip2_db' must have a non-empty string value", name);
-        if (gdmap->geoip_path)
-            log_fatal("plugin_geoip: map '%s': Can only one have one of 'geoip_db' or 'geoip2_db'", name);
         gdmap->geoip_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(gdb2_cfg), "geoip");
-        gdmap->geoip_is_v2 = true;
     }
 
     // map config
@@ -156,7 +125,7 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, c
         if (!vscf_is_hash(map_map))
             log_fatal("plugin_geoip: map '%s': 'map' stanza must be a hash", name);
         if (!gdmap->geoip_path)
-            log_fatal("plugin_geoip: map '%s': 'map' stanza requires 'geoip_db'", name);
+            log_fatal("plugin_geoip: map '%s': 'map' stanza requires 'geoip2_db'", name);
         gdmap->dcmap = dcmap_new(map_map, gdmap->dclists_pend, 0, 0, name, gdmap->city_auto_mode);
     }
 
@@ -174,14 +143,6 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, c
         log_fatal("plugin_geoip: map '%s': 'nets' stanza must be a hash of direct entries or a filename", name);
     }
 
-    // optional GeoIP1 City behavior flag
-    gdmap->city_no_region = false;
-    vscf_data_t* cnr_cfg = vscf_hash_get_data_byconstkey(map_cfg, "city_no_region", true);
-    if (cnr_cfg) {
-        if (!vscf_is_simple(cnr_cfg) || !vscf_simple_get_as_bool(cnr_cfg, &gdmap->city_no_region))
-            log_fatal("plugin_geoip: map '%s': 'city_no_region' must be a boolean value ('true' or 'false')", name);
-    }
-
     // check for invalid keys
     vscf_hash_iterate_const(map_cfg, true, _gdmap_badkey, name);
 }
@@ -194,11 +155,7 @@ static void gdmap_tree_update(gdmap_t* gdmap)
     ntree_t* merged;
 
     if (gdmap->geoip_list) {
-        if (gdmap->geoip_v4o_list) {
-            merged = nlist_merge3_tree(gdmap->geoip_list, gdmap->geoip_v4o_list, gdmap->nets_list);
-        } else {
-            merged = nlist_merge2_tree(gdmap->geoip_list, gdmap->nets_list);
-        }
+        merged = nlist_merge2_tree(gdmap->geoip_list, gdmap->nets_list);
     } else {
         merged = nlist_xlate_tree(gdmap->nets_list);
     }
@@ -220,7 +177,7 @@ static void gdmap_tree_update(gdmap_t* gdmap)
 }
 
 F_NONNULL
-static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_list_ptr, gdgeoip_v4o_t v4o_flag)
+static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_list_ptr)
 {
     dclists_t* update_dclists;
 
@@ -231,31 +188,13 @@ static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_l
         update_dclists = gdmap->dclists_pend;
     }
 
-    nlist_t* new_list;
-
-    if (gdmap->geoip_is_v2) {
-        gdnsd_assert(!gdmap->geoip_v4o_path);
-        gdnsd_assert(v4o_flag == V4O_NONE);
-        new_list = gdgeoip2_make_list(
-                       path,
-                       gdmap->name,
-                       update_dclists,
-                       gdmap->dcmap,
-                       gdmap->city_auto_mode,
-                       gdmap->city_no_region
-                   );
-    } else {
-        new_list = gdgeoip_make_list(
-                       path,
-                       gdmap->name,
-                       update_dclists,
-                       gdmap->dcmap,
-                       gdmap->fips,
-                       v4o_flag,
-                       gdmap->city_auto_mode,
-                       gdmap->city_no_region
-                   );
-    }
+    nlist_t* new_list = gdgeoip2_make_list(
+                            path,
+                            gdmap->name,
+                            update_dclists,
+                            gdmap->dcmap,
+                            gdmap->city_auto_mode
+                        );
 
     bool rv = false;
 
@@ -328,16 +267,9 @@ static void gdmap_initial_load_all(gdmap_t* gdmap)
     gdnsd_assert(gdmap->dclists_pend);
     gdnsd_assert(!gdmap->geoip_list);
 
-    if (gdmap->geoip_path) {
-        const bool v4o = !!gdmap->geoip_v4o_path;
-
-        if (gdmap_update_geoip(gdmap, gdmap->geoip_path, &gdmap->geoip_list, v4o ? V4O_PRIMARY : V4O_NONE))
+    if (gdmap->geoip_path)
+        if (gdmap_update_geoip(gdmap, gdmap->geoip_path, &gdmap->geoip_list))
             log_fatal("plugin_geoip: map '%s': cannot continue initial load", gdmap->name);
-
-        if (gdmap->geoip_v4o_path)
-            if (gdmap_update_geoip(gdmap, gdmap->geoip_v4o_path, &gdmap->geoip_v4o_list, V4O_SECONDARY))
-                log_fatal("plugin_geoip: map '%s': cannot continue initial load", gdmap->name);
-    }
 
     if (!gdmap->nets_list) {
         gdnsd_assert(gdmap->nets_path);
@@ -367,28 +299,10 @@ static void gdmap_geoip_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUS
     gdmap_t* gdmap = w->data;
     gdnsd_assert(gdmap);
     gdnsd_assert(gdmap->geoip_path);
-    const bool v4o = !!gdmap->geoip_v4o_path;
 
     ev_timer_stop(loop, w);
 
-    if (!gdmap_update_geoip(gdmap, gdmap->geoip_path, &gdmap->geoip_list, v4o ? V4O_PRIMARY : V4O_NONE)) {
-        gdnsd_assert(gdmap->dclists_pend);
-        gdmap_kick_tree_update(gdmap, loop);
-    }
-}
-
-F_NONNULL
-static void gdmap_geoip_v4o_reload_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
-{
-    gdnsd_assert(revents == EV_TIMER);
-
-    gdmap_t* gdmap = w->data;
-    gdnsd_assert(gdmap);
-    gdnsd_assert(gdmap->geoip_v4o_path);
-
-    ev_timer_stop(loop, w);
-
-    if (!gdmap_update_geoip(gdmap, gdmap->geoip_v4o_path, &gdmap->geoip_v4o_list, V4O_SECONDARY)) {
+    if (!gdmap_update_geoip(gdmap, gdmap->geoip_path, &gdmap->geoip_list)) {
         gdnsd_assert(gdmap->dclists_pend);
         gdmap_kick_tree_update(gdmap, loop);
     }
@@ -419,19 +333,18 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
     gdmap_t* gdmap = w->data;
     gdnsd_assert(gdmap);
 
-    const bool v4o = gdmap->geoip_v4o_path == w->path;
-    gdnsd_assert(v4o || gdmap->geoip_path == w->path);
+    gdnsd_assert(gdmap->geoip_path == w->path);
 
     if (w->attr.st_nlink) { // file exists
         if (w->attr.st_mtime != w->prev.st_mtime || !w->prev.st_nlink) {
             // Start (or restart) a timer to geoip_reload_timer_cb, so that we
             //  wait for multiple changes to "settle" before re-reading the file
-            ev_timer* which_timer = v4o ? &gdmap->geoip_v4o_reload_timer : &gdmap->geoip_reload_timer;
-            if (!ev_is_active(which_timer) && !ev_is_pending(which_timer))
+            ev_timer* grt = &gdmap->geoip_reload_timer;
+            if (!ev_is_active(grt) && !ev_is_pending(grt))
                 log_info("plugin_geoip: map '%s': Change detected in GeoIP database '%s', waiting for %gs of change quiescence...", gdmap->name, w->path, STAT_RELOAD_WAIT);
             else
                 log_debug("plugin_geoip: map '%s': Timer for GeoIP database '%s' re-kicked for %gs due to rapid change...", gdmap->name, w->path, STAT_RELOAD_WAIT);
-            ev_timer_again(loop, which_timer);
+            ev_timer_again(loop, grt);
         }
     } else {
         log_warn("plugin_geoip: map '%s': GeoIP database '%s' disappeared! Internal DB remains unchanged, waiting for it to re-appear...", gdmap->name, w->path);
@@ -496,38 +409,19 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop)
 {
     gdnsd_assert(gdmap->geoip_path);
 
-    const bool v4o = !!gdmap->geoip_v4o_path;
-
-    // the reload stat-quiesce timers
+    // the reload stat-quiesce timer
     ev_timer* grt = &gdmap->geoip_reload_timer;
     ev_init(grt, gdmap_geoip_reload_timer_cb);
     ev_set_priority(grt, -1);
     grt->repeat = STAT_RELOAD_WAIT;
     grt->data = gdmap;
 
-    if (v4o) {
-        gdnsd_assert(!gdmap->geoip_is_v2);
-        ev_timer* g4rt = &gdmap->geoip_v4o_reload_timer;
-        ev_init(g4rt, gdmap_geoip_v4o_reload_timer_cb);
-        ev_set_priority(g4rt, -1);
-        g4rt->repeat = STAT_RELOAD_WAIT;
-        g4rt->data = gdmap;
-    }
-
-    // the reload stat() watchers (they share a callback differentiated on w->path)
+    // the reload stat() watcher
     ev_stat* gsw = &gdmap->geoip_stat_watcher;
     ev_stat_init(gsw, gdmap_geoip_reload_stat_cb, gdmap->geoip_path, 0);
     ev_set_priority(gsw, 0);
     gsw->data = gdmap;
     ev_stat_start(loop, gsw);
-
-    if (v4o) {
-        ev_stat* g4sw = &gdmap->geoip_v4o_stat_watcher;
-        ev_stat_init(g4sw, gdmap_geoip_reload_stat_cb, gdmap->geoip_v4o_path, 0);
-        ev_set_priority(g4sw, 0);
-        g4sw->data = gdmap;
-        ev_stat_start(loop, g4sw);
-    }
 }
 
 F_NONNULL
@@ -582,7 +476,6 @@ struct _gdmaps_t {
     bool reload_thread_spawned;
     unsigned count;
     struct ev_loop* reload_loop;
-    fips_t* fips;
     gdmap_t* maps;
 };
 
@@ -590,7 +483,7 @@ F_NONNULL
 static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
 {
     gdmaps_t* gdmaps = data;
-    gdmap_init(&gdmaps->maps[gdmaps->count++], key, val, gdmaps->fips);
+    gdmap_init(&gdmaps->maps[gdmaps->count++], key, val);
     return true;
 }
 
@@ -600,18 +493,7 @@ gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg)
 
     gdmaps_t* gdmaps = xcalloc(sizeof(*gdmaps));
 
-    unsigned num_maps = vscf_hash_get_len(maps_cfg);
-
-    vscf_data_t* crn_cfg = vscf_hash_get_data_byconstkey(maps_cfg, "city_region_names", true);
-    if (crn_cfg) {
-        if (!vscf_is_simple(crn_cfg))
-            log_fatal("plugin_geoip: 'city_region_names' must be a filename as a simple string value");
-        char* fips_path = gdnsd_resolve_path_cfg(vscf_simple_get_data(crn_cfg), "geoip");
-        gdmaps->fips = fips_init(fips_path);
-        free(fips_path);
-        num_maps--;
-    }
-
+    const unsigned num_maps = vscf_hash_get_len(maps_cfg);
     gdmaps->maps = xcalloc_n(num_maps, sizeof(*gdmaps->maps));
     vscf_hash_iterate(maps_cfg, true, _gdmaps_new_iter, gdmaps);
     gdnsd_assert(num_maps == gdmaps->count);

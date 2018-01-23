@@ -1,7 +1,7 @@
 =head1 NAME
 
 gdnsd-plugin-geoip - gdnsd meta-plugin for GSLB + failover via MaxMind's
-GeoIP databases
+GeoIP2 databases
 
 =head1 SYNOPSIS
 
@@ -21,7 +21,7 @@ Minimal example gdnsd config file using this plugin:
         }
       },
       my_auto_map => {
-        geoip_db => GeoIPCityv6.dat,
+        geoip2_db => GeoIP2-Country.mmdb,
         datacenters => [dc1, dc2],
         auto_dc_coords => {
            dc1 => [ 38.9, -77 ],
@@ -58,7 +58,7 @@ Example zonefile RRs:
 
 =head1 DESCRIPTION
 
-B<gdnsd-plugin-geoip> uses MaxMind's GeoIP binary databases to
+B<gdnsd-plugin-geoip> uses MaxMind's GeoIP2 binary databases to
 map address and CNAME results based on geography and
 monitored service availability.  It fully supports both
 IPv6 and the emerging edns-client-subnet standard.  If a request
@@ -66,25 +66,17 @@ contains the edns-client-subnet option with a source netmask greater
 than zero, the edns-client-subnet information will be used instead
 of the source IP of the request (the IP of the querying cache).
 
-It supports both the legacy GeoIP1 format databases which typically
-end in F<.dat> and the newer GeoIP2 format database which typically end in
-F<.mmdb>.  There are a few differences in the plugin's behavior depending on
-the database type in use, which are noted throughout this document.  It is
-notable that what was called the singular "Region" in GeoIP1 is now multiple
-"Subdivisions" in GeoIP2.  Both occupy the hierarchical space between
-"Country" and "City" level information.  In the GeoIP2 case there can be
-several layers of Subdivisions, which depend entirely on how a Country is
-broken down in ISO3166-2.  Assume the terms Region and Subdivision are
-interchangeable for the most part throughout this document.
+It supports the GeoIP2 format databases, which typically end in F<.mmdb>.  It
+does not supports the legacy GeoIP1 format databases (which typically end in
+F<.dat>).
 
 It can also be used with no GeoIP database at all, in which case the only
 network-mapping input comes from the C<nets> config data or an external
 C<nets> file, which explicitly map subnets to datacenter lists.
 
-This plugin can operate in an automatic distance-based mode (using
-City-level coordinate information rather than an external file and a
-Region-level db).  It can also operate coordinate-free and rely on the
-user to configure a hierarchical map of cascading default
+This plugin can operate in an automatic distance-based mode (using a City-level
+database's coordinate information) It can also operate coordinate-free and rely
+on the user to configure a hierarchical map of cascading default
 user-location-to-datacenter mappings, starting at the continent level.
 
 The two modes can also be effectively mixed at geographic boundaries.
@@ -154,41 +146,7 @@ than or equal to the map's C<auto_dc_limit>.
 
 =head1 CONFIGURATION - MAPS
 
-The C<maps> stanza supports one special configuration key at the top level:
-
-=head2 C<city_region_names = region_codes.csv>
-
-String, filename, optional.  GeoIP1 City databases use FIPS 10-4 codes for
-the names of Regions outside of the US and Canada, and two-letter national
-alpha codes within the US and Canada.  For example the Geneve region of
-Switzerland is identified as C<07> in the database.  By default you would
-have to use these relatively confusing region codes in your hierarchical
-maps that make use of Region-level information (e.g. C<EU =E<gt> { CH
-=E<gt> { 07 =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  If this option is
-specified, it points to a text file that maps these FIPS codes to
-canonical, memorable full names for clearer map configuration (e.g. C<EU
-=E<gt> { CH =E<gt> { Geneve =E<gt> { Geneva =E<gt> [ ... ] } } } }>.  Note
-that while older versions of this data did not map the US/Canadian
-two-letter alpha codes, newer versions do (e.g. TX -> Texas).
-
-This setting does not affect the GeoIP C<Region> -format databases, which
-have no region codes outside of the US and Canada, and always need the
-two-letter alpha codes in the map.
-
-It also does not affect GeoIP2 databases, as they all use ISO3166-2 codes
-for subdivision (aka region) data directly, which are at least usually more
-intuitive than FIPS.
-
-The file format is a simple subset of the CSV format with 3 fields: ISO
-3166-1 country code, FIPS 10-4 region code (or two-letter alpha in
-US/Canada), and the region name in double-quotes.  It is recommended you
-download this file directly from MaxMind's reference copy in this format.
-As of this writing, it is available from them at the following URL:
-L<http://www.maxmind.com/download/geoip/misc/region_codes.csv>.
-
-=head1 CONFIGURATION - PER-MAP
-
-All other C<maps>-level configuration keys are the names of the maps you
+All C<maps>-level configuration keys are the names of the maps you
 choose to define.  A map, conceptually, is a mapping between geography
 and/or network topology to varying ordered datacenter sub-sets.  The value
 of each named map must be a hash, and the following configuration keys
@@ -200,30 +158,7 @@ String, filename, optional.  This is the filename of a MaxMind GeoIP2 format
 database.  It should contain either the City or Country data model.  There is
 no distinction made here for the IP version, and it is normal for these
 databases to contain both IPv4 and IPv6 data together.  If one or the other is
-missing, clients using that address family will be defaulted.  If this
-parameter is set, then the legacy C<geoip_db> and C<geoip_db_v4_overlay> are
-not allowed alongside it.
-
-=head2 C<geoip_db = GeoIPv6.dat>
-
-String, filename, optional.  This is the filename of one of the supported
-MaxMind GeoIP1 database types.  It will be reloaded at runtime (without any
-significant query interruptions) if a change to the database file is
-detected.
-
-=head2 C<geoip_db_v4_overlay = GeoIP.dat>
-
-String, pathname, optional.  This specifies an optional IPv4-level GeoIP1
-database to overwrite the IPv4 sub-space of the IPv6 data loaded from
-C<geoip_db>.  It must be a V4-format database, and C<geoip_db> must be
-defined as a V6-format database.  In all other respects, it is similar to
-C<geoip_db>.
-
-As of this writing, MaxMind doesn't sell a commercial GeoIP1v6 database.
-What they offer are free IPv6 GeoLite1 database downloads, which include the
-IPv4 subset in the less-accurate GeoLite1 form.  This option allows you to
-use these GeoLite1v6 databases for IPv6 coverage, and then overlay your paid
-commercial GeoIP1v4 data on top for more accurate IPv4 results.
+missing, clients using that address family will be defaulted.
 
 =head2 C<datacenters = [ one, two, three, ... ]>
 
@@ -234,14 +169,6 @@ limit of 254 datacenter names per map, although this could be raised if
 anyone requires it.  The order specified here is the fallback default
 result ordering in various default cases (e.g. if no explicit top-level map
 default list is given).
-
-=head2 C<city_no_region = true>
-
-Boolean, default C<false>.  If this key is set to C<true> and the database
-is a City-level database, the Region/Subdivision-level information within it
-will be completely ignored for mapping purposes.  Your hierarchical map
-structure will now be C<continent =E<gt> country =E<gt> city> rather than
-C<continent =E<gt> country =E<gt> region/subdivision =E<gt> city>.
 
 =head2 C<nets = { ... }>
 
@@ -283,8 +210,7 @@ at runtime much like the GeoIP databases.
 
 Key-value hash, optional.  This is the heart of a named map which uses
 GeoIP: the map itself, which maps places to ordered lists of datacenters.
-It requires that C<geoip_db> or C<geoip2_db> is also specified, and makes no
-sense without it.
+It requires C<geoip2_db> is also specified, and makes no sense without it.
 
 This is a nested key-value hash.  At each level, the keys are location
 codes (continent, country, region/subdivision, or city information depending
@@ -301,53 +227,14 @@ will simply be a NODATA/NOERROR response like you'd get if there were no
 records of this type, but could be records of other types for the same
 name).
 
-The map has slightly different interpretations for GeoIP2 vs GeoIP1 databases:
+=head2 GeoIP2 Location Data Hierarchy
 
-=over 4
-
-=item GeoIP1
-
-The meaningful location keys at the top level are continent codes, of which
-there are primarily seven in MaxMind's databases: C<AF> for Africa, C<AS>
-for Asia, C<NA> for North America, C<SA> for South America, C<EU> for
-Europe, C<OC> for Oceania, and C<AN> for Antarctica.  There is also an
-eighth continent-level code which is, literally, C<-->.  This is a sort of
-fallback "no information available" continent code, and it contains the
-special country codes C<A1>, C<A2>, C<O1>, and C<-->, which represent
-Anonymous Proxies, Satellite Providers, Other, and Unknown, respsectively.
-
-The next layer (the sub-hash beneath any continent code) maps ISO-3166-1
-2-letter country codes, which as with continents can map directly to
-datacenters, or to yet another recursive layer.
-
-The next two layers deep are for Region and City level information, only
-available from the Region and City type databases.  The Region database
-type only provides region information for the US and Canada, using the
-standard local 2-letter abbreviations (e.g. AB for Alberta, OK for
-Oklahama).  The City databases use those same region abbreviations for the
-US and Canada, but use either FIPS 10-4 2-letter codes or full region names
-for the rest of the world's regions (as detailed earlier in, and controlled
-by, the C<city_region_names> option).
-
-The actual City names at the final layer appear to be encoded using some
-form of ISO8859-1 and/or CP1252 character set in the databases themselves,
-and your map entries will have to match byte-for-byte in the case of
-non-ASCII characters.  May come up with a better solution for this down the
-road.
-
-=item GeoIP2
-
-As with GeoIP1, the top level of the hierarchy is comprised of MaxMind's seven
+The top level of the map hierarchy is comprised of MaxMind's seven
 continent codes: C<AF> for Africa, C<AS> for Asia, C<NA> for North America,
 C<SA> for South America, C<EU> for Europe, C<OC> for Oceania, and C<AN> for
-Antarctica.  There is no special C<--> continent for various types of
-unknowns; those database entries that lack some or all information at this
-level simply take the appropriate defaults for the level of detail they
-possess.
+Antarctica.  The next level is the ISO 3166-1 2-letter country code.
 
-The next level, again as in GeoIP1, is the ISO 3166-1 2-letter country code.
-
-From here GeoIP2 has a number of Subdivision levels, the count of which varies
+From here there are a number of Subdivision levels, the count of which varies
 for different network database entries.  In the US, for example, there is only
 one level of subdivision data for the US States.  In the Czech
 Republic there are two levels of subdivision: first into 14 regions, and then
@@ -360,13 +247,10 @@ English city names from the database, even though other languages may be
 available depending on the database.
 
 As a pragmatic answer to the issues that can arise with multiple subdivision
-layers, in the GeoIP2 case the map automatically searches deeper in the
-database data when no map match is found at a given level of the map hierarchy
-beneath the Country level.  This means you can skip over any levels of
-Subdivision detail in your map that are irrelevant to you.  This mostly
-supplants the practical need for the C<city_no_region> and C<skip_level>
-functionality that was used with GeoIP1 maps, but those features remain
-functional as well.
+layers, the map automatically searches deeper in the database data when no map
+match is found at a given level of the map hierarchy beneath the Country level.
+This means you can skip over any levels of Subdivision detail in your map that
+are irrelevant to you.
 
 For example, this targets the New Zealand regional council subdivision of
 Otago without explicitly specifying the enclosing subdivision for the South
@@ -379,21 +263,6 @@ without caring about what layers of subdivisions lie between it and FR:
 
   { EU => { FR => { Paris => [...] } } }
 
-=back
-
-There is also one other special key (aside from C<default>) available at
-all levels of the map hierarchy, a boolean named C<skip_level>, default
-C<false>.  If set within the hierarchical C<map> at any layer, it causes
-the next layer of detail to be skipped for this portion of the map.  For
-example, setting this at the very top layer would mean that the top layer
-would contain country-level codes directly, without an enclosing
-continent-level hierarchy.  Setting it within a country would mean that
-city names are used directly within that country, without an intervening
-layer of region names.  This option is not aware of the C<city_no_region>
-option, so e.g. setting that option and specifying C<skip_level> at the
-country-level would result in no further information being available within
-that country (as C<skip_level> would skip the remaining layer of city data).
-
 =head1 CONFIGURATION - MAPS - CITY AUTO MODE
 
 "City-auto-mode" is a special mode of operation that automatically maps out
@@ -402,7 +271,8 @@ have to manually construct a complex hierarchical C<map>.  It can still be
 mixed with C<map> of course, allowing you to use auto-mode for only select
 geographic areas if you wish (or disabling it for select areas by
 specifying manual lists).  The key parameter is C<auto_dc_coords>, which
-enables city-auto-mode.
+enables city-auto-mode.  This requires a City-level GeoIP2 database; the
+Country ones don't contain coordinate information.
 
 =over 4
 
@@ -413,7 +283,7 @@ basic mode of operation changes to "city-auto-mode".  The contents of the
 hash are a key for each datacenter named in C<datacenters>, with their
 values set to an array of C<[lat, lon]> in decimal degree units.  When
 city-auto-mode is enabled by this, the following configuration-validation
-changes occur from the default, static-mapping mode: the loaded GeoIP
+changes occur from the default, static-mapping mode: the loaded GeoIP2
 database(s) are required be City-level databases, and the special keyword
 C<auto> becomes a legal "datacenter list" in the C<map> stanza.
 
@@ -538,14 +408,11 @@ v4compat and native v4 forms in C<nets>, e.g. C<192.0.2.0/24> and
 C<::C000:0200/120> are completely identical.
 
 GeoIP databases that are natively IPv4-only get all of their data loaded
-into the v4compat space only.  For IPv6 GeoIP databases, by default we load
-the v4compat space directly (which is where MaxMind stores IPv4 data in
+into the v4compat space only.  For normal IPv6 GeoIP databases, by default we
+load the v4compat space directly (which is where MaxMind stores IPv4 data in
 their IPv6 databases), but ignore the v4mapped/SIIT/Teredo/6to4 spaces
 (some of which are empty in MaxMind's databases, and some of which simply
-alias the v4compat space).  When using an IPv6 GeoIP database combined with
-an IPv4 GeoIP overlay (geoip_db_v4_overlay config), the v4compat space of
-the IPv6 database is also ignored on loading, and the direct IPv4 data from
-the IPv4 databasee takes its place.
+alias the v4compat space).
 
 =head1 ANOTHER CONFIG EXAMPLE
 
@@ -559,17 +426,13 @@ C<maps> and C<resources> sections:
   plugins => {
     geoip => {
       maps => {
-        city_region_names => fips_include,
         my_prod_map => {
-          geoip_db => GeoIPCityv6.dat,
-          geoip_db_v4_overlay => GeoIPCity.dat,
-          city_no_region => false, # default
+          geoip2_db => GeoIP2-City.mmdb,
           datacenters => [us-01, de-01, sg-01],
           map => {
               # Hierarchy is Continent -> Country -> Region -> City
               NA => {
                 US => {
-                  skip_level => 1, # skip past region level
                   Dallas => [sg-01],
                 }
               }
@@ -592,8 +455,7 @@ C<maps> and C<resources> sections:
           }
         }
         my_auto_map => {
-          geoip_db => GeoIPCityv6.dat,
-          geoip_db_v4_overlay => GeoIPCity.dat,
+          geoip2_db => GeoIP2-City.mmdb,
           datacenters => [us-01, de-01, sg-01],
           auto_dc_coords => {
              us-01 => [ 38.9, -77 ],
@@ -662,7 +524,7 @@ Example zonefile RRs:
     geoip => {
       maps => {
         auto_map => {
-          geoip_db => GeoIPCityv6.dat,
+          geoip2_db => GeoIP2-City.mmdb,
           datacenters => [dc1, dc2, dc3, dc4],
           auto_dc_coords => {
              dc1 => [ 38.9, -77 ],

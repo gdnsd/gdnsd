@@ -491,13 +491,3 @@ ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b)
     nlist_destroy(merged);
     return rv;
 }
-
-ntree_t* nlist_merge3_tree(const nlist_t* nl_a, const nlist_t* nl_b, const nlist_t* nl_c)
-{
-    nlist_t* merge1 = nlist_merge(nl_a, nl_b);
-    nlist_t* merge2 = nlist_merge(merge1, nl_c);
-    nlist_destroy(merge1);
-    ntree_t* rv = nlist_xlate_tree(merge2);
-    nlist_destroy(merge2);
-    return rv;
-}
