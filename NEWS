@@ -1,3 +1,10 @@
+2.4.0 - 2018-02-15
+    * plugin_multifo: added "ignore_health" parameter. If "ignore_health" is
+      true, all addresses are added to the result set regardless of health, but
+      the up_thresh and TTL effects still happen, and the final resource-level
+      state still reflects the overall state as it would without
+      "ignore_health", for meta-plugin consumption.
+
 2.3.1 - 2018-02-15
     * GeoIP2: Detect coordinate-free post-2018 GeoLite2-City databases, and
       refuse to use them with auto_dc_coords. cf:
