@@ -1,3 +1,19 @@
+2.2.5 - 2018-02-15
+    * GeoIP2: Detect coordinate-free post-2018 GeoLite2-City databases, and
+      refuse to use them with auto_dc_coords. cf:
+      https://blog.maxmind.com/2018/01/02/discontinuation-of-the-geolite-legacy-databases/
+    * GeoIP2: fixed the handling of automatic, coordinate-based mapping for
+      networks with no coordinates (e.g. anon-proxy, satellite).  These now
+      return the default datacenter ordering as documented, which is how GeoIP1
+      has always behaved.  The GeoIP2 code was calculating distances for these
+      networks based on literal 0,0 coordinates since the code was introduced.
+    * Fixed zonefile comment parsing for RFC 3597 RRs
+    * Removed illegal malloc function attributes (could cause optimizer bugs?
+      no known reports)
+    * Removed useless/invalid syslog.target dependency from systemd unit
+    * Fix testsuite breakage with system Net::DNS
+    * Various minor docs / logs / error message / spelling fixups
+
 2.2.4 - 2016-04-14
     * libmaxminddb 1.2.0+ compatibility, using the new interface.
     * Note that libmaxminddb's 1.2.0 release is a shared library runtime
