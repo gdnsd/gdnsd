@@ -297,10 +297,11 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level) {
 static const char* GEOIP2_PATH_LAT[] = { "location", "latitude", NULL };
 static const char* GEOIP2_PATH_LON[] = { "location", "longitude", NULL };
 
-#define mmdb_lookup_double_(d_out, ...) do {\
+#define mmdb_lookup_double_(d_out, d_set, ...) do {\
     int mmrv_ = MMDB_aget_value(state.entry, &val, __VA_ARGS__);\
     if(mmrv_ == MMDB_SUCCESS && val.has_data && val.type == MMDB_DATA_TYPE_DOUBLE) {\
         d_out = val.double_value;\
+        d_set = true;\
     }\
     else if(mmrv_ != MMDB_LOOKUP_PATH_DOES_NOT_MATCH_DATA_ERROR) {\
         dmn_log_err("plugin_geoip: map %s: Unexpected error fetching GeoIP2City location data (%s)",\
@@ -345,15 +346,19 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry) {
 
     if(dclist == DCLIST_AUTO) {
         dmn_assert(db->city_auto_mode && db->is_city);
+        dclist = 0; // default to the default dclist
 
-        double lat = 0.0;
-        double lon = 0.0;
         MMDB_entry_data_s val;
-        mmdb_lookup_double_(lat, GEOIP2_PATH_LAT);
-        mmdb_lookup_double_(lon, GEOIP2_PATH_LON);
-        dclist = dclists_city_auto_map(db->dclists, db->map_name, lat, lon);
-        dmn_assert(dclist != DCLIST_AUTO);
-        dmn_assert(dclist <= DCLIST_MAX);
+        double lat = 0.0;
+        bool lat_set = false;
+        mmdb_lookup_double_(lat, lat_set, GEOIP2_PATH_LAT);
+        if(lat_set) {
+            double lon = 0.0;
+            bool lon_set = false;
+            mmdb_lookup_double_(lon, lon_set, GEOIP2_PATH_LON);
+            if(lon_set)
+                dclist = dclists_city_auto_map(db->dclists, db->map_name, lat, lon);
+        }
     }
 
     dmn_assert(dclist != DCLIST_AUTO);

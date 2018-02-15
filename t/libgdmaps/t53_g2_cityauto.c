@@ -52,7 +52,7 @@ int main(int argc V_UNUSED, char* argv[] V_UNUSED) {
     gdmaps = gdmaps_test_load(cfg);
     //datacenters => [ us, ie, sg ]
     gdmaps_test_lookup_check(gdmaps, "my_prod_map", "137.138.144.168", "\2\1\3", 16); // Geneva
-    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "69.58.186.119", "\1\2\3", 17); // US East Coast
+    gdmaps_test_lookup_check(gdmaps, "my_prod_map", "69.58.186.119", "\1\2\3", 14); // US East Coast
     gdmaps_test_lookup_check(gdmaps, "my_prod_map", "117.53.170.202", "\3\2\1", 23); // Australia
     exit(exit_status());
 }
