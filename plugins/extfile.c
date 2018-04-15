@@ -195,7 +195,7 @@ static void process_file(const extf_svc_t* svc)
     // FORCED-bit below is temporary (within this function) as a flag
     //   to identify those entries which were not affected by file input.
     // It is cleared before copying the results out elsewhere.
-    gdnsd_sttl_t results[svc->num_mons];
+    gdnsd_sttl_t* results = xmalloc_n(svc->num_mons, sizeof(*results));
     for (unsigned i = 0; i < svc->num_mons; i++)
         results[i] = svc->def_sttl | GDNSD_STTL_FORCED;
 
@@ -230,6 +230,8 @@ static void process_file(const extf_svc_t* svc)
     } else {
         log_err("plugin_extfile: Service type '%s': file load failed, no updates applied", svc->name);
     }
+
+    free(results);
 }
 
 F_NONNULL

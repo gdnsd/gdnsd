@@ -233,8 +233,7 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
 
     bool success = true;
 
-    gdnsd_sttl_t updates[num_smgrs];
-    memset(updates, 0, sizeof(updates));
+    gdnsd_sttl_t* updates = xcalloc_n(num_smgrs, sizeof(*updates));
 
     const unsigned num_raw = vscf_hash_get_len(raw);
     for (unsigned i = 0; i < num_raw; i++) {
@@ -289,6 +288,8 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
             log_info("admin_state: load complete, no net changes");
         }
     }
+
+    free(updates);
 
     return success;
 }

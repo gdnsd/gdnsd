@@ -729,7 +729,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
     //   as well as a sum of all dynamic weights
     const unsigned ct = cnset->count;
     unsigned dyn_sum = 0;
-    unsigned dyn_weights[ct];
+    unsigned dyn_weights[MAX_ITEMS_PER_SET];
     for (unsigned i = 0; i < ct; i++) {
         const res_citem_t* citem = &cnset->items[i];
         const gdnsd_sttl_t citem_sttl
@@ -787,10 +787,10 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     const unsigned num_items = aset->count;
     unsigned dyn_items_sum = 0; // sum of dyn_item_sums[]
     unsigned dyn_items_max = 0; // max of dyn_item_sums[]
-    unsigned dyn_item_sums[num_items]; // sum of dyn_addr_weights[N][]
-    unsigned dyn_item_maxs[num_items]; // max of dyn_addr_weights[N][]
+    unsigned dyn_item_sums[MAX_ITEMS_PER_SET]; // sum of dyn_addr_weights[N][]
+    unsigned dyn_item_maxs[MAX_ITEMS_PER_SET]; // max of dyn_addr_weights[N][]
     // addr cfg weight or 0, depends on status:
-    unsigned dyn_addr_weights[num_items][aset->max_addrs_pergroup];
+    unsigned dyn_addr_weights[num_items][aset->max_addrs_pergroup]; // VLA XXX
 
     // not strictly necessary (we write to every array item we use), but this
     //   avoids clang-analyzer getting confused and complaining about garbage values :P

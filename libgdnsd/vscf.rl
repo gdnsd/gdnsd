@@ -452,14 +452,16 @@ static bool vscf_include_glob_or_dir(vscf_scnr_t* scnr, const char* glob_or_dir)
         // we handle the directory case by transforming it into a
         // glob, but allowing GLOB_NOMATCH
         const size_t inc_dir_len = strlen(glob_or_dir);
-        char inc_dir_glob[inc_dir_len + 3];
+        char* inc_dir_glob = xmalloc(inc_dir_len + 3);
         memcpy(inc_dir_glob, glob_or_dir, inc_dir_len);
         size_t pos = inc_dir_len;
         if (inc_dir_len > 0 && inc_dir_glob[inc_dir_len - 1] != '/')
             inc_dir_glob[pos++] = '/';
         inc_dir_glob[pos++] = '*';
         inc_dir_glob[pos] = '\0';
-        return vscf_include_glob(scnr, inc_dir_glob, 0);
+        bool rv = vscf_include_glob(scnr, inc_dir_glob, 0);
+        free(inc_dir_glob);
+        return rv;
     }
 
     // handle as a user-specified glob
@@ -473,7 +475,7 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end)
 
     // raw scanner storage isn't NUL-terminated, so we copy to input_fn to terminate
     const unsigned infn_len = end - scnr->tstart;
-    char input_fn[infn_len + 1];
+    char* input_fn = xmalloc(infn_len + 1);
     memcpy(input_fn, scnr->tstart, infn_len);
     input_fn[infn_len] = '\0';
     scnr->tstart = NULL;
@@ -482,17 +484,20 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end)
 
     // absolute path, easy
     if (input_fn[0] == '/') {
-        return vscf_include_glob_or_dir(scnr, input_fn);
+        bool rv = vscf_include_glob_or_dir(scnr, input_fn);
+        free(input_fn);
+        return rv;
     }
 
     // relative path, make relative to including file if possible
     if (!scnr->fn) {
         parse_error("Relative include path '%s' not allowed here because scanner does not know the filesystem path of including data '%s'", input_fn, scnr->desc);
+        free(input_fn);
         return false;
     }
 
     const unsigned cur_fn_len = strlen(scnr->fn);
-    char abs_path[cur_fn_len + infn_len + 2]; // slightly oversized, who cares
+    char* abs_path = xmalloc(cur_fn_len + infn_len + 2); // slightly oversized, who cares
 
     // copy outer filename to temp storage
     memcpy(abs_path, scnr->fn, cur_fn_len);
@@ -506,7 +511,10 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end)
     char* copy_to = final_slash ? final_slash + 1 : abs_path;
     memcpy(copy_to, input_fn, infn_len);
     copy_to[infn_len] = '\0';
-    return vscf_include_glob_or_dir(scnr, abs_path);
+    bool rv = vscf_include_glob_or_dir(scnr, abs_path);
+    free(abs_path);
+    free(input_fn);
+    return rv;
 }
 
 F_NONNULL

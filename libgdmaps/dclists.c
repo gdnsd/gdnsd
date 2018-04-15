@@ -198,8 +198,10 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
 
     // Copy the default datacenter list to local storage for sorting
     const unsigned num_dcs = dcinfo_get_count(lists->info);
+    gdnsd_assert(num_dcs <= MAX_NUM_DCS);
+
     const unsigned store_len = num_dcs + 1;
-    uint8_t sortlist[store_len];
+    uint8_t sortlist[MAX_NUM_DCS + 1];
     memcpy(sortlist, lists->list[0], store_len);
 
     // calculate the target's distance from each datacenter.
@@ -207,7 +209,7 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
     //  storage is offset by one.  This is so that the actual
     //  1-based dcnums in 'sortlist' can be used as direct
     //  indices into 'dists'
-    double dists[store_len];
+    double dists[MAX_NUM_DCS + 1];
     for (unsigned i = 0; i < num_dcs; i++) {
         const dcinfo_coords_t* coords = dcinfo_get_coords(lists->info, i);
         if (!isnan(coords->lat))

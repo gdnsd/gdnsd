@@ -38,8 +38,8 @@ void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, 
     unsigned num_auto = num_dcs;
     if (!num_dcs)
         log_fatal("plugin_geoip: map '%s': 'datacenters' must be an array of one or more strings", map_name);
-    if (num_dcs > 254)
-        log_fatal("plugin_geoip: map '%s': %u datacenters is too many, this code only supports up to 254", map_name, num_dcs);
+    if (num_dcs > MAX_NUM_DCS)
+        log_fatal("plugin_geoip: map '%s': %u datacenters is too many, this code only supports up to %i", map_name, num_dcs, MAX_NUM_DCS);
 
     info->num_dcs = num_dcs;
     info->dcs = xmalloc_n(num_dcs, sizeof(*info->dcs));

@@ -47,6 +47,8 @@
 //  always the correct limit for direct application even if num_dcs
 //  is < auto_dc_limit.
 
+#define MAX_NUM_DCS 254
+
 typedef struct {
     double lat;
     double lon;

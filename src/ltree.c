@@ -418,7 +418,9 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char*
     rrset->limit_v6 = limit_v6;
 
     const unsigned rhs_size = strlen(rhs) + 1;
-    char plugin_name[rhs_size];
+    if (rhs_size > 256)
+        log_zfatal("Name '%s%s': DYNA plugin!resource string cannot exceed 255 chars", logf_dname(dname), logf_dname(zone->dname));
+    char plugin_name[256];
     memcpy(plugin_name, rhs, rhs_size);
     char* resource_name = strchr(plugin_name, '!');
     if (resource_name)
@@ -478,7 +480,9 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
     rrset->limit_v6 = limit_v6;
 
     const unsigned rhs_size = strlen(rhs) + 1;
-    char plugin_name[rhs_size];
+    if (rhs_size > 256)
+        log_zfatal("Name '%s%s': DYNC plugin!resource string cannot exceed 255 chars", logf_dname(dname), logf_dname(zone->dname));
+    char plugin_name[256];
     memcpy(plugin_name, rhs, rhs_size);
     char* resource_name = strchr(plugin_name, '!');
     if (resource_name)

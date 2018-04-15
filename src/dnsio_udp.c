@@ -348,7 +348,7 @@ static unsigned get_pgsz(void)
 F_HOT F_NONNULL
 static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg)
 {
-    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
+    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
@@ -359,7 +359,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         .iov_len  = 0
     };
     struct msghdr msg_hdr;
-    char cmsg_buf[cmsg_size];
+    char cmsg_buf[CMSG_BUFSIZE];
     memset(cmsg_buf, 0, sizeof(cmsg_buf));
     memset(&msg_hdr, 0, sizeof(msg_hdr));
     msg_hdr.msg_name       = &asin.sa;
@@ -443,18 +443,18 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 F_HOT F_NONNULL
 static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg)
 {
-    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 1U;
+    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
 
     // gcfg->max_response, rounded up to the next nearest multiple of the page size
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
     uint8_t* bufs = gdnsd_xpmalign_n(pgsz, width, max_rounded);
-    uint8_t* buf[width];
-    struct iovec iov[width][1];
-    struct mmsghdr dgrams[width];
-    char cmsg_buf[width][cmsg_size];
-    gdnsd_anysin_t asin[width];
+    uint8_t* buf[width]; // VLA XXX
+    struct iovec iov[width][1]; // VLA XXX
+    struct mmsghdr dgrams[width]; // VLA XXX
+    char cmsg_buf[width][CMSG_BUFSIZE]; // VLA XXX
+    gdnsd_anysin_t asin[width]; // VLA XXX
 
     /* Set up packet buffers */
     memset(cmsg_buf, 0, sizeof(cmsg_buf));

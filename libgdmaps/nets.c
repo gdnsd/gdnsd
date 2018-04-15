@@ -72,7 +72,12 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
         // convert 192.0.2.0/24 -> anysin_t w/ mask in port field
         unsigned net_str_len = 0;
         const char* net_str_cfg = vscf_hash_get_key_byindex(nets_cfg, i, &net_str_len);
-        char net_str[net_str_len + 1];
+        if (net_str_len >= GDNSD_ANYSIN_MAXSTR) {
+            log_err("plguin_geoip: map '%s': nets entry '%s' is too long", map_name, net_str_cfg);
+            rv = true;
+            break;
+        }
+        char net_str[GDNSD_ANYSIN_MAXSTR];
         memcpy(net_str, net_str_cfg, net_str_len + 1);
 
         char* mask_str = strchr(net_str, '/');

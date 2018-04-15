@@ -15,14 +15,6 @@ fi
 # AC_PROG_CC_C99 has to come before this or we don't get a C99 CPP
 AC_USE_SYSTEM_EXTENSIONS
 
-# This is explcitly checked by CC_C99 above for now, but
-#   the C11 standard reversed course and made this an optional
-#   feature, so we may as well double-check here for future-proofing
-AC_C_VARARRAYS
-if test "x$ac_cv_c_vararrays" = xno; then
-    AC_MSG_ERROR([Your compiler lacks support for variable arrays])
-fi
-
 AM_PROG_CC_C_O
 
 # POSIX threads stuff

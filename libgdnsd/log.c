@@ -58,8 +58,11 @@ static const char PFX_ERR[] = "error: ";
 static const char PFX_CRIT[] = "fatal: ";
 static const char PFX_UNKNOWN[] = "???: ";
 
+// If passed format string is stupidly-long:
+static const char FMT_TOO_LONG[] = "BUG: log format string is way too long!";
+
 // Max length of an errno string (for our buffer purposes)
-static const size_t GDNSD_ERRNO_MAXLEN = 256U;
+#define GDNSD_ERRNO_MAXLEN 256U
 
 /***********************************************************
 ***** Static process-global data ***************************
@@ -169,6 +172,18 @@ GDNSD_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 
 void gdnsd_loggerv(int level, const char* fmt, va_list ap)
 {
+    // Later in the stdio path, we use 1K stack space to assemble the prefix
+    // onto the provided format string.  The max prefix length is 9, but we
+    // allow 24 here for simplicity / future-proof.  If the caller provided a
+    // stupidly-long format string that would cause overflow, replace it with a
+    // simpler error about the format string itself.
+    size_t fmtlen = strlen(fmt);
+    if (fmtlen > 1000) {
+        level = LOG_CRIT;
+        fmt = FMT_TOO_LONG;
+        fmtlen = sizeof(FMT_TOO_LONG) - 1;
+    }
+
     if (do_syslog) {
         vsyslog(level, fmt, ap);
         gdnsd_fmtbuf_reset();
@@ -176,36 +191,43 @@ void gdnsd_loggerv(int level, const char* fmt, va_list ap)
     }
 
     const char* pfx;
+    size_t pfxlen;
 
     switch (level) {
     case LOG_DEBUG:
         pfx = PFX_DEBUG;
+        pfxlen = sizeof(PFX_DEBUG) - 1;
         break;
     case LOG_INFO:
         pfx = PFX_INFO;
+        pfxlen = sizeof(PFX_INFO) - 1;
         break;
     case LOG_WARNING:
         pfx = PFX_WARNING;
+        pfxlen = sizeof(PFX_WARNING) - 1;
         break;
     case LOG_ERR:
         pfx = PFX_ERR;
+        pfxlen = sizeof(PFX_ERR) - 1;
         break;
     case LOG_CRIT:
         pfx = PFX_CRIT;
+        pfxlen = sizeof(PFX_CRIT) - 1;
         break;
     default:
         pfx = PFX_UNKNOWN;
+        pfxlen = sizeof(PFX_UNKNOWN) - 1;
         break;
     }
 
-    const size_t pfxlen = strlen(pfx);
-    const size_t fmtlen = strlen(fmt);
-    const size_t fsz = fmtlen + pfxlen + 2;
-    char f[fsz];
-    memcpy(f, pfx, pfxlen);
-    memcpy(&f[pfxlen], fmt, fmtlen);
-    f[fsz - 2] = '\n';
-    f[fsz - 1] = '\0';
+    char f[1024];
+    char* fp = f;
+    memcpy(fp, pfx, pfxlen);
+    fp += pfxlen;
+    memcpy(fp, fmt, fmtlen);
+    fp += fmtlen;
+    *fp++ = '\n';
+    *fp++ = '\0';
 
     va_list apcpy;
     va_copy(apcpy, ap);
@@ -228,10 +250,10 @@ GDNSD_DIAG_POP
 const char* gdnsd_logf_bt(void)
 {
 #ifdef HAVE_LIBUNWIND
-    static const unsigned bt_size = 1024U;
-    static const unsigned bt_max_name = 60U;
+#define BT_SIZE 1024U
+#define BT_MAX_NAME 60U
 
-    char* tbuf = gdnsd_fmtbuf_alloc(bt_size);
+    char* tbuf = gdnsd_fmtbuf_alloc(BT_SIZE);
     unsigned tbuf_pos = 0;
     tbuf[tbuf_pos] = '\0'; // in case no output below
 
@@ -240,7 +262,7 @@ const char* gdnsd_logf_bt(void)
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
 
-    while (unw_step(&cursor) > 0 && tbuf_pos < bt_size) {
+    while (unw_step(&cursor) > 0 && tbuf_pos < BT_SIZE) {
         unw_word_t ip = 0;
         unw_word_t sp = 0;
         unw_word_t offset = 0;
@@ -249,12 +271,12 @@ const char* gdnsd_logf_bt(void)
             break;
         unw_get_reg(&cursor, UNW_REG_SP, &sp);
 
-        char cbuf[bt_max_name];
+        char cbuf[BT_MAX_NAME];
         cbuf[0] = '\0'; // in case no output below
-        (void)unw_get_proc_name(&cursor, cbuf, bt_max_name, &offset);
+        (void)unw_get_proc_name(&cursor, cbuf, BT_MAX_NAME, &offset);
 
         int snp_rv = snprintf(&tbuf[tbuf_pos],
-                              (bt_size - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
+                              (BT_SIZE - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
                               (unsigned long)ip, (unsigned long)sp,
                               cbuf, (unsigned long)offset);
         if (snp_rv < 0)

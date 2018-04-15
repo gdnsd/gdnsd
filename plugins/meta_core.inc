@@ -508,7 +508,7 @@ gdnsd_sttl_t CB_RES(unsigned resnum, const uint8_t* origin, const client_info_t*
     unsigned dcnum;
 
     // If the resource does not define all DCs, filter the map's dclist
-    uint8_t dclist_filtered[res->num_dcs_defined + 1];
+    uint8_t dclist_filtered[255];
     if (res->num_dcs != res->num_dcs_defined) {
         const uint8_t* dclist_iter = dclist;
         uint8_t* dclist_filtered_iter = dclist_filtered;

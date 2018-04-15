@@ -59,7 +59,8 @@ F_MALLOC F_NONNULLX(1, 2)
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
 
 // allocate a new string and concatenate all "count" strings
-//   from the args list into it.
+//   from the args list into it.  Meant to be used with small fixed counts,
+//   asserts that count is <= 16.
 F_MALLOC F_NONNULL
 char* gdnsd_str_combine_n(const unsigned count, ...);
 

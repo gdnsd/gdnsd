@@ -79,7 +79,8 @@ bool emc_read_nbytes(const int fd, const size_t len, uint8_t* out)
 bool emc_read_exact(const int fd, const char* str)
 {
     const unsigned len = strlen(str);
-    uint8_t buf[len];
+    gdnsd_assert(len <= 256);
+    uint8_t buf[256];
     return (emc_read_nbytes(fd, len, buf)
             || !!memcmp(str, buf, len));
 }
@@ -155,6 +156,7 @@ extmon_cmd_t* emc_read_command(const int fd)
 {
 
     extmon_cmd_t* cmd = NULL;
+    uint8_t* var_part = NULL;
 
     {
         uint8_t fixed_part[14];
@@ -181,7 +183,7 @@ extmon_cmd_t* emc_read_command(const int fd)
             goto out_error;
         }
 
-        uint8_t var_part[var_len];
+        var_part = xmalloc(var_len);
         if (emc_read_nbytes(fd, var_len, var_part)) {
             log_debug("emc_read_command() failed to read %u-byte variable section", var_len);
             goto out_error;
@@ -221,6 +223,8 @@ extmon_cmd_t* emc_read_command(const int fd)
             log_debug("emc_read_command(): unused len at end of buffer!");
             goto out_error;
         }
+
+        free(var_part);
     }
 
     return cmd;
@@ -234,5 +238,9 @@ out_error:
         }
         free(cmd);
     }
+
+    if (var_part)
+        free(var_part);
+
     return NULL;
 }

@@ -208,7 +208,7 @@ F_NONNULL
 static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
 {
 
-    char text_temp[len + 1];
+    char* text_temp = xmalloc(len + 1);
     text_temp[0] = 0;
     unsigned newlen = len;
     if (len)
@@ -217,10 +217,14 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
     gdnsd_assert(newlen <= len);
 
     if (newlen > 255) {
-        if (!big_ok || gcfg->disable_text_autosplit)
+        if (!big_ok || gcfg->disable_text_autosplit) {
+            free(text_temp);
             parse_error_noargs("Text chunk too long (>255 unescaped)");
-        if (newlen > 65500)
+        }
+        if (newlen > 65500) {
+            free(text_temp);
             parse_error_noargs("Text chunk too long (>65500 unescaped)");
+        }
         unsigned remainder = newlen % 255;
         unsigned num_whole_chunks = (newlen - remainder) / 255;
         const char* zptr = text_temp;
@@ -246,6 +250,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
         z->texts[z->num_texts] = NULL;
     }
 
+    free(text_temp);
     z->tstart = NULL;
 }
 

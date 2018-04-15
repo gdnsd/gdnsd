@@ -73,7 +73,8 @@ typedef struct {
 
 char* gdnsd_str_combine_n(const unsigned count, ...)
 {
-    str_with_len_t strs[count];
+    gdnsd_assert(count <= 16);
+    str_with_len_t strs[16];
     unsigned oal = 1; // for terminating NUL
 
     va_list ap;
