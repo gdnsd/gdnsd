@@ -60,6 +60,11 @@
       allowed customization of the width of recvmmsg() and sendmmsg(), or
       disabling them altogether when set to "1".  These interfaces are now
       always used with a fixed width of 16 if they're available at runtime.
+    ---- DNS-level changes ----
+    * Our edns-client-subnet code was updated for basic conformance with RFC
+      7871 in a few key areas where they differed.  Haven't yet dealt with a
+      few deeper issues around corner cases like delegation and negative
+      responses.
     ---- Relatively-trivial things ----
     * Code cleaned up a ton for clarity, simplicity, and formatting.
     * plugin_geoip distance calculations are faster and more-accurate

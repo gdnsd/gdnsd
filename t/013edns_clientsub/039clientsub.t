@@ -4,7 +4,7 @@ use _GDT ();
 use Socket qw/AF_INET/;
 use Socket6 qw/AF_INET6 inet_pton/;
 use IO::Socket::INET6 qw//;
-use Test::More tests => 26;
+use Test::More tests => 31;
 
 my $pid = _GDT->test_spawn_daemon();
 
@@ -23,6 +23,16 @@ _GDT->test_dns(
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24),
     answer => 'static.example.com 86400 A 192.0.2.1',
     addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 24, scope_mask => 0),
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+
+# Note this is as above, but excercises the case of a source mask that doesn't
+# end on a byte boundary, but is otherwise correct
+_GDT->test_dns(
+    qname => 'static.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 27),
+    answer => 'static.example.com 86400 A 192.0.2.1',
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 27, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -228,6 +238,59 @@ _GDT->test_dns(
     header => { rcode => 'FORMERR', aa => 0 },
     addtl => $optrr_basic,
     stats => [qw/udp_reqs edns edns_clientsub formerr/],
+);
+
+# excess address bytes for src mask
+my $optrr_excess_addr = Net::DNS::RR->new(@optrr_base,
+    optioncode => 0x0008,
+    optiondata => pack('nCCa4', 1, 24, 0, inet_pton(AF_INET, "192.0.2.1"))
+);
+_GDT->test_dns(
+    qname => 'reflect-best.example.com', qtype => 'AAAA',
+    q_optrr => $optrr_excess_addr,
+    header => { rcode => 'FORMERR', aa => 0 },
+    addtl => $optrr_basic,
+    stats => [qw/udp_reqs edns edns_clientsub formerr/],
+);
+
+# excess non-zero bits beyond mask in final address byte
+my $optrr_excess_bits = Net::DNS::RR->new(@optrr_base,
+    optioncode => 0x0008,
+    optiondata => pack('nCCa4', 1, 31, 0, inet_pton(AF_INET, "192.0.2.1"))
+);
+_GDT->test_dns(
+    qname => 'reflect-best.example.com', qtype => 'AAAA',
+    q_optrr => $optrr_excess_bits,
+    header => { rcode => 'FORMERR', aa => 0 },
+    addtl => $optrr_basic,
+    stats => [qw/udp_reqs edns edns_clientsub formerr/],
+);
+
+# non-zero scope mask
+my $optrr_badscope = Net::DNS::RR->new(@optrr_base,
+    optioncode => 0x0008,
+    optiondata => pack('nCCa4', 1, 24, 1, inet_pton(AF_INET, "192.0.2.0"))
+);
+_GDT->test_dns(
+    qname => 'reflect-best.example.com', qtype => 'AAAA',
+    q_optrr => $optrr_badscope,
+    header => { rcode => 'FORMERR', aa => 0 },
+    addtl => $optrr_basic,
+    stats => [qw/udp_reqs edns edns_clientsub formerr/],
+);
+
+# reflect arbitrary junk family without error if src_mask==0
+my $optrr_junkfam_ok = Net::DNS::RR->new(@optrr_base,
+    optioncode => 0x0008,
+    optiondata => pack('nCC', 42, 0, 0)
+);
+_GDT->test_dns(
+    v4_only => 1,
+    qname => 'reflect-best.example.com', qtype => 'A',
+    q_optrr => $optrr_junkfam_ok,
+    answer => 'reflect-best.example.com 60 A 127.0.0.1',
+    addtl => $optrr_junkfam_ok,
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
 _GDT->test_kill_daemon($pid);

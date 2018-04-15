@@ -73,8 +73,8 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res1sa.example.com', qtype => 'A',
     answer => [ 'res1sa.example.com 86400 A 192.0.2.4', 'res1sa.example.com 86400 A 192.0.2.3' ],
-    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 15),
-    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 15, scope_mask => 0),
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -87,8 +87,8 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res1eu.example.com', qtype => 'A',
     answer => [ 'res1eu.example.com 86400 A 192.0.2.5', 'res1eu.example.com 86400 A 192.0.2.6' ],
-    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 15),
-    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 15, scope_mask => 0),
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -101,8 +101,8 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res1ap.example.com', qtype => 'A',
     answer => [ 'res1ap.example.com 86400 A 192.0.2.7', 'res1ap.example.com 86400 A 192.0.2.8', 'res1ap.example.com 86400 A 192.0.2.9' ],
-    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 1),
-    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 1, scope_mask => 0),
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 

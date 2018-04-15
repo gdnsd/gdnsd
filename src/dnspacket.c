@@ -110,7 +110,8 @@ typedef struct {
     ltree_rrset_t dync_synth_rrset;
 
     // EDNS Client Subnet response mask.
-    // Not valid/useful unless use_edns_client_subnet is true below.
+    // Not valid/useful in DNS reponses unless respond_edns_client_subnet is true
+    // below, *and* the source mask was non-zero.
     // For static responses, this is set to zero by dnspacket.c
     // For dynamic responses, this is set from .ans_dyn{a,cname}.edns_client_mask,
     //   which is in turn defaulted to zero.
@@ -123,7 +124,10 @@ typedef struct {
     bool use_edns;
 
     // Client sent EDNS Client Subnet option, and we must respond with one
-    bool use_edns_client_subnet;
+    bool respond_edns_client_subnet;
+
+    // If above is true, this records the original family value verbatim
+    unsigned edns_client_family;
 
     // If this is true, the query class was CH
     bool chaos;
@@ -274,44 +278,75 @@ static bool handle_edns_client_subnet(dnsp_ctx_t* ctx, dnspacket_stats_t* stats,
 
         const unsigned family = ntohs(gdnsd_get_una16(opt_data));
         opt_data += 2;
-        const unsigned src_mask = *opt_data;
-        opt_data += 2;
-        const unsigned addr_bytes = (src_mask >> 3) + ((src_mask & 7) ? 1 : 0);
-        // Technically, edns-client-subnet specifies that opt_len should be
-        //   *exactly* "4 + addr_bytes" here, but we'll accept it if they left
-        //   additional trailing bytes on the end, since it doesn't hurt us.
-        // We must have the correct amount at a minimum, though.
-        if (opt_len < 4 + addr_bytes) {
-            log_devdebug("edns_client_subnet: addr length %u too short for src_mask of %u", opt_len, src_mask);
+        const unsigned src_mask = *opt_data++;
+        const unsigned scope_mask = *opt_data++;
+        if (scope_mask) {
+            log_devdebug("edns_client_subnet: non-zero scope mask in request: %u", scope_mask);
             rv = true;
             break;
         }
 
-        if (family == 1) { // IPv4
-            if (src_mask > 32) {
-                log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
+        // Validate family iff src_mask is non-zero, and validate non-zero
+        // src_mask as appropriate for the know families.
+        if (src_mask) {
+            if (family == 1U) { // IPv4
+                if (src_mask > 32U) {
+                    log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
+                    rv = true;
+                    break;
+                }
+            } else if (family == 2U) { // IPv6
+                if (src_mask > 128U) {
+                    log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
+                    rv = true;
+                    break;
+                }
+            } else {
+                log_devdebug("edns_client_subnet has unknown family %u", family);
                 rv = true;
                 break;
             }
-            ctx->client_info.edns_client.sa.sa_family = AF_INET;
-            memcpy(&ctx->client_info.edns_client.sin.sin_addr.s_addr, opt_data, addr_bytes);
-        } else if (family == 2) { // IPv6
-            if (src_mask > 128) {
-                log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
-                rv = true;
-                break;
-            }
-            ctx->client_info.edns_client.sa.sa_family = AF_INET6;
-            memcpy(ctx->client_info.edns_client.sin6.sin6_addr.s6_addr, opt_data, addr_bytes);
-        } else {
-            log_devdebug("edns_client_subnet has unknown family %u", family);
+        }
+
+        // There should be exactly enough address bytes to cover the provided source mask (possibly 0)
+        const unsigned whole_bytes = src_mask >> 3;
+        const unsigned trailing_bits = src_mask & 7;
+        const unsigned addr_bytes = whole_bytes + (trailing_bits ? 1 : 0);
+        if (opt_len != 4 + addr_bytes) {
+            log_devdebug("edns_client_subnet: option length %u mismatches src_mask of %u", opt_len, src_mask);
             rv = true;
             break;
+        }
+
+        // Also, we need to check that any unmasked trailing bits in the final
+        // byte are explicitly set to zero
+        if (trailing_bits) {
+            const unsigned final_byte = opt_data[src_mask >> 3];
+            const unsigned final_mask = ~(0xFFu << (8U - trailing_bits)) & 0xFFu;
+            if (final_byte & final_mask) {
+                log_devdebug("edns_client_subnet: non-zero bits beyond src_mask");
+                rv = true;
+                break;
+            }
+        }
+
+        // If we made it this far, the input data is completely-valid, and
+        // should be used if the source mask is non-zero:
+        if (src_mask) {
+            if (family == 1U) { // IPv4
+                ctx->client_info.edns_client.sa.sa_family = AF_INET;
+                memcpy(&ctx->client_info.edns_client.sin.sin_addr.s_addr, opt_data, addr_bytes);
+            } else {
+                gdnsd_assert(family == 2U); // IPv6
+                ctx->client_info.edns_client.sa.sa_family = AF_INET6;
+                memcpy(ctx->client_info.edns_client.sin6.sin6_addr.s6_addr, opt_data, addr_bytes);
+            }
         }
 
         ctx->this_max_response -= (8 + addr_bytes); // leave room for response option
-        ctx->use_edns_client_subnet = true;
+        ctx->respond_edns_client_subnet = true;
         ctx->client_info.edns_client_mask = src_mask;
+        ctx->edns_client_family = family; // copy family literally, in case src_mask==0 + junk family echo
     } while (0);
 
     stats_own_inc(&stats->edns_clientsub);
@@ -2063,28 +2098,27 @@ unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdn
         gdnsd_put_una32((status == DECODE_BADVERS) ? htonl(0x01000000) : 0, &opt->extflags);
         gdnsd_put_una16(0, &opt->rdlen);
 
-        if (ctx->use_edns_client_subnet) {
+        if (ctx->respond_edns_client_subnet) {
             gdnsd_put_una16(htons(EDNS_CLIENTSUB_OPTCODE), &packet[res_offset]);
             res_offset += 2;
             const unsigned src_mask = ctx->client_info.edns_client_mask;
+            const unsigned scope_mask = src_mask ? ctx->edns_client_scope_mask : 0;
             const unsigned addr_bytes = (src_mask >> 3) + ((src_mask & 7) ? 1 : 0);
             gdnsd_put_una16(htons(8 + addr_bytes), &opt->rdlen);
             gdnsd_put_una16(htons(4 + addr_bytes), &packet[res_offset]);
             res_offset += 2;
-            if (ctx->client_info.edns_client.sa.sa_family == AF_INET) {
-                gdnsd_put_una16(htons(1), &packet[res_offset]); // family IPv4
-                res_offset += 2;
-                packet[res_offset++] = src_mask;
-                packet[res_offset++] = ctx->edns_client_scope_mask;
-                memcpy(&packet[res_offset], &ctx->client_info.edns_client.sin.sin_addr.s_addr, addr_bytes);
-                res_offset += addr_bytes;
-            } else {
-                gdnsd_assert(ctx->client_info.edns_client.sa.sa_family == AF_INET6);
-                gdnsd_put_una16(htons(2), &packet[res_offset]); // family IPv6
-                res_offset += 2;
-                packet[res_offset++] = src_mask;
-                packet[res_offset++] = ctx->edns_client_scope_mask;
-                memcpy(&packet[res_offset], ctx->client_info.edns_client.sin6.sin6_addr.s6_addr, addr_bytes);
+            gdnsd_put_una16(htons(ctx->edns_client_family), &packet[res_offset]);
+            res_offset += 2;
+            packet[res_offset++] = src_mask;
+            packet[res_offset++] = scope_mask;
+            if (src_mask) {
+                gdnsd_assert(addr_bytes);
+                if (ctx->edns_client_family == 1U) { // IPv4
+                    memcpy(&packet[res_offset], &ctx->client_info.edns_client.sin.sin_addr.s_addr, addr_bytes);
+                } else {
+                    gdnsd_assert(ctx->edns_client_family == 2U); // IPv6
+                    memcpy(&packet[res_offset], ctx->client_info.edns_client.sin6.sin6_addr.s6_addr, addr_bytes);
+                }
                 res_offset += addr_bytes;
             }
         }
