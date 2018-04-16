@@ -56,6 +56,10 @@
       new daemon is a child process of the existing one, certain process(group)
       -level attributes are preserved, allowing compatibility with e.g. systemd
       unit operations.
+    * Configuration option "udp_recv_width" has been removed.  Previously this
+      allowed customization of the width of recvmmsg() and sendmmsg(), or
+      disabling them altogether when set to "1".  These interfaces are now
+      always used with a fixed width of 16 if they're available at runtime.
     ---- Relatively-trivial things ----
     * Code cleaned up a ton for clarity, simplicity, and formatting.
     * plugin_geoip distance calculations are faster and more-accurate

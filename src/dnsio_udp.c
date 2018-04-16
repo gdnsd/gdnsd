@@ -37,6 +37,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in_systm.h>
+#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 #include <pthread.h>
@@ -78,6 +79,18 @@
 // prime at us (3109367) and ms (3109) resolution for the same reasons.
 #define MAX_SHUTDOWN_DELAY_S 3
 
+// This is the width of our recvmmsg + sendmmsg operations.  It used to be
+// configurable, but really a fixed value is probably better, as it makes
+// allocations easier to deal with and loops easier to unroll, etc.  At the end
+// of the day, once you've gotten past burst absorption and a bit over an order
+// of magnitude throughput improvement in the worst case, you've gotten about
+// all the pragmatic benefit you can out of this without risking latencies, as
+// the packet processing between send+recv is serialized.
+// In situations where a larger value seems desirable, it's probably better to
+// just drop packets from the buffer (or add more udp threads, or upgrade
+// hardware, or improve kernel socket efficiency).
+#define MMSG_WIDTH 16U
+
 // This flag is set true early in dnsio_udp_init() only in the case that the
 // runtime check passes (in addition to the configure-time check that handles
 // the USE_MMSG define).
@@ -100,6 +113,8 @@ void dnsio_udp_init(void)
         errno = 0;
         recvmmsg(-1, 0, 0, 0, 0);
         use_mmsg = (errno != ENOSYS);
+        if (use_mmsg)
+            log_devdebug("using sendmmsg()/recvmmsg() interfaces for UDP");
     }
     errno = 0;
 #endif
@@ -227,21 +242,24 @@ static void udp_sock_opts_v6(const int sock)
 }
 
 F_NONNULL
-static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, const unsigned width, const gdnsd_anysin_t* asin)
+static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, const gdnsd_anysin_t* asin)
 {
     gdnsd_assert(sock > -1);
     gdnsd_assert(which == SO_SNDBUF || which == SO_RCVBUF);
     gdnsd_assert(pktsize >= 512);
     gdnsd_assert(pktsize <= 65536);
-    gdnsd_assert(width > 0);
-    gdnsd_assert(width <= 64);
 
     // Our default desired buffer.  This is based on enough room for
-    //   recv_width * 8 packets.  recv_width is counted as "4" if less than 4
-    //   (including the non-sendmmsg() case).
-    const int desired_buf = (int)(pktsize * 8 * ((width < 4) ? 4 : width));
+    //   MMSG_WIDTH * 8 packets in the mmsg case, or 32 packets otherwise
+#ifdef USE_MMSG
+    const unsigned npkts = 8U * (use_mmsg ? MMSG_WIDTH : 4U);
+#else
+    const unsigned npkts = 8U * 4U;
+#endif
+
+    const int desired_buf = (int)(pktsize * npkts);
     gdnsd_assert(desired_buf >= 16384); // 512 * 8 * 4
-    gdnsd_assert(desired_buf <= 33554432); // 64K * 8 * 64
+    gdnsd_assert(desired_buf <= 8388608); // 64K * 8 * 16
 
     // Bare minimum buffer we'll accept: the greater of 16K or pktsize
     const int min_buf = (int)((pktsize < 16384) ? 16384 : pktsize);
@@ -266,7 +284,7 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
             else if (opt_size > min_buf)
                 opt_size = min_buf;
             else
-                log_fatal("Failed to set %s to %i for UDP socket %s: %s.  You may need to reduce the max_edns_response and/or udp_recv_width, or specify workable buffer sizes explicitly in the config", which_str, opt_size, logf_anysin(asin), logf_errno());
+                log_fatal("Failed to set %s to %i for UDP socket %s: %s.  You may need to reduce the max_edns_response, or specify workable buffer sizes explicitly in the config", which_str, opt_size, logf_anysin(asin), logf_errno());
         }
     }
 
@@ -300,19 +318,13 @@ void udp_sock_setup(dns_thread_t* t)
     if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof(opt_one)) == -1)
         log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
 
-#ifdef USE_MMSG
-    const unsigned negotiate_width = use_mmsg ? addrconf->udp_recv_width : 1;
-#else
-    const unsigned negotiate_width = 1;
-#endif
-
     if (addrconf->udp_rcvbuf) {
         int opt_size = (int)addrconf->udp_rcvbuf;
         if (setsockopt(t->sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
             log_fatal("Failed to set SO_RCVBUF to %i for UDP socket %s: %s", opt_size,
                       logf_anysin(asin), logf_errno());
     } else {
-        negotiate_udp_buffer(t->sock, SO_RCVBUF, DNS_RECV_SIZE, negotiate_width, asin);
+        negotiate_udp_buffer(t->sock, SO_RCVBUF, DNS_RECV_SIZE, asin);
     }
 
     if (addrconf->udp_sndbuf) {
@@ -321,7 +333,7 @@ void udp_sock_setup(dns_thread_t* t)
             log_fatal("Failed to set SO_SNDBUF to %i for UDP socket %s: %s", opt_size,
                       logf_anysin(asin), logf_errno());
     } else {
-        negotiate_udp_buffer(t->sock, SO_SNDBUF, gcfg->max_edns_response, negotiate_width, asin);
+        negotiate_udp_buffer(t->sock, SO_SNDBUF, gcfg->max_edns_response, asin);
     }
 
     if (isv6)
@@ -342,8 +354,12 @@ static unsigned get_pgsz(void)
     return (unsigned)pgsz;
 }
 
-// A reasonable guess for v4/v6 dstaddr pktinfo + cmsg header?
-#define CMSG_BUFSIZE 256
+// This is a precise definition of the cmsg buffer space needed for IPv6, which
+// is assumed to be larger than that needed for IPv4 (we use the same buffer
+// size for both cases for simplicity).  There could be portability issues
+// lurking here that will need to be addressed, but this works for Linux and I
+// think it works for the *BSDs as well.
+#define CMSG_BUFSIZE CMSG_SPACE(sizeof(struct in6_pktinfo))
 
 F_HOT F_NONNULL
 static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg)
@@ -359,13 +375,15 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         .iov_len  = 0
     };
     struct msghdr msg_hdr;
-    char cmsg_buf[CMSG_BUFSIZE];
-    memset(cmsg_buf, 0, sizeof(cmsg_buf));
+    union {
+        char cbuf[CMSG_BUFSIZE];
+        struct cmsghdr align;
+    } cmsg_buf;
     memset(&msg_hdr, 0, sizeof(msg_hdr));
     msg_hdr.msg_name       = &asin.sa;
     msg_hdr.msg_iov        = &iov;
     msg_hdr.msg_iovlen     = 1;
-    msg_hdr.msg_control    = use_cmsg ? cmsg_buf : NULL;
+    msg_hdr.msg_control    = use_cmsg ? cmsg_buf.cbuf : NULL;
 
     const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
@@ -381,6 +399,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         msg_hdr.msg_controllen = cmsg_size;
         msg_hdr.msg_namelen    = GDNSD_ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
+        memset(cmsg_buf.cbuf, 0, sizeof(cmsg_buf));
 
         ssize_t recvmsg_rv;
 
@@ -441,7 +460,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 #ifdef USE_MMSG
 
 F_HOT F_NONNULL
-static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg)
+static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg)
 {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
 
@@ -449,17 +468,27 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
 
-    uint8_t* bufs = gdnsd_xpmalign_n(pgsz, width, max_rounded);
-    uint8_t* buf[width]; // VLA XXX
-    struct iovec iov[width][1]; // VLA XXX
-    struct mmsghdr dgrams[width]; // VLA XXX
-    char cmsg_buf[width][CMSG_BUFSIZE]; // VLA XXX
-    gdnsd_anysin_t asin[width]; // VLA XXX
+    uint8_t* bufs = gdnsd_xpmalign_n(pgsz, MMSG_WIDTH, max_rounded);
 
-    /* Set up packet buffers */
-    memset(cmsg_buf, 0, sizeof(cmsg_buf));
-    for (unsigned i = 0; i < width; i++)
-        iov[i][0].iov_base = buf[i] = &bufs[i * max_rounded];
+    struct mmsghdr dgrams[MMSG_WIDTH];
+    struct {
+        struct iovec iov[1];
+        gdnsd_anysin_t asin;
+        union {
+            char cbuf[CMSG_BUFSIZE];
+            struct cmsghdr align;
+        } cmsg_buf;
+    } msgdata[MMSG_WIDTH];
+
+    // Set up mmsg buffers and sub-structures
+    for (unsigned i = 0; i < MMSG_WIDTH; i++) {
+        memset(&dgrams[i].msg_hdr, 0, sizeof(dgrams[i].msg_hdr));
+        msgdata[i].iov[0].iov_base       = &bufs[i * max_rounded];
+        dgrams[i].msg_hdr.msg_iov        = msgdata[i].iov;
+        dgrams[i].msg_hdr.msg_iovlen     = 1;
+        dgrams[i].msg_hdr.msg_name       = &msgdata[i].asin.sa;
+        dgrams[i].msg_hdr.msg_control    = use_cmsg ? msgdata[i].cmsg_buf.cbuf : NULL;
+    }
 
     const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
@@ -471,24 +500,20 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
         if (unlikely(thread_shutdown))
             break;
 
-        /* Set up msg_hdr stuff: moving initialization inside of the loop was
-             necessitated by the memmove() below */
-        for (unsigned i = 0; i < width; i++) {
-            iov[i][0].iov_len = DNS_RECV_SIZE;
-            dgrams[i].msg_hdr.msg_iov        = iov[i];
-            dgrams[i].msg_hdr.msg_iovlen     = 1;
-            dgrams[i].msg_hdr.msg_name       = &asin[i].sa;
-            dgrams[i].msg_hdr.msg_namelen    = GDNSD_ANYSIN_MAXLEN;
-            dgrams[i].msg_hdr.msg_control    = use_cmsg ? cmsg_buf[i] : NULL;
-            dgrams[i].msg_hdr.msg_controllen = cmsg_size;
-            dgrams[i].msg_hdr.msg_flags      = 0;
+        // Re-set values changed by previous syscalls
+        for (unsigned i = 0; i < MMSG_WIDTH; i++) {
+            dgrams[i].msg_hdr.msg_iov[0].iov_len = DNS_RECV_SIZE;
+            dgrams[i].msg_hdr.msg_namelen        = GDNSD_ANYSIN_MAXLEN;
+            dgrams[i].msg_hdr.msg_controllen     = cmsg_size;
+            dgrams[i].msg_hdr.msg_flags          = 0;
+            memset(msgdata[i].cmsg_buf.cbuf, 0, sizeof(msgdata[i].cmsg_buf));
         }
 
         int mmsg_rv;
 
         if (likely(is_online)) {
             rcu_quiescent_state();
-            mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+            mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
             if (unlikely(mmsg_rv < 0)) {
                 if (errno == EINTR)
                     continue;
@@ -500,7 +525,7 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
                 }
             }
         } else {
-            mmsg_rv = recvmmsg(fd, dgrams, width, MSG_WAITFORONE, NULL);
+            mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
             if (unlikely(mmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
                 continue;
             (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
@@ -516,56 +541,63 @@ static void mainloop_mmsg(const unsigned width, const int fd, void* dnsp_ctx, dn
         }
 
         unsigned pkts = (unsigned)mmsg_rv;
-        gdnsd_assert(pkts <= width);
+        gdnsd_assert(pkts <= MMSG_WIDTH);
         for (unsigned i = 0; i < pkts; i++) {
-            if (unlikely((asin[i].sa.sa_family == AF_INET && !asin[i].sin.sin_port)
-                         || (asin[i].sa.sa_family == AF_INET6 && !asin[i].sin6.sin6_port))) {
+            gdnsd_anysin_t* asp = &msgdata[i].asin;
+            struct iovec* iop = &msgdata[i].iov[0];
+            if (unlikely((asp->sa.sa_family == AF_INET && !asp->sin.sin_port)
+                         || (asp->sa.sa_family == AF_INET6 && !asp->sin6.sin6_port))) {
                 // immediately fail with no log output for packets with source port zero
                 stats_own_inc(&stats->dropped);
-                iov[i][0].iov_len = 0; // skip send, still need memmove below
+                iop->iov_len = 0; // skip send, same as if process_dns_query() rejected it
             } else {
-                asin[i].len = dgrams[i].msg_hdr.msg_namelen;
-                iov[i][0].iov_len = process_dns_query(dnsp_ctx, stats, &asin[i], buf[i], dgrams[i].msg_len);
+                asp->len = dgrams[i].msg_hdr.msg_namelen;
+                iop->iov_len = process_dns_query(dnsp_ctx, stats, asp, iop->iov_base, dgrams[i].msg_len);
             }
         }
 
-        /* This block adjusts the array of mmsg entries to account for skips where
-         *   process_query() (or source port zero) decided we don't owe the
-         *   sender a response packet.
-         */
-        /* This could be far simpler if sendmmsg() had an interface for skipping packets,
-         *   e.g. a msg_flags flag that indicates the sendmmsg() internal loop should take
-         *   no action for this entry, but still count it in the total number of successes
-         */
-        unsigned i = 0;
-        while (i < pkts) {
-            if (unlikely(!dgrams[i].msg_hdr.msg_iov[0].iov_len)) {
-                const unsigned next = i + 1;
-                if (next < pkts)
-                    memmove(&dgrams[i], &dgrams[next], sizeof(dgrams[i]) * (pkts - next));
-                pkts--;
-            } else {
-                i++;
-            }
-        }
+        // We have an array of datagrams to potentially send.  There are "pkts"
+        // entries, but any with iov_len == 0 should not be sent, and sendmmsg can
+        // only send contiguous chunks of the array.  Therefore, some magic here
+        // has to skip past blocks of zeros while sending blocks of non-zeros:
 
         struct mmsghdr* dgptr = dgrams;
         while (pkts) {
-            mmsg_rv = sendmmsg(fd, dgptr, pkts, 0);
-            gdnsd_assert(mmsg_rv != 0); // not possible, sendmmsg returns >0 or -1+errno
-            if (unlikely(mmsg_rv < 0)) {
-                if (errno == EINTR || ERRNO_WOULDBLOCK)
-                    continue; // retry same sendmmsg() call
-                stats_own_inc(&stats->udp.sendfail);
-                log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
-                mmsg_rv = 1; // count as one packet "handled", so we
-                // don't re-send the erroring packet
+            // skip any leading run of zeros
+            while (pkts && unlikely(!dgptr[0].msg_hdr.msg_iov[0].iov_len)) {
+                dgptr++;
+                pkts--;
             }
-            gdnsd_assert(mmsg_rv >= 1);
-            gdnsd_assert(mmsg_rv <= (int)pkts);
-            const unsigned sent = (unsigned)mmsg_rv;
-            dgptr += sent; // skip past the handled packets
-            pkts -= sent; // drop the count of all handled packets
+
+            // count the next run of non-zeros, transferring their accounting
+            // from pkts to spkts
+            unsigned spkts = 0;
+            for (unsigned i = 0; i < pkts; i++) {
+                if (likely(dgptr[i].msg_hdr.msg_iov[0].iov_len))
+                    spkts++;
+                else
+                    break;
+            }
+            pkts -= spkts;
+
+            // send next run of non-zero entries
+            while (spkts) {
+                mmsg_rv = sendmmsg(fd, dgptr, spkts, 0);
+                gdnsd_assert(mmsg_rv != 0); // not possible, sendmmsg returns >0 or -1+errno
+                if (unlikely(mmsg_rv < 0)) {
+                    if (errno == EINTR || ERRNO_WOULDBLOCK)
+                        continue; // retry same sendmmsg() call
+                    stats_own_inc(&stats->udp.sendfail);
+                    log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
+                    mmsg_rv = 1; // count as one packet "handled", so we
+                    // don't re-send the erroring packet
+                }
+                gdnsd_assert(mmsg_rv >= 1);
+                gdnsd_assert(mmsg_rv <= (int)spkts);
+                const unsigned sent = (unsigned)mmsg_rv;
+                dgptr += sent; // skip past the handled packets
+                spkts -= sent; // drop the count of all handled packets
+            }
         }
     }
 
@@ -615,15 +647,11 @@ void* dnsio_udp_start(void* thread_asvoid)
     rcu_register_thread();
 
 #ifdef USE_MMSG
-    if (use_mmsg && addrconf->udp_recv_width > 1) {
-        log_debug("sendmmsg() with a width of %u enabled for UDP socket %s",
-                  addrconf->udp_recv_width, logf_anysin(&addrconf->addr));
-        mainloop_mmsg(addrconf->udp_recv_width, t->sock, dnsp_ctx, stats, need_cmsg);
-    } else
+    if (use_mmsg)
+        mainloop_mmsg(t->sock, dnsp_ctx, stats, need_cmsg);
+    else
 #endif
-    {
         mainloop(t->sock, dnsp_ctx, stats, need_cmsg);
-    }
 
     rcu_unregister_thread();
 #ifndef NDEBUG

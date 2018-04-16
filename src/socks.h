@@ -29,7 +29,6 @@
 typedef struct {
     gdnsd_anysin_t addr;
     unsigned dns_port;
-    unsigned udp_recv_width;
     unsigned udp_sndbuf;
     unsigned udp_rcvbuf;
     unsigned udp_threads;

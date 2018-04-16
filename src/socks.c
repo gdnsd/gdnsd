@@ -43,7 +43,6 @@
 // The "default defaults" for various address-level things
 static const dns_addr_t addr_defs_defaults = {
     .dns_port = 53U,
-    .udp_recv_width = 8U,
     .udp_rcvbuf = 0U,
     .udp_sndbuf = 0U,
     .udp_threads = 1U,
@@ -143,7 +142,6 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             if (!vscf_is_hash(addr_opts))
                 log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
 
-            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_recv_width, 1LU, 64LU, addrconf->udp_recv_width);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, udp_threads, 1024LU, addrconf->udp_threads);
@@ -232,7 +230,6 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
         CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
-        CFG_OPT_UINT_ALTSTORE(options, udp_recv_width, 1LU, 64LU, addr_defs.udp_recv_width);
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
         CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, addr_defs.udp_sndbuf);
         CFG_OPT_UINT_ALTSTORE_NOMIN(options, udp_threads, 1024LU, addr_defs.udp_threads);

@@ -147,7 +147,7 @@ per-address options, as in:
 
 The per-address options (which are identical to, and locally override,
 the global option of the same name) are C<tcp_threads>,
-C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>, C<udp_recv_width>,
+C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>,
 C<udp_rcvbuf>, and C<udp_sndbuf>.
 
 Finally, it can also be set to the special string value C<any>, as in:
@@ -207,34 +207,13 @@ a valid query for this many seconds.  L<gdnsd(8)> allows multiple
 requests per connection, and this idle timeout applies to the time
 between requests as well.
 
-=item B<udp_recv_width>
-
-Integer, default 8, min 1, max 64.  On supported Linux kernels this
-setting tunes the use of more efficient interfaces to receive and send
-multiple packets with a single syscall.  Higher values reduce syscall
-overhead and generally give the server higher throughput and better
-efficiency under high loads.
-
-I believe that this is basically always a win under load when
-supported, but values much larger than necessary do have a chance to
-increase average response latency very slightly.  The optimal setting
-is highly dependent on local hardware, software configuration, and
-network load conditions.
-
-Setting this to a value of 1 will completely disable this code, as if
-we were running on a platform that didn't support it.  On platforms
-that don't support it, this option has no effect and is ignored.  On
-Linux if we don't detect a 3.0 or higher kernel at runtime, we fall
-back to the same code as other platforms that don't support it.
-
 =item B<udp_rcvbuf>
 
 Integer, min 4096, max 1048576.  If set, this value will be used to set
 the C<SO_RCVBUF> socket option on the UDP listening socket(s).  Most
 users do not need to tune this value.  If left unset, the code
 takes a somewhat heuristic approach, trying to raise the value only if
-the OS-supplied default seems too low, and multiplying it a bit in the
-case of C<udp_recv_width> > 1.
+the OS-supplied default seems too low for conditions.
 
 =item B<udp_sndbuf>
 
