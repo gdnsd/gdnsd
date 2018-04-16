@@ -126,6 +126,28 @@ static uint64_t get_rand(const uint64_t modval)
     return gdnsd_rand64_get(rstate) % modval;
 }
 
+// This is a per-thread 2D array of unsigneds which is indexed like:
+//   dyn_addr_weights[item][addr]
+// It's used to store temporary outputs while calculating our response during
+// runtime lookups in resolve().  It would be a stack buffer like others near
+// the top of resolve(), but:
+// (1) the size of this buffer ends up being ~16KB even though few of those
+//     bytes are commonly used, which seems too high to toss on the stack.
+// (2) malloc during resolve() is undesirable in perf terms.
+// The values set here are either the configured weight or zero, depending on
+// the runtime-variable monitored status of the items in question.
+static __thread unsigned(*dyn_addr_weights)[MAX_ADDRS_PER_GROUP] = NULL;
+
+static void init_dyn_addr_weights(void)
+{
+    dyn_addr_weights = xmalloc_n(MAX_ITEMS_PER_SET, sizeof(*dyn_addr_weights));
+}
+
+static void clear_dyn_addr_weights(void)
+{
+    memset(dyn_addr_weights, 0, sizeof(*dyn_addr_weights) * MAX_ITEMS_PER_SET);
+}
+
 // Main config code starts here
 
 F_NONNULL
@@ -708,11 +730,13 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* origin)
 void plugin_weighted_iothread_init(void)
 {
     init_rand();
+    init_dyn_addr_weights();
 }
 
 void plugin_weighted_iothread_debug_cleanup(void)
 {
     free(rstate);
+    free(dyn_addr_weights);
 }
 
 F_NONNULL
@@ -789,12 +813,8 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     unsigned dyn_items_max = 0; // max of dyn_item_sums[]
     unsigned dyn_item_sums[MAX_ITEMS_PER_SET]; // sum of dyn_addr_weights[N][]
     unsigned dyn_item_maxs[MAX_ITEMS_PER_SET]; // max of dyn_addr_weights[N][]
-    // addr cfg weight or 0, depends on status:
-    unsigned dyn_addr_weights[num_items][aset->max_addrs_pergroup]; // VLA XXX
 
-    // not strictly necessary (we write to every array item we use), but this
-    //   avoids clang-analyzer getting confused and complaining about garbage values :P
-    memset(dyn_addr_weights, 0, sizeof(dyn_addr_weights));
+    clear_dyn_addr_weights();
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
 
@@ -808,9 +828,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
             const gdnsd_sttl_t addr_sttl
                 = gdnsd_sttl_min(sttl_tbl, addr->indices, aset->num_svcs);
             rv = gdnsd_sttl_min2(rv, addr_sttl);
-            if (addr_sttl & GDNSD_STTL_DOWN) {
-                dyn_addr_weights[item_idx][addr_idx] = 0;
-            } else {
+            if (!(addr_sttl & GDNSD_STTL_DOWN)) {
                 dyn_addr_weights[item_idx][addr_idx] = addr->weight;
                 dyn_item_sums[item_idx] += addr->weight;
                 if (addr->weight > dyn_item_maxs[item_idx])
