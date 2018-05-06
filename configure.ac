@@ -126,6 +126,7 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wcast-qual \
     -Wduplicated-cond \
     -Wendif-labels \
+    -Werror=vla \
     -Wfloat-equal \
     -Wfloat-conversion \
     -Wformat=2 \
