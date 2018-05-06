@@ -65,6 +65,10 @@
       7871 in a few key areas where they differed.  Haven't yet dealt with a
       few deeper issues around corner cases like delegation and negative
       responses.
+    * Semantics of the sub-fields of NAPTR are no longer validated - if it
+      legally fits in the protocol sense we'll accept it, rather than trying to
+      warn or fail on certain RFC-illegal combinations of data/flags.
+    * NAPTR also no longer encodes any additional-section addresses.
     ---- Relatively-trivial things ----
     * Code cleaned up a ton for clarity, simplicity, and formatting.
     * plugin_geoip distance calculations are faster and more-accurate

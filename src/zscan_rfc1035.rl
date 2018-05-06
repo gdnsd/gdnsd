@@ -58,7 +58,7 @@ typedef struct {
     bool     zn_err_detect;
     bool     lhs_is_ooz;
     unsigned lcount;
-    unsigned num_texts;
+    unsigned text_len;
     unsigned def_ttl;
     unsigned uval;
     unsigned ttl;
@@ -83,7 +83,7 @@ typedef struct {
         char    rhs_dyn[256];
         char    caa_prop[256];
     };
-    uint8_t** texts;
+    uint8_t* text;
     sigjmp_buf jbuf;
 } zscan_t;
 
@@ -200,23 +200,21 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
 F_NONNULL
 static void text_start(zscan_t* z)
 {
-    z->num_texts = 0;
-    z->texts = NULL;
+    gdnsd_assert(z->text == NULL);
+    gdnsd_assert(z->text_len == 0);
 }
 
 F_NONNULL
 static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
 {
-
-    char* text_temp = xmalloc(len + 1);
-    text_temp[0] = 0;
+    char* text_temp = xmalloc(len ? len : 1);
     unsigned newlen = len;
-    if (len)
+    if (len) {
         newlen = dns_unescape(text_temp, z->tstart, len);
+        gdnsd_assert(newlen && newlen <= len);
+    }
 
-    gdnsd_assert(newlen <= len);
-
-    if (newlen > 255) {
+    if (newlen > 255U) {
         if (!big_ok || gcfg->disable_text_autosplit) {
             free(text_temp);
             parse_error_noargs("Text chunk too long (>255 unescaped)");
@@ -225,32 +223,65 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
             free(text_temp);
             parse_error_noargs("Text chunk too long (>65500 unescaped)");
         }
-        unsigned remainder = newlen % 255;
-        unsigned num_whole_chunks = (newlen - remainder) / 255;
-        const char* zptr = text_temp;
-        const unsigned new_alloc = 1 + z->num_texts + num_whole_chunks + (remainder ? 1 : 0);
-        z->texts = xrealloc_n(z->texts, new_alloc, sizeof(*z->texts));
+        const unsigned remainder = newlen % 255;
+        const unsigned num_whole_chunks = (newlen - remainder) / 255;
+        unsigned new_alloc = newlen + num_whole_chunks + (remainder ? 1 : 0);
+        if (new_alloc + z->text_len > 65500)
+            parse_error_noargs("Text record too long (>65500 in rdata form)");
+
+        z->text = xrealloc(z->text, z->text_len + new_alloc);
+        unsigned write_offset = z->text_len;
+        z->text_len += new_alloc;
+        const char* readptr = text_temp;
         for (unsigned i = 0; i < num_whole_chunks; i++) {
-            uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(256);
-            *chunk++ = 255;
-            memcpy(chunk, zptr, 255);
-            zptr += 255;
+            z->text[write_offset++] = 255;
+            memcpy(&z->text[write_offset], readptr, 255);
+            write_offset += 255;
+            readptr += 255;
         }
         if (remainder) {
-            uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(remainder + 1);
-            *chunk++ = remainder;
-            memcpy(chunk, zptr, remainder);
+            z->text[write_offset++] = remainder;
+            memcpy(&z->text[write_offset], readptr, remainder);
         }
-        z->texts[z->num_texts] = NULL;
-    } else {
-        z->texts = xrealloc_n(z->texts, z->num_texts + 2, sizeof(*z->texts));
-        uint8_t* chunk = z->texts[z->num_texts++] = xmalloc(newlen + 1);
-        *chunk++ = newlen;
-        memcpy(chunk, text_temp, newlen);
-        z->texts[z->num_texts] = NULL;
+        gdnsd_assert(write_offset + remainder == z->text_len);
+    } else { // 0-255 bytes, one chunk
+        const unsigned new_alloc = newlen + 1;
+        if (new_alloc + z->text_len > 65500) {
+            free(text_temp);
+            parse_error_noargs("Text record too long (>65500 in rdata form)");
+        }
+        z->text = xrealloc(z->text, z->text_len + new_alloc);
+        unsigned write_offset = z->text_len;
+        z->text_len += new_alloc;
+        z->text[write_offset++] = newlen;
+        memcpy(&z->text[write_offset], text_temp, newlen);
     }
 
     free(text_temp);
+    z->tstart = NULL;
+}
+
+F_NONNULL
+static void text_add_tok_huge(zscan_t* z, const unsigned len)
+{
+    char* storage = xmalloc(len ? len : 1);
+    unsigned newlen = len;
+    if (len) {
+        newlen = dns_unescape(storage, z->tstart, len);
+        gdnsd_assert(newlen && newlen <= len);
+    }
+
+    if (newlen > 65500) {
+        free(storage);
+        parse_error_noargs("Text chunk too long (>65500 unescaped)");
+    }
+
+    // _huge is only used alone, not in a set
+    gdnsd_assert(!z->text_len);
+    gdnsd_assert(!z->text);
+
+    z->text = (uint8_t*)storage;
+    z->text_len = newlen;
     z->tstart = NULL;
 }
 
@@ -394,29 +425,32 @@ static void rec_srv(zscan_t* z)
 }
 
 F_NONNULL
-static void texts_cleanup(zscan_t* z)
+static void text_cleanup(zscan_t* z)
 {
-    free(z->texts);
-    z->texts = NULL;
-    z->num_texts = 0;
+    if (z->text)
+        free(z->text);
+    z->text = NULL;
+    z->text_len = 0;
 }
 
 F_NONNULL
 static void rec_naptr(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->num_texts, z->texts))
+    if (ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->text_len, z->text))
         siglongjmp(z->jbuf, 1);
-    texts_cleanup(z);
+    z->text = NULL; // storage handed off to ltree
+    text_cleanup(z);
 }
 
 F_NONNULL
 static void rec_txt(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_txt(z->zone, z->lhs_dname, z->num_texts, z->texts, z->ttl))
+    if (ltree_add_rec_txt(z->zone, z->lhs_dname, z->text_len, z->text, z->ttl))
         siglongjmp(z->jbuf, 1);
-    texts_cleanup(z);
+    z->text = NULL; // storage handed off to ltree
+    text_cleanup(z);
 }
 
 F_NONNULL
@@ -448,7 +482,6 @@ static void rec_rfc3597(zscan_t* z)
 F_NONNULL
 static void rec_caa(zscan_t* z)
 {
-    gdnsd_assert(z->num_texts == 1); // parser-enforced
     if (z->uv_1 > 255)
         parse_error("CAA flags byte value %u is >255", z->uv_1);
 
@@ -456,7 +489,7 @@ static void rec_caa(zscan_t* z)
 
     const unsigned prop_len = strlen(z->caa_prop);
     gdnsd_assert(prop_len < 256); // parser-enforced
-    const unsigned value_len = (uint8_t)z->texts[0][0];
+    const unsigned value_len = z->text_len;
     const unsigned total_len = 2 + prop_len + value_len;
 
     uint8_t* caa_rdata = xmalloc(total_len);
@@ -465,12 +498,11 @@ static void rec_caa(zscan_t* z)
     *caa_write++ = prop_len;
     memcpy(caa_write, z->caa_prop, prop_len);
     caa_write += prop_len;
-    memcpy(caa_write, &z->texts[0][1], value_len);
-    free(z->texts[0]);
+    memcpy(caa_write, z->text, value_len);
 
     if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata))
         siglongjmp(z->jbuf, 1);
-    texts_cleanup(z);
+    text_cleanup(z);
 }
 
 F_NONNULL
@@ -547,6 +579,8 @@ static void close_paren(zscan_t* z)
     action push_txt_rdata_q { z->tstart++; text_add_tok(z, fpc - z->tstart - 1, true); }
     action push_txt_rdata_255 { text_add_tok(z, fpc - z->tstart, false); }
     action push_txt_rdata_255_q { z->tstart++; text_add_tok(z, fpc - z->tstart - 1, false); }
+    action push_txt_rdata_huge { text_add_tok_huge(z, fpc - z->tstart); }
+    action push_txt_rdata_huge_q { z->tstart++; text_add_tok_huge(z, fpc - z->tstart - 1); }
 
     action set_ipv4 { set_ipv4(z, fpc); }
     action set_ipv6 { set_ipv6(z, fpc); }
@@ -650,6 +684,9 @@ static void close_paren(zscan_t* z)
     # One chunk of TXT rdata, limited to 255 explicitly
     txt_item_255  = (tword %push_txt_rdata_255 | qword %push_txt_rdata_255_q) >token_start;
 
+    # One chunk of TXT rdata, limited to 65500 explicitly
+    txt_item_huge  = (tword %push_txt_rdata_huge | qword %push_txt_rdata_huge_q) >token_start;
+
     # A whole set of TXT rdata
     txt_rdata = (ws | txt_item)+ $1 %0 >start_txt;
 
@@ -682,7 +719,7 @@ static void close_paren(zscan_t* z)
         (rfc3597_octet+ ws?)**;
 
     caa_prop = [0-9A-Za-z]{1,255} >token_start %set_caa_prop;
-    caa_rdata = uval %set_uv_1 ws caa_prop ws txt_item >start_txt;
+    caa_rdata = uval %set_uv_1 ws caa_prop ws txt_item_huge >start_txt;
 
     # The left half of a resource record, which for our purposes here
     #  is the optional domainname and/or the optional ttl and/or the
@@ -830,12 +867,8 @@ bool zscan_rfc1035(zone_t* zone, const char* fn)
     if (gdnsd_fmap_delete(fmap))
         rv = true;
 
-    if (z->texts) {
-        for (unsigned i = 0; i < z->num_texts; i++)
-            if (z->texts[i])
-                free(z->texts[i]);
-        free(z->texts);
-    }
+    if (z->text)
+        free(z->text);
     if (z->rfc3597_data)
         free(z->rfc3597_data);
     free(z);

@@ -598,46 +598,12 @@ bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* 
     return false;
 }
 
-/* RFC 2195 was obsoleted by RFC 3403 for defining the NAPTR RR
- * As 3403 is much looser about the contents of the 3 text fields,
- * there's not much validation we can do on them.
- *
- * All we can really say for sure anymore is:
- *   1) Flags must be [0-9A-Za-z]*
- *   2) Regexp (the final text field) and Replacement (the RHS domainname)
- *     are apparently mutually exclusive as of RFC3403, and it is an error
- *     to define both in one NAPTR RR.  The "undefined" value for Regexp is the empty
- *     string, and the "undefined" value for Replacement is the root of DNS ('\0').
- */
-F_NONNULL
-static bool naptr_validate_flags(const uint8_t* zone_dname, const uint8_t* dname, const uint8_t* flags)
+bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned text_len, uint8_t* text)
 {
-    unsigned len = *flags++;
-    while (len--) {
-        unsigned c = *flags++;
-        if ((c > 0x7AU)         // > 'Z'
-                || (c > 0x5BU && c < 0x61U) // > 'z' && < 'A'
-                || (c > 0x39U && c < 0x41U) // > '9' && < 'a'
-                || (c < 0x30U))            // < '0'
-            log_zwarn("Name '%s%s': NAPTR has illegal flag char '%c'", logf_dname(dname), logf_dname(zone_dname), (int)c);
-    }
-
-    return false;
-}
-
-bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned num_texts V_UNUSED, uint8_t** texts)
-{
-    gdnsd_assert(num_texts == 3);
-
     if (order > 65535U)
         log_zfatal("Name '%s%s': NAPTR order value %u too large", logf_dname(dname), logf_dname(zone->dname), order);
     if (pref > 65535U)
         log_zfatal("Name '%s%s': NAPTR preference value %u too large", logf_dname(dname), logf_dname(zone->dname), pref);
-    if (naptr_validate_flags(zone->dname, dname, texts[NAPTR_TEXTS_FLAGS]))
-        return true;
-
-    if (rhs[1] != 0 && texts[NAPTR_TEXTS_REGEXP][0])
-        log_zwarn("Name '%s%s': NAPTR does not allow defining both Regexp and Replacement in a single RR", logf_dname(dname), logf_dname(zone->dname));
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -645,23 +611,19 @@ bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t
     new_rdata->dname = lta_dnamedup(zone->arena, rhs);
     new_rdata->order = htons(order);
     new_rdata->pref = htons(pref);
-    memcpy(new_rdata->texts, texts, sizeof(new_rdata->texts));
-    new_rdata->ad = NULL;
+    new_rdata->text_len = text_len;
+    new_rdata->text = text;
     return false;
 }
 
-// We copy the array of pointers, but alias the actual data (which is malloc'd for
-//   us per call in the parser).
-bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl)
+bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl)
 {
-    gdnsd_assert(num_texts);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     INSERT_NEXT_RR(txt, txt, "TXT", 1)
-    ltree_rdata_txt_t new_rd = *new_rdata = xmalloc_n(num_texts + 1, sizeof(*new_rd));
-    for (unsigned i = 0; i <= num_texts; i++)
-        new_rd[i] = texts[i];
+    new_rdata->text_len = text_len;
+    new_rdata->text = text;
     return false;
 }
 
@@ -844,22 +806,6 @@ static bool set_valid_addr(const uint8_t* dname, const zone_t* zone, ltree_rrset
             return false;
 
     return true;
-}
-
-// Input must be a binstr (first byte is len, rest is the data),
-//  "c" must be an uppercase ASCII character.
-// retval indicates whether the string contains this character
-//   (in upper or lower case form).
-F_NONNULL F_PURE
-static bool binstr_hasichr(const uint8_t* bstr, const uint8_t c)
-{
-    gdnsd_assert(c > 0x40 && c < 0x5B);
-    unsigned len = *bstr++;
-    while (len--) {
-        if (((*bstr++) & (~0x20)) == c)
-            return true;
-    }
-    return false;
 }
 
 // For static addresses, if no limit was specified, set it
@@ -1056,15 +1002,6 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
         for (unsigned i = 0; i < node_srv->gen.count; i++)
             if (!set_valid_addr(node_srv->rdata[i].dname, zone, &(node_srv->rdata[i].ad)))
                 log_zwarn("In rrset '%s%s SRV', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_srv->rdata[i].dname));
-
-    if (node_naptr) {
-        for (unsigned i = 0; i < node_naptr->gen.count; i++) {
-            if (binstr_hasichr(node_naptr->rdata[i].texts[NAPTR_TEXTS_FLAGS], 'A')) {
-                if (!set_valid_addr(node_naptr->rdata[i].dname, zone, &(node_naptr->rdata[i].ad)))
-                    log_zwarn("In rrset '%s%s NAPTR', same-zone A-target '%s' has no A or AAAA records", logf_lstack(lstack, depth, zone->dname), logf_dname(node_naptr->rdata[i].dname));
-            }
-        }
-    }
 
     return false;
 }
@@ -1292,21 +1229,13 @@ void ltree_destroy(ltree_node_t* node)
             break;
 
         case DNS_TYPE_NAPTR:
-            for (unsigned i = 0; i < rrset->gen.count; i++) {
-                free(rrset->naptr.rdata[i].texts[NAPTR_TEXTS_REGEXP]);
-                free(rrset->naptr.rdata[i].texts[NAPTR_TEXTS_SERVICES]);
-                free(rrset->naptr.rdata[i].texts[NAPTR_TEXTS_FLAGS]);
-            }
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                free(rrset->naptr.rdata[i].text);
             free(rrset->naptr.rdata);
             break;
         case DNS_TYPE_TXT:
-            for (unsigned i = 0; i < rrset->gen.count; i++) {
-                uint8_t** tptr = rrset->txt.rdata[i];
-                uint8_t* t;
-                while ((t = *tptr++))
-                    free(t);
-                free(rrset->txt.rdata[i]);
-            }
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                free(rrset->txt.rdata[i].text);
             free(rrset->txt.rdata);
             break;
         case DNS_TYPE_NS:

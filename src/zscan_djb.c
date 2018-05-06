@@ -70,10 +70,8 @@ typedef struct {
     /* variables preserved across files */
     zscan_djb_zonedata_t* zonedata;
     const char* path;
-    uint8_t** texts;
     char* line;
     size_t allocated;
-    int num_texts;
     int skipped;
 
     /* file specific data */
@@ -400,19 +398,17 @@ static void load_zones(zscan_t* z, char record_type, field_t* field)
             if (bytes > 65500)
                 parse_error_noargs("Text chunk too long (>65500 unescaped)");
 
-            z->texts = xrealloc_n(z->texts, chunks + 1, sizeof(*z->texts));
+            unsigned text_len = bytes + chunks;
+            uint8_t* text = xmalloc(text_len);
+            unsigned offset = 0;
             for (i = 0; i < chunks; i++) {
                 unsigned s = (bytes > 255U ? 255U : bytes);
-                z->texts[i] = xmalloc(s + 1U);
-                z->texts[i][0] = s;
-                memcpy(&z->texts[i][1], src, s);
-                bytes -= s;
-                src += s;
+                text[offset++] = s;
+                memcpy(&text[offset], src, s);
+                offset += s;
             }
-            z->texts[i] = NULL;
-            if (ltree_add_rec_txt(zone, dname, chunks, z->texts, parse_ttl(z, &field[2], TTL_POSITIVE))) {
-                for (i = 0; i < chunks; i++)
-                    free(z->texts[i]);
+            if (ltree_add_rec_txt(zone, dname, text_len, text, parse_ttl(z, &field[2], TTL_POSITIVE))) {
+                free(text);
                 parse_abort();
             }
         }
@@ -443,17 +439,20 @@ static void load_zones(zscan_t* z, char record_type, field_t* field)
         if (field[3].len > 255 || field[4].len > 255 || field[5].len > 255)
             parse_error_noargs("NAPTR label cannot exceed 255 chars");
 
-        z->texts = xrealloc_n(z->texts, 4, sizeof(*z->texts));
-        for (i = 0; i < 3; i++) {
-            z->texts[i] = xmalloc(field[3 + i].len + 1);
-            z->texts[i][0] = field[3 + i].len;
-            memcpy(&z->texts[i][1], field[3 + i].ptr, field[3 + i].len);
-        }
-        z->texts[i] = NULL;
-        if (ltree_add_rec_naptr(zone, dname, parse_dname(z, dname2, &field[6]), parse_ttl(z, &field[7], TTL_POSITIVE), parse_int(z, &field[1]), parse_int(z, &field[2]), 3, z->texts)) {
-            for (i = 0; i < 3; i++)
-                free(z->texts[i]);
-            parse_abort();
+        {
+            unsigned text_len = field[3].len + field[4].len + field[5].len + 3;
+            uint8_t* text = xmalloc(text_len);
+            unsigned offset = 0;
+            for (i = 0; i < 3; i++) {
+                unsigned l = field[3 + i].len;
+                text[offset++] = l;
+                memcpy(&text[offset], field[3 + i].ptr, l);
+                offset += l;
+            }
+            if (ltree_add_rec_naptr(zone, dname, parse_dname(z, dname2, &field[6]), parse_ttl(z, &field[7], TTL_POSITIVE), parse_int(z, &field[1]), parse_int(z, &field[2]), text_len, text)) {
+                free(text);
+                parse_abort();
+            }
         }
         break;
 #if 0

@@ -1174,21 +1174,12 @@ static unsigned encode_rrs_naptr(dnsp_ctx_t* ctx, unsigned offset, const ltree_r
         offset += 2;
         gdnsd_put_una16(rd->pref, &packet[offset]);
         offset += 2;
-
-        // flags, services, regexp
-        for (unsigned j = 0; j < 3; j++) {
-            const uint8_t* this_txt = rd->texts[j];
-            const unsigned oal = *this_txt + 1U; // oal is the encoded len value + 1 for the len byte itself
-            memcpy(&packet[offset], this_txt, oal);
-            offset += oal;
-        }
+        memcpy(&packet[offset], rd->text, rd->text_len);
+        offset += rd->text_len;
 
         // NAPTR target can't be compressed
-        const unsigned newlen = store_dname_nocomp(ctx, offset, rd->dname);
-        gdnsd_put_una16(htons(offset - rdata_offset + newlen), &packet[rdata_offset - 2]);
-        if (rd->ad)
-            add_addtl_rrset(ctx, rd->ad, offset);
-        offset += newlen;
+        offset += store_dname_nocomp(ctx, offset, rd->dname);
+        gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
     }
 
     return offset;
@@ -1209,20 +1200,12 @@ static unsigned encode_rrs_txt(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
         gdnsd_put_una32(DNS_RRFIXED_TXT, &packet[offset]);
         offset += 4;
         gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 6;
-
-        const unsigned rdata_offset = offset;
-        unsigned rdata_len = 0;
-        const uint8_t* bs;
-        unsigned j = 0;
-        const ltree_rdata_txt_t rd = rrset->rdata[i];
-        while ((bs = rd[j++])) {
-            const unsigned oal = *bs + 1U; // oal is the encoded len value + 1 for the len byte itself
-            memcpy(&packet[offset], bs, oal);
-            offset += oal;
-            rdata_len += oal;
-        }
-        gdnsd_put_una16(htons(rdata_len), &packet[rdata_offset - 2]);
+        offset += 4;
+        const ltree_rdata_txt_t* rd = &rrset->rdata[i];
+        gdnsd_put_una16(htons(rd->text_len), &packet[offset]);
+        offset += 2;
+        memcpy(&packet[offset], rd->text, rd->text_len);
+        offset += rd->text_len;
     }
 
     return offset;

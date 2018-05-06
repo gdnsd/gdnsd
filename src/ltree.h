@@ -123,7 +123,7 @@ typedef struct _ltree_rdata_ptr_struct ltree_rdata_ptr_t;
 typedef struct _ltree_rdata_mx_struct ltree_rdata_mx_t;
 typedef struct _ltree_rdata_srv_struct ltree_rdata_srv_t;
 typedef struct _ltree_rdata_naptr_struct ltree_rdata_naptr_t;
-typedef uint8_t** ltree_rdata_txt_t;
+typedef struct _ltree_rdata_txt_struct ltree_rdata_txt_t;
 typedef struct _ltree_rdata_rfc3597_struct ltree_rdata_rfc3597_t;
 
 typedef union  _ltree_rrset_union ltree_rrset_t;
@@ -169,15 +169,17 @@ struct _ltree_rdata_srv_struct {
     uint16_t port; // net-order
 };
 
-#define NAPTR_TEXTS_FLAGS 0
-#define NAPTR_TEXTS_SERVICES 1
-#define NAPTR_TEXTS_REGEXP 2
 struct _ltree_rdata_naptr_struct {
     const uint8_t* dname;
-    ltree_rrset_addr_t* ad;
-    uint8_t* texts[3]; // flags, services, regexp
+    uint8_t* text;
+    uint16_t text_len;
     uint16_t order; // net-order
     uint16_t pref; // net-order
+};
+
+struct _ltree_rdata_txt_struct {
+    uint8_t* text;
+    unsigned text_len;
 };
 
 struct _ltree_rdata_rfc3597_struct {
@@ -363,9 +365,9 @@ bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* r
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned priority, const unsigned weight, const unsigned port);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned num_texts, uint8_t** texts);
+bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned text_len, uint8_t* text);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned num_texts, uint8_t** texts, unsigned ttl);
+bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl);
 F_WUNUSED F_NONNULLX(1)
 bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd);
 
