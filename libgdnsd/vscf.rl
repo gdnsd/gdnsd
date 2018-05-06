@@ -333,9 +333,12 @@ static unsigned unescape_string(char** outp, const char* in, unsigned len)
 {
     char* out = xmalloc(len + 1);
     unsigned newlen = len;
-    if (len)
+    if (len) {
         newlen = dns_unescape(out, in, len);
-    out = xrealloc(out, newlen + 1); // downsize
+        gdnsd_assert(newlen && newlen <= len);
+        if (newlen != len)
+            out = xrealloc(out, newlen + 1); // downsize
+    }
     out[newlen] = 0;
     *outp = out;
     return newlen;
