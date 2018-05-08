@@ -187,7 +187,7 @@ else {
     $PLUGIN_PATH = "$ENV{TOP_BUILDDIR}/plugins/.libs";
 }
 
-our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 100;
+our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 50;
 
 # Server control socket
 our $CSOCK_PATH = "$OUTDIR/run/gdnsd/control.sock";
@@ -281,8 +281,8 @@ sub check_stats_inner {
 
 sub check_stats {
     my ($class, %to_check) = @_;
-    my $total_attempts = $TEST_RUNNER ? 30 : 20;
-    my $attempt_delay = $TEST_RUNNER ? 0.5 : 0.05;
+    my $total_attempts = $TEST_RUNNER ? 30 : 100;
+    my $attempt_delay = $TEST_RUNNER ? 0.5 : 0.01;
     my $err;
     my $attempts = 0;
     while(1) {
@@ -425,7 +425,6 @@ sub spawn_daemon_execute {
         if(-f $daemon_out) {
             open($GDOUT_FH, '<', $daemon_out)
                 or die "Cannot open '$daemon_out' for reading: $!";
-            my $is_listening;
             while(<$GDOUT_FH>) {
                 daemon_abort($daemon_out) if /\bfatal: /; # don't wait around if we see a fatal log entry...
                 return $pid if /\bDNS listeners started$/;
@@ -545,15 +544,27 @@ sub test_log_output {
 
     my $ok = 0;
     # $retry_delay doubles after each wait...
-    my $retry_delay = 0.1;
-    my $retry = $TEST_RUNNER ? 10 : 9;
+    my $retry_delay = 0.01;
+    my $retry = $TEST_RUNNER ? 12 : 10;
+
+    # Note that tailing a file like this can sometimes read partial lines, if
+    # the OS happens to flush a buffer to visibility mid-line (as can happen
+    # commonly at disk-block boundaries) and our read picks that up terminated
+    # by EOF before the rest of the line becomes visible.  This is the reason
+    # for the $partial/$line code and \n-checking .
+    my $partial = '';
     while($retry--) {
         while(scalar(keys %$texts) && ($_ = <$GDOUT_FH>)) {
-            foreach my $k (keys %$texts) {
-                my $this_text = $texts->{$k};
-                if($_ =~ /\Q$this_text\E/) {
-                    delete $texts->{$k};
-                    last;
+            $partial .= $_;
+            if($partial =~ /\n$/) {
+                my $line = $partial;
+                $partial = '';
+                foreach my $k (keys %$texts) {
+                    my $this_text = $texts->{$k};
+                    if($line =~ /\Q$this_text\E/) {
+                        delete $texts->{$k};
+                        last;
+                    }
                 }
             }
         }

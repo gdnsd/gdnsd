@@ -11,7 +11,7 @@
 
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 4 + ($_GDT::RAND_LOOPS * 5);
+use Test::More tests => 4 + $_GDT::RAND_LOOPS;
 
 # Initialize the random seed and diag() it, so that
 #  failures can be reproduced and sorted out
@@ -89,17 +89,6 @@ foreach (1..$_GDT::RAND_LOOPS) {
     send($sock, gen_random_packet(13), 0);
     send($sock, gen_random_packet(14), 0);
     send($sock, gen_random_packet(15), 0);
-
-    $rand_reqs += 15;
-
-    eval {_GDT->check_stats(
-        udp_reqs => $rand_reqs + $valid_reqs,
-        noerror => $valid_reqs,
-        nxdomain => 0,
-        refused => 0,
-    )};
-    ok(!$@) or diag $@;
-
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
@@ -120,17 +109,6 @@ foreach (1..$_GDT::RAND_LOOPS) {
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
-
-    $rand_reqs += 20;
-
-    eval {_GDT->check_stats(
-        udp_reqs => $rand_reqs + $valid_reqs,
-        noerror => $valid_reqs,
-        nxdomain => 0,
-        refused => 0,
-    )};
-    ok(!$@) or diag $@;
-
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
@@ -151,17 +129,6 @@ foreach (1..$_GDT::RAND_LOOPS) {
     send($sock, gen_random_packet_good_header(10), 0);
     send($sock, gen_random_packet_good_header(11), 0);
     send($sock, gen_random_packet_good_header(), 0);
-
-    $rand_reqs += 20;
-
-    eval {_GDT->check_stats(
-        udp_reqs => $rand_reqs + $valid_reqs,
-        noerror => $valid_reqs,
-        nxdomain => 0,
-        refused => 0,
-    )};
-    ok(!$@) or diag $@;
-
     send($sock, gen_random_packet_good_header(), 0);
     send($sock, gen_random_packet_good_header(), 0);
     send($sock, gen_random_packet_good_header(), 0);
@@ -181,15 +148,7 @@ foreach (1..$_GDT::RAND_LOOPS) {
     send($sock, gen_random_packet_good_header(), 0);
     close($sock);
 
-    $rand_reqs += 17;
-
-    eval {_GDT->check_stats(
-        udp_reqs => $rand_reqs + $valid_reqs,
-        noerror => $valid_reqs,
-        nxdomain => 0,
-        refused => 0,
-    )};
-    ok(!$@) or diag $@;
+    $rand_reqs += 72;
 
     eval {_GDT->query_server(
         undef,
@@ -203,7 +162,6 @@ foreach (1..$_GDT::RAND_LOOPS) {
     ok(!$@) or diag $@;
 
     $valid_reqs += 1;
-
 }
 
 eval {_GDT->check_stats(

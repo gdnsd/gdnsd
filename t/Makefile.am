@@ -7,8 +7,8 @@ ALLTESTS = $(srcdir)/[0-9]*/*.t
 # re-use silent-rules to set "prove" execution mode:
 #  V=0 -> quiet + parallelized
 #  V=1 -> verbose + serial
-# Note test concurrency is TEST_CPUS * 2; we do a lot of sleeping/waiting...
-prove_mode_0 = -q --merge -j$$(($(TEST_CPUS) * 2)) --state=slow,save
+# Note test concurrency is TEST_CPUS * 4; we do a lot of sleeping/waiting...
+prove_mode_0 = -q --merge -j$$(($(TEST_CPUS) * 4)) --state=slow,save
 prove_mode_1 = -v -f
 prove_mode_  = $(prove_mode_@AM_DEFAULT_V@)
 prove_mode   = $(prove_mode_@AM_V@)
