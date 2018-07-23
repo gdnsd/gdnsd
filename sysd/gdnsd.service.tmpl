@@ -12,6 +12,8 @@ Type=notify
 NotifyAccess=all
 ExecStart=@GDNSD_SBINDIR@/gdnsd -f start
 ExecStop=@GDNSD_SBINDIR@/gdnsd stop
+Restart=always
+RestartSec=30
 
 #---
 # Things below this mark are not strictly required for proper operation,
@@ -27,5 +29,7 @@ MountFlags=slave
 DevicePolicy=closed
 PrivateDevices=true
 PrivateTmp=true
+
+# If you have pid files in /usr/local/ then disable ProtectSystem=full to allow RW on /usr/path_to_pid/gdnsd.pid
 ProtectSystem=full
 ProtectHome=true
