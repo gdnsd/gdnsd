@@ -1,0 +1,6 @@
+; this starts at origin zlevel
+@ A 192.0.2.42
+$ORIGIN @Z
+blah A 192.0.2.43
+$ORIGIN foo.@F
+bleh A 192.0.2.44

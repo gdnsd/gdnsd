@@ -43,6 +43,9 @@
       "-s".  All runtime reloads are now synchronous, commanded reloads of the
       entire zone dataset, which will either succeed or fail as a unit (in
       which case runtime remains unaffected and continues serving old data).
+    * $INCLUDE support has been (re-)added to rfc1035 zonefiles
+    * New special names '@Z' and '@F' added to rfc1035 parsing, to allow
+      relative references to the current zone name or file-level origin.
     * SIGUSR1 no longer triggers async zone reloads.
     * A unix control socket interface was added, and a new program "gdnsdctl"
       added as the canonical client of this socket.  Control operations are

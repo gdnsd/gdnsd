@@ -1,0 +1,3 @@
+; this file starts at origin ns1
+@	A	192.0.2.1
+ns2	a	192.0.2.2

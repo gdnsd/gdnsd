@@ -54,8 +54,8 @@ just cover a few important highlights and/or deviations from the norm.
 
 =head1 DIRECTIVES
 
-The standard C<$TTL> and C<$ORIGIN> directives
-are supported with their normal syntax and semantics.
+The standard C<$TTL>, C<$ORIGIN>, and C<$INCLUDE> directives
+are supported with their normal syntax and semantics:
 
 C<$TTL> changes the default TTL of any records coming after it,
 and can occur multiple times.  Note that in the absence of a
@@ -71,25 +71,65 @@ name, in which case the previous origin is appended to it.
 Any fully-qualified C<$ORIGIN> must be within the zone described
 by this zonefile.  The default origin is the zone name itself.
 
+C<$INCLUDE> includes another file as if its contents existed
+at the point of the C<$INCLUDE> directive.  Include directives
+may specify an optional origin, which has the same effect
+as C<$ORIGIN> at the top of the included file.  Changes to
+the origin (and default ttl) within included files have no
+effect on the outer file.
+
 C<$ADDR_LIMIT_V4> is a non-standard, gdnsd-specific directive.
 It requires a single unsigned integer argument.  The argument
 limits the total number of C<A> records to include in the server's
 responses for any given C<A> rrset (whether static or dynamic).
 The default limit is zero, which is interpreted as no limit.
 Setting the limit via this directive affects all rrsets until
-the value is changed again by another directive.  gdnsd always
-rotates the RRs of an address RR-set in a round-robin fashion,
-and this rotation occurs before the limit is applied, allowing
-a small pseudo-random subset of a larger list to be delivered
-via this mechanism.
+the value is changed again by another directive, and inherits down
+into C<$INCLUDE> files as well.  gdnsd always rotates the RRs of an
+address RR-set in a round-robin fashion, and this rotation occurs
+before the limit is applied, allowing a small pseudo-random subset of
+a larger list to be delivered via this mechanism.
 
 C<$ADDR_LIMIT_V6> same as above, but for IPv6 C<AAAA> rrsets.
-
-The RFC-standard C<$INCLUDE> directive is not currently supported.
 
 BIND's C<$GENERATE> extension is not supported at this time, but
 there's no fundamental reason it couldn't be added at a later
 date.
+
+=head1 SPECIAL NAMES AND ORIGINS
+
+The standard C<@>, as a whole name, is supported as an alias for the current
+origin.  In addition to this, gdnsd implements two special extensions C<@Z> and
+C<@F>.  These denote the current zone name, and the original origin (before any
+internal C<$ORIGIN> declarations) of the file currently being parsed.  Unlike
+C<@>, they can also be used as the final label of an unqualified name.  C<@Z>
+and C<@F> will always be equivalent to each other in the main zonefile for a
+zone, but may differ when parsing included files from "$INCLUDE".  As an example:
+
+
+    * zones/example.org has the line "$INCLUDE includes/foo foo"
+    * zones/includes/foo has these lines:
+       $ORIGIN bar
+       asdf A 192.0.2.1
+       $ORIGIN baz.@F
+       asdf A 192.0.2.2
+       $ORIGIN quux.@Z
+       asdf A 192.0.2.3
+    * This results in creating all of these:
+       asdf.bar.foo.example.org A 192.0.2.1
+       asdf.baz.foo.example.org A 192.0.2.2
+       asdf.quux.example.org    A 192.0.2.3
+
+
+Note that the origin changes accomplished with C<@F> and C<@Z> backtrack
+towards the root of the name hierarchy, and thus wouldn't normally be possible
+without explicitly using the zone name itself.  The main benefit of these
+directives is they allow this kind of origin-switching behavior while keeping
+all zone data relative to the zone name rather than absolute.  When combined
+with the fact that the zones scanner will load symlinks, this means the above
+F<zones/example.org> could also be symlinked as F<zones/example.com>, loading
+all the same files and providing an identical tree of data under the other zone
+name without conflict.
 
 =head1 SUPPORTED RESOURCE RECORD TYPES
 

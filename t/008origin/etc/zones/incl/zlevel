@@ -1,0 +1,3 @@
+; this include file starts at the zone origin
+zlevel-cf CNAME @F
+$include inc2/zlevel zlevel

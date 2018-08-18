@@ -41,13 +41,13 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt, logf_dname(z->zone->dname), z->lcount, __VA_ARGS__);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zone->dname), z->curfn, z->lcount, __VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at line %u: " _fmt, logf_dname(z->zone->dname), z->lcount);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zone->dname), z->curfn, z->lcount);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
@@ -75,7 +75,10 @@ typedef struct {
     uint8_t* rfc3597_data;
     zone_t* zone;
     const char* tstart;
+    const char* curfn;
+    char* include_filename;
     uint8_t  origin[256];
+    uint8_t  file_origin[256];
     uint8_t  lhs_dname[256];
     uint8_t  rhs_dname[256];
     union {
@@ -150,6 +153,73 @@ static void validate_lhs_not_ooz(zscan_t* z)
 }
 
 F_NONNULL
+static unsigned dn_find_final_label_offset(const uint8_t* dname)
+{
+    gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
+
+    // Since we assert DNAME_PARTIAL, we just have to search forward until the
+    // next potential label len is the partial terminator 0xff.
+    const uint8_t* dnptr = dname + 1;
+    unsigned next_llen_pos = *dnptr + 1U;
+    while (dnptr[next_llen_pos] != 0xff) {
+        dnptr += next_llen_pos;
+        next_llen_pos = *dnptr + 1U;
+    }
+
+    return (unsigned)(dnptr - dname);
+}
+
+// This converts an unqualified name to a qualified one.  Normal behavior is to
+// append the current $ORIGIN, but we also plug in support for '@' here (as a
+// lone character meaning $ORIGIN) and also these extensions:
+//--
+// * If the final label is "@Z", we replace that with the original zone-level
+// origin (the name of the actual zone) rather than the current $ORIGIN
+// * If the final label is "@F", we replace that with the original file-level
+// origin (the origin when a zonefile or includefile was first loaded, before
+// any $ORIGIN statement within it) rather than the current $ORIGIN
+//--
+// @Z and @F are equivalent when not processing an included file.
+// @Z and @F can also, like @, be the first (only) label; there doesn't have to
+// be any prefix label before them.
+
+F_NONNULL
+static dname_status_t dn_qualify(uint8_t* dname, const uint8_t* origin, uint8_t* const file_origin, const uint8_t* zone_origin)
+{
+    gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
+
+    // Lone "@" case:
+    if (dname[0] == 3U && dname[2] == '@') {
+        gdnsd_assert(dname[1] == 1U && dname[3] == 0xff);
+        dname_copy(dname, origin);
+        return DNAME_VALID;
+    }
+
+    // @Z/@F handling (note @X for any other char is illegal for now):
+    const unsigned final_label_offset = dn_find_final_label_offset(dname);
+    const unsigned final_label_len = dname[final_label_offset];
+    gdnsd_assert(final_label_len != 0);
+
+    if (final_label_len == 2U && dname[final_label_offset + 1] == '@') {
+        const uint8_t which = dname[final_label_offset + 2];
+        // adjust dname to strip the final @X label off
+        dname[final_label_offset] = 0xff;
+        *dname -= 3U;
+        // note lowercase z/f here, because earlier dname processing
+        // normalizes all alpha chars to lowercase
+        if (which == 'z')
+            return dname_cat(dname, zone_origin);
+        else if (which == 'f')
+            return dname_cat(dname, file_origin);
+        else
+            return DNAME_INVALID;
+    }
+
+    // default qualification with no @ involvement
+    return dname_cat(dname, origin);
+}
+
+F_NONNULL
 static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
 {
     gdnsd_assert(z->zone->dname);
@@ -181,7 +251,7 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
         // even though in the lhs case we commonly trim
         //   back most or all of z->origin from dname, we
         //   still have to construct it just for validity checks
-        catstat = dname_cat(dname, z->origin);
+        catstat = dn_qualify(dname, z->origin, z->file_origin, z->zone->dname);
         if (catstat == DNAME_INVALID)
             parse_error_noargs("illegal domainname");
         gdnsd_assert(catstat == DNAME_VALID);
@@ -193,6 +263,66 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
     default:
         gdnsd_assert(0);
     }
+}
+
+// This is broken out into a separate function (called via
+//   function pointer to eliminate the possibility of
+//   inlining on non-gcc compilers, I hope) to avoid issues with
+//   setjmp and all of the local auto variables in zscan_rfc1035() below.
+typedef bool (*sij_func_t)(zscan_t*, const char*, const unsigned);
+F_NONNULL F_NOINLINE
+static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsize)
+{
+    if (!sigsetjmp(z->jbuf, 0)) {
+        scanner(z, buf, bufsize);
+        return false;
+    }
+    return true;
+}
+
+F_NONNULL
+static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6)
+{
+    log_debug("rfc1035: Scanning file '%s' for zone '%s'", fn, logf_dname(zone->dname));
+
+    bool failed = false;
+
+    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
+    if (!fmap) {
+        failed = true;
+        return failed;
+    }
+
+    const size_t bufsize = gdnsd_fmap_get_len(fmap);
+    const char* buf = gdnsd_fmap_get_buf(fmap);
+
+    zscan_t* z = xcalloc(sizeof(*z));
+    z->lcount = 1;
+    z->def_ttl = def_ttl_arg;
+    z->limit_v4 = limit_v4;
+    z->limit_v6 = limit_v6;
+    z->zone = zone;
+    z->curfn = fn;
+    dname_copy(z->origin, origin);
+    dname_copy(z->file_origin, origin);
+    z->lhs_dname[0] = 1; // set lhs to relative origin initially
+
+    sij_func_t sij = &_scan_isolate_jmp;
+    if (sij(z, buf, bufsize))
+        failed = true;
+
+    if (gdnsd_fmap_delete(fmap))
+        failed = true;
+
+    if (z->text)
+        free(z->text);
+    if (z->rfc3597_data)
+        free(z->rfc3597_data);
+    if (z->include_filename)
+        free(z->include_filename);
+    free(z);
+
+    return failed;
 }
 
 /********** TXT ******************/
@@ -283,6 +413,49 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
     z->text = (uint8_t*)storage;
     z->text_len = newlen;
     z->tstart = NULL;
+}
+
+F_NONNULL
+static void set_filename(zscan_t* z, const unsigned len)
+{
+    char* fn = malloc(len + 1);
+    const unsigned newlen = dns_unescape(fn, z->tstart, len);
+    gdnsd_assert(newlen <= len);
+    z->include_filename = fn = realloc(fn, newlen + 1);
+    fn[newlen] = 0;
+    z->tstart = NULL;
+}
+
+F_NONNULL
+static char* _make_zfn(const char* curfn, const char* include_fn)
+{
+    if (include_fn[0] == '/')
+        return strdup(include_fn);
+
+    const char* slashpos = strrchr(curfn, '/');
+    const unsigned cur_copy = (slashpos - curfn) + 1;
+    const unsigned include_len = strlen(include_fn);
+    char* rv = malloc(cur_copy + include_len + 1);
+    memcpy(rv, curfn, cur_copy);
+    memcpy(rv + cur_copy, include_fn, include_len);
+    rv[cur_copy + include_len] = 0;
+
+    return rv;
+}
+
+F_NONNULL
+static void process_include(zscan_t* z)
+{
+    gdnsd_assert(z->include_filename);
+
+    validate_origin_in_zone(z, z->rhs_dname);
+    char* zfn = _make_zfn(z->curfn, z->include_filename);
+    free(z->include_filename);
+    z->include_filename = NULL;
+    bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
+    free(zfn);
+    if (subfailed)
+        siglongjmp(z->jbuf, 1);
 }
 
 // Input must have two bytes of text constrained to [0-9A-Fa-f]
@@ -560,10 +733,8 @@ static void close_paren(zscan_t* z)
     action token_start { z->tstart = fpc; }
 
     # special case for LHS: dname_set w/ len of zero -> use origin and trim zone root
-    action set_lhs_origin { dname_set(z, z->lhs_dname, 0, true); }
     action set_lhs_dname { dname_set(z, z->lhs_dname, fpc - z->tstart, true); }
     action set_lhs_qword { z->tstart++; dname_set(z, z->lhs_dname, fpc - z->tstart - 1, true); }
-    action set_rhs_origin { dname_copy(z->rhs_dname, z->origin); }
     action set_rhs_dname { dname_set(z, z->rhs_dname, fpc - z->tstart, false); }
     action set_rhs_qword { z->tstart++; dname_set(z, z->rhs_dname, fpc - z->tstart - 1, false); }
     action set_eml_dname { dname_set(z, z->eml_dname, fpc - z->tstart, false); }
@@ -573,6 +744,10 @@ static void close_paren(zscan_t* z)
         validate_origin_in_zone(z, z->rhs_dname);
         dname_copy(z->origin, z->rhs_dname);
     }
+
+    action set_filename { set_filename(z, fpc - z->tstart); }
+    action set_filename_q { z->tstart++; set_filename(z, fpc - z->tstart - 1); }
+    action process_include { process_include(z); }
 
     action start_txt { text_start(z); }
     action push_txt_rdata { text_add_tok(z, fpc - z->tstart, true); }
@@ -657,26 +832,13 @@ static void close_paren(zscan_t* z)
     # unquoted TXT case
     tword     = (lit_chr | escapes)+ $1 %0;
 
-    # unquoted dname case, disallow unescaped [@$] at the front
-    dname     = ((lit_chr - [@$]) | escapes ) (lit_chr | escapes)*;
+    # unquoted dname case, disallow unescaped [$] at the front
+    dname     = ((lit_chr - [$]) | escapes ) (lit_chr | escapes)*;
 
-    # A whole domainname (or @ as $ORIGIN shorthand) in various contexts
-    dname_lhs     = (
-          '@'   %set_lhs_origin
-        | dname %set_lhs_dname
-        | qword %set_lhs_qword
-    ) >token_start;
-
-    dname_rhs     = (
-          '@'   %set_rhs_origin
-        | dname %set_rhs_dname
-        | qword %set_rhs_qword
-    ) >token_start;
-
-    dname_eml     = (
-          dname %set_eml_dname
-        | qword %set_eml_qword
-    ) >token_start;
+    # A whole domainname in various contexts
+    dname_lhs     = (dname %set_lhs_dname | qword %set_lhs_qword) >token_start;
+    dname_rhs     = (dname %set_rhs_dname | qword %set_rhs_qword) >token_start;
+    dname_eml     = (dname %set_eml_dname | qword %set_eml_qword) >token_start;
 
     # One chunk of TXT rdata
     txt_item  = (tword %push_txt_rdata | qword %push_txt_rdata_q) >token_start;
@@ -689,6 +851,9 @@ static void close_paren(zscan_t* z)
 
     # A whole set of TXT rdata
     txt_rdata = (ws | txt_item)+ $1 %0 >start_txt;
+
+    # filenames for $INCLUDE
+    filename  = (tword %set_filename | qword %set_filename_q) >token_start;
 
     # plugin!resource for DYN[AC] records
     dyna_rdata = (plugres ('!' plugres)?) >token_start %set_dyna;
@@ -772,6 +937,7 @@ static void close_paren(zscan_t* z)
     cmd = '$' (
           ('TTL'i ws ttl %set_def_ttl)
         | ('ORIGIN'i ws dname_rhs %reset_origin)
+        | ('INCLUDE'i ws filename (ws dname_rhs)?) $1 %0 %process_include
         | ('ADDR_LIMIT_V4'i ws uval %set_limit_v4)
         | ('ADDR_LIMIT_V6'i ws uval %set_limit_v6)
     );
@@ -822,56 +988,9 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
         parse_error_noargs("Trailing incomplete or unparseable record at end of file");
 }
 
-// This is broken out into a separate function (called via
-//   function pointer to eliminate the possibility of
-//   inlining on non-gcc compilers, I hope) to avoid issues with
-//   setjmp and all of the local auto variables in zscan_rfc1035() below.
-typedef bool (*sij_func_t)(zscan_t*, const char*, const unsigned);
-F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsize)
-{
-    if (!sigsetjmp(z->jbuf, 0)) {
-        scanner(z, buf, bufsize);
-        return false;
-    }
-    return true;
-}
-
 bool zscan_rfc1035(zone_t* zone, const char* fn)
 {
     gdnsd_assert(zone->dname);
-    log_debug("rfc1035: Scanning zone '%s'", logf_dname(zone->dname));
-
-    bool rv = false; // success by default
-
-    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
-    if (!fmap) {
-        rv = true;
-        return rv;
-    }
-
-    const size_t bufsize = gdnsd_fmap_get_len(fmap);
-    const char* buf = gdnsd_fmap_get_buf(fmap);
-
-    zscan_t* z = xcalloc(sizeof(*z));
-    z->lcount = 1;
-    z->def_ttl = gcfg->zones_default_ttl;
-    z->zone = zone;
-    dname_copy(z->origin, zone->dname);
-    z->lhs_dname[0] = 1; // set lhs to relative origin initially
-
-    sij_func_t sij = &_scan_isolate_jmp;
-    if (sij(z, buf, bufsize))
-        rv = true;
-
-    if (gdnsd_fmap_delete(fmap))
-        rv = true;
-
-    if (z->text)
-        free(z->text);
-    if (z->rfc3597_data)
-        free(z->rfc3597_data);
-    free(z);
-
-    return rv;
+    log_debug("rfc1035: Scanning zonefile '%s'", logf_dname(zone->dname));
+    return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl, 0, 0);
 }

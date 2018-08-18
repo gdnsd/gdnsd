@@ -1,0 +1,3 @@
+; this file starts at origin xxx.sub
+@	A	192.0.2.101
+www	A	192.0.2.102
