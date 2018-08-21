@@ -5,13 +5,32 @@ use Test::More tests => 14;
 
 my $pid = _GDT->test_spawn_daemon();
 
-$optrr = Net::DNS::RR->new(
+my $optrr = Net::DNS::RR->new(
     type => "OPT",
     ednsversion => 0,
     name => "",
     class => 1024,
     extendedrcode => 0,
     ednsflags => 0,
+);
+
+# The value "128" here is our expected keepalive advertisement with a single
+# open connection under default settings.  The defaults are 128 max clients and
+# 15s max timeout.  Following the code's logic for the 75% threshold, etc:
+# --
+# 75% threshold of 128 max = 96
+# free connections / threshold, with 1 open = 95/96
+# 15s max timeout, -2 for the internal timeout vs keepalive offset = 13s baseline
+# floor(13 * (95/96) * 10) = 128 in 100ms units
+my $optrr_keepalive = Net::DNS::RR->new(
+    type => "OPT",
+    ednsversion => 0,
+    name => "",
+    class => 1024,
+    extendedrcode => 0,
+    ednsflags => 0,
+    optioncode => 11,
+    optiondata => pack('n', 128),
 );
 
 my $big_answers = [
@@ -142,7 +161,7 @@ _GDT->test_dns(
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
     addtl => $big_additional,
-    stats => [qw/tcp_reqs noerror/],
+    stats => [qw/tcp_reqs tcp_conns noerror/],
 );
 
 _GDT->test_dns(
@@ -173,7 +192,7 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 0, udppacketsize => 600 },
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
-    addtl => [@$big_additional, $optrr],
+    addtl => [@$big_additional, $optrr_keepalive],
     stats => [qw/udp_reqs udp_edns_tc tcp_reqs edns edns noerror noerror/],
 );
 
@@ -221,7 +240,7 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 0, udppacketsize => 900 },
     qname => 'vbig.example.com', qtype => 'MX',
     answer => $vbig_answers,
-    addtl => [@$vbig_additional, $optrr],
+    addtl => [@$vbig_additional, $optrr_keepalive],
     stats => [qw/udp_reqs udp_edns_tc tcp_reqs edns edns noerror noerror/],
 );
 

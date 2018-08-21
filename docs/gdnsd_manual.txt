@@ -199,6 +199,25 @@ Overall Design
     tcp_sendfail
         Count of abnormal failures in send() on a DNS TCP socket.
 
+    tcp_conns
+	Count of TCP connections we accepted (excludes extremely early
+        failures, e.g. accept() itself returning an error)
+
+    tcp_close_c
+        Count of TCP connections closed cleanly by the client
+
+    tcp_close_s_ok
+	Count of TCP connections closed cleanly by the server, usually due to
+        an idle timeout being reached or during thread shutdown, etc.
+
+    tcp_close_s_err
+	Count of TCP connections closed by the server due to an error such as
+        tcp_recvfail, tcp_sendfail, or "dropped" from the general stats.
+
+    tcp_close_s_kill
+	Count of TCP connections closed by the server, which were killed early
+	to make room for a new client when max_clients_per_thread was reached.
+
     These statistics are tracked in per-thread structures. The actual data
     slots are uintptr_t, which helps with rollover on 64-bit machines.
 

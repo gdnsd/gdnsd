@@ -55,7 +55,7 @@ my $compt_aset = [
     'foo.foo.fox.foo.example.com 21600 A 192.0.2.175',
 ];
 
-$optrr = Net::DNS::RR->new(
+my $optrr = Net::DNS::RR->new(
     type => "OPT",
     ednsversion => 0,
     name => "",

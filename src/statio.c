@@ -44,18 +44,23 @@ typedef struct {
     stats_uint_t udp_edns_tc;        // 5
     stats_uint_t tcp_recvfail;       // 6
     stats_uint_t tcp_sendfail;       // 7
-    stats_uint_t dns_noerror;        // 8
-    stats_uint_t dns_refused;        // 9
-    stats_uint_t dns_nxdomain;       // 10
-    stats_uint_t dns_notimp;         // 11
-    stats_uint_t dns_badvers;        // 12
-    stats_uint_t dns_formerr;        // 13
-    stats_uint_t dns_dropped;        // 14
-    stats_uint_t dns_v6;             // 15
-    stats_uint_t dns_edns;           // 16
-    stats_uint_t dns_edns_clientsub; // 17
-    stats_uint_t udp_reqs;           // 18
-    stats_uint_t tcp_reqs;           // 19
+    stats_uint_t tcp_conns;          // 8
+    stats_uint_t tcp_close_c;        // 9
+    stats_uint_t tcp_close_s_ok;     // 10
+    stats_uint_t tcp_close_s_err;    // 11
+    stats_uint_t tcp_close_s_kill;   // 12
+    stats_uint_t dns_noerror;        // 13
+    stats_uint_t dns_refused;        // 14
+    stats_uint_t dns_nxdomain;       // 15
+    stats_uint_t dns_notimp;         // 16
+    stats_uint_t dns_badvers;        // 17
+    stats_uint_t dns_formerr;        // 18
+    stats_uint_t dns_dropped;        // 19
+    stats_uint_t dns_v6;             // 20
+    stats_uint_t dns_edns;           // 21
+    stats_uint_t dns_edns_clientsub; // 22
+    stats_uint_t udp_reqs;           // 23
+    stats_uint_t tcp_reqs;           // 24
 } statio_t;
 
 static const char json_fixed[] =
@@ -84,7 +89,12 @@ static const char json_fixed[] =
     "\t\"tcp\": {\r\n"
     "\t\t\"reqs\": %" PRIuPTR ",\r\n"
     "\t\t\"recvfail\": %" PRIuPTR ",\r\n"
-    "\t\t\"sendfail\": %" PRIuPTR "\r\n"
+    "\t\t\"sendfail\": %" PRIuPTR ",\r\n"
+    "\t\t\"conns\": %" PRIuPTR ",\r\n"
+    "\t\t\"close_c\": %" PRIuPTR ",\r\n"
+    "\t\t\"close_s_ok\": %" PRIuPTR ",\r\n"
+    "\t\t\"close_s_err\": %" PRIuPTR ",\r\n"
+    "\t\t\"close_s_kill\": %" PRIuPTR "\r\n"
     "\t}\r\n"
     "}\r\n";
 
@@ -127,9 +137,14 @@ static void accumulate_statio(unsigned threadnum)
         statio.udp_edns_big += stats_get(&this_stats->udp.edns_big);
         statio.udp_edns_tc  += stats_get(&this_stats->udp.edns_tc);
     } else {
-        statio.tcp_reqs     += this_reqs;
-        statio.tcp_recvfail += stats_get(&this_stats->tcp.recvfail);
-        statio.tcp_sendfail += stats_get(&this_stats->tcp.sendfail);
+        statio.tcp_reqs         += this_reqs;
+        statio.tcp_recvfail     += stats_get(&this_stats->tcp.recvfail);
+        statio.tcp_sendfail     += stats_get(&this_stats->tcp.sendfail);
+        statio.tcp_conns        += stats_get(&this_stats->tcp.conns);
+        statio.tcp_close_c      += stats_get(&this_stats->tcp.close_c);
+        statio.tcp_close_s_ok   += stats_get(&this_stats->tcp.close_s_ok);
+        statio.tcp_close_s_err  += stats_get(&this_stats->tcp.close_s_err);
+        statio.tcp_close_s_kill += stats_get(&this_stats->tcp.close_s_kill);
     }
 
     statio.dns_v6             += stats_get(&this_stats->v6);
@@ -145,7 +160,7 @@ char* statio_get_json(time_t nowish, size_t* len)
     for (unsigned i = 0; i < num_dns_threads; i++)
         accumulate_statio(i);
     // fill json output buffer
-    int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail);
+    int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail, statio.tcp_conns, statio.tcp_close_c, statio.tcp_close_s_ok, statio.tcp_close_s_err, statio.tcp_close_s_kill);
     gdnsd_assert(snp_rv > 0);
     size_t json_len = (size_t)snp_rv;
     *len = json_len;
@@ -162,7 +177,7 @@ void statio_init(unsigned arg_num_dns_threads)
     json_buffer_max =
         (sizeof(json_fixed) - 1)               // json_fixed format string
         + (20 - strlen(PRIu64))                // uint64_t uptime
-        + (19 * (stat_len - strlen(PRIuPTR))); // 19 stats, 10 or 20 bytes long each
+        + (24 * (stat_len - strlen(PRIuPTR))); // 24 stats, 10 or 20 bytes long each
 
     // double it, because it's not that big and this gives us a lot of headroom for
     //   having made any stupid mistakes in the max len calcuations :P

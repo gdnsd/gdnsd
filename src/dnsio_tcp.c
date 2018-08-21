@@ -43,9 +43,9 @@
 #include <urcu-qsbr.h>
 
 typedef enum {
-    READING_INITIAL = 0,
-    READING_MORE,
-    WRITING,
+    ST_IDLE = 0,
+    ST_READING,
+    ST_WRITING,
 } tcpdns_state_t;
 
 struct tcpdns_conn;
@@ -59,10 +59,15 @@ typedef struct {
     ev_io accept_watcher;
     ev_prepare prep_watcher;
     ev_async stop_watcher;
-    tcpdns_conn_t* conns; // doubly-linked-list
-    unsigned timeout;
+    ev_timer timeout_watcher;
+    tcpdns_conn_t* idleq_head; // doubly-linked-list, most-idle at head
+    tcpdns_conn_t* idleq_tail; // last element, least-idle
+    double tmo_scaler; // timeout changes by this much per connection under tmo_thresh75
+    unsigned tmo_thresh75; // 75% threshold connection count for timeout calc
+    unsigned edns0_keepalive; // current timeout, minus 2s, in integer units of 100ms
+    unsigned max_timeout;
     unsigned max_clients;
-    unsigned num_conn_watchers;
+    unsigned num_conns; // count of all conns, also len of idleq list
     bool rcu_is_online;
     bool shutting_down;
 } tcpdns_thread_t;
@@ -74,7 +79,7 @@ struct tcpdns_conn {
     tcpdns_thread_t* ctx;
     ev_io read_watcher;
     ev_io write_watcher;
-    ev_timer timeout_watcher;
+    ev_tstamp idle_start;
     gdnsd_anysin_t asin;
     unsigned size;
     unsigned size_done;
@@ -111,71 +116,253 @@ static void register_thread(tcpdns_thread_t* ctx)
     pthread_mutex_unlock(&registry_lock);
 }
 
+// Used by raw idleq-managing functions to just close the conn itself and stop
+// watchers, but not free the conn structure or remove it from the idleq
 F_NONNULL
-static void cleanup_conn_watchers(struct ev_loop* loop, tcpdns_conn_t* tdata)
+static void conn_close(tcpdns_conn_t* conn, bool clean)
 {
-    ev_io* read_watcher = &tdata->read_watcher;
-    shutdown(read_watcher->fd, SHUT_RDWR);
+    struct ev_loop* loop = conn->ctx->loop;
+    ev_io* read_watcher = &conn->read_watcher;
+    if (clean)
+        shutdown(read_watcher->fd, SHUT_RDWR);
     close(read_watcher->fd);
     ev_io_stop(loop, read_watcher);
-
-    ev_timer* timeout_watcher = &tdata->timeout_watcher;
-    ev_timer_stop(loop, timeout_watcher);
-
-    ev_io* write_watcher = &tdata->write_watcher;
+    ev_io* write_watcher = &conn->write_watcher;
     ev_io_stop(loop, write_watcher);
-
-    if (tdata->ctx->num_conn_watchers-- == tdata->ctx->max_clients) {
-        if (!tdata->ctx->shutting_down) {
-            ev_io* accept_watcher = &tdata->ctx->accept_watcher;
-            ev_io_start(loop, accept_watcher);
-        }
-    }
-
-    // doubly-linked list removal
-    if (tdata->prev)
-        tdata->prev->next = tdata->next;
-    else
-        tdata->ctx->conns = tdata->next;
-    if (tdata->next)
-        tdata->next->prev = tdata->prev;
-
-    free(tdata);
 }
 
-static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED)
+// idleq_process_timeouts:
+// * Forces the closure of idleq_head (most-idle) if max_clients connections
+//   have been reached.
+// * Closes off the first N connections (starting at idleq_head) which are
+//   past the current idle timeout, dynamically adjusting the idle timeout
+//   cutoff after each close reduces the count of open connections
+// * Updates the idle timeout based on the remaining connection count
+// * Resets the actual timer event based on the new timeout and the new list
+//   head (or stops it, if list became empty).
+// This needs to be called in all of these various cases:
+// * A new connection is added to the idleq
+// * A connection is removed from the idleq
+// * The head of the idleq changes (prev head bumped to tail for activity)
+// * The timeout timer managed by this function fires
+F_NONNULL
+static void idleq_process_timeouts(tcpdns_thread_t* ctx)
 {
-    gdnsd_assert(revents == EV_ASYNC);
-    tcpdns_thread_t* ctx = w->data;
-    ev_async* stop_watcher = &ctx->stop_watcher;
-    ev_async_stop(loop, stop_watcher);
-    ev_io* accept_watcher = &ctx->accept_watcher;
-    ev_io_stop(loop, accept_watcher);
-    ctx->shutting_down = true;
-    tcpdns_conn_t* c = ctx->conns;
-    while (c) {
-        tcpdns_conn_t* c_next = c->next;
-        if (c->state == READING_INITIAL)
-            cleanup_conn_watchers(loop, c);
-        c = c_next;
+    gdnsd_assert(ctx->num_conns <= ctx->max_clients);
+
+    // If we arrived here just after adding a new connection which raised us to
+    // the maximum, force the expiry of the next entry on the list by faking
+    // its idle_start to zero.
+    if (ctx->num_conns == ctx->max_clients)
+        ctx->idleq_head->idle_start = 0.;
+
+    // Calculate an updated timeout value (if shutting down, fixed 2s)
+    double cur_timeout = 2.0;
+    if (!ctx->shutting_down)
+        cur_timeout += ((ctx->num_conns >= ctx->tmo_thresh75 ? 0 : (ctx->tmo_thresh75 - ctx->num_conns)) * ctx->tmo_scaler);
+
+    // efficiency/fudge factor, expire up to 10ms past the actual clock cutoff
+    double cutoff = ev_now(ctx->loop) + 0.01 - cur_timeout;
+
+    tcpdns_conn_t* conn = ctx->idleq_head;
+    while (conn && conn->idle_start <= cutoff) {
+        tcpdns_conn_t* next_conn = conn->next;
+        ctx->num_conns--;
+        // adjust cutoff and cur_timeout as we close conns, if not shutting down
+        if (ctx->num_conns < ctx->tmo_thresh75 && !ctx->shutting_down) {
+            cutoff -= ctx->tmo_scaler;
+            cur_timeout += ctx->tmo_scaler;
+        }
+        // we're looking for the force-to-zero above, vs realistic timestamp, the "< 1.0" is to avoid float-equality problems.
+        if (conn->idle_start < 1.0) {
+            log_debug("TCP DNS conn to %s closed by server: killed due to connection load", logf_anysin(&conn->asin));
+            stats_own_inc(&conn->ctx->stats->tcp.close_s_kill);
+        } else {
+            log_debug("TCP DNS conn to %s closed by server: timeout", logf_anysin(&conn->asin));
+            stats_own_inc(&conn->ctx->stats->tcp.close_s_ok);
+        }
+        conn_close(conn, true);
+        free(conn);
+        conn = next_conn;
     }
+
+    if (conn) {
+        conn->prev = NULL;
+        ctx->idleq_head = conn;
+    } else {
+        gdnsd_assert(!ctx->num_conns);
+        ctx->idleq_head = ctx->idleq_tail = NULL;
+    }
+
+    // Adjust timer event as approrpriate
+    ev_timer* tmo = &ctx->timeout_watcher;
+    if (ctx->idleq_head) {
+        ev_tstamp next_interval = cur_timeout - (ev_now(ctx->loop) - ctx->idleq_head->idle_start);
+        if (next_interval < 0.01)
+            next_interval = 0.01;
+        tmo->repeat = next_interval;
+        ev_timer_again(ctx->loop, tmo);
+    } else {
+        gdnsd_assert(!ctx->num_conns);
+        ev_timer_stop(ctx->loop, tmo);
+    }
+
+    // Update edns0 keepalive view of current timeout
+    gdnsd_assert(cur_timeout >= 2.0);
+    ctx->edns0_keepalive = (unsigned)((cur_timeout - 2.0) * 10.0);
+}
+
+// Append a new connection at the tail of the idle list and set its idle_start
+F_NONNULL
+static void idleq_append_tail(tcpdns_conn_t* conn)
+{
+    tcpdns_thread_t* ctx = conn->ctx;
+    gdnsd_assert(ctx);
+
+    // This element is not part of the linked list yet
+    gdnsd_assert(ctx->idleq_head != conn);
+    gdnsd_assert(ctx->idleq_tail != conn);
+    gdnsd_assert(!conn->next);
+    gdnsd_assert(!conn->prev);
+
+    if (!ctx->idleq_head) {
+        // Empty idle queue, we must set head+tail
+        gdnsd_assert(!ctx->idleq_tail);
+        ctx->idleq_head = ctx->idleq_tail = conn;
+    } else {
+        gdnsd_assert(ctx->idleq_tail);
+        gdnsd_assert(!ctx->idleq_tail->next);
+        ctx->idleq_tail->next = conn;
+        conn->prev = ctx->idleq_tail;
+        ctx->idleq_tail = conn;
+    }
+
+    conn->idle_start = ev_now(ctx->loop);
+    ctx->num_conns++;
+    idleq_process_timeouts(ctx);
+}
+
+// Remove a connection from the list
+F_NONNULL
+static void idleq_remove(tcpdns_conn_t* conn, bool skip_timer_updates)
+{
+    tcpdns_thread_t* ctx = conn->ctx;
+    gdnsd_assert(ctx);
+
+    gdnsd_assert(ctx->num_conns);
+
+    if (conn->next) {
+        gdnsd_assert(conn != ctx->idleq_tail);
+        conn->next->prev = conn->prev;
+    } else {
+        gdnsd_assert(conn == ctx->idleq_tail);
+        ctx->idleq_tail = conn->prev;
+    }
+
+    if (conn->prev) {
+        gdnsd_assert(conn != ctx->idleq_head);
+        conn->prev->next = conn->next;
+    } else {
+        gdnsd_assert(conn == ctx->idleq_head);
+        ctx->idleq_head = conn->next;
+    }
+
+    // wipe the stale references from the removed object
+    conn->prev = conn->next = NULL;
+
+    ctx->num_conns--;
+    if (!skip_timer_updates)
+        idleq_process_timeouts(ctx);
+}
+
+// Update idle_start for a connection, move to tail of list, adjust next
+// timeout if applicable
+F_NONNULL
+static void idleq_refresh(tcpdns_conn_t* conn)
+{
+    tcpdns_thread_t* ctx = conn->ctx;
+    gdnsd_assert(ctx);
+
+    bool needs_timeouts = false;
+
+    conn->idle_start = ev_now(ctx->loop);
+    if (conn == ctx->idleq_head) {
+        if (conn->next) {
+            gdnsd_assert(conn != ctx->idleq_tail);
+            ctx->idleq_head = conn->next;
+        }
+        needs_timeouts = true;
+    }
+
+    if (conn->next) {
+        conn->next->prev = conn->prev;
+        if (conn->prev)
+            conn->prev->next = conn->next;
+        conn->next = NULL;
+        conn->prev = ctx->idleq_tail;
+        ctx->idleq_tail->next = conn;
+        ctx->idleq_tail = conn;
+    }
+
+    if (needs_timeouts)
+        idleq_process_timeouts(ctx);
 }
 
 F_NONNULL
 static void tcp_timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_TIMER);
+    tcpdns_thread_t* ctx = t->data;
+    gdnsd_assert(ctx);
+    idleq_process_timeouts(ctx);
+}
 
-    tcpdns_conn_t* tdata = t->data;
-    log_devdebug("TCP DNS Connection timed out while %s %s",
-                 tdata->state == WRITING ? "writing to" : "reading from", logf_anysin(&tdata->asin));
+// Used by per-connection callbacks to close+destroy a singular conn
+F_NONNULL
+static void conn_close_and_destroy(tcpdns_conn_t* conn, bool clean, bool skip_timer_update)
+{
+    conn_close(conn, clean);
+    idleq_remove(conn, skip_timer_update);
+    free(conn);
+}
 
-    if (tdata->state == WRITING)
-        stats_own_inc(&tdata->ctx->stats->tcp.sendfail);
-    else
-        stats_own_inc(&tdata->ctx->stats->tcp.recvfail);
+F_NONNULL
+static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED)
+{
+    gdnsd_assert(revents == EV_ASYNC);
+    tcpdns_thread_t* ctx = w->data;
+    gdnsd_assert(ctx);
 
-    cleanup_conn_watchers(loop, tdata);
+    // Stop the accept() and stop-watchers
+    ev_async* stop_watcher = &ctx->stop_watcher;
+    ev_async_stop(loop, stop_watcher);
+    ev_io* accept_watcher = &ctx->accept_watcher;
+    ev_io_stop(loop, accept_watcher);
+
+    // This flag informs the read handler that connections should be terminated
+    // immediately on reaching the ST_IDLE state, for any that are still
+    // outstanding in other states.  It also tells idleq_process_timeouts()
+    // above to alter its behavior for the shutdown phase.
+    ctx->shutting_down = true;
+
+    // Walk the idle conns list and immediately destroy any in ST_IDLE,
+    // telling the destructor not to process idleq timer updates yet (primarily
+    // because it would potentially mutate this list while we're walking it,
+    // but also for efficiency since we're going to call
+    // idleq_process_timeouts() after the loop anyways).
+    tcpdns_conn_t* conn = ctx->idleq_head;
+    while (conn) {
+        tcpdns_conn_t* next_conn = conn->next;
+        if (conn->state == ST_IDLE) {
+            log_debug("TCP DNS conn to %s closed by server (shutting down): while idle", logf_anysin(&conn->asin));
+            stats_own_inc(&conn->ctx->stats->tcp.close_s_ok);
+            conn_close_and_destroy(conn, true, true);
+        }
+        conn = next_conn;
+    }
+
+    // Now run the idle timeout updates
+    idleq_process_timeouts(ctx);
 }
 
 F_NONNULL
@@ -183,43 +370,42 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* w, const int revents 
 {
     gdnsd_assert(revents == EV_WRITE);
 
-    tcpdns_conn_t* tdata = w->data;
-    ev_io* read_watcher = &tdata->read_watcher;
-    ev_timer* timeout_watcher = &tdata->timeout_watcher;
+    tcpdns_conn_t* conn = w->data;
+    ev_io* read_watcher = &conn->read_watcher;
 
-    const size_t wanted = tdata->size - tdata->size_done;
-    const uint8_t* source = tdata->buffer + tdata->size_done;
+    const size_t wanted = conn->size - conn->size_done;
+    const uint8_t* source = conn->buffer + conn->size_done;
 
     const ssize_t send_rv = send(w->fd, source, wanted, 0);
     if (unlikely(send_rv < 0)) {
         if (!ERRNO_WOULDBLOCK) {
-            log_devdebug("TCP DNS send() failed, dropping response to %s: %s", logf_anysin(&tdata->asin), logf_errno());
-            stats_own_inc(&tdata->ctx->stats->tcp.sendfail);
-            cleanup_conn_watchers(loop, tdata);
+            log_debug("TCP DNS conn to %s closed by server: failed while writing: %s", logf_anysin(&conn->asin), logf_errno());
+            stats_own_inc(&conn->ctx->stats->tcp.sendfail);
+            stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
+            conn_close_and_destroy(conn, false, false);
             return;
         }
     } else { // we sent something...
-        tdata->size_done += (size_t)send_rv;
-        if (likely(tdata->size_done == tdata->size)) {
-            if (tdata->ctx->shutting_down) {
-                // if shutting down, take the opportunity to close cleanly
-                // after sending a response, instead of waiting for another
-                // request on this connection
-                cleanup_conn_watchers(loop, tdata);
+        conn->size_done += (size_t)send_rv;
+        if (likely(conn->size_done == conn->size)) {
+            conn->state = ST_IDLE;
+            if (conn->ctx->shutting_down) {
+                log_debug("TCP DNS conn to %s closed by server (shutting down): while idle", logf_anysin(&conn->asin));
+                stats_own_inc(&conn->ctx->stats->tcp.close_s_ok);
+                conn_close_and_destroy(conn, true, false);
             } else {
-                ev_timer_again(loop, timeout_watcher);
-                tdata->state = READING_INITIAL;
                 ev_io_stop(loop, w);
                 ev_io_start(loop, read_watcher);
-                tdata->size_done = 0;
-                tdata->size = 0;
+                conn->size_done = 0;
+                conn->size = 0;
+                idleq_refresh(conn);
             }
             return;
         }
     }
 
     // Start write watcher if necc
-    ev_io* write_watcher = &tdata->write_watcher;
+    ev_io* write_watcher = &conn->write_watcher;
     ev_io_start(loop, write_watcher);
 }
 
@@ -227,74 +413,83 @@ F_NONNULL
 static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_READ);
-    tcpdns_conn_t* tdata = w->data;
+    tcpdns_conn_t* conn = w->data;
 
-    gdnsd_assert(tdata);
-    gdnsd_assert(tdata->state == READING_INITIAL || tdata->state == READING_MORE);
+    gdnsd_assert(conn);
+    gdnsd_assert(conn->state == ST_IDLE || conn->state == ST_READING);
 
-    uint8_t* destination = &tdata->buffer[tdata->size_done];
+    uint8_t* destination = &conn->buffer[conn->size_done];
     const size_t wanted =
-        (tdata->state == READING_INITIAL ? (DNS_RECV_SIZE + 2) : tdata->size)
-        - tdata->size_done;
+        (conn->state == ST_IDLE ? (DNS_RECV_SIZE + 2) : conn->size)
+        - conn->size_done;
 
     const ssize_t pktlen = recv(w->fd, destination, wanted, 0);
     if (pktlen < 1) {
-        if (unlikely(pktlen == -1 || tdata->size_done)) {
-            if (pktlen == -1) {
-                if (ERRNO_WOULDBLOCK)
-                    return;
-                log_devdebug("TCP DNS recv() from %s: %s", logf_anysin(&tdata->asin), logf_errno());
-            } else if (tdata->size_done) {
-                log_devdebug("TCP DNS recv() from %s: Unexpected EOF", logf_anysin(&tdata->asin));
+        if (!pktlen) { // EOF
+            if (conn->size_done) {
+                log_debug("TCP DNS conn to %s closed by client while reading: unexpected EOF", logf_anysin(&conn->asin));
+                stats_own_inc(&conn->ctx->stats->tcp.recvfail);
+                stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
+                conn_close_and_destroy(conn, false, false);
+            } else {
+                log_debug("TCP DNS conn to %s closed by client while idle (ideal close)", logf_anysin(&conn->asin));
+                stats_own_inc(&conn->ctx->stats->tcp.close_c);
+                conn_close_and_destroy(conn, true, false);
             }
-            stats_own_inc(&tdata->ctx->stats->tcp.recvfail);
+        } else if (!ERRNO_WOULDBLOCK) {
+            log_debug("TCP DNS conn to %s closed by server while reading: error: %s", logf_anysin(&conn->asin), logf_errno());
+            stats_own_inc(&conn->ctx->stats->tcp.recvfail);
+            stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
+            conn_close_and_destroy(conn, false, false);
         }
-        cleanup_conn_watchers(loop, tdata);
         return;
     }
 
-    tdata->size_done += pktlen;
+    conn->size_done += pktlen;
 
-    if (likely(tdata->state == READING_INITIAL)) {
-        if (likely(tdata->size_done > 1)) {
-            tdata->size = ((unsigned)tdata->buffer[0] << 8U) + (unsigned)tdata->buffer[1] + 2U;
-            if (unlikely(tdata->size > DNS_RECV_SIZE)) {
-                log_devdebug("Oversized TCP DNS query of length %u from %s", tdata->size, logf_anysin(&tdata->asin));
-                stats_own_inc(&tdata->ctx->stats->tcp.recvfail);
-                cleanup_conn_watchers(loop, tdata);
+    if (likely(conn->state == ST_IDLE)) {
+        if (likely(conn->size_done > 1)) {
+            conn->size = ((unsigned)conn->buffer[0] << 8U) + (unsigned)conn->buffer[1] + 2U;
+            if (unlikely(conn->size > DNS_RECV_SIZE)) {
+                log_debug("TCP DNS conn to %s closed by server while reading: oversized query of length %u", logf_anysin(&conn->asin), conn->size);
+                stats_own_inc(&conn->ctx->stats->tcp.recvfail);
+                stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
+                conn_close_and_destroy(conn, false, false);
                 return;
             }
-            tdata->state = READING_MORE;
+            conn->state = ST_READING;
         }
     }
 
-    if (unlikely(tdata->size_done < tdata->size))
+    if (unlikely(conn->size_done < conn->size))
         return;
 
     //  Process the query and start the writer
-    if (!tdata->ctx->rcu_is_online) {
-        tdata->ctx->rcu_is_online = true;
+    if (!conn->ctx->rcu_is_online) {
+        conn->ctx->rcu_is_online = true;
         rcu_thread_online();
     }
-    tdata->size = process_dns_query(tdata->ctx->dnsp_ctx, tdata->ctx->stats, &tdata->asin, &tdata->buffer[2], tdata->size - 2);
-    if (!tdata->size) {
-        cleanup_conn_watchers(loop, tdata);
+    conn->size = process_dns_query(conn->ctx->dnsp_ctx, conn->ctx->stats, &conn->asin, &conn->buffer[2], conn->size - 2, conn->ctx->edns0_keepalive);
+    if (!conn->size) {
+        log_debug("TCP DNS conn to %s closed by server: dropped invalid query", logf_anysin(&conn->asin));
+        stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
+        conn_close_and_destroy(conn, false, false);
         return;
     }
 
     ev_io_stop(loop, w);
-    tdata->buffer[0] = (uint8_t)(tdata->size >> 8U);
-    tdata->buffer[1] = (uint8_t)(tdata->size & 0xFF);
-    tdata->size += 2;
-    tdata->size_done = 0;
-    tdata->state = WRITING;
+    conn->buffer[0] = (uint8_t)(conn->size >> 8U);
+    conn->buffer[1] = (uint8_t)(conn->size & 0xFF);
+    conn->size += 2;
+    conn->size_done = 0;
+    conn->state = ST_WRITING;
 
     // Most likely the response fits in the socket buffers
     //  as well as the window size, and therefore a complete
     //  write can proceed immediately, so try it without
     //  going through the loop.  tcp_write_handler() will
     //  start its own watcher if necc.
-    ev_io* write_watcher = &tdata->write_watcher;
+    ev_io* write_watcher = &conn->write_watcher;
     tcp_write_handler(loop, write_watcher, EV_WRITE);
 }
 
@@ -327,7 +522,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
         case EHOSTDOWN:
         case EHOSTUNREACH:
         case ENETUNREACH:
-            log_devdebug("TCP DNS: early tcp socket death: %s", logf_errno());
+            log_debug("TCP DNS: early tcp socket death: %s", logf_errno());
             break;
         default:
             log_err("TCP DNS: accept() failed: %s", logf_errno());
@@ -335,46 +530,36 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
         return;
     }
 
-    log_devdebug("Received TCP DNS connection from %s", logf_anysin(&asin));
+    log_debug("Received TCP DNS connection from %s", logf_anysin(&asin));
 
     tcpdns_thread_t* ctx = w->data;
-
-    if (++ctx->num_conn_watchers == ctx->max_clients) {
-        ev_io* accept_watcher = &ctx->accept_watcher;
-        ev_io_stop(loop, accept_watcher);
-    }
+    stats_own_inc(&ctx->stats->tcp.conns);
 
     // buffer[0] is last element of struct, sized to max_response + 2.
-    tcpdns_conn_t* tdata = xcalloc(sizeof(*tdata) + (gcfg->max_response + 2));
+    tcpdns_conn_t* conn = xcalloc(sizeof(*conn) + (gcfg->max_response + 2));
+    memcpy(&conn->asin, &asin, sizeof(asin));
 
-    // doubly-linked list handling:
-    if (ctx->conns) {
-        gdnsd_assert(!ctx->conns->prev);
-        ctx->conns->prev = tdata;
-        tdata->next = ctx->conns;
-    }
-    ctx->conns = tdata;
+    conn->state = ST_IDLE;
+    conn->ctx = ctx;
+    idleq_append_tail(conn); // Insert at end of idleness list, updating tail
 
-    tdata->state = READING_INITIAL;
-    memcpy(&tdata->asin, &asin, sizeof(asin));
-    tdata->ctx = ctx;
-
-    ev_io* read_watcher = &tdata->read_watcher;
+    ev_io* read_watcher = &conn->read_watcher;
     ev_io_init(read_watcher, tcp_read_handler, sock, EV_READ);
     ev_set_priority(read_watcher, 0);
-    read_watcher->data = tdata;
+    read_watcher->data = conn;
     ev_io_start(loop, read_watcher);
 
-    ev_io* write_watcher = &tdata->write_watcher;
+    ev_io* write_watcher = &conn->write_watcher;
     ev_io_init(write_watcher, tcp_write_handler, sock, EV_WRITE);
     ev_set_priority(write_watcher, 1);
-    write_watcher->data = tdata;
+    write_watcher->data = conn;
 
-    ev_timer* timeout_watcher = &tdata->timeout_watcher;
-    ev_timer_init(timeout_watcher, tcp_timeout_handler, 0, ctx->timeout);
-    ev_set_priority(timeout_watcher, -1);
-    timeout_watcher->data = tdata;
-    ev_timer_again(loop, timeout_watcher);
+    // Even if TCP_DEFER_ACCEPT and SO_ACCEPTFILTER are both unavailable,
+    // there's a chance that under load the request data from a legitimate
+    // client already arrived before we processed the accept(), so
+    // optimistically try to read() immediately and avoid a chance at this
+    // connection being killed for idleness before its first read:
+    tcp_read_handler(loop, &conn->read_watcher, EV_READ);
 }
 
 #ifndef SOL_IPV6
@@ -416,9 +601,17 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
 
 #ifdef TCP_DEFER_ACCEPT
-    const int opt_timeout = (int)addrconf->tcp_timeout;
+    const int opt_timeout = (int)addrconf->tcp_max_timeout;
     if (setsockopt(t->sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof(opt_timeout)) == -1)
         log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", logf_errno());
+#endif
+
+#ifdef TCP_FASTOPEN
+    const int opt_tfo = (int)addrconf->tcp_fastopen;
+    if (opt_tfo) {
+        if (setsockopt(t->sock, SOL_TCP, TCP_FASTOPEN, &opt_tfo, sizeof(opt_tfo)) == -1)
+            log_fatal("Failed to set TCP_FASTOPEN to %i on TCP socket: %s", opt_tfo, logf_errno());
+    }
 #endif
 
     if (isv6) {
@@ -463,17 +656,36 @@ void* dnsio_tcp_start(void* thread_asvoid)
     if (listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
         log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(&addrconf->addr), logf_errno());
 
+#ifdef SO_ACCEPTFILTER
+    struct accept_filter_arg afa;
+    memset(&afa, 0, sizeof(afa));
+    strcpy(afa.af_name, "dnsready");
+    if (setsockopt(t->sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)))
+        log_err("Failed to install 'dnsready' SO_ACCEPTFILTER on TCP socket %s: %s", logf_anysin(&addrconf->addr), logf_errno());
+#endif
+
     ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    ctx->timeout = addrconf->tcp_timeout;
+    ctx->max_timeout = addrconf->tcp_max_timeout;
     ctx->max_clients = addrconf->tcp_clients_per_thread;
+
+    // cached pre-calculations based on the above two configured values:
+    ctx->tmo_thresh75 = ctx->max_clients - (ctx->max_clients >> 2U);
+    ctx->tmo_scaler = ((double)ctx->max_timeout - 2.0) / (double)ctx->tmo_thresh75;
 
     ev_io* accept_watcher = &ctx->accept_watcher;
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
     ev_set_priority(accept_watcher, -2);
     accept_watcher->data = ctx;
+
+    ev_timer* timeout_watcher = &ctx->timeout_watcher;
+    ev_timer_init(timeout_watcher, tcp_timeout_handler, 0, ctx->max_timeout);
+    ev_set_priority(timeout_watcher, -1);
+    timeout_watcher->data = ctx;
+
+    // per-conn read and write handlers occupy priorities 0 and 1, respectively
 
     ev_prepare* prep_watcher = &ctx->prep_watcher;
     ev_prepare_init(prep_watcher, set_rcu_offline);

@@ -44,7 +44,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => $manylabels_lhs, qtype => 'MX',
     answer => "$manylabels_lhs 21600 MX 1 $manylabels_rhs",
-    stats => [qw/udp_reqs udp_tc tcp_reqs noerror noerror/],
+    stats => [qw/udp_reqs udp_tc tcp_reqs tcp_conns noerror noerror/],
 );
 
 _GDT->test_dns(

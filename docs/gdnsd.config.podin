@@ -176,14 +176,11 @@ monitoring purposes.
 
 =item B<tcp_threads>
 
-Integer, default 1, min 0, max 1024.  This is the number of separate
+Integer, default 2, min 1, max 1024.  This is the number of separate
 TCP listening sockets and corresponding listener threads that will be created
 for each DNS listener address.  On a multi-core host, increasing this
-parameter (up to at most a small multiple of the CPU core count) may
-increase overall performance.  Note that on hosts without SO_REUSEPORT
-support (notably Linux < 3.9, Solaris), any setting greater than 1 will
-be forced to 1 with a warning, as support multiple sockets/threads
-per-address are not supported without SO_REUSEPORT.
+parameter (up to at most a very small multiple of the CPU core count) may
+increase overall performance.
 
 =item B<udp_threads>
 
@@ -191,21 +188,55 @@ Exactly like C<tcp_threads>, but for UDP sockets per DNS listening address.
 
 =item B<tcp_clients_per_thread>
 
-Integer, default 128, min 1, max 65535.  This is maximum number of tcp
+Integer, default 128, min 32, max 65536.  This is maximum number of tcp
 DNS connections gdnsd will allow to occur in parallel per listening tcp
-thread.  Once this limit is reached by a given thread, no new
-connections will be allowed to that thread until one of the existing
-ones closes or times out.  Note that sockets map 1:m to threads, and thus
-the total client limit for connecting to a given socket address would be
+thread.  When this limit is reached by a new incoming connection, the
+longest-idle of the existing connections will be closed in exchange for it.
+
+Note that sockets map 1:m to threads, and thus the total client limit for
+connecting to a given socket address would be
 C<tcp_clients_per_thread * tcp_threads>.
 
-=item B<tcp_timeout>
+=item B<tcp_max_timeout>
 
-Integer seconds, default 5, min 3, max 60.  TCP DNS connections will be
-forcibly shut down if they go idle without receiving and responding to
-a valid query for this many seconds.  L<gdnsd(8)> allows multiple
-requests per connection, and this idle timeout applies to the time
-between requests as well.
+Integer seconds, default 15, min 5, max 60.
+
+The idle timer for a TCP connection starts the moment the connection is open,
+and is reset each time a connection completes a whole transaction (sends a
+whole valid request and receives our whole response (at least into the TCP
+buffering window)).  If an open connection exceeds the idle timeout limit without
+completing a new transaction, the server will close the connection.  The
+timeout value in effect at any moment decreases as the the count of active
+connections increases.  C<tcp_max_timeout> is the initial value when there are
+zero connections, and it scales down to a minimum value of 2 seconds when 75%
+of C<tcp_clients_per_thread> is reached.
+
+Note that in the common/typical case of well-behaved clients and connections,
+on a Linux server (where we use TCP_DEFER_ACCEPT) or a BSD server supporting
+the "dnsready" accept filter, when a new connection arrives we immediately
+receive the first request and fire back the response without any opportunity
+for delays that count as idle time, and without re-entering the general
+eventloop where idle time is processed or other new connections could arrive.
+
+Well-behaved client connections only become idle connections (subject to
+termination for idleness, or to make room for new connections when
+C<tcp_clients_per_thread> is reached) during inter-transaction idle periods
+after their first transaction, and for not-so-well-behaved clients the idle
+timer helps control the impact of patterns similar to slow-read/write attacks.
+
+The server will send edns TCP keepalive information to supporting clients
+(those that have sent us the option at least once during the connection) when
+it's legal to do so per RFC 7828 (in response to any query that contained an
+edns0 OPT RR at all), keeping any long-running client connections continually
+updated about the evolving server-side timeout as best as we're allowed to.
+
+The timeout value sent to clients will be the current server-side timeout
+rounded to the nearest 100ms, minus 2 whole seconds, meaning when we reach our
+internal minimum of 2s, the timeout advertised to the clients will reach zero,
+which requests that they close immediately after receiving the response to
+their first query.  The 2 second differential helps ensure that well-behaved
+clients close before the server does under reasonable latency scenarios,
+avoiding TIME_WAIT pile-up on the server side.
 
 =item B<udp_rcvbuf>
 

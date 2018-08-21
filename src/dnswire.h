@@ -106,6 +106,7 @@ typedef struct S_PACKED {
 #define DNS_OPTRR_GET_VERSION(_r)  ((uint8_t)((ntohl((_r)->extflags) & 0x00FF0000) >> 16))
 
 #define EDNS_CLIENTSUB_OPTCODE 0x0008
+#define EDNS_TCP_KEEPALIVE_OPTCODE 0x000B
 
 /* DNS RR Types */
 #define DNS_TYPE_A 1

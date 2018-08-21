@@ -129,6 +129,9 @@ typedef struct {
     // If above is true, this records the original family value verbatim
     unsigned edns_client_family;
 
+    // units of 100ms, sent by dnsio_tcp code
+    unsigned edns0_tcp_keepalive;
+
     // If this is true, the query class was CH
     bool chaos;
 } dnsp_ctx_t;
@@ -357,6 +360,17 @@ static bool handle_edns_client_subnet(dnsp_ctx_t* ctx, dnspacket_stats_t* stats,
 F_NONNULL
 static bool handle_edns_option(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, unsigned opt_code, unsigned opt_len, const uint8_t* opt_data)
 {
+    // Note we don't explicitly parse RFC 7828 edns0 tcp keepalive here, but
+    // this is where we'd install the handler function if we did.  Our
+    // implementation does not choose to change its behavior (e.g. longer
+    // timeouts) based on the client's request for keepalive, and always sends
+    // its own keepalive option whenever possible (any time the client tcp
+    // query has an edns0 opt rr at all).  Therefore we gain little by
+    // attempting to parse the client's option here, and we can just ignore it.
+    // We could hypothetically parse it just to FORMERR-reject it if the client
+    // violates the RFC by sending a non-zero data length, but that seems
+    // needlessly aggressive.
+
     bool rv = false;
     if ((opt_code == EDNS_CLIENTSUB_OPTCODE) && gcfg->edns_client_subnet)
         rv = handle_edns_client_subnet(ctx, stats, opt_len, opt_data);
@@ -425,7 +439,8 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const w
                                      ? client_req
                                      : gcfg->max_edns_response;
         } else { // TCP
-            ctx->this_max_response = gcfg->max_response;
+            // the -6U is to fit the RFC 7828 edns0 tcp keepalive option
+            ctx->this_max_response = gcfg->max_response - 6U;
         }
 
         // ensure nothing goes wrong with implied limits above
@@ -2002,11 +2017,12 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, 
     return offset;
 }
 
-unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len)
+unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns0_tcp_keepalive)
 {
     dnsp_ctx_t* ctx = ctx_asvoid;
     reset_context(ctx);
     ctx->packet = packet;
+    ctx->edns0_tcp_keepalive = edns0_tcp_keepalive;
 
     /*
         log_devdebug("Processing %sv%u DNS query of length %u from %s",
@@ -2081,13 +2097,16 @@ unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdn
         gdnsd_put_una32((status == DECODE_BADVERS) ? htonl(0x01000000) : 0, &opt->extflags);
         gdnsd_put_una16(0, &opt->rdlen);
 
+        // code below which tacks on options should increment this for the overall rdlen of the OPT RR
+        unsigned rdlen = 0;
+
         if (ctx->respond_edns_client_subnet) {
             gdnsd_put_una16(htons(EDNS_CLIENTSUB_OPTCODE), &packet[res_offset]);
             res_offset += 2;
             const unsigned src_mask = ctx->client_info.edns_client_mask;
             const unsigned scope_mask = src_mask ? ctx->edns_client_scope_mask : 0;
             const unsigned addr_bytes = (src_mask >> 3) + ((src_mask & 7) ? 1 : 0);
-            gdnsd_put_una16(htons(8 + addr_bytes), &opt->rdlen);
+            rdlen += (8 + addr_bytes);
             gdnsd_put_una16(htons(4 + addr_bytes), &packet[res_offset]);
             res_offset += 2;
             gdnsd_put_una16(htons(ctx->edns_client_family), &packet[res_offset]);
@@ -2106,7 +2125,21 @@ unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdn
             }
         }
 
+        // TCP keepalive is emitted for any TCP request which had an edns0 OPT RR
+        if (!ctx->is_udp) {
+            rdlen += 6U;
+            gdnsd_put_una16(htons(EDNS_TCP_KEEPALIVE_OPTCODE), &packet[res_offset]);
+            res_offset += 2;
+            gdnsd_put_una16(htons(2), &packet[res_offset]);
+            res_offset += 2;
+            gdnsd_put_una16(htons(ctx->edns0_tcp_keepalive), &packet[res_offset]);
+            res_offset += 2;
+        }
+
+        // Update OPT RR's rdlen for any options emitted above, and bump arcount for it
+        gdnsd_put_una16(htons(rdlen), &opt->rdlen);
         ctx->arcount++;
+
         if (likely(ctx->is_udp)) {
             // We only do one kind of truncation: complete truncation.
             //  therefore if we're returning a >512 packet, it wasn't truncated

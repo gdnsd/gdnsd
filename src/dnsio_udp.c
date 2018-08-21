@@ -436,7 +436,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         } else {
             size_t buf_in_len = (size_t)recvmsg_rv;
             asin.len = msg_hdr.msg_namelen;
-            iov.iov_len = process_dns_query(dnsp_ctx, stats, &asin, buf, buf_in_len);
+            iov.iov_len = process_dns_query(dnsp_ctx, stats, &asin, buf, buf_in_len, 0);
             if (likely(iov.iov_len)) {
                 while (1) {
                     int sent = sendmsg(fd, &msg_hdr, 0);
@@ -552,7 +552,7 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
                 iop->iov_len = 0; // skip send, same as if process_dns_query() rejected it
             } else {
                 asp->len = dgrams[i].msg_hdr.msg_namelen;
-                iop->iov_len = process_dns_query(dnsp_ctx, stats, asp, iop->iov_base, dgrams[i].msg_len);
+                iop->iov_len = process_dns_query(dnsp_ctx, stats, asp, iop->iov_base, dgrams[i].msg_len, 0);
             }
         }
 

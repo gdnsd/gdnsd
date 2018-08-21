@@ -23,7 +23,7 @@ _GDT->test_dns(
     addtl => [
         'ns1.example.com 86400 A 192.0.2.1',
     ],
-    stats => [qw/tcp_reqs noerror/],
+    stats => [qw/tcp_reqs tcp_conns noerror/],
 );
 
 _GDT->test_kill_daemon($pid);

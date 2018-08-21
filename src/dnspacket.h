@@ -46,6 +46,11 @@ typedef struct {
         struct { // TCP stats
             stats_t recvfail;
             stats_t sendfail;
+            stats_t conns;
+            stats_t close_c;
+            stats_t close_s_ok;
+            stats_t close_s_err;
+            stats_t close_s_kill;
         } tcp;
     };
 
@@ -74,7 +79,7 @@ typedef struct {
 } dnspacket_stats_t;
 
 F_HOT F_NONNULL
-unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len);
+unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns0_tcp_keepalive);
 
 F_NONNULL F_WUNUSED
 void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp);

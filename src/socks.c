@@ -45,10 +45,11 @@ static const dns_addr_t addr_defs_defaults = {
     .dns_port = 53U,
     .udp_rcvbuf = 0U,
     .udp_sndbuf = 0U,
-    .udp_threads = 1U,
+    .udp_threads = 2U,
+    .tcp_max_timeout = 15U,
+    .tcp_fastopen = 0U,
     .tcp_clients_per_thread = 128U,
-    .tcp_timeout = 5U,
-    .tcp_threads = 1U,
+    .tcp_threads = 2U,
 };
 
 static const socks_cfg_t socks_cfg_defaults = {
@@ -146,8 +147,9 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, udp_threads, 1024LU, addrconf->udp_threads);
 
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_max_timeout, 3LU, 60LU, addrconf->tcp_max_timeout);
+            CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_fastopen, 1048576LU, addrconf->tcp_fastopen);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_threads, 1024LU, addrconf->tcp_threads);
 
             make_addr(lspec, addrconf->dns_port, &addrconf->addr);
@@ -190,6 +192,7 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
     unsigned tnum = 0;
     for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
         dns_addr_t* a = &socks_cfg->dns_addrs[i];
+
         for (unsigned j = 0; j < a->udp_threads; j++) {
             dns_thread_t* t = &socks_cfg->dns_threads[tnum];
             t->ac = a;
@@ -197,6 +200,7 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             t->threadnum = tnum++;
             t->sock = -1;
         }
+
         for (unsigned j = 0; j < a->tcp_threads; j++) {
             dns_thread_t* t = &socks_cfg->dns_threads[tnum];
             t->ac = a;
@@ -204,12 +208,9 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             t->threadnum = tnum++;
             t->sock = -1;
         }
-        if (!(a->udp_threads + a->tcp_threads))
-            log_warn("DNS listen address %s explicitly configured with no UDP or TCP threads - nothing is actually listening on this address!",
-                     logf_anysin(&a->addr));
-        else
-            log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
-                     a->udp_threads, a->tcp_threads, logf_anysin(&a->addr));
+
+        log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
+                 a->udp_threads, a->tcp_threads, logf_anysin(&a->addr));
     }
 
     gdnsd_assert(tnum == socks_cfg->num_dns_threads);
@@ -232,10 +233,11 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
         CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
         CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, addr_defs.udp_sndbuf);
-        CFG_OPT_UINT_ALTSTORE_NOMIN(options, udp_threads, 1024LU, addr_defs.udp_threads);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, addr_defs.tcp_timeout);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 1LU, 65535LU, addr_defs.tcp_clients_per_thread);
-        CFG_OPT_UINT_ALTSTORE_NOMIN(options, tcp_threads, 1024LU, addr_defs.tcp_threads);
+        CFG_OPT_UINT_ALTSTORE(options, udp_threads, 1LU, 1024LU, addr_defs.udp_threads);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_max_timeout, 3LU, 60LU, addr_defs.tcp_max_timeout);
+        CFG_OPT_UINT_ALTSTORE_NOMIN(options, tcp_fastopen, 1048576LU, addr_defs.tcp_fastopen);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 32LU, 65536LU, addr_defs.tcp_clients_per_thread);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_threads, 1LU, 1024LU, addr_defs.tcp_threads);
 
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
     }

@@ -44,7 +44,7 @@ my $pid = _GDT->test_spawn_daemon();
         die "AXFR gave us records???" if scalar @zone;
     };
     ok(!$@) or diag $@;
-    _GDT->stats_inc(qw/tcp_reqs notimp/);
+    _GDT->stats_inc(qw/tcp_reqs tcp_conns notimp/);
     _GDT->test_stats();
 }
 

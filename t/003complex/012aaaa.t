@@ -5,7 +5,7 @@ use Test::More tests => 19;
 
 my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
-$optrr = Net::DNS::RR->new(
+my $optrr = Net::DNS::RR->new(
     type => "OPT",
     ednsversion => 0,
     name => "",

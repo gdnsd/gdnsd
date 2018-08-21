@@ -194,25 +194,30 @@ our $CSOCK_PATH = "$OUTDIR/run/gdnsd/control.sock";
 our $csock;
 
 my %stats_accum = (
-    noerror      => 0,
-    refused      => 0,
-    nxdomain     => 0,
-    notimp       => 0,
-    badvers      => 0,
-    formerr      => 0,
-    dropped      => 0,
-    v6           => 0,
-    edns         => 0,
-    edns_clientsub => 0,
-    udp_reqs     => 0,
-    udp_sendfail => 0,
-    udp_recvfail => 0,
-    udp_tc       => 0,
-    udp_edns_big => 0,
-    udp_edns_tc  => 0,
-    tcp_reqs     => 0,
-    tcp_recvfail => 0,
-    tcp_sendfail => 0,
+    noerror          => 0,
+    refused          => 0,
+    nxdomain         => 0,
+    notimp           => 0,
+    badvers          => 0,
+    formerr          => 0,
+    dropped          => 0,
+    v6               => 0,
+    edns             => 0,
+    edns_clientsub   => 0,
+    udp_reqs         => 0,
+    udp_sendfail     => 0,
+    udp_recvfail     => 0,
+    udp_tc           => 0,
+    udp_edns_big     => 0,
+    udp_edns_tc      => 0,
+    tcp_reqs         => 0,
+    tcp_recvfail     => 0,
+    tcp_sendfail     => 0,
+    tcp_conns        => 0,
+    tcp_close_c      => 0,
+    tcp_close_s_ok   => 0,
+    tcp_close_s_err  => 0,
+    tcp_close_s_kill => 0,
 );
 
 sub reset_stats {
@@ -314,8 +319,6 @@ sub proc_tmpl {
         plugin_search_path = $PLUGIN_PATH
         run_dir = $OUTDIR/run/gdnsd
         state_dir = $OUTDIR/var/lib/gdnsd
-        udp_threads = 2
-        tcp_threads = 2
     };
 
     while(<$in_fh>) {

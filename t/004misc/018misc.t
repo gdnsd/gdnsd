@@ -7,7 +7,7 @@
 use _GDT ();
 use Test::More tests => 12;
 
-$optrr = Net::DNS::RR->new(
+my $optrr = Net::DNS::RR->new(
     type => "OPT",
     ednsversion => 0,
     name => "",

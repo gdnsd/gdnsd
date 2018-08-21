@@ -32,7 +32,8 @@ typedef struct {
     unsigned udp_sndbuf;
     unsigned udp_rcvbuf;
     unsigned udp_threads;
-    unsigned tcp_timeout;
+    unsigned tcp_max_timeout;
+    unsigned tcp_fastopen;
     unsigned tcp_clients_per_thread;
     unsigned tcp_threads;
 } dns_addr_t;
