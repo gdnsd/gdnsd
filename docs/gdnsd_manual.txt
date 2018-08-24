@@ -13,9 +13,9 @@ Portability Testing
 
     Portability data and testing is somewhat out of date at this time.
 
-    Modern Linux/x86-64 is the primary development and deployment platform,
-    and of course the x86 architecture there generally receives extensive
-    testing as well.
+    Modern Linux/x86-64 is the primary development and deployment
+    platform, and of course the x86 architecture there generally
+    receives extensive testing as well.
 
     Compatibility with the open source *BSD distributions is important,
     and bug reports are welcome for any breakage there.  Unfortunately
@@ -29,17 +29,21 @@ Portability Testing
     shouldn't have issues with any of the well-supported Debian target
     architectures.
 
-    I do some development on Macs, so portability to reasonably-recent
-    releases of MacOS X is usually good, but optimization on this platform
-    for production use isn't a priority.
+    I used do some gdnsd development on Macs, so portability to
+    reasonably-recent releases of MacOS X has been good in the past.
+    However, I no longer regular use a Mac or test on it, and
+    optimization on this platform for production use was never a
+    priority.
 
-    In the past I've successfully tested portability to other relatively
-    exotic-yet-POSIXy targets like Linux/mips32r2 and OpenSolaris (with
-    Sun's compiler), but those results are very outdated at this time.
+    In the distant past I've successfully tested portability to other
+    relatively exotic-yet-POSIXy targets like Linux/mips32r2 and
+    OpenSolaris (with Sun's compiler), but those results are very
+    outdated at this time.
 
     I take absolutely no interest in portability to Microsoft platforms,
-    and would probably reject pull requests for it if they add significant
-    noise and/or complexity to the codebase.  It's simply not worth it.
+    and would probably reject pull requests for it if they add
+    significant noise and/or complexity to the codebase.  It's simply
+    not worth it.
 
 Overall Design
 
@@ -57,38 +61,43 @@ Overall Design
     The gdnsd daemon uses pthreads to maximize performance and efficiency,
     but they don't contend with each other on locks at runtime (assuming
     gdnsd is compiled with userspace-rcu support), and no more
-    than one thread writes to any shared memory location. Thread-local
-    writable memory is malloc()'d within the writing thread and the address
-    is private to the thread.
+    than one thread writes to any shared memory location.  Thread-local
+    writable memory is generally malloc()'d within the writing thread
+    and the address is private to the thread.  There are three primary
+    functional threads of execution, aside from actual DNS I/O handling:
 
-    There are 3 singleton threads in gdnsd that handle specific functional
-    roles: main, zone data, and monitoring.
+    The "main" thread of execution (the first thread of the process)
+    primarily handles meta-level managerial functions once initial
+    startup is done (control socket, signals, process management, etc.).
+    It also handles any configured health monitoring checks at runtime.
 
-    The "main" thread is the original thread of execution in the daemon.
-    While it handles a great deal of diverse things during the startup
-    process, at runtime it does absolutely nothing but watch for external
-    signals via sigwait() (such as TERM, INT, USR1) and act on them.  It
-    is the only thread that runs with signals unblocked.
+    The geoip plugin spawns a separate persistent functional thread,
+    whose only job is to watch for updates to configured GeoIP databases
+    and handle the asynchronous reloading of their data.
 
-    The "zone data" thread handles the runtime-reloading of zone data
-    from providers.  Depending on the provider and configuration, these
-    could be automatic and/or triggered on SIGUSR1.  When not actively
-    checking for new zone data and/or reloading it, this thread should
-    mostly be idle.
+    When zone data reloads are requested, a temporary separate pthread
+    is spawned just for the purpose of loading the zone data, which
+    terminates after the operation is complete.
 
-    The "monitoring" thread handles all monitoring duties for the monitoring
-    plugin system.  Currently it also handles inbound traffic to the
-    built-in pseudo-HTTP service to serve stats data.
+    The rest of the threads are all dedciated DNS I/O threads.  The
+    general model employed is that every configured listening address
+    (address/port/protocol combination) creates multiple SO_REUSEPORT
+    listening sockets.  The number of duplicate listening sockets per
+    address is controlled by the 'udp_threads' and 'tcp_threads'
+    parameters, which default to 2.  There's exactly one I/O thread per
+    listening socket, and they exist for the life of the daemon.  It's
+    intended that the udp/thread_threads options should be tuned to
+    roughly the CPU core count of the host machine.  For example, if two
+    listen addresses are configured at 192.0.2.1:53 and 192.0.2.42:53,
+    and the threads parameters are at their default value of two, there
+    will be a total of 8 I/O threads created (2 tcp + 2 udp for each of
+    the two IP:port, each thread having its own separate SO_REUSEPORT
+    listening socket).
 
-    Aside from these 3 singleton threads, a single thread is spawned
-    for every configured DNS listening socket.  If the options
-    'udp_threads' or 'tcp_threads' are set to values greater than one,
-    multiple sockets are created at the same socket address via
-    SO_REUSEPORT and a separate thread attaches to each.
-
-    The TCP DNS threads use a libev event loop to handle traffic for
-    all connections on the given socket.  The UDP DNS threads use a tight
-    loop over the raw send and receive calls for the given socket.
+    The TCP DNS threads use a libev event loop to multiplex the handling
+    of all traffic for all connections they accept on their listening
+    socket.  The UDP DNS threads use a tight loop over the raw send and
+    receive calls for the given socket.
 
     All of the code executed in the UDP threads at runtime is carefully
     crafted to avoid all syscalls (other than the necessary send/recv
@@ -96,8 +105,7 @@ Overall Design
     locks and dynamic memory allocation).  These threads should never
     block on anything other than their send/recv calls, and should execute
     at most 2 syscalls per request (significantly less under heavy traffic
-    loads if Linux sendmmsg() support is compiled in and detected at
-    runtime).
+    loads if sendmmsg() support is compiled in and detected at runtime).
 
     The TCP code shares the efficient core DNS parsing and response
     code of the UDP threads, but it does use dynamic memory allocation
@@ -221,13 +229,6 @@ Overall Design
     These statistics are tracked in per-thread structures. The actual data
     slots are uintptr_t, which helps with rollover on 64-bit machines.
 
-    The monitoring thread reports the statistics in two different ways.
-    The first is via syslog every log_stats seconds (default 3600), as well
-    as always at exit time. The other is via an embedded HTTP server which
-    listens by default on port 3506. The HTTP server can give the data in
-    html, json and csv formats.  All of the stats reporting code is in
-    statio.c.
-
   Truncation Handling and other related things
 
     gdnsd's truncation handling follows the simplest valid set of truncation
@@ -270,32 +271,9 @@ Security
     like.  gdnsd never sends DNS queries (even indirectly via
     gethostbyname()) to anyone else. It's a DNS server, not a DNS client.
 
-    Perhaps more importantly, gdnsd doesn't trust itself to be root on your
-    machine. Any time gdnsd is started as root, it will drop privileges to
-    those of the user named "gdnsd" (configurable) before it begins
-    receiving network traffic.  This cannot be disabled, and the user isn't
-    allowed to have root's uid or gid either.
-
-    If any security-related operation fails, the daemon will fail to start
-    itself and abort with a log message indicating the problem.
-
-    The code used to directly support "chroot()". This was removed during
-    the development cycle leading to version 2.0. The rationales for removal
-    included: "chroot()" wasn't the best tool to begin with (it doesn't
-    limit as many things as we'd like). Direct "chroot()" support added
-    complexities in many areas of the code and documentation. Systems
-    (especially auth DNS servers) tend to be special-purpose rather than
-    shared these days. Also, "chroot()" is largely supplanted by much better
-    mechanisms on most target hosts which should be configured externally
-    (e.g. FreeBSD jails, systemd service options, AppArmor, SELinux, LXC
-    containers, actual VMs, etc). For that matter, a distribution packager
-    or system admin can still do basic chroot through their init
-    scripts/system, and probably set it up better with regard to mounting
-    special directories to make library calls work right, etc.
-
 Copyright and License
 
-    Copyright (c) 2014 Brandon L Black <blblack@gmail.com>
+    Copyright (c) 2018 Brandon L Black <blblack@gmail.com>
 
     This file is part of gdnsd.
 
