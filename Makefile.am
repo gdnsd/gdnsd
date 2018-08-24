@@ -124,6 +124,8 @@ src_gdnsd_SOURCES = \
 	src/zsrc_djb.h \
 	src/zscan_djb.c \
 	src/zscan_djb.h \
+	src/zscan_rfc1035.c \
+	src/zscan_rfc1035.h \
 	src/zsrc_rfc1035.c \
 	src/zsrc_rfc1035.h \
 	src/ztree.c \
@@ -142,8 +144,7 @@ src_gdnsd_SOURCES = \
 	src/socks.h \
 	src/statio.c \
 	src/statio.h \
-	src/dnswire.h \
-	src/zscan_rfc1035.h
+	src/dnswire.h
 
 # The reason for -I$(srcdir)/src below is that zscan_rfc1035.c is
 #   created in the builddir, so the compiler won't otherwise pick
@@ -153,11 +154,9 @@ src_gdnsd_CFLAGS = $(CFLAGS_PIE)
 src_gdnsd_LDFLAGS = $(LDFLAGS_PIE)
 src_gdnsd_LDADD = src/libcsc.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
-nodist_src_gdnsd_SOURCES = src/zscan_rfc1035.c
 src/zscan_rfc1035.c: src/zscan_rfc1035.rl
 	$(AM_V_GEN)ragel -G2 -o $@ $(srcdir)/src/zscan_rfc1035.rl
-CLEANFILES += src/zscan_rfc1035.c
-EXTRA_DIST += src/zscan_rfc1035.rl
+EXTRA_DIST += src/zscan_rfc1035.rl src/zscan_rfc1035.c
 
 #=====================================
 # plugins/
@@ -294,7 +293,8 @@ libgdnsd_libgdnsd_la_SOURCES = \
 	libgdnsd/paths.c \
 	libgdnsd/file.c \
 	libgdnsd/plugapi.c \
-	libgdnsd/alloc.c
+	libgdnsd/alloc.c \
+	libgdnsd/vscf.c
 
 LIBGDNSD_PATHS = \
 	-DGDNSD_DEFPATH_CONFIG='"$(GDNSD_DEFPATH_CONFIG)"' \
@@ -310,11 +310,9 @@ libgdnsd_libgdnsd_la_LIBADD  = $(LIBGDNSD_LIBS)
 libgdnsd_libgdnsd_la_pkgincludedir = $(pkgincludedir)
 libgdnsd_libgdnsd_la_pkginclude_HEADERS = $(xHEADERS_INST)
 
-nodist_libgdnsd_libgdnsd_la_SOURCES = libgdnsd/vscf.c
 libgdnsd/vscf.c: libgdnsd/vscf.rl
 	$(AM_V_GEN)ragel -T0 -o $@ $(srcdir)/libgdnsd/vscf.rl
-CLEANFILES += libgdnsd/vscf.c
-EXTRA_DIST += libgdnsd/vscf.rl
+EXTRA_DIST += libgdnsd/vscf.rl libgdnsd/vscf.c
 
 #=====================================
 # sysd/

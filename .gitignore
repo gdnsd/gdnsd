@@ -18,7 +18,7 @@
 /plugins/gdnsd_extmon_helper
 /plugins/gdnsd_geoip_test
 
-# Built and not distributed or installed
+# Built and distributed in tarballs, but not kept in git
 /src/zscan_rfc1035.c
 /libgdnsd/vscf.c
 
