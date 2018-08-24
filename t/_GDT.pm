@@ -122,8 +122,9 @@ my %SIGS;
 }
 
 # Set up per-testfile output directory, zones input directory,
-#   and $TEST_SERIAL.
+#   rundir, and $TEST_SERIAL.
 our $OUTDIR;
+our $RUNDIR;
 our $TEST_SERIAL;
 our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
 {
@@ -132,6 +133,15 @@ our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
     $tname .= '_' . $FindBin::Script;
     $tname =~ s{\.t$}{};
     $OUTDIR = $ENV{TESTOUT_DIR} . '/' . $tname;
+
+    # Hardcoding /tmp/ is a little ugly, but we need rundir pathnames to be
+    # short enough for the stupid limits on unix domain socket pathname
+    # lengths, and in many cases testsuite invocations end up very deep in
+    # directory hierarchies...
+    $RUNDIR = '/tmp/gdnsd-testrun-' . $tname;
+    if(!-d $RUNDIR) {
+        mkdir $RUNDIR or die "Cannot create directory $RUNDIR $!";
+    }
 
     $FindBin::Script =~ m{^0*([0-9]{1,3})}
         or die "Cannot figure out TEST_SERIAL value for $tname";
@@ -190,7 +200,7 @@ else {
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 50;
 
 # Server control socket
-our $CSOCK_PATH = "$OUTDIR/run/gdnsd/control.sock";
+our $CSOCK_PATH = "$RUNDIR/control.sock";
 our $csock;
 
 my %stats_accum = (
@@ -317,7 +327,7 @@ sub proc_tmpl {
         listen => $dns_lspec
         dns_port => $DNS_PORT
         plugin_search_path = $PLUGIN_PATH
-        run_dir = $OUTDIR/run/gdnsd
+        run_dir = $RUNDIR
         state_dir = $OUTDIR/var/lib/gdnsd
     };
 
@@ -1273,6 +1283,7 @@ sub optrr_clientsub {
 
 END {
     kill('SIGKILL', $saved_pid) if $saved_pid;
+    safe_rmtree($RUNDIR);
 }
 
 1;
