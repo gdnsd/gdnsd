@@ -45,6 +45,7 @@ typedef struct {
     unsigned max_edns_response;
     unsigned max_cname_depth;
     unsigned max_addtl_rrsets;
+    unsigned acme_challenge_ttl;
 } cfg_t;
 
 extern const cfg_t* gcfg;

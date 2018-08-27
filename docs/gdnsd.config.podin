@@ -438,6 +438,17 @@ version reporting, which responds to "version.bind" queries in the
 C<CH> class, and is what a client will see if they use such a query
 against a gdnsd server.
 
+=item B<acme_challenge_ttl>
+
+Integer seconds, range 60-3600, default 600.  For temporary ACME DNS-01
+challenge data added via C<gdnsdctl acme-dns-01 ...>, this sets both the
+time until the TXT records auto-expire from the server and dissappear,
+and also the TTL of the RRs themselves.  The TTL of static TXT records
+in zonefiles which happen to have C<_acme-challenge> as their leading
+label are also forced to this TTL regardless of the zonefile-level TTL,
+to avoid cases of mixed TTLs when mixing static and dynamic records in
+server outputs.  See the L<gdnsdctl(8)> documentation for more details.
+
 =item B<run_dir>
 
 String, defaults to F<@GDNSD_DEFPATH_RUN@>.  This is the directory

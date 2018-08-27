@@ -60,6 +60,7 @@ static const cfg_t cfg_defaults = {
     .max_edns_response = 1410U,
     .max_cname_depth = 16U,
     .max_addtl_rrsets = 64U,
+    .acme_challenge_ttl = 600U,
 };
 
 F_NONNULL
@@ -226,6 +227,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         // Nobody should have even the default 16-depth CNAMEs anyways :P
         CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
         CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
+        CFG_OPT_UINT(options, acme_challenge_ttl, 60LU, 3600LU);
         CFG_OPT_BOOL(options, zones_strict_data);
 
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);

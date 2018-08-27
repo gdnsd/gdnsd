@@ -261,4 +261,33 @@ static uint32_t gdnsd_lookup2(const uint8_t* k, uint32_t len)
     return c;
 }
 
+// count2mask converts a uint32_t to the next-largest power of two, minus 1.
+// useful in sizing po2-sized hash tables and masking hash results for them.
+
+#ifndef HAVE_BUILTIN_CLZ
+
+F_CONST F_UNUSED
+static uint32_t count2mask(uint32_t x)
+{
+    x |= 1U;
+    x |= x >> 1U;
+    x |= x >> 2U;
+    x |= x >> 4U;
+    x |= x >> 8U;
+    x |= x >> 16U;
+    return x;
+}
+
+#else
+
+F_CONST F_UNUSED
+static uint32_t count2mask(const uint32_t x)
+{
+    // This variant is about twice as fast as the above, but
+    //  only available w/ GCC 3.4 and above.
+    return ((1U << (31U - (unsigned)__builtin_clz(x | 1U))) << 1U) - 1U;
+}
+
+#endif
+
 #endif // GDNSD_MISC_H

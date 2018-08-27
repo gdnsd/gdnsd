@@ -24,6 +24,7 @@
 #include "socks.h"
 #include "dnswire.h"
 #include "ztree.h"
+#include "chal.h"
 
 #include <gdnsd-prot/plugapi.h>
 #include <gdnsd/alloc.h>
@@ -1673,8 +1674,8 @@ static encode_funcptr encode_funcptrs[256] = {
     NULL,                  // 255 - ANY
 };
 
-F_NONNULLX(1, 4)
-static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* res_rrsets, const ltree_node_t* authdom, const bool res_is_auth)
+F_NONNULLX(1)
+static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* res_rrsets)
 {
     if (ctx->qtype == DNS_TYPE_ANY) {
         offset = encode_rrs_any(ctx, offset, res_rrsets);
@@ -1695,12 +1696,6 @@ static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, cons
             node_rrset = node_rrset->gen.next;
         }
     }
-
-    if (!ctx->ancount)
-        offset = encode_rr_soa_negative(ctx, offset, ltree_node_get_rrset_soa(authdom));
-    else if (gcfg->include_optional_ns && ctx->qtype != DNS_TYPE_NS
-             && (ctx->qtype != DNS_TYPE_ANY || !res_is_auth))
-        offset = encode_rrs_ns(ctx, offset, ltree_node_get_rrset_ns(authdom), false);
 
     return offset;
 }
@@ -1941,14 +1936,21 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const 
     if (status == DNAME_AUTH) {
         gdnsd_assert(resauth);
         res_hdr->flags1 |= 4; // AA bit
-        if (likely(resdom)) {
-            offset = construct_normal_response(ctx, offset, res_rrsets, resauth, (resdom == resauth));
-        } else {
-            const ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(resauth);
-            gdnsd_assert(soa);
-            res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
-            offset = encode_rr_soa_negative(ctx, offset, soa);
-            stats_own_inc(&stats->nxdomain);
+        if (likely(resdom))
+            offset = construct_normal_response(ctx, offset, res_rrsets);
+
+        // ACME DNS-01 data injection
+        const bool matched = chal_respond(ctx->qname_comp, ctx->qtype, qname, ctx->packet, &ctx->ancount, &offset);
+
+        if (!ctx->ancount) {
+            offset = encode_rr_soa_negative(ctx, offset, ltree_node_get_rrset_soa(resauth));
+            if (!resdom && !matched) {
+                res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
+                stats_own_inc(&stats->nxdomain);
+            }
+        } else if (gcfg->include_optional_ns && ctx->qtype != DNS_TYPE_NS
+                   && (ctx->qtype != DNS_TYPE_ANY || !(resdom == resauth))) {
+            offset = encode_rrs_ns(ctx, offset, ltree_node_get_rrset_ns(resauth), false);
         }
     } else if (status == DNAME_DELEG) {
         gdnsd_assert(resdom);
@@ -1969,7 +1971,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const 
 }
 
 F_NONNULL
-static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, uint8_t* qname, unsigned offset)
+static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, dnspacket_stats_t* stats, const uint8_t* qname, unsigned offset)
 {
     gdnsd_assert(offset);
 

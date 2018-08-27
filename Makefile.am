@@ -120,6 +120,8 @@ src_gdnsd_SOURCES = \
 	src/cs.h \
 	src/conf.c \
 	src/conf.h \
+	src/chal.c \
+	src/chal.h \
 	src/zsrc_djb.c \
 	src/zsrc_djb.h \
 	src/zscan_djb.c \

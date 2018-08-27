@@ -501,6 +501,7 @@ sub test_spawn_daemon_execute {
 sub test_run_gdnsdctl {
     my $class = shift;
     my $args = shift;
+    my $fail = shift || 0;
     my $ctl_out = $OUTDIR . '/gdnsdctl.out';
     my $exec_line = $TEST_RUNNER
         ? qq{$TEST_RUNNER $GDNSDCTL_BIN -t 300 -Dc $OUTDIR/etc $args}
@@ -528,13 +529,23 @@ sub test_run_gdnsdctl {
     }
 
     waitpid($gpid, 0);
-    if($?) {
-        Test::More::ok(0);
-        Test::More::diag("gdnsdctl status was $?");
-        die "gdnsdctl status was $?";
-    }
 
-    Test::More::ok(1);
+    if($fail) {
+        if($?) {
+            Test::More::ok(1);
+            Test::More::diag("gdnsdctl status was $?");
+        } else {
+            Test::More::ok(0);
+            die "gdnsdctl status was unexpectedly zero!";
+	}
+    } else {
+        if($?) {
+            Test::More::ok(0);
+            Test::More::diag("gdnsdctl status was $?");
+            die "gdnsdctl status was $?";
+        }
+        Test::More::ok(1);
+    }
 }
 
 ##### START RELOAD STUFF

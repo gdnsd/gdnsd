@@ -37,13 +37,13 @@
 //    there is no unprompted server-pushed output, and no new requests from
 //    the client will be accepted until after the server response to the
 //    previous request is buffered into the socket.
-// 2. All messages are single chunks of binary data, with an implementation
-//    defined maximum possible length of UINT32_MAX (~4GB).
-// 3. Each request or response starts with a 4 byte unsigned length value in
-//    native byte order.  Length zero is illegal in both directions.
-// 4. Any communications error, or a length value from the client exceeding the
-//    server's max_client_req parameter will result in immediate connection
-//    termination and cleanup.
+// 2. All messages in both directions start with an 8 byte structure defined
+//    in cs.h, which encodes 1 byte as the requested command (or ack/nak on
+//    response side), a 24-bit "v" value, and a 32-bit "d" value.  The purpose
+//    of "v" and "d" can be customized per command or response type.  Typically
+//    if a message is followed by other data, "d" is used to encode the length
+//    of the data.  In the basic server info transaction, the response contains
+//    the server's version in "v" and its PID in "d".
 
 // Opaque server objects
 struct css_s_;

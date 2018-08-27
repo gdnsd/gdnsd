@@ -59,6 +59,8 @@
       new daemon is a child process of the existing one, certain process(group)
       -level attributes are preserved, allowing compatibility with e.g. systemd
       unit operations.
+    * "gdnsdctl acme-dns-01" injects temporary ACME DNS-01 challenge response
+      payload TXT records, see gdnsdctl documentation for more information.
     * Configuration option "udp_recv_width" has been removed.  Previously this
       allowed customization of the width of recvmmsg() and sendmmsg(), or
       disabling them altogether when set to "1".  These interfaces are now

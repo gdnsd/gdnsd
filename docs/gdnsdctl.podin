@@ -4,7 +4,7 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsdctl [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-t 47] <action>
+  Usage: gdnsdctl [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-t 47] <action> [...]
     -c - Configuration directory (def @GDNSD_DEFPATH_CONFIG@)
     -D - Enable verbose debug output
     -l - Send logs to syslog rather than stderr
@@ -16,6 +16,9 @@ gdnsd - An authoritative DNS daemon
     status - Checks the running daemon's status
     stats - Dumps JSON statistics from the running daemon
     states - Dumps JSON monitored states
+    acme-dns-01 - Create ACME DNS-01 payloads from additional arguments:
+                  <name> <payload> <name> <payload> ... [max %u payloads]
+    acme-dns-01-flush - Flush (remove) all ACME DNS-01 payloads added above
 
 =head1 DESCRIPTION
 
@@ -98,6 +101,61 @@ Dumps JSON statistics from the running daemon to stdout.
 =item B<states>
 
 Dumps JSON monitored states from any configured service health monitors.
+
+=item B<acme-dns-01>
+
+Injects temporary ACME DNS-01 challenge response payloads as defined by
+L<https://tools.ietf.org/html/draft-ietf-acme-acme-14> into the running daemon.
+This is intended for integration with scripts or services which generate signed
+certificates from an ACME-capable certificate authority.
+
+Two or more additional commandline arguments are required, in pairs of C<name>
+and C<payload>, where C<name> is a valid domainname and C<payload> is the
+challenge response payload (which, as a SHA-256 output encoded in base64url
+encoding, should be 43 bytes long and consist of only alphanumeric characters
+plus C<-> and C<_>).  A maximum of 100 separate payloads can be specified in a
+single gdnsdctl invocation.
+
+This example...
+
+    gdnsdctl acme-dns-01 example.org 0123456789012345678901234567890123456789012 www.example.org ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnop
+
+... causes the daemon to temporarily respond to C<TXT> requests for the name
+C<_acme-challenge.example.org.> with the first payload above, and similarly
+with the second payload for C<_acme-challenge.www.example.org.>.
+
+Challenge payload responses injected by this command automatically expire after
+a short time.  The default is 10 minutes, and is configurable via the config
+option C<acme_challenge_ttl>.  This is also emitted as the TTL of the TXT
+records themselves.
+
+Injecting responses for domainnames that are not within the scope of one of the
+statically-configured zones will succeed, but the response to such queries will
+still be C<REFUSED>.
+
+If more than one payload is configured for a given name (in the same command,
+or in separate commands less than the TTL window apart), multiple TXT records
+will be emitted.  If there is any statically-configured TXT data from zonefiles
+at a conflicting C<_acme-challenge> name, the static TXT RRs will also be
+served alongside any data from this mechanism.
+
+As an implementail detail (quirk?) of this mechanism, any static zonefile RRs
+which have a first label of C<_acme-challenge> will automatically have their
+TTLs forced to the C<acme_challenge_ttl> regardless of the TTL specified in the
+zonefile.  This was the easiest way to ensure that we never serve mixed TTL
+values in a single RR-set of TXT records, which is forbidden by RFC 2181.
+
+Note the data injected by this mechanism does not persist through daemon
+restart or replace operations.  It does persist through zone data reloads, and
+in the case that data is injected for a non-existent zone which then comes into
+existence through a reload, the challenge will begin working after the reload.
+
+=item B<acme-dns-01-flush>
+
+Immediately flushes all injected payload data from above ahead of its natural
+expiry.  Mostly useful for testing or for clearing up mistakes, but some
+integrations with spiky large volumes of challenges may wish to flush data
+explicitly at points in time when there are no outstanding DNS-01 challenges.
 
 =back
 

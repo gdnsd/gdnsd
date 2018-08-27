@@ -32,6 +32,7 @@
 #include "zsrc_djb.h"
 #include "css.h"
 #include "csc.h"
+#include "chal.h"
 
 #include <gdnsd-prot/plugapi.h>
 #include <gdnsd-prot/misc.h>
@@ -377,6 +378,9 @@ int main(int argc, char** argv)
     // Initialize the network and PRNG bits of libgdnsd for runtime operation
     gdnsd_init_net();
     gdnsd_init_rand();
+
+    // Basic init for the acme challenge code
+    chal_init();
 
     // init locked control socket, can fail if concurrent daemon...
     csc_t* csc = NULL;

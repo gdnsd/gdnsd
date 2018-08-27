@@ -203,6 +203,19 @@ gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restr
 F_NONNULL F_PURE
 gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
 
+// As above, but takes a second argument specifying the known length of the
+// memory allocation at "dname", and pre-checks for running off the end of the
+// buffer, returning DNAME_INVALID if so.  Still requires that "dname" is a
+// non-NULL pointer, but a buflen of zero is legal (which will always return
+// DNAME_INVALID).
+F_NONNULL F_PURE F_UNUSED
+static gdnsd_dname_status_t gdnsd_dname_status_buflen(const uint8_t* dname, size_t buflen)
+{
+    if (!buflen || ((*dname) + 1U) > buflen)
+        return DNAME_INVALID;
+    return gdnsd_dname_status(dname);
+}
+
 #pragma GCC visibility pop
 
 // Terminate a DNAME_PARTIAL name, converting it to DNAME_VALID.  Idempotent
@@ -382,6 +395,7 @@ typedef gdnsd_dname_status_t dname_status_t;
 #define dname_cat gdnsd_dname_cat
 #define dname_terminate gdnsd_dname_terminate
 #define dname_status gdnsd_dname_status
+#define dname_status_buflen gdnsd_dname_status_buflen
 #define dname_is_partial gdnsd_dname_is_partial
 #define dname_trim gdnsd_dname_trim
 #define dname_copy gdnsd_dname_copy

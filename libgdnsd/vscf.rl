@@ -120,18 +120,6 @@ typedef struct {
 /*** Private functions ***/
 /*************************/
 
-static unsigned count2mask(unsigned x)
-{
-    if (!x)
-        return 1;
-    x |= x >> 1;
-    x |= x >> 2;
-    x |= x >> 4;
-    x |= x >> 8;
-    x |= x >> 16;
-    return x;
-}
-
 F_NONNULL F_PURE
 static unsigned key_hash(const char* k, unsigned klen, const unsigned hash_mask)
 {

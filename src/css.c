@@ -25,6 +25,7 @@
 #include "statio.h"
 #include "main.h"
 #include "socks.h"
+#include "chal.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
@@ -57,6 +58,7 @@ static const mode_t CSOCK_PERMS = (S_IRUSR | S_IWUSR); // 0600
 
 typedef enum {
     READING_REQ,
+    READING_DATA,
     WAITING_SERVER,
     WRITING_RESP,
     WRITING_RESP_FDS,
@@ -72,12 +74,12 @@ struct css_conn_s_ {
     css_t* css;
     csbuf_t rbuf;
     csbuf_t wbuf;
-    char* resp_data;
+    char* data;
     ev_io w_read;
     ev_io w_write;
     int fd;
-    size_t resp_size;
-    size_t resp_size_done;
+    size_t size;
+    size_t size_done;
     css_cstate_t state;
 };
 
@@ -143,8 +145,8 @@ static void css_conn_cleanup(css_conn_t* c)
         css->takeover_conn = NULL;
 
     // stop/free io-related things
-    if (c->resp_data)
-        free(c->resp_data);
+    if (c->data)
+        free(c->data);
     ev_io* w_read = &c->w_read;
     ev_io_stop(css->loop, w_read);
     ev_io* w_write = &c->w_write;
@@ -189,11 +191,11 @@ F_NONNULL
 static void css_conn_write_data(css_conn_t* c)
 {
     gdnsd_assert(c->state == WRITING_RESP_DATA);
-    gdnsd_assert(c->resp_data);
-    gdnsd_assert(c->resp_size);
-    size_t wanted = c->resp_size - c->resp_size_done;
+    gdnsd_assert(c->data);
+    gdnsd_assert(c->size);
+    const size_t wanted = c->size - c->size_done;
     gdnsd_assert(wanted > 0);
-    ssize_t pktlen = send(c->fd, &c->resp_data[c->resp_size_done], wanted, MSG_DONTWAIT);
+    const ssize_t pktlen = send(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
     if (pktlen < 0) {
         if (ERRNO_WOULDBLOCK)
             return;
@@ -202,12 +204,12 @@ static void css_conn_write_data(css_conn_t* c)
         return;
     }
 
-    c->resp_size_done += (size_t)pktlen;
-    if (c->resp_size_done == c->resp_size) {
-        free(c->resp_data);
-        c->resp_data = NULL;
-        c->resp_size = 0;
-        c->resp_size_done = 0;
+    c->size_done += (size_t)pktlen;
+    if (c->size_done == c->size) {
+        free(c->data);
+        c->data = NULL;
+        c->size = 0;
+        c->size_done = 0;
         ev_io* w_write = &c->w_write;
         ev_io_stop(c->css->loop, w_write);
         ev_io* w_read = &c->w_read;
@@ -233,7 +235,7 @@ static bool css_conn_write_resp(css_conn_t* c)
 
     size_t send_fd_count = SCM_MAX_FDS;
     if (c->state == WRITING_RESP_FDS) {
-        const size_t fd_todo = c->resp_size - c->resp_size_done;
+        const size_t fd_todo = c->size - c->size_done;
         if (fd_todo < SCM_MAX_FDS)
             send_fd_count = fd_todo;
         const size_t send_fd_len = sizeof(int) * send_fd_count;
@@ -245,7 +247,7 @@ static bool css_conn_write_resp(css_conn_t* c)
         cmsg->cmsg_level = SOL_SOCKET;
         cmsg->cmsg_type = SCM_RIGHTS;
         cmsg->cmsg_len = CMSG_LEN(send_fd_len);
-        memcpy(CMSG_DATA(cmsg), &c->css->handoff_fds[c->resp_size_done], send_fd_len);
+        memcpy(CMSG_DATA(cmsg), &c->css->handoff_fds[c->size_done], send_fd_len);
     }
 
     ssize_t pktlen = sendmsg(c->fd, &msg, MSG_DONTWAIT);
@@ -258,12 +260,12 @@ static bool css_conn_write_resp(css_conn_t* c)
     }
 
     if (c->state == WRITING_RESP_FDS) {
-        c->resp_size_done += send_fd_count;
-        if (c->resp_size_done < c->resp_size)
+        c->size_done += send_fd_count;
+        if (c->size_done < c->size)
             return false;
-        c->resp_size = 0;
-        c->resp_size_done = 0;
-    } else if (c->resp_data) {
+        c->size = 0;
+        c->size_done = 0;
+    } else if (c->data) {
         c->state = WRITING_RESP_DATA;
         return true;
     }
@@ -309,17 +311,17 @@ static void respond(css_conn_t* c, const char key, const uint32_t v, const uint3
     c->wbuf.d = d;
     c->state = WRITING_RESP;
     if (data) {
-        c->resp_data = data;
-        c->resp_size = d;
-        c->resp_size_done = 0;
+        c->data = data;
+        c->size = d;
+        c->size_done = 0;
     } else if (send_fds) {
         gdnsd_assert(key == RESP_ACK);
         gdnsd_assert(!v);
         gdnsd_assert(!d);
         c->state = WRITING_RESP_FDS;
         csbuf_set_v(&c->wbuf, c->css->handoff_fds_count);
-        c->resp_size = c->css->handoff_fds_count;
-        c->resp_size_done = 0;
+        c->size = c->css->handoff_fds_count;
+        c->size_done = 0;
     }
     ev_io* w_write = &c->w_write;
     ev_io_start(c->css->loop, w_write);
@@ -490,7 +492,43 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     css_t* css = c->css;
     gdnsd_assert(c);
     gdnsd_assert(css);
-    gdnsd_assert(c->state == READING_REQ);
+    gdnsd_assert(c->state == READING_REQ || c->state == READING_DATA);
+
+    if (c->state == READING_DATA) {
+        gdnsd_assert(c->data);
+        gdnsd_assert(c->size);
+        size_t wanted = c->size - c->size_done;
+        gdnsd_assert(wanted > 0);
+
+        ssize_t pktlen = recv(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
+        if (pktlen < 0) {
+            if (ERRNO_WOULDBLOCK)
+                return;
+            log_err("control socket read of %zu data bytes failed with retval %zi, closing: %s", wanted, pktlen, logf_errno());
+            css_conn_cleanup(c);
+            return;
+        }
+
+        c->size_done += (size_t)pktlen;
+
+        if (c->size_done == c->size) {
+            ev_io_stop(loop, w);
+            c->state = WAITING_SERVER;
+
+            // we'd switch here if more than one, but REQ_CHAL is the only key that leads here for now
+            gdnsd_assert(c->rbuf.key == REQ_CHAL);
+            const bool failed = cset_create(loop, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data);
+
+            free(c->data);
+            c->data = NULL;
+            c->size = 0;
+            c->size_done = 0;
+
+            respond(c, failed ? RESP_NAK : RESP_ACK, 0, 0, NULL, false);
+        }
+
+        return;
+    }
 
     const ssize_t pktlen = recv(c->fd, c->rbuf.raw, 8, MSG_DONTWAIT);
     if (pktlen != 8) {
@@ -501,6 +539,24 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         else
             log_err("control socket read of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
         css_conn_cleanup(c);
+        return;
+    }
+
+    // REQ_CHAL is the only case so far where the client sends data after the
+    // 8-byte standard request, using "d" as the raw data length and "v" as the
+    // count of challenges sent in the data.
+    if (c->rbuf.key == REQ_CHAL) {
+        const unsigned count = csbuf_get_v(&c->rbuf);
+        const unsigned dlen = c->rbuf.d;
+        if (!count || count > CHAL_MAX_COUNT || !dlen || dlen > CHAL_MAX_DLEN) {
+            log_err("Challenge request has illegal sizes (%u count, %u data), closing", count, dlen);
+            css_conn_cleanup(c);
+        } else {
+            c->state = READING_DATA;
+            c->size_done = 0;
+            c->size = dlen;
+            c->data = xmalloc(dlen);
+        }
         return;
     }
 
@@ -556,6 +612,10 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
             swap_reload_zones_queues(css);
             spawn_async_zones_reloader_thread();
         }
+        break;
+    case REQ_CHALF:
+        cset_flush(loop);
+        respond(c, RESP_ACK, 0, 0, 0, false);
         break;
     case REQ_REPL:
         if (css->replacement_pid) {

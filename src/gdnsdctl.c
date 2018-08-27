@@ -20,12 +20,14 @@
 #include <config.h>
 
 #include "csc.h"
+#include "chal.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
+#include <gdnsd/dname.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -46,11 +48,11 @@ static bool opt_syslog = false;
 static const char* opt_cfg_dir = NULL;
 
 F_NONNULL F_NORETURN
-static void usage(const char* argv0)
+static void usage(void)
 {
     fprintf(stderr,
             "gdnsdctl version " PACKAGE_VERSION "\n"
-            "Usage: %s [-c %s] [-D] [-l] [-t %u] <action>\n"
+            "Usage: gdnsdctl [-c %s] [-D] [-l] [-t %u] <action> [...]\n"
             "  -c - Configuration directory (def %s)\n"
             "  -D - Enable verbose debug output\n"
             "  -l - Send logs to syslog rather than stderr\n"
@@ -62,15 +64,18 @@ static void usage(const char* argv0)
             "  status - Checks the running daemon's status\n"
             "  stats - Dumps JSON statistics from the running daemon\n"
             "  states - Dumps JSON monitored states\n"
+            "  acme-dns-01 - Create ACME DNS-01 payloads from additional arguments:\n"
+            "                <name> <payload> <name> <payload> ... [max %u payloads]\n"
+            "  acme-dns-01-flush - Flush (remove) all ACME DNS-01 payloads added above\n"
             "\nFeatures: " BUILD_FEATURES
             "\nBuild Info: " BUILD_INFO
             "\nBug report URL: " PACKAGE_BUGREPORT
             "\nGeneral info URL: " PACKAGE_URL
             "\n",
-            argv0,
             gdnsd_get_default_config_dir(), DEF_TIMEO,
             gdnsd_get_default_config_dir(), DEF_TIMEO,
-            MIN_TIMEO, MAX_TIMEO
+            MIN_TIMEO, MAX_TIMEO,
+            CHAL_MAX_COUNT
            );
     exit(2);
 }
@@ -78,15 +83,21 @@ static void usage(const char* argv0)
 /**** Action functions ****/
 
 F_NONNULL
-static int action_stop(csc_t* csc)
+static int action_stop(csc_t* csc, int argc, char** argv V_UNUSED)
 {
+    if (argc)
+        usage(); // No additional arguments
+
     return csc_stop_server(csc)
            || csc_wait_stopping_server(csc);
 }
 
 F_NONNULL
-static int action_reloadz(csc_t* csc)
+static int action_reloadz(csc_t* csc, int argc, char** argv V_UNUSED)
 {
+    if (argc)
+        usage(); // No additional arguments
+
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_ZREL;
@@ -99,8 +110,11 @@ static int action_reloadz(csc_t* csc)
 }
 
 F_NONNULL
-static int action_replace(csc_t* csc)
+static int action_replace(csc_t* csc, int argc, char** argv V_UNUSED)
 {
+    if (argc)
+        usage(); // No additional arguments
+
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
     log_info("Existing daemon: version %s running at pid %li", s_vers, (long)s_pid);
@@ -127,8 +141,11 @@ static int action_replace(csc_t* csc)
 }
 
 F_NONNULL
-static int action_status(csc_t* csc)
+static int action_status(csc_t* csc, int argc, char** argv V_UNUSED)
 {
+    if (argc)
+        usage(); // No additional arguments
+
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
     log_info("version %s running at pid %li", s_vers, (long)s_pid);
@@ -136,8 +153,11 @@ static int action_status(csc_t* csc)
 }
 
 F_NONNULL
-static int action_stats(csc_t* csc)
+static int action_stats(csc_t* csc, int argc, char** argv V_UNUSED)
 {
+    if (argc)
+        usage(); // No additional arguments
+
     char* resp_data;
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
@@ -150,8 +170,11 @@ static int action_stats(csc_t* csc)
 }
 
 F_NONNULL
-static int action_states(csc_t* csc)
+static int action_states(csc_t* csc, int argc, char** argv V_UNUSED)
 {
+    if (argc)
+        usage(); // No additional arguments
+
     char* resp_data;
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
@@ -163,30 +186,107 @@ static int action_states(csc_t* csc)
     return 0;
 }
 
+// base64url legal chars are [-_0-9A-Za-z]
+static const unsigned b64u_legal[256] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+F_NONNULL
+static int action_chal(csc_t* csc, int argc, char** argv)
+{
+    // Requires 2+ additional arguments, in pairs
+    if (!argc || argc & 1 || argc > (int)(CHAL_MAX_COUNT * 2))
+        usage();
+
+    const unsigned chal_count = (unsigned)argc >> 1U;
+    unsigned dlen = 0;
+    uint8_t* buf = xmalloc(CHAL_MAX_DLEN);
+    for (int i = 0; i < argc; i += 2) {
+        gdnsd_assert(CHAL_MAX_DLEN - dlen >= (240U + 44U));
+        if (DNAME_INVALID == dname_from_string(&buf[dlen], argv[i], strlen(argv[i])))
+            log_fatal("Could not parse domainname '%s'", argv[i]);
+        if (buf[dlen] > 239)
+            log_fatal("Domainname '%s' is too long for ACME DNS-01 challenges", argv[i]);
+        dname_terminate(&buf[dlen]);
+        dlen += (buf[dlen] + 1U);
+        if (strlen(argv[i + 1]) != 43)
+            log_fatal("Payload '%s' for '%s' is not 43 bytes long", argv[i + 1], argv[i]);
+        for (unsigned j = 0; j < 43; j++)
+            if (!b64u_legal[(unsigned)argv[i + 1][j]])
+                log_fatal("Paylen '%s' for '%s' illegal base64url bytes", argv[i + 1], argv[i]);
+        memcpy(&buf[dlen], argv[i + 1], 43);
+        dlen += 43;
+        buf[dlen++] = 0;
+        gdnsd_assert(dlen <= CHAL_MAX_DLEN);
+    }
+
+    csbuf_t req, resp;
+    memset(&req, 0, sizeof(req));
+    req.key = REQ_CHAL;
+    csbuf_set_v(&req, chal_count);
+    req.d = dlen;
+    return csc_txn_senddata(csc, &req, &resp, (char*)buf);
+}
+
+F_NONNULL
+static int action_chalf(csc_t* csc, int argc, char** argv V_UNUSED)
+{
+    if (argc)
+        usage(); // No additional arguments
+
+    csbuf_t req, resp;
+    memset(&req, 0, sizeof(req));
+    req.key = REQ_CHALF;
+    if (csc_txn(csc, &req, &resp)) {
+        log_err("Failed to flush ACME DNS-01 challenges!");
+        return 1;
+    }
+    log_info("ACME DNS-01 challenges flushed");
+    return 0;
+}
+
+
 /**** Commandline parsing and action selection ****/
 
-typedef int (*afunc_t)(csc_t* csc);
+typedef int (*afunc_t)(csc_t* csc, int argc, char** argv);
 
 static struct {
     const char* cmdstring;
     afunc_t func;
 } actionmap[] = {
-    { "stop",         action_stop    },
-    { "reload-zones", action_reloadz },
-    { "replace",      action_replace },
-    { "status",       action_status  },
-    { "stats",        action_stats   },
-    { "states",       action_states  },
+    { "stop",               action_stop    },
+    { "reload-zones",       action_reloadz },
+    { "replace",            action_replace },
+    { "status",             action_status  },
+    { "stats",              action_stats   },
+    { "states",             action_states  },
+    { "acme-dns-01",        action_chal    },
+    { "acme-dns-01-flush",  action_chalf   },
 };
 
 F_NONNULL F_PURE F_RETNN
-static afunc_t match_action(const char* argv0, const char* match)
+static afunc_t match_action(const char* match)
 {
     unsigned i;
     for (i = 0; i < ARRAY_SIZE(actionmap); i++)
         if (!strcasecmp(actionmap[i].cmdstring, match))
             return actionmap[i].func;
-    usage(argv0);
+    usage();
 }
 
 F_NONNULL F_RETNN
@@ -209,21 +309,21 @@ static afunc_t parse_args(const int argc, char** argv)
             errno = 0;
             timeo = strtoul(optarg, NULL, 10);
             if (errno || timeo < MIN_TIMEO || timeo > MAX_TIMEO)
-                usage(argv[0]);
+                usage();
             opt_timeo = (unsigned)timeo;
             break;
         case -1:
-            if (optind != (argc - 1))
-                usage(argv[0]);
-            return match_action(argv[0], argv[optind]);
+            if (optind >= argc)
+                usage();
+            return match_action(argv[optind++]);
             break;
         default:
-            usage(argv[0]);
+            usage();
             break;
         }
     }
 
-    usage(argv[0]);
+    usage();
 }
 
 int main(int argc, char** argv)
@@ -236,7 +336,7 @@ int main(int argc, char** argv)
     vscf_data_t* cfg_root = gdnsd_init_paths(opt_cfg_dir, false);
     vscf_destroy(cfg_root);
     csc_t* csc = csc_new(opt_timeo);
-    int rv = action_func(csc);
+    int rv = action_func(csc, argc - optind, &argv[optind]);
     csc_delete(csc);
     return rv;
 }

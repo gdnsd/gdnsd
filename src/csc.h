@@ -58,6 +58,14 @@ bool csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp);
 F_NONNULL
 bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data);
 
+// As above, but data is sent with the request instead of received from the
+// response.  req_data must be non-NULL and heap-allocated, and will be freed
+// by this function before returning.  Caller is responsible for setting req.d
+// to the length of the req_data in bytes (non-zero), and req.v to whatever
+// value is appropriate for the action.
+F_NONNULL
+bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data);
+
 // As above, but expects server's resp.v to contain a count of file descriptors
 // sent over SCM_RIGHTS, which will be received and placed in newly-allocated
 // storage at *resp_fds for the caller to consume and free.

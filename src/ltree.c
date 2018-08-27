@@ -23,6 +23,7 @@
 #include "conf.h"
 #include "dnspacket.h"
 #include "ltarena.h"
+#include "chal.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dname.h>
@@ -84,32 +85,6 @@ static const char* _logf_lstack(const uint8_t** lstack, unsigned depth)
 
 #define logf_lstack(_lstack, _depth, _zdname) \
     _logf_lstack(_lstack, _depth), logf_dname(_zdname)
-
-#ifndef HAVE_BUILTIN_CLZ
-
-F_CONST
-static uint32_t count2mask(uint32_t x)
-{
-    x |= 1U;
-    x |= x >> 1U;
-    x |= x >> 2U;
-    x |= x >> 4U;
-    x |= x >> 8U;
-    x |= x >> 16U;
-    return x;
-}
-
-#else
-
-F_CONST
-static uint32_t count2mask(const uint32_t x)
-{
-    // This variant is about twice as fast as the above, but
-    //  only available w/ GCC 3.4 and above.
-    return ((1U << (31U - (unsigned)__builtin_clz(x | 1U))) << 1U) - 1U;
-}
-
-#endif
 
 F_NONNULL
 static void ltree_childtable_grow(ltree_node_t* node)
@@ -620,6 +595,21 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
 {
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
+
+    // RFC 2181 disallows mixed TTLs within a single RR-set.  Our choices here
+    // in light of ACME response injection are:
+    // 1) When ACME responses are injected, mask (replace) any conflicting
+    //    statically-configured TXT RRs from zonefiles
+    // -or-
+    // 2) Mix injected ACME TXT with statically configured TXT in a single
+    //    RR-set, and somehow force the TTLs to be the same
+    // We've chosen the latter, and chosen to force all TTLs for names that
+    // start with _acme-challenge to the configured ACME challenge TTL
+    // regardless of whether there was any injection to mix with them because
+    // it makes things simpler and quicker, and shouldn't be a major issue.
+
+    if (dname_is_acme_chal(dname) && ttl != gcfg->acme_challenge_ttl)
+        ttl = gcfg->acme_challenge_ttl;
 
     INSERT_NEXT_RR(txt, txt, "TXT", 1)
     new_rdata->text_len = text_len;

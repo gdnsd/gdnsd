@@ -225,6 +225,43 @@ bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_
     return false;
 }
 
+bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data)
+{
+    gdnsd_assert(req->d);
+
+    ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
+    if (pktlen != 8) {
+        log_err("8-byte send() failed with retval %zi: %s", pktlen, logf_errno());
+        return true;
+    }
+
+    const size_t total = req->d;
+    size_t done = 0;
+
+    while (done < total) {
+        const size_t wanted = total - done;
+        const ssize_t sent = send(csc->fd, &req_data[done], wanted, 0);
+        if (sent < 0) {
+            free(req_data);
+            log_err("%zu-byte send() failed: %s", wanted, logf_errno());
+            return true;
+        }
+        done += (size_t)sent;
+    }
+
+    free(req_data);
+
+    pktlen = recv(csc->fd, resp->raw, 8, 0);
+    if (pktlen != 8) {
+        log_err("8-byte recv() failed with retval %zi: %s", pktlen, logf_errno());
+        return true;
+    }
+    if (resp->key != RESP_ACK)
+        return true;
+
+    return false;
+}
+
 bool csc_wait_stopping_server(csc_t* csc)
 {
     // Wait for server to close our csock fd as it exits
