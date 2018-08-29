@@ -160,7 +160,6 @@ _GDT->test_dns(
     resopts => { usevc => 1, igntc => 0, udppacketsize => 512 },
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
-    addtl => $big_additional,
     stats => [qw/tcp_reqs tcp_conns noerror/],
 );
 
@@ -168,7 +167,6 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 0, udppacketsize => 512 },
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
-    addtl => $big_additional,
     stats => [qw/udp_reqs udp_tc tcp_reqs noerror noerror/],
 );
 
@@ -176,7 +174,7 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 1, udppacketsize => 1200 },
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
-    addtl => [@$big_additional, $optrr],
+    addtl => $optrr,
     stats => [qw/udp_reqs edns udp_edns_big noerror/],
 );
 
@@ -192,7 +190,7 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 0, udppacketsize => 600 },
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
-    addtl => [@$big_additional, $optrr_keepalive],
+    addtl => $optrr_keepalive,
     stats => [qw/udp_reqs udp_edns_tc tcp_reqs edns edns noerror noerror/],
 );
 
@@ -208,7 +206,6 @@ _GDT->test_dns(
     resopts => { usevc => 1, igntc => 0, udppacketsize => 512 },
     qname => 'vbig.example.com', qtype => 'MX',
     answer => $vbig_answers,
-    addtl => $vbig_additional,
     stats => [qw/tcp_reqs noerror/],
 );
 
@@ -216,7 +213,6 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 0, udppacketsize => 512 },
     qname => 'vbig.example.com', qtype => 'MX',
     answer => $vbig_answers,
-    addtl => $vbig_additional,
     stats => [qw/udp_reqs udp_tc tcp_reqs noerror noerror/],
 );
 
@@ -224,7 +220,7 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 1, udppacketsize => 2560 },
     qname => 'vbig.example.com', qtype => 'MX',
     answer => $vbig_answers,
-    addtl => [@$vbig_additional, $optrr],
+    addtl => $optrr,
     stats => [qw/udp_reqs edns udp_edns_big noerror/],
 );
 
@@ -240,7 +236,7 @@ _GDT->test_dns(
     resopts => { usevc => 0, igntc => 0, udppacketsize => 900 },
     qname => 'vbig.example.com', qtype => 'MX',
     answer => $vbig_answers,
-    addtl => [@$vbig_additional, $optrr_keepalive],
+    addtl => $optrr_keepalive,
     stats => [qw/udp_reqs udp_edns_tc tcp_reqs edns edns noerror noerror/],
 );
 

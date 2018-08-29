@@ -61,19 +61,55 @@
       unit operations.
     * "gdnsdctl acme-dns-01" injects temporary ACME DNS-01 challenge response
       payload TXT records, see gdnsdctl documentation for more information.
+    * Configuration option "include_optional_ns" has been removed.  The
+      previous default behavior (off) is now the fixed behavior.
     * Configuration option "udp_recv_width" has been removed.  Previously this
       allowed customization of the width of recvmmsg() and sendmmsg(), or
       disabling them altogether when set to "1".  These interfaces are now
       always used with a fixed width of 16 if they're available at runtime.
     ---- DNS-level changes ----
-    * Our edns-client-subnet code was updated for basic conformance with RFC
-      7871 in a few key areas where they differed.  Haven't yet dealt with a
-      few deeper issues around corner cases like delegation and negative
-      responses.
+    * Our edns-client-subnet code was updated for conformance with RFC
+      7871 in a few key areas where they differed.
     * Semantics of the sub-fields of NAPTR are no longer validated - if it
       legally fits in the protocol sense we'll accept it, rather than trying to
       warn or fail on certain RFC-illegal combinations of data/flags.
-    * NAPTR also no longer encodes any additional-section addresses.
+    * MX, SRV, and NAPTR no longer encode any additional-section addresses.
+    * The rdata of a single TXT RR is now limited to a maximum of 16000 bytes.
+    * A and AAAA queries no longer put opposite-family records in the
+      additional section
+    * CNAME chains are not pursued in local data.  Any CNAME encountered is
+      emitted as a singular RR to the client, as if they had explicitly
+      requested qtype=CNAME, and it's up to the client to chase a chain of
+      CNAMEs in our data via multiple queries.
+    * Superfluous NS records are never added to the auth section of a
+      positive, non-delegation response (this was previously our
+      default behavior, but now it's hardcoded).
+    * NS responses only put A/AAAA records into the additional section when
+      emitting glue (defined out-of-zone glue and in-delegation glue), and glue
+      is only possible for delegation responses.  They do not tack on
+      additional-section addresses in other cases.
+    * NS RRs are no longer allowed to point at local address data defined by
+      DYNA records; they must be static.
+    * NS RR sets are no longer randomly rotated (mostly pointless).
+    * NS RR sets are now limited to at most 64 RRs per RR set.
+    * SOA records are now always emitted with their negative caching TTL as the
+      RR-level TTL, even for positive responses.
+    * edns-client-subnet is always enabled
+    * ANY queries over UDP are always answered with an empty truncated
+      response requesting a switch to TCP to reduce reflection attack
+      surface.  This was the default, but now it's hardcoded.
+    * All responses are limited to a maximum response size of 16K,
+      regardless of protocol.  Zone data and other config is checked at
+      startup and rejected if it could create oversized responses.
+    * The upper limit for the configuration option 'max_edns_response'
+      was lowered from 64000 to 16384.
+    * The following configuration options are removed:
+    ** include_optional_ns (always off, same as previous default)
+    ** edns_client_subnet (always on, same as prev def)
+    ** max_cname_depth (fixed 16, same as prev def)
+    ** max_addtl_rrsets (no longer applicable)
+    ** any_mitigation (always on, same as prev def)
+    ** max_response (fixed 16384, same as prev def)
     ---- Relatively-trivial things ----
     * Code cleaned up a ton for clarity, simplicity, and formatting.
     * plugin_geoip distance calculations are faster and more-accurate

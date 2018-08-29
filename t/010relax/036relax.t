@@ -12,16 +12,13 @@ my $neg_soa = 'example.com 10800 SOA foo.example.com hostmaster.example.com 1 72
 
 _GDT->test_dns(
     qname => 'abc.example.com', qtype => 'A',
-    header => { rcode => 'NXDOMAIN' },
     answer => 'abc.example.com 86400 CNAME foo.example.com',
-    auth => $neg_soa,
-    stats => [qw/udp_reqs nxdomain/],
+    stats => [qw/udp_reqs noerror/],
 );
 
 _GDT->test_dns(
     qname => 'bcd.example.com', qtype => 'A',
     answer => 'bcd.example.com 86400 CNAME bob.example.com',
-    auth => $neg_soa,
 );
 
 _GDT->test_dns(

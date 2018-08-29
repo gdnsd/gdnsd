@@ -99,7 +99,7 @@ foreach my $i (0, 1) {
         header => { rcode => 'NXDOMAIN' },
         answer => [],
         auth => $soa_neg,
-        stats => [qw/nxdomain udp_reqs udp_tc nxdomain tcp_reqs/],
+        stats => [qw/noerror udp_reqs udp_tc nxdomain tcp_reqs/],
     );
 
     ## Inject data over all of the names above, in sets of 2 then 3, with a triple record for ns1:

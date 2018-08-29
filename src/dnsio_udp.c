@@ -366,7 +366,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
     const unsigned pgsz = get_pgsz();
-    const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
+    const unsigned max_rounded = ((MAX_RESPONSE + pgsz - 1) / pgsz) * pgsz;
 
     gdnsd_anysin_t asin;
     void* buf = gdnsd_xpmalign(pgsz, max_rounded);
@@ -436,7 +436,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         } else {
             size_t buf_in_len = (size_t)recvmsg_rv;
             asin.len = msg_hdr.msg_namelen;
-            iov.iov_len = process_dns_query(dnsp_ctx, stats, &asin, buf, buf_in_len, 0);
+            iov.iov_len = process_dns_query(dnsp_ctx, &asin, buf, buf_in_len, 0);
             if (likely(iov.iov_len)) {
                 while (1) {
                     int sent = sendmsg(fd, &msg_hdr, 0);
@@ -464,9 +464,9 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
 {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
 
-    // gcfg->max_response, rounded up to the next nearest multiple of the page size
+    // MAX_RESPONSE, rounded up to the next nearest multiple of the page size
     const unsigned pgsz = get_pgsz();
-    const unsigned max_rounded = ((gcfg->max_response + pgsz - 1) / pgsz) * pgsz;
+    const unsigned max_rounded = ((MAX_RESPONSE + pgsz - 1) / pgsz) * pgsz;
 
     uint8_t* bufs = gdnsd_xpmalign_n(pgsz, MMSG_WIDTH, max_rounded);
 
@@ -552,7 +552,7 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
                 iop->iov_len = 0; // skip send, same as if process_dns_query() rejected it
             } else {
                 asp->len = dgrams[i].msg_hdr.msg_namelen;
-                iop->iov_len = process_dns_query(dnsp_ctx, stats, asp, iop->iov_base, dgrams[i].msg_len, 0);
+                iop->iov_len = process_dns_query(dnsp_ctx, asp, iop->iov_base, dgrams[i].msg_len, 0);
             }
         }
 

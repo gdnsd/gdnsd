@@ -7,10 +7,10 @@
 )
 
 @	NS	ns1
-@	NS	f42
+@	NS	ns2
 @	NS	ns1.example.net.
-ns1.example.net. DYNA static!bar41
 ns1	A	192.0.2.1
+ns2	A	192.0.2.2
 a	A	192.0.2.2
 
 n	DYNA	null
@@ -20,9 +20,6 @@ f42	DYNA	static!foo42
 b41	DYNA	static!bar41
 
 addtl	MX	0 r
-
-subz		NS	ns1.subz
-ns1.subz	DYNA	static!bar41
 
 sfo1	DYNA	simplefo!sfo1
 sfo2	DYNA	simplefo!sfo2

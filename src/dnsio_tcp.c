@@ -469,7 +469,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V
         conn->ctx->rcu_is_online = true;
         rcu_thread_online();
     }
-    conn->size = process_dns_query(conn->ctx->dnsp_ctx, conn->ctx->stats, &conn->asin, &conn->buffer[2], conn->size - 2, conn->ctx->edns0_keepalive);
+    conn->size = process_dns_query(conn->ctx->dnsp_ctx, &conn->asin, &conn->buffer[2], conn->size - 2, conn->ctx->edns0_keepalive);
     if (!conn->size) {
         log_debug("TCP DNS conn to %s closed by server: dropped invalid query", logf_anysin(&conn->asin));
         stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
@@ -535,8 +535,8 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
     tcpdns_thread_t* ctx = w->data;
     stats_own_inc(&ctx->stats->tcp.conns);
 
-    // buffer[0] is last element of struct, sized to max_response + 2.
-    tcpdns_conn_t* conn = xcalloc(sizeof(*conn) + (gcfg->max_response + 2));
+    // buffer[0] is last element of struct, sized to MAX_RESPONSE + 2.
+    tcpdns_conn_t* conn = xcalloc(sizeof(*conn) + (MAX_RESPONSE + 2));
     memcpy(&conn->asin, &asin, sizeof(asin));
 
     conn->state = ST_IDLE;

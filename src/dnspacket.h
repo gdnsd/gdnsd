@@ -28,8 +28,6 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-#define COMPTARGETS_MAX 256
-
 // dnspacket-layer statistics, per-thread
 typedef struct {
     bool is_udp;
@@ -79,7 +77,7 @@ typedef struct {
 } dnspacket_stats_t;
 
 F_HOT F_NONNULL
-unsigned process_dns_query(void* ctx_asvoid, dnspacket_stats_t* stats, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns0_tcp_keepalive);
+unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns0_tcp_keepalive);
 
 F_NONNULL F_WUNUSED
 void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp);

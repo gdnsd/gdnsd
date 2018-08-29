@@ -41,6 +41,11 @@
 #define DNS_EDNS0_SIZE 1024U
 #define DNS_RECV_SIZE DNS_EDNS0_SIZE
 
+// Sizes our output buffers, we never generate packets longer than this.
+// This can't be changed arbitrarily to another number by editing the define
+// here, as the 16K boundary has other magic effects (e.g. on DNS compression).
+#define MAX_RESPONSE 16384U
+
 /*** Wire formats ***/
 
 /* DNS Header */
@@ -75,13 +80,12 @@ typedef struct S_PACKED {
 /* macros to pull data from wire_dns_header */
 #define DNSH_GET_ID(_h)      (ntohs((_h)->id))
 #define DNSH_GET_QR(_h)      ((_h)->flags1 & 0x80)
-// technically one must >> 3 to get the real opcode
-//  but we only really care whether it's zero or not
-#define DNSH_GET_OPCODE(_h)  ((_h)->flags1 & 0x78)
+#define DNSH_GET_OPCODE(_h)  (((_h)->flags1 & 0x78) >> 3)
 #define DNSH_GET_AA(_h)      ((_h)->flags1 & 0x04)
 #define DNSH_GET_TC(_h)      ((_h)->flags1 & 0x02)
 #define DNSH_GET_RD(_h)      ((_h)->flags1 & 0x01)
 #define DNSH_GET_RA(_h)      ((_h)->flags2 & 0x80)
+// Reserved: #define DNSH_GET_XXXXXX(_h)  ((_h)->flags2 & 0x40)
 #define DNSH_GET_AD(_h)      ((_h)->flags2 & 0x20)
 #define DNSH_GET_CD(_h)      ((_h)->flags2 & 0x10)
 #define DNSH_GET_RCODE(_h)   ((_h)->flags2 & 0x0F)
@@ -125,6 +129,7 @@ typedef struct S_PACKED {
 #define DNS_TYPE_ANY 255
 
 #define DNS_CLASS_IN 1
+#define DNS_CLASS_CH 3
 #define DNS_CLASS_ANY 255
 
 // Our own synthetic 'type' for DYNC

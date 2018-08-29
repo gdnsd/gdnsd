@@ -140,15 +140,9 @@ typedef struct _ltree_rrset_naptr_struct ltree_rrset_naptr_t;
 typedef struct _ltree_rrset_txt_struct ltree_rrset_txt_t;
 typedef struct _ltree_rrset_rfc3597_struct ltree_rrset_rfc3597_t;
 
-// Used to set/get the "glue" status of the "ad" pointer
-//  in ltree_rdata_ns_t, which is stored in the LSB.
-#define AD_IS_GLUE(x) (!!(((uintptr_t)(x)) & 1UL))
-#define AD_SET_GLUE(x) ((x) = (void*)(((uintptr_t)(x)) | 1UL))
-#define AD_GET_PTR(x) ((const ltree_rrset_addr_t*)((uintptr_t)(x) & ~((uintptr_t)1UL)))
-
 struct _ltree_rdata_ns_struct {
     const uint8_t* dname;
-    ltree_rrset_addr_t* ad;
+    ltree_rrset_addr_t* glue;
 };
 
 struct _ltree_rdata_ptr_struct {
@@ -157,13 +151,11 @@ struct _ltree_rdata_ptr_struct {
 
 struct _ltree_rdata_mx_struct {
     const uint8_t* dname;
-    ltree_rrset_addr_t* ad;
     uint16_t pref; // net-order
 };
 
 struct _ltree_rdata_srv_struct {
     const uint8_t* dname;
-    ltree_rrset_addr_t* ad;
     uint16_t priority; // net-order
     uint16_t weight; // net-order
     uint16_t port; // net-order
@@ -237,7 +229,6 @@ struct _ltree_rrset_soa_struct {
     const uint8_t* email;
     const uint8_t* master;
     uint32_t times[5];
-    uint32_t neg_ttl; // cache of htons(min(ntohs(gen.ttl), ntohs(times[4])))
 };
 
 struct _ltree_rrset_cname_struct {
@@ -321,6 +312,11 @@ union _ltree_rrset_union {
 //  which is stored under a special child node of the zone root.
 #define LTNFLAG_GUSED 0x2
 
+// Maximum count of NS RRs in an NS rr-set.  Nobody should realistically ever
+// hit this, but we needed some sane value here to size a stack-based array to
+// hold glue offsets during dnspacket.c output generation.
+#define MAX_NS_COUNT 64U
+
 struct _ltree_node_struct {
     uint32_t flags;
     // During the ltree_add_rec_* (parsing) phase of ltree.c, an accurate count
@@ -351,7 +347,7 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, un
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const unsigned limit_v6, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6, const bool ooz);
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6);
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL
@@ -373,6 +369,9 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
 
 // Load zonefiles (called from main, invokes parser)
 void ltree_load_zones(void);
+
+// One-shot init at startup, after config load
+void ltree_init(void);
 
 typedef enum {
     DNAME_NOAUTH = 0,

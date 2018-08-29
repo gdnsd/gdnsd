@@ -23,6 +23,7 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'rfc3597.example.com', qtype => 'ANY',
     answer => [$t31337_1, $t31337_2, $sshfp_1, $sshfp_2],
+    stats => [qw/udp_reqs udp_tc noerror tcp_conns tcp_reqs noerror/],
 );
 
 _GDT->test_kill_daemon($pid);

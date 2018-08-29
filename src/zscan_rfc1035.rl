@@ -349,15 +349,15 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
             free(text_temp);
             parse_error_noargs("Text chunk too long (>255 unescaped)");
         }
-        if (newlen > 65500) {
+        if (newlen > 16000U) {
             free(text_temp);
-            parse_error_noargs("Text chunk too long (>65500 unescaped)");
+            parse_error_noargs("Text chunk too long (>16000 unescaped)");
         }
         const unsigned remainder = newlen % 255;
         const unsigned num_whole_chunks = (newlen - remainder) / 255;
         unsigned new_alloc = newlen + num_whole_chunks + (remainder ? 1 : 0);
-        if (new_alloc + z->text_len > 65500)
-            parse_error_noargs("Text record too long (>65500 in rdata form)");
+        if (new_alloc + z->text_len > 16000U)
+            parse_error_noargs("Text record too long (>16000 in rdata form)");
 
         z->text = xrealloc(z->text, z->text_len + new_alloc);
         unsigned write_offset = z->text_len;
@@ -376,9 +376,9 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
         gdnsd_assert(write_offset + remainder == z->text_len);
     } else { // 0-255 bytes, one chunk
         const unsigned new_alloc = newlen + 1;
-        if (new_alloc + z->text_len > 65500) {
+        if (new_alloc + z->text_len > 16000U) {
             free(text_temp);
-            parse_error_noargs("Text record too long (>65500 in rdata form)");
+            parse_error_noargs("Text record too long (>16000 in rdata form)");
         }
         z->text = xrealloc(z->text, z->text_len + new_alloc);
         unsigned write_offset = z->text_len;
@@ -401,9 +401,9 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
         gdnsd_assert(newlen && newlen <= len);
     }
 
-    if (newlen > 65500) {
+    if (newlen > 16000U) {
         free(storage);
-        parse_error_noargs("Text chunk too long (>65500 unescaped)");
+        parse_error_noargs("Text chunk too long (>16000 unescaped)");
     }
 
     // _huge is only used alone, not in a set
@@ -629,7 +629,8 @@ static void rec_txt(zscan_t* z)
 F_NONNULL
 static void rec_dyna(zscan_t* z)
 {
-    if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6, z->lhs_is_ooz))
+    validate_lhs_not_ooz(z);
+    if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -846,7 +847,7 @@ static void close_paren(zscan_t* z)
     # One chunk of TXT rdata, limited to 255 explicitly
     txt_item_255  = (tword %push_txt_rdata_255 | qword %push_txt_rdata_255_q) >token_start;
 
-    # One chunk of TXT rdata, limited to 65500 explicitly
+    # One chunk of TXT rdata, limited to 16000 explicitly
     txt_item_huge  = (tword %push_txt_rdata_huge | qword %push_txt_rdata_huge_q) >token_start;
 
     # A whole set of TXT rdata

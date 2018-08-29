@@ -50,48 +50,36 @@ my $pid = _GDT->test_spawn_daemon();
 _GDT->test_dns(
     qname => 'setlimit.example.com', qtype => 'A',
     answer => $setlimit_A,
-    addtl => $setlimit_AAAA,
     limit_v4 => 3,
-    limit_v6 => 4,
 );
 
 _GDT->test_dns(
     qname => 'setlimit.example.com', qtype => 'AAAA',
     answer => $setlimit_AAAA,
-    addtl => $setlimit_A,
-    limit_v4 => 3,
     limit_v6 => 4,
 );
 
 _GDT->test_dns(
     qname => 'setlimit-under.example.com', qtype => 'AAAA',
     answer => $setlimit_under_AAAA,
-    addtl => $setlimit_under_A,
-    limit_v4 => 5,
     limit_v6 => 6,
 );
 
 _GDT->test_dns(
     qname => 'setlimit-under.example.com', qtype => 'A',
     answer => $setlimit_under_A,
-    addtl => $setlimit_under_AAAA,
     limit_v4 => 5,
-    limit_v6 => 6,
 );
 
 _GDT->test_dns(
     qname => 'setlimit-one.example.com', qtype => 'A',
     answer => $setlimit_one_A,
-    addtl => $setlimit_one_AAAA,
     limit_v4 => 1,
-    limit_v6 => 1,
 );
 
 _GDT->test_dns(
     qname => 'setlimit-one.example.com', qtype => 'AAAA',
     answer => $setlimit_one_AAAA,
-    addtl => $setlimit_one_A,
-    limit_v4 => 1,
     limit_v6 => 1,
 );
 

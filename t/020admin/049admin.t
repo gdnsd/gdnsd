@@ -32,10 +32,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => [
-        'm1.example.com 42 CNAME m1cname.example.com',
-        'm1cname.example.com 42 A 192.0.2.42',
-    ]
+    answer => 'm1.example.com 42 CNAME m1cname.example.com',
 );
 
 _GDT->test_dns(
@@ -66,10 +63,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => [
-        'm1.example.com 42 CNAME m1cname.example.com',
-        'm1cname.example.com 42 A 192.0.2.42',
-    ]
+    answer => 'm1.example.com 42 CNAME m1cname.example.com',
 );
 
 ### Leave those down and also down m1cname for m1
@@ -163,10 +157,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => [
-        'm1.example.com 42 CNAME m1cname.example.com',
-        'm1cname.example.com 42 A 192.0.2.42',
-    ]
+    answer => 'm1.example.com 42 CNAME m1cname.example.com',
 );
 
 ### down dc1 at the datacenter level
@@ -212,10 +203,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => [
-        'm1.example.com 42 CNAME m1cname.example.com',
-        'm1cname.example.com 42 A 192.0.2.42',
-    ]
+    answer => 'm1.example.com 42 CNAME m1cname.example.com',
 );
 
 ### switch over to dc2 still down, dc1 forced UP
@@ -239,10 +227,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => [
-        'm1.example.com 42 CNAME m1cname.example.com',
-        'm1cname.example.com 42 A 192.0.2.42',
-    ]
+    answer => 'm1.example.com 42 CNAME m1cname.example.com',
 );
 
 ### ... now down the resource within dc1, which should
@@ -268,10 +253,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => [
-        'm1.example.com 42 CNAME m1cname.example.com',
-        'm1cname.example.com 42 A 192.0.2.42',
-    ]
+    answer => 'm1.example.com 42 CNAME m1cname.example.com',
 );
 
 ### ra tests extfile + admin state operating on the same resource,

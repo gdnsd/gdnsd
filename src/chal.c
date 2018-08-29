@@ -270,12 +270,6 @@ bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data)
 // an RCU read-side critical section.  Must be fast, non-blocking, no syscalls.
 bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p)
 {
-    // Even with the maximum possible configured max_cname_depth (24), and all
-    // CNAMEs in the chain being of maximal domainname length, then reaching an
-    // acme challenge at the end of the chain, the new qname (RHS of final
-    // CNAME entry) can't go past 16K, so we can do simple compression here
-    gdnsd_assert(qname_comp < 16384U);
-
     bool matched = false;
     const bool qname_is_chal = dname_is_acme_chal(qname);
     const chal_tbl_t* t = rcu_dereference(chal_tbl);
@@ -296,6 +290,8 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
                 if (ch->dnhash == qname_hash && !dname_cmp(qname, ch->dname)) {
                     matched = true;
                     if (qname_is_chal && (qtype == DNS_TYPE_TXT || qtype == DNS_TYPE_ANY)) {
+                        if ((*offset_p + 2U + CHAL_RR_LEN) > MAX_RESPONSE)
+                            break; // do not run off the end of the buffer!
                         gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
                         (*offset_p) += 2;
                         memcpy(&packet[*offset_p], ch->txt, CHAL_RR_LEN);

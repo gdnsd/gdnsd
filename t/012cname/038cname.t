@@ -14,141 +14,82 @@ my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
     qname => 'cn-nx.example.com', qtype => 'A',
-    header => { rcode => 'NXDOMAIN' },
     answer => 'cn-nx.example.com 21600 CNAME nx.example.com',
-    auth => $neg_soa,
-    stats => [qw/udp_reqs nxdomain/],
 );
 
-foreach my $qt (qw/CNAME ANY/) {
-    _GDT->test_dns(
-        qname => 'cn-nx.example.com', qtype => $qt,
-        answer => 'cn-nx.example.com 21600 CNAME nx.example.com',
-        auth => [
-	    'example.com 21600 NS ns1.example.com',
-	    'example.com 21600 NS ns2.example.com',
-        ],
-        addtl => [
-            'ns1.example.com 21600 A 192.0.2.1',
-            'ns2.example.com 21600 A 192.0.2.2',
-        ],
-    );
-}
+_GDT->test_dns(
+    qname => 'cn-nx.example.com', qtype => 'CNAME',
+    answer => 'cn-nx.example.com 21600 CNAME nx.example.com',
+);
+
+_GDT->test_dns(
+    qname => 'cn-nx.example.com', qtype => 'ANY',
+    answer => 'cn-nx.example.com 21600 CNAME nx.example.com',
+    stats => [qw/udp_reqs udp_tc noerror tcp_conns tcp_reqs noerror/],
+);
 
 _GDT->test_dns(
     qname => 'cn-local.example.com', qtype => 'A',
-    answer => [
-        'cn-local.example.com 21600 CNAME ns1.example.com',
-        'ns1.example.com 21600 A 192.0.2.1',
-    ],
-    auth => [
-	'example.com 21600 NS ns1.example.com',
-	'example.com 21600 NS ns2.example.com',
-    ],
-    addtl => [
-        'ns2.example.com 21600 A 192.0.2.2',
-    ],
+    answer => 'cn-local.example.com 21600 CNAME ns1.example.com',
 );
 
-foreach my $qt (qw/CNAME ANY/) {
-    _GDT->test_dns(
-        qname => 'cn-local.example.com', qtype => $qt,
-        answer => [
-            'cn-local.example.com 21600 CNAME ns1.example.com'
-        ],
-        auth => [
-	    'example.com 21600 NS ns1.example.com',
-	    'example.com 21600 NS ns2.example.com',
-        ],
-        addtl => [
-            'ns1.example.com 21600 A 192.0.2.1',
-            'ns2.example.com 21600 A 192.0.2.2',
-        ],
-    );
-}
+_GDT->test_dns(
+    qname => 'cn-local.example.com', qtype => 'CNAME',
+    answer => 'cn-local.example.com 21600 CNAME ns1.example.com',
+);
+
+_GDT->test_dns(
+    qname => 'cn-local.example.com', qtype => 'ANY',
+    answer => 'cn-local.example.com 21600 CNAME ns1.example.com',
+    stats => [qw/udp_reqs udp_tc noerror tcp_reqs noerror/],
+);
 
 _GDT->test_dns(
     qname => 'cn-deleg.example.com', qtype => 'A',
-    answer => [
-        'cn-deleg.example.com 21600 CNAME foo.subz.example.com',
-    ],
-    auth => [
-	'subz.example.com 21600 NS ns1.subz.example.com',
-	'subz.example.com 21600 NS ns2.subz.example.com',
-    ],
-    addtl => [
-        'ns1.subz.example.com 21600 A 192.0.2.10',
-        'ns2.subz.example.com 21600 A 192.0.2.20',
-    ],
+    answer => 'cn-deleg.example.com 21600 CNAME foo.subz.example.com',
 );
 
-foreach my $qt (qw/CNAME ANY/) {
-    _GDT->test_dns(
-        qname => 'cn-deleg.example.com', qtype => $qt,
-        answer => [
-            'cn-deleg.example.com 21600 CNAME foo.subz.example.com',
-        ],
-        auth => [
-	    'example.com 21600 NS ns1.example.com',
-	    'example.com 21600 NS ns2.example.com',
-        ],
-        addtl => [
-            'ns1.example.com 21600 A 192.0.2.1',
-            'ns2.example.com 21600 A 192.0.2.2',
-        ],
-    );
-}
+_GDT->test_dns(
+    qname => 'cn-deleg.example.com', qtype => 'CNAME',
+    answer => 'cn-deleg.example.com 21600 CNAME foo.subz.example.com',
+);
+
+_GDT->test_dns(
+    qname => 'cn-deleg.example.com', qtype => 'ANY',
+    answer => 'cn-deleg.example.com 21600 CNAME foo.subz.example.com',
+    stats => [qw/udp_reqs udp_tc noerror tcp_reqs noerror/],
+);
 
 _GDT->test_dns(
     qname => 'cn-deleg-glue.example.com', qtype => 'A',
-    answer => [
-        'cn-deleg-glue.example.com 21600 CNAME ns1.subz.example.com',
-    ],
-    auth => [
-	'subz.example.com 21600 NS ns1.subz.example.com',
-	'subz.example.com 21600 NS ns2.subz.example.com',
-    ],
-    addtl => [
-        'ns1.subz.example.com 21600 A 192.0.2.10',
-        'ns2.subz.example.com 21600 A 192.0.2.20',
-    ],
+    answer => 'cn-deleg-glue.example.com 21600 CNAME ns1.subz.example.com',
 );
 
-foreach my $qt (qw/CNAME ANY/) {
-    _GDT->test_dns(
-        qname => 'cn-deleg-glue.example.com', qtype => $qt,
-        answer => [
-            'cn-deleg-glue.example.com 21600 CNAME ns1.subz.example.com',
-        ],
-        auth => [
-	    'example.com 21600 NS ns1.example.com',
-	    'example.com 21600 NS ns2.example.com',
-        ],
-        addtl => [
-            'ns1.example.com 21600 A 192.0.2.1',
-            'ns2.example.com 21600 A 192.0.2.2',
-        ],
-    );
-}
+_GDT->test_dns(
+    qname => 'cn-deleg-glue.example.com', qtype => 'CNAME',
+    answer => 'cn-deleg-glue.example.com 21600 CNAME ns1.subz.example.com',
+);
+
+_GDT->test_dns(
+    qname => 'cn-deleg-glue.example.com', qtype => 'ANY',
+    answer => 'cn-deleg-glue.example.com 21600 CNAME ns1.subz.example.com',
+    stats => [qw/udp_reqs udp_tc noerror tcp_reqs noerror/],
+);
 
 _GDT->test_dns(
     qname => 'cn-ext.example.com', qtype => 'A',
     answer => 'cn-ext.example.com 21600 CNAME www.example.net',
 );
 
-foreach my $qt (qw/CNAME ANY/) {
-    _GDT->test_dns(
-        qname => 'cn-ext.example.com', qtype => $qt,
-        answer => 'cn-ext.example.com 21600 CNAME www.example.net',
-        auth => [
-	    'example.com 21600 NS ns1.example.com',
-	    'example.com 21600 NS ns2.example.com',
-        ],
-        addtl => [
-            'ns1.example.com 21600 A 192.0.2.1',
-            'ns2.example.com 21600 A 192.0.2.2',
-        ],
-    );
-}
+_GDT->test_dns(
+    qname => 'cn-ext.example.com', qtype => 'CNAME',
+    answer => 'cn-ext.example.com 21600 CNAME www.example.net',
+);
+
+_GDT->test_dns(
+    qname => 'cn-ext.example.com', qtype => 'ANY',
+    answer => 'cn-ext.example.com 21600 CNAME www.example.net',
+    stats => [qw/udp_reqs udp_tc noerror tcp_reqs noerror/],
+);
 
 _GDT->test_kill_daemon($pid);

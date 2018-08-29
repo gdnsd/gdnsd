@@ -243,11 +243,8 @@ Overall Design
     the whole packet will be truncated w/ TC, even though they go in the
     Additional section).
 
-    Also, by default, unnecessary lists of NS records in the Authority
-    section are left out completely (they're really only necessary for
-    delegation responses). This behavior can be reversed (to always send
-    appropriate NS records even when not strictly necessary) via the
-    include_optional_ns option.
+    Unnecessary lists of NS records in the Authority section are left out
+    completely (they're really only necessary for delegation responses).
 
 Security
 

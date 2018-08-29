@@ -1,4 +1,3 @@
 zones_default_ttl = 21600
-max_response = 64000
-max_edns_response = 64000
+max_edns_response = 16384
 chaos_response = "some random string"

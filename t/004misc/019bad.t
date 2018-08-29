@@ -1,13 +1,14 @@
 # This tests various malformed questions that have to be hand-encoded.
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 13;
+use Test::More tests => 15;
 
 my $_id = 5555;
 sub make_query {
     my $qname = shift;
     my $arcount = shift || 0;
     my $qtype = shift || 1;
+    my $qclass = shift || 1;
     return pack("nCCnnnna*nn",
         $_id++,
         0, # flags1
@@ -18,7 +19,7 @@ sub make_query {
         $arcount,
         $qname,
         $qtype,
-        1, # qclass
+        $qclass
     );
 }
 
@@ -132,6 +133,32 @@ eval {_GDT->check_stats(
 )};
 ok(!$@) or diag $@;
 
+# CLASS=HS, which gets dropped
+my $test8 = make_query("\x07example\x03com\x00", 0, 1, 4);
+send($sock, $test8, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 10,
+    noerror => 1,
+    dropped => 6,
+    refused => 2,
+    edns => 1,
+    notimp => 1,
+)};
+ok(!$@) or diag $@;
+
+# QCLASS=ANY, works just like IN
+my $test8 = make_query("\x07example\x03com\x00", 0, 1, 255);
+send($sock, $test8, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 11,
+    noerror => 2,
+    dropped => 6,
+    refused => 2,
+    edns => 1,
+    notimp => 1,
+)};
+ok(!$@) or diag $@;
+
 close($sock);
 
 # Test a valid query to make sure the server is still functioning
@@ -140,22 +167,16 @@ eval {_GDT->query_server(
     Net::DNS::Packet->new('foo.example.com', 'A'),
     _GDT->mkanswer({ },
         Net::DNS::Question->new('foo.example.com', 'A'),
-        [Net::DNS::rr_add('foo.example.com 86400 A 192.0.2.3')], [
-            Net::DNS::rr_add('example.com 86400 NS ns1.example.com'),
-            Net::DNS::rr_add('example.com 86400 NS ns2.example.com'),
-        ], [
-            Net::DNS::rr_add('ns1.example.com 86400 A 192.0.2.1'),
-            Net::DNS::rr_add('ns2.example.com 86400 A 192.0.2.2'),
-        ],
+        [Net::DNS::rr_add('foo.example.com 86400 A 192.0.2.3')], [], [],
     ),
     _GDT->get_resolver(), {},
 )};
 ok(!$@) or diag $@;
 
 eval {_GDT->check_stats(
-    udp_reqs => 10,
-    noerror => 2,
-    dropped => 5,
+    udp_reqs => 12,
+    noerror => 3,
+    dropped => 6,
     refused => 2,
     edns => 1,
     notimp => 1,

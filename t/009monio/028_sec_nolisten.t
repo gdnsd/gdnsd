@@ -2,7 +2,7 @@
 
 use _GDT ();
 use Net::DNS;
-use Test::More tests => 8;
+use Test::More tests => 7;
 
 my $pid = _GDT->test_spawn_daemon('etc002');
 
@@ -31,12 +31,6 @@ _GDT->test_dns(
         'mdyn-one.example.com 120 A 192.0.2.1',
     ],
     limit_v4 => 1
-);
-
-_GDT->test_dns(
-    qname => 'addtl.example.com', qtype => 'MX',
-    answer => 'addtl.example.com 86400 MX 0 dyn.example.com',
-    addtl => 'dyn.example.com 120 A 192.0.2.1',
 );
 
 _GDT->test_dns(

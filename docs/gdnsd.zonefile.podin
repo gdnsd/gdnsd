@@ -155,6 +155,12 @@ gdnsd does not allow using the RFC3597 format to specify any of the
 traditional standard RR types, but it can be used to encode data for
 the non-traditional types.
 
+C<SOA> records' negative-caching TTL is set to the minimum of the traditional
+"minimum" (last) field (which always means "negative cache TTL" as of RFC
+2308), and the actual TTL of the SOA record itself.  This TTL is used as the
+actual TTL of the SOA record any time it is emitted, whether for negative or
+positive answers.
+
 Additionally, gdnsd supports two special-case, non-standard
 virtual resource record types DYNA and DYNC:
 
@@ -169,11 +175,14 @@ and it is up to the plugin code which addresses of which types
 to return in the response.
 
 The dynamic plugin lookup for C<DYNA> will be used anywhere that
-regular C<A> and/or C<AAAA> records would be used.  This includes
-not only direct responses to C<A> and C<AAAA> queries, but also
-things like Additional-section RRs and C<ANY>-query output.
-C<DYNA> cannot co-exist with actual static A or AAAA records
-at the same name, but can co-exist with any other RR-type.
+regular C<A> and/or C<AAAA> records would be used.  C<DYNA> cannot
+co-exist with actual static A or AAAA records at the same name, but can
+co-exist with any other RR-type.
+
+C<DYNA> and C<DYNAAAA> RRs B<cannot> be used to supply the addresses of
+nameservers.  In other words, any name that exists in zone scope on the
+right-hand-side of an C<NS> record cannot have C<DYNA> or C<DYNAAAA>
+(and relatedly, must have at least one of C<A> or C<AAAA>).
 
 Example:
 
@@ -242,6 +251,9 @@ specify a single long chunk and have the server break it at
 255 byte boundaries automatically.  (this behavior can be
 disabled via L<gdnsd.config(5)> as well, which will turn
 oversized chunks into zonefile parsing errors).
+
+TXT records are limited to a maximum of 16000 bytes when encoded in rdata form
+for wire transmission.
 
 =head1 SEE ALSO
 

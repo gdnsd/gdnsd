@@ -28,6 +28,7 @@
 #include "dnspacket.h"
 #include "statio.h"
 #include "ztree.h"
+#include "ltree.h"
 #include "zsrc_rfc1035.h"
 #include "zsrc_djb.h"
 #include "css.h"
@@ -366,6 +367,9 @@ int main(int argc, char** argv)
     cfg_t* cfg = conf_load(cfg_root, socks_cfg, copts.force_zsd);
     gcfg = cfg;
     vscf_destroy(cfg_root);
+
+    // init DYNA packet sizing stuff
+    ltree_init();
 
     // Load zone data (final step if checkconf) synchronously
     ztree_init();

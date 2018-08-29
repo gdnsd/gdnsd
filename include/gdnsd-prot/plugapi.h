@@ -57,6 +57,11 @@ unsigned gdnsd_result_get_v6_offset(void);
 F_PURE
 unsigned gdnsd_result_get_alloc(void);
 
+// As above, but returns an rrset allocation for response sizing, as the
+// maximum encoded size of all the A and AAAA RRs
+F_PURE
+size_t gdnsd_result_get_max_response(void);
+
 // MUST call this before loading plugins below,
 //   array can be NULL for just the default
 //   MUST only call this once per program

@@ -26,7 +26,6 @@ my $pid = _GDT->test_spawn_daemon($etcdir);
 _GDT->test_dns(
     qname => 'example.com', qtype => 'NS',
     answer => 'example.com 86400 NS ns1.example.com',
-    addtl => 'ns1.example.com 86400 A 192.0.2.1',
 );
 
 # res1
@@ -111,27 +110,20 @@ _GDT->test_dns(
     qname => 'res2.example.com', qtype => 'A',
     answer => [],
     auth => $neg_soa,
-    addtl => 'res2.example.com 86400 AAAA 2001:DB8::11',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
     answer => [], auth => $neg_soa,
-    addtl => [
-        'res2.example.com 86400 AAAA 2001:DB8::11',
-        _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
-    ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 _GDT->test_dns(
     qname => 'res2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
     answer => 'res2.example.com 86400 A 192.0.2.10',
-    addtl => [
-        'res2.example.com 86400 AAAA 2001:DB8::10',
-        _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
-    ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -139,17 +131,13 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res2dc1.example.com', qtype => 'A',
     answer => 'res2dc1.example.com 86400 A 192.0.2.10',
-    addtl => 'res2dc1.example.com 86400 AAAA 2001:DB8::10',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res2dc1.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
     answer => 'res2dc1.example.com 86400 A 192.0.2.10',
-    addtl => [
-        'res2dc1.example.com 86400 AAAA 2001:DB8::10',
-        _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
-    ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -157,17 +145,13 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res2dc2.example.com', qtype => 'A',
     answer => [], auth => $neg_soa,
-    addtl => 'res2dc2.example.com 86400 AAAA 2001:DB8::11',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res2dc2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
     answer => [], auth => $neg_soa,
-    addtl => [
-        'res2dc2.example.com 86400 AAAA 2001:DB8::11',
-        _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
-    ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -189,50 +173,33 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     answer => 'res3.example.com 86400 CNAME dc2cn.example.com',
-    auth => $neg_soa,
-    addtl => 'dc2cn.example.com 86400 AAAA 2001:DB8::101',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
     answer => 'res3.example.com 86400 CNAME dc2cn.example.com',
-    auth => $neg_soa,
-    addtl => [
-        'dc2cn.example.com 86400 AAAA 2001:DB8::101',
-        _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
-    ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
-    answer => [
-        'res3.example.com 86400 CNAME dc1cn.example.com',
-        'dc1cn.example.com 86400 A 192.0.2.100',
-    ],
-    addtl => [
-        _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
-    ],
+    answer => 'res3.example.com 86400 CNAME dc1cn.example.com',
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
 #res3/dc1
 _GDT->test_dns(
     qname => 'res3dc1.example.com', qtype => 'A',
-    answer => [
-        'res3dc1.example.com 86400 CNAME dc1cn.example.com',
-        'dc1cn.example.com 86400 A 192.0.2.100',
-    ],
+    answer => 'res3dc1.example.com 86400 CNAME dc1cn.example.com',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3dc1.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
-    answer => [
-        'res3dc1.example.com 86400 CNAME dc1cn.example.com',
-        'dc1cn.example.com 86400 A 192.0.2.100',
-    ],
+    answer => 'res3dc1.example.com 86400 CNAME dc1cn.example.com',
     addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
@@ -241,43 +208,27 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'res3dc2.example.com', qtype => 'A',
     answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.com',
-    auth => $neg_soa,
-    addtl => 'dc2cn.example.com 86400 AAAA 2001:DB8::101',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3dc2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
     answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.com',
-    auth => $neg_soa,
-    addtl => [
-        'dc2cn.example.com 86400 AAAA 2001:DB8::101',
-        _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 0),
-    ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
 #res3/dc3
 _GDT->test_dns(
     qname => 'res3dc3.example.com', qtype => 'A',
-    answer => [
-        'res3dc3.example.com 86400 CNAME dc3cn.example.com',
-        'dc3cn.example.com 86400 A 192.0.2.102',
-    ],
-    addtl => 'dc3cn.example.com 86400 AAAA 2001:DB8::102',
+    answer => 'res3dc3.example.com 86400 CNAME dc3cn.example.com',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3dc3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
-    answer => [
-        'res3dc3.example.com 86400 CNAME dc3cn.example.com',
-        'dc3cn.example.com 86400 A 192.0.2.102',
-    ],
-    addtl => [
-        'dc3cn.example.com 86400 AAAA 2001:DB8::102',
-        _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 0),
-    ],
+    answer => 'res3dc3.example.com 86400 CNAME dc3cn.example.com',
+    addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -289,10 +240,6 @@ _GDT->test_dns(
         'dmx.example.com 86400 MX 1 res2.example.com',
         'dmx.example.com 86400 MX 2 res3.example.com',
     ],
-    addtl => [
-        'res1.example.com 86400 A 192.0.2.1',
-        'res2.example.com 86400 AAAA 2001:DB8::11',
-    ],
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
@@ -303,13 +250,7 @@ _GDT->test_dns(
         'dmx.example.com 86400 MX 1 res2.example.com',
         'dmx.example.com 86400 MX 2 res3.example.com',
     ],
-    addtl => [
-       'res1.example.com 86400 A 192.0.2.5',
-        'res1.example.com 86400 A 192.0.2.6',
-        'res2.example.com 86400 A 192.0.2.10',
-        'res2.example.com 86400 AAAA 2001:DB8::10',
-        _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
-    ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
@@ -393,13 +334,11 @@ _GDT->test_dns(
     stats => [qw/udp_reqs noerror/],
 );
 
-# DYNC that loops on itself until max_cname_depth (16) is reached...
+# DYNC that loops on itself
 _GDT->test_dns(
     qname => 'res5.example.com', qtype => 'AAAA',
-    header => { rcode => 'NXDOMAIN' },
-    answer => [],
-    auth => $neg_soa,
-    stats => [qw/udp_reqs nxdomain/],
+    answer => 'res5.example.com 86400 CNAME dc2cn-loop.example.com',
+    stats => [qw/udp_reqs noerror/],
 );
 
 #geoip + weighted

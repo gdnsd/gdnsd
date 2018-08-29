@@ -6,7 +6,6 @@ gdnsd.config - gdnsd configuration file
 
   options => {
     tcp_timeout => 15 ; zonefile-style comment
-    include_optional_ns => true
     listen => [ 127.0.0.1, 192.0.2.1 ]
   }
 
@@ -308,21 +307,6 @@ disabled, and any single character string specified in a zonefile as
 part of a C<TXT> record which is larger than 255 bytes will
 be considered a syntax error.
 
-=item B<include_optional_ns>
-
-Boolean, default false.  Causes the daemon to include the optional NS
-records in the Authority section of simple authoritative responses
-containing actual response data.  Leaving this option in its default
-state results in smaller response packets and faster response packet
-generation in many common cases.  This is similar in nature to (but not
-exactly like) BIND's "minimal-responses" option, except that we default
-to the minimal mode.
-
-Regardless of this setting, all *necessary* Authority-section records
-are always included, such as when they are necessary for delegation
-responses, NXDOMAIN responses, and NOERROR responses containing no
-RRsets in the answer section.
-
 =item B<plugin_search_path>
 
 A single string or an array of strings, default empty.  Normally the
@@ -331,102 +315,28 @@ using filenames of the form C<plugin_${name}.so>.  If you define this
 parameter, all paths in this list will be searched in the given order
 for plugins *before* trying the default, fixed search path.
 
-=item B<max_response>
-
-Integer, default 16384, min 4096, max 64000.  This number is used to
-size the per-I/O-thread buffers that we construct response packets in.
-For any sane, normal use of the DNS, the default value is far more than
-enough.  For embedded or other low memory hosts, you might even
-consider setting this smaller than default to save a bunch of
-per-socket-context buffer space.
-
-However, if you have strange DNS data that's very large (giant RRsets,
-giant blobs of data in TXT records) which might generate response
-packets greater than the 16K default max here, you *must* set this
-parameter large enough to accommodate them or random very bad things
-will happen.  It should be noted that the odds are high whatever you're
-trying to do is misguided in the first place.  You can size this by
-setting it to the max and running some test queries via "dig" (or a
-similar tool) to find your limit.
-
-This number does not need to take into account UDP, IP, or any
-lower-level headers.  Typically when probing your data for the largest
-response sizes you should do C<ANY> queries and/or specific RR-type
-queries against the first CNAME in any CNAME chains leading to large
-RR-sets.  Keep in mind that the C<include_optional_ns> option will
-affect the sizing as well.  Also keep in mind that wildcards and
-delegations can match any child name, including ones of maximal overall
-length.
-
 =item B<max_edns_response>
 
-Integer, default 1410, min 512, max 64000.  This is the maximum size
+Integer, default 1410, min 512, max 16384.  This is the maximum size
 of a UDP edns response to a client, acting as a cap on the edns
 buffer size advertised by the client in its request.
 
 The default of 1410 is the largest size suggested in RFC 6891 when
 falling back from the inability to deliver 4K-sized packets, and it
 seems very likely to be a successful size for unfragmented delivery
-on most networks today even given IPv6 and some reasonable tunneling.
+on most ~ethernet MTU networks today even given IPv6 and some reasonable
+tunneling.
+
+Setting this in the ~4-16K range might be desirable if you have large
+response RR-sets and/or are willing to tolerate some fragmentation,
+especially in a private network where a larger path MTU (e.g. ~9K for
+ethernet jumbo frames) can be gauranteed.
 
 The option obviously has no pragmatic effect if you do not have
 large response datasets in your zones in the first place.
 
 This value will be capped at the configured (or default) value of
 C<max_response> with a warning if configured above that value.
-
-=item B<max_addtl_rrsets>
-
-Integer, default 64, min 16, max 256.  This is the maximum number of RR
-sets that will ever be added to the Additional section of a response
-packet.  This sets a hard limit on the number of delegation glue NS
-records a subzone can have (which is checked at startup), and a runtime
-soft limit on other Additional section RR sets.  When the limit is
-reached at runtime, the remaining potential additional RR sets are
-simply not added to the packet.  Most users won't need to raise this
-value, and users on low-memory/embedded hosts might want to lower it to
-save more memory.
-
-=item B<max_cname_depth>
-
-Integer, default 16, min 4, max 24.  How deep CNAME -> CNAME chains are
-allowed to recurse within local data in a single zonefile.  If a chain
-longer than this is detected between normal static CNAME entries in the
-authoritative data of a single zonefile, an error will be thrown when
-loading the zonefile.
-
-If the limit is exceeded at runtime (due to C<DYNC> dynamic CNAME
-responses) the code will halt further recursive lookups for this
-request and return an empty B<NXDOMAIN> response, and log a loud
-message to syslog on every single request for this broken domainname.
-
-Note that this is the only thing preventing infinite CNAME loops caused
-by bad DYNC plugin configurations.  Also note that even in the C<DYNC>
-case, all of this applies only within a single zone.  The gdnsd code
-never crosses the boundary between two distinct local zonefiles when
-processing queries.
-
-=item B<edns_client_subnet>
-
-Boolean, default true.  Enables support for the edns-client-subnet
-option.  gdnsd only includes this EDNS option in responses to queries
-which also contained the option.  In the case of normal responses from
-static zone data, the scope mask will be set to zero.  Dynamic response
-plugins have access to the query's EDNS client-subnet data, and have
-full control over the response scope mask.
-
-If the option is set to false, gdnsd will ignore the option in queries,
-never set it in its responses, and plugins will not have access to any
-data provided by any ignored edns-client-subnet option in queries.
-
-Of the included standard plugins only C<reflect> and C<geoip> make use
-of edns-client-subnet information.  The rest will leave the scope mask
-at zero as normal for client-location-agnostic static data.
-
-Relevant links documenting edns-client-subnet:
-
-L<http://www.afasterinternet.com/>
-L<http://tools.ietf.org/html/draft-vandergaast-edns-client-subnet-00>
 
 =item B<chaos_response>
 
@@ -479,28 +389,6 @@ the daemon.  This should live on a filesystem which is preserved
 across reboots.
 
 The F<admin_state> file lives here.
-
-=item B<any_mitigation>
-
-Boolean, default true.  If true, the server will attempt to mitigate
-problems with ANY-query reflection attacks over UDP.  As ANY queries
-tend to have the largest response sizes, they are an obvious target for
-amplified reflection attacks using gdnsd as the traffic source.  ANY
-queries aren't commonly used by legitimate clients; they're mostly for
-debugging.
-
-Currently gdnsd's only mechanism for mitigation is forcing legitimate
-clients to use TCP for ANY queries by sending a truncated UDP response.
-Truncation responses are a normal expectation regardless, and supporting
-DNS over TCP is a requirement of the DNS.  Therefore this should cause
-no real-world performance or interoperability problems in exchange for
-the protection it offers.
-
-In future releases, C<any_mitigation> may behave differently and allow
-some ANY-over-UDP traffic to succeed when it's safe to do so.  For
-example, it may allow ANY over UDP up to a certain response ratelimit,
-and/or it may allow ANY over UDP when the request source is weakly
-validated by an edns0 cookie.
 
 =back
 

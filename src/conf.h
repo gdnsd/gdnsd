@@ -30,21 +30,15 @@
 
 typedef struct {
     const uint8_t* chaos;
-    bool     include_optional_ns;
     bool     lock_mem;
     bool     disable_text_autosplit;
-    bool     edns_client_subnet;
     bool     zones_strict_data;
-    bool     any_mitigation;
     unsigned chaos_len;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;
     unsigned max_ttl;
     unsigned min_ttl;
-    unsigned max_response;
     unsigned max_edns_response;
-    unsigned max_cname_depth;
-    unsigned max_addtl_rrsets;
     unsigned acme_challenge_ttl;
 } cfg_t;
 

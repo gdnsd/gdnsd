@@ -28,6 +28,7 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/log.h>
+#include <gdnsd-prot/plugapi.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -38,6 +39,11 @@
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists
 static const uint8_t ooz_glue_label[1] = { 0 };
+
+// initialized to realistic value by ltree_init(), is the total response size
+// of all A+AAAA RRs from a DYNA that returns the maximal configured set (of
+// all global plugin configurations).
+static size_t dyna_max_response = 65536U;
 
 #define log_zfatal(...)\
     do {\
@@ -359,15 +365,9 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
     return false;
 }
 
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6, const bool ooz)
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6)
 {
-    ltree_node_t* node;
-    if (ooz) {
-        ltree_node_t* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
-        node = ltree_node_find_or_add_child(zone->arena, ooz_node, dname);
-    } else {
-        node = ltree_find_or_add_dname(zone, dname);
-    }
+    ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     ltree_rrset_addr_t* rrset;
     if ((rrset = ltree_node_get_rrset_addr(node))) {
@@ -534,8 +534,10 @@ bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* r
     }
 
     INSERT_NEXT_RR(ns, ns, "NS", 2)
+    if (rrset->gen.count > MAX_NS_COUNT)
+        log_zfatal("Name '%s%s': Too many NS records in one NS RRset (%u > %u)", logf_dname(dname), logf_dname(zone->dname), rrset->gen.count, MAX_NS_COUNT);
     new_rdata->dname = lta_dnamedup(zone->arena, rhs);
-    new_rdata->ad = NULL;
+    new_rdata->glue = NULL;
     return false;
 }
 
@@ -549,7 +551,6 @@ bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* r
     INSERT_NEXT_RR(mx, mx, "MX", 2)
     new_rdata->dname = lta_dnamedup(zone->arena, rhs);
     new_rdata->pref = htons(pref);
-    new_rdata->ad = NULL;
     return false;
 }
 
@@ -569,7 +570,6 @@ bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* 
     new_rdata->priority = htons(priority);
     new_rdata->weight = htons(weight);
     new_rdata->port = htons(port);
-    new_rdata->ad = NULL;
     return false;
 }
 
@@ -629,6 +629,9 @@ bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* 
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
+    // Parsers only allow SOA at zone root
+    gdnsd_assert(zone->root == node);
+
     if (ltree_node_get_rrset_soa(node))
         log_zfatal("Zone '%s': SOA defined twice", logf_dname(dname));
 
@@ -636,13 +639,12 @@ bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* 
     soa->email = lta_dnamedup(zone->arena, email);
     soa->master = lta_dnamedup(zone->arena, master);
 
-    soa->gen.ttl = htonl(ttl);
+    soa->gen.ttl = htonl(ttl < ncache ? ttl : ncache);
     soa->times[0] = htonl(serial);
     soa->times[1] = htonl(refresh);
     soa->times[2] = htonl(retry);
     soa->times[3] = htonl(expire);
     soa->times[4] = htonl(ncache);
-    soa->neg_ttl = htonl(ttl < ncache ? ttl : ncache);
 
     return false;
 }
@@ -780,20 +782,17 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
     return rval;
 }
 
-// retval: true, all is well (although we didn't necessarily set an address)
+// retval: true, all is well
 //         false, the target points at an authoritative name in the same zone which doesn't exist
 F_NONNULL
-static bool set_valid_addr(const uint8_t* dname, const zone_t* zone, ltree_rrset_addr_t** addr_out)
+static bool check_valid_addr(const uint8_t* dname, const zone_t* zone)
 {
     gdnsd_assert(*dname);
 
     ltree_node_t* node;
     const ltree_dname_status_t status = ltree_search_dname_zone(dname, zone, &node);
-
-    *addr_out = NULL;
-    if (status == DNAME_AUTH)
-        if (!node || !(*addr_out = ltree_node_get_rrset_addr(node)))
-            return false;
+    if (status == DNAME_AUTH && (!node || !ltree_node_get_rrset_addr(node)))
+        return false;
 
     return true;
 }
@@ -827,8 +826,8 @@ static bool p1_proc_cname(const zone_t* zone, const ltree_rrset_cname_t* node_cn
 
     unsigned cn_depth = 1;
     while (cn_target && cnstat == DNAME_AUTH && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME) {
-        if (++cn_depth > gcfg->max_cname_depth) {
-            log_zfatal("CNAME '%s%s' leads to a CNAME chain longer than %u (max_cname_depth)", logf_lstack(lstack, depth, zone->dname), gcfg->max_cname_depth);
+        if (++cn_depth > 16U) {
+            log_zfatal("CNAME '%s%s' leads to a CNAME chain at least 16 RRs deep, assuming infinity or insanity and failing", logf_lstack(lstack, depth, zone->dname));
             break;
         }
         ltree_rrset_cname_t* cur_cname = &cn_target->rrsets->cname;
@@ -841,14 +840,14 @@ static bool p1_proc_cname(const zone_t* zone, const ltree_rrset_cname_t* node_cn
 F_WUNUSED F_NONNULL
 static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t* this_ns, const uint8_t** lstack, const unsigned depth)
 {
-    gdnsd_assert(!this_ns->ad);
+    gdnsd_assert(!this_ns->glue);
 
     ltree_node_t* ns_target = NULL;
     ltree_rrset_addr_t* target_addr = NULL;
-    ltree_dname_status_t ns_status = ltree_search_dname_zone(this_ns->dname, zone, &ns_target);
+    ltree_dname_status_t target_status = ltree_search_dname_zone(this_ns->dname, zone, &ns_target);
 
     // if NOAUTH, look for explicit out-of-zone glue
-    if (ns_status == DNAME_NOAUTH) {
+    if (target_status == DNAME_NOAUTH) {
         ltree_node_t* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
         if (ooz) {
             ns_target = ltree_node_find_child(ooz, this_ns->dname);
@@ -862,33 +861,164 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
     } else {
         // if !NOAUTH, target must be in auth or deleg space for this
         //   same zone, and we *must* have a legal address for it
-        gdnsd_assert(ns_status == DNAME_AUTH || ns_status == DNAME_DELEG);
+        gdnsd_assert(target_status == DNAME_AUTH || target_status == DNAME_DELEG);
         if (!ns_target || !(target_addr = ltree_node_get_rrset_addr(ns_target)))
             log_zfatal("Missing A and/or AAAA records for target nameserver in '%s%s NS %s'",
                        logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
+        // Explicitly disallowing NS->DYNA avoids a number of pitfalls.  Most
+        // importantly, it evades the question-marks around practices with this
+        // in RFC7871, but also it makes delegation max response sizes much
+        // more predictable, and they're otherwise our worst-case scenario for
+        // predicting overlong responses.
+        if (target_addr && !target_addr->gen.count && !target_addr->count_v6)
+            log_zfatal("Target nameserver in '%s%s NS %s' cannot have DYNA addresses",
+                       logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
     }
 
-    // use target_addr found via either path above
-    if (target_addr) {
+    // use target_addr found via either path above, if it's OOZ glue or
+    // deleg-space glue and this is a delegation.  If someone happens to put
+    // their zone root nameservers in deleg space or define OOZ glue for them,
+    // we're not going to help with that (and it's not going to help anyways,
+    // it's the delegator above them that needs to emit that glue in the OOZ
+    // case, and the delegated-NS case is just nuts...).
+    if (target_addr && target_status != DNAME_AUTH && in_deleg) {
         gdnsd_assert(ns_target);
-        this_ns->ad = target_addr;
-        // treat as glue if NS for delegation, and addr is in delegation or ooz
-        if (ns_status != DNAME_AUTH) {
-            if (in_deleg)
-                AD_SET_GLUE(this_ns->ad);
-            ns_target->flags |= LTNFLAG_GUSED;
-        }
+        gdnsd_assert(target_addr);
+        this_ns->glue = target_addr;
+        ns_target->flags |= LTNFLAG_GUSED;
     }
 
     return false;
 }
 
+// Check whether this node can generate oversized (>16K) responses.  The dns
+// processing code uses fixed 16K buffers for output packets and assumes (e.g.
+// in compression-related code, where that cutoff comes into play) that
+// no packet data can possibly exist at offsets >= 16384.
+//
+// In general, the methodology here is to sum up the output sizes of all rrsets
+// defined in the node as if doing an ANY-query.  We also have to add on
+// various fixed quantities to account for headers, the query, and maximal
+// edns0 option outputs.  In delegation and wildcard cases, we also have to
+// assume the query name consumed the full 255 byte maximum.  When checking
+// delegation NS RR-sets we also have to account for their glued address data
+// in the additional section.
+//
+// Note that this check is more conservative than it has to be, because making
+// some parts more precise is complicated:
+//
+// * It doesn't consider the savings from arbitrary heuristic compression of
+// right-hand-side domainnames of RR-sets (e.g. compression of mail server
+// hostnames on the right side of an MX RR-set against the query name or each
+// other), even though the runtime code does attempt to save space with such
+// compression.  It does assume the obvious easy compression of left-hand-side
+// names against the query name or the zone name within it.  We could run a
+// real query using the runtime compression code as a final check before
+// rejecting a node for being too big, but for now I'm voting to avoid that
+// complexity unless someone using data big enough to matter complains.
+//
+// * In the case of addresses from DYNA RR sets, they're all counted as if they
+// always emit the maximum recorded address counts possible from any DYNA
+// (which is globally tracked during config parsing at startup), even if a
+// given particular node's DYNA would never return that full amount.
+
+F_NONNULL
+static size_t max_response_size(const ltree_node_t* node, const zone_t* zone, const uint8_t** lstack, unsigned depth, const bool in_deleg)
+{
+    const bool at_deleg = (node->flags & LTNFLAG_DELEG);
+
+    // We don't need to check below a delegation cut.  the only things that can
+    // be there are hidden glue addresses which, if used at all, will be
+    // checked by some delegation's NS-sizing check below.
+    if (in_deleg && !at_deleg)
+        return 0;
+
+    // First, the fixed portions:
+    // sizeof(wire_dns_header_t): basic header bytes before query
+    // 4U: the fixed parts of the query (qtype and qclass)
+    // 11U: edns0 OPT RR with no options
+    // 24U: edns0 edns-client-subnet option at max response length (full ipv6 bytes)
+    // 6U: edns0 tcp-keepalive response
+    size_t rsize = sizeof(wire_dns_header_t) + 4U + 11U + 24U + 6U;
+
+    // QNAME:
+    // For delegations and wildcards, assume maximum possible matching qname
+    // for others, use the exact matching query name length
+    if (at_deleg || (node->label && node->label[0] == 1 && node->label[1] == '*')) {
+        rsize += 255U;
+    } else {
+        rsize += *zone->dname;
+        while (depth--)
+            rsize += (1U + * (lstack[depth]));
+    }
+
+    // The fixed part on the left of the RRs is counted as 12 bytes: 2 for
+    // compressed LHS name, 2 type, 2 class, 4 ttl, 2 rdlen
+
+    const ltree_rrset_t* rrset = node->rrsets;
+    while (rrset) {
+        switch (rrset->gen.type) {
+        case DNS_TYPE_SOA:
+            rsize += (12U + *rrset->soa.master + *rrset->soa.email + 20U);
+            break;
+        case DNS_TYPE_CNAME:
+            rsize += (12U + *rrset->cname.dname);
+            break;
+        case DNS_TYPE_DYNC:
+            rsize += (12U + 255U);
+            break;
+        case DNS_TYPE_A:
+            // At delegation cuts, we avoid counting up addresses.  They're
+            // only glue addresses, and they'll be counted with any delegation
+            // NS sets that reference them (possibly even the one at this node,
+            // which would be redundant if we counted them here)
+            if (!at_deleg) {
+                if (rrset->gen.count | rrset->addr.count_v6)
+                    rsize += (rrset->gen.count * (12U + 4U)) + (rrset->addr.count_v6 * (12U + 16U));
+                else
+                    rsize += dyna_max_response;
+            }
+            break;
+        case DNS_TYPE_NS:
+            for (unsigned i = 0; i < rrset->gen.count; i++) {
+                rsize += (12U + *rrset->ns.rdata[i].dname);
+                if (rrset->ns.rdata[i].glue)
+                    rsize += (rrset->ns.rdata[i].glue->gen.count * (12U + 4U)) + (rrset->ns.rdata[i].glue->count_v6 * (12U + 16U));
+            }
+            break;
+        case DNS_TYPE_PTR:
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                rsize += (12U + *rrset->ptr.rdata[i].dname);
+            break;
+        case DNS_TYPE_MX:
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                rsize += (12U + 2U + *rrset->mx.rdata[i].dname);
+            break;
+        case DNS_TYPE_SRV:
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                rsize += (12U + 2U + 2U + 2U + *rrset->srv.rdata[i].dname);
+            break;
+        case DNS_TYPE_NAPTR:
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                rsize += (12U + 2U + 2U + rrset->naptr.rdata[i].text_len + *rrset->naptr.rdata[i].dname);
+            break;
+        case DNS_TYPE_TXT:
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                rsize += (12U + rrset->txt.rdata[i].text_len);
+            break;
+        default:
+            for (unsigned i = 0; i < rrset->gen.count; i++)
+                rsize += (12U + rrset->rfc3597.rdata[i].rdlen);
+            break;
+        }
+        rrset = rrset->gen.next;
+    }
+
+    return rsize;
+}
+
 // Phase 1:
-// Walks the entire ltree, accomplishing two things in a single pass:
-// 1) Sanity-check of referential and structural things
-//    that could not be checked as records were being added.
-// 2) Setting various inter-node pointers for the dnspacket code (and
-//    Phase 2) to chase later.
+// Walks the entire ltree, sanity-checking very basic things
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg)
 {
@@ -985,21 +1115,23 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
 
     if (node_mx)
         for (unsigned i = 0; i < node_mx->gen.count; i++)
-            if (!set_valid_addr(node_mx->rdata[i].dname, zone, &(node_mx->rdata[i].ad)))
+            if (!check_valid_addr(node_mx->rdata[i].dname, zone))
                 log_zwarn("In rrset '%s%s MX', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_mx->rdata[i].dname));
 
     if (node_srv)
         for (unsigned i = 0; i < node_srv->gen.count; i++)
-            if (!set_valid_addr(node_srv->rdata[i].dname, zone, &(node_srv->rdata[i].ad)))
+            if (!check_valid_addr(node_srv->rdata[i].dname, zone))
                 log_zwarn("In rrset '%s%s SRV', same-zone target '%s' has no addresses", logf_lstack(lstack, depth, zone->dname), logf_dname(node_srv->rdata[i].dname));
+
+    const size_t mrs = max_response_size(node, zone, lstack, depth, in_deleg);
+    if (mrs > MAX_RESPONSE)
+        log_zfatal("Domainname '%s%s' has too much total data (%zu > %u)", logf_lstack(lstack, depth, zone->dname), mrs, MAX_RESPONSE);
 
     return false;
 }
 
 // Phase 2:
 //  Checks on unused glue RRs underneath delegations
-//  Checks the total count of glue RRs per delegation
-//  Checks TTL matching between NS and glue RRs
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg)
 {
@@ -1008,21 +1140,6 @@ static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* no
         gdnsd_assert(!ltree_node_get_rrset_dync(node));
         if (ltree_node_get_rrset_addr(node) && !(node->flags & LTNFLAG_GUSED))
             log_zwarn("Delegation glue address(es) at domainname '%s%s' are unused and ignored", logf_lstack(lstack, depth, zone->dname));
-        if (node->flags & LTNFLAG_DELEG) {
-            ltree_rrset_ns_t* ns = ltree_node_get_rrset_ns(node);
-            gdnsd_assert(ns);
-            const unsigned nsct = ns->gen.count;
-            ltree_rdata_ns_t* nsrd = ns->rdata;
-            gdnsd_assert(nsct);
-            gdnsd_assert(nsrd);
-            unsigned num_glue = 0;
-            for (unsigned i = 0; i < nsct; i++) {
-                if (AD_IS_GLUE(nsrd[i].ad))
-                    num_glue++;
-            }
-            if (num_glue > gcfg->max_addtl_rrsets)
-                log_zfatal("Delegation point '%s%s' has '%u' glued NS RRs, which is greater than the configured max_addtl_rrsets (%u)", logf_lstack(lstack, depth, zone->dname), num_glue, gcfg->max_addtl_rrsets);
-        }
     }
 
     return false;
@@ -1176,14 +1293,11 @@ bool ltree_postproc_zone(zone_t* zone)
     //   (e.g. NS/SOA existence), also sets zone->serial
     if (unlikely(ltree_postproc_zroot_phase1(zone)))
         return true;
+
     // tree phase1 does a ton of readonly per-node checks
     //   (e.g. junk inside delegations, CNAME depth, CNAME
-    //    and DYNC do not have partner rrsets)
-    // It also sets additional-data pointers from various
-    //   other RR-types -> address rrsets, including
-    //   flagging glue in the glue-address cases and
-    //   marking it as used.  Ditto for additional data
-    //   for local CNAME targets.
+    //    and DYNC do not have partner rrsets, response sizing)
+    // It also sets glue pointers for NS->A/AAAA
     if (unlikely(ltree_postproc(zone, ltree_postproc_phase1)))
         return true;
 
@@ -1192,8 +1306,7 @@ bool ltree_postproc_zone(zone_t* zone)
     if (unlikely(ltree_postproc_zroot_phase2(zone)))
         return true;
 
-    // tree phase2 looks for unused delegation glue addresses,
-    //   and delegation glue address sets that exceed max_addtl_rrsets
+    // tree phase2 looks for unused delegation glue addresses
     if (unlikely(ltree_postproc(zone, ltree_postproc_phase2)))
         return true;
     return false;
@@ -1268,4 +1381,9 @@ void ltree_destroy(ltree_node_t* node)
 
     free(node->child_table);
     free(node);
+}
+
+void ltree_init(void)
+{
+    dyna_max_response = gdnsd_result_get_max_response();
 }

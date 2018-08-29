@@ -52,16 +52,21 @@ unsigned gdnsd_result_get_alloc(void)
     return sizeof(dyn_result_t) + storage;
 }
 
+size_t gdnsd_result_get_max_response(void)
+{
+    return (addrlimit_v4 * (12U + 4U)) + (addrlimit_v6 * (12U + 16U));
+}
+
 void gdnsd_dyn_addr_max(unsigned v4, unsigned v6)
 {
-    // Note these limits are somewhat arbitrary (with some thought towards 16K-ish limits), but:
-    //   (a) I can't imagine reasonable use-cases hitting them in practice at this time
-    //   (b) There may be other implications for very large values that need to be addressed
-    //     before lifting these limits (e.g. auto-raising max packet size?)
-    if (v4 > 512U)
-        log_fatal("gdnsd cannot cope with plugin configurations which add >512 IPv4 addresses to a single result!");
-    if (v6 > 512U)
-        log_fatal("gdnsd cannot cope with plugin configurations which add >512 IPv6 addresses to a single result!");
+    // 360+360 as limits here ensures that a completely maxed-out DYNA response
+    // still fits just under 16K in the worst-case scenario.  A zonefile could
+    // still be rejected, but only if it uses a maximally-configured DYNA
+    // alongside other data which combine to bring it past the 16K mark.
+    if (v4 > 360U)
+        log_fatal("gdnsd cannot cope with plugin configurations which add >360 IPv4 addresses to a single result!");
+    if (v6 > 360U)
+        log_fatal("gdnsd cannot cope with plugin configurations which add >360 IPv6 addresses to a single result!");
 
     if (v4 > addrlimit_v4) {
         addrlimit_v4 = v4;

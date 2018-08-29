@@ -356,7 +356,7 @@ static void load_zones(zscan_t* z, char record_type, field_t* field)
         if (field[4].len == 2 && memcmp(field[4].ptr, "~~", 2) == 0) {
             /* FIXME: check ooz is right */
             /* FIXME: new arg ttl_min set to half of ttl, could use explicit param in data file */
-            if (ltree_add_rec_dynaddr(zone, dname, field[1].ptr, ttl, ttl >> 1, 0, 0, 0))
+            if (ltree_add_rec_dynaddr(zone, dname, field[1].ptr, ttl, ttl >> 1, 0, 0))
                 parse_abort();
         } else {
             LOCCHECK(4);
@@ -395,8 +395,8 @@ static void load_zones(zscan_t* z, char record_type, field_t* field)
 
             if (bytes > 255 && gcfg->disable_text_autosplit)
                 parse_error_noargs("Text chunk too long (>255 unescaped)");
-            if (bytes > 65500)
-                parse_error_noargs("Text chunk too long (>65500 unescaped)");
+            if (bytes > 16000)
+                parse_error_noargs("Text chunk too long (>16000 unescaped)");
 
             unsigned text_len = bytes + chunks;
             uint8_t* text = xmalloc(text_len);

@@ -12,10 +12,6 @@ _GDT->test_dns(
         'subeasy.example.com 21600 NS subeasyns1.example.com',
         'subeasy.example.com 21600 NS subeasyns2.example.com',
     ],
-    addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
-        'subeasyns2.example.com 21600 A 192.0.2.4',
-    ]
 );
 
 _GDT->test_dns(
@@ -25,10 +21,6 @@ _GDT->test_dns(
         'subeasy.example.com 21600 NS subeasyns1.example.com',
         'subeasy.example.com 21600 NS subeasyns2.example.com',
     ],
-    addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
-        'subeasyns2.example.com 21600 A 192.0.2.4',
-    ]
 );
 
 _GDT->test_dns(
@@ -38,10 +30,6 @@ _GDT->test_dns(
         'subeasy.example.com 21600 NS subeasyns1.example.com',
         'subeasy.example.com 21600 NS subeasyns2.example.com',
     ],
-    addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
-        'subeasyns2.example.com 21600 A 192.0.2.4',
-    ]
 );
 
 _GDT->test_dns(
@@ -172,7 +160,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
@@ -188,7 +175,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
@@ -204,7 +190,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
@@ -220,7 +205,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
@@ -236,7 +220,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
@@ -252,7 +235,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
@@ -317,10 +299,10 @@ _GDT->test_dns(
     header => { aa => 0, rcode => 'REFUSED' },
     stats => [qw/udp_reqs refused/],
 );
+
 _GDT->test_dns(
     qname => 'unused.glue.example.net.example.org', qtype => 'A',
     auth => 'example.org 120 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120',
-    addtl => 'unused.glue.example.net.example.org 43201 AAAA 0:0:0:0:0:0:0:1' # from wildcard...
 );
 
 # check that the minimal out-of-zone-glue domain mostly works

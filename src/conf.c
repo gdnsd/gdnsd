@@ -45,21 +45,15 @@ static const char chaos_def[] = "gdnsd";
 
 static const cfg_t cfg_defaults = {
     .chaos = NULL,
-    .include_optional_ns = false,
     .lock_mem = false,
     .disable_text_autosplit = false,
-    .edns_client_subnet = true,
     .zones_strict_data = false,
-    .any_mitigation = true,
     .chaos_len = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
     .max_ttl = 3600000U,
     .min_ttl = 5U,
-    .max_response = 16384U,
     .max_edns_response = 1410U,
-    .max_cname_depth = 16U,
-    .max_addtl_rrsets = 64U,
     .acme_challenge_ttl = 600U,
 };
 
@@ -202,12 +196,8 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
-        CFG_OPT_BOOL(options, include_optional_ns);
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
-        CFG_OPT_BOOL(options, edns_client_subnet);
-        CFG_OPT_BOOL(options, any_mitigation);
-
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
         CFG_OPT_UINT(options, max_ttl, 3600LU, (unsigned long)GDNSD_STTL_TTL_MAX);
@@ -216,17 +206,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_UINT(options, max_ncache_ttl, 10LU, 86400LU);
         if (cfg->max_ncache_ttl < cfg->min_ttl)
             log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ncache_ttl, cfg->min_ttl);
-        CFG_OPT_UINT(options, max_response, 4096LU, 64000LU);
-        CFG_OPT_UINT(options, max_edns_response, 512LU, 64000LU);
-        if (cfg->max_edns_response > cfg->max_response) {
-            log_warn("The global option 'max_edns_response' was reduced from %u to the max_response size of %u", cfg->max_edns_response, cfg->max_response);
-            cfg->max_edns_response = cfg->max_response;
-        }
-        // Limit here (24) is critical, to ensure that when encode_rr_cname resets
-        //  c->qname_comp in dnspacket.c, c->qname_comp must still be <16K into a packet.
-        // Nobody should have even the default 16-depth CNAMEs anyways :P
-        CFG_OPT_UINT(options, max_cname_depth, 4LU, 24LU);
-        CFG_OPT_UINT(options, max_addtl_rrsets, 16LU, 256LU);
+        CFG_OPT_UINT(options, max_edns_response, 512LU, 16384LU);
         CFG_OPT_UINT(options, acme_challenge_ttl, 60LU, 3600LU);
         CFG_OPT_BOOL(options, zones_strict_data);
 
