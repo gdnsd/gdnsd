@@ -45,6 +45,68 @@ Sets the timeout in seconds (default 47) for various io and waiting operations.
 
 =back
 
+=head1 Actions
+
+=over 4
+
+=item B<stop>
+
+Synchronously stops the running daemon.  Exit status zero means the daemon was
+observed to stop as commanded.
+
+=item B<reload-zones>
+
+Synchronously reloads the daemon's zonefiles.  Exit status zero indicates the
+operation completed successfully and the new data is visible to clients.
+
+=item B<replace>
+
+Ask the running daemon to spawn a replacement instance of itself.  This can be
+used for code upgrades and/or configuration changes.  The replacement daemon is
+initially executed as a child of the running daemon and thus inherits many
+attributes of its execution environment.  The old and new daemons coordinate a
+handoff process over an inter-daemon control socket connection.  The handoff
+process does its best to ensure that if the new daemon fails at any stage of
+startup, the old daemon can continue operations as it was before.
+
+DNS listening sockets are handed off in an overlapped fashion: there will be a
+brief window of time where client requests can be routed to either daemon
+randomly, but there should never be a window where service is unavailable.  The
+control socket itself is handed off synchronously: the old daemon stops
+listening for new connections before the new daemon begins listening, and the
+old daemon re-starts listening if the new daemon fails to take over completely.
+During the entire replacement process, the old daemon will deny control socket
+requests from already-connected clients to "stop" the daemon or initiate
+concurrent "replace" requests.
+
+Once the old daemon claims the replacement process was successful, gdnsdctl
+will monitor the old daemon's exit and then make a fresh connection to the
+control socket of the new daemon and check its status.  If all of this is
+successful, the replace command will finally exit with status zero.  It will
+exit with a non-zero status if any part of this operation fails for any reason,
+which should in most conceivable cases leave the existing daemon fully
+functional (if there was one!).
+
+=item B<status>
+
+Checks the running daemon's status, reporting its PID and version to stderr.
+
+=item B<stats>
+
+Dumps JSON statistics from the running daemon to stdout.
+
+=item B<states>
+
+Dumps JSON monitored states from any configured service health monitors.
+
+=back
+
+=head1 EXIT STATUS
+
+In general, all operations exit with status zero if and only if the operation
+is successful.  Errors and most other output go to stderr, except in the case
+of JSON data dumps, which go to stdout.
+
 =head1 SEE ALSO
 
 L<gdnsd(8)>, L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd.djbdns(5)>
