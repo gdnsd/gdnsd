@@ -442,6 +442,10 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, const wire_dns_rr_opt_t* opt, con
         // leave room for basic OPT RR (edns-client-subnet room is addressed elsewhere)
         ctx->this_max_response -= 11;
 
+        // Leave room for NSID if configured
+        if (gcfg->nsid_len)
+            ctx->this_max_response -= (4U + gcfg->nsid_len);
+
         unsigned rdlen = htons(gdnsd_get_una16(&opt->rdlen));
         if (rdlen) {
             if (packet_len < offset + sizeof_optrr + rdlen) {
@@ -1909,6 +1913,18 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
             res_offset += 2;
             gdnsd_put_una16(htons(ctx->edns0_tcp_keepalive), &packet[res_offset]);
             res_offset += 2;
+        }
+
+        // NSID, if configured by user
+        if (gcfg->nsid_len) {
+            gdnsd_assert(gcfg->nsid);
+            rdlen += (4U + gcfg->nsid_len);
+            gdnsd_put_una16(htons(EDNS_NSID_OPTCODE), &packet[res_offset]);
+            res_offset += 2;
+            gdnsd_put_una16(htons(gcfg->nsid_len), &packet[res_offset]);
+            res_offset += 2;
+            memcpy(&packet[res_offset], gcfg->nsid, gcfg->nsid_len);
+            res_offset += gcfg->nsid_len;
         }
 
         // Update OPT RR's rdlen for any options emitted above, and bump arcount for it

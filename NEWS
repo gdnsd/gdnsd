@@ -110,6 +110,9 @@
     ** max_addtl_rrsets (no longer applicable)
     ** any_mitigation (always on, same as prev def)
     ** max_response (fixed 16384, same as prev def)
+    * The NSID EDNS0 option (RFC 5001) is implemented, configurable by the
+      option 'nsid', which takes up to 128 bytes of binary data encoded as an
+      ASCII hex string.
     ---- Relatively-trivial things ----
     * Code cleaned up a ton for clarity, simplicity, and formatting.
     * plugin_geoip distance calculations are faster and more-accurate

@@ -30,10 +30,12 @@
 
 typedef struct {
     const uint8_t* chaos;
+    const uint8_t* nsid;
     bool     lock_mem;
     bool     disable_text_autosplit;
     bool     zones_strict_data;
     unsigned chaos_len;
+    unsigned nsid_len;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;
     unsigned max_ttl;

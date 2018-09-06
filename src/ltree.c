@@ -941,6 +941,10 @@ static size_t max_response_size(const ltree_node_t* node, const zone_t* zone, co
     // 6U: edns0 tcp-keepalive response
     size_t rsize = sizeof(wire_dns_header_t) + 4U + 11U + 24U + 6U;
 
+    // Optional NSID if configured (4U is 2 bytes optcode + 2 bytes datalen)
+    if (gcfg->nsid_len)
+        rsize += (4U + gcfg->nsid_len);
+
     // QNAME:
     // For delegations and wildcards, assume maximum possible matching qname
     // for others, use the exact matching query name length

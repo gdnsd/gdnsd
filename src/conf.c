@@ -45,10 +45,12 @@ static const char chaos_def[] = "gdnsd";
 
 static const cfg_t cfg_defaults = {
     .chaos = NULL,
+    .nsid = NULL,
     .lock_mem = false,
     .disable_text_autosplit = false,
     .zones_strict_data = false,
     .chaos_len = 0,
+    .nsid_len = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
     .max_ttl = 3600000U,
@@ -73,6 +75,26 @@ static void set_chaos(cfg_t* cfg, const char* data)
     memcpy(combined + chaos_prefix_len + 3, data, dlen);
     cfg->chaos = combined;
     cfg->chaos_len = overall_len;
+}
+
+static const uint8_t ahex[] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // 01234567
+    0x08, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 89:;<=>?
+    0x00, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x00, // @ABCDEFG
+};
+
+F_NONNULL
+static void set_nsid(cfg_t* cfg, const char* data)
+{
+    const unsigned dlen = strlen(data);
+    if (!dlen || dlen > 256U || dlen & 1U || dlen != strspn(data, "0123456789ABCDEFabcdef"))
+        log_fatal("Option 'nsid' must be a hex string up to 256 characters (128 encoded bytes) long");
+    cfg->nsid_len = dlen >> 1U;
+    uint8_t* nsid;
+    cfg->nsid = nsid = xmalloc(cfg->nsid_len);
+    for (unsigned i = 0; i < dlen; i += 2)
+        nsid[i >> 1] = (ahex[(data[i] & 0x1F) ^ 0x10] << 4)
+                       | ahex[(data[i + 1] & 0x1F) ^ 0x10];
 }
 
 static void plugins_cleanup(void)
@@ -193,6 +215,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
 
     vscf_data_t* psearch_array = NULL;
     const char* chaos_data = chaos_def;
+    const char* nsid_data = NULL;
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
@@ -211,6 +234,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_BOOL(options, zones_strict_data);
 
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
+        CFG_OPT_STR_NOCOPY(options, nsid, nsid_data);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate_const(options, true, bad_key, "options");
     }
@@ -221,6 +245,10 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
 
     // set response string for CHAOS queries
     set_chaos(cfg, chaos_data);
+
+    // set nsid if set
+    if (nsid_data)
+        set_nsid(cfg, nsid_data);
 
     vscf_data_t* stypes_cfg = cfg_root
                               ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
