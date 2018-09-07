@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
+#include <time.h>
 
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists
@@ -1190,6 +1191,20 @@ static bool ltree_postproc(const zone_t* zone, bool (*fn)(const uint8_t**, const
     return _ltree_proc_inner(fn, lstack, zone->root, zone, 0, false);
 }
 
+F_CONST
+static unsigned make_serial(time_t mtime)
+{
+    unsigned rv = 0;
+    struct tm mt;
+    if (gmtime_r(&mtime, &mt))
+        rv = ((((unsigned)mt.tm_year) % 100U) * 100000000U)
+             + ((((unsigned)mt.tm_mon) + 1U)  * 1000000U)
+             + (((unsigned)mt.tm_mday)        * 10000U)
+             + (((unsigned)mt.tm_hour)        * 100U)
+             + (unsigned)mt.tm_min;
+    return rv;
+}
+
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_zroot_phase1(zone_t* zone)
 {
@@ -1232,8 +1247,15 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone)
     if (!ok)
         log_zwarn("Zone '%s': SOA Master does not match any NS records for this zone", logf_dname(zone->dname));
 
-    // copy SOA Serial field up to zone_t for easy comparisons
-    zone->serial = ntohl(zroot_soa->times[0]);
+    if (zroot_soa->times[0]) {
+        // Parser set explicit SOA serial value, use that to set zone-level one
+        zone->serial = ntohl(zroot_soa->times[0]);
+    } else if (zone->mtime) {
+        // SOA serial is zero, but mtime was set, so use automagic value for both serials
+        zone->serial = make_serial(zone->mtime);
+        zroot_soa->times[0] = htonl(zone->serial);
+    }
+
     return false;
 }
 
@@ -1293,8 +1315,8 @@ bool ltree_postproc_zone(zone_t* zone)
 
     ltree_fix_masks(zone->root);
 
-    // zroot phase1 is a readonly check of zone basics
-    //   (e.g. NS/SOA existence), also sets zone->serial
+    // zroot phase1 is a readonly check of zone basics (e.g. NS/SOA existence),
+    // also does SOA serial magic between zone_t and the actual SOA
     if (unlikely(ltree_postproc_zroot_phase1(zone)))
         return true;
 

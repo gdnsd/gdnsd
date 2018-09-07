@@ -1,5 +1,5 @@
 @	SOA ns1 hostmaster (
-	1      ; serial
+	0      ; serial (0 -> auto from mtime)
 	7200   ; refresh
 	1800   ; retry
 	259200 ; expire

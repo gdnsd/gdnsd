@@ -24,6 +24,7 @@
 
 #include <sys/types.h>
 #include <stdbool.h>
+#include <time.h>
 
 struct gdnsd_fmap_s_;
 typedef struct gdnsd_fmap_s_ gdnsd_fmap_t;
@@ -47,6 +48,9 @@ size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap);
 // Get the buffer pointer for the mapped file data (always a valid pointer)
 F_NONNULL F_RETNN F_PURE
 const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap);
+
+// Get the mtime of the file when first mapped (1s resolution)
+time_t gdnsd_fmap_get_mtime(const gdnsd_fmap_t* fmap);
 
 // Destructs the fmap_t object, which includes unmap() of the memory
 //   returned via fmap_get_buf() and closing the file descriptor, which

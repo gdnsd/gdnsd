@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <setjmp.h>
 #include <errno.h>
+#include <time.h>
 
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN 46
@@ -292,6 +293,10 @@ static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const 
         failed = true;
         return failed;
     }
+
+    const time_t file_mtime = gdnsd_fmap_get_mtime(fmap);
+    if (file_mtime > zone->mtime)
+        zone->mtime = file_mtime;
 
     const size_t bufsize = gdnsd_fmap_get_len(fmap);
     const char* buf = gdnsd_fmap_get_buf(fmap);

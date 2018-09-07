@@ -31,10 +31,23 @@ typedef struct _zone_struct zone_t;
 #include <stdbool.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 
+// re: zone_t mtime/serial fields:
+// These initialize to zero during zone_new(), and the zone data loader can
+// optionally set them at any time between zone_new() and zone_finalize().
+// At the time of zone_finalize(), the following logic is applied:
+// 1) If the zone's SOA record has a non-zero serial value, the mtime is
+//    ignored and the explicit SOA serial is copied to the zone-level serial.
+// 2) If the zone's SOA record has a zero value and the mtime field has a nonzero value,
+//    an automatic serial is calculated from the mtime and copied to both the
+//    zone-level serial and the SOA record serial.
+// 3) If both the SOA record and the serial field here are zero, they're left at zero.
+// 4) The zone-level serial is what's output in log messages about zone loading.
 struct _zone_struct {
     unsigned hash;        // hash of dname
-    unsigned serial;      // SOA serial from zone data
+    time_t mtime;         // effective mtime of the zone data
+    unsigned serial;      // SOA serial
     char* src;            // string description of src, e.g. "rfc1035:example.com"
     const uint8_t* dname; // zone name as a dname (stored in ->arena)
     ltarena_t* arena;     // arena for dname/label storage
@@ -54,8 +67,6 @@ void* ztree_zones_reloader_thread(void* init_asvoid);
 
 // --- zsrc_* interfaces ---
 
-// These are for zsrc_* code to create/delete detached zone_t's used
-//   in ztree_update() calls.
 F_NONNULL F_WUNUSED
 zone_t* zone_new(const char* zname, const char* source);
 F_NONNULL
