@@ -218,18 +218,24 @@ static int action_chal(csc_t* csc, int argc, char** argv)
     uint8_t* buf = xmalloc(CHAL_MAX_DLEN);
     for (int i = 0; i < argc; i += 2) {
         gdnsd_assert(CHAL_MAX_DLEN - dlen >= (240U + 44U));
-        if (DNAME_INVALID == dname_from_string(&buf[dlen], argv[i], strlen(argv[i])))
-            log_fatal("Could not parse domainname '%s'", argv[i]);
+        const char* dname_input = argv[i];
+        const char* chal_input = argv[i + 1];
+        // If the user mistakenly puts the _acme-challenge. prefix on the
+        // commandline, strip it:
+        if (!strncmp(dname_input, "_acme-challenge.", 16U))
+            dname_input += 16U;
+        if (DNAME_INVALID == dname_from_string(&buf[dlen], dname_input, strlen(dname_input)))
+            log_fatal("Could not parse domainname '%s'", dname_input);
         if (buf[dlen] > 239)
-            log_fatal("Domainname '%s' is too long for ACME DNS-01 challenges", argv[i]);
+            log_fatal("Domainname '%s' is too long for ACME DNS-01 challenges", dname_input);
         dname_terminate(&buf[dlen]);
         dlen += (buf[dlen] + 1U);
-        if (strlen(argv[i + 1]) != 43)
-            log_fatal("Payload '%s' for '%s' is not 43 bytes long", argv[i + 1], argv[i]);
+        if (strlen(chal_input) != 43)
+            log_fatal("Payload '%s' for '%s' is not 43 bytes long", chal_input, dname_input);
         for (unsigned j = 0; j < 43; j++)
             if (!b64u_legal[(unsigned)argv[i + 1][j]])
-                log_fatal("Paylen '%s' for '%s' illegal base64url bytes", argv[i + 1], argv[i]);
-        memcpy(&buf[dlen], argv[i + 1], 43);
+                log_fatal("Payload '%s' for '%s' illegal base64url bytes", chal_input, dname_input);
+        memcpy(&buf[dlen], chal_input, 43);
         dlen += 43;
         buf[dlen++] = 0;
         gdnsd_assert(dlen <= CHAL_MAX_DLEN);

@@ -102,8 +102,10 @@ foreach my $i (0, 1) {
         stats => [qw/noerror udp_reqs udp_tc nxdomain tcp_reqs/],
     );
 
-    ## Inject data over all of the names above, in sets of 2 then 3, with a triple record for ns1:
-    _GDT->test_run_gdnsdctl('acme-dns-01 exists.example.com 0123456789012345678901234567890123456789012 ns1.example.com A123456789012345678901234567890123456789012');
+    ## Inject data over all of the names above, in sets of 2 then 3, with a
+    # triple record for ns1, and unnecessary explicit _acme-challenge prefix on
+    # the first ns1 example:
+    _GDT->test_run_gdnsdctl('acme-dns-01 exists.example.com 0123456789012345678901234567890123456789012 _acme-challenge.ns1.example.com A123456789012345678901234567890123456789012');
     _GDT->test_run_gdnsdctl('acme-dns-01 ns1.example.com B123456789012345678901234567890123456789012 other.example.com X123456789012345678901234567890123456789012 snxd.example.com Y123456789012345678901234567890123456789012 ns1.example.com Z123456789012345678901234567890123456789012');
 
     ## Re-test all the above
