@@ -601,16 +601,19 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
 
 #ifdef TCP_DEFER_ACCEPT
-    const int opt_timeout = (int)addrconf->tcp_max_timeout;
+    const int opt_timeout = (int)addrconf->tcp_timeout;
     if (setsockopt(t->sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof(opt_timeout)) == -1)
         log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", logf_errno());
 #endif
 
 #ifdef TCP_FASTOPEN
+    // This is non-fatal for now because many OSes may require tuning/config to
+    // allow this to work, but we do want to default it on in cases where it
+    // works out of the box correctly.
     const int opt_tfo = (int)addrconf->tcp_fastopen;
     if (opt_tfo) {
         if (setsockopt(t->sock, SOL_TCP, TCP_FASTOPEN, &opt_tfo, sizeof(opt_tfo)) == -1)
-            log_fatal("Failed to set TCP_FASTOPEN to %i on TCP socket: %s", opt_tfo, logf_errno());
+            log_err("Failed to set TCP_FASTOPEN to %i on TCP socket: %s, continuing!", opt_tfo, logf_errno());
     }
 #endif
 
@@ -668,7 +671,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-    ctx->max_timeout = addrconf->tcp_max_timeout;
+    ctx->max_timeout = addrconf->tcp_timeout;
     ctx->max_clients = addrconf->tcp_clients_per_thread;
 
     // cached pre-calculations based on the above two configured values:

@@ -113,6 +113,29 @@
     * The NSID EDNS0 option (RFC 5001) is implemented, configurable by the
       option 'nsid', which takes up to 128 bytes of binary data encoded as an
       ASCII hex string.
+    * TCP DNS code upgraded to match RFCs 7766 and 7828 and be much more
+      performant and resilient against attacks in the real world.  The
+      the EDNS0 tcp-keepalive option and TCP Fastopen are implemented.  In
+      brief: connection idleness is now tracked and sorted, TCP timeouts are
+      now scaled down to a server-side minimum of 2s as client count reaches
+      75% of the configured maximum, edns0 advertises 2 seconds less than the
+      server timeout to encourage well-behaved clients to close first,
+      well-behaved clients don't typically reach an idle period until after the
+      first transaction of their connection, and the most-idle existing clients
+      are closed early to make room for new ones when the limit is reached.
+    * tcp_timeout min/default/max seconds changed from 3/5/60 to 5/15/60.
+    * The minimum value for tcp_clients_per_thread raised from 1 to 32, with
+      the default still being 128.
+    * tcp_threads and udp_threads no longer accept the value 0, and their
+      defaults have been raised from 1 to 2.
+    * New option tcp_fastopen defaults to 128 and sets the socket's fastopen
+      queue size.  Setting this to zero disables TFO.  If the setsockopt()
+      fails because TFO is not enabled at the OS level, the failure is
+      non-fatal but does emit a logged error.
+    * The 'dnsready' SO_ACCEPTFILTER is enabled on *BSDs which have
+      SO_ACCEPTFILTER, and the setsockopt() for this also fails non-fatally,
+      because I believe it's not uncommon that the module isn't
+      available/configured/enabled.
     ---- Relatively-trivial things ----
     * Code cleaned up a ton for clarity, simplicity, and formatting.
     * plugin_geoip distance calculations are faster and more-accurate

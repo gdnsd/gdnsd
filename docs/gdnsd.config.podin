@@ -146,7 +146,7 @@ per-address options, as in:
 
 The per-address options (which are identical to, and locally override,
 the global option of the same name) are C<tcp_threads>,
-C<tcp_timeout>, C<tcp_clients_per_thread>, C<udp_threads>,
+C<tcp_timeout>, C<tcp_clients_per_thread>, C<tcp_fastopen>, C<udp_threads>,
 C<udp_rcvbuf>, and C<udp_sndbuf>.
 
 Finally, it can also be set to the special string value C<any>, as in:
@@ -196,7 +196,7 @@ Note that sockets map 1:m to threads, and thus the total client limit for
 connecting to a given socket address would be
 C<tcp_clients_per_thread * tcp_threads>.
 
-=item B<tcp_max_timeout>
+=item B<tcp_timeout>
 
 Integer seconds, default 15, min 5, max 60.
 
@@ -206,7 +206,7 @@ whole valid request and receives our whole response (at least into the TCP
 buffering window)).  If an open connection exceeds the idle timeout limit without
 completing a new transaction, the server will close the connection.  The
 timeout value in effect at any moment decreases as the the count of active
-connections increases.  C<tcp_max_timeout> is the initial value when there are
+connections increases.  C<tcp_timeout> is the initial value when there are
 zero connections, and it scales down to a minimum value of 2 seconds when 75%
 of C<tcp_clients_per_thread> is reached.
 
@@ -236,6 +236,17 @@ which requests that they close immediately after receiving the response to
 their first query.  The 2 second differential helps ensure that well-behaved
 clients close before the server does under reasonable latency scenarios,
 avoiding TIME_WAIT pile-up on the server side.
+
+=item B<tcp_fastopen>
+
+Integer, default 128, min 0, max 1048576.  If set to a non-zero value, declares
+a TCP Fastopen queue size and enables the feature.  TCP Fastopen allows clients
+who have connected to the server at least once before to send initial data (in
+our case, their first DNS request) at the same time as their initial SYN,
+shaving off the round trip delays of the handshake on reconnect.  This is
+recommended, but may require OS-level support and/or configuration tuning, and
+in the case of multiple servers behind a loadbalancer or anycast pool, may also
+require administrative coordination of the server-side secret TFO key.
 
 =item B<udp_rcvbuf>
 

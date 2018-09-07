@@ -46,8 +46,8 @@ static const dns_addr_t addr_defs_defaults = {
     .udp_rcvbuf = 0U,
     .udp_sndbuf = 0U,
     .udp_threads = 2U,
-    .tcp_max_timeout = 15U,
-    .tcp_fastopen = 0U,
+    .tcp_timeout = 15U,
+    .tcp_fastopen = 128U,
     .tcp_clients_per_thread = 128U,
     .tcp_threads = 2U,
 };
@@ -147,7 +147,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, udp_threads, 1024LU, addrconf->udp_threads);
 
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_max_timeout, 3LU, 60LU, addrconf->tcp_max_timeout);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 3LU, 60LU, addrconf->tcp_timeout);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_fastopen, 1048576LU, addrconf->tcp_fastopen);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 1LU, 65535LU, addrconf->tcp_clients_per_thread);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_threads, 1024LU, addrconf->tcp_threads);
@@ -234,7 +234,7 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
         CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, addr_defs.udp_sndbuf);
         CFG_OPT_UINT_ALTSTORE(options, udp_threads, 1LU, 1024LU, addr_defs.udp_threads);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_max_timeout, 3LU, 60LU, addr_defs.tcp_max_timeout);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 3LU, 60LU, addr_defs.tcp_timeout);
         CFG_OPT_UINT_ALTSTORE_NOMIN(options, tcp_fastopen, 1048576LU, addr_defs.tcp_fastopen);
         CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 32LU, 65536LU, addr_defs.tcp_clients_per_thread);
         CFG_OPT_UINT_ALTSTORE(options, tcp_threads, 1LU, 1024LU, addr_defs.tcp_threads);
