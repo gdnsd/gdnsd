@@ -138,7 +138,7 @@
       available/configured/enabled.
     * If the explicit serial value in an SOA record from an rfc1035 zonefile is
       zero, the serial will be automatically generated based on the mtime of
-      the zonefile.  The automatic serial format has 1 hour resolution, and is
+      the zonefile.  The automatic serial format has 1 minute resolution, and is
       formatted as YYMMDDHHMM in UTC.  In the case of $INCLUDE, the effective
       mtime is the latest of all recursively included files used by the zone.
     ---- Relatively-trivial things ----
