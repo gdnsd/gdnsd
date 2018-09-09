@@ -69,6 +69,7 @@ static struct ev_loop* def_loop = NULL;
 // libev watchers for signals+async
 static ev_signal sig_int;
 static ev_signal sig_term;
+static ev_signal sig_usr1;
 static ev_async async_reloadz;
 
 // custom atexit-like stuff, only for resource
@@ -173,6 +174,14 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal* w, const int
 }
 
 F_NONNULL
+static void usr1_signal(struct ev_loop* loop V_UNUSED, struct ev_signal* w V_UNUSED, const int revents V_UNUSED)
+{
+    gdnsd_assert(revents == EV_SIGNAL);
+    gdnsd_assert(w->signum == SIGUSR1);
+    log_err("Ignoring SIGUSR1 - use 'gdnsdctl reload-zones' to reload zone data!");
+}
+
+F_NONNULL
 static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a V_UNUSED, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_ASYNC);
@@ -232,7 +241,7 @@ static void usage(const char* argv0)
 F_NONNULL
 static void start_threads(socks_cfg_t* socks_cfg)
 {
-    dnsio_udp_init();
+    dnsio_udp_init(getpid());
     unsigned num_tcp_threads = 0;
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++)
         if (!socks_cfg->dns_threads[i].is_udp)
@@ -438,12 +447,15 @@ int main(int argc, char** argv)
     // setup main thread signal handlers
     ev_signal* p_sig_int = &sig_int;
     ev_signal* p_sig_term = &sig_term;
+    ev_signal* p_sig_usr1 = &sig_usr1;
     ev_signal_init(p_sig_int, terminal_signal, SIGINT);
     p_sig_int->data = css;
     ev_signal_start(def_loop, p_sig_int);
     ev_signal_init(p_sig_term, terminal_signal, SIGTERM);
     p_sig_term->data = css;
     ev_signal_start(def_loop, p_sig_term);
+    ev_signal_init(p_sig_usr1, usr1_signal, SIGUSR1);
+    ev_signal_start(def_loop, p_sig_usr1);
 
     // Initialize+bind DNS listening sockets
     socks_dns_lsocks_init(socks_cfg);

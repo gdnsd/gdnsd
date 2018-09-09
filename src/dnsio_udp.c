@@ -98,13 +98,18 @@
 static bool use_mmsg = false;
 #endif
 
+// Used to check the sender of USR2 as the main pid, to ignore erroneous
+// signals sent by outsiders:
+static pid_t mainpid = 0;
+
 static __thread volatile sig_atomic_t thread_shutdown = 0;
-static void sighand_stop(int s V_UNUSED)
+static void sighand_stop(int s V_UNUSED, siginfo_t* info, void* ucontext V_UNUSED)
 {
-    thread_shutdown = 1;
+    if (!info || info->si_pid == mainpid)
+        thread_shutdown = 1;
 }
 
-void dnsio_udp_init(void)
+void dnsio_udp_init(const pid_t main_pid)
 {
 #ifdef USE_MMSG
     errno = 0;
@@ -118,11 +123,14 @@ void dnsio_udp_init(void)
     }
     errno = 0;
 #endif
+    gdnsd_assert(main_pid);
+    mainpid = main_pid;
     struct sigaction sa;
-    sa.sa_handler = sighand_stop;
+    sa.sa_sigaction = sighand_stop;
     sigfillset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGUSR2, &sa, 0);
+    sa.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGUSR2, &sa, 0))
+        log_fatal("Cannot install SIGUSR2 handler for dnsio_udp threads!");
 }
 
 static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr)
