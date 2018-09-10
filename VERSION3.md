@@ -12,6 +12,12 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Implements the RFC 7828 edns0 tcp-keepalive option
   * Internal connection idle timeouts scale with connection load
   * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
+  * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:
+    * `tcp_conns` - TCP conns we accepted (excludes extremely early failures, e.g. accept() itself returning an error)
+    * `tcp_close_c` - TCP conns closed cleanly by the client
+    * `tcp_close_s_ok` - TCP conns closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
+    * `tcp_close_s_err` - TCP conns closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
+    * `tcp_close_s_kill` - TCP conns closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
 * edns-client-subnet support updated to match RFC 7871, and is now always enabled
 * The nsid edns0 option from RFC 5001 is implemented, allowing identification of members of a loadbalanced or anycast server set
 * All responses are completely minimized:
@@ -33,7 +39,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ### gdnsdctl
 
-The daemon now has a control socket, and 'gdnsdctl' is shipped as the canonical client for it.  All gdnsdctl commands are synchronous and status-reporting, meaning they do not exit until the requested operation has either succeeded or failed fully, and always reflect success with a zero exit code and failure with non-zero.  The commands currently implemented by gdnsdctl include:
+The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical client for it.  All gdnsdctl commands are synchronous and status-reporting, meaning they do not exit until the requested operation has either succeeded or failed fully, and always reflect success with a zero exit code and failure with non-zero.  The commands currently implemented by gdnsdctl include:
 
 * `status` - Basic status check, reports version and PID of running daemon
 * `stats` - Dumps current statistics from the daemon in JSON format to stdout
