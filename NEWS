@@ -1,4 +1,6 @@
-2.99.1 - Not a real release, placeholder for alpha-level 3.x work
+2.99.5-beta - 2018-09-11
+      Beta-quality pre-release of 3.0.0 for integration/live testing
+      Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
 
 2.4.0 - 2018-02-15
