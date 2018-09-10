@@ -12,7 +12,7 @@ The geographically-aware features also support the emerging EDNS Client Subnet d
 
 ## Resources
 
-Project site: http://gdnsd.org/
+Project site: https://gdnsd.org/
 
 Release downloads: https://github.com/gdnsd/gdnsd/releases/
 
