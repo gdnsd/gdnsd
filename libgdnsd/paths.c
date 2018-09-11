@@ -53,16 +53,11 @@ const char* gdnsd_get_default_config_dir(void)
 F_NONNULL
 static void gdnsd_ensure_dir(const char* dpath, const char* desc, mode_t def_mode)
 {
+    if (mkdir(dpath, def_mode) && errno != EEXIST)
+        log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, logf_errno());
     struct stat st;
-    int stat_rv = stat(dpath, &st);
-
-    if (stat_rv) {
-        if (mkdir(dpath, def_mode))
-            log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, logf_errno());
-        log_info("Created %s directory %s", desc, dpath);
-    } else if (!S_ISDIR(st.st_mode)) {
-        log_fatal("%s directory '%s' is not a directory (but should be)!", desc, dpath);
-    }
+    if (stat(dpath, &st) || !S_ISDIR(st.st_mode))
+        log_fatal("%s directory '%s' does not exist or is not a directory!", desc, dpath);
 }
 
 typedef enum {
