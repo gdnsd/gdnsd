@@ -108,7 +108,7 @@ typedef void (*gdnsd_load_config_cb_t)(vscf_data_t* pc, const unsigned num_threa
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* origin);
 typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(void);
-typedef void (*gdnsd_iothread_debug_cleanup_cb_t)(void);
+typedef void (*gdnsd_iothread_cleanup_cb_t)(void);
 typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
 typedef void (*gdnsd_exit_cb_t)(void);
 
@@ -129,7 +129,7 @@ typedef struct {
     gdnsd_map_res_cb_t map_res;
     gdnsd_pre_run_cb_t pre_run;
     gdnsd_iothread_init_cb_t iothread_init;
-    gdnsd_iothread_debug_cleanup_cb_t iothread_debug_cleanup;
+    gdnsd_iothread_cleanup_cb_t iothread_cleanup;
     gdnsd_resolve_cb_t resolve;
     gdnsd_exit_cb_t exit;
     gdnsd_add_svctype_cb_t add_svctype;

@@ -179,17 +179,15 @@ void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp)
     return ctx;
 }
 
-#ifndef NDEBUG
-void dnspacket_ctx_debug_cleanup(void* ctxv)
+void dnspacket_ctx_cleanup(void* ctxv)
 {
-    gdnsd_plugins_action_iothread_debug_cleanup();
+    gdnsd_plugins_action_iothread_cleanup();
 
     dnsp_ctx_t* ctx = (dnsp_ctx_t*)ctxv;
     free(ctx->dyn);
     free(ctx->rand_state);
     free(ctx);
 }
-#endif
 
 F_NONNULL
 static void reset_context(dnsp_ctx_t* ctx)

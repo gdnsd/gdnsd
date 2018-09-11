@@ -321,7 +321,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     gdnsd_mon_cfg_stypes_p2(stypes_cfg);
 
     // register a hook for plugin cleanup callbacks
-    gdnsd_atexit_debug(plugins_cleanup);
+    gdnsd_atexit(plugins_cleanup);
 
     // Throw an error if there are any other unretrieved root config keys
     if (cfg_root)

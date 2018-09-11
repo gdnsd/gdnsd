@@ -72,32 +72,22 @@ static ev_signal sig_term;
 static ev_signal sig_usr1;
 static ev_async async_reloadz;
 
-// custom atexit-like stuff, only for resource
-//   de-allocation in debug builds to check for leaks
-
-#ifndef NDEBUG
+// custom atexit-like stuff for resource deallocation
 
 static void (**exitfuncs)(void) = NULL;
 static unsigned exitfuncs_pending = 0;
 
-void gdnsd_atexit_debug(void (*f)(void))
+void gdnsd_atexit(void (*f)(void))
 {
     exitfuncs = xrealloc_n(exitfuncs, exitfuncs_pending + 1, sizeof(*exitfuncs));
     exitfuncs[exitfuncs_pending++] = f;
 }
 
-static void atexit_debug_execute(void)
+static void atexit_execute(void)
 {
     while (exitfuncs_pending--)
         exitfuncs[exitfuncs_pending]();
 }
-
-#else
-
-void gdnsd_atexit_debug(void (*f)(void) V_UNUSED) { }
-static void atexit_debug_execute(void) { }
-
-#endif
 
 F_NONNULL F_NORETURN
 static void syserr_for_ev(const char* msg)
@@ -514,8 +504,8 @@ int main(int argc, char** argv)
             log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
     }
 
-    // deallocate resources in debug mode
-    atexit_debug_execute();
+    // deallocate resources
+    atexit_execute();
 
     // We delete this last, because in the case of "gdnsdctl stop" this is
     // where the active connection to gdnsdctl will be broken, sending it into

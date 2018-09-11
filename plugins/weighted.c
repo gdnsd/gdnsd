@@ -733,7 +733,7 @@ void plugin_weighted_iothread_init(void)
     init_dyn_addr_weights();
 }
 
-void plugin_weighted_iothread_debug_cleanup(void)
+void plugin_weighted_iothread_cleanup(void)
 {
     free(rstate);
     free(dyn_addr_weights);

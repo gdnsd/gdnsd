@@ -320,5 +320,5 @@ void chal_init(void)
     ev_timer* expire_ptr = &expire_timer;
     memset(expire_ptr, 0, sizeof(*expire_ptr));
     ev_timer_init(expire_ptr, cset_expire, 0., 0.);
-    gdnsd_atexit_debug(chal_cleanup);
+    gdnsd_atexit(chal_cleanup);
 }

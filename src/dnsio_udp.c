@@ -460,9 +460,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
         }
     }
 
-#ifndef NDEBUG
     free(buf);
-#endif
 }
 
 #ifdef USE_MMSG
@@ -609,9 +607,7 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
         }
     }
 
-#ifndef NDEBUG
     free(bufs);
-#endif
 }
 
 #endif // USE_MMSG
@@ -662,8 +658,6 @@ void* dnsio_udp_start(void* thread_asvoid)
         mainloop(t->sock, dnsp_ctx, stats, need_cmsg);
 
     rcu_unregister_thread();
-#ifndef NDEBUG
-    dnspacket_ctx_debug_cleanup(dnsp_ctx);
-#endif
+    dnspacket_ctx_cleanup(dnsp_ctx);
     return NULL;
 }

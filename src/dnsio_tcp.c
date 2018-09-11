@@ -715,12 +715,9 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     rcu_unregister_thread();
 
-    // de-allocate explicitly when debugging, for leaks
-#ifndef NDEBUG
     ev_loop_destroy(loop);
-    dnspacket_ctx_debug_cleanup(ctx->dnsp_ctx);
+    dnspacket_ctx_cleanup(ctx->dnsp_ctx);
     free(ctx);
-#endif
 
     return NULL;
 }

@@ -32,7 +32,7 @@ gdnsd-plugin-api - How to write gdnsd plugin code
     [R ] gdnsd_sttl_t plugin_foo_resolve(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result)
 
     -- cleanup stuff:
-    [R ] void plugin_foo_iothread_debug_cleanup(void)
+    [R ] void plugin_foo_iothread_cleanup(void)
     [RM] void plugin_foo_exit(void)
 
 =head1 WARNING
@@ -356,7 +356,7 @@ never fail fatally.  Simply log an error and return -1.
 
 As iothreads exit during daemon shutdown, in a developer debug build,
 each iothread will invoke the optional
-C<plugin_foo_iothread_debug_cleanup()>, which should deallocate
+C<plugin_foo_iothread_cleanup()>, which should deallocate
 resources acquired per-thread in C<plugin_foo_iothread_init>.
 
 At the time of daemon exit, C<plugin_foo_exit()> may be called in developer
