@@ -108,6 +108,7 @@ bool zsrc_rfc1035_load_zones(ztree_t* tree)
         return true;
     }
 
+    bool failed = false;
     unsigned zone_count = 0;
     struct dirent* result = NULL;
     do {
@@ -121,20 +122,19 @@ bool zsrc_rfc1035_load_zones(ztree_t* tree)
                 char* full_fn = gdnsd_str_combine(rfc1035_dir, result->d_name, &fn);
                 if (stat(full_fn, &st)) {
                     log_err("rfc1035: stat(%s) failed: %s", full_fn, logf_errno());
-                    return true;
-                }
-                bool fail_return = false;
-                if (S_ISREG(st.st_mode)) {
-                    fail_return = process_zonefile(tree, fn, full_fn);
+                    failed = true;
+                } else if (S_ISREG(st.st_mode)) {
+                    failed = process_zonefile(tree, fn, full_fn);
                     zone_count++;
                 }
                 free(full_fn);
-                if (fail_return)
-                    return true;
+                if (failed)
+                    break;
             }
         } else if (errno) {
             log_err("rfc1035: readdir(%s) failed: %s", rfc1035_dir, logf_errno());
-            return true;
+            failed = true;
+            break;
         }
     } while (result);
 
@@ -142,6 +142,9 @@ bool zsrc_rfc1035_load_zones(ztree_t* tree)
         log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, logf_errno());
         return true;
     }
+
+    if (failed)
+        return true;
 
     log_info("rfc1035: Loaded %u zonefiles from '%s'", zone_count, rfc1035_dir);
     return false;
