@@ -335,7 +335,16 @@ static afunc_t parse_args(const int argc, char** argv)
 int main(int argc, char** argv)
 {
     umask(022);
+
+    // We need POSIXLY_CORRECT to force GNU libc to do things the POSIX way in
+    // getopt(), so that option processing stops after the action verb instead
+    // of permuting the action verb out to the end.  Otherwise we run into
+    // issues with acme-dns-01 challenge data which happens to start with the
+    // legitimate base64url character '-'.
+    setenv("POSIXLY_CORRECT", "1", 1);
     afunc_t action_func = parse_args(argc, argv);
+    unsetenv("POSIXLY_CORRECT");
+
     gdnsd_assert(action_func);
     gdnsd_log_set_debug(opt_debug);
     gdnsd_log_set_syslog(opt_syslog);
