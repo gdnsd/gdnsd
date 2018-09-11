@@ -224,8 +224,10 @@ static gdnsd_dname_status_t gdnsd_dname_status_buflen(const uint8_t* dname, size
 F_NONNULL F_UNUSED
 static void gdnsd_dname_terminate(uint8_t* dname)
 {
-    gdnsd_assert(*dname);
-    dname[*dname] = 0;
+    const unsigned len = *dname;
+    gdnsd_assert(len > 0U);
+    gdnsd_assert(len < 256U);
+    dname[len] = 0;
 }
 
 // Return a hash for a dname, may crash on invalid input!
@@ -263,7 +265,7 @@ F_NONNULL F_UNUSED
 static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source)
 {
     const unsigned len = *source;
-    gdnsd_assert(len);
+    gdnsd_assert(len > 0U);
     gdnsd_assert(len < 256U);
     memcpy(dest, source, len + 1U);
 }

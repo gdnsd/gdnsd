@@ -232,13 +232,13 @@ bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data)
 
         gdnsd_assert(didx <= dlen);
         if ((dlen - didx) < 44U) {
-            log_err("Control socket client sent too little payload data for name '%s' in acme-dns-01 request", logf_dname(c->dname));
+            log_err("Control socket client sent too little payload data in acme-dns-01 request");
             free(cset);
             return true;
         }
         data[didx + 43U] = '\0'; // should already be there, but enforce JIC
         mk_chal_rr(c->txt, &data[didx]);
-        log_debug(" ACME DNS-01 record created: dname '%s' payload '%s'", logf_dname(c->dname), &data[didx]);
+        log_devdebug(" ACME DNS-01 record created: dname '%s' payload '%s'", logf_dname(c->dname), &data[didx]);
         didx += 44U;
     }
 
