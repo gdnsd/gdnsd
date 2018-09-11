@@ -141,12 +141,14 @@ None of these generate a syntax error for now, they merely log a non-fatal error
 
 The TL;DR here is that gdnsd doesn't manage its own OS security or privileges anymore.  It just runs and assumes the environment was already secured by the init system or script, and assumes it can bind port 53.  The init script/system is also responsible for taking care of other optional bits gdnsd used to do for itself as root before dropping its own privileges: setting the working directory sanely, setting locked memory (and/or other) resource limits, setting process priority, dropping privileges for the daemon, etc.  Since most installations will want gdnsd to run as a non-root user and also to bind port 53, that means a system-specific mechanism will have to be employed by the init script/system to allow the non-root user to bind port 53.  For Linux this means `CAP_NET_BIND_SERVICE`, and for FreeBSD I think it's `mac_portacl`, but in general this is not an area where portable solutions exist.  See the next section for more rationale and background.
 
+For systemd-based Linux distributions, an example unit file which handles all the things is built along with the software at `sysd/gdnsd.service`.  For traditional initscript systems, you'll have to piece it together from commands in the initscript such as `ulimit`, `nice`, `su`, the BSD `daemon` command, etc.
+
 ## Other changes of interest to builders and packagers
 
 * Autotools updates: building from git now requires autoconf 2.64+ and automake 1.13+
 * The userspace-rcu library (liburcu) is now a build requirement rather than an optional recommendation
 * GeoIP2 support, while still optional, requires libmaxminddb 1.2.0+ if enabled at all
-* In general, lots of source-level backwards compatibility for older systems and/or kernels was removed where the assumptions seemed safe for a new major release in late 2018 or after.  If cases arise where certain operating systems are still in vendor support and require patching, I'd be happy to add back the necessary bits.  Examples here include the assumptions about `SO_REUSEPORT`, `SOCK_CLOEXEC`, `SOCK_NONBLOCK`, and `accept4()`.
+* In general, lots of source-level backwards compatibility for older systems and/or kernels was removed where the assumptions seemed safe for a new major release in late 2018 or after.  If cases arise where certain operating systems are still in support and require patching, I'd be happy to add back the necessary bits.  Examples here include the assumptions about `SO_REUSEPORT`, `SOCK_CLOEXEC`, `SOCK_NONBLOCK`, and `accept4()`.
 * The generated C sources `src/zscan_rfc1035.c` and `libgdnsd/vscf.c`, which are built with `ragel`, are once again being included in tarball releases, but not in the git repo.  This is in response to ragel dependency hell reported by some who build from source on every machine.
 
 ## Rationale and Philosophy

@@ -14,16 +14,16 @@ ExecStart=@GDNSD_SBINDIR@/gdnsd -l start
 ExecStop=@GDNSD_BINDIR@/gdnsdctl -l stop
 ExecReload=@GDNSD_BINDIR@/gdnsdctl -l replace
 
-#---
-# Things below this mark are not strictly required for proper operation,
-# they're just considered good baseline defaults for security and/or perf
-#---
-
 # The very basics: run as non-root user + allow binding port 53
 UMask=0022
 User=gdnsd
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+#---
+# Things below this mark are not strictly required for proper operation,
+# they're just considered good baseline defaults for security and/or perf
+#---
 
 # Usually an authdns server is critical infrastructure and performance
 # sensitive; make it less likely to be oomkilled if something else goes crazy
