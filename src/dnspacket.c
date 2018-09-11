@@ -615,20 +615,19 @@ static unsigned store_dname_comp(dnsp_ctx_t* ctx, const uint8_t* dname, const un
     const uint8_t* dname_read = dname;
     unsigned dnread_len = dn_full_len;
     unsigned dnread_offset = offset;
-    ctarget_t* ctargets = ctx->ctargets;
 
     // Search for a match, take the first match found since they're pre-sorted by len
     for (unsigned i = 0; i < ctx->ctarget_count; i++) {
         // So long as the target (longest remaining in sorted list) is shorter
         // than the input, we must iterate storing new names into the list
-        while (ctargets[i].len < dnread_len) {
+        while (ctx->ctargets[i].len < dnread_len) {
             if (make_targets && ctx->ctarget_count < COMPTARGETS_MAX) {
                 gdnsd_assert(dnread_len > 2U); // implied by rest of the logic...
                 unsigned to_move = ctx->ctarget_count - i;
-                memmove(&ctargets[i + 1U], &ctargets[i], to_move * sizeof(ctarget_t));
-                ctargets[i].orig = dname_read;
-                ctargets[i].len = dnread_len;
-                ctargets[i].offset = dnread_offset;
+                memmove(ctx->ctargets + i + 1U, ctx->ctargets + i, to_move * sizeof(ctarget_t));
+                ctx->ctargets[i].orig = dname_read;
+                ctx->ctargets[i].len = dnread_len;
+                ctx->ctargets[i].offset = dnread_offset;
                 i++;
                 ctx->ctarget_count++;
             }
@@ -638,16 +637,16 @@ static unsigned store_dname_comp(dnsp_ctx_t* ctx, const uint8_t* dname, const un
             dnread_len -= jump;
         }
 
-        if (ctargets[i].len == dnread_len && !memcmp(dname_read, ctargets[i].orig, dnread_len)) {
+        if (ctx->ctargets[i].len == dnread_len && !memcmp(dname_read, ctx->ctargets[i].orig, dnread_len)) {
             // exact match!
             unsigned match_depth = dn_full_len - dnread_len;
             memcpy(&ctx->packet[offset], dname, match_depth);
-            gdnsd_put_una16(htons(0xC000u | ctargets[i].offset), &ctx->packet[offset + match_depth]);
-            gdnsd_assert(!(ctx->packet[ctargets[i].offset] & 0xC0u)); // no ptr-to-ptr
+            gdnsd_put_una16(htons(0xC000u | ctx->ctargets[i].offset), &ctx->packet[offset + match_depth]);
+            gdnsd_assert(!(ctx->packet[ctx->ctargets[i].offset] & 0xC0u)); // no ptr-to-ptr
             return match_depth + 2U;
         }
 
-        // otherwise ctargets[i].len is > dnread_len, or == dnread_len but no
+        // otherwise ctx->ctargets[i].len is > dnread_len, or == dnread_len but no
         // match yet, so we iterate further in the sorted list to find a case
         // that triggers one of the above
     }
@@ -657,9 +656,9 @@ static unsigned store_dname_comp(dnsp_ctx_t* ctx, const uint8_t* dname, const un
     // add to the ctargets set, all at the end (<= len of shortest existing)
     if (make_targets) {
         while (dnread_len > 2U && ctx->ctarget_count < COMPTARGETS_MAX) {
-            ctargets[ctx->ctarget_count].orig = dname_read;
-            ctargets[ctx->ctarget_count].len = dnread_len;
-            ctargets[ctx->ctarget_count].offset = dnread_offset;
+            ctx->ctargets[ctx->ctarget_count].orig = dname_read;
+            ctx->ctargets[ctx->ctarget_count].len = dnread_len;
+            ctx->ctargets[ctx->ctarget_count].offset = dnread_offset;
             ctx->ctarget_count++;
             const unsigned jump = *dname_read + 1U;
             dname_read += jump;
