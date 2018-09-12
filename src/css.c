@@ -423,6 +423,8 @@ static pid_t spawn_replacement(const char* argv0)
                 log_fatal("sigaction() failed: %s", logf_errno());
             if (sigaction(SIGCHLD, &defaultme, NULL))
                 log_fatal("sigaction() failed: %s", logf_errno());
+            if (sigaction(SIGUSR1, &defaultme, NULL))
+                log_fatal("sigaction() failed: %s", logf_errno());
             if (sigaction(SIGUSR2, &defaultme, NULL))
                 log_fatal("sigaction() failed: %s", logf_errno());
 
