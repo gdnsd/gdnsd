@@ -155,6 +155,12 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs)
 // ---------------------------
 // Runtime stuff
 
+const char* gdnsd_get_config_dir(void)
+{
+    gdnsd_assert(gdnsd_dirs[CFG]); // must happen after gdnsd_init_paths()
+    return gdnsd_dirs[CFG];
+}
+
 static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx)
 {
     gdnsd_assert(gdnsd_dirs[p]);

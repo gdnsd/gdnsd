@@ -383,6 +383,16 @@ static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_
 // Thanks, systemd :P
 static pid_t spawn_replacement(const char* argv0)
 {
+    // Set up the more-complicated exec args, to be used much deeper during
+    // execlp() of the final replacement child
+    const char* cfpath = gdnsd_get_config_dir();
+    char flags[5] = { '-', 'T', '\0', '\0', '\0' };
+    unsigned fidx = 2;
+    if (gdnsd_log_get_debug())
+        flags[fidx++] = 'D';
+    if (gdnsd_log_get_syslog())
+        flags[fidx++] = 'l';
+
     // Before forking, block all signals and save the old mask
     //   to avoid a race condition where local sighandlers execute
     //   in the child between fork and exec().
@@ -409,6 +419,7 @@ static pid_t spawn_replacement(const char* argv0)
 
         if (!replacement_pid) { // final-child
             close(pipefd[PIPE_WR]);
+
             // reset to default any signal handlers that we actually listen to in
             // the main process, but don't disturb others (e.g. PIPE/HUP) that may
             // be set to SIG_IGN, which is automatically maintained through both
@@ -427,15 +438,6 @@ static pid_t spawn_replacement(const char* argv0)
                 log_fatal("sigaction() failed: %s", logf_errno());
             if (sigaction(SIGUSR2, &defaultme, NULL))
                 log_fatal("sigaction() failed: %s", logf_errno());
-
-            // Set up the more-complicated exec args
-            char* cfpath = gdnsd_resolve_path_cfg(NULL, NULL);
-            char flags[5] = { '-', 'T', '\0', '\0', '\0' };
-            unsigned fidx = 2;
-            if (gdnsd_log_get_debug())
-                flags[fidx++] = 'D';
-            if (gdnsd_log_get_syslog())
-                flags[fidx++] = 'l';
 
             // unblock all
             sigset_t no_sigs;
