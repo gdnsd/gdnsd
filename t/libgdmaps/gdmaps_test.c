@@ -93,6 +93,8 @@ gdmaps_t* gdmaps_test_load(const char* cfg_data)
         log_fatal("Test config load failed");
     if (!vscf_is_hash(maps_cfg))
         log_fatal("Geoip plugin config for 'maps' must be a hash");
+    if (!vscf_hash_get_len(maps_cfg))
+        log_fatal("Geoip plugin config for 'maps' must contain one or more maps");
     gdmaps_t* rv = gdmaps_new(maps_cfg);
     vscf_destroy(maps_cfg);
 

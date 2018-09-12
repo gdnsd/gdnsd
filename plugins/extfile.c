@@ -151,7 +151,7 @@ static int moncmp(const void* x, const void* y)
     return strcmp(xm->name, ym->name);
 }
 
-F_NONNULL
+F_NONNULLX(1, 2, 3)
 static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_t* val, gdnsd_sttl_t* results)
 {
     bool success = false;
@@ -167,10 +167,12 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_
                 log_warn("plugin_extfile: Service type '%s': TTL value for '%s' in file '%s' ignored in 'monitor' mode", svc->name, matchme, svc->path);
             const extf_mon_t findme = { matchme, 0, 0 };
             const extf_mon_t* found = bsearch(&findme, svc->mons, svc->num_mons, sizeof(findme), moncmp);
-            if (found)
+            if (found) {
+                gdnsd_assert(results);
                 results[found->midx] = result;
-            else
+            } else {
                 log_warn("plugin_extfile: Service type '%s': entry '%s' in file '%s' ignored, did not match any configured resource!", svc->name, matchme, svc->path);
+            }
             success = true;
         }
     }
@@ -192,10 +194,13 @@ static void process_file(const extf_svc_t* svc)
         }
     }
 
+    gdnsd_sttl_t* results = NULL;
+    if (svc->num_mons)
+        results = xmalloc_n(svc->num_mons, sizeof(*results));
+
     // FORCED-bit below is temporary (within this function) as a flag
     //   to identify those entries which were not affected by file input.
     // It is cleared before copying the results out elsewhere.
-    gdnsd_sttl_t* results = xmalloc_n(svc->num_mons, sizeof(*results));
     for (unsigned i = 0; i < svc->num_mons; i++)
         results[i] = svc->def_sttl | GDNSD_STTL_FORCED;
 
@@ -231,7 +236,8 @@ static void process_file(const extf_svc_t* svc)
         log_err("plugin_extfile: Service type '%s': file load failed, no updates applied", svc->name);
     }
 
-    free(results);
+    if (results)
+        free(results);
 }
 
 F_NONNULL

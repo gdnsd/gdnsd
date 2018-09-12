@@ -231,6 +231,9 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
 {
     gdnsd_assert(vscf_is_hash(raw));
 
+    if (!num_smgrs)
+        return true;
+
     bool success = true;
 
     gdnsd_sttl_t* updates = xcalloc_n(num_smgrs, sizeof(*updates));

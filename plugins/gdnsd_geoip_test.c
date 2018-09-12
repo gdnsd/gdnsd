@@ -169,6 +169,12 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir)
     if (!cfg_root)
         log_fatal("gdnsd_geoip_test cannot proceed without an actual config file");
     vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
+    if (!maps_cfg)
+        log_fatal("gdnsd_geoip_test: config has no 'maps' stanza");
+    if (!vscf_is_hash(maps_cfg))
+        log_fatal("gdnsd_geoip_test: 'maps' stanza must be a hash");
+    if (!vscf_hash_get_len(maps_cfg))
+        log_fatal("gdnsd_geoip_test: 'maps' must contain one or more maps");
     gdmaps_t* rv = gdmaps_new(maps_cfg);
     vscf_destroy(cfg_root);
 

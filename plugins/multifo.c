@@ -326,10 +326,12 @@ void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads 
     if (vscf_hash_bequeath_all(config, "ignore_health", true, false))
         num_resources--;
 
-    resources = xcalloc_n(num_resources, sizeof(*resources));
-    unsigned residx = 0;
-    vscf_hash_iterate(config, true, config_res, &residx);
-    gdnsd_dyn_addr_max(v4_max, v6_max);
+    if (num_resources) {
+        resources = xcalloc_n(num_resources, sizeof(*resources));
+        unsigned residx = 0;
+        vscf_hash_iterate(config, true, config_res, &residx);
+        gdnsd_dyn_addr_max(v4_max, v6_max);
+    }
 }
 
 int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED)

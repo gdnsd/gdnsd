@@ -669,9 +669,11 @@ void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads
     if (vscf_hash_bequeath_all(config, "up_thresh", true, false))
         num_resources--; // don't count up_thresh
 
-    resources = xcalloc_n(num_resources, sizeof(*resources));
-    unsigned idx = 0;
-    vscf_hash_iterate(config, true, config_res, &idx);
+    if (num_resources) {
+        resources = xcalloc_n(num_resources, sizeof(*resources));
+        unsigned idx = 0;
+        vscf_hash_iterate(config, true, config_res, &idx);
+    }
 
     // find maximum per-address-family address output counts...
     unsigned max_v4 = 0;

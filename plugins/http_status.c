@@ -405,6 +405,8 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     if (ok_codes_cfg) {
         ok_codes_set = true;
         this_svc->num_ok_codes = vscf_array_get_len(ok_codes_cfg);
+        if (!this_svc->num_ok_codes)
+            log_fatal("plugin_http_status: service type '%s': ok_codes array cannot be empty", this_svc->name);
         this_svc->ok_codes = xmalloc_n(this_svc->num_ok_codes, sizeof(*this_svc->ok_codes));
         for (unsigned i = 0; i < this_svc->num_ok_codes; i++) {
             vscf_data_t* code_cfg = vscf_array_get_data(ok_codes_cfg, i);

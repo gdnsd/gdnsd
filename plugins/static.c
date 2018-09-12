@@ -75,10 +75,12 @@ void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V
     gdnsd_assert(vscf_get_type(config) == VSCF_HASH_T);
 
     num_resources = vscf_hash_get_len(config);
-    resources = xmalloc_n(num_resources, sizeof(*resources));
-    unsigned residx = 0;
-    vscf_hash_iterate(config, false, config_res, &residx);
-    gdnsd_dyn_addr_max(1, 1); // static only ever returns a single IP
+    if (num_resources) {
+        resources = xmalloc_n(num_resources, sizeof(*resources));
+        unsigned residx = 0;
+        vscf_hash_iterate(config, false, config_res, &residx);
+        gdnsd_dyn_addr_max(1, 1); // static only ever returns a single IP
+    }
 }
 
 int plugin_static_map_res(const char* resname, const uint8_t* origin)
