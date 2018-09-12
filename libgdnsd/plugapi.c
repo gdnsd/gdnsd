@@ -249,8 +249,6 @@ static plugin_t* gdnsd_plugin_load(const char* pname)
                       pname, apiv_bopt, this_bopt);
     }
 
-    plug->handle = pptr;
-
 #   define PSETFUNC(x) plug->x = (gdnsd_ ## x ## _cb_t)plugin_dlsym(pptr, pname, #x);
     PSETFUNC(load_config)
     PSETFUNC(map_res)
@@ -266,6 +264,8 @@ static plugin_t* gdnsd_plugin_load(const char* pname)
     PSETFUNC(start_monitors)
 #   undef PSETFUNC
 
+    // leak of dlopen() handle "pptr" here is intentional.  The code has no further
+    //   use for it at this point, and we never dlclose() the plugins...
     return plug;
 }
 
@@ -327,7 +327,4 @@ void gdnsd_plugins_action_exit(void)
     for (unsigned i = 0; i < num_plugins; i++)
         if (plugins[i]->exit)
             plugins[i]->exit();
-    for (unsigned i = 0; i < num_plugins; i++)
-        if (dlclose(plugins[i]->handle))
-            log_fatal("Failed to close() the '%s' plugin: %s", plugins[i]->name, dlerror());
 }
