@@ -376,7 +376,7 @@ int main(int argc, char** argv)
     if (!strcmp(argv[1], "Y"))
         gdnsd_log_set_debug(true);
     if (!strcmp(argv[2], "L"))
-        gdnsd_log_set_syslog(true);
+        gdnsd_log_set_syslog(true, "gdnsd_extmon_helper");
 
     // regardless, we seal off stdin now.  We don't need it,
     //   and this way we don't have to deal with it when

@@ -79,16 +79,19 @@ void gdnsd_log_set_debug(bool debug)
 {
     do_dbg = debug;
 }
+
 bool gdnsd_log_get_debug(void)
 {
     return do_dbg;
 }
-void gdnsd_log_set_syslog(bool set_syslog)
+
+void gdnsd_log_set_syslog(bool set_syslog, const char* ident)
 {
     if (!do_syslog && set_syslog)
-        openlog(PACKAGE_NAME, LOG_NDELAY | LOG_PID, LOG_DAEMON);
+        openlog(ident ? ident : PACKAGE_NAME, LOG_NDELAY | LOG_PID, LOG_DAEMON);
     do_syslog = set_syslog;
 }
+
 bool gdnsd_log_get_syslog(void)
 {
     return do_syslog;

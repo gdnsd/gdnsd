@@ -310,7 +310,7 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
             gdnsd_log_set_debug(true);
             break;
         case 'l':
-            gdnsd_log_set_syslog(true);
+            gdnsd_log_set_syslog(true, NULL);
             break;
         case 'S':
             copts->force_zsd = true;
@@ -328,7 +328,7 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
                     return;
                 } else if (!strcasecmp("daemonize", argv[optind])) {
                     copts->action = ACT_DAEMONIZE;
-                    gdnsd_log_set_syslog(true);
+                    gdnsd_log_set_syslog(true, NULL);
                     return;
                 }
             }

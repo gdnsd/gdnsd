@@ -185,7 +185,7 @@ static void do_daemonize(void)
         log_fatal("Cannot open /dev/null: %s", logf_errno());
     if (!freopen("/dev/null", "r+", stderr))
         log_fatal("Cannot open /dev/null: %s", logf_errno());
-    gdnsd_log_set_syslog(true); // should be redundant, but JIC...
+    gdnsd_log_set_syslog(true, NULL); // should be redundant, but JIC...
 
     // Save the write end of the pipe for gdnsd_daemon_notify_ready() later
     daemon_status_pipe = pipefd[PIPE_WR];

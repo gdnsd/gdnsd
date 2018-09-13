@@ -42,7 +42,7 @@ void gdnsd_log_set_debug(bool debug);
 bool gdnsd_log_get_debug(void);
 
 // Setter+Getter for syslog (vs stderr) log output:
-void gdnsd_log_set_syslog(bool set_syslog);
+void gdnsd_log_set_syslog(bool set_syslog, const char* ident);
 bool gdnsd_log_get_syslog(void);
 
 // This is a syslog()-like interface that will log

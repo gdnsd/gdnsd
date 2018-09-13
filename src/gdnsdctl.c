@@ -347,7 +347,7 @@ int main(int argc, char** argv)
 
     gdnsd_assert(action_func);
     gdnsd_log_set_debug(opt_debug);
-    gdnsd_log_set_syslog(opt_syslog);
+    gdnsd_log_set_syslog(opt_syslog, "gdnsdctl");
     vscf_data_t* cfg_root = gdnsd_init_paths(opt_cfg_dir, false);
     vscf_destroy(cfg_root);
     csc_t* csc = csc_new(opt_timeo);
