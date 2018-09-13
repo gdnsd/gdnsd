@@ -22,14 +22,14 @@ Minimal example gdnsd config file using this plugin:
           dcmap => {
             dc-01 => { lb01 => 192.0.1.1, lb02 => 192.0.1.2 }
             dc-02 => [ 192.0.5.1, 192.0.5.2, 192.0.5.3 ]
-            dc-bk => fallback.static.cname.example.com.
+            dc-bk => fallback.static.cname.example.org.
           }
         }
       }
     }
   }
 
-Example zonefile RRs:
+Example zonefile RRs in zone example.com:
 
   www      600 DYNA metafo!prod_www
   www-dc01 600 DYNA metafo!prod_www/dc-01

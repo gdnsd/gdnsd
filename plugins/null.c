@@ -30,24 +30,18 @@ void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_th
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
 }
 
-int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* origin V_UNUSED)
+int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone_name V_UNUSED)
 {
     return 0;
 }
 
-gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
-    if (origin) {
-        uint8_t cntmp[256];
-        gdnsd_dname_from_string(cntmp, "invalid.", 8);
-        gdnsd_result_add_cname(result, cntmp, origin);
-    } else {
-        gdnsd_anysin_t tmpsin;
-        gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
-        gdnsd_result_add_anysin(result, &tmpsin);
-        gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
-        gdnsd_result_add_anysin(result, &tmpsin);
-    }
+    gdnsd_anysin_t tmpsin;
+    gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
+    gdnsd_result_add_anysin(result, &tmpsin);
+    gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
+    gdnsd_result_add_anysin(result, &tmpsin);
 
     return GDNSD_STTL_TTL_MAX;
 }

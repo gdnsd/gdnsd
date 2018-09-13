@@ -12,9 +12,9 @@ Example plugin config:
       service_types = up
       up_thresh => 0.5 # default
       corpwww => {
-        lb01 = [ lb01.example.com., 99 ]
-        lb02 = [ lb02.example.com., 15 ]
-        lb03 = [ lb03, 1 ]
+        lb01 = [ lb01.example.org., 99 ]
+        lb02 = [ lb02.example.org., 15 ]
+        lb03 = [ lb03.example.org., 1 ]
       }
       frontwww6 => {
         service_types = up
@@ -63,13 +63,13 @@ Example plugin config:
       }
       cn => {
         service_types = my_cn_check
-        foo = [ lb01.example.com., 99 ]
-        bar = [ lb02.example.com., 15 ]
+        foo = [ lb01.example.org., 99 ]
+        bar = [ lb02.example.org., 15 ]
       }
     }
   }
 
-Zonefile RRs referencing the above:
+Zonefile RRs referencing the above, in example.com:
 
   www.corp   300 DYNC weighted!corpwww
   www6.front 300 DYNA weighted!frontwww6
@@ -145,12 +145,8 @@ algorithm based on weights and monitoring results is as documented below
 for addresses in the B<THE UNGROUPED SINGLE CASE>, since groups of
 CNAMEs cannot be configured, and the C<multi> option is not valid for them.
 
-If the CNAMEs are not fully-qualified (do not end in "."), the current
-C<$ORIGIN> value for the zonefile RR being queried will be appended to
-complete the name, much as you would expect if the same not-fully-qualified
-name were substituted into the zonefiles everywhere the relevant DYNC record
-exists.  Monitoring will be based on the originally-configured CNAME text
-exactly as it was entered (including the terminal dot or the lack thereof).
+CNAME data must be fully qualified (ends in "."), and a C<DYNC> cannot be used
+to emit a CNAME that points into the same zone that contained the C<DYNC>.
 
 =head1 CONFIGURATION - ADDRESSES
 

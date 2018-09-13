@@ -232,30 +232,23 @@ monitoring plugins by invoking their C<plugin_foo_add_mon_addr()> and
 C<plugin_foo_add_mon_cname()>.  This is when a monitoring plugin sets up
 per-address/CNAME data structures.
 
-After all of the above, the daemon loads and parses all zonefiles,
-constructing the internal runtime DNS database.  During the zonefile
-loading phase, when it encounters C<DYNA> RRs in zonefiles, they will
-trigger the plugin callback C<plugin_foo_map_res> once for
-every C<DYNA> RR, with a C<NULL> C<origin> argument.  The same occurs
-with all C<DYNC> RRs, and they will get non-C<NULL> C<origin> arguments,
-which indicate the current C<$ORIGIN> in effect for the RR.  It is
-important to note that your plugin should treat it as an error if
-it gets a C<_map_res> call with a C<NULL> C<origin> (DYNA) for a resource
-which is configured to be capable of returning C<CNAME> results.
-
-If your DYNC plugin supports variable origins (e.g. the same resource
-name can be re-used in multiple zonefiles, and prepends some standard
-domainname fragment to origin in effect for the given RR), it is
-important that you validate that you can construct a legal domainname
-(length limits) from the given origin, resource name, and your own
-config at this time.
+After all of the above, the daemon loads and parses all zonefiles, constructing
+the internal runtime DNS database.  During the zonefile loading phase, when it
+encounters C<DYNA> RRs in zonefiles, they will trigger the plugin callback
+C<plugin_foo_map_res> once for every C<DYNA> RR, with a C<NULL> C<zone_name>
+argument.  The same occurs with all C<DYNC> RRs, and they will get non-C<NULL>
+C<zone_name> arguments, which indicate the current zone the RR was located in.
+Plugins should check that none of the CNAME data they can return exists within
+the specified zone.  It is important to note that your plugin should treat it
+as an error if it gets a C<_map_res> call with a C<NULL> C<zone_name> (DYNA)
+for a resource which is configured to be capable of returning C<CNAME> results.
 
 Plugins should B<not> return different resource numbers for the same
 resname argument regardless of C<origin> value (or lack thereof).  You
 will break things if you do so.
 
 If your map_resource operation fails (e.g. unknown resource name, or
-illegal origin-based C<CNAME> construction, or a NULL origin argument (DYNA)
+illegal same-zone C<CNAME> construction, or a NULL origin argument (DYNA)
 for a resource that could return C<CNAME> data), log the error and return -1.
 Do B<not> fail fatally, as these calls happen at runtime during dynamic
 zonefile reloads.
@@ -467,17 +460,17 @@ The C<_map_res()> callback, if implemented, B<must> return a consistent,
 singular resource number for a given resource name, regardless of any
 C<origin> argument or the lack thereof.
 
-=item ignoring origin for address-only data
+=item ignoring zone_name for address-only data
 
 If a plugin only handles addresses (for this resource, or in the general
-case), it should not fail on C<_map_res()> or C<_resolve()> just because an
-origin is defined, indicating a C<DYNC> RR.  It should instead simply ignore
-any origin argument and act as it always did.
+case), it should not fail on C<_map_res()> or C<_resolve()> just because a
+zone_name is defined, indicating a C<DYNC> RR.  It should instead simply ignore
+any zone_name argument and act as it always did.
 
 =item map_res DYNA validity checks
 
 If a resource name passed to C<_map_res()> is configured to be capable of
-returning C<CNAME> data and the C<origin> argument is C<NULL> (indicating
+returning C<CNAME> data and the C<zone_name> argument is C<NULL> (indicating
 a C<DYNA> RR), the plugin B<must> fail by returning -1.  One of the implications
 of this rule is that for any plugin which is capable of returning C<CNAME> data
 at all, C<_map_res()> B<must> be implemented.  Another implication of this
@@ -490,87 +483,20 @@ its matching set of changes.
 
 =head1 RECENT API CHANGES
 
-=head2 Version 17
+=head2 Version 20
 
-This corresponds with the release of 2.2.0
+This corresponds with the release of 3.0.0.  Version 17 was the API version for
+v2.2 - v2.4.  Versions 18 and 19 were burned up during development/test cycles.
 
-Changes versus version 16:
+There were many changes, most of them trivial.  The major non-trivial change
+was the switch of map_res's origin argument for zone_name, and the new
+processing requirements there: CNAME data must be fully qualified in the
+configured input, and the map_res code must check that the configured name is
+not within the zone specified by zone_name.
 
-C<gdnsd_dname_isparentof()> removed (can be trivially replaced using
-C<gdnsd_dname_isinzone()> if necessary).
-
-The PRNG interfaces have changed completely.  The old interface returned a
-C<gdnsd_rstate_t*> from the call C<gdnsd_rand_init()>, which could then be
-passed to either of C<gdnsd_rand_get32()> or C<gdnsd_rand_get64()> to get
-unsigned 32-bit or 64-bit random numbers, respectively.  The replacement
-interface has split the 32-bit and 64-bit random number generators into
-separate interfaces and state structures.
-
-For a 32-bit PRNG, call C<gdnsd_rand32_init()> which returns a
-C<gdnsd_rstate32_t*>, which can then be passed to C<gdnsd_rand32_get()>
-to obtain unsigned 32-bit random numbers.
-
-For a 64-bit PRNG, call C<gdnsd_rand64_init()> which returns a
-C<gdnsd_rstate64_t*>, which can then be passed to C<gdnsd_rand64_get()>
-to obtain unsigned 64-bit random numbers.
-
-=head2 Version 15/16
-
-This corresponds with the release of 2.0.0 and 2.1.0
-
-The changes below are versus Version 12 (final gdnsd 1.x API version).
-Versions 13 and 14 only existed in development releases and were moving
-targets.  The changes from Version 12 were rather sweeping.  This tries to
-cover the largest notable changes in the key callbacks, but likely doesn't
-note them all.  When in doubt, look at the source of the core plugins
-distributed with the main source for guidance.
-
-The data structures C<dynaddr_result_t> and C<dyncname_result_t> were
-merged and replaced with a single structure C<dyn_result_t>, which
-is an opaque data structure modified by the various C<gdnsd_result_*()>
-functions for adding or clearing address and/or CNAME results.
-
-The C<_map_res_dyna()> and C<_map_res_dync()> callbacks were merged
-and renamed to just C<_map_res()>.  The new call has an origin argument
-like the old C<_map_res_dync()>, which will be NULL when called for
-C<DYNA> RRs, and the C<result> argument's type was
-changed from C<dynaddr_result_t*> to C<dyn_result_t*>.
-
-The C<_resolve_dynaddr()> and C<_resolve_dyncname()> callbacks were
-merged and renamed to just C<_resolve()>.  The new call has an origin
-argument like the old C<_resolve_dyncame()>, which will be NULL when
-called for C<DYNA> RRs, and the C<result> argument's type was
-changed from C<dynaddr_result_t*> to C<dyn_result_t*>.  The new call
-also lacks the C<threadnum> argument, as any plugin which needs this
-information can work around it via the C<_iothread_init()> callback
-and/or thread-local storage.
-
-C<gdnsd_dynaddr_add_result_anysin()> was renamed to
-C<gdnsd_dyn_add_result_anysin()>, and the C<result> argument's type was
-changed from C<dynaddr_result_t*> to C<dyn_result_t*>.
-
-C<_load_config()> no longer has a C<mon_list_t*> return value; instead
-monitored resources are indicated to the core via the C<gdnsd_mon_addr()>
-and C<gdnsd_mon_cname()> functions during the execution of C<_load_config()>.
-
-Resolver plugins must now call C<gdnsd_dyn_addr_max()> during C<_load_config()>
-to inform the core of address limits.
-
-C<gdnsd_add_monitor> was replaced by C<gdnsd_add_mon_addr()> and
-C<gdnsd_add_mon_cname()>.
-
-The callbacks C<_post_daemonize()>, C<_pre_privdrop()>, C<_post_privdrop()>,
-and C<_full_config()> were removed.  With the current structure, code that logically
-fit in these can be placed elsewhere (e.g. C<_start_monitors()>, C<_pre_run()>, or
-C<_load_config()> as appropriate).
-
-The type C<vscf_data_t*> in callback arguments used to be C<const>, and now it is
-not.  Similar changes occurred in many places in the vscf API in general.  Just remove
-const from your plugin's local vscf pointers and recompile.
-
-Version 16 was bumped just to require a recompile (some formerly-exported funcs
-became inlines, some const changes in signatures, etc), but is mostly the same
-as 15 otherwise.
+I suspect the plugin API will be substantially reduced or refactored, possibly
+eliminated, by the next major version.  It's not stable in any long-term sense,
+and I think the level of abstraction it currently operates at is far too low.
 
 =head1 SEE ALSO
 

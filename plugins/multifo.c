@@ -334,7 +334,7 @@ void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads 
     }
 }
 
-int plugin_multifo_map_res(const char* resname, const uint8_t* origin V_UNUSED)
+int plugin_multifo_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
 {
     if (resname) {
         for (unsigned i = 0; i < num_resources; i++)
@@ -389,7 +389,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     return rv;
 }
 
-gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 

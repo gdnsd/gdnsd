@@ -32,7 +32,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 42 CNAME m1cname.example.com',
+    answer => 'm1.example.com 42 CNAME m1cname.example.net',
 );
 
 _GDT->test_dns(
@@ -63,17 +63,17 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 42 CNAME m1cname.example.com',
+    answer => 'm1.example.com 42 CNAME m1cname.example.net',
 );
 
 ### Leave those down and also down m1cname for m1
 
 _GDT->write_statefile('admin_state', qq{
     127.*/up => DOWN/33
-    m1cname/up => DOWN/29
+    m1cname.example.net./up => DOWN/29
 });
 
-_GDT->test_log_output(q{admin_state: state of 'm1cname/up' forced to DOWN/29, real state is UP/MAX});
+_GDT->test_log_output(q{admin_state: state of 'm1cname.example.net./up' forced to DOWN/29, real state is UP/MAX});
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -94,7 +94,7 @@ _GDT->test_dns(
 ###   a non-wildcard entry that covers just r2 primary
 
 _GDT->write_statefile('admin_state', qq{
-    m1cname/up => DOWN/29
+    m1cname.example.net./up => DOWN/29
     127.2.2.2/up => DOWN/33
 });
 
@@ -118,7 +118,7 @@ _GDT->test_dns(
 ### Remove the r2 primary entry
 
 _GDT->write_statefile('admin_state', qq{
-    m1cname/up => DOWN/29
+    m1cname.example.net./up => DOWN/29
 });
 
 _GDT->test_log_output(q{admin_state: state of '127.2.2.2/up' no longer forced (was forced to DOWN/33), real and current state is UP/MAX});
@@ -143,7 +143,7 @@ _GDT->test_dns(
 _GDT->write_statefile('admin_state', qq{
 });
 
-_GDT->test_log_output(q{admin_state: state of 'm1cname/up' no longer forced (was forced to DOWN/29), real and current state is UP/MAX});
+_GDT->test_log_output(q{admin_state: state of 'm1cname.example.net./up' no longer forced (was forced to DOWN/29), real and current state is UP/MAX});
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -157,7 +157,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 42 CNAME m1cname.example.com',
+    answer => 'm1.example.com 42 CNAME m1cname.example.net',
 );
 
 ### down dc1 at the datacenter level
@@ -203,7 +203,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 42 CNAME m1cname.example.com',
+    answer => 'm1.example.com 42 CNAME m1cname.example.net',
 );
 
 ### switch over to dc2 still down, dc1 forced UP
@@ -227,7 +227,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 42 CNAME m1cname.example.com',
+    answer => 'm1.example.com 42 CNAME m1cname.example.net',
 );
 
 ### ... now down the resource within dc1, which should
@@ -236,10 +236,10 @@ _GDT->test_dns(
 _GDT->write_statefile('admin_state', qq{
     metafo/m1/dc1 => UP
     metafo/m1/dc2 => DOWN
-    m1cname/up => DOWN/25
+    m1cname.example.net./up => DOWN/25
 });
 
-_GDT->test_log_output(q{admin_state: state of 'm1cname/up' forced to DOWN/25, real state is UP/MAX});
+_GDT->test_log_output(q{admin_state: state of 'm1cname.example.net./up' forced to DOWN/25, real state is UP/MAX});
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -253,7 +253,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 42 CNAME m1cname.example.com',
+    answer => 'm1.example.com 42 CNAME m1cname.example.net',
 );
 
 ### ra tests extfile + admin state operating on the same resource,
@@ -264,7 +264,7 @@ _GDT->write_statefile('admin_state', qq{
     metafo/m1/dc1 => UP
     metafo/m1/dc2 => DOWN
     127.3.3.3/extf_admin => DOWN
-    m1cname/up => DOWN/25
+    m1cname.example.net./up => DOWN/25
 });
 
 _GDT->test_log_output(q{admin_state: state of '127.3.3.3/extf_admin' forced to DOWN/MAX, real state is UP/MAX});
@@ -294,7 +294,7 @@ _GDT->write_statefile('admin_state', qq{
     metafo/m1/dc2 => DOWN
     127.3.3.3/extf_admin => DOWN
     192.0.2.3/extf_admin => UP
-    m1cname/up => DOWN/25
+    m1cname.example.net./up => DOWN/25
 });
 
 _GDT->test_log_output(q{admin_state: state of '192.0.2.3/extf_admin' forced to UP/MAX, real state is DOWN/MAX});
@@ -341,7 +341,7 @@ _GDT->write_statefile('admin_state', qq{
     metafo/m1/dc1 => UP
     metafo/m1/dc2 => DOWN
     192.0.2.3/extf_admin => UP
-    m1cname/up => DOWN/25
+    m1cname.example.net./up => DOWN/25
 });
 
 _GDT->test_log_output(q{admin_state: state of '127.3.3.3/extf_admin' no longer forced (was forced to DOWN/MAX), real and current state is UP/MAX});

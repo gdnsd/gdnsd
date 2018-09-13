@@ -643,7 +643,7 @@ F_NONNULL
 static void rec_dync(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->origin, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
+    if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
         siglongjmp(z->jbuf, 1);
 }
 

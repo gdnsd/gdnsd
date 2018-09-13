@@ -238,7 +238,6 @@ struct _ltree_rrset_cname_struct {
 
 struct _ltree_rrset_dync_struct {
     ltree_rrset_gen_t gen;
-    const uint8_t* origin;
     gdnsd_resolve_cb_t func;
     unsigned resource;
     uint32_t ttl_min; // host-order!
@@ -317,6 +316,9 @@ union _ltree_rrset_union {
 // hold glue offsets during dnspacket.c output generation.
 #define MAX_NS_COUNT 64U
 
+// Maximum we'll recurse CNAME chains within the local data of one zone
+#define MAX_CNAME_DEPTH 16U
+
 struct _ltree_node_struct {
     uint32_t flags;
     // During the ltree_add_rec_* (parsing) phase of ltree.c, an accurate count
@@ -351,7 +353,7 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char*
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, const uint8_t* origin, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6);
+bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6);
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL

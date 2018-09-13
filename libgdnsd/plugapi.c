@@ -89,19 +89,15 @@ void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* asin)
     }
 }
 
-void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname, const uint8_t* origin)
+void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname)
 {
-    gdnsd_assert(dname_status(dname) != DNAME_INVALID);
-    gdnsd_assert(dname_status(origin) == DNAME_VALID);
+    gdnsd_assert(dname_status(dname) == DNAME_VALID);
     gdnsd_assert(!result->is_cname);
     gdnsd_assert(!result->count_v4);
     gdnsd_assert(!result->count_v6);
 
     result->is_cname = true;
     dname_copy(result->storage, dname);
-    if (dname_is_partial(result->storage))
-        dname_cat(result->storage, origin);
-    gdnsd_assert(dname_status(result->storage) == DNAME_VALID);
 }
 
 void gdnsd_result_wipe(dyn_result_t* result)

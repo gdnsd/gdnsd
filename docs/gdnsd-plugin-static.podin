@@ -10,7 +10,7 @@ Example static resources config for resolution:
     static => {
       foo => 192.0.2.1
       bar => 2001:db8::1
-      baz => something.example.com.
+      baz => something.example.org.
     }
   }
 
@@ -25,7 +25,7 @@ Example static service_types config for monitoring:
     }
   }
 
-Zonefile RRs using static plugin resolution
+Zonefile RRs using static plugin resolution, in zone example.com:
 
   foo 300 DYNA static!foo
   bar 300 DYNC static!bar

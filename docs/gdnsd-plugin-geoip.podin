@@ -50,7 +50,7 @@ Minimal example gdnsd config file using this plugin:
     }
   }}
 
-Example zonefile RRs:
+Example zonefile RRs in zone example.com:
 
   www      600 DYNA geoip!prod_www
   www-dc01 600 DYNA geoip!prod_www/dc-01
@@ -501,16 +501,16 @@ C<maps> and C<resources> sections:
         prod_cdn => {
           map => my_prod_map,
           dcmap => {
-            us-01 => us-cdn-provider.example.com.
-            sg-01 => asia-cdn-provider.example.com.
-            de-01 => europe-cdn-provider.example.com.
+            us-01 => us-cdn-provider.example.net.
+            sg-01 => asia-cdn-provider.example.net.
+            de-01 => europe-cdn-provider.example.net.
           }
         }
       }
     }
   }
 
-Example zonefile RRs:
+Example zonefile RRs in zone example.com:
 
   app     600 DYNA geoip!prod_app
   app.us  600 DYNA geoip!prod_app/us-01
@@ -562,7 +562,7 @@ Example zonefile RRs:
     }
   }
 
-  And in the zonefile:
+  And in the example.com zonefile:
 
   ; This tries through the closest 2/4 datacenters to
   ;   the client from the geoip map, and if both of

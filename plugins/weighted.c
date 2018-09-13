@@ -451,9 +451,11 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
     uint8_t* dname = xmalloc(256);
     dname_status_t dnstat = vscf_simple_get_as_dname(cn, dname);
     if (dnstat == DNAME_INVALID)
-        log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' is not a legal domainname", res_name, stanza, item_name, vscf_simple_get_data(vscf_array_get_data(cfg_data, 0)));
-    if (dnstat == DNAME_VALID)
-        dname = dname_trim(dname);
+        log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' is not a legal domainname", res_name, stanza, item_name, cname_txt);
+    if (dnstat == DNAME_PARTIAL)
+        log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' must be fully qualified (end in dot)", res_name, stanza, item_name, cname_txt);
+    gdnsd_assert(dnstat == DNAME_VALID);
+    dname = dname_trim(dname);
     res_item->cname = dname;
 
     if (cnset->num_svcs) {
@@ -700,7 +702,7 @@ void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads
     gdnsd_dyn_addr_max(max_v4, max_v6);
 }
 
-int plugin_weighted_map_res(const char* resname, const uint8_t* origin)
+int plugin_weighted_map_res(const char* resname, const uint8_t* zone_name)
 {
     if (!resname)
         map_res_err("plugin_weighted: resource name required");
@@ -709,16 +711,12 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* origin)
         if (!strcmp(resname, resources[i].name)) {
             cnset_t* cnset = resources[i].cnames;
             if (cnset) {
-                if (!origin)
+                if (!zone_name)
                     map_res_err("plugin_weighted: Resource '%s' used in a DYNA RR, but has CNAME data", resources[i].name);
                 for (unsigned j = 0; j < cnset->count; j++) {
                     const uint8_t* dname = cnset->items[j].cname;
-                    if (dname_status(dname) == DNAME_PARTIAL) {
-                        uint8_t dnbuf[256];
-                        dname_copy(dnbuf, dname);
-                        if (dname_cat(dnbuf, origin) != DNAME_VALID)
-                            map_res_err("plugin_weighted: Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), resources[i].name, logf_dname(origin));
-                    }
+                    if (dname_isinzone(zone_name, dname))
+                        map_res_err("plugin_weighted: Resource '%s' CNAME value '%s' cannot be used within zone '%s'", resources[i].name, logf_dname(dname), logf_dname(zone_name));
                 }
             }
             log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
@@ -742,7 +740,7 @@ void plugin_weighted_iothread_cleanup(void)
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, const uint8_t* origin, dyn_result_t* result)
+static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, dyn_result_t* result)
 {
     cnset_t* cnset = resource->cnames;
     gdnsd_assert(cnset);
@@ -802,7 +800,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
     }
 
     // set the output stuff
-    gdnsd_result_add_cname(result, cnset->items[chosen].cname, origin);
+    gdnsd_result_add_cname(result, cnset->items[chosen].cname);
 
     return rv;
 }
@@ -931,7 +929,7 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t*
     return rv;
 }
 
-gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     const resource_t* resource = &resources[resnum];
     gdnsd_assert(resource);
@@ -941,8 +939,7 @@ gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const uint8_t* origin, con
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
     if (resource->cnames) {
-        gdnsd_assert(origin); // map_res validates this
-        rv = resolve_cname(sttl_tbl, resource, origin, result);
+        rv = resolve_cname(sttl_tbl, resource, result);
     } else {
         rv = resolve_addr(sttl_tbl, resource, result);
     }

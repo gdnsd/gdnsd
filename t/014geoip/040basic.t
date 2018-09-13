@@ -172,20 +172,20 @@ _GDT->test_dns(
 #res3
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
-    answer => 'res3.example.com 86400 CNAME dc2cn.example.com',
+    answer => 'res3.example.com 86400 CNAME dc2cn.example.net',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
-    answer => 'res3.example.com 86400 CNAME dc2cn.example.com',
+    answer => 'res3.example.com 86400 CNAME dc2cn.example.net',
     addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 _GDT->test_dns(
     qname => 'res3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
-    answer => 'res3.example.com 86400 CNAME dc1cn.example.com',
+    answer => 'res3.example.com 86400 CNAME dc1cn.example.net',
     addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
@@ -193,13 +193,13 @@ _GDT->test_dns(
 #res3/dc1
 _GDT->test_dns(
     qname => 'res3dc1.example.com', qtype => 'A',
-    answer => 'res3dc1.example.com 86400 CNAME dc1cn.example.com',
+    answer => 'res3dc1.example.com 86400 CNAME dc1cn.example.net',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3dc1.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
-    answer => 'res3dc1.example.com 86400 CNAME dc1cn.example.com',
+    answer => 'res3dc1.example.com 86400 CNAME dc1cn.example.net',
     addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
@@ -207,13 +207,13 @@ _GDT->test_dns(
 #res3/dc2
 _GDT->test_dns(
     qname => 'res3dc2.example.com', qtype => 'A',
-    answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.com',
+    answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.net',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3dc2.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
-    answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.com',
+    answer => 'res3dc2.example.com 86400 CNAME dc2cn.example.net',
     addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
@@ -221,13 +221,13 @@ _GDT->test_dns(
 #res3/dc3
 _GDT->test_dns(
     qname => 'res3dc3.example.com', qtype => 'A',
-    answer => 'res3dc3.example.com 86400 CNAME dc3cn.example.com',
+    answer => 'res3dc3.example.com 86400 CNAME dc3cn.example.net',
     stats => [qw/udp_reqs noerror/],
 );
 _GDT->test_dns(
     qname => 'res3dc3.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
-    answer => 'res3dc3.example.com 86400 CNAME dc3cn.example.com',
+    answer => 'res3dc3.example.com 86400 CNAME dc3cn.example.net',
     addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
@@ -337,7 +337,7 @@ _GDT->test_dns(
 # DYNC that loops on itself
 _GDT->test_dns(
     qname => 'res5.example.com', qtype => 'AAAA',
-    answer => 'res5.example.com 86400 CNAME dc2cn-loop.example.com',
+    answer => 'res5.example.com 86400 CNAME dc2cn-loop.example.net',
     stats => [qw/udp_reqs noerror/],
 );
 

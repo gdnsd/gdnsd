@@ -59,8 +59,10 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         dname_status_t status = vscf_simple_get_as_dname(addr, resources[res].dname);
         if (status == DNAME_INVALID)
             log_fatal("plugin_static: resource %s: must be an IPv4 address or a domainname in string form", resname);
-        if (status == DNAME_VALID)
-            resources[res].dname = dname_trim(resources[res].dname);
+        if (status == DNAME_PARTIAL)
+            log_fatal("plugin_static: resource %s: '%s' must be fully qualified (end in dot)", resname, addr_txt);
+        gdnsd_assert(status == DNAME_VALID);
+        resources[res].dname = dname_trim(resources[res].dname);
     } else {
         resources[res].is_addr = true;
     }
@@ -83,22 +85,18 @@ void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V
     }
 }
 
-int plugin_static_map_res(const char* resname, const uint8_t* origin)
+int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
 {
     if (resname) {
         for (unsigned i = 0; i < num_resources; i++) {
             if (!strcmp(resname, resources[i].name)) {
                 if (resources[i].is_addr)
                     return (int)i;
-                if (!origin)
+                if (!zone_name)
                     map_res_err("plugin_static: CNAME resource '%s' cannot be used for a DYNA record", resources[i].name);
-                if (dname_is_partial(resources[i].dname)) {
-                    uint8_t dnbuf[256];
-                    dname_copy(dnbuf, resources[i].dname);
-                    dname_status_t status = dname_cat(dnbuf, origin);
-                    if (status != DNAME_VALID)
-                        map_res_err("plugin_static: CNAME resource '%s' (configured with partial domainname '%s') creates an invalid domainname when used at origin '%s'", resources[i].name, logf_dname(resources[i].dname), logf_dname(origin));
-                }
+                uint8_t* dname = resources[i].dname;
+                if (dname_isinzone(zone_name, dname))
+                    map_res_err("plugin_static: Resource '%s' CNAME value '%s' cannot be used within zone '%s'", resources[i].name, logf_dname(dname), logf_dname(zone_name));
                 return (int)i;
             }
         }
@@ -108,19 +106,12 @@ int plugin_static_map_res(const char* resname, const uint8_t* origin)
     map_res_err("plugin_static: resource name required");
 }
 
-gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const uint8_t* origin, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
-    // this (DYNA->CNAME) should be caught during map_res
-    //   and cause the zonefile to fail to load
-    if (!origin)
-        gdnsd_assert(resources[resnum].is_addr);
-
-    if (resources[resnum].is_addr) {
+    if (resources[resnum].is_addr)
         gdnsd_result_add_anysin(result, &resources[resnum].addr);
-    } else {
-        gdnsd_assert(origin);
-        gdnsd_result_add_cname(result, resources[resnum].dname, origin);
-    }
+    else
+        gdnsd_result_add_cname(result, resources[resnum].dname);
 
     return GDNSD_STTL_TTL_MAX;
 }

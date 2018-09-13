@@ -46,7 +46,7 @@ void plugin_reflect_load_config(vscf_data_t* config V_UNUSED, const unsigned num
 
 // resource names (and numbers) are used by this plugin to choose
 //  one of four response types above, defaulting to "best".
-int plugin_reflect_map_res(const char* resname, const uint8_t* origin V_UNUSED)
+int plugin_reflect_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
 {
     if (!resname)
         return RESPONSE_BEST;
@@ -59,7 +59,7 @@ int plugin_reflect_map_res(const char* resname, const uint8_t* origin V_UNUSED)
     return -1;
 }
 
-gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const uint8_t* origin V_UNUSED, const client_info_t* cinfo, dyn_result_t* result)
+gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
 {
     gdnsd_assert(resnum < NUM_RTYPES);
 

@@ -25,10 +25,8 @@ possible plugin of both types.  It is simultaneously both a
 monitoring plugin and a resolution plugin.
 
 When used as a resolution plugin in C<DNYA> or C<DYNC> RRs, it
-ignores any resource name provided.  With C<DYNA> it always
-returns the IPv4 address C<0.0.0.0> and the IPv6 address C<::>.
-With C<DYNC> it always returns a CNAME to to the domainname
-C<invalid.>
+ignores any resource name provided.  It always returns the IPv4 address
+C<0.0.0.0> and the IPv6 address C<::>.
 
 When used as a monitoring plugin by defining a service_type as
 shown in the example above it emulates the behavior of a real

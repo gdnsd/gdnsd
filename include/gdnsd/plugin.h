@@ -72,13 +72,13 @@ unsigned SYM_GET_APIV(GDNSD_PLUGIN_NAME)(void)
 }
 
 void SYM_LOAD_CONFIG(GDNSD_PLUGIN_NAME)(vscf_data_t* config, const unsigned num_threads);
-int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* origin);
+int SYM_MAP_RES(GDNSD_PLUGIN_NAME)(const char* resname, const uint8_t* zone_name);
 F_NONNULL
 void SYM_PRE_RUN(GDNSD_PLUGIN_NAME)(void);
 void SYM_IOTH_INIT(GDNSD_PLUGIN_NAME)(void);
 void SYM_IOTH_CLN(GDNSD_PLUGIN_NAME)(void);
-F_NONNULLX(3, 4)
-gdnsd_sttl_t SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result);
+F_NONNULL
+gdnsd_sttl_t SYM_RESOLVE(GDNSD_PLUGIN_NAME)(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result);
 void SYM_EXIT(GDNSD_PLUGIN_NAME)(void);
 F_NONNULL
 void SYM_ADD_SVC(GDNSD_PLUGIN_NAME)(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout);

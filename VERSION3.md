@@ -22,10 +22,9 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * The nsid edns0 option from RFC 5001 is implemented, allowing identification of members of a loadbalanced or anycast server set
 * All responses are completely minimized:
   * A and AAAA responses no longer include opposite-family records in the additional section
-  * CNAME chains are not followed locally; they're emitted as single records as if the qtype were CNAME, for a recursor to chase with multiple queries if necessary
-  * The answer section never contains more than one rrset
+  * The answer section usually contains only one rrset, unless CNAMEs are involved (we still output CNAME chains within local zone data)
   * The auth section is only ever used for negative responses (1x SOA) and delegations (NS records at a zone cut)
-  * The additional section only ever contains actual glue IPs mandated by a delegation response
+  * The additional section only ever contains actual mandatory glue IPs (out-of-zone glue or glue within any delegated subzone of the delegating zone).
 
 ### Zonefiles
 
@@ -47,7 +46,7 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * `stop` - Stops the running daemon
 * `reload-zones` - Reloads zonefiles
 * `acme-dns-01` - Creates ephemeral TXT records for ACME DNS-01 challenge responses
-* `replace` - Requests that the daemon replace itself:
+* `replace` - Requests that the daemon replace itself seamlessly (no downtime, no lost requests):
   * Replacement is a fresh execution of the same binary pathname with CLI options preserved
   * Spawned as a child of the running daemon in order to preserve as much execution context as possible
   * The old and new daemons communicate with each other over a separate control socket connection for coordination and smooth socket handoff
@@ -68,6 +67,7 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * NS record nameserver hostnames are no longer allowed to point at DYNA records in local data
 * NS record sets are limited to 64 records per set and are no longer randomly rotated in the output
 * The server does not support emitting responses greater than ~16KB in size over any protocol.  Zone data is explicitly validated against this constraint, and zonefiles will fail to load if they contain record sets which could generate an over-sized response packet.  The checks are somewhat conservative in corner cases and may reject data which would technically barely fit in practice.
+* DYNC and related plugin configurations have two new restrictions: all configured dynamic CNAME values must be fully-qualified (end in dot), and DYNC cannot be used to emit a CNAME that points into the same zone (in others words, if `example.com` has the RR `foo DYNC %weighted!some-cnames`, the weighted plugin's configuration for the resource `some-cnames` cannot contain any CNAME values within the zone `example.com`; they must be names in other domains).
 
 ## Other minor things
 
@@ -97,14 +97,14 @@ You'll need to fix values for these in existing config before trying an upgrade,
 
 None of these generate a syntax error for now, they merely log a non-fatal error to ease transition.  They'll become syntax errors in a future major version update:
 
-* `any_mitigation` - Fixed on
-* `edns_client_subnet` - Fixed on
-* `include_optional_ns` - Fixed off
+* `any_mitigation` - Fixed on (same as previous default)
+* `edns_client_subnet` - Fixed on (same as previous default)
+* `include_optional_ns` - Fixed off (same as previous default)
 * `max_addtl_rrsets` - No longer applicable
-* `max_cname_depth` - Fixed at 16
-* `max_response` - Fixed 16384
-* `udp_recv_width` - Fixed at 16
-* `zones_strict_startup` - Fixed on
+* `max_cname_depth` - Fixed at 16 (same as previous default)
+* `max_response` - Fixed 16384 (same as previous default)
+* `udp_recv_width` - Fixed at 16 (prev default was 8)
+* `zones_strict_startup` - Fixed on (same as previous default)
 
 * `zones_rfc1035_auto` - Removed with zonefile autoscanning
 * `zones_rfc1035_auto_interval` - Removed with zonefile autoscanning
@@ -207,7 +207,7 @@ I hope to do some kind of work related to some of this for 4.x, but it's hard to
 
 ### The DYNA/DYNC resource types in general
 
-I'm not fond of the design at this level either.  Probably DYNC should only return CNAMEs and not addresses, and probably DYNA should be broken up into separate types for A and AAAA.  Doing this to the existing names without breaking compatibility is hard, so I'll probably invent new names and leave some support in place for the old ones.  In light of all this, it would probably behoove users to move away from solutions that require DYNC to be able to return addresses, as that will likely be a major compatibility barrier in a future major version upgrade.
+I'm not fond of the design at this level either.  Probably DYNC should only return CNAMEs and not addresses (not really sure about this one), and probably DYNA should be broken up into separate types for A and AAAA.  Doing this to the existing names without breaking compatibility is hard, so I'll probably invent new names and leave some support in place for the old ones.  In light of all this, it would probably behoove users to move away from solutions that require DYNC to be able to return addresses, as that may be a major compatibility barrier in a future major version upgrade.
 
 ### Various DNS protocol-level privacy and security issues
 

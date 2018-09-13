@@ -217,8 +217,10 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
                 dname_status_t dnstat = vscf_simple_get_as_dname(dc_data, dname);
                 if (dnstat == DNAME_INVALID)
                     log_fatal("plugin_" PNSTR ": resource '%s': CNAME for datacenter '%s' is not a legal domainname", resname, dc_name);
-                if (dnstat == DNAME_VALID)
-                    dname = dname_trim(dname);
+                if (dnstat == DNAME_PARTIAL)
+                    log_fatal("plugin_" PNSTR ": resource '%s': CNAME for datacenter '%s' must be fully qualified (end in dot)", resname, dc_name);
+                gdnsd_assert(dnstat == DNAME_VALID);
+                dname = dname_trim(dname);
                 this_dc->dname = dname;
 
                 // service_types is already inherited from top-level to res-level, this gets
@@ -304,7 +306,7 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
     config_res_dcmap(res, res_cfg, dcs_cfg, res_name);
 }
 
-static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result)
+static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, const client_info_t* cinfo, dyn_result_t* result)
 {
     gdnsd_assert(dc);
     gdnsd_assert(cinfo);
@@ -313,13 +315,12 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, con
     gdnsd_sttl_t rv;
 
     if (dc->is_cname) { // direct CNAME
-        gdnsd_assert(origin); // detected at map_res time
         gdnsd_assert(dc->dname);
-        gdnsd_result_add_cname(result, dc->dname, origin);
+        gdnsd_result_add_cname(result, dc->dname);
         rv = gdnsd_sttl_min(sttl_tbl, dc->indices, dc->num_svcs);
     } else {
         gdnsd_assert(dc->plugin && dc->plugin->resolve); // detected at map_res time
-        rv = dc->plugin->resolve(dc->res_num, origin, cinfo, result);
+        rv = dc->plugin->resolve(dc->res_num, cinfo, result);
     }
 
 #if META_MAP_ADMIN == 1
@@ -361,7 +362,7 @@ static void resource_destroy(resource_t* res)
 }
 
 F_NONNULLX(1)
-static int map_res_inner(const char* resname, const uint8_t* origin, const char* dcname)
+static int map_res_inner(const char* resname, const uint8_t* zone_name, const char* dcname)
 {
     for (unsigned i = 0; i < num_res; i++) {
         if (!strcmp(resname, resources[i].name)) { // match!
@@ -382,15 +383,11 @@ static int map_res_inner(const char* resname, const uint8_t* origin, const char*
                     continue;
                 dc_t* this_dc = &res->dcs[j];
                 if (this_dc->is_cname) {
-                    if (!origin)
+                    if (!zone_name)
                         map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s' is configured as the fixed CNAME '%s', therefore this resource cannot be used in an address-only DYNA RR", res->name, this_dc->dc_name, logf_dname(this_dc->dname));
                     const uint8_t* dname = this_dc->dname;
-                    if (dname_status(dname) == DNAME_PARTIAL) {
-                        uint8_t dnbuf[256];
-                        dname_copy(dnbuf, dname);
-                        if (dname_cat(dnbuf, origin) != DNAME_VALID)
-                            map_res_err("plugin_" PNSTR ": Name '%s' of resource '%s', when used at origin '%s', produces an invalid domainname", logf_dname(dname), res->name, logf_dname(origin));
-                    }
+                    if (dname_isinzone(zone_name, dname))
+                        map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': CNAME value '%s' cannot be used from DYNC in its own zone '%s'", res->name, this_dc->dc_name, logf_dname(dname), logf_dname(zone_name));
                 } else {
                     if (!this_dc->plugin) {
                         this_dc->plugin = gdnsd_plugin_find(this_dc->plugin_name);
@@ -403,10 +400,10 @@ static int map_res_inner(const char* resname, const uint8_t* origin, const char*
 
                     this_dc->res_num = 0;
                     if (this_dc->plugin->map_res) {
-                        const int resnum = this_dc->plugin->map_res(this_dc->res_name, origin);
+                        const int resnum = this_dc->plugin->map_res(this_dc->res_name, zone_name);
                         if (resnum < 0) {
-                            if (origin)
-                                map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': plugin '%s' rejected DYNC resource name '%s' at origin '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(origin));
+                            if (zone_name)
+                                map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': plugin '%s' rejected DYNC resource name '%s' within zone '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name, logf_dname(zone_name));
                             else
                                 map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s': plugin '%s' rejected DYNA resource name '%s'", res->name, this_dc->dc_name, this_dc->plugin_name, this_dc->res_name);
                         }
@@ -463,7 +460,7 @@ void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED)
     bottom_config_hook();
 }
 
-int CB_MAP(const char* resname, const uint8_t* origin)
+int CB_MAP(const char* resname, const uint8_t* zone_name)
 {
     int rv = -1;
 
@@ -477,17 +474,17 @@ int CB_MAP(const char* resname, const uint8_t* origin)
             const unsigned reslen = slash - resname;
             resname_copy[reslen] = '\0';
             char* dcname = resname_copy + reslen + 1;
-            rv = map_res_inner(resname_copy, origin, dcname);
+            rv = map_res_inner(resname_copy, zone_name, dcname);
             free(resname_copy);
         } else {
-            rv = map_res_inner(resname, origin, NULL);
+            rv = map_res_inner(resname, zone_name, NULL);
         }
     }
 
     return rv;
 }
 
-gdnsd_sttl_t CB_RES(unsigned resnum, const uint8_t* origin, const client_info_t* cinfo, dyn_result_t* result)
+gdnsd_sttl_t CB_RES(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
 {
     // extract and clear any datacenter index from upper 8 bits
     //  (used for synthetic resname/dcname resources)
@@ -528,7 +525,7 @@ gdnsd_sttl_t CB_RES(unsigned resnum, const uint8_t* origin, const client_info_t*
             gdnsd_assert(dcnum <= res->num_dcs);
             gdnsd_result_wipe(result);
             gdnsd_result_reset_scope_mask(result);
-            gdnsd_sttl_t this_rv = resolve_dc(sttl_tbl, &res->dcs[dcnum], origin, cinfo, result);
+            gdnsd_sttl_t this_rv = resolve_dc(sttl_tbl, &res->dcs[dcnum], cinfo, result);
             assert_valid_sttl(this_rv);
             rv = gdnsd_sttl_min2(rv, this_rv);
             if (!(this_rv & GDNSD_STTL_DOWN)) {
@@ -541,7 +538,7 @@ gdnsd_sttl_t CB_RES(unsigned resnum, const uint8_t* origin, const client_info_t*
         if (rv & GDNSD_STTL_DOWN) {
             gdnsd_result_wipe(result);
             gdnsd_result_reset_scope_mask(result);
-            resolve_dc(sttl_tbl, &res->dcs[first_dc_num], origin, cinfo, result);
+            resolve_dc(sttl_tbl, &res->dcs[first_dc_num], cinfo, result);
         }
     }
 

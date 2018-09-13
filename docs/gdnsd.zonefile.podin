@@ -205,10 +205,10 @@ rules.  Plugins results returned via C<DYNC> can be either addresses
 or a C<CNAME> record.  C<DYNC> cannot co-exist with B<any> other
 resource record at the same name, much like normal C<CNAME> RRs.
 This also implies that C<DYNC> cannot be used at the zone root,
-as the zone root requires C<NS> and C<SOA> RRs.  While C<DYNC>
-responses are included in C<ANY> queries for the given name,
-they are B<not> used in Additional-section processing, even
-when the plugin responds with address records rather than C<CNAME>.
+as the zone root requires C<NS> and C<SOA> RRs.
+
+C<DYNC>'s dynamic CNAME targets cannot be used to point at names in the same
+zonefile as the C<DYNC> record; they must be used to point at other zones.
 
 Example:
 
