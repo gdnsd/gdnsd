@@ -1,12 +1,37 @@
-2.99.7-beta - 2018-09-13
+2.99.8-beta - 2018-09-17
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
+      ------
+  *** Bugfixes:
+    * Fixed bug where ancillary programs like gdnsdctl were using the same
+      syslog identifier 'gdnsd' as the main daemon, which was confusing.
+    * Fixed a very long-standing bug (back to 1.x somewhere) that allowed
+      zonefiles to specify CNAME alongside other RRs in certain ways while
+      evading the intended failure to load the zone.  CNAMEs created in this
+      manner wouldn't actually be used for real CNAME aliasing at runtime,
+      but could be seen in direct queries for qtype=CNAME.  Doesn't seem
+      worth a separate bugfix release for 2.x.
+  *** Feature changes:
+    * Zone-local CNAMEs are (once again, like 2.x) followed when generating
+      response packets.
+    * Dynamic CNAME target values emitted via DYNC RRs can no longer point
+      into same-zone data.
+    * VERSION3.md was updated to reflect these.  See previous commit c9fc7de
+      for a fuller explanation of these changes.
+    * CLI option '-T' renamed to '-R' to reduce confusion, and all log
+      outputs related to the replace process had their clarity improved.
+
+2.99.7-beta - 2018-09-13
+    * Fixed bugs that would cause an error exit on startup when
+      certain plugin configuration stanzas were (legally) empty sets.
+    * SIGUSR1 properly handled for extmon_helper as well
 
 2.99.6-beta - 2018-09-12
-      Beta-quality pre-release of 3.0.0 for integration/live testing
-      Note this is not a real release, and there are no gaurantees!
-      Please see the separate file VERSION3.md - there's too much NEWS!
+    * Minor cleanups from Coverity analysis: mostly workarounds to
+      avoid false positives, but also two actual resource leaks fixed
+      (memory and directory handles when reload-zones failed)
+    * SIGUSR1 properly handled during takeover replacement spawn
 
 2.99.5-beta - 2018-09-11
       Beta-quality pre-release of 3.0.0 for integration/live testing
