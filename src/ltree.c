@@ -148,12 +148,11 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 
 // Creates a new, disconnected node
 F_NONNULLX(1)
-static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label, const uint32_t flags)
+static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label)
 {
     ltree_node_t* rv = xcalloc(sizeof(*rv));
     if (label)
         rv->label = lta_labeldup(arena, label);
-    rv->flags = flags;
     return rv;
 }
 
@@ -175,7 +174,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
         child = child->next;
     }
 
-    child = ltree_node_new(arena, child_label, 0);
+    child = ltree_node_new(arena, child_label);
     child->next = node->child_table[child_hash];
     node->child_table[child_hash] = child;
 
@@ -1304,7 +1303,7 @@ void ltree_init_zone(zone_t* zone)
     gdnsd_assert(zone->arena);
     gdnsd_assert(!zone->root);
 
-    zone->root = ltree_node_new(zone->arena, NULL, 0);
+    zone->root = ltree_node_new(zone->arena, NULL);
 }
 
 bool ltree_postproc_zone(zone_t* zone)
