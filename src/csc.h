@@ -36,10 +36,12 @@ typedef struct csc_s_ csc_t;
 // blocking.
 
 // Opens a control socket connection handle.
-// "timeout" is in seconds, and sets socket-level send/receive timeouts
-// Fails fatally or returns a valid csc object
+// "timeout" is in seconds, and sets socket-level send/receive timeouts.
+// "replace" means this is being used by a starting server for a replace
+//            attempt, and mostly changes the log output style.
+// Fails fatally or returns a valid csc object.
 F_RETNN
-csc_t* csc_new(const unsigned timeout);
+csc_t* csc_new(const unsigned timeout, const bool replace);
 
 // Get basic info about server on other side of controlsock (this is fetched
 // via the "status" command immediately after starting a new connection above,
@@ -80,8 +82,9 @@ bool csc_stop_server(csc_t* csc);
 // shut down.  We witness its shutdown by watching the daemon's exit auto-close
 // our control socket, and then watching for the daemon's PID to go away.  This
 // function does all of that waiting and watching.
-F_NONNULL
-bool csc_wait_stopping_server(csc_t* csc);
+// If pfx is non-NULL, used as custom prefix, for gdnsdctl's replace case.
+F_NONNULLX(1)
+bool csc_wait_stopping_server(csc_t* csc, const char* pfx);
 
 // destructs the control socket handle
 F_NONNULL

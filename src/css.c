@@ -110,7 +110,7 @@ struct css_s_ {
     uint32_t status_v;
     uint32_t status_d;
     ev_io w_accept;
-    ev_timer w_takeover;
+    ev_timer w_replace;
     struct ev_loop* loop;
     char* path;
     css_conn_t* clients;
@@ -118,8 +118,8 @@ struct css_s_ {
     conn_queue_t reload_zones_active;
     char* argv0;
     socks_cfg_t* socks_cfg;
-    css_conn_t* replace_conn;
-    css_conn_t* takeover_conn;
+    css_conn_t* replace_conn_ctl;
+    css_conn_t* replace_conn_dmn;
     int* handoff_fds;
     size_t handoff_fds_count;
     pid_t replacement_pid;
@@ -139,10 +139,10 @@ static void css_conn_cleanup(css_conn_t* c)
     css_t* css = c->css;
     gdnsd_assert(css);
 
-    if (c == css->replace_conn)
-        css->replace_conn = NULL;
-    if (c == css->takeover_conn)
-        css->takeover_conn = NULL;
+    if (c == css->replace_conn_ctl)
+        css->replace_conn_ctl = NULL;
+    if (c == css->replace_conn_dmn)
+        css->replace_conn_dmn = NULL;
 
     // stop/free io-related things
     if (c->data)
@@ -296,7 +296,7 @@ static void css_conn_write(struct ev_loop* loop V_UNUSED, ev_io* w, int revents 
 // If "data" is set, it's a buffer of extended response data to send after the
 // initial 8-byte response (and then free once sent), and "d" contains the
 // length of the data.
-// If "send_fds" is set, send the SCM_RIGHTS fd list response for "takeover".
+// If "send_fds" is set, send the SCM_RIGHTS fd list response for REQ_TAKE.
 // "send_fds" requires: key=RESP_ACK, v=0, d=0, data=NULL
 F_NONNULLX(1)
 static void respond(css_conn_t* c, const char key, const uint32_t v, const uint32_t d, char* data, bool send_fds)
@@ -333,7 +333,7 @@ bool css_stop_ok(css_t* css)
 }
 
 F_NONNULL
-static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
+static void css_watch_replace(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_TIMER);
     css_t* css = w->data;
@@ -341,23 +341,23 @@ static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_
     gdnsd_assert(css->replacement_pid);
 
     // libev's default SIGCHLD handler auto-reaps for us
-    // If the process that was attempting a takeover operation died, and we're
+    // If the process that was attempting a replace operation died, and we're
     // still here, so we have some cleanup to do...
     if (kill(css->replacement_pid, 0)) {
-        log_err("Attempted takeover daemon at pid %li died, re-setting takeover states",
+        log_err("REPLACE[old daemon]: New daemon at PID %li died, resuming normal operations",
                 (long)css->replacement_pid);
         ev_timer_stop(loop, w);
 
-        if (css->replace_conn)
-            respond(css->replace_conn, RESP_NAK, 0, 0, NULL, false);
+        if (css->replace_conn_ctl)
+            respond(css->replace_conn_ctl, RESP_NAK, 0, 0, NULL, false);
 
-        if (css->takeover_conn)
-            css_conn_cleanup(css->takeover_conn);
+        if (css->replace_conn_dmn)
+            css_conn_cleanup(css->replace_conn_dmn);
 
-        // re-set our states so that further stop/takeover/replace actions can happen
+        // re-set our states so that further stop/replace/replace actions can happen
         css->replacement_pid = 0;
-        css->takeover_conn = NULL;
-        css->replace_conn = NULL;
+        css->replace_conn_ctl = NULL;
+        css->replace_conn_dmn = NULL;
 
         // Re-start our accept watcher
         ev_io* w_accept = &css->w_accept;
@@ -377,7 +377,7 @@ static void css_watch_takeover(struct ev_loop* loop, ev_timer* w, int revents V_
 // running, which will race with our own reaper to no ill effect.  We just need
 // to be sure the pid is gone completely before continuing.
 //   However, we also still need to track the final PID of the new child in the
-// original daemon, in order to prevent takeover races against a "replace", so
+// original daemon, in order to prevent races between multiple replacements, so
 // we'll also have to set up a pipe() to communicate the final PID back to the
 // parent from the middle process.
 // Thanks, systemd :P
@@ -386,7 +386,7 @@ static pid_t spawn_replacement(const char* argv0)
     // Set up the more-complicated exec args, to be used much deeper during
     // execlp() of the final replacement child
     const char* cfpath = gdnsd_get_config_dir();
-    char flags[5] = { '-', 'T', '\0', '\0', '\0' };
+    char flags[5] = { '-', 'R', '\0', '\0', '\0' };
     unsigned fidx = 2;
     if (gdnsd_log_get_debug())
         flags[fidx++] = 'D';
@@ -570,10 +570,11 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     double nowish;
     size_t stats_size;
     size_t states_size;
+    size_t dns_fds_send;
     char* stats_msg;
     char* states_msg;
     pid_t take_pid;
-    ev_timer* w_takeover = &css->w_takeover;
+    ev_timer* w_replace = &css->w_replace;
     ev_io* w_accept = &css->w_accept;
 
     switch (c->rbuf.key) {
@@ -581,21 +582,26 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         respond(c, RESP_ACK, css->status_v, css->status_d, NULL, false);
         break;
     case REQ_STOP:
-        if (css->replacement_pid && c != css->takeover_conn) {
-            log_err("Denying control socket client request 'stop' because a 'takeover' or 'replace' attempt is in progress!");
-            respond(c, RESP_NAK, 0, 0, NULL, false);
-            break;
+        if (css->replacement_pid) {
+            if (c != css->replace_conn_dmn) {
+                log_err("REPLACE[old daemon]: Denying control socket client request 'stop' because a replace attempt is in progress!");
+                respond(c, RESP_NAK, 0, 0, NULL, false);
+                break;
+            } else {
+                log_info("REPLACE[old daemon]: Exiting cleanly at request of new daemon");
+            }
+        } else {
+            log_info("Exiting cleanly due to control socket client request");
         }
-        log_info("Exiting cleanly due to control socket client request");
         ev_break(loop, EVBREAK_ALL);
         // Setting fd = -1 prevents further writes and prevents closing
         // during css_delete(), so that socket close can be used to witness
         // the daemon exiting just before the PID vanishes...
         if (!respond_blocking_ack(c))
             c->fd = -1;
-        if (css->replace_conn)
-            if (!respond_blocking_ack(css->replace_conn))
-                css->replace_conn->fd = -1;
+        if (css->replace_conn_ctl)
+            if (!respond_blocking_ack(css->replace_conn_ctl))
+                css->replace_conn_ctl->fd = -1;
         break;
     case REQ_STAT:
         nowish = ev_now(loop);
@@ -623,30 +629,37 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         break;
     case REQ_REPL:
         if (css->replacement_pid) {
-            log_warn("Denying socket client attempt at 'replace' while another 'takeover' or 'replace' already in progress");
+            log_warn("REPLACE[old daemon]: Denying replace request while another replace already in progress");
             respond(c, RESP_NAK, 0, 0, NULL, false);
             break;
         }
-        log_info("Accepting socket client replace command, spawning replacement server...");
-        gdnsd_assert(!css->takeover_conn);
-        gdnsd_assert(!css->replace_conn);
-        css->replace_conn = c;
+        log_debug("REPLACE[old daemon]: Accepting replace command, spawning replacement server...");
+        gdnsd_assert(!css->replace_conn_ctl);
+        gdnsd_assert(!css->replace_conn_dmn);
+        css->replace_conn_ctl = c;
         css->replacement_pid = spawn_replacement(css->argv0);
-        log_info("Replacement server started at pid %li", (long)css->replacement_pid);
-        ev_timer_start(css->loop, w_takeover);
+        log_info("REPLACE[old daemon]: Accepted replace command, spawned replacement daemon at PID %li", (long)css->replacement_pid);
+        ev_timer_start(css->loop, w_replace);
         break;
     case REQ_TAKE:
+        gdnsd_assert(css->handoff_fds_count >= 2LU);
         take_pid = (pid_t)c->rbuf.d;
-        if (css->replacement_pid && take_pid != css->replacement_pid) {
-            log_warn("Denying socket client attempt at 'takeover' while another 'takeover' or 'replace' is already in progress");
-            respond(c, RESP_NAK, 0, 0, NULL, false);
-            break;
+        dns_fds_send = css->handoff_fds_count - 2LU;
+        if (css->replacement_pid) {
+            if (take_pid != css->replacement_pid) {
+                log_warn("REPLACE[old daemon]: Denying takeover request while another replace is already in progress");
+                respond(c, RESP_NAK, 0, 0, NULL, false);
+                break;
+            } else {
+                log_info("REPLACE[old daemon]: Accepting takeover request from spawned replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
+            }
+        } else {
+            log_info("REPLACE[old daemon]: Accepting takeover request from indepedent new daemon at PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
         }
-        log_info("Accepting socket client takeover attempt from pid %li", (long)take_pid);
         css->replacement_pid = take_pid;
-        ev_timer_start(css->loop, w_takeover);
-        gdnsd_assert(!css->takeover_conn);
-        css->takeover_conn = c;
+        ev_timer_start(css->loop, w_replace);
+        gdnsd_assert(!css->replace_conn_dmn);
+        css->replace_conn_dmn = c;
         ev_io_stop(css->loop, w_accept); // there can be only one
         respond(c, RESP_ACK, 0, 0, NULL, true);
         break;
@@ -717,11 +730,11 @@ static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
 
     if (getsockname(fd, &fd_sin.sa, &fd_sin.len) || fd_sin.len > GDNSD_ANYSIN_MAXLEN) {
         if (errno == EBADF)
-            log_err("Socket takeover: Ignoring invalid file descriptor %i", fd);
+            log_err("REPLACE[new daemon]: Socket handoff: Ignoring invalid file descriptor %i", fd);
         else if (fd_sin.len > GDNSD_ANYSIN_MAXLEN)
-            log_err("Socket takeover: getsockname(%i) returned oversize address, closing", fd);
+            log_err("REPLACE[new daemon]: Socket handoff: getsockname(%i) returned oversize address, closing", fd);
         else
-            log_err("Socket takeover: getsockname(%i) failed, closing: %s", fd, logf_errno());
+            log_err("REPLACE[new daemon]: Socket handoff: getsockname(%i) failed, closing: %s", fd, logf_errno());
         if (errno != EBADF)
             close(fd);
         return;
@@ -732,7 +745,7 @@ static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
     if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &fd_sin_type, &fd_sin_type_size)
             || fd_sin_type_size != sizeof(fd_sin_type)
             || (fd_sin_type != SOCK_DGRAM && fd_sin_type != SOCK_STREAM)) {
-        log_err("Socket takeover: cannot get type of fd %i @ %s, closing: %s", fd, logf_anysin(&fd_sin), logf_errno());
+        log_err("REPLACE[new daemon]: Socket handoff: cannot get type of fd %i @ %s, closing: %s", fd, logf_anysin(&fd_sin), logf_errno());
         close(fd);
         return;
     }
@@ -747,13 +760,12 @@ static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
         }
     }
 
-    log_info("Socket takeover: closing excess socket for address %s", logf_anysin(&fd_sin));
+    log_info("REPLACE[new daemon]: Socket handoff: closing excess socket for address %s", logf_anysin(&fd_sin));
     close(fd);
 }
 
 static void socks_import_fds(socks_cfg_t* socks_cfg, const int* fds, const size_t nfds)
 {
-    log_info("Socket takeover: got %zu DNS sockets", nfds);
     for (size_t i = 0; i < nfds; i++)
         socks_import_fd(socks_cfg, fds[i]);
 }
@@ -786,7 +798,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
             return NULL;
         }
     } else if (csc) {
-        log_warn("Existing daemon at %li appears to have exited while we were starting, resuming normal non-takeover startup!",
+        log_warn("REPLACE[new daemon]: old daemon at %li appears to have exited while we were starting, executing a normal non-replace startup!",
                  (long)csc_get_server_pid(csc));
         csc_delete(csc);
         csc = NULL;
@@ -796,26 +808,23 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
     free(lock_path);
 
     if (csc) {
-        log_info("Executing actual takeover of v%s running at pid %li",
-                 csc_get_server_version(csc),
-                 (long)csc_get_server_pid(csc)
-                );
         csbuf_t req, resp;
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAKE;
         req.d = (uint32_t)getpid();
         int* resp_fds = NULL;
         if (csc_txn_getfds(csc, &req, &resp, &resp_fds))
-            log_fatal("Takeover request failed");
-        log_info("Takeover request accepted");
+            log_fatal("REPLACE[new daemon]: Takeover request failed");
         gdnsd_assert(resp_fds);
-        gdnsd_assert(csbuf_get_v(&resp) > 2);
+        gdnsd_assert(csbuf_get_v(&resp) > 2U);
         gdnsd_assert(sock_fd == -1);
         gdnsd_assert(lock_fd == -1);
         // cppcheck-suppress resourceLeak (cppcheck can't follow the logic)
         lock_fd = resp_fds[0];
         sock_fd = resp_fds[1];
-        socks_import_fds(socks_cfg, &resp_fds[2], (size_t)csbuf_get_v(&resp) - 2U);
+        size_t dns_fd_count = csbuf_get_v(&resp) - 2U;
+        log_info("REPLACE[new daemon]: Takeover request accepted, received %zu DNS sockets", dns_fd_count);
+        socks_import_fds(socks_cfg, &resp_fds[2], dns_fd_count);
         free(resp_fds);
     }
 
@@ -855,9 +864,9 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
     ev_io_init(w_accept, css_accept, css->fd, EV_READ);
     w_accept->data = css;
 
-    ev_timer* w_takeover = &css->w_takeover;
-    ev_timer_init(w_takeover, css_watch_takeover, 1.0, 1.0);
-    w_takeover->data = css;
+    ev_timer* w_replace = &css->w_replace;
+    ev_timer_init(w_replace, css_watch_replace, 1.0, 1.0);
+    w_replace->data = css;
 
     return css;
 }
@@ -875,6 +884,7 @@ void css_start(css_t* css, struct ev_loop* loop)
     css->handoff_fds[1] = css->fd;
     for (unsigned i = 0; i < css->socks_cfg->num_dns_threads; i++)
         css->handoff_fds[i + 2] = css->socks_cfg->dns_threads[i].sock;
+    log_debug("Entering runtime loop in main thread, listening to control socket");
 }
 
 bool css_notify_zone_reloaders(css_t* css, const bool failed)
@@ -915,8 +925,8 @@ void css_delete(css_t* css)
         free(css->handoff_fds);
     ev_io* w_accept = &css->w_accept;
     ev_io_stop(css->loop, w_accept);
-    ev_timer* w_takeover = &css->w_takeover;
-    ev_timer_stop(css->loop, w_takeover);
+    ev_timer* w_replace = &css->w_replace;
+    ev_timer_stop(css->loop, w_replace);
     close(css->fd);
     close(css->lock_fd); // Closing the lock fd implicitly clears the lock
     free(css->argv0);

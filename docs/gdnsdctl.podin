@@ -77,7 +77,7 @@ brief window of time where client requests can be routed to either daemon
 randomly, but there should never be a window where service is unavailable.  The
 control socket itself is handed off synchronously: the old daemon stops
 listening for new connections before the new daemon begins listening, and the
-old daemon re-starts listening if the new daemon fails to take over completely.
+old daemon re-starts listening if the new daemon fails to succeed completely.
 During the entire replacement process, the old daemon will deny control socket
 requests from already-connected clients to "stop" the daemon or initiate
 concurrent "replace" requests.

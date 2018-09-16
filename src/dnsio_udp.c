@@ -312,7 +312,7 @@ void udp_sock_setup(dns_thread_t* t)
     gdnsd_assert(isv6 || asin->sa.sa_family == AF_INET);
 
     bool need_bind = false;
-    if (t->sock == -1) { // not acquired via takeover
+    if (t->sock == -1) { // not acquired via replace
         t->sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM | SOCK_CLOEXEC, gdnsd_getproto_udp());
         if (t->sock == -1)
             log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());

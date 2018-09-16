@@ -56,11 +56,11 @@ typedef struct css_s_ css_t;
 // detect the socket is already locked by another daemon instance, this
 // function returns NULL.
 // * If csc_p is non-NULL, *csc_p must also be non-NULL, and we will attempt
-// graceful takeover from the running daemon connected to *csc_p if the control
-// socket lock is still held, and fall back to attempting non-takeover startup
+// graceful replace from the running daemon connected to *csc_p if the control
+// socket lock is still held, and fall back to attempting non-replace startup
 // if it is not held.  Either way, either a valid "css" will be returned or
 // this function will fail fatally.  If the csc connection was used for
-// takeover, *csc will retain its original value.  If it was not used (we were
+// replace, *csc will retain its original value.  If it was not used (we were
 // able to obtain the lock normally), csc will be closed/deleted and *csc_p set
 // to NULL.
 F_NONNULLX(1, 2)
@@ -77,7 +77,7 @@ void css_start(css_t* css, struct ev_loop* loop);
 bool css_notify_zone_reloaders(css_t* css, const bool failed);
 
 // Check whether a stop (e.g. via signal) is currently ok or not (due to
-// impending replacement/takeover operation)
+// impending replacement/replace operation)
 bool css_stop_ok(css_t* css);
 
 // Stop all traffic and destruct all resources (css itself is freed as well)

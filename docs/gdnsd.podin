@@ -4,12 +4,12 @@ gdnsd - An authoritative DNS daemon
 
 =head1 SYNOPSIS
 
-  Usage: gdnsd [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-S] [-T] <action>
+  Usage: gdnsd [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-S] [-R] <action>
     -c - Configuration directory (default @GDNSD_DEFPATH_CONFIG@)
     -D - Enable verbose debug output
     -l - Send logs to syslog rather than stderr
     -S - Force 'zones_strict_data = true' for this invocation
-    -T - Allow downtime-less takeover of another instance
+    -R - Attempt downtimeless replacement of another instance
   Actions:
     checkconf - Checks validity of config and zone files
     start - Start as a regular foreground process
@@ -55,7 +55,7 @@ Forces the C<zones_strict_data> configuration option to true for
 this invocation, regardless of the setting in the config file.  This is
 mostly useful for validation during the C<checkconf> option.
 
-=item B<-T>
+=item B<-R>
 
 Normally, if another server instance has the server control socket locked, a
 C<start> or C<daemonize> attempt will fail.  With this flag set, the new server

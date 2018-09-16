@@ -36,12 +36,18 @@
 #include <sys/un.h>
 #include <sys/file.h>
 
+static const char repl_pfx_normal[] = "";
+static const char repl_pfx_replace[] = "REPLACE[new daemon]: ";
+static const char repl_pfx_replace_old[] = "REPLACE[new daemon]: old ";
+
 struct csc_s_ {
     int fd;
     unsigned timeout;
     pid_t server_pid;
     char* path;
     char server_vers[16];
+    const char* repl_pfx;
+    const char* repl_pfx_old;
 };
 
 static bool csc_get_status(csc_t* csc)
@@ -59,32 +65,34 @@ static bool csc_get_status(csc_t* csc)
     return false;
 }
 
-csc_t* csc_new(const unsigned timeout)
+csc_t* csc_new(const unsigned timeout, const bool replace)
 {
+    csc_t* csc = xcalloc(sizeof(*csc));
+    csc->timeout = timeout;
+    csc->repl_pfx = replace ? repl_pfx_replace : repl_pfx_normal;
+    csc->repl_pfx_old = replace ? repl_pfx_replace_old : repl_pfx_normal;
+
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
-        log_fatal("Creating AF_UNIX socket failed: %s", logf_errno());
+        log_fatal("%sCreating AF_UNIX socket failed: %s", csc->repl_pfx, logf_errno());
+    csc->fd = fd;
 
     const struct timeval tmout = { .tv_sec = timeout, .tv_usec = 0 };
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout, sizeof(tmout)))
-        log_fatal("Failed to set SO_RCVTIMEO on control socket: %s", logf_errno());
+        log_fatal("%sFailed to set SO_RCVTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
     if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tmout, sizeof(tmout)))
-        log_fatal("Failed to set SO_SNDTIMEO on control socket: %s", logf_errno());
+        log_fatal("%sFailed to set SO_SNDTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
 
     char* path = gdnsd_resolve_path_run("control.sock", NULL);
+    csc->path = path;
 
     struct sockaddr_un addr;
     sun_set_path(&addr, path);
     if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)))
-        log_fatal("connect() to unix domain socket %s failed: %s", path, logf_errno());
-
-    csc_t* csc = xcalloc(sizeof(*csc));
-    csc->fd = fd;
-    csc->path = path;
-    csc->timeout = timeout;
+        log_fatal("%sconnect() to unix domain socket %s failed: %s", csc->repl_pfx, path, logf_errno());
 
     if (csc_get_status(csc))
-        log_fatal("Failed to get server status over control socket %s", csc->path);
+        log_fatal("%sFailed to get daemon status over control socket %s", csc->repl_pfx, csc->path);
 
     return csc;
 }
@@ -164,14 +172,14 @@ bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fd
                         fds_recvd += nfds;
                         got_some_fds = true;
                     } else {
-                        log_err("Received more SCM_RIGHTS fds than expected!");
+                        log_err("REPLACE[new daemon]: Received more SCM_RIGHTS fds than expected!");
                     }
                 }
             }
         }
 
         if (!got_some_fds) {
-            log_err("recvmsg() failed to get SCM_RIGHTS fds after %zu of %zu expected", fds_recvd, fds_wanted);
+            log_err("REPLACE[new daemon]: recvmsg() failed to get SCM_RIGHTS fds after %zu of %zu expected", fds_recvd, fds_wanted);
             free(fds);
             return true;
         }
@@ -262,16 +270,21 @@ bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_d
     return false;
 }
 
-bool csc_wait_stopping_server(csc_t* csc)
+bool csc_wait_stopping_server(csc_t* csc, const char* pfx)
 {
+    // wait_stopping_server is used both by the old daemon and gdnsdctl during
+    // replace, so gdnsdctl needs to provide its own custom prefix
+    if (!pfx)
+        pfx = csc->repl_pfx_old;
+
     // Wait for server to close our csock fd as it exits
     char x;
     ssize_t recv_rv = recv(csc->fd, &x, 1, 0);
     if (recv_rv) {
         if (recv_rv < 0)
-            log_err("Error while waiting for stopping server to close: %s", logf_errno());
+            log_err("%sdaemon connection error while waiting for close: %s", pfx, logf_errno());
         else
-            log_err("Got data byte '%c' while waiting for stopping server close", x);
+            log_err("%sdaemon send unexpected data byte '%c' while waiting for close", pfx, x);
         return true;
     }
 
@@ -281,11 +294,12 @@ bool csc_wait_stopping_server(csc_t* csc)
     while (tries--) {
         nanosleep(&ts, NULL);
         if (kill(csc->server_pid, 0)) {
-            log_info("Server at pid %li exited after stop command", (long)csc->server_pid);
+            log_info("%sdaemon at PID %li exited as commanded", pfx, (long)csc->server_pid);
             return false;
         }
     }
-    log_err("Server at pid %li did not exit within ~%u seconds after stop, giving up", (long)csc->server_pid, csc->timeout);
+
+    log_err("%sdaemon at PID %li did not exit within ~%u seconds after stop, giving up", pfx, (long)csc->server_pid, csc->timeout);
     return true;
 }
 
@@ -295,10 +309,10 @@ bool csc_stop_server(csc_t* csc)
     memset(&req, 0, sizeof(req));
     req.key = REQ_STOP;
     if (csc_txn(csc, &req, &resp)) {
-        log_err("Stop command to server pid %li failed", (long)csc->server_pid);
+        log_err("%sdaemon at PID %li failed stop command", csc->repl_pfx_old, (long)csc->server_pid);
         return true;
     }
-    log_info("Stop command to server pid %li succeeded", (long)csc->server_pid);
+    log_debug("%sdaemon at PID %li accepted stop command", csc->repl_pfx_old, (long)csc->server_pid);
     return false;
 }
 

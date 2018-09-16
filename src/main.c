@@ -155,7 +155,7 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal* w, const int
     gdnsd_assert(w->signum == SIGTERM || w->signum == SIGINT);
     css_t* css = w->data;
     if (!css_stop_ok(css)) {
-        log_err("Ignoring terminating signal %i because a takeover or replacement attempt is in progress!", w->signum);
+        log_err("Ignoring terminating signal %i because a replace or replacement attempt is in progress!", w->signum);
     } else {
         log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
         killed_by = w->signum;
@@ -208,12 +208,12 @@ static void usage(const char* argv0)
     const char* def_cfdir = gdnsd_get_default_config_dir();
     fprintf(stderr,
             PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-            "Usage: %s [-c %s] [-D] [-l] [-S] [-T] <action>\n"
+            "Usage: %s [-c %s] [-D] [-l] [-S] [-R] <action>\n"
             "  -c - Configuration directory, default '%s'\n"
             "  -D - Enable verbose debug output\n"
             "  -l - Send logs to syslog rather than stderr\n"
             "  -S - Force 'zones_strict_data = true' for this invocation\n"
-            "  -T - Allow downtime-less takeover of another instance\n"
+            "  -R - Attempt downtimeless replace of another instance\n"
             "Actions:\n"
             "  checkconf - Checks validity of config and zone files\n"
             "  start - Start as a regular foreground process\n"
@@ -293,7 +293,7 @@ typedef enum {
 typedef struct {
     const char* cfg_dir;
     bool force_zsd;
-    bool takeover_ok;
+    bool replace_ok;
     cmdline_action_t action;
 } cmdline_opts_t;
 
@@ -301,7 +301,7 @@ F_NONNULL
 static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
 {
     int optchar;
-    while ((optchar = getopt(argc, argv, "c:DlST"))) {
+    while ((optchar = getopt(argc, argv, "c:DlSR"))) {
         switch (optchar) {
         case 'c':
             copts->cfg_dir = optarg;
@@ -315,8 +315,8 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
         case 'S':
             copts->force_zsd = true;
             break;
-        case 'T':
-            copts->takeover_ok = true;
+        case 'R':
+            copts->replace_ok = true;
             break;
         case -1:
             if (optind == (argc - 1)) {
@@ -349,7 +349,7 @@ int main(int argc, char** argv)
     cmdline_opts_t copts = {
         .cfg_dir = NULL,
         .force_zsd = false,
-        .takeover_ok = false,
+        .replace_ok = false,
         .action = ACT_UNDEF
     };
 
@@ -389,11 +389,10 @@ int main(int argc, char** argv)
     csc_t* csc = NULL;
     css_t* css = css_new(argv[0], socks_cfg, NULL);
     if (!css) {
-        if (!copts.takeover_ok)
-            log_fatal("Another instance is running and has the control socket locked!");
-        log_info("Another instance is running, connecting to control socket for takeover");
-        csc = csc_new(13);
-        log_info("Connected to existing instance v%s at pid %li",
+        if (!copts.replace_ok)
+            log_fatal("Another instance is running and has the control socket locked, exiting!");
+        csc = csc_new(13, true);
+        log_info("REPLACE[new daemon]: Connected to old daemon version %s at PID %li for takeover",
                  csc_get_server_version(csc), (long)csc_get_server_pid(csc));
     }
 
@@ -424,7 +423,7 @@ int main(int argc, char** argv)
     gdnsd_plugins_action_pre_run();
 
     // Now that we're past potentially long-running operations like initial
-    // monitoring and plugin pre_run actions, initiate the takeover operation
+    // monitoring and plugin pre_run actions, initiate the replace operation
     // over the control socket connection.  During those long-running
     // operations, another starting daemon could beat us in a race here and
     // we'll be denied (unless we were initiated by "replace" fork->execve,
@@ -470,7 +469,7 @@ int main(int argc, char** argv)
     // Stop old daemon after establishing the new one's listeners
     if (csc) {
         if (!csc_stop_server(csc))
-            csc_wait_stopping_server(csc);
+            csc_wait_stopping_server(csc, NULL);
         csc_delete(csc);
         csc = NULL;
     }
