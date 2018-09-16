@@ -425,6 +425,8 @@ bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t
     CLAMP_TTL("CNAME")
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
+    if (node->rrsets)
+        log_zfatal("Name '%s%s': CNAME not allowed alongside other data", logf_dname(dname), logf_dname(zone->dname));
     ltree_rrset_cname_t* rrset = ltree_node_add_rrset_cname(node);
     rrset->dname = lta_dnamedup(zone->arena, rhs);
     rrset->gen.ttl = htonl(ttl);
@@ -447,6 +449,8 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
     }
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
+    if (node->rrsets)
+        log_zfatal("Name '%s%s': DYNC not allowed alongside other data", logf_dname(dname), logf_dname(zone->dname));
     ltree_rrset_dync_t* rrset = ltree_node_add_rrset_dync(node);
     rrset->origin = lta_dnamedup(zone->arena, origin);
     rrset->gen.ttl = htonl(ttl);
