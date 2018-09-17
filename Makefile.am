@@ -88,12 +88,6 @@ install-exec-hook-top:
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG)/geoip";
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_RUN)";
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_STATE)";
-	@id gdnsd >/dev/null 2>&1; if test $$? -ne 0; then \
-		echo; \
-		echo === READ ME ===; \
-		echo The default user \"gdnsd\" \(for privdrop when executed as root\) does not seem to exist yet!; \
-		echo; \
-	fi
 
 #=====================================
 # src/
