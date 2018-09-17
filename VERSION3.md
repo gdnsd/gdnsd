@@ -69,7 +69,7 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * The server does not support emitting responses greater than ~16KB in size over any protocol.  Zone data is explicitly validated against this constraint, and zonefiles will fail to load if they contain record sets which could generate an over-sized response packet.  The checks are somewhat conservative in corner cases and may reject data which would technically barely fit in practice.
 * DYNC and related plugin configurations have two new restrictions: all configured dynamic CNAME values must be fully-qualified (end in dot), and DYNC cannot be used to emit a CNAME that points into the same zone (in others words, if `example.com` has the RR `foo DYNC %weighted!some-cnames`, the weighted plugin's configuration for the resource `some-cnames` cannot contain any CNAME values within the zone `example.com`; they must be names in other domains).
 
-## Other minor things
+### Other minor things
 
 * The GeoIP distance calculations are now slightly faster and more accurate.
 * The source code has been through a bunch of cleanup for clarity, simplicity, and formatting
@@ -123,7 +123,7 @@ None of these generate a syntax error for now, they merely log a non-fatal error
 
 ## Commandline changes for the main daemon
 
-* All of these CLI action verbs are removed and effectively replaced `gdnsdctl`: `stop`, `reload-zones`, `restart`, `condrestart`, `try-restart`, `status`.
+* All of these CLI action verbs are removed and effectively replaced by `gdnsdctl`: `stop`, `reload-zones`, `restart`, `condrestart`, `try-restart`, `status`.
 * The remaining verbs are:
   * `start` - Starts a foreground process, non-daemonizing with log output to stderr by default.
   * `daemonize` - Starts a background daemon process.  The daemonization is minimal, but correct and complete.  It properly goes through the `fork()->setsid()->fork()` sequence, it ignores `SIGHUP` (unlike `start`), and it closes off the stdio files and sends its logging to syslog.  The original foreground process waits on the daemonized child to report successful startup (through offering live runtime service) before it exits with status zero.
@@ -139,7 +139,7 @@ None of these generate a syntax error for now, they merely log a non-fatal error
 
 ## Security, daemon management and init systems
 
-The TL;DR here is that gdnsd doesn't manage its own OS security or privileges anymore.  It just runs and assumes the environment was already secured by the init system or script, and assumes it can bind port 53.  The init script/system is also responsible for taking care of other optional bits gdnsd used to do for itself as root before dropping its own privileges: setting the working directory sanely, setting locked memory (and/or other) resource limits, setting process priority, dropping privileges for the daemon, etc.  Since most installations will want gdnsd to run as a non-root user and also to bind port 53, that means a system-specific mechanism will have to be employed by the init script/system to allow the non-root user to bind port 53.  For Linux this means `CAP_NET_BIND_SERVICE`, and for FreeBSD I think it's `mac_portacl`, but in general this is not an area where portable solutions exist.  See the next section for more rationale and background.
+The TL;DR here is that gdnsd doesn't manage its own OS security or privileges anymore.  It just runs and assumes the environment was already secured by the init system or script, and assumes it can bind port 53.  The init script/system is also responsible for taking care of other optional bits gdnsd used to do for itself as root before dropping its own privileges: setting the working directory sanely, setting locked memory (and/or other) resource limits, setting process priority, dropping privileges for the daemon, etc.  Since most installations will want gdnsd to run as a non-root user and also to bind port 53, that means a system-specific mechanism will have to be employed by the init script/system to allow the non-root user to bind port 53.  For Linux this means `CAP_NET_BIND_SERVICE`, and for FreeBSD I think it's `mac_portacl`, but in general this is not an area where portable solutions exist.  More rationale and background on this further down below.
 
 For systemd-based Linux distributions, an example unit file which handles all the things is built along with the software at `sysd/gdnsd.service`.  For traditional initscript systems, you'll have to piece it together from commands in the initscript such as `ulimit`, `nice`, `su`, the BSD `daemon` command, etc.
 
@@ -203,7 +203,7 @@ I think the plugin API for dynamic resolution has always been at the wrong abstr
 
 It would make sense for this hypothetical universal resolver to have pluggable mapping methods (geoip being the canonical example), but then I don't know if I'd go back down the true `dlopen()` plugin road for that or not.  The APIs are never stable enough and all plugins could have more-easily just been source patches against a reasonably-well-documented internal core API, avoiding all the complexity and mess of `dlopen()`ing code and pretending we support some portable and stable external plugin ABI.
 
-I hope to do some kind of work related to some of this for 4.x, but it's hard to say where it will all end up right now.  One of the real feature needs I have in this space over the coming year is the proper intersection of the 'weighted' and 'geoip' functionalities, where geographic locations have weight values which can be dynamically adjusted at runtime (via the `admin_state` file, or via gdnsdctl?), and the weight affects distance calculations (you can think of it as growing or shrinking the bubble of mapped clients around a datacenter on the geographic map).  Probably something that supports those ideas will get implemented, even if all of the rest of the dramatic re-architecting doesn't happen.
+I hope to do some kind of work related to some of this for 4.x, but it's hard to say where it will all end up right now.  One of the real feature needs I have in this space over the coming year is the proper intersection of the 'weighted' and 'geoip' functionalities, where datacenters have weight values which can be dynamically adjusted at runtime (via the `admin_state` file, or via gdnsdctl?), and the weight affects distance calculations (you can think of it as growing or shrinking the bubble of mapped clients around a datacenter on the geographic map).  Probably something that supports those ideas will get implemented, even if all of the rest of the dramatic re-architecting doesn't happen.
 
 ### The DYNA/DYNC resource types in general
 
