@@ -137,7 +137,7 @@ None of these generate a syntax error for now, they merely log a non-fatal error
   * Added: `-l` - explicitly switches log output from stderr to syslog for the `start` and `checkconf` actions.
   * Added: `-R` - allows `start` or `daemonize` to replace another running daemon instance in a smooth (downtime-less, loss-free) way.  This is what's used when the daemon spawns its own replacement process when commanded to do so by `gdnsdctl replace`.  Without `-R`, if another daemon instance were already running, `start` or `daemonize` would complain and exit.
 
-The removed flags `-s` and `-x` are still allowed for compatibility reasons and emit non-fatal log messages, to ease transition of tools/scripts.
+All the removed flags (`-f`, `-s`, and `-x`) are still allowed for compatibility reasons and emit non-fatal log messages, to ease transition of tools/scripts.
 
 ## Security, daemon management and init systems
 

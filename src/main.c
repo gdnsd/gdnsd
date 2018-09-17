@@ -294,6 +294,7 @@ typedef struct {
     const char* cfg_dir;
     bool force_zsd;
     bool replace_ok;
+    bool deadopt_f;
     bool deadopt_s;
     bool deadopt_x;
     cmdline_action_t action;
@@ -303,7 +304,7 @@ F_NONNULL
 static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
 {
     int optchar;
-    while ((optchar = getopt(argc, argv, "c:DlSRsx"))) {
+    while ((optchar = getopt(argc, argv, "c:DlSRfsx"))) {
         switch (optchar) {
         case 'c':
             copts->cfg_dir = optarg;
@@ -319,6 +320,9 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
             break;
         case 'R':
             copts->replace_ok = true;
+            break;
+        case 'f':
+            copts->deadopt_f = true;
             break;
         case 's':
             copts->deadopt_s = true;
@@ -366,9 +370,10 @@ int main(int argc, char** argv)
     parse_args(argc, argv, &copts);
     gdnsd_assert(copts.action != ACT_UNDEF);
 
+    if (copts.deadopt_f)
+        log_err("The commandline option '-f' has been removed.  This will be an error in a future major version update!");
     if (copts.deadopt_s)
         log_err("The commandline option '-s' has been removed.  This will be an error in a future major version update!");
-
     if (copts.deadopt_x)
         log_err("The commandline option '-x' has been removed.  This will be an error in a future major version update!");
 
