@@ -137,6 +137,8 @@ None of these generate a syntax error for now, they merely log a non-fatal error
   * Added: `-l` - explicitly switches log output from stderr to syslog for the `start` and `checkconf` actions.
   * Added: `-R` - allows `start` or `daemonize` to replace another running daemon instance in a smooth (downtime-less, loss-free) way.  This is what's used when the daemon spawns its own replacement process when commanded to do so by `gdnsdctl replace`.  Without `-R`, if another daemon instance were already running, `start` or `daemonize` would complain and exit.
 
+The removed flags `-s` and `-x` are still allowed for compatibility reasons and emit non-fatal log messages, to ease transition of tools/scripts.
+
 ## Security, daemon management and init systems
 
 The TL;DR here is that gdnsd doesn't manage its own OS security or privileges anymore.  It just runs and assumes the environment was already secured by the init system or script, and assumes it can bind port 53.  The init script/system is also responsible for taking care of other optional bits gdnsd used to do for itself as root before dropping its own privileges: setting the working directory sanely, setting locked memory (and/or other) resource limits, setting process priority, dropping privileges for the daemon, etc.  Since most installations will want gdnsd to run as a non-root user and also to bind port 53, that means a system-specific mechanism will have to be employed by the init script/system to allow the non-root user to bind port 53.  For Linux this means `CAP_NET_BIND_SERVICE`, and for FreeBSD I think it's `mac_portacl`, but in general this is not an area where portable solutions exist.  More rationale and background on this further down below.

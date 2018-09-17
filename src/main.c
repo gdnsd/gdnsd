@@ -294,6 +294,8 @@ typedef struct {
     const char* cfg_dir;
     bool force_zsd;
     bool replace_ok;
+    bool deadopt_s;
+    bool deadopt_x;
     cmdline_action_t action;
 } cmdline_opts_t;
 
@@ -301,7 +303,7 @@ F_NONNULL
 static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
 {
     int optchar;
-    while ((optchar = getopt(argc, argv, "c:DlSR"))) {
+    while ((optchar = getopt(argc, argv, "c:DlSRsx"))) {
         switch (optchar) {
         case 'c':
             copts->cfg_dir = optarg;
@@ -317,6 +319,12 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
             break;
         case 'R':
             copts->replace_ok = true;
+            break;
+        case 's':
+            copts->deadopt_s = true;
+            break;
+        case 'x':
+            copts->deadopt_x = true;
             break;
         case -1:
             if (optind == (argc - 1)) {
@@ -350,11 +358,19 @@ int main(int argc, char** argv)
         .cfg_dir = NULL,
         .force_zsd = false,
         .replace_ok = false,
+        .deadopt_s = false,
+        .deadopt_x = false,
         .action = ACT_UNDEF
     };
 
     parse_args(argc, argv, &copts);
     gdnsd_assert(copts.action != ACT_UNDEF);
+
+    if (copts.deadopt_s)
+        log_err("The commandline option '-s' has been removed.  This will be an error in a future major version update!");
+
+    if (copts.deadopt_x)
+        log_err("The commandline option '-x' has been removed.  This will be an error in a future major version update!");
 
     // Initialize libgdnsd basic paths/config stuff
     if (copts.action != ACT_CHECKCONF)
