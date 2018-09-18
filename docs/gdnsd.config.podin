@@ -91,12 +91,6 @@ Integer port, 1-65535, default 53.  This is the global default port
 number for DNS listener addresses which do not specify port numbers
 themselves.
 
-=item B<http_port>
-
-Integer port, 1-65535, default 3506.  This is the default HTTP port
-number for stats listener addresses which do not specify port numbers
-themselves.
-
 =item B<listen>
 
 The listen option specifies the socket addresses the server listens on
@@ -159,19 +153,6 @@ and IPv6 C<ANY> addresses C<0.0.0.0> and C<::>.  gdnsd's C<ANY>-address
 sockets should correctly handle sending outgoing datagrams via the interface
 they were received on with a source address matching the destination address of
 the request.
-
-=item B<http_listen>
-
-Basically like B<listen> above, but used for the HTTP listener (serving
-stats information), and defaulting to port 3506.  The hash form isn't
-supported as there are no per-address options, and the any/all options
-don't exist here.  The default is to listen on the IPv4 and IPv6
-any-addresses (C<0.0.0.0> and C<::>).
-
-It makes common sense to restrict access to this service via firewall
-rules, as the data served leaks information about the rate and nature
-of your DNS traffic.  This is mostly intended for your own internal
-monitoring purposes.
 
 =item B<tcp_threads>
 
@@ -262,18 +243,6 @@ Integer, min 4096, max 1048576.  If set, this value will be used to set
 the C<SO_SNDBUF> socket option on the UDP listening socket(s).  Tuning
 advice mirrors the above.
 
-=item B<max_http_clients>
-
-Integer, default 128, min 1, max 65535.  Maximum number of HTTP
-connections to allow in parallel at any given time.  Once this number
-is reached, no more new connections will be answered until an existing
-connection closes or times out.
-
-=item B<http_timeout>
-
-Integer seconds, default 5, min 3, max 60.  HTTP connections will be
-forcibly shut down if they go idle for more than this many seconds.
-
 =item B<zones_strict_data>
 
 Boolean, default C<false>
@@ -307,7 +276,7 @@ chunk.
 
 Ordinarily, you may specify chunk(s) of a C<TXT> record in gdnsd
 zonefiles as a string of any size up to the legal length (just short of
-64K in practice), and gdnsd will auto-split the data into 255-byte
+16K in practice), and gdnsd will auto-split the data into 255-byte
 chunks for transmission over the DNS protocol correctly.  If you choose
 to manually break up your TXT record into multiple strings in the
 zonefile, gdnsd also honors these boundaries and will not attempt to
@@ -370,7 +339,7 @@ label are also forced to this TTL regardless of the zonefile-level TTL,
 to avoid cases of mixed TTLs when mixing static and dynamic records in
 server outputs.  See the L<gdnsdctl(8)> documentation for more details.
 
-=item <nsid>
+=item B<nsid>
 
 String, no default, 2-256 chars in length.  Character count must be
 even, and all characters must be ASCII hex digits.  This encodes up to
@@ -738,19 +707,17 @@ Example 1 (simple and clean):
 
   options = {
     listen = [ 192.0.2.1, 192.0.2.2 ],
-    http_listen = 127.0.0.1,
   }
 
 Example 2 (fat arrows, no commas, some arbitrary quoting):
 
   "options" => {
     listen => [ 192.0.2.1 192.0.2.2 ]
-    http_listen => "127.0.0.1"
   }
 
 Example 3 (compressed and ugly):
 
-  options={listen=[192.0.2.1 192.0.2.2]http_listen=127.0.0.1}
+  options={listen=[192.0.2.1 192.0.2.2]}
 
 =head1 INCLUDING OTHER FILES
 

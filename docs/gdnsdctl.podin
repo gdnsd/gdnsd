@@ -1,6 +1,6 @@
 =head1 NAME
 
-gdnsd - An authoritative DNS daemon
+gdnsdctl - Control socket client for gdnsd
 
 =head1 SYNOPSIS
 
