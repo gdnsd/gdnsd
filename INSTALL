@@ -57,9 +57,6 @@ Interesting / Non-standard autoconf options
     systemd software installed (but e.g. are not using it for the init
     system), use --without-systemdsystemunitdir
 
---without-urcu
-  Explicitly disable support for liburcu (falls back to pthread rwlocks)
-
 --without-hardening
   Disable the default compiler/linker flags for security hardening.
   Probably not a great idea unless they're breaking things on your
