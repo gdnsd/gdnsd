@@ -1,8 +1,19 @@
-2.99.8-beta - 2018-09-17
+2.99.9-beta - 2018-09-18
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * Fixed three related bugs in MX/SRV record validation during zone
+      loading which could have caused duplicated warnings, negated the
+      intended effect of zones_strict_data just for the MX/SRV case, and
+      also failed to reject huge MX/SRV RR sets, if zones_strict_data
+      was true.
+    * Main daemon now ignores old options '-f', '-s', and '-x' to ease
+      transition of scripts/tools
+    * 'make install' no longer checks for the 'gdnsd' user
+    * Various documentation fixups and minor cleanup
+
+2.99.8-beta - 2018-09-17
   *** Bugfixes:
     * Fixed bug where ancillary programs like gdnsdctl were using the same
       syslog identifier 'gdnsd' as the main daemon, which was confusing.
