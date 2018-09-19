@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/file.h>
@@ -53,8 +54,6 @@ static const char base_sock[] = "control.sock";
 static const char base_lock[] = "control.lock";
 
 static const unsigned max_clients = 100U;
-
-static const mode_t CSOCK_PERMS = (S_IRUSR | S_IWUSR); // 0600
 
 typedef enum {
     READING_REQ,
@@ -850,11 +849,16 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         sun_set_path(&addr, sock_path);
         if (unlink(sock_path) && errno != ENOENT)
             log_fatal("unlink(%s) failed: %s", sock_path, logf_errno());
+
+        // umask()-switching around the bind() seems safer against possible
+        // perms races on various platforms than doing a chmod between bind()
+        // and listen().  Note umask() isn't thread-safe, but css_new() is
+        // called before any threads are created.
+        const mode_t oldmask = umask(S_IXUSR | S_IRWXG | S_IRWXO); // 0177
         if (bind(css->fd, (struct sockaddr*)&addr, sizeof(addr)))
             log_fatal("bind() of unix domain socket %s failed: %s", sock_path, logf_errno());
+        umask(oldmask);
 
-        if (chmod(sock_path, CSOCK_PERMS))
-            log_fatal("Failed to chmod(%s, 0%o): %s", sock_path, CSOCK_PERMS, logf_errno());
         if (listen(css->fd, 100))
             log_fatal("Failed to listen() on control socket %s: %s", sock_path, logf_errno());
         free(sock_path);
