@@ -140,7 +140,7 @@ bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fd
             if (pktlen != 8)
                 log_err("8-byte recvmsg() failed with retval %zi: %s", pktlen, logf_errno());
             if (msg.msg_flags & MSG_CTRUNC)
-                log_err("recvmsg() got truncated ancillary data");
+                log_err("recvmsg(): ancillary data for socket handoff was truncated (open files ulimit too small?)");
             if (fds)
                 free(fds);
             return true;
