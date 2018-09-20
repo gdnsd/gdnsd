@@ -14,11 +14,14 @@ ExecStart=@GDNSD_SBINDIR@/gdnsd -l start
 ExecStop=@GDNSD_BINDIR@/gdnsdctl -l stop
 ExecReload=@GDNSD_BINDIR@/gdnsdctl -l replace
 
-# The very basics: run as non-root user + allow binding port 53
+# The very basics: run as non-root user, allow binding port 53,
+# and manage the run directory
 UMask=0022
 User=gdnsd
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_BIND_SERVICE
+RuntimeDirectory=gdnsd
+RuntimeDirectoryMode=0700
 
 #---
 # Things below this mark are not strictly required for proper operation,
