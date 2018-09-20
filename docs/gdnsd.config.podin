@@ -372,11 +372,8 @@ The daemon's control socket and lock files live here.
 String, defaults to F<@GDNSD_DEFPATH_STATE@>.  This is the directory
 which the daemon owns as its state directory.
 
-It will create this directory or modify the permissions of an existng one on
-startup.  If it does not exist and cannot be created, or the permissions cannot
-be set to acceptable values (possibly because the existing directory is owned
-by a different uid than the daemon is currently running as), the daemon will
-not start.
+It will create this directory if necessary at startup.  If it does not exist
+and cannot be created, the daemon will not start.
 
 The contents of this directory belong to the system administrator
 and are used to communicate persistent, stateful information to

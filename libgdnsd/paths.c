@@ -49,22 +49,23 @@ const char* gdnsd_get_default_config_dir(void)
 // Init-time stuff
 
 // fails fatally if pathname doesn't exist and mkdir fails, or if pathname
-// exists but is not a dir, or if chmod(dir_mode) on an existing dir fails.
-// "dir_mode" is always set via chmod on existing dirs even if it would be
-// redundant, as this also ensures we're the owner and thus triggers a
-// desirable failure if the rundir is owned by some other user.
+// exists but is not a dir, or if force_mode is set and chmod(dir_mode) on an
+// existing dir fails.
+// force_mode always executes chmod() without checking existing mode, as this
+// also ensures we're the owner and thus triggers a desirable failure if the
+// rundir is owned by some other user.
 F_NONNULL
-static void gdnsd_ensure_dir(const char* dpath, const char* desc, mode_t dir_mode)
+static void gdnsd_ensure_dir(const char* dpath, const char* desc, mode_t dir_mode, bool force_mode)
 {
     if (mkdir(dpath, dir_mode)) {
         if (errno != EEXIST)
             log_fatal("mkdir of %s directory '%s' failed: %s", desc, dpath, logf_errno());
-        if (chmod(dpath, dir_mode))
+        if (force_mode && chmod(dpath, dir_mode))
             log_fatal("%s directory '%s': chmod(%o) failed: %s", desc, dpath, dir_mode, logf_errno());
+        struct stat st;
+        if (stat(dpath, &st) || !S_ISDIR(st.st_mode))
+            log_fatal("%s directory '%s' does not exist or is not a directory!", desc, dpath);
     }
-    struct stat st;
-    if (stat(dpath, &st) || !S_ISDIR(st.st_mode))
-        log_fatal("%s directory '%s' does not exist or is not a directory!", desc, dpath);
 }
 
 typedef enum {
@@ -149,8 +150,8 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs)
     gdnsd_dirs[RUN] = strdup(run_dir);
     gdnsd_dirs[STATE] = strdup(state_dir);
     if (create_dirs) {
-        gdnsd_ensure_dir(run_dir, "run", 0700);
-        gdnsd_ensure_dir(state_dir, "state", 0755);
+        gdnsd_ensure_dir(run_dir, "run", 0700, true);
+        gdnsd_ensure_dir(state_dir, "state", 0755, false);
     }
 
     // This is just fixed at compiletime, period
