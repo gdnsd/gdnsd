@@ -277,10 +277,6 @@ void* ztree_zones_reloader_thread(void* init_asvoid)
     if (rfc1035_failed || djb_failed) {
         ztree_destroy(new_ztree);
         rv = 1; // the zsrc already logged why
-    } else if (!new_ztree->children && !new_ztree->zone) {
-        ztree_destroy(new_ztree);
-        log_err("No zone data found for any zones from any source");
-        rv = 1;
     } else {
         ztree_t* old_ztree = ztree_root;
         rcu_assign_pointer(ztree_root, new_ztree);
