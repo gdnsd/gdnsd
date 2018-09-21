@@ -504,10 +504,13 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         gdnsd_assert(wanted > 0);
 
         ssize_t pktlen = recv(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
-        if (pktlen < 0) {
-            if (ERRNO_WOULDBLOCK)
+        if (pktlen <= 0) {
+            if (pktlen < 0 && ERRNO_WOULDBLOCK)
                 return;
-            log_err("control socket read of %zu data bytes failed with retval %zi, closing: %s", wanted, pktlen, logf_errno());
+            if (pktlen == 0)
+                log_err("control socket client disconnected when we expected %zu more bytes from it", wanted);
+            else
+                log_err("control socket read of %zu data bytes failed with retval %zi, closing: %s", wanted, pktlen, logf_errno());
             css_conn_cleanup(c);
             return;
         }
