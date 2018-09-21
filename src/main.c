@@ -481,11 +481,11 @@ int main(int argc, char** argv)
     //  requests at the socket layer from the time it's bound.
     dnspacket_wait_stats(socks_cfg);
 
-    // Notify the user that the listeners are up
-    log_info("DNS listeners started");
-
     // Notify 3rd parties of readiness (systemd, or fg process if daemonizing)
     gdnsd_daemon_notify_ready();
+
+    // Notify the user that the listeners are up
+    log_info("DNS listeners started");
 
     // Stop old daemon after establishing the new one's listeners
     if (csc) {
