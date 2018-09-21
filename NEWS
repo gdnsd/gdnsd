@@ -1,8 +1,14 @@
-2.99.42-beta - 2018-09-20
+2.99.1729-beta - 2018-09-21
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * Systemd unit file example updated to add required declarations about
+      managing the run directory
+    * Fixed failure to start if no zone data was defined
+    * A few other minor and relatively-invisible resiliency fixes
+
+2.99.42-beta - 2018-09-20
     * Fixed various pedantic and/or racy issues around permissions of the run
       directory and the control socket.
     * A couple minor cleanups for error messages and docs
