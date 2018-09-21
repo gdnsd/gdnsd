@@ -506,10 +506,6 @@ int main(int argc, char** argv)
     // request i/o threads to exit
     request_io_threads_stop(socks_cfg);
 
-    // Stop the terminal signal handlers
-    ev_signal_stop(def_loop, p_sig_term);
-    ev_signal_stop(def_loop, p_sig_int);
-
     // get rid of child procs (e.g. extmon helper)
     gdnsd_kill_registered_children();
 
@@ -531,6 +527,18 @@ int main(int argc, char** argv)
     // where the active connection to gdnsdctl will be broken, sending it into
     // a loop waiting on our PID to cease existing.
     css_delete(css);
+
+    // Stop the terminal signal handlers very late in the game.  Any terminal
+    // signal received since ev_run() returned above will simply not be
+    // processed because we never re-entered the eventloop since the handlers
+    // saw it.  ev_signal_stop() will restore default signal behavior, which
+    // will be to terminate the process, which we'll rely on in raise() below.
+    // Regardless of our reason for exiting, it doesn't cause a problem if a
+    // new terminal signal races us from here through exit()/raise() below.  It
+    // is kinda problematic if we do this earlier (e.g. above i/o thread exit)
+    // as it could abort our clean shutdown sequence.
+    ev_signal_stop(def_loop, p_sig_term);
+    ev_signal_stop(def_loop, p_sig_int);
 
 #ifdef GDNSD_COVERTEST_EXIT
     // We have to use exit() when testing coverage, as raise()
