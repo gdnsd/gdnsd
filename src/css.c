@@ -359,7 +359,7 @@ static void css_watch_replace(struct ev_loop* loop, ev_timer* w, int revents V_U
         ev_timer_stop(loop, w);
 
         if (css->replace_conn_ctl)
-            respond(css->replace_conn_ctl, RESP_NAK, 0, 0, NULL, false);
+            respond(css->replace_conn_ctl, RESP_FAIL, 0, 0, NULL, false);
 
         if (css->replace_conn_dmn)
             css_conn_cleanup(css->replace_conn_dmn);
@@ -498,6 +498,23 @@ static pid_t spawn_replacement(const char* argv0)
     return replacement_pid;
 }
 
+// When a takeover starts (replacement_pid is assigned), send an immediate
+// RESP_LATR to all waiting reload-zones clients (even active ones with a
+// thread already running), so they'll retry against the new daemon.
+static void latr_all_reloaders(css_t* css)
+{
+    for (size_t i = 0; i < css->reload_zones_active.len; i++) {
+        log_info("REPLACE[old daemon]: Deferring reload-zones request while replace in progress");
+        respond(css->reload_zones_active.q[i], RESP_LATR, 0, 0, NULL, false);
+    }
+    for (size_t i = 0; i < css->reload_zones_queued.len; i++) {
+        log_info("REPLACE[old daemon]: Deferring reload-zones request while replace in progress");
+        respond(css->reload_zones_queued.q[i], RESP_LATR, 0, 0, NULL, false);
+    }
+    conn_queue_clear(&css->reload_zones_active);
+    conn_queue_clear(&css->reload_zones_queued);
+}
+
 F_NONNULL
 static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 {
@@ -540,8 +557,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
             c->data = NULL;
             c->size = 0;
             c->size_done = 0;
-
-            respond(c, failed ? RESP_NAK : RESP_ACK, 0, 0, NULL, false);
+            respond(c, failed ? RESP_FAIL : RESP_ACK, 0, 0, NULL, false);
         }
 
         return;
@@ -563,6 +579,11 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     // 8-byte standard request, using "d" as the raw data length and "v" as the
     // count of challenges sent in the data.
     if (c->rbuf.key == REQ_CHAL) {
+        if (css->replacement_pid) {
+            log_info("Deferring acme-dns-01 request while replace in progress");
+            respond(c, RESP_LATR, 0, 0, NULL, false);
+            return;
+        }
         const unsigned count = csbuf_get_v(&c->rbuf);
         const unsigned dlen = c->rbuf.d;
         if (!count || count > CHAL_MAX_COUNT || !dlen || dlen > CHAL_MAX_DLEN) {
@@ -597,8 +618,8 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     case REQ_STOP:
         if (css->replacement_pid) {
             if (c != css->replace_conn_dmn) {
-                log_err("REPLACE[old daemon]: Denying control socket client request 'stop' because a replace attempt is in progress!");
-                respond(c, RESP_NAK, 0, 0, NULL, false);
+                log_info("Deferring stop request while replace in progress");
+                respond(c, RESP_LATR, 0, 0, NULL, false);
                 break;
             } else {
                 log_info("REPLACE[old daemon]: Exiting cleanly at request of new daemon");
@@ -639,6 +660,11 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg, false);
         break;
     case REQ_ZREL:
+        if (css->replacement_pid) {
+            log_info("Deferring reload-zones request while replace in progress");
+            respond(c, RESP_LATR, 0, 0, NULL, false);
+            break;
+        }
         conn_queue_add(&css->reload_zones_queued, c);
         if (!css->reload_zones_active.len) {
             swap_reload_zones_queues(css);
@@ -651,8 +677,8 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         break;
     case REQ_REPL:
         if (css->replacement_pid) {
-            log_warn("REPLACE[old daemon]: Denying replace request while another replace already in progress");
-            respond(c, RESP_NAK, 0, 0, NULL, false);
+            log_info("Deferring replace request while another replace already in progress");
+            respond(c, RESP_LATR, 0, 0, NULL, false);
             break;
         }
         log_debug("REPLACE[old daemon]: Accepting replace command, spawning replacement server...");
@@ -662,6 +688,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         css->replacement_pid = spawn_replacement(css->argv0);
         log_info("REPLACE[old daemon]: Accepted replace command, spawned replacement daemon at PID %li", (long)css->replacement_pid);
         ev_timer_start(css->loop, w_replace);
+        latr_all_reloaders(css);
         break;
     case REQ_TAKE:
         gdnsd_assert(css->handoff_fds_count >= 2LU);
@@ -669,8 +696,8 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         dns_fds_send = css->handoff_fds_count - 2LU;
         if (css->replacement_pid) {
             if (take_pid != css->replacement_pid) {
-                log_warn("REPLACE[old daemon]: Denying takeover request while another replace is already in progress");
-                respond(c, RESP_NAK, 0, 0, NULL, false);
+                log_info("Deferring takeover request while replace is already in progress");
+                respond(c, RESP_LATR, 0, 0, NULL, false);
                 break;
             } else {
                 log_info("REPLACE[old daemon]: Accepting takeover request from spawned replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
@@ -684,10 +711,11 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         css->replace_conn_dmn = c;
         ev_io_stop(css->loop, w_accept); // there can be only one
         respond(c, RESP_ACK, 0, 0, NULL, true);
+        latr_all_reloaders(css);
         break;
     default:
-        log_err("Invalid request from control socket, closing");
-        css_conn_cleanup(c);
+        log_err("Unknown request type %hhx from control socket", (uint8_t)c->rbuf.key);
+        respond(c, RESP_UNK, 0, 0, NULL, true);
     }
 }
 
@@ -918,8 +946,7 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed)
 {
     // Notify log and all waiting control sock clients of success/fail
     for (size_t i = 0; i < css->reload_zones_active.len; i++)
-        respond(css->reload_zones_active.q[i],
-                failed ? RESP_NAK : RESP_ACK, 0, 0, NULL, NULL);
+        respond(css->reload_zones_active.q[i], failed ? RESP_FAIL : RESP_ACK, 0, 0, NULL, NULL);
 
     // clear out the queue of clients waiting for reload status
     conn_queue_clear(&css->reload_zones_active);

@@ -58,17 +58,19 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 }
 
 // Legal values for "key"
-#define REQ_INFO  'I'
-#define REQ_STAT  'S'
+#define RESP_ACK  'A'
+#define REQ_CHALF 'c'
+#define REQ_CHAL  'C'
 #define REQ_STATE 'E'
+#define RESP_FAIL 'F'
+#define RESP_LATR 'L'
+#define REQ_INFO  'I'
+#define REQ_REPL  'R'
+#define REQ_STAT  'S'
+#define REQ_TAKE  'T'
+#define RESP_UNK  'U'
 #define REQ_STOP  'X'
 #define REQ_ZREL  'Z'
-#define REQ_TAKE  'T'
-#define REQ_REPL  'R'
-#define REQ_CHAL  'C'
-#define REQ_CHALF 'c'
-#define RESP_ACK  'A'
-#define RESP_NAK  'N'
 
 // AFAIK there's no portable way to know the max FDs that can be sent in an
 // SCM_RIGHTS message.  I only know the Linux limit for sure, so in the
