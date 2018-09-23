@@ -140,8 +140,19 @@ static void css_conn_cleanup(css_conn_t* c)
 
     if (c == css->replace_conn_ctl)
         css->replace_conn_ctl = NULL;
-    if (c == css->replace_conn_dmn)
+
+    if (c == css->replace_conn_dmn) {
         css->replace_conn_dmn = NULL;
+        // If the replacement daemon drops the csock connection or there's some
+        // kind of communications error with it that causes us to drop the
+        // connection, assume it's failing and send it a SIGKILL, letting our
+        // PID watcher do the rest of the cleanup when it exits.
+        if (css->replacement_pid) {
+            log_err("REPLACE[old daemon]: Communications error with new daemon at pid %li, killing it with SIGKILL",
+                    (long)css->replacement_pid);
+            kill(css->replacement_pid, SIGKILL);
+        }
+    }
 
     // stop/free io-related things
     if (c->data)
@@ -591,6 +602,15 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
                 break;
             } else {
                 log_info("REPLACE[old daemon]: Exiting cleanly at request of new daemon");
+                // Note from here we won't re-enter the eventloop anyways, so
+                // no further requests can be processed and the replacement_pid
+                // flag isn't very useful anymore.  Explicitly re-setting it to
+                // zero avoids the eventual css_conn_cleanup of this connection
+                // (during css_delete(), or due to some communications failure
+                // with the blocking acks below) trying to kill the new daemon
+                // off because it thinks it's a fail-to-takeover sort of
+                // situation.
+                css->replacement_pid = 0;
             }
         } else {
             log_info("Exiting cleanly due to control socket client request");
