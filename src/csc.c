@@ -46,6 +46,9 @@ struct csc_s_ {
     pid_t server_pid;
     char* path;
     char server_vers[16];
+    uint8_t svers_major;
+    uint8_t svers_minor;
+    uint8_t svers_patch;
     const char* repl_pfx;
     const char* repl_pfx_old;
 };
@@ -59,6 +62,13 @@ static bool csc_get_status(csc_t* csc)
         return true;
 
     csc->server_pid = (pid_t)resp.d;
+    csc->svers_major = resp.v0;
+    csc->svers_minor = resp.v1;
+    csc->svers_patch = resp.v2;
+
+    // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
+    // making resp.v0 < 3 a fatal condition
+
     int snp_rv = snprintf(csc->server_vers, 16, "%hhu.%hhu.%hhu",
                           resp.v0, resp.v1, resp.v2);
     gdnsd_assert(snp_rv >= 5 && snp_rv < 16);
@@ -105,6 +115,15 @@ pid_t csc_get_server_pid(const csc_t* csc)
 const char* csc_get_server_version(const csc_t* csc)
 {
     return csc->server_vers;
+}
+
+bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t minor, const uint8_t patch)
+{
+    return (
+               csc->svers_major > major
+               || (csc->svers_major == major && csc->svers_minor > minor)
+               || (csc->svers_major == major && csc->svers_minor == minor && csc->svers_patch >= patch)
+           );
 }
 
 F_NONNULL

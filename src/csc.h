@@ -49,6 +49,9 @@ csc_t* csc_new(const unsigned timeout, const bool replace);
 pid_t csc_get_server_pid(const csc_t* csc);
 const char* csc_get_server_version(const csc_t* csc);
 
+// Boolean check if server version is >= M.m.p
+bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t minor, const uint8_t patch);
+
 // Performs a transaction using csbuf_t's
 // retval - false for success, true for failure
 F_NONNULL

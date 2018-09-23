@@ -283,6 +283,21 @@ static void request_io_threads_stop(socks_cfg_t* socks_cfg)
     }
 }
 
+static void do_tak1(csc_t* csc)
+{
+    // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
+    // assuming all daemons with listening control sockets have a major >= 3
+    // and support TAK1.
+    if (csc_server_version_gte(csc, 2, 99, 200)) {
+        csbuf_t req, resp;
+        memset(&req, 0, sizeof(req));
+        req.key = REQ_TAK1;
+        req.d = (uint32_t)getpid();
+        if (csc_txn(csc, &req, &resp))
+            log_fatal("REPLACE[new daemon]: takeover notification attempt failed (possibly lost race against another)");
+    }
+}
+
 typedef enum {
     ACT_UNDEF = 0,
     ACT_CHECKCONF,
@@ -377,15 +392,34 @@ int main(int argc, char** argv)
     if (copts.deadopt_x)
         log_err("The commandline option '-x' has been removed.  This will be an error in a future major version update!");
 
-    // Initialize libgdnsd basic paths/config stuff
+    // Init daemon code if starting
     if (copts.action != ACT_CHECKCONF)
         gdnsd_init_daemon(copts.action == ACT_DAEMONIZE);
+
+    // Load and init basic pathname config (but no mkdir/chmod if checkconf)
     vscf_data_t* cfg_root = gdnsd_init_paths(copts.cfg_dir, copts.action != ACT_CHECKCONF);
 
-    // Load full configuration and expose through the globals
+    // Load (but do not act on) socket config
     socks_cfg_t* socks_cfg = socks_conf_load(cfg_root);
-    cfg_t* cfg = conf_load(cfg_root, socks_cfg, copts.force_zsd);
-    gcfg = cfg;
+
+    // init locked control socket if starting, can fail if concurrent daemon,
+    // or begin a takeover process if CLI flag allows
+    csc_t* csc = NULL;
+    css_t* css = NULL;
+    if (copts.action != ACT_CHECKCONF) {
+        css = css_new(argv[0], socks_cfg, NULL);
+        if (!css) {
+            if (!copts.replace_ok)
+                log_fatal("Another instance is running and has the control socket locked, exiting!");
+            csc = csc_new(13, true);
+            do_tak1(csc);
+            log_info("REPLACE[new daemon]: Connected to old daemon version %s at PID %li for takeover",
+                     csc_get_server_version(csc), (long)csc_get_server_pid(csc));
+        }
+    }
+
+    // Load full configuration and expose through the globals
+    gcfg = conf_load(cfg_root, socks_cfg, copts.force_zsd);
     vscf_destroy(cfg_root);
 
     // init DYNA packet sizing stuff
@@ -406,22 +440,11 @@ int main(int argc, char** argv)
     // Basic init for the acme challenge code
     chal_init();
 
-    // init locked control socket, can fail if concurrent daemon...
-    csc_t* csc = NULL;
-    css_t* css = css_new(argv[0], socks_cfg, NULL);
-    if (!css) {
-        if (!copts.replace_ok)
-            log_fatal("Another instance is running and has the control socket locked, exiting!");
-        csc = csc_new(13, true);
-        log_info("REPLACE[new daemon]: Connected to old daemon version %s at PID %li for takeover",
-                 csc_get_server_version(csc), (long)csc_get_server_pid(csc));
-    }
-
     // init the stats code
     statio_init(socks_cfg->num_dns_threads);
 
     // Lock whole daemon into memory, including all future allocations.
-    if (cfg->lock_mem)
+    if (gcfg->lock_mem)
         if (mlockall(MCL_CURRENT | MCL_FUTURE))
             log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
 
@@ -443,14 +466,9 @@ int main(int argc, char** argv)
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
 
-    // Now that we're past potentially long-running operations like initial
-    // monitoring and plugin pre_run actions, initiate the replace operation
-    // over the control socket connection.  During those long-running
-    // operations, another starting daemon could beat us in a race here and
-    // we'll be denied (unless we were initiated by "replace" fork->execve,
-    // which gaurantees us winning and denies racers), or some other control
-    // socket client could have requested the old server to stop, either of
-    // which will cause failure here.
+    // Now that we're past potentially long-running operations like zone
+    // loading, initial monitoring, plugin pre_run actions, initiate the
+    // true takeover handoff sequence via css_new.
     if (!css)
         css = css_new(argv[0], socks_cfg, &csc);
 

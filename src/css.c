@@ -690,28 +690,35 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         ev_timer_start(css->loop, w_replace);
         latr_all_reloaders(css);
         break;
-    case REQ_TAKE:
-        gdnsd_assert(css->handoff_fds_count >= 2LU);
+    case REQ_TAK1:
         take_pid = (pid_t)c->rbuf.d;
-        dns_fds_send = css->handoff_fds_count - 2LU;
-        if (css->replacement_pid) {
-            if (take_pid != css->replacement_pid) {
-                log_info("Deferring takeover request while replace is already in progress");
-                respond(c, RESP_LATR, 0, 0, NULL, false);
-                break;
-            } else {
-                log_info("REPLACE[old daemon]: Accepting takeover request from spawned replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
-            }
-        } else {
-            log_info("REPLACE[old daemon]: Accepting takeover request from indepedent new daemon at PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
+        if (css->replacement_pid && css->replacement_pid != take_pid) {
+            log_warn("Denying takeover notification from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+            // could argue for LATR or FAIL here, but currently the new daemon doesn't wait and retry anyways
+            respond(c, RESP_LATR, 0, 0, NULL, false);
+            break;
         }
+        log_debug("Accepted takeover notification from PID %li", (long)take_pid);
         css->replacement_pid = take_pid;
-        ev_timer_start(css->loop, w_replace);
         gdnsd_assert(!css->replace_conn_dmn);
         css->replace_conn_dmn = c;
+        ev_timer_start(css->loop, w_replace);
+        latr_all_reloaders(css);
+        respond(c, RESP_ACK, 0, 0, NULL, false);
+        break;
+    case REQ_TAKE:
+        take_pid = (pid_t)c->rbuf.d;
+        if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
+            log_err("Denying takeover request without pre-notification");
+            respond(c, RESP_FAIL, 0, 0, NULL, false);
+            css_conn_cleanup(c);
+            break;
+        }
+        gdnsd_assert(css->handoff_fds_count >= 2LU);
+        dns_fds_send = css->handoff_fds_count - 2LU;
+        log_info("REPLACE[old daemon]: Accepting takeover request from replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
         ev_io_stop(css->loop, w_accept); // there can be only one
         respond(c, RESP_ACK, 0, 0, NULL, true);
-        latr_all_reloaders(css);
         break;
     default:
         log_err("Unknown request type %hhx from control socket", (uint8_t)c->rbuf.key);
