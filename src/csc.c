@@ -221,7 +221,7 @@ bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_
     while (done < total) {
         const size_t wanted = total - done;
         const ssize_t pktlen = recv(csc->fd, &rd[done], wanted, 0);
-        if (pktlen < 0) {
+        if (pktlen <= 0) {
             free(rd);
             log_err("%zu-byte recv() failed: %s", wanted, logf_errno());
             return true;
