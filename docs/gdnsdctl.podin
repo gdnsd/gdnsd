@@ -4,11 +4,14 @@ gdnsdctl - Control socket client for gdnsd
 
 =head1 SYNOPSIS
 
-  Usage: gdnsdctl [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-t 47] <action> [...]
+  Usage: gdnsdctl [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-t 47] [-o] [-i] <action> [...]
     -c - Configuration directory (def @GDNSD_DEFPATH_CONFIG@)
     -D - Enable verbose debug output
     -l - Send logs to syslog rather than stderr
     -t - Timeout in seconds (def 47, range 5 - 300)
+    -o - One-shot mode: do not retry soft failures (comms errors, replace-in-progress)
+    -i - Ignore lack of a running daemon for stop, reload-zones, replace,
+         and acme-dns-01-flush, reporting success instead of failure in those cases.
   Actions:
     stop - Stops the running daemon
     reload-zones - Reload the running daemon's zone data
@@ -25,6 +28,24 @@ gdnsdctl - Control socket client for gdnsd
 B<gdnsdctl> is the canonical control socket client for B<gdnsd>.  All
 operations described above are synchronous and report success by exiting with
 exit status zero, or failure by non-zero.
+
+In general gdnsd and gdnsdctl support concurrent execution of disparate actions
+from multiple actors against a single daemon, and everything should eventually
+faithfully report success without any bugs caused by races, if there are no
+other issues.
+
+That is to say, for example, things should be reliable if your configuration
+management is routinely executing C<gdnsdctl replace> for configuration
+updates, and another tool is independently routinely executing C<gdnsdctl
+reload-zones> as it updates zonefile data, while a third set of tooling is
+doing C<gdnsdctl acme-dns-01> commands, even if all 3 commands collide with
+near-perfect timing.  Eventually all 3 C<gdnsdctl> commands will exit, and the
+resulting state will have all of the configuration, zone data, and challenge
+updates.
+
+This is also true of multiple independent and overlapping executions of the
+same action, such as multiple C<reload-zones> requests proceeding in parallel,
+or multiple C<acme-dns-01> requests.
 
 =head1 COMMANDLINE OPTION FLAGS
 
@@ -44,7 +65,30 @@ Sends log output to syslog rather than the default stderr.
 
 =item B<-t>
 
-Sets the timeout in seconds (default 47) for various io and waiting operations.
+Sets the timeout in seconds (default 47) for the entire execution.  This is
+enforced via a process-level SIGALRM timer, but it can run slightly over time
+in corner cases.
+
+=item B<-o>
+
+One-shot mode.  Normally, gdnsdctl will persistently retry to execute the
+action under soft failure conditions.  The soft failure conditions happen when
+the daemon is in the midst of a C<replace> operation, or when a communications
+error occurs after the connection is initially established (which could be the
+racy result of catching bad timing with the old daemon shutting down during a
+C<replace> operation).  This disables the retries and upgrades all soft
+(retryable) errors to hard (immediately-fatal) errors.
+
+=item B<-i>
+
+Ignore-dead-daemon mode.  Normally, all actions fail if no daemon is currently
+running.  With this flag set, if the daemon is not currently running, but the
+action is one of the limited set where the intent would be accurately reflected
+by a future start of the daemon, gdnsdctl will return a successful exit value
+in spite of the lack of a running daemon.
+
+The set of commands which currently honor C<-i> are: C<reload-zones>, C<stop>,
+C<acme-dns-01-flush>, and C<replace>.
 
 =back
 
@@ -57,34 +101,45 @@ Sets the timeout in seconds (default 47) for various io and waiting operations.
 Synchronously stops the running daemon.  Exit status zero means the daemon was
 observed to stop as commanded.
 
+With C<-i>, exit status zero can also mean the daemon was already not running,
+which makes C<gdnsdctl -i stop> an idempotent stop.
+
 =item B<reload-zones>
 
 Synchronously reloads the daemon's zonefiles.  Exit status zero indicates the
 operation completed successfully and the new data is visible to clients.
 
+With C<-i>, exit status zero can also mean the daemon was not running (if it's
+started in the future, the recently-updated zonefiles would be in effect).
+
 =item B<replace>
 
-Ask the running daemon to spawn a replacement instance of itself.  This can be
-used for code upgrades and/or configuration changes.  The replacement daemon is
-initially executed as a child of the running daemon and thus inherits many
-attributes of its execution environment.  The old and new daemons coordinate a
-handoff process over an inter-daemon control socket connection.  The handoff
-process does its best to ensure that if the new daemon fails at any stage of
-startup, the old daemon can continue operations as it was before.
+Asks the running daemon to spawn a replacement instance of itself.  This can be
+used for daemon code upgrades and/or configuration changes.  The C<replace>
+sequence is intended to have minimal operational impact from most points of
+view: it's race-free, requests are not lost or dropped and there is no pause in
+processing requests.  Stats data is handed off seamlessly from the old instance
+to the new one, as is any ephemeral ACME DNS-01 challenge data.  The control
+socket remains available for new connections at all times, but the actual
+processing of new connections is delayed for a short span of time.
+
+Commands from already-connected control socket clients (like gdnsdctl) can be
+denied with a soft failure response during critical time windows of the replace
+sequence, but gdnsdctl will wait and retry them afterwards.
+
+The replacement daemon is initially executed as a child of the running daemon
+and thus inherits many attributes of its execution environment.  The old and
+new daemons coordinate a handoff process over an inter-daemon control socket
+connection.  The handoff process does its best to ensure that if the new daemon
+fails at any stage of startup, the old daemon can continue operations as it was
+before.
 
 DNS listening sockets are handed off in an overlapped fashion: there will be a
 brief window of time where client requests can be routed to either daemon
 randomly, but there should never be a window where service is unavailable.  The
 control socket itself is handed off synchronously: the old daemon stops
-listening for new connections before the new daemon begins listening, and the
-old daemon re-starts listening if the new daemon fails to succeed completely.
-During the entire replacement process, the old daemon will deny control socket
-requests clients for any stateful operations (e.g. other C<replace> requests,
-C<reload-zones>, C<acme-dns-01>).  The takeover process ensures that any
-successful stateful operations which happened (even just barely) before the
-replacement remain valid.  The challenge data carries over, and the new daemon
-will have loaded the zone data at or after the point the last reload-zones
-operation did so.
+accepting new connections before the new daemon begins accepting them, and the
+old daemon re-starts accepting if the new daemon fails to succeed completely.
 
 Once the old daemon claims the replacement process was successful, gdnsdctl
 will monitor the old daemon's exit and then make a fresh connection to the
@@ -92,7 +147,28 @@ control socket of the new daemon and check its status.  If all of this is
 successful, the replace command will finally exit with status zero.  It will
 exit with a non-zero status if any part of this operation fails for any reason,
 which should in most conceivable cases leave the existing daemon fully
-functional (if there was one!).
+functional.
+
+All other daemon-state-changing gdnsdctl operations (anything but the readonly
+actions "status", "stats", and "states") which might be initiated separately
+and concurrently are explicitly blocked by the daemon while the critical
+part of the replace handoff sequence is in progress.  gdnsdctl will, by
+default, retry an action repeatedly until the replace finishes and lets the
+action through or it reaches the C<-t> timeout.  The C<-o> flag disables these
+retries, which will cause the state-changing gdnsdctl actions to immediately
+fail during the critical replace window.
+
+Normally, this command will fail if there is no running daemon.  However, with
+C<-i>, exit status zero can also mean the daemon was not running (if it's
+started in the future, the recently-updated configuration or binary that
+triggered wanting to execute the C<replace> request would then be in effect).
+
+The retry system works for C<replace> vs C<replace> as well: if you
+concurrently execute several C<gdnsdctl replace> commands, one will proceed
+first and the rest will wait in retry loops to each take their turn replacing
+the daemon serially until they've all done so successfully, unless their
+gdnsdctl C<-t> timeout expires first (each new daemon will take some time to
+start, depending on the zonefile count and configuration complexity).
 
 =item B<status>
 
@@ -161,6 +237,10 @@ Immediately flushes all injected payload data from above ahead of its natural
 expiry.  Mostly useful for testing or for clearing up mistakes, but some
 integrations with spiky large volumes of challenges may wish to flush data
 explicitly at points in time when there are no outstanding DNS-01 challenges.
+
+This is another command that honors the C<-i> flag: if C<-i> is specified and
+the daemon is not running, this command will report success, as a dead daemon
+has no challenge data to flush.
 
 =back
 

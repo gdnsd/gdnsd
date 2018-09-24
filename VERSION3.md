@@ -47,12 +47,14 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * `reload-zones` - Reloads zonefiles
 * `acme-dns-01` - Creates ephemeral TXT records for ACME DNS-01 challenge responses
 * `replace` - Requests that the daemon replace itself seamlessly (no downtime, no lost requests):
+  * This mechanism supports seamless configuration changes or code updates
   * Replacement is a fresh execution of the same binary pathname with CLI options preserved
   * Spawned as a child of the running daemon in order to preserve as much execution context as possible
-  * The old and new daemons communicate with each other over a separate control socket connection for coordination and smooth socket handoff
+  * Listening sockets are handed off seamlessly with no loss or interruption of DNS services
+  * ACME DNS-01 challenge data is handed off seamlessly
+  * Stats counters also hand off seamlessly (no stats rollover blips from restarts in your graphs!)
   * The old daemon can continue operations as it was before if the new dies before finishing the handoff
   * gdnsdctl monitors the entire sequence: watches the previous daemon report a successful takeover by the replacement, witnesses the exit of the old daemon, and reconnects to the new daemon to ensure it survived the transition
-  * This mechanism supports seamless configuration changes or code updates without dropping requests
   * Critically, this mechanism is systemd compatible
 
 ### Feature Regressions

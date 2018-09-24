@@ -45,18 +45,49 @@
 static unsigned opt_timeo = DEF_TIMEO;
 static bool opt_debug = false;
 static bool opt_syslog = false;
+static bool opt_oneshot = false;
+static bool opt_ignore_dead = false;
 static const char* opt_cfg_dir = NULL;
+
+static volatile sig_atomic_t alarm_raised = 0;
+static void sighand_alrm(int s V_UNUSED)
+{
+    alarm_raised = 1;
+    // We only check the alarm_raised flag once per outer retry loop.  Several
+    // separate calls are made which could/should fail all the way out
+    // immediately with EINTR, but the alarm could also arrive between such
+    // calls, or during some call that for some reason implicitly restarts in
+    // spite of a lack of SA_RESTART, and at least some of the i/o calls will
+    // block indefinitely if there is no alarm signal received.  Therefore, we
+    // re-arm indefinitely at 1s intervals to plow through such cases.
+    alarm(1U);
+}
+
+static void install_alarm(void)
+{
+    struct sigaction sa;
+    sa.sa_handler = sighand_alrm;
+    sigfillset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGALRM, &sa, 0))
+        log_fatal("Cannot install SIGALRM handler!");
+    alarm(opt_timeo);
+}
 
 F_NONNULL F_NORETURN
 static void usage(void)
 {
     fprintf(stderr,
             "gdnsdctl version " PACKAGE_VERSION "\n"
-            "Usage: gdnsdctl [-c %s] [-D] [-l] [-t %u] <action> [...]\n"
+            "Usage: gdnsdctl [-c %s] [-D] [-l] [-t %u] [-o] [-i] <action> [...]\n"
             "  -c - Configuration directory (def %s)\n"
             "  -D - Enable verbose debug output\n"
             "  -l - Send logs to syslog rather than stderr\n"
             "  -t - Timeout in seconds (def %u, range %u - %u)\n"
+            "  -o - One-shot mode: do not retry soft failures (comms errors, replace-in-progress)\n"
+            "  -i - Idempotent mode for stop, reload-zones, replace, and acme-dns-01-flush: success if no daemon running\n"
+            "  -i - Ignore lack of a running daemon for stop, reload-zones, replace,\n"
+            "       and acme-dns-01-flush, reporting success instead of failure in those cases.\n"
             "Actions:\n"
             "  stop - Stops the running daemon\n"
             "  reload-zones - Reload the running daemon's zone data\n"
@@ -83,38 +114,43 @@ static void usage(void)
 /**** Action functions ****/
 
 F_NONNULL
-static int action_stop(csc_t* csc, int argc, char** argv V_UNUSED)
+static bool action_stop(csc_t* csc)
 {
-    if (argc)
-        usage(); // No additional arguments
+    csc_txn_rv_t crv = csc_stop_server(csc);
+    if (crv == CSC_TXN_OK) {
+        if (!csc_wait_stopping_server(csc)) {
+            log_info("Stop command successful, daemon exited");
+            return false;
+        }
+        log_fatal("Stop command accepted, but daemon failed to exit");
+    } else if (!opt_oneshot && crv == CSC_TXN_FAIL_SOFT) {
+        return true;
+    }
 
-    return csc_stop_server(csc)
-           || csc_wait_stopping_server(csc);
+    log_fatal("Stop command failed");
 }
 
 F_NONNULL
-static int action_reloadz(csc_t* csc, int argc, char** argv V_UNUSED)
+static bool action_reloadz(csc_t* csc)
 {
-    if (argc)
-        usage(); // No additional arguments
-
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_ZREL;
-    if (csc_txn(csc, &req, &resp) != CSC_TXN_OK) {
-        log_err("Reload transaction failed!");
-        return 1;
-    }
+    csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
+    if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
+        crv = CSC_TXN_FAIL_HARD;
+    if (crv == CSC_TXN_FAIL_HARD)
+        log_fatal("Reload transaction failed");
+    if (crv == CSC_TXN_FAIL_SOFT)
+        return true;
+
     log_info("Zone data reloaded");
-    return 0;
+    return false;
 }
 
 F_NONNULL
-static int action_replace(csc_t* csc, int argc, char** argv V_UNUSED)
+static bool action_replace(csc_t* csc)
 {
-    if (argc)
-        usage(); // No additional arguments
-
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
     log_info("REPLACE[gdnsdctl]: Sending replace command to old daemon version %s running at PID %li", s_vers, (long)s_pid);
@@ -122,79 +158,88 @@ static int action_replace(csc_t* csc, int argc, char** argv V_UNUSED)
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_REPL;
-    if (csc_txn(csc, &req, &resp) != CSC_TXN_OK) {
-        log_err("REPLACE[gdnsdctl]: Replace command to old daemon failed");
-        return 1;
-    }
+    csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
+    if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
+        crv = CSC_TXN_FAIL_HARD;
+    if (crv == CSC_TXN_FAIL_HARD)
+        log_fatal("REPLACE[gdnsdctl]: Replace command to old daemon failed");
+    if (crv == CSC_TXN_FAIL_SOFT)
+        return true;
 
-    if (csc_wait_stopping_server(csc)) {
-        log_err("REPLACE[gdnsdctl]: Replace command to old daemon succeeded, but old daemon never finished exiting...");
-        return 1;
-    }
+    if (csc_wait_stopping_server(csc))
+        log_fatal("REPLACE[gdnsdctl]: Replace command to old daemon succeeded, but old daemon never finished exiting...");
 
-    csc_t* csc2 = csc_new(opt_timeo, false);
-    if (!csc2) {
-        log_err("REPLACE[gdnsdctl]: Cannot establish connection to new daemon for verification!");
-        return 1;
-    }
+    csc_t* csc2 = csc_new(0, "");
+    if (!csc2)
+        log_fatal("REPLACE[gdnsdctl]: Cannot establish connection to new daemon for verification");
 
     const pid_t s2_pid = csc_get_server_pid(csc2);
     const char* s2_vers = csc_get_server_version(csc2);
     log_info("REPLACE[gdnsdctl]: SUCCESS, new daemon version %s running at PID %li", s2_vers, (long)s2_pid);
     csc_delete(csc2);
-    return 0;
+    return false;
 }
 
 F_NONNULL
-static int action_status(csc_t* csc, int argc, char** argv V_UNUSED)
+static bool action_status(csc_t* csc)
 {
-    if (argc)
-        usage(); // No additional arguments
-
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
     log_info("version %s running at PID %li", s_vers, (long)s_pid);
-    return 0;
+    return false;
 }
 
 F_NONNULL
-static int action_stats(csc_t* csc, int argc, char** argv V_UNUSED)
+static bool action_stats(csc_t* csc)
 {
-    if (argc)
-        usage(); // No additional arguments
-
     char* resp_data;
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STAT;
-    if (csc_txn_getdata(csc, &req, &resp, &resp_data) != CSC_TXN_OK)
-        return 1;
+    csc_txn_rv_t crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
+    if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
+        crv = CSC_TXN_FAIL_HARD;
+    if (crv == CSC_TXN_FAIL_HARD)
+        log_fatal("Stats command failed");
+    if (crv == CSC_TXN_FAIL_SOFT)
+        return true;
+
+    gdnsd_assert(crv == CSC_TXN_OK);
+
     if (resp_data) {
         gdnsd_assert(resp.d);
         fwrite(resp_data, 1, resp.d, stdout);
         free(resp_data);
     }
-    return 0;
+
+    return false;
 }
 
 F_NONNULL
-static int action_states(csc_t* csc, int argc, char** argv V_UNUSED)
+static bool action_states(csc_t* csc)
 {
-    if (argc)
-        usage(); // No additional arguments
-
     char* resp_data;
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STATE;
-    if (csc_txn_getdata(csc, &req, &resp, &resp_data) != CSC_TXN_OK)
-        return 1;
+    csc_txn_rv_t crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
+    if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
+        crv = CSC_TXN_FAIL_HARD;
+    if (crv == CSC_TXN_FAIL_HARD)
+        log_fatal("States command failed");
+    if (crv == CSC_TXN_FAIL_SOFT)
+        return true;
+
+
+    gdnsd_assert(crv == CSC_TXN_OK);
+
     if (resp_data) {
         gdnsd_assert(resp.d);
         fwrite(resp_data, 1, resp.d, stdout);
         free(resp_data);
     }
-    return 0;
+
+    return false;
 }
 
 // base64url legal chars are [-_0-9A-Za-z]
@@ -218,7 +263,7 @@ static const unsigned b64u_legal[256] = {
 };
 
 F_NONNULL
-static int action_chal(csc_t* csc, int argc, char** argv)
+static bool action_chal(csc_t* csc, int argc, char** argv)
 {
     // Requires 2+ additional arguments, in pairs
     if (!argc || argc & 1 || argc > (int)(CHAL_MAX_COUNT * 2))
@@ -257,63 +302,90 @@ static int action_chal(csc_t* csc, int argc, char** argv)
     req.key = REQ_CHAL;
     csbuf_set_v(&req, chal_count);
     req.d = dlen;
-    if (csc_txn_senddata(csc, &req, &resp, (char*)buf) == CSC_TXN_OK)
-        return 0;
-    return 1;
+    csc_txn_rv_t crv = csc_txn_senddata(csc, &req, &resp, (char*)buf);
+    if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
+        crv = CSC_TXN_FAIL_HARD;
+    if (crv == CSC_TXN_FAIL_HARD)
+        log_fatal("acme-dns-01 command failed");
+    if (crv == CSC_TXN_FAIL_SOFT)
+        return true;
+
+    gdnsd_assert(crv == CSC_TXN_OK);
+    log_info("ACME DNS-01 challenges accepted");
+    return false;
 }
 
 F_NONNULL
-static int action_chalf(csc_t* csc, int argc, char** argv V_UNUSED)
+static bool action_chalf(csc_t* csc)
 {
-    if (argc)
-        usage(); // No additional arguments
-
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_CHALF;
-    if (csc_txn(csc, &req, &resp) != CSC_TXN_OK) {
-        log_err("Failed to flush ACME DNS-01 challenges!");
-        return 1;
-    }
+    csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
+    if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
+        crv = CSC_TXN_FAIL_HARD;
+    if (crv == CSC_TXN_FAIL_HARD)
+        log_fatal("Failed to flush ACME DNS-01 challenges");
+    if (crv == CSC_TXN_FAIL_SOFT)
+        return true;
+
     log_info("ACME DNS-01 challenges flushed");
-    return 0;
+    return false;
 }
 
-
-/**** Commandline parsing and action selection ****/
-
-typedef int (*afunc_t)(csc_t* csc, int argc, char** argv);
-
-static struct {
-    const char* cmdstring;
-    afunc_t func;
-} actionmap[] = {
-    { "stop",               action_stop    },
-    { "reload-zones",       action_reloadz },
-    { "replace",            action_replace },
-    { "status",             action_status  },
-    { "stats",              action_stats   },
-    { "states",             action_states  },
-    { "acme-dns-01",        action_chal    },
-    { "acme-dns-01-flush",  action_chalf   },
-};
-
-F_NONNULL F_PURE F_RETNN
-static afunc_t match_action(const char* match)
+static bool do_action(csc_t* csc, const char* action, int argc, char** argv)
 {
-    unsigned i;
-    for (i = 0; i < ARRAY_SIZE(actionmap); i++)
-        if (!strcasecmp(actionmap[i].cmdstring, match))
-            return actionmap[i].func;
+    if (!strcasecmp(action, "acme-dns-01"))
+        return action_chal(csc, argc, argv);
+
+    // Actions above use arguments
+    if (argc)
+        usage();
+    // Actions below do not use arguments
+
+    if (!strcasecmp(action, "stop"))
+        return action_stop(csc);
+    if (!strcasecmp(action, "reload-zones"))
+        return action_reloadz(csc);
+    if (!strcasecmp(action, "replace"))
+        return action_replace(csc);
+    if (!strcasecmp(action, "status"))
+        return action_status(csc);
+    if (!strcasecmp(action, "stats"))
+        return action_stats(csc);
+    if (!strcasecmp(action, "states"))
+        return action_states(csc);
+    if (!strcasecmp(action, "acme-dns-01-flush"))
+        return action_chalf(csc);
+
     usage();
 }
 
+// These commands, when used with "-i", return success if no connection can be
+// established.  For "stop" and "acme-dns-01-flush" this mode of operation is
+// obvious (and arguably could've been default, but whatever), but for
+// "reload-zones" and "replace" the use-case for "-i" is a little more subtle:
+// you would use it with a scripted integration that does not want to interfere
+// with other tools managing the daemon's liveness, but does want to ensure
+// that if the daemon is alive, it reflects recently applies changes to
+// zonefiles and/or config.  If it's down, then those state updates will
+// obviously be available the next time something else starts it, so it's not
+// untruthful to say they've been applied in some sense.
+F_NONNULL
+static bool can_ignore_dead(const char* action)
+{
+    return !strcasecmp(action, "stop")
+           || !strcasecmp(action, "reload-zones")
+           || !strcasecmp(action, "replace")
+           || !strcasecmp(action, "acme-dns-01-flush");
+}
+
 F_NONNULL F_RETNN
-static afunc_t parse_args(const int argc, char** argv)
+static const char* parse_args(const int argc, char** argv)
 {
     unsigned long timeo;
     int optchar;
-    while ((optchar = getopt(argc, argv, "c:Dlt:"))) {
+    while ((optchar = getopt(argc, argv, "c:Dloit:"))) {
         switch (optchar) {
         case 'c':
             opt_cfg_dir = optarg;
@@ -323,6 +395,12 @@ static afunc_t parse_args(const int argc, char** argv)
             break;
         case 'l':
             opt_syslog = true;
+            break;
+        case 'o':
+            opt_oneshot = true;
+            break;
+        case 'i':
+            opt_ignore_dead = true;
             break;
         case 't':
             errno = 0;
@@ -334,8 +412,7 @@ static afunc_t parse_args(const int argc, char** argv)
         case -1:
             if (optind >= argc)
                 usage();
-            return match_action(argv[optind++]);
-            break;
+            return argv[optind++];
         default:
             usage();
             break;
@@ -355,18 +432,41 @@ int main(int argc, char** argv)
     // issues with acme-dns-01 challenge data which happens to start with the
     // legitimate base64url character '-'.
     setenv("POSIXLY_CORRECT", "1", 1);
-    afunc_t action_func = parse_args(argc, argv);
+    const char* action = parse_args(argc, argv);
     unsetenv("POSIXLY_CORRECT");
 
-    gdnsd_assert(action_func);
+    gdnsd_assert(action);
     gdnsd_log_set_debug(opt_debug);
     gdnsd_log_set_syslog(opt_syslog, "gdnsdctl");
     vscf_data_t* cfg_root = gdnsd_init_paths(opt_cfg_dir, false);
     vscf_destroy(cfg_root);
-    csc_t* csc = csc_new(opt_timeo, false);
-    if (!csc)
-        log_fatal("Cannot connect to a running daemon!");
-    int rv = action_func(csc, argc - optind, &argv[optind]);
-    csc_delete(csc);
-    return rv;
+
+    install_alarm();
+    while (1) {
+        csc_t* csc = csc_new(0, "");
+        if (!csc) {
+            if (opt_ignore_dead && can_ignore_dead(action)) {
+                log_info("No running daemon, succeeding");
+                return 0;
+            }
+            return 1; // csc_new already logged the reason
+        }
+
+        const bool retry = do_action(csc, action, argc - optind, &argv[optind]);
+        csc_delete(csc);
+
+        if (!retry)
+            return 0;
+
+        if (opt_oneshot || alarm_raised) {
+            if (alarm_raised)
+                log_err("Operation timed out");
+            return 1;
+        }
+
+        log_warn("Soft failure (comms error or blocked by an in-progress replace operation), retrying in ~1s...");
+        const struct timespec asecond = { 1, 0 };
+        if (nanosleep(&asecond, NULL) && errno != EINTR)
+            log_fatal("nanosleep() failed: %s", logf_errno());
+    }
 }

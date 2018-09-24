@@ -49,16 +49,15 @@ typedef enum {
 // Opens a control socket connection handle.
 // "timeout" is in seconds, and sets socket-level send+receive timeouts.
 //           if this is zero, no timeouts are set and blocking is indefinite.
-// "replace" means this is being used by a starting server for a replace
-//           attempt, and only affects some of the log output string contents
-//           for the REPLACE[x] -style outputs, for clarity.
+// "pfx" is a constant string used to prefix log outputs for the replace case
 // Fails fatally on certain un-retryable failures (failure to allocate a unix
 // socket fd, failure set timeouts on socket, or control socket pathname too
 // long for platform limits).  Returns NULL on retryable failures (failure to
 // connect, failure to get a valid response to a basic status inquiry over the
 // new socket).  If return value is non-NULL, the object is connected validly
 // to a live daemon and knows the daemon's basic status info (pid, version).
-csc_t* csc_new(const unsigned timeout, const bool replace);
+F_NONNULL
+csc_t* csc_new(const unsigned timeout, const char* pfx);
 
 // Get basic info about server on other side of controlsock (this is fetched
 // via the "status" command immediately after starting a new connection above,

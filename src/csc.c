@@ -37,10 +37,6 @@
 #include <sys/un.h>
 #include <sys/file.h>
 
-static const char repl_pfx_normal[] = "";
-static const char repl_pfx_replace[] = "REPLACE[new daemon]: ";
-static const char repl_pfx_replace_old[] = "REPLACE[new daemon]: old ";
-
 struct csc_s_ {
     int fd;
     pid_t server_pid;
@@ -49,8 +45,6 @@ struct csc_s_ {
     uint8_t svers_major;
     uint8_t svers_minor;
     uint8_t svers_patch;
-    const char* repl_pfx;
-    const char* repl_pfx_old;
 };
 
 static bool csc_get_status(csc_t* csc)
@@ -75,36 +69,34 @@ static bool csc_get_status(csc_t* csc)
     return false;
 }
 
-csc_t* csc_new(const unsigned timeout, const bool replace)
+csc_t* csc_new(const unsigned timeout, const char* pfx)
 {
     csc_t* csc = xcalloc(sizeof(*csc));
-    csc->repl_pfx = replace ? repl_pfx_replace : repl_pfx_normal;
-    csc->repl_pfx_old = replace ? repl_pfx_replace_old : repl_pfx_normal;
     csc->path = gdnsd_resolve_path_run("control.sock", NULL);
 
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
-        log_fatal("%sCreating AF_UNIX socket failed: %s", csc->repl_pfx, logf_errno());
+        log_fatal("%sCreating AF_UNIX socket failed: %s", pfx, logf_errno());
     csc->fd = fd;
 
     if (timeout) {
         const struct timeval tmout = { .tv_sec = timeout, .tv_usec = 0 };
         if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout, sizeof(tmout)))
-            log_fatal("%sFailed to set SO_RCVTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
+            log_fatal("%sFailed to set SO_RCVTIMEO on control socket: %s", pfx, logf_errno());
         if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tmout, sizeof(tmout)))
-            log_fatal("%sFailed to set SO_SNDTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
+            log_fatal("%sFailed to set SO_SNDTIMEO on control socket: %s", pfx, logf_errno());
     }
 
     struct sockaddr_un addr;
     sun_set_path(&addr, csc->path);
     if (connect(fd, (struct sockaddr*)&addr, sizeof(addr))) {
-        log_err("%sconnect() to unix domain socket %s failed: %s", csc->repl_pfx, csc->path, logf_errno());
+        log_err("%sconnect() to unix domain socket %s failed: %s", pfx, csc->path, logf_errno());
         close(fd);
         free(csc->path);
         free(csc);
         csc = NULL;
     } else if (csc_get_status(csc)) {
-        log_err("%sFailed to get daemon status over control socket %s", csc->repl_pfx, csc->path);
+        log_err("%sFailed to get daemon status over control socket %s", pfx, csc->path);
         close(fd);
         free(csc->path);
         free(csc);
