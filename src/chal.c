@@ -49,7 +49,7 @@ typedef struct {
 struct cset_s_;
 typedef struct cset_s_ cset_t;
 struct cset_s_ {
-    unsigned count;
+    size_t count;
     ev_tstamp expiry;
     cset_t* next_newer;
     chal_t chals[0];
@@ -66,7 +66,7 @@ static cset_t* newest = NULL;
 
 // Sum of cset_t->count for all live sets in the list above, maintained
 // during insert/remove of cset_t, used to size hashtable
-static unsigned chal_count = 0;
+static size_t chal_count = 0;
 
 // Global expiration timer, ticking towards "oldest" expire-time, if any
 // cset_t are active at all.
@@ -79,7 +79,7 @@ static ev_timer expire_timer;
 // commonly, and have to return the whole set of duplicates, so open addressing
 // isn't a great idea either.
 typedef struct {
-    unsigned count;
+    size_t count;
     chal_t* chals[0];
 } chal_collide_t;
 
@@ -103,10 +103,10 @@ static void chal_tbl_create_and_swap(cset_t* cset)
         new_chal_tbl = xcalloc(sizeof(*new_chal_tbl) + (sizeof(new_chal_tbl->tbl[0]) * (mask + 1U)));
         new_chal_tbl->mask = mask;
         while (cset) {
-            for (unsigned i = 0; i < cset->count; i++) {
+            for (size_t i = 0; i < cset->count; i++) {
                 chal_t* ch = &cset->chals[i];
                 chal_collide_t** slotptr = &new_chal_tbl->tbl[ch->dnhash & mask];
-                unsigned old_ct = 0;
+                size_t old_ct = 0;
                 if (*slotptr)
                     old_ct = (*slotptr)->count;
                 *slotptr = xrealloc(*slotptr, sizeof(**slotptr) + (sizeof((*slotptr)->chals[0]) * (old_ct + 1U)));
@@ -121,7 +121,7 @@ static void chal_tbl_create_and_swap(cset_t* cset)
     rcu_assign_pointer(chal_tbl, new_chal_tbl);
     synchronize_rcu();
     if (old_chal_tbl) {
-        for (unsigned i = 0; i <= old_chal_tbl->mask; i++) {
+        for (size_t i = 0; i <= old_chal_tbl->mask; i++) {
             if (old_chal_tbl->tbl[i])
                 free(old_chal_tbl->tbl[i]);
         }
@@ -189,7 +189,7 @@ void cset_flush(struct ev_loop* loop)
 // construct a whole TXT RR encoding the payload
 static void mk_chal_rr(uint8_t* out, const uint8_t* payload)
 {
-    unsigned idx = 0;
+    size_t idx = 0;
     gdnsd_put_una32(DNS_RRFIXED_TXT, &out[idx]);
     idx += 4;
     gdnsd_put_una32(htonl(gcfg->acme_challenge_ttl), &out[idx]);
@@ -216,8 +216,8 @@ bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data)
 
     log_debug("Creating ACME DNS-01 challenge set with %zu items:", count);
 
-    unsigned didx = 0;
-    for (unsigned i = 0; i < count; i++) {
+    size_t didx = 0;
+    for (size_t i = 0; i < count; i++) {
         gdnsd_assert(didx <= dlen);
         if (dname_status_buflen(&data[didx], (dlen - didx)) == DNAME_INVALID) {
             log_err("Control socket client sent invalid domainname in acme-dns-01 request");
