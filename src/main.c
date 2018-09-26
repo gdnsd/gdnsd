@@ -294,7 +294,39 @@ static void do_tak1(csc_t* csc)
         req.key = REQ_TAK1;
         req.d = (uint32_t)getpid();
         if (csc_txn(csc, &req, &resp))
-            log_fatal("REPLACE[new daemon]: takeover notification attempt failed (possibly lost race against another)");
+            log_fatal("REPLACE[new daemon]: takeover phase 1 notification attempt failed (possibly lost race against another)");
+    }
+}
+
+static void do_tak2(struct ev_loop* loop, csc_t* csc)
+{
+    // As above for compat
+    if (csc_server_version_gte(csc, 2, 99, 200)) {
+        uint8_t* chal_data = NULL;
+        csbuf_t req, resp;
+        memset(&req, 0, sizeof(req));
+        req.key = REQ_TAK2;
+        req.d = (uint32_t)getpid();
+        if (csc_txn_getdata(csc, &req, &resp, (char**)&chal_data))
+            log_fatal("REPLACE[new daemon]: takeover phase 2 notification attempt failed");
+        const size_t chal_count = csbuf_get_v(&resp);
+        const size_t chal_dlen = resp.d;
+        log_devdebug("TAK1 challenge handoff got count %zu dlen %zu", chal_count, chal_dlen);
+        size_t offset = 0;
+        for (size_t i = 0; i < chal_count; i++) {
+            if (offset + 5U > chal_dlen)
+                log_fatal("REPLACE[new daemon]: corrupt challenge data size");
+            size_t cset_dlen = gdnsd_get_una16(&chal_data[offset]);
+            offset += 2U;
+            size_t ttl_remain = gdnsd_get_una16(&chal_data[offset]);
+            offset += 2U;
+            size_t cset_count = chal_data[offset++];
+            if (offset + cset_dlen > chal_dlen)
+                log_fatal("REPLACE[new daemon]: corrupt challenge data size");
+            if (cset_create(loop, ttl_remain, cset_count, cset_dlen, &chal_data[offset]))
+                log_fatal("REPLACE[new daemon]: illegal challenge handoff data");
+            offset += cset_dlen;
+        }
     }
 }
 
@@ -422,6 +454,22 @@ int main(int argc, char** argv)
     gcfg = conf_load(cfg_root, socks_cfg, copts.force_zsd);
     vscf_destroy(cfg_root);
 
+    // Basic init for the acme challenge code
+    chal_init();
+
+    // Set up libev error callback
+    ev_set_syserr_cb(&syserr_for_ev);
+
+    // default ev loop in main process to handle statio, monitors, control
+    // socket, signals, etc.
+    def_loop = ev_default_loop(EVFLAG_AUTO);
+    if (!def_loop)
+        log_fatal("Could not initialize the default libev loop");
+
+    // import challenge data in takeover case
+    if (csc)
+        do_tak2(def_loop, csc);
+
     // init DYNA packet sizing stuff
     ltree_init();
 
@@ -437,9 +485,6 @@ int main(int argc, char** argv)
     gdnsd_init_net();
     gdnsd_init_rand();
 
-    // Basic init for the acme challenge code
-    chal_init();
-
     // init the stats code
     statio_init(socks_cfg->num_dns_threads);
 
@@ -450,15 +495,6 @@ int main(int argc, char** argv)
 
     // Initialize dnspacket stuff
     dnspacket_global_setup(socks_cfg);
-
-    // Set up libev error callback
-    ev_set_syserr_cb(&syserr_for_ev);
-
-    // default ev loop in main process to handle statio, monitors, control
-    // socket, signals, etc.
-    def_loop = ev_default_loop(EVFLAG_AUTO);
-    if (!def_loop)
-        log_fatal("Could not initialize the default libev loop");
 
     // set up monitoring, which expects an initially empty loop
     gdnsd_mon_start(def_loop);

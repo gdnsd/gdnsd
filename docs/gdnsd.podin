@@ -61,7 +61,9 @@ Normally, if another server instance has the server control socket locked, a
 C<start> or C<daemonize> attempt will fail.  With this flag set, the new server
 will connect to the old over its control socket and attempt a downtime-less,
 graceful takeover of operations.  This allows for both code and configuration
-changes to happen without losing requests in most cases.
+changes to happen without losing requests in most cases.  See the
+L<gdnsdctl(8)> documentation for "replace" for more information, as that is the
+preferred interface to this functionality.
 
 =back
 

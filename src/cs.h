@@ -59,6 +59,7 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 
 // Legal values for "key"
 #define REQ_TAK1  '1'
+#define REQ_TAK2  '2'
 #define RESP_ACK  'A'
 #define REQ_CHALF 'c'
 #define REQ_CHAL  'C'

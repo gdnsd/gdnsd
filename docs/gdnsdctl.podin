@@ -79,8 +79,12 @@ control socket itself is handed off synchronously: the old daemon stops
 listening for new connections before the new daemon begins listening, and the
 old daemon re-starts listening if the new daemon fails to succeed completely.
 During the entire replacement process, the old daemon will deny control socket
-requests from already-connected clients to "stop" the daemon or initiate
-concurrent "replace" requests.
+requests clients for any stateful operations (e.g. other C<replace> requests,
+C<reload-zones>, C<acme-dns-01>).  The takeover process ensures that any
+successful stateful operations which happened (even just barely) before the
+replacement remain valid.  The challenge data carries over, and the new daemon
+will have loaded the zone data at or after the point the last reload-zones
+operation did so.
 
 Once the old daemon claims the replacement process was successful, gdnsdctl
 will monitor the old daemon's exit and then make a fresh connection to the
@@ -145,10 +149,11 @@ TTLs forced to the C<acme_challenge_ttl> regardless of the TTL specified in the
 zonefile.  This was the easiest way to ensure that we never serve mixed TTL
 values in a single RR-set of TXT records, which is forbidden by RFC 2181.
 
-Note the data injected by this mechanism does not persist through daemon
-restart or replace operations.  It does persist through zone data reloads, and
-in the case that data is injected for a non-existent zone which then comes into
-existence through a reload, the challenge will begin working after the reload.
+The data injected by this mechanism persists through daemon C<replace>
+operations, but not through a full C<stop> of the daemon.  It also persists
+through zone data reloads, and in the case that data is injected for a
+non-existent zone which then comes into existence through a reload, the
+challenge will begin working after the reload.
 
 =item B<acme-dns-01-flush>
 

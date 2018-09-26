@@ -337,6 +337,15 @@ static void respond(css_conn_t* c, const char key, const uint32_t v, const uint3
     ev_io_start(c->css->loop, w_write);
 }
 
+F_NONNULL
+static void respond_tak2(struct ev_loop* loop, css_conn_t* c)
+{
+    size_t csets_count = 0;
+    size_t csets_size = 0;
+    uint8_t* csets_data = csets_serialize(loop, &csets_count, &csets_size);
+    respond(c, RESP_ACK, (uint32_t)csets_count, (uint32_t)csets_size, (char*)csets_data, false);
+}
+
 bool css_stop_ok(css_t* css)
 {
     return !css->replacement_pid;
@@ -551,7 +560,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 
             // we'd switch here if more than one, but REQ_CHAL is the only key that leads here for now
             gdnsd_assert(c->rbuf.key == REQ_CHAL);
-            const bool failed = cset_create(loop, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data);
+            const bool failed = cset_create(loop, 0, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data);
 
             free(c->data);
             c->data = NULL;
@@ -706,10 +715,20 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         latr_all_reloaders(css);
         respond(c, RESP_ACK, 0, 0, NULL, false);
         break;
+    case REQ_TAK2:
+        take_pid = (pid_t)c->rbuf.d;
+        if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
+            log_warn("Denying illegal takeover phase 2 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+            respond(c, RESP_FAIL, 0, 0, NULL, false);
+            break;
+        }
+        log_debug("Accepted takeover phase 2 (challenge data req) from PID %li", (long)take_pid);
+        respond_tak2(css->loop, c);
+        break;
     case REQ_TAKE:
         take_pid = (pid_t)c->rbuf.d;
         if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
-            log_err("Denying takeover request without pre-notification");
+            log_err("Denying illegal takeover request without pre-notification");
             respond(c, RESP_FAIL, 0, 0, NULL, false);
             css_conn_cleanup(c);
             break;

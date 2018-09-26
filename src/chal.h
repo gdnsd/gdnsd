@@ -52,8 +52,16 @@
 // socket server code enforces the maximums declared above, and requires both
 // numbers to be non-zero as well.  This function asserts those constraints
 // without checking them.
+// ttl_remain is for daemon->daemon imports, and should be zero for true client
+// insertions.
 F_NONNULL
-bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data);
+bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t dlen, uint8_t* data);
+
+// Returns an allocated data chunk and a count (v) and dlen (d) for sending one
+// message which serializes all active cset_t for handoff.  Sets zeros and
+// returns NULL if there are no cset_t to serialize.
+F_NONNULL F_MALLOC
+uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* csets_dlen_p);
 
 // Flush all created above immediately, instead of letting them expire our naturally
 // If loop is non-NULL, also stops timer

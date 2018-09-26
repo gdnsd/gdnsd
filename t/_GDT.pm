@@ -203,6 +203,10 @@ our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 50;
 our $CSOCK_PATH = "$RUNDIR/control.sock";
 our $csock;
 
+# Cached resolver objects from Net::DNS
+our $_resolver;
+our $_resolver6;
+
 my %stats_accum = (
     noerror          => 0,
     refused          => 0,
@@ -230,14 +234,16 @@ my %stats_accum = (
     tcp_close_s_kill => 0,
 );
 
-sub reset_stats {
-    # reset stats if daemon run multiple times in one testfile
+# reset stats, constrolsock, and resolver objects (incl TCP conns)
+# if daemon run multiple times in one testfile
+sub reset_for_new_daemon {
     foreach my $k (keys %stats_accum) { $stats_accum{$k} = 0; }
-}
-
-sub reset_csock {
-    $csock = IO::Socket::UNIX->new($CSOCK_PATH)
-        or die "hard-fail: cannot open runtime control socket $CSOCK_PATH: $!";
+    if ($csock) {
+        $csock = IO::Socket::UNIX->new($CSOCK_PATH)
+            or die "hard-fail: cannot open runtime control socket $CSOCK_PATH: $!";
+    }
+    undef $_resolver;
+    undef $_resolver6;
 }
 
 sub _get_daemon_json_stats {
@@ -447,7 +453,7 @@ sub spawn_daemon_execute {
 sub test_spawn_daemon {
     my $class = shift;
 
-    reset_stats();
+    reset_for_new_daemon();
 
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $pid = eval{
@@ -481,7 +487,7 @@ sub test_spawn_daemon_setup {
 sub test_spawn_daemon_execute {
     my $class = shift;
 
-    reset_stats();
+    reset_for_new_daemon();
 
     local $Test::Builder::Level = $Test::Builder::Level + 1;
     my $pid = eval{
@@ -640,9 +646,6 @@ sub write_statefile {
 }
 
 ##### END RELOAD STUFF
-
-my $_resolver;
-my $_resolver6;
 
 sub get_resolver {
     return $_resolver ||= Net::DNS::Resolver->new(
@@ -1255,6 +1258,7 @@ sub test_kill_daemon {
         die $d;
     }
     undef $saved_pid; # avoid END-block SIGKILL if we know it died fine
+    undef $csock;
 
     # if we make it here, gdnsd exited with status zero as expected.
     Test::More::ok(1);

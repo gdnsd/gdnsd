@@ -232,20 +232,23 @@ bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_
     if (csc_txn(csc, req, resp))
         return true;
 
-    gdnsd_assert(resp->d);
-    const size_t total = resp->d;
-    char* rd = xmalloc(total);
-    size_t done = 0;
+    char* rd = NULL;
 
-    while (done < total) {
-        const size_t wanted = total - done;
-        const ssize_t pktlen = recv(csc->fd, &rd[done], wanted, 0);
-        if (pktlen <= 0) {
-            free(rd);
-            log_err("%zu-byte recv() failed: %s", wanted, logf_errno());
-            return true;
+    if (resp->d) {
+        const size_t total = resp->d;
+        rd = xmalloc(total);
+        size_t done = 0;
+
+        while (done < total) {
+            const size_t wanted = total - done;
+            const ssize_t pktlen = recv(csc->fd, &rd[done], wanted, 0);
+            if (pktlen <= 0) {
+                free(rd);
+                log_err("%zu-byte recv() failed: %s", wanted, logf_errno());
+                return true;
+            }
+            done += (size_t)pktlen;
         }
-        done += (size_t)pktlen;
     }
 
     *resp_data = rd;

@@ -164,8 +164,11 @@ static int action_stats(csc_t* csc, int argc, char** argv V_UNUSED)
     req.key = REQ_STAT;
     if (csc_txn_getdata(csc, &req, &resp, &resp_data))
         return 1;
-    fwrite(resp_data, 1, resp.d, stdout);
-    free(resp_data);
+    if (resp_data) {
+        gdnsd_assert(resp.d);
+        fwrite(resp_data, 1, resp.d, stdout);
+        free(resp_data);
+    }
     return 0;
 }
 
@@ -181,8 +184,11 @@ static int action_states(csc_t* csc, int argc, char** argv V_UNUSED)
     req.key = REQ_STATE;
     if (csc_txn_getdata(csc, &req, &resp, &resp_data))
         return 1;
-    fwrite(resp_data, 1, resp.d, stdout);
-    free(resp_data);
+    if (resp_data) {
+        gdnsd_assert(resp.d);
+        fwrite(resp_data, 1, resp.d, stdout);
+        free(resp_data);
+    }
     return 0;
 }
 

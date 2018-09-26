@@ -34,13 +34,24 @@
 
 // Challenge payload TXT RR len, fully pre-encoded
 // 2 bytes type, 2 bytes class, 4 bytes ttl,
-// 2 bytes rdlen, 1 byte txt chunklen, 43 bytes payload
-#define CHAL_RR_LEN (2U + 2U + 4U + 2U + 1U + 43U)
+// 2 bytes rdlen, 1 byte txt chunklen
+// 43 bytes payload
+#define CHAL_RR_FIELDS (2U + 2U + 4U + 2U + 1U)
+#define CHAL_RR_PAYLOAD (43U)
+#define CHAL_RR_LEN (CHAL_RR_FIELDS + CHAL_RR_PAYLOAD)
+
+// When serializing, we add 5 bytes at the start:
+// 2 bytes size, 2 bytes remaining TTL, 1 byte count
+#define CHAL_MAX_SERIAL (CHAL_MAX_DLEN + 5U)
+
+// Seconds of fudge-factor on expiries to avoid edge-cases with timers and
+// communication delays, etc
+#define TIME_FUDGE 3.2
 
 // A single challenge
 typedef struct {
     uint32_t dnhash; // faster table re-creations and collision checks
-    uint8_t dname[256]; // full dname, so we don't have to prefix _acme-challenge when runtime-checking
+    uint8_t dname[256]; // full dname, without _acme-challenge prefix
     uint8_t txt[CHAL_RR_LEN];
 } chal_t;
 
@@ -134,7 +145,7 @@ static void cset_expire(struct ev_loop* loop, ev_timer* t, const int revents V_U
 {
     gdnsd_assert(revents == EV_TIMER);
 
-    const ev_tstamp cutoff = ev_now(loop) + 3.2; // fuzz/aggregation-factor
+    const ev_tstamp cutoff = ev_now(loop) + TIME_FUDGE;
 
     // Skip past the to-be-expired without actually deleting them yet
     cset_t* cset = oldest;
@@ -201,17 +212,19 @@ static void mk_chal_rr(uint8_t* out, const uint8_t* payload)
     gdnsd_assert((idx + 43U) == CHAL_RR_LEN);
 }
 
-bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data)
+bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t dlen, uint8_t* data)
 {
-    gdnsd_assert(count);
-    gdnsd_assert(count < CHAL_MAX_COUNT);
-    gdnsd_assert(dlen);
-    gdnsd_assert(dlen < CHAL_MAX_DLEN);
+    if (!count || !dlen || count > CHAL_MAX_COUNT || dlen > CHAL_MAX_DLEN) {
+        log_err("Control socket send illegal ACME dns-01 challenge data");
+        return true;
+    }
 
     cset_t* cset = xmalloc(sizeof(*cset) + (sizeof(cset->chals[0]) * count));
     cset->count = count;
     chal_count += count;
-    cset->expiry = ev_now(loop) + gcfg->acme_challenge_ttl;
+    if (!ttl_remain || ttl_remain > gcfg->acme_challenge_ttl)
+        ttl_remain = gcfg->acme_challenge_ttl;
+    cset->expiry = ev_now(loop) + ttl_remain;
     cset->next_newer = NULL;
 
     log_debug("Creating ACME DNS-01 challenge set with %zu items:", count);
@@ -220,7 +233,7 @@ bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data)
     for (size_t i = 0; i < count; i++) {
         gdnsd_assert(didx <= dlen);
         if (dname_status_buflen(&data[didx], (dlen - didx)) == DNAME_INVALID) {
-            log_err("Control socket client sent invalid domainname in acme-dns-01 request");
+            log_err("Control socket sent invalid domainname in acme-dns-01 request");
             free(cset);
             return true;
         }
@@ -232,18 +245,18 @@ bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data)
 
         gdnsd_assert(didx <= dlen);
         if ((dlen - didx) < 44U) {
-            log_err("Control socket client sent too little payload data in acme-dns-01 request");
+            log_err("Control socket sent too little payload data in acme-dns-01 request");
             free(cset);
             return true;
         }
         data[didx + 43U] = '\0'; // should already be there, but enforce JIC
         mk_chal_rr(c->txt, &data[didx]);
-        log_devdebug(" ACME DNS-01 record created: dname '%s' payload '%s'", logf_dname(c->dname), &data[didx]);
+        log_devdebug("ACME DNS-01 record created: dname '%s' payload '%s'", logf_dname(c->dname), &data[didx]);
         didx += 44U;
     }
 
     if (didx != dlen) {
-        log_err("Control socket client sent trailing junk data in acme-dns-01 request");
+        log_err("Control socket sent trailing junk data in acme-dns-01 request");
         free(cset);
         return true;
     }
@@ -264,6 +277,80 @@ bool cset_create(struct ev_loop* loop, size_t count, size_t dlen, uint8_t* data)
     chal_tbl_create_and_swap(oldest);
 
     return false;
+}
+
+// Serialize a cset_t back into controlsock wire format
+F_NONNULL F_WUNUSED
+static size_t cset_serialize(ev_tstamp now, cset_t* cset, uint8_t* dptr)
+{
+    gdnsd_assert(cset->count <= CHAL_MAX_COUNT);
+    gdnsd_assert(cset->count);
+
+    uint16_t ttl_remain = 0;
+    gdnsd_assert(now < cset->expiry);
+    gdnsd_assert(gcfg->acme_challenge_ttl <= UINT16_MAX);
+    ev_tstamp remain_raw = cset->expiry - now;
+    if (remain_raw > gcfg->acme_challenge_ttl)
+        ttl_remain = gcfg->acme_challenge_ttl;
+    else
+        ttl_remain = (uint16_t)remain_raw;
+
+    size_t offset = 2U; // save room for placing size at start
+    gdnsd_put_una16(ttl_remain, &dptr[offset]);
+    offset += 2U;
+    dptr[offset++] = (uint8_t)cset->count;
+    for (size_t i = 0; i < cset->count; i++) {
+        const chal_t* c = &cset->chals[i];
+        gdnsd_assert(dname_status(c->dname) == DNAME_VALID);
+        dname_copy(&dptr[offset], c->dname);
+        offset += c->dname[0] + 1U;
+        memcpy(&dptr[offset], &c->txt[CHAL_RR_FIELDS], CHAL_RR_PAYLOAD);
+        offset += CHAL_RR_PAYLOAD;
+        dptr[offset++] = 0;
+    }
+
+    gdnsd_assert(offset > 5U);
+    gdnsd_assert(offset <= CHAL_MAX_SERIAL);
+
+    const size_t dlen = offset - 5U;
+    gdnsd_assert(dlen <= UINT16_MAX);
+    gdnsd_put_una16(dlen, dptr);
+
+    return offset;
+}
+
+uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* csets_dlen_p)
+{
+    uint8_t* rv = NULL;
+    size_t allocated = 0;
+    size_t used = 0;
+    size_t ct = 0;
+    ev_tstamp now = ev_now(loop);
+
+    cset_t* cur = oldest;
+    while (cur) {
+        if ((now + TIME_FUDGE) < cur->expiry) {
+            if (used + CHAL_MAX_SERIAL > allocated) {
+                if (unlikely(used + CHAL_MAX_SERIAL > UINT32_MAX)) {
+                    log_err("Handing off partial ACME challenge data, total data length exceeds design limits");
+                    break;
+                }
+                allocated += CHAL_MAX_SERIAL;
+                rv = xrealloc(rv, allocated);
+            }
+            used += cset_serialize(now, cur, &rv[used]);
+            if (unlikely(ct == 0xFFFFFFu)) {
+                log_err("Handing off partial ACME challenge data, total count exceeds design limits");
+                break;
+            }
+            ct++;
+        }
+        cur = cur->next_newer;
+    }
+
+    *csets_count_p = ct;
+    *csets_dlen_p = used;
+    return rv;
 }
 
 // runtime lookup called in dns i/o thread context from dnspacket.c from within
