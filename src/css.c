@@ -715,7 +715,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         break;
     default:
         log_err("Unknown request type %hhx from control socket", (uint8_t)c->rbuf.key);
-        respond(c, RESP_UNK, 0, 0, NULL, true);
+        respond(c, RESP_UNK, 0, 0, NULL, false);
     }
 }
 
