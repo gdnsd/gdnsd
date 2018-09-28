@@ -6,15 +6,9 @@ AM_INIT_AUTOMAKE([1.13 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wa
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
-# TODO: when/if a new autoconf release has a C11 macro,
-#    prefer that and fall back to requiring C99.
-AC_PROG_CC_C99
-if test "x$ac_cv_prog_cc_c99" = xno; then
-    AC_MSG_ERROR([Your compiler lacks sufficient C99 support])
-fi
-# AC_PROG_CC_C99 has to come before this or we don't get a C99 CPP
+# We're hoping for C11, but anything C99 or higher will work
+AC_PROG_CC_STDC
 AC_USE_SYSTEM_EXTENSIONS
-
 AM_PROG_CC_C_O
 
 # POSIX threads stuff
