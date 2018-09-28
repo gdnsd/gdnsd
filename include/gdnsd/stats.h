@@ -26,7 +26,7 @@
 
 /*
  * This header defines two data types named stats_t and stats_uint_t,
- *   and several accessor functions for them.
+ *   and two accessor functions for stats_t.
  *
  * stats_t is used to implement an uint-like peice of data which is
  *   shared (without barriers or locking) between multiple threads
@@ -46,7 +46,7 @@
  *   generally happens "pretty soon", soon enough that it doesn't matter
  *   for stats accounting.  There is no actual gaurantee on when the
  *   update becomes visible in the general case, and it might *never*
- *   become visible on some exotic architectures that gdnsd  doesn't
+ *   become visible on some exotic architectures that gdnsd doesn't
  *   care to support at this time.
  *
  * stats_uint_t is simply an regular unsigned type of some width that
@@ -57,33 +57,27 @@
  * The width of the types currently matches uintptr_t (the width of a
  *   pointer), because most mainstream architectures are atomic for
  *   this size of aligned memory access (not atomic in the SMP sense,
- *   atomic in the "you won't read a half-updated value" sense).
+ *   atomic in the "you won't read a half-updated value" sense).  We've
+ *   made a special exception for x86_64 x32, because it's a
+ *   reasonably-common option where pointers are 32-bit, but 64-bit
+ *   atomic operations are possible.
  */
 
+#if defined __x86_64__ && defined __ILP32__
+typedef uint64_t stats_uint_t;
+#else
 typedef uintptr_t stats_uint_t;
+#endif
+
 typedef struct {
     stats_uint_t _x;
 } stats_t;
-
-// stats_own_set() -> set the stats value from the owner thread only
-F_NONNULL F_UNUSED
-static void stats_own_set(stats_t* s, const stats_uint_t v)
-{
-    s->_x = v;
-}
 
 // stats_own_inc() -> increment stats value from the owner thread only
 F_NONNULL F_UNUSED
 static void stats_own_inc(stats_t* s)
 {
     s->_x++;
-}
-
-// stats_own_get() -> read the value from the owner thread
-F_NONNULL F_UNUSED
-static stats_uint_t stats_own_get(const stats_t* s)
-{
-    return s->_x;
 }
 
 // stats_get() -> read the value from any other thread
