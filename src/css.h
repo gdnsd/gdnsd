@@ -74,11 +74,16 @@ void css_start(css_t* css, struct ev_loop* loop);
 // control socket clients of success/fail.  Return value of true indicates that
 // more waiters queued up during the reload, so main.c needs to start yet
 // another reload operation.
+F_NONNULL
 bool css_notify_zone_reloaders(css_t* css, const bool failed);
 
 // Check whether a stop (e.g. via signal) is currently ok or not (due to
 // impending replacement/replace operation)
+F_NONNULL
 bool css_stop_ok(css_t* css);
+
+F_NONNULL
+void css_send_stats_handoff(css_t* css);
 
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL

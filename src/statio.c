@@ -36,32 +36,33 @@
 #include <sys/uio.h>
 #include <pthread.h>
 
-typedef struct {
-    stats_uint_t udp_recvfail;       // 1
-    stats_uint_t udp_sendfail;       // 2
-    stats_uint_t udp_tc;             // 3
-    stats_uint_t udp_edns_big;       // 4
-    stats_uint_t udp_edns_tc;        // 5
-    stats_uint_t tcp_recvfail;       // 6
-    stats_uint_t tcp_sendfail;       // 7
-    stats_uint_t tcp_conns;          // 8
-    stats_uint_t tcp_close_c;        // 9
-    stats_uint_t tcp_close_s_ok;     // 10
-    stats_uint_t tcp_close_s_err;    // 11
-    stats_uint_t tcp_close_s_kill;   // 12
-    stats_uint_t dns_noerror;        // 13
-    stats_uint_t dns_refused;        // 14
-    stats_uint_t dns_nxdomain;       // 15
-    stats_uint_t dns_notimp;         // 16
-    stats_uint_t dns_badvers;        // 17
-    stats_uint_t dns_formerr;        // 18
-    stats_uint_t dns_dropped;        // 19
-    stats_uint_t dns_v6;             // 20
-    stats_uint_t dns_edns;           // 21
-    stats_uint_t dns_edns_clientsub; // 22
-    stats_uint_t udp_reqs;           // 23
-    stats_uint_t tcp_reqs;           // 24
-} statio_t;
+typedef enum {
+    UDP_RECVFAIL       = 0,
+    UDP_SENDFAIL       = 1,
+    UDP_TC             = 2,
+    UDP_EDNS_BIG       = 3,
+    UDP_EDNS_TC        = 4,
+    TCP_RECVFAIL       = 5,
+    TCP_SENDFAIL       = 6,
+    TCP_CONNS          = 7,
+    TCP_CLOSE_C        = 8,
+    TCP_CLOSE_S_OK     = 9,
+    TCP_CLOSE_S_ERR    = 10,
+    TCP_CLOSE_S_KILL   = 11,
+    DNS_NOERROR        = 12,
+    DNS_REFUSED        = 13,
+    DNS_NXDOMAIN       = 14,
+    DNS_NOTIMP         = 15,
+    DNS_BADVERS        = 16,
+    DNS_FORMERR        = 17,
+    DNS_DROPPED        = 18,
+    DNS_V6             = 19,
+    DNS_EDNS           = 20,
+    DNS_EDNS_CLIENTSUB = 21,
+    UDP_REQS           = 22,
+    TCP_REQS           = 23,
+    SLOT_COUNT         = 24,
+} slot_t;
 
 static const char json_fixed[] =
     "{\r\n"
@@ -101,8 +102,13 @@ static const char json_fixed[] =
 static time_t start_time;
 static unsigned num_dns_threads;
 
-// This is memset to zero and re-accumulated for every output
-static statio_t statio;
+// This is memset to zero on startup, and then imports the final stats of the
+// daemon we replaced (if applicable), and becomes the baseline for the
+// accumulations into statio below.
+static stats_uint_t statio_base[SLOT_COUNT];
+
+// This is reset to statio_base and used to accumulate thread stats for output
+static stats_uint_t statio[SLOT_COUNT];
 
 static size_t json_buffer_max = 0;
 
@@ -118,66 +124,109 @@ static void accumulate_statio(unsigned threadnum)
     const stats_uint_t l_badvers   = stats_get(&this_stats->badvers);
     const stats_uint_t l_formerr   = stats_get(&this_stats->formerr);
     const stats_uint_t l_dropped   = stats_get(&this_stats->dropped);
-    statio.dns_noerror  += l_noerror;
-    statio.dns_refused  += l_refused;
-    statio.dns_nxdomain += l_nxdomain;
-    statio.dns_notimp   += l_notimp;
-    statio.dns_badvers  += l_badvers;
-    statio.dns_formerr  += l_formerr;
-    statio.dns_dropped  += l_dropped;
+    statio[DNS_NOERROR]  += l_noerror;
+    statio[DNS_REFUSED]  += l_refused;
+    statio[DNS_NXDOMAIN] += l_nxdomain;
+    statio[DNS_NOTIMP]   += l_notimp;
+    statio[DNS_BADVERS]  += l_badvers;
+    statio[DNS_FORMERR]  += l_formerr;
+    statio[DNS_DROPPED]  += l_dropped;
 
     const stats_uint_t this_reqs = l_noerror + l_refused + l_nxdomain
                                    + l_notimp + l_badvers + l_formerr + l_dropped;
 
     if (this_stats->is_udp) {
-        statio.udp_reqs     += this_reqs;
-        statio.udp_recvfail += stats_get(&this_stats->udp.recvfail);
-        statio.udp_sendfail += stats_get(&this_stats->udp.sendfail);
-        statio.udp_tc       += stats_get(&this_stats->udp.tc);
-        statio.udp_edns_big += stats_get(&this_stats->udp.edns_big);
-        statio.udp_edns_tc  += stats_get(&this_stats->udp.edns_tc);
+        statio[UDP_REQS]     += this_reqs;
+        statio[UDP_RECVFAIL] += stats_get(&this_stats->udp.recvfail);
+        statio[UDP_SENDFAIL] += stats_get(&this_stats->udp.sendfail);
+        statio[UDP_TC]       += stats_get(&this_stats->udp.tc);
+        statio[UDP_EDNS_BIG] += stats_get(&this_stats->udp.edns_big);
+        statio[UDP_EDNS_TC]  += stats_get(&this_stats->udp.edns_tc);
     } else {
-        statio.tcp_reqs         += this_reqs;
-        statio.tcp_recvfail     += stats_get(&this_stats->tcp.recvfail);
-        statio.tcp_sendfail     += stats_get(&this_stats->tcp.sendfail);
-        statio.tcp_conns        += stats_get(&this_stats->tcp.conns);
-        statio.tcp_close_c      += stats_get(&this_stats->tcp.close_c);
-        statio.tcp_close_s_ok   += stats_get(&this_stats->tcp.close_s_ok);
-        statio.tcp_close_s_err  += stats_get(&this_stats->tcp.close_s_err);
-        statio.tcp_close_s_kill += stats_get(&this_stats->tcp.close_s_kill);
+        statio[TCP_REQS]         += this_reqs;
+        statio[TCP_RECVFAIL]     += stats_get(&this_stats->tcp.recvfail);
+        statio[TCP_SENDFAIL]     += stats_get(&this_stats->tcp.sendfail);
+        statio[TCP_CONNS]        += stats_get(&this_stats->tcp.conns);
+        statio[TCP_CLOSE_C]      += stats_get(&this_stats->tcp.close_c);
+        statio[TCP_CLOSE_S_OK]   += stats_get(&this_stats->tcp.close_s_ok);
+        statio[TCP_CLOSE_S_ERR]  += stats_get(&this_stats->tcp.close_s_err);
+        statio[TCP_CLOSE_S_KILL] += stats_get(&this_stats->tcp.close_s_kill);
     }
 
-    statio.dns_v6             += stats_get(&this_stats->v6);
-    statio.dns_edns           += stats_get(&this_stats->edns);
-    statio.dns_edns_clientsub += stats_get(&this_stats->edns_clientsub);
+    statio[DNS_V6]             += stats_get(&this_stats->v6);
+    statio[DNS_EDNS]           += stats_get(&this_stats->edns);
+    statio[DNS_EDNS_CLIENTSUB] += stats_get(&this_stats->edns_clientsub);
+}
+
+static void populate_statio(void)
+{
+    memcpy(&statio, &statio_base, sizeof(statio));
+    for (unsigned i = 0; i < num_dns_threads; i++)
+        accumulate_statio(i);
 }
 
 char* statio_get_json(time_t nowish, size_t* len)
 {
-    char* buf = xmalloc(json_buffer_max);
-    memset(&statio, 0, sizeof(statio));
-    uint64_t uptime64 = (uint64_t)nowish - (uint64_t)start_time;
-    for (unsigned i = 0; i < num_dns_threads; i++)
-        accumulate_statio(i);
+    populate_statio();
     // fill json output buffer
-    int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio.dns_noerror, statio.dns_refused, statio.dns_nxdomain, statio.dns_notimp, statio.dns_badvers, statio.dns_formerr, statio.dns_dropped, statio.dns_v6, statio.dns_edns, statio.dns_edns_clientsub, statio.udp_reqs, statio.udp_recvfail, statio.udp_sendfail, statio.udp_tc, statio.udp_edns_big, statio.udp_edns_tc, statio.tcp_reqs, statio.tcp_recvfail, statio.tcp_sendfail, statio.tcp_conns, statio.tcp_close_c, statio.tcp_close_s_ok, statio.tcp_close_s_err, statio.tcp_close_s_kill);
+    uint64_t uptime64 = (uint64_t)nowish - (uint64_t)start_time;
+    char* buf = xmalloc(json_buffer_max);
+    int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio[DNS_NOERROR], statio[DNS_REFUSED], statio[DNS_NXDOMAIN], statio[DNS_NOTIMP], statio[DNS_BADVERS], statio[DNS_FORMERR], statio[DNS_DROPPED], statio[DNS_V6], statio[DNS_EDNS], statio[DNS_EDNS_CLIENTSUB], statio[UDP_REQS], statio[UDP_RECVFAIL], statio[UDP_SENDFAIL], statio[UDP_TC], statio[UDP_EDNS_BIG], statio[UDP_EDNS_TC], statio[TCP_REQS], statio[TCP_RECVFAIL], statio[TCP_SENDFAIL], statio[TCP_CONNS], statio[TCP_CLOSE_C], statio[TCP_CLOSE_S_OK], statio[TCP_CLOSE_S_ERR], statio[TCP_CLOSE_S_KILL]);
     gdnsd_assert(snp_rv > 0);
     size_t json_len = (size_t)snp_rv;
     *len = json_len;
     return buf;
 }
 
+// Serializes as a set of 8-byte uint64_t values, one for each stat slot,
+// followed by an extra one for the start_time value.
+// *dlen_p holds the raw size of the allocated, returned buffer in bytes.
+char* statio_serialize(size_t* dlen_p)
+{
+    populate_statio();
+    const size_t count = SLOT_COUNT + 1U;
+    uint64_t* data64 = xmalloc_n(count, sizeof(*data64));
+    for (size_t i = 0; i < SLOT_COUNT; i++)
+        data64[i] = (uint64_t)statio[i];
+    data64[SLOT_COUNT] = (uint64_t)start_time;
+    *dlen_p = count * sizeof(*data64);
+    return (char*)data64;
+}
+
+// Deserialize as above, and handle compatibility: if we receive more stats
+// slots than we support, ignore the trailing.  If we receive fewer than we
+// support, the missing ones are implicitly zero.  Either way, true
+// compatibility rests with the maintainer in never re-ordering slot numbers or
+// re-using them for new/different meanings.  Future slot deletions will have
+// to leave an unused hole in the sequence, future additions must go on the
+// end, and future significant meaning changes will require deleting a slot and
+// then adding a new one.
+void statio_deserialize(char* data, size_t dlen)
+{
+    if (!dlen || dlen & 4U) {
+        log_err("stats deserialization failed: length must be a non-zero multiple of 8");
+    } else {
+        uint64_t* data64 = (uint64_t*)data;
+        size_t input_slot_count = (dlen >> 3) - 1U;
+        start_time = (time_t)data64[input_slot_count];
+        for (size_t i = 0; i < SLOT_COUNT && i < input_slot_count; i++)
+            statio_base[i] = (stats_uint_t)data64[i];
+    }
+}
+
 void statio_init(unsigned arg_num_dns_threads)
 {
     num_dns_threads = arg_num_dns_threads;
     start_time = time(NULL);
+    memset(&statio_base, 0, sizeof(statio_base));
+    memset(&statio, 0, sizeof(statio_base));
 
     // stats counters are 32-bit on 32-bit machines, and 64 on 64
     const unsigned stat_len = sizeof(stats_uint_t) == 8 ? 20 : 10;
     json_buffer_max =
         (sizeof(json_fixed) - 1)               // json_fixed format string
         + (20 - strlen(PRIu64))                // uint64_t uptime
-        + (24 * (stat_len - strlen(PRIuPTR))); // 24 stats, 10 or 20 bytes long each
+        + (SLOT_COUNT * (stat_len - strlen(PRIuPTR))); // SLOT_COUNT stats, 10 or 20 bytes long each
 
     // double it, because it's not that big and this gives us a lot of headroom for
     //   having made any stupid mistakes in the max len calcuations :P

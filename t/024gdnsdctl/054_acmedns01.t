@@ -207,14 +207,14 @@ foreach my $i (0, 1) {
 
 # Replace the daemon
 _GDT->test_run_gdnsdctl("replace");
-_GDT->reset_for_new_daemon();
+_GDT->reset_for_replace_daemon();
 
 # Make sure the data survived (13 tests)
 check_data_acme(1);
 
 # Try it again to verify transitivity
 _GDT->test_run_gdnsdctl("replace");
-_GDT->reset_for_new_daemon();
+_GDT->reset_for_replace_daemon();
 
 # Make sure the data survived (13 tests)
 check_data_acme(1);

@@ -232,12 +232,33 @@ my %stats_accum = (
     tcp_close_s_ok   => 0,
     tcp_close_s_err  => 0,
     tcp_close_s_kill => 0,
+    _tcp_conns_prev  => 0,
 );
 
 # reset stats, constrolsock, and resolver objects (incl TCP conns)
 # if daemon run multiple times in one testfile
 sub reset_for_new_daemon {
     foreach my $k (keys %stats_accum) { $stats_accum{$k} = 0; }
+    if ($csock) {
+        $csock = IO::Socket::UNIX->new($CSOCK_PATH)
+            or die "hard-fail: cannot open runtime control socket $CSOCK_PATH: $!";
+    }
+    undef $_resolver;
+    undef $_resolver6;
+}
+
+# As above, but do not reset stats for "replace", since they should carry
+# through, but we do have to fixup tcp_conns -> tcp_close, since the carried
+# stats will reflect the final shutdown close of connections in the old.  Note
+# that in order to transit multiple replacements in a single test run, we must
+# track the hidden stat _tcp_conns_prev to see how many should be newly-closed
+# after each replace operation:
+sub reset_for_replace_daemon {
+    if ($stats_accum{'tcp_conns'}) {
+        my $new_conns = $stats_accum{'tcp_conns'} - $stats_accum{'_tcp_conns_prev'};
+        $stats_accum{'tcp_close_s_ok'} += $new_conns;
+        $stats_accum{'_tcp_conns_prev'} = $stats_accum{'tcp_conns'};
+    }
     if ($csock) {
         $csock = IO::Socket::UNIX->new($CSOCK_PATH)
             or die "hard-fail: cannot open runtime control socket $CSOCK_PATH: $!";
@@ -291,6 +312,7 @@ sub check_stats_inner {
     ## use Data::Dumper; warn Dumper(\%json_vals);
 
     foreach my $checkit (keys %to_check) {
+        next if $checkit =~ /^_/;
         if($json_vals{$checkit} != $to_check{$checkit}) {
             my $ftype = ($json_vals{$checkit} < $to_check{$checkit}) ? 'soft' : 'hard';
             die "$checkit mismatch (${ftype}-fail), wanted " . $to_check{$checkit} . ", got " . $json_vals{$checkit};
@@ -543,7 +565,7 @@ sub test_run_gdnsdctl {
         } else {
             Test::More::ok(0);
             die "gdnsdctl status was unexpectedly zero!";
-	}
+        }
     } else {
         if($?) {
             Test::More::ok(0);

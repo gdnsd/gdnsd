@@ -89,6 +89,11 @@ bool csc_stop_server(csc_t* csc);
 F_NONNULLX(1)
 bool csc_wait_stopping_server(csc_t* csc, const char* pfx);
 
+// Used during daemon->daemon takeover, to hand off final stats into the
+// baseline of the new daemon.
+F_NONNULL
+void csc_get_stats_handoff(csc_t* csc);
+
 // destructs the control socket handle
 F_NONNULL
 void csc_delete(csc_t* csc);

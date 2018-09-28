@@ -29,4 +29,10 @@ void statio_init(unsigned arg_num_dns_threads);
 F_NONNULL
 char* statio_get_json(time_t nowish, size_t* len);
 
+F_NONNULL F_MALLOC
+char* statio_serialize(size_t* dlen_p);
+
+F_NONNULL
+void statio_deserialize(char* data, size_t dlen);
+
 #endif // GDSND_STATIO_H

@@ -19,6 +19,7 @@
 
 #include <config.h>
 #include "csc.h"
+#include "statio.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
@@ -336,6 +337,55 @@ bool csc_stop_server(csc_t* csc)
     }
     log_debug("%sdaemon at PID %li accepted stop command", csc->repl_pfx_old, (long)csc->server_pid);
     return false;
+}
+
+void csc_get_stats_handoff(csc_t* csc)
+{
+    // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
+    // assuming all daemons with listening control sockets have a major >= 3
+    // and send stats handoff
+    if (!csc_server_version_gte(csc, 2, 99, 200))
+        return;
+
+    csbuf_t handoff;
+    memset(&handoff, 0, sizeof(handoff));
+
+    ssize_t pktlen = recv(csc->fd, handoff.raw, 8, 0);
+    if (pktlen != 8) {
+        log_err("REPLACE[new daemon]: Stats handoff failed: 8-byte recv() failed with retval %zi: %s", pktlen, logf_errno());
+        return;
+    }
+
+    if (handoff.key != REQ_SHAND) {
+        log_err("REPLACE[new daemon]: Stats handoff failed: wrong key %hhx", handoff.key);
+        return;
+    }
+
+    // Current dlen for this is 200 bytes, it's unlikely we'll ever have so
+    // many stats defined that we reach 64K, and this avoids potential buggy
+    // situations where the old server asks us to malloc huge sizes below
+    if (!handoff.d || handoff.d > UINT16_MAX) {
+        log_err("REPLACE[new daemon]: Stats handoff failed: bad data length %" PRIu32, handoff.d);
+        return;
+    }
+
+    const size_t total = handoff.d;
+    char* raw_data = xmalloc(total);
+    size_t done = 0;
+
+    while (done < total) {
+        const size_t wanted = total - done;
+        pktlen = recv(csc->fd, &raw_data[done], wanted, 0);
+        if (pktlen <= 0) {
+            free(raw_data);
+            log_err("REPLACE[new daemon]: Stats handoff failed: %zu-byte recv() failed: %s", wanted, logf_errno());
+            return;
+        }
+        done += (size_t)pktlen;
+    }
+
+    statio_deserialize(raw_data, handoff.d);
+    free(raw_data);
 }
 
 void csc_delete(csc_t* csc)

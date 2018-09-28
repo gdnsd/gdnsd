@@ -541,10 +541,11 @@ int main(int argc, char** argv)
     // Notify the user that the listeners are up
     log_info("DNS listeners started");
 
-    // Stop old daemon after establishing the new one's listeners
+    // Stop old daemon after establishing the new one's listeners, and import
+    // the final stats from it
     if (csc) {
         if (!csc_stop_server(csc))
-            csc_wait_stopping_server(csc, NULL);
+            csc_get_stats_handoff(csc);
         csc_delete(csc);
         csc = NULL;
     }
@@ -577,9 +578,13 @@ int main(int argc, char** argv)
     // deallocate resources
     atexit_execute();
 
-    // We delete this last, because in the case of "gdnsdctl stop" this is
-    // where the active connection to gdnsdctl will be broken, sending it into
-    // a loop waiting on our PID to cease existing.
+    // If we were replaced, this sends a final dump of stats to the new daemon
+    // for stats counter continuity
+    css_send_stats_handoff(css);
+
+    // We delete this last, because in the case of "gdnsdctl stop" or "gdnsdctl
+    // replace" this is where the active connection to gdnsdctl will be broken,
+    // sending it into a loop waiting on our PID to cease existing.
     css_delete(css);
 
     // Stop the terminal signal handlers very late in the game.  Any terminal

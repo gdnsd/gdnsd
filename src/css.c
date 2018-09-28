@@ -646,11 +646,10 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
             log_info("Exiting cleanly due to control socket client request");
         }
         ev_break(loop, EVBREAK_ALL);
+        respond_blocking_ack(c);
         // Setting fd = -1 prevents further writes and prevents closing
         // during css_delete(), so that socket close can be used to witness
         // the daemon exiting just before the PID vanishes...
-        if (!respond_blocking_ack(c))
-            c->fd = -1;
         if (css->replace_conn_ctl)
             if (!respond_blocking_ack(css->replace_conn_ctl))
                 css->replace_conn_ctl->fd = -1;
@@ -984,6 +983,43 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed)
     // If the new active queue already had waiters,
     // return true to start another reload
     return !!css->reload_zones_active.len;
+}
+
+void css_send_stats_handoff(css_t* css)
+{
+    // no-op if we don't have a takeover connection from a newer daemon
+    if (!css->replace_conn_dmn)
+        return;
+
+    css_conn_t* c = css->replace_conn_dmn;
+    size_t dlen = 0;
+    char* data = statio_serialize(&dlen);
+
+    csbuf_t handoff;
+    memset(&handoff, 0, sizeof(handoff));
+    handoff.key = REQ_SHAND;
+    csbuf_set_v(&handoff, 0);
+    handoff.d = (uint32_t)dlen;
+    ssize_t pktlen = send(c->fd, handoff.raw, 8, 0);
+    if (pktlen != 8) {
+        log_err("REPLACE[old daemon]: Stats handoff failed: blocking control socket write of 8 bytes failed with retval %zi: %s", pktlen, logf_errno());
+        free(data);
+        return;
+    }
+
+    size_t done = 0;
+    while (done < dlen) {
+        const size_t wanted = dlen - done;
+        const ssize_t sent = send(c->fd, &data[done], wanted, 0);
+        if (sent < 0) {
+            free(data);
+            log_err("REPLACE[old daemon]: Stats handoff failed: %zu-byte send() failed: %s", wanted, logf_errno());
+            return;
+        }
+        done += (size_t)sent;
+    }
+
+    free(data);
 }
 
 void css_delete(css_t* css)

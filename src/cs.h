@@ -69,6 +69,7 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 #define REQ_INFO  'I'
 #define REQ_REPL  'R'
 #define REQ_STAT  'S'
+#define REQ_SHAND 's'
 #define REQ_TAKE  'T'
 #define RESP_UNK  'U'
 #define REQ_STOP  'X'
