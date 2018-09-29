@@ -682,8 +682,13 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         }
         break;
     case REQ_CHALF:
-        cset_flush(loop);
-        respond(c, RESP_ACK, 0, 0, 0, false);
+        if (css->replacement_pid) {
+            log_info("Deferring acme-dns-01-flush request while another replace already in progress");
+            respond(c, RESP_LATR, 0, 0, NULL, false);
+        } else {
+            cset_flush(loop);
+            respond(c, RESP_ACK, 0, 0, 0, false);
+        }
         break;
     case REQ_REPL:
         if (css->replacement_pid) {
