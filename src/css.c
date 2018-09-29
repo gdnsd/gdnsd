@@ -560,13 +560,20 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 
             // we'd switch here if more than one, but REQ_CHAL is the only key that leads here for now
             gdnsd_assert(c->rbuf.key == REQ_CHAL);
-            const bool failed = cset_create(loop, 0, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data);
+
+            char resp_key = RESP_ACK;
+            if (css->replacement_pid) {
+                log_info("Deferring acme-dns-01 request while replace in progress");
+                resp_key = RESP_LATR;
+            } else if (cset_create(loop, 0, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data)) {
+                resp_key = RESP_FAIL;
+            }
 
             free(c->data);
             c->data = NULL;
             c->size = 0;
             c->size_done = 0;
-            respond(c, failed ? RESP_FAIL : RESP_ACK, 0, 0, NULL, false);
+            respond(c, resp_key, 0, 0, NULL, false);
         }
 
         return;
@@ -588,11 +595,6 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     // 8-byte standard request, using "d" as the raw data length and "v" as the
     // count of challenges sent in the data.
     if (c->rbuf.key == REQ_CHAL) {
-        if (css->replacement_pid) {
-            log_info("Deferring acme-dns-01 request while replace in progress");
-            respond(c, RESP_LATR, 0, 0, NULL, false);
-            return;
-        }
         const unsigned count = csbuf_get_v(&c->rbuf);
         const unsigned dlen = c->rbuf.d;
         if (!count || count > CHAL_MAX_COUNT || !dlen || dlen > CHAL_MAX_DLEN) {
