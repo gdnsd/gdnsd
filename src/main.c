@@ -155,7 +155,7 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal* w, const int
     gdnsd_assert(w->signum == SIGTERM || w->signum == SIGINT);
     css_t* css = w->data;
     if (!css_stop_ok(css)) {
-        log_err("Ignoring terminating signal %i because a replace or replacement attempt is in progress!", w->signum);
+        log_err("Ignoring terminating signal %i because a replace attempt is in progress!", w->signum);
     } else {
         log_info("Exiting cleanly on receipt of terminating signal %i", w->signum);
         killed_by = w->signum;
@@ -450,7 +450,7 @@ int main(int argc, char** argv)
         }
     }
 
-    // Load full configuration and expose through the globals
+    // Load full configuration and expose through the global "gcfg"
     gcfg = conf_load(cfg_root, socks_cfg, copts.force_zsd);
     vscf_destroy(cfg_root);
 

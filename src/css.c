@@ -647,11 +647,16 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         } else {
             log_info("Exiting cleanly due to control socket client request");
         }
+        // Note this is the point of no return for the old daemon in "replace",
+        // as we'll never re-enter the main thread's runtime eventloop to
+        // process further control socket message (or other events).
         ev_break(loop, EVBREAK_ALL);
+        // ACK to the client that sent REQ_STOP
         respond_blocking_ack(c);
-        // Setting fd = -1 prevents further writes and prevents closing
-        // during css_delete(), so that socket close can be used to witness
-        // the daemon exiting just before the PID vanishes...
+        // If "gdnsdctl replace" is connected and driving the process, finally
+        // give it an ACK response to its REQ_REPL, as we're now past the point
+        // of no return on the replace operation, and also set its fd to -1 to
+        // let it close as the process dies as above
         if (css->replace_conn_ctl)
             if (!respond_blocking_ack(css->replace_conn_ctl))
                 css->replace_conn_ctl->fd = -1;
@@ -683,7 +688,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         break;
     case REQ_CHALF:
         if (css->replacement_pid) {
-            log_info("Deferring acme-dns-01-flush request while another replace already in progress");
+            log_info("Deferring acme-dns-01-flush request while replace in progress");
             respond(c, RESP_LATR, 0, 0, NULL, false);
         } else {
             cset_flush(loop);
@@ -992,6 +997,11 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed)
     return !!css->reload_zones_active.len;
 }
 
+// During a "replace", this is the final communication over the daemon<->daemon
+// control socket, and happens very late.  We're already past the point of no
+// return (new sent REQ_STOP to old, and old ACK'd it), stats continuity
+// isn't critical to operations, and no further communications are intended
+// (including no response to this message) so failures here are non-fatal.
 void css_send_stats_handoff(css_t* css)
 {
     // no-op if we don't have a takeover connection from a newer daemon

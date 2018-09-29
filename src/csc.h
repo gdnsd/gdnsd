@@ -31,12 +31,13 @@
 struct csc_s_;
 typedef struct csc_s_ csc_t;
 
-// Note the current client API assumes a simple, relatively-stateless
-// commandline client with blocking serial execution.  All network i/o is
-// blocking.
+// Note this client API assumes a simple, relatively-stateless commandline
+// client with blocking serial execution, or the special case uses of this
+// object by daemon takeover operations.  All network i/o is blocking.  Other
+// clients could be written which are more asynch and advanced.
 
 // Opens a control socket connection handle.
-// "timeout" is in seconds, and sets socket-level send/receive timeouts.
+// "timeout" is in seconds, and sets socket-level send+receive timeouts.
 // "replace" means this is being used by a starting server for a replace
 //            attempt, and mostly changes the log output style.
 // Fails fatally or returns a valid csc object.
@@ -49,10 +50,12 @@ csc_t* csc_new(const unsigned timeout, const bool replace);
 pid_t csc_get_server_pid(const csc_t* csc);
 const char* csc_get_server_version(const csc_t* csc);
 
-// Boolean check if server version is >= M.m.p
+// Boolean check if server version is >= M.m.p, using the same cached version
+// info as csc_get_server_version() above
 bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t minor, const uint8_t patch);
 
-// Performs a transaction using csbuf_t's
+// Performs a basic req->resp transaction using csbuf_t objects, with no
+// extra or ancillary data moving in either direction.
 // retval - false for success, true for failure
 F_NONNULL
 bool csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp);
@@ -73,19 +76,22 @@ bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_d
 
 // As above, but expects server's resp.v to contain a count of file descriptors
 // sent over SCM_RIGHTS, which will be received and placed in newly-allocated
-// storage at *resp_fds for the caller to consume and free.
+// storage at *resp_fds for the caller to consume and free.  This is only
+// intended for use in daemon<->daemon takeover connections.
 F_NONNULL
 bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds);
 
-// built in server "stop" management.
+// Request the server to shut down.  Non-failing response (false) means the
+// server accepted the command and intends to stop, but does not mean it has
+// actually finished shutdown yet.  This is just a simple wrapper around
+// csc_txn() sending REQ_STOP and expecting RESP_ACK on success.
 F_NONNULL
 bool csc_stop_server(csc_t* csc);
 
-// When the server ACKs a "stop" request above, it only tells us it intends to
-// shut down.  We witness its shutdown by watching the daemon's exit auto-close
-// our control socket, and then watching for the daemon's PID to go away.  This
-// function does all of that waiting and watching.
-// If pfx is non-NULL, used as custom prefix, for gdnsdctl's replace case.
+// This function witnesses a server stop by watching serially for the daemon to
+// close the csc object's control socket connection as it is exiting and then
+// for the daemon's PID to actually dissappear.  If pfx is non-NULL, it's used
+// as custom log output prefix (intended for gdnsdctl's replace case).
 F_NONNULLX(1)
 bool csc_wait_stopping_server(csc_t* csc, const char* pfx);
 

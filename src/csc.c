@@ -295,8 +295,8 @@ bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_d
 
 bool csc_wait_stopping_server(csc_t* csc, const char* pfx)
 {
-    // wait_stopping_server is used both by the old daemon and gdnsdctl during
-    // replace, so gdnsdctl needs to provide its own custom prefix
+    // wait_stopping_server is used by gdnsdctl during replace, so gdnsdctl
+    // needs to provide its own custom prefix
     if (!pfx)
         pfx = csc->repl_pfx_old;
 
