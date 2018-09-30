@@ -215,29 +215,34 @@ bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fd
     return false;
 }
 
-bool csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp)
+csc_txn_rv_t csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp)
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8) {
         log_err("8-byte send() failed with retval %zi: %s", pktlen, logf_errno());
-        return true;
+        return CSC_TXN_FAIL_SOFT;
     }
 
     pktlen = recv(csc->fd, resp->raw, 8, 0);
     if (pktlen != 8) {
         log_err("8-byte recv() failed with retval %zi: %s", pktlen, logf_errno());
-        return true;
+        return CSC_TXN_FAIL_SOFT;
     }
-    if (resp->key != RESP_ACK)
-        return true;
 
-    return false;
+    if (resp->key == RESP_ACK)
+        return CSC_TXN_OK;
+
+    if (resp->key == RESP_LATR)
+        return CSC_TXN_FAIL_SOFT;
+
+    return CSC_TXN_FAIL_HARD;
 }
 
-bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data)
+csc_txn_rv_t csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data)
 {
-    if (csc_txn(csc, req, resp))
-        return true;
+    csc_txn_rv_t rv = csc_txn(csc, req, resp);
+    if (rv != CSC_TXN_OK)
+        return rv;
 
     char* rd = NULL;
 
@@ -252,24 +257,24 @@ bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_
             if (pktlen <= 0) {
                 free(rd);
                 log_err("%zu-byte recv() failed: %s", wanted, logf_errno());
-                return true;
+                return CSC_TXN_FAIL_HARD;
             }
             done += (size_t)pktlen;
         }
     }
 
     *resp_data = rd;
-    return false;
+    return CSC_TXN_OK;
 }
 
-bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data)
+csc_txn_rv_t csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data)
 {
     gdnsd_assert(req->d);
 
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8) {
         log_err("8-byte send() failed with retval %zi: %s", pktlen, logf_errno());
-        return true;
+        return CSC_TXN_FAIL_SOFT;
     }
 
     const size_t total = req->d;
@@ -281,7 +286,7 @@ bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_d
         if (sent < 0) {
             free(req_data);
             log_err("%zu-byte send() failed: %s", wanted, logf_errno());
-            return true;
+            return CSC_TXN_FAIL_SOFT;
         }
         done += (size_t)sent;
     }
@@ -291,12 +296,16 @@ bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_d
     pktlen = recv(csc->fd, resp->raw, 8, 0);
     if (pktlen != 8) {
         log_err("8-byte recv() failed with retval %zi: %s", pktlen, logf_errno());
-        return true;
+        return CSC_TXN_FAIL_SOFT;
     }
-    if (resp->key != RESP_ACK)
-        return true;
 
-    return false;
+    if (resp->key == RESP_ACK)
+        return CSC_TXN_OK;
+
+    if (resp->key == RESP_LATR)
+        return CSC_TXN_FAIL_SOFT;
+
+    return CSC_TXN_FAIL_HARD;
 }
 
 bool csc_wait_stopping_server(csc_t* csc)
@@ -309,17 +318,12 @@ bool csc_wait_stopping_server(csc_t* csc)
     return true;
 }
 
-bool csc_stop_server(csc_t* csc)
+csc_txn_rv_t csc_stop_server(csc_t* csc)
 {
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STOP;
-    if (csc_txn(csc, &req, &resp)) {
-        log_err("%sdaemon at PID %li failed stop command", csc->repl_pfx_old, (long)csc->server_pid);
-        return true;
-    }
-    log_debug("%sdaemon at PID %li accepted stop command", csc->repl_pfx_old, (long)csc->server_pid);
-    return false;
+    return csc_txn(csc, &req, &resp);
 }
 
 void csc_get_stats_handoff(csc_t* csc)

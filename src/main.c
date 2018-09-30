@@ -293,7 +293,7 @@ static void do_tak1(csc_t* csc)
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAK1;
         req.d = (uint32_t)getpid();
-        if (csc_txn(csc, &req, &resp))
+        if (csc_txn(csc, &req, &resp) != CSC_TXN_OK)
             log_fatal("REPLACE[new daemon]: takeover phase 1 notification attempt failed (possibly lost race against another)");
     }
 }
@@ -307,7 +307,7 @@ static void do_tak2(struct ev_loop* loop, csc_t* csc)
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAK2;
         req.d = (uint32_t)getpid();
-        if (csc_txn_getdata(csc, &req, &resp, (char**)&chal_data))
+        if (csc_txn_getdata(csc, &req, &resp, (char**)&chal_data) != CSC_TXN_OK)
             log_fatal("REPLACE[new daemon]: takeover phase 2 notification attempt failed");
         const size_t chal_count = csbuf_get_v(&resp);
         const size_t chal_dlen = resp.d;

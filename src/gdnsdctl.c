@@ -101,7 +101,7 @@ static int action_reloadz(csc_t* csc, int argc, char** argv V_UNUSED)
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_ZREL;
-    if (csc_txn(csc, &req, &resp)) {
+    if (csc_txn(csc, &req, &resp) != CSC_TXN_OK) {
         log_err("Reload transaction failed!");
         return 1;
     }
@@ -122,7 +122,7 @@ static int action_replace(csc_t* csc, int argc, char** argv V_UNUSED)
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_REPL;
-    if (csc_txn(csc, &req, &resp)) {
+    if (csc_txn(csc, &req, &resp) != CSC_TXN_OK) {
         log_err("REPLACE[gdnsdctl]: Replace command to old daemon failed");
         return 1;
     }
@@ -167,7 +167,7 @@ static int action_stats(csc_t* csc, int argc, char** argv V_UNUSED)
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STAT;
-    if (csc_txn_getdata(csc, &req, &resp, &resp_data))
+    if (csc_txn_getdata(csc, &req, &resp, &resp_data) != CSC_TXN_OK)
         return 1;
     if (resp_data) {
         gdnsd_assert(resp.d);
@@ -187,7 +187,7 @@ static int action_states(csc_t* csc, int argc, char** argv V_UNUSED)
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STATE;
-    if (csc_txn_getdata(csc, &req, &resp, &resp_data))
+    if (csc_txn_getdata(csc, &req, &resp, &resp_data) != CSC_TXN_OK)
         return 1;
     if (resp_data) {
         gdnsd_assert(resp.d);
@@ -257,7 +257,9 @@ static int action_chal(csc_t* csc, int argc, char** argv)
     req.key = REQ_CHAL;
     csbuf_set_v(&req, chal_count);
     req.d = dlen;
-    return csc_txn_senddata(csc, &req, &resp, (char*)buf);
+    if (csc_txn_senddata(csc, &req, &resp, (char*)buf) == CSC_TXN_OK)
+        return 0;
+    return 1;
 }
 
 F_NONNULL
@@ -269,7 +271,7 @@ static int action_chalf(csc_t* csc, int argc, char** argv V_UNUSED)
     csbuf_t req, resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_CHALF;
-    if (csc_txn(csc, &req, &resp)) {
+    if (csc_txn(csc, &req, &resp) != CSC_TXN_OK) {
         log_err("Failed to flush ACME DNS-01 challenges!");
         return 1;
     }

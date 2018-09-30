@@ -31,6 +31,16 @@
 struct csc_s_;
 typedef struct csc_s_ csc_t;
 
+// Enum for certain transaction retvals below
+// OK -> Transaction successful
+// FAIL_HARD -> Transaction actively rejected by daemon with RESP_FAIL
+// FAIL_SOFT -> Communications error or daemon sent RESP_LATR
+typedef enum {
+    CSC_TXN_OK = 0,
+    CSC_TXN_FAIL_HARD = 1,
+    CSC_TXN_FAIL_SOFT = 2,
+} csc_txn_rv_t;
+
 // Note this client API assumes a simple, relatively-stateless commandline
 // client with blocking serial execution, or the special case uses of this
 // object by daemon takeover operations.  All network i/o is blocking.  Other
@@ -62,15 +72,14 @@ bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t
 
 // Performs a basic req->resp transaction using csbuf_t objects, with no
 // extra or ancillary data moving in either direction.
-// retval - false for success, true for failure
 F_NONNULL
-bool csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp);
+csc_txn_rv_t csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp);
 
 // As above, but expects server's resp.d to contain a length of followup data,
 // which will be received and placed in newly-allocated storage at *resp_data
 // for the caller to consume and free
 F_NONNULL
-bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data);
+csc_txn_rv_t csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data);
 
 // As above, but data is sent with the request instead of received from the
 // response.  req_data must be non-NULL and heap-allocated, and will be freed
@@ -78,7 +87,7 @@ bool csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_
 // to the length of the req_data in bytes (non-zero), and req.v to whatever
 // value is appropriate for the action.
 F_NONNULL
-bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data);
+csc_txn_rv_t csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data);
 
 // As above, but expects server's resp.v to contain a count of file descriptors
 // sent over SCM_RIGHTS, which will be received and placed in newly-allocated
@@ -90,9 +99,9 @@ bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fd
 // Request the server to shut down.  Non-failing response (false) means the
 // server accepted the command and intends to stop, but does not mean it has
 // actually finished shutdown yet.  This is just a simple wrapper around
-// csc_txn() sending REQ_STOP and expecting RESP_ACK on success.
+// csc_txn() sending REQ_STOP.
 F_NONNULL
-bool csc_stop_server(csc_t* csc);
+csc_txn_rv_t csc_stop_server(csc_t* csc);
 
 // This function witnesses a server stop by watching for the daemon to
 // close the csc object's control socket connection as it is exiting.
