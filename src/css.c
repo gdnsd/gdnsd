@@ -646,13 +646,22 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         ev_break(loop, EVBREAK_ALL);
         // ACK to the client that sent REQ_STOP
         respond_blocking_ack(c);
+        // In non-replace cases (plain close from e.g. gdnsdctl), set the fd
+        // to -1 here so that we don't close it during css_delete, as the
+        // response above was our last interaction with it.  In replace cases,
+        // there's one more interaction during the final stats handoff, and the
+        // new daemon doesn't wait on our close anyways.
+        if (c != css->replace_conn_dmn)
+            c->fd = -1;
         // If "gdnsdctl replace" is connected and driving the process, finally
         // give it an ACK response to its REQ_REPL, as we're now past the point
         // of no return on the replace operation, and also set its fd to -1 to
-        // let it close as the process dies as above
-        if (css->replace_conn_ctl)
+        // let it close as the process dies as above.
+        if (css->replace_conn_ctl) {
+            gdnsd_assert(c == css->replace_conn_dmn);
             if (!respond_blocking_ack(css->replace_conn_ctl))
                 css->replace_conn_ctl->fd = -1;
+        }
         break;
     case REQ_STAT:
         nowish = ev_now(loop);
@@ -1016,8 +1025,8 @@ void css_send_stats_handoff(css_t* css)
         const size_t wanted = dlen - done;
         const ssize_t sent = send(c->fd, &data[done], wanted, 0);
         if (sent < 0) {
-            free(data);
             log_err("REPLACE[old daemon]: Stats handoff failed: %zu-byte send() failed: %s", wanted, logf_errno());
+            free(data);
             return;
         }
         done += (size_t)sent;
