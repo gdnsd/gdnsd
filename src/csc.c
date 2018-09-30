@@ -87,11 +87,13 @@ csc_t* csc_new(const unsigned timeout, const bool replace)
         log_fatal("%sCreating AF_UNIX socket failed: %s", csc->repl_pfx, logf_errno());
     csc->fd = fd;
 
-    const struct timeval tmout = { .tv_sec = timeout, .tv_usec = 0 };
-    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout, sizeof(tmout)))
-        log_fatal("%sFailed to set SO_RCVTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
-    if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tmout, sizeof(tmout)))
-        log_fatal("%sFailed to set SO_SNDTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
+    if (timeout) {
+        const struct timeval tmout = { .tv_sec = timeout, .tv_usec = 0 };
+        if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout, sizeof(tmout)))
+            log_fatal("%sFailed to set SO_RCVTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
+        if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tmout, sizeof(tmout)))
+            log_fatal("%sFailed to set SO_SNDTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
+    }
 
     struct sockaddr_un addr;
     sun_set_path(&addr, csc->path);

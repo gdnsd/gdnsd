@@ -38,6 +38,7 @@ typedef struct csc_s_ csc_t;
 
 // Opens a control socket connection handle.
 // "timeout" is in seconds, and sets socket-level send+receive timeouts.
+//           if this is zero, no timeouts are set and blocking is indefinite.
 // "replace" means this is being used by a starting server for a replace
 //           attempt, and only affects some of the log output string contents
 //           for the REPLACE[x] -style outputs, for clarity.
