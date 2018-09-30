@@ -82,6 +82,7 @@ csc_t* csc_new(const unsigned timeout, const bool replace)
     csc->timeout = timeout;
     csc->repl_pfx = replace ? repl_pfx_replace : repl_pfx_normal;
     csc->repl_pfx_old = replace ? repl_pfx_replace_old : repl_pfx_normal;
+    csc->path = gdnsd_resolve_path_run("control.sock", NULL);
 
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
@@ -94,16 +95,21 @@ csc_t* csc_new(const unsigned timeout, const bool replace)
     if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tmout, sizeof(tmout)))
         log_fatal("%sFailed to set SO_SNDTIMEO on control socket: %s", csc->repl_pfx, logf_errno());
 
-    char* path = gdnsd_resolve_path_run("control.sock", NULL);
-    csc->path = path;
-
     struct sockaddr_un addr;
-    sun_set_path(&addr, path);
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)))
-        log_fatal("%sconnect() to unix domain socket %s failed: %s", csc->repl_pfx, path, logf_errno());
-
-    if (csc_get_status(csc))
-        log_fatal("%sFailed to get daemon status over control socket %s", csc->repl_pfx, csc->path);
+    sun_set_path(&addr, csc->path);
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr))) {
+        log_err("%sconnect() to unix domain socket %s failed: %s", csc->repl_pfx, csc->path, logf_errno());
+        close(fd);
+        free(csc->path);
+        free(csc);
+        csc = NULL;
+    } else if (csc_get_status(csc)) {
+        log_err("%sFailed to get daemon status over control socket %s", csc->repl_pfx, csc->path);
+        close(fd);
+        free(csc->path);
+        free(csc);
+        csc = NULL;
+    }
 
     return csc;
 }

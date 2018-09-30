@@ -39,9 +39,14 @@ typedef struct csc_s_ csc_t;
 // Opens a control socket connection handle.
 // "timeout" is in seconds, and sets socket-level send+receive timeouts.
 // "replace" means this is being used by a starting server for a replace
-//            attempt, and mostly changes the log output style.
-// Fails fatally or returns a valid csc object.
-F_RETNN
+//           attempt, and only affects some of the log output string contents
+//           for the REPLACE[x] -style outputs, for clarity.
+// Fails fatally on certain un-retryable failures (failure to allocate a unix
+// socket fd, failure set timeouts on socket, or control socket pathname too
+// long for platform limits).  Returns NULL on retryable failures (failure to
+// connect, failure to get a valid response to a basic status inquiry over the
+// new socket).  If return value is non-NULL, the object is connected validly
+// to a live daemon and knows the daemon's basic status info (pid, version).
 csc_t* csc_new(const unsigned timeout, const bool replace);
 
 // Get basic info about server on other side of controlsock (this is fetched

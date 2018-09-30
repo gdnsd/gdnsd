@@ -444,6 +444,8 @@ int main(int argc, char** argv)
             if (!copts.replace_ok)
                 log_fatal("Another instance is running and has the control socket locked, exiting!");
             csc = csc_new(13, true);
+            if (!csc)
+                log_fatal("Another daemon appears to be running, but cannot establish a connection to its control socket for takeover, exiting!");
             do_tak1(csc);
             log_info("REPLACE[new daemon]: Connected to old daemon version %s at PID %li for takeover",
                      csc_get_server_version(csc), (long)csc_get_server_pid(csc));

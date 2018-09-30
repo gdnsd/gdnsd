@@ -133,6 +133,11 @@ static int action_replace(csc_t* csc, int argc, char** argv V_UNUSED)
     }
 
     csc_t* csc2 = csc_new(opt_timeo, false);
+    if (!csc2) {
+        log_err("REPLACE[gdnsdctl]: Cannot establish connection to new daemon for verification!");
+        return 1;
+    }
+
     const pid_t s2_pid = csc_get_server_pid(csc2);
     const char* s2_vers = csc_get_server_version(csc2);
     log_info("REPLACE[gdnsdctl]: SUCCESS, new daemon version %s running at PID %li", s2_vers, (long)s2_pid);
@@ -357,6 +362,8 @@ int main(int argc, char** argv)
     vscf_data_t* cfg_root = gdnsd_init_paths(opt_cfg_dir, false);
     vscf_destroy(cfg_root);
     csc_t* csc = csc_new(opt_timeo, false);
+    if (!csc)
+        log_fatal("Cannot connect to a running daemon!");
     int rv = action_func(csc, argc - optind, &argv[optind]);
     csc_delete(csc);
     return rv;
