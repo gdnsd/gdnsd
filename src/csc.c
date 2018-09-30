@@ -43,7 +43,6 @@ static const char repl_pfx_replace_old[] = "REPLACE[new daemon]: old ";
 
 struct csc_s_ {
     int fd;
-    unsigned timeout;
     pid_t server_pid;
     char* path;
     char server_vers[16];
@@ -79,7 +78,6 @@ static bool csc_get_status(csc_t* csc)
 csc_t* csc_new(const unsigned timeout, const bool replace)
 {
     csc_t* csc = xcalloc(sizeof(*csc));
-    csc->timeout = timeout;
     csc->repl_pfx = replace ? repl_pfx_replace : repl_pfx_normal;
     csc->repl_pfx_old = replace ? repl_pfx_replace_old : repl_pfx_normal;
     csc->path = gdnsd_resolve_path_run("control.sock", NULL);
@@ -299,36 +297,13 @@ bool csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_d
     return false;
 }
 
-bool csc_wait_stopping_server(csc_t* csc, const char* pfx)
+bool csc_wait_stopping_server(csc_t* csc)
 {
-    // wait_stopping_server is used by gdnsdctl during replace, so gdnsdctl
-    // needs to provide its own custom prefix
-    if (!pfx)
-        pfx = csc->repl_pfx_old;
-
     // Wait for server to close our csock fd as it exits
     char x;
     ssize_t recv_rv = recv(csc->fd, &x, 1, 0);
-    if (recv_rv) {
-        if (recv_rv < 0)
-            log_err("%sdaemon connection error while waiting for close: %s", pfx, logf_errno());
-        else
-            log_err("%sdaemon send unexpected data byte '%c' while waiting for close", pfx, x);
-        return true;
-    }
-
-    // Wait timeout in 10ms increments for pid to exit
-    const struct timespec ts = { 0, 10000000 };
-    size_t tries = 100U * csc->timeout;
-    while (tries--) {
-        nanosleep(&ts, NULL);
-        if (kill(csc->server_pid, 0)) {
-            log_info("%sdaemon at PID %li exited as commanded", pfx, (long)csc->server_pid);
-            return false;
-        }
-    }
-
-    log_err("%sdaemon at PID %li did not exit within ~%u seconds after stop, giving up", pfx, (long)csc->server_pid, csc->timeout);
+    if (recv_rv == 0)
+        return false;
     return true;
 }
 

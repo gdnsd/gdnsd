@@ -93,12 +93,11 @@ bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fd
 F_NONNULL
 bool csc_stop_server(csc_t* csc);
 
-// This function witnesses a server stop by watching serially for the daemon to
-// close the csc object's control socket connection as it is exiting and then
-// for the daemon's PID to actually dissappear.  If pfx is non-NULL, it's used
-// as custom log output prefix (intended for gdnsdctl's replace case).
-F_NONNULLX(1)
-bool csc_wait_stopping_server(csc_t* csc, const char* pfx);
+// This function witnesses a server stop by watching for the daemon to
+// close the csc object's control socket connection as it is exiting.
+// rv true == failure, false == success
+F_NONNULL
+bool csc_wait_stopping_server(csc_t* csc);
 
 // Used during daemon->daemon takeover, to hand off final stats into the
 // baseline of the new daemon.

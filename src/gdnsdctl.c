@@ -89,7 +89,7 @@ static int action_stop(csc_t* csc, int argc, char** argv V_UNUSED)
         usage(); // No additional arguments
 
     return csc_stop_server(csc)
-           || csc_wait_stopping_server(csc, NULL);
+           || csc_wait_stopping_server(csc);
 }
 
 F_NONNULL
@@ -127,7 +127,7 @@ static int action_replace(csc_t* csc, int argc, char** argv V_UNUSED)
         return 1;
     }
 
-    if (csc_wait_stopping_server(csc, "REPLACE[gdnsdctl]: old ")) {
+    if (csc_wait_stopping_server(csc)) {
         log_err("REPLACE[gdnsdctl]: Replace command to old daemon succeeded, but old daemon never finished exiting...");
         return 1;
     }
