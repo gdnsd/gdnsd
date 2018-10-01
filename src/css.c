@@ -53,8 +53,6 @@ static const unsigned PIPE_WR = 1;
 static const char base_sock[] = "control.sock";
 static const char base_lock[] = "control.lock";
 
-static const unsigned max_clients = 100U;
-
 typedef enum {
     READING_REQ,
     READING_DATA,
@@ -172,11 +170,6 @@ static void css_conn_cleanup(css_conn_t* c)
     if (c->next)
         c->next->prev = c->prev;
     free(c);
-
-    ev_io* w_accept = &css->w_accept;
-    // if we were at the maximum, start accepting connections again
-    if (css->num_clients-- == max_clients)
-        ev_io_start(css->loop, w_accept);
 }
 
 F_NONNULL
@@ -778,12 +771,6 @@ static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UN
             break;
         }
         return;
-    }
-
-    // if we now have max_clients connected, stop accepting new ones
-    if (++css->num_clients == max_clients) {
-        ev_io* w_accept = &css->w_accept;
-        ev_io_stop(css->loop, w_accept);
     }
 
     // set up the per-connection state and start reading requests...
