@@ -353,12 +353,14 @@ void csc_get_stats_handoff(csc_t* csc)
     }
 
     const size_t total = handoff.d;
-    char* raw_data = xmalloc(total);
+    void* raw_data = xmalloc(total);
+    char* raw_char = raw_data;
+    uint64_t* raw_u64 = raw_data;
     size_t done = 0;
 
     while (done < total) {
         const size_t wanted = total - done;
-        pktlen = recv(csc->fd, &raw_data[done], wanted, 0);
+        pktlen = recv(csc->fd, &raw_char[done], wanted, 0);
         if (pktlen <= 0) {
             free(raw_data);
             log_err("REPLACE[new daemon]: Stats handoff failed: %zu-byte recv() failed: %s", wanted, logf_errno());
@@ -367,7 +369,7 @@ void csc_get_stats_handoff(csc_t* csc)
         done += (size_t)pktlen;
     }
 
-    statio_deserialize(raw_data, handoff.d);
+    statio_deserialize(raw_u64, handoff.d);
     free(raw_data);
 }
 

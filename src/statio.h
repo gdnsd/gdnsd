@@ -22,6 +22,7 @@
 
 #include <gdnsd/compiler.h>
 #include <sys/types.h>
+#include <inttypes.h>
 
 F_NONNULL
 void statio_init(unsigned arg_num_dns_threads);
@@ -33,6 +34,6 @@ F_NONNULL F_MALLOC
 char* statio_serialize(size_t* dlen_p);
 
 F_NONNULL
-void statio_deserialize(char* data, size_t dlen);
+void statio_deserialize(uint64_t* data, size_t dlen);
 
 #endif // GDSND_STATIO_H

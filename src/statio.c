@@ -201,16 +201,15 @@ char* statio_serialize(size_t* dlen_p)
 // to leave an unused hole in the sequence, future additions must go on the
 // end, and future significant meaning changes will require deleting a slot and
 // then adding a new one.
-void statio_deserialize(char* data, size_t dlen)
+void statio_deserialize(uint64_t* data, size_t dlen)
 {
     if (!dlen || dlen & 4U) {
         log_err("stats deserialization failed: length must be a non-zero multiple of 8");
     } else {
-        uint64_t* data64 = (uint64_t*)data;
         size_t input_slot_count = (dlen >> 3) - 1U;
-        start_time = (time_t)data64[input_slot_count];
+        start_time = (time_t)data[input_slot_count];
         for (size_t i = 0; i < SLOT_COUNT && i < input_slot_count; i++)
-            statio_base[i] = (stats_uint_t)data64[i];
+            statio_base[i] = (stats_uint_t)data[i];
     }
 }
 
