@@ -208,12 +208,14 @@ static void usage(const char* argv0)
     const char* def_cfdir = gdnsd_get_default_config_dir();
     fprintf(stderr,
             PACKAGE_NAME " version " PACKAGE_VERSION "\n"
-            "Usage: %s [-c %s] [-D] [-l] [-S] [-R] <action>\n"
+            "Usage: %s [-c %s] [-D] [-l] [-S] [-R | -i] <action>\n"
             "  -c - Configuration directory, default '%s'\n"
             "  -D - Enable verbose debug output\n"
             "  -l - Send logs to syslog rather than stderr\n"
             "  -S - Force 'zones_strict_data = true' for this invocation\n"
             "  -R - Attempt downtimeless replace of another instance\n"
+            "  -i - Idempotent mode for start/daemonize: exit 0 if already running\n"
+            "       (-R and -i cannot be used together)\n"
             "Actions:\n"
             "  checkconf - Checks validity of config and zone files\n"
             "  start - Start as a regular foreground process\n"
@@ -341,6 +343,7 @@ typedef struct {
     const char* cfg_dir;
     bool force_zsd;
     bool replace_ok;
+    bool idempotent;
     bool deadopt_f;
     bool deadopt_s;
     bool deadopt_x;
@@ -351,7 +354,7 @@ F_NONNULL
 static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
 {
     int optchar;
-    while ((optchar = getopt(argc, argv, "c:DlSRfsx"))) {
+    while ((optchar = getopt(argc, argv, "c:DlSRifsx"))) {
         switch (optchar) {
         case 'c':
             copts->cfg_dir = optarg;
@@ -367,6 +370,9 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
             break;
         case 'R':
             copts->replace_ok = true;
+            break;
+        case 'i':
+            copts->idempotent = true;
             break;
         case 'f':
             copts->deadopt_f = true;
@@ -409,6 +415,7 @@ int main(int argc, char** argv)
         .cfg_dir = NULL,
         .force_zsd = false,
         .replace_ok = false,
+        .idempotent = false,
         .deadopt_s = false,
         .deadopt_x = false,
         .action = ACT_UNDEF
@@ -423,6 +430,9 @@ int main(int argc, char** argv)
         log_err("The commandline option '-s' has been removed.  This will be an error in a future major version update!");
     if (copts.deadopt_x)
         log_err("The commandline option '-x' has been removed.  This will be an error in a future major version update!");
+
+    if (copts.replace_ok && copts.idempotent)
+        log_fatal("The flags -R and -i are mutually exclusive, do not specify both");
 
     // Init daemon code if starting
     if (copts.action != ACT_CHECKCONF)
@@ -441,8 +451,12 @@ int main(int argc, char** argv)
     if (copts.action != ACT_CHECKCONF) {
         css = css_new(argv[0], socks_cfg, NULL);
         if (!css) {
+            if (copts.idempotent) {
+                log_info("Another instance is already running, success");
+                exit(0);
+            }
             if (!copts.replace_ok)
-                log_fatal("Another instance is running and has the control socket locked, exiting!");
+                log_fatal("Another instance is running and has the control socket locked, failing");
             csc = csc_new(13, "REPLACE[new daemon]: ");
             if (!csc)
                 log_fatal("Another daemon appears to be running, but cannot establish a connection to its control socket for takeover, exiting!");
