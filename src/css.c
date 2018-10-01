@@ -645,13 +645,12 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         // process further control socket message (or other events).
         ev_break(loop, EVBREAK_ALL);
         // ACK to the client that sent REQ_STOP
-        respond_blocking_ack(c);
-        // In non-replace cases (plain close from e.g. gdnsdctl), set the fd
+        // In non-replace cases (plain stop from e.g. gdnsdctl), set the fd
         // to -1 here so that we don't close it during css_delete, as the
         // response above was our last interaction with it.  In replace cases,
         // there's one more interaction during the final stats handoff, and the
         // new daemon doesn't wait on our close anyways.
-        if (c != css->replace_conn_dmn)
+        if (!respond_blocking_ack(c) && c != css->replace_conn_dmn)
             c->fd = -1;
         // If "gdnsdctl replace" is connected and driving the process, finally
         // give it an ACK response to its REQ_REPL, as we're now past the point
