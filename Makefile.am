@@ -311,15 +311,15 @@ libgdnsd/vscf.c: libgdnsd/vscf.rl
 EXTRA_DIST += libgdnsd/vscf.rl libgdnsd/vscf.c
 
 #=====================================
-# sysd/
+# init/
 #=====================================
 
 if DO_SYSD_UNITFILE
 
 DISTCHECK_CONFIGURE_FLAGS += --with-systemdsystemunitdir=$$dc_install_base/$(systemdsystemunitdir)
-systemdsystemunit_DATA = sysd/gdnsd.service
-INSTALL_EXEC_HOOK_DEPS += install-exec-hook-sysd
-install-exec-hook-sysd:
+systemdsystemunit_DATA = init/gdnsd.service
+INSTALL_EXEC_HOOK_DEPS += install-exec-hook-systemd
+install-exec-hook-systemd:
 	@echo;\
 	echo === READ ME ===;\
 	echo A systemd service unit file was installed at $(systemdsystemunitdir)/gdnsd.service;\
@@ -333,15 +333,19 @@ install-exec-hook-sysd:
 else
 
 DISTCHECK_CONFIGURE_FLAGS += --without-systemdsystemunitdir
-noinst_SCRIPTS += sysd/gdnsd.service
+noinst_SCRIPTS += init/gdnsd.service
 
 endif
 
-sysd/gdnsd.service: sysd/gdnsd.service.tmpl Makefile
-	$(AM_V_GEN)sed -e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' -e 's|@GDNSD_BINDIR[@]|$(bindir)|g' <$(srcdir)/sysd/gdnsd.service.tmpl >$@
+init/gdnsd.service: init/gdnsd.service.tmpl Makefile
+	$(AM_V_GEN)sed -e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' -e 's|@GDNSD_BINDIR[@]|$(bindir)|g' <$(srcdir)/init/gdnsd.service.tmpl >$@
 
-EXTRA_DIST += sysd/gdnsd.service.tmpl
-CLEANFILES += sysd/gdnsd.service
+init/gdnsd.init: init/gdnsd.init.tmpl Makefile
+	$(AM_V_GEN)sed -e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g' -e 's|@GDNSD_BINDIR[@]|$(bindir)|g' -e 's|@GDNSD_RUNDIR@|$(GDNSD_DEFPATH_RUN)|g' -e 's|@GDNSD_CONFIGDIR@|$(GDNSD_DEFPATH_CONFIG)|g' <$(srcdir)/init/gdnsd.init.tmpl >$@
+
+EXTRA_DIST += init/gdnsd.service.tmpl init/gdnsd.init.tmpl
+CLEANFILES += init/gdnsd.service init/gdnsd.init
+noinst_SCRIPTS += init/gdnsd.init
 
 #=====================================
 # docs/
@@ -385,8 +389,8 @@ MAN_SED = $(SED) \
 	-e 's|@GDNSD_DEFPATH_STATE[@]|$(GDNSD_DEFPATH_STATE)|g' \
 	-e 's|@GDNSD_DEFPATH_RUN[@]|$(GDNSD_DEFPATH_RUN)|g' \
 	-e 's|@GDNSD_DEFPATH_LIB[@]|$(GDNSD_DEFPATH_LIB)|g' \
-	-e 's|@GDNSD_DEFPATH_LIBEXEC[@]|$(GDNSD_DEFPATH_LIBEXEC)|g' \
-	-e 's|@GDNSD_SBINDIR[@]|$(sbindir)|g'
+	-e 's|@GDNSD_DEFPATH_LIBEXEC[@]|$(GDNSD_DEFPATH_LIBEXEC)|g'
+
 INTERMEDIATE_PODS = $(ALL_PODS:.podin=.pod)
 $(INTERMEDIATE_PODS): Makefile
 .podin.pod:

@@ -64,5 +64,6 @@ clang_output_*
 *.pod
 /wikidocs/
 
-# generated systemd unit file
-sysd/gdnsd.service
+# generated systemd unit file + initscript
+init/gdnsd.service
+init/gdnsd.init

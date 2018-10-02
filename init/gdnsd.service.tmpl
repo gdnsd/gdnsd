@@ -39,7 +39,7 @@ LimitMEMLOCK=infinity
 
 # Various settings for stricter security that probably work for most configs
 NoNewPrivileges=yes
-SecureBits=keep-caps noroot-locked no-setuid-fixup-locked
+SecureBits=noroot noroot-locked no-setuid-fixup no-setuid-fixup-locked
 MountFlags=slave
 DevicePolicy=closed
 PrivateDevices=true
