@@ -370,7 +370,7 @@ AC_CONFIG_FILES([
   t/libtap/Makefile
   t/libgdmaps/Makefile
 ])
-AC_CONFIG_COMMANDS([mkdirs],[$MKDIR_P sysd; $MKDIR_P docs])
+AC_CONFIG_COMMANDS([mkdirs],[$MKDIR_P init; $MKDIR_P docs])
 AC_OUTPUT
 
 echo "========================================================================"
