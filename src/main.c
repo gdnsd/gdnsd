@@ -432,7 +432,7 @@ int main(int argc, char** argv)
         log_err("The commandline option '-x' has been removed.  This will be an error in a future major version update!");
 
     if (copts.replace_ok && copts.idempotent)
-        log_fatal("The flags -R and -i are mutually exclusive, do not specify both");
+        usage(argv[0]);
 
     // Init daemon code if starting
     if (copts.action != ACT_CHECKCONF)
