@@ -92,19 +92,24 @@ typedef struct {
     // As above, but for the authority within the qname (zone/deleg start point)
     unsigned auth_comp;
 
-    // dns source IP + optional EDNS client subnet info for plugins
-    client_info_t client_info;
-
     unsigned ancount;
     unsigned nscount;
     unsigned arcount;
     unsigned cname_ancount;
+
+    // The original query name input from the question is stored here,
+    // normalized to lowercase, and in our "dname" format, which means
+    // prefixing the wire version with an overall length byte.
+    uint8_t lqname[256];
 
     // synthetic rrsets for DYNC
     ltree_rrset_t dync_synth_rrset;
 
     // needs room for 1x CNAME target
     uint8_t dync_store[256];
+
+    // dns source IP + optional EDNS client subnet info for plugins
+    client_info_t client_info;
 
     // EDNS Client Subnet response mask.
     // Not valid/useful in DNS reponses unless respond_edns_client_subnet is true
@@ -202,9 +207,9 @@ static void reset_context(dnsp_ctx_t* ctx)
 
 // "buf" points to the question section of an input packet.
 F_NONNULL
-static unsigned parse_question(dnsp_ctx_t* ctx, uint8_t* lqname, const uint8_t* buf, const unsigned len)
+static unsigned parse_question(dnsp_ctx_t* ctx, const uint8_t* buf, const unsigned len)
 {
-    uint8_t* lqname_ptr = lqname + 1;
+    uint8_t* lqname_ptr = &ctx->lqname[1];
     unsigned pos = 0;
     unsigned llen;
     while ((llen = *lqname_ptr++ = buf[pos++])) {
@@ -236,7 +241,7 @@ static unsigned parse_question(dnsp_ctx_t* ctx, uint8_t* lqname, const uint8_t* 
 
     if (likely(pos)) {
         // Store the overall length of the lowercased name
-        *lqname = pos;
+        ctx->lqname[0] = pos;
 
         if (likely(pos + 4 <= len)) {
             ctx->qtype = ntohs(gdnsd_get_una16(&buf[pos]));
@@ -464,7 +469,7 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, const wire_dns_rr_opt_t* opt, con
 }
 
 F_NONNULL
-static rcode_rv_t decode_query(dnsp_ctx_t* ctx, uint8_t* lqname, unsigned* question_len_ptr, const unsigned packet_len, const gdnsd_anysin_t* asin)
+static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* question_len_ptr, const unsigned packet_len, const gdnsd_anysin_t* asin)
 {
     gdnsd_assert(ctx->packet);
 
@@ -512,7 +517,7 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, uint8_t* lqname, unsigned* quest
         }
 
         unsigned offset = sizeof(wire_dns_header_t);
-        if (unlikely(!(*question_len_ptr = parse_question(ctx, lqname, &packet[offset], packet_len - offset)))) {
+        if (unlikely(!(*question_len_ptr = parse_question(ctx, &packet[offset], packet_len - offset)))) {
             log_devdebug("Failed to parse question, ignoring %s", logf_anysin(asin));
             rcode = DECODE_IGNORE;
             break;
@@ -564,21 +569,6 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, uint8_t* lqname, unsigned* quest
     return rcode;
 }
 
-// only for the query name is this required, others have an existing len byte
-// prefix in ltree storage.  Obviously, the name must be valid and
-// uncompressed, which is already gauranteed by parse_question().
-F_NONNULL F_PURE
-static unsigned compute_dname_len(const uint8_t* orig)
-{
-    const uint8_t* readptr = orig;
-    unsigned llen;
-    do {
-        llen = *readptr++;
-        readptr += llen;
-    } while (llen);
-    return (unsigned)(readptr - orig);
-}
-
 // Always first thing added, once we hit a situation where general compression is warranted
 F_NONNULL
 static void ctargets_add_qname(dnsp_ctx_t* ctx)
@@ -586,7 +576,7 @@ static void ctargets_add_qname(dnsp_ctx_t* ctx)
     gdnsd_assert(!ctx->ctarget_count);
     unsigned offset = sizeof(wire_dns_header_t);
     const uint8_t* orig = &ctx->packet[offset];
-    unsigned len = compute_dname_len(orig);
+    unsigned len = ctx->lqname[0];
     // root is "." => "\0" => len==1 and is not worth compressing
     // next-shortest is "a." => "\1a\0" => len==3, and is worth compressing
     while (len > 2 && ctx->ctarget_count < COMPTARGETS_MAX) {
@@ -1750,7 +1740,7 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
 }
 
 F_NONNULL
-static unsigned answer_from_db(dnsp_ctx_t* ctx, const uint8_t* qname, unsigned offset)
+static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
 {
     gdnsd_assert(offset);
     gdnsd_assert(ctx->stats);
@@ -1766,6 +1756,8 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, const uint8_t* qname, unsigned o
 
     ltree_dname_status_t status = DNAME_NOAUTH;
     unsigned auth_depth = 0;
+
+    const uint8_t* qname = ctx->lqname;
 
     rcu_read_lock();
 
@@ -1861,7 +1853,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, const uint8_t* qname, unsigned o
 }
 
 F_NONNULL
-static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, const uint8_t* qname, unsigned offset)
+static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
 {
     gdnsd_assert(offset);
     gdnsd_assert(ctx->stats);
@@ -1870,7 +1862,7 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, const uint8_t* qname, unsi
 
     const bool any_udp = (ctx->qtype == DNS_TYPE_ANY && ctx->is_udp);
     if (!any_udp)
-        offset = answer_from_db(ctx, qname, offset);
+        offset = answer_from_db(ctx, offset);
 
     // Check for truncation (ANY-over-UDP truncation, or true overflow w/ just ans, auth, and glue)
     if (any_udp || unlikely(offset > ctx->this_max_response)) {
@@ -1910,10 +1902,9 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
     if (asin->sa.sa_family == AF_INET6)
         stats_own_inc(&ctx->stats->v6);
 
-    uint8_t lqname[256];
     unsigned question_len = 0;
 
-    const rcode_rv_t status = decode_query(ctx, lqname, &question_len, packet_len, asin);
+    const rcode_rv_t status = decode_query(ctx, &question_len, packet_len, asin);
 
     if (status == DECODE_IGNORE) {
         stats_own_inc(&ctx->stats->dropped);
@@ -1942,7 +1933,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         hdr->flags2 = DNS_RCODE_NOERROR;
         if (likely(!ctx->chaos)) {
             memcpy(&ctx->client_info.dns_source, asin, sizeof(*asin));
-            res_offset = answer_from_db_outer(ctx, lqname, res_offset);
+            res_offset = answer_from_db_outer(ctx, res_offset);
         } else {
             ctx->ancount = 1;
             memcpy(&packet[res_offset], gcfg->chaos, gcfg->chaos_len);
