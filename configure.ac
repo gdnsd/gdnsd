@@ -161,9 +161,6 @@ m4_include([libgdnsd/libgdnsd.m4])
 # include libgdmaps configure stuff
 m4_include([libgdmaps/libgdmaps.m4])
 
-# posix_madvise to readahead on zonefiles
-AC_CHECK_FUNCS([posix_madvise])
-
 # Linux, FreeBSD, and NetBSD all have this these days
 USE_MMSG=1
 AC_CHECK_DECLS([sendmmsg, recvmmsg, MSG_WAITFORONE],,[USE_MMSG=0],[[#include <sys/socket.h>]])

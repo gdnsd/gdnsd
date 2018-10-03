@@ -73,10 +73,12 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
             // cppcheck-suppress memleak (MAP_FAILED is not a leak :P)
             return NULL;
         }
-#ifdef HAVE_POSIX_MADVISE
-        if (seq && len > 8192) // why waste the syscall on small files?
-            (void)posix_madvise(mapbuf, len, POSIX_MADV_SEQUENTIAL);
-#endif
+        int advice = POSIX_MADV_WILLNEED;
+        if (seq)
+            advice |= POSIX_MADV_SEQUENTIAL;
+        else
+            advice |= POSIX_MADV_RANDOM;
+        (void)posix_madvise(mapbuf, len, advice);
     } else {
         // mmap doesn't always work for zero-length files, and we also
         //   don't want callers to have to care about cases where this call
