@@ -74,6 +74,7 @@ int gdnsd_getproto_udp(void)
 {
     return udp_proto;
 }
+
 int gdnsd_getproto_tcp(void)
 {
     return tcp_proto;

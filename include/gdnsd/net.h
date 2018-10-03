@@ -98,7 +98,7 @@ F_NONNULLX(1, 3)
 int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gdnsd_anysin_t* result);
 
 // Check if the sockaddr is the V4 or V6 ANY-address (0.0.0.0, or ::)
-F_NONNULL
+F_NONNULL F_PURE
 bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* asin);
 
 // convert "asin" to numeric ASCII of the form "ipv4:port" or "[ipv6]:port"

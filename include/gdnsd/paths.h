@@ -46,9 +46,11 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs);
 
 // This is just to display the compiled-in static default for e.g.
 //   commandline help output purposes
+F_PURE
 const char* gdnsd_get_default_config_dir(void);
 
 // Gets a readonly copy of the base config dir actually in use
+F_PURE
 const char* gdnsd_get_config_dir(void);
 
 // given a configfile name and an optional path prefix, return

@@ -96,7 +96,7 @@ bool zone_finalize(zone_t* zone)
 
 /******* ztree code *********/
 
-F_NONNULL
+F_NONNULL F_PURE
 static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label)
 {
     ztree_t* rv = NULL;

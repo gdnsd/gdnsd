@@ -79,7 +79,7 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed);
 
 // Check whether a stop (e.g. via signal) is currently ok or not (due to
 // impending replacement/replace operation)
-F_NONNULL
+F_NONNULL F_PURE
 bool css_stop_ok(css_t* css);
 
 F_NONNULL

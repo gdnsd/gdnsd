@@ -43,7 +43,7 @@ F_MALLOC F_ALLOCSZ(2) F_RETNN F_NONNULL
 uint8_t* lta_malloc(ltarena_t* lta, const size_t size);
 
 // Duplicate a label in arena storage
-F_UNUSED F_RETNN F_NONNULL
+F_MALLOC F_UNUSED F_RETNN F_NONNULL
 static uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label)
 {
     const size_t sz = *label + 1U;

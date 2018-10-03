@@ -153,7 +153,7 @@ static void validate_lhs_not_ooz(zscan_t* z)
         parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
 }
 
-F_NONNULL
+F_NONNULL F_PURE
 static unsigned dn_find_final_label_offset(const uint8_t* dname)
 {
     gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);

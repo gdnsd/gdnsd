@@ -62,11 +62,14 @@ csc_t* csc_new(const unsigned timeout, const char* pfx);
 // Get basic info about server on other side of controlsock (this is fetched
 // via the "status" command immediately after starting a new connection above,
 // and these APIs return the client-side cached data).
+F_NONNULL F_PURE
 pid_t csc_get_server_pid(const csc_t* csc);
+F_NONNULL F_PURE
 const char* csc_get_server_version(const csc_t* csc);
 
 // Boolean check if server version is >= M.m.p, using the same cached version
 // info as csc_get_server_version() above
+F_NONNULL F_PURE
 bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t minor, const uint8_t patch);
 
 // Performs a basic req->resp transaction using csbuf_t objects, with no

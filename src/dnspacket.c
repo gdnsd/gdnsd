@@ -567,7 +567,7 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, uint8_t* lqname, unsigned* quest
 // only for the query name is this required, others have an existing len byte
 // prefix in ltree storage.  Obviously, the name must be valid and
 // uncompressed, which is already gauranteed by parse_question().
-F_NONNULL
+F_NONNULL F_PURE
 static unsigned compute_dname_len(const uint8_t* orig)
 {
     const uint8_t* readptr = orig;

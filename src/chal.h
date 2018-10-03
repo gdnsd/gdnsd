@@ -79,8 +79,8 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
 void chal_init(void);
 
 // Quick pre-flight check
-F_NONNULL F_UNUSED
-static inline bool dname_is_acme_chal(const uint8_t* d)
+F_NONNULL F_UNUSED F_PURE
+static bool dname_is_acme_chal(const uint8_t* d)
 {
     gdnsd_assert(dname_status(d) != DNAME_INVALID);
     return (d[0] > 16U && d[1] == 15U && !memcmp(&d[2], "_acme-challenge", 15U));

@@ -50,6 +50,7 @@ F_NONNULL F_RETNN F_PURE
 const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap);
 
 // Get the mtime of the file when first mapped (1s resolution)
+F_NONNULL F_PURE
 time_t gdnsd_fmap_get_mtime(const gdnsd_fmap_t* fmap);
 
 // Destructs the fmap_t object, which includes unmap() of the memory
