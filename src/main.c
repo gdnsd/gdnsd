@@ -329,6 +329,7 @@ static void do_tak2(struct ev_loop* loop, csc_t* csc)
                 log_fatal("REPLACE[new daemon]: illegal challenge handoff data");
             offset += cset_dlen;
         }
+        free(chal_data);
     }
 }
 
