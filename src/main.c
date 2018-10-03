@@ -438,6 +438,8 @@ int main(int argc, char** argv)
     if (copts.action != ACT_CHECKCONF)
         gdnsd_init_daemon(copts.action == ACT_DAEMONIZE);
 
+    log_info("gdnsd version " PACKAGE_VERSION " @ pid %li", (long)getpid());
+
     // Load and init basic pathname config (but no mkdir/chmod if checkconf)
     vscf_data_t* cfg_root = gdnsd_init_paths(copts.cfg_dir, copts.action != ACT_CHECKCONF);
 
