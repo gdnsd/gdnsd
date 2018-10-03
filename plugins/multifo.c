@@ -31,7 +31,7 @@
 #include <netdb.h>
 
 static const char DEFAULT_SVCNAME[] = "up";
-static const double DEF_UP_THRESH = 0.5;
+#define DEF_UP_THRESH 0.5
 
 static unsigned v4_max = 0;
 static unsigned v6_max = 0;

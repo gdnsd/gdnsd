@@ -35,11 +35,11 @@
 //  remaining 28 bits are unsigned TTL (max value ~8.5 years)
 typedef uint32_t gdnsd_sttl_t;
 
-static const gdnsd_sttl_t GDNSD_STTL_DOWN          = (1U << 31U);
-static const gdnsd_sttl_t GDNSD_STTL_FORCED        = (1U << 30U);
-static const gdnsd_sttl_t GDNSD_STTL_RESERVED_MASK = (3U << 28U);
-static const gdnsd_sttl_t GDNSD_STTL_TTL_MASK      = ((1U << 28U) - 1U);
-static const gdnsd_sttl_t GDNSD_STTL_TTL_MAX       = ((1U << 28U) - 1U);
+#define GDNSD_STTL_DOWN          ((gdnsd_sttl_t)(1U << 31U))
+#define GDNSD_STTL_FORCED        ((gdnsd_sttl_t)(1U << 30U))
+#define GDNSD_STTL_RESERVED_MASK ((gdnsd_sttl_t)(3U << 28U))
+#define GDNSD_STTL_TTL_MASK      ((gdnsd_sttl_t)((1U << 28U) - 1U))
+#define GDNSD_STTL_TTL_MAX       ((gdnsd_sttl_t)((1U << 28U) - 1U))
 // ^ identical to above, but better semantics when reading code
 
 // the only hard rule on this data type is zero in the reserved bits for now

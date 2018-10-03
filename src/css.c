@@ -47,8 +47,8 @@
 #include <sys/wait.h>
 
 // makes sides of int[] from pipe2() clearer
-static const unsigned PIPE_RD = 0;
-static const unsigned PIPE_WR = 1;
+#define PIPE_RD 0
+#define PIPE_WR 1
 
 static const char base_sock[] = "control.sock";
 static const char base_lock[] = "control.lock";

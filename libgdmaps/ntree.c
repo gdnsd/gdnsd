@@ -25,7 +25,7 @@
 
 // Initial node allocation count,
 //   must be power of two due to alloc code,
-static const unsigned NT_SIZE_INIT = 128;
+#define NT_SIZE_INIT 128U
 
 ntree_t* ntree_new(void)
 {

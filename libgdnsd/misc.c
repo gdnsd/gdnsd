@@ -149,8 +149,8 @@ static bool get_urand_data(urand_data_t* rdata)
 
 // We throw away the first N results from new PRNGs.
 // N's range, given current constants below, is [31013 - 96548]
-static const unsigned THROW_MIN = 31013;
-static const unsigned THROW_MASK = 0xFFFF;
+#define THROW_MIN 31013U
+#define THROW_MASK 0xFFFF
 
 // Must be called early, before any consumers of the public PRNG
 //  init interfaces from C<gdnsd/misc.h>

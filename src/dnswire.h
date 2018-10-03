@@ -113,24 +113,24 @@ typedef struct S_PACKED {
 #define EDNS_TCP_KEEPALIVE_OPTCODE 0x000B
 
 /* DNS RR Types */
-#define DNS_TYPE_A 1
-#define DNS_TYPE_NS 2
-#define DNS_TYPE_CNAME 5
-#define DNS_TYPE_SOA 6
-#define DNS_TYPE_PTR 12
-#define DNS_TYPE_MX 15
-#define DNS_TYPE_TXT 16
-#define DNS_TYPE_AAAA 28
-#define DNS_TYPE_SRV 33
-#define DNS_TYPE_NAPTR 35
-#define DNS_TYPE_OPT 41
-#define DNS_TYPE_IXFR 251
-#define DNS_TYPE_AXFR 252
-#define DNS_TYPE_ANY 255
+#define DNS_TYPE_A 1U
+#define DNS_TYPE_NS 2U
+#define DNS_TYPE_CNAME 5U
+#define DNS_TYPE_SOA 6U
+#define DNS_TYPE_PTR 12U
+#define DNS_TYPE_MX 15U
+#define DNS_TYPE_TXT 16U
+#define DNS_TYPE_AAAA 28U
+#define DNS_TYPE_SRV 33U
+#define DNS_TYPE_NAPTR 35U
+#define DNS_TYPE_OPT 41U
+#define DNS_TYPE_IXFR 251U
+#define DNS_TYPE_AXFR 252U
+#define DNS_TYPE_ANY 255U
 
-#define DNS_CLASS_IN 1
-#define DNS_CLASS_CH 3
-#define DNS_CLASS_ANY 255
+#define DNS_CLASS_IN 1U
+#define DNS_CLASS_CH 3U
+#define DNS_CLASS_ANY 255U
 
 // Our own synthetic 'type' for DYNC
 //   Note that current standards mark
@@ -143,22 +143,17 @@ typedef struct S_PACKED {
 
 /* Network-order TYPE+CLASS as a 32-bit uint */
 
-#ifdef WORDS_BIGENDIAN
-#define _mkrrf(_t, _c) (((_t) << 16) | (_c))
-#else
-#define _mkrrf(_t, _c) (((_t) << 8) | ((_c) << 24))
-#endif
-
-static const uint32_t DNS_RRFIXED_A     = _mkrrf(DNS_TYPE_A, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_NS    = _mkrrf(DNS_TYPE_NS, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_CNAME = _mkrrf(DNS_TYPE_CNAME, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_SOA   = _mkrrf(DNS_TYPE_SOA, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_PTR   = _mkrrf(DNS_TYPE_PTR, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_MX    = _mkrrf(DNS_TYPE_MX, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_TXT   = _mkrrf(DNS_TYPE_TXT, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_AAAA  = _mkrrf(DNS_TYPE_AAAA, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_SRV   = _mkrrf(DNS_TYPE_SRV, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_NAPTR = _mkrrf(DNS_TYPE_NAPTR, DNS_CLASS_IN);
-static const uint32_t DNS_RRFIXED_OPT   = _mkrrf(DNS_TYPE_OPT, DNS_CLASS_IN);
+#define _mkrrf(_t) ((uint32_t)htonl(_t << 16 | DNS_CLASS_IN))
+#define DNS_RRFIXED_A     _mkrrf(DNS_TYPE_A)
+#define DNS_RRFIXED_NS    _mkrrf(DNS_TYPE_NS)
+#define DNS_RRFIXED_CNAME _mkrrf(DNS_TYPE_CNAME)
+#define DNS_RRFIXED_SOA   _mkrrf(DNS_TYPE_SOA)
+#define DNS_RRFIXED_PTR   _mkrrf(DNS_TYPE_PTR)
+#define DNS_RRFIXED_MX    _mkrrf(DNS_TYPE_MX)
+#define DNS_RRFIXED_TXT   _mkrrf(DNS_TYPE_TXT)
+#define DNS_RRFIXED_AAAA  _mkrrf(DNS_TYPE_AAAA)
+#define DNS_RRFIXED_SRV   _mkrrf(DNS_TYPE_SRV)
+#define DNS_RRFIXED_NAPTR _mkrrf(DNS_TYPE_NAPTR)
+#define DNS_RRFIXED_OPT   _mkrrf(DNS_TYPE_OPT)
 
 #endif // GDNSD_DNSWIRE_H

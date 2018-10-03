@@ -835,13 +835,13 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest)
 //--------------------------------------------------
 
 static const char json_head[] = "{\r\n";
-static const unsigned json_head_len = sizeof(json_head) - 1;
 static const char json_tmpl[] = "\t\"%s\": {\"state\": \"%s\", \"real_state\": \"%s\"}";
-static const unsigned json_tmpl_len = sizeof(json_tmpl) - 7; // 3x%s
 static const char json_sep[] = ",\r\n";
-static const unsigned json_sep_len = sizeof(json_sep) - 1;
 static const char json_foot[] = "\r\n}\r\n";
-static const unsigned json_foot_len = sizeof(json_foot) - 1;
+#define json_head_len (sizeof(json_head) - 1U)
+#define json_sep_len (sizeof(json_sep) - 1U)
+#define json_tmpl_len (sizeof(json_tmpl) - 7U) // 3x%s
+#define json_foot_len (sizeof(json_foot) - 1U)
 
 // Initialize max_states_len for runtime use
 static void init_max_states_len(void)

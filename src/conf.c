@@ -40,7 +40,7 @@ const cfg_t* gcfg = NULL;
 
 // just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
 static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00";
-static const unsigned chaos_prefix_len = 10U;
+#define chaos_prefix_len 10U
 static const char chaos_def[] = "gdnsd";
 
 static const cfg_t cfg_defaults = {

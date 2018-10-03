@@ -27,9 +27,6 @@ AC_COMPILE_IFELSE(
 [CLANG=yes], [CLANG=no])
 AC_MSG_RESULT([$CLANG])
 
-# need to know endian-ness
-AC_C_BIGENDIAN
-
 # pointer width...
 AC_CHECK_SIZEOF(uintptr_t)
 
