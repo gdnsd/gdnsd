@@ -287,10 +287,12 @@ static bool action_chal(csc_t* csc, int argc, char** argv)
         dname_terminate(&buf[dlen]);
         dlen += (buf[dlen] + 1U);
         if (strlen(chal_input) != 43)
-            log_fatal("Payload '%s' for '%s' is not 43 bytes long", chal_input, dname_input);
-        for (unsigned j = 0; j < 43; j++)
-            if (!b64u_legal[(unsigned)argv[i + 1][j]])
-                log_fatal("Payload '%s' for '%s' illegal base64url bytes", chal_input, dname_input);
+            log_fatal("Payload for '%s' is not 43 bytes long", dname_input);
+        for (unsigned j = 0; j < 43; j++) {
+            const uint8_t x = (uint8_t)chal_input[j];
+            if (!b64u_legal[x])
+                log_fatal("Payload for '%s' has illegal base64url bytes", dname_input);
+        }
         memcpy(&buf[dlen], chal_input, 43);
         dlen += 43;
         buf[dlen++] = 0;
