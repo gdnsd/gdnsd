@@ -114,10 +114,13 @@ AX_APPEND_COMPILE_FLAGS([\
     -pipe \
     -Wall \
     -Wextra \
+    -Waggregate-return \
     -Warray-bounds=2 \
     -Wbad-function-cast \
     -Wcast-align \
     -Wcast-qual \
+    -Wdate-time \
+    -Wdouble-promotion \
     -Wduplicated-cond \
     -Wendif-labels \
     -Werror=vla \
@@ -139,12 +142,14 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wshadow \
     -Wsign-conversion \
     -Wshift-overflow=2 \
+    -Wstrict-aliasing=3 \
     -Wstrict-overflow=5 \
     -Wstrict-prototypes \
     -Wswitch-default \
     -Wswitch-enum \
     -Wtrampolines \
     -Wundef \
+    -Wuninitialized \
     -Wunused \
     -Wwrite-strings \
     -Wthis-does-not-exist \
