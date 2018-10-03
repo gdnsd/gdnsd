@@ -26,8 +26,7 @@
 #include <arpa/inet.h>
 
 // Our UDP input buffers are shared with output buffer
-//  space, and the output buffer size in turn has
-//  a minimum size of 4K, default 16K.
+//  space, and the output buffer size is 16K.
 // However, we only advertise a buffer size of 1024,
 //  to be absolutely sure that even in the face of
 //  an IPv6 min-MTU link and lots of extra headers
