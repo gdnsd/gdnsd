@@ -34,10 +34,9 @@ test -x $DAEMON || exit 0
 [ -f /etc/default/$NAME ] && . /etc/default/$NAME
 
 gdnsd_start() {
-    GDNSD_UID=$(id -ru $GDNSD_USER)
-    GDNSD_GID=$(id -rg $GDNSD_USER)
-    GDNSD_GRPS=$(id -rG $GDNSD_USER | sed 's/ /,/g')
-    GDNSD_GRNAM=$(id -rng $GDNSD_USER)
+    GDNSD_UID=$(id -u $GDNSD_USER)
+    GDNSD_GID=$(id -g $GDNSD_USER)
+    GDNSD_GRNAM=$(id -ng $GDNSD_USER)
 
     # gdnsd does this internally anyways, but always a good idea!
     umask 022
@@ -57,7 +56,7 @@ gdnsd_start() {
     # Note idempotent startup here with "-i daemonize": it will succeed if
     # already running.  Note also this requires setpriv from util-linux v2.31
     # or higher and kernel 4.3 or higher.
-    setpriv --reuid $GDNSD_UID --regid $GDNSD_GID --groups $GDNSD_GRPS \
+    setpriv --reuid $GDNSD_UID --regid $GDNSD_GID --init-groups \
         --securebits +noroot,+noroot_locked,+no_setuid_fixup,+no_setuid_fixup_locked \
         --bounding-set -all,+net_bind_service \
         --ambient-caps -all,+net_bind_service \
