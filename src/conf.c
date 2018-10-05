@@ -98,6 +98,26 @@ static void set_nsid(cfg_t* cfg, const char* data)
                        | ahex[(data[i + 1] & 0x1F) ^ 0x10];
 }
 
+F_NONNULL
+static void set_nsid_ascii(cfg_t* cfg, const char* data)
+{
+    const unsigned dlen = strlen(data);
+    bool fail = false;
+    if (!dlen || dlen > 128U) {
+        fail = true;
+    } else {
+        for (size_t i = 0; i < dlen; i++)
+            if (data[i] < 0x20 || data[i] > 0x7E)
+                fail = true;
+    }
+    if (fail)
+        log_fatal("Option 'nsid_ascii' must be a string of printable ASCII characters up to 128 bytes long");
+    cfg->nsid_len = dlen;
+    uint8_t* nsid;
+    cfg->nsid = nsid = xmalloc(cfg->nsid_len);
+    memcpy(nsid, data, dlen);
+}
+
 static void plugins_cleanup(void)
 {
     gdnsd_plugins_action_exit();
@@ -225,6 +245,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     vscf_data_t* psearch_array = NULL;
     const char* chaos_data = chaos_def;
     const char* nsid_data = NULL;
+    const char* nsid_data_ascii = NULL;
 
     vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
@@ -264,6 +285,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
 
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         CFG_OPT_STR_NOCOPY(options, nsid, nsid_data);
+        CFG_OPT_STR_NOCOPY(options, nsid_ascii, nsid_data_ascii);
         psearch_array = vscf_hash_get_data_byconstkey(options, "plugin_search_path", true);
         vscf_hash_iterate_const(options, true, bad_key, "options");
     }
@@ -276,8 +298,12 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     set_chaos(cfg, chaos_data);
 
     // set nsid if set
+    if (nsid_data && nsid_data_ascii)
+        log_fatal("Only one of 'nsid_ascii' or 'nsid' can be set");
     if (nsid_data)
         set_nsid(cfg, nsid_data);
+    if (nsid_data_ascii)
+        set_nsid_ascii(cfg, nsid_data_ascii);
 
     vscf_data_t* stypes_cfg = cfg_root
                               ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)

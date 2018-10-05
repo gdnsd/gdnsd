@@ -367,6 +367,13 @@ not emitted at all unless this option is specified explicitly.  This is
 intended to help with the identification of specific servers when
 multiple servers are part of an anycast or loadbalancer pool.
 
+=item B<nsid_ascii>
+
+String, no default, 1-128 chars of printable ASCII characters.
+This is an convenience alternative to C<nsid> above, allowing the binary NSID
+data to be configured with the bytes of a printable ASCII string up to 128
+bytes in length.  Only one of C<nsid> or C<nsid_ascii> may be specified.
+
 =item B<run_dir>
 
 String, defaults to F<@GDNSD_DEFPATH_RUN@>.  This is the directory which the

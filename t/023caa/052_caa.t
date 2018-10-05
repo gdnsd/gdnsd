@@ -11,7 +11,7 @@ my $optrr_nsid = Net::DNS::RR->new(
     extendedrcode => 0,
     ednsflags => 0,
     optioncode => 3,
-    optiondata => pack('H*', '6578616D706C6500'),
+    optiondata => pack('H*', '6578616D706C65'),
 );
 
 _GDT->test_dns(

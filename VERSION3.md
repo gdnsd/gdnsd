@@ -84,6 +84,7 @@ These are all new options for new features:
 
 * `acme_challenge_ttl` - Sets the time in seconds for records injected by `gdnsdctl acme-dns-01` to expire, as well as the advertised TTL.  min/def/max is 60/600/3600.
 * `nsid` - Sets the raw binary data returned by the NSID edns0 option.  Up to 128 raw bytes, encoded as up to 256 characters of ascii hex in a single string.  The option is not sent unless the data is explicitly defined by this option.
+* `nsid_ascii` - Convenience alternative to the above, sets the NSID binary data to the bytes of the specified printable ASCII string of at most 128 characters.
 * `tcp_fastopen` - Sets the queue size for TCP Fastopen (global, per-socket).  min/def/max is 0/128/1048576, zero disables.
 
 ### Options with changed defaults or allowed values
