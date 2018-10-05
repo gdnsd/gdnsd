@@ -1,8 +1,19 @@
-2.99.9161-beta - 2018-10-03
+2.99.9930-beta - 2018-10-05
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * New config option 'nsid_ascii', as a simpler variant for defining NSID
+      data bytes which happen to map to ASCII printable strings.
+    * Old config option 'edns_client_subnet' restored (was removed in
+      previous betas), allows turning off edns-client-subnet support.
+    * Minor change to edns-client-subnet RFC interpretations: send FORMERR
+      in all cases when the family field is not IPv4 or IPv6 (has no
+      practical impact on real world requests).
+    * Minor updates to the example initscript
+    * Minor QA-related updates to the source
+
+2.99.9161-beta - 2018-10-03
     * Daemon replacement is now much more operationally transparent:
     ** Stats counter data is handed off; it no longer rolls over to zero like
        it would on a full stop -> start.  The "uptime" stat now reflects the
