@@ -288,26 +288,23 @@ static bool handle_edns_client_subnet(dnsp_ctx_t* ctx, unsigned opt_len, const u
             break;
         }
 
-        // Validate family iff src_mask is non-zero, and validate non-zero
-        // src_mask as appropriate for the know families.
-        if (src_mask) {
-            if (family == 1U) { // IPv4
-                if (src_mask > 32U) {
-                    log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
-                    rv = true;
-                    break;
-                }
-            } else if (family == 2U) { // IPv6
-                if (src_mask > 128U) {
-                    log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
-                    rv = true;
-                    break;
-                }
-            } else {
-                log_devdebug("edns_client_subnet has unknown family %u", family);
+        // Validate family and validate non-zero src_mask as appropriate
+        if (family == 1U) { // IPv4
+            if (src_mask > 32U) {
+                log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
                 rv = true;
                 break;
             }
+        } else if (family == 2U) { // IPv6
+            if (src_mask > 128U) {
+                log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
+                rv = true;
+                break;
+            }
+        } else {
+            log_devdebug("edns_client_subnet has unknown family %u", family);
+            rv = true;
+            break;
         }
 
         // There should be exactly enough address bytes to cover the provided source mask (possibly 0)
@@ -348,7 +345,7 @@ static bool handle_edns_client_subnet(dnsp_ctx_t* ctx, unsigned opt_len, const u
         ctx->this_max_response -= (8 + addr_bytes); // leave room for response option
         ctx->respond_edns_client_subnet = true;
         ctx->client_info.edns_client_mask = src_mask;
-        ctx->edns_client_family = family; // copy family literally, in case src_mask==0 + junk family echo
+        ctx->edns_client_family = family; // copy family for output
     } while (0);
 
     gdnsd_assert(ctx->stats);

@@ -279,18 +279,18 @@ _GDT->test_dns(
     stats => [qw/udp_reqs edns edns_clientsub formerr/],
 );
 
-# reflect arbitrary junk family without error if src_mask==0
-my $optrr_junkfam_ok = Net::DNS::RR->new(@optrr_base,
+# formerr for arbitrary junk family
+my $optrr_junkfam = Net::DNS::RR->new(@optrr_base,
     optioncode => 0x0008,
     optiondata => pack('nCC', 42, 0, 0)
 );
 _GDT->test_dns(
     v4_only => 1,
     qname => 'reflect-best.example.com', qtype => 'A',
-    q_optrr => $optrr_junkfam_ok,
-    answer => 'reflect-best.example.com 60 A 127.0.0.1',
-    addtl => $optrr_junkfam_ok,
-    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+    q_optrr => $optrr_junkfam,
+    header => { rcode => 'FORMERR', aa => 0 },
+    addtl => $optrr_basic,
+    stats => [qw/udp_reqs edns edns_clientsub formerr/],
 );
 
 _GDT->test_kill_daemon($pid);
