@@ -3,58 +3,58 @@
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
-      * Daemon replacement is now much more operationally transparent:
-      ** Stats counter data is handed off; it no longer rolls over to zero like
-         it would on a full stop -> start.  The "uptime" stat now reflects the
-         uptime of the stats themselves, which could be considerably longer
-         than the uptime of the current daemon process.
-      ** ACME DNS-01 challenge data is handed off as well, so that replacement
-         doesn't effectively flush all the active ephemeral challenge data.
-      ** gdnsdctl now actually enforces its timeout, at least loosely.
-      ** The server's control socket now correctly and effectively blocks all
-         state-changing operations that it should during the critical window of
-         the replacement process (pretty much everything but the gdnsdctl
- I       commands "stats", "states", and "status"), and it does so with a
-         unique response type (RESP_LATR) that lets the client know it's being
-         denied for this reason instead of some other generic failure and it
-         can/should retry on a fresh connection later.
-      ** gdnsdctl pays attention to the above RESP_LATR (and other "soft"
-         communication failures which could be caused by really bad timing with
-         a replace/stop operation on the daemon) and retries the transaction on
-         a fresh connection once per second until it goes through successfully
-         (or truly fails), or until it reaches its overall timeout.
-      ** The net effect of these changes is that they closed up the final
-         loopholes to make gdnsdctl<->daemon operations fully reliable for
-         multiple indepedent actors.  You could have several different admins,
-         scripts, CM tools, and cronjobs firing off concurrent or overlapping
-         state-changing gdnsdctl commands like "replace" (for config updates or
-         a package/binary update), "reload-zones", "acme-dns-01", etc, and all
-         of them will eventually succeed or fail correctly (i.e. they won't
-         artificially fail because of conflict).  None of them will ever lie
-         about the real, user-facing meaning of their successful exit values
-         (e.g. that when "gdnsdctl reload-zones" exits successfully, the new
-         data is already visible to queries, regardless of whatever else was
-         going on).
-      * gdnsd has a new flag '-i' for idempotent start/daemonize (reports
-        success instead of failure if it detects another running instance)
-      * gdnsdctl has a similar new flag '-i' which means "ignore dead daemon"
-        for certain actions where that makes sense, returning success if
-        there's no live daemon to connect to.  "gdnsdctl -i stop" is
-        effectively an idempotent stop, but "idempotent" is the wrong word for
-        what it does to "replace", "reload-zones", and "acme-dns-01-flush".
-        For those actions, it's more like "succeed if the daemon is dead,
-        because a new daemon in the future will implicitly start with the state
-        changes I was trying to notify any optionally-alive daemon of"
-      * gdnsdctl also gained the new flag "-o" for one-shot mode, which disables
-        retries, causing commands to (pointlessly?) fail if they collide with
-        the critical time window of a replace operation.
-      * An example Linux LSB-style sysv initscript is provided that does
-        most of the same setup/security stuff as the example systemd unit
-      * Version and PID info are now always logged at startup
-      * Builds for the x32 ABI (x86_64 ILP32) now get 64-bit stat counters,
-        which are otherwise only generally available in builds for *P64 ABIs.
-      * Several corner-case bugfixes for the control socket code
-      * Lots of other cleanup and minor correction
+    * Daemon replacement is now much more operationally transparent:
+    ** Stats counter data is handed off; it no longer rolls over to zero like
+       it would on a full stop -> start.  The "uptime" stat now reflects the
+       uptime of the stats themselves, which could be considerably longer
+       than the uptime of the current daemon process.
+    ** ACME DNS-01 challenge data is handed off as well, so that replacement
+       doesn't effectively flush all the active ephemeral challenge data.
+    ** gdnsdctl now actually enforces its timeout, at least loosely.
+    ** The server's control socket now correctly and effectively blocks all
+       state-changing operations that it should during the critical window of
+       the replacement process (pretty much everything but the gdnsdctl
+       commands "stats", "states", and "status"), and it does so with a
+       unique response type (RESP_LATR) that lets the client know it's being
+       denied for this reason instead of some other generic failure and it
+       can/should retry on a fresh connection later.
+    ** gdnsdctl pays attention to the above RESP_LATR (and other "soft"
+       communication failures which could be caused by really bad timing with
+       a replace/stop operation on the daemon) and retries the transaction on
+       a fresh connection once per second until it goes through successfully
+       (or truly fails), or until it reaches its overall timeout.
+    ** The net effect of these changes is that they closed up the final
+       loopholes to make gdnsdctl<->daemon operations fully reliable for
+       multiple indepedent actors.  You could have several different admins,
+       scripts, CM tools, and cronjobs firing off concurrent or overlapping
+       state-changing gdnsdctl commands like "replace" (for config updates or
+       a package/binary update), "reload-zones", "acme-dns-01", etc, and all
+       of them will eventually succeed or fail correctly (i.e. they won't
+       artificially fail because of conflict).  None of them will ever lie
+       about the real, user-facing meaning of their successful exit values
+       (e.g. that when "gdnsdctl reload-zones" exits successfully, the new
+       data is already visible to queries, regardless of whatever else was
+       going on).
+    * gdnsd has a new flag '-i' for idempotent start/daemonize (reports
+      success instead of failure if it detects another running instance)
+    * gdnsdctl has a similar new flag '-i' which means "ignore dead daemon"
+      for certain actions where that makes sense, returning success if
+      there's no live daemon to connect to.  "gdnsdctl -i stop" is
+      effectively an idempotent stop, but "idempotent" is the wrong word for
+      what it does to "replace", "reload-zones", and "acme-dns-01-flush".
+      For those actions, it's more like "succeed if the daemon is dead,
+      because a new daemon in the future will implicitly start with the state
+      changes I was trying to notify any optionally-alive daemon of"
+    * gdnsdctl also gained the new flag "-o" for one-shot mode, which disables
+      retries, causing commands to (pointlessly?) fail if they collide with
+      the critical time window of a replace operation.
+    * An example Linux LSB-style sysv initscript is provided that does
+      most of the same setup/security stuff as the example systemd unit
+    * Version and PID info are now always logged at startup
+    * Builds for the x32 ABI (x86_64 ILP32) now get 64-bit stat counters,
+      which are otherwise only generally available in builds for *P64 ABIs.
+    * Several corner-case bugfixes for the control socket code
+    * Lots of other cleanup and minor correction
 
 2.99.1729-beta - 2018-09-21
     * Systemd unit file example updated to add required declarations about
