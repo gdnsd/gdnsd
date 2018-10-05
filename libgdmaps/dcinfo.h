@@ -73,7 +73,7 @@ F_NONNULL F_PURE
 unsigned dcinfo_get_count(const dcinfo_t* info);
 F_NONNULL F_PURE
 unsigned dcinfo_get_limit(const dcinfo_t* info);
-F_NONNULL F_PURE
+F_NONNULL F_PURE F_RETNN
 const dcinfo_coords_t* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum);
 F_NONNULLX(1) F_PURE
 unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname);

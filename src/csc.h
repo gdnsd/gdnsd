@@ -64,7 +64,7 @@ csc_t* csc_new(const unsigned timeout, const char* pfx);
 // and these APIs return the client-side cached data).
 F_NONNULL F_PURE
 pid_t csc_get_server_pid(const csc_t* csc);
-F_NONNULL F_PURE
+F_NONNULL F_PURE F_RETNN
 const char* csc_get_server_version(const csc_t* csc);
 
 // Boolean check if server version is >= M.m.p, using the same cached version

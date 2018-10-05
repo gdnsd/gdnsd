@@ -252,7 +252,7 @@ static bool gdnsd_dname_is_partial(const uint8_t* dname)
 // Trim a dname's storage to the minimum required size.  Assumes storage was
 //  originally allocated with xmalloc() or equivalent.  Note that after trimming
 //  you cannot perform operations like dname_cat() on this directly.
-F_WUNUSED F_NONNULL F_UNUSED
+F_WUNUSED F_NONNULL F_UNUSED F_RETNN
 static uint8_t* gdnsd_dname_trim(uint8_t* dname)
 {
     gdnsd_assert(*dname);
@@ -273,7 +273,7 @@ static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source)
 // Allocate new storage (via xmalloc()), clone the input dname into it, and return.
 // The second argument "exact" determines whether the new copy will be allocated
 //  to 256 bytes or to the exact amount necessary to hold the data.
-F_WUNUSED F_NONNULL F_UNUSED
+F_MALLOC F_NONNULL F_UNUSED F_RETNN
 static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact)
 {
     gdnsd_assert(*dname);

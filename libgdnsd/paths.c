@@ -169,11 +169,12 @@ const char* gdnsd_get_config_dir(void)
     return gdnsd_dirs[CFG];
 }
 
+F_RETNN
 static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx)
 {
     gdnsd_assert(gdnsd_dirs[p]);
 
-    char* out = NULL;
+    char* out;
 
     if (inpath && inpath[0] == '/') {
         out = strdup(inpath);

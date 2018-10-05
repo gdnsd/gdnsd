@@ -53,6 +53,7 @@ typedef struct {
     unsigned num_dns_threads;
 } socks_cfg_t;
 
+F_RETNN
 socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root);
 
 F_NONNULL

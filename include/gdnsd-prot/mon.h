@@ -57,7 +57,7 @@ F_NONNULL
 void gdnsd_mon_start(struct ev_loop* mon_loop);
 
 // JSON monitored-state output for control socket
-F_NONNULL
+F_NONNULL F_RETNN
 char* gdnsd_mon_states_get_json(size_t* len);
 
 #pragma GCC visibility pop

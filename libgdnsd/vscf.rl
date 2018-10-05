@@ -249,10 +249,10 @@ static vscf_simple_t* simple_new(const char* rval, const unsigned rlen)
     return s;
 }
 
-F_NONNULL F_WUNUSED
+F_NONNULL F_WUNUSED F_RETNN
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked);
 
-F_NONNULL
+F_NONNULL F_RETNN
 static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked)
 {
     vscf_hash_t* nh = hash_new();
@@ -268,7 +268,7 @@ static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked)
     return nh;
 }
 
-F_NONNULL F_WUNUSED
+F_NONNULL F_WUNUSED F_RETNN
 static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked)
 {
     vscf_array_t* na = array_new();
@@ -278,13 +278,13 @@ static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked
     return na;
 }
 
-F_NONNULL F_WUNUSED
+F_NONNULL F_WUNUSED F_RETNN
 static vscf_simple_t* simple_clone(const vscf_simple_t* s)
 {
     return simple_new(s->rval, s->rlen);
 }
 
-F_WUNUSED
+F_WUNUSED F_RETNN
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked)
 {
     vscf_data_t* rv = NULL;

@@ -42,13 +42,13 @@ static uint32_t csbuf_make_v(uint8_t v0, uint8_t v1, uint8_t v2)
     return (uint32_t) v0 << 16 | (uint32_t) v1 << 8 | (uint32_t) v2;
 }
 
-F_UNUSED
+F_UNUSED F_NONNULL
 static uint32_t csbuf_get_v(const csbuf_t* c)
 {
     return csbuf_make_v(c->v0, c->v1, c->v2);
 }
 
-F_UNUSED
+F_UNUSED F_NONNULL
 static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 {
     gdnsd_assert(!(v & 0xFF000000));

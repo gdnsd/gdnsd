@@ -35,7 +35,7 @@ typedef struct _nlist nlist_t;
 // This allows for significant optimizations in GeoIP input case,
 //   as GeoIP's data structure implies these gaurantees when walked
 //   in order for _append().
-F_NONNULL F_WUNUSED
+F_NONNULL F_WUNUSED F_RETNN
 nlist_t* nlist_new(const char* map_name, const bool pre_norm);
 
 F_NONNULL
@@ -54,9 +54,9 @@ F_NONNULL
 void nlist_finish(nlist_t* nl);
 
 // must pass through _finish() before *any* of the xlate/merge funcs below
-F_NONNULL
+F_NONNULL F_RETNN
 ntree_t* nlist_xlate_tree(const nlist_t* nl_a);
-F_NONNULL
+F_NONNULL F_RETNN
 ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b);
 
 // Just for debugging...

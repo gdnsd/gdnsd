@@ -130,7 +130,7 @@ typedef struct {
     unsigned alloc; // current allocation of store during construction, set to zero after _finish()
 } ntree_t;
 
-F_WUNUSED
+F_WUNUSED F_RETNN
 ntree_t* ntree_new(void);
 
 F_NONNULL

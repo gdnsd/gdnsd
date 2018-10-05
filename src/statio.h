@@ -27,7 +27,7 @@
 F_NONNULL
 void statio_init(unsigned arg_num_dns_threads);
 
-F_NONNULL
+F_NONNULL F_RETNN
 char* statio_get_json(time_t nowish, size_t* len);
 
 F_NONNULL F_MALLOC

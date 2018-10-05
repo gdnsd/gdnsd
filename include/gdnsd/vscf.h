@@ -110,7 +110,7 @@ unsigned vscf_simple_get_len(vscf_data_t* d);
 // Also note that all simple strings get an extra NUL terminator
 //  one byte past the official end of string data.  For many cases
 //  this allows one to use them as NUL-terminated strings.
-F_NONNULL
+F_NONNULL F_RETNN
 const char* vscf_simple_get_data(vscf_data_t* d);
 
 // Return value indicates type-conversion success or failure (whether the
@@ -227,7 +227,7 @@ bool vscf_hash_add_val(const char* k, const unsigned klen, vscf_data_t* h, vscf_
 // deep-clone any type of data. detaches parent ptr at top.
 //  if ignore_marked is set, any hashes (recursively) will not
 //   copy marked items to the cloned copy.
-F_NONNULL
+F_NONNULL F_RETNN
 vscf_data_t* vscf_clone(const vscf_data_t* d, const bool ignore_marked);
 
 // "inherit" a key from src to dest.  If the key already exists in dest,

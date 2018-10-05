@@ -67,7 +67,7 @@ size_t gdnsd_result_get_max_response(void);
 //   MUST only call this once per program
 void gdnsd_plugins_set_search_path(vscf_data_t* psearch_array);
 
-F_NONNULL
+F_NONNULL F_RETNN
 plugin_t* gdnsd_plugin_find_or_load(const char* pname);
 
 // call _load_config() for all plugins which are loaded but have not

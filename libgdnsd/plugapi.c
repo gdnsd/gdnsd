@@ -165,7 +165,7 @@ plugin_t* gdnsd_plugin_find(const char* pname)
     return NULL;
 }
 
-F_NONNULL
+F_NONNULL F_RETNN
 static plugin_t* plugin_allocate(const char* pname)
 {
     gdnsd_assert(!gdnsd_plugin_find(pname));
@@ -180,7 +180,7 @@ static plugin_t* plugin_allocate(const char* pname)
     return rv;
 }
 
-F_NONNULL
+F_NONNULL F_RETNN
 static void* plugin_dlopen(const char* pname)
 {
     gdnsd_assert(psearch);
@@ -217,6 +217,7 @@ static gen_func_ptr plugin_dlsym(void* handle, const char* pname, const char* sy
     return rval;
 }
 
+F_RETNN
 static plugin_t* gdnsd_plugin_load(const char* pname)
 {
     gdnsd_assert(psearch);

@@ -331,7 +331,7 @@ static bool net_subnet_of(const net_t* sub, const net_t* super)
     return rv;
 }
 
-F_NONNULL
+F_NONNULL F_RETNN
 static nlist_t* nlist_merge(const nlist_t* nl_a, const nlist_t* nl_b)
 {
     gdnsd_assert(nl_a->normalized);

@@ -47,7 +47,7 @@ typedef struct {
 
 extern const cfg_t* gcfg;
 
-F_NONNULLX(2)
+F_NONNULLX(2) F_RETNN
 cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, const bool force_zsd);
 
 #endif // GDNSD_CONF_H
