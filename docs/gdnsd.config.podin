@@ -318,6 +318,23 @@ large response datasets in your zones in the first place.
 This value will be capped at the configured (or default) value of
 C<max_response> with a warning if configured above that value.
 
+=item B<edns_client_subnet>
+
+Boolean, default true.  Enables support for the edns-client-subnet
+option from RFC 7871.  gdnsd only includes this EDNS option in responses
+to queries which also contained the option.  In the case of normal
+responses from static zone data, the scope mask will be set to zero.
+Dynamic response plugins have access to the query's EDNS client-subnet
+data, and have full control over the response scope mask.
+
+If the option is set to false, gdnsd will ignore the option in queries,
+never set it in its responses, and plugins will not have access to any
+data provided by any ignored edns-client-subnet option in queries.
+
+Of the included standard plugins only C<reflect> and C<geoip> make use
+of edns-client-subnet information.  The rest will leave the scope mask
+at zero as normal for client-location-agnostic static data.
+
 =item B<chaos_response>
 
 String, default "gdnsd".  When gdnsd receives any query with the class

@@ -48,6 +48,7 @@ static const cfg_t cfg_defaults = {
     .nsid = NULL,
     .lock_mem = false,
     .disable_text_autosplit = false,
+    .edns_client_subnet = true,
     .zones_strict_data = false,
     .chaos_len = 0,
     .nsid_len = 0,
@@ -231,7 +232,6 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_REMOVED(options, weaker_security);
         CFG_OPT_REMOVED(options, include_optional_ns);
         CFG_OPT_REMOVED(options, realtime_stats);
-        CFG_OPT_REMOVED(options, edns_client_subnet);
         CFG_OPT_REMOVED(options, zones_strict_startup);
         CFG_OPT_REMOVED(options, zones_rfc1035_auto);
         CFG_OPT_REMOVED(options, any_mitigation);
@@ -249,6 +249,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
 
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
+        CFG_OPT_BOOL(options, edns_client_subnet);
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
         CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
         CFG_OPT_UINT(options, max_ttl, 3600LU, (unsigned long)GDNSD_STTL_TTL_MAX);

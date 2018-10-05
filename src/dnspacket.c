@@ -362,7 +362,8 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
 {
     bool rv = false;
     if (opt_code == EDNS_CLIENTSUB_OPTCODE) {
-        rv = handle_edns_client_subnet(ctx, opt_len, opt_data);
+        if (gcfg->edns_client_subnet)
+            rv = handle_edns_client_subnet(ctx, opt_len, opt_data);
     } else if (opt_code == EDNS_TCP_KEEPALIVE_OPTCODE) {
         // no-op
         // Note we don't explicitly parse RFC 7828 edns0 tcp keepalive here, but

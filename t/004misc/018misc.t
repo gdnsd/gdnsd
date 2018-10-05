@@ -67,9 +67,13 @@ _GDT->test_dns(
     answer => 'cov.example.com 86400 MX 1 .',
 );
 
+# This one also tests that clientsub is effectively ignored when disabled
 _GDT->test_dns(
     qname => 'cov.example.com', qtype => 'SRV',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.0', src_mask => 32),
     answer => 'cov.example.com 86400 SRV 1 2 3 .',
+    addtl => $optrr,
+    stats => [qw/udp_reqs noerror edns/],
 );
 
 my $chaos = Net::DNS::Packet->new();

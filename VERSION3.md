@@ -18,7 +18,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
     * `tcp_close_s_ok` - TCP conns closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
     * `tcp_close_s_err` - TCP conns closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
     * `tcp_close_s_kill` - TCP conns closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
-* edns-client-subnet support updated to match RFC 7871, and is now always enabled
+* edns-client-subnet support updated to match RFC 7871
 * The nsid edns0 option from RFC 5001 is implemented, allowing identification of members of a loadbalanced or anycast server set
 * All responses are completely minimized:
   * A and AAAA responses no longer include opposite-family records in the additional section
@@ -100,7 +100,6 @@ You'll need to fix values for these in existing config before trying an upgrade,
 None of these generate a syntax error for now, they merely log a non-fatal error to ease transition.  They'll become syntax errors in a future major version update:
 
 * `any_mitigation` - Fixed on (same as previous default)
-* `edns_client_subnet` - Fixed on (same as previous default)
 * `include_optional_ns` - Fixed off (same as previous default)
 * `max_addtl_rrsets` - No longer applicable
 * `max_cname_depth` - Fixed at 16 (same as previous default)
