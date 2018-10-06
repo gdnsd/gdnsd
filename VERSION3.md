@@ -76,6 +76,24 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * The GeoIP distance calculations are now slightly faster and more accurate.
 * The source code has been through a bunch of cleanup for clarity, simplicity, and formatting
 
+## Platform and/or Architecture specific notes
+
+### Linux and `CAP_NET_BIND_SERVICE`
+
+Because of all of the things about privileges detailed further down in this document, to get gdnsd running as a non-root user, you need a way to provide it with the `CAP_NET_BIND_SERVICE` capability in a way that inherits to future child processes as well.  For Linux on kernels 4.3 or higher, the best mechanism for this is the ambient capability set.  Our example systemd unit file uses ambient capabilities, and so does our example init script.  Systemd gained ambient capabilities in version 229, so this won't work with earlier versions.  The init script notably requires util-linux 2.31 or higher's `setpriv` command to handle the ambient capabilities issue, which is fairly new.
+
+If you're lacking ambient capabilities (Kernel < 4.3, systemd < 229, or sysvinit with setpriv < 2.31), there are a few other workarounds.  One is that you can try setting `CAP_NET_BIND_SERVICE` on the binary itself as a filesystem-level capability, and probably a different invocation of setpriv (no ambient caps arg, and probably have to leave off some of the securebits as well?).  Another is you can simply bind to an unprivileged port and use something else to rewrite the traffic (e.g. iptables rules?).  Finally, the simplest but least-favored approach would be to simply run the daemon as root.  Maybe that's not so scary if you're taking other measures to contain its access (e.g. root is inside some secure minimal container or VM without access to any other sensitive data).
+
+### BSDs
+
+While I've tried to maintain compatibility for recent BSD releases as I wrote the code, I haven't tested on any BSD in quite some time.  Hopefully I'll fix that by at least trying a virtual image of the latest FreeBSD stable release and update this message before 3.0.0 is released with any build notes and/or more info on how to use port ACLs to get port 53 bound, etc.
+
+### Any 32-bit platform in general
+
+The daemon exports statistics counters which can reach very large values over time.  Because of some deep issues about implementing them efficiently and portably, on platforms with 32-bit-wide pointers, the stats counters are also only 32 bits wide, and this means for a high volume authdns server, they can easily roll back over to zero after reaching ~4 billion, and whatever tooling you're using to consume and graph the stats will need to be able to sanely detect and handle the rollover.
+
+I've implemented a special exception which turns on 64-bit stats for the known case of the x86_64 x32 ABI, which has 32-bit pointers but is capable of efficiently and correctly supporting 64-bit stats counters.  The requirement is that there's a C data type on the platform that can be incremented in a tear-free way (that is, concurrent access from another thread will not see a half-updated value), but we don't need multi-updater atomicity.  This was easy to do without assembly for x32.  It's technically possible to do it for 32-bit x86 on i486 or higher as well I think, using asm-level constructs built around `CMPXCHG8B`, but I haven't tried implementing it.  The Linux kernel demonstrates some related stuff in their `atomic64_t` support.  Patches welcome!
+
 ## Configuration changes
 
 ### New options
