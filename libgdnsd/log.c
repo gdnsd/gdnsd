@@ -160,7 +160,7 @@ const char* gdnsd_logf_strerror(const int errnum)
         if (rv == EINVAL || (rv < 0 && errno == EINVAL))
             snprintf(tmpbuf, GDNSD_ERRNO_MAXLEN, "Invalid errno: %i", errnum);
         else
-            log_fatal("strerror_r(,,%zu) failed", GDNSD_ERRNO_MAXLEN);
+            log_fatal("strerror_r(,,%u) failed", GDNSD_ERRNO_MAXLEN);
     }
     tmpbuf_ptr = tmpbuf;
 #endif
