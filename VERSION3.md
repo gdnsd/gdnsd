@@ -76,26 +76,6 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * The GeoIP distance calculations are now slightly faster and more accurate.
 * The source code has been through a bunch of cleanup for clarity, simplicity, and formatting
 
-## Platform and/or Architecture specific notes
-
-### Linux and `CAP_NET_BIND_SERVICE`
-
-Because of all of the things about privileges detailed further down in this document, to get gdnsd running as a non-root user, you need a way to provide it with the `CAP_NET_BIND_SERVICE` capability in a way that inherits to future child processes as well.  Linux kernels 4.3 and higher support ambient capabilities, which is the best way to provide this.
-
-For systemd-based Linux distributions: gdnsd requires systemd v229 or higher and kernel 4.3 or higher.  Systemd versions earlier than this do not support ambient capabilities.  All systemd versions (<229, or 229+ without the AmbientCapabilities setting in the unit file) fail to use the correct sequence of operations to support gdnsd's use-case for securely executing with filesystem-level capabilities when started as non-root.  This implies that for default (systemd) Debian installations, running gdnsd 3 securely requires stretch (the current stable) or higher.
-
-For sysvinit-based Linux distributions: if you have kernel 4.3 or higher and setpriv from util-linux 2.31 or higher (recommended!), you can use ambient capabilities via the setpriv command as shown in the example initscript.  If one or both of these requirements can't be met, you can fall back to filesystem-level capabilities in place of ambient ones.  In this case, the package installation process should run `setcap cap_net_bind_service=ei /usr/sbin/gdnsd` every time it installs a new binary image, and the "--ambient-capabilities" argument to setpriv shown in the example initscript should be removed.  Filesystem capability support goes back to kernel 2.6.24, and there's no good reason for gdnsd to support (or users to run) anything older than that, as there would probably be other subtle (or not-so-subtle) issues.
-
-### BSDs
-
-While I've tried to maintain compatibility for recent BSD releases as I wrote the code, I haven't tested on any BSD in quite some time.  Hopefully I'll fix that by at least trying a virtual image of the latest FreeBSD stable release and update this message before 3.0.0 is released with any build notes and/or more info on how to use port ACLs to get port 53 bound, etc.
-
-### Any 32-bit platform in general
-
-The daemon exports statistics counters which can reach very large values over time.  Because of some deep issues about implementing them efficiently and portably, on platforms with 32-bit-wide pointers, the stats counters are also only 32 bits wide, and this means for a high volume authdns server, they can easily roll back over to zero after reaching ~4 billion, and whatever tooling you're using to consume and graph the stats will need to be able to sanely detect and handle the rollover.
-
-I've implemented a special exception which turns on 64-bit stats for the known case of the x86_64 x32 ABI, which has 32-bit pointers but is capable of efficiently and correctly supporting 64-bit stats counters.  The requirement is that there's a C data type on the platform that can be incremented in a tear-free way (that is, concurrent access from another thread will not see a half-updated value), but we don't need multi-updater atomicity.  This was easy to do without assembly for x32.  It's technically possible to do it for 32-bit x86 on i486 or higher as well I think, using asm-level constructs built around `CMPXCHG8B`, but I haven't tried implementing it.  The Linux kernel demonstrates some related stuff in their `atomic64_t` support.  Patches welcome!
-
 ## Configuration changes
 
 ### New options
@@ -174,6 +154,104 @@ For systemd-based Linux distributions, an example unit file which handles all th
 * GeoIP2 support, while still optional, requires libmaxminddb 1.2.0+ if enabled at all
 * In general, lots of source-level backwards compatibility for older systems and/or kernels was removed where the assumptions seemed safe for a new major release in late 2018 or after.  If cases arise where certain operating systems are still in support and require patching, I'd be happy to add back the necessary bits.  Examples here include the assumptions about `SO_REUSEPORT`, `SOCK_CLOEXEC`, `SOCK_NONBLOCK`, and `accept4()`.
 * The generated C sources `src/zscan_rfc1035.c` and `libgdnsd/vscf.c`, which are built with `ragel`, are once again being included in tarball releases, but not in the git repo.  This is in response to ragel dependency hell reported by some who build from source on every machine.
+
+## Platform and/or Architecture specific notes
+
+### Linux and `CAP_NET_BIND_SERVICE`
+
+Because of all of the things about privileges detailed further down in this document, to get gdnsd running as a non-root user, you need a way to provide it with the `CAP_NET_BIND_SERVICE` capability in a way that inherits to future child processes as well.  Linux kernels 4.3 and higher support ambient capabilities, which is the best way to provide this.
+
+For systemd-based Linux distributions: gdnsd requires systemd v229 or higher and kernel 4.3 or higher.  Systemd versions earlier than this do not support ambient capabilities.  All systemd versions (<229, or 229+ without the AmbientCapabilities setting in the unit file) fail to use the correct sequence of operations to support gdnsd's use-case for securely executing with filesystem-level capabilities when started as non-root.  This implies that for default (systemd) Debian installations, running gdnsd 3 securely requires stretch (the current stable) or higher.
+
+For sysvinit-based Linux distributions: if you have kernel 4.3 or higher and setpriv from util-linux 2.31 or higher (recommended!), you can use ambient capabilities via the setpriv command as shown in the example initscript.  If one or both of these requirements can't be met, you can fall back to filesystem-level capabilities in place of ambient ones.  In this case, the package installation process should run `setcap cap_net_bind_service=ei /usr/sbin/gdnsd` every time it installs a new binary image, and the "--ambient-capabilities" argument to setpriv shown in the example initscript should be removed.  Filesystem capability support goes back to kernel 2.6.24, and there's no good reason for gdnsd to support (or users to run) anything older than that, as there would probably be other subtle (or not-so-subtle) issues.
+
+### BSDs
+
+I've tested the 3.x build on FreeBSD 11.2 (but not others, sorry!) under qemu.  Starting from a clean install, this stuff worked:
+
+Build/Test/Install:
+```
+pkg install liburcu
+pkg install libev
+pkg install libunwind
+pkg install libmaxminddb
+pkg install p5-HTTP-Daemon
+pkg install gmake
+setenv CPPFLAGS "-isystem/usr/local/include"
+setenv CFLAGS "-fPIC"
+setenv LDFLAGS "-fPIC -L/usr/local/lib"
+./configure
+gmake
+gmake check
+gmake install
+```
+
+Runtime setup stuff done manually:
+```
+# Create gdnsd user (for portacl rules at bottom, assuming uid is 1234)
+# Confirm mac_portacl and accf_dns are loaded, look for them in the output of:
+kldstat
+# If not loaded, set them up in loader.conf.local for future boots:
+echo 'mac_portacl_load="YES"' >>/boot/loader.conf.local
+echo 'accf_dns_load="YES"' >>/boot/loader.conf.local
+# If not loaded, load them now for immediate use:
+kldload mac_portacl
+kldload accf_dns
+# Add the necessary mac_portacl bits to /etc/sysctl.conf:
+# (note, if portacl rules already exist, must append to existing ones!)
+security.mac.portacl.suser_exempt=1
+security.mac.portacl.port_high=1023
+net.inet.ip.portrange.reservedlow=0
+net.inet.ip.portrange.reservedhigh=0
+security.mac.portacl.rules=uid:1234:udp:53,uid:1234:tcp:53
+```
+
+Very basic /usr/local/etc/rc.d/gdnsd script that seems to work.  Obviously it could be fleshed out a lot more (e.g. to wrap all the gdnsdctl commands, use gdnsdctl for stop, use gdnsdctl replace for reload/restart, etc):
+```
+#! /bin/sh
+#
+
+# PROVIDE: gdnsd
+# REQUIRE: DAEMON
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf to enable git_daemon:
+#
+# gdnsd_enable="YES"
+
+. /etc/rc.subr
+
+name="gdnsd"
+rcvar="gdnsd_enable"
+
+load_rc_config $name
+
+: ${gdnsd_user:=gdnsd}
+: ${gdnsd_group:=gdnsd}
+: ${gdnsd_enable:=NO}
+: ${gdnsd_flags:=daemonize}
+
+command="/usr/local/sbin/gdnsd"
+command_args=""
+
+gdnsd_prestart()
+{
+        mkdir -p /usr/local/var/run/gdnsd
+        chown gdnsd:gdnsd /usr/local/var/run/gdnsd
+        chmod 700 /usr/local/var/run/gdnsd
+        # Could also set priority/nice/ulimit/etc stuff here
+        return 0
+}
+
+run_rc_command "$1"
+```
+
+### Any 32-bit platform in general
+
+The daemon exports statistics counters which can reach very large values over time.  Because of some deep issues about implementing them efficiently and portably, on platforms with 32-bit-wide pointers, the stats counters are also only 32 bits wide, and this means for a high volume authdns server, they can easily roll back over to zero after reaching ~4 billion, and whatever tooling you're using to consume and graph the stats will need to be able to sanely detect and handle the rollover.
+
+I've implemented a special exception which turns on 64-bit stats for the known case of the x86_64 x32 ABI, which has 32-bit pointers but is capable of efficiently and correctly supporting 64-bit stats counters.  The requirement is that there's a C data type on the platform that can be incremented in a tear-free way (that is, concurrent access from another thread will not see a half-updated value), but we don't need multi-updater atomicity.  This was easy to do without assembly for x32.  It's technically possible to do it for 32-bit x86 on i486 or higher as well I think, using asm-level constructs built around `CMPXCHG8B`, but I haven't tried implementing it.  The Linux kernel demonstrates some related stuff in their `atomic64_t` support.  Patches welcome!
 
 ## Rationale and Philosophy
 
