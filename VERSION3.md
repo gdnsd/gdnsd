@@ -234,6 +234,7 @@ load_rc_config $name
 
 command="/usr/local/sbin/gdnsd"
 command_args=""
+start_precmd="gdnsd_prestart"
 
 gdnsd_prestart()
 {
