@@ -210,7 +210,7 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
   # 2-arg set_name (e.g. FreeBSD, OpenBSD)
   AC_MSG_CHECKING([for 2-arg pthread_set_name_np])
   AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
-      return pthread_set_name_np(pthread_self(), "foo");
+      pthread_set_name_np(pthread_self(), "foo");
   ])], [
     AC_DEFINE(HAVE_PTHREAD_SET_NAME_NP_2, 1, [2-arg pthread_set_name_np])
     AC_MSG_RESULT([yes])
