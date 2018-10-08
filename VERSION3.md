@@ -14,7 +14,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
   * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:
     * `tcp_conns` - TCP conns we accepted (excludes extremely early failures, e.g. accept() itself returning an error)
-    * `tcp_close_c` - TCP conns closed cleanly by the client
+    * `tcp_close_c` - TCP conns closed cleanly by the client (the most-desirable outcome)
     * `tcp_close_s_ok` - TCP conns closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
     * `tcp_close_s_err` - TCP conns closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
     * `tcp_close_s_kill` - TCP conns closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
@@ -24,7 +24,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * A and AAAA responses no longer include opposite-family records in the additional section
   * The answer section usually contains only one rrset, unless CNAMEs are involved (we still output CNAME chains within local zone data)
   * The auth section is only ever used for negative responses (1x SOA) and delegations (NS records at a zone cut)
-  * The additional section only ever contains actual mandatory glue IPs (out-of-zone glue or glue within any delegated subzone of the delegating zone).
+  * The additional section only ever contains actual mandatory glue IPs (out-of-zone glue or glue within any delegated subzone of the delegating zone); it is no longer used for other purposes like A/AAAA additionals for answer-section MX, SRV, etc.
 
 ### Zonefiles
 
@@ -155,123 +155,6 @@ For systemd-based Linux distributions, an example unit file which handles all th
 * In general, lots of source-level backwards compatibility for older systems and/or kernels was removed where the assumptions seemed safe for a new major release in late 2018 or after.  If cases arise where certain operating systems are still in support and require patching, I'd be happy to add back the necessary bits.  Examples here include the assumptions about `SO_REUSEPORT`, `SOCK_CLOEXEC`, `SOCK_NONBLOCK`, and `accept4()`.
 * The generated C sources `src/zscan_rfc1035.c` and `libgdnsd/vscf.c`, which are built with `ragel`, are once again being included in tarball releases, but not in the git repo.  This is in response to ragel dependency hell reported by some who build from source on every machine.
 
-## Platform and/or Architecture specific notes
-
-### Linux and `CAP_NET_BIND_SERVICE`
-
-Because of all of the things about privileges detailed further down in this document, to get gdnsd running as a non-root user, you need a way to provide it with the `CAP_NET_BIND_SERVICE` capability in a way that inherits to future child processes as well.  Linux kernels 4.3 and higher support ambient capabilities, which is the best way to provide this.
-
-For systemd-based Linux distributions: gdnsd requires systemd v229 or higher and kernel 4.3 or higher.  Systemd versions earlier than this do not support ambient capabilities.  All systemd versions (<229, or 229+ without the AmbientCapabilities setting in the unit file) fail to use the correct sequence of operations to support gdnsd's use-case for securely executing with filesystem-level capabilities when started as non-root.  This implies that for default (systemd) Debian installations, running gdnsd 3 securely requires stretch (the current stable) or higher.
-
-For sysvinit-based Linux distributions: if you have kernel 4.3 or higher and setpriv from util-linux 2.31 or higher (recommended!), you can use ambient capabilities via the setpriv command as shown in the example initscript.  If one or both of these requirements can't be met, you can fall back to filesystem-level capabilities in place of ambient ones.  In this case, the package installation process should run `setcap cap_net_bind_service=ei /usr/sbin/gdnsd` every time it installs a new binary image, and the "--ambient-capabilities" argument to setpriv shown in the example initscript should be removed.  Filesystem capability support goes back to kernel 2.6.24, and there's no good reason for gdnsd to support (or users to run) anything older than that, as there would probably be other subtle (or not-so-subtle) issues.
-
-### BSDs
-
-I've tested the 3.x build on FreeBSD 11.2 (but not others, sorry!) under qemu.  Starting from a clean install, this stuff worked:
-
-Build/Test/Install:
-```
-pkg install liburcu
-pkg install libev
-pkg install libunwind
-pkg install libmaxminddb
-pkg install p5-HTTP-Daemon
-pkg install gmake
-setenv CPPFLAGS "-isystem/usr/local/include"
-setenv CFLAGS "-fPIC"
-setenv LDFLAGS "-fPIC -L/usr/local/lib"
-./configure
-gmake
-gmake check
-gmake install
-```
-
-Runtime setup stuff done manually:
-```
-# Create gdnsd user (for portacl rules at bottom, assuming uid is 1234)
-# Confirm mac_portacl and accf_dns are loaded, look for them in the output of:
-kldstat
-# If not loaded, set them up in loader.conf.local for future boots:
-echo 'mac_portacl_load="YES"' >>/boot/loader.conf.local
-echo 'accf_dns_load="YES"' >>/boot/loader.conf.local
-# If not loaded, load them now for immediate use:
-kldload mac_portacl
-kldload accf_dns
-# Add the necessary mac_portacl bits to /etc/sysctl.conf:
-# (note, if portacl rules already exist, must append to existing ones!)
-security.mac.portacl.suser_exempt=1
-security.mac.portacl.port_high=1023
-net.inet.ip.portrange.reservedlow=0
-net.inet.ip.portrange.reservedhigh=0
-security.mac.portacl.rules=uid:1234:udp:53,uid:1234:tcp:53
-```
-
-Very basic /usr/local/etc/rc.d/gdnsd script that seems to work.  Obviously it could be fleshed out a lot more (e.g. to wrap all the gdnsdctl commands, use gdnsdctl for stop, use gdnsdctl replace for reload/restart, etc):
-```
-#! /bin/sh
-#
-
-# PROVIDE: gdnsd
-# REQUIRE: DAEMON
-# KEYWORD: shutdown
-
-#
-# Add the following lines to /etc/rc.conf to enable git_daemon:
-#
-# gdnsd_enable="YES"
-
-. /etc/rc.subr
-
-name="gdnsd"
-rcvar="gdnsd_enable"
-
-load_rc_config $name
-
-: ${gdnsd_user:=gdnsd}
-: ${gdnsd_group:=gdnsd}
-: ${gdnsd_enable:=NO}
-: ${gdnsd_flags:=daemonize}
-
-command="/usr/local/sbin/gdnsd"
-command_args=""
-start_precmd="gdnsd_prestart"
-
-gdnsd_prestart()
-{
-        mkdir -p /usr/local/var/run/gdnsd
-        chown gdnsd:gdnsd /usr/local/var/run/gdnsd
-        chmod 700 /usr/local/var/run/gdnsd
-        # Could also set priority/nice/ulimit/etc stuff here
-        return 0
-}
-
-run_rc_command "$1"
-```
-
-### Any 32-bit platform in general
-
-The daemon exports statistics counters which can reach very large values over time.  Because of some deep issues about implementing them efficiently and portably, on platforms with 32-bit-wide pointers, the stats counters are also only 32 bits wide, and this means for a high volume authdns server, they can easily roll back over to zero after reaching ~4 billion, and whatever tooling you're using to consume and graph the stats will need to be able to sanely detect and handle the rollover.
-
-I've implemented a special exception which turns on 64-bit stats for the known case of the x86_64 x32 ABI, which has 32-bit pointers but is capable of efficiently and correctly supporting 64-bit stats counters.  The requirement is that there's a C data type on the platform that can be incremented in a tear-free way (that is, concurrent access from another thread will not see a half-updated value), but we don't need multi-updater atomicity.  This was easy to do without assembly for x32.  It's technically possible to do it for 32-bit x86 on i486 or higher as well I think, using asm-level constructs built around `CMPXCHG8B`, but I haven't tried implementing it.  The Linux kernel demonstrates some related stuff in their `atomic64_t` support.  Patches welcome!
-
-## Rationale and Philosophy
-
-This isn't a corporate-backed software.  There's no budget or team or financial interest at all.  Most of this software is written by me, a lone author who mostly works on this in gaps of spare time when I'm able.  I love the 3rd-party contributions the codebase has had from others over the years, but they've all been fairly minor in total scope.  We happen to also use it in production at my current day job at the non-profit Wikimedia Foundation, and also did so at my previous employer Logitech, and in those capacities I've occasionally been able to expend real work hours on this project where it directly impacted features we needed or bugs we cared about.  Beyond that though, while I have a fondness for this project and take pride in it, my time is limited.  This is reflected in the sometimes glacial pace of major feature development.  I'm also not the among the best developers in the world, so my capacity for handling increases in the complexity of this project is limited.  Any excess complexity burden slows things down even more.
-
-I'm not a fan of the way most software is developed, where features accrete on features in endless succession like barnacles attaching to the hull of a ship until there's more barnacles than ship.  I think most developers don't spend enough time on quality, on refactoring, or on cleanliness, and I think they don't weigh the costs of every new feature (and every piece of old compatibility cruft) as heavily as they should.  I'm also not a fan of the kind of personal rigidity where one never questions one's own past decisions and thoughts.  I regularly make stupid design mistakes, and I don't want to have to live with them forever.  Software projects should at least try to value simplicity and purposeful design, and try to avoid the [Second System Effect](https://en.wikipedia.org/wiki/Second-system_effect).
-
-It is in light of these values and my limited time and complexity budget that I've opted to ungracefully eradicate large swaths of gdnsd code and features during the development cycle leading up to the major version bump for 3.x.  In some cases I've backtracked on feature or design decisions because I think my past intents and/or rationales were flawed.  Sometimes it's that the world changed.  Sometimes it's just not worth the complexity budget anymore.  Many times it's a combination of several such factors.
-
-The git statistics from v2.4.0..v3.0 (well, at the time of this writing, slightly before the cut of the actual 3.0) are telling, and I'm proud of the reductions shown there.  Ignoring all the quibbles about real "Lines of Code" (vs comments and whitespace and documentation and tests and build cruft, etc) and just looking at the raw git stats on files and lines, there was a net reduction of ~4K lines:
-
-```
-git diff --stat v2.4.0
-[...]
-258 files changed, 13646 insertions(+), 17748 deletions(-)
-```
-
-4K lines removed is roughly 6% of the original total, and the "deletions" stat is around 28%, if that's any better measure of total change.  This is all in spite of adding several new features.
-
 ### The big changes around security, daemon management, and init systems
 
 In the past, gdnsd has tried to take care of all security and daemon management functions internally.  It managed a number of execution aspects which typically require initial root privileges: setting process priority, raising the locked memory ulimit for `lock_mem => true`, binding the privileged port 53, limiting security scope via Linux -specific calls like prctl(), etc... and then took care of dropping its own process uid and gid to unprivileged ones safely and permanently.  Some of this was already portability-problematic for some platforms, but the real nail in the coffin for all of this was systemd.
@@ -281,47 +164,3 @@ Another key feature was the ability to do downtime-less restarts for changing co
 Systemd didn't allow for this to work the way it had under traditional init systems in the past, and as a result gdnsd 2.x lost this smooth replace-restart capability on systemd-based systems, which for better or worse came to dominate the Linux (and thus all servers) market during its lifetime.  The primary crux of incompatibility was that systemd wouldn't allow any kind of overlapped-restart by a process which wasn't a child of the original daemon and inheriting its cgroup settings, not even from processes started by other commands in the unit file such as `ExecReload`, and my various mailing list posts about finding ways to fix the situation and allow daemons to manage smooth restarts with independent replacement daemons fell on deaf ears.  And again, since the running daemon was unprivileged, there was no easy way for it to spawn a replacement that needed to perform privileged operations on startup.
 
 I expended many months of effort and many ultimately-doomed code branches trying to come up with a sane way to still do everything else we were doing in this area portably while appeasing the requirements of systemd, but all of my efforts either resulted in other serious design flaws, or simply had way too high a complexity and fragility burden to be reasonable.  At the end of the day, the only reasonable path forward given systemd's dominance was to give in and structure things in the way that pleased systemd the most, while still preserving some ability to able to get similar results under traditional init systems and/or on non-Linux platforms manually, and that ended up being to push all related things back on the init system/script and be security-oblivious in the daemon code.  I apologize to all the non-systemd users, but I couldn't find a better way out of this mess!
-
-## Future Directions
-
-With the caveats that future is impossible to predict, and that if my thoughts on these subjects were fully-formed these things might already be done, these reflect my current mental state of affairs on various future gdnsd topics as of the release of 3.0.0:
-
-### CPUs and IRQs
-
-I'd like to implement auto-detection of CPU core counts for setting an automatic sane value for `udp_threads` and `tcp_threads`, perhaps ignoring thread-sibling CPU cores by default (physical core count rather than virtual).  Going a bit beyond this, we could also support explicitly taking better advantage of RSS IRQ spreading on Linux for those that have it configured, probably by allowing a manual or automatic mapping of I/O threads to CPU cores with affinity pinning, coupled with SO_ATTACH_REUSEPORT_EBPF or a similar mechanism to pin the traffic flow from card->gdnsd->card without ever leaving a single CPU core.  Possibly some of this should be NUMA-aware as well, as typically the NIC is attached directly to only one NUMA domain.  Some supporting features in this space may get added during a future 3.N feature release if I have time to sort out the details.
-
-### Zone data and files
-
-While I think 3.x's move to explicit, synchronous, whole reloads of all the zone data was the right move, I think some efficiency could be added back for those with giant sets of zonefiles without ruining the intent here.  Probably the simplest thing to do would be to track the full list of included files for a zone and all of their mtimes, and then simply not re-parse/load zones which haven't changed since they were last loaded, copying or aliasing the data over from the old dataset.  This would also need proper handling of symlink mtime/contents as well, to catch changes where e.g. a zone or include file is a symlink and just the symlink targeting changes.  Needs a flag to disable this as well, in case mtimes are known-bad or an operator with a small dataset doesn't want to take risks with mtime mistakes.
-
-I still think we could hook up more advanced data backends, so long as they follow an explicit reload model.  For instance, we could have a SQL zone data backend, but there would be no live querying of SQL during live DNS response processing.  The data would be reloaded explicitly on-command, and the schema might ideally have some per-zone structure to it and some timestamp/serial by which we could optimize against reloading zones which haven't changed, as with files above.  I don't know when or if I'll have time to work on this myself, and I don't have any immediate needs for it myself, either.
-
-### Healthchecking plugins
-
-I really don't think healthcheck plugins belong inside this daemon anymore, I just haven't done the work to get rid of them.  I do think there's value in having dynamic resolution be able to use healthcheck states, I just think the complexity should be pushed outside of this C daemon, via mechanisms like the current `extmon` and `extfile` plugins.  Perhaps those should be the only healthcheck code in the daemon (in the core rather than as plugins), and everything else shifted externally.  The existing simple tcp/http/etc checks' code could be moved to example external tools that ship with gdnsd as well.  We could also perhaps support other existing pseudo-standards for easier integration (e.g. automatically be able to run nagios check scripts directly, and/or have some decent interface to get states directly from a nagios server).
-
-### Dynamic resolution plugins
-
-I think the plugin API for dynamic resolution has always been at the wrong abstraction level, but I wasn't able to finish sorting this out in time for 3.x.  All of the non-trivial resolver plugins (simplefo, multifo, weighted, metafo, and geoip) could operate from a unified structure and methodology that revolves around mapping, and at the very least could be deduplicated down to a single replacement plugin that does it all in a blended way.  Arguably if healthcheck plugins are gone too (see above), the singular replacement resolver plugin could just move into the core code.
-
-It would make sense for this hypothetical universal resolver to have pluggable mapping methods (geoip being the canonical example), but then I don't know if I'd go back down the true `dlopen()` plugin road for that or not.  The APIs are never stable enough and all plugins could have more-easily just been source patches against a reasonably-well-documented internal core API, avoiding all the complexity and mess of `dlopen()`ing code and pretending we support some portable and stable external plugin ABI.
-
-I hope to do some kind of work related to some of this for 4.x, but it's hard to say where it will all end up right now.  One of the real feature needs I have in this space over the coming year is the proper intersection of the 'weighted' and 'geoip' functionalities, where datacenters have weight values which can be dynamically adjusted at runtime (via the `admin_state` file, or via gdnsdctl?), and the weight affects distance calculations (you can think of it as growing or shrinking the bubble of mapped clients around a datacenter on the geographic map).  Probably something that supports those ideas will get implemented, even if all of the rest of the dramatic re-architecting doesn't happen.
-
-### The DYNA/DYNC resource types in general
-
-I'm not fond of the design at this level either.  Probably DYNC should only return CNAMEs and not addresses (not really sure about this one), and probably DYNA should be broken up into separate types for A and AAAA.  Doing this to the existing names without breaking compatibility is hard, so I'll probably invent new names and leave some support in place for the old ones.  In light of all this, it would probably behoove users to move away from solutions that require DYNC to be able to return addresses, as that may be a major compatibility barrier in a future major version upgrade.
-
-### Various DNS protocol-level privacy and security issues
-
-The DNS really isn't where I'd like it to be on protocol level privacy and security issues.  DNSSEC only attacks the "can you trust your cache?" part of the problem, but ignores privacy and censorship issues and creates a lot of other problems along the way.  Other efforts are attempting to encrypt DNS communications to avoid both passive and active MITM of DNS communications as well as privacy leaks on the wire, but none of them are quite where they need to be yet, at least for the authserver case.  My random thoughts on various related (pseudo-)standards:
-
-DNSSEC - I still hate it.  I'm not going to detail all of its horrible faults here, it's easy enough these days to just provide links like [DNSSEC Outages](https://ianix.com/pub/dnssec-outages.html) (which has far more than outage info; scroll to the bottom for some great lists of DNSSEC-related CVEs and quotes from smart people bashing DNSSEC).  I think the DNS without DNSSEC is already incredibly complex, and with DNSSEC it's probably borderline impossible to build a reasonably-unbuggy implementation of an authserver that's reasonably fast and resilient.  I've been saying for years that I'll probably eventually be forced into implementing it by the rest of the world, but it hasn't happened yet!  There's a possible middle-ground on supporting it, where we implement DNSSEC-correct handling of the appropriate RR-types and flag bits (etc), but relegate all actual crypto to offline pre-signing/generation of the zonefile data.  Still sounds awful.
-
-DNSCurve - I don't think DNSCurve is actually going anywhere anymore in terms of widespread adoption.  Much older versions of gdnsd implemented it for a while, but I eventually gave up on the standard.  I'm still sad about that, because there was a lot to really like about DNSCurve.  It just needed some minor fixups around key distribution and rollover practices (vs "encode the pubkey in the nameserver hostname").  DNSCrypt is similarly wonderful, but not applicable to gdnsd as an authserver.
-
-DNS-over-HTTPS (DoH) - As far as I know, DoH efforts are only targeting the user-to-cache leg of things like DNSCrypt, and so they aren't really relevant here.  If this ever did apply to the authserver case, it would probably be simplest to just make it easy to configure a separate proxy daemon for it.
-
-DNS-over-TLS (DoT) - Current standards for this also only target the user-to-cache leg, but DPRIVE is apparently eventually going to publish something about the cache-to-authserver leg, which is exciting.  I think we could implement this reasonably, assuming they don't end up making it require DNSSEC to be useful.  Ditto for DNS-over-DTLS (DoDTLS?).
-
-EDNS0 Cookies - Doesn't really address privacy/censorship, but does offer a ToFU mechanism that makes blind forgery much harder in some cases (even harder than forging TCP blindly).  Implementing this almost made the cut for 3.x, but I didn't quite have the time left.  It may appear in a future 3.N feature release.

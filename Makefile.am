@@ -353,7 +353,8 @@ noinst_SCRIPTS += init/gdnsd.init
 
 # dist + install simple docs
 dist_doc_DATA += \
-	docs/gdnsd_manual.txt \
+	docs/Manual.md \
+	docs/Security.md \
 	docs/stats_example.html
 
 PODS_IN_1 = docs/gdnsd_geoip_test.podin
