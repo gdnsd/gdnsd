@@ -1,8 +1,15 @@
-2.99.9930-beta - 2018-10-05
+2.99.9942-beta - 2018-10-11
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * Documentation improvements/fixups
+    * A few minor fixes and docs updates from testing on FreeBSD 11.2
+    * Dumped any pretense of MacOS support, as it's been untested for many
+      MacOS and gdnsd releases and unlikely to work anymore, and seems
+      pointless to support when they sell no servers and don't allow emulation.
+
+2.99.9930-beta - 2018-10-05
     * New config option 'nsid_ascii', as a simpler variant for defining NSID
       data bytes which happen to map to ASCII printable strings.
     * Old config option 'edns_client_subnet' restored (was removed in
