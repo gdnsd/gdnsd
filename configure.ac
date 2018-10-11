@@ -166,9 +166,6 @@ if test $USE_MMSG -eq 1; then
     AC_DEFINE([USE_MMSG],1,[recvmmsg and sendmmsg look usable])
 fi
 
-# Network Stuff
-AC_DEFINE([__APPLE_USE_RFC_3542],1,[Force MacOS Lion and higher to use RFC3542 IPv6 stuff])
-
 # systemd unit dir for "make install" of gdnsd.service
 PKG_CHECK_VAR([SYSD_UNITDIR], [systemd], [systemdsystemunitdir])
 AC_MSG_CHECKING([for systemd system unit installdir])
@@ -188,7 +185,7 @@ AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 AM_CONDITIONAL(DO_SYSD_UNITFILE, [test -n "$with_systemdsystemunitdir"])
 
 #---------------------------------------------
-# pthread setname (4 non-portable variants...)
+# pthread setname (3 non-portable variants...)
 #---------------------------------------------
 AC_CHECK_HEADERS([pthread_np.h])
 define(pthread_np_preamble,[
@@ -217,26 +214,15 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
   ], [
     AC_MSG_RESULT([no])
 
-    # 1-arg setname (e.g. Darwin)
-    AC_MSG_CHECKING([for 1-arg pthread_setname_np])
+    # 3-arg setname (e.g. NetBSD)
+    AC_MSG_CHECKING([for 3-arg pthread_setname_np])
     AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
-        return pthread_setname_np("foo");
+        return pthread_setname_np(pthread_self(), "foo", NULL);
     ])], [
-      AC_DEFINE(HAVE_PTHREAD_SETNAME_NP_1, 1, [1-arg pthread_setname_np])
+      AC_DEFINE(HAVE_PTHREAD_SETNAME_NP_3, 1, [3-arg pthread_setname_np])
       AC_MSG_RESULT([yes])
     ], [
       AC_MSG_RESULT([no])
-
-      # 3-arg setname (e.g. NetBSD)
-      AC_MSG_CHECKING([for 3-arg pthread_setname_np])
-      AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
-          return pthread_setname_np(pthread_self(), "foo", NULL);
-      ])], [
-        AC_DEFINE(HAVE_PTHREAD_SETNAME_NP_3, 1, [3-arg pthread_setname_np])
-        AC_MSG_RESULT([yes])
-      ], [
-        AC_MSG_RESULT([no])
-      ])
     ])
   ])
 ])
@@ -297,7 +283,7 @@ AC_MSG_CHECKING([number of CPUs available for testing])
 if test "x$ac_cv_env_TEST_CPUS_set" = "xset"; then
     AC_MSG_RESULT([$TEST_CPUS (user-specified)])
 else
-    # These two methods should work for the *BSDs, MacOS, and Linux
+    # These two methods should work for the *BSDs and Linux
     TEST_CPUS=$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
     AC_MSG_RESULT([$TEST_CPUS])
 fi
