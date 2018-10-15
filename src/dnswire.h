@@ -118,6 +118,7 @@ typedef struct S_PACKED {
 #define DNS_TYPE_CNAME 5U
 #define DNS_TYPE_SOA 6U
 #define DNS_TYPE_PTR 12U
+#define DNS_TYPE_HINFO 13U
 #define DNS_TYPE_MX 15U
 #define DNS_TYPE_TXT 16U
 #define DNS_TYPE_AAAA 28U

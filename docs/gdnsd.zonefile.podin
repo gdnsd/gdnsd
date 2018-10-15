@@ -140,6 +140,7 @@ standard RDATA formats:
 
 traditional: SOA, A, AAAA, NS, PTR, CNAME, MX, SRV, TXT, NAPTR
 non-traditional: CAA
+explicitly unsupported: HINFO
 
 It also supports the generic format for unknown RR types documented
 in RFC 3597, which has syntax like:
@@ -151,9 +152,11 @@ in RFC 3597, which has syntax like:
 a pair of 5-byte hex strings.  See RFC 3597 itself for full
 details.
 
-gdnsd does not allow using the RFC3597 format to specify any of the
-traditional standard RR types, but it can be used to encode data for
-the non-traditional types.
+gdnsd does not allow using the RFC3597 format to specify any of the supported
+traditional standard RR types, but it can be used to encode data for the
+non-traditional types.  It's also not allowed to use RFC3597 to specify HINFO
+RRs, as these are now reserved in gdnsd for use in handling C<ANY> queries,
+using the RFC 8482 HINFO option.
 
 C<SOA> records' negative-caching TTL is set to the minimum of the traditional
 "minimum" (last) field (which always means "negative cache TTL" as of RFC

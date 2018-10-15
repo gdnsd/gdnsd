@@ -25,8 +25,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'v6basic.example.com', qtype => 'ANY',
-    answer => 'v6basic.example.com 1234 AAAA 1234:5678:90AB:CDEF:FDEC:BA09:8765:4321',
-    stats => [qw/udp_reqs udp_tc noerror tcp_conns tcp_reqs noerror/],
+    answer => 'v6basic.example.com 3600 HINFO "RFC8482" ""',
 );
 
 _GDT->test_dns(
@@ -71,13 +70,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => '46mix.example.com', qtype => 'ANY',
-    answer => [
-        '46mix.example.com 21600 AAAA ABCD::DCBA',
-        '46mix.example.com 21600 AAAA DEAD::BEEF',
-        '46mix.example.com 21600 A 192.0.2.200',
-        '46mix.example.com 21600 A 192.0.2.201',
-    ],
-    stats => [qw/udp_reqs udp_tc noerror tcp_reqs noerror/],
+    answer => '46mix.example.com 3600 HINFO "RFC8482" ""',
 );
 
 _GDT->test_dns(

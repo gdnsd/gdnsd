@@ -6,8 +6,6 @@ my $soa_neg = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200
 
 # 13 tests here
 sub check_data_acme {
-    my $newtcp = shift;
-
     # Static data not involved with ACME, to test some branch edge-cases
     _GDT->test_dns(
         qname => 'asdf.example.com',
@@ -47,17 +45,10 @@ sub check_data_acme {
         answer => [],
         auth => $soa_neg,
     );
-    my $first_tcp_stats = [qw/noerror udp_reqs udp_tc noerror tcp_reqs/];
-    if ($newtcp) {
-        push(@$first_tcp_stats, 'tcp_conns');
-    }
+
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'ANY',
-        answer => [
-            '_acme-challenge.exists.example.com 600 TXT "abcde"',
-            '_acme-challenge.exists.example.com 600 TXT "0123456789012345678901234567890123456789012"',
-        ],
-        stats => $first_tcp_stats,
+        answer => '_acme-challenge.exists.example.com 3600 HINFO "RFC8482" ""',
     );
 
     # Static data for this name:
@@ -72,11 +63,7 @@ sub check_data_acme {
     );
     _GDT->test_dns(
         qname => '_acme-challenge.other.example.com', qtype => 'ANY',
-        answer => [
-            '_acme-challenge.other.example.com 86400 A 192.0.2.43',
-            '_acme-challenge.other.example.com 600 TXT "X123456789012345678901234567890123456789012"',
-        ],
-        stats => [qw/noerror udp_reqs udp_tc noerror tcp_reqs/],
+        answer => '_acme-challenge.other.example.com 3600 HINFO "RFC8482" ""',
     );
 
     # *NO* static data for this name:
@@ -91,8 +78,7 @@ sub check_data_acme {
     );
     _GDT->test_dns(
         qname => '_acme-challenge.snxd.example.com', qtype => 'ANY',
-        answer => '_acme-challenge.snxd.example.com 600 TXT "Y123456789012345678901234567890123456789012"',
-        stats => [qw/noerror udp_reqs udp_tc noerror tcp_reqs/],
+        answer => '_acme-challenge.snxd.example.com 3600 HINFO "RFC8482" ""',
     );
 }
 
@@ -144,15 +130,9 @@ foreach my $i (0, 1) {
         answer => [],
         auth => $soa_neg,
     );
-    # tcp_conns stat only bumps on the first loop iteration here...
-    my $first_tcp_stats = [qw/noerror udp_reqs udp_tc noerror tcp_reqs/];
-    if (!$i) {
-	push(@$first_tcp_stats, 'tcp_conns');
-    }
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'ANY',
-        answer => '_acme-challenge.exists.example.com 600 TXT "abcde"',
-        stats => $first_tcp_stats,
+        answer => '_acme-challenge.exists.example.com 3600 HINFO "RFC8482" ""',
     );
 
     # Static data for this name:
@@ -168,8 +148,7 @@ foreach my $i (0, 1) {
     );
     _GDT->test_dns(
         qname => '_acme-challenge.other.example.com', qtype => 'ANY',
-        answer => '_acme-challenge.other.example.com 86400 A 192.0.2.43',
-        stats => [qw/noerror udp_reqs udp_tc noerror tcp_reqs/],
+        answer => '_acme-challenge.other.example.com 3600 HINFO "RFC8482" ""',
     );
 
     # *NO* static data for this name:
@@ -192,7 +171,7 @@ foreach my $i (0, 1) {
         header => { rcode => 'NXDOMAIN' },
         answer => [],
         auth => $soa_neg,
-        stats => [qw/noerror udp_reqs udp_tc nxdomain tcp_reqs/],
+        stats => [qw/nxdomain udp_reqs/],
     );
 
     ## Inject data over all of the names above, in sets of 2 then 3, with a

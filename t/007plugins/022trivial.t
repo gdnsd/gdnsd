@@ -99,8 +99,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'sfo2.example.com', qtype => 'ANY',
-    answer => 'sfo2.example.com 86400 A 192.0.2.150',
-    stats => [qw/udp_reqs udp_tc noerror tcp_conns tcp_reqs noerror/],
+    answer => 'sfo2.example.com 3600 HINFO "RFC8482" ""',
 );
 
 _GDT->test_dns(
@@ -115,8 +114,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'sfo4.example.com', qtype => 'ANY',
-    answer => 'sfo4.example.com 86400 AAAA 2001:DB8::B00',
-    stats => [qw/udp_reqs udp_tc noerror tcp_reqs noerror/],
+    answer => 'sfo4.example.com 3600 HINFO "RFC8482" ""',
 );
 
 _GDT->test_dns(
@@ -143,14 +141,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'mfo1.example.com', qtype => 'ANY',
-    answer => [
-        'mfo1.example.com 86400 A 192.0.2.101',
-        'mfo1.example.com 86400 A 192.0.2.102',
-        'mfo1.example.com 86400 A 192.0.2.103',
-        'mfo1.example.com 86400 AAAA 2001:DB8::101',
-        'mfo1.example.com 86400 AAAA 2001:DB8::102',
-    ],
-    stats => [qw/udp_reqs udp_tc noerror tcp_reqs noerror/],
+    answer => 'mfo1.example.com 3600 HINFO "RFC8482" ""',
 );
 
 _GDT->test_dns(

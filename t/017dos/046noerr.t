@@ -108,18 +108,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'example.com', qtype => 'ANY',
-    answer => [
-        'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900',
-        'example.com 3600 MX 42 ns1.example.com',
-        'example.com 3600 MX 44 foo.example.com',
-        'example.com 86400 NS ns1.example.com',
-        'example.com 86400 NS ns2.example.com',
-        'example.com 86400 NS ns3.goober.example.com',
-        'example.com 86400 NS ns4.goober.example.com',
-        'example.com 86400 TXT "foo bar baz" "asdf 123 123 foo"',
-        'example.com 1111 PTR foo.example.org',
-    ],
-    stats => [qw/udp_reqs udp_tc noerror tcp_conns tcp_reqs noerror/],
+    answer => 'example.com 3600 HINFO "RFC8482" ""',
 );
 
 _GDT->test_kill_daemon($pid);

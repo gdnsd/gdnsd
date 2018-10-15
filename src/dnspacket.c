@@ -44,6 +44,10 @@
 // consumes 3 entries.
 #define COMPTARGETS_MAX 16U
 
+// Fixed HINFO record with TTL=3600 for RFC 8482
+static const char hinfo_for_any[] = "\0\015\0\01\0\0\016\020\0\011\07RFC8482";
+#define hinfo_for_any_len sizeof(hinfo_for_any)
+
 // Storage for general-purpose compression target info
 typedef struct {
     const uint8_t* orig; // aliases original dname storage, starting at first label len (no compression in this copy)
@@ -541,8 +545,6 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* question_len_ptr, cons
 
         offset += *question_len_ptr;
 
-        // this_max_response isn't used in the TCP case, but other code will
-        // subtract from it anyways, so set a large value to keep things sane.
         // parse_optrr() will raise this value in the udp edns0 case as necc.
         ctx->this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE;
 
@@ -865,28 +867,6 @@ static unsigned do_dyn_callback(dnsp_ctx_t* ctx, gdnsd_resolve_cb_t func, const 
     return ttl;
 }
 
-// This is only used for filling out all possible A/AAAA/DYNA in the answer
-// section in response to an ANY query
-F_NONNULL
-static unsigned encode_rrs_anyaddr(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset)
-{
-    if (rrset->gen.count | rrset->count_v6) {
-        if (rrset->gen.count)
-            offset = enc_a_static(ctx, offset, rrset, ctx->qname_comp, false);
-        if (rrset->count_v6)
-            offset = enc_aaaa_static(ctx, offset, rrset, ctx->qname_comp, false);
-    } else {
-        const unsigned ttl = do_dyn_callback(ctx, rrset->dyn.func, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
-        gdnsd_assert(!ctx->dyn->is_cname);
-        if (ctx->dyn->count_v4)
-            offset = enc_a_dynamic(ctx, offset, rrset, ctx->qname_comp, ttl);
-        if (ctx->dyn->count_v6)
-            offset = enc_aaaa_dynamic(ctx, offset, rrset, ctx->qname_comp, ttl);
-    }
-
-    return offset;
-}
-
 F_NONNULL
 static unsigned encode_rrs_a(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset)
 {
@@ -923,7 +903,7 @@ static unsigned encode_rrs_aaaa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
     return offset;
 }
 
-// This is only used when qtype == NS|ANY and the qname doesn't land in a
+// This is only used when qtype == NS and the qname doesn't land in a
 // delegation cut, which implies it only gets called for explicit output of NS
 // records at a zone root.  ltree doesn't currently allow these to have glue.
 F_NONNULL
@@ -1244,50 +1224,6 @@ static unsigned encode_rrs_rfc3597(dnsp_ctx_t* ctx, unsigned offset, const ltree
     return offset;
 }
 
-F_NONNULLX(1)
-static unsigned encode_rrs_any(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* res_rrsets)
-{
-    const ltree_rrset_t* rrset = res_rrsets;
-    while (rrset) {
-        switch (rrset->gen.type) {
-        case DNS_TYPE_A:
-            offset = encode_rrs_anyaddr(ctx, offset, &rrset->addr);
-            break;
-        case DNS_TYPE_SOA:
-            offset = encode_rr_soa(ctx, offset, &rrset->soa);
-            break;
-        case DNS_TYPE_NS:
-            offset = encode_rrs_ns(ctx, offset, &rrset->ns);
-            break;
-        case DNS_TYPE_PTR:
-            offset = encode_rrs_ptr(ctx, offset, &rrset->ptr);
-            break;
-        case DNS_TYPE_MX:
-            offset = encode_rrs_mx(ctx, offset, &rrset->mx);
-            break;
-        case DNS_TYPE_SRV:
-            offset = encode_rrs_srv(ctx, offset, &rrset->srv);
-            break;
-        case DNS_TYPE_NAPTR:
-            offset = encode_rrs_naptr(ctx, offset, &rrset->naptr);
-            break;
-        case DNS_TYPE_TXT:
-            offset = encode_rrs_txt(ctx, offset, &rrset->txt);
-            break;
-        case DNS_TYPE_CNAME:
-            offset = encode_rr_cname(ctx, offset, &rrset->cname);
-            break;
-        default:
-            gdnsd_assert(rrset->gen.type != DNS_TYPE_DYNC);
-            offset = encode_rrs_rfc3597(ctx, offset, &rrset->rfc3597);
-            break;
-        }
-        rrset = rrset->gen.next;
-    }
-
-    return offset;
-}
-
 // These have no test for falling out with a NULL if we reach the end
 //  of the list because ltree already validated at startup that in all
 //  cases where we call these, the given RRset exists.
@@ -1568,27 +1504,23 @@ static encode_funcptr encode_funcptrs[256] = {
     NULL,                  // 255 - ANY
 };
 
-F_NONNULLX(1)
-static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* res_rrsets)
+F_NONNULL
+static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* node_rrset)
 {
-    if (ctx->qtype == DNS_TYPE_ANY) {
-        offset = encode_rrs_any(ctx, offset, res_rrsets);
-    } else if (res_rrsets) {
-        const ltree_rrset_t* node_rrset = res_rrsets;
-        unsigned etype = ctx->qtype;
-        // rrset_addr is stored as type DNS_TYPE_A for both A and AAAA
-        if (etype == DNS_TYPE_AAAA)
-            etype = DNS_TYPE_A;
-        while (node_rrset) {
-            if (node_rrset->gen.type == etype) {
-                if (unlikely(etype & 0xFF00))
-                    offset = encode_rrs_rfc3597(ctx, offset, &node_rrset->rfc3597);
-                else
-                    offset = encode_funcptrs[ctx->qtype](ctx, offset, node_rrset);
-                break;
-            }
-            node_rrset = node_rrset->gen.next;
+    gdnsd_assert(ctx->qtype != DNS_TYPE_ANY);
+    unsigned etype = ctx->qtype;
+    // rrset_addr is stored as type DNS_TYPE_A for both A and AAAA
+    if (etype == DNS_TYPE_AAAA)
+        etype = DNS_TYPE_A;
+    while (node_rrset) {
+        if (node_rrset->gen.type == etype) {
+            if (unlikely(etype & 0xFF00))
+                offset = encode_rrs_rfc3597(ctx, offset, &node_rrset->rfc3597);
+            else
+                offset = encode_funcptrs[ctx->qtype](ctx, offset, node_rrset);
+            break;
         }
+        node_rrset = node_rrset->gen.next;
     }
 
     return offset;
@@ -1812,13 +1744,36 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
     if (status == DNAME_AUTH) {
         gdnsd_assert(resauth);
         res_hdr->flags1 |= 4; // AA bit
-        if (likely(resdom))
-            offset = construct_normal_response(ctx, offset, res_rrsets);
 
-        // ACME DNS-01 data injection
-        bool matched = false;
-        if (ctx->qtype == DNS_TYPE_TXT || ctx->qtype == DNS_TYPE_ANY || !ctx->ancount)
-            matched = chal_respond(ctx->qname_comp, ctx->qtype, qname, ctx->packet, &ctx->ancount, &offset);
+        bool chal_matched = false;
+
+        if (likely(res_rrsets)) {
+            // ANY queries against CNAME data should be treated like explicit CNAME queries:
+            if (unlikely(ctx->qtype == DNS_TYPE_ANY && res_rrsets->gen.type == DNS_TYPE_CNAME))
+                ctx->qtype = DNS_TYPE_CNAME;
+            if (likely(ctx->qtype != DNS_TYPE_ANY))
+                offset = construct_normal_response(ctx, offset, res_rrsets);
+        }
+
+        if (ctx->qtype == DNS_TYPE_TXT || !ctx->ancount)
+            chal_matched = chal_respond(ctx->qname_comp, ctx->qtype, qname, ctx->packet, &ctx->ancount, &offset);
+
+        if (unlikely(ctx->qtype == DNS_TYPE_ANY)) {
+            // construct_normal_response is not called for ANY, and
+            // chal_respond does not inject an RR for ANY, so there should
+            // still be zero answers here:
+            gdnsd_assert(!ctx->ancount);
+            // ANY->CNAME was already handled above construct_normal_response by changing ctx->qtype
+            gdnsd_assert(!res_rrsets || res_rrsets->gen.type != DNS_TYPE_CNAME);
+
+            // The conditional here basically means "if this wouldn't be an NXDOMAIN below"
+            if (resdom || chal_matched) {
+                ctx->ancount = 1;
+                offset += repeat_name(ctx, offset, ctx->qname_comp);
+                memcpy(&ctx->packet[offset], hinfo_for_any, hinfo_for_any_len);
+                offset += hinfo_for_any_len;
+            }
+        }
 
         if (!ctx->ancount) {
             offset = encode_rr_soa(ctx, offset, ltree_node_get_rrset_soa(resauth));
@@ -1826,7 +1781,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
             gdnsd_assert(ctx->ancount == 1 && !ctx->nscount);
             ctx->nscount = 1;
             ctx->ancount = 0;
-            if (!resdom && !matched) {
+            if (!resdom && !chal_matched) {
                 res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
                 stats_own_inc(&ctx->stats->nxdomain);
             }
@@ -1858,12 +1813,11 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
 
     const unsigned full_trunc_offset = offset;
 
-    const bool any_udp = (ctx->qtype == DNS_TYPE_ANY && ctx->is_udp);
-    if (!any_udp)
-        offset = answer_from_db(ctx, offset);
+    offset = answer_from_db(ctx, offset);
 
-    // Check for truncation (ANY-over-UDP truncation, or true overflow w/ just ans, auth, and glue)
-    if (any_udp || unlikely(offset > ctx->this_max_response)) {
+    // Check for truncation
+    if (unlikely(offset > ctx->this_max_response)) {
+        gdnsd_assert(ctx->is_udp); // TCP already gauranteed by sizing checks!
         offset = full_trunc_offset;
         ((wire_dns_header_t*)ctx->packet)->flags1 |= 0x2; // TC bit
         // avoid potential confusion over NXDOMAIN+TC (can only happen in CNAME-chaining case)

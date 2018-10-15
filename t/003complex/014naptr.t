@@ -41,8 +41,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'nsa.example.com', qtype => 'ANY',
-    answer => [$nsa1, $nsa2, $nsa3, $nsa4],
-    stats => [qw/udp_reqs udp_tc noerror tcp_conns tcp_reqs noerror/],
+    answer => 'nsa.example.com 3600 HINFO "RFC8482" ""',
 );
 
 _GDT->test_kill_daemon($pid);

@@ -25,6 +25,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * The answer section usually contains only one rrset, unless CNAMEs are involved (we still output CNAME chains within local zone data)
   * The auth section is only ever used for negative responses (1x SOA) and delegations (NS records at a zone cut)
   * The additional section only ever contains actual mandatory glue IPs (out-of-zone glue or glue within any delegated subzone of the delegating zone); it is no longer used for other purposes like A/AAAA additionals for answer-section MX, SRV, etc.
+  * ANY-queries are now answered with a minimal, synthetic HINFO RR per RFC 8482
 
 ### Zonefiles
 

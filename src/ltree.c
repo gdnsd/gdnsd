@@ -689,6 +689,7 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
             || rrtype == DNS_TYPE_MX
             || rrtype == DNS_TYPE_SRV
             || rrtype == DNS_TYPE_NAPTR
+            || rrtype == DNS_TYPE_HINFO
             || rrtype == DNS_TYPE_TXT)
         log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed, please use the explicit support built in for this RR type", logf_dname(dname), logf_dname(zone->dname), rrtype);
 
@@ -882,13 +883,12 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
 // packets and assumes (e.g.  in compression-related code, where that cutoff
 // comes into play) that no packet data can possibly exist at offsets >= 16384.
 //
-// In general, the methodology here is to sum up the output sizes of all rrsets
-// defined in the node as if doing an ANY-query.  We also have to add on
-// various fixed quantities to account for headers, the query, and maximal
-// edns0 option outputs.  In delegation and wildcard cases, we also have to
-// assume the query name consumed the full 255 byte maximum.  When checking
-// delegation NS RR-sets we also have to account for their glued address data
-// in the additional section.
+// In general, the method here is to find the largest single rrset defined in
+// the node.  We also have to add on various fixed quantities to account for
+// headers, the query, and maximal edns0 option outputs.  In delegation and
+// wildcard cases, we also have to assume the query name consumed the full 255
+// byte maximum.  When checking delegation NS RR-sets we also have to account
+// for their glued address data in the additional section.
 //
 // Note that this check is more conservative than it has to be, because making
 // some parts more precise is complicated:
@@ -920,6 +920,9 @@ static bool p1_rrset_size(ltree_rrset_t* rrset, const bool in_deleg)
     switch (rrset->gen.type) {
     case DNS_TYPE_SOA:
         set_size = (12U + *rrset->soa.master + *rrset->soa.email + 20U);
+        break;
+    case DNS_TYPE_CNAME:
+        gdnsd_assert(0);
         break;
     case DNS_TYPE_DYNC:
         set_size = (12U + 255U);
@@ -1121,21 +1124,14 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
         }
 
         const size_t set_size = p1_rrset_size(rrset, in_deleg);
-        if (via_cname) {
-            // ANY-via-CNAME is impossible, so we only need the max of the
-            // rrsets when coming in via cname:
-            if (set_size > rsize_rrs)
-                rsize_rrs = set_size;
-        } else {
-            // In the non-CNAME case, we have to sum to check the ANY case:
-            rsize_rrs += set_size;
-        }
+        if (set_size > rsize_rrs)
+            rsize_rrs = set_size;
         rrset = rrset->gen.next;
     }
 
     rsize += rsize_rrs;
     if (rsize > MAX_RESPONSE)
-        log_zfatal("Domainname '%s%s' has too much total data (%zu > %u)",
+        log_zfatal("Domainname '%s%s' has too much data (%zu > %u)",
                    logf_lstack(lstack, depth, zone->dname), rsize, MAX_RESPONSE);
 
     return false;

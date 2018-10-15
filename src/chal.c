@@ -376,7 +376,7 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
                 chal_t* ch = coll->chals[i];
                 if (ch->dnhash == qname_hash && !dname_cmp(qname, ch->dname)) {
                     matched = true;
-                    if (qname_is_chal && (qtype == DNS_TYPE_TXT || qtype == DNS_TYPE_ANY)) {
+                    if (qname_is_chal && qtype == DNS_TYPE_TXT) {
                         if ((*offset_p + 2U + CHAL_RR_LEN) > MAX_RESPONSE)
                             break; // do not run off the end of the buffer!
                         gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
