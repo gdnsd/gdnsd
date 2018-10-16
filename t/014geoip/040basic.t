@@ -1,7 +1,7 @@
 # Basic geoip plugin tests
 
 use _GDT ();
-use Test::More tests => 58 * 2;
+use Test::More tests => 60 * 2;
 
 my $test_bin = $ENV{INSTALLCHECK_BINDIR}
     ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_geoip_test"
@@ -39,6 +39,21 @@ _GDT->test_dns(
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
     answer => 'res1.example.com 86400 A 192.0.2.1',
     addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+# Extra 2x tests for explicit scope mask zero
+_GDT->test_dns(
+    qname => 'res1.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '0.0.0.0', src_mask => 0),
+    answer => 'res1.example.com 86400 A 192.0.2.1',
+    addtl => _GDT::optrr_clientsub(addr_v4 => '0.0.0.0', src_mask => 0, scope_mask => 0),
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+_GDT->test_dns(
+    qname => 'res1.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v6 => '::', src_mask => 0),
+    answer => 'res1.example.com 86400 A 192.0.2.1',
+    addtl => _GDT::optrr_clientsub(addr_v6 => '::', src_mask => 0, scope_mask => 0),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 _GDT->test_dns(
