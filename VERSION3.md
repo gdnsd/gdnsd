@@ -134,6 +134,7 @@ None of these generate a syntax error for now, they merely log a non-fatal error
 * Flags:
   * Unchanged: `-c` - sets the configuration directory, if not using the hardcoded default path from build time.
   * Unchanged: `-D` - requests debug-level logging output (in production builds it's not too spammy for most things.  In `--enable-developer` debug builds, the output from this flag can be unreasonably verbose).
+  * Unchanged: `-S` - upgrades all zonefile warnings to errors, like config setting `zones_strict_data`
   * Removed: `-f` (foreground) - replaced by the `start`/`daemonize` distinction above
   * Removed: `-x` (no syslog) - Stderr logging is the default
   * Removed: `-s` (zones strict startup) - this is now always true and doesn't make sense as a flag
