@@ -94,7 +94,7 @@ You'll need to fix values for these in existing config before trying an upgrade,
 
 * `max_edns_response` - max changed from 64000 to 16384
 * `tcp_threads` - Default changed from 1 to 2, minimum changed from 0 to 1
-* `tcp_timeout` - min/default/max changed from 3/5/60 to 5/15/60
+* `tcp_timeout` - min/default/max changed from 3/5/60 to 5/37/1080
 * `udp_threads` - Default changed from 1 to 2, minimum changed from 0 to 1
 
 ### Options removed completely

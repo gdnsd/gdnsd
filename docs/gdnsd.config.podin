@@ -179,7 +179,7 @@ C<tcp_clients_per_thread * tcp_threads>.
 
 =item B<tcp_timeout>
 
-Integer seconds, default 15, min 5, max 60.
+Integer seconds, default 37, min 5, max 1080.
 
 The idle timer for a TCP connection starts the moment the connection is open,
 and is reset each time a connection completes a whole transaction (sends a
