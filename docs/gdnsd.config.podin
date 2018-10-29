@@ -204,11 +204,10 @@ C<tcp_clients_per_thread> is reached) during inter-transaction idle periods
 after their first transaction, and for not-so-well-behaved clients the idle
 timer helps control the impact of patterns similar to slow-read/write attacks.
 
-The server will send edns TCP keepalive information to supporting clients
-(those that have sent us the option at least once during the connection) when
-it's legal to do so per RFC 7828 (in response to any query that contained an
-edns0 OPT RR at all), keeping any long-running client connections continually
-updated about the evolving server-side timeout as best as we're allowed to.
+The server will send edns TCP keepalive information to clients when it's legal
+to do so per RFC 7828 (in response to any TCP query that contained an edns0 OPT
+RR at all), keeping any long-running client connections continually updated
+about the evolving server-side timeout as best as we're allowed to.
 
 The timeout value sent to clients will be the current server-side timeout
 rounded to the nearest 100ms, minus 2 whole seconds, meaning when we reach our
