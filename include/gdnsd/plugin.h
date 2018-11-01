@@ -17,10 +17,7 @@
  *
  */
 
-#ifdef GDNSD_PLUGIN_H
-#error gdnsd/plugin.h must be included *exactly once* from *exactly one* source file per plugin
-#endif
-
+#ifndef GDNSD_PLUGIN_H
 #define GDNSD_PLUGIN_H
 
 // Include all of the libgdnsd stuff for convenience
@@ -106,3 +103,5 @@ void SYM_START_MONS(GDNSD_PLUGIN_NAME)(struct ev_loop* mon_loop);
 #undef SYM_ADD_MON_CNAME
 #undef SYM_INIT_MONS
 #undef SYM_START_MONS
+
+#endif // GDNSD_PLUGIN_H
