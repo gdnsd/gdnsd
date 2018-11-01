@@ -928,8 +928,8 @@ char* gdnsd_mon_states_get_json(size_t* len)
         get_state_texts(i, &cur_st, &real_st);
         const size_t avail = (size_t)(max_states_len - (size_t)(buf - buf_start));
         const int snp_rv = snprintf(buf, avail, json_tmpl, smgrs[i].desc, cur_st, real_st);
-        gdnsd_assert(snp_rv > 0);
-        buf += (unsigned)snp_rv;
+        gdnsd_assert(snp_rv > 0 && (size_t)snp_rv < avail);
+        buf += (size_t)snp_rv;
     }
 
     memcpy(buf, json_foot, json_foot_len);

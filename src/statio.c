@@ -172,9 +172,8 @@ char* statio_get_json(time_t nowish, size_t* len)
     uint64_t uptime64 = (uint64_t)nowish - (uint64_t)start_time;
     char* buf = xmalloc(json_buffer_max);
     int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio[DNS_NOERROR], statio[DNS_REFUSED], statio[DNS_NXDOMAIN], statio[DNS_NOTIMP], statio[DNS_BADVERS], statio[DNS_FORMERR], statio[DNS_DROPPED], statio[DNS_V6], statio[DNS_EDNS], statio[DNS_EDNS_CLIENTSUB], statio[UDP_REQS], statio[UDP_RECVFAIL], statio[UDP_SENDFAIL], statio[UDP_TC], statio[UDP_EDNS_BIG], statio[UDP_EDNS_TC], statio[TCP_REQS], statio[TCP_RECVFAIL], statio[TCP_SENDFAIL], statio[TCP_CONNS], statio[TCP_CLOSE_C], statio[TCP_CLOSE_S_OK], statio[TCP_CLOSE_S_ERR], statio[TCP_CLOSE_S_KILL]);
-    gdnsd_assert(snp_rv > 0);
-    size_t json_len = (size_t)snp_rv;
-    *len = json_len;
+    gdnsd_assert(snp_rv > 0 && (size_t)snp_rv < json_buffer_max);
+    *len = (size_t)snp_rv;
     return buf;
 }
 

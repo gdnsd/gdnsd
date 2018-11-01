@@ -253,11 +253,11 @@ GDNSD_DIAG_POP
 const char* gdnsd_logf_bt(void)
 {
 #ifdef HAVE_LIBUNWIND
-#define BT_SIZE 1024U
-#define BT_MAX_NAME 60U
+#define BT_SIZE 1024LU
+#define BT_MAX_NAME 60LU
 
     char* tbuf = gdnsd_fmtbuf_alloc(BT_SIZE);
-    unsigned tbuf_pos = 0;
+    size_t tbuf_pos = 0;
     tbuf[tbuf_pos] = '\0'; // in case no output below
 
     unw_cursor_t cursor;
@@ -282,9 +282,9 @@ const char* gdnsd_logf_bt(void)
                               (BT_SIZE - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
                               (unsigned long)ip, (unsigned long)sp,
                               cbuf, (unsigned long)offset);
-        if (snp_rv < 0)
+        if (snp_rv < 0 || (size_t)snp_rv >= (BT_SIZE - tbuf_pos))
             break;
-        tbuf_pos += (unsigned)snp_rv;
+        tbuf_pos += (size_t)snp_rv;
     }
     return tbuf;
 #else
