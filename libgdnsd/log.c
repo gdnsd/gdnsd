@@ -253,7 +253,7 @@ GDNSD_DIAG_POP
 const char* gdnsd_logf_bt(void)
 {
 #ifdef HAVE_LIBUNWIND
-#define BT_SIZE 1024LU
+#define BT_SIZE 2048LU
 #define BT_MAX_NAME 60LU
 
     char* tbuf = gdnsd_fmtbuf_alloc(BT_SIZE);
@@ -265,7 +265,7 @@ const char* gdnsd_logf_bt(void)
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
 
-    while (unw_step(&cursor) > 0 && tbuf_pos < BT_SIZE) {
+    while (tbuf_pos < BT_SIZE && unw_step(&cursor) > 0) {
         unw_word_t ip = 0;
         unw_word_t sp = 0;
         unw_word_t offset = 0;
