@@ -25,18 +25,14 @@
 #include <inttypes.h>
 #include <arpa/inet.h>
 
-// Our UDP input buffers are shared with output buffer
-//  space, and the output buffer size is 16K.
-// However, we only advertise a buffer size of 1024,
-//  to be absolutely sure that even in the face of
-//  an IPv6 min-MTU link and lots of extra headers
-//  and whatnot, it will always be a single fragment.
-// We use this size as our recvmsg() limit as well,
-//  discarding anything larger to save ourselves
-//  processing it.  Really we could even advertise
-//  512 here since we don't support anything
-//  that warrants larger input sizes, but this is
-//  reasonable.
+// Our UDP input buffers are shared with output buffer space, and the output
+// buffer size is 16K.
+// However, we only advertise a buffer size of 1024, to be absolutely sure that
+// even in the face of an IPv6 min-MTU link and lots of extra headers and
+// whatnot, it will always be a single fragment.
+// We use this size as our recvmsg() limit as well, discarding anything larger
+// to save ourselves processing it.  And in the TCP case, we immediately close
+// if a size greater than this is sent as the message length field.
 #define DNS_EDNS0_SIZE 1024U
 #define DNS_RECV_SIZE DNS_EDNS0_SIZE
 
@@ -57,24 +53,6 @@ typedef struct S_PACKED {
     uint16_t nscount;
     uint16_t arcount;
 } wire_dns_header_t;
-
-/* DNS OPT RR for EDNS0 */
-/* (for basic EDNS0, it's a fixed structure) */
-/* Note the initial one-bye NULL domainname
- * is left out */
-typedef struct S_PACKED {
-    uint16_t type;
-    uint16_t maxsize;
-    uint32_t extflags;
-    uint16_t rdlen;
-    uint8_t  rdata[0];
-} wire_dns_rr_opt_t;
-
-// Use this for the size of the above, so that
-//  the compiler's final 2 bytes of padding are
-//  not counted, and only counts the fixed part.
-//  (not the initial \0 label, and none of rdata).
-#define sizeof_optrr 10
 
 /* macros to pull data from wire_dns_header */
 #define DNSH_GET_ID(_h)      (ntohs((_h)->id))
@@ -102,12 +80,7 @@ typedef struct S_PACKED {
 #define DNS_RCODE_REFUSED 5
 #define DNS_EXT_RCODE_BADVERS 1
 
-/* Macros to pull data from wire_dns_rr_opt */
-#define DNS_OPTRR_GET_TYPE(_r)     (ntohs((_r)->type))
-#define DNS_OPTRR_GET_MAXSIZE(_r)  (ntohs((_r)->maxsize))
-#define DNS_OPTRR_GET_EXTRCODE(_r) ((uint8_t)(ntohl((_r)->extflags) >> 24))
-#define DNS_OPTRR_GET_VERSION(_r)  ((uint8_t)((ntohl((_r)->extflags) & 0x00FF0000) >> 16))
-
+// EDNS0 option codes
 #define EDNS_NSID_OPTCODE          0x0003
 #define EDNS_CLIENTSUB_OPTCODE     0x0008
 #define EDNS_TCP_KEEPALIVE_OPTCODE 0x000B

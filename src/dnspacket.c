@@ -88,6 +88,9 @@ typedef struct {
     // the case of queries which land on a CNAME RR.
     unsigned qtype;
 
+    // The queried class.
+    unsigned qclass;
+
     // Compression pointer to query name.  For most queries this remains set to
     // the fixed offset where the real query starts, but when chasing CNAME
     // pointers, we re-set this to point at the CNAME's target.
@@ -96,6 +99,7 @@ typedef struct {
     // As above, but for the authority within the qname (zone/deleg start point)
     unsigned auth_comp;
 
+    unsigned qdcount;
     unsigned ancount;
     unsigned nscount;
     unsigned arcount;
@@ -134,9 +138,6 @@ typedef struct {
 
     // units of 100ms, sent by dnsio_tcp code
     unsigned edns0_tcp_keepalive;
-
-    // If this is true, the query class was CH
-    bool chaos;
 
     // Compression targets, for the few cases where we do general-case compression
     unsigned ctarget_count;
@@ -207,66 +208,6 @@ static void reset_context(dnsp_ctx_t* ctx)
         &ctx->this_max_response, 0,
         sizeof(dnsp_ctx_t) - offsetof(dnsp_ctx_t, this_max_response)
     );
-}
-
-// "buf" points to the question section of an input packet.
-F_NONNULL
-static unsigned parse_question(dnsp_ctx_t* ctx, const uint8_t* buf, const unsigned len)
-{
-    uint8_t* lqname_ptr = &ctx->lqname[1];
-    unsigned pos = 0;
-    unsigned llen;
-    while ((llen = *lqname_ptr++ = buf[pos++])) {
-        if (unlikely(llen & 0xC0)) {
-            log_devdebug("Label compression detected in question, failing.");
-            pos = 0;
-            break;
-        }
-
-        if (unlikely(pos + llen >= len)) {
-            log_devdebug("Query name truncated (runs off end of packet)");
-            pos = 0;
-            break;
-        }
-
-        if (unlikely(pos + llen > 254)) {
-            log_devdebug("Query domain name too long");
-            pos = 0;
-            break;
-        }
-
-        while (llen--) {
-            if (unlikely((buf[pos] < 0x5B) && (buf[pos] > 0x40)))
-                *lqname_ptr++ = buf[pos++] | 0x20;
-            else
-                *lqname_ptr++ = buf[pos++];
-        }
-    }
-
-    if (likely(pos)) {
-        // Store the overall length of the lowercased name
-        ctx->lqname[0] = pos;
-
-        if (likely(pos + 4 <= len)) {
-            ctx->qtype = ntohs(gdnsd_get_una16(&buf[pos]));
-            pos += 2;
-            const unsigned cls = ntohs(gdnsd_get_una16(&buf[pos]));
-            pos += 2;
-            if (cls != DNS_CLASS_IN && cls != DNS_CLASS_ANY) {
-                if (cls == DNS_CLASS_CH) {
-                    ctx->chaos = true;
-                } else {
-                    log_devdebug("Question class was not IN, CH, or ANY (was %u)", cls);
-                    pos = 0;
-                }
-            }
-        } else {
-            log_devdebug("Packet length exhausted before parsing question type/class!");
-            pos = 0;
-        }
-    }
-
-    return pos;
 }
 
 // retval: true -> FORMERR, false -> OK
@@ -421,7 +362,7 @@ static bool handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uint8_t* 
 }
 
 typedef enum {
-    DECODE_IGNORE  = -4, // totally invalid packet (len < header len or unparseable question, and we do not respond)
+    DECODE_IGNORE  = -4, // totally invalid packet (len < header len or QR-bit set in query) - NO RESPONSE PACKET
     DECODE_FORMERR = -3, // slightly better but still invalid input, we return FORMERR
     DECODE_BADVERS = -2, // EDNS version higher than ours (0)
     DECODE_NOTIMP  = -1, // non-QUERY opcode or [AI]XFER, we return NOTIMP
@@ -429,21 +370,41 @@ typedef enum {
 } rcode_rv_t;
 
 F_NONNULL
-static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, const wire_dns_rr_opt_t* opt, const gdnsd_anysin_t* asin V_UNUSED, const unsigned packet_len, const unsigned offset)
+static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsigned packet_len)
 {
     gdnsd_assert(ctx->stats);
+
+    uint8_t* packet = ctx->packet;
+
+    unsigned offset = *offset_ptr;
+    // assumptions caller has checked for us:
+    gdnsd_assert(offset + 11 <= packet_len); // enough bytes for minimal OPT RR
+    gdnsd_assert(packet[offset] == '\0'); // root name
+    gdnsd_assert(ntohs(gdnsd_get_una16(&packet[offset + 1])) == DNS_TYPE_OPT);
+
+    // skip past the above and grab the other fields we need
+    offset += 3;
+    unsigned edns_maxsize = ntohs(gdnsd_get_una16(&packet[offset]));
+    offset += 2;
+    unsigned edns_extflags = ntohl(gdnsd_get_una32(&packet[offset]));
+    offset += 4;
+    unsigned edns_rdlen = ntohs(gdnsd_get_una16(&packet[offset]));
+    offset += 2;
+
+    // derive version from extflags
+    unsigned edns_version = (edns_extflags & 0xFF0000) >> 16;
 
     rcode_rv_t rcode = DECODE_OK;
     ctx->use_edns = true;            // send OPT RR with response
     stats_own_inc(&ctx->stats->edns);
-    if (likely(DNS_OPTRR_GET_VERSION(opt) == 0)) {
+
+    if (likely(edns_version == 0)) {
         if (likely(ctx->is_udp)) {
-            unsigned client_req = DNS_OPTRR_GET_MAXSIZE(opt);
-            if (client_req < 512U)
-                client_req = 512U;
-            ctx->this_max_response = client_req < gcfg->max_edns_response
-                                     ? client_req
-                                     : gcfg->max_edns_response;
+            ctx->this_max_response = edns_maxsize < 512U
+                ? 512U
+                : edns_maxsize < gcfg->max_edns_response
+                    ? edns_maxsize
+                    : gcfg->max_edns_response;
         }
 
         // leave room for basic OPT RR (edns-client-subnet room is addressed elsewhere)
@@ -453,118 +414,251 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, const wire_dns_rr_opt_t* opt, con
         if (gcfg->nsid_len)
             ctx->this_max_response -= (4U + gcfg->nsid_len);
 
-        unsigned rdlen = htons(gdnsd_get_una16(&opt->rdlen));
-        if (rdlen) {
-            if (packet_len < offset + sizeof_optrr + rdlen) {
-                log_devdebug("Received EDNS OPT RR with options data longer than packet length from %s", logf_anysin(asin));
+        if (edns_rdlen) {
+            if (packet_len < offset + edns_rdlen) {
+                log_devdebug("Received EDNS OPT RR with options data longer than packet length");
                 rcode = DECODE_FORMERR;
-            } else if (handle_edns_options(ctx, rdlen, opt->rdata)) {
+            } else if (handle_edns_options(ctx, edns_rdlen, &packet[offset])) {
                 rcode = DECODE_FORMERR;
             }
+            offset += edns_rdlen;
         }
     } else {
-        log_devdebug("Received EDNS OPT RR with VERSION > 0 (BADVERSION) from %s", logf_anysin(asin));
+        log_devdebug("Received EDNS OPT RR with VERSION > 0 (BADVERSION)");
         rcode = DECODE_BADVERS;
     }
 
+    if (rcode == DECODE_OK)
+        *offset_ptr = offset;
     return rcode;
 }
 
 F_NONNULL
-static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* question_len_ptr, const unsigned packet_len, const gdnsd_anysin_t* asin)
+static bool parse_first_question(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsigned packet_len)
+{
+    const unsigned len = packet_len - *offset_ptr;
+    if (unlikely(!len))
+        return true;
+
+    const uint8_t* buf = &ctx->packet[*offset_ptr];
+    uint8_t* lqname_ptr = &ctx->lqname[1];
+    unsigned pos = 0;
+    unsigned llen;
+    while ((llen = *lqname_ptr++ = buf[pos++])) {
+        if (unlikely(llen & 0xC0)) {
+            log_devdebug("Label compression detected in question, failing.");
+            pos = 0;
+            break;
+        }
+
+        if (unlikely(pos + llen >= len)) {
+            log_devdebug("Query name truncated (runs off end of packet)");
+            pos = 0;
+            break;
+        }
+
+        if (unlikely(pos + llen > 254)) {
+            log_devdebug("Query domain name too long");
+            pos = 0;
+            break;
+        }
+
+        while (llen--) {
+            if (unlikely((buf[pos] < 0x5B) && (buf[pos] > 0x40)))
+                *lqname_ptr++ = buf[pos++] | 0x20;
+            else
+                *lqname_ptr++ = buf[pos++];
+        }
+    }
+
+    if (likely(pos)) {
+        // Store the overall length of the lowercased name
+        ctx->lqname[0] = pos;
+
+        if (likely(pos + 4 <= len)) {
+            ctx->qtype = ntohs(gdnsd_get_una16(&buf[pos]));
+            pos += 2;
+            ctx->qclass = ntohs(gdnsd_get_una16(&buf[pos]));
+            pos += 2;
+        } else {
+            log_devdebug("Packet length exhausted before parsing question type/class!");
+            pos = 0;
+        }
+    }
+
+    if (likely(pos)) {
+        *offset_ptr += pos;
+        gdnsd_assert(*offset_ptr <= packet_len);
+        return false;
+    }
+    return true;
+}
+
+F_NONNULL
+static unsigned parse_rr_name_minimal(const uint8_t* buf, const unsigned len)
+{
+    gdnsd_assert(len);
+    unsigned pos = 0;
+    unsigned llen;
+    while ((llen = buf[pos++])) {
+        if (unlikely(llen & 0xC0)) {
+            if (unlikely(pos + 1 >= len))
+                pos = 0;
+            else
+                pos++;
+            break;
+        }
+        pos += llen;
+        if (unlikely(pos >= len || pos > 254)) {
+            pos = 0;
+            break;
+        }
+    }
+
+    return pos;
+}
+
+F_NONNULL
+static bool parse_rr_minimal(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsigned packet_len, const bool has_data)
+{
+    const unsigned len = packet_len - *offset_ptr;
+    if (unlikely(!len))
+        return true;
+
+    const uint8_t* buf = &ctx->packet[*offset_ptr];
+    unsigned pos = parse_rr_name_minimal(buf, len);
+    if (likely(pos)) {
+        if (has_data) {
+            if (likely(pos + 10 <= len)) { // type/class/ttl/rdlen
+                pos += 8; // type/class/ttl
+                const unsigned rdlen = ntohs(gdnsd_get_una16(&buf[pos]));
+                pos += 2;
+                if (likely(pos + rdlen <= len))
+                    pos += rdlen;
+                else
+                    pos = 0;
+            } else {
+                pos = 0;
+            }
+        } else {
+            if (likely(pos + 4 <= len)) // type/class
+                pos += 4;
+            else
+                pos = 0;
+        }
+    }
+
+    if (likely(pos)) {
+        *offset_ptr += pos;
+        gdnsd_assert(*offset_ptr <= packet_len);
+        return false;
+    }
+    return true;
+}
+
+F_NONNULL
+static rcode_rv_t parse_query_rrs(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, const unsigned packet_len)
+{
+    gdnsd_assert(*output_offset_ptr == sizeof(wire_dns_header_t));
+    gdnsd_assert(packet_len >= sizeof(wire_dns_header_t));
+
+    const wire_dns_header_t* hdr = (const wire_dns_header_t*)ctx->packet;
+    unsigned offset = sizeof(wire_dns_header_t);
+
+    gdnsd_assert(!ctx->qdcount);
+
+    const unsigned qdcount = DNSH_GET_QDCOUNT(hdr);
+    const unsigned ancount = DNSH_GET_ANCOUNT(hdr);
+    const unsigned nscount = DNSH_GET_NSCOUNT(hdr);
+    const unsigned arcount = DNSH_GET_ARCOUNT(hdr);
+
+    if (qdcount) {
+        if (parse_first_question(ctx, &offset, packet_len))
+            return DECODE_FORMERR;
+        // If we can parse the first question, we'll include it in the
+        // output, even if the rest below may result in some other error
+        // response.  Note we don't currently reflect any additional questions
+        // even if they parse correctly, because it's too burdensome on our
+        // output sizing constraints.
+        ctx->qdcount = 1;
+        *output_offset_ptr = offset;
+    }
+
+    for (unsigned i = 1; i < qdcount; i++)
+        if (parse_rr_minimal(ctx, &offset, packet_len, false))
+            return DECODE_FORMERR;
+
+    for (unsigned i = 0; i < ancount; i++)
+        if (parse_rr_minimal(ctx, &offset, packet_len, true))
+            return DECODE_FORMERR;
+
+    for (unsigned i = 0; i < nscount; i++)
+        if (parse_rr_minimal(ctx, &offset, packet_len, true))
+            return DECODE_FORMERR;
+
+    bool seen_optrr = false;
+    for (unsigned i = 0; i < arcount; i++) {
+        if (likely(packet_len >= (offset + 11)) && likely(ctx->packet[offset] == '\0')) {
+            if (likely(ntohs(gdnsd_get_una16(&ctx->packet[offset + 1])) == DNS_TYPE_OPT)) {
+                if (seen_optrr) // >1 OPT RRs
+                    return DECODE_FORMERR;
+                seen_optrr = true;
+                rcode_rv_t rc = parse_optrr(ctx, &offset, packet_len);
+                if (rc != DECODE_OK)
+                    return rc;
+                continue;
+            }
+        }
+        if (parse_rr_minimal(ctx, &offset, packet_len, true))
+            return DECODE_FORMERR;
+    }
+
+    // If there's trailing junk bytes left in the query packet either it's
+    // malformed or we've critically failed to parse it correctly:
+    if (offset != packet_len)
+        return DECODE_FORMERR;
+
+    return DECODE_OK;
+}
+
+F_NONNULL
+static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, const unsigned packet_len, const gdnsd_anysin_t* asin)
 {
     gdnsd_assert(ctx->packet);
+    gdnsd_assert(*output_offset_ptr == sizeof(wire_dns_header_t));
 
-    rcode_rv_t rcode = DECODE_OK;
+    if (unlikely(packet_len < (sizeof(wire_dns_header_t)))) {
+        log_devdebug("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
+        return DECODE_IGNORE;
+    }
 
-    do {
-        // 5 is the minimal question length (1 byte root, 2 bytes each type and class)
-        if (unlikely(packet_len < (sizeof(wire_dns_header_t) + 5))) {
-            log_devdebug("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
-            rcode = DECODE_IGNORE;
-            break;
-        }
+    uint8_t* packet = ctx->packet;
+    const wire_dns_header_t* hdr = (const wire_dns_header_t*)packet;
 
-        uint8_t* packet = ctx->packet;
-        const wire_dns_header_t* hdr = (const wire_dns_header_t*)packet;
+    if (unlikely(DNSH_GET_QR(hdr))) {
+        log_devdebug("QR bit set in query from %s, ignoring", logf_anysin(asin));
+        return DECODE_IGNORE;
+    }
 
-        /*
-            log_devdebug("Query header details: ID:%hu QR:%i OPCODE:%hhu AA:%i TC:%i RD:%i RA:%i AD:%i CD:%i RCODE:%hhu QDCOUNT:%hu ANCOUNT:%hu NSCOUNT:%hu ARCOUNT:%hu",
-                DNSH_GET_ID(hdr), DNSH_GET_QR(hdr) ? 1 : 0,
-                DNSH_GET_OPCODE(hdr), DNSH_GET_AA(hdr) ? 1 : 0,
-                DNSH_GET_TC(hdr) ? 1 : 0, DNSH_GET_RD(hdr) ? 1 : 0,
-                DNSH_GET_RA(hdr) ? 1 : 0, DNSH_GET_AD(hdr) ? 1 : 0,
-                DNSH_GET_CD(hdr) ? 1 : 0, DNSH_GET_RCODE(hdr),
-                DNSH_GET_QDCOUNT(hdr), DNSH_GET_ANCOUNT(hdr),
-                DNSH_GET_NSCOUNT(hdr), DNSH_GET_ARCOUNT(hdr)
-            );
-        */
+    // In all cases other than the 2 ignores above, we will do our best to
+    // parse the query RRs, and always send some kind of response packet...
+    rcode_rv_t rcode = parse_query_rrs(ctx, output_offset_ptr, packet_len);
 
-        if (unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
-            log_devdebug("Received request from %s with %hu questions, ignoring", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
-            rcode = DECODE_IGNORE;
-            break;
-        }
-
-        if (unlikely(DNSH_GET_QR(hdr))) {
-            log_devdebug("QR bit set in query from %s, ignoring", logf_anysin(asin));
-            rcode = DECODE_IGNORE;
-            break;
-        }
-
-        if (unlikely(DNSH_GET_TC(hdr))) {
-            log_devdebug("TC bit set in query from %s, ignoring", logf_anysin(asin));
-            rcode = DECODE_IGNORE;
-            break;
-        }
-
-        unsigned offset = sizeof(wire_dns_header_t);
-        if (unlikely(!(*question_len_ptr = parse_question(ctx, &packet[offset], packet_len - offset)))) {
-            log_devdebug("Failed to parse question, ignoring %s", logf_anysin(asin));
-            rcode = DECODE_IGNORE;
-            break;
-        }
-
-        if (DNSH_GET_OPCODE(hdr)) {
+    if (likely(rcode == DECODE_OK)) {
+        if (unlikely(DNSH_GET_OPCODE(hdr))) {
             log_devdebug("Non-QUERY request (NOTIMP) from %s, opcode is %i", logf_anysin(asin), DNSH_GET_OPCODE(hdr));
             rcode = DECODE_NOTIMP;
-            break;
-        }
-
-        if (unlikely(ctx->qtype == DNS_TYPE_AXFR)) {
-            log_devdebug("AXFR attempted (NOTIMP) from %s", logf_anysin(asin));
+        } else if (unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
+            log_devdebug("Received QUERY request from %s with %hu questions, FORMERR", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
+            rcode = DECODE_FORMERR;
+        } else if (unlikely(ctx->qtype > 127 && ctx->qtype < 255)) {
+            // Range 128-255 is meta-query types, not data types.  We implement ANY
+            // (255) in normal response process, but we do not implement any others
+            // (e.g. IXFR, AXFR, MAILA, MAILB, TKEY, TSIG, etc).
+            log_devdebug("Unsupported meta-query type %u (NOTIMP) attempted from %s", ctx->qtype, logf_anysin(asin));
             rcode = DECODE_NOTIMP;
-            break;
         }
-
-        if (unlikely(ctx->qtype == DNS_TYPE_IXFR)) {
-            log_devdebug("IXFR attempted (NOTIMP) from %s", logf_anysin(asin));
-            rcode = DECODE_NOTIMP;
-            break;
-        }
-
-        offset += *question_len_ptr;
-
-        // parse_optrr() will raise this value in the udp edns0 case as necc.
-        ctx->this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE;
-
-        // Note this will only catch OPT RR as the first addtl record.  It may not always
-        //  be in that place, and it would be more robust to attempt to search the addtl
-        //  records for the first OPT one (there should only be one OPT).  For that matter,
-        //  for reasons yet unknown, future DNS packets might have other intervening non-
-        //  addtl records (answer, auth).  But this handles the common use case today,
-        //  and the worst fallout is an edns0 detection failure, which results in traditional
-        //  dns comms.
-        // At some point in the future, we need to pay attention all of ancount/nscount/adcount,
-        //  and step through any such records looking for an appropriate OPT record in addtl.
-        const wire_dns_rr_opt_t* opt = (const wire_dns_rr_opt_t*)&packet[offset + 1];
-        if (DNSH_GET_ARCOUNT(hdr)
-                && likely(packet_len >= (offset + sizeof_optrr + 1))
-                && likely(packet[offset] == '\0')
-                && likely(DNS_OPTRR_GET_TYPE(opt) == DNS_TYPE_OPT)) {
-            rcode = parse_optrr(ctx, opt, asin, packet_len, offset + 1);
-        }
-    } while (0);
+    }
 
     return rcode;
 }
@@ -1245,7 +1339,7 @@ MK_RRSET_GET(ns, ns, DNS_TYPE_NS)
 typedef unsigned(*encode_funcptr)(dnsp_ctx_t*, unsigned, const void*);
 #define EC (encode_funcptr)
 
-static encode_funcptr encode_funcptrs[256] = {
+static encode_funcptr encode_funcptrs[128] = {
     EC encode_rrs_rfc3597, // 000
     EC encode_rrs_a,       // 001 - DNS_TYPE_A
     EC encode_rrs_ns,      // 002 - DNS_TYPE_NS
@@ -1374,140 +1468,12 @@ static encode_funcptr encode_funcptrs[256] = {
     EC encode_rrs_rfc3597, // 125
     EC encode_rrs_rfc3597, // 126
     EC encode_rrs_rfc3597, // 127
-    EC encode_rrs_rfc3597, // 128
-    EC encode_rrs_rfc3597, // 129
-    EC encode_rrs_rfc3597, // 130
-    EC encode_rrs_rfc3597, // 131
-    EC encode_rrs_rfc3597, // 132
-    EC encode_rrs_rfc3597, // 133
-    EC encode_rrs_rfc3597, // 134
-    EC encode_rrs_rfc3597, // 135
-    EC encode_rrs_rfc3597, // 136
-    EC encode_rrs_rfc3597, // 137
-    EC encode_rrs_rfc3597, // 138
-    EC encode_rrs_rfc3597, // 139
-    EC encode_rrs_rfc3597, // 140
-    EC encode_rrs_rfc3597, // 141
-    EC encode_rrs_rfc3597, // 142
-    EC encode_rrs_rfc3597, // 143
-    EC encode_rrs_rfc3597, // 144
-    EC encode_rrs_rfc3597, // 145
-    EC encode_rrs_rfc3597, // 146
-    EC encode_rrs_rfc3597, // 147
-    EC encode_rrs_rfc3597, // 148
-    EC encode_rrs_rfc3597, // 149
-    EC encode_rrs_rfc3597, // 150
-    EC encode_rrs_rfc3597, // 151
-    EC encode_rrs_rfc3597, // 152
-    EC encode_rrs_rfc3597, // 153
-    EC encode_rrs_rfc3597, // 154
-    EC encode_rrs_rfc3597, // 155
-    EC encode_rrs_rfc3597, // 156
-    EC encode_rrs_rfc3597, // 157
-    EC encode_rrs_rfc3597, // 158
-    EC encode_rrs_rfc3597, // 159
-    EC encode_rrs_rfc3597, // 160
-    EC encode_rrs_rfc3597, // 161
-    EC encode_rrs_rfc3597, // 162
-    EC encode_rrs_rfc3597, // 163
-    EC encode_rrs_rfc3597, // 164
-    EC encode_rrs_rfc3597, // 165
-    EC encode_rrs_rfc3597, // 166
-    EC encode_rrs_rfc3597, // 167
-    EC encode_rrs_rfc3597, // 168
-    EC encode_rrs_rfc3597, // 169
-    EC encode_rrs_rfc3597, // 170
-    EC encode_rrs_rfc3597, // 171
-    EC encode_rrs_rfc3597, // 172
-    EC encode_rrs_rfc3597, // 173
-    EC encode_rrs_rfc3597, // 174
-    EC encode_rrs_rfc3597, // 175
-    EC encode_rrs_rfc3597, // 176
-    EC encode_rrs_rfc3597, // 177
-    EC encode_rrs_rfc3597, // 178
-    EC encode_rrs_rfc3597, // 179
-    EC encode_rrs_rfc3597, // 180
-    EC encode_rrs_rfc3597, // 181
-    EC encode_rrs_rfc3597, // 182
-    EC encode_rrs_rfc3597, // 183
-    EC encode_rrs_rfc3597, // 184
-    EC encode_rrs_rfc3597, // 185
-    EC encode_rrs_rfc3597, // 186
-    EC encode_rrs_rfc3597, // 187
-    EC encode_rrs_rfc3597, // 188
-    EC encode_rrs_rfc3597, // 189
-    EC encode_rrs_rfc3597, // 190
-    EC encode_rrs_rfc3597, // 191
-    EC encode_rrs_rfc3597, // 192
-    EC encode_rrs_rfc3597, // 193
-    EC encode_rrs_rfc3597, // 194
-    EC encode_rrs_rfc3597, // 195
-    EC encode_rrs_rfc3597, // 196
-    EC encode_rrs_rfc3597, // 197
-    EC encode_rrs_rfc3597, // 198
-    EC encode_rrs_rfc3597, // 199
-    EC encode_rrs_rfc3597, // 200
-    EC encode_rrs_rfc3597, // 201
-    EC encode_rrs_rfc3597, // 202
-    EC encode_rrs_rfc3597, // 203
-    EC encode_rrs_rfc3597, // 204
-    EC encode_rrs_rfc3597, // 205
-    EC encode_rrs_rfc3597, // 206
-    EC encode_rrs_rfc3597, // 207
-    EC encode_rrs_rfc3597, // 208
-    EC encode_rrs_rfc3597, // 209
-    EC encode_rrs_rfc3597, // 210
-    EC encode_rrs_rfc3597, // 211
-    EC encode_rrs_rfc3597, // 212
-    EC encode_rrs_rfc3597, // 213
-    EC encode_rrs_rfc3597, // 214
-    EC encode_rrs_rfc3597, // 215
-    EC encode_rrs_rfc3597, // 216
-    EC encode_rrs_rfc3597, // 217
-    EC encode_rrs_rfc3597, // 218
-    EC encode_rrs_rfc3597, // 219
-    EC encode_rrs_rfc3597, // 220
-    EC encode_rrs_rfc3597, // 221
-    EC encode_rrs_rfc3597, // 222
-    EC encode_rrs_rfc3597, // 223
-    EC encode_rrs_rfc3597, // 224
-    EC encode_rrs_rfc3597, // 225
-    EC encode_rrs_rfc3597, // 226
-    EC encode_rrs_rfc3597, // 227
-    EC encode_rrs_rfc3597, // 228
-    EC encode_rrs_rfc3597, // 229
-    EC encode_rrs_rfc3597, // 230
-    EC encode_rrs_rfc3597, // 231
-    EC encode_rrs_rfc3597, // 232
-    EC encode_rrs_rfc3597, // 233
-    EC encode_rrs_rfc3597, // 234
-    EC encode_rrs_rfc3597, // 235
-    EC encode_rrs_rfc3597, // 236
-    EC encode_rrs_rfc3597, // 237
-    EC encode_rrs_rfc3597, // 238
-    EC encode_rrs_rfc3597, // 239
-    EC encode_rrs_rfc3597, // 240
-    EC encode_rrs_rfc3597, // 241
-    EC encode_rrs_rfc3597, // 242
-    EC encode_rrs_rfc3597, // 243
-    EC encode_rrs_rfc3597, // 244
-    EC encode_rrs_rfc3597, // 245
-    EC encode_rrs_rfc3597, // 246
-    EC encode_rrs_rfc3597, // 247
-    EC encode_rrs_rfc3597, // 248
-    EC encode_rrs_rfc3597, // 249
-    EC encode_rrs_rfc3597, // 250
-    NULL,                  // 251 - IXFR
-    NULL,                  // 252 - AXFR
-    EC encode_rrs_rfc3597, // 253
-    EC encode_rrs_rfc3597, // 254
-    NULL,                  // 255 - ANY
 };
 
 F_NONNULL
 static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* node_rrset)
 {
-    gdnsd_assert(ctx->qtype != DNS_TYPE_ANY);
+    gdnsd_assert(ctx->qtype < 128 || ctx->qtype & 0xFF00);
     unsigned etype = ctx->qtype;
     // rrset_addr is stored as type DNS_TYPE_A for both A and AAAA
     if (etype == DNS_TYPE_AAAA)
@@ -1837,11 +1803,17 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
 
 unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns0_tcp_keepalive)
 {
+    // iothreads don't allow queries larger than this
+    gdnsd_assert(packet_len <= DNS_RECV_SIZE);
+
     dnsp_ctx_t* ctx = ctx_asvoid;
     reset_context(ctx);
     gdnsd_assert(ctx->stats);
     ctx->packet = packet;
     ctx->edns0_tcp_keepalive = edns0_tcp_keepalive;
+
+    // parse_optrr() will raise this value in the udp edns0 case as necc.
+    ctx->this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE;
 
     /*
         log_devdebug("Processing %sv%u DNS query of length %u from %s",
@@ -1854,42 +1826,30 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
     if (asin->sa.sa_family == AF_INET6)
         stats_own_inc(&ctx->stats->v6);
 
-    unsigned question_len = 0;
-
-    const rcode_rv_t status = decode_query(ctx, &question_len, packet_len, asin);
+    unsigned res_offset = sizeof(wire_dns_header_t);
+    const rcode_rv_t status = decode_query(ctx, &res_offset, packet_len, asin);
 
     if (status == DECODE_IGNORE) {
         stats_own_inc(&ctx->stats->dropped);
         return 0;
     }
 
-    unsigned res_offset = sizeof(wire_dns_header_t);
-
     wire_dns_header_t* hdr = (wire_dns_header_t*)packet;
     hdr->flags1 &= 0x79; // Clears QR, TC, AA bits, preserves RD and Opcode
     hdr->flags1 |= 0x80; // Sets QR
-    gdnsd_put_una16(0, &hdr->ancount);
-    gdnsd_put_una16(0, &hdr->nscount);
-    gdnsd_put_una16(0, &hdr->arcount);
-
-    if (status == DECODE_NOTIMP) {
-        gdnsd_put_una16(0, &hdr->qdcount);
-        hdr->flags2 = DNS_RCODE_NOTIMP;
-        stats_own_inc(&ctx->stats->notimp);
-        return res_offset;
-    }
-
-    res_offset += question_len;
 
     if (likely(status == DECODE_OK)) {
         hdr->flags2 = DNS_RCODE_NOERROR;
-        if (likely(!ctx->chaos)) {
+        if (likely(ctx->qclass == DNS_CLASS_IN) || ctx->qclass == DNS_CLASS_ANY) {
             memcpy(&ctx->client_info.dns_source, asin, sizeof(*asin));
             res_offset = answer_from_db_outer(ctx, res_offset);
-        } else {
+        } else if (ctx->qclass == DNS_CLASS_CH) {
             ctx->ancount = 1;
             memcpy(&packet[res_offset], gcfg->chaos, gcfg->chaos_len);
             res_offset += gcfg->chaos_len;
+        } else {
+            hdr->flags2 = DNS_RCODE_REFUSED;
+            stats_own_inc(&ctx->stats->refused);
         }
 
         if (hdr->flags2 == DNS_RCODE_NOERROR)
@@ -1898,6 +1858,9 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         if (status == DECODE_FORMERR) {
             hdr->flags2 = DNS_RCODE_FORMERR;
             stats_own_inc(&ctx->stats->formerr);
+        } else if (status == DECODE_NOTIMP) {
+            hdr->flags2 = DNS_RCODE_NOTIMP;
+            stats_own_inc(&ctx->stats->notimp);
         } else {
             gdnsd_assert(status == DECODE_BADVERS);
             hdr->flags2 = DNS_RCODE_NOERROR;
@@ -1907,13 +1870,14 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
 
     if (ctx->use_edns) {
         packet[res_offset++] = '\0'; // domainname part of OPT
-        wire_dns_rr_opt_t* opt = (wire_dns_rr_opt_t*)&packet[res_offset];
-        res_offset += sizeof_optrr;
-
-        gdnsd_put_una16(htons(DNS_TYPE_OPT), &opt->type);
-        gdnsd_put_una16(htons(DNS_EDNS0_SIZE), &opt->maxsize);
-        gdnsd_put_una32((status == DECODE_BADVERS) ? htonl(0x01000000) : 0, &opt->extflags);
-        gdnsd_put_una16(0, &opt->rdlen);
+        gdnsd_put_una16(htons(DNS_TYPE_OPT), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(DNS_EDNS0_SIZE), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una32((status == DECODE_BADVERS) ? htonl(0x01000000) : 0, &packet[res_offset]);
+        res_offset += 4;
+        uint8_t* rdlen_ptr = &packet[res_offset]; // filled in at end, after we know
+        res_offset += 2;
 
         // code below which tacks on options should increment this for the overall rdlen of the OPT RR
         unsigned rdlen = 0;
@@ -1967,7 +1931,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         }
 
         // Update OPT RR's rdlen for any options emitted above, and bump arcount for it
-        gdnsd_put_una16(htons(rdlen), &opt->rdlen);
+        gdnsd_put_una16(htons(rdlen), rdlen_ptr);
         ctx->arcount++;
 
         if (likely(ctx->is_udp)) {
@@ -1978,6 +1942,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         }
     }
 
+    gdnsd_put_una16(htons(ctx->qdcount), &hdr->qdcount);
     gdnsd_put_una16(htons(ctx->ancount + ctx->cname_ancount), &hdr->ancount);
     gdnsd_put_una16(htons(ctx->nscount), &hdr->nscount);
     gdnsd_put_una16(htons(ctx->arcount), &hdr->arcount);

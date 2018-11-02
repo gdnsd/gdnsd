@@ -5,7 +5,7 @@
 # Also covers a few EDNS cases at the bottom
 
 use _GDT ();
-use Test::More tests => 8;
+use Test::More tests => 11;
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
@@ -94,7 +94,7 @@ _GDT->test_dns(
     stats => [qw/udp_reqs edns udp_edns_big nxdomain/],
 );
 
-# Questions containing Additional Records which are not OPT RRs...
+# Queries containing Additional Records which are not OPT RRs...
 
 {
     my $qpacket = Net::DNS::Packet->new();
@@ -113,6 +113,50 @@ _GDT->test_dns(
     _GDT->test_dns(
         qpacket => $qpacket,
         answer => 'foo.example.com 86400 A 192.0.2.3',
+    );
+}
+
+# as above, with an OPTRR after one and before the other
+#
+{
+    my $qpacket = Net::DNS::Packet->new();
+    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
+    $qpacket->push('additional', $long_rr);
+    $qpacket->push('additional', $optrr);
+    _GDT->test_dns(
+        qpacket => $qpacket,
+        answer => 'foo.example.com 86400 A 192.0.2.3',
+        addtl => $optrr,
+        stats => [qw/udp_reqs noerror edns/],
+    );
+}
+
+{
+    my $qpacket = Net::DNS::Packet->new();
+    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
+    $qpacket->push('additional', $optrr);
+    $qpacket->push('additional', $long_root_rr);
+    _GDT->test_dns(
+        qpacket => $qpacket,
+        answer => 'foo.example.com 86400 A 192.0.2.3',
+        addtl => $optrr,
+        stats => [qw/udp_reqs noerror edns/],
+    );
+}
+
+# Try a bunch of records in all the non-question sections
+{
+    my $qpacket = Net::DNS::Packet->new();
+    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
+    $qpacket->push('answer', Net::DNS::RR->new('. A 192.0.2.1')) for 1..15;
+    $qpacket->push('auth', Net::DNS::RR->new('. AAAA ::192.0.2.1')) for 1..13;
+    $qpacket->push('additional', Net::DNS::RR->new('. MX 0 192.0.2.1')) for 1..11;
+    _GDT->test_dns(
+        resopts => { usevc => 0, igntc => 1, udppacketsize => 1024 },
+        qpacket => $qpacket,
+        answer => 'foo.example.com 86400 A 192.0.2.3',
+        addtl => $optrr,
+        stats => [qw/udp_reqs noerror edns/],
     );
 }
 

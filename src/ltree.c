@@ -689,14 +689,13 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
             || rrtype == DNS_TYPE_MX
             || rrtype == DNS_TYPE_SRV
             || rrtype == DNS_TYPE_NAPTR
-            || rrtype == DNS_TYPE_HINFO
             || rrtype == DNS_TYPE_TXT)
         log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed, please use the explicit support built in for this RR type", logf_dname(dname), logf_dname(zone->dname), rrtype);
 
-    if (rrtype == DNS_TYPE_AXFR
+    if (rrtype == DNS_TYPE_HINFO
             || rrtype == DNS_TYPE_DYNC
-            || rrtype == DNS_TYPE_IXFR
-            || rrtype == DNS_TYPE_ANY)
+            || (rrtype > 127 && rrtype < 256)
+            || rrtype == 0)
         log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed", logf_dname(dname), logf_dname(zone->dname), rrtype);
 
     ltree_rrset_rfc3597_t* rrset = ltree_node_get_rrset_rfc3597(node, rrtype);

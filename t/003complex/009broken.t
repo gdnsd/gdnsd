@@ -7,14 +7,14 @@ my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 18
 
 my $pid = _GDT->test_spawn_daemon();
 
-{   # more than one question
+{   # more than one question, and using compression for the second name
     my $qpacket = Net::DNS::Packet->new();
     $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
     $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
     _GDT->test_dns(
         qpacket => $qpacket,
-        nores => 1,
-        stats => [qw/udp_reqs dropped/],
+        header => { rcode => 'FORMERR', aa => 0 },
+        stats => [qw/udp_reqs formerr/],
     );
 }
 
@@ -28,13 +28,13 @@ my $pid = _GDT->test_spawn_daemon();
     );
 }
 
-{   # TC bit set
+{   # TC bit set, which we ignore in queries
     my $qpacket = Net::DNS::Packet->new('foo.example.com', 'A');
     $qpacket->header->tc(1);
     _GDT->test_dns(
         qpacket => $qpacket,
-        nores => 1,
-        stats => [qw/udp_reqs dropped/],
+        answer => 'foo.example.com 21600 A 192.0.2.160',
+        stats => [qw/udp_reqs noerror/],
     );
 }
 
@@ -55,7 +55,6 @@ my $pid = _GDT->test_spawn_daemon();
     _GDT->test_dns(
         qpacket => $qpacket,
         header => { rcode => 'NOTIMP', opcode => 'IQUERY', aa => 0 },
-        noresq => 1,
         stats => [qw/udp_reqs notimp/],
     );
 }

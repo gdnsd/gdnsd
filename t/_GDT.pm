@@ -1105,19 +1105,19 @@ sub test_dns {
         map { if(!ref $aref->[$_]) { $aref->[$_] = Net::DNS::RR->new_from_string($aref->[$_]) } } (0..$#$aref);
     }
 
-    my $question = $args{qpacket} || Net::DNS::Packet->new($args{qname}, $args{qtype});
+    my $qpacket = $args{qpacket} || Net::DNS::Packet->new($args{qname}, $args{qtype});
     if(defined $args{qid}) {
-        $question->header->id($args{qid});
+        $qpacket->header->id($args{qid});
     }
     if(defined $args{q_optrr}) {
-        $question->push(additional => $args{q_optrr});
+        $qpacket->push(additional => $args{q_optrr});
     }
 
     my $answer = $args{nores}
         ? undef
         : $class->mkanswer(
             $args{header},
-            $args{noresq} ? undef : $question->question(),
+            $args{noresq} ? undef : ($qpacket->question())[0],
             $args{answer},
             $args{auth},
             $args{addtl},
@@ -1130,7 +1130,7 @@ sub test_dns {
             foreach my $stat (@{$args{stats}}) {
                 $stats_accum{$stat}++;
             }
-            $size4 = eval { $class->query_server($args{qpacket_raw}, $question, $answer, 'IPv4', $args{resopts}, $args{limit_v4}, $args{limit_v6}, $args{wrr_v4}, $args{wrr_v6}) };
+            $size4 = eval { $class->query_server($args{qpacket_raw}, $qpacket, $answer, 'IPv4', $args{resopts}, $args{limit_v4}, $args{limit_v6}, $args{wrr_v4}, $args{wrr_v6}) };
             if($@) {
                 Test::More::ok(0);
                 Test::More::diag("IPv4 query failed: $@");
@@ -1147,7 +1147,7 @@ sub test_dns {
                     $stats_accum{v6}++;
                 }
             }
-            $size6 = eval { $class->query_server($args{qpacket_raw}, $question, $answer, 'IPv6', $args{resopts}, $args{limit_v4}, $args{limit_v6}, $args{wrr_v4}, $args{wrr_v6}) };
+            $size6 = eval { $class->query_server($args{qpacket_raw}, $qpacket, $answer, 'IPv6', $args{resopts}, $args{limit_v4}, $args{limit_v6}, $args{wrr_v4}, $args{wrr_v6}) };
             if($@) {
                 Test::More::ok(0);
                 Test::More::diag("IPv6 query failed: $@");
