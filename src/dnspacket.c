@@ -80,8 +80,9 @@ typedef struct {
 // response
 // ---
 
-    // Max UDP response size for this individual request, as determined
-    //  by protocol type and EDNS (or lack thereof), not used for TCP
+    // Max response size for this individual request, as determined
+    //  by protocol type, expected edns0 output bytes at the end, and in the
+    //  case of UDP, the EDNS max response size (if any).
     unsigned this_max_response;
 
     // The queried type.  Note that this gets switched internally to CNAME in
@@ -418,6 +419,8 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
                 : edns_maxsize < gcfg->max_edns_response
                     ? edns_maxsize
                     : gcfg->max_edns_response;
+        } else {
+            ctx->this_max_response -= 6U; // tcp keepalive option space
         }
 
         // leave room for basic OPT RR (edns-client-subnet room is addressed elsewhere)
