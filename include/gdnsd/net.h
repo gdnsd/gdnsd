@@ -47,7 +47,7 @@
 void gdnsd_init_net(void);
 
 F_NONNULL
-void sun_set_path(struct sockaddr_un* a, const char* path);
+void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path);
 
 // Plugins should use these to get protocol numbers
 F_PURE

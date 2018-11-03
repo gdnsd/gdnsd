@@ -929,7 +929,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
 
         char* sock_path = gdnsd_resolve_path_run(base_sock, NULL);
         struct sockaddr_un addr;
-        sun_set_path(&addr, sock_path);
+        gdnsd_sun_set_path(&addr, sock_path);
         if (unlink(sock_path) && errno != ENOENT)
             log_fatal("unlink(%s) failed: %s", sock_path, logf_errno());
 

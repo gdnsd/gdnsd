@@ -60,7 +60,7 @@ void gdnsd_init_net(void)
     udp_proto = pe->p_proto;
 }
 
-void sun_set_path(struct sockaddr_un* a, const char* path)
+void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
 {
     memset(a, 0, sizeof(*a));
     a->sun_family = AF_UNIX;
