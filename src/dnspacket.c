@@ -130,6 +130,9 @@ typedef struct {
     // Whether this request had a valid EDNS0 optrr
     bool use_edns;
 
+    // Whether the query requested NSID *and* we have it configured
+    bool respond_nsid;
+
     // Client sent EDNS Client Subnet option, and we must respond with one
     bool respond_edns_client_subnet;
 
@@ -306,6 +309,16 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
     if (opt_code == EDNS_CLIENTSUB_OPTCODE) {
         if (gcfg->edns_client_subnet)
             rv = handle_edns_client_subnet(ctx, opt_len, opt_data);
+    } else if (opt_code == EDNS_NSID_OPTCODE) {
+        if (!opt_len) {
+            if (gcfg->nsid_len) {
+                gdnsd_assert(gcfg->nsid);
+                ctx->this_max_response -= (4U + gcfg->nsid_len);
+                ctx->respond_nsid = true;
+	    }
+	} else {
+            rv = true; // nsid req MUST NOT have data
+        }
     } else if (opt_code == EDNS_TCP_KEEPALIVE_OPTCODE) {
         // no-op
         // Note we don't explicitly parse RFC 7828 edns0 tcp keepalive here, but
@@ -409,10 +422,6 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
 
         // leave room for basic OPT RR (edns-client-subnet room is addressed elsewhere)
         ctx->this_max_response -= 11;
-
-        // Leave room for NSID if configured
-        if (gcfg->nsid_len)
-            ctx->this_max_response -= (4U + gcfg->nsid_len);
 
         if (edns_rdlen) {
             if (packet_len < offset + edns_rdlen) {
@@ -1919,8 +1928,9 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         }
 
         // NSID, if configured by user
-        if (gcfg->nsid_len) {
+        if (ctx->respond_nsid) {
             gdnsd_assert(gcfg->nsid);
+            gdnsd_assert(gcfg->nsid_len);
             rdlen += (4U + gcfg->nsid_len);
             gdnsd_put_una16(htons(EDNS_NSID_OPTCODE), &packet[res_offset]);
             res_offset += 2;

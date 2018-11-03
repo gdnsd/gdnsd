@@ -358,10 +358,11 @@ String, no default, 2-256 chars in length.  Character count must be
 even, and all characters must be ASCII hex digits.  This encodes up to
 128 bytes of arbitrary binary data chosen by the administrator and
 serves it in the EDNS0 NSID (RFC 5001) option data of all response
-packets.  The NSID is obviously not emitted to non-edns0 clients, and is
-not emitted at all unless this option is specified explicitly.  This is
-intended to help with the identification of specific servers when
-multiple servers are part of an anycast or loadbalancer pool.
+packets.  The NSID is obviously not emitted to clients unless they
+request it via edns0, and is not emitted at all unless this option
+is specified explicitly.  This is intended to help with the
+identification of specific servers when multiple servers are part
+of an anycast or loadbalancer pool.
 
 =item B<nsid_ascii>
 

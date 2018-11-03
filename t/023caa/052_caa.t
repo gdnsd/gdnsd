@@ -3,6 +3,16 @@ use Test::More tests => 3;
 
 my $pid = _GDT->test_spawn_daemon();
 
+my $optrr_req_nsid = Net::DNS::RR->new(
+    type => "OPT",
+    ednsversion => 0,
+    name => "",
+    class => 32000,
+    extendedrcode => 0,
+    ednsflags => 0,
+    optioncode => 3,
+);
+
 my $optrr_nsid = Net::DNS::RR->new(
     type => "OPT",
     ednsversion => 0,
@@ -15,8 +25,8 @@ my $optrr_nsid = Net::DNS::RR->new(
 );
 
 _GDT->test_dns(
-    resopts => { usevc => 0, igntc => 0, udppacketsize => 32000 },
     qname => 'example.com', qtype => 'TYPE257',
+    q_optrr => $optrr_req_nsid,
     answer => [
         'example.com 86400 TYPE257 \# 21 00 05 6973737565 63612E6578616D706C652E6E6574',
         'example.com 86400 TYPE257 \# 12 80 03 746273 556E6B6E6F776E',

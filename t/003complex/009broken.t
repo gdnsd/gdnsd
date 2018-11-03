@@ -1,7 +1,7 @@
 # Test various forms of "broken" queries
 
 use _GDT ();
-use Test::More tests => 17;
+use Test::More tests => 19;
 
 my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
@@ -178,6 +178,58 @@ my @edns_base = (
         qname => 'example.com', qtype => 'A', qid => $id,
         header => { rcode => 'FORMERR', aa => 0},
         addtl => $optrr_res,
+        stats => [qw/udp_reqs edns formerr/]
+    );
+}
+
+my $optrr_resp = Net::DNS::RR->new(
+    type => "OPT",
+    ednsversion => 0,
+    name => "",
+    class => 1024,
+    extendedrcode => 0,
+    ednsflags => 0,
+);
+
+# NSID query when not configured
+{
+    my $optrr_nsid = Net::DNS::RR->new(
+        type => "OPT",
+        ednsversion => 0,
+        name => "",
+        class => 1024,
+        extendedrcode => 0,
+        ednsflags => 0,
+        optioncode => 3,
+    );
+
+    _GDT->test_dns(
+        qname => 'foo.example.com', qtype => 'A',
+        q_optrr => $optrr_nsid,
+        answer => 'foo.example.com 21600 A 192.0.2.160',
+        addtl => $optrr_resp,
+        stats => [qw/udp_reqs edns noerror/]
+    );
+}
+
+# NSID with illegal client-sent NSID data
+{
+    my $optrr_nsid_withdata = Net::DNS::RR->new(
+        type => "OPT",
+        ednsversion => 0,
+        name => "",
+        class => 1024,
+        extendedrcode => 0,
+        ednsflags => 0,
+        optioncode => 3,
+        optiondata => pack('H*', '6578616D706C65'),
+    );
+
+    _GDT->test_dns(
+        qname => 'foo.example.com', qtype => 'A',
+        q_optrr => $optrr_nsid_withdata,
+        header => { rcode => 'FORMERR', aa => 0 },
+        addtl => $optrr_resp,
         stats => [qw/udp_reqs edns formerr/]
     );
 }

@@ -2,7 +2,17 @@
 
 use _GDT ();
 use Net::DNS;
-use Test::More tests => 5;
+use Test::More tests => 6;
+
+my $optrr_req_nsid = Net::DNS::RR->new(
+    type => "OPT",
+    ednsversion => 0,
+    name => "",
+    class => 1024,
+    extendedrcode => 0,
+    ednsflags => 0,
+    optioncode => 3,
+);
 
 my $optrr_nsid = Net::DNS::RR->new(
     type => "OPT",
@@ -15,6 +25,15 @@ my $optrr_nsid = Net::DNS::RR->new(
     optiondata => pack('H*', '6578616D706C65'),
 );
 
+my $optrr_nonsid = Net::DNS::RR->new(
+    type => "OPT",
+    ednsversion => 0,
+    name => "",
+    class => 1024,
+    extendedrcode => 0,
+    ednsflags => 0,
+);
+
 my $pid = _GDT->test_spawn_daemon();
 
 _GDT->test_dns(
@@ -23,10 +42,18 @@ _GDT->test_dns(
 );
 
 _GDT->test_dns(
+    qname => 'www.com', qtype => 'A',
+    q_optrr => $optrr_req_nsid,
+    answer => 'www.com 43200 A 192.0.2.4',
+    addtl => $optrr_nsid,
+    stats => [qw/udp_reqs noerror edns/],
+);
+
+_GDT->test_dns(
     resopts => { usevc => 0, igntc => 0, udppacketsize => 32000 },
     qname => 'www.com', qtype => 'A',
     answer => 'www.com 43200 A 192.0.2.4',
-    addtl => $optrr_nsid,
+    addtl => $optrr_nonsid,
     stats => [qw/udp_reqs noerror edns/],
 );
 
