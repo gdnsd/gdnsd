@@ -1734,7 +1734,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
         }
 
         if (ctx->qtype == DNS_TYPE_TXT || !ctx->ancount)
-            chal_matched = chal_respond(ctx->qname_comp, ctx->qtype, qname, ctx->packet, &ctx->ancount, &offset);
+            chal_matched = chal_respond(ctx->qname_comp, ctx->qtype, qname, ctx->packet, &ctx->ancount, &offset, ctx->this_max_response);
 
         if (unlikely(ctx->qtype == DNS_TYPE_ANY)) {
             // construct_normal_response is not called for ANY, and

@@ -73,7 +73,7 @@ void cset_flush(struct ev_loop* loop);
 // offset.  If no matching records, returns the offset it was given and does
 // not affect packet or *ancount_p.
 F_NONNULL
-bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p);
+bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response);
 
 // Does some basic initialization early
 void chal_init(void);

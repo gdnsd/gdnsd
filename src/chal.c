@@ -458,7 +458,7 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
 
 // runtime lookup called in dns i/o thread context from dnspacket.c from within
 // an RCU read-side critical section.  Must be fast, non-blocking, no syscalls.
-bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p)
+bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response)
 {
     bool matched = false;
     const bool qname_is_chal = dname_is_acme_chal(qname);
@@ -480,7 +480,7 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
                 if (ch->dnhash == qname_hash && likely(!dname_cmp(qname, ch->dname))) {
                     matched = true;
                     if (qname_is_chal && qtype == DNS_TYPE_TXT) {
-                        if ((*offset_p + 2U + CHAL_RR_LEN) > MAX_RESPONSE)
+                        if ((*offset_p + 2U + CHAL_RR_LEN) > this_max_response)
                             break; // do not run off the end of the buffer!
                         gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
                         (*offset_p) += 2;
