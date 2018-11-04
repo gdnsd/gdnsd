@@ -314,9 +314,6 @@ ethernet jumbo frames) can be gauranteed.
 The option obviously has no pragmatic effect if you do not have
 large response datasets in your zones in the first place.
 
-This value will be capped at the configured (or default) value of
-C<max_response> with a warning if configured above that value.
-
 =item B<edns_client_subnet>
 
 Boolean, default true.  Enables support for the edns-client-subnet
