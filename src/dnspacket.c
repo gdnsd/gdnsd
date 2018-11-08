@@ -316,8 +316,8 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
                 gdnsd_assert(gcfg->nsid);
                 ctx->this_max_response -= (4U + gcfg->nsid_len);
                 ctx->respond_nsid = true;
-	    }
-	} else {
+            }
+        } else {
             rv = true; // nsid req MUST NOT have data
         }
     } else if (opt_code == EDNS_TCP_KEEPALIVE_OPTCODE) {
@@ -415,10 +415,10 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
     if (likely(edns_version == 0)) {
         if (likely(ctx->is_udp)) {
             ctx->this_max_response = edns_maxsize < 512U
-                ? 512U
-                : edns_maxsize < gcfg->max_edns_response
-                    ? edns_maxsize
-                    : gcfg->max_edns_response;
+                                     ? 512U
+                                     : edns_maxsize < gcfg->max_edns_response
+                                     ? edns_maxsize
+                                     : gcfg->max_edns_response;
         } else {
             ctx->this_max_response -= 6U; // tcp keepalive option space
         }
