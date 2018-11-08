@@ -131,6 +131,9 @@ typedef struct {
     // Whether this request had a valid EDNS0 optrr
     bool use_edns;
 
+    // DO bit in edns, if edns used at all
+    bool edns_do_bit;
+
     // Whether the query requested NSID *and* we have it configured
     bool respond_nsid;
 
@@ -405,13 +408,18 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
     unsigned edns_rdlen = ntohs(gdnsd_get_una16(&packet[offset]));
     offset += 2;
 
-    // derive version from extflags
-    unsigned edns_version = (edns_extflags & 0xFF0000) >> 16;
-
     rcode_rv_t rcode = DECODE_OK;
     ctx->use_edns = true;            // send OPT RR with response
     stats_own_inc(&ctx->stats->edns);
 
+    // DO-bit from extflags
+    if (edns_extflags & 0x8000) {
+        ctx->edns_do_bit = true;
+        stats_own_inc(&ctx->stats->edns_do);
+    }
+
+    // derive version from extflags
+    const unsigned edns_version = (edns_extflags & 0xFF0000) >> 16;
     if (likely(edns_version == 0)) {
         if (likely(ctx->is_udp)) {
             ctx->this_max_response = edns_maxsize < 512U
@@ -1881,12 +1889,16 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
     }
 
     if (ctx->use_edns) {
+        uint32_t extflags = (status == DECODE_BADVERS) ? 0x01000000 : 0;
+        if (ctx->edns_do_bit)
+            extflags |= 0x8000;
+
         packet[res_offset++] = '\0'; // domainname part of OPT
         gdnsd_put_una16(htons(DNS_TYPE_OPT), &packet[res_offset]);
         res_offset += 2;
         gdnsd_put_una16(htons(DNS_EDNS0_SIZE), &packet[res_offset]);
         res_offset += 2;
-        gdnsd_put_una32((status == DECODE_BADVERS) ? htonl(0x01000000) : 0, &packet[res_offset]);
+        gdnsd_put_una32(htonl(extflags), &packet[res_offset]);
         res_offset += 4;
         uint8_t* rdlen_ptr = &packet[res_offset]; // filled in at end, after we know
         res_offset += 2;

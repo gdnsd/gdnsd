@@ -5,7 +5,7 @@
 # Also covers a few EDNS cases at the bottom
 
 use _GDT ();
-use Test::More tests => 11;
+use Test::More tests => 12;
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
@@ -159,5 +159,25 @@ _GDT->test_dns(
         stats => [qw/udp_reqs noerror edns/],
     );
 }
+
+# DO-bit should echo
+{
+    my $optrr_do = Net::DNS::RR->new(
+        type => "OPT",
+        ednsversion => 0,
+        name => "",
+        class => 1024,
+        extendedrcode => 0,
+        ednsflags => 0x8000,
+    );
+    _GDT->test_dns(
+        qname => 'cov.example.com', qtype => 'MX',
+        q_optrr => $optrr_do,
+        answer => 'cov.example.com 86400 MX 1 .',
+        addtl => $optrr_do,
+        stats => [qw/udp_reqs noerror edns edns_do/],
+    );
+}
+
 
 _GDT->test_kill_daemon($pid);

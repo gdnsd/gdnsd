@@ -27,6 +27,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * The additional section only ever contains actual mandatory glue IPs (out-of-zone glue or glue within any delegated subzone of the delegating zone); it is no longer used for other purposes like A/AAAA additionals for answer-section MX, SRV, etc.
   * ANY-queries are now answered with a minimal, synthetic HINFO RR per RFC 8482
 * Input query parsing is now much more robust and future-proof in general.  We now at least minimally parse all query RRs and seek the OPT RR anywhere within the additional section, and we're much more likely to respond explicitly with a FORMERR or NOTIMP in some cases where we'd have previously not responded at all to oddly-formed queries from future standards efforts we're not aware of.
+* The DNSSEC OK (DO) bit in the edns0 flags field is now echoed back in responses as per RFC 3225 (but we continue to not support DNSSEC so far, so no functional impact on the response).
+* A new stat counter `edns_do` tracks the count of edns0 requests with the DO bit set.
 
 ### Zonefiles
 

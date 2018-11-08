@@ -74,6 +74,9 @@ typedef struct {
 
     // A percentage of "edns" above:
     stats_t edns_clientsub;
+
+    // edns requests with the DO (DNSSEC OK) bit set
+    stats_t edns_do;
 } dnspacket_stats_t;
 
 F_HOT F_NONNULL
