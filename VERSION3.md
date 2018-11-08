@@ -26,6 +26,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * The auth section is only ever used for negative responses (1x SOA) and delegations (NS records at a zone cut)
   * The additional section only ever contains actual mandatory glue IPs (out-of-zone glue or glue within any delegated subzone of the delegating zone); it is no longer used for other purposes like A/AAAA additionals for answer-section MX, SRV, etc.
   * ANY-queries are now answered with a minimal, synthetic HINFO RR per RFC 8482
+* Input query parsing is now much more robust and future-proof in general.  We now at least minimally parse all query RRs and seek the OPT RR anywhere within the additional section, and we're much more likely to respond explicitly with a FORMERR or NOTIMP in some cases where we'd have previously not responded at all to oddly-formed queries from future standards efforts we're not aware of.
 
 ### Zonefiles
 
