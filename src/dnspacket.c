@@ -25,6 +25,7 @@
 #include "dnswire.h"
 #include "ztree.h"
 #include "chal.h"
+#include "cookie.h"
 
 #include <gdnsd-prot/plugapi.h>
 #include <gdnsd/alloc.h>
@@ -128,7 +129,10 @@ typedef struct {
     //   which is in turn defaulted to zero.
     unsigned edns_client_scope_mask;
 
-    // Whether this request had a valid EDNS0 optrr
+    // How many bytes the OPTRR will consume at the end of the packet
+    unsigned edns_out_bytes;
+
+    // Whether this request had a valid EDNS optrr
     bool use_edns;
 
     // DO bit in edns, if edns used at all
@@ -136,6 +140,15 @@ typedef struct {
 
     // Whether the query requested NSID *and* we have it configured
     bool respond_nsid;
+
+    // Client sent COOKIE option, perhaps a malformed one
+    bool recvd_cookie;
+
+    // Client sent well-formed COOKIE option, and we will respond with one
+    bool respond_cookie;
+
+    // Client sent a full client+server cookie value that we recognize as one we issued
+    bool valid_cookie;
 
     // Client sent EDNS Client Subnet option, and we must respond with one
     bool respond_edns_client_subnet;
@@ -149,6 +162,9 @@ typedef struct {
     // Compression targets, for the few cases where we do general-case compression
     unsigned ctarget_count;
     ctarget_t ctargets[COMPTARGETS_MAX];
+
+    // Output cookie option data, if respond_cookie
+    uint8_t cookie_output[16U];
 } dnsp_ctx_t;
 
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -294,7 +310,7 @@ static bool handle_edns_client_subnet(dnsp_ctx_t* ctx, unsigned opt_len, const u
             }
         }
 
-        ctx->this_max_response -= (8 + addr_bytes); // leave room for response option
+        ctx->edns_out_bytes += (8 + addr_bytes); // leave room for response option
         ctx->respond_edns_client_subnet = true;
         ctx->client_info.edns_client_mask = src_mask;
         ctx->edns_client_family = family; // copy family for output
@@ -317,13 +333,14 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
         if (!opt_len) {
             if (gcfg->nsid_len) {
                 gdnsd_assert(gcfg->nsid);
-                ctx->this_max_response -= (4U + gcfg->nsid_len);
+                ctx->edns_out_bytes += (4U + gcfg->nsid_len);
                 ctx->respond_nsid = true;
             }
         } else {
             rv = true; // nsid req MUST NOT have data
         }
     } else if (opt_code == EDNS_TCP_KEEPALIVE_OPTCODE) {
+        log_devdebug("Got client edns tcp keepalive option, no use for it");
         // no-op
         // Note we don't explicitly parse RFC 7828 edns0 tcp keepalive here, but
         // this is where we'd install the handler function if we did.  Our
@@ -335,6 +352,25 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
         // We could hypothetically parse it just to FORMERR-reject it if the client
         // violates the RFC by sending a non-zero data length, but that seems
         // needlessly aggressive.
+    } else if (opt_code == EDNS_COOKIE_OPTCODE) {
+        // ignore any cookie after the first one, per RFC
+        if (!gcfg->disable_cookies && !ctx->recvd_cookie) {
+            ctx->recvd_cookie = true;
+            // FORMERR if illegal data len, only legal lens are 8, or 16-40
+            if (opt_len != 8U && (opt_len < 16U || opt_len > 40U)) {
+                stats_own_inc(&ctx->stats->edns_cookie_formerr);
+                return true;
+            }
+            ctx->respond_cookie = true;
+            ctx->edns_out_bytes += 20U;
+            ctx->valid_cookie = cookie_process(ctx->cookie_output, opt_data, &ctx->client_info.dns_source, opt_len);
+            if (ctx->valid_cookie)
+                stats_own_inc(&ctx->stats->edns_cookie_ok);
+            else if (opt_len == 8U)
+                stats_own_inc(&ctx->stats->edns_cookie_init);
+            else
+                stats_own_inc(&ctx->stats->edns_cookie_bad);
+        }
     } else {
         log_devdebug("Unknown EDNS option code: %x", opt_code);
     }
@@ -410,6 +446,8 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
 
     rcode_rv_t rcode = DECODE_OK;
     ctx->use_edns = true;            // send OPT RR with response
+    ctx->edns_out_bytes = 11;
+
     stats_own_inc(&ctx->stats->edns);
 
     // DO-bit from extflags
@@ -428,11 +466,8 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
                                      ? edns_maxsize
                                      : gcfg->max_edns_response;
         } else {
-            ctx->this_max_response -= 6U; // tcp keepalive option space
+            ctx->edns_out_bytes += 6U; // tcp keepalive option space
         }
-
-        // leave room for basic OPT RR (edns-client-subnet room is addressed elsewhere)
-        ctx->this_max_response -= 11;
 
         if (edns_rdlen) {
             if (packet_len < offset + edns_rdlen) {
@@ -664,23 +699,31 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, con
     // parse the query RRs, and always send some kind of response packet...
     rcode_rv_t rcode = parse_query_rrs(ctx, output_offset_ptr, packet_len);
 
-    if (likely(rcode == DECODE_OK)) {
-        if (unlikely(DNSH_GET_OPCODE(hdr))) {
-            log_devdebug("Non-QUERY request (NOTIMP), opcode is %i", DNSH_GET_OPCODE(hdr));
-            rcode = DECODE_NOTIMP;
-        } else if (unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
-            log_devdebug("Received QUERY request with %hu questions, FORMERR", DNSH_GET_QDCOUNT(hdr));
-            rcode = DECODE_FORMERR;
-        } else if (unlikely(ctx->qtype > 127 && ctx->qtype < 255)) {
-            // Range 128-255 is meta-query types, not data types.  We implement ANY
-            // (255) in normal response process, but we do not implement any others
-            // (e.g. IXFR, AXFR, MAILA, MAILB, TKEY, TSIG, etc).
-            log_devdebug("Unsupported meta-query type %u (NOTIMP) attempted", ctx->qtype);
-            rcode = DECODE_NOTIMP;
-        }
+    if (rcode != DECODE_OK)
+        return rcode;
+
+    if (unlikely(DNSH_GET_OPCODE(hdr))) {
+        log_devdebug("Non-QUERY request (NOTIMP), opcode is %i", DNSH_GET_OPCODE(hdr));
+        return DECODE_NOTIMP;
     }
 
-    return rcode;
+    const unsigned hdr_qdcount = DNSH_GET_QDCOUNT(hdr);
+    if (hdr_qdcount != 1) {
+        if (!hdr_qdcount && ctx->recvd_cookie)
+            return DECODE_OK; // QDCOUNT==0 + Cookie is ok
+        log_devdebug("Received QUERY request with %hu questions, FORMERR", DNSH_GET_QDCOUNT(hdr));
+        return DECODE_FORMERR;
+    }
+
+    if (unlikely(ctx->qtype > 127 && ctx->qtype < 255)) {
+        // Range 128-255 is meta-query types, not data types.  We implement ANY
+        // (255) in normal response process, but we do not implement any others
+        // (e.g. IXFR, AXFR, MAILA, MAILB, TKEY, TSIG, etc).
+        log_devdebug("Unsupported meta-query type %u (NOTIMP) attempted", ctx->qtype);
+        return DECODE_NOTIMP;
+    }
+
+    return DECODE_OK;
 }
 
 // Always first thing added, once we hit a situation where general compression is warranted
@@ -1801,21 +1844,25 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
 
     offset = answer_from_db(ctx, offset);
 
-    // Check for truncation
-    if (unlikely(offset > ctx->this_max_response)) {
-        gdnsd_assert(ctx->is_udp); // TCP already gauranteed by sizing checks!
-        offset = full_trunc_offset;
-        ((wire_dns_header_t*)ctx->packet)->flags1 |= 0x2; // TC bit
-        // avoid potential confusion over NXDOMAIN+TC (can only happen in CNAME-chaining case)
-        ((wire_dns_header_t*)ctx->packet)->flags2 = DNS_RCODE_NOERROR;
-        ctx->ancount = 0;
-        ctx->nscount = 0;
-        ctx->arcount = 0;
-        ctx->cname_ancount = 0;
-        if (ctx->use_edns)
-            stats_own_inc(&ctx->stats->udp.edns_tc);
-        else
-            stats_own_inc(&ctx->stats->udp.tc);
+    // UDP truncation handling
+    if (ctx->is_udp) {
+        if (!ctx->valid_cookie && gcfg->max_nocookie_response && gcfg->max_nocookie_response < ctx->this_max_response)
+            ctx->this_max_response = gcfg->max_nocookie_response;
+
+        if ((offset + ctx->edns_out_bytes) > ctx->this_max_response) {
+            offset = full_trunc_offset;
+            ((wire_dns_header_t*)ctx->packet)->flags1 |= 0x2; // TC bit
+            // avoid potential confusion over NXDOMAIN+TC (can only happen in CNAME-chaining case)
+            ((wire_dns_header_t*)ctx->packet)->flags2 = DNS_RCODE_NOERROR;
+            ctx->ancount = 0;
+            ctx->nscount = 0;
+            ctx->arcount = 0;
+            ctx->cname_ancount = 0;
+            if (ctx->use_edns)
+                stats_own_inc(&ctx->stats->udp.edns_tc);
+            else
+                stats_own_inc(&ctx->stats->udp.tc);
+        }
     }
 
     return offset;
@@ -1831,6 +1878,10 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
     gdnsd_assert(ctx->stats);
     ctx->packet = packet;
     ctx->edns0_tcp_keepalive = edns0_tcp_keepalive;
+    memcpy(&ctx->client_info.dns_source, asin, sizeof(*asin));
+
+    if (asin->sa.sa_family == AF_INET6)
+        stats_own_inc(&ctx->stats->v6);
 
     // parse_optrr() will raise this value in the udp edns0 case as necc.
     ctx->this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE;
@@ -1842,9 +1893,6 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
             packet_len,
             logf_anysin(asin));
     */
-
-    if (asin->sa.sa_family == AF_INET6)
-        stats_own_inc(&ctx->stats->v6);
 
     unsigned res_offset = sizeof(wire_dns_header_t);
     const rcode_rv_t status = decode_query(ctx, &res_offset, packet_len);
@@ -1860,18 +1908,20 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
 
     if (likely(status == DECODE_OK)) {
         hdr->flags2 = DNS_RCODE_NOERROR;
-        if (likely(ctx->qclass == DNS_CLASS_IN) || ctx->qclass == DNS_CLASS_ANY) {
-            memcpy(&ctx->client_info.dns_source, asin, sizeof(*asin));
-            res_offset = answer_from_db_outer(ctx, res_offset);
-        } else if (ctx->qclass == DNS_CLASS_CH) {
-            ctx->ancount = 1;
-            memcpy(&packet[res_offset], gcfg->chaos, gcfg->chaos_len);
-            res_offset += gcfg->chaos_len;
+        if (likely(DNSH_GET_QDCOUNT(hdr) == 1U)) {
+            if (likely(ctx->qclass == DNS_CLASS_IN) || ctx->qclass == DNS_CLASS_ANY) {
+                res_offset = answer_from_db_outer(ctx, res_offset);
+            } else if (ctx->qclass == DNS_CLASS_CH) {
+                ctx->ancount = 1;
+                memcpy(&packet[res_offset], gcfg->chaos, gcfg->chaos_len);
+                res_offset += gcfg->chaos_len;
+            } else {
+                hdr->flags2 = DNS_RCODE_REFUSED;
+                stats_own_inc(&ctx->stats->refused);
+            }
         } else {
-            hdr->flags2 = DNS_RCODE_REFUSED;
-            stats_own_inc(&ctx->stats->refused);
+            gdnsd_assert(ctx->recvd_cookie);
         }
-
         if (hdr->flags2 == DNS_RCODE_NOERROR)
             stats_own_inc(&ctx->stats->noerror);
     } else {
@@ -1896,7 +1946,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         packet[res_offset++] = '\0'; // domainname part of OPT
         gdnsd_put_una16(htons(DNS_TYPE_OPT), &packet[res_offset]);
         res_offset += 2;
-        gdnsd_put_una16(htons(DNS_EDNS0_SIZE), &packet[res_offset]);
+        gdnsd_put_una16(htons(DNS_EDNS_SIZE), &packet[res_offset]);
         res_offset += 2;
         gdnsd_put_una32(htonl(extflags), &packet[res_offset]);
         res_offset += 4;
@@ -1931,6 +1981,18 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
             }
         }
 
+        // EDNS Cookie output
+        if (ctx->respond_cookie) {
+            gdnsd_assert(ctx->recvd_cookie);
+            rdlen += 20U;
+            gdnsd_put_una16(htons(EDNS_COOKIE_OPTCODE), &packet[res_offset]);
+            res_offset += 2;
+            gdnsd_put_una16(htons(16), &packet[res_offset]);
+            res_offset += 2;
+            memcpy(&packet[res_offset], ctx->cookie_output, 16U);
+            res_offset += 16U;
+        }
+
         // TCP keepalive is emitted for any TCP request which had an edns0 OPT RR
         if (!ctx->is_udp) {
             rdlen += 6U;
@@ -1955,6 +2017,9 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
             res_offset += gcfg->nsid_len;
         }
 
+        // predicted edns_out_bytes correctly earlier for truncation
+        gdnsd_assert(ctx->edns_out_bytes == (11U + rdlen));
+
         // Update OPT RR's rdlen for any options emitted above, and bump arcount for it
         gdnsd_put_una16(htons(rdlen), rdlen_ptr);
         ctx->arcount++;
@@ -1962,7 +2027,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         if (likely(ctx->is_udp)) {
             // We only do one kind of truncation: complete truncation.
             //  therefore if we're returning a >512 packet, it wasn't truncated
-            if (res_offset > 512)
+            if (res_offset > 512U)
                 stats_own_inc(&ctx->stats->udp.edns_big);
         }
     }

@@ -29,6 +29,11 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * Input query parsing is now much more robust and future-proof in general.  We now at least minimally parse all query RRs and seek the OPT RR anywhere within the additional section, and we're much more likely to respond explicitly with a FORMERR or NOTIMP in some cases where we'd have previously not responded at all to oddly-formed queries from future standards efforts we're not aware of.
 * The DNSSEC OK (DO) bit in the edns0 flags field is now echoed back in responses as per RFC 3225 (but we continue to not support DNSSEC so far, so no functional impact on the response).
 * A new stat counter `edns_do` tracks the count of edns0 requests with the DO bit set.
+* EDNS Cookies from RFC 7873 are implemented to help with off-path response forgery and forged amplification attacks.  These add 4 new stats counters:
+  * `edns_cookie_init` - Received a client cookie with no server cookie
+  * `edns_cookie_ok` - Received a client cookie with a server cookie, and it validates
+  * `edns_cookie_bad` - Received a client cookie with a server cookie, and it failed validation
+  * `edns_cookie_formerr` - Recived an EDNS Cookie option that was malformed (also increments the normal formerr stat)
 
 ### Zonefiles
 
@@ -90,6 +95,9 @@ These are all new options for new features:
 * `nsid` - Sets the raw binary data returned by the NSID edns0 option.  Up to 128 raw bytes, encoded as up to 256 characters of ascii hex in a single string.  The option is not sent unless the data is explicitly defined by this option.
 * `nsid_ascii` - Convenience alternative to the above, sets the NSID binary data to the bytes of the specified printable ASCII string of at most 128 characters.
 * `tcp_fastopen` - Sets the queue size for TCP Fastopen (global, per-socket).  min/def/max is 0/128/1048576, zero disables.
+* `disable_cookies` - Disables EDNS Cookies (not recommended!)
+* `cookie_key_file` - Loads the master cookie secret key from a file controlled by the administrator, useful for synchronizing cookie support across a set of loadbalanced or anycasted gdnsd instances.
+* `max_nocookie_response` - Limits UDP response sizes when clients present no valid cookie auth.  This is disabled by default for now.
 
 ### Options with changed defaults or allowed values
 

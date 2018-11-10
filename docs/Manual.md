@@ -262,5 +262,3 @@ DNSCurve - I don't think DNSCurve is actually going anywhere anymore in terms of
 DNS-over-HTTPS (DoH) - As far as I know, DoH efforts are only targeting the user-to-cache leg of things like DNSCrypt, and so they aren't really relevant here.  If this ever did apply to the authserver case, it would probably be simplest to just make it easy to configure a separate proxy daemon for it.
 
 DNS-over-TLS (DoT) - Current standards for this also only target the user-to-cache leg, but DPRIVE is apparently eventually going to publish something about the cache-to-authserver leg, which is exciting.  I think we could implement this reasonably, assuming they don't end up making it require DNSSEC to be useful, in which case we'd be blocked on that until we support it.  Ditto for DNS-over-DTLS (DoDTLS?).
-
-EDNS0 Cookies - Doesn't really address privacy/censorship, but does offer a ToFU mechanism that makes blind forgery much harder in some cases (even harder than forging TCP blindly).  Implementing this almost made the cut for 3.x, but I didn't quite have the time left.  It may appear in a future 3.N feature release.

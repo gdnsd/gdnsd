@@ -33,8 +33,8 @@
 // We use this size as our recvmsg() limit as well, discarding anything larger
 // to save ourselves processing it.  And in the TCP case, we immediately close
 // if a size greater than this is sent as the message length field.
-#define DNS_EDNS0_SIZE 1024U
-#define DNS_RECV_SIZE DNS_EDNS0_SIZE
+#define DNS_EDNS_SIZE 1024U
+#define DNS_RECV_SIZE DNS_EDNS_SIZE
 
 // Sizes our output buffers, we never generate packets longer than this.
 // This can't be changed arbitrarily to another number by editing the define
@@ -80,9 +80,10 @@ typedef struct S_PACKED {
 #define DNS_RCODE_REFUSED 5
 #define DNS_EXT_RCODE_BADVERS 1
 
-// EDNS0 option codes
+// EDNS option codes
 #define EDNS_NSID_OPTCODE          0x0003
 #define EDNS_CLIENTSUB_OPTCODE     0x0008
+#define EDNS_COOKIE_OPTCODE        0x000A
 #define EDNS_TCP_KEEPALIVE_OPTCODE 0x000B
 
 /* DNS RR Types */

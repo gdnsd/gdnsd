@@ -1009,6 +1009,10 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     if (gcfg->nsid_len)
         rsize += (4U + gcfg->nsid_len);
 
+    // EDNS cookies (our output is fixed 8 byte server cookies)
+    if (!gcfg->disable_cookies)
+        rsize += 20U;
+
     // QNAME:
     // For delegations and wildcards, assume maximum possible matching qname
     // for others, use the exact matching query name length

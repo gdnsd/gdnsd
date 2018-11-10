@@ -37,32 +37,36 @@
 #include <pthread.h>
 
 typedef enum {
-    UDP_RECVFAIL       = 0,
-    UDP_SENDFAIL       = 1,
-    UDP_TC             = 2,
-    UDP_EDNS_BIG       = 3,
-    UDP_EDNS_TC        = 4,
-    TCP_RECVFAIL       = 5,
-    TCP_SENDFAIL       = 6,
-    TCP_CONNS          = 7,
-    TCP_CLOSE_C        = 8,
-    TCP_CLOSE_S_OK     = 9,
-    TCP_CLOSE_S_ERR    = 10,
-    TCP_CLOSE_S_KILL   = 11,
-    DNS_NOERROR        = 12,
-    DNS_REFUSED        = 13,
-    DNS_NXDOMAIN       = 14,
-    DNS_NOTIMP         = 15,
-    DNS_BADVERS        = 16,
-    DNS_FORMERR        = 17,
-    DNS_DROPPED        = 18,
-    DNS_V6             = 19,
-    DNS_EDNS           = 20,
-    DNS_EDNS_CLIENTSUB = 21,
-    UDP_REQS           = 22,
-    TCP_REQS           = 23,
-    DNS_EDNS_DO        = 24,
-    SLOT_COUNT         = 25,
+    UDP_RECVFAIL         = 0,
+    UDP_SENDFAIL         = 1,
+    UDP_TC               = 2,
+    UDP_EDNS_BIG         = 3,
+    UDP_EDNS_TC          = 4,
+    TCP_RECVFAIL         = 5,
+    TCP_SENDFAIL         = 6,
+    TCP_CONNS            = 7,
+    TCP_CLOSE_C          = 8,
+    TCP_CLOSE_S_OK       = 9,
+    TCP_CLOSE_S_ERR      = 10,
+    TCP_CLOSE_S_KILL     = 11,
+    DNS_NOERROR          = 12,
+    DNS_REFUSED          = 13,
+    DNS_NXDOMAIN         = 14,
+    DNS_NOTIMP           = 15,
+    DNS_BADVERS          = 16,
+    DNS_FORMERR          = 17,
+    DNS_DROPPED          = 18,
+    DNS_V6               = 19,
+    DNS_EDNS             = 20,
+    DNS_EDNS_CLIENTSUB   = 21,
+    UDP_REQS             = 22,
+    TCP_REQS             = 23,
+    DNS_EDNS_DO          = 24,
+    DNS_EDNS_COOKIE_ERR  = 25,
+    DNS_EDNS_COOKIE_OK   = 26,
+    DNS_EDNS_COOKIE_INIT = 27,
+    DNS_EDNS_COOKIE_BAD  = 28,
+    SLOT_COUNT           = 29,
 } slot_t;
 
 static const char json_fixed[] =
@@ -79,7 +83,11 @@ static const char json_fixed[] =
     "\t\t\"v6\": %" PRIuPTR ",\r\n"
     "\t\t\"edns\": %" PRIuPTR ",\r\n"
     "\t\t\"edns_clientsub\": %" PRIuPTR ",\r\n"
-    "\t\t\"edns_do\": %" PRIuPTR "\r\n"
+    "\t\t\"edns_do\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns_cookie_formerr\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns_cookie_ok\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns_cookie_init\": %" PRIuPTR ",\r\n"
+    "\t\t\"edns_cookie_bad\": %" PRIuPTR "\r\n"
     "\t},\r\n"
     "\t\"udp\": {\r\n"
     "\t\t\"reqs\": %" PRIuPTR ",\r\n"
@@ -155,10 +163,14 @@ static void accumulate_statio(unsigned threadnum)
         statio[TCP_CLOSE_S_KILL] += stats_get(&this_stats->tcp.close_s_kill);
     }
 
-    statio[DNS_V6]             += stats_get(&this_stats->v6);
-    statio[DNS_EDNS]           += stats_get(&this_stats->edns);
-    statio[DNS_EDNS_CLIENTSUB] += stats_get(&this_stats->edns_clientsub);
-    statio[DNS_EDNS_DO]        += stats_get(&this_stats->edns_do);
+    statio[DNS_V6]               += stats_get(&this_stats->v6);
+    statio[DNS_EDNS]             += stats_get(&this_stats->edns);
+    statio[DNS_EDNS_CLIENTSUB]   += stats_get(&this_stats->edns_clientsub);
+    statio[DNS_EDNS_DO]          += stats_get(&this_stats->edns_do);
+    statio[DNS_EDNS_COOKIE_ERR]  += stats_get(&this_stats->edns_cookie_formerr);
+    statio[DNS_EDNS_COOKIE_OK]   += stats_get(&this_stats->edns_cookie_ok);
+    statio[DNS_EDNS_COOKIE_INIT] += stats_get(&this_stats->edns_cookie_init);
+    statio[DNS_EDNS_COOKIE_BAD]  += stats_get(&this_stats->edns_cookie_bad);
 }
 
 static void populate_statio(void)
@@ -174,7 +186,7 @@ char* statio_get_json(time_t nowish, size_t* len)
     // fill json output buffer
     uint64_t uptime64 = (uint64_t)nowish - (uint64_t)start_time;
     char* buf = xmalloc(json_buffer_max);
-    int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio[DNS_NOERROR], statio[DNS_REFUSED], statio[DNS_NXDOMAIN], statio[DNS_NOTIMP], statio[DNS_BADVERS], statio[DNS_FORMERR], statio[DNS_DROPPED], statio[DNS_V6], statio[DNS_EDNS], statio[DNS_EDNS_CLIENTSUB], statio[DNS_EDNS_DO], statio[UDP_REQS], statio[UDP_RECVFAIL], statio[UDP_SENDFAIL], statio[UDP_TC], statio[UDP_EDNS_BIG], statio[UDP_EDNS_TC], statio[TCP_REQS], statio[TCP_RECVFAIL], statio[TCP_SENDFAIL], statio[TCP_CONNS], statio[TCP_CLOSE_C], statio[TCP_CLOSE_S_OK], statio[TCP_CLOSE_S_ERR], statio[TCP_CLOSE_S_KILL]);
+    int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio[DNS_NOERROR], statio[DNS_REFUSED], statio[DNS_NXDOMAIN], statio[DNS_NOTIMP], statio[DNS_BADVERS], statio[DNS_FORMERR], statio[DNS_DROPPED], statio[DNS_V6], statio[DNS_EDNS], statio[DNS_EDNS_CLIENTSUB], statio[DNS_EDNS_DO], statio[DNS_EDNS_COOKIE_ERR], statio[DNS_EDNS_COOKIE_OK], statio[DNS_EDNS_COOKIE_INIT], statio[DNS_EDNS_COOKIE_BAD], statio[UDP_REQS], statio[UDP_RECVFAIL], statio[UDP_SENDFAIL], statio[UDP_TC], statio[UDP_EDNS_BIG], statio[UDP_EDNS_TC], statio[TCP_REQS], statio[TCP_RECVFAIL], statio[TCP_SENDFAIL], statio[TCP_CONNS], statio[TCP_CLOSE_C], statio[TCP_CLOSE_S_OK], statio[TCP_CLOSE_S_ERR], statio[TCP_CLOSE_S_KILL]);
     gdnsd_assert(snp_rv > 0 && (size_t)snp_rv < json_buffer_max);
     *len = (size_t)snp_rv;
     return buf;

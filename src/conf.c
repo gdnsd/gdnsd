@@ -22,6 +22,7 @@
 
 #include "main.h"
 #include "socks.h"
+#include "cookie.h"
 
 #include <gdnsd-prot/mon.h>
 #include <gdnsd-prot/plugapi.h>
@@ -46,10 +47,13 @@ static const char chaos_def[] = "gdnsd";
 static const cfg_t cfg_defaults = {
     .chaos = NULL,
     .nsid = NULL,
+    .cookie_key_file = NULL,
     .lock_mem = false,
     .disable_text_autosplit = false,
     .edns_client_subnet = true,
     .zones_strict_data = false,
+    .disable_cookies = false,
+    .max_nocookie_response = 0,
     .chaos_len = 0,
     .nsid_len = 0,
     .zones_default_ttl = 86400U,
@@ -179,6 +183,20 @@ static bool load_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_d
         } \
     } while (0)
 
+#define CFG_OPT_UINT_NOMIN(_opt_set, _gconf_loc, _max) \
+    do { \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        if (_opt_setting) { \
+            unsigned long _val; \
+            if (!vscf_is_simple(_opt_setting) \
+            || !vscf_simple_get_as_ulong(_opt_setting, &_val)) \
+                log_fatal("Config option %s: Value must be a positive integer", #_gconf_loc); \
+            if (_val > _max) \
+                log_fatal("Config option %s: Value out of range (0, %lu)", #_gconf_loc, _max); \
+            cfg->_gconf_loc = (unsigned) _val; \
+        } \
+    } while (0)
+
 #define CFG_OPT_DBL(_opt_set, _gconf_loc, _min, _max) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
@@ -282,6 +300,11 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_UINT(options, max_edns_response, 512LU, 16384LU);
         CFG_OPT_UINT(options, acme_challenge_ttl, 60LU, 3600LU);
         CFG_OPT_BOOL(options, zones_strict_data);
+        CFG_OPT_BOOL(options, disable_cookies);
+        CFG_OPT_UINT_NOMIN(options, max_nocookie_response, 1024LU);
+        if (cfg->max_nocookie_response && cfg->max_nocookie_response < 128U)
+            log_fatal("The global option 'max_nocookie_response' (%u) must be zero, or in the range 128 - 1024", cfg->max_nocookie_response);
+        CFG_OPT_STR(options, cookie_key_file);
 
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         CFG_OPT_STR_NOCOPY(options, nsid, nsid_data);

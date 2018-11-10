@@ -77,6 +77,13 @@ typedef struct {
 
     // edns requests with the DO (DNSSEC OK) bit set
     stats_t edns_do;
+
+    // cookies: exactly one of these will increment for every client query
+    // containing an EDNS Cookie option:
+    stats_t edns_cookie_formerr; // RFC-illegal Cookie data length
+    stats_t edns_cookie_ok;      // Valid server cookie issued by us
+    stats_t edns_cookie_init;    // No server cookie sent at all
+    stats_t edns_cookie_bad;     // Invalid server cookie (e.g. expired)
 } dnspacket_stats_t;
 
 F_HOT F_NONNULL

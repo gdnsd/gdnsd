@@ -34,6 +34,7 @@
 #include "css.h"
 #include "csc.h"
 #include "chal.h"
+#include "cookie.h"
 
 #include <gdnsd-prot/plugapi.h>
 #include <gdnsd-prot/misc.h>
@@ -508,11 +509,19 @@ int main(int argc, char** argv)
         if (mlockall(MCL_CURRENT | MCL_FUTURE))
             log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
 
+    // init cookie support and load key, if any
+    if (!gcfg->disable_cookies)
+        cookie_config(gcfg->cookie_key_file);
+
     // Initialize dnspacket stuff
     dnspacket_global_setup(socks_cfg);
 
     // set up monitoring, which expects an initially empty loop
     gdnsd_mon_start(def_loop);
+
+    // Set up timer hook in the default loop for cookie key rotation
+    if (!gcfg->disable_cookies)
+        cookie_runtime_init(def_loop);
 
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
@@ -589,6 +598,9 @@ int main(int argc, char** argv)
         if (raw_exit_status != NULL)
             log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
     }
+
+    // deallocate/wipe sensitive keys!
+    cookie_destroy();
 
     // deallocate resources
     atexit_execute();

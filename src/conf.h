@@ -31,10 +31,13 @@
 typedef struct {
     const uint8_t* chaos;
     const uint8_t* nsid;
+    const char*    cookie_key_file;
     bool     lock_mem;
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
     bool     zones_strict_data;
+    bool     disable_cookies;
+    unsigned max_nocookie_response;
     unsigned chaos_len;
     unsigned nsid_len;
     unsigned zones_default_ttl;

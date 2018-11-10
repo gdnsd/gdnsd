@@ -357,7 +357,7 @@ server outputs.  See the L<gdnsdctl(8)> documentation for more details.
 String, no default, 2-256 chars in length.  Character count must be
 even, and all characters must be ASCII hex digits.  This encodes up to
 128 bytes of arbitrary binary data chosen by the administrator and
-serves it in the EDNS0 NSID (RFC 5001) option data of all response
+serves it in the EDNS NSID (RFC 5001) option data of all response
 packets.  The NSID is obviously not emitted to clients unless they
 request it via edns0, and is not emitted at all unless this option
 is specified explicitly.  This is intended to help with the
@@ -370,6 +370,75 @@ String, no default, 1-128 chars of printable ASCII characters.
 This is an convenience alternative to C<nsid> above, allowing the binary NSID
 data to be configured with the bytes of a printable ASCII string up to 128
 bytes in length.  Only one of C<nsid> or C<nsid_ascii> may be specified.
+
+=item B<disable_cookies>
+
+Boolean, default false.  Disables support for RFC 7873 EDNS Cookies.  Not
+recommended, as these cookies provide a layer of defense against both off-path
+response forgery and amplification attacks.  One possible legitimate reason to
+disable cookies would be if gdnsd is operating in a mixed set of
+loadbalanced/anycasted auth servers and some of the other servers do not
+support cookies, or use different algorithms than gdnsd.  Our cookie support is
+fairly efficient; there shouldn't be any major performance reason to disable
+it.
+
+=item B<max_nocookie_response>
+
+Integer bytes, default zero (disabled), range 128-1024.  If this parameter is
+set to a non-zero value, all UDP responses will be limited to this many bytes
+unless the query presents a valid EDNS Cookie that the server recognizes as its
+own.  Responses which fail this check (UDP with no valid cookie and larger than
+this length) will be truncated fully (no response RRs) and the TC-bit will be
+set, asking the client to retry over TCP.
+
+This is intended to limit the ability of attackers to use your server as a
+reflection source for amplification attacks, as valid cookies give some
+reasonable gaurantee that the query packet source address wasn't forged.  It
+B<should> be pretty safe to set this at least as low as 512, and that may
+become the default setting in some future version.
+
+=item B<cookie_key_file>
+
+String, default undefined.  When this is defined, the file's contents are read
+as the persistent master key value for generating EDNS Cookie responses.
+
+If the file exists, it must be readable by the daemon, and it must contain 32
+bytes of binary data.  Failure to properly read a key file defined here is
+fatal at startup.  Permissions should be set with care, so that other
+unprivileged users of the system cannot read the key.
+
+Note that the contents are considered binary data and are used B<directly> as
+secret key input to crypto algorithms, and thus they should be generated
+securely with high entropy and indistinguishable from random bytes.  It is
+recommended the file's contents be generated with an RNG outputting 32 random
+binary bytes, e.g.: C<dd if=/dev/urandom of=cookie.key bs=32 count=1>.
+
+The keyfile's contents don't have to be changed on any sort of fixed or
+frequent schedule to maintain security.  Treat it like any other long-term
+secret value and make new ones once in a blue moon just out of an abundance of
+caution, or if you believe the previous key material may be compromised.  The
+daemon must be replaced or restarted to put the new key into effect, and this
+will abruptly invalidate outstanding cookies clients may be holding that were
+generated with previous keys.
+
+The primary reason to define C<cookie_key_file> to your own pathname and key
+contents is to have synchronized cookie keys across an anycasted or otherwise
+loadbalanced set of servers, so that they all agree on server cookies.
+
+If this file is not defined, then the daemon manages the cookie master key
+value automatically.  Under automatic management of the key, it will attempt to
+read a key from F<@GDNSD_DEFPATH_RUN@/cookie.autokey> at startup.  If that
+doesn't work, it will generate a new random key in memory and attempt to write
+it to the same path for consumption by future daemons.  If both reading an old
+automatic key and writing the new one fail, a non-fatal error will be logged,
+and the new randomly-generated key exists only in daemon memory and will not
+persist across future daemon replace or restart cycles.
+
+Note that in common Linux/systemd installations, the run directory will be
+wiped on OS reboots and a fresh key will be generated on the next daemon
+startup.  As with a manually-defined C<cookie_key_file>, any time the automatic
+key must be regenerated, this will invalidate all outstanding server cookies
+held by clients.
 
 =item B<run_dir>
 

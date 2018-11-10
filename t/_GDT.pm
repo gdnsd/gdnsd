@@ -671,7 +671,6 @@ sub mkanswer {
     $p->header->ad(0);
     $p->header->opcode('QUERY');
     $p->header->rcode('NOERROR');
-    $p->header->qdcount(0) if !$question;
 
     # Apply nondefault header settings from $headers
     foreach my $hfield (keys %$headers) {
@@ -792,6 +791,9 @@ sub _compare_sections {
 # Defers to _compare_rrsets_wrr below if the rrset in question has
 #  a matching entry in $wrr_v4 or $wrr_v6
 
+our $_lastacookie;
+sub get_last_server_cookie { return $_lastacookie; }
+
 sub _compare_rrsets {
     my ($a_rrset, $c_rrset, $limit_v4, $limit_v6, $wrr_v4, $wrr_v6) = @_;
 
@@ -802,13 +804,27 @@ sub _compare_rrsets {
     if($rrtype eq 'A') {
         $wrr = $wrr_v4->{$dname} if exists $wrr_v4->{$dname};
         $limit = $limit_v4;
-    }
-    elsif($rrtype eq 'AAAA') {
+    } elsif($rrtype eq 'AAAA') {
         $wrr = $wrr_v6->{$dname} if exists $wrr_v6->{$dname};
         $limit = $limit_v6;
-    }
-    elsif($rrtype eq 'CNAME') {
+    } elsif($rrtype eq 'CNAME') {
         $limit = 1;
+    } elsif($rrtype eq 'OPT') {
+        $_lastacookie = undef;
+        my $ccookieval = $c_rrset->[0]->option('COOKIE');
+        if (defined $ccookieval) {
+            my $ccookielen = length($ccookieval);
+            my $acookieval = $a_rrset->[0]->option('COOKIE');
+            if (defined $acookieval) {
+                my $acookielen = length($acookieval);
+                return "Bad server cookie len ($acookielen != $ccookielen)" if ($acookielen != $ccookielen);
+                $_lastacookie = $acookieval;
+                if ($acookielen > 8) {
+                    substr($acookieval, 8, $acookielen - 8, "\x00" x ($acookielen - 8));
+                    $a_rrset->[0]->option(COOKIE => $acookieval);
+                }
+            }
+        }
     }
 
     # Clamp unspecified/excessive limit to @$c_rrset

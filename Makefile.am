@@ -116,6 +116,10 @@ src_gdnsd_SOURCES = \
 	src/conf.h \
 	src/chal.c \
 	src/chal.h \
+	src/cookie.c \
+	src/cookie.h \
+	src/kdf_compat.c \
+	src/kdf_compat.h \
 	src/zsrc_djb.c \
 	src/zsrc_djb.h \
 	src/zscan_djb.c \

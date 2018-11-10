@@ -11,7 +11,7 @@
 
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 29;
+use Test::More tests => 30;
 
 my $recvbuf = '';
 
@@ -416,6 +416,26 @@ eval {_GDT->check_stats(
 ok(!$@) or diag $@;
 # resp check: 1/0/0/1, aa=>1, rcode=>noerror, matches question, has response A-record 'foo.example.com 86400 A 192.0.2.3'
 
+# Valid OPT RR, which contains 2x cookies, with a normal REFUSED query
+my $test27 = make_query("\x03foo\x00", 1, 0, 0, 1);
+$test27 .= "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x18"; # OPT RR w/ rdlen=24
+$test27 .= "\x00\x0A\x00\x08\x01\x23\x45\x67\x89\xAB\xCD\xEF"; # 12 byte minimal cookie option
+$test27 .= "\x00\x0A\x00\x08\xFE\xDC\xBA\x98\x76\x54\x32\x10"; # 12 byte minimal cookie option
+send($sock, $test27, 0);
+recv($sock, $recvbuf, 4096, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 26,
+    noerror => 4,
+    formerr => 17,
+    refused => 3,
+    edns => 9,
+    notimp => 1,
+    badvers => 1,
+    edns_cookie_init => 1,
+)};
+ok(!$@) or diag $@;
+# resp check: 1/0/0/1, aa=>0, rcode=>refused, matches question, EDNS Cookie output matching client cookie from *first* cookie sent
+
 close($sock);
 
 # Test a valid query to make sure the server is still functioning
@@ -431,13 +451,14 @@ eval {_GDT->query_server(
 ok(!$@) or diag $@;
 
 eval {_GDT->check_stats(
-    udp_reqs => 26,
+    udp_reqs => 27,
     noerror => 5,
     formerr => 17,
-    refused => 2,
-    edns => 8,
+    refused => 3,
+    edns => 9,
     notimp => 1,
     badvers => 1,
+    edns_cookie_init => 1,
 )};
 ok(!$@) or diag $@;
 

@@ -5,7 +5,7 @@
 # Also covers a few EDNS cases at the bottom
 
 use _GDT ();
-use Test::More tests => 10;
+use Test::More tests => 12;
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
@@ -110,6 +110,31 @@ _GDT->test_dns(
         answer => 'foo.example.com 86400 A 192.0.2.3',
         addtl => $optrr,
         stats => [qw/udp_reqs noerror edns/],
+    );
+}
+
+# An empty QUERY packet with no questions
+{
+    my $qpacket = Net::DNS::Packet->new();
+    _GDT->test_dns(
+        qpacket => $qpacket,
+        header => { aa => 0, rcode => 'FORMERR' },
+        noresq => 1,
+        stats => [qw/udp_reqs formerr/],
+    );
+}
+
+# A QUERY packet with *just* an OPT RR, but no questions, and no cookie, which
+# will also FORMERR, but should still signal EDNS compliance
+{
+    my $qpacket = Net::DNS::Packet->new();
+    _GDT->test_dns(
+        resopts => { udppacketsize => 8080 },
+        qpacket => $qpacket,
+        header => { aa => 0, rcode => 'FORMERR' },
+        noresq => 1,
+        addtl => $optrr,
+        stats => [qw/udp_reqs formerr edns/],
     );
 }
 
