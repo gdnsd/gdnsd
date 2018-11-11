@@ -500,9 +500,6 @@ int main(int argc, char** argv)
     if (copts.action == ACT_CHECKCONF)
         exit(0);
 
-    // Initialize the libgdnsd PRNG stuff for runtime operation
-    gdnsd_init_rand();
-
     // init the stats code
     statio_init(socks_cfg->num_dns_threads);
 

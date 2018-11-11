@@ -47,6 +47,10 @@ typedef struct _gdnsd_rstate64_t {
 
 #pragma GCC visibility push(default)
 
+// Initialize libgdnsd at library load time
+__attribute__((__constructor__))
+void gdnsd_init_lib(void);
+
 // Register a child process that exists for the life of the daemon, so that
 //   the core can SIGTERM and reap it on clean shutdown.
 void gdnsd_register_child_pid(pid_t child);
@@ -66,9 +70,6 @@ char* gdnsd_str_combine_n(const unsigned count, ...);
 
 // set thread name (via pthread_setname_np or similar)
 void gdnsd_thread_setname(const char* n);
-
-// Global PRNG init, once per process, done early before launching threads
-void gdnsd_init_rand(void);
 
 // State initializers for gdnsd_randXX_get() below
 F_RETNN

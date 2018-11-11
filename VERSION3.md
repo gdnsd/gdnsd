@@ -155,6 +155,7 @@ For systemd-based Linux distributions, an example unit file which handles all th
 ## Other changes of interest to builders and packagers
 
 * Autotools updates: building from git now requires autoconf 2.64+ and automake 1.13+
+* We newly depend on libsodium-1.x as our current crypto lib of choice
 * The userspace-rcu library (liburcu) is now a build requirement rather than an optional recommendation
 * The testsuite now requires Perl module Net::DNS version 1.03+
 * GeoIP2 support, while still optional, requires libmaxminddb 1.2.0+ if enabled at all
