@@ -642,13 +642,13 @@ static rcode_rv_t parse_query_rrs(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, 
 }
 
 F_NONNULL
-static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, const unsigned packet_len, const gdnsd_anysin_t* asin)
+static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, const unsigned packet_len)
 {
     gdnsd_assert(ctx->packet);
     gdnsd_assert(*output_offset_ptr == sizeof(wire_dns_header_t));
 
     if (unlikely(packet_len < (sizeof(wire_dns_header_t)))) {
-        log_devdebug("Ignoring short request from %s of length %u", logf_anysin(asin), packet_len);
+        log_devdebug("Ignoring short request of length %u", packet_len);
         return DECODE_IGNORE;
     }
 
@@ -656,7 +656,7 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, con
     const wire_dns_header_t* hdr = (const wire_dns_header_t*)packet;
 
     if (unlikely(DNSH_GET_QR(hdr))) {
-        log_devdebug("QR bit set in query from %s, ignoring", logf_anysin(asin));
+        log_devdebug("QR bit set in query, ignoring");
         return DECODE_IGNORE;
     }
 
@@ -666,16 +666,16 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, con
 
     if (likely(rcode == DECODE_OK)) {
         if (unlikely(DNSH_GET_OPCODE(hdr))) {
-            log_devdebug("Non-QUERY request (NOTIMP) from %s, opcode is %i", logf_anysin(asin), DNSH_GET_OPCODE(hdr));
+            log_devdebug("Non-QUERY request (NOTIMP), opcode is %i", DNSH_GET_OPCODE(hdr));
             rcode = DECODE_NOTIMP;
         } else if (unlikely(DNSH_GET_QDCOUNT(hdr) != 1)) {
-            log_devdebug("Received QUERY request from %s with %hu questions, FORMERR", logf_anysin(asin), DNSH_GET_QDCOUNT(hdr));
+            log_devdebug("Received QUERY request with %hu questions, FORMERR", DNSH_GET_QDCOUNT(hdr));
             rcode = DECODE_FORMERR;
         } else if (unlikely(ctx->qtype > 127 && ctx->qtype < 255)) {
             // Range 128-255 is meta-query types, not data types.  We implement ANY
             // (255) in normal response process, but we do not implement any others
             // (e.g. IXFR, AXFR, MAILA, MAILB, TKEY, TSIG, etc).
-            log_devdebug("Unsupported meta-query type %u (NOTIMP) attempted from %s", ctx->qtype, logf_anysin(asin));
+            log_devdebug("Unsupported meta-query type %u (NOTIMP) attempted", ctx->qtype);
             rcode = DECODE_NOTIMP;
         }
     }
@@ -1847,7 +1847,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         stats_own_inc(&ctx->stats->v6);
 
     unsigned res_offset = sizeof(wire_dns_header_t);
-    const rcode_rv_t status = decode_query(ctx, &res_offset, packet_len, asin);
+    const rcode_rv_t status = decode_query(ctx, &res_offset, packet_len);
 
     if (status == DECODE_IGNORE) {
         stats_own_inc(&ctx->stats->dropped);
