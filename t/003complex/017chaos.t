@@ -10,7 +10,7 @@ $chaos1->push('question', Net::DNS::Question->new('example.com', 'TXT', 'CH'));
 _GDT->test_dns(
     qpacket => $chaos1,
     header => { aa => 0 },
-    answer => 'example.com CH TXT "some random string"',
+    answer => 'example.com 0 CH TXT "some random string"',
 );
 
 my $chaos2 = Net::DNS::Packet->new();
@@ -18,7 +18,7 @@ $chaos2->push('question', Net::DNS::Question->new('.', 'A', 'CH'));
 _GDT->test_dns(
     qpacket => $chaos2,
     header => { aa => 0 },
-    answer => '. CH TXT "some random string"',
+    answer => '. 0 CH TXT "some random string"',
 );
 
 my $chaos3 = Net::DNS::Packet->new();
@@ -26,7 +26,7 @@ $chaos3->push('question', Net::DNS::Question->new('abc.def.ghi.jkl.mno.pqr', 'PT
 _GDT->test_dns(
     qpacket => $chaos3,
     header => { aa => 0 },
-    answer => 'abc.def.ghi.jkl.mno.pqr CH TXT "some random string"',
+    answer => 'abc.def.ghi.jkl.mno.pqr 0 CH TXT "some random string"',
 );
 
 _GDT->test_kill_daemon($pid);

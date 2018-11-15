@@ -7,11 +7,11 @@ my $pid = _GDT->test_spawn_daemon();
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
 
 # The value "346" here is our expected keepalive advertisement with a single
@@ -24,14 +24,13 @@ my $optrr = Net::DNS::RR->new(
 # floor(35 * (95/96) * 10) = 346 in 100ms units
 my $optrr_keepalive = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
-    optioncode => 11,
-    optiondata => pack('n', 346),
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
+$optrr_keepalive->option(11 => pack('n', 346));
 
 my $big_answers = [
     'big.example.com 21600 MX 0 asdf.example.com',
@@ -150,21 +149,21 @@ my $vbig_additional = [
 ];
 
 _GDT->test_dns(
-    resopts => { usevc => 0, igntc => 1, udppacketsize => 512 },
+    resopts => { usevc => 0, igntc => 1 },
     qname => 'big.example.com', qtype => 'MX',
     header => { tc => 1 },
     stats => [qw/udp_reqs udp_tc noerror/],
 );
 
 _GDT->test_dns(
-    resopts => { usevc => 1, igntc => 0, udppacketsize => 512 },
+    resopts => { usevc => 1, igntc => 0 },
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
     stats => [qw/tcp_reqs tcp_conns noerror/],
 );
 
 _GDT->test_dns(
-    resopts => { usevc => 0, igntc => 0, udppacketsize => 512 },
+    resopts => { usevc => 0, igntc => 0 },
     qname => 'big.example.com', qtype => 'MX',
     answer => $big_answers,
     stats => [qw/udp_reqs udp_tc tcp_reqs noerror noerror/],
@@ -196,21 +195,21 @@ _GDT->test_dns(
 
 # Now all of the above again, but for vbig:
 _GDT->test_dns(
-    resopts => { usevc => 0, igntc => 1, udppacketsize => 512 },
+    resopts => { usevc => 0, igntc => 1 },
     qname => 'vbig.example.com', qtype => 'MX',
     header => { tc => 1 },
     stats => [qw/udp_reqs udp_tc noerror/],
 );
 
 _GDT->test_dns(
-    resopts => { usevc => 1, igntc => 0, udppacketsize => 512 },
+    resopts => { usevc => 1, igntc => 0 },
     qname => 'vbig.example.com', qtype => 'MX',
     answer => $vbig_answers,
     stats => [qw/tcp_reqs noerror/],
 );
 
 _GDT->test_dns(
-    resopts => { usevc => 0, igntc => 0, udppacketsize => 512 },
+    resopts => { usevc => 0, igntc => 0 },
     qname => 'vbig.example.com', qtype => 'MX',
     answer => $vbig_answers,
     stats => [qw/udp_reqs udp_tc tcp_reqs noerror noerror/],

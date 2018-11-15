@@ -7,11 +7,11 @@ my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 18
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
 
 my $bigname = q{0.0123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.01234567890123456789012345678901234567890123456789.46glue.example.com};
@@ -135,7 +135,7 @@ _GDT->test_dns(
 );
 
 _GDT->test_dns(
-    resopts => { usevc => 0, igntc => 1, udppacketsize => 512 },
+    resopts => { usevc => 0, igntc => 1 },
     qname => $bigname, qtype => 'A',
     header => { aa => 0, tc => 1 },
     stats => [qw/udp_reqs udp_tc noerror/],

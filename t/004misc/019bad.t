@@ -1,7 +1,19 @@
-# This tests various malformed questions that have to be hand-encoded.
+# This tests various malformed questions that have to be hand-encoded because
+# Net::DNS can't ask such silly questions, basically.
+
+# Some of the tests that had to be moved here from other test scripts while
+# working on Net::DNS 1.03-19 compatibility used to test the contents of the
+# output packets as well, and now they don't.  But I did add matching recv()
+# calls to all of these to confirm they receive a response packet at all, and
+# we are still checking for appropriate stats increments.  Should probably
+# parse the responses for better testing here!  I added notes to the recent
+# additions in commentary, about the output they should parse for.
+
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 23;
+use Test::More tests => 29;
+
+my $recvbuf = '';
 
 my $_id = 5555;
 sub make_query {
@@ -30,22 +42,23 @@ my $pid = _GDT->test_spawn_daemon();
 my $sock = IO::Socket::INET->new(
     PeerAddr => '127.0.0.1:' . $_GDT::DNS_PORT,
     Proto => 'udp',
-    Timeout => 2,
+    Timeout => 3,
 );
 
 # A valid query, manually
 my $test2 = make_query("\x07example\x03com\x00");
 send($sock, $test2, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 1,
     noerror => 1,
-    dropped => 0,
 )};
 ok(!$@) or diag $@;
 
 # Compressed label in question name
 my $test3 = make_query("\x03ggg\xC0\x01");
 send($sock, $test3, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 2,
     noerror => 1,
@@ -57,6 +70,7 @@ ok(!$@) or diag $@;
 my $chrs_63 = '012345678901234567890123456789012345678901234567890123456789012';
 my $test4 = make_query("\x3F$chrs_63\x3F$chrs_63\x3F$chrs_63\x3F$chrs_63\x3F$chrs_63\x00");
 send($sock, $test4, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 3,
     noerror => 1,
@@ -68,6 +82,7 @@ ok(!$@) or diag $@;
 my $test5_ok = make_query("\x03ggg\x00");
 my $test5_bad = substr($test5_ok, 0, -1);
 send($sock, $test5_bad, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 4,
     noerror => 1,
@@ -79,6 +94,7 @@ ok(!$@) or diag $@;
 my $test6_ok = make_query("\x03ggg\x00");
 my $test6_bad = substr($test6_ok, 0, -3);
 send($sock, $test6_bad, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 5,
     noerror => 1,
@@ -90,6 +106,7 @@ ok(!$@) or diag $@;
 my $test7_ok = make_query("\x03ggg\x03zzz\x00");
 my $test7_bad = substr($test7_ok, 0, -5);
 send($sock, $test7_bad, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 6,
     noerror => 1,
@@ -101,6 +118,7 @@ ok(!$@) or diag $@;
 my $test8 = make_query("\x03ggg\x00", 1, 0, 0, 1);
 $test8 .= "\x00\x00\x00";
 send($sock, $test8, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 7,
     noerror => 1,
@@ -112,6 +130,7 @@ ok(!$@) or diag $@;
 my $test9 = make_query("\x03ggg\x00", 1, 0, 0, 1);
 $test9 .= "\x00\x00\x29\x00\x01\x00\x00\x00\x00\x00\x00";
 send($sock, $test9, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 8,
     noerror => 1,
@@ -124,6 +143,7 @@ ok(!$@) or diag $@;
 # IXFR
 my $test10 = make_query("\x07example\x03com\x00", 1, 0, 0, 0, 251);
 send($sock, $test10, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 9,
     noerror => 1,
@@ -137,6 +157,7 @@ ok(!$@) or diag $@;
 # CLASS=HS
 my $test11 = make_query("\x07example\x03com\x00", 1, 0, 0, 0, 1, 4);
 send($sock, $test11, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 10,
     noerror => 1,
@@ -150,6 +171,7 @@ ok(!$@) or diag $@;
 # QCLASS=ANY, works just like IN
 my $test12 = make_query("\x07example\x03com\x00", 1, 0, 0, 0, 1, 255);
 send($sock, $test12, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 11,
     noerror => 2,
@@ -163,6 +185,7 @@ ok(!$@) or diag $@;
 # QDCOUNT=2, but only 1 query present in packet
 my $test13 = make_query("\x07example\x03com\x00", 2);
 send($sock, $test13, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 12,
     noerror => 2,
@@ -177,6 +200,7 @@ ok(!$@) or diag $@;
 my $test14 = make_query("\x07example\x03com\x00", 2);
 $test14 .= "\x07abc";
 send($sock, $test14, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 13,
     noerror => 2,
@@ -191,6 +215,7 @@ ok(!$@) or diag $@;
 my $test15 = make_query("\x07example\x03com\x00", 2);
 $test15 .= "\x07example\x00\x01";
 send($sock, $test15, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 14,
     noerror => 2,
@@ -209,6 +234,7 @@ $test16 .= "\x3f012345678901234567890123456789012345678901234567890123456789012"
 $test16 .= "\x3f012345678901234567890123456789012345678901234567890123456789012"; # 63-byte label (now illegal)
 $test16 .= "\x00\x00\x00\x00\x00"; # terminal label, type, class
 send($sock, $test16, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 15,
     noerror => 2,
@@ -224,6 +250,7 @@ my $test17 = make_query("\x07example\x03com\x00", 1, 0, 0, 2);
 $test17 .= "\x00\x00\x29\x00\x01\x00\x00\x00\x00\x00\x00";
 $test17 .= "\x00\x00\x29\x00\x01\x00\x00\x00\x00\x00\x00";
 send($sock, $test17, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 16,
     noerror => 2,
@@ -239,6 +266,7 @@ ok(!$@) or diag $@;
 my $test18 = make_query("\x07example\x03com\x00", 1, 1);
 $test18 .= "\x07example\xC0";
 send($sock, $test18, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 17,
     noerror => 2,
@@ -255,6 +283,7 @@ my $test19 = make_query("\x07example\x03com\x00", 1, 0, 1);
 $test19 .= "\xC0\x0C\x00\x01\x00\x01\x00\x00\x00\x01\x00";
 #           ^compqn ^type   ^class  ^ttl            ^rdlen
 send($sock, $test19, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 18,
     noerror => 2,
@@ -270,6 +299,7 @@ my $test20 = make_query("\x07example\x03com\x00", 1, 0, 1);
 $test20 .= "\xC0\x0C\x00\x01\x00\x01\x00\x00\x00\x01\x00\x04\x01\x02\x02";
 #           ^compqn ^type   ^class  ^ttl            ^rdlen  ^rdata
 send($sock, $test20, 0);
+recv($sock, $recvbuf, 4096, 0);
 eval {_GDT->check_stats(
     udp_reqs => 19,
     noerror => 2,
@@ -279,6 +309,112 @@ eval {_GDT->check_stats(
     notimp => 1,
 )};
 ok(!$@) or diag $@;
+
+# OPT RR with version=1
+my $test21 = make_query("\x07example\x03com\x00", 1, 0, 0, 1);
+$test21 .= "\x00\x00\x29\x02\x00\x00\x01\x00\x00\x00\x00";
+send($sock, $test21, 0);
+recv($sock, $recvbuf, 4096, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 20,
+    noerror => 2,
+    formerr => 14,
+    refused => 2,
+    edns => 3,
+    notimp => 1,
+    badvers => 1,
+)};
+ok(!$@) or diag $@;
+# resp check: 1/0/0/1, aa=>0, rcode=>badvers, matches question
+
+# OPT RR w/ rdlen that goes past end of packet...
+my $test22 = make_query("\x07example\x03com\x00", 1, 0, 0, 1);
+$test22 .= "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x01";
+send($sock, $test22, 0);
+recv($sock, $recvbuf, 4096, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 21,
+    noerror => 2,
+    formerr => 15,
+    refused => 2,
+    edns => 4,
+    notimp => 1,
+    badvers => 1,
+)};
+ok(!$@) or diag $@;
+# resp check: 1/0/0/1, aa=>0, rcode=>formerr, matches question
+
+# OPT RR w/ rdata too short to parse as optcode+optlen
+my $test23 = make_query("\x07example\x03com\x00", 1, 0, 0, 1);
+$test23 .= "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x03\x78\x78\x78";
+send($sock, $test23, 0);
+recv($sock, $recvbuf, 4096, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 22,
+    noerror => 2,
+    formerr => 16,
+    refused => 2,
+    edns => 5,
+    notimp => 1,
+    badvers => 1,
+)};
+ok(!$@) or diag $@;
+# resp check: 1/0/0/1, aa=>0, rcode=>formerr, matches question
+
+# OPT RR w/ valid rdlen, valid optcode, but optlen overrun
+my $test24 = make_query("\x07example\x03com\x00", 1, 0, 0, 1);
+$test24 .= "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x05\x55\x55\x00\x02\x01";
+send($sock, $test24, 0);
+recv($sock, $recvbuf, 4096, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 23,
+    noerror => 2,
+    formerr => 17,
+    refused => 2,
+    edns => 6,
+    notimp => 1,
+    badvers => 1,
+)};
+ok(!$@) or diag $@;
+# resp check: 1/0/0/1, aa=>0, rcode=>formerr, matches question
+
+# OPT RR followed by some other additional record:
+my $test25 = make_query("\x03foo\x07example\x03com\x00", 1, 0, 0, 2);
+$test25 .= "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x00"; # OPT RR
+$test25 .= "\x07example\x00\x00\x01\x00\x01\x00\x00\x00\xFF\x00\x04\x01\x02\x03\x04";
+#          ^ "example. 255 IN A 1.2.3.4"
+send($sock, $test25, 0);
+recv($sock, $recvbuf, 4096, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 24,
+    noerror => 3,
+    formerr => 17,
+    refused => 2,
+    edns => 7,
+    notimp => 1,
+    badvers => 1,
+)};
+ok(!$@) or diag $@;
+# resp check: 1/0/0/1, aa=>1, rcode=>noerror, matches question, has response A-record 'foo.example.com 86400 A 192.0.2.3'
+
+# OPT RR *after* some other additional record:
+my $test26 = make_query("\x03foo\x07example\x03com\x00", 1, 0, 0, 2);
+$test26 .= "\x07example\x00\x00\x01\x00\x01\x00\x00\x00\xFF\x00\x04\x01\x02\x03\x04";
+#          ^ "example. 255 IN A 1.2.3.4"
+$test26 .= "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x00"; # OPT RR
+send($sock, $test26, 0);
+recv($sock, $recvbuf, 4096, 0);
+eval {_GDT->check_stats(
+    udp_reqs => 25,
+    noerror => 4,
+    formerr => 17,
+    refused => 2,
+    edns => 8,
+    notimp => 1,
+    badvers => 1,
+)};
+ok(!$@) or diag $@;
+# resp check: 1/0/0/1, aa=>1, rcode=>noerror, matches question, has response A-record 'foo.example.com 86400 A 192.0.2.3'
 
 close($sock);
 
@@ -295,12 +431,13 @@ eval {_GDT->query_server(
 ok(!$@) or diag $@;
 
 eval {_GDT->check_stats(
-    udp_reqs => 20,
-    noerror => 3,
-    formerr => 14,
+    udp_reqs => 26,
+    noerror => 5,
+    formerr => 17,
     refused => 2,
-    edns => 2,
+    edns => 8,
     notimp => 1,
+    badvers => 1,
 )};
 ok(!$@) or diag $@;
 

@@ -31,8 +31,8 @@ use POSIX ':sys_wait_h';
 use Scalar::Util qw/looks_like_number/;
 use FindBin ();
 use File::Spec ();
+use Net::DNS 1.03 ();
 use Net::DNS::Resolver ();
-use Net::DNS ();
 use Test::More ();
 use File::Copy qw//;
 use Socket qw/AF_INET/;
@@ -42,66 +42,6 @@ use File::Path qw//;
 use IO::Socket::UNIX qw//;
 use JSON::PP;
 use Config;
-
-# The generic rr-matching code assumes "$rr->string eq $rr->string" is sufficient
-#   to detect a test-failure difference between two RRs.  However, the stock ->string
-#   code in Net::DNS::RR::OPT doesn't actually print the RDATA portion of OPT RRs,
-#   which is where the option code + data live for e.g. edns-client-subnet.  Further,
-#   even with ->string fixed, it was discovered that ->new wasn't actually decoding
-#   the option data properly anyways.  Both are hacked below to make our test comparisons
-#   actually detect failures...
-# Arguably we could just patch our local copy directly instead of hacking methods,
-#   but I'd rather keep our copy of Net::DNS relatively clean for now, pending whatever
-#   comes of all that.
-use Net::DNS::RR::OPT;
-{
-    no warnings 'redefine';
-
-    # The only difference here is removal of the buggy 'unpack("n",...)' from
-    #  the decoding of "optiondata"
-    *Net::DNS::RR::OPT::new = sub {
-	    my ($class, $self, $data, $offset) = @_;
-
-	    $self->{"name"} = "" ;   # should allway be "root"
-	    if ($self->{"rdlength"} > 0) {
-		    $self->{"optioncode"}   = unpack("n", substr($$data, $offset, 2));
-		    $self->{"optionlength"} = unpack("n", substr($$data, $offset+2, 2));
-		    $self->{"optiondata"}   = substr($$data, $offset+4, $self->{"optionlength"});
-	    }
-
-	    $self->{"_rcode_flags"}  = pack("N",$self->{"ttl"});
-
-	    $self->{"extendedrcode"} = unpack("C", substr($self->{"_rcode_flags"}, 0, 1));
-	    $self->{"ednsversion"}   = unpack("C", substr($self->{"_rcode_flags"}, 1, 1));
-	    $self->{"ednsflags"}     = unpack("n", substr($self->{"_rcode_flags"}, 2, 2));
-
-	    return bless $self, $class;
-    };
-
-    # This was changed to actually reflect optioncode/data differences in the string output
-    *Net::DNS::RR::OPT::string = sub {
-        my $self = shift;
-        my $basics =
-            "; EDNS Version "     . $self->{"ednsversion"} .
-            "\t UDP Packetsize: " .  $self->{"class"} .
-            "\n; EDNS-RCODE:\t"   . $self->{"extendedrcode"} .
-            " (" . $Net::DNS::RR::OPT::extendedrcodesbyval{ $self->{"extendedrcode"} }. ")" .
-            "\n; EDNS-FLAGS:\t"   . sprintf("0x%04x", $self->{"ednsflags"}) .
-            "\n";
-        # Technically, there can be multiple options, but the rest of Net::DNS::RR:OPT
-        #  just assumes one and ignores any others, and that's all we really need for now anyways
-        my $optdata = "";
-        if($self->{"optioncode"}) {
-            $optdata =
-                "; EDNS Option Code: " . $self->{"optioncode"} .
-                "\n; EDNS Option Len: " . $self->{"optionlength"} .
-                "\n; EDNS Option Hex Data: " . unpack('H*', $self->{"optiondata"}) .
-                "\n";
-        }
-
-        return $basics . $optdata;
-    };
-}
 
 sub safe_rmtree {
     my $target = shift;
@@ -1070,7 +1010,15 @@ sub query_server {
 
         # restore altered resolver options
         foreach my $k (keys %saveopts) {
-           $res->$k($saveopts{$k});
+           # Bug introduced in Net::DNS 1.11 makes resetting udppacketsize to
+           # 512 not work correctly (it keeps sending EDNS with new queries @
+           # 512), but setting it to 511 has nearly the same effect as
+           # intended (no more ENDS in future queries).
+           if ($k eq "udppacketsize" && $saveopts{$k} == 512) {
+               $res->udppacketsize(511);
+           } else {
+               $res->$k($saveopts{$k});
+           }
         }
     }
 
@@ -1103,7 +1051,7 @@ sub test_dns {
         else {
             $aref = $args{$sec};
         }
-        map { if(!ref $aref->[$_]) { $aref->[$_] = Net::DNS::RR->new_from_string($aref->[$_]) } } (0..$#$aref);
+        map { if(!ref $aref->[$_]) { $aref->[$_] = Net::DNS::RR->new($aref->[$_]) } } (0..$#$aref);
     }
 
     my $qpacket = $args{qpacket} || Net::DNS::Packet->new($args{qname}, $args{qtype});
@@ -1293,30 +1241,27 @@ sub optrr_clientsub {
     my %args = @_;
     $args{scope_mask} ||= 0;
 
-    my %option;
+    my $optrr = Net::DNS::RR->new(
+        type => "OPT",
+        version => 0,
+        name => "",
+        size => 1024,
+        rcode => 0,
+        flags => 0,
+    );
 
     if(defined $args{addr_v4} || defined $args{addr_v6}) {
         my $src_mask = $args{src_mask};
         my $addr_bytes = ($src_mask >> 3) + (($src_mask & 7) ? 1 : 0);
         if(defined $args{addr_v4}) {
-            $option{optiondata} = pack('nCCa' . $addr_bytes, 1, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET, $args{addr_v4}));
-            $option{optioncode} = $EDNS_CLIENTSUB_OPTCODE;
+            $optrr->option('CLIENT-SUBNET' => pack('nCCa' . $addr_bytes, 1, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET, $args{addr_v4})));
         }
         else {
-            $option{optiondata} = pack('nCCa' . $addr_bytes, 2, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET6, $args{addr_v6}));
-            $option{optioncode} = $EDNS_CLIENTSUB_OPTCODE;
+            $optrr->option('CLIENT-SUBNET' => pack('nCCa' . $addr_bytes, 2, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET6, $args{addr_v6})));
         }
     }
 
-    Net::DNS::RR->new(
-        type => "OPT",
-        ednsversion => 0,
-        name => "",
-        class => 1024,
-        extendedrcode => 0,
-        ednsflags => 0,
-        %option,
-    );
+    $optrr;
 }
 
 END {

@@ -71,11 +71,11 @@ my $compt_mxset = [
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
 
 my $pid = _GDT->test_spawn_daemon();

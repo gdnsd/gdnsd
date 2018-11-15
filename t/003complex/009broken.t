@@ -1,7 +1,7 @@
 # Test various forms of "broken" queries
 
 use _GDT ();
-use Test::More tests => 19;
+use Test::More tests => 15;
 
 my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
 
@@ -39,11 +39,9 @@ my $pid = _GDT->test_spawn_daemon();
 }
 
 {   # AXFR - stats result should be NOTIMP over TCP
-    eval {
-        my @zone = _GDT->get_resolver()->axfr('example.com');
-        die "AXFR gave us records???" if scalar @zone;
-    };
-    ok(!$@) or diag $@;
+    my @zone = ();
+    eval { @zone = _GDT->get_resolver()->axfr('example.com'); };
+    ok(!scalar @zone) or diag "AXFR gave us records???";
     _GDT->stats_inc(qw/tcp_reqs tcp_conns notimp/);
     _GDT->test_stats();
 }
@@ -74,29 +72,17 @@ _GDT->test_dns(
 
 my @edns_base = (
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
-
-# EDNS badversion
-{
-    my $optrr_req = Net::DNS::RR->new(@edns_base, class => 512, ednsversion => 1);
-    my $optrr_res = Net::DNS::RR->new(@edns_base, extendedrcode => 1);
-    _GDT->test_dns(
-        qname => 'foo.example.com', qtype => 'A',
-        q_optrr => $optrr_req,
-        header => { aa => 0 },
-        addtl => $optrr_res,
-        stats => [qw/udp_reqs edns badvers/],
-    );
-}
 
 # EDNS unknown option
 {
-    my $optrr_req = Net::DNS::RR->new(@edns_base, optioncode => 0x5555, optiondata => 'foo');
+    my $optrr_req = Net::DNS::RR->new(@edns_base);
+    $optrr_req->option(0x5555 => 'foo');
     my $optrr_res = Net::DNS::RR->new(@edns_base);
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',
@@ -109,7 +95,8 @@ my @edns_base = (
 
 # EDNS unknown option + zero optlen
 {
-    my $optrr_req = Net::DNS::RR->new(@edns_base, optioncode => 0x5555, optiondata => '');
+    my $optrr_req = Net::DNS::RR->new(@edns_base);
+    $optrr_req->option(0x5555 => '');
     my $optrr_res = Net::DNS::RR->new(@edns_base);
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',
@@ -120,88 +107,26 @@ my @edns_base = (
     );
 }
 
-# EDNS w/ rdlen that goes past end of packet...
-{
-    # optrr rdlen set to 1 nonexistent byte
-    my $pkt = Net::DNS::Packet->new('example.com', 'A');
-    $pkt->header->rd(0);
-    $pkt->push(additional => Net::DNS::RR->new(@edns_base));
-    my $id = $pkt->header->id;
-    my $raw = $pkt->data;
-    substr($raw, -2, 2, pack('n', 1));
-
-    my $optrr_res = Net::DNS::RR->new(@edns_base);
-    _GDT->test_dns(
-        qpacket_raw => $raw,
-        qname => 'example.com', qtype => 'A', qid => $id,
-        header => { rcode => 'FORMERR', aa => 0},
-        addtl => $optrr_res,
-        stats => [qw/udp_reqs edns formerr/]
-    );
-}
-
-# EDNS w/ rdata too short to parse as optcode+optlen
-{
-    # optrr rdata set to 3 bytes of 'xxx'
-    my $pkt = Net::DNS::Packet->new('example.com', 'A');
-    $pkt->header->rd(0);
-    $pkt->push(additional => Net::DNS::RR->new(@edns_base));
-    my $id = $pkt->header->id;
-    my $raw = $pkt->data;
-    substr($raw, -2, 2, pack('n', 3));
-    $raw .= 'xxx';
-
-    my $optrr_res = Net::DNS::RR->new(@edns_base);
-    _GDT->test_dns(
-        qpacket_raw => $raw,
-        qname => 'example.com', qtype => 'A', qid => $id,
-        header => { rcode => 'FORMERR', aa => 0},
-        addtl => $optrr_res,
-        stats => [qw/udp_reqs edns formerr/]
-    );
-}
-
-# EDNS w/ valid rdlen, valid optcode, but optlen overrun
-{
-    # optrr rdlen is valid @ 5 bytes, but option len goes past that..
-    my $pkt = Net::DNS::Packet->new('example.com', 'A');
-    $pkt->header->rd(0);
-    $pkt->push(additional => Net::DNS::RR->new(@edns_base));
-    my $id = $pkt->header->id;
-    my $raw = $pkt->data;
-    substr($raw, -2, 2, pack('n', 5));
-    $raw .= pack('nnC', 0x5555, 2, 1);
-
-    my $optrr_res = Net::DNS::RR->new(@edns_base);
-    _GDT->test_dns(
-        qpacket_raw => $raw,
-        qname => 'example.com', qtype => 'A', qid => $id,
-        header => { rcode => 'FORMERR', aa => 0},
-        addtl => $optrr_res,
-        stats => [qw/udp_reqs edns formerr/]
-    );
-}
-
 my $optrr_resp = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
 
 # NSID query when not configured
 {
     my $optrr_nsid = Net::DNS::RR->new(
         type => "OPT",
-        ednsversion => 0,
+        version => 0,
         name => "",
-        class => 1024,
-        extendedrcode => 0,
-        ednsflags => 0,
-        optioncode => 3,
+        size => 1024,
+        rcode => 0,
+        flags => 0,
     );
+    $optrr_nsid->option(NSID => '');
 
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',
@@ -216,14 +141,13 @@ my $optrr_resp = Net::DNS::RR->new(
 {
     my $optrr_nsid_withdata = Net::DNS::RR->new(
         type => "OPT",
-        ednsversion => 0,
+        version => 0,
         name => "",
-        class => 1024,
-        extendedrcode => 0,
-        ednsflags => 0,
-        optioncode => 3,
-        optiondata => pack('H*', '6578616D706C65'),
+        size => 1024,
+        rcode => 0,
+        flags => 0,
     );
+    $optrr_nsid_withdata->option(NSID => pack('H*', '6578616D706C65'));
 
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',

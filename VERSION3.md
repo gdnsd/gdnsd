@@ -156,6 +156,7 @@ For systemd-based Linux distributions, an example unit file which handles all th
 
 * Autotools updates: building from git now requires autoconf 2.64+ and automake 1.13+
 * The userspace-rcu library (liburcu) is now a build requirement rather than an optional recommendation
+* The testsuite now requires Perl module Net::DNS version 1.03+
 * GeoIP2 support, while still optional, requires libmaxminddb 1.2.0+ if enabled at all
 * In general, lots of source-level backwards compatibility for older systems and/or kernels was removed where the assumptions seemed safe for a new major release in late 2018 or after.  If cases arise where certain operating systems are still in support and require patching, I'd be happy to add back the necessary bits.  Examples here include the assumptions about `SO_REUSEPORT`, `SOCK_CLOEXEC`, `SOCK_NONBLOCK`, and `accept4()`.
 * The generated C sources `src/zscan_rfc1035.c` and `libgdnsd/vscf.c`, which are built with `ragel`, are once again being included in tarball releases, but not in the git repo.  This is in response to ragel dependency hell reported by some who build from source on every machine.

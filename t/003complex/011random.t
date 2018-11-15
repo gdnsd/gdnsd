@@ -41,8 +41,15 @@ sub gen_random_packet {
 }
 
 sub gen_valid_header {
-    my $req_packet = Net::DNS::Packet->new('foo.example.com', 'A');
-    return $req_packet->header->encode;
+    return pack("nCCnnnn",
+        12345, # id
+        0, # flags1
+        0, # flags2
+        1, # qdcount
+        0, # ancount
+        0, # nscount
+        0  # arcount
+    );
 }
 
 sub gen_random_packet_good_header {

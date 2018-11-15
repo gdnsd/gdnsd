@@ -6,32 +6,31 @@ use Test::More tests => 6;
 
 my $optrr_req_nsid = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
-    optioncode => 3,
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
+$optrr_req_nsid->option(NSID => '');
 
 my $optrr_nsid = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
-    optioncode => 3,
-    optiondata => pack('H*', '6578616D706C65'),
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
+$optrr_nsid->option(NSID => pack('H*', '6578616D706C65'));
 
 my $optrr_nonsid = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
 
 my $pid = _GDT->test_spawn_daemon();

@@ -5,34 +5,15 @@
 # Also covers a few EDNS cases at the bottom
 
 use _GDT ();
-use Test::More tests => 12;
+use Test::More tests => 10;
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
-    ednsversion => 0,
+    version => 0,
     name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
-);
-
-# The value "128" here is our expected keepalive advertisement with a single
-# open connection under default settings.  The defaults are 128 max clients and
-# 15s max timeout.  Following the code's logic for the 75% threshold, etc:
-# --
-# 75% threshold of 128 max = 96
-# free connections / threshold, with 1 open = 95/96
-# 15s max timeout, -2 for the internal timeout vs keepalive offset = 13s baseline
-# floor(13 * (95/96) * 10) = 128 in 100ms units
-my $optrr_keepalive = Net::DNS::RR->new(
-    type => "OPT",
-    ednsversion => 0,
-    name => "",
-    class => 1024,
-    extendedrcode => 0,
-    ednsflags => 0,
-    optioncode => 11,
-    optiondata => pack('n', 128),
+    size => 1024,
+    rcode => 0,
+    flags => 0,
 );
 
 my $long_rr = Net::DNS::rr_add('this.is.an.rr.thats.longer.than.an.opt.rr.in.order.to.make.coverage.work A 192.0.2.1');
@@ -81,7 +62,7 @@ $chaos->push('question', Net::DNS::Question->new('foo', 'TXT', 'CH'));
 _GDT->test_dns(
     qpacket => $chaos,
     header => { aa => 0 },
-    answer => 'foo CH TXT gdnsd',
+    answer => 'foo 0 CH TXT gdnsd',
 );
 
 _GDT->test_dns(
@@ -116,34 +97,6 @@ _GDT->test_dns(
     );
 }
 
-# as above, with an OPTRR after one and before the other
-#
-{
-    my $qpacket = Net::DNS::Packet->new();
-    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
-    $qpacket->push('additional', $long_rr);
-    $qpacket->push('additional', $optrr);
-    _GDT->test_dns(
-        qpacket => $qpacket,
-        answer => 'foo.example.com 86400 A 192.0.2.3',
-        addtl => $optrr,
-        stats => [qw/udp_reqs noerror edns/],
-    );
-}
-
-{
-    my $qpacket = Net::DNS::Packet->new();
-    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
-    $qpacket->push('additional', $optrr);
-    $qpacket->push('additional', $long_root_rr);
-    _GDT->test_dns(
-        qpacket => $qpacket,
-        answer => 'foo.example.com 86400 A 192.0.2.3',
-        addtl => $optrr,
-        stats => [qw/udp_reqs noerror edns/],
-    );
-}
-
 # Try a bunch of records in all the non-question sections
 {
     my $qpacket = Net::DNS::Packet->new();
@@ -162,19 +115,19 @@ _GDT->test_dns(
 
 # DO-bit should echo
 {
-    my $optrr_do = Net::DNS::RR->new(
+    my @optrr_do = (
         type => "OPT",
-        ednsversion => 0,
+        version => 0,
         name => "",
-        class => 1024,
-        extendedrcode => 0,
-        ednsflags => 0x8000,
+        size => 1024,
+        rcode => 0,
+        flags => 0x8000,
     );
     _GDT->test_dns(
         qname => 'cov.example.com', qtype => 'MX',
-        q_optrr => $optrr_do,
+        q_optrr => Net::DNS::RR->new(@optrr_do),
         answer => 'cov.example.com 86400 MX 1 .',
-        addtl => $optrr_do,
+        addtl => Net::DNS::RR->new(@optrr_do),
         stats => [qw/udp_reqs noerror edns edns_do/],
     );
 }
