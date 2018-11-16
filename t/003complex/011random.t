@@ -1,13 +1,10 @@
 # Random packet torture testing.
-# All of these queries should result
-# in "dropped", "fmterr", etc...
-# They are sent directly via UDP rather than Net::DNS,
-# so specific error counts aren't reliable.  We just check
-# at the end that the overall packet count in the daemon
-# stats is correct, and that the "valid" counts (noerror,
-# nxdomain, refused) only account for the handful of
-# valid requests we make to ensure the daemon is still alive
-# and well.
+# All of these queries should result in "dropped", "fmterr", etc...
+# They are sent directly via UDP rather than Net::DNS, so specific error counts
+# aren't reliable.  We just check at the end that the overall packet count in
+# the daemon stats is correct, and that the "valid" counts (noerror) only
+# account for the handful of valid requests we make to ensure the daemon is
+# still alive and well.
 
 use _GDT ();
 use Scalar::Util ();
@@ -167,8 +164,6 @@ foreach (1..$_GDT::RAND_LOOPS) {
 eval {_GDT->check_stats(
     udp_reqs => $rand_reqs + $valid_reqs,
     noerror => $valid_reqs,
-    nxdomain => 0,
-    refused => 0,
 )};
 ok(!$@) or diag $@;
 
