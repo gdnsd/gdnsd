@@ -34,32 +34,6 @@
 
 /* network utils */
 
-static int tcp_proto = 0;
-static int udp_proto = 0;
-
-void gdnsd_init_net(void)
-{
-    static bool has_run = false;
-    if (has_run)
-        log_fatal("BUG: gdnsd_init_net() should only be called once!");
-    else
-        has_run = true;
-
-    struct protoent* pe;
-
-    // cppcheck-suppress getprotobynameCalled (init time, no threads)
-    pe = getprotobyname("tcp");
-    if (!pe)
-        log_fatal("getprotobyname('tcp') failed");
-    tcp_proto = pe->p_proto;
-
-    // cppcheck-suppress getprotobynameCalled (init time, no threads)
-    pe = getprotobyname("udp");
-    if (!pe)
-        log_fatal("getprotobyname('udp') failed");
-    udp_proto = pe->p_proto;
-}
-
 void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
 {
     memset(a, 0, sizeof(*a));
@@ -68,16 +42,6 @@ void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
     if (plen > sizeof(a->sun_path))
         log_fatal("Implementation bug/limit: desired control socket path %s exceeds sun_path length of %zu", path, sizeof(a->sun_path));
     memcpy(a->sun_path, path, plen);
-}
-
-int gdnsd_getproto_udp(void)
-{
-    return udp_proto;
-}
-
-int gdnsd_getproto_tcp(void)
-{
-    return tcp_proto;
 }
 
 int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_anysin_t* result)

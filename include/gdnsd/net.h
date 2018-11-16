@@ -42,18 +42,8 @@
 
 #pragma GCC visibility push(default)
 
-// Initialize network stuff (caches getprotoent, test features, etc),
-// needed before runtime socket creations, etc.
-void gdnsd_init_net(void);
-
 F_NONNULL
 void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path);
-
-// Plugins should use these to get protocol numbers
-F_PURE
-int gdnsd_getproto_udp(void);
-F_PURE
-int gdnsd_getproto_tcp(void);
 
 /* Socket union type */
 // note anonymous union here, which gcc has supported

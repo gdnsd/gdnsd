@@ -36,6 +36,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <netinet/in_systm.h>
+#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 
@@ -587,7 +588,7 @@ void tcp_dns_listen_setup(dns_thread_t* t)
 
     bool need_bind = false;
     if (t->sock == -1) { // not acquired via replace
-        t->sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, gdnsd_getproto_tcp());
+        t->sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
         if (t->sock < 0)
             log_fatal("Failed to create IPv%c TCP socket: %s", isv6 ? '6' : '4', logf_errno());
         need_bind = true;

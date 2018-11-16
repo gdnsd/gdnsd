@@ -30,6 +30,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in_systm.h>
+#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <sys/types.h>
@@ -94,7 +95,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
     const bool isv6 = md->addr.sa.sa_family == AF_INET6;
 
-    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, gdnsd_getproto_tcp());
+    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
     if (sock == -1) {
         log_err("plugin_tcp_connect: Failed to create monitoring socket: %s", logf_errno());
         return;
