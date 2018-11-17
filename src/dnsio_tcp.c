@@ -655,7 +655,6 @@ void* dnsio_tcp_start(void* thread_asvoid)
     const dns_addr_t* addrconf = t->ac;
 
     tcpdns_thread_t* ctx = xcalloc(sizeof(*ctx));
-    register_thread(ctx);
 
     if (listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
         log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(&addrconf->addr), logf_errno());
@@ -667,8 +666,6 @@ void* dnsio_tcp_start(void* thread_asvoid)
     if (setsockopt(t->sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)))
         log_err("Failed to install 'dnsready' SO_ACCEPTFILTER on TCP socket %s: %s", logf_anysin(&addrconf->addr), logf_errno());
 #endif
-
-    ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -708,6 +705,19 @@ void* dnsio_tcp_start(void* thread_asvoid)
     ev_io_start(loop, accept_watcher);
     ev_prepare_start(loop, prep_watcher);
     ev_unref(loop); // prepare should not hold a ref, but should run to the end
+
+    // register_thread() hooks us into the ev_async-based shutdown-handling
+    // code, therefore we must have ctx->loop and ctx->stop_watcher initialized
+    // and ready before we register here
+    register_thread(ctx);
+
+    // dnspacket_ctx_init() is what releases threads through the startup gates,
+    // and main.c's call to dnspacket_wait_stats() waits for all threads to
+    // have reached this point before entering the main runtime loop.
+    // Therefore, this must happen after register_thread() above, to ensure
+    // that all tcp threads are properly registered with the shutdown handler
+    // before we begin processing possible future shutdown events.
+    ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false);
 
     rcu_register_thread();
     ctx->rcu_is_online = true;
