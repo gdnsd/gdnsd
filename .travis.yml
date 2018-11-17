@@ -1,5 +1,5 @@
 sudo: required
-dist: xenial
+dist: bionic
 branches:
   only:
     - master
@@ -9,9 +9,7 @@ cache:
   - ccache
 before_install:
   - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
-  - sudo apt-add-repository ppa:maxmind/ppa -y
-  - sudo apt-get update -qq
-  - sudo apt-get install -qq ragel libev-dev liburcu-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl lcov
+  - sudo apt-get install -qq ragel libev-dev liburcu-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl lcov
   - gem install coveralls-lcov
 before_script:
   - autoreconf -vif
