@@ -1498,7 +1498,7 @@ static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, cons
     // rrset_addr is stored as type DNS_TYPE_A for both A and AAAA
     if (etype == DNS_TYPE_AAAA)
         etype = DNS_TYPE_A;
-    while (node_rrset) {
+    do {
         if (node_rrset->gen.type == etype) {
             if (unlikely(etype & 0xFF00))
                 offset = encode_rrs_rfc3597(ctx, offset, &node_rrset->rfc3597);
@@ -1507,7 +1507,7 @@ static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, cons
             break;
         }
         node_rrset = node_rrset->gen.next;
-    }
+    } while (node_rrset);
 
     return offset;
 }
