@@ -9,11 +9,11 @@ cache:
   - ccache
 before_install:
   - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
+  - sudo apt-add-repository ppa:maxmind/ppa -y
   - sudo apt-get update -qq
   - sudo apt-get -y upgrade -qq
-  - sudo apt install update-manager-core
-  - sudo do-release-upgrade
   - sudo apt-get -y install -qq ragel libev-dev liburcu-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl lcov
+  - sudo sh -c 'PERL_MM_USE_DEFAULT=1 perl -MCPAN -e "CPAN::Shell->o(q{conf}, q{recommends_policy}, q{0}); CPAN::Shell->o(q{conf}, q{commit}); CPAN::Shell->notest(q{install}, q{Net::DNS})"'
   - gem install coveralls-lcov
 before_script:
   - autoreconf -vif
