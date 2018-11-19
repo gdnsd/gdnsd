@@ -1001,9 +1001,12 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     // sizeof(wire_dns_header_t): basic header bytes before query
     // 4U: the fixed parts of the query (qtype and qclass)
     // 11U: edns0 OPT RR with no options
-    // 24U: edns0 edns-client-subnet option at max response length (full ipv6 bytes)
     // 6U: edns0 tcp-keepalive response
-    size_t rsize = sizeof(wire_dns_header_t) + 4U + 11U + 24U + 6U;
+    size_t rsize = sizeof(wire_dns_header_t) + 4U + 11U + 6U;
+
+    // 24U: edns0 edns-client-subnet option at max response length (full ipv6 bytes)
+    if (gcfg->edns_client_subnet)
+        rsize += 24U;
 
     // Optional NSID if configured (4U is 2 bytes optcode + 2 bytes datalen)
     if (gcfg->nsid_len)
