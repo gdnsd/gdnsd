@@ -45,6 +45,7 @@ typedef struct {
     unsigned max_ttl;
     unsigned min_ttl;
     unsigned max_edns_response;
+    unsigned max_edns_response_v6;
     unsigned acme_challenge_ttl;
 } cfg_t;
 

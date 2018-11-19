@@ -645,6 +645,13 @@ static void set_rcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSE
     }
 }
 
+F_NONNULL F_PURE
+static bool is_ipv6(const gdnsd_anysin_t* asin)
+{
+    gdnsd_assert(asin->sa.sa_family == AF_INET6 || asin->sa.sa_family == AF_INET);
+    return (asin->sa.sa_family == AF_INET6);
+}
+
 void* dnsio_tcp_start(void* thread_asvoid)
 {
     gdnsd_thread_setname("gdnsd-io-tcp");
@@ -717,7 +724,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
     // Therefore, this must happen after register_thread() above, to ensure
     // that all tcp threads are properly registered with the shutdown handler
     // before we begin processing possible future shutdown events.
-    ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false);
+    ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false, is_ipv6(&addrconf->addr));
 
     rcu_register_thread();
     ctx->rcu_is_online = true;

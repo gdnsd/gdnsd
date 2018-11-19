@@ -292,7 +292,7 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
             else if (opt_size > min_buf)
                 opt_size = min_buf;
             else
-                log_fatal("Failed to set %s to %i for UDP socket %s: %s.  You may need to reduce the max_edns_response, or specify workable buffer sizes explicitly in the config", which_str, opt_size, logf_anysin(asin), logf_errno());
+                log_fatal("Failed to set %s to %i for UDP socket %s: %s.  You may need to reduce the max_edns_response[_v6], or specify workable buffer sizes explicitly in the config", which_str, opt_size, logf_anysin(asin), logf_errno());
         }
     }
 
@@ -341,7 +341,7 @@ void udp_sock_setup(dns_thread_t* t)
             log_fatal("Failed to set SO_SNDBUF to %i for UDP socket %s: %s", opt_size,
                       logf_anysin(asin), logf_errno());
     } else {
-        negotiate_udp_buffer(t->sock, SO_SNDBUF, gcfg->max_edns_response, asin);
+        negotiate_udp_buffer(t->sock, SO_SNDBUF, isv6 ? gcfg->max_edns_response_v6 : gcfg->max_edns_response, asin);
     }
 
     if (isv6)
@@ -612,14 +612,20 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
 
 #endif // USE_MMSG
 
+F_NONNULL F_PURE
+static bool is_ipv6(const gdnsd_anysin_t* asin)
+{
+    gdnsd_assert(asin->sa.sa_family == AF_INET6 || asin->sa.sa_family == AF_INET);
+    return (asin->sa.sa_family == AF_INET6);
+}
+
 // We need to use cmsg stuff in the case of any IPv6 address (at minimum,
 //  to copy the flow label correctly, if not the interface + source addr),
 //  as well as the IPv4 any-address (for correct source address).
 F_NONNULL F_PURE
 static bool needs_cmsg(const gdnsd_anysin_t* asin)
 {
-    gdnsd_assert(asin->sa.sa_family == AF_INET6 || asin->sa.sa_family == AF_INET);
-    return (asin->sa.sa_family == AF_INET6 || gdnsd_anysin_is_anyaddr(asin))
+    return (is_ipv6(asin) || gdnsd_anysin_is_anyaddr(asin))
            ? true
            : false;
 }
@@ -634,7 +640,7 @@ void* dnsio_udp_start(void* thread_asvoid)
     const dns_addr_t* addrconf = t->ac;
 
     dnspacket_stats_t* stats;
-    void* dnsp_ctx = dnspacket_ctx_init(&stats, true);
+    void* dnsp_ctx = dnspacket_ctx_init(&stats, true, is_ipv6(&addrconf->addr));
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 

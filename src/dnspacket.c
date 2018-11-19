@@ -75,6 +75,9 @@ typedef struct {
     // set permanently at startup
     bool is_udp;
 
+    // As above for IPv4 vs IPv6 sockets
+    bool is_ipv6;
+
 // ---
 // From this point on, all of this gets memset to zero at the start of each
 // request and is set with new values as we parse the query and create the
@@ -194,12 +197,13 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
     pthread_mutex_unlock(&stats_init_mutex);
 }
 
-void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp)
+void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool is_ipv6)
 {
     dnsp_ctx_t* ctx = xcalloc(sizeof(*ctx));
 
     ctx->rand_state = gdnsd_rand32_init();
     ctx->is_udp = is_udp;
+    ctx->is_ipv6 = is_ipv6;
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
 
     gdnsd_plugins_action_iothread_init();
@@ -460,11 +464,12 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
     const unsigned edns_version = (edns_extflags & 0xFF0000) >> 16;
     if (likely(edns_version == 0)) {
         if (likely(ctx->is_udp)) {
+            const unsigned edns_cfg_max = ctx->is_ipv6 ? gcfg->max_edns_response_v6 : gcfg->max_edns_response;
             ctx->this_max_response = edns_maxsize < 512U
                                      ? 512U
-                                     : edns_maxsize < gcfg->max_edns_response
+                                     : edns_maxsize < edns_cfg_max
                                      ? edns_maxsize
-                                     : gcfg->max_edns_response;
+                                     : edns_cfg_max;
         } else {
             ctx->edns_out_bytes += 6U; // tcp keepalive option space
         }

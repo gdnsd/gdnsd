@@ -27,6 +27,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * The additional section only ever contains actual mandatory glue IPs (out-of-zone glue or glue within any delegated subzone of the delegating zone); it is no longer used for other purposes like A/AAAA additionals for answer-section MX, SRV, etc.
   * ANY-queries are now answered with a minimal, synthetic HINFO RR per RFC 8482
 * Input query parsing is now much more robust and future-proof in general.  We now at least minimally parse all query RRs and seek the OPT RR anywhere within the additional section, and we're much more likely to respond explicitly with a FORMERR or NOTIMP in some cases where we'd have previously not responded at all to oddly-formed queries from future standards efforts we're not aware of.
+* The default maximum EDNS output size over UDPv6 should better avoid loss in the real-world IPv6 Internet.
 * The DNSSEC OK (DO) bit in the edns0 flags field is now echoed back in responses as per RFC 3225 (but we continue to not support DNSSEC so far, so no functional impact on the response).
 * A new stat counter `edns_do` tracks the count of edns0 requests with the DO bit set.
 * EDNS Cookies from RFC 7873 are implemented to help with off-path response forgery and forged amplification attacks.  These add 4 new stats counters:
@@ -98,6 +99,7 @@ These are all new options for new features:
 * `disable_cookies` - Disables EDNS Cookies (not recommended!)
 * `cookie_key_file` - Loads the master cookie secret key from a file controlled by the administrator, useful for synchronizing cookie support across a set of loadbalanced or anycasted gdnsd instances.
 * `max_nocookie_response` - Limits UDP response sizes when clients present no valid cookie auth.  This is disabled by default for now.
+* `max_edns_response_v6` - Like existing `max_edns_response` parameter (which is now v4-only), but for IPv6, and defaulting to 1212.
 
 ### Options with changed defaults or allowed values
 

@@ -61,6 +61,7 @@ static const cfg_t cfg_defaults = {
     .max_ttl = 3600000U,
     .min_ttl = 5U,
     .max_edns_response = 1410U,
+    .max_edns_response_v6 = 1212U,
     .acme_challenge_ttl = 600U,
 };
 
@@ -298,6 +299,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         if (cfg->max_ncache_ttl < cfg->min_ttl)
             log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ncache_ttl, cfg->min_ttl);
         CFG_OPT_UINT(options, max_edns_response, 512LU, 16384LU);
+        CFG_OPT_UINT(options, max_edns_response_v6, 512LU, 16384LU);
         CFG_OPT_UINT(options, acme_challenge_ttl, 60LU, 3600LU);
         CFG_OPT_BOOL(options, zones_strict_data);
         CFG_OPT_BOOL(options, disable_cookies);
