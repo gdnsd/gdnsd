@@ -619,6 +619,35 @@ void tcp_dns_listen_setup(dns_thread_t* t)
 #endif
 
     if (isv6) {
+        // as with our default max_edns_response_v6, leave plenty of headroom
+        // here to avoid IPv6 mtu/frag loss issues.  Clamping to min mtu should
+        // commonly set MSS to 1220 anyways, but we'll go with a
+        // more-conservative 1212 below in TCP_MAXSEG.  I'm assuming here that
+        // setting the MTU/MAXSEG on the listening socket (as opposed to the
+        // per-connection socket) is the only reasonable place, because the
+        // 3WHS is already over and done by the time we get an fd from
+        // accept() at runtime, so this stuff should effectively inherit down
+        // or it's kind of useless...
+
+#if defined IPV6_USE_MIN_MTU
+        const int opt_one = 1;
+        if (setsockopt(t->sock, SOL_IPV6, IPV6_USE_MIN_MTU, &opt_one, sizeof(opt_one)) == -1)
+            log_fatal("Failed to set IPV6_USE_MIN_MTU on TCP socket: %s", logf_errno());
+#elif defined IPV6_MTU
+#  ifndef IPV6_MIN_MTU
+#    define IPV6_MIN_MTU 1280
+#  endif
+        const int min_mtu = IPV6_MIN_MTU;
+        if (setsockopt(t->sock, SOL_IPV6, IPV6_MTU, &min_mtu, sizeof(min_mtu)) == -1)
+            log_fatal("Failed to set IPV6_MTU on TCP socket: %s", logf_errno());
+#endif
+
+#ifdef TCP_MAXSEG
+        const int maxseg = 1212;
+        if (setsockopt(t->sock, SOL_TCP, TCP_MAXSEG, &maxseg, sizeof(maxseg)) == -1)
+            log_fatal("Failed to set TCP_MAXSEG to %i on TCP socket: %s", maxseg, logf_errno());
+#endif
+
         // Guard IPV6_V6ONLY with a getsockopt(), because Linux fails here if a
         // socket is already bound (in which case we also should've already set
         // this in the previous daemon instance), because it affects how binding
