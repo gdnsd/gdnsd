@@ -98,7 +98,7 @@ These are all new options for new features:
 * `nsid_ascii` - Convenience alternative to the above, sets the NSID binary data to the bytes of the specified printable ASCII string of at most 128 characters.
 * `tcp_fastopen` - Sets the queue size for TCP Fastopen (global, per-socket).  min/def/max is 0/128/1048576, zero disables.
 * `disable_cookies` - Disables EDNS Cookies (not recommended!)
-* `cookie_key_file` - Loads the master cookie secret key from a file controlled by the administrator, useful for synchronizing cookie support across a set of loadbalanced or anycasted gdnsd instances.
+* `cookie_key_file` - Loads the master cookie secret key from a file controlled by the administrator, useful for synchronizing cookie support across a set of loadbalanced or anycasted gdnsd instances.  The file's contents must be a 32-byte chunk of binary data generated securely and randomly for direct use as a secret key!
 * `max_nocookie_response` - Limits UDP response sizes when clients present no valid cookie auth.  This is disabled by default for now.
 * `max_edns_response_v6` - Like existing `max_edns_response` parameter (which is now v4-only), but for IPv6, and defaulting to 1212.
 
@@ -115,7 +115,7 @@ You'll need to fix values for these in existing config before trying an upgrade,
 
 None of these generate a syntax error for now, they merely log a non-fatal error to ease transition.  They'll become syntax errors in a future major version update:
 
-* `any_mitigation` - Fixed on (same as previous default)
+* `any_mitigation` - No longer applicable
 * `include_optional_ns` - Fixed off (same as previous default)
 * `max_addtl_rrsets` - No longer applicable
 * `max_cname_depth` - Fixed at 16 (same as previous default)
