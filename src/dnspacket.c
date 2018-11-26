@@ -85,7 +85,7 @@ typedef struct {
 // ---
 
     // Max response size for this individual request, as determined
-    //  by protocol type, expected edns0 output bytes at the end, and in the
+    //  by protocol type, expected edns output bytes at the end, and in the
     //  case of UDP, the EDNS max response size (if any).
     unsigned this_max_response;
 
@@ -160,7 +160,7 @@ typedef struct {
     unsigned edns_client_family;
 
     // units of 100ms, sent by dnsio_tcp code
-    unsigned edns0_tcp_keepalive;
+    unsigned edns_tcp_keepalive;
 
     // Compression targets, for the few cases where we do general-case compression
     unsigned ctarget_count;
@@ -346,12 +346,12 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
     } else if (opt_code == EDNS_TCP_KEEPALIVE_OPTCODE) {
         log_devdebug("Got client edns tcp keepalive option, no use for it");
         // no-op
-        // Note we don't explicitly parse RFC 7828 edns0 tcp keepalive here, but
+        // Note we don't explicitly parse RFC 7828 edns tcp keepalive here, but
         // this is where we'd install the handler function if we did.  Our
         // implementation does not choose to change its behavior (e.g. longer
         // timeouts) based on the client's request for keepalive, and always sends
         // its own keepalive option whenever possible (any time the client tcp
-        // query has an edns0 opt rr at all).  Therefore we gain little by
+        // query has an edns opt rr at all).  Therefore we gain little by
         // attempting to parse the client's option here, and we can just ignore it.
         // We could hypothetically parse it just to FORMERR-reject it if the client
         // violates the RFC by sending a non-zero data length, but that seems
@@ -1873,7 +1873,7 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
     return offset;
 }
 
-unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns0_tcp_keepalive)
+unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns_tcp_keepalive)
 {
     // iothreads don't allow queries larger than this
     gdnsd_assert(packet_len <= DNS_RECV_SIZE);
@@ -1882,13 +1882,13 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
     reset_context(ctx);
     gdnsd_assert(ctx->stats);
     ctx->packet = packet;
-    ctx->edns0_tcp_keepalive = edns0_tcp_keepalive;
+    ctx->edns_tcp_keepalive = edns_tcp_keepalive;
     memcpy(&ctx->client_info.dns_source, asin, sizeof(*asin));
 
     if (asin->sa.sa_family == AF_INET6)
         stats_own_inc(&ctx->stats->v6);
 
-    // parse_optrr() will raise this value in the udp edns0 case as necc.
+    // parse_optrr() will raise this value in the udp edns case as necc.
     ctx->this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE;
 
     /*
@@ -1998,14 +1998,14 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
             res_offset += 16U;
         }
 
-        // TCP keepalive is emitted for any TCP request which had an edns0 OPT RR
+        // TCP keepalive is emitted for any TCP request which had an edns OPT RR
         if (!ctx->is_udp) {
             rdlen += 6U;
             gdnsd_put_una16(htons(EDNS_TCP_KEEPALIVE_OPTCODE), &packet[res_offset]);
             res_offset += 2;
             gdnsd_put_una16(htons(2), &packet[res_offset]);
             res_offset += 2;
-            gdnsd_put_una16(htons(ctx->edns0_tcp_keepalive), &packet[res_offset]);
+            gdnsd_put_una16(htons(ctx->edns_tcp_keepalive), &packet[res_offset]);
             res_offset += 2;
         }
 

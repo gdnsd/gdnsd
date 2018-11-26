@@ -884,7 +884,7 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
 //
 // In general, the method here is to find the largest single rrset defined in
 // the node.  We also have to add on various fixed quantities to account for
-// headers, the query, and maximal edns0 option outputs.  In delegation and
+// headers, the query, and maximal edns option outputs.  In delegation and
 // wildcard cases, we also have to assume the query name consumed the full 255
 // byte maximum.  When checking delegation NS RR-sets we also have to account
 // for their glued address data in the additional section.
@@ -1000,11 +1000,11 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     // First, the fixed portions:
     // sizeof(wire_dns_header_t): basic header bytes before query
     // 4U: the fixed parts of the query (qtype and qclass)
-    // 11U: edns0 OPT RR with no options
-    // 6U: edns0 tcp-keepalive response
+    // 11U: edns OPT RR with no options
+    // 6U: edns tcp-keepalive response
     size_t rsize = sizeof(wire_dns_header_t) + 4U + 11U + 6U;
 
-    // 24U: edns0 edns-client-subnet option at max response length (full ipv6 bytes)
+    // 24U: edns edns-client-subnet option at max response length (full ipv6 bytes)
     if (gcfg->edns_client_subnet)
         rsize += 24U;
 

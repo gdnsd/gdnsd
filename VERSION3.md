@@ -9,7 +9,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * The TCP DNS code was upgraded substantially:
   * Follows the spirit and recommendations of RFC 7766 "DNS Transport over TCP - Implementation Requirements"
   * Supports TCP Fastopen
-  * Implements the RFC 7828 edns0 tcp-keepalive option
+  * Implements the RFC 7828 EDNS tcp-keepalive option
   * Internal connection idle timeouts scale with connection load
   * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
   * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:
@@ -19,7 +19,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
     * `tcp_close_s_err` - TCP conns closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
     * `tcp_close_s_kill` - TCP conns closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
 * edns-client-subnet support updated to match RFC 7871
-* The nsid edns0 option from RFC 5001 is implemented, allowing identification of members of a loadbalanced or anycast server set
+* The nsid EDNS option from RFC 5001 is implemented, allowing identification of members of a loadbalanced or anycast server set
 * All responses are completely minimized:
   * A and AAAA responses no longer include opposite-family records in the additional section
   * The answer section usually contains only one rrset, unless CNAMEs are involved (we still output CNAME chains within local zone data)
@@ -29,8 +29,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * Input query parsing is now much more robust and future-proof in general.  We now at least minimally parse all query RRs and seek the OPT RR anywhere within the additional section, and we're much more likely to respond explicitly with a FORMERR or NOTIMP in some cases where we'd have previously not responded at all to oddly-formed queries from future standards efforts we're not aware of.
 * The default maximum EDNS output size over UDPv6 should better avoid loss in the real-world IPv6 Internet.
 * TCPv6 now also uses a minimal MTU/MSS setup to avoid similar loss/performance issues.
-* The DNSSEC OK (DO) bit in the edns0 flags field is now echoed back in responses as per RFC 3225 (but we continue to not support DNSSEC so far, so no functional impact on the response).
-* A new stat counter `edns_do` tracks the count of edns0 requests with the DO bit set.
+* The DNSSEC OK (DO) bit in the EDNS flags field is now echoed back in responses as per RFC 3225 (but we continue to not support DNSSEC so far, so no functional impact on the response).
+* A new stat counter `edns_do` tracks the count of EDNS requests with the DO bit set.
 * EDNS Cookies from RFC 7873 are implemented to help with off-path response forgery and forged amplification attacks.  These add 4 new stats counters:
   * `edns_cookie_init` - Received a client cookie with no server cookie
   * `edns_cookie_ok` - Received a client cookie with a server cookie, and it validates
@@ -94,7 +94,7 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 These are all new options for new features:
 
 * `acme_challenge_ttl` - Sets the time in seconds for records injected by `gdnsdctl acme-dns-01` to expire, as well as the advertised TTL.  min/def/max is 60/600/3600.
-* `nsid` - Sets the raw binary data returned by the NSID edns0 option.  Up to 128 raw bytes, encoded as up to 256 characters of ascii hex in a single string.  The option is not sent unless the data is explicitly defined by this option.
+* `nsid` - Sets the raw binary data returned by the NSID EDNS option.  Up to 128 raw bytes, encoded as up to 256 characters of ascii hex in a single string.  The option is not sent unless the data is explicitly defined by this option.
 * `nsid_ascii` - Convenience alternative to the above, sets the NSID binary data to the bytes of the specified printable ASCII string of at most 128 characters.
 * `tcp_fastopen` - Sets the queue size for TCP Fastopen (global, per-socket).  min/def/max is 0/128/1048576, zero disables.
 * `disable_cookies` - Disables EDNS Cookies (not recommended!)

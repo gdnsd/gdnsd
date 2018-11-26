@@ -65,7 +65,7 @@ typedef struct {
     tcpdns_conn_t* idleq_tail; // last element, least-idle
     double tmo_scaler; // timeout changes by this much per connection under tmo_thresh75
     unsigned tmo_thresh75; // 75% threshold connection count for timeout calc
-    unsigned edns0_keepalive; // current timeout, minus 2s, in integer units of 100ms
+    unsigned edns_keepalive; // current timeout, minus 2s, in integer units of 100ms
     unsigned max_timeout;
     unsigned max_clients;
     unsigned num_conns; // count of all conns, also len of idleq list
@@ -208,9 +208,9 @@ static void idleq_process_timeouts(tcpdns_thread_t* ctx)
         ev_timer_stop(ctx->loop, tmo);
     }
 
-    // Update edns0 keepalive view of current timeout
+    // Update edns keepalive view of current timeout
     gdnsd_assert(cur_timeout >= 2.0);
-    ctx->edns0_keepalive = (unsigned)((cur_timeout - 2.0) * 10.0);
+    ctx->edns_keepalive = (unsigned)((cur_timeout - 2.0) * 10.0);
 }
 
 // Append a new connection at the tail of the idle list and set its idle_start
@@ -470,7 +470,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V
         conn->ctx->rcu_is_online = true;
         rcu_thread_online();
     }
-    conn->size = process_dns_query(conn->ctx->dnsp_ctx, &conn->asin, &conn->buffer[2], conn->size - 2, conn->ctx->edns0_keepalive);
+    conn->size = process_dns_query(conn->ctx->dnsp_ctx, &conn->asin, &conn->buffer[2], conn->size - 2, conn->ctx->edns_keepalive);
     if (!conn->size) {
         log_debug("TCP DNS conn to %s closed by server: dropped invalid query", logf_anysin(&conn->asin));
         stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
