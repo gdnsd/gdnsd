@@ -117,14 +117,18 @@ void gdnsd_thread_setname(const char* n V_UNUSED)
 gdnsd_rstate64_t* gdnsd_rand64_init(void)
 {
     gdnsd_rstate64_t* newstate = xmalloc(sizeof(*newstate));
-    randombytes_buf(newstate, sizeof(*newstate));
+    do {
+        randombytes_buf(newstate, sizeof(*newstate));
+    } while (!newstate->y); // y==0 is bad for jlkiss64
     return newstate;
 }
 
 gdnsd_rstate32_t* gdnsd_rand32_init(void)
 {
     gdnsd_rstate32_t* newstate = xmalloc(sizeof(*newstate));
-    randombytes_buf(newstate, sizeof(*newstate));
+    do {
+        randombytes_buf(newstate, sizeof(*newstate));
+    } while (!newstate->y); // y==0 is bad for jkiss32
     return newstate;
 }
 
