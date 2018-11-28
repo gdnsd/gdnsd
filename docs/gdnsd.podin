@@ -243,12 +243,6 @@ for administrative state-overrides on monitored resources, see below
 in the FILES section.  See the entry for C<state_dir> in the
 L<gdnsd.config(5)> manpage for more information about this directory.
 
-=item F<@GDNSD_DEFPATH_LIB@>
-
-This is the default path that plugin shared libraries are loaded from.
-Other directories can be prepended to the search path via the configuration
-option C<plugin_search_path>, documented in L<gdnsd.config(5)>.
-
 =item F<@GDNSD_DEFPATH_LIBEXEC@>
 
 This is the default path for daemon-private executables that users should

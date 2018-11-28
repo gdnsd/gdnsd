@@ -94,7 +94,7 @@ static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* 
 }
 
 F_NONNULLX(1, 2, 3)
-static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg)
+static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, monreg_func_t mrf)
 {
     // basics
     gdmap->name = strdup(name);
@@ -108,7 +108,7 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg)
     vscf_data_t* dc_auto_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_coords", true);
     vscf_data_t* dc_auto_limit_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_limit", true);
     gdmap->city_auto_mode = dc_auto_cfg ? true : false;
-    dcinfo_init(&gdmap->dcinfo, dc_cfg, dc_auto_cfg, dc_auto_limit_cfg, name);
+    dcinfo_init(&gdmap->dcinfo, dc_cfg, dc_auto_cfg, dc_auto_limit_cfg, name, mrf);
     gdmap->dclists_pend = dclists_new(&gdmap->dcinfo);
 
     // geoip2 config
@@ -477,22 +477,23 @@ struct _gdmaps_t {
     unsigned count;
     struct ev_loop* reload_loop;
     gdmap_t* maps;
+    monreg_func_t mrf;
 };
 
 F_NONNULL
 static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
 {
     gdmaps_t* gdmaps = data;
-    gdmap_init(&gdmaps->maps[gdmaps->count++], key, val);
+    gdmap_init(&gdmaps->maps[gdmaps->count++], key, val, gdmaps->mrf);
     return true;
 }
 
-gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg)
+gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg, monreg_func_t mrf)
 {
     gdnsd_assert(vscf_is_hash(maps_cfg));
 
     gdmaps_t* gdmaps = xcalloc(sizeof(*gdmaps));
-
+    gdmaps->mrf = mrf;
     const unsigned num_maps = vscf_hash_get_len(maps_cfg);
     gdmaps->maps = xcalloc_n(num_maps, sizeof(*gdmaps->maps));
     vscf_hash_iterate(maps_cfg, true, _gdmaps_new_iter, gdmaps);

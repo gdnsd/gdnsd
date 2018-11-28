@@ -22,6 +22,7 @@
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
+#include <gdmaps.h>
 
 #include <math.h>
 
@@ -68,7 +69,7 @@ typedef struct {
 } dcinfo_t;
 
 F_NONNULLX(1, 2, 5)
-void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name);
+void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name, monreg_func_t mrf);
 F_NONNULL F_PURE
 unsigned dcinfo_get_count(const dcinfo_t* info);
 F_NONNULL F_PURE

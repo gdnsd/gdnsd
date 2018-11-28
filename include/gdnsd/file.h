@@ -29,8 +29,6 @@
 struct gdnsd_fmap_s_;
 typedef struct gdnsd_fmap_s_ gdnsd_fmap_t;
 
-#pragma GCC visibility push(default)
-
 // Given a filename "fn", this will open the file for reading
 //   and mmap() it for readonly use.
 // On errors, the return value is NULL.
@@ -60,7 +58,5 @@ time_t gdnsd_fmap_get_mtime(const gdnsd_fmap_t* fmap);
 //   operate on it without error).
 F_NONNULL
 bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap);
-
-#pragma GCC visibility pop
 
 #endif // GDNSD_FILE_H

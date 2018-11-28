@@ -23,7 +23,6 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/mon.h>
 
 #include <math.h>
 
@@ -32,7 +31,7 @@
 //  names go into a hash requiring uniqueness, and the count is required
 //  to match (ditto for auto_dc_coords never succeeding with dupes in the
 //  datacenters list).
-void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name)
+void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name, monreg_func_t mrf)
 {
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
     unsigned num_auto = num_dcs;
@@ -52,7 +51,8 @@ void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, 
         if (!strcmp(info->dcs[i].name, "auto"))
             log_fatal("plugin_geoip: map '%s': datacenter name 'auto' is illegal", map_name);
         char* map_mon_desc = gdnsd_str_combine_n(4, "geoip/", map_name, "/", info->dcs[i].name);
-        info->dcs[i].mon_index = gdnsd_mon_admin(map_mon_desc);
+        if (mrf)
+            info->dcs[i].mon_index = mrf(map_mon_desc);
         free(map_mon_desc);
     }
 

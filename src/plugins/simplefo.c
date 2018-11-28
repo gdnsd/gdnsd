@@ -19,8 +19,12 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME simplefo
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -181,7 +185,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
 /* Exported callbacks start here */
 /*********************************/
 
-void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
 {
     if (!config)
         log_fatal("simplefo plugin requires a 'plugins' configuration stanza");
@@ -202,7 +206,7 @@ void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_threads
     }
 }
 
-int plugin_simplefo_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
+static int plugin_simplefo_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
 {
     if (resname) {
         for (unsigned i = 0; i < num_resources; i++)
@@ -253,7 +257,7 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const addrstate_t
     return sttl_out;
 }
 
-gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     res_t* res = &resources[resnum];
 
@@ -275,3 +279,21 @@ gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const client_info_t* cinfo
     assert_valid_sttl(rv);
     return rv;
 }
+
+#include "plugins.h"
+plugin_t plugin_simplefo_funcs = {
+    .name = "simplefo",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_simplefo_load_config,
+    .map_res = plugin_simplefo_map_res,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = plugin_simplefo_resolve,
+    .add_svctype = NULL,
+    .add_mon_addr = NULL,
+    .add_mon_cname = NULL,
+    .init_monitors = NULL,
+    .start_monitors = NULL,
+};

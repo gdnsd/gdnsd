@@ -17,14 +17,18 @@
  *
  */
 
-// This was basically copied from http_status.c and stripped down
+// This was basically copied from tcp_connect.c and stripped down
 //   to just check connect() success or failure without doing
 //   any actual socket i/o.
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME tcp_connect
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -216,7 +220,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
         } \
     } while (0)
 
-void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
+static void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
     service_types = xrealloc_n(service_types, num_tcp_svcs + 1, sizeof(*service_types));
     tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
@@ -233,7 +237,7 @@ void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     this_svc->interval = interval;
 }
 
-void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
+static void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
     tcp_events_t* this_mon = xcalloc(sizeof(*this_mon));
     this_mon->desc = strdup(desc);
@@ -275,7 +279,7 @@ void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, con
     mons[num_mons++] = this_mon;
 }
 
-void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop)
+static void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = &mons[i]->interval_watcher;
@@ -285,7 +289,7 @@ void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop)
     }
 }
 
-void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
+static void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         tcp_events_t* mon = mons[i];
@@ -297,3 +301,21 @@ void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
         ev_timer_start(mon_loop, ival_watcher);
     }
 }
+
+#include "plugins.h"
+plugin_t plugin_tcp_connect_funcs = {
+    .name = "tcp_connect",
+    .config_loaded = false,
+    .used = false,
+    .load_config = NULL,
+    .map_res = NULL,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = NULL,
+    .add_svctype = plugin_tcp_connect_add_svctype,
+    .add_mon_addr = plugin_tcp_connect_add_mon_addr,
+    .add_mon_cname = NULL,
+    .init_monitors = plugin_tcp_connect_init_monitors,
+    .start_monitors = plugin_tcp_connect_start_monitors,
+};

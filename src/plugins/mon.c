@@ -18,16 +18,12 @@
  */
 
 #include <config.h>
-#include <gdnsd/mon.h>
-#include <gdnsd-prot/mon.h>
+#include "mon.h"
 
-#include "plugapi.h"
-
-#include <gdnsd-prot/plugapi.h>
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
-#include <gdnsd/plugapi.h>
+#include "plugapi.h"
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
 
@@ -646,7 +642,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
         if (!vscf_is_simple(pname_cfg) || !vscf_simple_get_len(pname_cfg))
             log_fatal("Service type '%s': 'plugin' must be a string", this_svc->name);
         const char* pname = vscf_simple_get_data(pname_cfg);
-        this_svc->plugin = gdnsd_plugin_find_or_load(pname);
+        this_svc->plugin = gdnsd_plugin_find(pname);
         if (!this_svc->plugin->add_svctype)
             log_fatal("Service type '%s' references plugin '%s', which does not support service monitoring (lacks add_svctype func)", this_svc->name, pname);
     }

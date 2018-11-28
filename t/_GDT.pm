@@ -123,18 +123,8 @@ our $GDNSDCTL_BIN = $ENV{INSTALLCHECK_BINDIR}
 our $EXTMON_BIN;
 our $EXTMON_HELPER_CFG = '';
 if(!$ENV{INSTALLCHECK_SBINDIR}) { # not installcheck, regular check
-    $EXTMON_BIN = "$ENV{TOP_BUILDDIR}/plugins/gdnsd_extmon_helper";
+    $EXTMON_BIN = "$ENV{TOP_BUILDDIR}/src/plugins/gdnsd_extmon_helper";
     $EXTMON_HELPER_CFG = qq|extmon => { helper_path => "$EXTMON_BIN" }|;
-}
-
-# During installcheck, the default hardcoded plugin path
-#  should work correctly for finding the installed plugins
-our $PLUGIN_PATH;
-if($ENV{INSTALLCHECK_SBINDIR}) {
-    $PLUGIN_PATH = "/xxx_does_not_exist";
-}
-else {
-    $PLUGIN_PATH = "$ENV{TOP_BUILDDIR}/plugins/.libs";
 }
 
 our $RAND_LOOPS = $ENV{GDNSD_RTEST_LOOPS} || 50;
@@ -295,7 +285,6 @@ sub proc_tmpl {
     my $std_opts = qq{
         listen => $dns_lspec
         dns_port => $DNS_PORT
-        plugin_search_path = $PLUGIN_PATH
         run_dir = $RUNDIR
         state_dir = $OUTDIR/var/lib/gdnsd
     };

@@ -35,8 +35,13 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME extfile
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
+#include <gdnsd/paths.h>
 
 #include <string.h>
 #include <unistd.h>
@@ -91,7 +96,7 @@ static bool testsuite_nodelay = false;
         } \
     } while (0)
 
-void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
+static void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
     service_types = xrealloc_n(service_types, num_svcs + 1, sizeof(*service_types));
     extf_svc_t* svc = &service_types[num_svcs++];
@@ -119,7 +124,7 @@ void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const un
     svc->mons = NULL;
 }
 
-void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname, const unsigned idx)
+static void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname, const unsigned idx)
 {
     extf_svc_t* svc = NULL;
     for (unsigned i = 0; i < num_svcs; i++) {
@@ -138,7 +143,7 @@ void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_nam
     mon->midx = svc->num_mons++;
 }
 
-void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
 {
     plugin_extfile_add_mon_cname(desc, svc_name, cname, idx);
 }
@@ -293,13 +298,13 @@ static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop)
     }
 }
 
-void plugin_extfile_start_monitors(struct ev_loop* mon_loop)
+static void plugin_extfile_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_svcs; i++)
         start_svc(&service_types[i], mon_loop);
 }
 
-void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED)
+static void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED)
 {
     if (getenv("GDNSD_TESTSUITE_NODELAY"))
         testsuite_nodelay = true;
@@ -314,3 +319,21 @@ void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED)
         process_file(svc);
     }
 }
+
+#include "plugins.h"
+plugin_t plugin_extfile_funcs = {
+    .name = "extfile",
+    .config_loaded = false,
+    .used = false,
+    .load_config = NULL,
+    .map_res = NULL,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = NULL,
+    .add_svctype = plugin_extfile_add_svctype,
+    .add_mon_addr = plugin_extfile_add_mon_addr,
+    .add_mon_cname = plugin_extfile_add_mon_cname,
+    .init_monitors = plugin_extfile_init_monitors,
+    .start_monitors = plugin_extfile_start_monitors,
+};

@@ -32,7 +32,7 @@ required in order to run the testsuite:
 
 If working directly from a git clone:
 
-* autoconf (2.64+), automake(1.13+), and libtool(2.2.6+) packages
+* autoconf (2.64+) and automake(1.13+) packages
 * If you want "make check" to run optional GeoIP-related unit tests which use
   large compressed files, those are stored in a separate repo as a submodule.
   You can bring them into your tree via: "git submodule update --init".

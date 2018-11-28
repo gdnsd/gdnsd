@@ -81,6 +81,7 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * NS record sets are limited to 64 records per set and are no longer randomly rotated in the output
 * The server does not support emitting responses greater than ~16KB in size over any protocol.  Zone data is explicitly validated against this constraint, and zonefiles will fail to load if they contain record sets which could generate an over-sized response packet.  The checks are somewhat conservative in corner cases and may reject data which would technically barely fit in practice.
 * DYNC and related plugin configurations have two new restrictions: all configured dynamic CNAME values must be fully-qualified (end in dot), and DYNC cannot be used to emit a CNAME that points into the same zone (in others words, if `example.com` has the RR `foo DYNC %weighted!some-cnames`, the weighted plugin's configuration for the resource `some-cnames` cannot contain any CNAME values within the zone `example.com`; they must be names in other domains).
+* Support for DSO plugins developed out of tree is removed.  The existing "plugins" are now compiled into the daemon, but otherwise work as they did before for now.
 
 ### Other minor things
 
@@ -120,6 +121,7 @@ None of these generate a syntax error for now, they merely log a non-fatal error
 * `max_addtl_rrsets` - No longer applicable
 * `max_cname_depth` - Fixed at 16 (same as previous default)
 * `max_response` - Fixed 16384 (same as previous default)
+* `plugin_search_path` - No longer applicable
 * `udp_recv_width` - Fixed at 16 (prev default was 8)
 * `zones_strict_startup` - Fixed on (same as previous default)
 
@@ -166,6 +168,7 @@ For systemd-based Linux distributions, an example unit file which handles all th
 ## Other changes of interest to builders and packagers
 
 * Autotools updates: building from git now requires autoconf 2.64+ and automake 1.13+
+* We no longer depend on libtool, and don't install any shared libraries, DSO modules, or headers.
 * We newly depend on libsodium-1.x as our current crypto lib of choice
 * The userspace-rcu library (liburcu) is now a build requirement rather than an optional recommendation
 * The testsuite now requires Perl module Net::DNS version 1.03+

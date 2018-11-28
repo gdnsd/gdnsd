@@ -40,8 +40,6 @@
 #  define ERRNO_WOULDBLOCK (errno == EAGAIN || errno == EWOULDBLOCK)
 #endif
 
-#pragma GCC visibility push(default)
-
 F_NONNULL
 void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path);
 
@@ -56,6 +54,13 @@ typedef struct {
     };
     socklen_t len;
 } gdnsd_anysin_t;
+
+// read-only for plugins
+typedef struct {
+    gdnsd_anysin_t dns_source;       // address of last source DNS cache/forwarder
+    gdnsd_anysin_t edns_client;      // edns-client-subnet address portion
+    unsigned edns_client_mask; // edns-client-subnet mask portion
+} client_info_t;               //  ^(if zero, edns_client is invalid (was not sent))
 
 // This is a maximum for the value of gdnsd_anysin_t.len
 #define GDNSD_ANYSIN_MAXLEN sizeof(struct sockaddr_in6)
@@ -110,8 +115,6 @@ F_RETNN
 const char* gdnsd_logf_anysin(const gdnsd_anysin_t* asin);
 F_RETNN
 const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* asin);
-
-#pragma GCC visibility pop
 
 #define logf_anysin gdnsd_logf_anysin
 #define logf_anysin_noport gdnsd_logf_anysin_noport

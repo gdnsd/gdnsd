@@ -6,11 +6,10 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-mkdir -p _vginst
-CPPFLAGS="-DGDNSD_COVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --without-hardening --prefix=${PWD}/_vginst --with-systemdsystemunitdir=${PWD}/_vginst
+CPPFLAGS="-DGDNSD_COVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --without-hardening
 make clean
-make install
-TEST_RUNNER="libtool --mode=execute valgrind --trace-children=yes --trace-children-skip=/bin/true,/bin/false,/bin/sh --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make installcheck
+make
+TEST_RUNNER="valgrind --trace-children=yes --trace-children-skip=/bin/true,/bin/false,/bin/sh --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make check
 set +e
 set +x
 grep "ERROR SUM" t/testout/*/*.out | grep -v ' 0 errors'

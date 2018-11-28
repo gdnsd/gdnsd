@@ -21,11 +21,13 @@
 #define GDNSD_MON_H
 
 #include <gdnsd/compiler.h>
+#include <gdnsd/vscf.h>
 #include <gdnsd/net.h>
 
 #include <inttypes.h>
 
 #include <urcu-qsbr.h>
+#include <ev.h>
 
 // gdnsd_sttl_t
 //  sttl -> state+ttl
@@ -44,8 +46,6 @@ typedef uint32_t gdnsd_sttl_t;
 
 // the only hard rule on this data type is zero in the reserved bits for now
 #define assert_valid_sttl(_x) gdnsd_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
-
-#pragma GCC visibility push(default)
 
 // Parses a string of the form STATE[/TTL], where STATE is UP or DOWN and
 //   the TTL is in the legal range 0 through 2^28-1.  Returns 0 on success.
@@ -98,7 +98,38 @@ unsigned gdnsd_mon_admin(const char* desc);
 // use gdnsd_mon_get_sttl_table() below for access!
 extern gdnsd_sttl_t* smgr_sttl_consumer_;
 
-#pragma GCC visibility pop
+// conf.c calls these.  the order of execution is important due
+//   to chicken-and-egg problems with explicit plugin configuration
+//   for monitoring plugins vs the config of resolver plugins which
+//   reference service types themselves.
+// The ordering goes:
+//   1) gdnsd_mon_cfg_stypes_p1() -> configures basic list of services
+//        but does not load any plugins
+//   2) load and configure all plugins, which will include callbacks
+//        to gdnsd_mon_addr() from the plugin, which will in turn
+//        reference the service types list from above but not delve
+//        into it deeply.
+//   3) gdnsd_mon_cfg_stypes_p2() -> fully fleshes out the
+//        service types, including autoloading any plugins not
+//        loaded and explicitly configured above, and then
+//        does post-processing to pass monitoring requests all
+//        the way through from resolver->monitoring plugins via
+//        callbacks
+void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg);
+void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg);
+
+// conf can call this to pre-check the admin_state syntax
+// fails fatally if the admin_state pathname exists
+//    but can't be loaded correctly
+void gdnsd_mon_check_admin_file(void);
+
+// main.c calls this for adding monio events to the main thread's eventloop
+F_NONNULL
+void gdnsd_mon_start(struct ev_loop* mon_loop);
+
+// JSON monitored-state output for control socket
+F_NONNULL F_RETNN
+char* gdnsd_mon_states_get_json(size_t* len);
 
 // State-fetching (one table call per resolve invocation, reused
 //   for as many index fetches as necc)

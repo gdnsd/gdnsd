@@ -155,8 +155,6 @@ typedef enum {
     DNAME_INVALID,
 } gdnsd_dname_status_t;
 
-#pragma GCC visibility push(default)
-
 // Unescape the string "in" into the storage at "out", using
 //  DNS zonefile escaping rules.
 // Return value is output len, which will be <= input len
@@ -215,8 +213,6 @@ static gdnsd_dname_status_t gdnsd_dname_status_buflen(const uint8_t* dname, size
         return DNAME_INVALID;
     return gdnsd_dname_status(dname);
 }
-
-#pragma GCC visibility pop
 
 // Terminate a DNAME_PARTIAL name, converting it to DNAME_VALID.  Idempotent
 //  and thus harmless on names which are already DNAME_VALID.  Invalid input

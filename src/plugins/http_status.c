@@ -19,8 +19,12 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME http_status
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -33,6 +37,8 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <fcntl.h>
+
+#include <ev.h>
 
 typedef struct {
     const char* name;
@@ -383,7 +389,7 @@ static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost
     }
 }
 
-void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
+static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
     // defaults
     const char* url_path = "/";
@@ -432,7 +438,7 @@ void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cfg, cons
     this_svc->interval = interval;
 }
 
-void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
+static void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
     http_events_t* this_mon = xcalloc(sizeof(*this_mon));
     this_mon->desc = strdup(desc);
@@ -478,7 +484,7 @@ void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, con
     mons[num_mons++] = this_mon;
 }
 
-void plugin_http_status_init_monitors(struct ev_loop* mon_loop)
+static void plugin_http_status_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = &mons[i]->interval_watcher;
@@ -488,7 +494,7 @@ void plugin_http_status_init_monitors(struct ev_loop* mon_loop)
     }
 }
 
-void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
+static void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         http_events_t* mon = mons[i];
@@ -500,3 +506,21 @@ void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
         ev_timer_start(mon_loop, ival_watcher);
     }
 }
+
+#include "plugins.h"
+plugin_t plugin_http_status_funcs = {
+    .name = "http_status",
+    .config_loaded = false,
+    .used = false,
+    .load_config = NULL,
+    .map_res = NULL,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = NULL,
+    .add_svctype = plugin_http_status_add_svctype,
+    .add_mon_addr = plugin_http_status_add_mon_addr,
+    .add_mon_cname = NULL,
+    .init_monitors = plugin_http_status_init_monitors,
+    .start_monitors = plugin_http_status_start_monitors,
+};

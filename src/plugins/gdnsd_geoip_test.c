@@ -24,7 +24,6 @@
 
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
-#include <gdnsd/plugapi.h>
 #include <gdnsd/paths.h>
 
 #include <gdmaps.h>
@@ -175,7 +174,7 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir)
         log_fatal("gdnsd_geoip_test: 'maps' stanza must be a hash");
     if (!vscf_hash_get_len(maps_cfg))
         log_fatal("gdnsd_geoip_test: 'maps' must contain one or more maps");
-    gdmaps_t* rv = gdmaps_new(maps_cfg);
+    gdmaps_t* rv = gdmaps_new(maps_cfg, NULL);
     vscf_destroy(cfg_root);
 
     gdmaps_load_databases(rv);

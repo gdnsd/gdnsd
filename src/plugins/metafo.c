@@ -19,8 +19,12 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME metafo
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -108,3 +112,21 @@ static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t*
 #define CB_RES plugin_metafo_resolve
 #define META_MAP_ADMIN 0
 #include "meta_core.inc"
+
+#include "plugins.h"
+plugin_t plugin_metafo_funcs = {
+    .name = "metafo",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_metafo_load_config,
+    .map_res = plugin_metafo_map_res,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = plugin_metafo_resolve,
+    .add_svctype = NULL,
+    .add_mon_addr = NULL,
+    .add_mon_cname = NULL,
+    .init_monitors = NULL,
+    .start_monitors = NULL,
+};

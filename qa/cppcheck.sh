@@ -24,9 +24,9 @@ SKIPFILES="
 INCDIRS="
 -I.
 -Isrc
+-Isrc/plugins
 -Ilibgdnsd
 -Iinclude
--Iplugins
 -Ilibgdmaps
 -It/libtap
 -It/libgdmaps

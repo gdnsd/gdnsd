@@ -30,21 +30,10 @@ AC_MSG_RESULT([$CLANG])
 # pointer width...
 AC_CHECK_SIZEOF(uintptr_t)
 
-# Apparently libtool+automake need this now, in newer versions
-#   which have it at all
-m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
-
-# The libtool macros in 2.2.6b - 2.4.2 have a bug that causes
-#  them to accidentally add LIBADD_DLOPEN to LIBS permanently,
-#  so we workaround that by saving and restoring LIBS
-XLIBS=$LIBS
-AC_DISABLE_STATIC
-LT_INIT([dlopen])
-LT_PREREQ([2.2.6])
-LT_LIB_DLLOAD
-AC_SUBST([LIBTOOL_DEPS])
-AC_SUBST([LIBADD_DLOPEN])
-LIBS=$XLIBS
+# Some tooling we need in our makefiles
+AM_PROG_AR
+AC_PROG_RANLIB
+AC_PROG_LN_S
 
 # Check for --enable-developer
 developer=no
@@ -87,16 +76,8 @@ if test $harden = 1; then
     AX_APPEND_LINK_FLAGS([-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack],[LDFLAGS],[$CLANG_WERROR])
 fi
 
-AX_APPEND_LINK_FLAGS([\
-    -Wl,--as-needed \
-    -Wl,--gc-sections \
-],[LDFLAGS],[$CLANG_WERROR])
-
 AX_APPEND_COMPILE_FLAGS([\
     $TRY_DEBUG_CFLAGS \
-    -fvisibility=hidden \
-    -ffunction-sections \
-    -fdata-sections \
     -fno-common \
     -pipe \
     -Wall \
@@ -319,19 +300,11 @@ AC_ARG_WITH([rundir],[AS_HELP_STRING([--with-rundir=LOCALSTATEDIR/run],
 ])
 GDNSD_DEFPATH_CONFIG="${sysconfdir}/${PACKAGE_NAME}"
 GDNSD_DEFPATH_STATE="${localstatedir}/lib/${PACKAGE_NAME}"
-GDNSD_DEFPATH_LIB="${libdir}/${PACKAGE_NAME}"
 GDNSD_DEFPATH_LIBEXEC="${libexecdir}/${PACKAGE_NAME}"
 AC_SUBST([GDNSD_DEFPATH_RUN])
 AC_SUBST([GDNSD_DEFPATH_CONFIG])
 AC_SUBST([GDNSD_DEFPATH_STATE])
-AC_SUBST([GDNSD_DEFPATH_LIB])
 AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
-
-# clump up all of the libgdnsd libdeps for re-use in LDADD for
-#   binaries that link libgdnsd on platforms where libtool's
-#   automatic dep resolution is disabled
-LIBGDNSD_LIBS="-lm -lurcu-qsbr -lev -lsodium $LIBADD_DLOPEN $LIBUNWIND_LIBS"
-AC_SUBST([LIBGDNSD_LIBS])
 
 # BUILD_FEATURES for cmdline output
 B_FEAT="prod"

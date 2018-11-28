@@ -19,10 +19,15 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME extmon
-#include <gdnsd/plugin.h>
-
 #include "extmon_comms.h"
+
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
+#include <gdnsd/paths.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -361,7 +366,7 @@ static bool bad_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UN
     log_fatal("plugin_extmon: bad global option '%s'", key);
 }
 
-void plugin_extmon_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void plugin_extmon_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
 {
     if (config) {
         vscf_data_t* helper_path_cfg = vscf_hash_get_data_byconstkey(config, "helper_path", true);
@@ -404,7 +409,7 @@ void plugin_extmon_load_config(vscf_data_t* config, const unsigned num_threads V
         } \
     } while (0)
 
-void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
+static void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
     // defaults
     unsigned max_proc = 0;
@@ -464,17 +469,17 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     this_mon->seen_once = false;
 }
 
-void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
 {
     add_mon_any(desc, svc_name, cname, idx);
 }
 
-void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, const char* cname, const unsigned idx)
+static void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, const char* cname, const unsigned idx)
 {
     add_mon_any(desc, svc_name, cname, idx);
 }
 
-void plugin_extmon_init_monitors(struct ev_loop* mon_loop)
+static void plugin_extmon_init_monitors(struct ev_loop* mon_loop)
 {
     gdnsd_assert(helper_path);
     if (num_mons) {
@@ -494,7 +499,7 @@ void plugin_extmon_init_monitors(struct ev_loop* mon_loop)
     }
 }
 
-void plugin_extmon_start_monitors(struct ev_loop* mon_loop)
+static void plugin_extmon_start_monitors(struct ev_loop* mon_loop)
 {
     if (num_mons && !helper_is_dead_flag) {
         init_phase = false;
@@ -504,3 +509,21 @@ void plugin_extmon_start_monitors(struct ev_loop* mon_loop)
             bump_local_timeout(mon_loop, &mons[i]);
     }
 }
+
+#include "plugins.h"
+plugin_t plugin_extmon_funcs = {
+    .name = "extmon",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_extmon_load_config,
+    .map_res = NULL,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = NULL,
+    .add_svctype = plugin_extmon_add_svctype,
+    .add_mon_addr = plugin_extmon_add_mon_addr,
+    .add_mon_cname = plugin_extmon_add_mon_cname,
+    .init_monitors = plugin_extmon_init_monitors,
+    .start_monitors = plugin_extmon_start_monitors,
+};

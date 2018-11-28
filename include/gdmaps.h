@@ -21,14 +21,16 @@
 #define GDMAPS_H
 
 #include <gdnsd/vscf.h>
-#include <gdnsd/plugapi.h>
+#include <gdnsd/net.h>
 
 #include <inttypes.h>
 
 typedef struct _gdmaps_t gdmaps_t;
 
-F_NONNULL F_WUNUSED F_RETNN
-gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg);
+typedef unsigned(*monreg_func_t)(const char* desc);
+
+F_NONNULLX(1) F_WUNUSED F_RETNN
+gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg, monreg_func_t mrf);
 F_NONNULL
 void gdmaps_load_databases(gdmaps_t* gdmaps);
 F_NONNULL F_PURE

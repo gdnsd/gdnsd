@@ -286,14 +286,6 @@ disabled, and any single character string specified in a zonefile as
 part of a C<TXT> record which is larger than 255 bytes will
 be considered a syntax error.
 
-=item B<plugin_search_path>
-
-A single string or an array of strings, default empty.  Normally the
-daemon searches for plugins in the fixed path C<@GDNSD_DEFPATH_LIB@>,
-using filenames of the form C<plugin_${name}.so>.  If you define this
-parameter, all paths in this list will be searched in the given order
-for plugins *before* trying the default, fixed search path.
-
 =item B<max_edns_response>
 
 Integer, default 1410, min 512, max 16384.  This is the maximum size

@@ -36,9 +36,8 @@
 #include "chal.h"
 #include "cookie.h"
 
-#include <gdnsd-prot/plugapi.h>
-#include <gdnsd-prot/misc.h>
-#include <gdnsd-prot/mon.h>
+#include "plugins/plugapi.h"
+#include "plugins/mon.h"
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/net.h>

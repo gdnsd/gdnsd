@@ -240,6 +240,9 @@ void cookie_config(const char* key_file)
 {
     gdnsd_assert(master_key == NULL); // config only happens once!
 
+    if (sodium_init() < 0)
+        log_fatal("Could not initialize libsodium: %s", logf_errno());
+
     master_key = sodium_malloc(KDF_KEYBYTES);
     if (!master_key)
         log_fatal("sodium_malloc() failed: %s", logf_errno());

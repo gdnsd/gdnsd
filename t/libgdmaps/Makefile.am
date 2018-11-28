@@ -1,10 +1,15 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/t/libtap
+ARFLAGS = cr
 
-check_LTLIBRARIES = libgdmaps_test.la
-libgdmaps_test_la_SOURCES = gdmaps_test.c gdmaps_test.h
-libgdmaps_test_la_LIBADD = $(top_builddir)/libgdmaps/libgdmaps.la $(top_builddir)/libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS) $(top_builddir)/t/libtap/libtap.la
+check_LIBRARIES = libgdmaps_test.a
+libgdmaps_test_a_SOURCES = gdmaps_test.c gdmaps_test.h
 
-LDADD = libgdmaps_test.la
+LDADD = \
+	libgdmaps_test.a \
+	$(top_builddir)/libgdmaps/libgdmaps.a \
+	$(top_builddir)/libgdnsd/libgdnsd.a \
+	$(top_builddir)/t/libtap/libtap.a \
+	-lm -lurcu-qsbr -lev $(GEOIP2_LIBS) $(LIBUNWIND_LIBS)
 
 TESTLIST = \
 	t50_g2_country \

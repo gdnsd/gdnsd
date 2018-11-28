@@ -53,11 +53,7 @@ binary F<gdnsd_extmon_helper> in the installation libexec
 directory at F<@GDNSD_DEFPATH_LIBEXEC@/gdnsd_extmon_helper>.
 If for some reason it can't do so, e.g. due to a relocated
 installation, you can set an explicit full pathname to the
-helper here.  Note that in this case you're probably also
-having to set the daemon-global config option
-C<plugin_search_path> as well, since locating plugin
-objects uses similar mechanisms to find the installation's
-plugin library path (default F<@GDNSD_DEFPATH_LIB@>) as well.
+helper here.
 
 =item B<helper_failure_action>
 

@@ -31,8 +31,6 @@
 #include <stdarg.h>
 #include <syslog.h>
 
-#pragma GCC visibility push(default)
-
 /***
 **** Logging interfaces
 ***/
@@ -161,8 +159,6 @@ F_RETNN
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
 F_RETNN
 const char* gdnsd_logf_dname(const uint8_t* dname);
-
-#pragma GCC visibility pop
 
 // shortcut defines for basic log levels + formatters, avoids the gdnsd_ prefix
 // in the common case to keep lines shorter, but doesn't pollute symbol table,

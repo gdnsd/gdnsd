@@ -29,6 +29,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <netdb.h>
 
 #include <tap.h>
@@ -95,7 +97,7 @@ gdmaps_t* gdmaps_test_load(const char* cfg_data)
         log_fatal("Geoip plugin config for 'maps' must be a hash");
     if (!vscf_hash_get_len(maps_cfg))
         log_fatal("Geoip plugin config for 'maps' must contain one or more maps");
-    gdmaps_t* rv = gdmaps_new(maps_cfg);
+    gdmaps_t* rv = gdmaps_new(maps_cfg, NULL);
     vscf_destroy(maps_cfg);
 
     gdmaps_load_databases(rv);

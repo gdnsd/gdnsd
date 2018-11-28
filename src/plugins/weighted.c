@@ -20,8 +20,13 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME weighted
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include <gdnsd/rand.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -658,7 +663,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
 
 ////// exported callbacks start here
 
-void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
 {
     gdnsd_assert(config);
     gdnsd_assert(vscf_is_hash(config));
@@ -702,7 +707,7 @@ void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads
     gdnsd_dyn_addr_max(max_v4, max_v6);
 }
 
-int plugin_weighted_map_res(const char* resname, const uint8_t* zone_name)
+static int plugin_weighted_map_res(const char* resname, const uint8_t* zone_name)
 {
     if (!resname)
         map_res_err("plugin_weighted: resource name required");
@@ -727,13 +732,13 @@ int plugin_weighted_map_res(const char* resname, const uint8_t* zone_name)
     map_res_err("plugin_weighted: unknown resource '%s'", resname);
 }
 
-void plugin_weighted_iothread_init(void)
+static void plugin_weighted_iothread_init(void)
 {
     init_rand();
     init_dyn_addr_weights();
 }
 
-void plugin_weighted_iothread_cleanup(void)
+static void plugin_weighted_iothread_cleanup(void)
 {
     free(rstate);
     free(dyn_addr_weights);
@@ -929,7 +934,7 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t*
     return rv;
 }
 
-gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     const resource_t* resource = &resources[resnum];
     gdnsd_assert(resource);
@@ -947,3 +952,21 @@ gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t* cinfo
     assert_valid_sttl(rv);
     return rv;
 }
+
+#include "plugins.h"
+plugin_t plugin_weighted_funcs = {
+    .name = "weighted",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_weighted_load_config,
+    .map_res = plugin_weighted_map_res,
+    .pre_run = NULL,
+    .iothread_init = plugin_weighted_iothread_init,
+    .iothread_cleanup = plugin_weighted_iothread_cleanup,
+    .resolve = plugin_weighted_resolve,
+    .add_svctype = NULL,
+    .add_mon_addr = NULL,
+    .add_mon_cname = NULL,
+    .init_monitors = NULL,
+    .start_monitors = NULL,
+};

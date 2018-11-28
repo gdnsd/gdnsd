@@ -19,8 +19,12 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME reflect
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <string.h>
 #include <inttypes.h>
@@ -39,14 +43,14 @@ static const char* response_text[NUM_RTYPES] = {
     "both"
 };
 
-void plugin_reflect_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
+static void plugin_reflect_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
 {
     gdnsd_dyn_addr_max(2, 2); // up to two (dns+edns) in any address family
 }
 
 // resource names (and numbers) are used by this plugin to choose
 //  one of four response types above, defaulting to "best".
-int plugin_reflect_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
+static int plugin_reflect_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
 {
     if (!resname)
         return RESPONSE_BEST;
@@ -59,7 +63,7 @@ int plugin_reflect_map_res(const char* resname, const uint8_t* zone_name V_UNUSE
     return -1;
 }
 
-gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
+static gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
 {
     gdnsd_assert(resnum < NUM_RTYPES);
 
@@ -79,3 +83,21 @@ gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t* cinfo,
 
     return GDNSD_STTL_TTL_MAX;
 }
+
+#include "plugins.h"
+plugin_t plugin_reflect_funcs = {
+    .name = "reflect",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_reflect_load_config,
+    .map_res = plugin_reflect_map_res,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = plugin_reflect_resolve,
+    .add_svctype = NULL,
+    .add_mon_addr = NULL,
+    .add_mon_cname = NULL,
+    .init_monitors = NULL,
+    .start_monitors = NULL,
+};

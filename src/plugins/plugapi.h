@@ -20,27 +20,16 @@
 #ifndef GDNSD_PLUGAPI_H
 #define GDNSD_PLUGAPI_H
 
+#include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/net.h>
-#include <gdnsd/mon.h>
 
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include <ev.h>
 
-/***
- * Plugin API version, bumped on any change that's not backwards-compat.
- * This is hardcoded as the return value of plugin_foo_get_api_version()
- *   in gdnsd/plugin.h, and also compiled into the gdnsd code.  The two
- *   values are compared at plugin load time to ensure that plugin code
- *   which doesn't match the API of the gdnsd binary is not allowed.
- * (Of course, in many cases the plugin never even makes it that far,
- *   because libgdnsd is missing symbols it wants to link against that
- *   were dropped in the new API.  This is just to protect other cases).
- ***/
-#define GDNSD_PLUGIN_API_VERSION 20
-
-#pragma GCC visibility push(default)
+#include "mon.h"
 
 // Called by resolver plugins during configuration load callback
 // Indicates the maximum count of each address family that the plugin
@@ -50,13 +39,6 @@
 void gdnsd_dyn_addr_max(unsigned v4, unsigned v6);
 
 /*** Data Types ***/
-
-// read-only for plugins
-typedef struct {
-    gdnsd_anysin_t dns_source;       // address of last source DNS cache/forwarder
-    gdnsd_anysin_t edns_client;      // edns-client-subnet address portion
-    unsigned edns_client_mask; // edns-client-subnet mask portion
-} client_info_t;               //  ^(if zero, edns_client is invalid (was not sent))
 
 // Private result structure for dynamic resolution plugins
 // Modified via the functions below...
@@ -110,7 +92,6 @@ typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(void);
 typedef void (*gdnsd_iothread_cleanup_cb_t)(void);
 typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result);
-typedef void (*gdnsd_exit_cb_t)(void);
 
 /**** New callbacks for monitoring plugins ****/
 
@@ -124,6 +105,7 @@ typedef void (*gdnsd_start_monitors_cb_t)(struct ev_loop* mon_loop);
 //  pointers for all of the possibly-documented callbacks
 typedef struct {
     const char* name;
+    bool used;
     bool config_loaded;
     gdnsd_load_config_cb_t load_config;
     gdnsd_map_res_cb_t map_res;
@@ -131,7 +113,6 @@ typedef struct {
     gdnsd_iothread_init_cb_t iothread_init;
     gdnsd_iothread_cleanup_cb_t iothread_cleanup;
     gdnsd_resolve_cb_t resolve;
-    gdnsd_exit_cb_t exit;
     gdnsd_add_svctype_cb_t add_svctype;
     gdnsd_add_mon_addr_cb_t add_mon_addr;
     gdnsd_add_mon_cname_cb_t add_mon_cname;
@@ -139,9 +120,8 @@ typedef struct {
     gdnsd_start_monitors_cb_t start_monitors;
 } plugin_t;
 
-// Find a(nother) plugin by name.  Not valid at load_config() time,
-//   use later.
-F_NONNULL F_PURE
+// Find a(nother) plugin by name.
+F_NONNULL F_PURE F_RETNN
 plugin_t* gdnsd_plugin_find(const char* plugin_name);
 
 // convenient macro for logging a config error and returning
@@ -153,6 +133,53 @@ plugin_t* gdnsd_plugin_find(const char* plugin_name);
         return -1;\
     } while (0)
 
-#pragma GCC visibility pop
+
+/*** Stuff used by the core code, not the plugins themselves ***/
+
+struct dyn_result {
+    // edns_scope_mask inits to zero,  should remain zero for global results,
+    // and should be set to cinfo->edns_client_mask if result depends only on cinfo->dns_source
+    unsigned edns_scope_mask;
+    bool     is_cname; // storage contains a CNAME in dname format, assert count_v[46] == 0
+    unsigned count_v4; // count of IPv4 in v4[], assert !is_cname
+    unsigned count_v6; // count of IPv6 starting at &storage[v6_offset], assert !is_cname
+    union {
+        uint32_t v4[0];
+        uint8_t  storage[0];
+    };
+};
+
+// Intended for result consumers (dnspacket.c), only valid
+//   after all resolver plugins are finished configuring,
+//   and is static for the life of the daemon from that
+//   point forward (can be cached locally).
+// Return value is the offset into dyn_result.storage where
+//   IPv6 address data begins
+F_PURE
+unsigned gdnsd_result_get_v6_offset(void);
+
+// Same rules as above, returns the memory size that
+//   should be allocated for dyn_result
+F_PURE
+unsigned gdnsd_result_get_alloc(void);
+
+// As above, but returns an rrset allocation for response sizing, as the
+// maximum encoded size of all the A and AAAA RRs
+F_PURE
+size_t gdnsd_result_get_max_response(void);
+
+// call _load_config() for all plugins which are loaded but have not
+//   yet had that callback called
+void gdnsd_plugins_configure_all(const unsigned num_threads);
+
+// action iterators
+void gdnsd_plugins_action_pre_run(void);
+void gdnsd_plugins_action_iothread_init(void);
+void gdnsd_plugins_action_iothread_cleanup(void);
+
+F_NONNULL
+void gdnsd_plugins_action_init_monitors(struct ev_loop* mon_loop);
+F_NONNULL
+void gdnsd_plugins_action_start_monitors(struct ev_loop* mon_loop);
 
 #endif // GDNSD_PLUGINAPI_H

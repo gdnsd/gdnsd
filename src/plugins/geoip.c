@@ -19,9 +19,12 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME geoip
-#include <gdnsd/plugin.h>
-
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 #include <gdmaps.h>
 
 #include <string.h>
@@ -70,7 +73,7 @@ static bool top_config_hook(vscf_data_t* top_config)
     if (!vscf_hash_get_len(maps))
         log_fatal("plugin_geoip: 'maps' stanza must contain one or more maps");
 
-    gdmaps = gdmaps_new(maps);
+    gdmaps = gdmaps_new(maps, gdnsd_mon_admin);
 
     bool undef_dc_ok = false;
     vscf_data_t* undef_dc_ok_vscf = vscf_hash_get_data_byconstkey(top_config, "undefined_datacenters_ok", true);
@@ -88,7 +91,7 @@ static void bottom_config_hook(void)
     gdmaps_load_databases(gdmaps);
 }
 
-void plugin_geoip_pre_run(void)
+static void plugin_geoip_pre_run(void)
 {
     gdnsd_assert(gdmaps);
     gdmaps_setup_watchers(gdmaps);
@@ -112,3 +115,21 @@ static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum)
 #define CB_RES plugin_geoip_resolve
 #define META_MAP_ADMIN 1
 #include "meta_core.inc"
+
+#include "plugins.h"
+plugin_t plugin_geoip_funcs = {
+    .name = "geoip",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_geoip_load_config,
+    .map_res = plugin_geoip_map_res,
+    .pre_run = plugin_geoip_pre_run,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = plugin_geoip_resolve,
+    .add_svctype = NULL,
+    .add_mon_addr = NULL,
+    .add_mon_cname = NULL,
+    .init_monitors = NULL,
+    .start_monitors = NULL,
+};

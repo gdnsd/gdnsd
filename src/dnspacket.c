@@ -27,10 +27,11 @@
 #include "chal.h"
 #include "cookie.h"
 
-#include <gdnsd-prot/plugapi.h>
+#include "plugins/plugapi.h"
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/rand.h>
 
 #include <string.h>
 #include <stddef.h>

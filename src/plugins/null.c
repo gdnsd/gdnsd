@@ -19,23 +19,27 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME null
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <string.h>
 #include <inttypes.h>
 
-void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
+static void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
 {
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
 }
 
-int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone_name V_UNUSED)
+static int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone_name V_UNUSED)
 {
     return 0;
 }
 
-gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     gdnsd_anysin_t tmpsin;
     gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
@@ -75,7 +79,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
     gdnsd_mon_state_updater(mon->idx, false);
 }
 
-void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED)
+static void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED)
 {
     null_svcs = xrealloc_n(null_svcs, ++num_svcs, sizeof(*null_svcs));
     null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
@@ -106,17 +110,17 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     ival_watcher->data = this_mon;
 }
 
-void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
 {
     add_mon_any(svc_name, idx);
 }
 
-void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx)
+static void plugin_null_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx)
 {
     add_mon_any(svc_name, idx);
 }
 
-void plugin_null_init_monitors(struct ev_loop* mon_loop)
+static void plugin_null_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = &null_mons[i]->interval_watcher;
@@ -125,7 +129,7 @@ void plugin_null_init_monitors(struct ev_loop* mon_loop)
     }
 }
 
-void plugin_null_start_monitors(struct ev_loop* mon_loop)
+static void plugin_null_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         null_mon_t* mon = null_mons[i];
@@ -136,3 +140,21 @@ void plugin_null_start_monitors(struct ev_loop* mon_loop)
         ev_timer_start(mon_loop, ival_watcher);
     }
 }
+
+#include "plugins.h"
+plugin_t plugin_null_funcs = {
+    .name = "null",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_null_load_config,
+    .map_res = plugin_null_map_res,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = plugin_null_resolve,
+    .add_svctype = plugin_null_add_svctype,
+    .add_mon_addr = plugin_null_add_mon_addr,
+    .add_mon_cname = plugin_null_add_mon_cname,
+    .init_monitors = plugin_null_init_monitors,
+    .start_monitors = plugin_null_start_monitors,
+};

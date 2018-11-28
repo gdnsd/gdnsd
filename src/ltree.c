@@ -28,7 +28,7 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/log.h>
-#include <gdnsd-prot/plugapi.h>
+#include "plugins/plugapi.h"
 
 #include <string.h>
 #include <stdlib.h>

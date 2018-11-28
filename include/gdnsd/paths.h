@@ -24,8 +24,6 @@
 
 #include <stdbool.h>
 
-#pragma GCC visibility push(default)
-
 // Call this at most once!
 // This does the following:
 //   1) If config_dir is not NULL, uses it to override the compiled-in
@@ -81,7 +79,5 @@ char* gdnsd_resolve_path_state(const char* inpath, const char* pfx);
 // As above for "libexec" paths (e.g. /usr/libexec/gdnsd/)
 F_RETNN
 char* gdnsd_resolve_path_libexec(const char* inpath, const char* pfx);
-
-#pragma GCC visibility pop
 
 #endif // GDNSD_PATHS_H

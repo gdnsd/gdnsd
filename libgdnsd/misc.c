@@ -19,7 +19,6 @@
 
 #include <config.h>
 #include <gdnsd/misc.h>
-#include <gdnsd-prot/misc.h>
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -45,8 +44,6 @@
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>
 #endif
-
-#include <sodium.h>
 
 /* misc */
 
@@ -114,24 +111,6 @@ void gdnsd_thread_setname(const char* n V_UNUSED)
 #endif
 }
 
-gdnsd_rstate64_t* gdnsd_rand64_init(void)
-{
-    gdnsd_rstate64_t* newstate = xmalloc(sizeof(*newstate));
-    do {
-        randombytes_buf(newstate, sizeof(*newstate));
-    } while (!newstate->y); // y==0 is bad for jlkiss64
-    return newstate;
-}
-
-gdnsd_rstate32_t* gdnsd_rand32_init(void)
-{
-    gdnsd_rstate32_t* newstate = xmalloc(sizeof(*newstate));
-    do {
-        randombytes_buf(newstate, sizeof(*newstate));
-    } while (!newstate->y); // y==0 is bad for jkiss32
-    return newstate;
-}
-
 static pid_t* children = NULL;
 static unsigned n_children = 0;
 
@@ -196,10 +175,4 @@ unsigned gdnsd_uscale_ceil(unsigned v, double s)
     const double sv = ceil(v * s);
     gdnsd_assert(sv <= (double)v);
     return (unsigned)sv;
-}
-
-void gdnsd_init_lib(void)
-{
-    if (sodium_init() < 0)
-        perror("Could not initialize libsodium");
 }

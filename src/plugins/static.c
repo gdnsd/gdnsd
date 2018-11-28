@@ -19,8 +19,12 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME static
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -70,7 +74,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     return true;
 }
 
-void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
 {
     if (!config)
         log_fatal("static plugin requires a 'plugins' configuration stanza");
@@ -85,7 +89,7 @@ void plugin_static_load_config(vscf_data_t* config, const unsigned num_threads V
     }
 }
 
-int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
+static int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
 {
     if (resname) {
         for (unsigned i = 0; i < num_resources; i++) {
@@ -106,7 +110,7 @@ int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
     map_res_err("plugin_static: resource name required");
 }
 
-gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     if (resources[resnum].is_addr)
         gdnsd_result_add_anysin(result, &resources[resnum].addr);
@@ -133,7 +137,7 @@ static unsigned num_mons = 0;
 static static_svc_t** static_svcs = NULL;
 static static_mon_t** static_mons = NULL;
 
-void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED)
+static void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED)
 {
     static_svcs = xrealloc_n(static_svcs, ++num_svcs, sizeof(*static_svcs));
     static_svc_t* this_svc = static_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
@@ -182,18 +186,36 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     this_mon->idx = idx;
 }
 
-void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
 {
     add_mon_any(svc_name, idx);
 }
 
-void plugin_static_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx)
+static void plugin_static_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const unsigned idx)
 {
     add_mon_any(svc_name, idx);
 }
 
-void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED)
+static void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED)
 {
     for (unsigned i = 0; i < num_mons; i++)
         gdnsd_mon_sttl_updater(static_mons[i]->idx, static_mons[i]->svc->static_sttl);
 }
+
+#include "plugins.h"
+plugin_t plugin_static_funcs = {
+    .name = "static",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_static_load_config,
+    .map_res = plugin_static_map_res,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = plugin_static_resolve,
+    .add_svctype = plugin_static_add_svctype,
+    .add_mon_addr = plugin_static_add_mon_addr,
+    .add_mon_cname = plugin_static_add_mon_cname,
+    .init_monitors = plugin_static_init_monitors,
+    .start_monitors = NULL,
+};

@@ -25,8 +25,6 @@
 #include <sys/types.h>
 #include <string.h>
 
-#pragma GCC visibility push(default)
-
 // These functions *never* return NULL.  They internally check for errors and
 // throw fatal exceptions on attempts to allocate zero bytes or >size_t bytes
 // as well as OOM and other conditions signalled by the underlying libc
@@ -55,8 +53,6 @@ void* gdnsd_xpmalign(size_t alignment, size_t size);
 
 F_MALLOC F_ALLOCSZ(2, 3) F_ALLOCAL(1) F_RETNN
 void* gdnsd_xpmalign_n(size_t alignment, size_t nmemb, size_t size);
-
-#pragma GCC visibility pop
 
 #define xmalloc gdnsd_xmalloc
 #define xmalloc_n gdnsd_xmalloc_n

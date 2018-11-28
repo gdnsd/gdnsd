@@ -20,8 +20,12 @@
 
 #include <config.h>
 
-#define GDNSD_PLUGIN_NAME multifo
-#include <gdnsd/plugin.h>
+#include <gdnsd/compiler.h>
+#include <gdnsd/alloc.h>
+#include <gdnsd/log.h>
+#include <gdnsd/vscf.h>
+#include "mon.h"
+#include "plugapi.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -309,7 +313,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
 /* Exported callbacks start here */
 /*********************************/
 
-void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
 {
     if (!config)
         log_fatal("multifo plugin requires a 'plugins' configuration stanza");
@@ -334,7 +338,7 @@ void plugin_multifo_load_config(vscf_data_t* config, const unsigned num_threads 
     }
 }
 
-int plugin_multifo_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
+static int plugin_multifo_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
 {
     if (resname) {
         for (unsigned i = 0; i < num_resources; i++)
@@ -389,7 +393,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     return rv;
 }
 
-gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
@@ -411,3 +415,21 @@ gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t* cinfo 
     assert_valid_sttl(rv);
     return rv;
 }
+
+#include "plugins.h"
+plugin_t plugin_multifo_funcs = {
+    .name = "multifo",
+    .config_loaded = false,
+    .used = false,
+    .load_config = plugin_multifo_load_config,
+    .map_res = plugin_multifo_map_res,
+    .pre_run = NULL,
+    .iothread_init = NULL,
+    .iothread_cleanup = NULL,
+    .resolve = plugin_multifo_resolve,
+    .add_svctype = NULL,
+    .add_mon_addr = NULL,
+    .add_mon_cname = NULL,
+    .init_monitors = NULL,
+    .start_monitors = NULL,
+};

@@ -20,7 +20,7 @@ precheck:
 	@$(MKDIR_P) $(TESTOUT_DIR); \
 	echo Test data/outputs will be stored at $(TESTOUT_DIR)
 
-# To run just one test subdir: make check TRUN=007plugins/*.t
+# To run just one test subdir: make check V=1 TRUN=007plugins/*.t
 check-local: precheck
 	${AM_V_GEN}if test "${TRUN}x" != "x"; then \
 		TOP_BUILDDIR=$(abs_top_builddir) $(TEXEC) $(srcdir)/${TRUN}; \

@@ -424,7 +424,7 @@ static int map_res_inner(const char* resname, const uint8_t* zone_name, const ch
 
 /********** Callbacks from gdnsd **************/
 
-void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED)
 {
     if (!config)
         log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");
@@ -460,7 +460,7 @@ void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED)
     bottom_config_hook();
 }
 
-int CB_MAP(const char* resname, const uint8_t* zone_name)
+static int CB_MAP(const char* resname, const uint8_t* zone_name)
 {
     int rv = -1;
 
@@ -484,7 +484,7 @@ int CB_MAP(const char* resname, const uint8_t* zone_name)
     return rv;
 }
 
-gdnsd_sttl_t CB_RES(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
+static gdnsd_sttl_t CB_RES(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
 {
     // extract and clear any datacenter index from upper 8 bits
     //  (used for synthetic resname/dcname resources)

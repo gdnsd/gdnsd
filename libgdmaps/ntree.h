@@ -21,9 +21,12 @@
 #define NTREE_H
 
 #include <gdnsd/compiler.h>
-#include <gdnsd/plugapi.h>
+#include <gdnsd/log.h>
+#include <gdnsd/net.h>
 
 #include <inttypes.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 /***************************************
  * ntree_t and related methods

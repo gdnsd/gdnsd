@@ -92,7 +92,7 @@ typedef struct _ltree_node_struct ltree_node_t;
 #include "ztree.h"
 
 #include <gdnsd/compiler.h>
-#include <gdnsd/plugapi.h>
+#include "plugins/plugapi.h"
 #include <gdnsd/misc.h>
 
 #include <inttypes.h>
