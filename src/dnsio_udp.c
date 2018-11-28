@@ -255,7 +255,7 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
     gdnsd_assert(sock > -1);
     gdnsd_assert(which == SO_SNDBUF || which == SO_RCVBUF);
     gdnsd_assert(pktsize >= 512);
-    gdnsd_assert(pktsize <= 65536);
+    gdnsd_assert(pktsize <= MAX_RESPONSE);
 
     // Our default desired buffer.  This is based on enough room for
     //   MMSG_WIDTH * 8 packets in the mmsg case, or 32 packets otherwise
@@ -265,14 +265,15 @@ static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, co
     const unsigned npkts = 8U * 4U;
 #endif
 
+    // Given asserts, constants, and conditions above, the possible range of
+    // desired_buf is 16KB -> 2MB.  For the SO_SNDBUF case, with default
+    // max_edns_response[_v6] values and MMSG support compiled in, the actual
+    // values would be ~176KB for IPv4 and ~152KB for IPv6.  For SO_RCVBUF it
+    // would be exactly 128KB for both protocols.
     const int desired_buf = (int)(pktsize * npkts);
-    gdnsd_assert(desired_buf >= 16384); // 512 * 8 * 4
-    gdnsd_assert(desired_buf <= 8388608); // 64K * 8 * 16
 
-    // Bare minimum buffer we'll accept: the greater of 16K or pktsize
-    const int min_buf = (int)((pktsize < 16384) ? 16384 : pktsize);
-    gdnsd_assert(min_buf >= 16384);
-    gdnsd_assert(min_buf <= 65536);
+    // Bare minimum buffer we'll accept is 16K
+    const int min_buf = 16384;
 
     // For log messages below
     const char* which_str = (which == SO_SNDBUF) ? "SO_SNDBUF" : "SO_RCVBUF";

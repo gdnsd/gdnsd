@@ -1569,7 +1569,7 @@ F_NONNULL F_PURE
 static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned auth_depth)
 {
     gdnsd_assert(offset);
-    gdnsd_assert(offset < 65536);
+    gdnsd_assert(offset < MAX_RESPONSE);
     gdnsd_assert(auth_depth < 256);
 
     unsigned llen = packet[offset];
