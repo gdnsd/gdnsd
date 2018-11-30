@@ -101,7 +101,7 @@ src_libcsc_la_SOURCES = src/csc.c src/csc.h
 
 src_gdnsdctl_SOURCES = src/gdnsdctl.c
 src_gdnsdctl_CFLAGS = $(CFLAGS_PIE)
-src_gdnsdctl_LDFLAGS = $(LDLAGS_PIE)
+src_gdnsdctl_LDFLAGS = $(LDFLAGS_PIE)
 src_gdnsdctl_LDADD = src/libcsc.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 src_gdnsd_SOURCES = \
