@@ -19,7 +19,6 @@
 
 #include <config.h>
 #include "csc.h"
-#include "statio.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
@@ -318,13 +317,13 @@ csc_txn_rv_t csc_stop_server(csc_t* csc)
     return csc_txn(csc, &req, &resp);
 }
 
-void csc_get_stats_handoff(csc_t* csc)
+size_t csc_get_stats_handoff(csc_t* csc, uint64_t** raw_u64)
 {
     // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
     // assuming all daemons with listening control sockets have a major >= 3
     // and send stats handoff
     if (!csc_server_version_gte(csc, 2, 99, 200))
-        return;
+        return 0;
 
     csbuf_t handoff;
     memset(&handoff, 0, sizeof(handoff));
@@ -332,12 +331,12 @@ void csc_get_stats_handoff(csc_t* csc)
     ssize_t pktlen = recv(csc->fd, handoff.raw, 8, 0);
     if (pktlen != 8) {
         log_err("REPLACE[new daemon]: Stats handoff failed: 8-byte recv() failed with retval %zi: %s", pktlen, logf_errno());
-        return;
+        return 0;
     }
 
     if (handoff.key != REQ_SHAND) {
         log_err("REPLACE[new daemon]: Stats handoff failed: wrong key %hhx", handoff.key);
-        return;
+        return 0;
     }
 
     // Current dlen for this is 200 bytes, it's unlikely we'll ever have so
@@ -345,13 +344,12 @@ void csc_get_stats_handoff(csc_t* csc)
     // situations where the old server asks us to malloc huge sizes below
     if (!handoff.d || handoff.d > UINT16_MAX) {
         log_err("REPLACE[new daemon]: Stats handoff failed: bad data length %" PRIu32, handoff.d);
-        return;
+        return 0;
     }
 
     const size_t total = handoff.d;
     void* raw_data = xmalloc(total);
     char* raw_char = raw_data;
-    uint64_t* raw_u64 = raw_data;
     size_t done = 0;
 
     while (done < total) {
@@ -360,13 +358,13 @@ void csc_get_stats_handoff(csc_t* csc)
         if (pktlen <= 0) {
             free(raw_data);
             log_err("REPLACE[new daemon]: Stats handoff failed: %zu-byte recv() failed: %s", wanted, logf_errno());
-            return;
+            return 0;
         }
         done += (size_t)pktlen;
     }
 
-    statio_deserialize(raw_u64, handoff.d);
-    free(raw_data);
+    *raw_u64 = (uint64_t*)raw_data;
+    return done;
 }
 
 void csc_delete(csc_t* csc)

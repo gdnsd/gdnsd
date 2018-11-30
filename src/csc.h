@@ -26,6 +26,8 @@
 
 #include <stdbool.h>
 #include <sys/types.h>
+#include <inttypes.h>
+#include <stddef.h>
 
 // Opaque server and client objects
 struct csc_s_;
@@ -114,7 +116,7 @@ bool csc_wait_stopping_server(csc_t* csc);
 // Used during daemon->daemon takeover, to hand off final stats into the
 // baseline of the new daemon.
 F_NONNULL
-void csc_get_stats_handoff(csc_t* csc);
+size_t csc_get_stats_handoff(csc_t* csc, uint64_t** raw_u64);
 
 // destructs the control socket handle
 F_NONNULL

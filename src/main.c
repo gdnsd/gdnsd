@@ -568,8 +568,15 @@ int main(int argc, char** argv)
     // Stop old daemon after establishing the new one's listeners, and import
     // the final stats from it
     if (csc) {
-        if (!csc_stop_server(csc))
-            csc_get_stats_handoff(csc);
+        if (!csc_stop_server(csc)) {
+            uint64_t* stats_raw = NULL;
+            const size_t dlen = csc_get_stats_handoff(csc, &stats_raw);
+            if (dlen) {
+                gdnsd_assert(stats_raw);
+                statio_deserialize(stats_raw, dlen);
+            }
+            free(stats_raw);
+        }
         csc_delete(csc);
         csc = NULL;
     }
