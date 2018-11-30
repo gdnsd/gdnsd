@@ -170,7 +170,6 @@ foreach (1..$_GDT::RAND_LOOPS) {
 
 eval {_GDT->check_stats(
     udp_reqs => $rand_reqs + $valid_reqs,
-    noerror => $valid_reqs,
 )};
 ok(!$@) or diag $@;
 
