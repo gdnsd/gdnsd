@@ -67,27 +67,6 @@ fi
 # These are only for urcu header stuff currently
 AC_DEFINE([_LGPL_SOURCE], 1, [LGPL-compatible source])
 
-harden=1
-AC_ARG_WITH([hardening],[AS_HELP_STRING([--without-hardening],
-    [Disable compiler/linker flags for security hardening])],[
-    if test "x$withval" = xno; then
-        harden=0
-    fi
-])
-HARDEN_COMPILER=
-HARDEN_LINKER=
-CFLAGS_PIE=
-LDFLAGS_PIE=
-if test $harden = 1; then
-    AS_CASE([$CFLAGS], [*-O[[1-6]]*], [CPPFLAGS="-D_FORTIFY_SOURCE=2 ${CPPFLAGS}"])
-    HARDEN_COMPILER="-fstack-protector-all -ftrapv"
-    HARDEN_LINKER="-Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack"
-    AX_APPEND_COMPILE_FLAGS([-fPIE],[CFLAGS_PIE],[])
-    AX_APPEND_LINK_FLAGS([-pie],[LDFLAGS_PIE],[])
-fi
-AC_SUBST([CFLAGS_PIE])
-AC_SUBST([LDFLAGS_PIE])
-
 # clang does not fail on some unsupported options without this,
 #  but it screws up some of our warnflag tests on gcc as well.
 CLANG_WERROR=
@@ -95,15 +74,26 @@ if test $CLANG = yes; then
    CLANG_WERROR="-Werror"
 fi
 
+harden=1
+AC_ARG_WITH([hardening],[AS_HELP_STRING([--without-hardening],
+    [Disable compiler/linker flags for security hardening])],[
+    if test "x$withval" = xno; then
+        harden=0
+    fi
+])
+if test $harden = 1; then
+    AS_CASE([$CFLAGS], [*-O[[1-6]]*], [CPPFLAGS="-D_FORTIFY_SOURCE=2 ${CPPFLAGS}"])
+    AX_APPEND_COMPILE_FLAGS([-fPIE -fstack-protector-all -ftrapv],[CFLAGS],[$CLANG_WERROR])
+    AX_APPEND_LINK_FLAGS([-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack],[LDFLAGS],[$CLANG_WERROR])
+fi
+
 AX_APPEND_LINK_FLAGS([\
-    $HARDEN_LINKER \
     -Wl,--as-needed \
     -Wl,--gc-sections \
 ],[LDFLAGS],[$CLANG_WERROR])
 
 AX_APPEND_COMPILE_FLAGS([\
     $TRY_DEBUG_CFLAGS \
-    $HARDEN_COMPILER \
     -fvisibility=hidden \
     -ffunction-sections \
     -fdata-sections \

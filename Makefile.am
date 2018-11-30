@@ -100,8 +100,6 @@ noinst_LTLIBRARIES += src/libcsc.la
 src_libcsc_la_SOURCES = src/csc.c src/csc.h
 
 src_gdnsdctl_SOURCES = src/gdnsdctl.c
-src_gdnsdctl_CFLAGS = $(CFLAGS_PIE)
-src_gdnsdctl_LDFLAGS = $(LDFLAGS_PIE)
 src_gdnsdctl_LDADD = src/libcsc.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 src_gdnsd_SOURCES = \
@@ -150,8 +148,6 @@ src_gdnsd_SOURCES = \
 #   created in the builddir, so the compiler won't otherwise pick
 #   up includes from $(srcdir)/src when compiling it.
 src_gdnsd_CPPFLAGS = -I$(srcdir)/src $(AM_CPPFLAGS)
-src_gdnsd_CFLAGS = $(CFLAGS_PIE)
-src_gdnsd_LDFLAGS = $(LDFLAGS_PIE)
 src_gdnsd_LDADD = src/libcsc.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 src/zscan_rfc1035.c: src/zscan_rfc1035.rl
@@ -204,8 +200,6 @@ plugins_libextmon_comms_la_SOURCES = plugins/extmon_comms.c plugins/extmon_comms
 pkglibexec_PROGRAMS += plugins/gdnsd_extmon_helper
 plugins_gdnsd_extmon_helper_SOURCES = plugins/extmon_helper.c plugins/extmon_comms.h
 plugins_gdnsd_extmon_helper_LDADD   = plugins/libextmon_comms.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
-plugins_gdnsd_extmon_helper_CFLAGS  = $(CFLAGS_PIE)
-plugins_gdnsd_extmon_helper_LDFLAGS = $(LDFLAGS_PIE)
 
 plugins_plugin_extmon_la_SOURCES  = plugins/extmon.c plugins/extmon_comms.h
 plugins_plugin_extmon_la_LDFLAGS  = -avoid-version -module
@@ -215,8 +209,6 @@ plugins_plugin_extmon_la_LIBADD   = plugins/libextmon_comms.la
 
 bin_PROGRAMS += plugins/gdnsd_geoip_test
 plugins_gdnsd_geoip_test_SOURCES  = plugins/gdnsd_geoip_test.c
-plugins_gdnsd_geoip_test_CFLAGS   = $(CFLAGS_PIE)
-plugins_gdnsd_geoip_test_LDFLAGS  = $(LDFLAGS_PIE)
 plugins_gdnsd_geoip_test_LDADD    = libgdmaps/libgdmaps.la libgdnsd/libgdnsd.la $(LIBGDNSD_LIBS)
 
 plugins_plugin_geoip_la_SOURCES   = plugins/geoip.c plugins/meta_core.inc
