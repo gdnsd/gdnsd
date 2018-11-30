@@ -1152,6 +1152,7 @@ bool vscf_hash_bequeath_all(const vscf_data_t* src, const char* k, const bool ma
         const unsigned src_len = vscf_hash_get_len(src);
         for (unsigned i = 0; i < src_len; i++) {
             vscf_data_t* child_val = vscf_hash_get_data_byindex(src, i);
+            gdnsd_assert(child_val);
             if (vscf_is_hash(child_val) && (!skip_marked || !src->hash.ordered[i]->marked))
                 if (!vscf_hash_get_data_bystringkey(child_val, k, false))
                     vscf_hash_add_val(k, strlen(k), child_val, vscf_clone(src_val, false));
