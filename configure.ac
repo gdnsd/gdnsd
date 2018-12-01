@@ -338,6 +338,17 @@ if test -d ${srcdir}/${GIT_DIR:-.git} -o -f ${srcdir}/.git; then
 fi
 AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
 
+werror=0
+AC_ARG_WITH([werror],[AS_HELP_STRING([--with-werror],
+    [Turn on -Werror in CFLAGS after other autoconf tests are done])],[
+    if test "x$withval" = xyes; then
+        werror=1
+    fi
+])
+if test $werror = 1; then
+    CFLAGS="${CFLAGS} -Werror"
+fi
+
 # Output generation
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
