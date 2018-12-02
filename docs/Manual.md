@@ -40,13 +40,14 @@ Build/Test/Install:
 ```
 pkg install liburcu
 pkg install libev
+pkg install libsodium
 pkg install libunwind
 pkg install libmaxminddb
 pkg install p5-HTTP-Daemon
+pkg install p5-Net-DNS
 pkg install gmake
 setenv CPPFLAGS "-isystem/usr/local/include"
-setenv CFLAGS "-fPIC"
-setenv LDFLAGS "-fPIC -L/usr/local/lib"
+setenv LDFLAGS "-L/usr/local/lib"
 ./configure
 gmake
 gmake check
@@ -129,7 +130,7 @@ The configuration file's basic syntax is handled by "vscf", which parses a simpl
 
 ### Threading
 
-The gdnsd daemon uses pthreads to maximize performance and efficiency, but they don't contend with each other on locks at runtime (assuming gdnsd is compiled with userspace-rcu support), and no more than one thread writes to any shared memory location.  Thread-local writable memory is generally malloc()'d within the writing thread and the address is private to the thread.  There are three primary functional threads of execution, aside from actual DNS I/O handling:
+The gdnsd daemon uses pthreads to maximize performance and efficiency, but they don't contend with each other on locks at runtime.  Some pthread lock/condwait methods are used to synchronize threads during the daemon's startup sequence, and may be used for runtime side jobs that aren't performance-critical (e.g. reloading zonefiles or GeoIP databases), but nothing in the runtime flow of actual DNS requests blocks on any pthread locks.  Situations which might normally require locks in the request flow are instead handled using RCU QSBR-based mechanisms provided by the userspace-rcu library.  We design for no more than one thread writing to any shared memory location in the general case, although there may be many readers in some cases.  Thread-local writable memory is generally malloc()'d within the writing thread and the address is private to the thread.  There are three primary functional threads of execution, aside from actual DNS I/O handling:
 
 The "main" thread of execution (the first thread of the process) primarily handles meta-level managerial functions once initial startup is done (control socket, signals, process management, etc.).  It also handles any configured health monitoring checks at runtime.
 
@@ -137,11 +138,11 @@ The geoip plugin spawns a separate persistent functional thread, whose only job 
 
 When zone data reloads are requested, a temporary separate pthread is spawned just for the purpose of loading the zone data, which terminates after the operation is complete.
 
-The rest of the threads are all dedciated DNS I/O threads.  The general model employed is that every configured listening address (address/port/protocol combination) creates multiple `SO_REUSEPORT` listening sockets.  The number of duplicate listening sockets per address is controlled by the `udp_threads` and `tcp_threads` parameters, which default to 2.  There's exactly one I/O thread per listening socket, and they exist for the life of the daemon.  It's intended that the tcp/udp threads options should be tuned to roughly the CPU core count of the host machine.  For example, if two listen addresses are configured at 192.0.2.1:53 and 192.0.2.42:53, and the threads parameters are at their default value of two, there will be a total of 8 I/O threads created (2 tcp + 2 udp for each of the two IP:port, each thread having its own separate `SO_REUSEPORT` listening socket).
+The rest of the threads are all dedicated DNS I/O threads.  The general model employed is that every configured listening address (address/port/protocol combination) creates multiple `SO_REUSEPORT` listening sockets.  The number of duplicate listening sockets per address is controlled by the `udp_threads` and `tcp_threads` parameters, which default to 2.  There's exactly one I/O thread per listening socket, and they exist for the life of the daemon.  It's intended that the tcp/udp threads options should be tuned to roughly the CPU core count of the host machine.  For example, if two listen addresses are configured at 192.0.2.1:53 and 192.0.2.42:53, and the threads parameters are at their default value of two, there will be a total of 8 I/O threads created (2 tcp + 2 udp for each of the two IP:port, each thread having its own separate `SO_REUSEPORT` listening socket).
 
 The TCP DNS threads use a libev event loop to multiplex the handling of all traffic for all connections they accept on their listening socket.  The UDP DNS threads use a tight loop over the raw send and receive calls for the given socket.
 
-All of the code executed in the UDP threads at runtime is carefully crafted to avoid all syscalls (other than the necessary send/recv ones) and other expensive or potentially-blocking operations (e.g.  locks and dynamic memory allocation).  These threads should never block on anything other than their send/recv calls, and should execute at most 2 syscalls per request (significantly less under heavy traffic loads if sendmmsg() support is compiled in and detected at runtime).
+All of the code executed in the UDP threads at runtime is carefully crafted to avoid all syscalls (other than the necessary send/recv ones) and other expensive or potentially-blocking operations (e.g. locks and dynamic memory allocation).  These threads should never block on anything other than their send/recv calls, and should execute at most 2 syscalls per request (significantly less under heavy traffic loads if sendmmsg() support is detected and used at runtime).
 
 The TCP code shares the efficient core DNS parsing and response code of the UDP threads, but it does use dynamic memory allocation and a plethora of per-request syscalls (some via the eventloop library) at the TCP connection-handling layer.
 
@@ -171,20 +172,28 @@ The DNS threads keep reasonably detailed statistical counters of all of their ac
 * notimp - Requested service not implemented by this daemon, such as zone transfer requests.
 * badvers - Request had an EDNS OPT RR with a version higher than zero, which this daemon does not support (at the time of this writing, such a version doesn't even exist).
 * formerr - Request was badly-formatted, but was sane enough that we did send a response with the rcode FORMERR.
-* dropped - Request was so horribly malformed that we didn't even bother to respond (too short to contain a valid header, unparseable question section, QR (Query Response) bit set in a supposed question, TC bit set, illegal domainname encoding, etc, etc).
+* dropped - Request was so horribly malformed that we didn't even bother to respond (too short to contain a valid header, or had a UDP source port of zero).
 * noerror - Request did not have any of the above problems.
 * v6 -  Request was from an IPv6 client. This one isn't RCODE based, and is orthogonal to all other counts above.
 * edns - Request contained an EDNS OPT-RR. Not RCODE-based, so again orthogonal to the RCODE-based totals above. Includes the ones that generated badvers RCODEs.
-* edns\_client\_subnet - Subset of the above which specified the `edns_client_subnet` option.
+* edns\_do - EDNS requests which had the DO (DNSSEC OK) bit set
+* edns\_client\_subnet - EDNS requests which contains a client-subnet option
+
+These track client requests with the EDNS Cookie option.  Every such request increments exactly one of these four counters:
+
+* edns\_cookie\_init - Cookie option contained just a client-side cookie value but no server cookie value
+* edns\_cookie\_ok - Cookie option contained a correct client+server cookie combo we cryptographically validated
+* edns\_cookie\_bad - Cookie option contained client+server cookies, but we don't recognize the values as valid
+* edns\_cookie\_formerr - Cookie option had RFC-illegal cookie data length, causing FORMERR rejection of the request
 
 The UDP thread(s) keep the following statistics at their own level of processing:
 
 * udp\_reqs - Total count of UDP requests received and passed on to the core DNS request handling code (this is synthesized by summing all of the RCODE-based stat counters above for the UDP threads).
-* udp\_recvfail - Count of UDP `recvmsg()` errors, where the OS indicated that something bad happened on receive. Obviously, we don't even get these requests, so they can't be processed and replied to.  We also count it as `udp_recvfail` (and do not process the request) if the `recvmsg()` call succeeds but the client used an illegal source port of zero.
+* udp\_recvfail - Count of UDP `recvmsg()` errors, where the OS indicated that something bad happened on receive. Obviously, we don't even get these requests, so they can't be processed and replied to.
 * udp\_sendfail - Count of UDP `sendmsg()` errors, which almost definitely resulted in dropped responses from the client's point of view.
 * udp\_tc - Non-EDNS (traditional 512-byte) UDP responses that were truncated with the TC bit set.
 * udp\_edns\_big - EDNS responses where the response was greater than 512 bytes (in other words, EDNS actually did something for you size-wise)
-* udp\_edns\_tc - EDNS responses where the response was truncated and the TC bit set, meaning that the client's specified edns buffer size was too small for the data requested in spite of EDNS.
+* udp\_edns\_tc - EDNS responses where the response was truncated and the TC bit set, meaning that the client's specified edns buffer size (as also limited by our config) was too small for the data requested in spite of EDNS.
 
 The TCP threads also count this stuff:
 
@@ -201,7 +210,7 @@ These statistics are usually tracked in either 32-bit or 64-bit counters (depend
 
 ### Truncation Handling
 
-gdnsd generally aims for minimal responses in the first place, and follows very simplistic truncation rules.  It refuses to service partial RR sets or answers, and it only places RR sets in the additional section when they're necessary glue.  Therefore, from the truncation POV, there are only two kinds of responses: non-truncated ones that are full and complete, and truncated ones that contain zero RRs and have the TC bit set.  The space for the EDNS OPT RR and any intended response option data is reserved from the start when applicable; it will never be elided to make room for other records.
+gdnsd generally aims for minimal responses in the first place, and follows very simplistic truncation rules.  It refuses to service partial RR sets or answers, and it only places RR sets in the additional section when they're necessary glue.  Therefore, from the truncation POV, there are only two kinds of responses: non-truncated ones that are full and complete, and truncated ones that contain zero RRs (other than the question and any application response OPT RR) and have the TC bit set.  The space for the EDNS OPT RR and any intended response option data is reserved from the start when applicable; it will never be elided to make room for other records.
 
 ## Rationale and Philosophy
 
