@@ -212,10 +212,12 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
     double dists[MAX_NUM_DCS + 1];
     for (unsigned i = 0; i < num_dcs; i++) {
         const dcinfo_coords_t* coords = dcinfo_get_coords(lists->info, i);
+        GDNSD_DIAG_PUSH_IGNORED("-Wdouble-promotion")
         if (!isnan(coords->lat))
             dists[i + 1] = geodist(lat_rad, lon_rad, coords->lat, coords->lon, coords->cos_lat);
         else
             dists[i + 1] = (double) + INFINITY;
+        GDNSD_DIAG_POP
     }
 
     // Given the relatively small num_dcs of most configs,

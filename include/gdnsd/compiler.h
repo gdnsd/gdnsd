@@ -70,6 +70,9 @@
 #  if __has_attribute(alloc_align)
 #    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
 #  endif
+#  if __has_attribute(fallthrough)
+#    define S_FALLTHROUGH __attribute__((__fallthrough__))
+#  endif
 #elif defined __GNUC__
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
 #    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
@@ -87,6 +90,9 @@
 #  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
 #    define F_RETNN         __attribute__((__returns_nonnull__))
 #    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
+#  endif
+#  if __GNUC__ > 7 || (__GNUC__ == 7 && __GNUC_MINOR__ >= 1)
+#    define S_FALLTHROUGH __attribute__((__fallthrough__))
 #  endif
 #endif
 
@@ -157,6 +163,9 @@
 #endif
 #ifndef   F_ALLOCAL
 #  define F_ALLOCAL(_x)
+#endif
+#ifndef   S_FALLTHROUGH
+#  define S_FALLTHROUGH ((void)(0))
 #endif
 
 // This is a GCC-ism which also seems to be supported

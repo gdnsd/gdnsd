@@ -399,7 +399,7 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
                     return;
                 }
             }
-        // fall-through
+            S_FALLTHROUGH; // FALLTHROUGH
         default:
             usage(argv[0]);
         }

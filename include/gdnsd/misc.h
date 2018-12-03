@@ -236,26 +236,37 @@ static uint32_t gdnsd_lookup2(const uint8_t* k, uint32_t len)
     switch (len) {
     case 11:
         c += ((uint32_t)k[10] << 24);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 10:
         c += ((uint32_t)k[9] << 16);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 9:
         c += ((uint32_t)k[8] << 8);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 8:
         b += ((uint32_t)k[7] << 24);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 7:
         b += ((uint32_t)k[6] << 16);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 6:
         b += ((uint32_t)k[5] << 8);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 5:
         b += k[4];
+        S_FALLTHROUGH; // FALLTHROUGH
     case 4:
         a += ((uint32_t)k[3] << 24);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 3:
         a += ((uint32_t)k[2] << 16);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 2:
         a += ((uint32_t)k[1] << 8);
+        S_FALLTHROUGH; // FALLTHROUGH
     case 1:
         a += k[0];
+        S_FALLTHROUGH; // FALLTHROUGH
     default:
         break;
     }

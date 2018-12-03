@@ -74,8 +74,10 @@ void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, 
             }
             if (dcidx == num_dcs)
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' not matched from 'datacenters' list", map_name, dcname);
+            GDNSD_DIAG_PUSH_IGNORED("-Wdouble-promotion")
             if (!isnan(info->dcs[dcidx].coords.lat))
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' defined twice", map_name, dcname);
+            GDNSD_DIAG_POP
             vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
             vscf_data_t* lat_cfg;
             vscf_data_t* lon_cfg;

@@ -976,6 +976,7 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
     int cs = zone_start;
 
     GDNSD_DIAG_PUSH_IGNORED("-Wswitch-default")
+    GDNSD_DIAG_PUSH_IGNORED("-Wimplicit-fallthrough")
 #ifndef __clang_analyzer__
     // ^ ... because the ragel-generated code for the zonefile parser is
     //   so huge that it makes analyzer runs take forever.
@@ -986,6 +987,7 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
     %% write exec;
     // *INDENT-ON*
 #endif // __clang_analyzer__
+    GDNSD_DIAG_POP
     GDNSD_DIAG_POP
 
     if (cs == zone_error)

@@ -102,12 +102,16 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wall \
     -Wextra \
     -Waggregate-return \
+    -Walloca \
+    -Walloc-zero \
     -Warray-bounds=2 \
     -Wbad-function-cast \
     -Wcast-align \
+    -Wcast-align=strict \
     -Wcast-qual \
     -Wdate-time \
     -Wdouble-promotion \
+    -Wduplicated-branches \
     -Wduplicated-cond \
     -Wendif-labels \
     -Werror=vla \
@@ -132,6 +136,7 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wstrict-aliasing=3 \
     -Wstrict-overflow=5 \
     -Wstrict-prototypes \
+    -Wstringop-overflow=3 \
     -Wswitch-default \
     -Wswitch-enum \
     -Wtrampolines \
@@ -139,8 +144,13 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wuninitialized \
     -Wunused \
     -Wwrite-strings \
+    -Wno-pragmas \
     -Wthis-does-not-exist \
 ],[CFLAGS],[$CLANG_WERROR])
+
+# Note "-Wno-pragmas" above is because our only use of pragmas is to suppress
+# warnings, and sometimes this in turn causes a warning on older GCC versions
+# that don't support the warning we're trying to suppress...
 
 # include libgdnsd configure stuff
 m4_include([libgdnsd/libgdnsd.m4])

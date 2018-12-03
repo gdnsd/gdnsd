@@ -1364,7 +1364,6 @@ void ltree_destroy(ltree_node_t* node)
                 free(rrset->addr.addrs.v4);
             }
             break;
-
         case DNS_TYPE_NAPTR:
             for (unsigned i = 0; i < rrset->gen.count; i++)
                 free(rrset->naptr.rdata[i].text);

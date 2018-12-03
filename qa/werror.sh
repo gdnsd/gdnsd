@@ -8,7 +8,7 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-for comp in gcc clang clang-6.0; do
+for comp in gcc gcc-8 clang clang-6.0 clang-7; do
     CC=${comp} ./configure --enable-developer --with-werror && make clean all && make check
     CC=${comp} CFLAGS=-O3 ./configure --disable-developer --with-werror && make clean all && make check
 done

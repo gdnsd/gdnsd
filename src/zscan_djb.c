@@ -179,7 +179,7 @@ static uint8_t* expand_dname(zscan_t* z, uint8_t* dname, field_t* f, const uint8
     case DNAME_PARTIAL:
         if (dname_cat(dname, dname_root) != DNAME_INVALID)
             break;
-    // fallthrough
+        S_FALLTHROUGH; // FALLTHROUGH
     case DNAME_INVALID:
         parse_error("unable to expand '%.*s' as to valid domain name", FIELD_FMT(f));
         break;
