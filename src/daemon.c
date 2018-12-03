@@ -56,27 +56,32 @@ static void sysd_notify_ready(void)
     if (!spath)
         return;
 
+    /* Must be an abstract socket, or an absolute path */
+    if ((spath[0] != '@' && spath[0] != '/') || spath[1] == 0)
+        log_fatal("Invalid NOTIFY_SOCKET path '%s'", spath);
+
+    const size_t spath_len = strlen(spath);
+
+    struct sockaddr_un sun;
+    memset(&sun, 0, sizeof(sun));
+    sun.sun_family = AF_UNIX;
+
+    if (spath_len > sizeof(sun.sun_path))
+        log_fatal("NOTIFY_SOCKET pathname too long!");
+    strncpy(sun.sun_path, spath, sizeof(sun.sun_path));
+
+    if (sun.sun_path[0] == '@')
+        sun.sun_path[0] = 0;
+
     char msg[64];
     int snp_rv = snprintf(msg, 64,
                           "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
     if (snp_rv < 0 || snp_rv > 64)
         log_fatal("BUG: sprintf()=>%i in sysd_notify_ready()", snp_rv);
 
-    /* Must be an abstract socket, or an absolute path */
-    if ((spath[0] != '@' && spath[0] != '/') || spath[1] == 0)
-        log_fatal("Invalid NOTIFY_SOCKET path '%s'", spath);
-
     int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
         log_fatal("Cannot create AF_UNIX socket");
-
-    struct sockaddr_un sun;
-    memset(&sun, 0, sizeof(sun));
-    sun.sun_family = AF_UNIX;
-    strncpy(sun.sun_path, spath, sizeof(sun.sun_path));
-
-    if (sun.sun_path[0] == '@')
-        sun.sun_path[0] = 0;
 
     struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
     struct msghdr m;
@@ -84,7 +89,7 @@ static void sysd_notify_ready(void)
     m.msg_iov = &iov;
     m.msg_iovlen = 1;
     m.msg_name = &sun;
-    m.msg_namelen = offsetof(struct sockaddr_un, sun_path) + strlen(spath);
+    m.msg_namelen = offsetof(struct sockaddr_un, sun_path) + spath_len;
     if (m.msg_namelen > sizeof(struct sockaddr_un))
         m.msg_namelen = sizeof(struct sockaddr_un);
 
