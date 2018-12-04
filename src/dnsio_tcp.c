@@ -154,8 +154,10 @@ static void idleq_process_timeouts(tcpdns_thread_t* ctx)
     // If we arrived here just after adding a new connection which raised us to
     // the maximum, force the expiry of the next entry on the list by faking
     // its idle_start to zero.
-    if (ctx->num_conns == ctx->max_clients)
+    if (ctx->num_conns == ctx->max_clients) {
+        gdnsd_assert(ctx->idleq_head); // can only be NULL if no connections
         ctx->idleq_head->idle_start = 0.;
+    }
 
     // Calculate an updated timeout value (if shutting down, fixed 2s)
     double cur_timeout = 2.0;
