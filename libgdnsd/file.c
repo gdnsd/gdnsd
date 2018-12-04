@@ -31,12 +31,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include <time.h>
 
 struct gdnsd_fmap_s_ {
     void* buf;
     size_t len;
-    time_t mtime;
 };
 
 gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
@@ -92,7 +90,6 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
     gdnsd_fmap_t* fmap = xmalloc(sizeof(*fmap));
     fmap->buf = mapbuf;
     fmap->len = len;
-    fmap->mtime = st.st_mtime;
 
     return fmap;
 }
@@ -107,11 +104,6 @@ size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap)
 {
     gdnsd_assert(fmap->buf);
     return fmap->len;
-}
-
-time_t gdnsd_fmap_get_mtime(const gdnsd_fmap_t* fmap)
-{
-    return fmap->mtime;
 }
 
 bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap)

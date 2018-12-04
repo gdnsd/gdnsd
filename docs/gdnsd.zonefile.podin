@@ -9,7 +9,7 @@ example.com:
   $TTL 86400
 
   @	SOA ns1 hostmaster (
-        0      ; serial (0 -> auto from mtime)
+        1      ; serial
         7200   ; refresh
         30M    ; retry
         3D     ; expire
@@ -164,15 +164,8 @@ C<SOA> records' negative-caching TTL is set to the minimum of the traditional
 actual TTL of the SOA record any time it is emitted, whether for negative or
 positive answers.
 
-If the serial field of an C<SOA> record is set to zero, an automatic serial
-number based on the zonefile's last modification timestamp will be generated
-using the format C<YYMMDDHHMM> in the UTC timezone.  This gives 1-minute
-resolution and will fail in the year 2043, by which time we'll have to come up
-with something new.  If there were C<$INCLUDE> files involved, the effective
-last modification will be the latest of all recursively included files.
-
-Additionally, gdnsd supports two special-case, non-standard virtual resource
-record types DYNA and DYNC:
+Additionally, gdnsd supports two special-case, non-standard
+virtual resource record types DYNA and DYNC:
 
 =head2 DYNA
 
