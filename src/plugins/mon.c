@@ -830,10 +830,10 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest)
 // states code from here to the end
 //--------------------------------------------------
 
-static const char json_head[] = "{\r\n";
+static const char json_head[] = "{\n";
 static const char json_tmpl[] = "\t\"%s\": {\"state\": \"%s\", \"real_state\": \"%s\"}";
-static const char json_sep[] = ",\r\n";
-static const char json_foot[] = "\r\n}\r\n";
+static const char json_sep[] = ",\n";
+static const char json_foot[] = "\n}\n";
 #define json_head_len (sizeof(json_head) - 1U)
 #define json_sep_len (sizeof(json_sep) - 1U)
 #define json_tmpl_len (sizeof(json_tmpl) - 7U) // 3x%s
