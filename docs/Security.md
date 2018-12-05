@@ -1,6 +1,6 @@
 # Security
 
-Any public-facing network daemon has to consider security issues. While the potential will always exist for gdnsd to contain stupid bugs and the like, I believe this software is well above average industry security standards.  What follows here are in-depth discussion and analyis, to the best of my ability, of the security of this software.  The first section is about the code itself, the second describes known potential attack surfaces, and the third reviews the security history of the project.
+Any public-facing network daemon has to consider security issues. While the potential will always exist for gdnsd to contain stupid bugs and the like, I believe this software is well above average industry security standards.  What follows here are in-depth discussion and analysis, to the best of my ability, of the security of this software.  The first section is about the code itself, the second describes known potential attack surfaces, and the third reviews the security history of the project.
 
 ## The Code
 
