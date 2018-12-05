@@ -340,7 +340,9 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
     unsigned newlen = len;
     if (len) {
         newlen = dns_unescape(text_temp, z->tstart, len);
-        gdnsd_assert(newlen && newlen <= len);
+        if (!newlen)
+            parse_error_noargs("Text chunk has bad escape sequence");
+        gdnsd_assert(newlen <= len);
     }
 
     if (newlen > 255U) {
@@ -397,7 +399,9 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
     unsigned newlen = len;
     if (len) {
         newlen = dns_unescape(storage, z->tstart, len);
-        gdnsd_assert(newlen && newlen <= len);
+        if (!newlen)
+            parse_error_noargs("Text chunk has bad escape sequence");
+        gdnsd_assert(newlen <= len);
     }
 
     if (newlen > 16000U) {
@@ -419,6 +423,8 @@ static void set_filename(zscan_t* z, const unsigned len)
 {
     char* fn = malloc(len + 1);
     const unsigned newlen = dns_unescape(fn, z->tstart, len);
+    if (!newlen)
+        parse_error_noargs("Filename has bad escape sequence");
     gdnsd_assert(newlen <= len);
     z->include_filename = fn = realloc(fn, newlen + 1);
     fn[newlen] = 0;
@@ -584,7 +590,7 @@ F_NONNULL
 static void rec_mx(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1))
+    if (ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uval))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -655,8 +661,8 @@ static void rec_rfc3597(zscan_t* z)
 F_NONNULL
 static void rec_caa(zscan_t* z)
 {
-    if (z->uv_1 > 255)
-        parse_error("CAA flags byte value %u is >255", z->uv_1);
+    if (z->uval > 255)
+        parse_error("CAA flags byte value %u is >255", z->uval);
 
     validate_lhs_not_ooz(z);
 
@@ -667,7 +673,7 @@ static void rec_caa(zscan_t* z)
 
     uint8_t* caa_rdata = xmalloc(total_len);
     uint8_t* caa_write = caa_rdata;
-    *caa_write++ = z->uv_1;
+    *caa_write++ = z->uval;
     *caa_write++ = prop_len;
     memcpy(caa_write, z->caa_prop, prop_len);
     caa_write += prop_len;
@@ -895,8 +901,7 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 
     # Escape sequences in general for any character-string
     #  (domainname or TXT record rdata, etc)
-    escape_int = 25[0-5] | ( 2[0-4] | [01][0-9] ) [0-9] ;
-    escapes    = ('\\' [^0-9\n]) | ('\\' escape_int) | ('\\' nl);
+    escapes    = '\\' ( [^0-9\n] | [0-9]{3} | nl);
 
     # Quoted character string
     qword     = '"' ([^"\n\\]|escapes|nl)* '"';
@@ -947,10 +952,8 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
     # IPv[46] Addresses.  Note that while they are not very
     #  very precise, anything bad that gets past them will still
     #  trigger graceful failure when passed to inet_pton().
-    ipoct     = digit{1,3};
-    _ipv4     = ipoct ('.' ipoct){3};
-    ipv4      = _ipv4 >token_start %set_ipv4;
-    ipv6      = ([a-fA-F0-9:]+ ( ':' _ipv4 )?) >token_start %set_ipv6;
+    ipv4      = [0-9.]+ >token_start %set_ipv4;
+    ipv6      = [a-fA-F0-9:.]+ >token_start %set_ipv6;
 
     # NAPTR's text strings
     naptr_txt = (txt_item_255 ws txt_item_255 ws txt_item_255) $1 %0 >start_txt;
@@ -962,8 +965,8 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
     rfc3597_rdata = uval %set_uv_1 ws '\\' '#' ws uval %rfc3597_data_setup ws
         (rfc3597_octet+ ws?)**;
 
-    caa_prop = [0-9A-Za-z]{1,255} >token_start %set_caa_prop;
-    caa_rdata = uval %set_uv_1 ws caa_prop ws txt_item_huge >start_txt;
+    caa_prop = [0-9A-Za-z]+ >token_start %set_caa_prop;
+    caa_rdata = uval ws caa_prop ws txt_item_huge >start_txt;
 
     # The left half of a resource record, which for our purposes here
     #  is the optional domainname and/or the optional ttl and/or the
@@ -989,7 +992,7 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
         | ('NS'i    ws dname_rhs) %rec_ns
         | ('CNAME'i ws dname_rhs) %rec_cname
         | ('PTR'i   ws dname_rhs) %rec_ptr
-        | ('MX'i    ws uval %set_uv_1 ws dname_rhs) %rec_mx
+        | ('MX'i    ws uval ws dname_rhs) %rec_mx
         | ('TXT'i   ws txt_rdata) %rec_txt
         | ('SRV'i   ws uval %set_uv_1 ws uval %set_uv_2
                     ws uval %set_uv_3 ws dname_rhs) %rec_srv
