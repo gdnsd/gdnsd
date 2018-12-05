@@ -621,10 +621,10 @@ static void val_destroy(vscf_data_t* d)
     }
 
     # newlines, count them
-    nl      = '\r'? '\n' %{ scnr->lcount++; };
+    nl      = '\n' %{ scnr->lcount++; };
 
     # Single line comment, e.g. ; dns comment or # sh comment
-    slc     = ([;#] [^\r\n]* nl);
+    slc     = ([;#] [^\n]* nl);
 
     # Whitespace, which includes newlines and comments, and is
     #  always optional wherever it occurs.
@@ -632,11 +632,11 @@ static void val_destroy(vscf_data_t* d)
 
     # Escape sequences in general for any character-string
     escape_int = 25[0-5] | ( 2[0-4] | [01][0-9] ) [0-9] ;
-    escapes = ('\\' [^0-9\r\n]) | ('\\' escape_int) | ('\\' nl);
+    escapes = ('\\' [^0-9\n]) | ('\\' escape_int) | ('\\' nl);
 
     # The base set of literal characters allowed in unquoted
     #  charater-srings
-    chr     = [^}{;# \t\r\n,"=\\] - (']'|'[');
+    chr     = [^}{;# \t\n,"=\\] - (']'|'[');
 
     # The set of characters allowed as the *first* character in
     #  unquoted character-strings ($ is additionally excluded to
@@ -648,7 +648,7 @@ static void val_destroy(vscf_data_t* d)
     #  forcing the parser to prefer staying in the string over other
     #  alternatives.
     unquoted = ((fchr | escapes) (chr | escapes)*) $1 %0;
-    quoted   = ('"' ([^\r\n\\] - '"'|escapes|nl)* '"');
+    quoted   = ('"' ([^\n\\] - '"'|escapes|nl)* '"');
 
     # Keys and Values are both character-strings, and either can
     #  optionally be in quoted form.  However, they trigger different code.

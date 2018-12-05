@@ -802,10 +802,10 @@ static void close_paren(zscan_t* z)
     action in_paren { z->in_paren }
 
     # newlines, count them
-    nl  = '\r'? '\n' %{ z->lcount++; };
+    nl  = '\n' %{ z->lcount++; };
 
     # Single Line Comment, e.g. ; dns comment
-    slc = ';' [^\r\n]*;
+    slc = ';' [^\n]*;
 
     # Whitespace, with special handling for braindead () multi-line records
     ws = (
@@ -818,14 +818,14 @@ static void close_paren(zscan_t* z)
     # Escape sequences in general for any character-string
     #  (domainname or TXT record rdata, etc)
     escape_int = 25[0-5] | ( 2[0-4] | [01][0-9] ) [0-9] ;
-    escapes    = ('\\' [^0-9\r\n]) | ('\\' escape_int) | ('\\' nl);
+    escapes    = ('\\' [^0-9\n]) | ('\\' escape_int) | ('\\' nl);
 
     # Quoted character string
-    qword     = '"' ([^"\r\n\\]|escapes|nl)* '"';
+    qword     = '"' ([^"\n\\]|escapes|nl)* '"';
 
     # The base set of literal characters allowed in unquoted character
     #  strings (again, labels or txt rdata chunks)
-    lit_chr   = [^; \t"\r\n\\)(];
+    lit_chr   = [^; \t"\n\\)(];
 
     # plugin / resource names for DYNA
     plugres   = ((lit_chr - [!]) | escapes)+;

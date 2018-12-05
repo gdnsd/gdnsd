@@ -81,6 +81,7 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 * The server does not support emitting responses greater than ~16KB in size over any protocol.  Zone data is explicitly validated against this constraint, and zonefiles will fail to load if they contain record sets which could generate an over-sized response packet.  The checks are somewhat conservative in corner cases and may reject data which would technically barely fit in practice.
 * DYNC and related plugin configurations have two new restrictions: all configured dynamic CNAME values must be fully-qualified (end in dot), and DYNC cannot be used to emit a CNAME that points into the same zone (in others words, if `example.com` has the RR `foo DYNC %weighted!some-cnames`, the weighted plugin's configuration for the resource `some-cnames` cannot contain any CNAME values within the zone `example.com`; they must be names in other domains).
 * Support for DSO plugins developed out of tree is removed.  The existing "plugins" are now compiled into the daemon, but otherwise work as they did before for now.
+* The configuration and zonefile parsers no longer accept DOS-style line endings (`"\r\n"`).  This was considered a convenience before, but it's not worth the complexity/fraily costs in the parsers.
 
 ### Other minor things
 
