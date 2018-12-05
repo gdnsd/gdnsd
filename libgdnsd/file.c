@@ -37,7 +37,7 @@ struct gdnsd_fmap_s_ {
     size_t len;
 };
 
-gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
+gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
 {
     const int fd = open(fn, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
@@ -64,7 +64,9 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
     char* mapbuf = NULL;
 
     if (len) {
-        mapbuf = mmap(NULL, len, PROT_READ, MAP_SHARED, fd, 0);
+        const int prot = mod ? (PROT_READ | PROT_WRITE) : PROT_READ;
+        const int flags = mod ? MAP_PRIVATE : MAP_SHARED;
+        mapbuf = mmap(NULL, len, prot, flags, fd, 0);
         if (mapbuf == MAP_FAILED) {
             log_err("Cannot mmap '%s': %s", fn, logf_errno());
             close(fd);
@@ -94,7 +96,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq)
     return fmap;
 }
 
-const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap)
+void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap)
 {
     gdnsd_assert(fmap->buf);
     return fmap->buf;

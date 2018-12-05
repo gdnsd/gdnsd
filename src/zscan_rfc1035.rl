@@ -54,7 +54,6 @@
 typedef struct {
     uint8_t  ipv6[16];
     uint32_t ipv4;
-    bool     in_paren;
     bool     zn_err_detect;
     bool     lhs_is_ooz;
     unsigned lcount;
@@ -91,7 +90,7 @@ typedef struct {
 } zscan_t;
 
 F_NONNULL
-static void scanner(zscan_t* z, const char* buf, const size_t bufsize);
+static void scanner(zscan_t* z, char* buf, const size_t bufsize);
 
 /******** IP Addresses ********/
 
@@ -269,9 +268,9 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
 //   function pointer to eliminate the possibility of
 //   inlining on non-gcc compilers, I hope) to avoid issues with
 //   setjmp and all of the local auto variables in zscan_rfc1035() below.
-typedef bool (*sij_func_t)(zscan_t*, const char*, const unsigned);
+typedef bool (*sij_func_t)(zscan_t*, char*, const unsigned);
 F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, const char* buf, const unsigned bufsize)
+static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize)
 {
     if (!sigsetjmp(z->jbuf, 0)) {
         scanner(z, buf, bufsize);
@@ -287,14 +286,14 @@ static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const 
 
     bool failed = false;
 
-    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
+    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true, true);
     if (!fmap) {
         failed = true;
         return failed;
     }
 
     const size_t bufsize = gdnsd_fmap_get_len(fmap);
-    const char* buf = gdnsd_fmap_get_buf(fmap);
+    char* buf = gdnsd_fmap_get_buf(fmap);
 
     zscan_t* z = xcalloc(sizeof(*z));
     z->lcount = 1;
@@ -711,20 +710,108 @@ static void set_limit_v6(zscan_t* z)
     z->limit_v6 = z->uval;
 }
 
-F_NONNULL
-static void open_paren(zscan_t* z)
+// The external entrypoint to the parser
+bool zscan_rfc1035(zone_t* zone, const char* fn)
 {
-    if (z->in_paren)
-        parse_error_noargs("Parenthetical error: double-open");
-    z->in_paren = true;
+    gdnsd_assert(zone->dname);
+    log_debug("rfc1035: Scanning zonefile '%s'", logf_dname(zone->dname));
+    return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl, 0, 0);
 }
 
+// This pre-processor does two important things that vastly simplify the real
+// ragel parser:
+// 1) Gets rid of all comments, replacing their characters with spaces so that
+//    they're just seen as excessive whitespace.  Technically we only needed
+//    to strip comments for the () case below, which is the complicated one
+//    for ragel, but since we're doing it anyways it seemed simpler to do
+//    universally and take comment-handling out of ragel as well.
+// 2) Gets rid of all awful rfc1035 () line continuation, replacing the
+//    parentheses themselves with spaces, and replacing any embedded newlines
+//    with the formfeed character \f (which the ragel parser treats as
+//    whitespace, but also knows to increment linecount on these so that error
+//    reporting still shows the correct line number).
+
+#define preproc_err(_msg) \
+    do {\
+        log_err("rfc1035: Zone %s: Zonefile preprocessing error at file %s line %lu: " _msg, logf_dname(z->zone->dname), z->curfn, line_num);\
+        siglongjmp(z->jbuf, 1);\
+    } while (0)
+
 F_NONNULL
-static void close_paren(zscan_t* z)
+static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 {
-    if (!z->in_paren)
-        parse_error_noargs("Parenthetical error: unnecessary close");
-    z->in_paren = false;
+    // This is validated with a user-facing error before calling this function!
+    gdnsd_assert(buf[buflen - 1] == '\n');
+
+    bool in_quotes = false;
+    bool in_parens = false;
+    size_t line_num = 1;
+    for (size_t i = 0; i < buflen; i++) {
+        switch (buf[i]) {
+        case '\n':
+            line_num++;
+            // In parens, replace \n with \f.  The ragel parser treats \f as
+            // whitespace but knows to increment the line count so that error
+            // reports are sane, while true unescaped \n terminates records.
+            if (in_parens && !in_quotes)
+                buf[i] = '\f';
+            break;
+        case ';':
+            if (!in_quotes) {
+                // Note we don't check i < buflen while advancing here, because
+                // there's a check that the final character of the buffer must
+                // be '\n' before the preprocessor is even invoked, which is
+                // re-asserted at the top of this function.
+                do {
+                    buf[i++] = ' ';
+                } while (buf[i] != '\n');
+                line_num++;
+                if (in_parens)
+                    buf[i] = '\f';
+            }
+            break;
+        case '"':
+            in_quotes = !in_quotes;
+            break;
+        case '(':
+            if (!in_quotes) {
+                if (in_parens)
+                    preproc_err("Parentheses double-opened");
+                in_parens = true;
+                buf[i] = ' ';
+            }
+            break;
+        case ')':
+            if (!in_quotes) {
+                if (!in_parens)
+                    preproc_err("Parentheses double-closed");
+                in_parens = false;
+                buf[i] = ' ';
+            }
+            break;
+        case '\\':
+            // Skip one escaped char.  Note 3-digit escapes exist as well, but
+            // we're only concerned here with escaping of metachars, so it
+            // turns out we don't have to track for the 3-digit escapes here.
+            // We do have to keep the line count accurate in the case of an
+            // escaped newline, though.
+            if (buf[++i] == '\n')
+                line_num++;
+            break;
+        case '\f':
+            // Because \f is a special metachar for our ()-handling
+            if (!in_quotes)
+                preproc_err("Literal formfeed character not allowed in unquoted text: please escape it!");
+            break;
+        default:
+            break;
+        }
+    }
+
+    if (in_quotes)
+        preproc_err("Unterminated open double-quote at EOF");
+    if (in_parens)
+        preproc_err("Unterminated open parentheses at EOF");
 }
 
 // *INDENT-OFF*
@@ -797,23 +884,14 @@ static void close_paren(zscan_t* z)
 
     action rfc3597_data_setup { rfc3597_data_setup(z); }
     action rfc3597_octet { rfc3597_octet(z); }
-    action open_paren { open_paren(z); }
-    action close_paren { close_paren(z); }
-    action in_paren { z->in_paren }
 
     # newlines, count them
     nl  = '\n' %{ z->lcount++; };
 
-    # Single Line Comment, e.g. ; dns comment
-    slc = ';' [^\n]*;
-
-    # Whitespace, with special handling for braindead () multi-line records
-    ws = (
-        [ \t]+
-        | '(' $open_paren
-        | ')' $close_paren
-        | (slc? nl)+ when in_paren
-    )+;
+    # Whitespace: note we use the special metachar \f as a linecount-bumping
+    # whitespace, to coordinate with the preprocessor's removal of true
+    # newlines within parentheses.
+    ws = ( [ \t] | ('\f' %{ z->lcount++; } ))+;
 
     # Escape sequences in general for any character-string
     #  (domainname or TXT record rdata, etc)
@@ -825,7 +903,7 @@ static void close_paren(zscan_t* z)
 
     # The base set of literal characters allowed in unquoted character
     #  strings (again, labels or txt rdata chunks)
-    lit_chr   = [^; \t"\n\\)(];
+    lit_chr   = [^; \t\f"\n\\)(];
 
     # plugin / resource names for DYNA
     plugres   = ((lit_chr - [!]) | escapes)+;
@@ -946,14 +1024,13 @@ static void close_paren(zscan_t* z)
     # A zonefile is composed of many resource records
     #  and commands and comments and such...
     statement = rr | cmd;
-    main := (statement? ws? ((slc? nl) when !in_paren))*;
+    main := (statement? ws? nl)*;
 
     write data;
 }%%
-// *INDENT-ON*
 
 F_NONNULL
-static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
+static void scanner(zscan_t* z, char* buf, const size_t bufsize)
 {
     gdnsd_assert(bufsize);
 
@@ -965,6 +1042,9 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
         parse_error_noargs("No newline at end of file");
         return;
     }
+
+    // Undo parentheses braindamage before real parsing
+    preprocess_buf(z, buf, bufsize);
 
     (void)zone_en_main; // silence unused var warning from generated code
 
@@ -978,9 +1058,7 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
     const char* p = buf;
     const char* pe = buf + bufsize;
     const char* eof = pe;
-    // *INDENT-OFF*
     %% write exec;
-    // *INDENT-ON*
 #endif // __clang_analyzer__
     GDNSD_DIAG_POP
     GDNSD_DIAG_POP
@@ -989,11 +1067,4 @@ static void scanner(zscan_t* z, const char* buf, const size_t bufsize)
         parse_error_noargs("General parse error");
     else if (cs < zone_first_final)
         parse_error_noargs("Trailing incomplete or unparseable record at end of file");
-}
-
-bool zscan_rfc1035(zone_t* zone, const char* fn)
-{
-    gdnsd_assert(zone->dname);
-    log_debug("rfc1035: Scanning zonefile '%s'", logf_dname(zone->dname));
-    return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl, 0, 0);
 }

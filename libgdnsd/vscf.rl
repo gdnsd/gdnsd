@@ -820,7 +820,7 @@ GDNSD_DIAG_POP
 vscf_data_t* vscf_scan_filename(const char* fn)
 {
     vscf_data_t* rv = NULL;
-    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true);
+    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true, false);
     if (fmap) {
         const size_t len = gdnsd_fmap_get_len(fmap);
         const char* buf = gdnsd_fmap_get_buf(fmap);

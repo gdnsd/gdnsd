@@ -35,8 +35,9 @@ typedef struct gdnsd_fmap_s_ gdnsd_fmap_t;
 //   will return length 0 and a valid pointer to 1 NUL byte.
 // "seq" is an optimization hint: set to true if expected buffer access
 //   pattern is sequential.
+// "mod" gives a writeable private buffer, instead of a readonly shared one
 F_NONNULL F_WUNUSED
-gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq);
+gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod);
 
 // Get the length of the mapped file data (zero is possible)
 F_NONNULL F_PURE
@@ -44,7 +45,7 @@ size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap);
 
 // Get the buffer pointer for the mapped file data (always a valid pointer)
 F_NONNULL F_RETNN F_PURE
-const void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap);
+void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap);
 
 // Destructs the fmap_t object, which includes unmap() of the memory
 //   returned via fmap_get_buf().
