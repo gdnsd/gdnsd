@@ -29,8 +29,6 @@
 #include "statio.h"
 #include "ztree.h"
 #include "ltree.h"
-#include "zsrc_rfc1035.h"
-#include "zsrc_djb.h"
 #include "css.h"
 #include "csc.h"
 #include "chal.h"

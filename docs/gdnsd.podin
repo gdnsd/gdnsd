@@ -192,23 +192,11 @@ different case-mapping such as F<EXample.Com>) are illegal.
 Subzones (e.g. having zonefiles for both C<example.com> and
 C<subz.example.com>) are also illegal.
 
-=head1 ZONE FILES - DJBDNS
-
-There is now experimental support for djbdns-format zonefiles
-in the F<djbdns> subdirectory of the config directory
-(default F<@GDNSD_DEFPATH_CONFIG@/djbdns/>.  For more information
-see L<gdnsd.djbdns(5)>.
-
-If the same zone is specified via more than one zone data backend (e.g. rfc1035
-+ djbdns), it will be an error and loading zone data will fail.  Similarly, it
-is illegal for the combined set of zones to contain subzones.
-
 =head1 ZONE FILES - RELOADING
 
-C<gdnsdctl reload-zones> triggers re-loading all zone data from all
-backends (currently just rfc1035 + djbdns).  The reload operation is
-done in a separate thread from the main server and doesn't interrupt
-DNS request flow.
+C<gdnsdctl reload-zones> triggers re-loading all zone data.  The reload
+operation is done in a separate thread from the main server and doesn't
+interrupt DNS request flow.
 
 C<gdnsdctl> will wait for the server to complete the load operation
 and report back the success or failure of the reload transaction via
@@ -370,7 +358,7 @@ shutdown case, or be zero if cleanly shut down by non-signal mechanisms.
 
 =head1 SEE ALSO
 
-L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>, L<gdnsd.djbdns(5)>
+L<gdnsd.config(5)>, L<gdnsd.zonefile(5)>
 
 The gdnsd manual.
 

@@ -80,7 +80,6 @@ check-local-top:
 INSTALL_EXEC_HOOK_DEPS += install-exec-hook-top
 install-exec-hook-top:
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG)/zones";
-	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG)/djbdns";
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_CONFIG)/geoip";
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_RUN)";
 	$(MKDIR_P) "$(DESTDIR)$(GDNSD_DEFPATH_STATE)";
@@ -136,10 +135,6 @@ src_gdnsd_SOURCES = \
 	src/cookie.h \
 	src/kdf_compat.c \
 	src/kdf_compat.h \
-	src/zsrc_djb.c \
-	src/zsrc_djb.h \
-	src/zscan_djb.c \
-	src/zscan_djb.h \
 	src/zsrc_rfc1035.c \
 	src/zsrc_rfc1035.h \
 	src/ztree.c \
@@ -298,8 +293,7 @@ dist_doc_DATA += \
 PODS_IN_1 = docs/gdnsd_geoip_test.podin
 PODS_IN_5 = \
 	docs/gdnsd.config.podin \
-	docs/gdnsd.zonefile.podin \
-	docs/gdnsd.djbdns.podin
+	docs/gdnsd.zonefile.podin
 PODS_IN_8 = \
 	docs/gdnsd.podin \
 	docs/gdnsdctl.podin \

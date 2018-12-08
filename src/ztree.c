@@ -22,7 +22,6 @@
 
 #include "main.h"
 #include "zsrc_rfc1035.h"
-#include "zsrc_djb.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dname.h>
@@ -271,10 +270,9 @@ void* ztree_zones_reloader_thread(void* init_asvoid)
     ztree_t* new_ztree = xcalloc(sizeof(*new_ztree));
 
     // These do not fail if their data directory doesn't exist
-    const bool djb_failed = zsrc_djb_load_zones(new_ztree);
     const bool rfc1035_failed = zsrc_rfc1035_load_zones(new_ztree);
 
-    if (rfc1035_failed || djb_failed) {
+    if (rfc1035_failed) {
         ztree_destroy(new_ztree);
         rv = 1; // the zsrc already logged why
     } else {
@@ -293,6 +291,5 @@ void* ztree_zones_reloader_thread(void* init_asvoid)
 
 void ztree_init(void)
 {
-    zsrc_djb_init();
     zsrc_rfc1035_init();
 }
