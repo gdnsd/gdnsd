@@ -9,7 +9,6 @@ If your starting point is a tarball, the following prerequisites apply:
 * A basically functional POSIX build environment with a C99 compiler
 * libev headers and libraries, version 4.x: distro pkg
   or http://software.schmorp.de/pkg/libev.html
-* Ragel 6.x: http://www.complang.org/ragel/ (or distro package)
 * Perl 5.10.1 or higher and the perl "pod2man" command for document
   generation (this may be in the package perl-podlaters)
 * liburcu aka userspace-rcu headers and libraries. Use distro pkg or
@@ -38,6 +37,9 @@ If working directly from a git clone:
   You can bring them into your tree via: "git submodule update --init".
   You will also need the 'xz' compression utility installed to unpack them.
 * Start with "autoreconf -vif", then ./configure ...
+* You'll need Ragel 6.x ( http://www.complang.org/ragel/ ) if you want to
+  be able to edit and recompile the .rl parser source code for the
+  configuration and zonefile languages.
 
 Interesting / Non-standard autoconf options
 ===========================================
