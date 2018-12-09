@@ -879,7 +879,7 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
     {\
         const unsigned _tot = (_total);\
         unsigned _x_count = (_limit);\
-        unsigned i = gdnsd_rand32_get(ctx->rand_state) % _tot;\
+        unsigned i = gdnsd_rand32_bounded(ctx->rand_state, _tot);\
         while (_x_count--) {\
 
 #define OFFSET_LOOP_END \

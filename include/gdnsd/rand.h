@@ -29,46 +29,17 @@
 #include <sodium.h>
 
 /***************
- * These are Public-Domain JKISS32/JLKISS64 PRNG implementations
- *   which I initially got from David Jones' RNG paper here:
+ * This is the Public-Domain JKISS32 PRNG implementation which I initially got
+ *   from David Jones' RNG paper here:
  *   http://www.cs.ucl.ac.uk/staff/d.jones/GoodPracticeRNG.pdf
  *   ... and then incorporated some usage/optimization hints from
  *   https://github.com/bhickey/librng
- * The actual algorithms ultimately came from George Marsaglia.
- * I've made cosmetic modifications (style, C99) and given them a
- *  state pointer for threading, and renamed them into the gdnsd API
- *  namespace so they can be swapped out easily later, and given them
- *  initialization from quality libsodium sources.
+ * The actual algorithms ultimately came from George Marsaglia.  I've made
+ *   cosmetic modifications (style, C99) and given it a state pointer for
+ *   threading, and renamed it into the gdnsd API namespace so they can be
+ *   swapped out easily later, and given them initialization from quality
+ *   libsodium sources.
  ***************/
-
-/* Note there are separate 64-bit and 32-bit interfaces here.
- * Both have periods sufficient for this software in general,
- *   given an analysis of high end per-thread DNS query rates and
- *   daemon uptimes, etc.  The 32-bit one is faster and should
- *   be used by default.
- * The 64-bit one is supplied for cases (such as plugin_weighted)
- *   where the result is being used in an integer modulo operation
- *   with unpredictable mod values which could be large enough to
- *   induce bias with the 32-bit one.
- * For "gdnsd_rand32_get() % N":
- *     maxN -> bias
- *     ----    ----
- *     2^24 -> 0.39%
- *     2^28 -> 6.25%
- *     2^29 -> 12.5%
- *     2^30 -> 25%
- * ... whereas rand64_get() will have an almost immeasurably small
- *   bias for modvals up to 2^32.
- */
-
-typedef struct _gdnsd_rstate64_t {
-    uint64_t x;
-    uint64_t y;
-    uint32_t z1;
-    uint32_t c1;
-    uint32_t z2;
-    uint32_t c2;
-} gdnsd_rstate64_t;
 
 typedef struct _gdnsd_rstate32_t {
     uint32_t x;
@@ -77,18 +48,6 @@ typedef struct _gdnsd_rstate32_t {
     uint32_t w;
     uint32_t c;
 } gdnsd_rstate32_t;
-
-F_RETNN F_UNUSED
-static gdnsd_rstate64_t* gdnsd_rand64_init(void)
-{
-    if (sodium_init() < 0)
-        log_fatal("Could not initialize libsodium: %s", logf_errno());
-    gdnsd_rstate64_t* newstate = xmalloc(sizeof(*newstate));
-    do {
-        randombytes_buf(newstate, sizeof(*newstate));
-    } while (!newstate->y); // y==0 is bad for jlkiss64
-    return newstate;
-}
 
 F_RETNN F_UNUSED
 static gdnsd_rstate32_t* gdnsd_rand32_init(void)
@@ -102,30 +61,6 @@ static gdnsd_rstate32_t* gdnsd_rand32_init(void)
     return newstate;
 }
 
-// This is JLKISS64
-F_NONNULL F_UNUSED
-static uint64_t gdnsd_rand64_get(gdnsd_rstate64_t* rs)
-{
-    rs->x = 1490024343005336237ULL * rs->x + 123456789;
-
-    uint64_t y = rs->y;
-    y ^= y << 21;
-    y ^= y >> 17;
-    y ^= y << 30;
-    rs->y = y;
-
-    uint64_t t = 4294584393ULL * rs->z1 + rs->c1;
-    rs->c1 = t >> 32;
-    rs->z1 = t;
-
-    t = 4246477509ULL * rs->z2 + rs->c2;
-    rs->c2 = t >> 32;
-    rs->z2 = t;
-
-    return rs->x + y + rs->z1 + ((uint64_t)rs->z2 << 32);
-}
-
-// This is JKISS32
 F_NONNULL F_UNUSED
 static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs)
 {
@@ -144,6 +79,25 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs)
     rs->x += 1411392427;
 
     return rs->x + y + rs->w;
+}
+
+// Unbiased while avoiding div/mod ops most of the time for smaller bounds, and
+// being faster than what we did before on average for larger bounds.
+// The techniques are from:
+// https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+// https://lemire.me/blog/2016/06/30/fast-random-shuffling/
+F_NONNULL F_UNUSED
+static uint32_t gdnsd_rand32_bounded(gdnsd_rstate32_t* rs, const uint32_t bound) {
+    uint64_t mr = (uint64_t)gdnsd_rand32_get(rs) * bound;
+    uint32_t leftover = (uint32_t)mr;
+    if (unlikely(leftover < bound)) {
+        uint32_t threshold = -bound % bound;
+        while (unlikely(leftover < threshold)) {
+            mr = (uint64_t)gdnsd_rand32_get(rs) * bound;
+            leftover = (uint32_t)mr;
+        }
+    }
+    return mr >> 32;
 }
 
 #endif // GDNSD_RAND_H
