@@ -100,11 +100,9 @@ our $TESTPORT_START = $ENV{TESTPORT_START};
 die "Test port start specification is not a number"
     unless looks_like_number($TESTPORT_START);
 
-our $DNS_PORT = $TESTPORT_START + (5 * $TEST_SERIAL);
-our $HTTP_PORT = $DNS_PORT + 1;
+our $DNS_PORT = $TESTPORT_START + (3 * $TEST_SERIAL);
+our $DNS_SPORT = $DNS_PORT + 1;
 our $EXTRA_PORT  = $DNS_PORT + 2;
-our $DNS_SPORT4 = $DNS_PORT + 3;
-our $DNS_SPORT6 = $DNS_PORT + 4;
 
 our $saved_pid;
 
@@ -604,7 +602,7 @@ sub get_resolver {
         recurse => 0,
         nameservers => [ '127.0.0.1' ],
         port => $DNS_PORT,
-        srcport => $DNS_SPORT4,
+        srcport => $DNS_SPORT,
         srcaddr => '127.0.0.1',
         force_v4 => 1,
         persistent_tcp => 1,
@@ -621,7 +619,7 @@ sub get_resolver6 {
         recurse => 0,
         nameservers => [ '::1' ],
         port => $DNS_PORT,
-        srcport => $DNS_SPORT6,
+        srcport => $DNS_SPORT,
         srcaddr => '::1',
         force_v6 => 1,
         persistent_tcp => 1,
@@ -980,7 +978,7 @@ sub query_server {
         my $sock = $sockclass->new(
             PeerAddr => $ns,
             PeerPort => $port,
-            LocalPort => ($transport eq 'IPv6') ? $DNS_SPORT6 : $DNS_SPORT4,
+            LocalPort => $DNS_SPORT,
             ReuseAddr => 1,
             Proto => 'udp',
             Timeout => 10,
