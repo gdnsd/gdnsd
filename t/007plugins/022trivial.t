@@ -1,7 +1,7 @@
 # Basic plugin tests
 
 use _GDT ();
-use Test::More tests => 30;
+use Test::More tests => 33;
 
 my $soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -168,6 +168,21 @@ _GDT->test_dns(
 _GDT->test_dns(
     qname => 'adyn.example.com', qtype => 'A',
     answer => 'adyn.example.com 86400 A 192.0.2.41',
+);
+
+_GDT->test_dns(
+    qname => 'adyn.example.com', qtype => 'AAAA',
+    auth => $soa,
+);
+
+_GDT->test_dns(
+    qname => 'aaaadyn.example.com', qtype => 'A',
+    auth => $soa,
+);
+
+_GDT->test_dns(
+    qname => 'aaaadyn.example.com', qtype => 'AAAA',
+    answer => 'aaaadyn.example.com 86400 AAAA 2001:DB8::416',
 );
 
 _GDT->test_kill_daemon($pid);

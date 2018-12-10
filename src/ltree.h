@@ -106,7 +106,8 @@ struct _ltree_rdata_naptr_struct;
 struct _ltree_rdata_rfc3597_struct;
 
 union  _ltree_rrset_union;
-struct _ltree_rrset_addr_struct;
+struct _ltree_rrset_a_struct;
+struct _ltree_rrset_aaaa_struct;
 struct _ltree_rrset_soa_struct;
 struct _ltree_rrset_cname_struct;
 struct _ltree_rrset_dync_struct;
@@ -128,7 +129,8 @@ typedef struct _ltree_rdata_rfc3597_struct ltree_rdata_rfc3597_t;
 
 typedef union  _ltree_rrset_union ltree_rrset_t;
 typedef struct _ltree_rrset_gen_struct ltree_rrset_gen_t;
-typedef struct _ltree_rrset_addr_struct ltree_rrset_addr_t;
+typedef struct _ltree_rrset_a_struct ltree_rrset_a_t;
+typedef struct _ltree_rrset_aaaa_struct ltree_rrset_aaaa_t;
 typedef struct _ltree_rrset_soa_struct ltree_rrset_soa_t;
 typedef struct _ltree_rrset_cname_struct ltree_rrset_cname_t;
 typedef struct _ltree_rrset_dync_struct ltree_rrset_dync_t;
@@ -142,7 +144,8 @@ typedef struct _ltree_rrset_rfc3597_struct ltree_rrset_rfc3597_t;
 
 struct _ltree_rdata_ns_struct {
     const uint8_t* dname;
-    ltree_rrset_addr_t* glue;
+    ltree_rrset_a_t* glue_v4;
+    ltree_rrset_aaaa_t* glue_v6;
 };
 
 struct _ltree_rdata_ptr_struct {
@@ -188,32 +191,43 @@ struct _ltree_rrset_gen_struct {
     uint32_t ttl; // net-order
 };
 
+// The rules for interpreting the _a_ structure:
+//   if (!gen.count)
+//       use .dyn, this is a DYNA
+//   else if (gen.count <= LTREE_V4A_SIZE)
+//       use v4a for direct IPv4 address data
+//   else
+//       else "addrs" for array of addresses
+
 #if SIZEOF_UINTPTR_T == 8
 #    define LTREE_V4A_SIZE 4
 #else
 #    define LTREE_V4A_SIZE 3
 #endif
 
-// The rules for interpreting the structure:
-//   if (!count_v6 && gen.count <= LTREE_V4A_SIZE) {
-//       if (!gen.count)
-//           use .dyn, this is a DYNA
-//       else
-//           use v4a for direct IPv4 address data
-//   }
-//   else {
-//      use addrs.v[46] for address arrays
-//   }
-struct _ltree_rrset_addr_struct {
+struct _ltree_rrset_a_struct {
     ltree_rrset_gen_t gen;
-    uint16_t count_v6;
-    // 16 "free" bits here on 32-bit, 48 on 64.... XXX
     union {
-        struct {
-            uint32_t* v4;
-            uint8_t* v6;
-        } addrs;
+        uint32_t* addrs;
         uint32_t v4a[LTREE_V4A_SIZE];
+        struct {
+            gdnsd_resolve_cb_t func;
+            unsigned resource;
+            uint32_t ttl_min; // host-order!
+        } dyn;
+    };
+};
+
+// The rules for interpreting the _aaaa_ structure:
+//   if (!gen.count)
+//       use .dyn, this is a DYNA
+//   else
+//       else "addrs" for array of addresses
+
+struct _ltree_rrset_aaaa_struct {
+    ltree_rrset_gen_t gen;
+    union {
+        uint8_t* addrs;
         struct {
             gdnsd_resolve_cb_t func;
             unsigned resource;
@@ -281,7 +295,8 @@ struct _ltree_rrset_rfc3597_struct {
 //  rrset_t and the specific rrset_t's
 union _ltree_rrset_union {
     ltree_rrset_gen_t gen;
-    ltree_rrset_addr_t addr;
+    ltree_rrset_a_t a;
+    ltree_rrset_aaaa_t aaaa;
     ltree_rrset_soa_t soa;
     ltree_rrset_cname_t cname;
     ltree_rrset_dync_t dync;

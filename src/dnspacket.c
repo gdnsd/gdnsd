@@ -889,7 +889,7 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
     }
 
 F_NONNULL
-static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const bool is_addtl)
+static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_a_t* rrset, const unsigned nameptr, const bool is_addtl)
 {
     gdnsd_assert(rrset->gen.count);
 
@@ -900,9 +900,9 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
     else
         ctx->ancount += rrset->gen.count;
 
-    const uint32_t* addr_ptr = (!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE)
+    const uint32_t* addr_ptr = (rrset->gen.count <= LTREE_V4A_SIZE)
                                ? &rrset->v4a[0]
-                               : rrset->addrs.v4;
+                               : rrset->addrs;
     OFFSET_LOOP_START(rrset->gen.count) {
         offset += repeat_name(ctx, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
@@ -919,18 +919,18 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
 }
 
 F_NONNULL
-static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const bool is_addtl)
+static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_aaaa_t* rrset, const unsigned nameptr, const bool is_addtl)
 {
-    gdnsd_assert(rrset->count_v6);
+    gdnsd_assert(rrset->gen.count);
 
     uint8_t* packet = ctx->packet;
 
     if (is_addtl)
-        ctx->arcount += rrset->count_v6;
+        ctx->arcount += rrset->gen.count;
     else
-        ctx->ancount += rrset->count_v6;
+        ctx->ancount += rrset->gen.count;
 
-    OFFSET_LOOP_START(rrset->count_v6) {
+    OFFSET_LOOP_START(rrset->gen.count) {
         offset += repeat_name(ctx, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -938,7 +938,7 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
         offset += 4;
         gdnsd_put_una16(htons(16), &packet[offset]);
         offset += 2;
-        memcpy(&packet[offset], rrset->addrs.v6 + (i << 4), 16);
+        memcpy(&packet[offset], rrset->addrs + (i << 4), 16);
         offset += 16;
     }
     OFFSET_LOOP_END
@@ -1023,14 +1023,14 @@ static unsigned do_dyn_callback(dnsp_ctx_t* ctx, gdnsd_resolve_cb_t func, const 
 }
 
 F_NONNULL
-static unsigned encode_rrs_a(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset)
+static unsigned encode_rrs_a(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_a_t* rrset)
 {
     gdnsd_assert(offset);
     gdnsd_assert(ctx->qtype == DNS_TYPE_A);
 
     if (rrset->gen.count) {
         offset = enc_a_static(ctx, offset, rrset, ctx->qname_comp, false);
-    } else if (!rrset->count_v6) {
+    } else {
         const unsigned ttl = do_dyn_callback(ctx, rrset->dyn.func, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
         gdnsd_assert(!ctx->dyn->is_cname);
         if (ctx->dyn->count_v4)
@@ -1041,14 +1041,14 @@ static unsigned encode_rrs_a(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
 }
 
 F_NONNULL
-static unsigned encode_rrs_aaaa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset)
+static unsigned encode_rrs_aaaa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_aaaa_t* rrset)
 {
     gdnsd_assert(offset);
     gdnsd_assert(ctx->qtype == DNS_TYPE_AAAA);
 
-    if (rrset->count_v6) {
+    if (rrset->gen.count) {
         offset = enc_aaaa_static(ctx, offset, rrset, ctx->qname_comp, false);
-    } else if (!rrset->gen.count) {
+    } else {
         const unsigned ttl = do_dyn_callback(ctx, rrset->dyn.func, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
         gdnsd_assert(!ctx->dyn->is_cname);
         if (ctx->dyn->count_v6)
@@ -1080,7 +1080,7 @@ static unsigned encode_rrs_ns(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrse
         offset += 6;
         const unsigned newlen = store_dname_comp(ctx, rrset->rdata[i].dname, offset, true);
         gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
-        gdnsd_assert(!rrset->rdata[i].glue);
+        gdnsd_assert(!rrset->rdata[i].glue_v4 && !rrset->rdata[i].glue_v6);
         offset += newlen;
     }
 
@@ -1116,13 +1116,15 @@ static unsigned encode_rrs_ns_deleg(dnsp_ctx_t* ctx, unsigned offset, const ltre
     }
 
     for (unsigned i = 0; i < rrct; i++) {
-        ltree_rrset_addr_t* glue = rrset->rdata[i].glue;
-        if (glue) {
-            gdnsd_assert(glue->gen.count | glue->count_v6);
-            if (glue->gen.count)
-                offset = enc_a_static(ctx, offset, glue, glue_name_offset[i], true);
-            if (glue->count_v6)
-                offset = enc_aaaa_static(ctx, offset, glue, glue_name_offset[i], true);
+        ltree_rrset_a_t* glue_v4 = rrset->rdata[i].glue_v4;
+        if (glue_v4) {
+            gdnsd_assert(glue_v4->gen.count);
+            offset = enc_a_static(ctx, offset, glue_v4, glue_name_offset[i], true);
+        }
+        ltree_rrset_aaaa_t* glue_v6 = rrset->rdata[i].glue_v6;
+        if (glue_v6) {
+            gdnsd_assert(glue_v6->gen.count);
+            offset = enc_aaaa_static(ctx, offset, glue_v6, glue_name_offset[i], true);
         }
     }
 
@@ -1535,13 +1537,9 @@ F_NONNULL
 static unsigned construct_normal_response(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_t* node_rrset)
 {
     gdnsd_assert(ctx->qtype < 128 || ctx->qtype & 0xFF00);
-    unsigned etype = ctx->qtype;
-    // rrset_addr is stored as type DNS_TYPE_A for both A and AAAA
-    if (etype == DNS_TYPE_AAAA)
-        etype = DNS_TYPE_A;
     do {
-        if (node_rrset->gen.type == etype) {
-            if (unlikely(etype & 0xFF00))
+        if (node_rrset->gen.type == ctx->qtype) {
+            if (unlikely(ctx->qtype & 0xFF00))
                 offset = encode_rrs_rfc3597(ctx, offset, &node_rrset->rfc3597);
             else
                 offset = encode_funcptrs[ctx->qtype](ctx, offset, node_rrset);
@@ -1653,12 +1651,13 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
 //   a new rrset (possibly NULL) via the plugin, using context
 //   storage.
 F_NONNULL
-static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync_t* rd)
+static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync_t* rd, const unsigned qtype)
 {
     gdnsd_assert(!rd->gen.next); // DYNC does not co-exist with other rrsets
 
     const unsigned ttl = do_dyn_callback(ctx, rd->func, rd->resource, rd->gen.ttl, rd->ttl_min);
     dyn_result_t* dr = ctx->dyn;
+    ltree_rrset_t* rv = NULL;
 
     if (dr->is_cname) {
         gdnsd_assert(gdnsd_dname_status(dr->storage) == DNAME_VALID);
@@ -1667,20 +1666,25 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
         ctx->dync_synth_rrset.gen.count = 1;
         ctx->dync_synth_rrset.gen.ttl = ttl;
         ctx->dync_synth_rrset.cname.dname = ctx->dync_store;
-    } else if (dr->count_v4 + dr->count_v6) {
+        rv = &ctx->dync_synth_rrset;
+    } else if (qtype == DNS_TYPE_A && dr->count_v4) {
         ctx->dync_synth_rrset.gen.type = DNS_TYPE_A;
         ctx->dync_synth_rrset.gen.ttl = ttl;
-        ctx->dync_synth_rrset.addr.count_v6 = dr->count_v6;
         ctx->dync_synth_rrset.gen.count = dr->count_v4;
-        if (!dr->count_v6 && dr->count_v4 <= LTREE_V4A_SIZE) {
-            memcpy(ctx->dync_synth_rrset.addr.v4a, dr->v4, sizeof(*dr->v4) * dr->count_v4);
-        } else {
-            ctx->dync_synth_rrset.addr.addrs.v4 = dr->v4;
-            ctx->dync_synth_rrset.addr.addrs.v6 = &dr->storage[result_v6_offset];
-        }
+        if (dr->count_v4 <= LTREE_V4A_SIZE)
+            memcpy(ctx->dync_synth_rrset.a.v4a, dr->v4, sizeof(*dr->v4) * dr->count_v4);
+        else
+            ctx->dync_synth_rrset.a.addrs = dr->v4;
+        rv = &ctx->dync_synth_rrset;
+    } else if (qtype == DNS_TYPE_AAAA && dr->count_v6) {
+        ctx->dync_synth_rrset.gen.type = DNS_TYPE_AAAA;
+        ctx->dync_synth_rrset.gen.ttl = ttl;
+        ctx->dync_synth_rrset.gen.count = dr->count_v6;
+        ctx->dync_synth_rrset.aaaa.addrs = &dr->storage[result_v6_offset];
+        rv = &ctx->dync_synth_rrset;
     }
 
-    return &ctx->dync_synth_rrset;
+    return rv;
 }
 
 F_NONNULL
@@ -1716,7 +1720,7 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
 
             res_rrsets = resdom ? resdom->rrsets : NULL;
             if (res_rrsets && res_rrsets->gen.type == DNS_TYPE_DYNC)
-                res_rrsets = process_dync(ctx, &res_rrsets->dync);
+                res_rrsets = process_dync(ctx, &res_rrsets->dync, ctx->qtype);
 
             // In the initial search, it's known that "qname" is in fact the real query name and therefore
             //  uncompressed, which is what makes the simplistic ctx->auth_comp calculation possible.

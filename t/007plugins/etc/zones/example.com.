@@ -64,8 +64,11 @@ meta2	DYNA metafo!meta2
 
 fivec	DYNC multifo!fivec
 
-; addr-via-DYNC
+; A-via-DYNC
 adyn DYNC static!bar41
+
+; AAAA-via-DYNC
+aaaadyn DYNC static!bar416
 
 ; metafo addr->cname failover
 acfail DYNC metafo!meta-ac

@@ -1,5 +1,6 @@
   foo42    => "192.0.2.42"
   bar41    => "192.0.2.41"
+  bar416   => "2001:db8::416"
   foo43    => "cn-x.example.net."
   toa      => "a.example.net."
   cdn      => "cdn.net."
