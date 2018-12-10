@@ -207,9 +207,7 @@ struct _ltree_rrset_gen_struct {
 struct _ltree_rrset_addr_struct {
     ltree_rrset_gen_t gen;
     uint16_t count_v6;
-    uint16_t limit_v4;
-    uint16_t limit_v6;
-    // 16 "free" bits here
+    // 16 "free" bits here on 32-bit, 48 on 64.... XXX
     union {
         struct {
             uint32_t* v4;
@@ -241,8 +239,6 @@ struct _ltree_rrset_dync_struct {
     gdnsd_resolve_cb_t func;
     unsigned resource;
     uint32_t ttl_min; // host-order!
-    uint16_t limit_v4;
-    uint16_t limit_v6;
 };
 
 struct _ltree_rrset_ns_struct {
@@ -345,15 +341,15 @@ void ltree_destroy(ltree_node_t* node);
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, const unsigned serial, const unsigned refresh, const unsigned retry, const unsigned expire, unsigned ncache);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, const unsigned limit_v4, const bool ooz);
+bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const unsigned limit_v6, const bool ooz);
+bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6);
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min);
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6);
+bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min);
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL

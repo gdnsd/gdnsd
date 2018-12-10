@@ -45,6 +45,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * `$INCLUDE` files supported (use subdirectories, which are otherwise ignored, to avoid confusing them for zones)
 * Symlinks now work for aliasing zones, assuming there are no explicit references to the zone name within the data.  To help with that:
 * `@Z` and `@F` macros implemented, which represent the original (line zero) `$ORIGIN` of the zone or the current file.  You can use these in situations like: `$ORIGIN foo.@F [... records ...] $ORIGIN bar.@F`, which would otherwise be impossible without hardcoding the zone name in the second origin statement, breaking symlink zone aliasing
+* Support for the gdnsd-specific `$ADDR_LIMIT_V4` and `$ADDR_LIMIT_V6` directives has been removed.
 
 ### gdnsdctl
 

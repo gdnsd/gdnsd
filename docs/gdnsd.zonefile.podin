@@ -78,20 +78,6 @@ as C<$ORIGIN> at the top of the included file.  Changes to
 the origin (and default ttl) within included files have no
 effect on the outer file.
 
-C<$ADDR_LIMIT_V4> is a non-standard, gdnsd-specific directive.
-It requires a single unsigned integer argument.  The argument
-limits the total number of C<A> records to include in the server's
-responses for any given C<A> rrset (whether static or dynamic).
-The default limit is zero, which is interpreted as no limit.
-Setting the limit via this directive affects all rrsets until
-the value is changed again by another directive, and inherits down
-into C<$INCLUDE> files as well.  gdnsd always rotates the RRs of an
-address RR-set in a round-robin fashion, and this rotation occurs
-before the limit is applied, allowing a small pseudo-random subset of
-a larger list to be delivered via this mechanism.
-
-C<$ADDR_LIMIT_V6> same as above, but for IPv6 C<AAAA> rrsets.
-
 BIND's C<$GENERATE> extension is not supported at this time, but
 there's no fundamental reason it couldn't be added at a later
 date.

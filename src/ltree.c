@@ -265,7 +265,7 @@ MK_RRSET_ADD(txt, txt, DNS_TYPE_TXT)
             ttl = gcfg->min_ttl;\
         }
 
-bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t addr, unsigned ttl, const unsigned limit_v4, const bool ooz)
+bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t addr, unsigned ttl, const bool ooz)
 {
     ltree_node_t* node;
     if (ooz) {
@@ -281,7 +281,6 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
         rrset = ltree_node_add_rrset_addr(node);
         rrset->gen.count = 1;
         rrset->gen.ttl = htonl(ttl);
-        rrset->limit_v4 = limit_v4;
         rrset->v4a[0] = addr;
     } else {
         if (!(rrset->gen.count | rrset->count_v6)) // DYNA here already
@@ -290,12 +289,6 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
             log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
         if (rrset->gen.count == UINT16_MAX)
             log_zfatal("Name '%s%s': Too many RRs of type A", logf_dname(dname), logf_dname(zone->dname));
-        if (rrset->gen.count > 0) {
-            if (rrset->limit_v4 != limit_v4)
-                log_zwarn("Name '%s%s': All $ADDR_LIMIT_4 for A-records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), rrset->limit_v4);
-        } else {
-            rrset->limit_v4 = limit_v4;
-        }
 
         if (!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE) {
             if (rrset->gen.count == LTREE_V4A_SIZE) { // upgrade to addrs, copy old addrs
@@ -317,7 +310,7 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
     return false;
 }
 
-bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const unsigned limit_v6, const bool ooz)
+bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const bool ooz)
 {
     ltree_node_t* node;
     if (ooz) {
@@ -335,7 +328,6 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
         memcpy(rrset->addrs.v6, addr, 16);
         rrset->count_v6 = 1;
         rrset->gen.ttl = htonl(ttl);
-        rrset->limit_v6 = limit_v6;
     } else {
         if (!(rrset->gen.count | rrset->count_v6)) // DYNA here already
             log_zfatal("Name '%s%s': DYNA cannot co-exist at the same name as A and/or AAAA", logf_dname(dname), logf_dname(zone->dname));
@@ -343,12 +335,6 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
             log_zwarn("Name '%s%s': All TTLs for A and/or AAAA records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), ntohl(rrset->gen.ttl));
         if (rrset->count_v6 == UINT16_MAX)
             log_zfatal("Name '%s%s': Too many RRs of type AAAA", logf_dname(dname), logf_dname(zone->dname));
-        if (rrset->count_v6 > 0) {
-            if (rrset->limit_v6 != limit_v6)
-                log_zwarn("Name '%s%s': All $ADDR_LIMIT_6 for AAAA-records at the same name should agree (using %u)", logf_dname(dname), logf_dname(zone->dname), rrset->limit_v6);
-        } else {
-            rrset->limit_v6 = limit_v6;
-        }
 
         if (!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE) {
             // was v4a-style, convert to addrs
@@ -364,7 +350,7 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
     return false;
 }
 
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6)
+bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min)
 {
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -388,8 +374,6 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char*
     rrset = ltree_node_add_rrset_addr(node);
     rrset->gen.ttl = htonl(ttl);
     rrset->dyn.ttl_min = ttl_min;
-    rrset->limit_v4 = limit_v4;
-    rrset->limit_v6 = limit_v6;
 
     const unsigned rhs_size = strlen(rhs) + 1;
     if (rhs_size > 256)
@@ -434,7 +418,7 @@ bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t
     return false;
 }
 
-bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min, const unsigned limit_v4, const unsigned limit_v6)
+bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min)
 {
     CLAMP_TTL("DYNC")
 
@@ -453,8 +437,6 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
     ltree_rrset_dync_t* rrset = ltree_node_add_rrset_dync(node);
     rrset->gen.ttl = htonl(ttl);
     rrset->ttl_min = ttl_min;
-    rrset->limit_v4 = limit_v4;
-    rrset->limit_v6 = limit_v6;
 
     const unsigned rhs_size = strlen(rhs) + 1;
     if (rhs_size > 256)
@@ -800,18 +782,6 @@ static bool check_valid_addr(const uint8_t* dname, const zone_t* zone)
     return true;
 }
 
-// For static addresses, if no limit was specified, set it
-//  to the count for simplicity.  If limit is greater than
-//  count, limit limit to the count.  This is done at runtime
-//  for DYNA.
-static void fix_addr_limits(ltree_rrset_addr_t* node_addr)
-{
-    if (!node_addr->limit_v4 || node_addr->limit_v4 > node_addr->gen.count)
-        node_addr->limit_v4 = node_addr->gen.count;
-    if (!node_addr->limit_v6 || node_addr->limit_v6 > node_addr->count_v6)
-        node_addr->limit_v6 = node_addr->count_v6;
-}
-
 // Phase 1 check of ltree after all records added:
 // Walks the entire ltree, sanity-checking very basic things.
 
@@ -873,8 +843,7 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
     return false;
 }
 
-// p1_rrset_size() does sizing, but also does fix_addr_limits() on DNS_TYPE_A,
-// since this is the most-convenient place for it.
+// p1_rrset_size() does response sizing
 //
 // Size checking is for whether this node can generate oversized (>16K)
 // responses.  The dns processing code uses fixed 16K buffers for output
@@ -931,7 +900,6 @@ static bool p1_rrset_size(ltree_rrset_t* rrset, const bool in_deleg)
         // NS sets that reference them (possibly even the one at this node,
         // which would be redundant if we counted them here)
         if (rrset->gen.count | rrset->addr.count_v6) {
-            fix_addr_limits(&rrset->addr);
             if (!in_deleg)
                 set_size = (rrset->gen.count * (12U + 4U)) + (rrset->addr.count_v6 * (12U + 16U));
         } else {
@@ -1256,7 +1224,6 @@ static bool ltree_postproc_zroot_phase2(const zone_t* zone)
                 gdnsd_assert(ooz_node->rrsets);
                 gdnsd_assert(ooz_node->rrsets->gen.type == DNS_TYPE_A);
                 gdnsd_assert(!ooz_node->rrsets->gen.next);
-                fix_addr_limits(&ooz_node->rrsets->addr);
                 if (!(ooz_node->flags & LTNFLAG_GUSED))
                     log_zwarn("In zone '%s', explicit out-of-zone glue address(es) at domainname '%s' are unused and ignored", logf_dname(zone->dname), logf_dname(ooz_node->label));
                 ooz_node = ooz_node->next;
@@ -1314,7 +1281,6 @@ bool ltree_postproc_zone(zone_t* zone)
         return true;
 
     // zroot phase2 checks for unused out-of-zone glue addresses,
-    //   and also does the standard address limit>count fixups on them
     if (unlikely(ltree_postproc_zroot_phase2(zone)))
         return true;
 

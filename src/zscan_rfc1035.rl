@@ -69,8 +69,6 @@ typedef struct {
     unsigned uv_5;
     unsigned rfc3597_data_len;
     unsigned rfc3597_data_written;
-    unsigned limit_v4;
-    unsigned limit_v6;
     uint8_t* rfc3597_data;
     zone_t* zone;
     const char* tstart;
@@ -280,7 +278,7 @@ static bool _scan_isolate_jmp(zscan_t* z, char* buf, const unsigned bufsize)
 }
 
 F_NONNULL
-static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg, const unsigned limit_v4, const unsigned limit_v6)
+static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg)
 {
     log_debug("rfc1035: Scanning file '%s' for zone '%s'", fn, logf_dname(zone->dname));
 
@@ -298,8 +296,6 @@ static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const 
     zscan_t* z = xcalloc(sizeof(*z));
     z->lcount = 1;
     z->def_ttl = def_ttl_arg;
-    z->limit_v4 = limit_v4;
-    z->limit_v6 = limit_v6;
     z->zone = zone;
     z->curfn = fn;
     dname_copy(z->origin, origin);
@@ -457,7 +453,7 @@ static void process_include(zscan_t* z)
     char* zfn = _make_zfn(z->curfn, z->include_filename);
     free(z->include_filename);
     z->include_filename = NULL;
-    bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl, z->limit_v4, z->limit_v6);
+    bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl);
     free(zfn);
     if (subfailed)
         siglongjmp(z->jbuf, 1);
@@ -551,14 +547,14 @@ static void rec_soa(zscan_t* z)
 F_NONNULL
 static void rec_a(zscan_t* z)
 {
-    if (ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->limit_v4, z->lhs_is_ooz))
+    if (ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_aaaa(zscan_t* z)
 {
-    if (ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->limit_v6, z->lhs_is_ooz))
+    if (ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -635,7 +631,7 @@ F_NONNULL
 static void rec_dyna(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
+    if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -643,7 +639,7 @@ F_NONNULL
 static void rec_dync(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min, z->limit_v4, z->limit_v6))
+    if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -700,28 +696,12 @@ static void rfc3597_octet(zscan_t* z)
     z->rfc3597_data[z->rfc3597_data_written++] = hexbyte(z->tstart);
 }
 
-F_NONNULL
-static void set_limit_v4(zscan_t* z)
-{
-    if (z->uval > 65535)
-        parse_error("$ADDR_LIMIT_V4 value %u out of range (0-65535)", z->uval);
-    z->limit_v4 = z->uval;
-}
-
-F_NONNULL
-static void set_limit_v6(zscan_t* z)
-{
-    if (z->uval > 65535)
-        parse_error("$ADDR_LIMIT_V6 value %u out of range (0-65535)", z->uval);
-    z->limit_v6 = z->uval;
-}
-
 // The external entrypoint to the parser
 bool zscan_rfc1035(zone_t* zone, const char* fn)
 {
     gdnsd_assert(zone->dname);
     log_debug("rfc1035: Scanning zonefile '%s'", logf_dname(zone->dname));
-    return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl, 0, 0);
+    return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl);
 }
 
 // This pre-processor does two important things that vastly simplify the real
@@ -866,9 +846,6 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
     action set_uv_3    { z->uv_3 = z->uval; }
     action set_uv_4    { z->uv_4 = z->uval; }
     action set_uv_5    { z->uv_5 = z->uval; }
-
-    action set_limit_v4 { set_limit_v4(z); }
-    action set_limit_v6 { set_limit_v6(z); }
 
     action set_dyna { set_dyna(z, fpc); }
     action set_caa_prop { set_caa_prop(z, fpc); }
@@ -1020,8 +997,6 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
           ('TTL'i ws ttl %set_def_ttl)
         | ('ORIGIN'i ws dname_rhs %reset_origin)
         | ('INCLUDE'i ws filename (ws dname_rhs)?) $1 %0 %process_include
-        | ('ADDR_LIMIT_V4'i ws uval %set_limit_v4)
-        | ('ADDR_LIMIT_V6'i ws uval %set_limit_v6)
     );
 
     # A zonefile is composed of many resource records

@@ -12,8 +12,3 @@ ns1		A	192.0.2.254
 addtl		MX	0 dyn
 dyn	120	DYNA	simplefo!dyn_xmpl
 mdyn	120	DYNA	multifo!multi_xmpl
-
-$ADDR_LIMIT_V4 1
-mdyn-one	120	DYNA	multifo!multi_xmpl
-$ADDR_LIMIT_V4 100
-mdyn-lots	120	DYNA	multifo!multi_xmpl

@@ -106,40 +106,6 @@ ctinside	CNAME	www.subfubar.x.y.z
 ; additional data in other auth domain
 mxinorg		MX	0	foo.example.org.
 
-; addr rrset limit tests
-$ADDR_LIMIT_V4 3
-$ADDR_LIMIT_V6 4
-setlimit	A	192.0.2.177
-setlimit	A	192.0.2.178
-setlimit	A	192.0.2.179
-setlimit	A	192.0.2.180
-setlimit	A	192.0.2.181
-setlimit	A	192.0.2.182
-setlimit	AAAA	::1
-setlimit	AAAA	::2
-setlimit	AAAA	::3
-setlimit	AAAA	::4
-setlimit	AAAA	::5
-setlimit	AAAA	::6
-$ADDR_LIMIT_V4 5
-$ADDR_LIMIT_V6 6
-setlimit-under	A	192.0.2.108
-setlimit-under	A	192.0.2.109
-setlimit-under	A	192.0.2.110
-setlimit-under	AAAA	::108
-setlimit-under	AAAA	::109
-setlimit-under	AAAA	::110
-$ADDR_LIMIT_V4 1
-$ADDR_LIMIT_V6 1
-setlimit-one	A	192.0.2.118
-setlimit-one	A	192.0.2.119
-setlimit-one	A	192.0.2.120
-setlimit-one	AAAA	::118
-setlimit-one	AAAA	::119
-setlimit-one	AAAA	::120
-$ADDR_LIMIT_V4 0
-$ADDR_LIMIT_V6 0
-
 ; compression torture-test names
 foo.compression-torture.foo	MX	0 foo.foo.foo.fox
 foo.compression-torture.foo	MX	1 fox

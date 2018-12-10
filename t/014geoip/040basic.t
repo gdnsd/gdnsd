@@ -1,7 +1,7 @@
 # Basic geoip plugin tests
 
 use _GDT ();
-use Test::More tests => 60 * 2;
+use Test::More tests => 56 * 2;
 
 my $test_bin = $ENV{INSTALLCHECK_BINDIR}
     ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_geoip_test"
@@ -269,49 +269,7 @@ _GDT->test_dns(
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
-# limited dynamic AAAA+A
-_GDT->test_dns(
-    qname => 'res4.example.com', qtype => 'AAAA',
-    answer => [
-        'res4.example.com 86400 AAAA 2001:DB8::2:123',
-        'res4.example.com 86400 AAAA 2001:DB8::2:456',
-        'res4.example.com 86400 AAAA 2001:DB8::2:789',
-    ],
-    limit_v6 => 2,
-    stats => [qw/udp_reqs noerror/],
-);
-_GDT->test_dns(
-    qname => 'res44.example.com', qtype => 'A',
-    answer => [
-        'res44.example.com 86400 A 192.0.2.111',
-        'res44.example.com 86400 A 192.0.2.112',
-        'res44.example.com 86400 A 192.0.2.113',
-    ],
-    limit_v4 => 2,
-    stats => [qw/udp_reqs noerror/],
-);
-_GDT->test_dns(
-    qname => 'res4-dync.example.com', qtype => 'AAAA',
-    answer => [
-        'res4-dync.example.com 86400 AAAA 2001:DB8::2:123',
-        'res4-dync.example.com 86400 AAAA 2001:DB8::2:456',
-        'res4-dync.example.com 86400 AAAA 2001:DB8::2:789',
-    ],
-    limit_v6 => 2,
-    stats => [qw/udp_reqs noerror/],
-);
-_GDT->test_dns(
-    qname => 'res44-dync.example.com', qtype => 'A',
-    answer => [
-        'res44-dync.example.com 86400 A 192.0.2.111',
-        'res44-dync.example.com 86400 A 192.0.2.112',
-        'res44-dync.example.com 86400 A 192.0.2.113',
-    ],
-    limit_v4 => 2,
-    stats => [qw/udp_reqs noerror/],
-);
-
-# over-limited dynamic AAAA
+# res4/res44 with multiple addrs
 _GDT->test_dns(
     qname => 'res4-lots.example.com', qtype => 'AAAA',
     answer => [

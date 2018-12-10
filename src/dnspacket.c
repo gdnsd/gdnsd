@@ -870,21 +870,21 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
 
 // These macros define a common pattern around the body of a loop encoding
 //  an rrset.  They behave like a for-loop specified as...
-//    for (unsigned i = 0; i < _limit; i++) { ... }
-//  ... with the exception that they start at a pseudo-random "i" value
-//  from the sequence 0->(_total-1), and "i" will wrap-around to zero
-//  as appropriate to stay within the _total while iterating _limit times.
+//    for (unsigned i = 0; i < _total; i++) { ... }
+//  ... with the exception that they start at a pseudo-random "i" value from
+//  within the range, and loop back over zero if necessary to up all the i
+//  values by the end.
 
-#define OFFSET_LOOP_START(_total, _limit) \
+#define OFFSET_LOOP_START(_total) \
     {\
         const unsigned _tot = (_total);\
-        unsigned _x_count = (_limit);\
+        unsigned _x_count = _tot;\
         unsigned i = gdnsd_rand32_bounded(ctx->rand_state, _tot);\
         while (_x_count--) {\
 
 #define OFFSET_LOOP_END \
             if (++i == _tot)\
-              i = 0;\
+                i = 0;\
         }\
     }
 
@@ -896,14 +896,14 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
     uint8_t* packet = ctx->packet;
 
     if (is_addtl)
-        ctx->arcount += rrset->limit_v4;
+        ctx->arcount += rrset->gen.count;
     else
-        ctx->ancount += rrset->limit_v4;
+        ctx->ancount += rrset->gen.count;
 
     const uint32_t* addr_ptr = (!rrset->count_v6 && rrset->gen.count <= LTREE_V4A_SIZE)
                                ? &rrset->v4a[0]
                                : rrset->addrs.v4;
-    OFFSET_LOOP_START(rrset->gen.count, rrset->limit_v4) {
+    OFFSET_LOOP_START(rrset->gen.count) {
         offset += repeat_name(ctx, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
@@ -926,11 +926,11 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
     uint8_t* packet = ctx->packet;
 
     if (is_addtl)
-        ctx->arcount += rrset->limit_v6;
+        ctx->arcount += rrset->count_v6;
     else
-        ctx->ancount += rrset->limit_v6;
+        ctx->ancount += rrset->count_v6;
 
-    OFFSET_LOOP_START(rrset->count_v6, rrset->limit_v6) {
+    OFFSET_LOOP_START(rrset->count_v6) {
         offset += repeat_name(ctx, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -946,7 +946,7 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
 }
 
 F_NONNULL
-static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const unsigned ttl)
+static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigned nameptr, const unsigned ttl)
 {
     gdnsd_assert(ctx->packet);
 
@@ -955,13 +955,9 @@ static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrse
     gdnsd_assert(!dr->is_cname);
     gdnsd_assert(dr->count_v4);
 
-    const unsigned limit_v4 = rrset->limit_v4 && rrset->limit_v4 < dr->count_v4
-                              ? rrset->limit_v4
-                              : dr->count_v4;
+    ctx->ancount += dr->count_v4;
 
-    ctx->ancount += limit_v4;
-
-    OFFSET_LOOP_START(dr->count_v4, limit_v4) {
+    OFFSET_LOOP_START(dr->count_v4) {
         offset += repeat_name(ctx, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
@@ -977,7 +973,7 @@ static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrse
 }
 
 F_NONNULL
-static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_addr_t* rrset, const unsigned nameptr, const unsigned ttl)
+static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigned nameptr, const unsigned ttl)
 {
     gdnsd_assert(ctx->packet);
 
@@ -986,14 +982,10 @@ static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const ltree_r
     gdnsd_assert(!dr->is_cname);
     gdnsd_assert(dr->count_v6);
 
-    const unsigned limit_v6 = rrset->limit_v6 && rrset->limit_v6 < dr->count_v6
-                              ? rrset->limit_v6
-                              : dr->count_v6;
-
-    ctx->ancount += limit_v6;
+    ctx->ancount += dr->count_v6;
 
     const uint8_t* v6 = &dr->storage[result_v6_offset];
-    OFFSET_LOOP_START(dr->count_v6, limit_v6) {
+    OFFSET_LOOP_START(dr->count_v6) {
         offset += repeat_name(ctx, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -1042,7 +1034,7 @@ static unsigned encode_rrs_a(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
         const unsigned ttl = do_dyn_callback(ctx, rrset->dyn.func, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
         gdnsd_assert(!ctx->dyn->is_cname);
         if (ctx->dyn->count_v4)
-            offset = enc_a_dynamic(ctx, offset, rrset, ctx->qname_comp, ttl);
+            offset = enc_a_dynamic(ctx, offset, ctx->qname_comp, ttl);
     }
 
     return offset;
@@ -1060,7 +1052,7 @@ static unsigned encode_rrs_aaaa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
         const unsigned ttl = do_dyn_callback(ctx, rrset->dyn.func, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
         gdnsd_assert(!ctx->dyn->is_cname);
         if (ctx->dyn->count_v6)
-            offset = enc_aaaa_dynamic(ctx, offset, rrset, ctx->qname_comp, ttl);
+            offset = enc_aaaa_dynamic(ctx, offset, ctx->qname_comp, ttl);
     }
 
     return offset;
@@ -1676,17 +1668,6 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
         ctx->dync_synth_rrset.gen.ttl = ttl;
         ctx->dync_synth_rrset.cname.dname = ctx->dync_store;
     } else if (dr->count_v4 + dr->count_v6) {
-        // ^ If both counts are zero, must represent this as
-        //  a missing rrset (NULL rv).  An actual rrset with zero
-        //  counts is interpreted as a DYNA entry in the ltree.
-        unsigned lv4 = rd->limit_v4;
-        if (!lv4 || lv4 > dr->count_v4)
-            lv4 = dr->count_v4;
-
-        unsigned lv6 = rd->limit_v6;
-        if (!lv6 || lv6 > dr->count_v6)
-            lv6 = dr->count_v6;
-
         ctx->dync_synth_rrset.gen.type = DNS_TYPE_A;
         ctx->dync_synth_rrset.gen.ttl = ttl;
         ctx->dync_synth_rrset.addr.count_v6 = dr->count_v6;
@@ -1697,8 +1678,6 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
             ctx->dync_synth_rrset.addr.addrs.v4 = dr->v4;
             ctx->dync_synth_rrset.addr.addrs.v6 = &dr->storage[result_v6_offset];
         }
-        ctx->dync_synth_rrset.addr.limit_v4 = lv4;
-        ctx->dync_synth_rrset.addr.limit_v6 = lv6;
     }
 
     return &ctx->dync_synth_rrset;
