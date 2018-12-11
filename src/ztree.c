@@ -289,7 +289,17 @@ void* ztree_zones_reloader_thread(void* init_asvoid)
     return (void*)rv;
 }
 
+static void ztree_cleanup(void)
+{
+    // Should we clean up any still-running reload thread?
+    if (ztree_root) {
+        ztree_destroy(ztree_root);
+        ztree_root = NULL;
+    }
+}
+
 void ztree_init(void)
 {
     zsrc_rfc1035_init();
+    gdnsd_atexit(ztree_cleanup);
 }

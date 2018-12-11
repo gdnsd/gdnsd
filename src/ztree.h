@@ -45,7 +45,7 @@ struct _zone_struct {
 struct _ztree_struct;
 typedef struct _ztree_struct ztree_t;
 
-// Initialize once at startup
+// Initialize at startup, deallocate final tree at shutdown
 void ztree_init(void);
 
 F_NONNULL

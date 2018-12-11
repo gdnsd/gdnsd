@@ -603,9 +603,6 @@ int main(int argc, char** argv)
             log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
     }
 
-    // deallocate/wipe sensitive keys!
-    cookie_destroy();
-
     // deallocate resources
     atexit_execute();
 

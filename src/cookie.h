@@ -40,11 +40,6 @@ void cookie_config(const char* key_file);
 F_NONNULL
 void cookie_runtime_init(struct ev_loop* loop);
 
-// Call this at termination, after all RCU reader threads are dead, to
-// wipe/dealloc sensitive data.  Doesn't care whether cookie_config() was
-// called earlier.
-void cookie_destroy(void);
-
 // Called under RCU readlock conditions from iothreads.
 // Caller ensures cookie_data_in has minimum 8 bytes (client cookie).  This
 // function always populates cookie_data_out with a full 16 bytes of both

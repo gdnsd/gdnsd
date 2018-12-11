@@ -109,6 +109,7 @@
 #include <config.h>
 
 #include "cookie.h"
+#include "main.h"
 
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
@@ -234,6 +235,17 @@ static int safe_write_keyfile(const char* key_fn, uint8_t* keybuf)
     return (writerv == KDF_KEYBYTES) ? closerv : -1;
 }
 
+// Must happen after iothreads are done using keys and the eventloop has exited
+static void cookie_destroy(void)
+{
+    if (keys_inuse)
+        sodium_free(keys_inuse);
+    if (master_key)
+        sodium_free(master_key);
+    keys_inuse = NULL;
+    master_key = NULL;
+}
+
 /************* Public functions *************/
 
 void cookie_config(const char* key_file)
@@ -262,6 +274,8 @@ void cookie_config(const char* key_file)
 
     if (sodium_mprotect_noaccess(master_key))
         log_fatal("sodium_mprotect_noaccess() failed: %s", logf_errno());
+
+    gdnsd_atexit(cookie_destroy);
 }
 
 void cookie_runtime_init(struct ev_loop* loop)
@@ -278,17 +292,6 @@ void cookie_runtime_init(struct ev_loop* loop)
     ev_periodic* hourly_p = &hourly;
     ev_periodic_init(hourly_p, hourly_callback, 2.02, 3600., NULL);
     ev_periodic_start(loop, hourly_p);
-}
-
-// Must happen after iothreads are done using keys and the eventloop has exited
-void cookie_destroy(void)
-{
-    if (keys_inuse)
-        sodium_free(keys_inuse);
-    if (master_key)
-        sodium_free(master_key);
-    keys_inuse = NULL;
-    master_key = NULL;
 }
 
 bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const gdnsd_anysin_t* client, const size_t cookie_data_in_len)
