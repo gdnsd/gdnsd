@@ -87,7 +87,8 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs)
 // https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
 // https://lemire.me/blog/2016/06/30/fast-random-shuffling/
 F_NONNULL F_UNUSED
-static uint32_t gdnsd_rand32_bounded(gdnsd_rstate32_t* rs, const uint32_t bound) {
+static uint32_t gdnsd_rand32_bounded(gdnsd_rstate32_t* rs, const uint32_t bound)
+{
     uint64_t mr = (uint64_t)gdnsd_rand32_get(rs) * bound;
     uint32_t leftover = (uint32_t)mr;
     if (unlikely(leftover < bound)) {
