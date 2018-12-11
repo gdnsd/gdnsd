@@ -1325,7 +1325,8 @@ void ltree_destroy(ltree_node_t* node)
                 free(rrset->a.addrs);
             break;
         case DNS_TYPE_AAAA:
-            free(rrset->aaaa.addrs);
+            if (rrset->gen.count)
+                free(rrset->aaaa.addrs);
             break;
         case DNS_TYPE_NAPTR:
             for (unsigned i = 0; i < rrset->gen.count; i++)
