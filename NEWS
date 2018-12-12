@@ -1,8 +1,58 @@
-2.99.9942-beta - 2018-10-11
+2.99.9944-beta - 2018-12-12
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * Support for building and loading out-of-tree DSO plugins is removed.  The
+      existing "plugins" from the source tree still work exactly as before from
+      the end-user point of view, but are compiled into the main daemon.  We no
+      longer install DSOs (or other shared libs) or headers for building 3rd
+      party DSOs against.  This is the first compatibility-breaking step
+      towards overhauling all related things for 4.x in the future.
+    * RFC 7873 EDNS Cookie support added.  Enabled and automatic by default.
+      There's 3 new optional config params (to disable, to use a persistent
+      master key for syncing loadbalanced/anycast cookies, and to set a
+      UDP response size limit for uncookied client requests) and 4 new stats
+      counters, see docs and/or VERSION3.md for more details!
+    * RFC 8482 "Refuse ANY" implemented, with a fixed behavior of returning a
+      synthetic HINFO RR to ANY queries over all protocols.  This also removes
+      our previous behavior of responding with truncation (TC=1) to ANY over
+      UDP and forcing those queries over to TCP.
+    * Query packets are now parsed much more robustly, generating more FORMERR
+      and/or NOTIMP responses to inputs we would've dropped without response
+      before, and also signalling EDNS support (response OPT RR) in edge cases
+      where we wouldn't have bothered before, which should help with future
+      proofing and moving standards forward.  This doesn't really impact
+      live/common traffic from present-day real clients.
+    * UDPv6: New separate param "max_edns_response_v6" (vs existing
+      "max_edns_response" which is now v4-only), defaulting to 1212 to avoid
+      problematic fragmentation issues on the live Internet.
+    * TCPv6: Hardcoded minimal MTU/MSS to avoid MTU and/or fragmentation issues
+      that could cause loss or performance impact (tuned similar to above).
+    * Bugfix for NSID: only respond with NSID when the client requests it!
+    * "tcp_timeout" min/def/max values changed from 5/15/60 to 5/37/1080.
+    * Fixed socket option limits: a few cases were inconsistent with the
+      documented, intended minimum and maximums.
+    * Removed the auto-serial misfeature
+    * Removed the gdnsd-specific $ADDR_LIMIT_V[46] zonefile directives
+    * Killed support for DOS (\r\n) line endings in the config and zone parsers
+    * The "DNSSEC OK" (DO) bit of client EDNS headers is now tracked as a stat
+      and reflected in responses.
+    * New build dependency: libsodium 1.x
+    * New testsuite dependency: Perl Net::DNS module version 1.03 or higher (we
+      used to bundle a forked old version, this catches us up with current and
+      gets the copied code out of our repo, and enables testing future/fancier
+      things).
+    * The ragel-generated rfc1035 zonefile parser's generated C code size was
+      reduced substantially with various tricks and fixups; it's not nearly as
+      bloated as it was before!
+    * The djbdns zonefile parser was removed.  It never made it past being a
+      very limited and experimental backend, and the time to remove it is now
+      during the major-version breakage cycle, instead of later when coming
+      feature work will necessitate it.
+    * Various minor / less-notable bugfixes
+
+2.99.9942-beta - 2018-10-11
     * Documentation improvements/fixups
     * A few minor fixes and docs updates from testing on FreeBSD 11.2
     * Dumped any pretense of MacOS support, as it's been untested for many
