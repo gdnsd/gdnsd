@@ -62,7 +62,7 @@ $chaos->push('question', Net::DNS::Question->new('foo', 'TXT', 'CH'));
 _GDT->test_dns(
     qpacket => $chaos,
     header => { aa => 0 },
-    answer => 'foo 0 CH TXT gdnsd',
+    answer => 'foo 0 CH TXT gdnsd/3',
 );
 
 _GDT->test_dns(
