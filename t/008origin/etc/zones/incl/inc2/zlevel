@@ -4,3 +4,5 @@ $ORIGIN @Z
 blah A 192.0.2.43
 $ORIGIN foo.@F
 bleh A 192.0.2.44
+set-rhs MX 0 mail.example.net.
+$include implicit-origin

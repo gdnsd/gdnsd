@@ -813,6 +813,8 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
     action set_rhs_qword { z->tstart++; dname_set(z, z->rhs_dname, fpc - z->tstart - 1, false); }
     action set_eml_dname { dname_set(z, z->eml_dname, fpc - z->tstart, false); }
     action set_eml_qword { z->tstart++; dname_set(z, z->eml_dname, fpc - z->tstart - 1, false); }
+    # re-sets default for $INCLUDE without explicit origin
+    action reset_rhs_origin { dname_copy(z->rhs_dname, z->origin); }
 
     action reset_origin {
         validate_origin_in_zone(z, z->rhs_dname);
@@ -996,7 +998,7 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
     cmd = '$' (
           ('TTL'i ws ttl %set_def_ttl)
         | ('ORIGIN'i ws dname_rhs %reset_origin)
-        | ('INCLUDE'i ws filename (ws dname_rhs)?) $1 %0 %process_include
+        | ('INCLUDE'i %reset_rhs_origin ws filename (ws dname_rhs)?) $1 %0 %process_include
     );
 
     # A zonefile is composed of many resource records

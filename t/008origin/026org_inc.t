@@ -1,6 +1,6 @@
 use _GDT ();
 use Net::DNS;
-use Test::More tests => 2 + (14 * 2);
+use Test::More tests => 2 + (15 * 2);
 
 my $pid = _GDT->test_spawn_daemon();
 
@@ -80,6 +80,11 @@ foreach my $tld (qw/com org/) {
     _GDT->test_dns(
         qname => "bleh.foo.zlevel.example.${tld}", qtype => 'A',
         answer => "bleh.foo.zlevel.example.${tld} 86400 A 192.0.2.44",
+    );
+
+    _GDT->test_dns(
+        qname => "bluh.foo.zlevel.example.${tld}", qtype => 'A',
+        answer => "bluh.foo.zlevel.example.${tld} 86400 A 192.0.2.45",
     );
 }
 
