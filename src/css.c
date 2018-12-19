@@ -912,7 +912,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
 
     css_t* css = xcalloc(sizeof(*css));
     css->lock_fd = lock_fd;
-    css->argv0 = strdup(argv0);
+    css->argv0 = xstrdup(argv0);
     css->socks_cfg = socks_cfg;
     css->status_d = (uint32_t)getpid();
     uint8_t x, y, z;

@@ -83,7 +83,7 @@ static void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNU
 {
     null_svcs = xrealloc_n(null_svcs, ++num_svcs, sizeof(*null_svcs));
     null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
-    this_svc->name = strdup(name);
+    this_svc->name = xstrdup(name);
     this_svc->interval = interval;
 }
 

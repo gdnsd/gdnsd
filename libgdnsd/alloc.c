@@ -113,3 +113,11 @@ void* gdnsd_xpmalign_n(size_t alignment, size_t nmemb, size_t size)
                   nmemb, size, alignment, logf_strerror(pmrv), logf_bt());
     return rv;
 }
+
+char* gdnsd_xstrdup(const char* s)
+{
+    char* rv = strdup(s);
+    if (unlikely(!rv))
+        log_fatal("strdup() failed: %s! backtrace:%s", logf_errno(), logf_bt());
+    return rv;
+}

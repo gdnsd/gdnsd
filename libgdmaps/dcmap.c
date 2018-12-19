@@ -64,7 +64,7 @@ static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t
     dcmap_iter_data* did = data;
 
     dcmap_child_t* child = &did->dcmap->children[did->child_num];
-    child->name = strdup(key);
+    child->name = xstrdup(key);
     if (vscf_is_hash(val))
         child->dcmap = dcmap_new(val, did->dclists, did->dcmap->def_dclist, did->true_depth + 1, did->map_name, did->allow_auto);
     else
@@ -92,7 +92,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
                 dcmap->def_dclist = DCLIST_AUTO;
             } else {
                 dcmap->def_dclist = 0;
-                dclists_replace_list0(dclists, (uint8_t*)strdup((char*)newlist));
+                dclists_replace_list0(dclists, (uint8_t*)xstrdup((char*)newlist));
             }
         } else {
             dcmap->def_dclist = dclists_find_or_add_vscf(dclists, def_cfg, map_name, allow_auto);

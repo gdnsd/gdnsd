@@ -97,7 +97,7 @@ F_NONNULLX(1, 2, 3)
 static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, monreg_func_t mrf)
 {
     // basics
-    gdmap->name = strdup(name);
+    gdmap->name = xstrdup(name);
     if (!vscf_is_hash(map_cfg))
         log_fatal("plugin_geoip: value for map '%s' must be a hash", name);
 

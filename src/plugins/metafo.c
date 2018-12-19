@@ -60,7 +60,7 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
             log_fatal("plugin_metafo: resource '%s': 'datacenters' must be an array of one or more datacenter name strings", res_name);
         const unsigned dcidx = i + 1;
         *dclptr++ = dcidx;
-        dcl->dc_names[dcidx] = strdup(vscf_simple_get_data(dcname_cfg));
+        dcl->dc_names[dcidx] = xstrdup(vscf_simple_get_data(dcname_cfg));
     }
     *dclptr = 0;
 

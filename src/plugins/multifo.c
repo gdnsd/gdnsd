@@ -274,7 +274,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     unsigned* residx_ptr = data;
     unsigned rnum = (*residx_ptr)++;
     res_t* res = &resources[rnum];
-    res->name = strdup(resname);
+    res->name = xstrdup(resname);
 
     vscf_data_t* addrs_v4_cfg = NULL;
     vscf_data_t* addrs_v6_cfg = NULL;

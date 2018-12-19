@@ -54,11 +54,15 @@ void* gdnsd_xpmalign(size_t alignment, size_t size);
 F_MALLOC F_ALLOCSZ(2, 3) F_ALLOCAL(1) F_RETNN
 void* gdnsd_xpmalign_n(size_t alignment, size_t nmemb, size_t size);
 
+F_MALLOC F_NONNULL F_RETNN
+char* gdnsd_xstrdup(const char* s);
+
 #define xmalloc gdnsd_xmalloc
 #define xmalloc_n gdnsd_xmalloc_n
 #define xcalloc gdnsd_xcalloc
 #define xcalloc_n gdnsd_xcalloc_n
 #define xrealloc gdnsd_xrealloc
 #define xrealloc_n gdnsd_xrealloc_n
+#define xstrdup gdnsd_xstrdup
 
 #endif // GDNSD_ALLOC_H

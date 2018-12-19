@@ -102,7 +102,7 @@ static void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, c
     extf_svc_t* svc = &service_types[num_svcs++];
     memset(svc, 0, sizeof(*svc));
 
-    svc->name = strdup(name);
+    svc->name = xstrdup(name);
     svc->timeout = timeout;
     svc->interval = interval;
 
@@ -138,7 +138,7 @@ static void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* 
 
     svc->mons = xrealloc_n(svc->mons, svc->num_mons + 1, sizeof(*svc->mons));
     extf_mon_t* mon = &svc->mons[svc->num_mons];
-    mon->name = strdup(cname);
+    mon->name = xstrdup(cname);
     mon->sidx = idx;
     mon->midx = svc->num_mons++;
 }

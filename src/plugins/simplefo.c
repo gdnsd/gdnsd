@@ -144,7 +144,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     unsigned* residx_ptr = data;
     unsigned rnum = (*residx_ptr)++;
     res_t* res = &resources[rnum];
-    res->name = strdup(resname);
+    res->name = xstrdup(resname);
 
     if (vscf_get_type(opts) != VSCF_HASH_T)
         log_fatal("plugin_simplefo: resource %s: value must be a hash", resname);

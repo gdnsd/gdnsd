@@ -355,13 +355,13 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
                 vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if (!vscf_is_simple(this_svc_cfg))
                     log_fatal("plugin_weighted: resource '%s' (%s): service_types values must be strings", res_name, stanza);
-                addrset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
+                addrset->svc_names[i] = xstrdup(vscf_simple_get_data(this_svc_cfg));
             }
         }
     } else {
         addrset->num_svcs = 1;
         addrset->svc_names = xmalloc(sizeof(*addrset->svc_names));
-        addrset->svc_names[0] = strdup(DEFAULT_SVCNAME);
+        addrset->svc_names[0] = xstrdup(DEFAULT_SVCNAME);
     }
 
     // multi option
@@ -491,13 +491,13 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
                 vscf_data_t* this_svc_cfg = vscf_array_get_data(res_stypes, i);
                 if (!vscf_is_simple(this_svc_cfg))
                     log_fatal("plugin_weighted: resource '%s' (%s): service_types values must be strings", res_name, stanza);
-                cnset->svc_names[i] = strdup(vscf_simple_get_data(this_svc_cfg));
+                cnset->svc_names[i] = xstrdup(vscf_simple_get_data(this_svc_cfg));
             }
         }
     } else {
         cnset->num_svcs = 1;
         cnset->svc_names = xmalloc(sizeof(*cnset->svc_names));
-        cnset->svc_names[0] = strdup(DEFAULT_SVCNAME);
+        cnset->svc_names[0] = xstrdup(DEFAULT_SVCNAME);
     }
 
     // up threshold as double
@@ -618,7 +618,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
 {
     unsigned* idx_ptr = idx_asvoid;
     resource_t* res = &resources[(*idx_ptr)++];
-    res->name = strdup(res_name);
+    res->name = xstrdup(res_name);
     if (!vscf_is_hash(res_cfg))
         log_fatal("plugin_weighted: the value of resource '%s' must be a hash", res_name);
 

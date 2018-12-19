@@ -47,7 +47,7 @@ void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, 
         vscf_data_t* dcname_cfg = vscf_array_get_data(dc_cfg, i);
         if (!dcname_cfg || !vscf_is_simple(dcname_cfg))
             log_fatal("plugin_geoip: map '%s': 'datacenters' must be an array of one or more strings", map_name);
-        info->dcs[i].name = strdup(vscf_simple_get_data(dcname_cfg));
+        info->dcs[i].name = xstrdup(vscf_simple_get_data(dcname_cfg));
         if (!strcmp(info->dcs[i].name, "auto"))
             log_fatal("plugin_geoip: map '%s': datacenter name 'auto' is illegal", map_name);
         char* map_mon_desc = gdnsd_str_combine_n(4, "geoip/", map_name, "/", info->dcs[i].name);

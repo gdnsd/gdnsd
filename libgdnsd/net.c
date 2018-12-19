@@ -21,6 +21,7 @@
 #include <gdnsd/net.h>
 
 #include <gdnsd/log.h>
+#include <gdnsd/alloc.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -79,7 +80,7 @@ static const char invalid_addr[] = "!!invalid!!";
 
 int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gdnsd_anysin_t* result)
 {
-    char* apcopy = strdup(addr_port_text);
+    char* apcopy = xstrdup(addr_port_text);
 
     const char* addr = apcopy;
     char* port = NULL;

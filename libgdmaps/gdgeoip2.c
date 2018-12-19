@@ -190,8 +190,8 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
 
     db->is_v4 = meta->ip_version == 4U;
     db->city_auto_mode = city_auto_mode;
-    db->pathname = strdup(pathname);
-    db->map_name = strdup(map_name);
+    db->pathname = xstrdup(pathname);
+    db->map_name = xstrdup(map_name);
     db->dclists = dclists;
     db->dcmap = dcmap;
     return db;

@@ -431,7 +431,7 @@ F_NONNULL
 static char* _make_zfn(const char* curfn, const char* include_fn)
 {
     if (include_fn[0] == '/')
-        return strdup(include_fn);
+        return xstrdup(include_fn);
 
     const char* slashpos = strrchr(curfn, '/');
     const unsigned cur_copy = (slashpos - curfn) + 1;

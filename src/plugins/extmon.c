@@ -224,7 +224,7 @@ static char* thing_xlate(const char* instr, const char* thing, const unsigned th
         }
     }
     *out_cur = '\0';
-    return strdup(outbuf);
+    return xstrdup(outbuf);
 }
 
 static void send_cmd(const unsigned idx, const mon_t* mon)
@@ -417,7 +417,7 @@ static void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, co
 
     svcs = xrealloc_n(svcs, num_svcs + 1, sizeof(*svcs));
     svc_t* this_svc = &svcs[num_svcs++];
-    this_svc->name = strdup(name);
+    this_svc->name = xstrdup(name);
     this_svc->timeout = timeout;
     this_svc->interval = interval;
     SVC_OPT_UINT_NOMIN(svc_cfg, name, max_proc, 65534LU);
@@ -436,7 +436,7 @@ static void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, co
         vscf_data_t* arg_cfg = vscf_array_get_data(args_cfg, i);
         if (!vscf_is_simple(arg_cfg))
             log_fatal("plugin_extmon: service_type '%s': option 'cmd': all elements must be simple strings", name);
-        this_svc->args[i] = strdup(vscf_simple_get_data(arg_cfg));
+        this_svc->args[i] = xstrdup(vscf_simple_get_data(arg_cfg));
     }
 
     this_svc->direct = false;
@@ -454,7 +454,7 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     mons = xrealloc_n(mons, num_mons + 1, sizeof(*mons));
     mon_t* this_mon = &mons[num_mons++];
     memset(this_mon, 0, sizeof(*this_mon));
-    this_mon->desc = strdup(desc);
+    this_mon->desc = xstrdup(desc);
     this_mon->idx = idx;
 
     this_mon->svc = NULL;
@@ -466,7 +466,7 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     }
     gdnsd_assert(this_mon->svc);
 
-    this_mon->thing = strdup(thing);
+    this_mon->thing = xstrdup(thing);
     this_mon->seen_once = false;
 }
 

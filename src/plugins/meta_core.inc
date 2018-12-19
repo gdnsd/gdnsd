@@ -95,9 +95,9 @@ static char* get_defaulted_plugname(vscf_data_t* cfg, const char* resname, const
     if (plugname_data) {
         if (!vscf_is_simple(plugname_data))
             log_fatal("plugin_" PNSTR ": resource '%s': datacenter '%s': value of 'plugin' must be a string", resname, dcname);
-        rv = strdup(vscf_simple_get_data(plugname_data));
+        rv = xstrdup(vscf_simple_get_data(plugname_data));
     } else {
-        rv = strdup("multifo");
+        rv = xstrdup("multifo");
     }
 
     return rv;
@@ -185,7 +185,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
 F_NONNULL
 static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, vscf_data_t* dc_data)
 {
-    this_dc->dc_name = strdup(dc_name);
+    this_dc->dc_name = xstrdup(dc_name);
 
     char* dc_mon_desc = gdnsd_str_combine_n(5, PNSTR, "/", resname, "/", dc_name);
     this_dc->dc_mon_idx = gdnsd_mon_admin(dc_mon_desc);
@@ -194,17 +194,17 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
     if (vscf_is_simple(dc_data)) {
         const char* textdata = vscf_simple_get_data(dc_data);
         if (*textdata == '%') {
-            char* child_plugname = strdup(textdata + 1);
+            char* child_plugname = xstrdup(textdata + 1);
             this_dc->plugin_name = child_plugname;
             char* child_resname = strchr(child_plugname, '!');
             if (child_resname) {
                 *child_resname++ = '\0';
-                this_dc->res_name = strdup(child_resname);
+                this_dc->res_name = xstrdup(child_resname);
             }
             if (!strcmp(this_dc->plugin_name, PNSTR) && !strcmp(this_dc->res_name, resname))
                 log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
         } else if (*textdata == '!') {
-            this_dc->res_name = strdup(textdata + 1);
+            this_dc->res_name = xstrdup(textdata + 1);
             this_dc->plugin_name = get_defaulted_plugname(res_cfg, resname, dc_name);
             if (!strcmp(this_dc->plugin_name, PNSTR) && !strcmp(this_dc->res_name, resname))
                 log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
@@ -278,7 +278,7 @@ static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t*
 F_NONNULL
 static void make_resource(resource_t* res, const char* res_name, vscf_data_t* res_cfg, const bool undef_dc_ok)
 {
-    res->name = strdup(res_name);
+    res->name = xstrdup(res_name);
 
     if (!vscf_is_hash(res_cfg))
         log_fatal("plugin_" PNSTR ": the value of resource '%s' must be a hash", res_name);
@@ -470,7 +470,7 @@ static int CB_MAP(const char* resname, const uint8_t* zone_name)
         const char* slash = strchr(resname, '/');
         if (slash) {
             // Handle synthetic resname/dcname resources
-            char* resname_copy = strdup(resname);
+            char* resname_copy = xstrdup(resname);
             const unsigned reslen = slash - resname;
             resname_copy[reslen] = '\0';
             char* dcname = resname_copy + reslen + 1;

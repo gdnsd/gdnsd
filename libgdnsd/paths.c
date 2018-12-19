@@ -117,7 +117,7 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs)
         has_run = true;
 
     // set up config dir
-    gdnsd_dirs[CFG] = config_dir ? strdup(config_dir) : GDNSD_DEFPATH_CONFIG;
+    gdnsd_dirs[CFG] = config_dir ? xstrdup(config_dir) : GDNSD_DEFPATH_CONFIG;
 
     // parse config file
     char* cfg_file = gdnsd_resolve_path_cfg("config", NULL);
@@ -147,8 +147,8 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs)
     }
 
     // set them up
-    gdnsd_dirs[RUN] = strdup(run_dir);
-    gdnsd_dirs[STATE] = strdup(state_dir);
+    gdnsd_dirs[RUN] = xstrdup(run_dir);
+    gdnsd_dirs[STATE] = xstrdup(state_dir);
     if (create_dirs) {
         gdnsd_ensure_dir(run_dir, "run", 0700, true);
         gdnsd_ensure_dir(state_dir, "state", 0755, false);
@@ -176,7 +176,7 @@ static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const ch
     char* out;
 
     if (inpath && inpath[0] == '/') {
-        out = strdup(inpath);
+        out = xstrdup(inpath);
     } else if (pfx) {
         if (inpath)
             out = gdnsd_str_combine_n(5, gdnsd_dirs[p], "/", pfx, "/", inpath);
@@ -186,7 +186,7 @@ static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const ch
         if (inpath)
             out = gdnsd_str_combine_n(3, gdnsd_dirs[p], "/", inpath);
         else
-            out = strdup(gdnsd_dirs[p]);
+            out = xstrdup(gdnsd_dirs[p]);
     }
 
     return out;

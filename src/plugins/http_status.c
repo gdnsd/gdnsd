@@ -399,7 +399,7 @@ static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cf
     service_types = xrealloc_n(service_types, num_http_svcs + 1, sizeof(*service_types));
     http_svc_t* this_svc = &service_types[num_http_svcs++];
 
-    this_svc->name = strdup(name);
+    this_svc->name = xstrdup(name);
     this_svc->num_ok_codes = 0;
     this_svc->ok_codes = NULL;
     bool ok_codes_set = false;
@@ -441,7 +441,7 @@ static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cf
 static void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
     http_events_t* this_mon = xcalloc(sizeof(*this_mon));
-    this_mon->desc = strdup(desc);
+    this_mon->desc = xstrdup(desc);
     this_mon->idx = idx;
 
     for (unsigned i = 0; i < num_http_svcs; i++) {

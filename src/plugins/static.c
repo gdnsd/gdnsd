@@ -53,7 +53,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         log_fatal("plugin_static: resource %s: must be an IP address or a domainname in string form", resname);
 
     unsigned res = (*residx_ptr)++;
-    resources[res].name = strdup(resname);
+    resources[res].name = xstrdup(resname);
 
     const char* addr_txt = vscf_simple_get_data(addr);
     if (gdnsd_anysin_fromstr(addr_txt, 0, &resources[res].addr)) {
@@ -141,7 +141,7 @@ static void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, co
 {
     static_svcs = xrealloc_n(static_svcs, ++num_svcs, sizeof(*static_svcs));
     static_svc_t* this_svc = static_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
-    this_svc->name = strdup(name);
+    this_svc->name = xstrdup(name);
     this_svc->static_sttl = GDNSD_STTL_TTL_MAX;
 
     vscf_data_t* ttl_data = vscf_hash_get_data_byconstkey(svc_cfg, "ttl", true);

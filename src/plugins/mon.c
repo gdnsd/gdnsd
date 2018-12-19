@@ -531,7 +531,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
 
         this_smgr->desc = gdnsd_str_combine_n(3, addr_str, "/", svctype_name);
         this_smgr->is_cname = false;
-        this_smgr->cname = strdup(addr_str);
+        this_smgr->cname = xstrdup(addr_str);
         gdnsd_downcase_str(this_smgr->cname);
         memcpy(&this_smgr->addr, addr, sizeof(this_smgr->addr));
     } else { // cname
@@ -540,7 +540,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
                       svctype_name, cname);
         this_smgr->desc = gdnsd_str_combine_n(3, cname, "/", svctype_name);
         this_smgr->is_cname = true;
-        this_smgr->cname = strdup(cname);
+        this_smgr->cname = xstrdup(cname);
         gdnsd_downcase_str(this_smgr->cname);
         this_smgr->dname = gdnsd_dname_dup(dname, true);
     }
@@ -582,7 +582,7 @@ unsigned gdnsd_mon_admin(const char* desc)
     smgr_sttl_consumer_ = xrealloc_n(smgr_sttl_consumer_, num_smgrs, sizeof(*smgr_sttl_consumer_));
     smgr_t* this_smgr = &smgrs[idx];
     memset(this_smgr, 0, sizeof(*this_smgr));
-    this_smgr->desc = strdup(desc);
+    this_smgr->desc = xstrdup(desc);
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
     smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
     return idx;
@@ -630,7 +630,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
     //   (see if () block at top of func, and definition of num_svc_types)
     for (unsigned i = 0; i < num_svc_types_cfg; i++) {
         service_type_t* this_svc = &service_types[i];
-        this_svc->name = strdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
+        this_svc->name = xstrdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
         if (!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
             log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
         vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);

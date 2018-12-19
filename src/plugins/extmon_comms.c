@@ -215,7 +215,7 @@ extmon_cmd_t* emc_read_command(const int fd)
             log_debug("emc_read_command(): argument runs off end of buffer");
             goto out_error;
         }
-        cmd->desc = strdup((const char*)current);
+        cmd->desc = xstrdup((const char*)current);
         current += strlen((const char*)current);
         current++;
 

@@ -225,7 +225,7 @@ static void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cf
     service_types = xrealloc_n(service_types, num_tcp_svcs + 1, sizeof(*service_types));
     tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
 
-    this_svc->name = strdup(name);
+    this_svc->name = xstrdup(name);
     unsigned port = 0U;
 
     SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
@@ -240,7 +240,7 @@ static void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cf
 static void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
 {
     tcp_events_t* this_mon = xcalloc(sizeof(*this_mon));
-    this_mon->desc = strdup(desc);
+    this_mon->desc = xstrdup(desc);
     this_mon->idx = idx;
 
     for (unsigned i = 0; i < num_tcp_svcs; i++) {

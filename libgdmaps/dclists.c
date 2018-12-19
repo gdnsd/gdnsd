@@ -127,7 +127,7 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
 
     const uint32_t newidx = lists->count;
     lists->list = xrealloc_n(lists->list, ++lists->count, sizeof(*lists->list));
-    lists->list[newidx] = (uint8_t*)strdup((const char*)newlist);
+    lists->list[newidx] = (uint8_t*)xstrdup((const char*)newlist);
 
     gdnsd_assert(newidx <= DCLIST_MAX);
     return newidx;

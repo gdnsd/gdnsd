@@ -226,7 +226,7 @@ static bool cfg_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_da
         if (_opt_setting) { \
             if (!vscf_is_simple(_opt_setting)) \
                 log_fatal("Config option %s: Wrong type (should be string)", #_gconf_loc); \
-            cfg->_gconf_loc = strdup(vscf_simple_get_data(_opt_setting)); \
+            cfg->_gconf_loc = xstrdup(vscf_simple_get_data(_opt_setting)); \
         } \
     } while (0)
 

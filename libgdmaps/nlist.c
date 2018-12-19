@@ -49,7 +49,7 @@ nlist_t* nlist_new(const char* map_name, const bool pre_norm)
 {
     nlist_t* nl = xmalloc(sizeof(*nl));
     nl->nets = xmalloc_n(NLIST_INITSIZE, sizeof(*nl->nets));
-    nl->map_name = strdup(map_name);
+    nl->map_name = xstrdup(map_name);
     nl->alloc = NLIST_INITSIZE;
     nl->count = 0;
     nl->normalized = pre_norm;
@@ -61,7 +61,7 @@ F_UNUSED F_NONNULL
 static nlist_t* nlist_clone(const nlist_t* nl)
 {
     nlist_t* nlc = xmalloc(sizeof(*nlc));
-    nlc->map_name = strdup(nl->map_name);
+    nlc->map_name = xstrdup(nl->map_name);
     nlc->alloc = nl->alloc;
     nlc->count = nl->count;
     nlc->normalized = nl->normalized;

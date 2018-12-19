@@ -81,7 +81,7 @@ zone_t* zone_new(const char* zname, const char* source)
     z->arena = lta_new();
     z->dname = lta_dnamedup(z->arena, dname);
     z->hash = dname_hash(z->dname);
-    z->src = strdup(source);
+    z->src = xstrdup(source);
     ltree_init_zone(z);
 
     return z;
