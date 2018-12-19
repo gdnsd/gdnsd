@@ -528,7 +528,7 @@ unsigned gdmaps_dcname2num(const gdmaps_t* gdmaps, const unsigned gdmap_idx, con
     return dcinfo_name2num(&gdmaps->maps[gdmap_idx].dcinfo, dcname);
 }
 
-const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum)
+static const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum)
 {
     gdnsd_assert(gdmap_idx < gdmaps->count);
     return dcinfo_num2name(&gdmaps->maps[gdmap_idx].dcinfo, dcnum);

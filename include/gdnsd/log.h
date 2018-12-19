@@ -50,11 +50,6 @@ bool gdnsd_log_get_syslog(void);
 F_COLD F_NONNULLX(2) F_PRINTF(2, 3)
 void gdnsd_logger(int level, const char* fmt, ...);
 
-// As above, but with a va_list interface to make it
-//  easier to integrate with your own custom wrapper code.
-F_COLD F_NONNULLX(2) F_PRINTF(2, 0)
-void gdnsd_loggerv(int level, const char* fmt, va_list ap);
-
 // The intended simple API for logging with 5 separate function-call-like
 // interfaces with different levels.  The _fatal variant exits after emitting
 // the logged statement, and the _debug variant's output is toggled with the
@@ -132,32 +127,33 @@ void gdnsd_loggerv(int level, const char* fmt, va_list ap);
 //
 //  gdnsd_log_warn("The integer had value %s!", my_int_formatter(someint));
 //
-F_RETNN
+F_RETNN F_COLD
 char* gdnsd_fmtbuf_alloc(const size_t size);
 
 // Reset (free allocations within) the format buffer.  Do not use this
 //  with the normal log functions.  If you use the fmtbuf-based formatters
 //  *outside* of a log function, use this afterwards to reclaim the space.
+F_COLD
 void gdnsd_fmtbuf_reset(void);
 
 // Use this as a thread-safe strerror() within the arguments
 //  of the above logging functions.  This is built on gdnsd_fmtbuf_alloc()
 //  above and takes care of the difference between the GNU
 //  and POSIX strerror_r() variants.
-F_RETNN
+F_RETNN F_COLD
 const char* gdnsd_logf_strerror(const int errnum);
 #define gdnsd_logf_errno() gdnsd_logf_strerror(errno)
 
 // Adds a strack trace to the log message, iff built w/ libunwind
-F_RETNN
+F_RETNN F_COLD
 const char* gdnsd_logf_bt(void);
 
 // custom log formatters for raw ipv6 data and dnames
-F_RETNN
+F_RETNN F_COLD
 const char* gdnsd_logf_ipv6(const uint8_t* ipv6);
-F_RETNN
+F_RETNN F_COLD
 const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
-F_RETNN
+F_RETNN F_COLD
 const char* gdnsd_logf_dname(const uint8_t* dname);
 
 // shortcut defines for basic log levels + formatters, avoids the gdnsd_ prefix

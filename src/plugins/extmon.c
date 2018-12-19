@@ -209,6 +209,7 @@ static char* num_to_str(const int i)
     return out;
 }
 
+F_NONNULL
 static char* thing_xlate(const char* instr, const char* thing, const unsigned thing_len)
 {
     char outbuf[1024]; // way more than enough, I'd hope...

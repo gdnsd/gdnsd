@@ -100,20 +100,20 @@ bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* asin);
 // NULL input results in the string "(null)"
 // note that buf *must* be pre-allocated to at least GDNSD_ANYSIN_MAXSTR bytes!
 // return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
-F_NONNULLX(2)
+F_NONNULLX(2) F_COLD
 int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf);
 
 // convert just the address portion to ASCII in "buf"
 // NULL input results in the string "(null)"
 // note that buf *must* be pre-allocated to at least INET6_ADDRSTRLEN bytes!
 // return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
-F_NONNULLX(2)
+F_NONNULLX(2) F_COLD
 int gdnsd_anysin2str_noport(const gdnsd_anysin_t* asin, char* buf);
 
 // Log-formatters for gdnsd_anysin_t + gdnsd_log_*(), which use the above...
-F_RETNN
+F_RETNN F_COLD
 const char* gdnsd_logf_anysin(const gdnsd_anysin_t* asin);
-F_RETNN
+F_RETNN F_COLD
 const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* asin);
 
 #define logf_anysin gdnsd_logf_anysin

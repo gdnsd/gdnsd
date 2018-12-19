@@ -72,14 +72,14 @@ void cset_flush(struct ev_loop* loop);
 // updates the answer count at *ancount_p, and returns the new end-of-packet
 // offset.  If no matching records, returns the offset it was given and does
 // not affect packet or *ancount_p.
-F_NONNULL
+F_NONNULL F_HOT
 bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response);
 
 // Does some basic initialization early
 void chal_init(void);
 
 // Quick pre-flight check
-F_NONNULL F_UNUSED F_PURE
+F_NONNULL F_UNUSED F_PURE F_HOT
 static bool dname_is_acme_chal(const uint8_t* d)
 {
     gdnsd_assert(dname_status(d) != DNAME_INVALID);

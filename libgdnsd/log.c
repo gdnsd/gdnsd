@@ -173,7 +173,7 @@ const char* gdnsd_logf_strerror(const int errnum)
 
 GDNSD_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 
-void gdnsd_loggerv(int level, const char* fmt, va_list ap)
+static void gdnsd_loggerv(int level, const char* fmt, va_list ap)
 {
     // Later in the stdio path, we use 1K stack space to assemble the prefix
     // onto the provided format string.  The max prefix length is 9, but we

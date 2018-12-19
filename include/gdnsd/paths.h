@@ -44,7 +44,7 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs);
 
 // This is just to display the compiled-in static default for e.g.
 //   commandline help output purposes
-F_PURE F_RETNN
+F_CONST F_RETNN
 const char* gdnsd_get_default_config_dir(void);
 
 // Gets a readonly copy of the base config dir actually in use
@@ -65,19 +65,19 @@ const char* gdnsd_get_config_dir(void);
 //        -> /etc/gdnsd/geoip/GeoIPRegion.dat
 //    gdnsd_resolve_path_cfg("/usr/share/maxmind/GeoIPRegion.dat", "geoip");
 //        -> /usr/share/maxmind/GeoIPRegion.dat
-F_RETNN
+F_RETNN F_MALLOC
 char* gdnsd_resolve_path_cfg(const char* inpath, const char* pfx);
 
 // As above for "run" paths (e.g. /var/run/gdnsd or /run/gdnsd)
-F_RETNN
+F_RETNN F_MALLOC
 char* gdnsd_resolve_path_run(const char* inpath, const char* pfx);
 
 // As above for "state" paths (e.g. /var/lib/gdnsd)
-F_RETNN
+F_RETNN F_MALLOC
 char* gdnsd_resolve_path_state(const char* inpath, const char* pfx);
 
 // As above for "libexec" paths (e.g. /usr/libexec/gdnsd/)
-F_RETNN
+F_RETNN F_MALLOC
 char* gdnsd_resolve_path_libexec(const char* inpath, const char* pfx);
 
 #endif // GDNSD_PATHS_H
