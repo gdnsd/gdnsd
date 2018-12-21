@@ -1,8 +1,17 @@
-2.99.9944-beta - 2018-12-12
+2.99.9945-beta - 2018-12-21
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * Bugfix: Parsing $INCLUDE without an origin argument should work
+      correctly now (it was setting incorrect origin values)
+    * On Linux, runtime threads for zone and geoip data reloads now increase
+      their niceness if the daemon was started with negative niceness (as is
+      the case in the recommended unit files and init scripts), so that their
+      heavy lifting doesn't compete so hard with the important DNS I/O
+      threads for priority.
+
+2.99.9944-beta - 2018-12-12
     * Support for building and loading out-of-tree DSO plugins is removed.  The
       existing "plugins" from the source tree still work exactly as before from
       the end-user point of view, but are compiled into the main daemon.  We no
