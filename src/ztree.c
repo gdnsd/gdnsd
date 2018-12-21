@@ -260,13 +260,14 @@ bool ztree_insert_zone(ztree_t* tree, zone_t* new_zone)
 
 void* ztree_zones_reloader_thread(void* init_asvoid)
 {
-    const bool init = (bool)init_asvoid;
     gdnsd_thread_setname("gdnsd-zreload");
-    uintptr_t rv = 0;
-
+    const bool init = (bool)init_asvoid;
     if (init)
         gdnsd_assert(!ztree_root);
+    else
+        gdnsd_thread_reduce_prio();
 
+    uintptr_t rv = 0;
     ztree_t* new_ztree = xcalloc(sizeof(*new_ztree));
 
     // These do not fail if their data directory doesn't exist

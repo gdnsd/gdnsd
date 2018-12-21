@@ -40,6 +40,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <math.h>
+#include <sys/resource.h>
 
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>
@@ -104,10 +105,28 @@ void gdnsd_thread_setname(const char* n V_UNUSED)
     pthread_setname_np(pthread_self(), n);
 #elif defined HAVE_PTHREAD_SET_NAME_NP_2
     pthread_set_name_np(pthread_self(), n);
-#elif defined HAVE_PTHREAD_SETNAME_NP_1
-    pthread_setname_np(n);
 #elif defined HAVE_PTHREAD_SETNAME_NP_3
     pthread_setname_np(pthread_self(), n, NULL);
+#endif
+}
+
+void gdnsd_thread_reduce_prio(void)
+{
+#ifdef __linux__
+    // On Linux, [sg]etpriority() can be used to set per-pthread nice values,
+    // and pid zero defaults to threadid rather than the main PID, but this
+    // isn't portable.  I think at least some of the *BSDs may offer similar
+    // functionality through pthread_[sg]etschedparam() for SCHED_OTHER using
+    // the dynamic min/max there with opposite directionality from nice
+    errno = 0;
+    const int current = getpriority(PRIO_PROCESS, 0);
+    if (errno) {
+        log_err("getpriority() failed: %s", logf_errno());
+    } else if (current < 0) {
+        const int newprio = current / 2;
+        if (setpriority(PRIO_PROCESS, 0, newprio))
+            log_warn("setpriority(%i) failed: %s", newprio, logf_errno());
+    }
 #endif
 }
 

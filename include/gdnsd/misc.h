@@ -192,4 +192,16 @@ static uint32_t count2mask(const uint32_t x)
 
 #endif
 
+// Called by threads other than DNS I/O threads (e.g. zonefile reloaders, geoip
+// database reloaders, etc) to increase their effective nice-ness relative to
+// the I/O threads during normal runtime, which should be the only ones to
+// enjoy the full benefit of any enhanced priority set up for the process as a
+// whole by the initscript or systemd unit.  It would be nice to call this for
+// the main thread at runtime as well, but then the reduction would inherit to
+// "replace" child daemons by default.  This could be an argument for shifting
+// much of the functionality of the main thread off to a side-thread, but there
+// are at least a few critical jobs we can't do that for.  Should probably wait
+// until after the monitoring rework to look at that.
+void gdnsd_thread_reduce_prio(void);
+
 #endif // GDNSD_MISC_H
