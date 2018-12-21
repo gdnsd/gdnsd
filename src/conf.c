@@ -117,9 +117,7 @@ static void set_nsid_ascii(cfg_t* cfg, const char* data)
     if (fail)
         log_fatal("Option 'nsid_ascii' must be a string of printable ASCII characters up to 128 bytes long");
     cfg->nsid_len = dlen;
-    uint8_t* nsid;
-    cfg->nsid = nsid = xmalloc(cfg->nsid_len);
-    memcpy(nsid, data, dlen);
+    cfg->nsid = (uint8_t*)xstrdup(data);
 }
 
 // Generic iterator for catching bad config hash keys in various places below
