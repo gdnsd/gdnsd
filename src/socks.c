@@ -50,6 +50,7 @@ static const dns_addr_t addr_defs_defaults = {
     .tcp_fastopen = 128U,
     .tcp_clients_per_thread = 128U,
     .tcp_threads = 2U,
+    .tcp_proxy = false,
 };
 
 static const socks_cfg_t socks_cfg_defaults = {
@@ -103,6 +104,18 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, gdnsd_anys
         } \
     } while (0)
 
+#define CFG_OPT_BOOL_ALTSTORE(_opt_set, _gconf_loc, _store) \
+    do { \
+        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        if (_opt_setting) { \
+        bool _val; \
+            if (!vscf_is_simple(_opt_setting) \
+            || !vscf_simple_get_as_bool(_opt_setting, &_val)) \
+                log_fatal("Config option %s: Value must be 'true' or 'false'", #_gconf_loc); \
+        _store = _val; \
+        } \
+    } while (0)
+
 #define CFG_OPT_REMOVED(_opt_set, _gconf_loc) \
     do { \
         vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
@@ -151,16 +164,25 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
                 log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
 
             CFG_OPT_REMOVED(addr_opts, udp_recv_width);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, udp_threads, 1LU, 1024LU, addrconf->udp_threads);
+            CFG_OPT_BOOL_ALTSTORE(addr_opts, tcp_proxy, addrconf->tcp_proxy);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 5LU, 1080LU, addrconf->tcp_timeout);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_fastopen, 1048576LU, addrconf->tcp_fastopen);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 32LU, 65535LU, addrconf->tcp_clients_per_thread);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_threads, 1LU, 1024LU, addrconf->tcp_threads);
+            if (addrconf->tcp_proxy) {
+                addrconf->udp_threads = 0U;
+            } else {
+                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
+                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
+                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_threads, 1LU, 1024LU, addrconf->udp_threads);
+            }
 
             make_addr(lspec, addrconf->dns_port, &addrconf->addr);
-            vscf_hash_iterate_const(addr_opts, true, bad_key, "per-address listen option");
+            if (addrconf->tcp_proxy && addrconf->dns_port == 53U)
+                log_fatal("Cannot configure tcp_proxy mode on port 53");
+            vscf_hash_iterate_const(addr_opts, true, bad_key, addrconf->tcp_proxy
+                                    ? "per-address listen option with tcp_proxy"
+                                    : "per-address listen option");
         }
     } else {
         socks_cfg->num_dns_addrs = vscf_array_get_len(listen_opt);
@@ -191,8 +213,8 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
     for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++)
         socks_cfg->num_dns_threads += (socks_cfg->dns_addrs[i].udp_threads + socks_cfg->dns_addrs[i].tcp_threads);
 
-    if (!socks_cfg->num_dns_threads)
-        log_fatal("All listen addresses configured for zero UDP and zero TCP threads - cannot continue without at least one listener!");
+    // Because we require thread counts to be non-zero
+    gdnsd_assert(socks_cfg->num_dns_threads);
 
     socks_cfg->dns_threads = xcalloc_n(socks_cfg->num_dns_threads, sizeof(*socks_cfg->dns_threads));
 
@@ -216,8 +238,14 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             t->sock = -1;
         }
 
-        log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
-                 a->udp_threads, a->tcp_threads, logf_anysin(&a->addr));
+        if (a->tcp_proxy) {
+            gdnsd_assert(!a->udp_threads);
+            log_info("DNS listener threads (%u TCP PROXY) configured for %s",
+                     a->tcp_threads, logf_anysin(&a->addr));
+        } else {
+            log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
+                     a->udp_threads, a->tcp_threads, logf_anysin(&a->addr));
+        }
     }
 
     gdnsd_assert(tnum == socks_cfg->num_dns_threads);

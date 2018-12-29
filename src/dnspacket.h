@@ -49,6 +49,8 @@ typedef struct {
             stats_t close_s_ok;
             stats_t close_s_err;
             stats_t close_s_kill;
+            stats_t proxy;
+            stats_t proxy_fail;
         } tcp;
     };
 

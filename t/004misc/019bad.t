@@ -11,7 +11,7 @@
 
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 31;
+use Test::More tests => 33;
 
 my $recvbuf = '';
 
@@ -443,6 +443,7 @@ ok(!$@) or diag $@;
 
 close($sock);
 
+# T28
 # TCP pipelining test.  We'll send a raw single send() with 5x minimal
 # questions (REFUSED due to root name) followed by a "real" question (NOERROR)
 # and then check stats etc.
@@ -464,9 +465,71 @@ eval {_GDT->check_stats(
     notimp => 1,
     badvers => 1,
     edns_cookie_init => 1,
+    tcp_conns => 1,
 )};
 ok(!$@) or diag $@;
 
+# T29
+# PROXYv1 + TCP pipelining test.  We'll send a raw single send() with a PROXYv1
+# header and 5x minimal questions (REFUSED due to root name) followed by a
+# "real" question (NOERROR) and then check stats etc.
+my $proxy_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
+    Proto => 'tcp',
+    Timeout => 3,
+);
+my $six_proxy_piped = "PROXY TCP4 127.0.0.1 127.0.0.1 1234 4321\r\n"
+    . (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
+send($proxy_sock, $six_proxy_piped, 0);
+# Let responses just buffer, who cares for now
+eval {_GDT->check_stats(
+    udp_reqs => 26,
+    tcp_reqs => 12,
+    noerror => 6,
+    formerr => 17,
+    refused => 13,
+    edns => 9,
+    notimp => 1,
+    badvers => 1,
+    edns_cookie_init => 1,
+    tcp_proxy => 1,
+    tcp_proxy_fail => 0,
+    tcp_conns => 2,
+)};
+ok(!$@) or diag $@;
+
+# T30
+# PROXYv2 + TCP pipelining test.  We'll send a raw single send() with a PROXYv2
+# header and 5x minimal questions (REFUSED due to root name) followed by a
+# "real" question (NOERROR) and then check stats etc.
+my $proxy2_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
+    Proto => 'tcp',
+    Timeout => 3,
+);
+my $six_proxy2_piped = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A" # 12 byte sig
+    . "\x21\x11\x00\x0C" # PROXY TCP4 w/ 12 bytes addr data
+    . "\x7F\x00\x00\x01\x7F\x00\x00\x01\x04\xD2\x10\xE1" # Same addrs/ports as v1 above
+    . (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
+send($proxy2_sock, $six_proxy2_piped, 0);
+# Let responses just buffer, who cares for now
+eval {_GDT->check_stats(
+    udp_reqs => 26,
+    tcp_reqs => 18,
+    noerror => 7,
+    formerr => 17,
+    refused => 18,
+    edns => 9,
+    notimp => 1,
+    badvers => 1,
+    edns_cookie_init => 1,
+    tcp_proxy => 2,
+    tcp_proxy_fail => 0,
+    tcp_conns => 3,
+)};
+ok(!$@) or diag $@;
+
+# T31
 # Test a valid query to make sure the server is still functioning
 eval {_GDT->query_server(
     undef,
@@ -479,17 +542,22 @@ eval {_GDT->query_server(
 )};
 ok(!$@) or diag $@;
 
+# T32
 eval {_GDT->check_stats(
     udp_reqs => 27,
-    tcp_reqs => 6,
-    noerror => 6,
+    tcp_reqs => 18,
+    noerror => 8,
     formerr => 17,
-    refused => 8,
+    refused => 18,
     edns => 9,
     notimp => 1,
     badvers => 1,
     edns_cookie_init => 1,
+    tcp_proxy => 2,
+    tcp_proxy_fail => 0,
+    tcp_conns => 3,
 )};
 ok(!$@) or diag $@;
 
+# T33
 _GDT->test_kill_daemon($pid);

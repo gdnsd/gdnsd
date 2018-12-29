@@ -36,6 +36,7 @@ typedef struct {
     unsigned tcp_fastopen;
     unsigned tcp_clients_per_thread;
     unsigned tcp_threads;
+    bool     tcp_proxy;
 } dns_addr_t;
 
 typedef struct {

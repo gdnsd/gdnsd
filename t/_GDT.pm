@@ -279,17 +279,21 @@ sub proc_tmpl {
         or die "Cannot open test template output '$outpath' for writing: $!";
 
     my $dns_lspec = qq{[ 127.0.0.1, ::1 ]};
+    my $state_dir = qq{$OUTDIR/var/lib/gdnsd};
 
     my $std_opts = qq{
         listen => $dns_lspec
         dns_port => $DNS_PORT
         run_dir = $RUNDIR
-        state_dir = $OUTDIR/var/lib/gdnsd
+        state_dir = $state_dir
     };
 
     while(<$in_fh>) {
         s/\@std_testsuite_options\@/$std_opts/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
+        s/\@dns_port\@/$DNS_PORT/g;
+        s/\@run_dir\@/$RUNDIR/g;
+        s/\@state_dir\@/$state_dir/g;
         s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
         print $out_fh $_;
     }

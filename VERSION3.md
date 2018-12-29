@@ -13,12 +13,15 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Pipelined requests should work fine, and will always be answered in-order due to implementation details
   * Internal connection idle timeouts scale with connection load
   * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
+  * PROXY procotol support can be enabled for specific special listen addresses
   * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:
-    * `tcp_conns` - TCP conns we accepted (excludes extremely early failures, e.g. accept() itself returning an error)
-    * `tcp_close_c` - TCP conns closed cleanly by the client (the most-desirable outcome)
-    * `tcp_close_s_ok` - TCP conns closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
-    * `tcp_close_s_err` - TCP conns closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
-    * `tcp_close_s_kill` - TCP conns closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
+    * `tcp.conns` - TCP conns we accepted (excludes extremely early failures, e.g. accept() itself returning an error)
+    * `tcp.close_c` - TCP conns closed cleanly by the client (the most-desirable outcome)
+    * `tcp.close_s_ok` - TCP conns closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
+    * `tcp.close_s_err` - TCP conns closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
+    * `tcp.close_s_kill` - TCP conns closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
+    * `tcp.proxy` - TCP conns initiated on PROXY protocol listeners (also incs `tcp.conns`)
+    * `tcp.proxy_fail` - TCP PROXY conns killed for failure to parse an acceptable PROXY protocol header (also incs `tcp.close_s_err`)
 * edns-client-subnet support updated to match RFC 7871
 * The nsid EDNS option from RFC 5001 is implemented, allowing identification of members of a loadbalanced or anycast server set
 * All responses are completely minimized:
@@ -104,6 +107,7 @@ These are all new options for new features:
 * `cookie_key_file` - Loads the master cookie secret key from a file controlled by the administrator, useful for synchronizing cookie support across a set of loadbalanced or anycasted gdnsd instances.  The file's contents must be a 32-byte chunk of binary data generated securely and randomly for direct use as a secret key!
 * `max_nocookie_response` - Limits UDP response sizes when clients present no valid cookie auth.  This is disabled by default for now.
 * `max_edns_response_v6` - Like existing `max_edns_response` parameter (which is now v4-only), but for IPv6, and defaulting to 1212.
+* `tcp_proxy` - Enables PROXY protocol support for a specific TCP listen address:port, see docs for details
 
 ### Options with changed defaults or allowed values
 

@@ -24,6 +24,7 @@
 #include "dnswire.h"
 #include "dnspacket.h"
 #include "socks.h"
+#include "proxy.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -44,7 +45,8 @@
 #include <urcu-qsbr.h>
 
 typedef enum {
-    ST_IDLE = 0,
+    ST_PROXY = 0,
+    ST_IDLE,
     ST_READING,
     ST_WRITING,
 } tcpdns_state_t;
@@ -69,6 +71,7 @@ typedef struct {
     unsigned max_timeout;
     unsigned max_clients;
     unsigned num_conns; // count of all conns, also len of idleq list
+    bool do_proxy;
     bool rcu_is_online;
     bool shutting_down;
 } tcpdns_thread_t;
@@ -456,7 +459,20 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V
     tcpdns_conn_t* conn = w->data;
 
     gdnsd_assert(conn);
-    gdnsd_assert(conn->state == ST_IDLE || conn->state == ST_READING);
+    gdnsd_assert(conn->state == ST_PROXY || conn->state == ST_IDLE || conn->state == ST_READING);
+
+    if (conn->state == ST_PROXY) {
+        const int pp = parse_proxy(conn->read_watcher.fd, &conn->asin);
+        if (unlikely(pp)) {
+            if (pp == -1) {
+                stats_own_inc(&conn->ctx->stats->tcp.proxy_fail);
+                stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
+                conn_close_and_destroy(conn, false, false);
+            }
+            return;
+        }
+        conn->state = ST_IDLE;
+    }
 
     if (conn->state == ST_IDLE) {
         conn->size = 2U;
@@ -548,12 +564,18 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
     log_debug("Received TCP DNS connection from %s", logf_anysin(&asin));
 
     tcpdns_thread_t* ctx = w->data;
-    stats_own_inc(&ctx->stats->tcp.conns);
 
     tcpdns_conn_t* conn = xcalloc(sizeof(*conn));
     memcpy(&conn->asin, &asin, sizeof(asin));
 
-    conn->state = ST_IDLE;
+    stats_own_inc(&ctx->stats->tcp.conns);
+    if (ctx->do_proxy) {
+        stats_own_inc(&ctx->stats->tcp.proxy);
+        conn->state = ST_PROXY;
+    } else {
+        conn->state = ST_IDLE;
+    }
+
     conn->ctx = ctx;
     idleq_append_tail(conn); // Insert at end of idleness list, updating tail
 
@@ -713,6 +735,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     ctx->max_timeout = addrconf->tcp_timeout;
     ctx->max_clients = addrconf->tcp_clients_per_thread;
+    ctx->do_proxy = addrconf->tcp_proxy;
 
     // cached pre-calculations based on the above two configured values:
     ctx->tmo_thresh75 = ctx->max_clients - (ctx->max_clients >> 2U);

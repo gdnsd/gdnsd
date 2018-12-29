@@ -228,6 +228,48 @@ recommended, but may require OS-level support and/or configuration tuning, and
 in the case of multiple servers behind a loadbalancer or anycast pool, may also
 require administrative coordination of the server-side secret TFO key.
 
+=item B<tcp_proxy>
+
+Boolean, default false.  This TCP option is B<only> supported inside the
+per-address options of a specific listener address in the hash form of the
+C<listen> option, not as a global option.
+
+Addresses for which the option is enabled B<only> accept PROXY requests, cannot
+use port number 53, do not spawn corresponding UDP listeners, and do not accept
+UDP-related options.  We support both version 1 and 2 of the PROXY protocol as
+defined in L<https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt>, and
+only accept TCPv4, TCPv6, and PROXYv2's "LOCAL".
+
+The source IP passed to gdnsd over the PROXY protocol will be used as the
+connection source address for all logical purposes, including e.g. GeoIP lookup
+fallbacks in the absence of edns-client-subnet.  Once the initial PROXY header
+is parsed successfully, the connection is treated exactly as any other TCP
+connection for the remainder of its life.
+
+It is not recommended to expose PROXY listeners to public traffic; they should
+be confined to localhost or to addresses which are not reachable outside of
+your infrastructure due to firewalling, etc.
+
+PROXY connections increment all of the same stat counters as regular TCP
+connections, and also add two new proxy-specific ones:
+
+    tcp.proxy: count of received connections on PROXY listeners (also
+               increments the normal tcp.conns stat).
+    tcp.proxy_fail: count of received PROXY connections which are
+                    closed early for failing to send a PROXY header
+                    the server parses and likes (also increments
+                    tcp.close_s_err)
+
+Example listen config:
+
+      options => {
+        listen => {
+          0.0.0.0 => { ... } # normal UDP+TCP on port 53
+          :: => { ... } # normal UDP+TCP on port 53 for IPv6
+          127.0.0.1:5353 => { tcp_proxy => true, ... }
+        }
+      }
+
 =item B<udp_rcvbuf>
 
 Integer, min 4096, max 1048576.  If set, this value will be used to set

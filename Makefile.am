@@ -149,6 +149,8 @@ src_gdnsd_SOURCES = \
 	src/dnsio_udp.h \
 	src/dnsio_tcp.c \
 	src/dnsio_tcp.h \
+	src/proxy.c \
+	src/proxy.h \
 	src/socks.c \
 	src/socks.h \
 	src/statio.c \
