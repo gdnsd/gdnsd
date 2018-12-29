@@ -90,7 +90,7 @@ F_HOT F_NONNULL
 unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns_tcp_keepalive);
 
 F_NONNULL F_WUNUSED F_RETNN
-void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool is_ipv6);
+void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6);
 
 F_NONNULL
 void dnspacket_ctx_cleanup(void* ctxv);
