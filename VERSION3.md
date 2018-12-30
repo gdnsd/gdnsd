@@ -10,6 +10,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Follows the spirit and recommendations of RFC 7766 "DNS Transport over TCP - Implementation Requirements"
   * Supports TCP Fastopen
   * Implements the RFC 7828 EDNS tcp-keepalive option
+  * Pipelined requests should work fine, and will always be answered in-order due to implementation details
   * Internal connection idle timeouts scale with connection load
   * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
   * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:

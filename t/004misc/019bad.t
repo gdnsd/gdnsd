@@ -11,7 +11,7 @@
 
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 30;
+use Test::More tests => 31;
 
 my $recvbuf = '';
 
@@ -36,6 +36,11 @@ sub make_query {
         $qtype,
         $qclass
     );
+}
+
+sub make_tcp_query {
+    my $data = make_query(@_);
+    return pack("n", length($data)) . $data;
 }
 
 my $pid = _GDT->test_spawn_daemon();
@@ -438,6 +443,30 @@ ok(!$@) or diag $@;
 
 close($sock);
 
+# TCP pipelining test.  We'll send a raw single send() with 5x minimal
+# questions (REFUSED due to root name) followed by a "real" question (NOERROR)
+# and then check stats etc.
+my $tcp_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::DNS_PORT,
+    Proto => 'tcp',
+    Timeout => 3,
+);
+my $six_tcp_piped = (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
+send($tcp_sock, $six_tcp_piped, 0);
+# Let responses just buffer, who cares for now
+eval {_GDT->check_stats(
+    udp_reqs => 26,
+    tcp_reqs => 6,
+    noerror => 5,
+    formerr => 17,
+    refused => 8,
+    edns => 9,
+    notimp => 1,
+    badvers => 1,
+    edns_cookie_init => 1,
+)};
+ok(!$@) or diag $@;
+
 # Test a valid query to make sure the server is still functioning
 eval {_GDT->query_server(
     undef,
@@ -452,9 +481,10 @@ ok(!$@) or diag $@;
 
 eval {_GDT->check_stats(
     udp_reqs => 27,
-    noerror => 5,
+    tcp_reqs => 6,
+    noerror => 6,
     formerr => 17,
-    refused => 3,
+    refused => 8,
     edns => 9,
     notimp => 1,
     badvers => 1,

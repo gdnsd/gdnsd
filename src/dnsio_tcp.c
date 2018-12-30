@@ -412,21 +412,15 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* w, const int revents 
     ev_io_start(loop, write_watcher);
 }
 
+// rv true means caller should return immediately (connection closed or read is
+// incomplete and needs to block in the loop again)
 F_NONNULL
-static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V_UNUSED)
+static bool conn_do_read(tcpdns_conn_t* conn)
 {
-    gdnsd_assert(revents == EV_READ);
-    tcpdns_conn_t* conn = w->data;
-
-    gdnsd_assert(conn);
-    gdnsd_assert(conn->state == ST_IDLE || conn->state == ST_READING);
-
     uint8_t* destination = &conn->buffer[conn->size_done];
-    const size_t wanted =
-        (conn->state == ST_IDLE ? (DNS_RECV_SIZE + 2) : conn->size)
-        - conn->size_done;
+    const size_t wanted = conn->size - conn->size_done;
 
-    const ssize_t pktlen = recv(w->fd, destination, wanted, 0);
+    const ssize_t pktlen = recv(conn->read_watcher.fd, destination, wanted, 0);
     if (pktlen < 1) {
         if (!pktlen) { // EOF
             if (conn->size_done) {
@@ -445,34 +439,54 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V
             stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
             conn_close_and_destroy(conn, false, false);
         }
-        return;
+        return true;
     }
 
     conn->size_done += pktlen;
+    if (unlikely(conn->size_done < conn->size))
+        return true;
 
-    if (likely(conn->state == ST_IDLE)) {
-        if (likely(conn->size_done > 1)) {
-            conn->size = ((unsigned)conn->buffer[0] << 8U) + (unsigned)conn->buffer[1] + 2U;
-            if (unlikely(conn->size > DNS_RECV_SIZE)) {
-                log_debug("TCP DNS conn to %s closed by server while reading: oversized query of length %u", logf_anysin(&conn->asin), conn->size);
-                stats_own_inc(&conn->ctx->stats->tcp.recvfail);
-                stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
-                conn_close_and_destroy(conn, false, false);
-                return;
-            }
-            conn->state = ST_READING;
+    return false;
+}
+
+F_NONNULL
+static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V_UNUSED)
+{
+    gdnsd_assert(revents == EV_READ);
+    tcpdns_conn_t* conn = w->data;
+
+    gdnsd_assert(conn);
+    gdnsd_assert(conn->state == ST_IDLE || conn->state == ST_READING);
+
+    if (conn->state == ST_IDLE) {
+        conn->size = 2U;
+        gdnsd_assert(conn->size_done < conn->size);
+        if (conn_do_read(conn))
+            return;
+        gdnsd_assert(conn->size_done == 2U);
+
+        conn->size += (((unsigned)conn->buffer[0] << 8U) + (unsigned)conn->buffer[1]);
+        if (unlikely(conn->size == 2U || conn->size > (DNS_RECV_SIZE + 2U))) {
+            log_debug("TCP DNS conn to %s closed by server while reading: bad query length %u", logf_anysin(&conn->asin), conn->size - 2U);
+            stats_own_inc(&conn->ctx->stats->tcp.recvfail);
+            stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
+            conn_close_and_destroy(conn, false, false);
+            return;
         }
+        conn->state = ST_READING;
     }
 
-    if (unlikely(conn->size_done < conn->size))
+    if (conn_do_read(conn))
         return;
 
-    //  Process the query and start the writer
+    gdnsd_assert(conn->size_done == conn->size);
+
+    // Process the query and start the writer
     if (!conn->ctx->rcu_is_online) {
         conn->ctx->rcu_is_online = true;
         rcu_thread_online();
     }
-    conn->size = process_dns_query(conn->ctx->dnsp_ctx, &conn->asin, &conn->buffer[2], conn->size - 2, conn->ctx->edns_keepalive);
+    conn->size = process_dns_query(conn->ctx->dnsp_ctx, &conn->asin, &conn->buffer[2], conn->size - 2U, conn->ctx->edns_keepalive);
     if (!conn->size) {
         log_debug("TCP DNS conn to %s closed by server: dropped invalid query", logf_anysin(&conn->asin));
         stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
