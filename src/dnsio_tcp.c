@@ -85,7 +85,7 @@ struct tcpdns_conn {
     unsigned size;
     unsigned size_done;
     tcpdns_state_t state;
-    uint8_t buffer[0];
+    uint8_t buffer[MAX_RESPONSE + 2];
 };
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -161,7 +161,7 @@ static void idleq_process_timeouts(tcpdns_thread_t* ctx)
 
     // Calculate an updated timeout value (if shutting down, fixed 2s)
     double cur_timeout = 2.0;
-    if (!ctx->shutting_down)
+    if (likely(!ctx->shutting_down))
         cur_timeout += ((ctx->num_conns >= ctx->tmo_thresh75 ? 0 : (ctx->tmo_thresh75 - ctx->num_conns)) * ctx->tmo_scaler);
 
     // efficiency/fudge factor, expire up to 10ms past the actual clock cutoff
@@ -172,7 +172,7 @@ static void idleq_process_timeouts(tcpdns_thread_t* ctx)
         tcpdns_conn_t* next_conn = conn->next;
         ctx->num_conns--;
         // adjust cutoff and cur_timeout as we close conns, if not shutting down
-        if (ctx->num_conns < ctx->tmo_thresh75 && !ctx->shutting_down) {
+        if (ctx->num_conns < ctx->tmo_thresh75 && likely(!ctx->shutting_down)) {
             cutoff -= ctx->tmo_scaler;
             cur_timeout += ctx->tmo_scaler;
         }
@@ -342,10 +342,10 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     ev_io* accept_watcher = &ctx->accept_watcher;
     ev_io_stop(loop, accept_watcher);
 
-    // This flag informs the read handler that connections should be terminated
-    // immediately on reaching the ST_IDLE state, for any that are still
-    // outstanding in other states.  It also tells idleq_process_timeouts()
-    // above to alter its behavior for the shutdown phase.
+    // This flag informs the write handler that connections with in-progress
+    // transactions should be terminated immediately on reaching the ST_IDLE
+    // state at the end of their response write.  It also tells
+    // idleq_process_timeouts() above to alter its behavior for the shutdown
     ctx->shutting_down = true;
 
     // Walk the idle conns list and immediately destroy any in ST_IDLE,
@@ -392,7 +392,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* w, const int revents 
         conn->size_done += (size_t)send_rv;
         if (likely(conn->size_done == conn->size)) {
             conn->state = ST_IDLE;
-            if (conn->ctx->shutting_down) {
+            if (unlikely(conn->ctx->shutting_down)) {
                 log_debug("TCP DNS conn to %s closed by server (shutting down): while idle", logf_anysin(&conn->asin));
                 stats_own_inc(&conn->ctx->stats->tcp.close_s_ok);
                 conn_close_and_destroy(conn, true, false);
@@ -513,8 +513,6 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 #if EWOULDBLOCK != EAGAIN
         case EWOULDBLOCK:
 #endif
-        case EINTR:
-            break;
 #ifdef ENONET
         case ENONET:
 #endif
@@ -538,8 +536,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
     tcpdns_thread_t* ctx = w->data;
     stats_own_inc(&ctx->stats->tcp.conns);
 
-    // buffer[0] is last element of struct, sized to MAX_RESPONSE + 2.
-    tcpdns_conn_t* conn = xcalloc(sizeof(*conn) + (MAX_RESPONSE + 2));
+    tcpdns_conn_t* conn = xcalloc(sizeof(*conn));
     memcpy(&conn->asin, &asin, sizeof(asin));
 
     conn->state = ST_IDLE;
