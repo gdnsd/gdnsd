@@ -48,7 +48,10 @@ pkg install p5-Net-DNS
 pkg install gmake
 setenv CPPFLAGS "-isystem/usr/local/include"
 setenv LDFLAGS "-L/usr/local/lib"
-./configure
+# PIE build flags test ok during configure, but PIE builds don't seem to work
+# out the same on FreeBSD as they do on Linux.  Hardening for the port might
+# need doing independently via CFLAGS/LDFLAGS:
+./configure --without-hardening
 gmake
 gmake check
 gmake install
