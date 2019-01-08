@@ -181,10 +181,10 @@ static void idleq_process_timeouts(tcpdns_thread_t* ctx)
         }
         // we're looking for the force-to-zero above, vs realistic timestamp, the "< 1.0" is to avoid float-equality problems.
         if (conn->idle_start < 1.0) {
-            log_debug("TCP DNS conn to %s closed by server: killed due to connection load", logf_anysin(&conn->asin));
+            log_debug("TCP DNS conn from %s closed by server: killed due to connection load", logf_anysin(&conn->asin));
             stats_own_inc(&conn->ctx->stats->tcp.close_s_kill);
         } else {
-            log_debug("TCP DNS conn to %s closed by server: timeout", logf_anysin(&conn->asin));
+            log_debug("TCP DNS conn from %s closed by server: timeout", logf_anysin(&conn->asin));
             stats_own_inc(&conn->ctx->stats->tcp.close_s_ok);
         }
         conn_close(conn, true);
@@ -360,7 +360,7 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     while (conn) {
         tcpdns_conn_t* next_conn = conn->next;
         if (conn->state == ST_IDLE) {
-            log_debug("TCP DNS conn to %s closed by server (shutting down): while idle", logf_anysin(&conn->asin));
+            log_debug("TCP DNS conn from %s closed by server (shutting down): while idle", logf_anysin(&conn->asin));
             stats_own_inc(&conn->ctx->stats->tcp.close_s_ok);
             conn_close_and_destroy(conn, true, true);
         }
@@ -385,7 +385,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* w, const int revents 
     const ssize_t send_rv = send(w->fd, source, wanted, 0);
     if (unlikely(send_rv < 0)) {
         if (!ERRNO_WOULDBLOCK) {
-            log_debug("TCP DNS conn to %s closed by server: failed while writing: %s", logf_anysin(&conn->asin), logf_errno());
+            log_debug("TCP DNS conn from %s closed by server: failed while writing: %s", logf_anysin(&conn->asin), logf_errno());
             stats_own_inc(&conn->ctx->stats->tcp.sendfail);
             stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
             conn_close_and_destroy(conn, false, false);
@@ -396,7 +396,7 @@ static void tcp_write_handler(struct ev_loop* loop, ev_io* w, const int revents 
         if (likely(conn->size_done == conn->size)) {
             conn->state = ST_IDLE;
             if (unlikely(conn->ctx->shutting_down)) {
-                log_debug("TCP DNS conn to %s closed by server (shutting down): while idle", logf_anysin(&conn->asin));
+                log_debug("TCP DNS conn from %s closed by server (shutting down): while idle", logf_anysin(&conn->asin));
                 stats_own_inc(&conn->ctx->stats->tcp.close_s_ok);
                 conn_close_and_destroy(conn, true, false);
             } else {
@@ -427,17 +427,17 @@ static bool conn_do_read(tcpdns_conn_t* conn)
     if (pktlen < 1) {
         if (!pktlen) { // EOF
             if (conn->size_done) {
-                log_debug("TCP DNS conn to %s closed by client while reading: unexpected EOF", logf_anysin(&conn->asin));
+                log_debug("TCP DNS conn from %s closed by client while reading: unexpected EOF", logf_anysin(&conn->asin));
                 stats_own_inc(&conn->ctx->stats->tcp.recvfail);
                 stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
                 conn_close_and_destroy(conn, false, false);
             } else {
-                log_debug("TCP DNS conn to %s closed by client while idle (ideal close)", logf_anysin(&conn->asin));
+                log_debug("TCP DNS conn from %s closed by client while idle (ideal close)", logf_anysin(&conn->asin));
                 stats_own_inc(&conn->ctx->stats->tcp.close_c);
                 conn_close_and_destroy(conn, true, false);
             }
         } else if (!ERRNO_WOULDBLOCK) {
-            log_debug("TCP DNS conn to %s closed by server while reading: error: %s", logf_anysin(&conn->asin), logf_errno());
+            log_debug("TCP DNS conn from %s closed by server while reading: error: %s", logf_anysin(&conn->asin), logf_errno());
             stats_own_inc(&conn->ctx->stats->tcp.recvfail);
             stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
             conn_close_and_destroy(conn, false, false);
@@ -483,7 +483,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V
 
         conn->size += (((unsigned)conn->buffer[0] << 8U) + (unsigned)conn->buffer[1]);
         if (unlikely(conn->size == 2U || conn->size > (DNS_RECV_SIZE + 2U))) {
-            log_debug("TCP DNS conn to %s closed by server while reading: bad query length %u", logf_anysin(&conn->asin), conn->size - 2U);
+            log_debug("TCP DNS conn from %s closed by server while reading: bad query length %u", logf_anysin(&conn->asin), conn->size - 2U);
             stats_own_inc(&conn->ctx->stats->tcp.recvfail);
             stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
             conn_close_and_destroy(conn, false, false);
@@ -504,7 +504,7 @@ static void tcp_read_handler(struct ev_loop* loop, ev_io* w, const int revents V
     }
     conn->size = process_dns_query(conn->ctx->dnsp_ctx, &conn->asin, &conn->buffer[2], conn->size - 2U, conn->ctx->edns_keepalive);
     if (!conn->size) {
-        log_debug("TCP DNS conn to %s closed by server: dropped invalid query", logf_anysin(&conn->asin));
+        log_debug("TCP DNS conn from %s closed by server: dropped invalid query", logf_anysin(&conn->asin));
         stats_own_inc(&conn->ctx->stats->tcp.close_s_err);
         conn_close_and_destroy(conn, false, false);
         return;
