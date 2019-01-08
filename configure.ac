@@ -41,6 +41,11 @@ AC_ARG_ENABLE([developer],
     [  --enable-developer      Turn on gcc developer warnings, debugging, etc (default=no)],
     [if test "x$enable_developer" = xyes; then developer=yes; fi])
 
+extrawarn=no
+AC_ARG_ENABLE([extrawarn],
+    [  --enable-extrawarn      Turn on excessive compiler warning flags (default=no, implied by --enable-developer)],
+    [if test "x$enable_extrawarn" = xyes; then extrawarn=yes; fi])
+
 # normal builds set -DNDEBUG because we make very very heavy
 #   use of assertions that really slow stuff down.
 # --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
@@ -81,53 +86,58 @@ AX_APPEND_COMPILE_FLAGS([\
     -fno-common \
     -pipe \
     -Wall \
-    -Wextra \
-    -Waggregate-return \
-    -Walloca \
-    -Walloc-zero \
-    -Warray-bounds=2 \
-    -Wbad-function-cast \
-    -Wcast-align \
-    -Wcast-align=strict \
-    -Wcast-qual \
-    -Wdate-time \
-    -Wdouble-promotion \
-    -Wduplicated-branches \
-    -Wduplicated-cond \
-    -Wendif-labels \
-    -Werror=vla \
-    -Wfloat-equal \
-    -Wfloat-conversion \
-    -Wformat=2 \
-    -Wformat-signedness \
-    -Winit-self \
-    -Wjump-misses-init \
-    -Wlogical-op \
-    -Wloop-analysis \
-    -Wmissing-declarations \
-    -Wmissing-include-dirs \
-    -Wmissing-prototypes \
-    -Wnull-dereference \
-    -Wold-style-definition \
-    -Wpointer-arith \
-    -Wredundant-decls \
-    -Wshadow \
-    -Wsign-conversion \
-    -Wshift-overflow=2 \
-    -Wstrict-aliasing=3 \
-    -Wstrict-overflow=5 \
-    -Wstrict-prototypes \
-    -Wstringop-overflow=3 \
-    -Wswitch-default \
-    -Wswitch-enum \
-    -Wtrampolines \
-    -Wundef \
-    -Wuninitialized \
-    -Wunused \
-    -Wwrite-strings \
     -Wno-pragmas \
-    -Wthis-does-not-exist \
 ],[CFLAGS],[$CLANG_WERROR])
+
+if test $developer = yes -o $extrawarn = yes; then
+    AX_APPEND_COMPILE_FLAGS([\
+        -Wextra \
+        -Waggregate-return \
+        -Walloca \
+        -Walloc-zero \
+        -Warray-bounds=2 \
+        -Wbad-function-cast \
+        -Wcast-align \
+        -Wcast-align=strict \
+        -Wcast-qual \
+        -Wdate-time \
+        -Wdouble-promotion \
+        -Wduplicated-branches \
+        -Wduplicated-cond \
+        -Wendif-labels \
+        -Werror=vla \
+        -Wfloat-equal \
+        -Wfloat-conversion \
+        -Wformat=2 \
+        -Wformat-signedness \
+        -Winit-self \
+        -Wjump-misses-init \
+        -Wlogical-op \
+        -Wloop-analysis \
+        -Wmissing-declarations \
+        -Wmissing-include-dirs \
+        -Wmissing-prototypes \
+        -Wnull-dereference \
+        -Wold-style-definition \
+        -Wpointer-arith \
+        -Wredundant-decls \
+        -Wshadow \
+        -Wsign-conversion \
+        -Wshift-overflow=2 \
+        -Wstrict-aliasing=3 \
+        -Wstrict-overflow=5 \
+        -Wstrict-prototypes \
+        -Wstringop-overflow=3 \
+        -Wswitch-default \
+        -Wswitch-enum \
+        -Wtrampolines \
+        -Wundef \
+        -Wuninitialized \
+        -Wunused \
+        -Wwrite-strings \
+        -Wthis-does-not-exist \
+    ],[CFLAGS],[$CLANG_WERROR])
+fi
 
 # Note "-Wno-pragmas" above is because our only use of pragmas is to suppress
 # warnings, and sometimes this in turn causes a warning on older GCC versions
