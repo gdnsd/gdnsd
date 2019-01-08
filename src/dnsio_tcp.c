@@ -665,7 +665,6 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         // or it's kind of useless...
 
 #if defined IPV6_USE_MIN_MTU
-        const int opt_one = 1;
         if (setsockopt(t->sock, SOL_IPV6, IPV6_USE_MIN_MTU, &opt_one, sizeof(opt_one)) == -1)
             log_fatal("Failed to set IPV6_USE_MIN_MTU on TCP socket: %s", logf_errno());
 #elif defined IPV6_MTU
