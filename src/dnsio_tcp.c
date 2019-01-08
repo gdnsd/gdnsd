@@ -708,6 +708,38 @@ static void set_rcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSE
     }
 }
 
+static void set_accf(const dns_addr_t* addrconf V_UNUSED, const int sock V_UNUSED)
+{
+#ifdef SO_ACCEPTFILTER
+    struct accept_filter_arg afa_exist;
+    struct accept_filter_arg afa_want;
+    socklen_t afa_exist_size = sizeof(afa_exist);
+    memset(&afa_exist, 0, sizeof(afa_exist));
+    memset(&afa_want, 0, sizeof(afa_want));
+    strcpy(afa_want.af_name, addrconf->tcp_proxy ? "dataready" : "dnsready");
+
+    const int getrv = getsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa_exist, &afa_exist_size);
+    if (getrv && errno != EINVAL) {
+        // If no existing filter is installed (or not listening), the retval is
+        // EINVAL, but any other weird error should log and stop related option
+        // processing here
+        log_err("Failed to get current SO_ACCEPTFILTER on TCP socket %s: %s",
+                logf_anysin(&addrconf->addr), logf_errno());
+    } else {
+        // If getsockopt failed with EINVAL we're in a fresh state, so just
+        // install the desired filter.  If getsockopt succeeded and the filter
+        // didn't match, we'll need to first clear the existing filter out
+        if (getrv || afa_exist_size != sizeof(afa_want) || memcmp(&afa_want, &afa_exist, sizeof(afa_want))) {
+            if (!getrv)
+                if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, NULL, 0))
+                    log_err("Failed to clear existing '%s' SO_ACCEPTFILTER on TCP socket %s: %s", afa_exist.af_name, logf_anysin(&addrconf->addr), logf_errno());
+            if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa_want, sizeof(afa_want)))
+                log_err("Failed to install '%s' SO_ACCEPTFILTER on TCP socket %s: %s", afa_want.af_name, logf_anysin(&addrconf->addr), logf_errno());
+        }
+    }
+#endif
+}
+
 void* dnsio_tcp_start(void* thread_asvoid)
 {
     gdnsd_thread_setname("gdnsd-io-tcp");
@@ -722,13 +754,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
     if (listen(t->sock, (int)addrconf->tcp_clients_per_thread) == -1)
         log_fatal("Failed to listen(s, %u) on TCP socket %s: %s", addrconf->tcp_clients_per_thread, logf_anysin(&addrconf->addr), logf_errno());
 
-#ifdef SO_ACCEPTFILTER
-    struct accept_filter_arg afa;
-    memset(&afa, 0, sizeof(afa));
-    strcpy(afa.af_name, addrconf->tcp_proxy ? "dataready" : "dnsready");
-    if (setsockopt(t->sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)))
-        log_err("Failed to install '%s' SO_ACCEPTFILTER on TCP socket %s: %s", afa.af_name, logf_anysin(&addrconf->addr), logf_errno());
-#endif
+    set_accf(addrconf, t->sock);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
