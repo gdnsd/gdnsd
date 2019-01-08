@@ -164,16 +164,17 @@ int parse_proxy(int fd, gdnsd_anysin_t* asin)
         const uint8_t cmd = hdr.v2.ver_cmd & 0xF;
         if (likely(cmd == 0x01)) { // cmd: PROXY
             gdnsd_anysin_t* a = asin;
+            memset(a, 0, sizeof(*a));
             if (hdr.v2.fam == 0x11 && skip_read >= (16U + 12U)) { // TCPv4
-                memset(a, 0, sizeof(*a));
                 a->sin.sin_family = AF_INET;
                 a->sin.sin_addr.s_addr = hdr.v2.ipv4.src_addr;
                 a->sin.sin_port = hdr.v2.ipv4.src_port;
+                a->len = sizeof(struct sockaddr_in);
             } else if (hdr.v2.fam == 0x21 && skip_read >= (16U + 36U)) { // TCPv6
-                memset(a, 0, sizeof(*a));
                 a->sin6.sin6_family = AF_INET6;
                 memcpy(&a->sin6.sin6_addr, hdr.v2.ipv6.src_addr, 16U);
                 a->sin6.sin6_port = hdr.v2.ipv6.src_port;
+                a->len = sizeof(struct sockaddr_in6);
             } else {
                 log_debug("Proxy v2 parse from %s failed: family %hhu total header len %zu",
                           logf_anysin(asin), hdr.v2.fam, skip_read);
