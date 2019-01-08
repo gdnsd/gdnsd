@@ -725,9 +725,9 @@ void* dnsio_tcp_start(void* thread_asvoid)
 #ifdef SO_ACCEPTFILTER
     struct accept_filter_arg afa;
     memset(&afa, 0, sizeof(afa));
-    strcpy(afa.af_name, "dnsready");
+    strcpy(afa.af_name, addrconf->tcp_proxy ? "dataready" : "dnsready");
     if (setsockopt(t->sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa, sizeof(afa)))
-        log_err("Failed to install 'dnsready' SO_ACCEPTFILTER on TCP socket %s: %s", logf_anysin(&addrconf->addr), logf_errno());
+        log_err("Failed to install '%s' SO_ACCEPTFILTER on TCP socket %s: %s", afa.af_name, logf_anysin(&addrconf->addr), logf_errno());
 #endif
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);

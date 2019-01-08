@@ -57,14 +57,16 @@ gmake install
 Runtime setup stuff done manually:
 ```
 # Create gdnsd user (for portacl rules at bottom, assuming uid is 1234)
-# Confirm mac_portacl and accf_dns are loaded, look for them in the output of:
+# Confirm mac_portacl, accf_dns, and accf_data are loaded, look for them in the output of:
 kldstat
 # If not loaded, set them up in loader.conf.local for future boots:
 echo 'mac_portacl_load="YES"' >>/boot/loader.conf.local
 echo 'accf_dns_load="YES"' >>/boot/loader.conf.local
+echo 'accf_data_load="YES"' >>/boot/loader.conf.local
 # If not loaded, load them now for immediate use:
 kldload mac_portacl
 kldload accf_dns
+kldload accf_data
 # Add the necessary mac_portacl bits to /etc/sysctl.conf:
 # (note, if portacl rules already exist, must append to existing ones!)
 security.mac.portacl.suser_exempt=1
