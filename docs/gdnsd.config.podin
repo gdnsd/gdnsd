@@ -272,17 +272,15 @@ Example listen config:
 
 =item B<udp_rcvbuf>
 
-Integer, min 4096, max 1048576.  If set, this value will be used to set
-the C<SO_RCVBUF> socket option on the UDP listening socket(s).  Most
-users do not need to tune this value.  If left unset, the code
-takes a somewhat heuristic approach, trying to raise the value only if
-the OS-supplied default seems too low for conditions.
+Integer, min 4096, max 1048576, default 0.  If set to a non-zero value, this
+value will be used to set the C<SO_RCVBUF> socket option on the UDP listening
+socket(s), otherwise we leave the OS defaults alone.
 
 =item B<udp_sndbuf>
 
-Integer, min 4096, max 1048576.  If set, this value will be used to set
-the C<SO_SNDBUF> socket option on the UDP listening socket(s).  Tuning
-advice mirrors the above.
+Integer, min 4096, max 1048576, default 0.  If set to a non-zero value, this
+value will be used to set the C<SO_SNDBUF> socket option on the UDP listening
+socket(s), otherwise we leave the OS defaults alone.
 
 =item B<zones_strict_data>
 

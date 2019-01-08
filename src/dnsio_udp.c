@@ -133,30 +133,24 @@ void dnsio_udp_init(const pid_t main_pid)
         log_fatal("Cannot install SIGUSR2 handler for dnsio_udp threads!");
 }
 
-static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr)
+static void udp_sock_opts_v4(const gdnsd_anysin_t* asin, const int sock V_UNUSED)
 {
-    const int opt_one V_UNUSED = 1;
     // If all variants we know of don't exist, we simply assume the IP
     //  stack will *not* set the DF bit on UDP packets.  We may need
     //  more variants here for other operating systems.
 #if defined IP_MTU_DISCOVER && defined IP_PMTUDISC_DONT
-    const int mtu_type = IP_PMTUDISC_DONT;
-    if (setsockopt(sock, SOL_IP, IP_MTU_DISCOVER, &mtu_type, sizeof(mtu_type)) == -1)
-        log_fatal("Failed to disable Path MTU Discovery for UDP socket: %s", logf_errno());
-#endif
-#if defined IP_DONTFRAG
-    const int opt_zero = 0;
-    if (setsockopt(sock, SOL_IP, IP_DONTFRAG, &opt_zero, sizeof(opt_zero)) == -1)
-        log_fatal("Failed to disable DF bit for UDP socket: %s", logf_errno());
+    sockopt_int_fatal(UDP, asin, sock, SOL_IP, IP_MTU_DISCOVER, IP_PMTUDISC_DONT);
+#elif defined IP_DONTFRAG
+    sockopt_bool_fatal(UDP, asin, sock, SOL_IP, IP_DONTFRAG, 0);
+#else
+#    error IPv6 not supported: cannot set min MTU and cannot disable DF/PMTUDISC
 #endif
 
-    if (any_addr) {
+    if (gdnsd_anysin_is_anyaddr(asin)) {
 #if defined IP_PKTINFO
-        if (setsockopt(sock, SOL_IP, IP_PKTINFO, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IP_PKTINFO on UDP socket: %s", logf_errno());
+        sockopt_bool_fatal(UDP, asin, sock, SOL_IP, IP_PKTINFO, 1);
 #elif defined IP_RECVDSTADDR
-        if (setsockopt(sock, SOL_IP, IP_RECVDSTADDR, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IP_RECVDSTADDR on UDP socket: %s", logf_errno());
+        sockopt_bool_fatal(UDP, asin, sock, SOL_IP, IP_RECVDSTADDR, 1);
 #else
         log_fatal("IPv4 any-address '0.0.0.0' not supported for DNS listening on your platform (no IP_PKTINFO or IP_RECVDSTADDR)");
 #endif
@@ -164,61 +158,33 @@ static void udp_sock_opts_v4(const int sock V_UNUSED, const bool any_addr)
 
     // This is just a latency hack, it's not necessary for correct operation
 #if defined IP_TOS && defined IPTOS_LOWDELAY
-    const int opt_tos = IPTOS_LOWDELAY;
-    if (setsockopt(sock, SOL_IP, IP_TOS, &opt_tos, sizeof(opt_tos)) == -1)
-        log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", logf_errno());
+    sockopt_int_warn(UDP, asin, sock, SOL_IP, IP_TOS, IPTOS_LOWDELAY);
 #endif
-
 }
 
-/* Here, we assume that if neither IPV6_USE_MIN_MTU or IPV6_MTU is
- *  available that the kernel will fragment for us by default.  This
- *  may or may not be a safe assumption on all OS's.
- * To test: set up an environment where one link in the client<->server
- *  path has a smaller MTU than the server interface MTU, and the
- *  server's interface MTU is >1280. Send an IPv6 query that results in
- *  a response greater than the path MTU, but smaller than the server's
- *  interface MTU.
- *  If the response does not reach the client, this platform is broken,
- *  and we need to find a platform-specific way to make it fragment to
- *  1280 or disable IPv6 completely for this platform.
- */
-
-static void udp_sock_opts_v6(const int sock)
+static void udp_sock_opts_v6(const gdnsd_anysin_t* asin, const int sock)
 {
-    const int opt_one = 1;
+    sockopt_bool_fatal(UDP, asin, sock, SOL_IPV6, IPV6_V6ONLY, 1);
 
 #if defined IPV6_USE_MIN_MTU
-    if (setsockopt(sock, SOL_IPV6, IPV6_USE_MIN_MTU, &opt_one, sizeof(opt_one)) == -1)
-        log_fatal("Failed to set IPV6_USE_MIN_MTU on UDP socket: %s", logf_errno());
+    sockopt_bool_fatal(UDP, asin, sock, SOL_IPV6, IPV6_USE_MIN_MTU, 1);
 #elif defined IPV6_MTU
 #    ifndef IPV6_MIN_MTU
 #      define IPV6_MIN_MTU 1280
 #    endif
+    // This sockopt doesn't have matching get+set; get needs a live
+    // connection and reports the connection's path MTU, so we have to just
+    // set it here blindly...
     const int min_mtu = IPV6_MIN_MTU;
     if (setsockopt(sock, SOL_IPV6, IPV6_MTU, &min_mtu, sizeof(min_mtu)) == -1)
-        log_fatal("Failed to set IPV6_MTU on UDP socket: %s", logf_errno());
+        log_fatal("Failed to set IPV6_MTU on TCP socket: %s", logf_errno());
+#else
+#   error IPv6 not ok: cannot set MTU to 1280
 #endif
-
-    // Guard IPV6_V6ONLY with a getsockopt(), because Linux fails here if a
-    // socket is already bound (in which case we also should've already set
-    // this in the previous daemon instance), because it affects how binding
-    // works...
-    int opt_v6o = 0;
-    socklen_t opt_v6o_len = sizeof(opt_v6o);
-    if (getsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_v6o, &opt_v6o_len) == -1)
-        log_fatal("Failed to get IPV6_V6ONLY on UDP socket: %s", logf_errno());
-    if (!opt_v6o)
-        if (setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IPV6_V6ONLY on UDP socket: %s", logf_errno());
 
 #if defined IPV6_MTU_DISCOVER && defined IPV6_PMTUDISC_DONT
-    const int mtu_type = IPV6_PMTUDISC_DONT;
-    if (setsockopt(sock, SOL_IPV6, IPV6_MTU_DISCOVER, &mtu_type, sizeof(mtu_type)) == -1)
-        log_fatal("Failed to disable Path MTU Discovery for UDP socket: %s", logf_errno());
-#endif
-
-#if defined IPV6_DONTFRAG
+    sockopt_int_fatal(UDP, asin, sock, SOL_IPV6, IPV6_MTU_DISCOVER, IPV6_PMTUDISC_DONT);
+#elif defined IPV6_DONTFRAG
     // There have been reports in https://github.com/gdnsd/gdnsd/issues/115 of
     // the IPV6_DONTFRAG setsockopt failing within the context of some
     // OpenVZ+Debian environments.
@@ -227,79 +193,20 @@ static void udp_sock_opts_v6(const int sock)
     // against bad defaults.
     // Therefore, we'll merely warn rather than fatal on this, in hopes it
     // clears up whatever's wrong with these OpenVZ environments.
-    const int opt_zero = 0;
-    if (setsockopt(sock, SOL_IPV6, IPV6_DONTFRAG, &opt_zero, sizeof(opt_zero)) == -1)
-        log_warn("Failed to disable DF bit for UDP socket: %s", logf_errno());
+    sockopt_int_warn(UDP, asin, sock, SOL_IPV6, IPV6_DONTFRAG, 0);
 #endif
 
 #if defined IPV6_RECVPKTINFO
-    if (setsockopt(sock, SOL_IPV6, IPV6_RECVPKTINFO, &opt_one, sizeof(opt_one)) == -1)
-        log_fatal("Failed to set IPV6_RECVPKTINFO on UDP socket: %s", logf_errno());
+    sockopt_bool_fatal(UDP, asin, sock, SOL_IPV6, IPV6_RECVPKTINFO, 1);
 #elif defined IPV6_PKTINFO
-    if (setsockopt(sock, SOL_IPV6, IPV6_PKTINFO, &opt_one, sizeof(opt_one)) == -1)
-        log_fatal("Failed to set IPV6_PKTINFO on UDP socket: %s", logf_errno());
+    sockopt_bool_fatal(UDP, asin, sock, SOL_IPV6, IPV6_PKTINFO, 1);
 #else
-#   error IPV6_RECVPKTINFO or IPV6_PKTINFO required; this host lacks both
+#   error IPv6 not supported: cannot set IPV6_RECVPKTINFO or IPV6_PKTINFO
 #endif
 
 #if defined IPV6_TCLASS && defined IPTOS_LOWDELAY
-    const int opt_tos = IPTOS_LOWDELAY;
-    if (setsockopt(sock, SOL_IPV6, IPV6_TCLASS, &opt_tos, sizeof(opt_tos)) == -1)
-        log_warn("Failed to set IPTOS_LOWDELAY on UDP socket: %s", logf_errno());
+    sockopt_int_warn(UDP, asin, sock, SOL_IPV6, IPV6_TCLASS, IPTOS_LOWDELAY);
 #endif
-}
-
-F_NONNULL
-static void negotiate_udp_buffer(int sock, int which, const unsigned pktsize, const gdnsd_anysin_t* asin)
-{
-    gdnsd_assert(sock > -1);
-    gdnsd_assert(which == SO_SNDBUF || which == SO_RCVBUF);
-    gdnsd_assert(pktsize >= 512);
-    gdnsd_assert(pktsize <= MAX_RESPONSE);
-
-    // Our default desired buffer.  This is based on enough room for
-    //   MMSG_WIDTH * 8 packets in the mmsg case, or 32 packets otherwise
-#ifdef USE_MMSG
-    const unsigned npkts = 8U * (use_mmsg ? MMSG_WIDTH : 4U);
-#else
-    const unsigned npkts = 8U * 4U;
-#endif
-
-    // Given asserts, constants, and conditions above, the possible range of
-    // desired_buf is 16KB -> 2MB.  For the SO_SNDBUF case, with default
-    // max_edns_response[_v6] values and MMSG support compiled in, the actual
-    // values would be ~176KB for IPv4 and ~152KB for IPv6.  For SO_RCVBUF it
-    // would be exactly 128KB for both protocols.
-    const int desired_buf = (int)(pktsize * npkts);
-
-    // Bare minimum buffer we'll accept is 16K
-    const int min_buf = 16384;
-
-    // For log messages below
-    const char* which_str = (which == SO_SNDBUF) ? "SO_SNDBUF" : "SO_RCVBUF";
-
-    // Negotiate with the kernel: if it reports <desired, try to set desired,
-    //   cutting in half on failure so long as we stay above the min, and then
-    //   eventually trying the exact minimum.  If we can't set the min, fail fatally.
-    int opt_size;
-    socklen_t size_size = sizeof(opt_size);
-    if (getsockopt(sock, SOL_SOCKET, which, &opt_size, &size_size) == -1)
-        log_fatal("Failed to get %s on UDP socket: %s", which_str, logf_errno());
-    if (opt_size < desired_buf) {
-        opt_size = desired_buf;
-        while (setsockopt(sock, SOL_SOCKET, which, &opt_size, sizeof(opt_size)) == -1) {
-            if (opt_size > (min_buf << 1))
-                opt_size >>= 1;
-            else if (opt_size > min_buf)
-                opt_size = min_buf;
-            else
-                log_fatal("Failed to set %s to %i for UDP socket %s: %s.  You may need to reduce the max_edns_response[_v6], or specify workable buffer sizes explicitly in the config", which_str, opt_size, logf_anysin(asin), logf_errno());
-        }
-    }
-
-    // If we had to endure some reductions above, complain about it
-    if (opt_size < desired_buf)
-        log_info("UDP socket %s: %s: wanted %i, got %i", logf_anysin(asin), which_str, desired_buf, opt_size);
 }
 
 void udp_sock_setup(dns_thread_t* t)
@@ -320,35 +227,17 @@ void udp_sock_setup(dns_thread_t* t)
         need_bind = true;
     }
 
-    const int opt_one = 1;
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof(opt_one)) == -1)
-        log_fatal("Failed to set SO_REUSEADDR on UDP socket: %s", logf_errno());
-
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof(opt_one)) == -1)
-        log_fatal("Failed to set SO_REUSEPORT on UDP socket: %s", logf_errno());
-
-    if (addrconf->udp_rcvbuf) {
-        int opt_size = (int)addrconf->udp_rcvbuf;
-        if (setsockopt(t->sock, SOL_SOCKET, SO_RCVBUF, &opt_size, sizeof(opt_size)) == -1)
-            log_fatal("Failed to set SO_RCVBUF to %i for UDP socket %s: %s", opt_size,
-                      logf_anysin(asin), logf_errno());
-    } else {
-        negotiate_udp_buffer(t->sock, SO_RCVBUF, DNS_RECV_SIZE, asin);
-    }
-
-    if (addrconf->udp_sndbuf) {
-        int opt_size = (int)addrconf->udp_sndbuf;
-        if (setsockopt(t->sock, SOL_SOCKET, SO_SNDBUF, &opt_size, sizeof(opt_size)) == -1)
-            log_fatal("Failed to set SO_SNDBUF to %i for UDP socket %s: %s", opt_size,
-                      logf_anysin(asin), logf_errno());
-    } else {
-        negotiate_udp_buffer(t->sock, SO_SNDBUF, isv6 ? gcfg->max_edns_response_v6 : gcfg->max_edns_response, asin);
-    }
+    sockopt_bool_fatal(UDP, asin, t->sock, SOL_SOCKET, SO_REUSEADDR, 1);
+    sockopt_bool_fatal(UDP, asin, t->sock, SOL_SOCKET, SO_REUSEPORT, 1);
+    if (addrconf->udp_rcvbuf)
+        sockopt_int_fatal(UDP, asin, t->sock, SOL_SOCKET, SO_RCVBUF, (int)addrconf->udp_rcvbuf);
+    if (addrconf->udp_sndbuf)
+        sockopt_int_fatal(UDP, asin, t->sock, SOL_SOCKET, SO_SNDBUF, (int)addrconf->udp_sndbuf);
 
     if (isv6)
-        udp_sock_opts_v6(t->sock);
+        udp_sock_opts_v6(asin, t->sock);
     else
-        udp_sock_opts_v4(t->sock, gdnsd_anysin_is_anyaddr(asin));
+        udp_sock_opts_v4(asin, t->sock);
 
     if (need_bind)
         socks_bind_sock("UDP DNS", t->sock, asin);

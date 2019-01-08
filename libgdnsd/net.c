@@ -26,7 +26,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <netinet/in_systm.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <string.h>
@@ -34,6 +37,96 @@
 #include <string.h>
 
 /* network utils */
+
+
+/******************************************************************************
+ * This block handles the mismatch of get/set sockopt values for
+ * TCP_DEFER_ACCEPT on Linux.  The algorithms and constants here are from the
+ * kernel, but are pretty stable.
+ *****************************************************************************/
+#ifdef __linux__
+
+#define LINUX_TCP_RTO_MAX 120
+#define LINUX_TCP_TIMEOUT_INIT 1
+
+static uint8_t secs_to_retrans(int seconds)
+{
+    uint8_t res = 0;
+    if (seconds > 0) {
+        int timeout = LINUX_TCP_TIMEOUT_INIT;
+        int period = timeout;
+        res = 1;
+        while (seconds > period && res < 255) {
+            res++;
+            timeout <<= 1;
+            if (timeout > LINUX_TCP_RTO_MAX)
+                timeout = LINUX_TCP_RTO_MAX;
+            period += timeout;
+        }
+    }
+    return res;
+}
+
+static int retrans_to_secs(uint8_t retrans)
+{
+    int period = 0;
+    if (retrans > 0) {
+        int timeout = LINUX_TCP_TIMEOUT_INIT;
+        period = timeout;
+        while (--retrans) {
+            timeout <<= 1;
+            if (timeout > LINUX_TCP_RTO_MAX)
+                timeout = LINUX_TCP_RTO_MAX;
+            period += timeout;
+        }
+    }
+    return period;
+}
+
+static int tcpdefaccept_xlate_secs(int seconds)
+{
+    return retrans_to_secs(secs_to_retrans(seconds));
+}
+
+#endif
+/******************************************************************************
+ * End block of Linux TCP_DEFER_ACCEPT hackery
+ *****************************************************************************/
+
+void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* asin, const char* level_str, const char* optname_str, const char* proto_str)
+{
+    int current = 0;
+    socklen_t s_current = sizeof(current);
+    int compare = wantval;
+#ifdef __linux__
+    // Linux hack: buffers are reported back at 2x configured value
+    if (level == SOL_SOCKET && (optname == SO_RCVBUF || optname == SO_SNDBUF))
+        compare *= 2;
+    // Linux hack: defer accept timeout is translated from seconds to
+    // retransmits on set, then back to seconds on get, which rounds it up
+    // based on tcp retransmit timing algorithm.
+    if (level == SOL_TCP && optname == TCP_DEFER_ACCEPT)
+        compare = tcpdefaccept_xlate_secs(compare);
+#endif
+    if (getsockopt(sock, level, optname, &current, &s_current)) {
+        if (fatal)
+            log_fatal("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, logf_errno());
+        else
+            log_warn("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, logf_errno());
+    } else {
+        bool ok;
+        if (is_bool)
+            ok = (!current == !compare);
+        else
+            ok = (current == compare);
+        if (!ok && setsockopt(sock, level, optname, &wantval, sizeof(wantval))) {
+            if (fatal)
+                log_fatal("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, wantval, logf_errno());
+            else
+                log_warn("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, wantval, logf_errno());
+        }
+    }
+}
 
 void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
 {

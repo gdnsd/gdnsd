@@ -119,4 +119,22 @@ const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* asin);
 #define logf_anysin gdnsd_logf_anysin
 #define logf_anysin_noport gdnsd_logf_anysin_noport
 
+// Idempotent (get, then set only if needs to change) setsockopt for basic integers.
+// The "bool" variants use an integer type, but only compare get-vs-set as
+// booleans (e.g. get returning 16 will still match a desired set value of 1):
+
+#define sockopt_int_fatal(proto, asin, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, false, asin, #level, #optname, #proto)
+
+#define sockopt_bool_fatal(proto, asin, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, true, asin, #level, #optname, #proto)
+
+#define sockopt_int_warn(proto, asin, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, false, asin, #level, #optname, #proto)
+
+#define sockopt_bool_warn(proto, asin, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, true, asin, #level, #optname, #proto)
+
+void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* asin, const char* level_str, const char* optname_str, const char* proto_str);
+
 #endif // GDNSD_NET_H

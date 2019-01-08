@@ -629,70 +629,41 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         need_bind = true;
     }
 
-    const int opt_one = 1;
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEADDR, &opt_one, sizeof(opt_one)) == -1)
-        log_fatal("Failed to set SO_REUSEADDR on TCP socket: %s", logf_errno());
+    sockopt_bool_fatal(TCP, asin, t->sock, SOL_SOCKET, SO_REUSEADDR, 1);
+    sockopt_bool_fatal(TCP, asin, t->sock, SOL_SOCKET, SO_REUSEPORT, 1);
 
-    if (setsockopt(t->sock, SOL_SOCKET, SO_REUSEPORT, &opt_one, sizeof(opt_one)) == -1)
-        log_fatal("Failed to set SO_REUSEPORT on TCP socket: %s", logf_errno());
+    sockopt_bool_fatal(TCP, asin, t->sock, SOL_TCP, TCP_NODELAY, 1);
 
 #ifdef TCP_DEFER_ACCEPT
-    const int opt_timeout = (int)addrconf->tcp_timeout;
-    if (setsockopt(t->sock, SOL_TCP, TCP_DEFER_ACCEPT, &opt_timeout, sizeof(opt_timeout)) == -1)
-        log_fatal("Failed to set TCP_DEFER_ACCEPT on TCP socket: %s", logf_errno());
+    sockopt_int_fatal(TCP, asin, t->sock, SOL_TCP, TCP_DEFER_ACCEPT, (int)addrconf->tcp_timeout);
 #endif
 
 #ifdef TCP_FASTOPEN
     // This is non-fatal for now because many OSes may require tuning/config to
     // allow this to work, but we do want to default it on in cases where it
     // works out of the box correctly.
-    const int opt_tfo = (int)addrconf->tcp_fastopen;
-    if (opt_tfo) {
-        if (setsockopt(t->sock, SOL_TCP, TCP_FASTOPEN, &opt_tfo, sizeof(opt_tfo)) == -1)
-            log_err("Failed to set TCP_FASTOPEN to %i on TCP socket: %s, continuing!", opt_tfo, logf_errno());
-    }
+    sockopt_int_warn(TCP, asin, t->sock, SOL_TCP, TCP_FASTOPEN, (int)addrconf->tcp_fastopen);
 #endif
 
     if (isv6) {
-        // as with our default max_edns_response_v6, leave plenty of headroom
-        // here to avoid IPv6 mtu/frag loss issues.  Clamping to min mtu should
-        // commonly set MSS to 1220 anyways, but we'll go with a
-        // more-conservative 1212 below in TCP_MAXSEG.  I'm assuming here that
-        // setting the MTU/MAXSEG on the listening socket (as opposed to the
-        // per-connection socket) is the only reasonable place, because the
-        // 3WHS is already over and done by the time we get an fd from
-        // accept() at runtime, so this stuff should effectively inherit down
-        // or it's kind of useless...
+        sockopt_bool_fatal(TCP, asin, t->sock, SOL_IPV6, IPV6_V6ONLY, 1);
 
+        // as with our default max_edns_response_v6, assume minimum MTU only to
+        // avoid IPv6 mtu/frag loss issues.  Clamping to min mtu should
+        // commonly set MSS to 1220.
 #if defined IPV6_USE_MIN_MTU
-        if (setsockopt(t->sock, SOL_IPV6, IPV6_USE_MIN_MTU, &opt_one, sizeof(opt_one)) == -1)
-            log_fatal("Failed to set IPV6_USE_MIN_MTU on TCP socket: %s", logf_errno());
+        sockopt_bool_fatal(TCP, asin, t->sock, SOL_IPV6, IPV6_USE_MIN_MTU, 1);
 #elif defined IPV6_MTU
 #  ifndef IPV6_MIN_MTU
 #    define IPV6_MIN_MTU 1280
 #  endif
+        // This sockopt doesn't have matching get+set; get needs a live
+        // connection and reports the connection's path MTU, so we have to just
+        // set it here blindly...
         const int min_mtu = IPV6_MIN_MTU;
         if (setsockopt(t->sock, SOL_IPV6, IPV6_MTU, &min_mtu, sizeof(min_mtu)) == -1)
             log_fatal("Failed to set IPV6_MTU on TCP socket: %s", logf_errno());
 #endif
-
-#ifdef TCP_MAXSEG
-        const int maxseg = 1212;
-        if (setsockopt(t->sock, SOL_TCP, TCP_MAXSEG, &maxseg, sizeof(maxseg)) == -1)
-            log_fatal("Failed to set TCP_MAXSEG to %i on TCP socket: %s", maxseg, logf_errno());
-#endif
-
-        // Guard IPV6_V6ONLY with a getsockopt(), because Linux fails here if a
-        // socket is already bound (in which case we also should've already set
-        // this in the previous daemon instance), because it affects how binding
-        // works...
-        int opt_v6o = 0;
-        socklen_t opt_v6o_len = sizeof(opt_v6o);
-        if (getsockopt(t->sock, SOL_IPV6, IPV6_V6ONLY, &opt_v6o, &opt_v6o_len) == -1)
-            log_fatal("Failed to get IPV6_V6ONLY on TCP socket: %s", logf_errno());
-        if (!opt_v6o)
-            if (setsockopt(t->sock, SOL_IPV6, IPV6_V6ONLY, &opt_one, sizeof(opt_one)) == -1)
-                log_fatal("Failed to set IPV6_V6ONLY on TCP socket: %s", logf_errno());
     }
 
     if (need_bind)
@@ -733,8 +704,18 @@ static void set_accf(const dns_addr_t* addrconf V_UNUSED, const int sock V_UNUSE
             if (!getrv)
                 if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, NULL, 0))
                     log_err("Failed to clear existing '%s' SO_ACCEPTFILTER on TCP socket %s: %s", afa_exist.af_name, logf_anysin(&addrconf->addr), logf_errno());
-            if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa_want, sizeof(afa_want)))
+            if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa_want, sizeof(afa_want))) {
                 log_err("Failed to install '%s' SO_ACCEPTFILTER on TCP socket %s: %s", afa_want.af_name, logf_anysin(&addrconf->addr), logf_errno());
+                // If we failed at "dnsready" for the non-proxy case, try
+                // "dataready" just in case that one happens to be loaded;
+                // it's better than nothing and matches what we get on Linux
+                // with just TCP_DEFER_ACCEPT
+                if (!addrconf->tcp_proxy) {
+                    strcpy(afa_want.af_name, "dataready");
+                    if (setsockopt(sock, SOL_SOCKET, SO_ACCEPTFILTER, &afa_want, sizeof(afa_want)))
+                        log_err("Failed to install '%s' SO_ACCEPTFILTER on TCP socket %s: %s", afa_want.af_name, logf_anysin(&addrconf->addr), logf_errno());
+                }
+            }
         }
     }
 #endif
