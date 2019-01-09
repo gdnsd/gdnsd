@@ -1,3 +1,11 @@
+2.4.1 - 2019-01-10
+    * These two fixes are backports from master branch work towards 3.x:
+    * Reverted the detection and rejection of post-2018 GeoLite2-City databases
+      with auto_dc_coords that was added in 2.3.1, as MaxMind later reversed
+      course and decided to keep the coordinates in the databases.
+    * Bugfix for a bad printf() format specifier in the case that strerror()
+      failed on non-GNU platforms.
+
 2.4.0 - 2018-02-15
     * plugin_multifo: added "ignore_health" parameter. If "ignore_health" is
       true, all addresses are added to the result set regardless of health, but
