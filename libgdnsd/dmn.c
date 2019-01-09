@@ -293,7 +293,7 @@ const char* dmn_logf_strerror(const int errnum) {
         if(rv == EINVAL || (rv < 0 && errno == EINVAL))
             snprintf(tmpbuf, DMN_ERRNO_MAXLEN, "Invalid errno: %i", errnum);
         else
-            dmn_log_fatal("strerror_r(,,%zu) failed", DMN_ERRNO_MAXLEN);
+            dmn_log_fatal("strerror_r(,,%u) failed", DMN_ERRNO_MAXLEN);
     }
     tmpbuf_ptr = tmpbuf;
 #endif
