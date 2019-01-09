@@ -428,19 +428,6 @@ C<auto_dc_coords>, those datacenters will not be used in automatic results,
 but will still be available for manual use via C<map> and/or C<nets>
 entries.
 
-Note that MaxMind will stop including coordinate data in their free
-GeoLite2-City databases in 2019, which makes them incompatible with this
-mode of operation.  The code will attempt to detect such a condition and
-refuse to configure the map in this case.  The commercial GeoIP2-City
-databases still contain coordinate information and can be used.  MaxMind
-links on this topic:
-
-L<https://dev.maxmind.com/geoip/geoip2/geolite2/>
-
-L<https://support.maxmind.com/geolite-legacy-discontinuation-notice/>
-
-L<https://blog.maxmind.com/2018/01/02/discontinuation-of-the-geolite-legacy-databases/>
-
 =item C<auto_dc_limit = N>
 
 Unsigned integer, optional, default 3.  When city-auto-mode is in effect,
