@@ -135,15 +135,12 @@ void dnsio_udp_init(const pid_t main_pid)
 
 static void udp_sock_opts_v4(const gdnsd_anysin_t* asin, const int sock V_UNUSED)
 {
-    // If all variants we know of don't exist, we simply assume the IP
-    //  stack will *not* set the DF bit on UDP packets.  We may need
-    //  more variants here for other operating systems.
 #if defined IP_MTU_DISCOVER && defined IP_PMTUDISC_DONT
     sockopt_int_fatal(UDP, asin, sock, SOL_IP, IP_MTU_DISCOVER, IP_PMTUDISC_DONT);
 #elif defined IP_DONTFRAG
     sockopt_bool_fatal(UDP, asin, sock, SOL_IP, IP_DONTFRAG, 0);
 #else
-#    error IPv6 not supported: cannot set min MTU and cannot disable DF/PMTUDISC
+#   error IPv4 not supported: cannot disable DF/PMTUDISC
 #endif
 
     if (gdnsd_anysin_is_anyaddr(asin)) {
