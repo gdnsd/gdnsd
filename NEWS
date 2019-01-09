@@ -1,8 +1,24 @@
-2.99.9945-beta - 2018-12-21
+2.99.9949-beta - 2019-01-09
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no gaurantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * Bugfix: Pipelined TCP requests should now work properly (these aren't
+      in common use by recursors yet AFAIK).
+    * Socket option-setting code refactored substantially, should smooth out
+      any bumps caused at the kernel level by pointlessly re-setting
+      already-set options on sockets taken over via replace.
+    * UDP send and receive buffer sizes are now no longer subject to heuristic
+      auto-tuning guesswork.  If an explicit value is not configured, OS
+      defaults are left alone.
+    * TCP PROXY (v1 and v2) protocol support can now be optionally enabled via
+      the new per-listener option "tcp_proxy".  This enables preservation of
+      recursors' source IP information for GeoIP lookups when proxying in TCP
+      DNS connections, and is primarily intended for testing DNS-over-TLS
+      deployment strategies using an external TLS proxy daemon.  See the
+      documentation for the "tcp_proxy" config option for more information.
+
+2.99.9945-beta - 2018-12-21
     * Bugfix: Parsing $INCLUDE without an origin argument should work
       correctly now (it was setting incorrect origin values)
     * On Linux, runtime threads for zone and geoip data reloads now increase
