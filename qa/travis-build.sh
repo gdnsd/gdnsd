@@ -16,6 +16,9 @@ set -e
 TEST_CPUS=`getconf _NPROCESSORS_ONLN`
 export TEST_CPUS
 
+# Fetch test data for fuller libgdmaps testing
+git submodule update --init
+
 case "$GDNSD_TRAVIS_BUILD" in
     optimized)
         CFLAGS=-O3 ./configure
