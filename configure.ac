@@ -77,7 +77,7 @@ AC_ARG_WITH([hardening],[AS_HELP_STRING([--without-hardening],
 ])
 if test $harden = 1; then
     AS_CASE([$CFLAGS], [*-O[[1-6]]*], [CPPFLAGS="-D_FORTIFY_SOURCE=2 ${CPPFLAGS}"])
-    AX_APPEND_COMPILE_FLAGS([-fPIE -fstack-protector-all -ftrapv],[CFLAGS],[$CLANG_WERROR])
+    AX_APPEND_COMPILE_FLAGS([-fPIE -fstack-protector-strong -fstack-clash-protection -fcf-protection=full -mshstk -fexceptions -ftrapv],[CFLAGS],[$CLANG_WERROR])
     AX_APPEND_LINK_FLAGS([-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack],[LDFLAGS],[$CLANG_WERROR])
 fi
 
