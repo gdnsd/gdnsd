@@ -178,8 +178,17 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             }
 
             make_addr(lspec, addrconf->dns_port, &addrconf->addr);
-            if (addrconf->tcp_proxy && addrconf->dns_port == 53U)
-                log_fatal("Cannot configure tcp_proxy mode on port 53");
+            if (addrconf->tcp_proxy) {
+                unsigned lport;
+                if (addrconf->addr.sa.sa_family == AF_INET) {
+                    lport = addrconf->addr.sin.sin_port;
+                } else {
+                    gdnsd_assert(addrconf->addr.sa.sa_family == AF_INET6);
+                    lport = addrconf->addr.sin6.sin6_port;
+                }
+                if (lport == 53U)
+                    log_fatal("Cannot configure tcp_proxy mode on port 53");
+            }
             vscf_hash_iterate_const(addr_opts, true, bad_key, addrconf->tcp_proxy
                                     ? "per-address listen option with tcp_proxy"
                                     : "per-address listen option");
