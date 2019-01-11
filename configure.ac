@@ -77,7 +77,15 @@ AC_ARG_WITH([hardening],[AS_HELP_STRING([--without-hardening],
 ])
 if test $harden = 1; then
     AS_CASE([$CFLAGS], [*-O[[1-6]]*], [CPPFLAGS="-D_FORTIFY_SOURCE=2 ${CPPFLAGS}"])
-    AX_APPEND_COMPILE_FLAGS([-fPIE -fstack-protector-strong -fstack-clash-protection -fcf-protection=full -mshstk -fexceptions -ftrapv],[CFLAGS],[$CLANG_WERROR])
+    AX_APPEND_COMPILE_FLAGS([-fPIE -fstack-protector-strong -fstack-clash-protection -fexceptions -ftrapv],[CFLAGS],[$CLANG_WERROR])
+    if test $CLANG != yes; then
+        # We'll only turn this on by default for real GCC-8 for now, because at
+        # least clang-7 seems to cause all binutils (ranlib, ar, ld) to emit
+        # strange errors on Linux with fcf-protection (yet linking succeeds
+        # anyways, which is odd in itself).  The errors look like:
+        # /usr/bin/ld: error: src/src_gdnsd-main.o: <corrupt x86 feature size: 0x8>
+        AX_APPEND_COMPILE_FLAGS([-mshstk -fcf-protection=full],[CFLAGS],[])
+    fi
     AX_APPEND_LINK_FLAGS([-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack],[LDFLAGS],[$CLANG_WERROR])
 fi
 
