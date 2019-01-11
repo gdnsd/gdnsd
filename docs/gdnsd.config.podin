@@ -120,7 +120,7 @@ It can also take the form of an array of such addresses, as in:
       192.0.2.1,
       192.0.2.2,
       2001:DB8::1,
-      "[2001:DB8::1234]:5353",
+      "[2001:DB8::1234]:53035",
     ]
   }
 
@@ -132,7 +132,7 @@ per-address options, as in:
       192.0.2.1 => {
         tcp_timeout = 7
       },
-      192.0.2.2:5353 => {
+      192.0.2.2:53035 => {
         udp_threads = 5
       },
     }
@@ -266,7 +266,7 @@ Example listen config:
         listen => {
           0.0.0.0 => { ... } # normal UDP+TCP on port 53
           :: => { ... } # normal UDP+TCP on port 53 for IPv6
-          127.0.0.1:5353 => { tcp_proxy => true, ... }
+          127.0.0.1:53035 => { tcp_proxy => true, ... }
         }
       }
 
