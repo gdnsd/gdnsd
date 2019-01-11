@@ -51,6 +51,7 @@ static const dns_addr_t addr_defs_defaults = {
     .tcp_clients_per_thread = 128U,
     .tcp_threads = 2U,
     .tcp_proxy = false,
+    .tcp_pad = false,
 };
 
 static const socks_cfg_t socks_cfg_defaults = {
@@ -171,11 +172,13 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_threads, 1LU, 1024LU, addrconf->tcp_threads);
             if (addrconf->tcp_proxy) {
                 addrconf->udp_threads = 0U;
+                addrconf->tcp_pad = true;
             } else {
                 CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
                 CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
                 CFG_OPT_UINT_ALTSTORE(addr_opts, udp_threads, 1LU, 1024LU, addrconf->udp_threads);
             }
+            CFG_OPT_BOOL_ALTSTORE(addr_opts, tcp_pad, addrconf->tcp_pad);
 
             make_addr(lspec, addrconf->dns_port, &addrconf->addr);
             if (addrconf->tcp_proxy) {

@@ -80,6 +80,9 @@ typedef struct {
     // startup based on the UDP address family and the max_response options.
     unsigned udp_edns_max;
 
+    // Whether to use EDNS Padding in TCP responses (encrypted transport)
+    bool tcp_pad;
+
 // ---
 // From this point on, all of this gets memset to zero at the start of each
 // request and is set with new values as we parse the query and create the
@@ -199,13 +202,18 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
     pthread_mutex_unlock(&stats_init_mutex);
 }
 
-void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6)
+void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad)
 {
     dnsp_ctx_t* ctx = xcalloc(sizeof(*ctx));
+    if (udp_is_ipv6)
+        gdnsd_assert(is_udp);
+    if (tcp_pad)
+        gdnsd_assert(!is_udp);
 
     ctx->rand_state = gdnsd_rand32_init();
     ctx->is_udp = is_udp;
     ctx->udp_edns_max = udp_is_ipv6 ? gcfg->max_edns_response_v6 : gcfg->max_edns_response;
+    ctx->tcp_pad = tcp_pad;
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
 
     gdnsd_plugins_action_iothread_init();
@@ -358,6 +366,11 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
         // We could hypothetically parse it just to FORMERR-reject it if the client
         // violates the RFC by sending a non-zero data length, but that seems
         // needlessly aggressive.
+    } else if (opt_code == EDNS_PADDING) {
+        log_devdebug("Got client edns padding option, no use for it");
+        // Ditto, we emit padding in response to any EDNS request over TCP when
+        // tcp_pad is enabled, so we don't care what padding they did (or
+        // didn't) send.
     } else if (opt_code == EDNS_COOKIE_OPTCODE) {
         // ignore any cookie after the first one, per RFC
         if (!gcfg->disable_cookies && !ctx->recvd_cookie) {
@@ -1560,7 +1573,7 @@ F_NONNULL F_PURE
 static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned auth_depth)
 {
     gdnsd_assert(offset);
-    gdnsd_assert(offset < MAX_RESPONSE);
+    gdnsd_assert(offset < MAX_RESPONSE_DATA);
     gdnsd_assert(auth_depth < 256);
 
     unsigned llen = packet[offset];
@@ -1873,7 +1886,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
         stats_own_inc(&ctx->stats->v6);
 
     // parse_optrr() will raise this value in the udp edns case as necc.
-    ctx->this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE;
+    ctx->this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE_DATA;
 
     /*
         log_devdebug("Processing %sv%u DNS query of length %u from %s",
@@ -2006,8 +2019,39 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
             res_offset += gcfg->nsid_len;
         }
 
-        // predicted edns_out_bytes correctly earlier for truncation
+        // predicted edns_out_bytes correctly earlier for truncation.  note
+        // this happens before padding below.
         gdnsd_assert(ctx->edns_out_bytes == (11U + rdlen));
+
+        // Padding, must be the last option, as it must make calculations based
+        // on the total size of the packet including any updates to
+        // "res_offset" from earlier options
+        if (ctx->tcp_pad) {
+            gdnsd_assert(!ctx->is_udp);
+            // RFC 8467 recommends block padding to 468, which we'll stick with
+            // here even though MTU-size concerns don't really matter as much
+            // for now, as we only support the TCP case.  The minimum size
+            // added to a packet by the Padding option itself is 4 bytes (for
+            // option code and option len of zero), plus however many bytes of
+            // actual padding length is tacked on).  Note MAX_RESPONSE_DATA
+            // allows us to always add the option and always obtain perfect
+            // padding within MAX_RESPONSE_BUF at a block size of 468 as
+            // documented in dnswire.h.
+            gdnsd_assert(res_offset <= MAX_RESPONSE_DATA);
+            size_t pad_dlen = (((res_offset + 4U + PAD_BLOCK_SIZE - 1U) / PAD_BLOCK_SIZE) * PAD_BLOCK_SIZE) - 4U - res_offset;
+            gdnsd_assert(res_offset + 4U + pad_dlen <= MAX_RESPONSE_BUF);
+
+            rdlen += (4U + pad_dlen);
+            gdnsd_put_una16(htons(EDNS_PADDING), &packet[res_offset]);
+            res_offset += 2;
+            gdnsd_put_una16(htons(pad_dlen), &packet[res_offset]);
+            res_offset += 2;
+            memset(&packet[res_offset], 0, pad_dlen);
+            res_offset += pad_dlen;
+
+            gdnsd_assert(res_offset <= MAX_RESPONSE_BUF);
+            gdnsd_assert((res_offset % PAD_BLOCK_SIZE) == 0);
+        }
 
         // Update OPT RR's rdlen for any options emitted above, and bump arcount for it
         gdnsd_put_una16(htons(rdlen), rdlen_ptr);
@@ -2026,7 +2070,7 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
     gdnsd_put_una16(htons(ctx->nscount), &hdr->nscount);
     gdnsd_put_una16(htons(ctx->arcount), &hdr->arcount);
 
-    gdnsd_assert(res_offset <= MAX_RESPONSE);
+    gdnsd_assert(res_offset <= MAX_RESPONSE_BUF);
 
     return res_offset;
 }

@@ -248,7 +248,10 @@ connection for the remainder of its life.
 
 It is not recommended to expose PROXY listeners to public traffic; they should
 be confined to localhost or to addresses which are not reachable outside of
-your infrastructure due to firewalling, etc.
+your infrastructure due to firewalling, etc.  This option is primarily intended
+to test encrypted transports using external daemons proxying into gdnsd.  If
+using it for some other generic loadbalancing without crypto, padding should be
+disabled via C<tcp_pad> below.
 
 PROXY connections increment all of the same stat counters as regular TCP
 connections, and also add two new proxy-specific ones:
@@ -269,6 +272,22 @@ Example listen config:
           127.0.0.1:53035 => { tcp_proxy => true, ... }
         }
       }
+
+=item B<tcp_pad>
+
+Boolean, default false for normal TCP listeners, default true for C<tcp_proxy>
+listeners (see above).  This TCP option is B<only> supported inside the
+per-address options of a specific listener address in the hash form of the
+C<listen> option, not as a global option.
+
+If enabled (by default for the C<tcp_proxy> case), a response to any request
+which carries an EDNS OPT RR will be padded using the EDNS Padding option to a
+multiple of 468 bytes as recommended in RFC 8467.  This should only be enabled
+if the TCP connections to a listener are encrypted by a proxy, which is the
+intended use-case for C<tcp_proxy> above.  You may wish to enable this manually
+if proxying encrypted requests via a daemon that doesn't do the PROXY protocol,
+and you may wish to disable it on C<tcp_proxy> listeners if the other daemon
+isn't providing a crypto wrapper.
 
 =item B<udp_rcvbuf>
 

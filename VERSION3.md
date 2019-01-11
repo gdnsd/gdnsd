@@ -13,7 +13,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Pipelined requests should work fine, and will always be answered in-order due to implementation details
   * Internal connection idle timeouts scale with connection load
   * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
-  * PROXY procotol support can be enabled for specific special listen addresses
+  * PROXY procotol support can be enabled for specific special listen addresses.  This is intended for testing encrypted connections such as DNS-over-TLS using an external daemon for the secure transport, and also by default enables EDNS Padding to help secure against response length analysis.
   * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:
     * `tcp.conns` - TCP conns we accepted (excludes extremely early failures, e.g. accept() itself returning an error)
     * `tcp.close_c` - TCP conns closed cleanly by the client (the most-desirable outcome)
@@ -108,6 +108,7 @@ These are all new options for new features:
 * `max_nocookie_response` - Limits UDP response sizes when clients present no valid cookie auth.  This is disabled by default for now.
 * `max_edns_response_v6` - Like existing `max_edns_response` parameter (which is now v4-only), but for IPv6, and defaulting to 1212.
 * `tcp_proxy` - Enables PROXY protocol support for a specific TCP listen address:port, see docs for details
+* `tcp_pad` - Controls EDNS Padding for TCP connections (default off for normal TCP listeners, default on for the `tcp_proxy` case).
 
 ### Options with changed defaults or allowed values
 

@@ -39,7 +39,16 @@
 // Sizes our output buffers, we never generate packets longer than this.
 // This can't be changed arbitrarily to another number by editing the define
 // here, as the 16K boundary has other magic effects (e.g. on DNS compression).
-#define MAX_RESPONSE 16384U
+#define MAX_RESPONSE_BUF 16384U
+
+// EDNS Padding block size from RFC 8467
+#define PAD_BLOCK_SIZE 468U
+
+// This is similar to MAX_RESPONSE_BUF, but for checking real data output
+// lengths, so that there's always room within MAX_RESPONSE_BUF to pad to a
+// multiple of 468 bytes for EDNS Padding, which has a min padding size of 4
+// bytes: (468*35 - 4) = 16376
+#define MAX_RESPONSE_DATA 16376U
 
 /*** Wire formats ***/
 
@@ -85,6 +94,7 @@ typedef struct S_PACKED {
 #define EDNS_CLIENTSUB_OPTCODE     0x0008
 #define EDNS_COOKIE_OPTCODE        0x000A
 #define EDNS_TCP_KEEPALIVE_OPTCODE 0x000B
+#define EDNS_PADDING               0x000C
 
 /* DNS RR Types */
 #define DNS_TYPE_A 1U

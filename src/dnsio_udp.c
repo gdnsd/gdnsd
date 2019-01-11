@@ -261,7 +261,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
     const unsigned pgsz = get_pgsz();
-    const unsigned max_rounded = ((MAX_RESPONSE + pgsz - 1) / pgsz) * pgsz;
+    const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
 
     gdnsd_anysin_t asin;
     void* buf = gdnsd_xpmalign(pgsz, max_rounded);
@@ -357,9 +357,9 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
 {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
 
-    // MAX_RESPONSE, rounded up to the next nearest multiple of the page size
+    // MAX_RESPONSE_BUF, rounded up to the next nearest multiple of the page size
     const unsigned pgsz = get_pgsz();
-    const unsigned max_rounded = ((MAX_RESPONSE + pgsz - 1) / pgsz) * pgsz;
+    const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
 
     uint8_t* bufs = gdnsd_xpmalign_n(pgsz, MMSG_WIDTH, max_rounded);
 
@@ -527,7 +527,7 @@ void* dnsio_udp_start(void* thread_asvoid)
     const dns_addr_t* addrconf = t->ac;
 
     dnspacket_stats_t* stats;
-    void* dnsp_ctx = dnspacket_ctx_init(&stats, true, is_ipv6(&addrconf->addr));
+    void* dnsp_ctx = dnspacket_ctx_init(&stats, true, is_ipv6(&addrconf->addr), false);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 

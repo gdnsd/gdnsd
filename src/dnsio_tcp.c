@@ -88,7 +88,7 @@ struct tcpdns_conn {
     unsigned size;
     unsigned size_done;
     tcpdns_state_t state;
-    uint8_t buffer[MAX_RESPONSE + 2];
+    uint8_t buffer[MAX_RESPONSE_BUF + 2];
 };
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -788,7 +788,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
     // Therefore, this must happen after register_thread() above, to ensure
     // that all tcp threads are properly registered with the shutdown handler
     // before we begin processing possible future shutdown events.
-    ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false, false);
+    ctx->dnsp_ctx = dnspacket_ctx_init(&ctx->stats, false, false, addrconf->tcp_pad);
 
     rcu_register_thread();
     ctx->rcu_is_online = true;

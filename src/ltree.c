@@ -1118,9 +1118,9 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     }
 
     rsize += rsize_rrs;
-    if (rsize > MAX_RESPONSE)
+    if (rsize > MAX_RESPONSE_DATA)
         log_zfatal("Domainname '%s%s' has too much data (%zu > %u)",
-                   logf_lstack(lstack, depth, zone->dname), rsize, MAX_RESPONSE);
+                   logf_lstack(lstack, depth, zone->dname), rsize, MAX_RESPONSE_DATA);
 
     return false;
 }
