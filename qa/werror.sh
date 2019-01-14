@@ -11,8 +11,8 @@ set -e
 for comp in gcc gcc-8 clang clang-6.0 clang-7; do
     CC=${comp} ./configure --enable-developer --with-werror
     make clean all
-    make check
+    SLOW_TESTS=1 make check
     CC=${comp} CFLAGS=-O3 ./configure --disable-developer --enable-extrawarn --with-werror
     make clean all
-    make check
+    SLOW_TESTS=1 make check
 done

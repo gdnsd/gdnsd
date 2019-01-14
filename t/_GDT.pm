@@ -88,6 +88,13 @@ our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
     $TEST_SERIAL = $1;
 }
 
+# Some TCP testing only works right in the presence of Linux's TCP_DEFER_ACCEPT
+# (which is universally available as far as we care) or *BSD's SO_ACCEPTFILTER
+# (which sometimes can't be loaded for lack of a non-default kernel module).
+# This flag is set if the daemon seems to emit log messages about the failure
+# to set up SO_ACCEPTFILTER stuff so that affected tests can workaround/skip.
+our $ACCF_FAIL = 0;
+
 # generic flag to eliminate various timer delays under testing
 $ENV{GDNSD_TESTSUITE_NODELAY} = 1;
 
@@ -100,9 +107,8 @@ our $TESTPORT_START = $ENV{TESTPORT_START};
 die "Test port start specification is not a number"
     unless looks_like_number($TESTPORT_START);
 
-our $DNS_PORT = $TESTPORT_START + (3 * $TEST_SERIAL);
-our $DNS_SPORT = $DNS_PORT + 1;
-our $EXTRA_PORT  = $DNS_PORT + 2;
+our $DNS_PORT = $TESTPORT_START + (2 * $TEST_SERIAL);
+our $EXTRA_PORT = $DNS_PORT + 1;
 
 our $saved_pid;
 
@@ -248,7 +254,11 @@ sub check_stats_inner {
         }
     }
 
-    return;
+    if (defined $to_check{'_code'}) {
+        $to_check{'_code'}->(\%json_vals);
+    }
+
+    return \%json_vals;
 }
 
 sub check_stats {
@@ -258,9 +268,9 @@ sub check_stats {
     my $err;
     my $attempts = 0;
     while(1) {
-        eval { $class->check_stats_inner(%to_check) };
+        my $json_vals = eval { $class->check_stats_inner(%to_check) };
         $err = $@;
-        return unless $err;
+        return $json_vals unless $err;
         if($err !~ /hard-fail/ && $attempts++ < $total_attempts) {
             select(undef, undef, undef, $attempt_delay * $attempts);
         }
@@ -393,6 +403,7 @@ sub spawn_daemon_execute {
                 or die "Cannot open '$daemon_out' for reading: $!";
             while(<$GDOUT_FH>) {
                 daemon_abort($daemon_out) if /\bfatal: /; # don't wait around if we see a fatal log entry...
+                $ACCF_FAIL = 1 if /SO_ACCEPTFILTER/; # this is only mentioned in logs if failing
                 return $pid if /\bDNS listeners started$/;
             }
             close($GDOUT_FH)
@@ -606,7 +617,6 @@ sub get_resolver {
         recurse => 0,
         nameservers => [ '127.0.0.1' ],
         port => $DNS_PORT,
-        srcport => $DNS_SPORT,
         srcaddr => '127.0.0.1',
         force_v4 => 1,
         persistent_tcp => 1,
@@ -623,7 +633,6 @@ sub get_resolver6 {
         recurse => 0,
         nameservers => [ '::1' ],
         port => $DNS_PORT,
-        srcport => $DNS_SPORT,
         srcaddr => '::1',
         force_v6 => 1,
         persistent_tcp => 1,
@@ -982,7 +991,6 @@ sub query_server {
         my $sock = $sockclass->new(
             PeerAddr => $ns,
             PeerPort => $port,
-            LocalPort => $DNS_SPORT,
             ReuseAddr => 1,
             Proto => 'udp',
             Timeout => 10,
@@ -1181,6 +1189,11 @@ sub test_kill_other_daemon {
 sub test_kill_daemon {
     my ($class, $pid) = @_;
     local $Test::Builder::Level = $Test::Builder::Level + 1;
+
+    # undef our cached resolvers, so that they'll close any open TCP
+    # connections to the server and not make it wait around on shutdown.
+    undef $_resolver;
+    undef $_resolver6;
 
     # use synchronous controlsock stop
     my $req = "X\0\0\0\0\0\0\0";

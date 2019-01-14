@@ -150,7 +150,7 @@ foreach my $proto (qw/v4_only v6_only/) {
 
     my $all_the_opts_response = _mk_optrr_cookie(hexstr('0123456789ABCDEF0000000000000000'));
     $all_the_opts_response->option('CLIENT-SUBNET' => pack('nCCa16', 2, 128, 0, inet_pton(AF_INET6, "::")));
-    $all_the_opts_response->option(11 => pack('n', 346));
+    $all_the_opts_response->option(11 => pack('n', 370));
     $all_the_opts_response->option(NSID => 'foobar');
 
     _GDT->test_dns(

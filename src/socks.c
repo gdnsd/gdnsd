@@ -47,8 +47,9 @@ static const dns_addr_t addr_defs_defaults = {
     .udp_sndbuf = 0U,
     .udp_threads = 2U,
     .tcp_timeout = 37U,
-    .tcp_fastopen = 128U,
-    .tcp_clients_per_thread = 128U,
+    .tcp_fastopen = 256U,
+    .tcp_clients_per_thread = 256U,
+    .tcp_backlog = 0U,
     .tcp_threads = 2U,
     .tcp_proxy = false,
     .tcp_pad = false,
@@ -166,9 +167,10 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 
             CFG_OPT_REMOVED(addr_opts, udp_recv_width);
             CFG_OPT_BOOL_ALTSTORE(addr_opts, tcp_proxy, addrconf->tcp_proxy);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 5LU, 1080LU, addrconf->tcp_timeout);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 5LU, 1800LU, addrconf->tcp_timeout);
             CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_fastopen, 1048576LU, addrconf->tcp_fastopen);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 32LU, 65535LU, addrconf->tcp_clients_per_thread);
+            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 16LU, 65535LU, addrconf->tcp_clients_per_thread);
+            CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_backlog, 65535LU, addrconf->tcp_backlog);
             CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_threads, 1LU, 1024LU, addrconf->tcp_threads);
             if (addrconf->tcp_proxy) {
                 addrconf->udp_threads = 0U;
@@ -282,9 +284,10 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
         CFG_OPT_UINT_ALTSTORE(options, udp_rcvbuf, 4096LU, 1048576LU, addr_defs.udp_rcvbuf);
         CFG_OPT_UINT_ALTSTORE(options, udp_sndbuf, 4096LU, 1048576LU, addr_defs.udp_sndbuf);
         CFG_OPT_UINT_ALTSTORE(options, udp_threads, 1LU, 1024LU, addr_defs.udp_threads);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 5LU, 1080LU, addr_defs.tcp_timeout);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_timeout, 5LU, 1800LU, addr_defs.tcp_timeout);
         CFG_OPT_UINT_ALTSTORE_NOMIN(options, tcp_fastopen, 1048576LU, addr_defs.tcp_fastopen);
-        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 32LU, 65536LU, addr_defs.tcp_clients_per_thread);
+        CFG_OPT_UINT_ALTSTORE(options, tcp_clients_per_thread, 16LU, 65535LU, addr_defs.tcp_clients_per_thread);
+        CFG_OPT_UINT_ALTSTORE_NOMIN(options, tcp_backlog, 65535LU, addr_defs.tcp_backlog);
         CFG_OPT_UINT_ALTSTORE(options, tcp_threads, 1LU, 1024LU, addr_defs.tcp_threads);
 
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);

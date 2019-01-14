@@ -443,15 +443,28 @@ ok(!$@) or diag $@;
 
 close($sock);
 
+# Open 3 sockets for the next 3 tests.  It's nice to have them open in parallel
+# to test more edge cases...
+my $tcp_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::DNS_PORT,
+    Proto => 'tcp',
+    Timeout => 10,
+);
+my $proxy_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
+    Proto => 'tcp',
+    Timeout => 10,
+);
+my $proxy2_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
+    Proto => 'tcp',
+    Timeout => 10,
+);
+
 # T28
 # TCP pipelining test.  We'll send a raw single send() with 5x minimal
 # questions (REFUSED due to root name) followed by a "real" question (NOERROR)
 # and then check stats etc.
-my $tcp_sock = IO::Socket::INET->new(
-    PeerAddr => '127.0.0.1:' . $_GDT::DNS_PORT,
-    Proto => 'tcp',
-    Timeout => 3,
-);
 my $six_tcp_piped = (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
 send($tcp_sock, $six_tcp_piped, 0);
 # Let responses just buffer, who cares for now
@@ -473,11 +486,6 @@ ok(!$@) or diag $@;
 # PROXYv1 + TCP pipelining test.  We'll send a raw single send() with a PROXYv1
 # header and 5x minimal questions (REFUSED due to root name) followed by a
 # "real" question (NOERROR) and then check stats etc.
-my $proxy_sock = IO::Socket::INET->new(
-    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
-    Proto => 'tcp',
-    Timeout => 3,
-);
 my $six_proxy_piped = "PROXY TCP4 127.0.0.1 127.0.0.1 1234 4321\r\n"
     . (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
 send($proxy_sock, $six_proxy_piped, 0);
@@ -502,11 +510,6 @@ ok(!$@) or diag $@;
 # PROXYv2 + TCP pipelining test.  We'll send a raw single send() with a PROXYv2
 # header and 5x minimal questions (REFUSED due to root name) followed by a
 # "real" question (NOERROR) and then check stats etc.
-my $proxy2_sock = IO::Socket::INET->new(
-    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
-    Proto => 'tcp',
-    Timeout => 3,
-);
 my $six_proxy2_piped = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A" # 12 byte sig
     . "\x21\x11\x00\x0C" # PROXY TCP4 w/ 12 bytes addr data
     . "\x7F\x00\x00\x01\x7F\x00\x00\x01\x04\xD2\x10\xE1" # Same addrs/ports as v1 above
@@ -528,6 +531,11 @@ eval {_GDT->check_stats(
     tcp_conns => 3,
 )};
 ok(!$@) or diag $@;
+
+# Half-close our side of the 3 TCP test sockets above, so we don't stall server shutdown
+shutdown($tcp_sock, 1); # SHUT_WR
+shutdown($proxy_sock, 1); # SHUT_WR
+shutdown($proxy2_sock, 1); # SHUT_WR
 
 # T31
 # Test a valid query to make sure the server is still functioning

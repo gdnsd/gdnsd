@@ -14,14 +14,6 @@ my $optrr = Net::DNS::RR->new(
     flags => 0,
 );
 
-# The value "346" here is our expected keepalive advertisement with a single
-# open connection under default settings.  The defaults are 128 max clients and
-# 37s max timeout.  Following the code's logic for the 75% threshold, etc:
-# --
-# 75% threshold of 128 max = 96
-# free connections / threshold, with 1 open = 95/96
-# 37s max timeout, -2 for the internal timeout vs keepalive offset = 35s baseline
-# floor(35 * (95/96) * 10) = 346 in 100ms units
 my $optrr_keepalive = Net::DNS::RR->new(
     type => "OPT",
     version => 0,
@@ -30,7 +22,7 @@ my $optrr_keepalive = Net::DNS::RR->new(
     rcode => 0,
     flags => 0,
 );
-$optrr_keepalive->option(11 => pack('n', 346));
+$optrr_keepalive->option(11 => pack('n', 370));
 
 my $big_answers = [
     'big.example.com 21600 MX 0 asdf.example.com',

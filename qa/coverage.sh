@@ -18,7 +18,7 @@ make all
 
 lcov -c -i -d . -o gdnsd-base.info --rc lcov_branch_coverage=1
 
-make check
+SLOW_TESTS=1 make check
 
 lcov -c -d . -o gdnsd-test.info --rc lcov_branch_coverage=1
 lcov -a gdnsd-base.info -a gdnsd-test.info -o gdnsd-cov.info --rc lcov_branch_coverage=1

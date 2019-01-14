@@ -11,7 +11,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Supports TCP Fastopen
   * Implements the RFC 7828 EDNS tcp-keepalive option
   * Pipelined requests should work fine, and will always be answered in-order due to implementation details
-  * Internal connection idle timeouts scale with connection load
+  * Partial progress on "DNS Stateful Operations" draft - logic/state is already in place to handle it well, but not protocol implementation
   * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
   * PROXY procotol support can be enabled for specific special listen addresses.  This is intended for testing encrypted connections such as DNS-over-TLS using an external daemon for the secure transport, and also by default enables EDNS Padding to help secure against response length analysis.
   * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:
@@ -102,13 +102,14 @@ These are all new options for new features:
 * `acme_challenge_ttl` - Sets the time in seconds for records injected by `gdnsdctl acme-dns-01` to expire, as well as the advertised TTL.  min/def/max is 60/600/3600.
 * `nsid` - Sets the raw binary data returned by the NSID EDNS option.  Up to 128 raw bytes, encoded as up to 256 characters of ascii hex in a single string.  The option is not sent unless the data is explicitly defined by this option.
 * `nsid_ascii` - Convenience alternative to the above, sets the NSID binary data to the bytes of the specified printable ASCII string of at most 128 characters.
-* `tcp_fastopen` - Sets the queue size for TCP Fastopen (global, per-socket).  min/def/max is 0/128/1048576, zero disables.
+* `tcp_fastopen` - Sets the queue size for TCP Fastopen (global, per-socket).  min/def/max is 0/256/1048576, zero disables.
 * `disable_cookies` - Disables EDNS Cookies (not recommended!)
 * `cookie_key_file` - Loads the master cookie secret key from a file controlled by the administrator, useful for synchronizing cookie support across a set of loadbalanced or anycasted gdnsd instances.  The file's contents must be a 32-byte chunk of binary data generated securely and randomly for direct use as a secret key!
 * `max_nocookie_response` - Limits UDP response sizes when clients present no valid cookie auth.  This is disabled by default for now.
 * `max_edns_response_v6` - Like existing `max_edns_response` parameter (which is now v4-only), but for IPv6, and defaulting to 1212.
 * `tcp_proxy` - Enables PROXY protocol support for a specific TCP listen address:port, see docs for details
 * `tcp_pad` - Controls EDNS Padding for TCP connections (default off for normal TCP listeners, default on for the `tcp_proxy` case).
+* `tcp_backlog` - Optional non-default backlog argument for TCP `listen()` (default it `SOMAXCONN`)
 
 ### Options with changed defaults or allowed values
 
@@ -116,7 +117,8 @@ You'll need to fix values for these in existing config before trying an upgrade,
 
 * `max_edns_response` - max changed from 64000 to 16384
 * `tcp_threads` - Default changed from 1 to 2, minimum changed from 0 to 1
-* `tcp_timeout` - min/default/max changed from 3/5/60 to 5/37/1080
+* `tcp_timeout` - min/default/max changed from 3/5/60 to 5/37/1800 (see docs for other related changes)
+* `tcp_clients_per_thread` - Default changed from 128 to 256
 * `udp_threads` - Default changed from 1 to 2, minimum changed from 0 to 1
 
 ### Options removed completely

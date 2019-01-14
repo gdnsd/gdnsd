@@ -130,7 +130,7 @@ per-address options, as in:
   options => {
     listen => {
       192.0.2.1 => {
-        tcp_timeout = 7
+        tcp_timeout = 15
       },
       192.0.2.2:53035 => {
         udp_threads = 5
@@ -168,58 +168,79 @@ Exactly like C<tcp_threads>, but for UDP sockets per DNS listening address.
 
 =item B<tcp_clients_per_thread>
 
-Integer, default 128, min 32, max 65536.  This is maximum number of tcp
-DNS connections gdnsd will allow to occur in parallel per listening tcp
-thread.  When this limit is reached by a new incoming connection, the
-longest-idle of the existing connections will be closed in exchange for it.
+Integer, default 256, min 16, max 65535.  This is maximum number of tcp DNS
+connections gdnsd will allow to occur in parallel per listening tcp thread.
+When this limit is reached by a new incoming connection, the longest-idle of
+the existing connections will be closed immediately in exchange for it.
 
-Note that sockets map 1:m to threads, and thus the total client limit for
-connecting to a given socket address would be
-C<tcp_clients_per_thread * tcp_threads>.
+You can monitor the C<tcp.close_s_kill> stat to see if such closes are
+happening due to reaching the limit, which should be avoided if possible.  The
+code is designed to be resilient (at least answer one legitimate request per
+legitimate connection) even in the face of misbehaving (e.g. slow-read/write)
+connection overloads on Linux, and on BSDs with C<SO_ACCEPTFILTER> and the
+appropriate kernel modules (C<accf_dataready> and/or C<accf_dns>) loaded (there
+will be a non-fatal error log output on startup if they aren't).
+
+Note that socket addresses map 1:m to threads (that is, each thread gets a
+separate C<SO_REUSEPORT> instantiation of a given logical socket), and thus the
+total client limit for connecting to a given socket address would be
+C<tcp_clients_per_thread * tcp_threads>, but it's up to the operating system to
+balance connections, and it may use simple connection tuple hashing or simple
+round-robin, neither of which may gaurantee very even distribution.
 
 =item B<tcp_timeout>
 
-Integer seconds, default 37, min 5, max 1080.
+Integer seconds, default 37, min 5, max 1800.
 
-The idle timer for a TCP connection starts the moment the connection is open,
-and is reset each time a connection completes a whole transaction (sends a
-whole valid request and receives our whole response (at least into the TCP
-buffering window)).  If an open connection exceeds the idle timeout limit without
-completing a new transaction, the server will close the connection.  The
-timeout value in effect at any moment decreases as the the count of active
-connections increases.  C<tcp_timeout> is the initial value when there are
-zero connections, and it scales down to a minimum value of 2 seconds when 75%
-of C<tcp_clients_per_thread> is reached.
+This determines the client-side idle timeout for TCP connections, which
+is sent by the server to applicable clients supporting signalling mechanisms
+like EDNS TCP Keepalive (or in the future, DNS Stateful Operations (DSO)).
+
+There is a corresponding server-side timeout which determines when gdnsd will
+give up on a client it believes to be delinquent (one that keeps a connection
+open too long without honoring any signalled client-side idle timeout).  The
+server-side timeout is double the client timeout (which equates to a default of
+74, min 10, max 3600).
 
 Note that in the common/typical case of well-behaved clients and connections,
 on a Linux server (where we use TCP_DEFER_ACCEPT) or a BSD server supporting
-the "dnsready" accept filter, when a new connection arrives we immediately
-receive the first request and fire back the response without any opportunity
-for delays that count as idle time, and without re-entering the general
+the "dnsready" or "dataready" accept filters, when a new connection arrives we
+immediately receive the first request and fire back the response without any
+opportunity for delays that count as idle time, without re-entering the general
 eventloop where idle time is processed or other new connections could arrive.
 
-Well-behaved client connections only become idle connections (subject to
-termination for idleness, or to make room for new connections when
-C<tcp_clients_per_thread> is reached) during inter-transaction idle periods
-after their first transaction, and for not-so-well-behaved clients the idle
-timer helps control the impact of patterns similar to slow-read/write attacks.
+The idleness of a client is only reset after it completes each full transaction
+(send us a full request, and our full response makes it into at least the local
+write buffer).  Inability to immediately write a full response into the
+server's local TCP buffers (generally because the client has a too-small
+receive window and/or is not ACKing several previous replies) causes immediate
+connection termination.  Well-behaved client connections which don't stall out
+midway through a transaction only become idle connections (subject to
+termination for idleness) during inter-transaction idle periods after their
+first transaction, and for not-so-well-behaved clients the idle timer helps
+control the impact of patterns similar to slow-read/write attacks.
 
-The server will send edns TCP keepalive information to clients when it's legal
-to do so per RFC 7828 (in response to any TCP query that contained an EDNS OPT
-RR at all), keeping any long-running client connections continually updated
-about the evolving server-side timeout as best as we're allowed to.
+The server will send edns TCP keepalive information to clients with all
+responses where it is legal (request used EDNS over TCP, and DSO is not yet
+established).  The timeout value will be sent with the fixed value that is
+configured here until the server begins shutting down, at which point the zero
+value is sent in such responses in an attempt to get clients to cleanly close.
 
-The timeout value sent to clients will be the current server-side timeout
-rounded to the nearest 100ms, minus 2 whole seconds, meaning when we reach our
-internal minimum of 2s, the timeout advertised to the clients will reach zero,
-which requests that they close immediately after receiving the response to
-their first query.  The 2 second differential helps ensure that well-behaved
-clients close before the server does under reasonable latency scenarios,
-avoiding TIME_WAIT pile-up on the server side.
+DSO is not yet implemented, but the current TCP code and state structures are
+designed for it, it just needs the protocol bits implemented.
+
+=item B<tcp_backlog>
+
+Integer, min 0, default 0, max 65535.  This sets the C<backlog> argument of the
+C<listen()> call for TCP listening sockets.  The exact effects of this varies
+by OS implementation, and it can also interact with features like
+C<TCP_DEFER_ACCEPT> and C<SO_ACCEPTFILTER>.  If left at (or set to) the default
+value of zero, the compile-time constant C<SOMAXCONN> from the operating system
+will be used, which tends to be reasonable for most use-cases.
 
 =item B<tcp_fastopen>
 
-Integer, default 128, min 0, max 1048576.  If set to a non-zero value, declares
+Integer, default 256, min 0, max 1048576.  If set to a non-zero value, declares
 a TCP Fastopen queue size and enables the feature.  TCP Fastopen allows clients
 who have connected to the server at least once before to send initial data (in
 our case, their first DNS request) at the same time as their initial SYN,

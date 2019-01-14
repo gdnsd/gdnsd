@@ -257,7 +257,7 @@ static unsigned get_pgsz(void)
 #define CMSG_BUFSIZE CMSG_SPACE(sizeof(struct in6_pktinfo))
 
 F_HOT F_NONNULL
-static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg)
+static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const bool use_cmsg)
 {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
     const unsigned pgsz = get_pgsz();
@@ -345,7 +345,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 #endif
             size_t buf_in_len = (size_t)recvmsg_rv;
             asin.len = msg_hdr.msg_namelen;
-            iov.iov_len = process_dns_query(dnsp_ctx, &asin, buf, buf_in_len, 0);
+            iov.iov_len = process_dns_query(pctx, &asin, buf, NULL, buf_in_len);
             if (likely(iov.iov_len)) {
                 while (1) {
                     int sent = sendmsg(fd, &msg_hdr, 0);
@@ -367,7 +367,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
 #ifdef USE_MMSG
 
 F_HOT F_NONNULL
-static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, const bool use_cmsg)
+static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const bool use_cmsg)
 {
     const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
 
@@ -474,7 +474,7 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
                 iop->iov_len = 0; // skip send, same as if process_dns_query() rejected it
             } else {
                 asp->len = dgrams[i].msg_hdr.msg_namelen;
-                iop->iov_len = process_dns_query(dnsp_ctx, asp, iop->iov_base, dgrams[i].msg_len, 0);
+                iop->iov_len = process_dns_query(pctx, asp, iop->iov_base, NULL, dgrams[i].msg_len);
             }
         }
 
@@ -556,7 +556,7 @@ void* dnsio_udp_start(void* thread_asvoid)
     const dns_addr_t* addrconf = t->ac;
 
     dnspacket_stats_t* stats;
-    void* dnsp_ctx = dnspacket_ctx_init(&stats, true, is_ipv6(&addrconf->addr), false);
+    dnsp_ctx_t* pctx = dnspacket_ctx_init_udp(&stats, is_ipv6(&addrconf->addr));
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -574,12 +574,12 @@ void* dnsio_udp_start(void* thread_asvoid)
 
 #ifdef USE_MMSG
     if (use_mmsg)
-        mainloop_mmsg(t->sock, dnsp_ctx, stats, need_cmsg);
+        mainloop_mmsg(t->sock, pctx, stats, need_cmsg);
     else
 #endif
-        mainloop(t->sock, dnsp_ctx, stats, need_cmsg);
+        mainloop(t->sock, pctx, stats, need_cmsg);
 
     rcu_unregister_thread();
-    dnspacket_ctx_cleanup(dnsp_ctx);
+    dnspacket_ctx_cleanup(pctx);
     return NULL;
 }

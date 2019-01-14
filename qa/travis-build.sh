@@ -22,13 +22,13 @@ git submodule update --init
 case "$GDNSD_TRAVIS_BUILD" in
     optimized)
         CFLAGS=-O3 ./configure
-        make -j$TEST_CPUS check
+        SLOW_TESTS=1 make -j$TEST_CPUS check
     ;;
     coveralls)
         CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage -fno-omit-frame-pointer" CPPFLAGS="-DGDNSD_NO_UNREACH_BUILTIN -DGDNSD_NO_FATAL_COVERAGE -DGDNSD_COVERTEST_EXIT" ./configure --without-hardening
         make -j$TEST_CPUS
         lcov -c -i -d . -o gdnsd-base.info
-        make check
+        SLOW_TESTS=1 make check
         lcov -c -d . -o gdnsd-test.info
         lcov -a gdnsd-base.info -a gdnsd-test.info -o gdnsd-tested.info
         # This filters out the ragel-generated parsers, the inlines from liburcu, and any test-only sources

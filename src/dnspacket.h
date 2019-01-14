@@ -88,14 +88,39 @@ typedef struct {
     stats_t edns_cookie_bad;     // Invalid server cookie (e.g. expired)
 } dnspacket_stats_t;
 
-F_HOT F_NONNULL
-unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns_tcp_keepalive);
+// Per-connection DSO state-tracking between dnsio_tcp (TCP) + dnspacket at the
+// boundary layer of invoking process_dns_query() (PDQ) for each req->resp
+typedef struct {
+    // last_was_ka: set false by TCP before PDQ always, PDQ sets true if
+    // request was a DSO KeepAlive, so that dnsio_tcp knows not to bump the
+    // server-side inactivity timer like it would for any other request.
+    bool last_was_ka;
+    // estab: False by default at thread start, PDQ sets permanently to true if
+    // DSO is established by client DSO KeepAlive reception, which changes some
+    // code behaviors on both sides.
+    bool estab;
+} dso_state_t;
+
+struct dnsp_ctx; // opaque to outsiders
+typedef struct dnsp_ctx dnsp_ctx_t;
+
+F_HOT F_NONNULLX(1, 2, 3)
+unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* asin, uint8_t* packet, dso_state_t* dso, const unsigned packet_len);
 
 F_NONNULL F_WUNUSED F_RETNN
-void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad);
+dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6);
+
+F_NONNULL F_WUNUSED F_RETNN
+dnsp_ctx_t* dnspacket_ctx_init_tcp(dnspacket_stats_t** stats_out, const bool pad, const unsigned timeout_secs);
+
+// TCP threads call this on their context when they start graceful shutdown,
+// telling the dnspacket layer to advertise inactivity timeouts of zero for the
+// remainder of the daemon's life.
+F_NONNULL
+void dnspacket_ctx_set_grace(dnsp_ctx_t* ctx);
 
 F_NONNULL
-void dnspacket_ctx_cleanup(void* ctxv);
+void dnspacket_ctx_cleanup(dnsp_ctx_t* ctx);
 
 F_NONNULL
 void dnspacket_global_setup(const socks_cfg_t* socks_cfg);

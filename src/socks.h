@@ -35,6 +35,7 @@ typedef struct {
     unsigned tcp_timeout;
     unsigned tcp_fastopen;
     unsigned tcp_clients_per_thread;
+    unsigned tcp_backlog;
     unsigned tcp_threads;
     bool     tcp_proxy;
     bool     tcp_pad;

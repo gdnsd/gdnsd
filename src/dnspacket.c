@@ -58,7 +58,7 @@ typedef struct {
 } ctarget_t;
 
 // per-thread context
-typedef struct {
+struct dnsp_ctx {
     // this is the packet buffer from the io code, this value is passed in and
     // overwritten at the start or every request
     uint8_t* packet;
@@ -83,11 +83,22 @@ typedef struct {
     // Whether to use EDNS Padding in TCP responses (encrypted transport)
     bool tcp_pad;
 
+    // TCP Keepalive / TCP DSO Inactivity: these are the same value in
+    // different units (100ms units for the EDNS version, and 1ms units for the
+    // DSO version).  Set at thread start, reset to zero if dnsp_ctx_grace() is
+    // called on this structure, to adverise zeros to clients and ask them to
+    // disconnect gracefully as we're shutting down.
+    unsigned edns_tcp_keepalive;
+    unsigned dso_inactivity;
+
 // ---
 // From this point on, all of this gets memset to zero at the start of each
 // request and is set with new values as we parse the query and create the
 // response
 // ---
+
+    // DSO state tracking, NULL in UDP case.
+    dso_state_t* dso;
 
     // Max response size for this individual request, as determined
     //  by protocol type, expected edns output bytes at the end, and in the
@@ -164,16 +175,13 @@ typedef struct {
     // If above is true, this records the original family value verbatim
     unsigned edns_client_family;
 
-    // units of 100ms, sent by dnsio_tcp code
-    unsigned edns_tcp_keepalive;
-
     // Compression targets, for the few cases where we do general-case compression
     unsigned ctarget_count;
     ctarget_t ctargets[COMPTARGETS_MAX];
 
     // Output cookie option data, if respond_cookie
     uint8_t cookie_output[16U];
-} dnsp_ctx_t;
+};
 
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t stats_init_cond = PTHREAD_COND_INITIALIZER;
@@ -202,18 +210,22 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
     pthread_mutex_unlock(&stats_init_mutex);
 }
 
-void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad)
+static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad, const unsigned tcp_timeout_secs)
 {
     dnsp_ctx_t* ctx = xcalloc(sizeof(*ctx));
     if (udp_is_ipv6)
         gdnsd_assert(is_udp);
     if (tcp_pad)
         gdnsd_assert(!is_udp);
+    if (tcp_timeout_secs)
+        gdnsd_assert(!is_udp);
 
     ctx->rand_state = gdnsd_rand32_init();
     ctx->is_udp = is_udp;
     ctx->udp_edns_max = udp_is_ipv6 ? gcfg->max_edns_response_v6 : gcfg->max_edns_response;
     ctx->tcp_pad = tcp_pad;
+    ctx->edns_tcp_keepalive = tcp_timeout_secs * 10;
+    ctx->dso_inactivity = tcp_timeout_secs * 1000;
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
 
     gdnsd_plugins_action_iothread_init();
@@ -228,11 +240,26 @@ void* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const
     return ctx;
 }
 
-void dnspacket_ctx_cleanup(void* ctxv)
+dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6)
+{
+    return dnspacket_ctx_init(stats_out, true, is_ipv6, false, 0);
+}
+
+dnsp_ctx_t* dnspacket_ctx_init_tcp(dnspacket_stats_t** stats_out, const bool pad, const unsigned timeout_secs)
+{
+    return dnspacket_ctx_init(stats_out, false, false, pad, timeout_secs);
+}
+
+void dnspacket_ctx_set_grace(dnsp_ctx_t* ctx)
+{
+    ctx->edns_tcp_keepalive = 0;
+    ctx->dso_inactivity = 0;
+}
+
+void dnspacket_ctx_cleanup(dnsp_ctx_t* ctx)
 {
     gdnsd_plugins_action_iothread_cleanup();
 
-    dnsp_ctx_t* ctx = (dnsp_ctx_t*)ctxv;
     free(ctx->dyn);
     free(ctx->rand_state);
     free(ctx);
@@ -357,15 +384,9 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
         log_devdebug("Got client edns tcp keepalive option, no use for it");
         // no-op
         // Note we don't explicitly parse RFC 7828 edns tcp keepalive here, but
-        // this is where we'd install the handler function if we did.  Our
-        // implementation does not choose to change its behavior (e.g. longer
-        // timeouts) based on the client's request for keepalive, and always sends
-        // its own keepalive option whenever possible (any time the client tcp
-        // query has an edns opt rr at all).  Therefore we gain little by
-        // attempting to parse the client's option here, and we can just ignore it.
-        // We could hypothetically parse it just to FORMERR-reject it if the client
-        // violates the RFC by sending a non-zero data length, but that seems
-        // needlessly aggressive.
+        // this is where we'd install the handler function if we did.  We
+        // ignore whether the client sent the option and just always send our
+        // own anytime EDNS over TCP is in use and DSO isn't (yet) established.
     } else if (opt_code == EDNS_PADDING) {
         log_devdebug("Got client edns padding option, no use for it");
         // Ditto, we emit padding in response to any EDNS request over TCP when
@@ -484,7 +505,7 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
             ctx->this_max_response = edns_maxsize < ctx->udp_edns_max
                                      ? edns_maxsize
                                      : ctx->udp_edns_max;
-        } else {
+        } else if (!ctx->dso->estab) {
             ctx->edns_out_bytes += 6U; // tcp keepalive option space
         }
 
@@ -1870,16 +1891,19 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
     return offset;
 }
 
-unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t* packet, const unsigned packet_len, const unsigned edns_tcp_keepalive)
+unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* asin, uint8_t* packet, dso_state_t* dso, const unsigned packet_len)
 {
     // iothreads don't allow queries larger than this
     gdnsd_assert(packet_len <= DNS_RECV_SIZE);
 
-    dnsp_ctx_t* ctx = ctx_asvoid;
     reset_context(ctx);
     gdnsd_assert(ctx->stats);
+    if (ctx->is_udp)
+        gdnsd_assert(!dso);
+    else
+        gdnsd_assert(dso);
     ctx->packet = packet;
-    ctx->edns_tcp_keepalive = edns_tcp_keepalive;
+    ctx->dso = dso;
     memcpy(&ctx->client_info.dns_source, asin, sizeof(*asin));
 
     if (asin->sa.sa_family == AF_INET6)
@@ -1995,8 +2019,11 @@ unsigned process_dns_query(void* ctx_asvoid, const gdnsd_anysin_t* asin, uint8_t
             res_offset += 16U;
         }
 
-        // TCP keepalive is emitted for any TCP request which had an edns OPT RR
-        if (!ctx->is_udp) {
+        // TCP keepalive is emitted with every response to an EDNS query over
+        // TCP if DSO isn't established, using either the fixed timeout set
+        // from config at startup, or zero if we're in shutdown_grace mode and
+        // trying to get clients to disconnect.
+        if (!ctx->is_udp && !ctx->dso->estab) {
             rdlen += 6U;
             gdnsd_put_una16(htons(EDNS_TCP_KEEPALIVE_OPTCODE), &packet[res_offset]);
             res_offset += 2;

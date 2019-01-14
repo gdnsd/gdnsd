@@ -41,7 +41,7 @@ If working directly from a git clone:
   be able to edit and recompile the .rl parser source code for the
   configuration and zonefile languages.
 
-Interesting / Non-standard autoconf options
+Interesting / Non-standard autoconf/make options
 ===========================================
 
 --with-rundir=/some/where
@@ -77,3 +77,25 @@ Interesting / Non-standard autoconf options
   The test suite needs to be able to bind to ~200 consecutive ports on
     127.0.0.1 and ::1, starting with port N.  The default is 12345.  If this
     conflicts with some existing service on your machine, change it here.
+
+TEST_CPUS=N
+  If this env var is set before configure, it will determine testsuite
+    execution parallelism.  Regular build parallelism is controlled by the
+    standard "-j" flag to make, but testsuite parallelism is a little different
+    and can't easily be unified with -j.  Some parts of the testsuite use this
+    value directly, and others which do lots of sleeping/stalling multiply the
+    value by 4.  The default is to attempt the auto-detect the number of
+    CPUs on the machine configure is executing on via "sysctl -n hw.ncpu" (for
+    BSDs) or "getconf _NPROCESSORS_ONLN" (for Linux).
+
+SLOW_TESTS=1
+  If this env var is set to "1" at the time "make check" is executed, a few
+    additional tests will be run which can take a long time (due to necessary
+    waits on timeouts while not doing much) to execute, but exercise the
+    code more thoroughly.  While it's set in our standard QA scripting, it can
+    be annoying if you're running "make check" a lot during development and
+    testing.  For reference, as of this writing on my laptop, a regular "make
+    check" takes ~3 seconds to execute, while "SLOW_TESTS=1 make check" takes
+    ~22 seconds.  Currently only some of the TCP DNS protocol handling code
+    benefits from the additional slow tests, so it's of little value for
+    commits that don't touch TCP.

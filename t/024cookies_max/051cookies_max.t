@@ -53,7 +53,7 @@ foreach my $proto (qw/v4_only v6_only/) {
     # do it again with a bad cookie over TCP, should get the large response
     # fine in spite of the (UDP-only) limit and the bad cookie noted in stats
     my $cookie_plus_keepalive = _mk_optrr_cookie(hexstr('0123456789ABCDEF0000000000000000'));
-    $cookie_plus_keepalive->option(11 => pack('n', 346));
+    $cookie_plus_keepalive->option(11 => pack('n', 370));
     _GDT->test_dns(
         $proto => 1,
         resopts => { usevc => 1 },
