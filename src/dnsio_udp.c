@@ -329,6 +329,20 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
             log_err("UDP recvmsg() error: %s", logf_errno());
             stats_own_inc(&stats->udp.recvfail);
         } else {
+#if defined __FreeBSD__ && defined IPV6_PKTINFO
+            if (asin.sa.sa_family == AF_INET6) {
+                struct cmsghdr* cmsg;
+                for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(&msg_hdr); cmsg;
+                        cmsg = (struct cmsghdr*)CMSG_NXTHDR(&msg_hdr, cmsg)) {
+                    if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
+                        struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
+                        if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
+                            pi->ipi6_ifindex = 0;
+                        continue;
+                    }
+                }
+            }
+#endif
             size_t buf_in_len = (size_t)recvmsg_rv;
             asin.len = msg_hdr.msg_namelen;
             iov.iov_len = process_dns_query(dnsp_ctx, &asin, buf, buf_in_len, 0);
@@ -437,6 +451,21 @@ static void mainloop_mmsg(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats
         gdnsd_assert(pkts <= MMSG_WIDTH);
         for (unsigned i = 0; i < pkts; i++) {
             gdnsd_anysin_t* asp = &msgdata[i].asin;
+#if defined __FreeBSD__ && defined IPV6_PKTINFO
+            if (asp->sa.sa_family == AF_INET6) {
+                struct msghdr* mhdr = &dgrams[i].msg_hdr;
+                struct cmsghdr* cmsg;
+                for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(mhdr); cmsg;
+                        cmsg = (struct cmsghdr*)CMSG_NXTHDR(mhdr, cmsg)) {
+                    if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
+                        struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
+                        if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
+                            pi->ipi6_ifindex = 0;
+                        continue;
+                    }
+                }
+            }
+#endif
             struct iovec* iop = &msgdata[i].iov[0];
             if (unlikely((asp->sa.sa_family == AF_INET && !asp->sin.sin_port)
                          || (asp->sa.sa_family == AF_INET6 && !asp->sin6.sin6_port))) {
