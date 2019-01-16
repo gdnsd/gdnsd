@@ -521,7 +521,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
                       svctype_name, logf_anysin_noport(addr));
 
         // construct desc for this new unique monitor
-        char addr_str[INET6_ADDRSTRLEN];
+        char addr_str[GDNSD_ANYSIN_MAXSTR];
         int name_err = gdnsd_anysin2str_noport(addr, addr_str);
         // this should basically never happen since the same family of functions will
         //   have already converted it from gdnsd_anysin_t -> text earlier, but if it does,

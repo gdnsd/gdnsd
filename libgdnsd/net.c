@@ -247,12 +247,12 @@ int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf)
     int name_err = 0;
     buf[0] = 0;
 
-    char hostbuf[INET6_ADDRSTRLEN];
+    char hostbuf[INET6_ADDRSTRLEN + 32];
     char servbuf[6];
     hostbuf[0] = servbuf[0] = 0; // JIC getnameinfo leaves them un-init
 
     if (asin) {
-        name_err = getnameinfo(&asin->sa, asin->len, hostbuf, INET6_ADDRSTRLEN, servbuf, 6, NI_NUMERICHOST | NI_NUMERICSERV);
+        name_err = getnameinfo(&asin->sa, asin->len, hostbuf, INET6_ADDRSTRLEN + 32, servbuf, 6, NI_NUMERICHOST | NI_NUMERICSERV);
         if (!name_err) {
             const bool isv6 = (asin->sa.sa_family == AF_INET6);
             const unsigned hostbuf_len = strlen(hostbuf);
@@ -295,7 +295,7 @@ int gdnsd_anysin2str_noport(const gdnsd_anysin_t* asin, char* buf)
     buf[0] = 0;
 
     if (asin)
-        name_err = getnameinfo(&asin->sa, asin->len, buf, INET6_ADDRSTRLEN, NULL, 0, NI_NUMERICHOST);
+        name_err = getnameinfo(&asin->sa, asin->len, buf, GDNSD_ANYSIN_MAXSTR, NULL, 0, NI_NUMERICHOST);
     else
         strcpy(buf, generic_nullstr);
 
@@ -304,7 +304,7 @@ int gdnsd_anysin2str_noport(const gdnsd_anysin_t* asin, char* buf)
 
 const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* asin)
 {
-    char tmpbuf[INET6_ADDRSTRLEN];
+    char tmpbuf[GDNSD_ANYSIN_MAXSTR];
     int name_err = gdnsd_anysin2str_noport(asin, tmpbuf);
     if (name_err)
         return gai_strerror(name_err); // This might be confusing...

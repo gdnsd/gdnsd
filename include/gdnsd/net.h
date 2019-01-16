@@ -71,8 +71,10 @@ typedef struct {
 #endif
 
 // maximum addr:port ASCII representation from gdnsd_anysin2str below
-// maximal form is "[...IPv6...]:12345\0"
-#define GDNSD_ANYSIN_MAXSTR (1 + ((INET6_ADDRSTRLEN) - 1) + 1 + 1 + 5 + 1)
+// maximal form is "[IPv6%f]:12345\0" where "%f" is a flow label, which we're
+// just kinda guessing can fit in 32 bytes or so.
+//                           [   IPv6 (incl NUL)    f ]   :   port
+#define GDNSD_ANYSIN_MAXSTR (1 + INET6_ADDRSTRLEN + 32 + 1 + 1 + 5)
 
 // transforms addr_txt + port_txt -> result using getaddrinfo(), setting result->len
 // input text fields must be numeric, not hostnames or port names.
@@ -105,7 +107,7 @@ int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf);
 
 // convert just the address portion to ASCII in "buf"
 // NULL input results in the string "(null)"
-// note that buf *must* be pre-allocated to at least INET6_ADDRSTRLEN bytes!
+// note that buf *must* be pre-allocated to at least GDNSD_ANYSIN_MAXSTR bytes!
 // return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
 F_NONNULLX(2) F_COLD
 int gdnsd_anysin2str_noport(const gdnsd_anysin_t* asin, char* buf);
