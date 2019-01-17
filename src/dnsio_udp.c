@@ -350,7 +350,7 @@ static void mainloop(const int fd, void* dnsp_ctx, dnspacket_stats_t* stats, con
             for(cmsg = (struct cmsghdr *)CMSG_FIRSTHDR(&msg_hdr); cmsg;
                 cmsg = (struct cmsghdr *)CMSG_NXTHDR(&msg_hdr, cmsg)) {
                 if((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
-                    struct in6_pktinfo* pi = (void*)CMSG_DATA((struct cmsghdr*)cmsg_buf.cbuf);
+                    struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
                     if(!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
                         pi->ipi6_ifindex = 0;
                     continue;
