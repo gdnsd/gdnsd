@@ -125,11 +125,43 @@ static void register_thread(thread_t* thr)
     pthread_mutex_unlock(&registry_lock);
 }
 
+// Assert all the things we assume about connection tracking sanity.  They're
+// not always true while things are under manipulation, but they should all be
+// true once a given set of manipulations are complete.
+F_NONNULL
+static void connq_assert_sane(thread_t* thr V_UNUSED)
+{
+#ifndef NDEBUG
+    if (!thr->num_conns) {
+        gdnsd_assert(!thr->connq_head);
+        gdnsd_assert(!thr->connq_tail);
+    } else {
+        gdnsd_assert(thr->num_conns <= thr->max_clients);
+        gdnsd_assert(thr->connq_head);
+        gdnsd_assert(thr->connq_tail);
+        gdnsd_assert(!thr->connq_head->prev);
+        gdnsd_assert(!thr->connq_tail->next);
+        unsigned ct = 0;
+        conn_t* c = thr->connq_head;
+        while (c) {
+            ct++;
+            if (c != thr->connq_tail)
+                gdnsd_assert(c->next);
+            if (c != thr->connq_head)
+                gdnsd_assert(c->prev);
+            c = c->next;
+        }
+        gdnsd_assert(ct == thr->num_conns);
+    }
+#endif
+}
+
 // This adjust the timer to the next connq_head expiry or stops it if no
 // connections are left in the queue.
 F_NONNULL
 static void connq_adjust_timer(thread_t* thr)
 {
+    connq_assert_sane(thr);
     // Adjust timer event as approrpriate
     ev_timer* tmo = &thr->timeout_watcher;
     if (thr->connq_head) {
@@ -157,6 +189,7 @@ static void connq_adjust_timer(thread_t* thr)
 F_NONNULL
 static void connq_pull_conn(thread_t* thr, conn_t* conn)
 {
+    connq_assert_sane(thr);
     gdnsd_assert(thr->num_conns);
     thr->num_conns--;
 
@@ -176,6 +209,7 @@ static void connq_pull_conn(thread_t* thr, conn_t* conn)
         thr->connq_head = conn->next;
         connq_adjust_timer(thr);
     }
+    connq_assert_sane(thr);
 }
 
 // Closes the connection's fd and then takes care of all the follow-on state
@@ -208,6 +242,7 @@ F_NONNULL
 static void connq_append_new_conn(thread_t* thr, conn_t* conn)
 {
     // This element is not part of the linked list yet
+    connq_assert_sane(thr);
     gdnsd_assert(thr->connq_head != conn);
     gdnsd_assert(thr->connq_tail != conn);
     gdnsd_assert(!conn->next);
@@ -237,6 +272,8 @@ static void connq_append_new_conn(thread_t* thr, conn_t* conn)
     thr->connq_tail->next = conn;
     thr->connq_tail = conn;
 
+    connq_assert_sane(thr);
+
     // and then if we've just maxed out the connection count, we have to kill a conn
     if (thr->num_conns == thr->max_clients) {
         log_debug("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&thr->connq_head->asin));
@@ -251,6 +288,7 @@ static void connq_append_new_conn(thread_t* thr, conn_t* conn)
 F_NONNULL
 static void connq_refresh_conn(thread_t* thr, conn_t* conn)
 {
+    connq_assert_sane(thr);
     gdnsd_assert(conn->state == ST_IDLE);
     conn->idle_start = ev_now(thr->loop);
 
@@ -274,6 +312,7 @@ static void connq_refresh_conn(thread_t* thr, conn_t* conn)
     thr->connq_tail->next = conn;
     thr->connq_tail = conn;
     thr->num_conns++; // connq_pull_conn decrements, but we're re-inserting here
+    connq_assert_sane(thr);
 }
 
 F_NONNULL
@@ -282,15 +321,13 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
     gdnsd_assert(revents == EV_TIMER);
     thread_t* thr = t->data;
     gdnsd_assert(thr);
-    gdnsd_assert(thr->num_conns <= thr->max_clients);
+    connq_assert_sane(thr);
 
     // In all cases (even final 5s shutdown timers), if the connection count
     // drops to zero the timer gets stopped, so we always should have one or
     // more connections if this timer callback fires at all:
-    gdnsd_assert(thr->num_conns);
-    gdnsd_assert(thr->connq_head);
-
     conn_t* conn = thr->connq_head;
+    gdnsd_assert(conn);
 
     // End of the 5s final shutdown phase: immediately close all connections and let the thread exit
     if (unlikely(thr->st == TH_SHUT)) {
@@ -365,6 +402,7 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
         thr->connq_head = thr->connq_tail = NULL;
     } else {
         gdnsd_assert(thr->num_conns);
+        conn->prev = NULL;
         thr->connq_head = conn;
     }
 
@@ -378,6 +416,7 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     thread_t* thr = w->data;
     gdnsd_assert(thr);
     gdnsd_assert(thr->st == TH_RUN); // this handler stops itself and transitions out of TH_RUN
+    connq_assert_sane(thr);
 
     // Stop the accept() watcher and the async watcher for this stop handler
     ev_async* stop_watcher = &thr->stop_watcher;
@@ -392,8 +431,6 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     if (!thr->num_conns) {
         ev_timer* tw V_UNUSED = &thr->timeout_watcher;
         gdnsd_assert(!ev_is_active(tw));
-        gdnsd_assert(!thr->connq_head);
-        gdnsd_assert(!thr->connq_tail);
         return;
     }
 
@@ -476,6 +513,9 @@ static bool conn_do_read(thread_t* thr, conn_t* conn)
             stats_own_inc(&thr->stats->tcp.recvfail);
             stats_own_inc(&thr->stats->tcp.close_s_err);
             connq_destruct_conn(thr, conn, true, true);
+        } else {
+            // else it's -1 + errno=EAGAIN|EWOULDBLOCK and we just return true
+            // and fall back out of the read handler until a future callback
         }
         return true;
     }
@@ -495,8 +535,6 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
     gdnsd_assert(conn);
     thread_t* thr = conn->thr;
     gdnsd_assert(thr);
-
-    gdnsd_assert(conn);
 
     // TH_SHUT means we already sent FIN via shutdown(), or in the
     // case of DSO have already sent a RetryDelay unidirectional packet, and
