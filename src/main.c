@@ -232,8 +232,8 @@ F_NONNULL
 static void start_threads(socks_cfg_t* socks_cfg)
 {
     dnsio_udp_init(getpid());
-    unsigned num_tcp_threads = 0;
-    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++)
+    size_t num_tcp_threads = 0;
+    for (size_t i = 0; i < socks_cfg->num_dns_threads; i++)
         if (!socks_cfg->dns_threads[i].is_udp)
             num_tcp_threads++;
     dnsio_tcp_init(num_tcp_threads);

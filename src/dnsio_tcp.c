@@ -40,15 +40,25 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
+#include <sys/uio.h>
 
 #include <ev.h>
 #include <urcu-qsbr.h>
 
-typedef enum {
-    ST_PROXY = 0,
-    ST_IDLE,
-    ST_READING,
-} conn_state_t;
+// libev prio map:
+// +2: thread async stop watcher (highest prio)
+// +1: conn check/read watchers (only 1 per conn active at any time)
+//  0: thread timeout watcher
+// -1: thread accept watcher
+// -2: thread idle watcher (lowest prio)
+
+// Size of our read buffer.  We always attempt filling it on a read if TCP
+// buffers have anything avail, and then drain all full requests from it and
+// move any remaining partial request to the bottom before reading again.
+#define TCP_READBUF 4096U
+#if __STDC_VERSION__ >= 201112L // C11
+_Static_assert(TCP_READBUF >= (DNS_RECV_SIZE + 2U), "TCP readbuf fits >= 1 maximal req");
+#endif
 
 typedef enum {
     TH_RUN = 0,   // normal runtime operation
@@ -66,16 +76,18 @@ typedef struct {
     dnsp_ctx_t* pctx;
     struct ev_loop* loop;
     double server_timeout;
-    unsigned max_clients;
+    size_t max_clients;
     bool do_proxy;
     // The rest below will mutate:
     ev_io accept_watcher;
     ev_prepare prep_watcher;
+    ev_idle idle_watcher;
     ev_async stop_watcher;
     ev_timer timeout_watcher;
     conn_t* connq_head; // doubly-linked-list, most-idle at head
     conn_t* connq_tail; // last element, least-idle
-    unsigned num_conns; // count of all conns, also len of connq list
+    size_t num_conns; // count of all conns, also len of connq list
+    size_t check_mode_conns; // conns using check_watcher at present
     thr_state_t st;
     bool rcu_is_online;
 } thread_t;
@@ -86,13 +98,22 @@ struct conn {
     conn_t* prev; // doubly-linked-list
     thread_t* thr;
     ev_io read_watcher;
+    ev_check check_watcher;
     ev_tstamp idle_start;
     gdnsd_anysin_t asin;
-    unsigned size;
-    unsigned size_done;
-    conn_state_t state;
+    bool need_proxy_init;
     dso_state_t dso; // shared w/ dnspacket layer
-    uint8_t buffer[MAX_RESPONSE_BUF + 2];
+    size_t readbuf_head;
+    size_t readbuf_bytes;
+    union {
+        proxy_hdr_t proxy_hdr;
+        uint8_t readbuf[TCP_READBUF];
+    };
+    // These two must be adjacent, as a single send() points at them as if
+    // they're one buffer.  This should be portable since uint8_t can't require
+    // alignment padding after a uint16_t.
+    uint16_t pktbuf_size_hdr;
+    uint8_t pktbuf[MAX_RESPONSE_BUF];
 };
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -100,16 +121,16 @@ static thread_t** registry = NULL;
 static size_t registry_size = 0;
 static size_t registry_init = 0;
 
-void dnsio_tcp_init(unsigned num_threads)
+void dnsio_tcp_init(size_t num_threads)
 {
-    registry_size = (size_t)num_threads;
+    registry_size = num_threads;
     registry = xcalloc_n(registry_size, sizeof(*registry));
 }
 
 void dnsio_tcp_request_threads_stop(void)
 {
     gdnsd_assert(registry_size == registry_init);
-    for (unsigned i = 0; i < registry_init; i++) {
+    for (size_t i = 0; i < registry_init; i++) {
         thread_t* thr = registry[i];
         ev_async* stop_watcher = &thr->stop_watcher;
         ev_async_send(thr->loop, stop_watcher);
@@ -131,7 +152,6 @@ static void register_thread(thread_t* thr)
 F_NONNULL
 static void connq_assert_sane(thread_t* thr V_UNUSED)
 {
-#ifndef NDEBUG
     if (!thr->num_conns) {
         gdnsd_assert(!thr->connq_head);
         gdnsd_assert(!thr->connq_tail);
@@ -141,7 +161,8 @@ static void connq_assert_sane(thread_t* thr V_UNUSED)
         gdnsd_assert(thr->connq_tail);
         gdnsd_assert(!thr->connq_head->prev);
         gdnsd_assert(!thr->connq_tail->next);
-        unsigned ct = 0;
+#ifndef NDEBUG
+        size_t ct = 0;
         conn_t* c = thr->connq_head;
         while (c) {
             ct++;
@@ -152,24 +173,20 @@ static void connq_assert_sane(thread_t* thr V_UNUSED)
             c = c->next;
         }
         gdnsd_assert(ct == thr->num_conns);
-    }
 #endif
+    }
 }
 
 // This adjust the timer to the next connq_head expiry or stops it if no
-// connections are left in the queue.
+// connections are left in the queue. when in either shutdown phase, we do not
+// update the timer, but we will stop it.  There is a 100ms floor/fudge factor
 F_NONNULL
 static void connq_adjust_timer(thread_t* thr)
 {
     connq_assert_sane(thr);
-    // Adjust timer event as approrpriate
     ev_timer* tmo = &thr->timeout_watcher;
     if (thr->connq_head) {
-        // when in either shutdown phase, we do not update the timer, as we're
-        // on a single fixed 5 second firing at this point, but we will stop it
-        // below if the last connection dies and we've nothing left to do.
         if (likely(thr->st == TH_RUN)) {
-            // 100ms floor/fudge factor
             ev_tstamp next_interval = thr->server_timeout + 0.1 - (ev_now(thr->loop) - thr->connq_head->idle_start);
             if (next_interval < 0.1)
                 next_interval = 0.1;
@@ -212,8 +229,7 @@ static void connq_pull_conn(thread_t* thr, conn_t* conn)
     connq_assert_sane(thr);
 }
 
-// Closes the connection's fd and then takes care of all the follow-on state
-// changes and cleanups.
+// Closes and destroys a connection, and optionally manages it out of the queue
 F_NONNULL
 static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, const bool manage_queue)
 {
@@ -221,10 +237,11 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
 
     ev_io* read_watcher = &conn->read_watcher;
     ev_io_stop(thr->loop, read_watcher);
+    ev_check* check_watcher = &conn->check_watcher;
+    ev_check_stop(thr->loop, check_watcher);
 
     const int fd = read_watcher->fd;
     if (rst) {
-        // A real error or timeout happened and we explicitly desire to cause a RST if we can
         const struct linger lin = { .l_onoff = 1, .l_linger = 0 };
         if (setsockopt(read_watcher->fd, SOL_SOCKET, SO_LINGER, &lin, sizeof(lin)))
             log_err("setsockopt(%s, SO_LINGER, {1, 0}) failed: %s", logf_anysin(&conn->asin), logf_errno());
@@ -241,13 +258,12 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
 F_NONNULL
 static void connq_append_new_conn(thread_t* thr, conn_t* conn)
 {
-    // This element is not part of the linked list yet
     connq_assert_sane(thr);
+    // This element is not part of the linked list yet
     gdnsd_assert(thr->connq_head != conn);
     gdnsd_assert(thr->connq_tail != conn);
     gdnsd_assert(!conn->next);
     gdnsd_assert(!conn->prev);
-
     // accept() handler is gone when in either shutdown phase
     gdnsd_assert(thr->st == TH_RUN);
 
@@ -283,13 +299,12 @@ static void connq_append_new_conn(thread_t* thr, conn_t* conn)
 }
 
 // Called when a connection completes a transaction (reads a legit request, and
-// writes the full response to the TCP layer) and returns to its
-// inter-transaction ST_IDLE state, causing us to reset its idle timeout state
+// writes the full response to the TCP layer), causing us to reset its idleness
 F_NONNULL
 static void connq_refresh_conn(thread_t* thr, conn_t* conn)
 {
     connq_assert_sane(thr);
-    gdnsd_assert(conn->state == ST_IDLE);
+    gdnsd_assert(!conn->need_proxy_init);
     conn->idle_start = ev_now(thr->loop);
 
     // If this is the only connection, just adjust the timer
@@ -323,15 +338,13 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
     gdnsd_assert(thr);
     connq_assert_sane(thr);
 
-    // In all cases (even final 5s shutdown timers), if the connection count
-    // drops to zero the timer gets stopped, so we always should have one or
-    // more connections if this timer callback fires at all:
+    // Timer never fires unless there are connections, in all cases
     conn_t* conn = thr->connq_head;
     gdnsd_assert(conn);
 
     // End of the 5s final shutdown phase: immediately close all connections and let the thread exit
     if (unlikely(thr->st == TH_SHUT)) {
-        log_debug("TCP DNS thread shutdown: immediately dropping (RST) %u delinquent connections while exiting", thr->num_conns);
+        log_debug("TCP DNS thread shutdown: immediately dropping (RST) %zu delinquent connections while exiting", thr->num_conns);
         while (conn) {
             conn_t* next_conn = conn->next;
             connq_destruct_conn(thr, conn, true, false); // no queue mgmt
@@ -341,29 +354,32 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
         // Stop ourselves, we should be the only remaining active watcher
         ev_timer* tmo = &thr->timeout_watcher;
         ev_timer_stop(thr->loop, tmo);
-        // Once we return here the eventloop will drop out of ev_run and the
-        // whole thread will do final cleanup and exit, so these values don't
-        // matter, but may as well set them correctly for debugging and/or
-        // general sanity.
         thr->connq_head = NULL;
         thr->connq_tail = NULL;
         thr->num_conns = 0;
-        return;
+        return; // eventloop will end now, and shortly after the whole thread
     }
 
-    // End of the 5s graceful shutdown phase: set st = TH_SHUT for the above
-    // block, ask clients to close (server sends DSO RD or FIN), and start
-    // another fixed 5s timer invocation to come back and hit the above.
+    // End of the 5s graceful phase (start 5s shutdown phase)
     if (unlikely(thr->st == TH_GRACE)) {
-        log_debug("TCP DNS thread shutdown: demanding clients to close %u remaining conns immediatley and waiting up to 5s", thr->num_conns);
+        log_debug("TCP DNS thread shutdown: demanding clients to close %zu remaining conns immediatley and waiting up to 5s", thr->num_conns);
         thr->st = TH_SHUT;
         while (conn) {
             conn_t* next_conn = conn->next;
-            // Reset all states to ST_IDLE to avoid confusion.  They should
-            // mostly be there anyways, unless they're stuck in ST_READING with
-            // a half-completed read of a request, in which case we no longer
-            // case about responding to it anyways.
-            conn->state = ST_IDLE;
+            ev_check* checkw = &conn->check_watcher;
+            // If any connection is still spooling buffered reqs in check mode,
+            // flip back to read watcher mode for shutdown drain.
+            if (ev_is_active(checkw)) {
+                gdnsd_assert(thr->check_mode_conns);
+                ev_check_stop(thr->loop, checkw);
+                ev_io* readw = &conn->read_watcher;
+                gdnsd_assert(!ev_is_active(readw));
+                ev_io_start(thr->loop, readw);
+                thr->check_mode_conns--;
+            }
+            // Wipe any outstanding read buffer state:
+            conn->readbuf_bytes = 0;
+            conn->readbuf_head = 0;
             if (conn->dso.estab) {
                 // send unidirectional RetryDelay, could destroy conn if cannot send
             } else {
@@ -371,32 +387,27 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
             }
             conn = next_conn;
         }
+        gdnsd_assert(!thr->check_mode_conns);
         ev_timer* tmo = &thr->timeout_watcher;
         tmo->repeat = 5.0;
         ev_timer_again(thr->loop, tmo);
         return;
     }
 
-    // If not at the end of either shutdown phase, this is just normal runtime
-    // connection timeout expiry handling:
-
-    // Server-side cutoff timestamp is server_timeout in the past
+    // Normal runtime timer fire for real conn expiry, expire from head of idle
+    // list until we find an unexpired one (if any)
     const double cutoff = ev_now(thr->loop) - thr->server_timeout;
-
-    // Expire from head of idle list until we find an unexpired one (if any)
     while (conn && conn->idle_start <= cutoff) {
         conn_t* next_conn = conn->next;
         log_debug("TCP DNS conn from %s reset by server: timeout", logf_anysin(&conn->asin));
         stats_own_inc(&conn->thr->stats->tcp.close_s_ok);
-        // Note final "manage_queue" argument is false.  We adjust the queue
-        // pointers and the timer at the bottom here in a very simple way once,
-        // instead of the full generic adjustments per loop iteration, since
-        // we're pulling only from the front of the queue.
+        // Note final "manage_queue" argument is false.
         connq_destruct_conn(thr, conn, true, false);
         thr->num_conns--;
         conn = next_conn;
     }
 
+    // Manual queue management, since we only pulled from the head
     if (!conn) {
         gdnsd_assert(!thr->num_conns);
         thr->connq_head = thr->connq_tail = NULL;
@@ -405,7 +416,6 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
         conn->prev = NULL;
         thr->connq_head = conn;
     }
-
     connq_adjust_timer(thr);
 }
 
@@ -434,22 +444,13 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
         return;
     }
 
-    log_debug("TCP DNS thread shutdown: gracefully requesting clients to close %u remaining conns when able and waiting up to 5s", thr->num_conns);
+    log_debug("TCP DNS thread shutdown: gracefully requesting clients to close %zu remaining conns when able and waiting up to 5s", thr->num_conns);
 
     // Switch thread state to the initial graceful shutdown phase
     thr->st = TH_GRACE;
 
-    // Inform dnspacket layer that future EDNS TCP Keepalive responses and DSO
-    // Keepalive responses should report zero:
+    // Inform dnspacket layer we're in graceful shutdown phase (zero timeouts)
     dnspacket_ctx_set_grace(thr->pctx);
-
-    // Following from the above about eventloop watchers, In general, from this
-    // point forward only the per-connection watchers and the timeout watcher
-    // are keeping the eventloop running, so if all connections end, any
-    // running timer will be stopped and there will be no events left (so e.g.
-    // it's possible for the thread to exit 0.1 seconds into the initial
-    // 5s grace period and never even reach the final 5s shutdown phase, if all
-    // clients happen to drop off nicely).
 
     // send unidirectional KeepAlive w/ inactivity=0 to all DSO clients
     conn_t* conn = thr->connq_head;
@@ -462,38 +463,183 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     }
 
     // Up until now, the timeout watcher was firing dynamically according to
-    // server timeout and connection idleness refreshes, always pointing at
-    // the idleness expiry point of the head-most (most-idle) connection in the
-    // queue.  Now it is reset to fire once 5 seconds from now to transition
-    // from TH_GRACE to TH_SHUT and wait another 5 seconds there before
-    // exiting.
-    // Technically by the DSO spec, we should allow our configured client-side
-    // timer divided by four for this window (from the time each connection was
-    // last active), but that could be as high as 7.5 minutes, which is
-    // unreasonable for stopping a server instance.
+    // connection idleness, always pointing at the expiry point of the
+    // head-most (most-idle) connection in the queue.  Now it is reset to fire
+    // once 5 seconds from now to transition from TH_GRACE to TH_SHUT and wait
+    // another 5 seconds there before exiting.
     ev_timer* tmo = &thr->timeout_watcher;
     tmo->repeat = 5.0;
     ev_timer_again(thr->loop, tmo);
 }
 
-// rv true means caller should return immediately (connection closed or read is
-// incomplete and needs to block in the loop again)
+// Checks the status of the next request in the buffer, if any, and takes a few
+// sanitizing actions along the way.
+// TLDR: -1 == killed conn, 0 == need more read, 1+ == size of full req avail
 F_NONNULL
-static bool conn_do_read(thread_t* thr, conn_t* conn)
+static ssize_t conn_check_next_req(thread_t* thr, conn_t* conn)
 {
-    gdnsd_assert(conn->state != ST_PROXY); // PROXY protocol parser doesn't use conn_do_read()
-    uint8_t* destination = &conn->buffer[conn->size_done];
-    const size_t wanted = conn->size - conn->size_done;
+    // No bytes, just ensure head is reset to zero and ask for more reading
+    if (!conn->readbuf_bytes) {
+        conn->readbuf_head = 0;
+        return 0;
+    }
 
-    const ssize_t pktlen = recv(conn->read_watcher.fd, destination, wanted, 0);
-    if (pktlen < 1) {
-        if (!pktlen) { // EOF
-            if (conn->size_done) {
+    // If even 1 byte is available, we can already pre-check for egregious
+    // oversize, but we need two bytes for full sanity.
+    size_t req_size = conn->readbuf[conn->readbuf_head];
+    req_size <<= 8;
+    bool undersized = false;
+    if (conn->readbuf_bytes > 1) {
+        req_size += conn->readbuf[conn->readbuf_head + 1];
+        if (unlikely(req_size < 12U))
+            undersized = true;
+    }
+    if (unlikely(undersized || req_size > DNS_RECV_SIZE)) {
+        log_debug("TCP DNS conn from %s reset by server while reading: bad TCP request length", logf_anysin(&conn->asin));
+        stats_own_inc(&thr->stats->tcp.recvfail);
+        stats_own_inc(&thr->stats->tcp.close_s_err);
+        connq_destruct_conn(thr, conn, true, true);
+        return -1;
+    }
+
+    // If we don't have a full request buffered, move any legitimate (so far)
+    // partial req to the bottom (if necc) and ask for more reading.
+    if (conn->readbuf_bytes < (req_size + 2U)) {
+        if (conn->readbuf_head) {
+            memmove(conn->readbuf, &conn->readbuf[conn->readbuf_head], conn->readbuf_bytes);
+            conn->readbuf_head = 0;
+        }
+        return 0;
+    }
+
+    return (ssize_t)req_size;
+}
+
+// Assumes a full request packet (starting with the 12 byte DNS header) is
+// available starting at "conn->readbuf[conn->readbuf_head + 2U]" and the
+// length indicated by the 2-byte length prefix from TCP DNS is indicated in
+// req_size, and that the size is legal (already checked for >= 12 bytes and <=
+// max).  Will copy out the request, process it, write a response, and then
+// manage the read buffer state and the check/read watcher states.
+F_NONNULL
+static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
+{
+    gdnsd_assert(req_size >= 12U && req_size <= DNS_RECV_SIZE);
+
+    // Move 1 full request from readbuf to pktbuf, advancing head and decrementing bytes
+    memcpy(conn->pktbuf, &conn->readbuf[conn->readbuf_head + 2U], req_size);
+    const size_t req_bufsize = req_size + 2U;
+    conn->readbuf_head += req_bufsize;
+    conn->readbuf_bytes -= req_bufsize;
+
+    // Bring RCU online and generate an answer
+    if (!thr->rcu_is_online) {
+        thr->rcu_is_online = true;
+        rcu_thread_online();
+    }
+    conn->dso.last_was_ka = false;
+    size_t resp_size = process_dns_query(thr->pctx, &conn->asin, conn->pktbuf, &conn->dso, req_size);
+    if (!resp_size) {
+        log_debug("TCP DNS conn from %s reset by server: dropped invalid query", logf_anysin(&conn->asin));
+        stats_own_inc(&thr->stats->tcp.close_s_err);
+        connq_destruct_conn(thr, conn, true, true);
+        return;
+    }
+
+    ev_io* readw = &conn->read_watcher;
+    ev_check* checkw = &conn->check_watcher;
+
+    // We only make one attempt to send the whole response, and do not accept
+    // EAGAIN.  This is incorrect in theory, but it makes sense in practice for
+    // our use-case: a reasonable client shouldn't be stuffing requests at us
+    // so fast that its own TCP receive window and/or our reasonable output
+    // buffers can't handle the resulting responses, and if some fault is
+    // responsible then we need to tear down anyways.
+
+    gdnsd_assert(resp_size <= MAX_RESPONSE_BUF);
+    conn->pktbuf_size_hdr = htons((uint16_t)resp_size);
+    const size_t resp_send_size = resp_size + 2U;
+    const ssize_t send_rv = send(readw->fd, &conn->pktbuf_size_hdr, resp_send_size, 0);
+    if (unlikely(send_rv < (ssize_t)resp_send_size)) {
+        if (send_rv < 0 && !ERRNO_WOULDBLOCK)
+            log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->asin), logf_errno());
+        else
+            log_debug("TCP DNS conn from %s reset by server: cannot buffer whole response", logf_anysin(&conn->asin));
+        stats_own_inc(&thr->stats->tcp.sendfail);
+        stats_own_inc(&thr->stats->tcp.close_s_err);
+        connq_destruct_conn(thr, conn, true, true);
+        return;
+    }
+
+    // We don't refresh timeout if this txn was just a DSO KA
+    if (!conn->dso.last_was_ka)
+        connq_refresh_conn(thr, conn);
+
+    // Check status of next readbuf req, decide which watcher should be active
+    const ssize_t ccnr_rv = conn_check_next_req(thr, conn);
+    if (ccnr_rv < 0) // ccnr closed the conn for illegal next req size
+        return;
+    if (!ccnr_rv) { // No full req available, need to hit the read_handler next
+        if (ev_is_active(checkw)) {
+            ev_check_stop(thr->loop, checkw);
+            gdnsd_assert(!ev_is_active(readw));
+            ev_io_start(thr->loop, readw);
+            thr->check_mode_conns--;
+        } else {
+            gdnsd_assert(ev_is_active(readw));
+        }
+    } else { // Full req available, need to hit the check_handler next
+        if (ev_is_active(readw)) {
+            ev_io_stop(thr->loop, readw);
+            gdnsd_assert(!ev_is_active(checkw));
+            ev_check_start(thr->loop, checkw);
+            thr->check_mode_conns++;
+        } else {
+            gdnsd_assert(ev_is_active(checkw));
+        }
+    }
+}
+
+F_NONNULL
+static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int revents V_UNUSED)
+{
+    gdnsd_assert(revents == EV_CHECK);
+    conn_t* conn = w->data;
+    gdnsd_assert(conn);
+    thread_t* thr = conn->thr;
+    gdnsd_assert(thr);
+
+    gdnsd_assert(!conn->need_proxy_init);
+
+    // We only arrive here if we have a legit-sized fully-buffered request
+    gdnsd_assert(conn->readbuf_bytes > 2U);
+    const size_t req_size = (((size_t)conn->readbuf[conn->readbuf_head + 0] << 8U) + (size_t)conn->readbuf[conn->readbuf_head + 1]);
+    gdnsd_assert(req_size >= 12U && req_size <= DNS_RECV_SIZE);
+    gdnsd_assert(conn->readbuf_bytes >= (req_size + 2U));
+    conn_respond(thr, conn, req_size);
+}
+
+// This does the actual recv() call and immediate post-processing (incl conn
+// termination on EOF or error), expects no empty space at buffer start.
+// rv true means caller should return immediately (connection closed or read
+// gave no new bytes and wants to block in the eventloop again).  rv false
+// means one or more new bytes were added to the readbuf.
+F_NONNULL
+static bool conn_do_recv(thread_t* thr, conn_t* conn)
+{
+    gdnsd_assert(!conn->readbuf_head);
+    gdnsd_assert(conn->readbuf_bytes < (DNS_RECV_SIZE + 2U));
+    gdnsd_assert(conn->readbuf_bytes < sizeof(conn->readbuf));
+    const size_t wanted = sizeof(conn->readbuf) - conn->readbuf_bytes;
+
+    const ssize_t recvrv = recv(conn->read_watcher.fd, &conn->readbuf[conn->readbuf_bytes], wanted, 0);
+    if (recvrv < 1) {
+        if (!recvrv) { // 0 (EOF)
+            if (conn->readbuf_bytes) {
                 log_debug("TCP DNS conn from %s closed by client while reading: unexpected EOF", logf_anysin(&conn->asin));
                 stats_own_inc(&thr->stats->tcp.recvfail);
                 stats_own_inc(&thr->stats->tcp.close_s_err);
             } else {
-                gdnsd_assert(conn->state == ST_IDLE);
                 if (unlikely(thr->st == TH_SHUT)) {
                     if (conn->dso.estab) {
                         log_debug("TCP DNS conn from %s closed by client while shutting down after DSO RetryDelay", logf_anysin(&conn->asin));
@@ -508,22 +654,22 @@ static bool conn_do_read(thread_t* thr, conn_t* conn)
                 }
             }
             connq_destruct_conn(thr, conn, false, true);
-        } else if (!ERRNO_WOULDBLOCK) {
-            log_debug("TCP DNS conn from %s reset by server: error while reading: %s", logf_anysin(&conn->asin), logf_errno());
-            stats_own_inc(&thr->stats->tcp.recvfail);
-            stats_own_inc(&thr->stats->tcp.close_s_err);
-            connq_destruct_conn(thr, conn, true, true);
-        } else {
-            // else it's -1 + errno=EAGAIN|EWOULDBLOCK and we just return true
-            // and fall back out of the read handler until a future callback
+        } else { // -1 (errno)
+            if (!ERRNO_WOULDBLOCK) {
+                log_debug("TCP DNS conn from %s reset by server: error while reading: %s", logf_anysin(&conn->asin), logf_errno());
+                stats_own_inc(&thr->stats->tcp.recvfail);
+                stats_own_inc(&thr->stats->tcp.close_s_err);
+                connq_destruct_conn(thr, conn, true, true);
+            } else {
+                // else it's -1 + errno=EAGAIN|EWOULDBLOCK and we just return true
+            }
         }
         return true;
     }
-
-    conn->size_done += pktlen;
-    if (unlikely(conn->size_done < conn->size))
-        return true;
-
+    size_t pktlen = (size_t)recvrv;
+    gdnsd_assert(pktlen <= wanted);
+    gdnsd_assert((conn->readbuf_bytes + pktlen) <= sizeof(conn->readbuf));
+    conn->readbuf_bytes += pktlen;
     return false;
 }
 
@@ -536,108 +682,43 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
     thread_t* thr = conn->thr;
     gdnsd_assert(thr);
 
-    // TH_SHUT means we already sent FIN via shutdown(), or in the
-    // case of DSO have already sent a RetryDelay unidirectional packet, and
-    // we're just trying to drain the read buffer and cleanly reach the
-    // client's FIN before our final 5s timer expires.  If conn_do_read()
-    // reaches an error state or a client close, it will take care of
-    // connection cleanup.
+    // The read handler is never invoked with empty space at the buffer start
+    gdnsd_assert(!conn->readbuf_head);
+    if (conn_do_recv(thr, conn))
+        return; // no new bytes or conn closed
+    gdnsd_assert(conn->readbuf_bytes);
+
+    // TH_SHUT means all conns are just draining junk reads looking for FIN
     if (unlikely(thr->st == TH_SHUT)) {
-        conn->size = sizeof(conn->buffer);
-        conn->size_done = 0;
-        (void)conn_do_read(thr, conn);
+        conn->readbuf_bytes = 0; // throw away any received bytes
         return;
     }
 
-    if (conn->state == ST_PROXY) {
-        const int pp = parse_proxy(conn->read_watcher.fd, &conn->asin);
-        if (unlikely(pp)) {
-            if (pp == -1) {
-                log_debug("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->asin));
-                stats_own_inc(&thr->stats->tcp.proxy_fail);
-                stats_own_inc(&thr->stats->tcp.close_s_err);
-                connq_destruct_conn(thr, conn, true, true);
-            }
-            return;
-        }
-        conn->state = ST_IDLE;
-    }
-
-    if (conn->state == ST_IDLE) {
-        conn->size = 2U;
-        gdnsd_assert(conn->size_done < conn->size);
-        if (conn_do_read(thr, conn))
-            return;
-        gdnsd_assert(conn->size_done == 2U);
-
-        conn->size += (((unsigned)conn->buffer[0] << 8U) + (unsigned)conn->buffer[1]);
-        if (unlikely(conn->size < (12U + 2U) || conn->size > (DNS_RECV_SIZE + 2U))) {
-            log_debug("TCP DNS conn from %s reset by server while reading: bad query length %u", logf_anysin(&conn->asin), conn->size - 2U);
-            stats_own_inc(&thr->stats->tcp.recvfail);
+    if (conn->need_proxy_init) {
+        conn->need_proxy_init = false;
+        const size_t consumed = proxy_parse(&conn->asin, &conn->proxy_hdr, conn->readbuf_bytes);
+        gdnsd_assert(consumed <= conn->readbuf_bytes);
+        if (!consumed) {
+            log_debug("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->asin));
+            stats_own_inc(&thr->stats->tcp.proxy_fail);
             stats_own_inc(&thr->stats->tcp.close_s_err);
             connq_destruct_conn(thr, conn, true, true);
             return;
         }
-        conn->state = ST_READING;
+        conn->readbuf_bytes -= consumed;
+        if (conn->readbuf_bytes) {
+            // If there's more data avail after PROXY, move it down so we're
+            // transparent to the normal handling of the first req below.
+            memmove(conn->readbuf, &conn->readbuf[consumed], conn->readbuf_bytes);
+        } else {
+            return;
+        }
     }
 
-    if (conn_do_read(thr, conn))
+    const ssize_t ccnr_rv = conn_check_next_req(thr, conn);
+    if (ccnr_rv < 1) // ccnr either closed on err or wants us to read more
         return;
-
-    // Process the query and write a response
-    gdnsd_assert(conn->size_done == conn->size);
-
-    if (!thr->rcu_is_online) {
-        thr->rcu_is_online = true;
-        rcu_thread_online();
-    }
-
-    conn->dso.last_was_ka = false;
-    conn->size = process_dns_query(thr->pctx, &conn->asin, &conn->buffer[2], &conn->dso, conn->size - 2U);
-    if (!conn->size) {
-        log_debug("TCP DNS conn from %s reset by server: dropped invalid query", logf_anysin(&conn->asin));
-        stats_own_inc(&thr->stats->tcp.close_s_err);
-        connq_destruct_conn(thr, conn, true, true);
-        return;
-    }
-
-    // Set the response size as the 2 byte TCP length prefix for the data
-    conn->buffer[0] = (uint8_t)(conn->size >> 8U);
-    conn->buffer[1] = (uint8_t)(conn->size & 0xFF);
-    conn->size += 2U;
-
-    // We only make a single attempt to send the whole response, right here
-    // from the same callback that finished receiving the full request, and the
-    // TCP stack must accept the whole thing immediately or we give up on the
-    // connection and RST.  We could (and have in the past) actually allow
-    // blocking and returning to the eventloop here and handle things more
-    // gracefully if the outbound buffers/tcp-windows are full, and it would be
-    // more "correct" in some abstract sense.  However, it adds complexity and
-    // new failure modes (and critically, doesn't always allow the sending of
-    // unidrectional DSO messages at any moment), and the bottom line is a
-    // reasonable client shouldn't be stuffing requests at us so fast that its
-    // own TCP receive window and/or our reasonable server-side output buffers
-    // can't handle the responses.
-    const ssize_t send_rv = send(w->fd, conn->buffer, conn->size, 0);
-    if (unlikely(send_rv < conn->size)) {
-        if (send_rv < 0 && !ERRNO_WOULDBLOCK)
-            log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->asin), logf_errno());
-        else
-            log_debug("TCP DNS conn from %s reset by server: cannot buffer whole response", logf_anysin(&conn->asin));
-        stats_own_inc(&thr->stats->tcp.sendfail);
-        stats_own_inc(&thr->stats->tcp.close_s_err);
-        connq_destruct_conn(thr, conn, true, true);
-        return;
-    }
-
-    // Back to ST_IDLE to listen for another request
-    conn->state = ST_IDLE;
-    conn->size_done = 0;
-    conn->size = 0;
-
-    // We don't refresh the timeout or mutate the queue if this transaction was just a DSO keepalive
-    if (!conn->dso.last_was_ka)
-        connq_refresh_conn(thr, conn);
+    conn_respond(thr, conn, (size_t)ccnr_rv);
 }
 
 F_NONNULL
@@ -685,9 +766,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
     stats_own_inc(&thr->stats->tcp.conns);
     if (thr->do_proxy) {
         stats_own_inc(&thr->stats->tcp.proxy);
-        conn->state = ST_PROXY;
-    } else {
-        conn->state = ST_IDLE;
+        conn->need_proxy_init = true;
     }
 
     conn->thr = thr;
@@ -695,16 +774,48 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 
     ev_io* read_watcher = &conn->read_watcher;
     ev_io_init(read_watcher, read_handler, sock, EV_READ);
-    ev_set_priority(read_watcher, 0);
+    ev_set_priority(read_watcher, 1);
     read_watcher->data = conn;
     ev_io_start(loop, read_watcher);
 
-    // Even if TCP_DEFER_ACCEPT and SO_ACCEPTFILTER are both unavailable,
-    // there's a chance that under load the request data from a legitimate
-    // client already arrived before we processed the accept(), so
-    // optimistically try to read() immediately and avoid a chance at this
-    // connection being killed for idleness before its first read:
-    read_handler(loop, &conn->read_watcher, EV_READ);
+    ev_check* check_watcher = &conn->check_watcher;
+    ev_check_init(check_watcher, check_handler);
+    ev_set_priority(check_watcher, 1);
+    check_watcher->data = conn;
+
+    // Always optimistically attempt to read a req at conn start.  Even if
+    // TCP_DEFER_ACCEPT and SO_ACCEPTFILTER are both unavailable, there's a
+    // chance that under load the request data is already present.
+    read_handler(loop, read_watcher, EV_READ);
+}
+
+F_NONNULL
+static void idle_handler(struct ev_loop* loop V_UNUSED, ev_idle* w V_UNUSED, const int revents V_UNUSED)
+{
+    gdnsd_assert(revents == EV_IDLE);
+    // no-op, just here for the side-effect of nonblocking loop iterations
+}
+
+F_NONNULL
+static void prep_handler(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED)
+{
+    thread_t* thr = w->data;
+    gdnsd_assert(thr);
+
+    ev_idle* iw = &thr->idle_watcher;
+    if (thr->check_mode_conns) {
+        if (!ev_is_active(iw))
+            ev_idle_start(thr->loop, iw);
+        if (thr->rcu_is_online)
+            rcu_quiescent_state();
+    } else {
+        if (ev_is_active(iw))
+            ev_idle_stop(thr->loop, iw);
+        if (thr->rcu_is_online) {
+            thr->rcu_is_online = false;
+            rcu_thread_offline();
+        }
+    }
 }
 
 #ifndef SOL_IPV6
@@ -783,15 +894,6 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         socks_bind_sock("TCP DNS", t->sock, asin);
 }
 
-static void set_rcu_offline(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED)
-{
-    thread_t* thr = w->data;
-    if (thr->rcu_is_online) {
-        thr->rcu_is_online = false;
-        rcu_thread_offline();
-    }
-}
-
 static void set_accf(const dns_addr_t* addrconf V_UNUSED, const int sock V_UNUSED)
 {
 #ifdef SO_ACCEPTFILTER
@@ -858,20 +960,23 @@ void* dnsio_tcp_start(void* thread_asvoid)
     thr->max_clients = addrconf->tcp_clients_per_thread;
     thr->do_proxy = addrconf->tcp_proxy;
 
+    ev_idle* idle_watcher = &thr->idle_watcher;
+    ev_idle_init(idle_watcher, idle_handler);
+    ev_set_priority(idle_watcher, -2);
+    idle_watcher->data = thr;
+
     ev_io* accept_watcher = &thr->accept_watcher;
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
-    ev_set_priority(accept_watcher, -2);
+    ev_set_priority(accept_watcher, -1);
     accept_watcher->data = thr;
 
     ev_timer* timeout_watcher = &thr->timeout_watcher;
     ev_timer_init(timeout_watcher, timeout_handler, 0, thr->server_timeout);
-    ev_set_priority(timeout_watcher, -1);
+    ev_set_priority(timeout_watcher, 0);
     timeout_watcher->data = thr;
 
-    // per-conn read watcher occupies priority 0 (default)
-
     ev_prepare* prep_watcher = &thr->prep_watcher;
-    ev_prepare_init(prep_watcher, set_rcu_offline);
+    ev_prepare_init(prep_watcher, prep_handler);
     prep_watcher->data = thr;
 
     ev_async* stop_watcher = &thr->stop_watcher;

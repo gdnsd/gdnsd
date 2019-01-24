@@ -22,6 +22,45 @@
 
 #include <gdnsd/net.h>
 
-int parse_proxy(int fd, gdnsd_anysin_t* asin);
+#include <inttypes.h>
+#include <stddef.h>
+
+// We need this for alignment / structure defs in dnsio_tcp
+typedef union {
+    struct {
+        char line[108];
+    } v1;
+    struct {
+        uint8_t sig[12];
+        uint8_t ver_cmd;
+        uint8_t fam;
+        uint16_t len;
+        union {
+            struct {
+                uint32_t src_addr;
+                // cppcheck-suppress unusedStructMember
+                uint32_t dst_addr;
+                uint16_t src_port;
+                // cppcheck-suppress unusedStructMember
+                uint16_t dst_port;
+            } ipv4;
+            struct {
+                uint8_t  src_addr[16];
+                // cppcheck-suppress unusedStructMember
+                uint8_t  dst_addr[16];
+                uint16_t src_port;
+                // cppcheck-suppress unusedStructMember
+                uint16_t dst_port;
+            } ipv6;
+        };
+    } v2;
+} proxy_hdr_t;
+
+// retval:
+// 0: failure
+// 1+: PROXY header was this many bytes (<= dlen), please skip past them
+// Note this mutates "asin", overwriting it with the client IP:port info
+// supplied by the PROXY protocol.
+size_t proxy_parse(gdnsd_anysin_t* asin, proxy_hdr_t* hdrp, size_t dlen);
 
 #endif

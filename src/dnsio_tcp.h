@@ -26,7 +26,7 @@
 #include <gdnsd/net.h>
 
 // Called before threads are started, to initialize a thread registry used for stopping
-void dnsio_tcp_init(unsigned num_threads);
+void dnsio_tcp_init(size_t num_threads);
 
 // Uses the above registry to ask threads to stop.  They will exit when
 // outstanding TCP connections drain due to close/timeout.
