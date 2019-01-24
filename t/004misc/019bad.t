@@ -24,6 +24,7 @@ sub make_query {
     my $arcount = shift || 0;
     my $qtype = shift || 1;
     my $qclass = shift || 1;
+    my $optdata = shift || '';
     return pack("nCCnnnna*nn",
         $_id++,
         0, # flags1
@@ -35,7 +36,7 @@ sub make_query {
         $qname,
         $qtype,
         $qclass
-    );
+    ) . $optdata;
 }
 
 sub make_tcp_query {
@@ -509,11 +510,14 @@ ok(!$@) or diag $@;
 # T30
 # PROXYv2 + TCP pipelining test.  We'll send a raw single send() with a PROXYv2
 # header and 5x minimal questions (REFUSED due to root name) followed by a
-# "real" question (NOERROR) and then check stats etc.
+# "real" question (NOERROR) which also includes an EDNS padding option and then check stats etc.
 my $six_proxy2_piped = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A" # 12 byte sig
     . "\x21\x11\x00\x0C" # PROXY TCP4 w/ 12 bytes addr data
     . "\x7F\x00\x00\x01\x7F\x00\x00\x01\x04\xD2\x10\xE1" # Same addrs/ports as v1 above
-    . (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
+    . (make_tcp_query("\x00") x 5)
+    . make_tcp_query("\x07example\x03com\x00", 1, 0, 0, 1, 1, 1,
+         # OPT w/ EDNS padding + 3 pad data bytes
+         "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x07\x00\x0C\x00\x03\x00\x00\x00");
 send($proxy2_sock, $six_proxy2_piped, 0);
 # Let responses just buffer, who cares for now
 eval {_GDT->check_stats(
@@ -522,7 +526,7 @@ eval {_GDT->check_stats(
     noerror => 7,
     formerr => 17,
     refused => 18,
-    edns => 9,
+    edns => 10,
     notimp => 1,
     badvers => 1,
     edns_cookie_init => 1,
@@ -557,7 +561,7 @@ eval {_GDT->check_stats(
     noerror => 8,
     formerr => 17,
     refused => 18,
-    edns => 9,
+    edns => 10,
     notimp => 1,
     badvers => 1,
     edns_cookie_init => 1,
