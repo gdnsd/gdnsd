@@ -44,7 +44,7 @@
  *   be seen by the non-owner threads "when the CPU feels like it".  On
  *   modern mainstream systems with reasonable cache coherency, this
  *   generally happens "pretty soon", soon enough that it doesn't matter
- *   for stats accounting.  There is no actual gaurantee on when the
+ *   for stats accounting.  There is no actual guarantee on when the
  *   update becomes visible in the general case, and it might *never*
  *   become visible on some exotic architectures that gdnsd doesn't
  *   care to support at this time.

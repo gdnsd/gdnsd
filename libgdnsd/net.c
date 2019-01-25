@@ -156,7 +156,7 @@ int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_a
 
     if (!addr_err) {
         // Zero-out the result in case of strange earlier contents,
-        //  and also to gaurantee a zero port if port_txt is NULL
+        //  and also to guarantee a zero port if port_txt is NULL
         //  (getaddrinfo() itself docs that it may be uninitialized)
         memset(result, 0, sizeof(*result));
         memcpy(&result->sa, ainfo->ai_addr, ainfo->ai_addrlen);

@@ -186,7 +186,7 @@ separate C<SO_REUSEPORT> instantiation of a given logical socket), and thus the
 total client limit for connecting to a given socket address would be
 C<tcp_clients_per_thread * tcp_threads>, but it's up to the operating system to
 balance connections, and it may use simple connection tuple hashing or simple
-round-robin, neither of which may gaurantee very even distribution.
+round-robin, neither of which may guarantee very even distribution.
 
 =item B<tcp_timeout>
 
@@ -380,7 +380,7 @@ on most ~ethernet MTU networks today even some reasonable tunneling.
 Setting this in the ~4-16K range might be desirable if you have large
 response RR-sets and/or are willing to tolerate some fragmentation,
 especially in a private network where a larger path MTU (e.g. ~9K for
-ethernet jumbo frames) can be gauranteed.
+ethernet jumbo frames) can be guaranteed.
 
 The option obviously has no pragmatic effect if you do not have
 large response datasets in your zones in the first place.
@@ -477,7 +477,7 @@ set, asking the client to retry over TCP.
 
 This is intended to limit the ability of attackers to use your server as a
 reflection source for amplification attacks, as valid cookies give some
-reasonable gaurantee that the query packet source address wasn't forged.  It
+reasonable guarantee that the query packet source address wasn't forged.  It
 B<should> be pretty safe to set this at least as low as 512, and that may
 become the default setting in some future version.
 

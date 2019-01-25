@@ -159,7 +159,7 @@ Typically, one would implement such data reloads naively using pthread mutexes. 
 
 The basic RCU algorithm offers an elegant answer to these kinds of problems.  It's perfect when reads far outnumber writes and performance degradation of the read side is far more important than the write side.  We specifically use the `QSBR` RCU algorithm variant from `liburcu`, the Userspace-RCU library.  The liburcu site has some links to read up on RCU fundamentals, which I won't cover in any great depth here: https://liburcu.org/ .
 
-The gist of it is this: the reader side gets to access the data in a completely lock-free and stall-free way that doesn't impact thread scaling, and the writer side is gauranteed to make progress within a fairly short window of absolute time without causing any impact.  What happens from a sequential point of view is something like this:
+The gist of it is this: the reader side gets to access the data in a completely lock-free and stall-free way that doesn't impact thread scaling, and the writer side is guaranteed to make progress within a fairly short window of absolute time without causing any impact.  What happens from a sequential point of view is something like this:
 
 1. The writer constructs a new set of data (e.g. from an updated input file)
 2. The writer switches a data pointer that was pointing at the old data, to point at the new data, but doesn't yet delete any of the old data
@@ -193,23 +193,25 @@ These track client requests with the EDNS Cookie option.  Every such request inc
 
 The UDP thread(s) keep the following statistics at their own level of processing:
 
-* udp\_reqs - Total count of UDP requests received and passed on to the core DNS request handling code (this is synthesized by summing all of the RCODE-based stat counters above for the UDP threads).
-* udp\_recvfail - Count of UDP `recvmsg()` errors, where the OS indicated that something bad happened on receive. Obviously, we don't even get these requests, so they can't be processed and replied to.
-* udp\_sendfail - Count of UDP `sendmsg()` errors, which almost definitely resulted in dropped responses from the client's point of view.
-* udp\_tc - Non-EDNS (traditional 512-byte) UDP responses that were truncated with the TC bit set.
-* udp\_edns\_big - EDNS responses where the response was greater than 512 bytes (in other words, EDNS actually did something for you size-wise)
-* udp\_edns\_tc - EDNS responses where the response was truncated and the TC bit set, meaning that the client's specified edns buffer size (as also limited by our config) was too small for the data requested in spite of EDNS.
+* udp.reqs - Total count of UDP requests received and passed on to the core DNS request handling code (this is synthesized by summing all of the RCODE-based stat counters above for the UDP threads).
+* udp.recvfail - Count of UDP `recvmsg()` errors, where the OS indicated that something bad happened on receive. Obviously, we don't even get these requests, so they can't be processed and replied to.
+* udp.sendfail - Count of UDP `sendmsg()` errors, which almost definitely resulted in dropped responses from the client's point of view.
+* udp.tc - Non-EDNS (traditional 512-byte) UDP responses that were truncated with the TC bit set.
+* udp.edns\_big - EDNS responses where the response was greater than 512 bytes (in other words, EDNS actually did something for you size-wise)
+* udp.edns\_tc - EDNS responses where the response was truncated and the TC bit set, meaning that the client's specified edns buffer size (as also limited by our config) was too small for the data requested in spite of EDNS.
 
 The TCP threads also count this stuff:
 
-* tcp\_reqs - Total count of TCP requests (again, synthesized by summing the RCODE-based stats for only TCP threads).
-* tcp\_recvfail - Count of abnormal failures in `recv()` on a DNS TCP socket, including ones where the sender indicated a payload larger than we're willing to accept.
-* tcp\_sendfail - Count of abnormal failures in `send()` on a DNS TCP socket.
-* tcp\_conns - Count of TCP connections we accepted (excludes extremely early failures, e.g. `accept()` itself returning an error)
-* tcp\_close\_c - Count of TCP connections closed cleanly by the client
-* tcp\_close\_s\_ok - Count of TCP connections closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
-* tcp\_close\_s\_err - Count of TCP connections closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
-* tcp\_close\_s\_kill - Count of TCP connections closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
+* tcp.reqs - Total count of TCP requests (again, synthesized by summing the RCODE-based stats for only TCP threads).
+* tcp.recvfail - Count of abnormal failures in `recv()` on a DNS TCP socket, including ones where the sender indicated a payload larger than we're willing to accept.
+* tcp.sendfail - Count of abnormal failures in `send()` on a DNS TCP socket.
+* tcp.conns - Count of TCP connections we accepted (excludes extremely early failures, e.g. `accept()` itself returning an error)
+* tcp.close\_c - Count of TCP connections closed cleanly by the client
+* tcp.close\_s\_ok - Count of TCP connections closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
+* tcp.close\_s\_err - Count of TCP connections closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
+* tcp.close\_s\_kill - Count of TCP connections closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
+* tcp.proxy - TCP conns initiated on PROXY protocol listeners (also incs `tcp.conns`)
+* tcp.proxy\_fail - TCP PROXY conns killed for failure to parse an acceptable PROXY protocol header (also incs `tcp.close_s_err`)
 
 These statistics are usually tracked in either 32-bit or 64-bit counters (depending on the platform) and exported to the user via `gdnsdctl stats`.  The implementation of the stats avoids stalls or locks in the I/O threads to minimize overhead.
 
@@ -251,7 +253,7 @@ I still think we could hook up more advanced data backends, so long as they foll
 
 ### Plugins
 
-The plugin APIs and all of the current plugins that use it are questionable and/or operating at the wrong abstraction levels.  I moved them into the daemon for now and killed the public API/ABI for 3.x as a first compat-breaking step towards fixing this situation.  I'd like to move all monitoring out of the main daemon through cleaner interfaces (more like current extfile/exmon methods, perhaps shipping a simple TCP/HTTP monitor to use with it?).  All of the non-trivial resolver plugins (simplefo, multifo, weighted, metafo, and geoip) could operate as a single new "plugin" from a unified structure and methodology that revolves around mapping and supports all their use-cases.  There might be a case for multiple in-daemon mappers to use with this plugin (e.g. swapping in something else where GeoIP or WRR fit into the scheme), but I think I'd still have those as in-tree alternatives and take source patches, as the cost/benefit just isn't there for a DSO system.
+The plugin APIs and all of the current plugins that use it are questionable and/or operating at the wrong abstraction levels.  I moved them into the daemon for now and killed the public API/ABI for 3.x as a first compat-breaking step towards fixing this situation.  I'd like to move all monitoring out of the main daemon through cleaner interfaces (more like current extfile/extmon methods, perhaps shipping a simple TCP/HTTP monitor to use with it?).  All of the non-trivial resolver plugins (simplefo, multifo, weighted, metafo, and geoip) could operate as a single new "plugin" from a unified structure and methodology that revolves around mapping and supports all their use-cases.  There might be a case for multiple in-daemon mappers to use with this plugin (e.g. swapping in something else where GeoIP or WRR fit into the scheme), but I think I'd still have those as in-tree alternatives and take source patches, as the cost/benefit just isn't there for a DSO system.
 
 ### The DYNA/DYNC resource types in general
 

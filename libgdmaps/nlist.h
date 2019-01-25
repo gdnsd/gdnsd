@@ -33,7 +33,7 @@ typedef struct _nlist nlist_t;
 //   will already be in fully normalized form and order other than
 //   the possibility of dclist-based merges of adjacent subnets.
 // This allows for significant optimizations in GeoIP input case,
-//   as GeoIP's data structure implies these gaurantees when walked
+//   as GeoIP's data structure implies these guarantees when walked
 //   in order for _append().
 F_NONNULL F_WUNUSED F_RETNN
 nlist_t* nlist_new(const char* map_name, const bool pre_norm);

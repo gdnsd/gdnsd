@@ -61,7 +61,7 @@
  *   all three of the secrets can be used to successfully validate
  *   previously-generated server cookies sent by the client.  With this scheme,
  *   so long as a cookie-enabled client checks in with the server more often
- *   than once every hour, they're gauranteed to smoothly roll over from one
+ *   than once every hour, they're guaranteed to smoothly roll over from one
  *   server cookie to the next without ever sending the server an outdated
  *   cookie it doesn't recognize.  Also, so long as NTP sync problems between
  *   servers keep them well under an hour apart in time, there will be at least

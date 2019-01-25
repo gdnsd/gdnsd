@@ -131,7 +131,7 @@ static ev_timer expire_timer;
 
 // chal_collide_t is used to store all the chal_t* pointers in a single hash
 // collision slot, and is realloc'd as it grows.  We can't do linked-list using
-// a pointer within chal_t because it would break RCU gaurantees during
+// a pointer within chal_t because it would break RCU guarantees during
 // updates, and we expect to store duplicate keys and thus collisions
 // commonly, and have to return the whole set of duplicates, so open addressing
 // isn't a great idea either.
@@ -251,7 +251,7 @@ static void cset_expire(struct ev_loop* loop, ev_timer* t, const int revents V_U
     chal_tbl_t* new_chal_tbl = chal_tbl_create(iter_old, NULL);
     chal_tbl_swap_and_free(new_chal_tbl);
 
-    // Delete expired csets now that RCU swap gauranteed no runtime references,
+    // Delete expired csets now that RCU swap guaranteed no runtime references,
     // and actual move the global "oldest" as we go
     while (oldest && oldest->expiry <= cutoff) {
         cset_t* nn = oldest->next_newer;

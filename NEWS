@@ -1,6 +1,6 @@
 2.99.9949-beta - 2019-01-09
       Beta-quality pre-release of 3.0.0 for integration/live testing
-      Note this is not a real release, and there are no gaurantees!
+      Note this is not a real release, and there are no guarantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
     * Bugfix: Pipelined TCP requests should now work properly (these aren't
@@ -204,7 +204,7 @@
 
 2.99.5-beta - 2018-09-11
       Beta-quality pre-release of 3.0.0 for integration/live testing
-      Note this is not a real release, and there are no gaurantees!
+      Note this is not a real release, and there are no guarantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
 
 2.4.0 - 2018-02-15

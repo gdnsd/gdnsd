@@ -17,7 +17,7 @@
 # of all the various connection closing states also adds up correctly.
 #
 # The successful requests of the client connections that act legitimately can
-# only be gauranteed (under these connection-limited conditions where the
+# only be guaranteed (under these connection-limited conditions where the
 # server is having to kill off connections to stay within limits) on Linux, or
 # on BSDs which have SO_ACCEPTFILTER (most of them) and have accf_dns and/or
 # accf_dataready kernel modules loaded.  Because of this, we skip the check on
@@ -129,7 +129,7 @@ my @behave = (
     # 8 - does a single fast legit transaction like case 0, but if SLOW_TESTS
     # is set, it will do a second recv() which will block for the socket's
     # Timeout value, which is set long enough that the server can call us
-    # delinquent and close us for timeout (in the gauranteed cases near the end
+    # delinquent and close us for timeout (in the guaranteed cases near the end
     # of the run that we're not killed as the most-idle client).  Later during
     # the daemon shutdown SLOW_TESTS phase, clients of this type will exit
     # almost immediately after the initial 5 second grace window, because
