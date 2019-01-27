@@ -1,8 +1,32 @@
-2.99.9949-beta - 2019-01-09
+2.99.9950-beta - 2019-01-27
       Beta-quality pre-release of 3.0.0 for integration/live testing
       Note this is not a real release, and there are no guarantees!
       Please see the separate file VERSION3.md - there's too much NEWS!
       ------
+    * TCP DNS implementation significantly revamped (again) with the DNS
+      Stateful Operations (DSO) draft in mind, and the testsuite was upgraded
+      to test it much more exhaustively now.  DSO protocol details are not yet
+      implemented, but all of the basic logic is.  The code is also more
+      efficient, especially in the case of pipelined requests.  Timeout
+      behaviors and various parameter defaults/limits have changed as well.
+    * EDNS Padding support added, with a new per-listener boolean option
+      "tcp_pad".  Only supported on TCP listeners at this time.  Defaults off
+      for normal TCP listeners and defaults on for "tcp_proxy" listeners.
+      "tcp_proxy" is intended for testing encrypted transports, and this will
+      help mitigate length analysis attacks against that traffic.
+    * Bugfix for the configuration of "tcp_proxy" listeners: the code was meant
+      to reject this option on a port 53 listener, but instead it was
+      rejecting the option anytime the global default "dns_port" option was
+      set to its normal value of 53.
+    * Forward-ported from 2.4.x: bugfix for FreeBSD IPv6 with traffic routed to
+      an IP that's bound to the loopback
+    * Reverted the detection and rejection of post-2018 GeoLite2-City databases
+      with auto_dc_coords that was added in 2.3.1, as MaxMind later reversed
+      course and decided to keep the coordinates in the databases.
+    * Default compiler flags for hardening updated with newer stack-protection
+      features from recent GCC, and also Intel's CET flow control stuff.
+
+2.99.9949-beta - 2019-01-09
     * Bugfix: Pipelined TCP requests should now work properly (these aren't
       in common use by recursors yet AFAIK).
     * Socket option-setting code refactored substantially, should smooth out
