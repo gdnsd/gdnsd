@@ -48,7 +48,8 @@ struct csc_s_ {
 
 static bool csc_get_status(csc_t* csc)
 {
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_INFO;
     if (csc_txn(csc, &req, &resp))
@@ -311,7 +312,8 @@ bool csc_wait_stopping_server(csc_t* csc)
 
 csc_txn_rv_t csc_stop_server(csc_t* csc)
 {
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STOP;
     return csc_txn(csc, &req, &resp);

@@ -25,6 +25,7 @@
 #include <gdnsd/vscf.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -142,7 +143,8 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
 static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_data_t* opts, void* data)
 {
     unsigned* residx_ptr = data;
-    unsigned rnum = (*residx_ptr)++;
+    unsigned rnum = *residx_ptr;
+    (*residx_ptr)++;
     res_t* res = &resources[rnum];
     res->name = xstrdup(resname);
 
@@ -166,13 +168,15 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         if (addrs_v4_cfg) {
             if (!vscf_is_hash(addrs_v4_cfg))
                 log_fatal("plugin_simplefo: resource %s: The value of 'addrs_v4', if defined, must be a hash", resname);
-            addrstate_t* as = res->addrs_v4 = xmalloc(sizeof(*as));
+            addrstate_t* as = xmalloc(sizeof(*as));
+            res->addrs_v4 = as;
             config_addrs(as, A_IPv4, resname, "addrs_v4", addrs_v4_cfg);
         }
         if (addrs_v6_cfg) {
             if (!vscf_is_hash(addrs_v6_cfg))
                 log_fatal("plugin_simplefo: resource %s: The value of 'addrs_v6', if defined, must be a hash", resname);
-            addrstate_t* as = res->addrs_v6 = xmalloc(sizeof(*as));
+            addrstate_t* as = xmalloc(sizeof(*as));
+            res->addrs_v6 = as;
             config_addrs(as, A_IPv6, resname, "addrs_v6", addrs_v6_cfg);
         }
     }
@@ -280,7 +284,6 @@ static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const client_info_t
     return rv;
 }
 
-#include "plugins.h"
 plugin_t plugin_simplefo_funcs = {
     .name = "simplefo",
     .config_loaded = false,

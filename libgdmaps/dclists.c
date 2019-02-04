@@ -126,7 +126,8 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
         log_fatal("plugin_geoip: map '%s': too many unique dclists (>%u)", map_name, lists->count);
 
     const uint32_t newidx = lists->count;
-    lists->list = xrealloc_n(lists->list, ++lists->count, sizeof(*lists->list));
+    lists->count++;
+    lists->list = xrealloc_n(lists->list, lists->count, sizeof(*lists->list));
     lists->list[newidx] = (uint8_t*)xstrdup((const char*)newlist);
 
     gdnsd_assert(newidx <= DCLIST_MAX);
@@ -250,8 +251,10 @@ void dclists_destroy(dclists_t* lists, dclists_destroy_depth_t depth)
             free(lists->list[i]);
         break;
     case KILL_NO_LISTS:
-    default:
+        // no-op
         break;
+    default:
+        gdnsd_assert(0); // unreachable
     }
     free(lists->list);
     free(lists);

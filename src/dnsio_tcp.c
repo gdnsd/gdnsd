@@ -830,6 +830,10 @@ static void prep_handler(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, 
 #define SOL_TCP IPPROTO_TCP
 #endif
 
+#ifndef IPV6_MIN_MTU
+#define IPV6_MIN_MTU 1280
+#endif
+
 void tcp_dns_listen_setup(dns_thread_t* t)
 {
     const dns_addr_t* addrconf = t->ac;
@@ -878,9 +882,6 @@ void tcp_dns_listen_setup(dns_thread_t* t)
 #if defined IPV6_USE_MIN_MTU
         sockopt_bool_fatal(TCP, asin, t->sock, SOL_IPV6, IPV6_USE_MIN_MTU, 1);
 #elif defined IPV6_MTU
-#  ifndef IPV6_MIN_MTU
-#    define IPV6_MIN_MTU 1280
-#  endif
         // This sockopt doesn't have matching get+set; get needs a live
         // connection and reports the connection's path MTU, so we have to just
         // set it here blindly...
@@ -984,9 +985,10 @@ void* dnsio_tcp_start(void* thread_asvoid)
     ev_set_priority(stop_watcher, 2);
     stop_watcher->data = thr;
 
-    struct ev_loop* loop = thr->loop = ev_loop_new(EVFLAG_AUTO);
+    struct ev_loop* loop = ev_loop_new(EVFLAG_AUTO);
     if (!loop)
         log_fatal("ev_loop_new() failed");
+    thr->loop = loop;
 
     ev_async_start(loop, stop_watcher);
     ev_io_start(loop, accept_watcher);

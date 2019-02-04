@@ -29,6 +29,7 @@
 #include <gdnsd/vscf.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -302,7 +303,6 @@ static void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-#include "plugins.h"
 plugin_t plugin_tcp_connect_funcs = {
     .name = "tcp_connect",
     .config_loaded = false,

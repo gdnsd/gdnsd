@@ -593,6 +593,7 @@ static void val_destroy(vscf_data_t* d)
 /************************************/
 
 // *INDENT-OFF*
+// start-sonar-exclude
 %%{
     machine vscf;
 
@@ -738,6 +739,7 @@ static void val_destroy(vscf_data_t* d)
 
     write data;
 }%%
+// end-sonar-exclude
 // *INDENT-ON*
 
 /****************************/
@@ -765,6 +767,7 @@ vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source
     scnr->eof = scnr->pe = buf + len;
 
     // *INDENT-OFF*
+    // start-sonar-exclude
     %%{
         prepush {
             if (scnr->top == scnr->cs_stack_alloc)
@@ -783,6 +786,7 @@ GDNSD_DIAG_PUSH_IGNORED("-Wsign-conversion")
     %% write exec;
 GDNSD_DIAG_POP
 GDNSD_DIAG_POP
+    // end-sonar-exclude
     // *INDENT-ON*
 
     // Error/incomplete states

@@ -25,6 +25,7 @@
 #include <gdnsd/vscf.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -79,6 +80,14 @@ static http_svc_t* service_types = NULL;
 static http_events_t** mons = NULL;
 
 F_NONNULL
+static void mon_quick_fail(http_events_t* md)
+{
+    log_debug("plugin_http_status: State poll of %s failed very quickly", md->desc);
+    md->hstate = HTTP_STATE_WAITING;
+    gdnsd_mon_state_updater(md->idx, false);
+}
+
+F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_TIMER);
@@ -104,50 +113,45 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 
     log_debug("plugin_http_status: Starting state poll of %s", md->desc);
 
-    do {
-        const bool isv6 = md->addr.sa.sa_family == AF_INET6;
+    const bool isv6 = md->addr.sa.sa_family == AF_INET6;
 
-        const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
-        if (sock < 0) {
-            log_err("plugin_http_status: Failed to create monitoring socket: %s", logf_errno());
-            break;
-        }
-
-        md->already_connected = true;
-        if (likely(connect(sock, &md->addr.sa, md->addr.len) == -1)) {
-            if (likely(errno == EINPROGRESS)) {
-                md->already_connected = false;
-            } else {
-                switch (errno) {
-                case EPIPE:
-                case ECONNREFUSED:
-                case ETIMEDOUT:
-                case EHOSTUNREACH:
-                case EHOSTDOWN:
-                case ENETUNREACH:
-                    break;
-                default:
-                    log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
-                }
-                close(sock);
-                break;
-            }
-        }
-
-        md->sock = sock;
-        md->hstate = HTTP_STATE_WRITING;
-        md->done = 0;
-        ev_io_set(w_watcher, sock, EV_WRITE);
-        ev_io_start(loop, w_watcher);
-        ev_timer_set(t_watcher, md->http_svc->timeout, 0);
-        ev_timer_start(loop, t_watcher);
+    const int sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
+    if (sock < 0) {
+        log_err("plugin_http_status: Failed to create monitoring socket: %s", logf_errno());
+        mon_quick_fail(md);
         return;
-    } while (0);
+    }
 
-    // This is only reachable via "break"'s above, which indicate an immediate failure
-    log_debug("plugin_http_status: State poll of %s failed very quickly", md->desc);
-    md->hstate = HTTP_STATE_WAITING;
-    gdnsd_mon_state_updater(md->idx, false);
+    md->already_connected = true;
+    if (likely(connect(sock, &md->addr.sa, md->addr.len) == -1)) {
+        if (likely(errno == EINPROGRESS)) {
+            md->already_connected = false;
+        } else {
+            switch (errno) {
+            case EPIPE:
+            case ECONNREFUSED:
+            case ETIMEDOUT:
+            case EHOSTUNREACH:
+            case EHOSTDOWN:
+            case ENETUNREACH:
+                break;
+            default:
+                log_err("plugin_http_status: Failed to connect() monitoring socket to remote server, possible local problem: %s", logf_errno());
+            }
+
+            close(sock);
+            mon_quick_fail(md);
+            return;
+        }
+    }
+
+    md->sock = sock;
+    md->hstate = HTTP_STATE_WRITING;
+    md->done = 0;
+    ev_io_set(w_watcher, sock, EV_WRITE);
+    ev_io_start(loop, w_watcher);
+    ev_timer_set(t_watcher, md->http_svc->timeout, 0);
+    ev_timer_start(loop, t_watcher);
 }
 
 F_NONNULL
@@ -507,7 +511,6 @@ static void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-#include "plugins.h"
 plugin_t plugin_http_status_funcs = {
     .name = "http_status",
     .config_loaded = false,

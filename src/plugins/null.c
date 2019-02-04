@@ -25,6 +25,7 @@
 #include <gdnsd/vscf.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <string.h>
 #include <inttypes.h>
@@ -81,8 +82,10 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 
 static void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED)
 {
-    null_svcs = xrealloc_n(null_svcs, ++num_svcs, sizeof(*null_svcs));
-    null_svc_t* this_svc = null_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
+    null_svc_t* this_svc = xmalloc(sizeof(*this_svc));
+    null_svcs = xrealloc_n(null_svcs, num_svcs + 1, sizeof(*null_svcs));
+    null_svcs[num_svcs] = this_svc;
+    num_svcs++;
     this_svc->name = xstrdup(name);
     this_svc->interval = interval;
 }
@@ -101,8 +104,10 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     }
 
     gdnsd_assert(this_svc);
-    null_mons = xrealloc_n(null_mons, ++num_mons, sizeof(*null_mons));
-    null_mon_t* this_mon = null_mons[num_mons - 1] = xmalloc(sizeof(*this_mon));
+    null_mon_t* this_mon = xmalloc(sizeof(*this_mon));
+    null_mons = xrealloc_n(null_mons, num_mons + 1, sizeof(*null_mons));
+    null_mons[num_mons] = this_mon;
+    num_mons++;
     this_mon->svc = this_svc;
     this_mon->idx = idx;
     ev_timer* ival_watcher = &this_mon->interval_watcher;
@@ -141,7 +146,6 @@ static void plugin_null_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-#include "plugins.h"
 plugin_t plugin_null_funcs = {
     .name = "null",
     .config_loaded = false,

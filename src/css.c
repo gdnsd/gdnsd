@@ -290,9 +290,8 @@ static void css_conn_write(struct ev_loop* loop V_UNUSED, ev_io* w, int revents 
     gdnsd_assert(c->state == WRITING_RESP || c->state == WRITING_RESP_FDS || c->state == WRITING_RESP_DATA);
 
 
-    if (c->state != WRITING_RESP_DATA)
-        if (!css_conn_write_resp(c))
-            return;
+    if (c->state != WRITING_RESP_DATA && !css_conn_write_resp(c))
+        return;
     css_conn_write_data(c);
 }
 
@@ -890,7 +889,8 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
     free(lock_path);
 
     if (csc) {
-        csbuf_t req, resp;
+        csbuf_t req;
+        csbuf_t resp;
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAKE;
         req.d = (uint32_t)getpid();
@@ -915,7 +915,9 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
     css->argv0 = xstrdup(argv0);
     css->socks_cfg = socks_cfg;
     css->status_d = (uint32_t)getpid();
-    uint8_t x, y, z;
+    uint8_t x;
+    uint8_t y;
+    uint8_t z;
     if (3 != sscanf(PACKAGE_VERSION, "%hhu.%hhu.%hhu", &x, &y, &z))
         log_fatal("BUG: Cannot parse our own package version");
     css->status_v = csbuf_make_v(x, y, z);
@@ -1042,7 +1044,7 @@ void css_delete(css_t* css)
         css_conn_t* next = c->next;
         css_conn_cleanup(c);
         c = next;
-    };
+    }
     gdnsd_assert(!css->num_clients);
 
     // free up the reload queues

@@ -133,7 +133,8 @@ static bool action_stop(csc_t* csc)
 F_NONNULL
 static bool action_reloadz(csc_t* csc)
 {
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_ZREL;
     csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
@@ -155,7 +156,8 @@ static bool action_replace(csc_t* csc)
     const char* s_vers = csc_get_server_version(csc);
     log_info("REPLACE[gdnsdctl]: Sending replace command to old daemon version %s running at PID %li", s_vers, (long)s_pid);
 
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_REPL;
     csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
@@ -193,7 +195,8 @@ F_NONNULL
 static bool action_stats(csc_t* csc)
 {
     char* resp_data;
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STAT;
     csc_txn_rv_t crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
@@ -219,7 +222,8 @@ F_NONNULL
 static bool action_states(csc_t* csc)
 {
     char* resp_data;
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STATE;
     csc_txn_rv_t crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
@@ -299,7 +303,8 @@ static bool action_chal(csc_t* csc, int argc, char** argv)
         gdnsd_assert(dlen <= CHAL_MAX_DLEN);
     }
 
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_CHAL;
     csbuf_set_v(&req, chal_count);
@@ -320,7 +325,8 @@ static bool action_chal(csc_t* csc, int argc, char** argv)
 F_NONNULL
 static bool action_chalf(csc_t* csc)
 {
-    csbuf_t req, resp;
+    csbuf_t req;
+    csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_CHALF;
     csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
@@ -417,7 +423,6 @@ static const char* parse_args(const int argc, char** argv)
             return argv[optind++];
         default:
             usage();
-            break;
         }
     }
 

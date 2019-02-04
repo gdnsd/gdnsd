@@ -25,6 +25,7 @@
 #include <gdnsd/vscf.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <string.h>
 #include <inttypes.h>
@@ -84,7 +85,6 @@ static gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t*
     return GDNSD_STTL_TTL_MAX;
 }
 
-#include "plugins.h"
 plugin_t plugin_reflect_funcs = {
     .name = "reflect",
     .config_loaded = false,

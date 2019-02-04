@@ -209,14 +209,12 @@ static chal_tbl_t* chal_tbl_create(const cset_t* oldest_set, const cset_t* addin
             chal_tbl_hash_cset(new_chal_tbl, iter_old, false);
             iter_old = iter_old->next_newer;
         }
-        if (adding) {
-            // Ask the hasher to check size constraints when adding new csets,
-            // and can fail here, which means we need to destruct our new table
-            // and return NULL.
-            if (chal_tbl_hash_cset(new_chal_tbl, adding, true)) {
-                chal_tbl_destruct(new_chal_tbl);
-                new_chal_tbl = NULL;
-            }
+        // Ask the hasher to check size constraints when adding new csets, and
+        // can fail here, which means we need to destruct our new table and
+        // return NULL.
+        if (adding && chal_tbl_hash_cset(new_chal_tbl, adding, true)) {
+            chal_tbl_destruct(new_chal_tbl);
+            new_chal_tbl = NULL;
         }
     }
 

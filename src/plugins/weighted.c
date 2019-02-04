@@ -27,6 +27,7 @@
 #include <gdnsd/rand.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -206,7 +207,8 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
 
     addrset_t* addrset = iaga->addrset;
     res_aitem_t* res_item = iaga->res_item;
-    unsigned lb_idx = iaga->lb_idx++;
+    unsigned lb_idx = iaga->lb_idx;
+    iaga->lb_idx++;
     const char* res_name = iaga->res_name;
     const char* stanza = iaga->stanza;
     const char* item_name = iaga->item_name;
@@ -296,7 +298,8 @@ static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, v
 
     // pull a bunch of data from addr_iter_data_t...
     addr_iter_data_t* addr_iter_data = aid_asvoid;
-    const unsigned item_idx = addr_iter_data->item_idx++;
+    const unsigned item_idx = addr_iter_data->item_idx;
+    addr_iter_data->item_idx++;
     addrset_t* addrset = addr_iter_data->addrset;
     const char* res_name = addr_iter_data->res_name;
     const char* stanza = addr_iter_data->stanza;
@@ -435,7 +438,8 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
     cnset_t* cnset = cid->cnset;
     const char* res_name = cid->res_name;
     const char* stanza = cid->stanza;
-    const unsigned item_idx = cid->item_idx++;
+    const unsigned item_idx = cid->item_idx;
+    cid->item_idx++;
     res_citem_t* res_item = &cnset->items[item_idx];
 
     long wtemp = 0;
@@ -950,7 +954,6 @@ static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t
     return rv;
 }
 
-#include "plugins.h"
 plugin_t plugin_weighted_funcs = {
     .name = "weighted",
     .config_loaded = false,

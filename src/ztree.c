@@ -121,14 +121,12 @@ static ztree_t* ztree_node_find_child(const ztree_t* node, const uint8_t* label)
 // PRCU: executing thread must be registered, online and have reader-lock
 zone_t* ztree_find_zone_for(const uint8_t* dname, unsigned* auth_depth_out)
 {
-    zone_t* rv = NULL;
-
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(dname, lstack);
     ztree_t* current = rcu_dereference(ztree_root);
-    while (current && !(rv = current->zone) && lcount)
+    while (current && !current->zone && lcount)
         current = ztree_node_find_child(current, lstack[--lcount]);
-
+    zone_t* rv = current ? current->zone : NULL;
     if (rv) {
         unsigned auth_depth = lcount;
         while (lcount--)

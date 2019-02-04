@@ -26,6 +26,7 @@
 #include <gdnsd/vscf.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -120,7 +121,8 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, vscf_data_
     const char* stanza = aid->stanza;
     const char** svc_names = aid->svc_names;
     addrset_t* aset = aid->aset;
-    const unsigned idx = aid->idx++;
+    const unsigned idx = aid->idx;
+    aid->idx++;
     const bool ipv6 = aid->ipv6;
     addrstate_t* as = &aset->as[idx];
 
@@ -272,7 +274,8 @@ F_NONNULL
 static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_data_t* opts, void* data)
 {
     unsigned* residx_ptr = data;
-    unsigned rnum = (*residx_ptr)++;
+    unsigned rnum = *residx_ptr;
+    (*residx_ptr)++;
     res_t* res = &resources[rnum];
     res->name = xstrdup(resname);
 
@@ -416,7 +419,6 @@ static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t*
     return rv;
 }
 
-#include "plugins.h"
 plugin_t plugin_multifo_funcs = {
     .name = "multifo",
     .config_loaded = false,

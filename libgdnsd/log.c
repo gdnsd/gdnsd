@@ -123,7 +123,6 @@ static char* _fmtbuf_common(const size_t size)
 
     return rv;
 }
-#undef FMTBUF_SIZE
 
 // Public (including this file) interfaces to _fmtbuf_common()
 
@@ -175,18 +174,6 @@ GDNSD_DIAG_PUSH_IGNORED("-Wformat-nonliteral")
 
 static void gdnsd_loggerv(int level, const char* fmt, va_list ap)
 {
-    // Later in the stdio path, we use 1K stack space to assemble the prefix
-    // onto the provided format string.  The max prefix length is 9, but we
-    // allow 24 here for simplicity / future-proof.  If the caller provided a
-    // stupidly-long format string that would cause overflow, replace it with a
-    // simpler error about the format string itself.
-    size_t fmtlen = strlen(fmt);
-    if (fmtlen > 1000) {
-        level = LOG_CRIT;
-        fmt = FMT_TOO_LONG;
-        fmtlen = sizeof(FMT_TOO_LONG) - 1;
-    }
-
     if (do_syslog) {
         vsyslog(level, fmt, ap);
         gdnsd_fmtbuf_reset();
@@ -194,43 +181,32 @@ static void gdnsd_loggerv(int level, const char* fmt, va_list ap)
     }
 
     const char* pfx;
-    size_t pfxlen;
 
     switch (level) {
     case LOG_DEBUG:
         pfx = PFX_DEBUG;
-        pfxlen = sizeof(PFX_DEBUG) - 1;
         break;
     case LOG_INFO:
         pfx = PFX_INFO;
-        pfxlen = sizeof(PFX_INFO) - 1;
         break;
     case LOG_WARNING:
         pfx = PFX_WARNING;
-        pfxlen = sizeof(PFX_WARNING) - 1;
         break;
     case LOG_ERR:
         pfx = PFX_ERR;
-        pfxlen = sizeof(PFX_ERR) - 1;
         break;
     case LOG_CRIT:
         pfx = PFX_CRIT;
-        pfxlen = sizeof(PFX_CRIT) - 1;
         break;
     default:
         pfx = PFX_UNKNOWN;
-        pfxlen = sizeof(PFX_UNKNOWN) - 1;
         break;
     }
 
     char f[1024];
-    char* fp = f;
-    memcpy(fp, pfx, pfxlen);
-    fp += pfxlen;
-    memcpy(fp, fmt, fmtlen);
-    fp += fmtlen;
-    *fp++ = '\n';
-    *fp++ = '\0';
+    const int snp_rv = snprintf(f, 1024, "%s%s\n", pfx, fmt);
+    if (unlikely(snp_rv >= 1024))
+        memcpy(f, FMT_TOO_LONG, sizeof(FMT_TOO_LONG));
 
     va_list apcpy;
     va_copy(apcpy, ap);
@@ -250,12 +226,12 @@ void gdnsd_logger(int level, const char* fmt, ...)
 
 GDNSD_DIAG_POP
 
-const char* gdnsd_logf_bt(void)
-{
-#ifdef HAVE_LIBUNWIND
 #define BT_SIZE 2048LU
 #define BT_MAX_NAME 60LU
 
+const char* gdnsd_logf_bt(void)
+{
+#ifdef HAVE_LIBUNWIND
     char* tbuf = gdnsd_fmtbuf_alloc(BT_SIZE);
     size_t tbuf_pos = 0;
     tbuf[tbuf_pos] = '\0'; // in case no output below

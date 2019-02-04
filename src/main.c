@@ -289,7 +289,8 @@ static void do_tak1(csc_t* csc)
     // assuming all daemons with listening control sockets have a major >= 3
     // and support TAK1.
     if (csc_server_version_gte(csc, 2, 99, 200)) {
-        csbuf_t req, resp;
+        csbuf_t req;
+        csbuf_t resp;
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAK1;
         req.d = (uint32_t)getpid();
@@ -303,7 +304,8 @@ static void do_tak2(struct ev_loop* loop, csc_t* csc)
     // As above for compat
     if (csc_server_version_gte(csc, 2, 99, 200)) {
         uint8_t* chal_data = NULL;
-        csbuf_t req, resp;
+        csbuf_t req;
+        csbuf_t resp;
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAK2;
         req.d = (uint32_t)getpid();
@@ -502,9 +504,8 @@ int main(int argc, char** argv)
     statio_init(socks_cfg->num_dns_threads);
 
     // Lock whole daemon into memory, including all future allocations.
-    if (gcfg->lock_mem)
-        if (mlockall(MCL_CURRENT | MCL_FUTURE))
-            log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
+    if (gcfg->lock_mem && mlockall(MCL_CURRENT | MCL_FUTURE))
+        log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
 
     // init cookie support and load key, if any
     if (!gcfg->disable_cookies)

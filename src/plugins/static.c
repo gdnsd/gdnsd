@@ -25,6 +25,7 @@
 #include <gdnsd/vscf.h>
 #include "mon.h"
 #include "plugapi.h"
+#include "plugins.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -52,7 +53,8 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     if (vscf_get_type(addr) != VSCF_SIMPLE_T)
         log_fatal("plugin_static: resource %s: must be an IP address or a domainname in string form", resname);
 
-    unsigned res = (*residx_ptr)++;
+    unsigned res = *residx_ptr;
+    (*residx_ptr)++;
     resources[res].name = xstrdup(resname);
 
     const char* addr_txt = vscf_simple_get_data(addr);
@@ -139,8 +141,11 @@ static static_mon_t** static_mons = NULL;
 
 static void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED)
 {
-    static_svcs = xrealloc_n(static_svcs, ++num_svcs, sizeof(*static_svcs));
-    static_svc_t* this_svc = static_svcs[num_svcs - 1] = xmalloc(sizeof(*this_svc));
+    static_svc_t* this_svc = xmalloc(sizeof(*this_svc));
+    static_svcs = xrealloc_n(static_svcs, num_svcs + 1, sizeof(*static_svcs));
+    static_svcs[num_svcs] = this_svc;
+    num_svcs++;
+
     this_svc->name = xstrdup(name);
     this_svc->static_sttl = GDNSD_STTL_TTL_MAX;
 
@@ -180,8 +185,10 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     }
     gdnsd_assert(this_svc);
 
-    static_mons = xrealloc_n(static_mons, ++num_mons, sizeof(*static_mons));
-    static_mon_t* this_mon = static_mons[num_mons - 1] = xmalloc(sizeof(*this_mon));
+    static_mon_t* this_mon = xmalloc(sizeof(*this_mon));
+    static_mons = xrealloc_n(static_mons, num_mons + 1, sizeof(*static_mons));
+    static_mons[num_mons] = this_mon;
+    num_mons++;
     this_mon->svc = this_svc;
     this_mon->idx = idx;
 }
@@ -202,7 +209,6 @@ static void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED)
         gdnsd_mon_sttl_updater(static_mons[i]->idx, static_mons[i]->svc->static_sttl);
 }
 
-#include "plugins.h"
 plugin_t plugin_static_funcs = {
     .name = "static",
     .config_loaded = false,

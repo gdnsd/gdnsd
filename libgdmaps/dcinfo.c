@@ -79,21 +79,23 @@ void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, 
                 log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' defined twice", map_name, dcname);
             GDNSD_DIAG_POP
             vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
-            vscf_data_t* lat_cfg;
-            vscf_data_t* lon_cfg;
-            double lat, lon;
-            if (
-                !vscf_is_array(coord_cfg) || vscf_array_get_len(coord_cfg) != 2
-                || !(lat_cfg = vscf_array_get_data(coord_cfg, 0))
-                || !(lon_cfg = vscf_array_get_data(coord_cfg, 1))
-                || !vscf_is_simple(lat_cfg)
-                || !vscf_is_simple(lon_cfg)
-                || !vscf_simple_get_as_double(lat_cfg, &lat)
-                || !vscf_simple_get_as_double(lon_cfg, &lon)
-                || lat > 90.0 || lat < -90.0
-                || lon > 180.0 || lon < -180.0
-            )
-                log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be an array of two floating-point values representing a legal latitude and longitude in decimal degrees", map_name, dcname);
+            if (!vscf_is_array(coord_cfg) || vscf_array_get_len(coord_cfg) != 2)
+                log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be an array of two values", map_name, dcname);
+            vscf_data_t* lat_cfg = vscf_array_get_data(coord_cfg, 0);
+            vscf_data_t* lon_cfg = vscf_array_get_data(coord_cfg, 1);
+            gdnsd_assert(lat_cfg);
+            gdnsd_assert(lon_cfg);
+
+            double lat;
+            double lon;
+            if (!vscf_is_simple(lat_cfg)
+                    || !vscf_is_simple(lon_cfg)
+                    || !vscf_simple_get_as_double(lat_cfg, &lat)
+                    || !vscf_simple_get_as_double(lon_cfg, &lon)
+                    || lat > 90.0 || lat < -90.0
+                    || lon > 180.0 || lon < -180.0
+               )
+                log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be a legal latitude and longitude in decimal degrees", map_name, dcname);
             info->dcs[dcidx].coords.lat = lat * DEG2RAD;
             info->dcs[dcidx].coords.lon = lon * DEG2RAD;
             info->dcs[dcidx].coords.cos_lat = cos(lat * DEG2RAD);

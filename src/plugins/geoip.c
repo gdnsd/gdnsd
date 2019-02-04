@@ -26,6 +26,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include <gdmaps.h>
+#include "plugins.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -77,10 +78,8 @@ static bool top_config_hook(vscf_data_t* top_config)
 
     bool undef_dc_ok = false;
     vscf_data_t* undef_dc_ok_vscf = vscf_hash_get_data_byconstkey(top_config, "undefined_datacenters_ok", true);
-    if (undef_dc_ok_vscf) {
-        if (!vscf_is_simple(undef_dc_ok_vscf) || !vscf_simple_get_as_bool(undef_dc_ok_vscf, &undef_dc_ok))
-            log_fatal("plugin_geoip: 'undef_dc_ok' must be a boolean value ('true' or 'false')");
-    }
+    if (undef_dc_ok_vscf && (!vscf_is_simple(undef_dc_ok_vscf) || !vscf_simple_get_as_bool(undef_dc_ok_vscf, &undef_dc_ok)))
+        log_fatal("plugin_geoip: 'undef_dc_ok' must be a boolean value ('true' or 'false')");
 
     return undef_dc_ok;
 }
@@ -116,7 +115,6 @@ static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum)
 #define META_MAP_ADMIN 1
 #include "meta_core.inc"
 
-#include "plugins.h"
 plugin_t plugin_geoip_funcs = {
     .name = "geoip",
     .config_loaded = false,

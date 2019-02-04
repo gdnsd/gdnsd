@@ -337,12 +337,10 @@ static void die_gracefully(struct ev_loop* loop)
             ev_timer* it = &mons[i].interval_timer;
             ev_timer* ct = &mons[i].cmd_timeout;
             ev_timer_stop(loop, it);
-            if (ev_is_active(ct)) {
-                if (ev_timer_remaining(loop, ct) > 2.0) {
-                    ev_timer_stop(loop, ct);
-                    ev_timer_set(ct, 2.0, 0.);
-                    ev_timer_start(loop, ct);
-                }
+            if (ev_is_active(ct) && ev_timer_remaining(loop, ct) > 2.0) {
+                ev_timer_stop(loop, ct);
+                ev_timer_set(ct, 2.0, 0.);
+                ev_timer_start(loop, ct);
             }
         }
     }

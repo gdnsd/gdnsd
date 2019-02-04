@@ -42,6 +42,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include <gdnsd/paths.h>
+#include "plugins.h"
 
 #include <string.h>
 #include <unistd.h>
@@ -320,7 +321,6 @@ static void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED)
     }
 }
 
-#include "plugins.h"
 plugin_t plugin_extfile_funcs = {
     .name = "extfile",
     .config_loaded = false,

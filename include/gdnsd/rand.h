@@ -92,7 +92,7 @@ static uint32_t gdnsd_rand32_bounded(gdnsd_rstate32_t* rs, const uint32_t bound)
     uint64_t mr = (uint64_t)gdnsd_rand32_get(rs) * bound;
     uint32_t leftover = (uint32_t)mr;
     if (unlikely(leftover < bound)) {
-        uint32_t threshold = -bound % bound;
+        uint32_t threshold = (0U - bound) % bound;
         while (unlikely(leftover < threshold)) {
             mr = (uint64_t)gdnsd_rand32_get(rs) * bound;
             leftover = (uint32_t)mr;

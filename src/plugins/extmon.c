@@ -28,6 +28,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include <gdnsd/paths.h>
+#include "plugins.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -511,7 +512,6 @@ static void plugin_extmon_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-#include "plugins.h"
 plugin_t plugin_extmon_funcs = {
     .name = "extmon",
     .config_loaded = false,

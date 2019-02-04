@@ -801,6 +801,7 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 }
 
 // *INDENT-OFF*
+// start-sonar-exclude
 %%{
     machine zone;
 
@@ -1008,6 +1009,7 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 
     write data;
 }%%
+// end-sonar-exclude
 
 F_NONNULL
 static void scanner(zscan_t* z, char* buf, const size_t bufsize)
@@ -1032,6 +1034,7 @@ static void scanner(zscan_t* z, char* buf, const size_t bufsize)
 
     GDNSD_DIAG_PUSH_IGNORED("-Wswitch-default")
     GDNSD_DIAG_PUSH_IGNORED("-Wimplicit-fallthrough")
+// start-sonar-exclude
 #ifndef __clang_analyzer__
     // ^ ... because the ragel-generated code for the zonefile parser is
     //   so huge that it makes analyzer runs take forever.
@@ -1040,6 +1043,7 @@ static void scanner(zscan_t* z, char* buf, const size_t bufsize)
     const char* eof = pe;
     %% write exec;
 #endif // __clang_analyzer__
+// end-sonar-exclude
     GDNSD_DIAG_POP
     GDNSD_DIAG_POP
 

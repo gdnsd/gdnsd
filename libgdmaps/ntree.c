@@ -150,7 +150,8 @@ static unsigned ntree_lookup_v6(const ntree_t* tree, const uint8_t* ip, unsigned
         gdnsd_assert(offset < tree->count);
         const nnode_t* current = &tree->store[offset];
         gdnsd_assert(current->one && current->zero);
-        offset = CHKBIT_v6(ip, chkbit++) ? current->one : current->zero;
+        offset = CHKBIT_v6(ip, chkbit) ? current->one : current->zero;
+        chkbit++;
         gdnsd_assert(chkbit < 129);
     } while (!NN_IS_DCLIST(offset));
 
@@ -181,7 +182,8 @@ static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned
         gdnsd_assert(offset < tree->count);
         const nnode_t* current = &tree->store[offset];
         gdnsd_assert(current->one && current->zero);
-        offset = CHKBIT_v4(ip, chkbit++) ? current->one : current->zero;
+        offset = CHKBIT_v4(ip, chkbit) ? current->one : current->zero;
+        chkbit++;
         gdnsd_assert(chkbit < 33);
     }
 

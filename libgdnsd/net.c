@@ -23,6 +23,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/alloc.h>
 
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -240,7 +241,7 @@ bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* asin)
     return false;
 }
 
-static const char* generic_nullstr = "(null)";
+static const char generic_nullstr[] = "(null)";
 
 int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf)
 {
@@ -254,22 +255,13 @@ int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf)
     if (asin) {
         name_err = getnameinfo(&asin->sa, asin->len, hostbuf, INET6_ADDRSTRLEN + 32, servbuf, 6, NI_NUMERICHOST | NI_NUMERICSERV);
         if (!name_err) {
-            const bool isv6 = (asin->sa.sa_family == AF_INET6);
-            const unsigned hostbuf_len = strlen(hostbuf);
-            const unsigned servbuf_len = strlen(servbuf);
-            gdnsd_assert((hostbuf_len + servbuf_len + (isv6 ? 4 : 2)) <= GDNSD_ANYSIN_MAXSTR);
-            char* bufptr = buf;
-            if (isv6)
-                *bufptr++ = '[';
-            memcpy(bufptr, hostbuf, hostbuf_len);
-            bufptr += hostbuf_len;
-            if (isv6)
-                *bufptr++ = ']';
-            *bufptr++ = ':';
-            memcpy(bufptr, servbuf, servbuf_len + 1); // include NUL
+            if (asin->sa.sa_family == AF_INET6)
+                snprintf(buf, GDNSD_ANYSIN_MAXSTR, "[%s]:%s", hostbuf, servbuf);
+            else
+                snprintf(buf, GDNSD_ANYSIN_MAXSTR, "%s:%s", hostbuf, servbuf);
         }
     } else {
-        strcpy(buf, generic_nullstr);
+        memcpy(buf, generic_nullstr, sizeof(generic_nullstr));
     }
 
     return name_err;
@@ -297,7 +289,7 @@ int gdnsd_anysin2str_noport(const gdnsd_anysin_t* asin, char* buf)
     if (asin)
         name_err = getnameinfo(&asin->sa, asin->len, buf, GDNSD_ANYSIN_MAXSTR, NULL, 0, NI_NUMERICHOST);
     else
-        strcpy(buf, generic_nullstr);
+        memcpy(buf, generic_nullstr, sizeof(generic_nullstr));
 
     return name_err;
 }

@@ -267,9 +267,8 @@ static void gdmap_initial_load_all(gdmap_t* gdmap)
     gdnsd_assert(gdmap->dclists_pend);
     gdnsd_assert(!gdmap->geoip_list);
 
-    if (gdmap->geoip_path)
-        if (gdmap_update_geoip(gdmap, gdmap->geoip_path, &gdmap->geoip_list))
-            log_fatal("plugin_geoip: map '%s': cannot continue initial load", gdmap->name);
+    if (gdmap->geoip_path && gdmap_update_geoip(gdmap, gdmap->geoip_path, &gdmap->geoip_list))
+        log_fatal("plugin_geoip: map '%s': cannot continue initial load", gdmap->name);
 
     if (!gdmap->nets_list) {
         gdnsd_assert(gdmap->nets_path);
@@ -566,18 +565,25 @@ const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx,
 
     // Allocate buffer
     char* buf = gdnsd_fmtbuf_alloc(output_len + 1);
-    buf[0] = '\0';
+    char* bptr = buf;
 
     // Actually write the output
     first = true;
     dclist = dclist_orig;
     while ((dcnum = *dclist++)) {
-        const char* dcname = gdmaps_dcnum2name(gdmaps, gdmap_idx, dcnum);
-        if (!first)
-            strcat(buf, ", ");
-        strcat(buf, dcname ? dcname : dclist_nodc);
+        if (!first) {
+            *bptr++ = ',';
+            *bptr++ = ' ';
+        }
         first = false;
+        const char* dcname = gdmaps_dcnum2name(gdmaps, gdmap_idx, dcnum);
+        if (!dcname)
+            dcname = dclist_nodc;
+        const size_t len = strlen(dcname);
+        memcpy(bptr, dcname, len);
+        bptr += len;
     }
+    *bptr = '\0';
 
     return buf;
 }

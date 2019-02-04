@@ -159,6 +159,10 @@ static void udp_sock_opts_v4(const gdnsd_anysin_t* asin, const int sock V_UNUSED
 #endif
 }
 
+#ifndef IPV6_MIN_MTU
+#define IPV6_MIN_MTU 1280
+#endif
+
 static void udp_sock_opts_v6(const gdnsd_anysin_t* asin, const int sock)
 {
     sockopt_bool_fatal(UDP, asin, sock, SOL_IPV6, IPV6_V6ONLY, 1);
@@ -166,9 +170,6 @@ static void udp_sock_opts_v6(const gdnsd_anysin_t* asin, const int sock)
 #if defined IPV6_USE_MIN_MTU
     sockopt_bool_fatal(UDP, asin, sock, SOL_IPV6, IPV6_USE_MIN_MTU, 1);
 #elif defined IPV6_MTU
-#    ifndef IPV6_MIN_MTU
-#      define IPV6_MIN_MTU 1280
-#    endif
     // This sockopt doesn't have matching get+set; get needs a live
     // connection and reports the connection's path MTU, so we have to just
     // set it here blindly...

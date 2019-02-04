@@ -179,13 +179,12 @@ bool gdnsd_mon_parse_sttl(const char* sttl_str, gdnsd_sttl_t* sttl_out, unsigned
         } else if (slash == '/' && *ttl_suffix) {
             char* endptr = NULL;
             unsigned long ttl_tmp = strtoul(ttl_suffix, &endptr, 10);
-            if (endptr && !*endptr) { // strtoul finished the string successfully
-                if (ttl_tmp <= GDNSD_STTL_TTL_MAX) {
-                    out = (out & ~GDNSD_STTL_TTL_MASK) | ttl_tmp;
-                    assert_valid_sttl(out);
-                    *sttl_out = out;
-                    failed = false;
-                }
+            // strtoul finished the string successfully and value is in range
+            if (endptr && !*endptr && ttl_tmp <= GDNSD_STTL_TTL_MAX) {
+                out = (out & ~GDNSD_STTL_TTL_MASK) | ttl_tmp;
+                assert_valid_sttl(out);
+                *sttl_out = out;
+                failed = false;
             }
         }
     }
@@ -509,7 +508,8 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
     }
 
     // allocate the new smgr/sttl
-    const unsigned idx = num_smgrs++;
+    const unsigned idx = num_smgrs;
+    num_smgrs++;
     smgrs = xrealloc_n(smgrs, num_smgrs, sizeof(*smgrs));
     smgr_t* this_smgr = &smgrs[idx];
     this_smgr->type = this_svc;
@@ -576,7 +576,8 @@ unsigned gdnsd_mon_cname(const char* svctype_name, const char* cname, const uint
 // .. for virtual entities (e.g. datacenters), which have no service_type
 unsigned gdnsd_mon_admin(const char* desc)
 {
-    const unsigned idx = num_smgrs++;
+    const unsigned idx = num_smgrs;
+    num_smgrs++;
     smgrs = xrealloc_n(smgrs, num_smgrs, sizeof(*smgrs));
     smgr_sttl = xrealloc_n(smgr_sttl, num_smgrs, sizeof(*smgr_sttl));
     smgr_sttl_consumer_ = xrealloc_n(smgr_sttl_consumer_, num_smgrs, sizeof(*smgr_sttl_consumer_));
@@ -709,15 +710,14 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
     //   the monitoring requests resolver plugins asked about earlier
     for (unsigned i = 0; i < num_smgrs; i++) {
         smgr_t* this_smgr = &smgrs[i];
-        if (this_smgr->type) { // virtuals (mon_admin) get no service_type at all
-            if (this_smgr->type->plugin) { // down/up get no plugin
-                if (this_smgr->is_cname) {
-                    gdnsd_assert(this_smgr->type->plugin->add_mon_cname);
-                    this_smgr->type->plugin->add_mon_cname(this_smgr->desc, this_smgr->type->name, this_smgr->cname, i);
-                } else {
-                    gdnsd_assert(this_smgr->type->plugin->add_mon_addr);
-                    this_smgr->type->plugin->add_mon_addr(this_smgr->desc, this_smgr->type->name, this_smgr->cname, &this_smgr->addr, i);
-                }
+        gdnsd_assert(this_smgr);
+        if (this_smgr->type && this_smgr->type->plugin) {
+            if (this_smgr->is_cname) {
+                gdnsd_assert(this_smgr->type->plugin->add_mon_cname);
+                this_smgr->type->plugin->add_mon_cname(this_smgr->desc, this_smgr->type->name, this_smgr->cname, i);
+            } else {
+                gdnsd_assert(this_smgr->type->plugin->add_mon_addr);
+                this_smgr->type->plugin->add_mon_addr(this_smgr->desc, this_smgr->type->name, this_smgr->cname, &this_smgr->addr, i);
             }
         }
     }
@@ -788,7 +788,8 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest)
         down = smgr->real_sttl & GDNSD_STTL_DOWN;
         if (down) { // Currently DOWN
             if (latest) { // New Success
-                if (++smgr->n_success == smgr->type->up_thresh) {
+                smgr->n_success++;
+                if (smgr->n_success == smgr->type->up_thresh) {
                     smgr->n_success = 0;
                     smgr->n_failure = 0;
                     down = false;
@@ -799,13 +800,17 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest)
         } else { // Currently UP
             if (latest) { // New Success
                 // Was UP with some intermittent failure history, but has cleared ok_thresh...
-                if (smgr->n_failure && (++smgr->n_success == smgr->type->ok_thresh)) {
-                    smgr->n_failure = 0;
-                    smgr->n_success = 0;
+                if (smgr->n_failure) {
+                    smgr->n_success++;
+                    if (smgr->n_success == smgr->type->ok_thresh) {
+                        smgr->n_failure = 0;
+                        smgr->n_success = 0;
+                    }
                 }
             } else { // New Failure
                 smgr->n_success = 0;
-                if (++smgr->n_failure == smgr->type->down_thresh) { // Fail threshold check on failure
+                smgr->n_failure++;
+                if (smgr->n_failure == smgr->type->down_thresh) { // Fail threshold check on failure
                     smgr->n_failure = 0;
                     down = true;
                 }
