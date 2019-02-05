@@ -25,21 +25,17 @@
 /src/zscan_rfc1035.c
 /libgdnsd/vscf.c
 
-# Testsuite input/output directories
+# Testsuite stuff
 /t/testout/
-
-# Installation directory for valgrind testing
-/_vginst
-
-# lcov html output from qa/coverage.sh
-/lcovout/
-
-# libgdmaps unit test junk
 /t/libgdmaps/*.t
 /t/libgdmaps/etc/
-
-# saved state for "prove"
 .prove
+
+# Various QA tool outputs
+/_vginst
+/lcovout/
+/bw-output/
+/.scannerwork/
 
 # Various tool outputs in all dirs
 Makefile

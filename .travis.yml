@@ -5,22 +5,50 @@ branches:
     - master
 language: c
 cache:
-  - apt
-  - ccache
+  apt: true
+  ccache: true
+  directories:
+    - '$HOME/.sonar'
+    - '$HOME/.cpanm'
+addons:
+  sonarcloud:
+    organization: gdnsd
+  apt:
+    update: true
+    sources:
+      - sourceline: "ppa:maxmind/ppa"
+    packages:
+      - ragel
+      - libev-dev
+      - liburcu-dev
+      - libsodium-dev
+      - libunwind8-dev
+      - libmaxminddb-dev
+      - libsocket6-perl
+      - libio-socket-inet6-perl
+      - libwww-perl
+      - libhttp-daemon-perl
+      - libnet-dns-perl
 before_install:
+  - cpanm -S -n Net::DNS
   - sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'
-  - sudo apt-add-repository ppa:maxmind/ppa -y
-  - sudo apt-get update -qq
-  - sudo apt-get -y install -qq ragel libev-dev liburcu-dev libsodium-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl lcov
-  - sudo sh -c 'PERL_MM_USE_DEFAULT=1 perl -MCPAN -e "CPAN::Shell->o(q{conf}, q{recommends_policy}, q{0}); CPAN::Shell->o(q{conf}, q{commit}); CPAN::Shell->notest(q{install}, q{Net::DNS})"'
-  - gem install coveralls-lcov
 before_script:
   - autoreconf -vif
+script: ./qa/travis-build.sh
 matrix:
   include:
-    - compiler: clang
+    - name: "SonarCloud Coverage and Analysis"
+      compiler: gcc
+      env: GDNSD_TRAVIS_BUILD=sonarcloud
+    - name: "GCC - Optimized Build and Test"
+      compiler: gcc
       env: GDNSD_TRAVIS_BUILD=optimized
-    - compiler: gcc
-      env: GDNSD_TRAVIS_BUILD=coveralls
-script:
-  - ./qa/travis-build.sh
+    - name: "GCC - Developer Build and Test"
+      compiler: gcc
+      env: GDNSD_TRAVIS_BUILD=developer
+    - name: "Clang - Optimized Build and Test"
+      compiler: clang
+      env: GDNSD_TRAVIS_BUILD=optimized
+    - name: "Clang - Developer Build and Test"
+      compiler: clang
+      env: GDNSD_TRAVIS_BUILD=developer
