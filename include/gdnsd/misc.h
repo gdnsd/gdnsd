@@ -45,6 +45,16 @@ char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs);
 F_MALLOC F_NONNULL F_RETNN
 char* gdnsd_str_combine_n(const unsigned count, ...);
 
+// Creates a new heap-allocated copy of the string "haystack", with all
+// occurences of "needle" replaced by "repl".  All string inputs should be NUL
+// terminated, and the _len arguments for the needle and repl should be their
+// strlen()s.  The needle must have a non-zero size.  This is meant for simple
+// uses during configuration-parsing kinds of cases, and errors out if the
+// needle, replacement, or original string are of unreasonable size (over half
+// the bits of size_t, so ~64K on ILP32).  It's also not terribly efficient :)
+F_NONNULL
+char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t needle_len, const char* repl, const size_t repl_len);
+
 // set thread name (via pthread_setname_np or similar)
 void gdnsd_thread_setname(const char* n);
 

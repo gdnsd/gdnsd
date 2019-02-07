@@ -14,7 +14,7 @@ service_types => {
     }
     ext_up => {
         plugin => extmon
-        cmd => [ "/bin/sh", "-c", "true" ],
+        cmd => [ "/bin/sh", "-c", "echo %%ITEM%%%%ITEM%%; true" ],
         timeout = 3
         interval = 10
         up_thresh = 20
@@ -23,7 +23,7 @@ service_types => {
     }
     ext_timeout => {
         plugin => extmon
-        cmd => [ "/bin/sh", "-c", "sleep 16" ],
+        cmd => [ "/bin/sh", "-c", "echo %%ITEM%%; echo %%ITEM%%; sleep 16; echo %%ITEM%%" ],
         timeout = 1
         interval = 10
         up_thresh = 20

@@ -99,6 +99,76 @@ char* gdnsd_str_combine_n(const unsigned count, ...)
     return out;
 }
 
+char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t needle_len, const char* repl, const size_t repl_len)
+{
+    gdnsd_assert(needle_len);
+    static const size_t half_size_bits = SIZE_MAX >> (sizeof(size_t) * 8 / 2);
+    const size_t haystack_len = strlen(haystack);
+    if (unlikely(haystack_len >= half_size_bits || needle_len >= half_size_bits || repl_len >= half_size_bits))
+        log_fatal("Oversized inputs during gdnsd_str_subst, backtrace:%s", logf_bt());
+
+    // Readonly pre-count of the needles in the haystack
+    const char* haystack_srch = haystack;
+    const char* ssrv;
+    size_t needle_count = 0;
+    while ((ssrv = strstr(haystack_srch, needle))) {
+        needle_count++;
+        haystack_srch = ssrv + needle_len;
+    }
+
+    // The whole string can't be this big, and the needle len has to be non-zero...
+    gdnsd_assert(needle_count < half_size_bits);
+
+    // Fast-path out if no needles
+    if (!needle_count)
+        return xstrdup(haystack);
+
+    // Figure out the final output size
+    const ssize_t adjust = (ssize_t)repl_len - (ssize_t)needle_len;
+    const size_t output_len = (size_t)((ssize_t)haystack_len
+                                       + (adjust * (ssize_t)needle_count));
+
+    // Even with the input size checks at the top, after the math above things
+    // could get crazy in edge cases, so reject them:
+    if (output_len >= half_size_bits)
+        log_fatal("String sizing overflow, backtrace:%s", logf_bt());
+
+    // Allocate output
+    const size_t output_alloc = output_len + 1U; // extra byte for NUL
+    char* output = xcalloc(output_alloc);
+    char* outptr = output;
+
+    // Actual search/replace into the output in chunks via memcpy
+    haystack_srch = haystack;
+    while ((ssrv = strstr(haystack_srch, needle))) {
+        gdnsd_assert(ssrv >= haystack_srch);
+        size_t before_bytes = (size_t)(ssrv - haystack_srch);
+        if (before_bytes) {
+            memcpy(outptr, haystack_srch, before_bytes);
+            outptr += before_bytes;
+            haystack_srch += before_bytes;
+        }
+        memcpy(outptr, repl, repl_len);
+        outptr += repl_len;
+        haystack_srch += needle_len;
+    }
+
+    // Handle final literal chunk, if any
+    const char* haystack_nul = &haystack[haystack_len];
+    gdnsd_assert(haystack_srch <= haystack_nul);
+    if (haystack_srch < haystack_nul) {
+        size_t trailing_bytes = (size_t)(haystack_nul - haystack_srch);
+        memcpy(outptr, haystack_srch, trailing_bytes);
+        outptr += trailing_bytes;
+    }
+
+    // Double-check sizing and NUL-termination for sanity
+    gdnsd_assert((outptr - output) == (ssize_t)output_len);
+    gdnsd_assert(output[output_len] == '\0');
+
+    return output;
+}
+
 void gdnsd_thread_setname(const char* n V_UNUSED)
 {
 #if defined HAVE_PTHREAD_SETNAME_NP_2

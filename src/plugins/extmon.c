@@ -25,6 +25,7 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
+#include <gdnsd/misc.h>
 #include "mon.h"
 #include "plugapi.h"
 #include <gdnsd/paths.h>
@@ -210,32 +211,13 @@ static char* num_to_str(const int i)
     return out;
 }
 
-F_NONNULL
-static char* thing_xlate(const char* instr, const char* thing, const unsigned thing_len)
-{
-    char outbuf[1024]; // way more than enough, I'd hope...
-    char* out_cur = outbuf;
-    while (*instr) {
-        if (!strncmp(instr, "%%ITEM%%", 8)) {
-            memcpy(out_cur, thing, thing_len);
-            out_cur += thing_len;
-            instr += 8;
-        } else {
-            *out_cur++ = *instr++;
-        }
-    }
-    *out_cur = '\0';
-    return xstrdup(outbuf);
-}
-
 static void send_cmd(const unsigned idx, const mon_t* mon)
 {
     char** this_args = xmalloc_n(mon->svc->num_args, sizeof(*this_args));
 
-    const unsigned thing_len = strlen(mon->thing);
-
+    const size_t thing_len = strlen(mon->thing);
     for (unsigned i = 0; i < mon->svc->num_args; i++)
-        this_args[i] = thing_xlate(mon->svc->args[i], mon->thing, thing_len);
+        this_args[i] = gdnsd_str_subst(mon->svc->args[i], "%%ITEM%%", 8LU, mon->thing, thing_len);
 
     extmon_cmd_t this_cmd = {
         .idx = idx,
