@@ -1627,49 +1627,29 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
     unsigned lcount = dname_to_lstack(local_dname, lstack);
 
     ltree_node_t* current = zone->root;
+    gdnsd_assert(zone->root);
     unsigned deleg_mod = 0;
 
-    do {
-    top_loop:
+    while (!rv_node && current) {
         if (current->flags & LTNFLAG_DELEG) {
             rval = DNAME_DELEG;
             *auth_depth_p -= deleg_mod;
             rv_node = current;
-            break;
-        }
-
-        if (!lcount || !current->child_table) {
-            if (!lcount)
-                rv_node = current;
-            break;
-        }
-
-        lcount--;
-        const uint8_t* child_label = lstack[lcount];
-        deleg_mod += *child_label;
-        deleg_mod++;
-        ltree_node_t* entry = current->child_table[ltree_hash(child_label, current->child_hash_mask)];
-
-        while (entry) {
-            if (!gdnsd_label_cmp(entry->label, child_label)) {
-                current = entry;
-                goto top_loop;
+        } else if (!lcount) {
+            // exact match of full label count
+            rv_node = current;
+        } else {
+            lcount--;
+            const uint8_t* child_label = lstack[lcount];
+            deleg_mod += *child_label;
+            deleg_mod++;
+            ltree_node_t* next = ltree_node_find_child(current, child_label);
+            // If in auth space and no deeper match, try wildcard
+            if (!next && rval == DNAME_AUTH) {
+                static const uint8_t label_wild[2] =  { '\001', '*' };
+                rv_node = ltree_node_find_child(current, label_wild);
             }
-            entry = entry->next;
-        }
-    } while (0);
-
-    //  If in auth space with no match, and we still have a child_table, check for wildcard
-    if (!rv_node && current->child_table) {
-        gdnsd_assert(rval == DNAME_AUTH);
-        static const uint8_t label_wild[2] =  { '\001', '*' };
-        ltree_node_t* entry = current->child_table[ltree_hash(label_wild, current->child_hash_mask)];
-        while (entry) {
-            if (entry->label[0] == '\001' && entry->label[1] == '*') {
-                rv_node = entry;
-                break;
-            }
-            entry = entry->next;
+            current = next;
         }
     }
 

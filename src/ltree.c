@@ -124,27 +124,6 @@ static void ltree_childtable_grow(ltree_node_t* node)
     node->child_table = new_table;
 }
 
-F_NONNULL F_PURE
-static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8_t* child_label)
-{
-    ltree_node_t* rv = NULL;
-
-    if (node->child_table) {
-        const uint32_t child_mask = count2mask(node->child_hash_mask);
-        const uint32_t child_hash = ltree_hash(child_label, child_mask);
-        ltree_node_t* child = node->child_table[child_hash];
-        while (child) {
-            if (!gdnsd_label_cmp(child_label, child->label)) {
-                rv = child;
-                break;
-            }
-            child = child->next;
-        }
-    }
-
-    return rv;
-}
-
 // Creates a new, disconnected node
 F_NONNULLX(1)
 static ltree_node_t* ltree_node_new(ltarena_t* arena, const uint8_t* label)
@@ -723,44 +702,28 @@ static ltree_dname_status_t ltree_search_dname_zone(const uint8_t* dname, const 
         unsigned lcount = dname_to_lstack(local_dname, lstack);
 
         ltree_node_t* current = zone->root;
+        gdnsd_assert(zone->root);
 
-        do {
-        top_loop:
+        while (!rv_node && current) {
             if (current->flags & LTNFLAG_DELEG) {
                 rval = DNAME_DELEG;
                 if (deleg_out)
                     *deleg_out = current;
             }
 
-            if (!lcount || !current->child_table) {
-                if (!lcount)
-                    rv_node = current;
-                break;
-            }
-
-            lcount--;
-            const uint8_t* child_label = lstack[lcount];
-            ltree_node_t* entry = current->child_table[ltree_hash(child_label, current->child_hash_mask)];
-
-            while (entry) {
-                if (!gdnsd_label_cmp(child_label, entry->label)) {
-                    current = entry;
-                    goto top_loop;
+            if (!lcount) {
+                // exact match of full label count
+                rv_node = current;
+            } else {
+                lcount--;
+                const uint8_t* child_label = lstack[lcount];
+                ltree_node_t* next = ltree_node_find_child(current, child_label);
+                // If in auth space and no deeper match, try wildcard
+                if (!next && rval == DNAME_AUTH) {
+                    static const uint8_t label_wild[2] =  { '\001', '*' };
+                    rv_node = ltree_node_find_child(current, label_wild);
                 }
-                entry = entry->next;
-            }
-        } while (0);
-
-        //  If in auth space with no match, and we still have a child_table, check for wildcard
-        if (!rv_node && rval == DNAME_AUTH && current->child_table) {
-            static const uint8_t label_wild[2] =  { '\001', '*' };
-            ltree_node_t* entry = current->child_table[ltree_hash(label_wild, current->child_hash_mask)];
-            while (entry) {
-                if (entry->label[0] == '\001' && entry->label[1] == '*') {
-                    rv_node = entry;
-                    break;
-                }
-                entry = entry->next;
+                current = next;
             }
         }
     }

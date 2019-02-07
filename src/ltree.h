@@ -421,4 +421,27 @@ static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack)
     return lcount;
 }
 
+// Used within ltree.c in many places, and also from dnspacket while traversing
+// the tree for runtime lookups
+F_NONNULL F_PURE F_UNUSED F_HOT
+static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8_t* child_label)
+{
+    ltree_node_t* rv = NULL;
+
+    if (node->child_table) {
+        const uint32_t child_mask = count2mask(node->child_hash_mask);
+        const uint32_t child_hash = ltree_hash(child_label, child_mask);
+        ltree_node_t* child = node->child_table[child_hash];
+        while (child) {
+            if (!gdnsd_label_cmp(child_label, child->label)) {
+                rv = child;
+                break;
+            }
+            child = child->next;
+        }
+    }
+
+    return rv;
+}
+
 #endif // GDNSD_LTREE_H
