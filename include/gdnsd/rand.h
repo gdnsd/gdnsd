@@ -49,16 +49,14 @@ typedef struct _gdnsd_rstate32_t {
     uint32_t c;
 } gdnsd_rstate32_t;
 
-F_RETNN F_UNUSED
-static gdnsd_rstate32_t* gdnsd_rand32_init(void)
+F_NONNULL F_UNUSED
+static void gdnsd_rand32_init(gdnsd_rstate32_t* st)
 {
     if (sodium_init() < 0)
         log_fatal("Could not initialize libsodium: %s", logf_errno());
-    gdnsd_rstate32_t* newstate = xmalloc(sizeof(*newstate));
     do {
-        randombytes_buf(newstate, sizeof(*newstate));
-    } while (!newstate->y); // y==0 is bad for jkiss32
-    return newstate;
+        randombytes_buf(st, sizeof(*st));
+    } while (!st->y); // y==0 is bad for jkiss32
 }
 
 F_NONNULL F_UNUSED

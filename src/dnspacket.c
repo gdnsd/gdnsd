@@ -171,7 +171,7 @@ struct dnsp_ctx {
     dnspacket_stats_t* stats;
 
     // used to pseudo-randomly rotate some RRsets (A, AAAA, and NS)
-    gdnsd_rstate32_t* rand_state;
+    gdnsd_rstate32_t rand_state;
 
     // allocated at startup, memset to zero before each callback
     dyn_result_t* dyn;
@@ -236,7 +236,7 @@ static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool 
     if (tcp_timeout_secs)
         gdnsd_assert(!is_udp);
 
-    ctx->rand_state = gdnsd_rand32_init();
+    gdnsd_rand32_init(&ctx->rand_state);
     ctx->is_udp = is_udp;
     ctx->udp_edns_max = udp_is_ipv6 ? gcfg->max_edns_response_v6 : gcfg->max_edns_response;
     ctx->tcp_pad = tcp_pad;
@@ -277,7 +277,6 @@ void dnspacket_ctx_cleanup(dnsp_ctx_t* ctx)
     gdnsd_plugins_action_iothread_cleanup();
 
     free(ctx->dyn);
-    free(ctx->rand_state);
     free(ctx);
 }
 
@@ -908,7 +907,7 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
 #define OFFSET_LOOP_START(_total) \
     const unsigned _tot = (_total);\
     unsigned _x_count = _tot;\
-    unsigned i = gdnsd_rand32_bounded(ctx->rand_state, _tot);\
+    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, _tot);\
     while (_x_count--) {\
 
 #define OFFSET_LOOP_END \

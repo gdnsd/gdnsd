@@ -115,18 +115,17 @@ static resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
 // Per-thread PRNGs
-static __thread gdnsd_rstate32_t* rstate = NULL;
+static __thread gdnsd_rstate32_t rstate;
 
 static void init_rand(void)
 {
-    rstate = gdnsd_rand32_init();
+    gdnsd_rand32_init(&rstate);
 }
 
 static uint64_t get_rand(const uint64_t modval)
 {
     gdnsd_assert(modval);
-    gdnsd_assert(rstate);
-    return gdnsd_rand32_bounded(rstate, modval);
+    return gdnsd_rand32_bounded(&rstate, modval);
 }
 
 // This is a per-thread 2D array of unsigneds which is indexed like:
@@ -741,7 +740,6 @@ static void plugin_weighted_iothread_init(void)
 
 static void plugin_weighted_iothread_cleanup(void)
 {
-    free(rstate);
     free(dyn_addr_weights);
 }
 
