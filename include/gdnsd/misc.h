@@ -214,4 +214,12 @@ static uint32_t count2mask(const uint32_t x)
 // until after the monitoring rework to look at that.
 void gdnsd_thread_reduce_prio(void);
 
+// reset to default any signal handlers that we actually listen to in the main
+// process (but don't disturb others (e.g. PIPE/HUP) that may be set to
+// SIG_IGN, which is automatically maintained through both fork and exec), and
+// then unblock all signals.  Intended to be called in a forked child process
+// just before exec-family functions for our own subprocesses (replacement
+// daemons, and the extmon helper process).
+void gdnsd_reset_signals_for_exec(void);
+
 #endif // GDNSD_MISC_H

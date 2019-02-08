@@ -906,16 +906,14 @@ static unsigned repeat_name(dnsp_ctx_t* ctx, unsigned store_at_offset, unsigned 
 //  values by the end.
 
 #define OFFSET_LOOP_START(_total) \
-    {\
-        const unsigned _tot = (_total);\
-        unsigned _x_count = _tot;\
-        unsigned i = gdnsd_rand32_bounded(ctx->rand_state, _tot);\
-        while (_x_count--) {\
+    const unsigned _tot = (_total);\
+    unsigned _x_count = _tot;\
+    unsigned i = gdnsd_rand32_bounded(ctx->rand_state, _tot);\
+    while (_x_count--) {\
 
 #define OFFSET_LOOP_END \
-            if (++i == _tot)\
-                i = 0;\
-        }\
+        if (++i == _tot)\
+            i = 0;\
     }
 
 F_NONNULL
@@ -1303,7 +1301,7 @@ static unsigned encode_rrs_txt(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
 }
 
 F_NONNULL
-static unsigned encode_rr_cname(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_cname_t* rd)
+static unsigned encode_rr_cname_common(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_cname_t* rd, const bool chain)
 {
     gdnsd_assert(ctx->txn.packet);
     gdnsd_assert(offset);
@@ -1318,36 +1316,31 @@ static unsigned encode_rr_cname(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
     const unsigned rdata_offset = offset;
     offset += store_dname_comp(ctx, rd->dname, offset, false);
     gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
-    ctx->txn.ancount++;
+
+    if (chain) {
+        // adjust qname_comp to point at cname's data for re-querying
+        ctx->txn.qname_comp = rdata_offset;
+        // cname answer count tracked separately, so that other logic on the
+        // zeroness of ancount still works
+        ctx->txn.cname_ancount++;
+    } else {
+        // direct answer record for qtype=CNAME
+        ctx->txn.ancount++;
+    }
 
     return offset;
 }
 
 F_NONNULL
+static unsigned encode_rr_cname(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_cname_t* rd)
+{
+    return encode_rr_cname_common(ctx, offset, rd, false);
+}
+
+F_NONNULL
 static unsigned encode_rr_cname_chain(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_cname_t* rd)
 {
-    gdnsd_assert(ctx->txn.packet);
-    gdnsd_assert(offset);
-
-    uint8_t* packet = ctx->txn.packet;
-
-    offset += repeat_name(ctx, offset, ctx->txn.qname_comp);
-    gdnsd_put_una32(DNS_RRFIXED_CNAME, &packet[offset]);
-    offset += 4;
-    gdnsd_put_una32(rd->gen.ttl, &packet[offset]);
-    offset += 6;
-    const unsigned rdata_offset = offset;
-    offset += store_dname_comp(ctx, rd->dname, offset, false);
-    gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
-
-    // adjust qname_comp to point at cname's data for re-querying
-    ctx->txn.qname_comp = rdata_offset;
-
-    // cname answer count tracked separately, so that other logic on the
-    // zeroness of ancount still works
-    ctx->txn.cname_ancount++;
-
-    return offset;
+    return encode_rr_cname_common(ctx, offset, rd, true);
 }
 
 F_NONNULL

@@ -346,6 +346,16 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
     gdnsd_mon_state_updater(md->idx, false);
 }
 
+#define SVC_OPT_STR(_hash, _typnam, _loc) \
+    do { \
+        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
+        if (_data) { \
+            if (!vscf_is_simple(_data)) \
+                log_fatal("plugin_http_status: Service type '%s': option %s: Wrong type (should be string)", _typnam, #_loc); \
+            _loc = vscf_simple_get_data(_data); \
+        } \
+    } while (0)
+
 #define SVC_OPT_UINT(_hash, _typnam, _loc, _min, _max) \
     do { \
         vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
@@ -357,16 +367,6 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
             if (_val < _min || _val > _max) \
                 log_fatal("plugin_http_status: Service type '%s': option '%s': Value out of range (%lu, %lu)", _typnam, #_loc, _min, _max); \
             _loc = (unsigned) _val; \
-        } \
-    } while (0)
-
-#define SVC_OPT_STR(_hash, _typnam, _loc) \
-    do { \
-        vscf_data_t* _data = vscf_hash_get_data_byconstkey(_hash, #_loc, true); \
-        if (_data) { \
-            if (!vscf_is_simple(_data)) \
-                log_fatal("plugin_http_status: Service type '%s': option %s: Wrong type (should be string)", _typnam, #_loc); \
-            _loc = vscf_simple_get_data(_data); \
         } \
     } while (0)
 

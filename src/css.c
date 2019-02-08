@@ -430,32 +430,7 @@ static pid_t spawn_replacement(const char* argv0)
 
         if (!replacement_pid) { // final-child
             close(pipefd[PIPE_WR]);
-
-            // reset to default any signal handlers that we actually listen to in
-            // the main process, but don't disturb others (e.g. PIPE/HUP) that may
-            // be set to SIG_IGN, which is automatically maintained through both
-            // fork and exec
-            struct sigaction defaultme;
-            sigemptyset(&defaultme.sa_mask);
-            defaultme.sa_handler = SIG_DFL;
-            defaultme.sa_flags = 0;
-            if (sigaction(SIGTERM, &defaultme, NULL))
-                log_fatal("sigaction() failed: %s", logf_errno());
-            if (sigaction(SIGINT, &defaultme, NULL))
-                log_fatal("sigaction() failed: %s", logf_errno());
-            if (sigaction(SIGCHLD, &defaultme, NULL))
-                log_fatal("sigaction() failed: %s", logf_errno());
-            if (sigaction(SIGUSR1, &defaultme, NULL))
-                log_fatal("sigaction() failed: %s", logf_errno());
-            if (sigaction(SIGUSR2, &defaultme, NULL))
-                log_fatal("sigaction() failed: %s", logf_errno());
-
-            // unblock all
-            sigset_t no_sigs;
-            sigemptyset(&no_sigs);
-            if (pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
-                log_fatal("pthread_sigmask() failed");
-
+            gdnsd_reset_signals_for_exec();
             execlp(argv0, argv0, "-c", cfpath, flags, "start", NULL);
             log_fatal("execlp(%s) failed: %s", argv0, logf_errno());
         }

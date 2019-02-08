@@ -265,3 +265,30 @@ unsigned gdnsd_uscale_ceil(unsigned v, double s)
     gdnsd_assert(sv <= (double)v);
     return (unsigned)sv;
 }
+
+// Keep updated if we add more signal handlers anywhere, even indirectly!
+void gdnsd_reset_signals_for_exec(void)
+{
+    // reset handlers to default (but not PIPE/HUP, which may be SIG_IGN and we
+    // want to preserve that)
+    struct sigaction defaultme;
+    sigemptyset(&defaultme.sa_mask);
+    defaultme.sa_handler = SIG_DFL;
+    defaultme.sa_flags = 0;
+    if (sigaction(SIGTERM, &defaultme, NULL))
+        log_fatal("sigaction() failed: %s", logf_errno());
+    if (sigaction(SIGINT, &defaultme, NULL))
+        log_fatal("sigaction() failed: %s", logf_errno());
+    if (sigaction(SIGCHLD, &defaultme, NULL))
+        log_fatal("sigaction() failed: %s", logf_errno());
+    if (sigaction(SIGUSR1, &defaultme, NULL))
+        log_fatal("sigaction() failed: %s", logf_errno());
+    if (sigaction(SIGUSR2, &defaultme, NULL))
+        log_fatal("sigaction() failed: %s", logf_errno());
+
+    // unblock all signals
+    sigset_t no_sigs;
+    sigemptyset(&no_sigs);
+    if (pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
+        log_fatal("pthread_sigmask() failed");
+}

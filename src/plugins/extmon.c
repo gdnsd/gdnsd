@@ -262,25 +262,6 @@ static void spawn_helper(void)
         log_fatal("plugin_extmon: fork() failed: %s", logf_errno());
 
     if (!helper_pid) { // child
-        // reset to default any signal handlers that we actually listen to in
-        // the main process, but don't disturb others (e.g. PIPE/HUP) that may
-        // be set to SIG_IGN, which is automatically maintained through both
-        // fork and exec
-        struct sigaction defaultme;
-        sigemptyset(&defaultme.sa_mask);
-        defaultme.sa_handler = SIG_DFL;
-        defaultme.sa_flags = 0;
-        if (sigaction(SIGTERM, &defaultme, NULL))
-            log_fatal("sigaction() failed: %s", logf_errno());
-        if (sigaction(SIGINT, &defaultme, NULL))
-            log_fatal("sigaction() failed: %s", logf_errno());
-        if (sigaction(SIGCHLD, &defaultme, NULL))
-            log_fatal("sigaction() failed: %s", logf_errno());
-        if (sigaction(SIGUSR1, &defaultme, NULL))
-            log_fatal("sigaction() failed: %s", logf_errno());
-        if (sigaction(SIGUSR2, &defaultme, NULL))
-            log_fatal("sigaction() failed: %s", logf_errno());
-
         close(writepipe[1]);
         close(readpipe[0]);
         // Clear FD_CLOEXEC on the 2x FDs we intend to pass off through execl() below:
@@ -294,12 +275,7 @@ static void spawn_helper(void)
         const char* dbg = gdnsd_log_get_debug() ? "Y" : "N";
         const char* lm = gdnsd_log_get_syslog() ? "L" : "E";
 
-        // unblock all the signals from earlier
-        sigset_t no_sigs;
-        sigemptyset(&no_sigs);
-        if (pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
-            log_fatal("pthread_sigmask() failed");
-
+        gdnsd_reset_signals_for_exec();
         execl(helper_path, helper_path, dbg, lm, child_read_fdstr, child_write_fdstr, NULL);
         log_fatal("plugin_extmon: execl(%s) failed: %s", helper_path, logf_errno());
     }

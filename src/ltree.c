@@ -1148,24 +1148,24 @@ F_WUNUSED F_NONNULL
 static bool ltree_postproc_zroot_phase1(zone_t* zone)
 {
     ltree_node_t* zroot = zone->root;
+    gdnsd_assert(zroot);
+
     ltree_rrset_soa_t* zroot_soa = NULL;
     ltree_rrset_ns_t* zroot_ns = NULL;
 
-    {
-        ltree_rrset_t* rrset = zroot->rrsets;
-        while (rrset) {
-            switch (rrset->gen.type) {
-            case DNS_TYPE_SOA:
-                zroot_soa = &rrset->soa;
-                break;
-            case DNS_TYPE_NS:
-                zroot_ns  = &rrset->ns;
-                break;
-            default:
-                break;
-            }
-            rrset = rrset->gen.next;
+    ltree_rrset_t* rrset = zroot->rrsets;
+    while (rrset) {
+        switch (rrset->gen.type) {
+        case DNS_TYPE_SOA:
+            zroot_soa = &rrset->soa;
+            break;
+        case DNS_TYPE_NS:
+            zroot_ns  = &rrset->ns;
+            break;
+        default:
+            break;
         }
+        rrset = rrset->gen.next;
     }
 
     gdnsd_assert(!zroot->label); // zone roots don't get a label
