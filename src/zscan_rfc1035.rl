@@ -417,12 +417,12 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
 F_NONNULL
 static void set_filename(zscan_t* z, const unsigned len)
 {
-    char* fn = malloc(len + 1);
+    char* fn = xmalloc(len + 1);
     const unsigned newlen = dns_unescape(fn, z->tstart, len);
     if (!newlen)
         parse_error_noargs("Filename has bad escape sequence");
     gdnsd_assert(newlen <= len);
-    z->include_filename = fn = realloc(fn, newlen + 1);
+    z->include_filename = fn = xrealloc(fn, newlen + 1);
     fn[newlen] = 0;
     z->tstart = NULL;
 }
@@ -436,7 +436,7 @@ static char* _make_zfn(const char* curfn, const char* include_fn)
     const char* slashpos = strrchr(curfn, '/');
     const unsigned cur_copy = (slashpos - curfn) + 1;
     const unsigned include_len = strlen(include_fn);
-    char* rv = malloc(cur_copy + include_len + 1);
+    char* rv = xmalloc(cur_copy + include_len + 1);
     memcpy(rv, curfn, cur_copy);
     memcpy(rv + cur_copy, include_fn, include_len);
     rv[cur_copy + include_len] = 0;
