@@ -32,6 +32,7 @@ case "$GDNSD_TRAVIS_BUILD" in
         make clean
         ./configure --disable-developer --without-hardening
         build-wrapper-linux-x86-64 --out-dir bw-output make -j$TEST_CPUS
+        git fetch --unshallow --quiet
         sonar-scanner -Dsonar.cfamily.threads=$TEST_CPUS -Dsonar.projectVersion=`git describe --match "v[0-9]*" --always --dirty`
     ;;
     *)
