@@ -139,7 +139,7 @@ my @behave = (
         my $sock = shift;
         send($sock, $tcp_query_ns1, 0);
         recv($sock, $rbuf, 4096, 0);
-	if ($ENV{'SLOW_TESTS'}) {
+        if ($ENV{'SLOW_TESTS'}) {
             recv($sock, $rbuf, 4096, 0); # blocks here for Timeout, unless server closes or RSTs
         }
     },
@@ -153,7 +153,7 @@ my @behave = (
         my $sock = shift;
         send($sock, $tcp_query_ns1, 0);
         recv($sock, $rbuf, 4096, 0);
-	if ($ENV{'SLOW_TESTS'}) {
+        if ($ENV{'SLOW_TESTS'}) {
             sleep_rand_ms(10100, 11000);
         }
     },
@@ -182,6 +182,25 @@ foreach my $i (1..$NUM_TCP) {
 
 my $expect_noerr = $NUM_TCP / 2;
 
+# On BSDs, runtime availability of accept filters affects test results/reliability here:
+my $noerr_checks_valid = 1;
+
+if ($^O =~ m/bsd/i) {
+    # If the dnsready accept filter is working, half the connections will never
+    # arrive at gdnsd because they're blocked at the accept filter level, so
+    # halve the count for stats checks below:
+    if (!$_GDT::ACCF_DNS_FAIL) {
+        $NUM_TCP = $NUM_TCP / 2;
+    }
+    # If both filters (dnsready and dataready) failed to load, the noerror
+    # check won't be valid, as under these conditions the code can't gaurantee
+    # that clients aren't killed before their first request arrives under
+    # connection overload pressure.
+    if ($_GDT::ACCF_DNS_FAIL && $_GDT::ACCF_DATA_FAIL) {
+        $noerr_checks_valid = 0;
+    }
+}
+
 # Check stats at the end.  This mechanism will keep polling the stats output
 # for a while if the values are too low, and will eventually timeout if they
 # stay too low, or fail quickly if they go higher than they should be.
@@ -197,14 +216,14 @@ my $raw = eval {_GDT->check_stats(
             my $ftype = ($close_sum < $NUM_TCP) ? 'soft' : 'hard';
             die "Close-sum mismatch (${ftype}-fail), wanted " . $NUM_TCP . ", got " . $close_sum;
         }
-        if (!$_GDT::ACCF_FAIL && $stats->{'tcp_reqs'} != $expect_noerr || $stats->{'noerror'} != $expect_noerr) {
+        if ($noerr_checks_valid && $stats->{'tcp_reqs'} != $expect_noerr || $stats->{'noerror'} != $expect_noerr) {
             die "reqs/noerror mismatch (hard-fail), wanted " . $expect_noerr . ", got " . $stats->{'tcp_reqs'} . " / " . $stats->{'noerror'};
         }
     },
 )};
 ok(!$@) or diag $@;
 
-# Remove zero valkues from the raw stats
+# Remove zero values from the raw stats
 for (keys %$raw) { delete $raw->{$_} if !$raw->{$_} }
 use Data::Dumper;
 $Data::Dumper::Sortkeys = 1;

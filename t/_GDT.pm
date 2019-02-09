@@ -90,10 +90,12 @@ our $ALTZONES_IN = $FindBin::Bin . '/altzones/';
 
 # Some TCP testing only works right in the presence of Linux's TCP_DEFER_ACCEPT
 # (which is universally available as far as we care) or *BSD's SO_ACCEPTFILTER
-# (which sometimes can't be loaded for lack of a non-default kernel module).
-# This flag is set if the daemon seems to emit log messages about the failure
-# to set up SO_ACCEPTFILTER stuff so that affected tests can workaround/skip.
-our $ACCF_FAIL = 0;
+# accf_dns and/or accf_data (which sometimes can't be loaded for lack of a
+# non-default kernel module).  These flags are set if the daemon seems to emit
+# log messages about the failure to set up either of the SO_ACCEPTFILTER
+# modules so that affected tests can workaround/skip.
+our $ACCF_DNS_FAIL = 0;
+our $ACCF_DATA_FAIL = 0;
 
 # generic flag to eliminate various timer delays under testing
 $ENV{GDNSD_TESTSUITE_NODELAY} = 1;
@@ -403,7 +405,8 @@ sub spawn_daemon_execute {
                 or die "Cannot open '$daemon_out' for reading: $!";
             while(<$GDOUT_FH>) {
                 daemon_abort($daemon_out) if /\bfatal: /; # don't wait around if we see a fatal log entry...
-                $ACCF_FAIL = 1 if /SO_ACCEPTFILTER/; # this is only mentioned in logs if failing
+                $ACCF_DNS_FAIL = 1 if m{Failed to install 'dnsready' SO_ACCEPTFILTER};
+                $ACCF_DATA_FAIL = 1 if m{Failed to install 'dataready' SO_ACCEPTFILTER};
                 return $pid if /\bDNS listeners started$/;
             }
             close($GDOUT_FH)
