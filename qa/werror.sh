@@ -8,7 +8,7 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-for comp in gcc gcc-8 clang clang-6.0 clang-7; do
+for comp in gcc-8 clang-7; do
     CC=${comp} ./configure --enable-developer --with-werror
     make clean all
     SLOW_TESTS=1 make check
