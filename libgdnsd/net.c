@@ -94,7 +94,7 @@ static int tcpdefaccept_xlate_secs(int seconds)
  * End block of Linux TCP_DEFER_ACCEPT hackery
  *****************************************************************************/
 
-void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* asin, const char* level_str, const char* optname_str, const char* proto_str)
+void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* sa, const char* level_str, const char* optname_str, const char* proto_str)
 {
     int current = 0;
     socklen_t s_current = sizeof(current);
@@ -111,9 +111,9 @@ void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname,
 #endif
     if (getsockopt(sock, level, optname, &current, &s_current)) {
         if (fatal)
-            log_fatal("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, logf_errno());
+            log_fatal("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, logf_errno());
         else
-            log_warn("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, logf_errno());
+            log_warn("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, logf_errno());
     } else {
         bool ok;
         if (is_bool)
@@ -122,9 +122,9 @@ void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname,
             ok = (current == compare);
         if (!ok && setsockopt(sock, level, optname, &wantval, sizeof(wantval))) {
             if (fatal)
-                log_fatal("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, wantval, logf_errno());
+                log_fatal("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, wantval, logf_errno());
             else
-                log_warn("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(asin), level_str, optname_str, wantval, logf_errno());
+                log_warn("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, wantval, logf_errno());
         }
     }
 }
@@ -216,7 +216,7 @@ int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gd
     // set default port
     if (!addr_err && !port && def_port) {
         if (result->sa.sa_family == AF_INET) {
-            result->sin.sin_port = htons(def_port);
+            result->sin4.sin_port = htons(def_port);
         } else {
             gdnsd_assert(result->sa.sa_family == AF_INET6);
             result->sin6.sin6_port = htons(def_port);
@@ -227,14 +227,14 @@ int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gd
     return addr_err;
 }
 
-bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* asin)
+bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* sa)
 {
-    gdnsd_assert(asin->sa.sa_family == AF_INET || asin->sa.sa_family == AF_INET6);
+    gdnsd_assert(sa->sa.sa_family == AF_INET || sa->sa.sa_family == AF_INET6);
 
-    if (asin->sa.sa_family == AF_INET6) {
-        if (!memcmp(&asin->sin6.sin6_addr.s6_addr, &in6addr_any, sizeof(in6addr_any)))
+    if (sa->sa.sa_family == AF_INET6) {
+        if (!memcmp(&sa->sin6.sin6_addr.s6_addr, &in6addr_any, sizeof(in6addr_any)))
             return true;
-    } else if (asin->sin.sin_addr.s_addr == INADDR_ANY) {
+    } else if (sa->sin4.sin_addr.s_addr == INADDR_ANY) {
         return true;
     }
 
@@ -243,7 +243,7 @@ bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* asin)
 
 static const char generic_nullstr[] = "(null)";
 
-int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf)
+int gdnsd_anysin2str(const gdnsd_anysin_t* sa, char* buf)
 {
     int name_err = 0;
     buf[0] = 0;
@@ -252,10 +252,10 @@ int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf)
     char servbuf[6];
     hostbuf[0] = servbuf[0] = 0; // JIC getnameinfo leaves them un-init
 
-    if (asin) {
-        name_err = getnameinfo(&asin->sa, asin->len, hostbuf, INET6_ADDRSTRLEN + 32, servbuf, 6, NI_NUMERICHOST | NI_NUMERICSERV);
+    if (sa) {
+        name_err = getnameinfo(&sa->sa, sa->len, hostbuf, INET6_ADDRSTRLEN + 32, servbuf, 6, NI_NUMERICHOST | NI_NUMERICSERV);
         if (!name_err) {
-            if (asin->sa.sa_family == AF_INET6)
+            if (sa->sa.sa_family == AF_INET6)
                 snprintf(buf, GDNSD_ANYSIN_MAXSTR, "[%s]:%s", hostbuf, servbuf);
             else
                 snprintf(buf, GDNSD_ANYSIN_MAXSTR, "%s:%s", hostbuf, servbuf);
@@ -267,10 +267,10 @@ int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf)
     return name_err;
 }
 
-const char* gdnsd_logf_anysin(const gdnsd_anysin_t* asin)
+const char* gdnsd_logf_anysin(const gdnsd_anysin_t* sa)
 {
     char tmpbuf[GDNSD_ANYSIN_MAXSTR];
-    int name_err = gdnsd_anysin2str(asin, tmpbuf);
+    int name_err = gdnsd_anysin2str(sa, tmpbuf);
     if (name_err)
         return gai_strerror(name_err); // This might be confusing...
 
@@ -281,23 +281,23 @@ const char* gdnsd_logf_anysin(const gdnsd_anysin_t* asin)
     return buf;
 }
 
-int gdnsd_anysin2str_noport(const gdnsd_anysin_t* asin, char* buf)
+int gdnsd_anysin2str_noport(const gdnsd_anysin_t* sa, char* buf)
 {
     int name_err = 0;
     buf[0] = 0;
 
-    if (asin)
-        name_err = getnameinfo(&asin->sa, asin->len, buf, GDNSD_ANYSIN_MAXSTR, NULL, 0, NI_NUMERICHOST);
+    if (sa)
+        name_err = getnameinfo(&sa->sa, sa->len, buf, GDNSD_ANYSIN_MAXSTR, NULL, 0, NI_NUMERICHOST);
     else
         memcpy(buf, generic_nullstr, sizeof(generic_nullstr));
 
     return name_err;
 }
 
-const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* asin)
+const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa)
 {
     char tmpbuf[GDNSD_ANYSIN_MAXSTR];
-    int name_err = gdnsd_anysin2str_noport(asin, tmpbuf);
+    int name_err = gdnsd_anysin2str_noport(sa, tmpbuf);
     if (name_err)
         return gai_strerror(name_err); // This might be confusing...
 

@@ -53,7 +53,7 @@ typedef struct dyn_result dyn_result_t;
 
 // Push an gdnsd_anysin_t (v4 or v6 addr) into dyn_result_t storage.
 F_NONNULL
-void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* asin);
+void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* sa);
 
 // Push a CNAME into dyn_result_t storage.
 F_NONNULL

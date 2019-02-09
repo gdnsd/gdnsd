@@ -49,7 +49,7 @@ void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path);
 typedef struct {
     union {
         struct sockaddr_in6 sin6;
-        struct sockaddr_in  sin;
+        struct sockaddr_in  sin4;
         struct sockaddr     sa;
     };
     socklen_t len;
@@ -96,27 +96,27 @@ int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gd
 
 // Check if the sockaddr is the V4 or V6 ANY-address (0.0.0.0, or ::)
 F_NONNULL F_PURE
-bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* asin);
+bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* sa);
 
-// convert "asin" to numeric ASCII of the form "ipv4:port" or "[ipv6]:port"
+// convert "sa" to numeric ASCII of the form "ipv4:port" or "[ipv6]:port"
 // NULL input results in the string "(null)"
 // note that buf *must* be pre-allocated to at least GDNSD_ANYSIN_MAXSTR bytes!
 // return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
 F_NONNULLX(2) F_COLD
-int gdnsd_anysin2str(const gdnsd_anysin_t* asin, char* buf);
+int gdnsd_anysin2str(const gdnsd_anysin_t* sa, char* buf);
 
 // convert just the address portion to ASCII in "buf"
 // NULL input results in the string "(null)"
 // note that buf *must* be pre-allocated to at least GDNSD_ANYSIN_MAXSTR bytes!
 // return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
 F_NONNULLX(2) F_COLD
-int gdnsd_anysin2str_noport(const gdnsd_anysin_t* asin, char* buf);
+int gdnsd_anysin2str_noport(const gdnsd_anysin_t* sa, char* buf);
 
 // Log-formatters for gdnsd_anysin_t + gdnsd_log_*(), which use the above...
 F_RETNN F_COLD
-const char* gdnsd_logf_anysin(const gdnsd_anysin_t* asin);
+const char* gdnsd_logf_anysin(const gdnsd_anysin_t* sa);
 F_RETNN F_COLD
-const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* asin);
+const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa);
 
 #define logf_anysin gdnsd_logf_anysin
 #define logf_anysin_noport gdnsd_logf_anysin_noport
@@ -125,18 +125,18 @@ const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* asin);
 // The "bool" variants use an integer type, but only compare get-vs-set as
 // booleans (e.g. get returning 16 will still match a desired set value of 1):
 
-#define sockopt_int_fatal(proto, asin, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, false, asin, #level, #optname, #proto)
+#define sockopt_int_fatal(proto, sa, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, false, sa, #level, #optname, #proto)
 
-#define sockopt_bool_fatal(proto, asin, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, true, asin, #level, #optname, #proto)
+#define sockopt_bool_fatal(proto, sa, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, true, sa, #level, #optname, #proto)
 
-#define sockopt_int_warn(proto, asin, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, false, asin, #level, #optname, #proto)
+#define sockopt_int_warn(proto, sa, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, false, sa, #level, #optname, #proto)
 
-#define sockopt_bool_warn(proto, asin, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, true, asin, #level, #optname, #proto)
+#define sockopt_bool_warn(proto, sa, sock, level, optname, wantval) \
+    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, true, sa, #level, #optname, #proto)
 
-void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* asin, const char* level_str, const char* optname_str, const char* proto_str);
+void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* sa, const char* level_str, const char* optname_str, const char* proto_str);
 
 #endif // GDNSD_NET_H

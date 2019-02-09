@@ -28,7 +28,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef struct _dclists dclists_t;
+typedef struct dclists dclists_t;
 
 typedef enum {
     KILL_NO_LISTS,

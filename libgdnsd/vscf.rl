@@ -86,7 +86,7 @@ typedef struct {
     vscf_hentry_t** ordered;
 } vscf_hash_t;
 
-union _vscf_data_t {
+union vscf_data_t {
     struct {
         vscf_data_t*    parent;
         vscf_type_t     type;

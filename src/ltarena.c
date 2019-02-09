@@ -52,7 +52,7 @@
 #  define RED_SIZE 0
 #endif
 
-struct _ltarena {
+struct ltarena {
     uint8_t** pools;
     size_t pool;
     size_t poffs;

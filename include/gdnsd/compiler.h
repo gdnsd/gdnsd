@@ -176,16 +176,16 @@
 
 // Unaligned memory access stuff
 #include <inttypes.h>
-struct _gdnsd_una16 {
+struct gdnsd_una16_ {
     uint16_t x;
 } S_PACKED;
-struct _gdnsd_una32 {
+struct gdnsd_una32_ {
     uint32_t x;
 } S_PACKED;
-#define gdnsd_get_una16(_p) (((const struct _gdnsd_una16*)(_p))->x)
-#define gdnsd_get_una32(_p) (((const struct _gdnsd_una32*)(_p))->x)
-#define gdnsd_put_una16(_v, _p) (((struct _gdnsd_una16*)(_p))->x) = (_v)
-#define gdnsd_put_una32(_v, _p) (((struct _gdnsd_una32*)(_p))->x) = (_v)
+#define gdnsd_get_una16(_p) (((const struct gdnsd_una16_*)(_p))->x)
+#define gdnsd_get_una32(_p) (((const struct gdnsd_una32_*)(_p))->x)
+#define gdnsd_put_una16(_v, _p) (((struct gdnsd_una16_*)(_p))->x) = (_v)
+#define gdnsd_put_una32(_v, _p) (((struct gdnsd_una32_*)(_p))->x) = (_v)
 
 // Generic useful macros
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))

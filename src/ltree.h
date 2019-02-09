@@ -87,8 +87,8 @@ daemon exit time).
 #include "dnswire.h"
 
 // [zl]tree.h have a mutual dependency due to type definitions:
-struct _ltree_node_struct;
-typedef struct _ltree_node_struct ltree_node_t;
+struct ltree_node;
+typedef struct ltree_node ltree_node_t;
 #include "ztree.h"
 
 #include <gdnsd/compiler.h>
@@ -98,73 +98,73 @@ typedef struct _ltree_node_struct ltree_node_t;
 #include <inttypes.h>
 #include <stdbool.h>
 
-struct _ltree_rdata_ns_struct;
-struct _ltree_rdata_ptr_struct;
-struct _ltree_rdata_mx_struct;
-struct _ltree_rdata_srv_struct;
-struct _ltree_rdata_naptr_struct;
-struct _ltree_rdata_rfc3597_struct;
+struct ltree_rdata_ns;
+struct ltree_rdata_ptr;
+struct ltree_rdata_mx;
+struct ltree_rdata_srv;
+struct ltree_rdata_naptr;
+struct ltree_rdata_rfc3597;
 
-union  _ltree_rrset_union;
-struct _ltree_rrset_a_struct;
-struct _ltree_rrset_aaaa_struct;
-struct _ltree_rrset_soa_struct;
-struct _ltree_rrset_cname_struct;
-struct _ltree_rrset_dync_struct;
-struct _ltree_rrset_ns_struct;
-struct _ltree_rrset_ptr_struct;
-struct _ltree_rrset_mx_struct;
-struct _ltree_rrset_srv_struct;
-struct _ltree_rrset_naptr_struct;
-struct _ltree_rrset_txt_struct;
-struct _ltree_rrset_rfc3597_struct;
+union  ltree_rrset;
+struct ltree_rrset_a;
+struct ltree_rrset_aaaa;
+struct ltree_rrset_soa;
+struct ltree_rrset_cname;
+struct ltree_rrset_dync;
+struct ltree_rrset_ns;
+struct ltree_rrset_ptr;
+struct ltree_rrset_mx;
+struct ltree_rrset_srv;
+struct ltree_rrset_naptr;
+struct ltree_rrset_txt;
+struct ltree_rrset_rfc3597;
 
-typedef struct _ltree_rdata_ns_struct ltree_rdata_ns_t;
-typedef struct _ltree_rdata_ptr_struct ltree_rdata_ptr_t;
-typedef struct _ltree_rdata_mx_struct ltree_rdata_mx_t;
-typedef struct _ltree_rdata_srv_struct ltree_rdata_srv_t;
-typedef struct _ltree_rdata_naptr_struct ltree_rdata_naptr_t;
-typedef struct _ltree_rdata_txt_struct ltree_rdata_txt_t;
-typedef struct _ltree_rdata_rfc3597_struct ltree_rdata_rfc3597_t;
+typedef struct ltree_rdata_ns ltree_rdata_ns_t;
+typedef struct ltree_rdata_ptr ltree_rdata_ptr_t;
+typedef struct ltree_rdata_mx ltree_rdata_mx_t;
+typedef struct ltree_rdata_srv ltree_rdata_srv_t;
+typedef struct ltree_rdata_naptr ltree_rdata_naptr_t;
+typedef struct ltree_rdata_txt ltree_rdata_txt_t;
+typedef struct ltree_rdata_rfc3597 ltree_rdata_rfc3597_t;
 
-typedef union  _ltree_rrset_union ltree_rrset_t;
-typedef struct _ltree_rrset_gen_struct ltree_rrset_gen_t;
-typedef struct _ltree_rrset_a_struct ltree_rrset_a_t;
-typedef struct _ltree_rrset_aaaa_struct ltree_rrset_aaaa_t;
-typedef struct _ltree_rrset_soa_struct ltree_rrset_soa_t;
-typedef struct _ltree_rrset_cname_struct ltree_rrset_cname_t;
-typedef struct _ltree_rrset_dync_struct ltree_rrset_dync_t;
-typedef struct _ltree_rrset_ns_struct ltree_rrset_ns_t;
-typedef struct _ltree_rrset_ptr_struct ltree_rrset_ptr_t;
-typedef struct _ltree_rrset_mx_struct ltree_rrset_mx_t;
-typedef struct _ltree_rrset_srv_struct ltree_rrset_srv_t;
-typedef struct _ltree_rrset_naptr_struct ltree_rrset_naptr_t;
-typedef struct _ltree_rrset_txt_struct ltree_rrset_txt_t;
-typedef struct _ltree_rrset_rfc3597_struct ltree_rrset_rfc3597_t;
+typedef union  ltree_rrset ltree_rrset_t;
+typedef struct ltree_rrset_gen ltree_rrset_gen_t;
+typedef struct ltree_rrset_a ltree_rrset_a_t;
+typedef struct ltree_rrset_aaaa ltree_rrset_aaaa_t;
+typedef struct ltree_rrset_soa ltree_rrset_soa_t;
+typedef struct ltree_rrset_cname ltree_rrset_cname_t;
+typedef struct ltree_rrset_dync ltree_rrset_dync_t;
+typedef struct ltree_rrset_ns ltree_rrset_ns_t;
+typedef struct ltree_rrset_ptr ltree_rrset_ptr_t;
+typedef struct ltree_rrset_mx ltree_rrset_mx_t;
+typedef struct ltree_rrset_srv ltree_rrset_srv_t;
+typedef struct ltree_rrset_naptr ltree_rrset_naptr_t;
+typedef struct ltree_rrset_txt ltree_rrset_txt_t;
+typedef struct ltree_rrset_rfc3597 ltree_rrset_rfc3597_t;
 
-struct _ltree_rdata_ns_struct {
+struct ltree_rdata_ns {
     const uint8_t* dname;
     ltree_rrset_a_t* glue_v4;
     ltree_rrset_aaaa_t* glue_v6;
 };
 
-struct _ltree_rdata_ptr_struct {
+struct ltree_rdata_ptr {
     const uint8_t* dname;
 };
 
-struct _ltree_rdata_mx_struct {
+struct ltree_rdata_mx {
     const uint8_t* dname;
     uint16_t pref; // net-order
 };
 
-struct _ltree_rdata_srv_struct {
+struct ltree_rdata_srv {
     const uint8_t* dname;
     uint16_t priority; // net-order
     uint16_t weight; // net-order
     uint16_t port; // net-order
 };
 
-struct _ltree_rdata_naptr_struct {
+struct ltree_rdata_naptr {
     const uint8_t* dname;
     uint8_t* text;
     uint16_t text_len;
@@ -172,19 +172,19 @@ struct _ltree_rdata_naptr_struct {
     uint16_t pref; // net-order
 };
 
-struct _ltree_rdata_txt_struct {
+struct ltree_rdata_txt {
     uint8_t* text;
     unsigned text_len;
 };
 
-struct _ltree_rdata_rfc3597_struct {
+struct ltree_rdata_rfc3597 {
     uint8_t* rd;
     uint16_t rdlen;
 };
 
 // rrset structs
 
-struct _ltree_rrset_gen_struct {
+struct ltree_rrset_gen {
     ltree_rrset_t* next;
     uint16_t type; // host-order
     uint16_t count; // host-order
@@ -205,7 +205,7 @@ struct _ltree_rrset_gen_struct {
 #    define LTREE_V4A_SIZE 3
 #endif
 
-struct _ltree_rrset_a_struct {
+struct ltree_rrset_a {
     ltree_rrset_gen_t gen;
     union {
         uint32_t* addrs;
@@ -224,7 +224,7 @@ struct _ltree_rrset_a_struct {
 //   else
 //       else "addrs" for array of addresses
 
-struct _ltree_rrset_aaaa_struct {
+struct ltree_rrset_aaaa {
     ltree_rrset_gen_t gen;
     union {
         uint8_t* addrs;
@@ -236,56 +236,56 @@ struct _ltree_rrset_aaaa_struct {
     };
 };
 
-struct _ltree_rrset_soa_struct {
+struct ltree_rrset_soa {
     ltree_rrset_gen_t gen;
     const uint8_t* email;
     const uint8_t* master;
     uint32_t times[5];
 };
 
-struct _ltree_rrset_cname_struct {
+struct ltree_rrset_cname {
     ltree_rrset_gen_t gen;
     const uint8_t* dname;
 };
 
-struct _ltree_rrset_dync_struct {
+struct ltree_rrset_dync {
     ltree_rrset_gen_t gen;
     gdnsd_resolve_cb_t func;
     unsigned resource;
     uint32_t ttl_min; // host-order!
 };
 
-struct _ltree_rrset_ns_struct {
+struct ltree_rrset_ns {
     ltree_rrset_gen_t gen;
     ltree_rdata_ns_t* rdata;
 };
 
-struct _ltree_rrset_ptr_struct {
+struct ltree_rrset_ptr {
     ltree_rrset_gen_t gen;
     ltree_rdata_ptr_t* rdata;
 };
 
-struct _ltree_rrset_mx_struct {
+struct ltree_rrset_mx {
     ltree_rrset_gen_t gen;
     ltree_rdata_mx_t* rdata;
 };
 
-struct _ltree_rrset_srv_struct {
+struct ltree_rrset_srv {
     ltree_rrset_gen_t gen;
     ltree_rdata_srv_t* rdata;
 };
 
-struct _ltree_rrset_naptr_struct {
+struct ltree_rrset_naptr {
     ltree_rrset_gen_t gen;
     ltree_rdata_naptr_t* rdata;
 };
 
-struct _ltree_rrset_txt_struct {
+struct ltree_rrset_txt {
     ltree_rrset_gen_t gen;
     ltree_rdata_txt_t* rdata;
 };
 
-struct _ltree_rrset_rfc3597_struct {
+struct ltree_rrset_rfc3597 {
     ltree_rrset_gen_t gen;
     ltree_rdata_rfc3597_t* rdata;
 };
@@ -293,7 +293,7 @@ struct _ltree_rrset_rfc3597_struct {
 // This is never allocated, it's just used
 //  for pointer types to cast between generic
 //  rrset_t and the specific rrset_t's
-union _ltree_rrset_union {
+union ltree_rrset {
     ltree_rrset_gen_t gen;
     ltree_rrset_a_t a;
     ltree_rrset_aaaa_t aaaa;
@@ -330,7 +330,7 @@ union _ltree_rrset_union {
 // Maximum we'll recurse CNAME chains within the local data of one zone
 #define MAX_CNAME_DEPTH 16U
 
-struct _ltree_node_struct {
+struct ltree_node {
     uint32_t flags;
     // During the ltree_add_rec_* (parsing) phase of ltree.c, an accurate count
     //  is maintained in child_hash_mask, and the effective mask is computed from

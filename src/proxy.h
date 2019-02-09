@@ -59,8 +59,8 @@ typedef union {
 // retval:
 // 0: failure
 // 1+: PROXY header was this many bytes (<= dlen), please skip past them
-// Note this mutates "asin", overwriting it with the client IP:port info
+// Note this mutates "sa", overwriting it with the client IP:port info
 // supplied by the PROXY protocol.
-size_t proxy_parse(gdnsd_anysin_t* asin, proxy_hdr_t* hdrp, size_t dlen);
+size_t proxy_parse(gdnsd_anysin_t* sa, proxy_hdr_t* hdrp, size_t dlen);
 
 #endif

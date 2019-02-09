@@ -102,8 +102,8 @@ bool gdnsd_log_get_syslog(void)
 // log_warn("...", logf_dname(x), logf_strerror(y))
 // The space allocated by logf_dname() + logf_strerror() must be <= 4096.
 #define FMTBUF_SIZE 4096U
-// _fmtbuf_common is private to the two functions below it
-static char* _fmtbuf_common(const size_t size)
+// fmtbuf_common is private to the two functions below it
+static char* fmtbuf_common(const size_t size)
 {
     static __thread size_t buf_used = 0;
     static __thread char buf[FMTBUF_SIZE];
@@ -124,13 +124,13 @@ static char* _fmtbuf_common(const size_t size)
     return rv;
 }
 
-// Public (including this file) interfaces to _fmtbuf_common()
+// Public (including this file) interfaces to fmtbuf_common()
 
 char* gdnsd_fmtbuf_alloc(const size_t size)
 {
     if (!size)
         log_fatal("BUG: fmtbuf alloc of zero bytes");
-    char* rv = _fmtbuf_common(size);
+    char* rv = fmtbuf_common(size);
     if (!rv)
         log_fatal("BUG: format buffer exhausted");
     return rv;
@@ -138,7 +138,7 @@ char* gdnsd_fmtbuf_alloc(const size_t size)
 
 void gdnsd_fmtbuf_reset(void)
 {
-    _fmtbuf_common(0);
+    fmtbuf_common(0);
 }
 
 // gdnsd_logf_strerror(), which hides GNU or POSIX strerror_r() thread-safe
@@ -274,7 +274,7 @@ const char* gdnsd_logf_ipv6(const uint8_t* ipv6)
 {
     gdnsd_anysin_t tempsin;
     memset(&tempsin, 0, sizeof(tempsin));
-    tempsin.sin.sin_family = AF_INET6;
+    tempsin.sa.sa_family = AF_INET6;
     memcpy(tempsin.sin6.sin6_addr.s6_addr, ipv6, 16);
     tempsin.len = sizeof(struct sockaddr_in6);
     return gdnsd_logf_anysin_noport(&tempsin);

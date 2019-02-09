@@ -308,7 +308,7 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
     // Setup server cookie input data buffer w/ client IP + client cookie
     uint8_t scookie_input[SCOOKIE_INPUT_LEN] = { 0 };
     if (client->sa.sa_family == AF_INET) {
-        memcpy(scookie_input, &client->sin.sin_addr.s_addr, 4LU);
+        memcpy(scookie_input, &client->sin4.sin_addr.s_addr, 4LU);
     } else {
         gdnsd_assert(client->sa.sa_family == AF_INET6);
         memcpy(scookie_input, client->sin6.sin6_addr.s6_addr, 16LU);

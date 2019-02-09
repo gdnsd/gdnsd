@@ -38,7 +38,7 @@ typedef struct {
     unsigned count;
 } ztchildren_t;
 
-struct _ztree_struct {
+struct ztree_struct {
     uint8_t* label;
     zone_t*  zone;
     ztchildren_t* children;

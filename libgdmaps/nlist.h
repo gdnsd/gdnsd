@@ -27,7 +27,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef struct _nlist nlist_t;
+typedef struct nlist nlist_t;
 
 // pre_norm flag indicates that the data to be added via _append()
 //   will already be in fully normalized form and order other than

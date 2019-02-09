@@ -255,7 +255,7 @@ static void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_na
 
     memcpy(&this_mon->addr, addr, sizeof(this_mon->addr));
     if (this_mon->addr.sa.sa_family == AF_INET) {
-        this_mon->addr.sin.sin_port = htons(this_mon->tcp_svc->port);
+        this_mon->addr.sin4.sin_port = htons(this_mon->tcp_svc->port);
     } else {
         gdnsd_assert(this_mon->addr.sa.sa_family == AF_INET6);
         this_mon->addr.sin6.sin6_port = htons(this_mon->tcp_svc->port);

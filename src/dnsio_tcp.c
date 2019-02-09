@@ -100,7 +100,7 @@ struct conn {
     ev_io read_watcher;
     ev_check check_watcher;
     ev_tstamp idle_start;
-    gdnsd_anysin_t asin;
+    gdnsd_anysin_t sa;
     bool need_proxy_init;
     dso_state_t dso; // shared w/ dnspacket layer
     size_t readbuf_head;
@@ -244,10 +244,10 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
     if (rst) {
         const struct linger lin = { .l_onoff = 1, .l_linger = 0 };
         if (setsockopt(read_watcher->fd, SOL_SOCKET, SO_LINGER, &lin, sizeof(lin)))
-            log_err("setsockopt(%s, SO_LINGER, {1, 0}) failed: %s", logf_anysin(&conn->asin), logf_errno());
+            log_err("setsockopt(%s, SO_LINGER, {1, 0}) failed: %s", logf_anysin(&conn->sa), logf_errno());
     }
     if (close(fd))
-        log_err("close(%s) failed: %s", logf_anysin(&conn->asin), logf_errno());
+        log_err("close(%s) failed: %s", logf_anysin(&conn->sa), logf_errno());
 
     if (manage_queue)
         connq_pull_conn(thr, conn);
@@ -292,7 +292,7 @@ static void connq_append_new_conn(thread_t* thr, conn_t* conn)
 
     // and then if we've just maxed out the connection count, we have to kill a conn
     if (thr->num_conns == thr->max_clients) {
-        log_debug("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&thr->connq_head->asin));
+        log_debug("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&thr->connq_head->sa));
         stats_own_inc(&conn->thr->stats->tcp.close_s_kill);
         connq_destruct_conn(thr, thr->connq_head, true, true);
     }
@@ -399,7 +399,7 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
     const double cutoff = ev_now(thr->loop) - thr->server_timeout;
     while (conn && conn->idle_start <= cutoff) {
         conn_t* next_conn = conn->next;
-        log_debug("TCP DNS conn from %s reset by server: timeout", logf_anysin(&conn->asin));
+        log_debug("TCP DNS conn from %s reset by server: timeout", logf_anysin(&conn->sa));
         stats_own_inc(&conn->thr->stats->tcp.close_s_ok);
         // Note final "manage_queue" argument is false.
         connq_destruct_conn(thr, conn, true, false);
@@ -495,7 +495,7 @@ static ssize_t conn_check_next_req(thread_t* thr, conn_t* conn)
             undersized = true;
     }
     if (unlikely(undersized || req_size > DNS_RECV_SIZE)) {
-        log_debug("TCP DNS conn from %s reset by server while reading: bad TCP request length", logf_anysin(&conn->asin));
+        log_debug("TCP DNS conn from %s reset by server while reading: bad TCP request length", logf_anysin(&conn->sa));
         stats_own_inc(&thr->stats->tcp.recvfail);
         stats_own_inc(&thr->stats->tcp.close_s_err);
         connq_destruct_conn(thr, conn, true, true);
@@ -538,9 +538,9 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
         rcu_thread_online();
     }
     conn->dso.last_was_ka = false;
-    size_t resp_size = process_dns_query(thr->pctx, &conn->asin, conn->pktbuf, &conn->dso, req_size);
+    size_t resp_size = process_dns_query(thr->pctx, &conn->sa, conn->pktbuf, &conn->dso, req_size);
     if (!resp_size) {
-        log_debug("TCP DNS conn from %s reset by server: dropped invalid query", logf_anysin(&conn->asin));
+        log_debug("TCP DNS conn from %s reset by server: dropped invalid query", logf_anysin(&conn->sa));
         stats_own_inc(&thr->stats->tcp.close_s_err);
         connq_destruct_conn(thr, conn, true, true);
         return;
@@ -562,9 +562,9 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
     const ssize_t send_rv = send(readw->fd, &conn->pktbuf_size_hdr, resp_send_size, 0);
     if (unlikely(send_rv < (ssize_t)resp_send_size)) {
         if (send_rv < 0 && !ERRNO_WOULDBLOCK)
-            log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->asin), logf_errno());
+            log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->sa), logf_errno());
         else
-            log_debug("TCP DNS conn from %s reset by server: cannot buffer whole response", logf_anysin(&conn->asin));
+            log_debug("TCP DNS conn from %s reset by server: cannot buffer whole response", logf_anysin(&conn->sa));
         stats_own_inc(&thr->stats->tcp.sendfail);
         stats_own_inc(&thr->stats->tcp.close_s_err);
         connq_destruct_conn(thr, conn, true, true);
@@ -636,27 +636,27 @@ static bool conn_do_recv(thread_t* thr, conn_t* conn)
     if (recvrv < 1) {
         if (!recvrv) { // 0 (EOF)
             if (conn->readbuf_bytes) {
-                log_debug("TCP DNS conn from %s closed by client while reading: unexpected EOF", logf_anysin(&conn->asin));
+                log_debug("TCP DNS conn from %s closed by client while reading: unexpected EOF", logf_anysin(&conn->sa));
                 stats_own_inc(&thr->stats->tcp.recvfail);
                 stats_own_inc(&thr->stats->tcp.close_s_err);
             } else {
                 if (unlikely(thr->st == TH_SHUT)) {
                     if (conn->dso.estab) {
-                        log_debug("TCP DNS conn from %s closed by client while shutting down after DSO RetryDelay", logf_anysin(&conn->asin));
+                        log_debug("TCP DNS conn from %s closed by client while shutting down after DSO RetryDelay", logf_anysin(&conn->sa));
                         stats_own_inc(&thr->stats->tcp.close_c);
                     } else {
-                        log_debug("TCP DNS conn from %s closed by client while shutting down after server half-close", logf_anysin(&conn->asin));
+                        log_debug("TCP DNS conn from %s closed by client while shutting down after server half-close", logf_anysin(&conn->sa));
                         stats_own_inc(&thr->stats->tcp.close_s_ok);
                     }
                 } else {
-                    log_debug("TCP DNS conn from %s closed by client while idle (ideal close)", logf_anysin(&conn->asin));
+                    log_debug("TCP DNS conn from %s closed by client while idle (ideal close)", logf_anysin(&conn->sa));
                     stats_own_inc(&thr->stats->tcp.close_c);
                 }
             }
             connq_destruct_conn(thr, conn, false, true);
         } else { // -1 (errno)
             if (!ERRNO_WOULDBLOCK) {
-                log_debug("TCP DNS conn from %s reset by server: error while reading: %s", logf_anysin(&conn->asin), logf_errno());
+                log_debug("TCP DNS conn from %s reset by server: error while reading: %s", logf_anysin(&conn->sa), logf_errno());
                 stats_own_inc(&thr->stats->tcp.recvfail);
                 stats_own_inc(&thr->stats->tcp.close_s_err);
                 connq_destruct_conn(thr, conn, true, true);
@@ -696,10 +696,10 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
 
     if (conn->need_proxy_init) {
         conn->need_proxy_init = false;
-        const size_t consumed = proxy_parse(&conn->asin, &conn->proxy_hdr, conn->readbuf_bytes);
+        const size_t consumed = proxy_parse(&conn->sa, &conn->proxy_hdr, conn->readbuf_bytes);
         gdnsd_assert(consumed <= conn->readbuf_bytes);
         if (!consumed) {
-            log_debug("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->asin));
+            log_debug("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->sa));
             stats_own_inc(&thr->stats->tcp.proxy_fail);
             stats_own_inc(&thr->stats->tcp.close_s_err);
             connq_destruct_conn(thr, conn, true, true);
@@ -726,11 +726,11 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 {
     gdnsd_assert(revents == EV_READ);
 
-    gdnsd_anysin_t asin;
-    memset(&asin, 0, sizeof(asin));
-    asin.len = GDNSD_ANYSIN_MAXLEN;
+    gdnsd_anysin_t sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.len = GDNSD_ANYSIN_MAXLEN;
 
-    const int sock = accept4(w->fd, &asin.sa, &asin.len, SOCK_NONBLOCK | SOCK_CLOEXEC);
+    const int sock = accept4(w->fd, &sa.sa, &sa.len, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
     if (unlikely(sock < 0)) {
         switch (errno) {
@@ -756,12 +756,12 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
         return;
     }
 
-    log_debug("Received TCP DNS connection from %s", logf_anysin(&asin));
+    log_debug("Received TCP DNS connection from %s", logf_anysin(&sa));
 
     thread_t* thr = w->data;
 
     conn_t* conn = xcalloc(sizeof(*conn));
-    memcpy(&conn->asin, &asin, sizeof(asin));
+    memcpy(&conn->sa, &sa, sizeof(sa));
 
     stats_own_inc(&thr->stats->tcp.conns);
     if (thr->do_proxy) {
@@ -839,11 +839,11 @@ void tcp_dns_listen_setup(dns_thread_t* t)
     const dns_addr_t* addrconf = t->ac;
     gdnsd_assert(addrconf);
 
-    const gdnsd_anysin_t* asin = &addrconf->addr;
-    gdnsd_assert(asin);
+    const gdnsd_anysin_t* sa = &addrconf->addr;
+    gdnsd_assert(sa);
 
-    const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
-    gdnsd_assert(isv6 || asin->sa.sa_family == AF_INET);
+    const bool isv6 = sa->sa.sa_family == AF_INET6 ? true : false;
+    gdnsd_assert(isv6 || sa->sa.sa_family == AF_INET);
 
     bool need_bind = false;
     if (t->sock == -1) { // not acquired via replace
@@ -853,34 +853,34 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         need_bind = true;
     }
 
-    sockopt_bool_fatal(TCP, asin, t->sock, SOL_SOCKET, SO_REUSEADDR, 1);
-    sockopt_bool_fatal(TCP, asin, t->sock, SOL_SOCKET, SO_REUSEPORT, 1);
+    sockopt_bool_fatal(TCP, sa, t->sock, SOL_SOCKET, SO_REUSEADDR, 1);
+    sockopt_bool_fatal(TCP, sa, t->sock, SOL_SOCKET, SO_REUSEPORT, 1);
 
-    sockopt_bool_fatal(TCP, asin, t->sock, SOL_TCP, TCP_NODELAY, 1);
+    sockopt_bool_fatal(TCP, sa, t->sock, SOL_TCP, TCP_NODELAY, 1);
 
 #ifdef TCP_DEFER_ACCEPT
     // Clamp TCP_DEFER_ACCEPT timeout to no more than 30s
     int defaccept_timeout = (int)addrconf->tcp_timeout;
     if (defaccept_timeout > 30)
         defaccept_timeout = 30;
-    sockopt_int_fatal(TCP, asin, t->sock, SOL_TCP, TCP_DEFER_ACCEPT, defaccept_timeout);
+    sockopt_int_fatal(TCP, sa, t->sock, SOL_TCP, TCP_DEFER_ACCEPT, defaccept_timeout);
 #endif
 
 #ifdef TCP_FASTOPEN
     // This is non-fatal for now because many OSes may require tuning/config to
     // allow this to work, but we do want to default it on in cases where it
     // works out of the box correctly.
-    sockopt_int_warn(TCP, asin, t->sock, SOL_TCP, TCP_FASTOPEN, (int)addrconf->tcp_fastopen);
+    sockopt_int_warn(TCP, sa, t->sock, SOL_TCP, TCP_FASTOPEN, (int)addrconf->tcp_fastopen);
 #endif
 
     if (isv6) {
-        sockopt_bool_fatal(TCP, asin, t->sock, SOL_IPV6, IPV6_V6ONLY, 1);
+        sockopt_bool_fatal(TCP, sa, t->sock, SOL_IPV6, IPV6_V6ONLY, 1);
 
         // as with our default max_edns_response_v6, assume minimum MTU only to
         // avoid IPv6 mtu/frag loss issues.  Clamping to min mtu should
         // commonly set MSS to 1220.
 #if defined IPV6_USE_MIN_MTU
-        sockopt_bool_fatal(TCP, asin, t->sock, SOL_IPV6, IPV6_USE_MIN_MTU, 1);
+        sockopt_bool_fatal(TCP, sa, t->sock, SOL_IPV6, IPV6_USE_MIN_MTU, 1);
 #elif defined IPV6_MTU
         // This sockopt doesn't have matching get+set; get needs a live
         // connection and reports the connection's path MTU, so we have to just
@@ -892,7 +892,7 @@ void tcp_dns_listen_setup(dns_thread_t* t)
     }
 
     if (need_bind)
-        socks_bind_sock("TCP DNS", t->sock, asin);
+        socks_bind_sock("TCP DNS", t->sock, sa);
 }
 
 static void set_accf(const dns_addr_t* addrconf V_UNUSED, const int sock V_UNUSED)

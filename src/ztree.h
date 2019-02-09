@@ -23,8 +23,8 @@
 #include "ltarena.h"
 
 // [zl]tree.h have a mutual dependency due to type definitions:
-struct _zone_struct;
-typedef struct _zone_struct zone_t;
+struct zone_struct;
+typedef struct zone_struct zone_t;
 #include "ltree.h"
 
 #include <inttypes.h>
@@ -32,7 +32,7 @@ typedef struct _zone_struct zone_t;
 #include <sys/types.h>
 #include <sys/stat.h>
 
-struct _zone_struct {
+struct zone_struct {
     unsigned hash;        // hash of dname
     unsigned serial;      // SOA serial from zone data
     char* src;            // string description of src, e.g. "rfc1035:example.com"
@@ -42,8 +42,8 @@ struct _zone_struct {
 };
 
 // The tree data structure that will hold the zone_t's
-struct _ztree_struct;
-typedef struct _ztree_struct ztree_t;
+struct ztree_struct;
+typedef struct ztree_struct ztree_t;
 
 // Initialize at startup, deallocate final tree at shutdown
 void ztree_init(void);

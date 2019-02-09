@@ -42,7 +42,7 @@ typedef struct {
     uint32_t dclist;
 } dcmap_child_t;
 
-struct _dcmap {
+struct dcmap {
     // All 3 below are allocated to num_children entries.
     dcmap_child_t* children;
     unsigned def_dclist; // copied from parent if not specced in cfg, required at root
@@ -59,7 +59,7 @@ typedef struct {
 } dcmap_iter_data;
 
 F_NONNULL
-static bool _dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
+static bool dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
 {
     dcmap_iter_data* did = data;
 
@@ -117,7 +117,7 @@ dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned pare
             .true_depth = true_depth,
             .allow_auto = allow_auto
         };
-        vscf_hash_iterate(map_cfg, true, _dcmap_new_iter, &did);
+        vscf_hash_iterate(map_cfg, true, dcmap_new_iter, &did);
     }
 
     return dcmap;

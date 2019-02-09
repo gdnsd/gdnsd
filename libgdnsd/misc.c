@@ -210,7 +210,7 @@ void gdnsd_register_child_pid(pid_t child)
     children[n_children++] = child;
 }
 
-static unsigned _wait_for_children(unsigned attempts)
+static unsigned wait_for_children(unsigned attempts)
 {
     unsigned remaining = n_children;
 
@@ -244,7 +244,7 @@ void gdnsd_kill_registered_children(void)
         log_info("Sending SIGTERM to child process %li", (long)children[i]);
         kill(children[i], SIGTERM);
     }
-    unsigned notdone = _wait_for_children(1000); // 10s
+    unsigned notdone = wait_for_children(1000); // 10s
 
     if (notdone) {
         for (unsigned i = 0; i < n_children; i++) {
@@ -253,7 +253,7 @@ void gdnsd_kill_registered_children(void)
                 kill(children[i], SIGKILL);
             }
         }
-        _wait_for_children(500); // 5s max
+        wait_for_children(500); // 5s max
     }
 }
 

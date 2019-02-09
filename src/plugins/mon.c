@@ -462,7 +462,7 @@ static bool addr_eq(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b)
     bool rv = false;
     if (a->sa.sa_family == b->sa.sa_family) {
         if (a->sa.sa_family == AF_INET)
-            rv = (a->sin.sin_addr.s_addr == b->sin.sin_addr.s_addr);
+            rv = (a->sin4.sin_addr.s_addr == b->sin4.sin_addr.s_addr);
         else
             rv = !memcmp(a->sin6.sin6_addr.s6_addr, b->sin6.sin6_addr.s6_addr, 16);
     }

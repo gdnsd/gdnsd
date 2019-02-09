@@ -25,7 +25,7 @@
 
 #include <inttypes.h>
 
-typedef struct _gdmaps_t gdmaps_t;
+typedef struct gdmaps_t gdmaps_t;
 
 typedef unsigned(*monreg_func_t)(const char* desc);
 

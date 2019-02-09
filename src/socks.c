@@ -186,7 +186,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             if (addrconf->tcp_proxy) {
                 unsigned lport;
                 if (addrconf->addr.sa.sa_family == AF_INET) {
-                    lport = addrconf->addr.sin.sin_port;
+                    lport = addrconf->addr.sin4.sin_port;
                 } else {
                     gdnsd_assert(addrconf->addr.sa.sa_family == AF_INET6);
                     lport = addrconf->addr.sin6.sin6_port;
@@ -298,19 +298,19 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
     return socks_cfg;
 }
 
-void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asin)
+void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* sa)
 {
     int bind_errno = 0;
 
     // Immediate, simple success
-    if (!bind(sock, &asin->sa, asin->len))
+    if (!bind(sock, &sa->sa, sa->len))
         return;
     bind_errno = errno;
 
 #if defined IP_FREEBIND || (defined IP_BINDANY && defined IPV6_BINDANY) || defined SO_BINDANY
     // first bind() attempt failed.  in the case of non-ANY addresses, where
     // the OS has support for freebind/bindany, try it before failing hard
-    if (errno == EADDRNOTAVAIL && !gdnsd_anysin_is_anyaddr(asin)) {
+    if (errno == EADDRNOTAVAIL && !gdnsd_anysin_is_anyaddr(sa)) {
         const int opt_one = 1;
 
 # if defined IP_FREEBIND
@@ -320,7 +320,7 @@ void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asi
         const char* bindtxt = "IP_FREEBIND";
 # elif defined IP_BINDANY && defined IPV6_BINDANY
         // FreeBSD, untested
-        const bool isv6 = asin->sa.sa_family == AF_INET6 ? true : false;
+        const bool isv6 = sa->sa.sa_family == AF_INET6 ? true : false;
         const int bindlev = isv6 ? IPPROTO_IPV6 : IPPROTO_IP;
         const int bindopt = isv6 ? IPV6_BINDANY : IP_BINDANY;
         const char* bindtxt = isv6 ? "IPV6_BINDANY" : "IP_BINDANY";
@@ -335,11 +335,11 @@ void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asi
             // Don't even re-attempt the bind if we can't set the option, just
             // warn about the setsockopt() and fail out at the bottom with the
             // original errno from bind():
-            log_warn("Failed to set %s on %s socket %s: %s", bindtxt, desc, logf_anysin(asin), logf_errno());
+            log_warn("Failed to set %s on %s socket %s: %s", bindtxt, desc, logf_anysin(sa), logf_errno());
         } else {
-            if (!bind(sock, &asin->sa, asin->len)) {
+            if (!bind(sock, &sa->sa, sa->len)) {
                 // Success, after setting IP_FREEBIND or similar
-                log_warn("%s socket %s bound via %s, address may not (yet!) exist on the host", desc, logf_anysin(asin), bindtxt);
+                log_warn("%s socket %s bound via %s, address may not (yet!) exist on the host", desc, logf_anysin(sa), bindtxt);
                 return;
             }
             // Second attempt failed, update bind_errno and fail out below
@@ -350,7 +350,7 @@ void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asi
 
     // If initial bind attempt failed, and the above freebind stuff either
     // failed or isn't available, fail hard:
-    log_fatal("bind() failed for %s socket %s: %s", desc, logf_anysin(asin), logf_strerror(bind_errno));
+    log_fatal("bind() failed for %s socket %s: %s", desc, logf_anysin(sa), logf_strerror(bind_errno));
 }
 
 void socks_dns_lsocks_init(socks_cfg_t* socks_cfg)

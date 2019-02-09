@@ -28,7 +28,7 @@
 #include <sys/types.h>
 
 // Opaque data type used for all complex data pointers in the public API
-typedef union _vscf_data_t vscf_data_t;
+typedef union vscf_data_t vscf_data_t;
 
 // Used in hash sorting callbacks
 typedef struct {

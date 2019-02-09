@@ -64,7 +64,7 @@ static size_t dyna_max_response = 65536U;
 // don't use this directly, use macro below
 // this logs the lstack labels as a partial domainname (possibly empty),
 // intended to be completed with the zone name via the macro below
-static const char* _logf_lstack(const uint8_t** lstack, unsigned depth)
+static const char* logf_lstack_labels(const uint8_t** lstack, unsigned depth)
 {
     char* dnbuf = gdnsd_fmtbuf_alloc(1024);
     char* dnptr = dnbuf;
@@ -90,7 +90,7 @@ static const char* _logf_lstack(const uint8_t** lstack, unsigned depth)
 }
 
 #define logf_lstack(_lstack, _depth, _zdname) \
-    _logf_lstack(_lstack, _depth), logf_dname(_zdname)
+    logf_lstack_labels(_lstack, _depth), logf_dname(_zdname)
 
 F_NONNULL
 static void ltree_childtable_grow(ltree_node_t* node)
@@ -1104,7 +1104,7 @@ static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* no
 }
 
 F_WUNUSED F_NONNULLX(1, 2, 3)
-static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool), const uint8_t** lstack, ltree_node_t* node, const zone_t* zone, const unsigned depth, bool in_deleg)
+static bool ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool), const uint8_t** lstack, ltree_node_t* node, const zone_t* zone, const unsigned depth, bool in_deleg)
 {
     if (node->flags & LTNFLAG_DELEG) {
         gdnsd_assert(node->label);
@@ -1123,7 +1123,7 @@ static bool _ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, c
             ltree_node_t* child = node->child_table[i];
             while (child) {
                 lstack[depth] = child->label;
-                if (unlikely(_ltree_proc_inner(fn, lstack, child, zone, depth + 1, in_deleg)))
+                if (unlikely(ltree_proc_inner(fn, lstack, child, zone, depth + 1, in_deleg)))
                     return true;
                 child = child->next;
             }
@@ -1141,7 +1141,7 @@ static bool ltree_postproc(const zone_t* zone, bool (*fn)(const uint8_t**, const
     //  for error/warning message output
     const uint8_t* lstack[127];
 
-    return _ltree_proc_inner(fn, lstack, zone->root, zone, 0, false);
+    return ltree_proc_inner(fn, lstack, zone->root, zone, 0, false);
 }
 
 F_WUNUSED F_NONNULL

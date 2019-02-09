@@ -339,7 +339,7 @@ static bool handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint
     if (src_mask) {
         if (family == 1U) { // IPv4
             edns->client_info.edns_client.sa.sa_family = AF_INET;
-            memcpy(&edns->client_info.edns_client.sin.sin_addr.s_addr, opt_data, addr_bytes);
+            memcpy(&edns->client_info.edns_client.sin4.sin_addr.s_addr, opt_data, addr_bytes);
         } else {
             gdnsd_assert(family == 2U); // IPv6
             edns->client_info.edns_client.sa.sa_family = AF_INET6;
@@ -1856,7 +1856,7 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
     return offset;
 }
 
-unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* asin, uint8_t* packet, dso_state_t* dso, const unsigned packet_len)
+unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* packet, dso_state_t* dso, const unsigned packet_len)
 {
     // iothreads don't allow queries larger than this
     gdnsd_assert(packet_len <= DNS_RECV_SIZE);
@@ -1869,9 +1869,9 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* asin, uint8_t*
         gdnsd_assert(dso);
     ctx->txn.packet = packet;
     ctx->txn.dso = dso;
-    memcpy(&ctx->txn.edns.client_info.dns_source, asin, sizeof(*asin));
+    memcpy(&ctx->txn.edns.client_info.dns_source, sa, sizeof(*sa));
 
-    if (asin->sa.sa_family == AF_INET6)
+    if (sa->sa.sa_family == AF_INET6)
         stats_own_inc(&ctx->stats->v6);
 
     // parse_optrr() will raise this value in the udp edns case as necc.
@@ -1880,9 +1880,9 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* asin, uint8_t*
     /*
         log_devdebug("Processing %sv%u DNS query of length %u from %s",
             (ctx->is_udp ? "UDP" : "TCP"),
-            (asin->sa.sa_family == AF_INET6) ? 6 : 4,
+            (sa->sa.sa_family == AF_INET6) ? 6 : 4,
             packet_len,
-            logf_anysin(asin));
+            logf_anysin(sa));
     */
 
     unsigned res_offset = sizeof(wire_dns_header_t);
@@ -1963,7 +1963,7 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* asin, uint8_t*
             if (src_mask) {
                 gdnsd_assert(addr_bytes);
                 if (ctx->txn.edns.client_family == 1U) { // IPv4
-                    memcpy(&packet[res_offset], &ctx->txn.edns.client_info.edns_client.sin.sin_addr.s_addr, addr_bytes);
+                    memcpy(&packet[res_offset], &ctx->txn.edns.client_info.edns_client.sin4.sin_addr.s_addr, addr_bytes);
                 } else {
                     gdnsd_assert(ctx->txn.edns.client_family == 2U); // IPv6
                     memcpy(&packet[res_offset], ctx->txn.edns.client_info.edns_client.sin6.sin6_addr.s6_addr, addr_bytes);

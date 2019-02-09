@@ -63,6 +63,6 @@ F_NONNULL
 void socks_dns_lsocks_init(socks_cfg_t* socks_cfg);
 
 F_NONNULL
-void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* asin);
+void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* sa);
 
 #endif // GDNSD_SOCKS_H

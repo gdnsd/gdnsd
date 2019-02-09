@@ -60,7 +60,7 @@
 //  used on true shutdown of the whole gdmap (only debug
 //  mode for the real plugin).
 
-struct _dclists {
+struct dclists {
     unsigned count; // count of unique result lists
     unsigned old_count; // count from object we cloned from
     uint8_t** list;    // strings of dc numbers

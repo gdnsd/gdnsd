@@ -37,7 +37,7 @@ typedef struct {
     unsigned dclist;
 } net_t;
 
-struct _nlist {
+struct nlist {
     net_t* nets;
     char* map_name;
     unsigned alloc;

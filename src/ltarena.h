@@ -30,7 +30,7 @@
 *   unaligned string data in giant pools with no overhead.
 \******************************************************************/
 
-typedef struct _ltarena ltarena_t;
+typedef struct ltarena ltarena_t;
 
 // Allocate a new arena
 F_WUNUSED

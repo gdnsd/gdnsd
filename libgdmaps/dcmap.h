@@ -28,7 +28,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef struct _dcmap dcmap_t;
+typedef struct dcmap dcmap_t;
 
 F_NONNULL F_WUNUSED F_RETNN
 dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto);

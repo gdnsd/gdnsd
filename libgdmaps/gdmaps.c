@@ -86,7 +86,7 @@ typedef struct {
 } gdmap_t;
 
 F_NONNULL
-static bool _gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* val V_UNUSED, const void* mapname_asvoid)
+static bool gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* val V_UNUSED, const void* mapname_asvoid)
 {
     const char* mapname = mapname_asvoid;
     log_fatal("plugin_geoip: map '%s': invalid config key '%s'", mapname, key);
@@ -144,7 +144,7 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, m
     }
 
     // check for invalid keys
-    vscf_hash_iterate_const(map_cfg, true, _gdmap_badkey, name);
+    vscf_hash_iterate_const(map_cfg, true, gdmap_badkey, name);
 }
 
 F_NONNULL
@@ -470,7 +470,7 @@ static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, 
  * gdmaps_t and related methods
  **************************************/
 
-struct _gdmaps_t {
+struct gdmaps_t {
     pthread_t reload_tid;
     bool reload_thread_spawned;
     unsigned count;
@@ -480,7 +480,7 @@ struct _gdmaps_t {
 };
 
 F_NONNULL
-static bool _gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
+static bool gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
 {
     gdmaps_t* gdmaps = data;
     gdmap_init(&gdmaps->maps[gdmaps->count++], key, val, gdmaps->mrf);
@@ -495,7 +495,7 @@ gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg, monreg_func_t mrf)
     gdmaps->mrf = mrf;
     const unsigned num_maps = vscf_hash_get_len(maps_cfg);
     gdmaps->maps = xcalloc_n(num_maps, sizeof(*gdmaps->maps));
-    vscf_hash_iterate(maps_cfg, true, _gdmaps_new_iter, gdmaps);
+    vscf_hash_iterate(maps_cfg, true, gdmaps_new_iter, gdmaps);
     gdnsd_assert(num_maps == gdmaps->count);
     return gdmaps;
 }

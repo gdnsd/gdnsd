@@ -41,7 +41,7 @@
  *   libsodium sources.
  ***************/
 
-typedef struct _gdnsd_rstate32_t {
+typedef struct gdnsd_rstate32_t {
     uint32_t x;
     uint32_t y;
     uint32_t z;

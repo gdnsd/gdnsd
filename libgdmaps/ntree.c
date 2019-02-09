@@ -223,7 +223,7 @@ static unsigned ntree_lookup_inner(const ntree_t* tree, const gdnsd_anysin_t* cl
     unsigned rv;
 
     if (client_addr->sa.sa_family == AF_INET) {
-        rv = ntree_lookup_v4(tree, ntohl(client_addr->sin.sin_addr.s_addr), scope_mask);
+        rv = ntree_lookup_v4(tree, ntohl(client_addr->sin4.sin_addr.s_addr), scope_mask);
     } else {
         gdnsd_assert(client_addr->sa.sa_family == AF_INET6);
         unsigned mask_adj = 0; // for v4-like conversions...

@@ -364,9 +364,9 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
     if (!oldest) {
         gdnsd_assert(!newest); // empty before this creation
         oldest = newest = cset;
-        ev_timer* exp = &expire_timer;
-        ev_timer_set(exp, gcfg->acme_challenge_ttl, 0);
-        ev_timer_start(loop, exp);
+        ev_timer* expire = &expire_timer;
+        ev_timer_set(expire, gcfg->acme_challenge_ttl, 0);
+        ev_timer_start(loop, expire);
     } else {
         gdnsd_assert(newest); // non-empty lists have both ends defined
         gdnsd_assert(!newest->next_newer);
