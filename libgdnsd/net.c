@@ -24,6 +24,7 @@
 #include <gdnsd/alloc.h>
 
 #include <stdio.h>
+#include <stddef.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -129,7 +130,7 @@ void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname,
     }
 }
 
-void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
+socklen_t gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
 {
     memset(a, 0, sizeof(*a));
     a->sun_family = AF_UNIX;
@@ -137,6 +138,7 @@ void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
     if (plen > sizeof(a->sun_path))
         log_fatal("Implementation bug/limit: desired control socket path %s exceeds sun_path length of %zu", path, sizeof(a->sun_path));
     memcpy(a->sun_path, path, plen);
+    return (offsetof(struct sockaddr_un, sun_path) + plen);
 }
 
 int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_anysin_t* result)

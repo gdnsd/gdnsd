@@ -23,6 +23,7 @@
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/log.h>
+#include <gdnsd/net.h>
 
 #include <fcntl.h>
 #include <stdbool.h>
@@ -60,23 +61,15 @@ static void sysd_notify_ready(void)
     if ((spath[0] != '@' && spath[0] != '/') || spath[1] == 0)
         log_fatal("Invalid NOTIFY_SOCKET path '%s'", spath);
 
-    const size_t spath_len = strlen(spath);
-
     struct sockaddr_un sun;
-    memset(&sun, 0, sizeof(sun));
-    sun.sun_family = AF_UNIX;
-
-    if (spath_len > sizeof(sun.sun_path))
-        log_fatal("NOTIFY_SOCKET pathname too long!");
-    strncpy(sun.sun_path, spath, sizeof(sun.sun_path));
+    const socklen_t sun_len = gdnsd_sun_set_path(&sun, spath);
 
     if (sun.sun_path[0] == '@')
         sun.sun_path[0] = 0;
 
     char msg[64];
-    int snp_rv = snprintf(msg, 64,
-                          "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
-    if (snp_rv < 0 || snp_rv > 64)
+    int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
+    if (snp_rv < 0 || snp_rv >= 64)
         log_fatal("BUG: sprintf()=>%i in sysd_notify_ready()", snp_rv);
 
     int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
@@ -84,14 +77,12 @@ static void sysd_notify_ready(void)
         log_fatal("Cannot create AF_UNIX socket");
 
     struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
-    struct msghdr m;
-    memset(&m, 0, sizeof(m));
-    m.msg_iov = &iov;
-    m.msg_iovlen = 1;
-    m.msg_name = &sun;
-    m.msg_namelen = offsetof(struct sockaddr_un, sun_path) + spath_len;
-    if (m.msg_namelen > sizeof(struct sockaddr_un))
-        m.msg_namelen = sizeof(struct sockaddr_un);
+    struct msghdr m = {
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+        .msg_name = &sun,
+        .msg_namelen = sun_len
+    };
 
     ssize_t sm_rv = sendmsg(fd, &m, 0);
     if (sm_rv < 0)

@@ -906,7 +906,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
 
         char* sock_path = gdnsd_resolve_path_run(base_sock, NULL);
         struct sockaddr_un addr;
-        gdnsd_sun_set_path(&addr, sock_path);
+        const socklen_t addr_len = gdnsd_sun_set_path(&addr, sock_path);
         if (unlink(sock_path) && errno != ENOENT)
             log_fatal("unlink(%s) failed: %s", sock_path, logf_errno());
 
@@ -915,7 +915,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         // and listen().  Note umask() isn't thread-safe, but css_new() is
         // called before any threads are created.
         const mode_t oldmask = umask(S_IXUSR | S_IRWXG | S_IRWXO); // 0177
-        if (bind(css->fd, (struct sockaddr*)&addr, sizeof(addr)))
+        if (bind(css->fd, (struct sockaddr*)&addr, addr_len))
             log_fatal("bind() of unix domain socket %s failed: %s", sock_path, logf_errno());
         umask(oldmask);
 

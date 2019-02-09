@@ -88,8 +88,8 @@ csc_t* csc_new(const unsigned timeout, const char* pfx)
     }
 
     struct sockaddr_un addr;
-    gdnsd_sun_set_path(&addr, csc->path);
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr))) {
+    const socklen_t addr_len = gdnsd_sun_set_path(&addr, csc->path);
+    if (connect(fd, (struct sockaddr*)&addr, addr_len)) {
         log_err("%sconnect() to unix domain socket %s failed: %s", pfx, csc->path, logf_errno());
         close(fd);
         free(csc->path);

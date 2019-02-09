@@ -41,7 +41,7 @@
 #endif
 
 F_NONNULL
-void gdnsd_sun_set_path(struct sockaddr_un* a, const char* path);
+socklen_t gdnsd_sun_set_path(struct sockaddr_un* a, const char* path);
 
 /* Socket union type */
 // note anonymous union here, which gcc has supported
