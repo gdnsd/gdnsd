@@ -168,6 +168,25 @@ The gist of it is this: the reader side gets to access the data in a completely 
 5. The writer is able to magically stall until all readers are done using the old data for their in-progress requests at the time of the pointer switch, without impacting the readers' performance in any way.
 6. Finally, the writer deletes the old data copy and goes back to looking for future updates to apply.
 
+### Performance
+
+I've done some basic UDP performance testing of the gdnsd 3.0 codebase just prior to release, but only on my laptop over the loopback.  Test conditions:
+
+* Thinkpad Carbon X1 laptop with CPU "Intel(R) Core(TM) i7-7600U CPU @ 2.80GHz"
+* Debian (stretch + various backports/testing packages, my normal everyday setup)
+* Linux kernel 4.19
+* gdnsd built with gcc-8 -O3 and default compiler hardening flags
+* gdnsd configured for single thread (udp\_threads = 1), with 100 small zones loaded
+* dnsperf from https://github.com/akamai/dnsperf.git for the client side
+* dnsperf input file with 110K A-queries to test, ~9% of wich are NXDOMAIN and the rest are NOERROR, spread randomly over the ~100 small zones' namespaces.
+* dnsperf args: -s 127.0.0.1 -p $port -d $datafile -e -D -l 60
+
+With this setup and zero latency over the loopback, gdnsd achieves a rate of ~450K reqs/sec with a single UDP server thread (I can't test parallel perf well on this hardware with only 2 real CPU cores), and 100% of responses are successful and correct.
+
+To validate the smoothness of the "replace" takeover model for binary upgrades and/or config changes, I've also re-run the test while spamming replace operations (a loop performing "gdnsdctl replace" on the test server instance once per second, which re-executes the whole daemon with overlapped socket handoff), and the reliability and performance results are indistinguishable from a normal run even though the daemon was replaced with a whole new PID ~60 times during the test run, with correct stats matching dnsperf's output in the final copy of the daemon.
+
+TODO: flesh this out with some more-realistic testing on server hardware over real NICs with realistic data and query stream.
+
 ### Statistics
 
 The DNS threads keep reasonably detailed statistical counters of all of their activity. The core dns request handling code that both the TCP and UDP threads use tracks counters for all response types. Mostly these counters are named for the corresponding DNS response codes (RCODEs):
