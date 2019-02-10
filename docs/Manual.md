@@ -10,7 +10,7 @@ This manual is not intended to be an exhaustive reference. For a complete rundow
 
 Modern 64-bit Linux/x86\_64 is the primary development and deployment platform, with 32-bit Linux/x86 and the in-between Linux/x32 ABI being close seconds.
 
-Compatibility with the open source \*BSD distributions is important, and bug reports are welcome for any breakage there.  Unfortunately the author doesn't use these regularly, so portability mistakes may creep in that need reporting.  FreeBSD 11.2 was tested during the final beta releases leading up to gdnsd 3 and seems to work out great with `mac_portacl` handling the issue of binding port 53.  Probably the biggest issue facing OpenBSD, NetBSD and other \*BSD builds right now is that even if they build, I have no idea how to handle non-root processes binding port 53 on them, which is a new requirement as of gdnsd 3.  They may have to fall back on using PF to remap port 53 traffic to unprivileged ports gdnsd is listening on.
+Compatibility with the open source \*BSD distributions is important, and bug reports are welcome for any breakage there.  Unfortunately the author doesn't use these regularly, so portability mistakes may creep in that need reporting.  FreeBSD 11.2 and 12 were tested during the final beta releases leading up to gdnsd 3 and seems to work out great with `mac_portacl` handling the issue of binding port 53.  Probably the biggest issue facing OpenBSD, NetBSD and other \*BSD builds right now is that even if they build, I have no idea how to handle non-root processes binding port 53 on them, which is a new requirement as of gdnsd 3.  They may have to fall back on using PF to remap port 53 traffic to unprivileged ports gdnsd is listening on.
 
 Through the official Debian packaging of gdnsd, it gets some testing on exotic CPU architectures, and generally shouldn't have issues with any of the well-supported Debian target architectures.  The code does try to be clean on endian-ness and alignment issues at least.
 
@@ -34,24 +34,20 @@ For sysvinit-based Linux distributions: if you have kernel 4.3 or higher and set
 
 ### BSDs
 
-I've tested the 3.x build on FreeBSD 11.2 (but not others, sorry!) under qemu.  Starting from a clean install, this stuff worked:
+I've tested the 3.x build on FreeBSD 11.2 and 12 (but not other BSDs, sorry!) under qemu.  Starting from a clean install, this stuff worked for FreeBSD 12:
 
 Build/Test/Install:
 ```
-pkg install liburcu
-pkg install libev
-pkg install libsodium
-pkg install libunwind
-pkg install libmaxminddb
-pkg install p5-HTTP-Daemon
-pkg install p5-Net-DNS
+pkg install liburcu libev libsodium libunwind libmaxminddb
+pkg install p5-HTTP-Daemon p5-Net-DNS p5-IO-Socket-INET6
 pkg install gmake
 setenv CPPFLAGS "-isystem/usr/local/include"
 setenv LDFLAGS "-L/usr/local/lib"
-# PIE build flags test ok during configure, but PIE builds don't seem to work
-# out the same on FreeBSD as they do on Linux.  Hardening for the port might
-# need doing independently via CFLAGS/LDFLAGS:
-./configure --without-hardening
+# If using FreeBSD 11.2, you may need to add "--disable-hardening" to configure
+# below to avoid PIE-related flags, which seem to break building there.
+# FreeBSD 12 is fine with the defaults and actually needs the PIE-related flags
+# to build successfully.
+./configure
 gmake
 gmake check
 gmake install

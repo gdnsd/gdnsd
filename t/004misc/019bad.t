@@ -444,29 +444,16 @@ ok(!$@) or diag $@;
 
 close($sock);
 
-# Open 3 sockets for the next 3 tests.  It's nice to have them open in parallel
-# to test more edge cases...
-my $tcp_sock = IO::Socket::INET->new(
-    PeerAddr => '127.0.0.1:' . $_GDT::DNS_PORT,
-    Proto => 'tcp',
-    Timeout => 10,
-);
-my $proxy_sock = IO::Socket::INET->new(
-    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
-    Proto => 'tcp',
-    Timeout => 10,
-);
-my $proxy2_sock = IO::Socket::INET->new(
-    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
-    Proto => 'tcp',
-    Timeout => 10,
-);
-
 # T28
 # TCP pipelining test.  We'll send a raw single send() with 5x minimal
 # questions (REFUSED due to root name) followed by a "real" question (NOERROR)
 # and then check stats etc.
 my $six_tcp_piped = (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
+my $tcp_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::DNS_PORT,
+    Proto => 'tcp',
+    Timeout => 10,
+);
 send($tcp_sock, $six_tcp_piped, 0);
 # Let responses just buffer, who cares for now
 eval {_GDT->check_stats(
@@ -489,6 +476,11 @@ ok(!$@) or diag $@;
 # "real" question (NOERROR) and then check stats etc.
 my $six_proxy_piped = "PROXY TCP4 127.0.0.1 127.0.0.1 1234 4321\r\n"
     . (make_tcp_query("\x00") x 5) . make_tcp_query("\x07example\x03com\x00");
+my $proxy_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
+    Proto => 'tcp',
+    Timeout => 10,
+);
 send($proxy_sock, $six_proxy_piped, 0);
 # Let responses just buffer, who cares for now
 eval {_GDT->check_stats(
@@ -518,6 +510,11 @@ my $six_proxy2_piped = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A" # 12 b
     . make_tcp_query("\x07example\x03com\x00", 1, 0, 0, 1, 1, 1,
          # OPT w/ EDNS padding + 3 pad data bytes
          "\x00\x00\x29\x02\x00\x00\x00\x00\x00\x00\x07\x00\x0C\x00\x03\x00\x00\x00");
+my $proxy2_sock = IO::Socket::INET->new(
+    PeerAddr => '127.0.0.1:' . $_GDT::EXTRA_PORT,
+    Proto => 'tcp',
+    Timeout => 10,
+);
 send($proxy2_sock, $six_proxy2_piped, 0);
 # Let responses just buffer, who cares for now
 eval {_GDT->check_stats(
