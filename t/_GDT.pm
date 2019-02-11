@@ -651,7 +651,7 @@ sub get_resolver6 {
 #  to compare with the real server response for correctness.
 #  Args are: { headerparam => value }, $question, [ answers ], [ auths ], [ addtl ]
 #  headers bits default to AA and QR on, the rest off, rcode NOERROR, opcode QUERY,
-#  note this wont set ID properly, which is almost surely necessary, and should
+#  note this won't set ID properly, which is almost surely necessary, and should
 #  match the question being asked.
 sub mkanswer {
     my ($class, $headers, $question, $answers, $auths, $addtl) = @_;

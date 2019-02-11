@@ -36,7 +36,7 @@ labels, e.g:
   A whole ltree represents a whole zone as a linked tree of per-label nodes
 starting at the root of the zone (the root zone of DNS in the example above).
 The actual root node of the tree has no label, as the labels are only useful
-in seaching the children of a node.  The root node itself is tracked and
+in searching the children of a node.  The root node itself is tracked and
 searched through another data structure, the "zones tree" in ztree.h.
 
   Each node in the ltree (ltree_node_t) contains a resizable hash table of
@@ -57,7 +57,7 @@ its own local search function that understands the ltree structure.
 the load factor reaches 1.0 (and rehashed all over again into the new table).
 Collisions are handled by linked lists of nodes.  The rrsets of a node are
 represented by a linked list, and the rdata items within an rrset are
-represented as a resizeable array of objects.
+represented as a resizable array of objects.
 
   There have been several design iterations, both in checked-in code and
 private testing.  Past experiments that failed: A flat hash table of all

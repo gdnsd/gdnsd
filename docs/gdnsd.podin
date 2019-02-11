@@ -117,12 +117,12 @@ things like the ubiquitous B<--help> and B<--version>.
 =head1 PRIVILEGES
 
 This service pays no attention to, nor does it attempt to check or
-modify, anything about the runtime security environment or privelege
+modify, anything about the runtime security environment or privilege
 set, or whether or not it happens to be running as C<root>, or attempt
-any actions that would commonly require C<root> priveleges, such as
+any actions that would commonly require C<root> privileges, such as
 altering its own memlock rlimits or raising its own process priority.
 The lone exception is that the code blindly assumes that binding its DNS
-listening ports, which default to being in the priveleged range, will
+listening ports, which default to being in the privileged range, will
 Just Work.
 
 It expects all such things to be managed managed by external

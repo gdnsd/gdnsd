@@ -98,7 +98,7 @@ case "$1" in
         gdnsdctl_cmd_exit "-i stop"
         ;;
     reload-zones)
-        # "-i reload-zones" will suceed if no daemon is running
+        # "-i reload-zones" will succeed if no daemon is running
         log_daemon_msg "Reloading zonefiles for $NAME" "$NAME"
         gdnsdctl_cmd_exit "-i reload-zones"
         ;;

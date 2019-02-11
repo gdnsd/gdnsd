@@ -636,7 +636,7 @@ static void val_destroy(vscf_data_t* d)
     escapes = ('\\' [^0-9\n]) | ('\\' escape_int) | ('\\' nl);
 
     # The base set of literal characters allowed in unquoted
-    #  charater-srings
+    #  character-srings
     chr     = [^}{;# \t\n,"=\\] - (']'|'[');
 
     # The set of characters allowed as the *first* character in

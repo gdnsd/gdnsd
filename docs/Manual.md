@@ -174,7 +174,7 @@ I've done some basic UDP performance testing of the gdnsd 3.0 codebase just prio
 * gdnsd built with gcc-8 -O3 and default compiler hardening flags
 * gdnsd configured for single thread (udp\_threads = 1), with 100 small zones loaded
 * dnsperf from https://github.com/akamai/dnsperf.git for the client side
-* dnsperf input file with 110K A-queries to test, ~9% of wich are NXDOMAIN and the rest are NOERROR, spread randomly over the ~100 small zones' namespaces.
+* dnsperf input file with 110K A-queries to test, ~9% of which are NXDOMAIN and the rest are NOERROR, spread randomly over the ~100 small zones' namespaces.
 * dnsperf args: -s 127.0.0.1 -p $port -d $datafile -e -D -l 60
 
 With this setup and zero latency over the loopback, gdnsd achieves a rate of ~450K reqs/sec with a single UDP server thread (I can't test parallel perf well on this hardware with only 2 real CPU cores), and 100% of responses are successful and correct.
@@ -188,7 +188,7 @@ TODO: flesh this out with some more-realistic testing on server hardware over re
 The DNS threads keep reasonably detailed statistical counters of all of their activity. The core dns request handling code that both the TCP and UDP threads use tracks counters for all response types. Mostly these counters are named for the corresponding DNS response codes (RCODEs):
 
 * refused - Request was refused by the server because the server is not authoritative for the queried name.
-* nxdomain - Request was for a non-existant domainname. In other words, a name the daemon is authoritative for, but which does not exist in the database.
+* nxdomain - Request was for a non-existent domainname. In other words, a name the daemon is authoritative for, but which does not exist in the database.
 * notimp - Requested service not implemented by this daemon, such as zone transfer requests.
 * badvers - Request had an EDNS OPT RR with a version higher than zero, which this daemon does not support (at the time of this writing, such a version doesn't even exist).
 * formerr - Request was badly-formatted, but was sane enough that we did send a response with the rcode FORMERR.

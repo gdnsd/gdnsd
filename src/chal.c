@@ -38,7 +38,7 @@
 // value configured for one single domainname.
 // --
 // A "challenge set" (cset_t) is a set of up to 100 challenges that were sent
-// to the daemon together in a single control socket transation (single
+// to the daemon together in a single control socket transaction (single
 // gdnsdctl invocation).
 // --
 // Expiration is tracked and processed in terms of whole challenge sets, and

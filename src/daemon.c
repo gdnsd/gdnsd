@@ -116,7 +116,7 @@ static void daemon_fg_waiter(const pid_t middle_pid, const int readpipe)
     if (status)
         log_fatal("waitpid(%li) returned bad status %i", (long)middle_pid, status);
 
-    // Now wait on the real deamon to report success over the pipe (or not)
+    // Now wait on the real daemon to report success over the pipe (or not)
     char msg = '0';
     ssize_t read_rv;
     do {

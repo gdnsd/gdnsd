@@ -46,7 +46,7 @@ F_MALLOC F_NONNULL F_RETNN
 char* gdnsd_str_combine_n(const unsigned count, ...);
 
 // Creates a new heap-allocated copy of the string "haystack", with all
-// occurences of "needle" replaced by "repl".  All string inputs should be NUL
+// occurrences of "needle" replaced by "repl".  All string inputs should be NUL
 // terminated, and the _len arguments for the needle and repl should be their
 // strlen()s.  The needle must have a non-zero size.  This is meant for simple
 // uses during configuration-parsing kinds of cases, and errors out if the

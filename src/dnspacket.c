@@ -79,7 +79,7 @@ typedef struct {
     client_info_t client_info;
 
     // EDNS Client Subnet response mask.
-    // Not valid/useful in DNS reponses unless edns.respond_client_subnet is true
+    // Not valid/useful in DNS responses unless edns.respond_client_subnet is true
     // below, *and* the source mask was non-zero.
     // For static responses, this is set to zero by dnspacket.c
     // For dynamic responses, this is set from .ans_dyn{a,cname}.edns_client_mask,

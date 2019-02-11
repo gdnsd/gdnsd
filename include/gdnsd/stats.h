@@ -28,7 +28,7 @@
  * This header defines two data types named stats_t and stats_uint_t,
  *   and two accessor functions for stats_t.
  *
- * stats_t is used to implement an uint-like peice of data which is
+ * stats_t is used to implement an uint-like piece of data which is
  *   shared (without barriers or locking) between multiple threads
  *   and/or CPUs with the following very important caveats:
  *

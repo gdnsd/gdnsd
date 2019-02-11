@@ -395,7 +395,7 @@
 2.1.1 - 2014-12-30
   *** Bugfixes backported from master branch:
     * Fixed incorrect error-handling code for the sendmmsg() syscall, which
-      could have caused an unecessary additional dropped packet and/or
+      could have caused an unnecessary additional dropped packet and/or
       bad error messages after failing to send one or more packets from a set.
     * The per-address level udp_recv_width option is now correctly limited to
       a value of 64 (previously it was being incorrectly limited to 32).
@@ -431,7 +431,7 @@
       run as a systemd service, this unit file *must* be used!
       Some of the settings within are critical to the proper
       operation of gdnsd under systemd.  The installation
-      path can be overriden from the pkg-config-based default
+      path can be overridden from the pkg-config-based default
       via --with-systemdsystemunitdir=DIR.  Generation and
       installation can be avoided on systems which have
       systemd installed via --without-systemdsystemunitdir.
@@ -866,7 +866,7 @@
        several releases will have their backwards-compatibility
        removed in 2.0.0, and notably the plugin API will have
        substantial changes for any 3rd-party plugin code to
-       accomodate.  You have been warned!
+       accommodate.  You have been warned!
 
 1.10.1 - 2013-10-04
     Bugfixes:
@@ -1101,7 +1101,7 @@
     Plugin API version bumped to ensure plugin binaries built during
       the unstable development period can't be loaded without at least
       a recompile.
-    Improved UDP buffer size negotation with the kernel, fixes testsuite
+    Improved UDP buffer size negotiation with the kernel, fixes testsuite
       failure on GNU/kFreeBSD.
     Testsuite *can* be run as root now.
     Better configure-time checks for sendmmsg() on Linux
@@ -1140,7 +1140,7 @@
     The forced chroot mode that has been the default for most of
       1.7.x has now been made optional.  The default default
       is now "-d system", which triggers the use of system paths
-      (e.g. /etc/gdnsd/config), and this can be overriden at
+      (e.g. /etc/gdnsd/config), and this can be overridden at
       configure-time via --with-rootdir=/srv/gdnsd for the old
       behavior, or at runtime via "-d /srv/gdnsd".  Regardless
       of the configure/build-time setting, all builds can operate

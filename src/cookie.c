@@ -33,7 +33,7 @@
  *   pre-defined master key, which must contain at least 32 bytes of data,
  *   which should be securely-generated random data.  The keyfile can be
  *   updated with a new key from time to time, but this can happen on slow
- *   timescales (e.g.  once a year or whatever makes sense for generic secret
+ *   timescales (e.g. once a year or whatever makes sense for generic secret
  *   key management).
  *
  * * The Time Counter
@@ -55,7 +55,7 @@
  *   Roughly once per hour (keeping in mind all the blah blah about unix time
  *   and leap seconds, properly), servers update their secrets using the new
  *   unix hour counter as input.  When generating secrets, they all generate 3
- *   secrets named "previous", "current", and "next", correspoding with the
+ *   secrets named "previous", "current", and "next", corresponding with the
  *   secrets for the previous, current, and next unix hour counter values.
  *   Only "current" is used to generate new server cookies sent to clients, but
  *   all three of the secrets can be used to successfully validate

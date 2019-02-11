@@ -1,7 +1,7 @@
 #
 # This tests that the test infrastructure basically works,
 #  and that we can spawn a gdnsd instance with an absolutely
-#  minimal configuration and get it to succesfully answer the
+#  minimal configuration and get it to successfully answer the
 #  easiest query imaginable.
 #
 #  There is a lot more verbosity in this test than will be

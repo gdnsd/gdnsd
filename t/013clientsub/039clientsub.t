@@ -26,7 +26,7 @@ _GDT->test_dns(
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
 
-# Note this is as above, but excercises the case of a source mask that doesn't
+# Note this is as above, but exercises the case of a source mask that doesn't
 # end on a byte boundary, but is otherwise correct
 _GDT->test_dns(
     qname => 'static.example.com', qtype => 'A',

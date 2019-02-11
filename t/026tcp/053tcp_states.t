@@ -143,7 +143,7 @@ my @behave = (
             recv($sock, $rbuf, 4096, 0); # blocks here for Timeout, unless server closes or RSTs
         }
     },
-    # 9 - Very similar in purpose to the above, but does an explict usleep for
+    # 9 - Very similar in purpose to the above, but does an explicit usleep for
     # longer than the server-side timeout rather than the recv() blockage
     # above.  This will turn out pretty similar to 8 during the main run, but
     # during the daemon shutdown testing these will have to be killed by the
@@ -193,7 +193,7 @@ if ($^O =~ m/bsd/i) {
         $NUM_TCP = $NUM_TCP / 2;
     }
     # If both filters (dnsready and dataready) failed to load, the noerror
-    # check won't be valid, as under these conditions the code can't gaurantee
+    # check won't be valid, as under these conditions the code can't guarantee
     # that clients aren't killed before their first request arrives under
     # connection overload pressure.
     if ($_GDT::ACCF_DNS_FAIL && $_GDT::ACCF_DATA_FAIL) {
