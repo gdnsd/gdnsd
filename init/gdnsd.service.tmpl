@@ -24,8 +24,7 @@ RuntimeDirectory=gdnsd
 RuntimeDirectoryMode=0700
 
 #---
-# Things below this mark are not strictly required for proper operation,
-# they're just considered good baseline defaults for security and/or perf
+# Optional performance/reliability config:
 #---
 
 # Usually an authdns server is critical infrastructure and performance
@@ -37,7 +36,16 @@ Nice=-11
 # Allows successful "lock_mem = true" configuration (can be left out otherwise)
 LimitMEMLOCK=infinity
 
-# Various settings for stricter security that probably work for most configs
+#---
+# Things below this mark are not strictly required for proper operation,
+# they're just considered good baseline conservative security defaults for a
+# standard installation in system paths that isn't doing anything tricky.
+# Installing to /usr/local might complicate things (especially might require
+# removing ProtectSystem=full), and obviously various configurations of the
+# extmon plugin might require relaxing many of the other security options to
+# allow an external binary to do its work underneath gdnsd_extmon_helper.
+#---
+
 NoNewPrivileges=yes
 SecureBits=noroot noroot-locked no-setuid-fixup no-setuid-fixup-locked
 MountFlags=slave
