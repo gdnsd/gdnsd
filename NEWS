@@ -1,3 +1,9 @@
+2.4.2 - 2019-02-11
+    * FreeBSD: Fix EADDRNOTAVAIL issue for IPv6 sockets when the listening IP
+      is bound to the loopback and traffic is routed indirectly, by resetting
+      ifindex to zero for non-link-local IPv6 IPs in the cmsg structure passed
+      between recvmsg() and sendmsg().
+
 2.4.1 - 2019-01-10
     * These two fixes are backports from master branch work towards 3.x:
     * Reverted the detection and rejection of post-2018 GeoLite2-City databases
