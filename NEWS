@@ -1,0 +1,11 @@
+3.0.0 - 2019-02-15
+    * Note that this is a major version number bump, and for some users and
+      configurations this means major compatibility-breaking changes.  Do not
+      expect a simple upgrade like a minor version release!  Please see the
+      separate file VERSION3.md which offers an overview of all the major
+      changes from 2.x; there's too much to succinctly summarize here.
+    * Also, all previous NEWS entries were shifted to NEWS.old, so that we can
+      start this file over and leave previous 2146 lines of updates behind.
+    * For beta users: there were no functional changes since the final
+      2.99.9950-beta release, only QA/refactoring work and a couple of
+      FreeBSD-specific fixups to the TCP parts of the testsuite.
