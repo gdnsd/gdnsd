@@ -12,7 +12,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Implements the RFC 7828 EDNS tcp-keepalive option
   * Pipelined requests should work fine, and will always be answered in-order due to implementation details
   * Partial progress on "DNS Stateful Operations" draft - logic/state is already in place to handle it well, but not protocol implementation
-  * Resiliency under heavy load or attack-like conditions, including slow-read/write, is much improved and should allow legitimate clients to continue making requests
+  * Resiliency under heavy load or attack-like conditions, including slow-read/write, is greatly improved and should allow legitimate clients to continue making requests under adverse conditions
   * PROXY procotol support can be enabled for specific special listen addresses.  This is intended for testing encrypted connections such as DNS-over-TLS using an external daemon for the secure transport, and also by default enables EDNS Padding to help secure against response length analysis.
   * Several new stat counters added for per-connection TCP stats, alongside the existing per-request ones:
     * `tcp.conns` - TCP conns we accepted (excludes extremely early failures, e.g. accept() itself returning an error)
@@ -100,7 +100,7 @@ The daemon now has a control socket, and `gdnsdctl` is shipped as the canonical 
 These are all new options for new features:
 
 * `acme_challenge_ttl` - Sets the time in seconds for records injected by `gdnsdctl acme-dns-01` to expire, as well as the advertised TTL.  min/def/max is 60/600/3600.
-* `nsid` - Sets the raw binary data returned by the NSID EDNS option.  Up to 128 raw bytes, encoded as up to 256 characters of ascii hex in a single string.  The option is not sent unless the data is explicitly defined by this option.
+* `nsid` - Sets the raw binary data returned by the NSID EDNS option.  Up to 128 raw bytes, encoded as up to 256 characters of ascii hex in a single string.
 * `nsid_ascii` - Convenience alternative to the above, sets the NSID binary data to the bytes of the specified printable ASCII string of at most 128 characters.
 * `tcp_fastopen` - Sets the queue size for TCP Fastopen (global, per-socket).  min/def/max is 0/256/1048576, zero disables.
 * `disable_cookies` - Disables EDNS Cookies (not recommended!)
@@ -109,7 +109,7 @@ These are all new options for new features:
 * `max_edns_response_v6` - Like existing `max_edns_response` parameter (which is now v4-only), but for IPv6, and defaulting to 1212.
 * `tcp_proxy` - Enables PROXY protocol support for a specific TCP listen address:port, see docs for details
 * `tcp_pad` - Controls EDNS Padding for TCP connections (default off for normal TCP listeners, default on for the `tcp_proxy` case).
-* `tcp_backlog` - Optional non-default backlog argument for TCP `listen()` (default it `SOMAXCONN`)
+* `tcp_backlog` - Optional non-default backlog argument for TCP `listen()` (default is `SOMAXCONN`)
 
 ### Options with changed defaults or allowed values
 
@@ -165,12 +165,13 @@ None of these generate a syntax error for now, they merely log a non-fatal error
   * Removed: `-s` (zones strict startup) - this is now always true and doesn't make sense as a flag
   * Added: `-l` - explicitly switches log output from stderr to syslog for the `start` and `checkconf` actions.
   * Added: `-R` - allows `start` or `daemonize` to replace another running daemon instance in a smooth (downtime-less, loss-free) way.  This is what's used when the daemon spawns its own replacement process when commanded to do so by `gdnsdctl replace`.  Without `-R`, if another daemon instance were already running, `start` or `daemonize` would complain and exit.
+  * Added: `-i` - Idempotent mode for `start` or `daemonize`, will exit with zero immediately if another instance is already running
 
 All the removed flags (`-f`, `-s`, and `-x`) are still allowed for compatibility reasons and emit non-fatal log messages, to ease transition of tools/scripts.
 
 ## Security, daemon management and init systems
 
-The TL;DR here is that gdnsd doesn't manage its own OS security or privileges anymore.  It just runs and assumes the environment was already secured by the init system or script, and assumes it can bind port 53.  The init script/system is also responsible for taking care of other optional bits gdnsd used to do for itself as root before dropping its own privileges: setting the working directory sanely, setting locked memory (and/or other) resource limits, setting process priority, dropping privileges for the daemon, etc.  Since most installations will want gdnsd to run as a non-root user and also to bind port 53, that means a system-specific mechanism will have to be employed by the init script/system to allow the non-root user to bind port 53.  For Linux this means `CAP_NET_BIND_SERVICE`, and for FreeBSD it's `mac_portacl`, but in general this is not an area where portable solutions exist.  More rationale and background on this further down below.
+The TL;DR here is that gdnsd doesn't manage its own OS security or privileges anymore.  It just runs and assumes the environment was already secured by the init system or script, and assumes it can bind port 53.  The init script/system is also responsible for taking care of other optional bits gdnsd used to do for itself as root before dropping its own privileges: setting the working directory sanely, setting locked memory (and/or other) resource limits, setting process priority, dropping privileges for the daemon, etc.  Since most installations will want gdnsd to run as a non-root user and also to bind port 53, that means a system-specific mechanism will have to be employed.  For Linux this means `CAP_NET_BIND_SERVICE`, and for FreeBSD it's `mac_portacl`, but in general this is not an area where portable solutions exist.  More rationale and background on this further down below.
 
 For systemd-based Linux distributions, an example unit file which handles all the things is built along with the software at `init/gdnsd.service`.  A similar example is provided for traditional Linux LSB sysvinit at `init/gdnsd.init`.  Some FreeBSD example config and init code from my basic testing is documented in `docs/Manual.md`.
 
@@ -182,7 +183,7 @@ For systemd-based Linux distributions, an example unit file which handles all th
 * The userspace-rcu library (liburcu) is now a build requirement rather than an optional recommendation
 * The testsuite now requires Perl module Net::DNS version 1.03+
 * GeoIP2 support, while still optional, requires libmaxminddb 1.2.0+ if enabled at all
-* In general, lots of source-level backwards compatibility for older systems and/or kernels was removed where the assumptions seemed safe for a new major release in late 2018 or after.  If cases arise where certain operating systems are still in support and require patching, I'd be happy to add back the necessary bits.  Examples here include the assumptions about `SO_REUSEPORT`, `SOCK_CLOEXEC`, `SOCK_NONBLOCK`, and `accept4()`.
+* In general, lots of source-level backwards compatibility for older systems and/or kernels was removed where the assumptions seemed safe for a new major release in 2019.  If cases arise where certain operating systems are still in support and require patching, I'd be happy to add back the necessary bits.  Examples here include the assumptions about `SO_REUSEPORT`, `SOCK_CLOEXEC`, `SOCK_NONBLOCK`, and `accept4()`.
 * The generated C sources `src/zscan_rfc1035.c` and `libgdnsd/vscf.c`, which are built with `ragel`, are once again being included in tarball releases, but not in the git repo.  This is in response to ragel dependency hell reported by some who build from source on every machine.
 
 ### The big changes around security, daemon management, and init systems
