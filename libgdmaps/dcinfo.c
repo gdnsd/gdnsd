@@ -26,6 +26,59 @@
 
 #include <math.h>
 
+F_NONNULL
+static unsigned dcinfo_init_auto(dcinfo_t* info, vscf_data_t* dc_auto_cfg, const char* map_name)
+{
+    if (!vscf_is_hash(dc_auto_cfg))
+        log_fatal("plugin_geoip: map '%s': auto_dc_coords must be a key-value hash", map_name);
+    const unsigned num_auto = vscf_hash_get_len(dc_auto_cfg);
+    const unsigned num_dcs = info->num_dcs;
+
+    for (unsigned i = 0; i < num_dcs; i++) {
+        info->dcs[i].coords.lat = (double)NAN;
+        info->dcs[i].coords.lon = (double)NAN;
+        info->dcs[i].coords.cos_lat = (double)NAN;
+    }
+
+    for (unsigned i = 0; i < num_auto; i++) {
+        const char* dcname = vscf_hash_get_key_byindex(dc_auto_cfg, i, NULL);
+        unsigned dcidx;
+        for (dcidx = 0; dcidx < num_dcs; dcidx++) {
+            if (!strcmp(dcname, info->dcs[dcidx].name))
+                break;
+        }
+        if (dcidx == num_dcs)
+            log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' not matched from 'datacenters' list", map_name, dcname);
+        GDNSD_DIAG_PUSH_IGNORED("-Wdouble-promotion")
+        if (!isnan(info->dcs[dcidx].coords.lat))
+            log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' defined twice", map_name, dcname);
+        GDNSD_DIAG_POP
+        vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
+        if (!vscf_is_array(coord_cfg) || vscf_array_get_len(coord_cfg) != 2)
+            log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be an array of two values", map_name, dcname);
+        vscf_data_t* lat_cfg = vscf_array_get_data(coord_cfg, 0);
+        vscf_data_t* lon_cfg = vscf_array_get_data(coord_cfg, 1);
+        gdnsd_assert(lat_cfg);
+        gdnsd_assert(lon_cfg);
+
+        double lat;
+        double lon;
+        if (!vscf_is_simple(lat_cfg)
+                || !vscf_is_simple(lon_cfg)
+                || !vscf_simple_get_as_double(lat_cfg, &lat)
+                || !vscf_simple_get_as_double(lon_cfg, &lon)
+                || lat > 90.0 || lat < -90.0
+                || lon > 180.0 || lon < -180.0
+           )
+            log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be a legal latitude and longitude in decimal degrees", map_name, dcname);
+        info->dcs[dcidx].coords.lat = lat * DEG2RAD;
+        info->dcs[dcidx].coords.lon = lon * DEG2RAD;
+        info->dcs[dcidx].coords.cos_lat = cos(lat * DEG2RAD);
+    }
+
+    return num_auto;
+}
+
 // Technically we could/should check for duplicates here.  The plugin will
 //  still fail later though: when a resource is defined, the datacenter
 //  names go into a hash requiring uniqueness, and the count is required
@@ -56,51 +109,8 @@ void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, 
         free(map_mon_desc);
     }
 
-    if (dc_auto_cfg) {
-        if (!vscf_is_hash(dc_auto_cfg))
-            log_fatal("plugin_geoip: map '%s': auto_dc_coords must be a key-value hash", map_name);
-        num_auto = vscf_hash_get_len(dc_auto_cfg);
-        for (unsigned i = 0; i < num_dcs; i++) {
-            info->dcs[i].coords.lat = (double)NAN;
-            info->dcs[i].coords.lon = (double)NAN;
-            info->dcs[i].coords.cos_lat = (double)NAN;
-        }
-        for (unsigned i = 0; i < num_auto; i++) {
-            const char* dcname = vscf_hash_get_key_byindex(dc_auto_cfg, i, NULL);
-            unsigned dcidx;
-            for (dcidx = 0; dcidx < num_dcs; dcidx++) {
-                if (!strcmp(dcname, info->dcs[dcidx].name))
-                    break;
-            }
-            if (dcidx == num_dcs)
-                log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' not matched from 'datacenters' list", map_name, dcname);
-            GDNSD_DIAG_PUSH_IGNORED("-Wdouble-promotion")
-            if (!isnan(info->dcs[dcidx].coords.lat))
-                log_fatal("plugin_geoip: map '%s': auto_dc_coords key '%s' defined twice", map_name, dcname);
-            GDNSD_DIAG_POP
-            vscf_data_t* coord_cfg = vscf_hash_get_data_byindex(dc_auto_cfg, i);
-            if (!vscf_is_array(coord_cfg) || vscf_array_get_len(coord_cfg) != 2)
-                log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be an array of two values", map_name, dcname);
-            vscf_data_t* lat_cfg = vscf_array_get_data(coord_cfg, 0);
-            vscf_data_t* lon_cfg = vscf_array_get_data(coord_cfg, 1);
-            gdnsd_assert(lat_cfg);
-            gdnsd_assert(lon_cfg);
-
-            double lat;
-            double lon;
-            if (!vscf_is_simple(lat_cfg)
-                    || !vscf_is_simple(lon_cfg)
-                    || !vscf_simple_get_as_double(lat_cfg, &lat)
-                    || !vscf_simple_get_as_double(lon_cfg, &lon)
-                    || lat > 90.0 || lat < -90.0
-                    || lon > 180.0 || lon < -180.0
-               )
-                log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be a legal latitude and longitude in decimal degrees", map_name, dcname);
-            info->dcs[dcidx].coords.lat = lat * DEG2RAD;
-            info->dcs[dcidx].coords.lon = lon * DEG2RAD;
-            info->dcs[dcidx].coords.cos_lat = cos(lat * DEG2RAD);
-        }
-    }
+    if (dc_auto_cfg)
+        num_auto = dcinfo_init_auto(info, dc_auto_cfg, map_name);
 
     if (dc_auto_limit_cfg) {
         unsigned long auto_limit_ul;

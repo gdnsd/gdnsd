@@ -96,9 +96,12 @@ csc_txn_rv_t csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, cha
 // As above, but expects server's resp.v to contain a count of file descriptors
 // sent over SCM_RIGHTS, which will be received and placed in newly-allocated
 // storage at *resp_fds for the caller to consume and free.  This is only
-// intended for use in daemon<->daemon takeover connections.
+// intended for use in daemon<->daemon takeover connections.  Return value is
+// count of received fds placed in *resp_fds (also what it's allocated to).
+// Retval zero indicates something went wrong, otherwise you can assert it's >=
+// 3 (control sock, control lock, 1+ DNS listen sockets).
 F_NONNULL
-bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds);
+size_t csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds);
 
 // Request the server to shut down.  Non-failing response (false) means the
 // server accepted the command and intends to stop, but does not mean it has

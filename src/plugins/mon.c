@@ -229,8 +229,6 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
     if (!num_smgrs)
         return true;
 
-    bool success = true;
-
     gdnsd_sttl_t* updates = xcalloc_n(num_smgrs, sizeof(*updates));
 
     const unsigned num_raw = vscf_hash_get_len(raw);
@@ -239,25 +237,25 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
         vscf_data_t* val = vscf_hash_get_data_byindex(raw, i);
         if (!vscf_is_simple(val)) {
             log_err("admin_state: value for '%s' must be a simple string!", matchme);
-            success = false;
-            break;
+            free(updates);
+            return false;
         } else {
             gdnsd_sttl_t update_val;
             if (gdnsd_mon_parse_sttl(vscf_simple_get_data(val), &update_val, GDNSD_STTL_TTL_MAX)) {
                 log_err("admin_state: value for '%s' must be of the form STATE[/TTL] (where STATE is 'UP' or 'DOWN', and the optional TTL is an unsigned integer in the range 0 - %u)", matchme, GDNSD_STTL_TTL_MAX);
-                success = false;
-                break;
+                free(updates);
+                return false;
             } else {
                 update_val |= GDNSD_STTL_FORCED; // all admin-states are forced
                 if (!admin_process_entry(matchme, updates, update_val)) {
-                    success = false;
-                    break;
+                    free(updates);
+                    return false;
                 }
             }
         }
     }
 
-    if (success && !check_only) {
+    if (!check_only) {
         bool affected = false;
 
         for (unsigned i = 0; i < num_smgrs; i++) {
@@ -289,7 +287,7 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
 
     free(updates);
 
-    return success;
+    return true;
 }
 
 F_NONNULL

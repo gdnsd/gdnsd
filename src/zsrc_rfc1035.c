@@ -128,26 +128,22 @@ bool zsrc_rfc1035_load_zones(ztree_t* tree)
                     zone_count++;
                 }
                 free(full_fn);
-                if (failed)
-                    break;
             }
         } else if (errno) {
             log_err("rfc1035: readdir(%s) failed: %s", rfc1035_dir, logf_errno());
             failed = true;
-            break;
         }
-    } while (result);
+    } while (!failed && result);
 
     if (closedir(zdhandle)) {
         log_err("rfc1035: closedir(%s) failed: %s", rfc1035_dir, logf_errno());
-        return true;
+        failed = true;
     }
 
-    if (failed)
-        return true;
+    if (!failed)
+        log_info("rfc1035: Loaded %u zonefiles from '%s'", zone_count, rfc1035_dir);
 
-    log_info("rfc1035: Loaded %u zonefiles from '%s'", zone_count, rfc1035_dir);
-    return false;
+    return failed;
 }
 
 void zsrc_rfc1035_init(void)

@@ -273,6 +273,7 @@ static void start_threads(socks_cfg_t* socks_cfg)
     pthread_attr_destroy(&attribs);
 }
 
+F_NONNULL
 static void request_io_threads_stop(socks_cfg_t* socks_cfg)
 {
     dnsio_tcp_request_threads_stop();
@@ -280,6 +281,20 @@ static void request_io_threads_stop(socks_cfg_t* socks_cfg)
         dns_thread_t* t = &socks_cfg->dns_threads[i];
         if (t->is_udp)
             pthread_kill(t->threadid, SIGUSR2);
+    }
+}
+
+F_NONNULL
+static void wait_io_threads_stop(socks_cfg_t* socks_cfg)
+{
+    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
+        dns_thread_t* t = &socks_cfg->dns_threads[i];
+        void* raw_exit_status = (void*)42U;
+        int pthread_err = pthread_join(t->threadid, &raw_exit_status);
+        if (pthread_err)
+            log_err("pthread_join() of DNS thread failed: %s", logf_strerror(pthread_err));
+        if (raw_exit_status != NULL)
+            log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
     }
 }
 
@@ -406,6 +421,97 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
     usage(argv[0]);
 }
 
+static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* css, csc_t* csc)
+{
+    // init the stats code
+    statio_init(socks_cfg->num_dns_threads);
+
+    // Lock whole daemon into memory, including all future allocations.
+    if (gcfg->lock_mem && mlockall(MCL_CURRENT | MCL_FUTURE))
+        log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
+
+    // init cookie support and load key, if any
+    if (!gcfg->disable_cookies)
+        cookie_config(gcfg->cookie_key_file);
+
+    // Initialize dnspacket stuff
+    dnspacket_global_setup(socks_cfg);
+
+    // set up monitoring, which expects an initially empty loop
+    gdnsd_mon_start(def_loop);
+
+    // Set up timer hook in the default loop for cookie key rotation
+    if (!gcfg->disable_cookies)
+        cookie_runtime_init(def_loop);
+
+    // Call plugin pre-run actions
+    gdnsd_plugins_action_pre_run();
+
+    // Now that we're past potentially long-running operations like zone
+    // loading, initial monitoring, plugin pre_run actions, initiate the
+    // true takeover handoff sequence via css_new.
+    if (!css)
+        css = css_new(argv0, socks_cfg, &csc);
+
+    // setup main thread signal handlers
+    ev_signal* p_sig_int = &sig_int;
+    ev_signal* p_sig_term = &sig_term;
+    ev_signal* p_sig_usr1 = &sig_usr1;
+    ev_signal_init(p_sig_int, terminal_signal, SIGINT);
+    p_sig_int->data = css;
+    ev_signal_start(def_loop, p_sig_int);
+    ev_signal_init(p_sig_term, terminal_signal, SIGTERM);
+    p_sig_term->data = css;
+    ev_signal_start(def_loop, p_sig_term);
+    ev_signal_init(p_sig_usr1, usr1_signal, SIGUSR1);
+    ev_signal_start(def_loop, p_sig_usr1);
+
+    // Initialize+bind DNS listening sockets
+    socks_dns_lsocks_init(socks_cfg);
+
+    // Start up all of the UDP and TCP i/o threads
+    start_threads(socks_cfg);
+
+    // This waits for all of the stat structures to be allocated by the i/o
+    //  threads before continuing on.  They must be ready before ev_run()
+    //  below, because statio event handlers hit them.
+    // This also incidentally waits for all TCP threads to have hit their
+    //  listen() call as well, whereas UDP is already at least buffering queued
+    //  requests at the socket layer from the time it's bound.
+    dnspacket_wait_stats(socks_cfg);
+
+    // Notify 3rd parties of readiness (systemd, or fg process if daemonizing)
+    gdnsd_daemon_notify_ready();
+
+    // Notify the user that the listeners are up
+    log_info("DNS listeners started");
+
+    // Stop old daemon after establishing the new one's listeners, and import
+    // the final stats from it
+    if (csc) {
+        if (!csc_stop_server(csc)) {
+            uint64_t* stats_raw = NULL;
+            const size_t dlen = csc_get_stats_handoff(csc, &stats_raw);
+            if (dlen) {
+                gdnsd_assert(stats_raw);
+                statio_deserialize(stats_raw, dlen);
+            }
+            free(stats_raw);
+        }
+        csc_delete(csc);
+    }
+
+    // Set up zone reload mechanism and control socket handlers in the loop
+    setup_reload_zones(css);
+    css_start(css, def_loop);
+
+    // The daemon stays in this libev loop for life,
+    // until there's a reason to cleanly exit
+    ev_run(def_loop, 0);
+
+    return css;
+}
+
 int main(int argc, char** argv)
 {
     umask(022);
@@ -500,92 +606,12 @@ int main(int argc, char** argv)
     if (copts.action == ACT_CHECKCONF)
         exit(0);
 
-    // init the stats code
-    statio_init(socks_cfg->num_dns_threads);
-
-    // Lock whole daemon into memory, including all future allocations.
-    if (gcfg->lock_mem && mlockall(MCL_CURRENT | MCL_FUTURE))
-        log_fatal("mlockall(MCL_CURRENT|MCL_FUTURE) failed: %s (you may need to disabled the lock_mem config option if your system or your ulimits do not allow it)", logf_errno());
-
-    // init cookie support and load key, if any
-    if (!gcfg->disable_cookies)
-        cookie_config(gcfg->cookie_key_file);
-
-    // Initialize dnspacket stuff
-    dnspacket_global_setup(socks_cfg);
-
-    // set up monitoring, which expects an initially empty loop
-    gdnsd_mon_start(def_loop);
-
-    // Set up timer hook in the default loop for cookie key rotation
-    if (!gcfg->disable_cookies)
-        cookie_runtime_init(def_loop);
-
-    // Call plugin pre-run actions
-    gdnsd_plugins_action_pre_run();
-
-    // Now that we're past potentially long-running operations like zone
-    // loading, initial monitoring, plugin pre_run actions, initiate the
-    // true takeover handoff sequence via css_new.
-    if (!css)
-        css = css_new(argv[0], socks_cfg, &csc);
-
-    // setup main thread signal handlers
-    ev_signal* p_sig_int = &sig_int;
-    ev_signal* p_sig_term = &sig_term;
-    ev_signal* p_sig_usr1 = &sig_usr1;
-    ev_signal_init(p_sig_int, terminal_signal, SIGINT);
-    p_sig_int->data = css;
-    ev_signal_start(def_loop, p_sig_int);
-    ev_signal_init(p_sig_term, terminal_signal, SIGTERM);
-    p_sig_term->data = css;
-    ev_signal_start(def_loop, p_sig_term);
-    ev_signal_init(p_sig_usr1, usr1_signal, SIGUSR1);
-    ev_signal_start(def_loop, p_sig_usr1);
-
-    // Initialize+bind DNS listening sockets
-    socks_dns_lsocks_init(socks_cfg);
-
-    // Start up all of the UDP and TCP i/o threads
-    start_threads(socks_cfg);
-
-    // This waits for all of the stat structures to be allocated by the i/o
-    //  threads before continuing on.  They must be ready before ev_run()
-    //  below, because statio event handlers hit them.
-    // This also incidentally waits for all TCP threads to have hit their
-    //  listen() call as well, whereas UDP is already at least buffering queued
-    //  requests at the socket layer from the time it's bound.
-    dnspacket_wait_stats(socks_cfg);
-
-    // Notify 3rd parties of readiness (systemd, or fg process if daemonizing)
-    gdnsd_daemon_notify_ready();
-
-    // Notify the user that the listeners are up
-    log_info("DNS listeners started");
-
-    // Stop old daemon after establishing the new one's listeners, and import
-    // the final stats from it
-    if (csc) {
-        if (!csc_stop_server(csc)) {
-            uint64_t* stats_raw = NULL;
-            const size_t dlen = csc_get_stats_handoff(csc, &stats_raw);
-            if (dlen) {
-                gdnsd_assert(stats_raw);
-                statio_deserialize(stats_raw, dlen);
-            }
-            free(stats_raw);
-        }
-        csc_delete(csc);
-        csc = NULL;
-    }
-
-    // Set up zone reload mechanism and control socket handlers in the loop
-    setup_reload_zones(css);
-    css_start(css, def_loop);
-
-    // The daemon stays in this libev loop for life,
-    // until there's a reason to cleanly exit
-    ev_run(def_loop, 0);
+    // Initalize for a real runtime daemon and enter a libev loop for the life
+    // of the daemon.  Note if css is NULL because we're doing a takeover, it
+    // will get created and handed back here for use during shutdown.
+    css = runtime_execute(argv[0], socks_cfg, css, csc);
+    // We've returned from runtime_execute, which means we're exiting cleanly
+    // for some reason, such as a stop or takeover...
 
     // request i/o threads to exit
     request_io_threads_stop(socks_cfg);
@@ -594,15 +620,7 @@ int main(int argc, char** argv)
     gdnsd_kill_registered_children();
 
     // wait for i/o threads to exit
-    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &socks_cfg->dns_threads[i];
-        void* raw_exit_status = (void*)42U;
-        int pthread_err = pthread_join(t->threadid, &raw_exit_status);
-        if (pthread_err)
-            log_err("pthread_join() of DNS thread failed: %s", logf_strerror(pthread_err));
-        if (raw_exit_status != NULL)
-            log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
-    }
+    wait_io_threads_stop(socks_cfg);
 
     // deallocate resources
     atexit_execute();
@@ -625,6 +643,8 @@ int main(int argc, char** argv)
     // new terminal signal races us from here through exit()/raise() below.  It
     // is kinda problematic if we do this earlier (e.g. above i/o thread exit)
     // as it could abort our clean shutdown sequence.
+    ev_signal* p_sig_int = &sig_int;
+    ev_signal* p_sig_term = &sig_term;
     ev_signal_stop(def_loop, p_sig_term);
     ev_signal_stop(def_loop, p_sig_int);
 

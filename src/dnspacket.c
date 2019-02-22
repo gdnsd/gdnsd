@@ -356,6 +356,28 @@ static bool handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint
 
 // retval: true -> FORMERR, false -> OK
 F_NONNULL
+static bool handle_edns_cookie(dnsp_ctx_t* ctx, unsigned opt_len, const uint8_t* opt_data)
+{
+    ctx->txn.edns.cookie.recvd = true;
+    // FORMERR if illegal data len, only legal lens are 8, or 16-40
+    if (opt_len != 8U && (opt_len < 16U || opt_len > 40U)) {
+        stats_own_inc(&ctx->stats->edns_cookie_formerr);
+        return true;
+    }
+    ctx->txn.edns.cookie.respond = true;
+    ctx->txn.edns.out_bytes += 20U;
+    ctx->txn.edns.cookie.valid = cookie_process(ctx->txn.edns.cookie.output, opt_data, &ctx->txn.edns.client_info.dns_source, opt_len);
+    if (ctx->txn.edns.cookie.valid)
+        stats_own_inc(&ctx->stats->edns_cookie_ok);
+    else if (opt_len == 8U)
+        stats_own_inc(&ctx->stats->edns_cookie_init);
+    else
+        stats_own_inc(&ctx->stats->edns_cookie_bad);
+    return false;
+}
+
+// retval: true -> FORMERR, false -> OK
+F_NONNULL
 static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_len, const uint8_t* opt_data)
 {
     gdnsd_assert(ctx->stats);
@@ -390,23 +412,8 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
         // didn't) send.
     } else if (opt_code == EDNS_COOKIE_OPTCODE) {
         // ignore any cookie after the first one, per RFC
-        if (!gcfg->disable_cookies && !ctx->txn.edns.cookie.recvd) {
-            ctx->txn.edns.cookie.recvd = true;
-            // FORMERR if illegal data len, only legal lens are 8, or 16-40
-            if (opt_len != 8U && (opt_len < 16U || opt_len > 40U)) {
-                stats_own_inc(&ctx->stats->edns_cookie_formerr);
-                return true;
-            }
-            ctx->txn.edns.cookie.respond = true;
-            ctx->txn.edns.out_bytes += 20U;
-            ctx->txn.edns.cookie.valid = cookie_process(ctx->txn.edns.cookie.output, opt_data, &ctx->txn.edns.client_info.dns_source, opt_len);
-            if (ctx->txn.edns.cookie.valid)
-                stats_own_inc(&ctx->stats->edns_cookie_ok);
-            else if (opt_len == 8U)
-                stats_own_inc(&ctx->stats->edns_cookie_init);
-            else
-                stats_own_inc(&ctx->stats->edns_cookie_bad);
-        }
+        if (!gcfg->disable_cookies && !ctx->txn.edns.cookie.recvd)
+            rv = handle_edns_cookie(ctx, opt_len, opt_data);
     } else {
         log_devdebug("Unknown EDNS option code: %x", opt_code);
     }
@@ -420,14 +427,11 @@ static bool handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uint8_t* 
 {
     gdnsd_assert(rdlen);
 
-    bool rv = false;
-
     // minimum edns option length is 4 bytes (2 byte option code, 2 byte data len)
     while (rdlen) {
         if (rdlen < 4) {
             log_devdebug("EDNS option too short");
-            rv = true;
-            break;
+            return true;
         }
         unsigned opt_code = ntohs(gdnsd_get_una16(rdata));
         rdata += 2;
@@ -436,18 +440,15 @@ static bool handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uint8_t* 
         rdlen -= 4;
         if (opt_dlen > rdlen) {
             log_devdebug("EDNS option too long");
-            rv = true;
-            break;
+            return true;
         }
-        if (handle_edns_option(ctx, opt_code, opt_dlen, rdata)) {
-            rv = true; // option handler indicated FORMERR
-            break;
-        }
+        if (handle_edns_option(ctx, opt_code, opt_dlen, rdata))
+            return true; // option handler indicated FORMERR
         rdlen -= opt_dlen;
         rdata += opt_dlen;
     }
 
-    return rv;
+    return false;
 }
 
 typedef enum {
@@ -538,20 +539,17 @@ static bool parse_first_question(txn_t* txn, unsigned* offset_ptr, const unsigne
     while ((llen = *lqname_ptr++ = buf[pos++])) {
         if (unlikely(llen & 0xC0)) {
             log_devdebug("Label compression detected in question, failing.");
-            pos = 0;
-            break;
+            return true;
         }
 
         if (unlikely(pos + llen >= len)) {
             log_devdebug("Query name truncated (runs off end of packet)");
-            pos = 0;
-            break;
+            return true;
         }
 
         if (unlikely(pos + llen > 254)) {
             log_devdebug("Query domain name too long");
-            pos = 0;
-            break;
+            return true;
         }
 
         while (llen--) {
@@ -562,48 +560,44 @@ static bool parse_first_question(txn_t* txn, unsigned* offset_ptr, const unsigne
         }
     }
 
-    if (likely(pos)) {
-        // Store the overall length of the lowercased name
-        txn->lqname[0] = pos;
+    // Store the overall length of the lowercased name
+    txn->lqname[0] = pos;
 
-        if (likely(pos + 4 <= len)) {
-            txn->qtype = ntohs(gdnsd_get_una16(&buf[pos]));
-            pos += 2;
-            txn->qclass = ntohs(gdnsd_get_una16(&buf[pos]));
-            pos += 2;
-        } else {
-            log_devdebug("Packet length exhausted before parsing question type/class!");
-            pos = 0;
-        }
+    if (likely(pos + 4 <= len)) {
+        txn->qtype = ntohs(gdnsd_get_una16(&buf[pos]));
+        pos += 2;
+        txn->qclass = ntohs(gdnsd_get_una16(&buf[pos]));
+        pos += 2;
+    } else {
+        log_devdebug("Packet length exhausted before parsing question type/class!");
+        return true;
     }
 
-    if (likely(pos)) {
-        *offset_ptr += pos;
-        gdnsd_assert(*offset_ptr <= packet_len);
-        return false;
-    }
-    return true;
+    *offset_ptr += pos;
+    gdnsd_assert(*offset_ptr <= packet_len);
+    return false;
 }
 
 F_NONNULL
-static unsigned parse_rr_name_minimal(const uint8_t* buf, const unsigned len)
+static unsigned parse_rr_name_minimal(const uint8_t* buf, unsigned len)
 {
     gdnsd_assert(len);
+    // input len is whole remaining buffer, so cap it to legal name length so
+    // we can check both limits together.
+    if (len > 255)
+        len = 255;
     unsigned pos = 0;
     unsigned llen;
     while ((llen = buf[pos++])) {
         if (unlikely(llen & 0xC0)) {
-            if (unlikely(pos + 1 >= len))
-                pos = 0;
-            else
-                pos++;
-            break;
+            pos++;
+            if (unlikely(pos >= len))
+                return 0;
+            return pos;
         }
         pos += llen;
-        if (unlikely(pos >= len || pos > 254)) {
-            pos = 0;
-            break;
-        }
+        if (unlikely(pos >= len))
+            return 0;
     }
 
     return pos;
@@ -618,33 +612,27 @@ static bool parse_rr_minimal(txn_t* txn, unsigned* offset_ptr, const unsigned pa
 
     const uint8_t* buf = &txn->packet[*offset_ptr];
     unsigned pos = parse_rr_name_minimal(buf, len);
-    if (likely(pos)) {
-        if (has_data) {
-            if (likely(pos + 10 <= len)) { // type/class/ttl/rdlen
-                pos += 8; // type/class/ttl
-                const unsigned rdlen = ntohs(gdnsd_get_una16(&buf[pos]));
-                pos += 2;
-                if (likely(pos + rdlen <= len))
-                    pos += rdlen;
-                else
-                    pos = 0;
-            } else {
-                pos = 0;
-            }
-        } else {
-            if (likely(pos + 4 <= len)) // type/class
-                pos += 4;
-            else
-                pos = 0;
-        }
+    if (unlikely(!pos))
+        return true;
+
+    if (has_data) {
+        if (unlikely(pos + 10 > len)) // type/class/ttl/rdlen
+            return true;
+        pos += 8; // type/class/ttl
+        const unsigned rdlen = ntohs(gdnsd_get_una16(&buf[pos]));
+        pos += 2;
+        pos += rdlen;
+        if (unlikely(pos > len))
+            return true;
+    } else {
+        if (unlikely(pos + 4 > len)) // type/class
+            return true;
+        pos += 4;
     }
 
-    if (likely(pos)) {
-        *offset_ptr += pos;
-        gdnsd_assert(*offset_ptr <= packet_len);
-        return false;
-    }
-    return true;
+    *offset_ptr += pos;
+    gdnsd_assert(*offset_ptr <= packet_len);
+    return false;
 }
 
 F_NONNULL
@@ -894,24 +882,6 @@ static unsigned repeat_name(uint8_t* packet, unsigned store_at_offset, unsigned 
     return rv;
 }
 
-// These macros define a common pattern around the body of a loop encoding
-//  an rrset.  They behave like a for-loop specified as...
-//    for (unsigned i = 0; i < _total; i++) { ... }
-//  ... with the exception that they start at a pseudo-random "i" value from
-//  within the range, and loop back over zero if necessary to up all the i
-//  values by the end.
-
-#define OFFSET_LOOP_START(_total) \
-    const unsigned _tot = (_total);\
-    unsigned _x_count = _tot;\
-    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, _tot);\
-    while (_x_count--) {\
-
-#define OFFSET_LOOP_END \
-        if (++i == _tot)\
-            i = 0;\
-    }
-
 F_NONNULL
 static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_a_t* rrset, const unsigned nameptr, const bool is_addtl)
 {
@@ -919,15 +889,20 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
 
     uint8_t* packet = ctx->txn.packet;
 
-    if (is_addtl)
-        ctx->txn.arcount += rrset->gen.count;
-    else
-        ctx->txn.ancount += rrset->gen.count;
+    const unsigned total = rrset->gen.count;
+    gdnsd_assert(total);
 
-    const uint32_t* addr_ptr = (rrset->gen.count <= LTREE_V4A_SIZE)
+    if (is_addtl)
+        ctx->txn.arcount += total;
+    else
+        ctx->txn.ancount += total;
+
+    const uint32_t* addr_ptr = (total <= LTREE_V4A_SIZE)
                                ? &rrset->v4a[0]
                                : rrset->addrs;
-    OFFSET_LOOP_START(rrset->gen.count) {
+    unsigned ct = total;
+    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
+    while (ct--) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
@@ -937,8 +912,9 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
         offset += 2;
         gdnsd_put_una32(addr_ptr[i], &packet[offset]);
         offset += 4;
+        if (++i == total)
+            i = 0;
     }
-    OFFSET_LOOP_END
     return offset;
 }
 
@@ -949,12 +925,17 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
 
     uint8_t* packet = ctx->txn.packet;
 
-    if (is_addtl)
-        ctx->txn.arcount += rrset->gen.count;
-    else
-        ctx->txn.ancount += rrset->gen.count;
+    const unsigned total = rrset->gen.count;
+    gdnsd_assert(total);
 
-    OFFSET_LOOP_START(rrset->gen.count) {
+    if (is_addtl)
+        ctx->txn.arcount += total;
+    else
+        ctx->txn.ancount += total;
+
+    unsigned ct = total;
+    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
+    while (ct--) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -964,8 +945,9 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
         offset += 2;
         memcpy(&packet[offset], rrset->addrs + (i << 4), 16);
         offset += 16;
+        if (++i == total)
+            i = 0;
     }
-    OFFSET_LOOP_END
     return offset;
 }
 
@@ -977,11 +959,15 @@ static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigned n
     uint8_t* packet = ctx->txn.packet;
     const dyn_result_t* dr = ctx->dyn;
     gdnsd_assert(!dr->is_cname);
-    gdnsd_assert(dr->count_v4);
 
-    ctx->txn.ancount += dr->count_v4;
+    const unsigned total = dr->count_v4;
+    gdnsd_assert(total);
 
-    OFFSET_LOOP_START(dr->count_v4) {
+    ctx->txn.ancount += total;
+
+    unsigned ct = total;
+    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
+    while (ct--) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
@@ -991,8 +977,9 @@ static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigned n
         offset += 2;
         gdnsd_put_una32(dr->v4[i], &packet[offset]);
         offset += 4;
+        if (++i == total)
+            i = 0;
     }
-    OFFSET_LOOP_END
     return offset;
 }
 
@@ -1004,12 +991,16 @@ static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigne
     uint8_t* packet = ctx->txn.packet;
     const dyn_result_t* dr = ctx->dyn;
     gdnsd_assert(!dr->is_cname);
-    gdnsd_assert(dr->count_v6);
 
-    ctx->txn.ancount += dr->count_v6;
+    const unsigned total = dr->count_v6;
+    gdnsd_assert(total);
+
+    ctx->txn.ancount += total;
 
     const uint8_t* v6 = &dr->storage[result_v6_offset];
-    OFFSET_LOOP_START(dr->count_v6) {
+    unsigned ct = total;
+    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
+    while (ct--) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -1019,8 +1010,9 @@ static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigne
         offset += 2;
         memcpy(&packet[offset], &v6[i << 4], 16);
         offset += 16;
+        if (++i == total)
+            i = 0;
     }
-    OFFSET_LOOP_END
     return offset;
 }
 
@@ -1687,122 +1679,152 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
 }
 
 F_NONNULL
+static ltree_dname_status_t db_lookup(dnsp_ctx_t* ctx, const uint8_t* qname, const ltree_node_t** resdom_p, const ltree_node_t** resauth_p, const ltree_rrset_t** res_rrsets_p, unsigned* offset_p, bool* via_cname_p)
+{
+    unsigned auth_depth = 0;
+    zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
+    if (!query_zone)
+        return DNAME_NOAUTH;
+
+    // an early output assignment
+    *resauth_p = query_zone->root;
+    // All of these end up as outputs at the bottom as well
+    const ltree_node_t* resdom = NULL;
+    const ltree_rrset_t* res_rrsets = NULL;
+    unsigned offset = *offset_p;
+    bool via_cname = false;
+
+    bool iterating_for_cname = false;
+    ltree_dname_status_t status;
+    do {
+        status = search_zone_for_dname(qname, query_zone, &resdom, &auth_depth);
+        gdnsd_assert(status == DNAME_AUTH || status == DNAME_DELEG);
+
+        res_rrsets = resdom ? resdom->rrsets : NULL;
+        if (res_rrsets && res_rrsets->gen.type == DNS_TYPE_DYNC)
+            res_rrsets = process_dync(ctx, &res_rrsets->dync, ctx->txn.qtype);
+
+        // In the initial search, it's known that "qname" is in fact the real query name and therefore
+        //  uncompressed, which is what makes the simplistic ctx->txn.auth_comp calculation possible.
+        if (!iterating_for_cname)
+            ctx->txn.auth_comp = ctx->txn.qname_comp + auth_depth;
+        else
+            ctx->txn.auth_comp = chase_auth_ptr(ctx->txn.packet, ctx->txn.qname_comp, auth_depth);
+
+        iterating_for_cname = false;
+
+        // If we have a CNAME without qtype=CNAME|ANY, we have to do recursive processing...
+        if (res_rrsets && res_rrsets->gen.type == DNS_TYPE_CNAME
+                && ctx->txn.qtype != DNS_TYPE_CNAME && ctx->txn.qtype != DNS_TYPE_ANY) {
+
+            gdnsd_assert(!res_rrsets->gen.next); // CNAME does not co-exist with other rrsets
+            gdnsd_assert(status == DNAME_AUTH); // no CNAME inside deleg
+
+            wire_dns_header_t* res_hdr = (wire_dns_header_t*)ctx->txn.packet;
+            res_hdr->flags1 |= 4; // pre-set AA bit, in case we go out of auth space later
+            via_cname = true; // avoid REFUSED if we go out of zone in the target
+
+            const ltree_rrset_cname_t* cname = &res_rrsets->cname;
+            offset = encode_rr_cname_chain(ctx, offset, cname);
+            if (dname_isinzone(query_zone->dname, cname->dname)) {
+                // If the target is in-zone, we recurse through it,
+                // resetting various things that affect the behaviors from
+                // search_zone_for_dname() onwards
+                qname = cname->dname;
+                int len_diff = *qname - *query_zone->dname;
+                gdnsd_assert(len_diff >= 0);
+                auth_depth = (unsigned)len_diff;
+                iterating_for_cname = true;
+            } else {
+                status = DNAME_NOAUTH;
+            }
+        } // CNAME-handling block
+    } while (iterating_for_cname);
+
+    // These are all outputs of this function.  It might pay to create a new
+    // compound type representing the results of a lookup?
+    *resdom_p = resdom;
+    *res_rrsets_p = res_rrsets;
+    *offset_p = offset;
+    *via_cname_p = via_cname;
+
+    return status;
+}
+
+F_NONNULLX(1, 2, 3)
+static unsigned do_auth_response(dnsp_ctx_t* ctx, const uint8_t* qname, const ltree_node_t* resauth, const ltree_node_t* resdom, const ltree_rrset_t* res_rrsets, unsigned offset)
+{
+    wire_dns_header_t* res_hdr = (wire_dns_header_t*)ctx->txn.packet;
+    res_hdr->flags1 |= 4; // AA bit
+
+    bool chal_matched = false;
+
+    if (likely(res_rrsets)) {
+        // ANY queries against CNAME data should be treated like explicit CNAME queries:
+        if (unlikely(ctx->txn.qtype == DNS_TYPE_ANY && res_rrsets->gen.type == DNS_TYPE_CNAME))
+            ctx->txn.qtype = DNS_TYPE_CNAME;
+        if (likely(ctx->txn.qtype != DNS_TYPE_ANY))
+            offset = construct_normal_response(ctx, offset, res_rrsets);
+    }
+
+    if (ctx->txn.qtype == DNS_TYPE_TXT || !ctx->txn.ancount)
+        chal_matched = chal_respond(ctx->txn.qname_comp, ctx->txn.qtype, qname, ctx->txn.packet, &ctx->txn.ancount, &offset, ctx->txn.this_max_response);
+
+    if (unlikely(ctx->txn.qtype == DNS_TYPE_ANY)) {
+        // construct_normal_response is not called for ANY, and
+        // chal_respond does not inject an RR for ANY, so there should
+        // still be zero answers here:
+        gdnsd_assert(!ctx->txn.ancount);
+        // ANY->CNAME was already handled above construct_normal_response by changing ctx->txn.qtype
+        gdnsd_assert(!res_rrsets || res_rrsets->gen.type != DNS_TYPE_CNAME);
+
+        // The conditional here basically means "if this wouldn't be an NXDOMAIN below"
+        if (resdom || chal_matched) {
+            ctx->txn.ancount = 1;
+            offset += repeat_name(ctx->txn.packet, offset, ctx->txn.qname_comp);
+            memcpy(&ctx->txn.packet[offset], hinfo_for_any, hinfo_for_any_len);
+            offset += hinfo_for_any_len;
+        }
+    }
+
+    if (!ctx->txn.ancount) {
+        offset = encode_rr_soa(ctx, offset, ltree_node_get_rrset_soa(resauth));
+        // Transfer the singleton SOA's count from answer to auth section.
+        gdnsd_assert(ctx->txn.ancount == 1 && !ctx->txn.nscount);
+        ctx->txn.nscount = 1;
+        ctx->txn.ancount = 0;
+        if (!resdom && !chal_matched) {
+            res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
+            stats_own_inc(&ctx->stats->nxdomain);
+        }
+    }
+
+    return offset;
+}
+
+F_NONNULL
 static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
 {
     gdnsd_assert(offset);
     gdnsd_assert(ctx->stats);
+    wire_dns_header_t* res_hdr = (wire_dns_header_t*)ctx->txn.packet;
 
     // Initial qname_comp set to original query
     ctx->txn.qname_comp = sizeof(wire_dns_header_t);
+    const uint8_t* qname = ctx->txn.lqname;
 
+    // These are all outputs (via pointer args) of db_lookup(), as is our own "offset" argument
     bool via_cname = false;
     const ltree_node_t* resdom = NULL;
     const ltree_node_t* resauth = NULL;
     const ltree_rrset_t* res_rrsets = NULL;
-    wire_dns_header_t* res_hdr = (wire_dns_header_t*)ctx->txn.packet;
-
-    ltree_dname_status_t status = DNAME_NOAUTH;
-    unsigned auth_depth = 0;
-
-    const uint8_t* qname = ctx->txn.lqname;
 
     rcu_read_lock();
 
-    zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
-
-    if (query_zone) { // matches auth space somewhere
-        resauth = query_zone->root;
-        bool iterating_for_cname = false;
-        do {
-            status = search_zone_for_dname(qname, query_zone, &resdom, &auth_depth);
-            gdnsd_assert(status == DNAME_AUTH || status == DNAME_DELEG);
-
-            res_rrsets = resdom ? resdom->rrsets : NULL;
-            if (res_rrsets && res_rrsets->gen.type == DNS_TYPE_DYNC)
-                res_rrsets = process_dync(ctx, &res_rrsets->dync, ctx->txn.qtype);
-
-            // In the initial search, it's known that "qname" is in fact the real query name and therefore
-            //  uncompressed, which is what makes the simplistic ctx->txn.auth_comp calculation possible.
-            if (!iterating_for_cname)
-                ctx->txn.auth_comp = ctx->txn.qname_comp + auth_depth;
-            else
-                ctx->txn.auth_comp = chase_auth_ptr(ctx->txn.packet, ctx->txn.qname_comp, auth_depth);
-
-            iterating_for_cname = false;
-
-            // If we have a CNAME without qtype=CNAME|ANY, we have to do recursive processing...
-            if (res_rrsets && res_rrsets->gen.type == DNS_TYPE_CNAME
-                    && ctx->txn.qtype != DNS_TYPE_CNAME && ctx->txn.qtype != DNS_TYPE_ANY) {
-
-                gdnsd_assert(!res_rrsets->gen.next); // CNAME does not co-exist with other rrsets
-                gdnsd_assert(status == DNAME_AUTH); // no CNAME inside deleg
-
-                res_hdr->flags1 |= 4; // pre-set AA bit, in case we go out of auth space later
-                via_cname = true; // avoid REFUSED if we go out of zone in the target
-
-                const ltree_rrset_cname_t* cname = &res_rrsets->cname;
-                offset = encode_rr_cname_chain(ctx, offset, cname);
-                if (dname_isinzone(query_zone->dname, cname->dname)) {
-                    // If the target is in-zone, we recurse through it,
-                    // resetting various things that affect the behaviors from
-                    // search_zone_for_dname() onwards
-                    qname = cname->dname;
-                    int len_diff = *qname - *query_zone->dname;
-                    gdnsd_assert(len_diff >= 0);
-                    auth_depth = (unsigned)len_diff;
-                    iterating_for_cname = true;
-                } else {
-                    status = DNAME_NOAUTH;
-                }
-            } // CNAME-handling block
-        } while (iterating_for_cname);
-    } // if query_zone block
-
+    ltree_dname_status_t status = db_lookup(ctx, qname, &resdom, &resauth, &res_rrsets, &offset, &via_cname);
     if (status == DNAME_AUTH) {
         gdnsd_assert(resauth);
-        res_hdr->flags1 |= 4; // AA bit
-
-        bool chal_matched = false;
-
-        if (likely(res_rrsets)) {
-            // ANY queries against CNAME data should be treated like explicit CNAME queries:
-            if (unlikely(ctx->txn.qtype == DNS_TYPE_ANY && res_rrsets->gen.type == DNS_TYPE_CNAME))
-                ctx->txn.qtype = DNS_TYPE_CNAME;
-            if (likely(ctx->txn.qtype != DNS_TYPE_ANY))
-                offset = construct_normal_response(ctx, offset, res_rrsets);
-        }
-
-        if (ctx->txn.qtype == DNS_TYPE_TXT || !ctx->txn.ancount)
-            chal_matched = chal_respond(ctx->txn.qname_comp, ctx->txn.qtype, qname, ctx->txn.packet, &ctx->txn.ancount, &offset, ctx->txn.this_max_response);
-
-        if (unlikely(ctx->txn.qtype == DNS_TYPE_ANY)) {
-            // construct_normal_response is not called for ANY, and
-            // chal_respond does not inject an RR for ANY, so there should
-            // still be zero answers here:
-            gdnsd_assert(!ctx->txn.ancount);
-            // ANY->CNAME was already handled above construct_normal_response by changing ctx->txn.qtype
-            gdnsd_assert(!res_rrsets || res_rrsets->gen.type != DNS_TYPE_CNAME);
-
-            // The conditional here basically means "if this wouldn't be an NXDOMAIN below"
-            if (resdom || chal_matched) {
-                ctx->txn.ancount = 1;
-                offset += repeat_name(ctx->txn.packet, offset, ctx->txn.qname_comp);
-                memcpy(&ctx->txn.packet[offset], hinfo_for_any, hinfo_for_any_len);
-                offset += hinfo_for_any_len;
-            }
-        }
-
-        if (!ctx->txn.ancount) {
-            offset = encode_rr_soa(ctx, offset, ltree_node_get_rrset_soa(resauth));
-            // Transfer the singleton SOA's count from answer to auth section.
-            gdnsd_assert(ctx->txn.ancount == 1 && !ctx->txn.nscount);
-            ctx->txn.nscount = 1;
-            ctx->txn.ancount = 0;
-            if (!resdom && !chal_matched) {
-                res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
-                stats_own_inc(&ctx->stats->nxdomain);
-            }
-        }
+        offset = do_auth_response(ctx, qname, resauth, resdom, res_rrsets, offset);
     } else if (status == DNAME_DELEG) {
         gdnsd_assert(resdom);
         const ltree_rrset_ns_t* ns = ltree_node_get_rrset_ns(resdom);
@@ -1854,6 +1876,136 @@ static unsigned answer_from_db_outer(dnsp_ctx_t* ctx, unsigned offset)
     }
 
     return offset;
+}
+
+F_NONNULL
+static unsigned do_edns_output(dnsp_ctx_t* ctx, uint8_t* packet, unsigned res_offset, const rcode_rv_t status)
+{
+    uint32_t extflags = (status == DECODE_BADVERS) ? 0x01000000 : 0;
+    if (ctx->txn.edns.do_bit)
+        extflags |= 0x8000;
+
+    packet[res_offset++] = '\0'; // domainname part of OPT
+    gdnsd_put_una16(htons(DNS_TYPE_OPT), &packet[res_offset]);
+    res_offset += 2;
+    gdnsd_put_una16(htons(DNS_EDNS_SIZE), &packet[res_offset]);
+    res_offset += 2;
+    gdnsd_put_una32(htonl(extflags), &packet[res_offset]);
+    res_offset += 4;
+    uint8_t* rdlen_ptr = &packet[res_offset]; // filled in at end, after we know
+    res_offset += 2;
+
+    // code below which tacks on options should increment this for the overall rdlen of the OPT RR
+    unsigned rdlen = 0;
+
+    if (ctx->txn.edns.respond_client_subnet) {
+        const unsigned src_mask = ctx->txn.edns.client_info.edns_client_mask;
+        const unsigned scope_mask = src_mask ? ctx->txn.edns.client_scope_mask : 0;
+        const unsigned addr_bytes = (src_mask >> 3) + ((src_mask & 7) ? 1 : 0);
+        rdlen += (8 + addr_bytes);
+        gdnsd_put_una16(htons(EDNS_CLIENTSUB_OPTCODE), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(4 + addr_bytes), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(ctx->txn.edns.client_family), &packet[res_offset]);
+        res_offset += 2;
+        packet[res_offset++] = src_mask;
+        packet[res_offset++] = scope_mask;
+        if (src_mask) {
+            gdnsd_assert(addr_bytes);
+            if (ctx->txn.edns.client_family == 1U) { // IPv4
+                memcpy(&packet[res_offset], &ctx->txn.edns.client_info.edns_client.sin4.sin_addr.s_addr, addr_bytes);
+            } else {
+                gdnsd_assert(ctx->txn.edns.client_family == 2U); // IPv6
+                memcpy(&packet[res_offset], ctx->txn.edns.client_info.edns_client.sin6.sin6_addr.s6_addr, addr_bytes);
+            }
+            res_offset += addr_bytes;
+        }
+    }
+
+    // EDNS Cookie output
+    if (ctx->txn.edns.cookie.respond) {
+        gdnsd_assert(ctx->txn.edns.cookie.recvd);
+        rdlen += 20U;
+        gdnsd_put_una16(htons(EDNS_COOKIE_OPTCODE), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(16), &packet[res_offset]);
+        res_offset += 2;
+        memcpy(&packet[res_offset], ctx->txn.edns.cookie.output, 16U);
+        res_offset += 16U;
+    }
+
+    // TCP keepalive is emitted with every response to an EDNS query over
+    // TCP if DSO isn't established, using either the fixed timeout set
+    // from config at startup, or zero if we're in shutdown_grace mode and
+    // trying to get clients to disconnect.
+    if (!ctx->is_udp && !ctx->txn.dso->estab) {
+        rdlen += 6U;
+        gdnsd_put_una16(htons(EDNS_TCP_KEEPALIVE_OPTCODE), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(2), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(ctx->edns_tcp_keepalive), &packet[res_offset]);
+        res_offset += 2;
+    }
+
+    // NSID, if configured by user
+    if (ctx->txn.edns.respond_nsid) {
+        gdnsd_assert(gcfg->nsid);
+        gdnsd_assert(gcfg->nsid_len);
+        rdlen += (4U + gcfg->nsid_len);
+        gdnsd_put_una16(htons(EDNS_NSID_OPTCODE), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(gcfg->nsid_len), &packet[res_offset]);
+        res_offset += 2;
+        memcpy(&packet[res_offset], gcfg->nsid, gcfg->nsid_len);
+        res_offset += gcfg->nsid_len;
+    }
+
+    // predicted edns.out_bytes correctly earlier for truncation.  note
+    // this happens before padding below.
+    gdnsd_assert(ctx->txn.edns.out_bytes == (11U + rdlen));
+
+    // Padding, must be the last option, as it must make calculations based
+    // on the total size of the packet including any updates to
+    // "res_offset" from earlier options
+    if (ctx->tcp_pad) {
+        gdnsd_assert(!ctx->is_udp);
+        // RFC 8467 recommends block padding to 468, which we'll stick with
+        // here even though MTU-size concerns don't really matter as much
+        // for now, as we only support the TCP case.  The minimum size
+        // added to a packet by the Padding option itself is 4 bytes (for
+        // option code and option len of zero), plus however many bytes of
+        // actual padding length is tacked on).  Note MAX_RESPONSE_DATA
+        // allows us to always add the option and always obtain perfect
+        // padding within MAX_RESPONSE_BUF at a block size of 468 as
+        // documented in dnswire.h.
+        gdnsd_assert(res_offset <= MAX_RESPONSE_DATA);
+        size_t pad_dlen = (((res_offset + 4U + PAD_BLOCK_SIZE - 1U) / PAD_BLOCK_SIZE) * PAD_BLOCK_SIZE) - 4U - res_offset;
+        gdnsd_assert(res_offset + 4U + pad_dlen <= MAX_RESPONSE_BUF);
+
+        rdlen += (4U + pad_dlen);
+        gdnsd_put_una16(htons(EDNS_PADDING), &packet[res_offset]);
+        res_offset += 2;
+        gdnsd_put_una16(htons(pad_dlen), &packet[res_offset]);
+        res_offset += 2;
+        memset(&packet[res_offset], 0, pad_dlen);
+        res_offset += pad_dlen;
+
+        gdnsd_assert(res_offset <= MAX_RESPONSE_BUF);
+        gdnsd_assert((res_offset % PAD_BLOCK_SIZE) == 0);
+    }
+
+    // Update OPT RR's rdlen for any options emitted above, and bump arcount for it
+    gdnsd_put_una16(htons(rdlen), rdlen_ptr);
+    ctx->txn.arcount++;
+
+    // We only do one kind of truncation: complete truncation.
+    //  therefore if we're returning a >512 packet, it wasn't truncated
+    if (ctx->is_udp && res_offset > 512U)
+        stats_own_inc(&ctx->stats->udp.edns_big);
+
+    return res_offset;
 }
 
 unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* packet, dso_state_t* dso, const unsigned packet_len)
@@ -1929,131 +2081,8 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* p
         }
     }
 
-    if (ctx->txn.edns.req_edns) {
-        uint32_t extflags = (status == DECODE_BADVERS) ? 0x01000000 : 0;
-        if (ctx->txn.edns.do_bit)
-            extflags |= 0x8000;
-
-        packet[res_offset++] = '\0'; // domainname part of OPT
-        gdnsd_put_una16(htons(DNS_TYPE_OPT), &packet[res_offset]);
-        res_offset += 2;
-        gdnsd_put_una16(htons(DNS_EDNS_SIZE), &packet[res_offset]);
-        res_offset += 2;
-        gdnsd_put_una32(htonl(extflags), &packet[res_offset]);
-        res_offset += 4;
-        uint8_t* rdlen_ptr = &packet[res_offset]; // filled in at end, after we know
-        res_offset += 2;
-
-        // code below which tacks on options should increment this for the overall rdlen of the OPT RR
-        unsigned rdlen = 0;
-
-        if (ctx->txn.edns.respond_client_subnet) {
-            const unsigned src_mask = ctx->txn.edns.client_info.edns_client_mask;
-            const unsigned scope_mask = src_mask ? ctx->txn.edns.client_scope_mask : 0;
-            const unsigned addr_bytes = (src_mask >> 3) + ((src_mask & 7) ? 1 : 0);
-            rdlen += (8 + addr_bytes);
-            gdnsd_put_una16(htons(EDNS_CLIENTSUB_OPTCODE), &packet[res_offset]);
-            res_offset += 2;
-            gdnsd_put_una16(htons(4 + addr_bytes), &packet[res_offset]);
-            res_offset += 2;
-            gdnsd_put_una16(htons(ctx->txn.edns.client_family), &packet[res_offset]);
-            res_offset += 2;
-            packet[res_offset++] = src_mask;
-            packet[res_offset++] = scope_mask;
-            if (src_mask) {
-                gdnsd_assert(addr_bytes);
-                if (ctx->txn.edns.client_family == 1U) { // IPv4
-                    memcpy(&packet[res_offset], &ctx->txn.edns.client_info.edns_client.sin4.sin_addr.s_addr, addr_bytes);
-                } else {
-                    gdnsd_assert(ctx->txn.edns.client_family == 2U); // IPv6
-                    memcpy(&packet[res_offset], ctx->txn.edns.client_info.edns_client.sin6.sin6_addr.s6_addr, addr_bytes);
-                }
-                res_offset += addr_bytes;
-            }
-        }
-
-        // EDNS Cookie output
-        if (ctx->txn.edns.cookie.respond) {
-            gdnsd_assert(ctx->txn.edns.cookie.recvd);
-            rdlen += 20U;
-            gdnsd_put_una16(htons(EDNS_COOKIE_OPTCODE), &packet[res_offset]);
-            res_offset += 2;
-            gdnsd_put_una16(htons(16), &packet[res_offset]);
-            res_offset += 2;
-            memcpy(&packet[res_offset], ctx->txn.edns.cookie.output, 16U);
-            res_offset += 16U;
-        }
-
-        // TCP keepalive is emitted with every response to an EDNS query over
-        // TCP if DSO isn't established, using either the fixed timeout set
-        // from config at startup, or zero if we're in shutdown_grace mode and
-        // trying to get clients to disconnect.
-        if (!ctx->is_udp && !ctx->txn.dso->estab) {
-            rdlen += 6U;
-            gdnsd_put_una16(htons(EDNS_TCP_KEEPALIVE_OPTCODE), &packet[res_offset]);
-            res_offset += 2;
-            gdnsd_put_una16(htons(2), &packet[res_offset]);
-            res_offset += 2;
-            gdnsd_put_una16(htons(ctx->edns_tcp_keepalive), &packet[res_offset]);
-            res_offset += 2;
-        }
-
-        // NSID, if configured by user
-        if (ctx->txn.edns.respond_nsid) {
-            gdnsd_assert(gcfg->nsid);
-            gdnsd_assert(gcfg->nsid_len);
-            rdlen += (4U + gcfg->nsid_len);
-            gdnsd_put_una16(htons(EDNS_NSID_OPTCODE), &packet[res_offset]);
-            res_offset += 2;
-            gdnsd_put_una16(htons(gcfg->nsid_len), &packet[res_offset]);
-            res_offset += 2;
-            memcpy(&packet[res_offset], gcfg->nsid, gcfg->nsid_len);
-            res_offset += gcfg->nsid_len;
-        }
-
-        // predicted edns.out_bytes correctly earlier for truncation.  note
-        // this happens before padding below.
-        gdnsd_assert(ctx->txn.edns.out_bytes == (11U + rdlen));
-
-        // Padding, must be the last option, as it must make calculations based
-        // on the total size of the packet including any updates to
-        // "res_offset" from earlier options
-        if (ctx->tcp_pad) {
-            gdnsd_assert(!ctx->is_udp);
-            // RFC 8467 recommends block padding to 468, which we'll stick with
-            // here even though MTU-size concerns don't really matter as much
-            // for now, as we only support the TCP case.  The minimum size
-            // added to a packet by the Padding option itself is 4 bytes (for
-            // option code and option len of zero), plus however many bytes of
-            // actual padding length is tacked on).  Note MAX_RESPONSE_DATA
-            // allows us to always add the option and always obtain perfect
-            // padding within MAX_RESPONSE_BUF at a block size of 468 as
-            // documented in dnswire.h.
-            gdnsd_assert(res_offset <= MAX_RESPONSE_DATA);
-            size_t pad_dlen = (((res_offset + 4U + PAD_BLOCK_SIZE - 1U) / PAD_BLOCK_SIZE) * PAD_BLOCK_SIZE) - 4U - res_offset;
-            gdnsd_assert(res_offset + 4U + pad_dlen <= MAX_RESPONSE_BUF);
-
-            rdlen += (4U + pad_dlen);
-            gdnsd_put_una16(htons(EDNS_PADDING), &packet[res_offset]);
-            res_offset += 2;
-            gdnsd_put_una16(htons(pad_dlen), &packet[res_offset]);
-            res_offset += 2;
-            memset(&packet[res_offset], 0, pad_dlen);
-            res_offset += pad_dlen;
-
-            gdnsd_assert(res_offset <= MAX_RESPONSE_BUF);
-            gdnsd_assert((res_offset % PAD_BLOCK_SIZE) == 0);
-        }
-
-        // Update OPT RR's rdlen for any options emitted above, and bump arcount for it
-        gdnsd_put_una16(htons(rdlen), rdlen_ptr);
-        ctx->txn.arcount++;
-
-        // We only do one kind of truncation: complete truncation.
-        //  therefore if we're returning a >512 packet, it wasn't truncated
-        if (ctx->is_udp && res_offset > 512U)
-            stats_own_inc(&ctx->stats->udp.edns_big);
-    }
+    if (ctx->txn.edns.req_edns)
+        res_offset = do_edns_output(ctx, packet, res_offset, status);
 
     gdnsd_put_una16(htons(ctx->txn.qdcount), &hdr->qdcount);
     gdnsd_put_una16(htons(ctx->txn.ancount + ctx->txn.cname_ancount), &hdr->ancount);

@@ -126,85 +126,98 @@ bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t
 }
 
 F_NONNULL
-bool csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds)
+static size_t get_control_fds(struct msghdr* msg, int* fds, const size_t fds_recvd, const size_t fds_wanted)
+{
+    if (!msg->msg_controllen)
+        return 0;
+
+    for (struct cmsghdr* cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR(msg, cmsg)) {
+        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+            const size_t dlen = cmsg->cmsg_len - CMSG_LEN(0);
+            const size_t nfds = dlen / sizeof(int);
+            if (dlen % sizeof(int) || nfds + fds_recvd > fds_wanted) {
+                log_err("REPLACE[new daemon]: Received bad SCM_RIGHTS byte count or more than expected!");
+                return 0;
+            }
+            memcpy(&fds[fds_recvd], CMSG_DATA(cmsg), dlen);
+            return nfds;
+        }
+    }
+
+    return 0;
+}
+
+F_NONNULL
+size_t csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds)
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8) {
         log_err("8-byte send() failed with retval %zi: %s", pktlen, logf_errno());
-        return true;
+        return 0;
     }
-
-    union {
-        struct cmsghdr c;
-        char cmsg_buf[CMSG_SPACE(sizeof(int) * SCM_MAX_FDS)];
-    } u;
-    struct iovec iov = { .iov_base = resp->raw, .iov_len  = 8 };
-    struct msghdr msg;
-    memset(&msg, 0, sizeof(msg));
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
 
     size_t fds_wanted = 0; // don't know till first recvmsg
     size_t fds_recvd = 0;
     int* fds = NULL;
 
     do {
+        union {
+            struct cmsghdr c;
+            char cmsg_buf[CMSG_SPACE(sizeof(int) * SCM_MAX_FDS)];
+        } u;
+        struct iovec iov = { .iov_base = resp->raw, .iov_len  = 8 };
+        struct msghdr msg;
+        memset(&msg, 0, sizeof(msg));
+        msg.msg_iov = &iov;
+        msg.msg_iovlen = 1;
         memset(u.cmsg_buf, 0, sizeof(u.cmsg_buf));
         msg.msg_control = u.cmsg_buf;
         msg.msg_controllen = sizeof(u.cmsg_buf);
 
         pktlen = recvmsg(csc->fd, &msg, MSG_CMSG_CLOEXEC);
-        if (pktlen != 8 || msg.msg_flags & MSG_CTRUNC) {
-            if (pktlen != 8)
-                log_err("8-byte recvmsg() failed with retval %zi: %s", pktlen, logf_errno());
-            if (msg.msg_flags & MSG_CTRUNC)
-                log_err("recvmsg(): ancillary data for socket handoff was truncated (open files ulimit too small?)");
-            if (fds)
-                free(fds);
-            return true;
+        if (pktlen != 8) {
+            log_err("8-byte recvmsg() failed with retval %zi: %s", pktlen, logf_errno());
+            free(fds);
+            return 0;
+        }
+        if (msg.msg_flags & MSG_CTRUNC) {
+            log_err("recvmsg(): ancillary data for socket handoff was truncated (open files ulimit too small?)");
+            free(fds);
+            return 0;
         }
 
         if (!fds) {
-            // first time through loop
-            if (resp->key != RESP_ACK)
-                return true;
+            // first time through loop, get ACK + total fd count, which must be
+            // 3+ because there's always 2 for control sock+lock plus at least
+            // one dns listener.
             fds_wanted = csbuf_get_v(resp);
-            gdnsd_assert(fds_wanted > 2);
+            if (resp->key != RESP_ACK || fds_wanted < 3) {
+                log_err("REPLACE[new daemon]: takeover protocol error during socket handoff (first msg)");
+                return 0;
+            }
             fds = xmalloc_n(fds_wanted, sizeof(*fds));
         } else {
-            // all later iterations of the loop
-            gdnsd_assert(RESP_ACK == resp->key);
-            gdnsd_assert(fds_wanted == csbuf_get_v(resp));
-        }
-
-        bool got_some_fds = false;
-
-        if (msg.msg_controllen) {
-            for (struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-                if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
-                    const size_t dlen = cmsg->cmsg_len - CMSG_LEN(0);
-                    gdnsd_assert((dlen % sizeof(int)) == 0);
-                    const size_t nfds = dlen / sizeof(int);
-                    if (nfds + fds_recvd <= fds_wanted) {
-                        memcpy(&fds[fds_recvd], CMSG_DATA(cmsg), dlen);
-                        fds_recvd += nfds;
-                        got_some_fds = true;
-                    } else {
-                        log_err("REPLACE[new daemon]: Received more SCM_RIGHTS fds than expected!");
-                    }
-                }
+            // followup messages carry same ACK + total fd count as initial msg
+            gdnsd_assert(fds);
+            gdnsd_assert(fds_wanted > 2);
+            if (RESP_ACK != resp->key || fds_wanted != csbuf_get_v(resp)) {
+                free(fds);
+                log_err("REPLACE[new daemon]: takeover protocol error during socket handoff (followup msg)");
+                return 0;
             }
         }
 
-        if (!got_some_fds) {
+        const size_t nfds = get_control_fds(&msg, fds, fds_recvd, fds_wanted);
+        if (!nfds) {
             log_err("REPLACE[new daemon]: recvmsg() failed to get SCM_RIGHTS fds after %zu of %zu expected", fds_recvd, fds_wanted);
             free(fds);
-            return true;
+            return 0;
         }
+        fds_recvd += nfds;
     } while (fds_recvd < fds_wanted);
 
     *resp_fds = fds;
-    return false;
+    return fds_recvd;
 }
 
 csc_txn_rv_t csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp)

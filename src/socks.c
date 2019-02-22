@@ -138,6 +138,45 @@ static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs)
     make_addr("::", addr_defs->dns_port, &ac_v6->addr);
 }
 
+F_NONNULL
+static void process_listen_hashentry(dns_addr_t* addrconf, const char* lspec, vscf_data_t* addr_opts)
+{
+    if (!vscf_is_hash(addr_opts))
+        log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
+    CFG_OPT_REMOVED(addr_opts, udp_recv_width);
+    CFG_OPT_BOOL_ALTSTORE(addr_opts, tcp_proxy, addrconf->tcp_proxy);
+    CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 5LU, 1800LU, addrconf->tcp_timeout);
+    CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_fastopen, 1048576LU, addrconf->tcp_fastopen);
+    CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 16LU, 65535LU, addrconf->tcp_clients_per_thread);
+    CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_backlog, 65535LU, addrconf->tcp_backlog);
+    CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_threads, 1LU, 1024LU, addrconf->tcp_threads);
+    if (addrconf->tcp_proxy) {
+        addrconf->udp_threads = 0U;
+        addrconf->tcp_pad = true;
+    } else {
+        CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
+        CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
+        CFG_OPT_UINT_ALTSTORE(addr_opts, udp_threads, 1LU, 1024LU, addrconf->udp_threads);
+    }
+    CFG_OPT_BOOL_ALTSTORE(addr_opts, tcp_pad, addrconf->tcp_pad);
+
+    make_addr(lspec, addrconf->dns_port, &addrconf->addr);
+    if (addrconf->tcp_proxy) {
+        unsigned lport;
+        if (addrconf->addr.sa.sa_family == AF_INET) {
+            lport = addrconf->addr.sin4.sin_port;
+        } else {
+            gdnsd_assert(addrconf->addr.sa.sa_family == AF_INET6);
+            lport = addrconf->addr.sin6.sin6_port;
+        }
+        if (lport == 53U)
+            log_fatal("Cannot configure tcp_proxy mode on port 53");
+    }
+    vscf_hash_iterate_const(addr_opts, true, bad_key, addrconf->tcp_proxy
+                            ? "per-address listen option with tcp_proxy"
+                            : "per-address listen option");
+}
+
 F_NONNULLX(1, 3)
 static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
 {
@@ -162,41 +201,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
             const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
             vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
-            if (!vscf_is_hash(addr_opts))
-                log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
-
-            CFG_OPT_REMOVED(addr_opts, udp_recv_width);
-            CFG_OPT_BOOL_ALTSTORE(addr_opts, tcp_proxy, addrconf->tcp_proxy);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_timeout, 5LU, 1800LU, addrconf->tcp_timeout);
-            CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_fastopen, 1048576LU, addrconf->tcp_fastopen);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_clients_per_thread, 16LU, 65535LU, addrconf->tcp_clients_per_thread);
-            CFG_OPT_UINT_ALTSTORE_NOMIN(addr_opts, tcp_backlog, 65535LU, addrconf->tcp_backlog);
-            CFG_OPT_UINT_ALTSTORE(addr_opts, tcp_threads, 1LU, 1024LU, addrconf->tcp_threads);
-            if (addrconf->tcp_proxy) {
-                addrconf->udp_threads = 0U;
-                addrconf->tcp_pad = true;
-            } else {
-                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_rcvbuf, 4096LU, 1048576LU, addrconf->udp_rcvbuf);
-                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_sndbuf, 4096LU, 1048576LU, addrconf->udp_sndbuf);
-                CFG_OPT_UINT_ALTSTORE(addr_opts, udp_threads, 1LU, 1024LU, addrconf->udp_threads);
-            }
-            CFG_OPT_BOOL_ALTSTORE(addr_opts, tcp_pad, addrconf->tcp_pad);
-
-            make_addr(lspec, addrconf->dns_port, &addrconf->addr);
-            if (addrconf->tcp_proxy) {
-                unsigned lport;
-                if (addrconf->addr.sa.sa_family == AF_INET) {
-                    lport = addrconf->addr.sin4.sin_port;
-                } else {
-                    gdnsd_assert(addrconf->addr.sa.sa_family == AF_INET6);
-                    lport = addrconf->addr.sin6.sin6_port;
-                }
-                if (lport == 53U)
-                    log_fatal("Cannot configure tcp_proxy mode on port 53");
-            }
-            vscf_hash_iterate_const(addr_opts, true, bad_key, addrconf->tcp_proxy
-                                    ? "per-address listen option with tcp_proxy"
-                                    : "per-address listen option");
+            process_listen_hashentry(addrconf, lspec, addr_opts);
         }
     } else {
         socks_cfg->num_dns_addrs = vscf_array_get_len(listen_opt);

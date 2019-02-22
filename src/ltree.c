@@ -847,7 +847,22 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
 // compressed LHS name, 2 type, 2 class, 4 ttl, 2 rdlen
 
 F_WUNUSED F_NONNULL
-static size_t p1_rrset_size(ltree_rrset_t* rrset, const bool in_deleg)
+static size_t p1_rrset_size_ns(const ltree_rrset_t* rrset)
+{
+    gdnsd_assert(rrset->gen.type == DNS_TYPE_NS);
+    size_t set_size = 0;
+    for (unsigned i = 0; i < rrset->gen.count; i++) {
+        set_size += (12U + *rrset->ns.rdata[i].dname);
+        if (rrset->ns.rdata[i].glue_v4)
+            set_size += rrset->ns.rdata[i].glue_v4->gen.count * (12U + 4U);
+        if (rrset->ns.rdata[i].glue_v6)
+            set_size += rrset->ns.rdata[i].glue_v6->gen.count * (12U + 16U);
+    }
+    return set_size;
+}
+
+F_WUNUSED F_NONNULL
+static size_t p1_rrset_size(const ltree_rrset_t* rrset, const bool in_deleg)
 {
     size_t set_size = 0;
 
@@ -885,13 +900,7 @@ static size_t p1_rrset_size(ltree_rrset_t* rrset, const bool in_deleg)
         }
         break;
     case DNS_TYPE_NS:
-        for (unsigned i = 0; i < rrset->gen.count; i++) {
-            set_size += (12U + *rrset->ns.rdata[i].dname);
-            if (rrset->ns.rdata[i].glue_v4)
-                set_size += rrset->ns.rdata[i].glue_v4->gen.count * (12U + 4U);
-            if (rrset->ns.rdata[i].glue_v6)
-                set_size += rrset->ns.rdata[i].glue_v6->gen.count * (12U + 16U);
-        }
+        set_size = p1_rrset_size_ns(rrset);
         break;
     case DNS_TYPE_PTR:
         for (unsigned i = 0; i < rrset->gen.count; i++)
@@ -923,10 +932,8 @@ static size_t p1_rrset_size(ltree_rrset_t* rrset, const bool in_deleg)
 }
 
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg)
+static bool p1_check_deleg(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg, const bool at_deleg)
 {
-    const bool at_deleg = (node->flags & LTNFLAG_DELEG);
-
     if (in_deleg) {
         gdnsd_assert(depth > 0);
         if (lstack[depth - 1][0] == 1 && lstack[depth - 1][1] == '*')
@@ -942,6 +949,12 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
         }
     }
 
+    return false;
+}
+
+F_WUNUSED F_NONNULL
+static bool p1_rsize_base(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool at_deleg)
+{
     // First, the fixed portions:
     // sizeof(wire_dns_header_t): basic header bytes before query
     // 4U: the fixed parts of the query (qtype and qclass)
@@ -973,9 +986,13 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
             rsize += (1U + *lstack[depwalk]);
     }
 
-    ltree_rrset_t* rrset = node->rrsets;
+    return rsize;
+}
 
-    // Check for CNAME/DYNC not having other types tacked on after they were added
+F_NONNULL
+static bool p1_check_cname(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth)
+{
+    const ltree_rrset_t* rrset = node->rrsets;
     if (rrset && rrset->gen.next) {
         if (rrset->gen.type == DNS_TYPE_CNAME)
             log_zfatal("Name '%s%s': CNAME not allowed alongside other data",
@@ -984,6 +1001,103 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
             log_zfatal("Name '%s%s': DYNC not allowed alongside other data",
                        logf_lstack(lstack, depth, zone->dname));
     }
+    return false;
+}
+
+F_WUNUSED F_NONNULL
+static bool p1_chase_cname(const ltree_rrset_t** rrset_p, size_t* rsize_rrs_p, size_t* rsize_p, const uint8_t** lstack, const zone_t* zone, const unsigned depth)
+{
+    const ltree_rrset_t* rrset = *rrset_p;
+    gdnsd_assert(rrset);
+    gdnsd_assert(rrset->gen.type == DNS_TYPE_CNAME);
+
+    const ltree_rrset_cname_t* node_cname = &rrset->cname;
+    ltree_node_t* cn_target = NULL;
+    ltree_node_t* deleg_cut = NULL;
+    ltree_dname_status_t cnstat = ltree_search_dname_zone(node_cname->dname, zone, &cn_target, &deleg_cut);
+
+    if (cnstat == DNAME_AUTH) {
+        if (!cn_target) {
+            log_zwarn("CNAME '%s%s' points to known same-zone NXDOMAIN '%s'",
+                      logf_lstack(lstack, depth, zone->dname), logf_dname(node_cname->dname));
+        } else if (!cn_target->rrsets) {
+            log_zwarn("CNAME '%s%s' points to '%s' in the same zone, which has no data",
+                      logf_lstack(lstack, depth, zone->dname), logf_dname(node_cname->dname));
+        }
+    }
+
+    // Add the output size for the initial CNAME
+    *rsize_p += (12U + *node_cname->dname);
+
+    // Chase further local CNAME->CNAME chains, adding sizes for them and checking max depth
+    unsigned cn_depth = 1;
+    while (cn_target && cnstat == DNAME_AUTH && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME) {
+        if (++cn_depth > MAX_CNAME_DEPTH) {
+            log_zfatal("CNAME '%s%s' leads to a CNAME chain at least %u RRs deep, assuming infinity or insanity and failing",
+                       logf_lstack(lstack, depth, zone->dname), MAX_CNAME_DEPTH);
+            break;
+        }
+        node_cname = &cn_target->rrsets->cname;
+        *rsize_p += (12U + *node_cname->dname);
+        cnstat = ltree_search_dname_zone(node_cname->dname, zone, &cn_target, &deleg_cut);
+    }
+
+    rrset = NULL; // we've processed the CNAME (+any chained ones), don't process it below
+
+    if (cnstat == DNAME_AUTH) {
+        // If the end of the CNAME chain pointed in auth space, we'll
+        // need to add on space for the maximum possible rr-set from the
+        // defined ones (with the zone soa as part of the max calc, for
+        // negative responses, which are always possible):
+        if (cn_target && cn_target->rrsets)
+            rrset = cn_target->rrsets;
+        ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(zone->root);
+        gdnsd_assert(soa); // checked in zroot phase1
+        // Put zone-level soa into the max rrset calc:
+        *rsize_rrs_p += (12U + *soa->master + *soa->email + 20U);
+    } else if (cnstat == DNAME_DELEG) {
+        // Size the delegation response below
+        gdnsd_assert(deleg_cut && deleg_cut->rrsets);
+        rrset = deleg_cut->rrsets;
+    }
+
+    *rrset_p = rrset;
+    return false;
+}
+
+F_WUNUSED F_NONNULL
+static bool p1_check_mx_srv(const ltree_rrset_t* rrset, const uint8_t** lstack, const zone_t* zone, const unsigned depth)
+{
+    if (rrset->gen.type == DNS_TYPE_MX)
+        for (unsigned i = 0; i < rrset->gen.count; i++)
+            if (!check_valid_addr(rrset->mx.rdata[i].dname, zone))
+                log_zwarn("In rrset '%s%s MX', same-zone target '%s' has no addresses",
+                          logf_lstack(lstack, depth, zone->dname),
+                          logf_dname(rrset->mx.rdata[i].dname));
+    if (rrset->gen.type == DNS_TYPE_SRV)
+        for (unsigned i = 0; i < rrset->gen.count; i++)
+            if (!check_valid_addr(rrset->srv.rdata[i].dname, zone))
+                log_zwarn("In rrset '%s%s SRV', same-zone target '%s' has no addresses",
+                          logf_lstack(lstack, depth, zone->dname),
+                          logf_dname(rrset->srv.rdata[i].dname));
+
+    return false;
+}
+
+F_WUNUSED F_NONNULL
+static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg)
+{
+    const bool at_deleg = (node->flags & LTNFLAG_DELEG);
+
+    if (p1_check_deleg(lstack, node, zone, depth, in_deleg, at_deleg))
+        return true;
+
+    // Base size for the query itself and applicable EDNS options
+    size_t rsize = p1_rsize_base(lstack, node, zone, depth, at_deleg);
+
+    // Check for CNAME/DYNC not having other types tacked on after they were added
+    if (p1_check_cname(lstack, node, zone, depth))
+        return true;
 
     // Whether the checks at the bottom are via-cname or direct
     bool via_cname = false;
@@ -992,59 +1106,13 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
     // later added to rsize, which tracks amounts that only sum
     size_t rsize_rrs = 0;
 
-    // CNAME handling...
+    const ltree_rrset_t* rrset = node->rrsets;
+
+    // CNAME handling, which can change "rrset" to point at the final destination of an in-zone chain
     if (rrset && rrset->gen.type == DNS_TYPE_CNAME) {
         via_cname = true;
-
-        ltree_rrset_cname_t* node_cname = &rrset->cname;
-        ltree_node_t* cn_target = NULL;
-        ltree_node_t* deleg_cut = NULL;
-        ltree_dname_status_t cnstat = ltree_search_dname_zone(node_cname->dname, zone, &cn_target, &deleg_cut);
-
-        if (cnstat == DNAME_AUTH) {
-            if (!cn_target) {
-                log_zwarn("CNAME '%s%s' points to known same-zone NXDOMAIN '%s'",
-                          logf_lstack(lstack, depth, zone->dname), logf_dname(node_cname->dname));
-            } else if (!cn_target->rrsets) {
-                log_zwarn("CNAME '%s%s' points to '%s' in the same zone, which has no data",
-                          logf_lstack(lstack, depth, zone->dname), logf_dname(node_cname->dname));
-            }
-        }
-
-        // Add the output size for the initial CNAME
-        rsize += (12U + *node_cname->dname);
-
-        // Chase further local CNAME->CNAME chains, adding sizes for them and checking max depth
-        unsigned cn_depth = 1;
-        while (cn_target && cnstat == DNAME_AUTH && cn_target->rrsets && cn_target->rrsets->gen.type == DNS_TYPE_CNAME) {
-            if (++cn_depth > MAX_CNAME_DEPTH) {
-                log_zfatal("CNAME '%s%s' leads to a CNAME chain at least %u RRs deep, assuming infinity or insanity and failing",
-                           logf_lstack(lstack, depth, zone->dname), MAX_CNAME_DEPTH);
-                break;
-            }
-            node_cname = &cn_target->rrsets->cname;
-            rsize += (12U + *node_cname->dname);
-            cnstat = ltree_search_dname_zone(node_cname->dname, zone, &cn_target, &deleg_cut);
-        }
-
-        rrset = NULL; // we've processed the CNAME (+any chained ones), don't process it below
-
-        if (cnstat == DNAME_AUTH) {
-            // If the end of the CNAME chain pointed in auth space, we'll
-            // need to add on space for the maximum possible rr-set from the
-            // defined ones (with the zone soa as part of the max calc, for
-            // negative responses, which are always possible):
-            if (cn_target && cn_target->rrsets)
-                rrset = cn_target->rrsets;
-            ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(zone->root);
-            gdnsd_assert(soa); // checked in zroot phase1
-            // Put zone-level soa into the max rrset calc:
-            rsize_rrs = (12U + *soa->master + *soa->email + 20U);
-        } else if (cnstat == DNAME_DELEG) {
-            // Size the delegation response below
-            gdnsd_assert(deleg_cut && deleg_cut->rrsets);
-            rrset = deleg_cut->rrsets;
-        }
+        if (p1_chase_cname(&rrset, &rsize_rrs, &rsize, lstack, zone, depth))
+            return true;
     }
 
     // Iterate the rrsets of the target node and either max or sum their sizes
@@ -1059,20 +1127,8 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
 
         // Only check MX/SRV targets when !via_cname, so we don't warn about
         // them multiple times each:
-        if (!via_cname) {
-            if (rrset->gen.type == DNS_TYPE_MX)
-                for (unsigned i = 0; i < rrset->gen.count; i++)
-                    if (!check_valid_addr(rrset->mx.rdata[i].dname, zone))
-                        log_zwarn("In rrset '%s%s MX', same-zone target '%s' has no addresses",
-                                  logf_lstack(lstack, depth, zone->dname),
-                                  logf_dname(rrset->mx.rdata[i].dname));
-            if (rrset->gen.type == DNS_TYPE_SRV)
-                for (unsigned i = 0; i < rrset->gen.count; i++)
-                    if (!check_valid_addr(rrset->srv.rdata[i].dname, zone))
-                        log_zwarn("In rrset '%s%s SRV', same-zone target '%s' has no addresses",
-                                  logf_lstack(lstack, depth, zone->dname),
-                                  logf_dname(rrset->srv.rdata[i].dname));
-        }
+        if (!via_cname && p1_check_mx_srv(rrset, lstack, zone, depth))
+            return true;
 
         const size_t set_size = p1_rrset_size(rrset, in_deleg);
         if (set_size > rsize_rrs)

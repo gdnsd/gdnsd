@@ -492,6 +492,179 @@ static void latr_all_reloaders(css_t* css)
 }
 
 F_NONNULL
+static void recv_challenge_data(struct ev_loop* loop, ev_io* w, css_conn_t* c, css_t* css)
+{
+    gdnsd_assert(c->data);
+    gdnsd_assert(c->size);
+    size_t wanted = c->size - c->size_done;
+    gdnsd_assert(wanted > 0);
+
+    ssize_t pktlen = recv(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
+    if (pktlen <= 0) {
+        if (pktlen < 0 && ERRNO_WOULDBLOCK)
+            return;
+        if (pktlen == 0)
+            log_err("control socket client disconnected when we expected %zu more bytes from it", wanted);
+        else
+            log_err("control socket read of %zu data bytes failed with retval %zi, closing: %s", wanted, pktlen, logf_errno());
+        css_conn_cleanup(c);
+        return;
+    }
+
+    c->size_done += (size_t)pktlen;
+
+    if (c->size_done == c->size) {
+        ev_io_stop(loop, w);
+        c->state = WAITING_SERVER;
+
+        char resp_key = RESP_ACK;
+        if (css->replacement_pid) {
+            log_info("Deferring acme-dns-01 request while replace in progress");
+            resp_key = RESP_LATR;
+        } else if (cset_create(loop, 0, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data)) {
+            resp_key = RESP_FAIL;
+        }
+
+        free(c->data);
+        c->data = NULL;
+        c->size = 0;
+        c->size_done = 0;
+        respond(c, resp_key, 0, 0, NULL, false);
+    }
+}
+
+F_NONNULL
+static void handle_req_stop(css_conn_t* c, css_t* css)
+{
+    if (css->replacement_pid) {
+        if (c != css->replace_conn_dmn) {
+            log_info("Deferring stop request while replace in progress");
+            respond(c, RESP_LATR, 0, 0, NULL, false);
+            return;
+        } else {
+            log_info("REPLACE[old daemon]: Exiting cleanly at request of new daemon");
+            // Note from here we won't re-enter the eventloop anyways, so
+            // no further requests can be processed and the replacement_pid
+            // flag isn't very useful anymore.  Explicitly re-setting it to
+            // zero avoids the eventual css_conn_cleanup of this connection
+            // (during css_delete(), or due to some communications failure
+            // with the blocking acks below) trying to kill the new daemon
+            // off because it thinks it's a fail-to-takeover sort of
+            // situation.
+            css->replacement_pid = 0;
+        }
+    } else {
+        log_info("Exiting cleanly due to control socket client request");
+    }
+    // Note this is the point of no return for the old daemon in "replace",
+    // as we'll never re-enter the main thread's runtime eventloop to
+    // process further control socket message (or other events).
+    ev_break(css->loop, EVBREAK_ALL);
+    // ACK to the client that sent REQ_STOP
+    // In non-replace cases (plain stop from e.g. gdnsdctl), set the fd
+    // to -1 here so that we don't close it during css_delete, as the
+    // response above was our last interaction with it.  In replace cases,
+    // there's one more interaction during the final stats handoff, and the
+    // new daemon doesn't wait on our close anyways.
+    if (!respond_blocking_ack(c) && c != css->replace_conn_dmn)
+        c->fd = -1;
+    // If "gdnsdctl replace" is connected and driving the process, finally
+    // give it an ACK response to its REQ_REPL, as we're now past the point
+    // of no return on the replace operation, and also set its fd to -1 to
+    // let it close as the process dies as above.
+    if (css->replace_conn_ctl) {
+        gdnsd_assert(c == css->replace_conn_dmn);
+        if (!respond_blocking_ack(css->replace_conn_ctl))
+            css->replace_conn_ctl->fd = -1;
+    }
+}
+
+F_NONNULL
+static void handle_req_zrel(css_conn_t* c, css_t* css)
+{
+    if (css->replacement_pid) {
+        log_info("Deferring reload-zones request while replace in progress");
+        respond(c, RESP_LATR, 0, 0, NULL, false);
+        return;
+    }
+    conn_queue_add(&css->reload_zones_queued, c);
+    if (!css->reload_zones_active.len) {
+        swap_reload_zones_queues(css);
+        spawn_async_zones_reloader_thread();
+    }
+}
+
+F_NONNULL
+static void handle_req_repl(css_conn_t* c, css_t* css)
+{
+    if (css->replacement_pid) {
+        log_info("Deferring replace request while another replace already in progress");
+        respond(c, RESP_LATR, 0, 0, NULL, false);
+        return;
+    }
+    log_debug("REPLACE[old daemon]: Accepting replace command, spawning replacement server...");
+    gdnsd_assert(!css->replace_conn_ctl);
+    gdnsd_assert(!css->replace_conn_dmn);
+    css->replace_conn_ctl = c;
+    css->replacement_pid = spawn_replacement(css->argv0);
+    log_info("REPLACE[old daemon]: Accepted replace command, spawned replacement daemon at PID %li", (long)css->replacement_pid);
+    ev_timer* w_replace = &css->w_replace;
+    ev_timer_start(css->loop, w_replace);
+    latr_all_reloaders(css);
+}
+
+F_NONNULL
+static void handle_req_tak1(css_conn_t* c, css_t* css)
+{
+    const pid_t take_pid = (pid_t)c->rbuf.d;
+    if (css->replacement_pid && css->replacement_pid != take_pid) {
+        log_warn("Denying takeover notification from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+        // could argue for LATR or FAIL here, but currently the new daemon doesn't wait and retry anyways
+        respond(c, RESP_LATR, 0, 0, NULL, false);
+        return;
+    }
+    log_debug("Accepted takeover notification from PID %li", (long)take_pid);
+    css->replacement_pid = take_pid;
+    gdnsd_assert(!css->replace_conn_dmn);
+    css->replace_conn_dmn = c;
+    ev_timer* w_replace = &css->w_replace;
+    ev_timer_start(css->loop, w_replace);
+    latr_all_reloaders(css);
+    respond(c, RESP_ACK, 0, 0, NULL, false);
+}
+
+F_NONNULL
+static void handle_req_tak2(css_conn_t* c, css_t* css)
+{
+    const pid_t take_pid = (pid_t)c->rbuf.d;
+    if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
+        log_warn("Denying illegal takeover phase 2 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+        respond(c, RESP_FAIL, 0, 0, NULL, false);
+        return;
+    }
+    log_debug("Accepted takeover phase 2 (challenge data req) from PID %li", (long)take_pid);
+    respond_tak2(css->loop, c);
+}
+
+F_NONNULL
+static void handle_req_take(css_conn_t* c, css_t* css)
+{
+    const pid_t take_pid = (pid_t)c->rbuf.d;
+    if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
+        log_err("Denying illegal takeover request without pre-notification");
+        respond(c, RESP_FAIL, 0, 0, NULL, false);
+        css_conn_cleanup(c);
+        return;
+    }
+    gdnsd_assert(css->handoff_fds_count >= 2LU);
+    const size_t dns_fds_send = css->handoff_fds_count - 2LU;
+    log_info("REPLACE[old daemon]: Accepting takeover request from replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
+    ev_io* w_accept = &css->w_accept;
+    ev_io_stop(css->loop, w_accept); // there can be only one
+    respond(c, RESP_ACK, 0, 0, NULL, true);
+}
+
+F_NONNULL
 static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_READ);
@@ -502,47 +675,10 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     gdnsd_assert(c->state == READING_REQ || c->state == READING_DATA);
 
     if (c->state == READING_DATA) {
-        gdnsd_assert(c->data);
-        gdnsd_assert(c->size);
-        size_t wanted = c->size - c->size_done;
-        gdnsd_assert(wanted > 0);
-
-        ssize_t pktlen = recv(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
-        if (pktlen <= 0) {
-            if (pktlen < 0 && ERRNO_WOULDBLOCK)
-                return;
-            if (pktlen == 0)
-                log_err("control socket client disconnected when we expected %zu more bytes from it", wanted);
-            else
-                log_err("control socket read of %zu data bytes failed with retval %zi, closing: %s", wanted, pktlen, logf_errno());
-            css_conn_cleanup(c);
-            return;
-        }
-
-        c->size_done += (size_t)pktlen;
-
-        if (c->size_done == c->size) {
-            ev_io_stop(loop, w);
-            c->state = WAITING_SERVER;
-
-            // we'd switch here if more than one, but REQ_CHAL is the only key that leads here for now
-            gdnsd_assert(c->rbuf.key == REQ_CHAL);
-
-            char resp_key = RESP_ACK;
-            if (css->replacement_pid) {
-                log_info("Deferring acme-dns-01 request while replace in progress");
-                resp_key = RESP_LATR;
-            } else if (cset_create(loop, 0, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data)) {
-                resp_key = RESP_FAIL;
-            }
-
-            free(c->data);
-            c->data = NULL;
-            c->size = 0;
-            c->size_done = 0;
-            respond(c, resp_key, 0, 0, NULL, false);
-        }
-
+        // we'd switch below if more than one case, but REQ_CHAL is the only
+        // key that causes READING_DATA so far.
+        gdnsd_assert(c->rbuf.key == REQ_CHAL);
+        recv_challenge_data(loop, w, c, css);
         return;
     }
 
@@ -582,59 +718,15 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
     double nowish;
     size_t stats_size;
     size_t states_size;
-    size_t dns_fds_send;
     char* stats_msg;
     char* states_msg;
-    pid_t take_pid;
-    ev_timer* w_replace = &css->w_replace;
-    ev_io* w_accept = &css->w_accept;
 
     switch (c->rbuf.key) {
     case REQ_INFO:
         respond(c, RESP_ACK, css->status_v, css->status_d, NULL, false);
         break;
     case REQ_STOP:
-        if (css->replacement_pid) {
-            if (c != css->replace_conn_dmn) {
-                log_info("Deferring stop request while replace in progress");
-                respond(c, RESP_LATR, 0, 0, NULL, false);
-                break;
-            } else {
-                log_info("REPLACE[old daemon]: Exiting cleanly at request of new daemon");
-                // Note from here we won't re-enter the eventloop anyways, so
-                // no further requests can be processed and the replacement_pid
-                // flag isn't very useful anymore.  Explicitly re-setting it to
-                // zero avoids the eventual css_conn_cleanup of this connection
-                // (during css_delete(), or due to some communications failure
-                // with the blocking acks below) trying to kill the new daemon
-                // off because it thinks it's a fail-to-takeover sort of
-                // situation.
-                css->replacement_pid = 0;
-            }
-        } else {
-            log_info("Exiting cleanly due to control socket client request");
-        }
-        // Note this is the point of no return for the old daemon in "replace",
-        // as we'll never re-enter the main thread's runtime eventloop to
-        // process further control socket message (or other events).
-        ev_break(loop, EVBREAK_ALL);
-        // ACK to the client that sent REQ_STOP
-        // In non-replace cases (plain stop from e.g. gdnsdctl), set the fd
-        // to -1 here so that we don't close it during css_delete, as the
-        // response above was our last interaction with it.  In replace cases,
-        // there's one more interaction during the final stats handoff, and the
-        // new daemon doesn't wait on our close anyways.
-        if (!respond_blocking_ack(c) && c != css->replace_conn_dmn)
-            c->fd = -1;
-        // If "gdnsdctl replace" is connected and driving the process, finally
-        // give it an ACK response to its REQ_REPL, as we're now past the point
-        // of no return on the replace operation, and also set its fd to -1 to
-        // let it close as the process dies as above.
-        if (css->replace_conn_ctl) {
-            gdnsd_assert(c == css->replace_conn_dmn);
-            if (!respond_blocking_ack(css->replace_conn_ctl))
-                css->replace_conn_ctl->fd = -1;
-        }
+        handle_req_stop(c, css);
         break;
     case REQ_STAT:
         nowish = ev_now(loop);
@@ -650,16 +742,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg, false);
         break;
     case REQ_ZREL:
-        if (css->replacement_pid) {
-            log_info("Deferring reload-zones request while replace in progress");
-            respond(c, RESP_LATR, 0, 0, NULL, false);
-            break;
-        }
-        conn_queue_add(&css->reload_zones_queued, c);
-        if (!css->reload_zones_active.len) {
-            swap_reload_zones_queues(css);
-            spawn_async_zones_reloader_thread();
-        }
+        handle_req_zrel(c, css);
         break;
     case REQ_CHALF:
         if (css->replacement_pid) {
@@ -671,59 +754,16 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         }
         break;
     case REQ_REPL:
-        if (css->replacement_pid) {
-            log_info("Deferring replace request while another replace already in progress");
-            respond(c, RESP_LATR, 0, 0, NULL, false);
-            break;
-        }
-        log_debug("REPLACE[old daemon]: Accepting replace command, spawning replacement server...");
-        gdnsd_assert(!css->replace_conn_ctl);
-        gdnsd_assert(!css->replace_conn_dmn);
-        css->replace_conn_ctl = c;
-        css->replacement_pid = spawn_replacement(css->argv0);
-        log_info("REPLACE[old daemon]: Accepted replace command, spawned replacement daemon at PID %li", (long)css->replacement_pid);
-        ev_timer_start(css->loop, w_replace);
-        latr_all_reloaders(css);
+        handle_req_repl(c, css);
         break;
     case REQ_TAK1:
-        take_pid = (pid_t)c->rbuf.d;
-        if (css->replacement_pid && css->replacement_pid != take_pid) {
-            log_warn("Denying takeover notification from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
-            // could argue for LATR or FAIL here, but currently the new daemon doesn't wait and retry anyways
-            respond(c, RESP_LATR, 0, 0, NULL, false);
-            break;
-        }
-        log_debug("Accepted takeover notification from PID %li", (long)take_pid);
-        css->replacement_pid = take_pid;
-        gdnsd_assert(!css->replace_conn_dmn);
-        css->replace_conn_dmn = c;
-        ev_timer_start(css->loop, w_replace);
-        latr_all_reloaders(css);
-        respond(c, RESP_ACK, 0, 0, NULL, false);
+        handle_req_tak1(c, css);
         break;
     case REQ_TAK2:
-        take_pid = (pid_t)c->rbuf.d;
-        if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
-            log_warn("Denying illegal takeover phase 2 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
-            respond(c, RESP_FAIL, 0, 0, NULL, false);
-            break;
-        }
-        log_debug("Accepted takeover phase 2 (challenge data req) from PID %li", (long)take_pid);
-        respond_tak2(css->loop, c);
+        handle_req_tak2(c, css);
         break;
     case REQ_TAKE:
-        take_pid = (pid_t)c->rbuf.d;
-        if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
-            log_err("Denying illegal takeover request without pre-notification");
-            respond(c, RESP_FAIL, 0, 0, NULL, false);
-            css_conn_cleanup(c);
-            break;
-        }
-        gdnsd_assert(css->handoff_fds_count >= 2LU);
-        dns_fds_send = css->handoff_fds_count - 2LU;
-        log_info("REPLACE[old daemon]: Accepting takeover request from replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
-        ev_io_stop(css->loop, w_accept); // there can be only one
-        respond(c, RESP_ACK, 0, 0, NULL, true);
+        handle_req_take(c, css);
         break;
     default:
         log_err("Unknown request type %hhx from control socket", (uint8_t)c->rbuf.key);
@@ -870,16 +910,16 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         req.key = REQ_TAKE;
         req.d = (uint32_t)getpid();
         int* resp_fds = NULL;
-        if (csc_txn_getfds(csc, &req, &resp, &resp_fds))
+        const size_t fds_recvd = csc_txn_getfds(csc, &req, &resp, &resp_fds);
+        if (!fds_recvd)
             log_fatal("REPLACE[new daemon]: Takeover request failed");
-        gdnsd_assert(resp_fds);
-        gdnsd_assert(csbuf_get_v(&resp) > 2U);
+        gdnsd_assert(fds_recvd > 2U);
         gdnsd_assert(sock_fd == -1);
         gdnsd_assert(lock_fd == -1);
         // cppcheck-suppress resourceLeak (cppcheck can't follow the logic)
         lock_fd = resp_fds[0];
         sock_fd = resp_fds[1];
-        size_t dns_fd_count = csbuf_get_v(&resp) - 2U;
+        const size_t dns_fd_count = fds_recvd - 2U;
         log_info("REPLACE[new daemon]: Takeover request accepted, received %zu DNS sockets", dns_fd_count);
         socks_import_fds(socks_cfg, &resp_fds[2], dns_fd_count);
         free(resp_fds);

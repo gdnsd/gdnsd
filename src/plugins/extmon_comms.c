@@ -32,48 +32,42 @@
 
 bool emc_write_string(const int fd, const char* str, const size_t len)
 {
-    bool rv = false;
     size_t written = 0;
     while (written < len) {
         ssize_t write_rv = write(fd, str + written, len - written);
         if (write_rv < 1) {
             if (!write_rv) {
                 log_debug("plugin_extmon: emc_write_string(%s) failed: pipe closed", str);
-                rv = true;
-                break;
+                return true;
             } else if (!ERRNO_WOULDBLOCK && errno != EINTR) {
                 log_debug("plugin_extmon: emc_write_string(%s) failed: %s", str, logf_errno());
-                rv = true;
-                break;
+                return true;
             }
         } else {
             written += (size_t)write_rv;
         }
     }
-    return rv;
+    return false;
 }
 
 bool emc_read_nbytes(const int fd, const size_t len, uint8_t* out)
 {
-    bool rv = false;
     size_t seen = 0;
     while (seen < len) {
         ssize_t read_rv = read(fd, out + seen, len - seen);
         if (read_rv < 1) {
             if (!read_rv) {
                 log_debug("plugin_extmon: emc_read_nbytes() failed: pipe closed");
-                rv = true;
-                break;
+                return true;
             } else if (!ERRNO_WOULDBLOCK && errno != EINTR) {
                 log_debug("plugin_extmon: emc_read_nbytes() failed: %s", logf_errno());
-                rv = true;
-                break;
+                return true;
             }
         } else {
             seen += (size_t)read_rv;
         }
     }
-    return rv;
+    return false;
 }
 
 bool emc_read_exact(const int fd, const char* str)

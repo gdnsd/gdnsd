@@ -241,24 +241,23 @@ const char* gdnsd_logf_bt(void)
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
 
-    while (tbuf_pos < BT_SIZE && unw_step(&cursor) > 0) {
+    while (unw_step(&cursor) > 0) {
         unw_word_t ip = 0;
         unw_word_t sp = 0;
         unw_word_t offset = 0;
         unw_get_reg(&cursor, UNW_REG_IP, &ip);
-        if (!ip)
-            break;
         unw_get_reg(&cursor, UNW_REG_SP, &sp);
 
         char cbuf[BT_MAX_NAME];
         cbuf[0] = '\0'; // in case no output below
         (void)unw_get_proc_name(&cursor, cbuf, BT_MAX_NAME, &offset);
 
+        const size_t size_rem = BT_SIZE - tbuf_pos;
         int snp_rv = snprintf(&tbuf[tbuf_pos],
-                              (BT_SIZE - tbuf_pos), "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
+                              size_rem, "\n[ip:%#.16lx sp:%#.16lx] %s+%#lx",
                               (unsigned long)ip, (unsigned long)sp,
                               cbuf, (unsigned long)offset);
-        if (snp_rv < 0 || (size_t)snp_rv >= (BT_SIZE - tbuf_pos))
+        if (snp_rv < 0 || (size_t)snp_rv >= size_rem)
             break;
         tbuf_pos += (size_t)snp_rv;
     }

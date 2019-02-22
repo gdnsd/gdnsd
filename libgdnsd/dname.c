@@ -39,28 +39,24 @@ unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const u
             *optr++ = in[i];
         } else {
             i++;
-            if (unlikely(i >= len)) { // dangling escape
-                optr = out;
-                break;
-            }
+            // check: dangling escape
+            if (unlikely(i >= len))
+                return 0;
+            // check: incomplete numeric escape
             if (in[i] <= '9' && in[i] >= '0') {
                 if (unlikely(((i + 2) >= len)
                              || (in[i + 1] > '9')
                              || (in[i + 1] < '0')
                              || (in[i + 2] > '9')
                              || (in[i + 2] < '0')
-                            )) {
-                    // incomplete numeric escape
-                    optr = out;
-                    break;
-                }
+                            ))
+                    return 0;
                 int x = ((in[i++] - '0') * 100);
                 x += ((in[i++] - '0') * 10);
                 x += (in[i] - '0');
-                if (unlikely(x > 255 || x < 0)) { // numeric escape val too large
-                    optr = out;
-                    break;
-                }
+                // check: numeric escape val too large
+                if (unlikely(x > 255 || x < 0))
+                    return 0;
                 *optr++ = x;
             } else {
                 *optr++ = in[i];
@@ -71,12 +67,27 @@ unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const u
     return optr - out;
 }
 
+
+// As above, but checks label-specific conditions as well, and downcases the
+// output if the length looks legit.  Output buffer should be 252 bytes long,
+// although final output len in legit cases will never be more than 63.
+F_NONNULL
+static unsigned gdnsd_dns_unescape_label(char* restrict out, const char* restrict in, const unsigned len)
+{
+    unsigned rv = 0;
+    // Even if full of escapes, input llen > 252 means output label is illegally long
+    if (len <= 252) {
+        rv = gdnsd_dns_unescape(out, in, len);
+        if (rv <= 63) // max legal label len
+            gdnsd_downcase_bytes(out, rv);
+        else
+            rv = 0;
+    }
+    return rv;
+}
+
 gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len)
 {
-    // A label can be at most 63 bytes after unescaping,
-    //  which means up to 252 bytes while escaped...
-    char label_buf[252];
-
     // If string len is >1004, it cannot possibly decode legally.
     if (len > 1004)
         return DNAME_INVALID;
@@ -96,9 +107,11 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
         return DNAME_PARTIAL;
     }
 
-    const char* label_start = instr;
-    const char* instr_cursor = instr;
-    const char* instr_last = instr + len - 1;
+    // Special case for root of DNS
+    if (len == 1 && instr[0] == '.') {
+        *dname_cursor = 0;
+        return DNAME_VALID;
+    }
 
     // escape_next is tracking for escaped dots "\.", and
     //  escaped slashes "\\" in the simplest reasonable manner, so that
@@ -106,65 +119,50 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
     //  the individual labels.
     bool escape_next = false;
 
-    while (1) {
-        // Label-terminal conditions, not mutually exclusive:
-        const bool end_of_input = instr_cursor == instr_last;
-        bool cursor_has_dot = false;
+    const unsigned last_char = len - 1;
+    bool cursor_has_dot = false;
+    unsigned label_start = 0;
+    for (unsigned i = 0; i < len; i++) {
+        // Raw label length before unescaping, without the terminal dot,
+        // assuming we're at the end of a label so-terminated.
+        unsigned raw_llen = i - label_start;
 
-        if (escape_next) {
+        char c = instr[i];
+        cursor_has_dot = false;
+        if (escape_next)
             escape_next = false;
-        } else if (*instr_cursor == '\\') {
+        else if (c == '\\')
             escape_next = true;
-        } else if (*instr_cursor == '.') {
+        else if (c == '.')
             cursor_has_dot = true;
-        }
 
-        // We're mid-label, advance cursor and continue
-        if (!cursor_has_dot && !end_of_input) {
-            instr_cursor++;
-            continue;
-        }
-
-        // Raw label length before unescaping
-        unsigned raw_llen = instr_cursor - label_start;
-
-        // If we're at string end without a terminal '.',
-        //  we must bump the label len by one.
+        // No unescaped dot at this position
         if (!cursor_has_dot) {
-            raw_llen++;
-        } else if (!raw_llen) {
-            // ... empty labels can only happen via '.'
-            // Special Case: "." == DNS Root
-            if (len == 1) {
-                *dname_cursor = 0;
-                return DNAME_VALID;
-            }
-
-            // Any other empty-label case ("..", "foo..com", etc) is invalid
-            return DNAME_INVALID;
+            // If we're looking at the final char, we need to process the final
+            // label, so increase the raw_llen to cover the final real label
+            // data byte since there's no dot to avoid, and fall into the
+            // bottom of the loop as if we'd otherwise seen a terminal dot
+            if (i == last_char)
+                raw_llen++;
+            // Else we're just mid-label and need to loop again until we find
+            // the end of the label or input
+            else
+                continue;
         }
 
-        // Raw label too long even before unescaping
-        if (raw_llen > 252)
+        // Empty labels are invalid (root case handled outside of loop)
+        if (!raw_llen)
             return DNAME_INVALID;
 
-        // unescape to label_buf
-        unsigned llen = gdnsd_dns_unescape(label_buf, label_start, raw_llen);
-
-        // Label invalid (error return from above)
+        // unescape+downcase to label_buf with basic checks for length issues
+        char label_buf[252];
+        unsigned llen = gdnsd_dns_unescape_label(label_buf, &instr[label_start], raw_llen);
         if (!llen)
-            return DNAME_INVALID;
-
-        // Label too long
-        if (llen > 63)
             return DNAME_INVALID;
 
         // Check for domainname overall len overflow
         if (llen + 1U + *dname > 255U)
             return DNAME_INVALID;
-
-        // normalize case
-        gdnsd_downcase_bytes(label_buf, llen);
 
         // Copy label updating overall length, setting current label length,
         //   and advancing dname_cursor.
@@ -173,22 +171,22 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
         memcpy(dname_cursor, label_buf, llen);
         dname_cursor += llen;
 
-        // If this was the end of the whole input string we're done
-        if (end_of_input) {
-            if (cursor_has_dot) {
-                *dname_cursor = 0;
-                gdnsd_assert(dname_status(dname) == DNAME_VALID);
-                return DNAME_VALID;
-            } else {
-                *dname_cursor = 255;
-                gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
-                return DNAME_PARTIAL;
-            }
-        }
-
-        // Advance instr_cursor while resetting label_start
-        label_start = ++instr_cursor;
+        // Reset label start for next label (doesn't matter if we're at end already)
+        label_start = i + 1;
     }
+
+    // Final byte must be 0 or 255 depending on whether the dname was fully
+    // qualified with a terminal dot:
+
+    if (!cursor_has_dot) {
+        *dname_cursor = 255;
+        gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
+        return DNAME_PARTIAL;
+    }
+
+    *dname_cursor = 0;
+    gdnsd_assert(dname_status(dname) == DNAME_VALID);
+    return DNAME_VALID;
 }
 
 unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str)

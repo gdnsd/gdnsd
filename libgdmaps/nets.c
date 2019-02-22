@@ -64,8 +64,6 @@ static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask)
 F_NONNULL
 static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name, nlist_t* nl)
 {
-    bool rv = false;
-
     const unsigned input_nnets = vscf_hash_get_len(nets_cfg);
 
     for (unsigned i = 0; i < input_nnets; i++) {
@@ -74,8 +72,7 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
         const char* net_str_cfg = vscf_hash_get_key_byindex(nets_cfg, i, &net_str_len);
         if (net_str_len >= GDNSD_ANYSIN_MAXSTR) {
             log_err("plguin_geoip: map '%s': nets entry '%s' is too long", map_name, net_str_cfg);
-            rv = true;
-            break;
+            return true;
         }
         char net_str[GDNSD_ANYSIN_MAXSTR];
         memcpy(net_str, net_str_cfg, net_str_len + 1);
@@ -83,16 +80,14 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
         char* mask_str = strchr(net_str, '/');
         if (!mask_str) {
             log_err("plugin_geoip: map '%s': nets entry '%s' does not parse as addr/mask", map_name, net_str);
-            rv = true;
-            break;
+            return true;
         }
         *mask_str++ = '\0';
         gdnsd_anysin_t tempsin;
         int addr_err = gdnsd_anysin_getaddrinfo(net_str, mask_str, &tempsin);
         if (addr_err) {
             log_err("plugin_geoip: map '%s': nets entry '%s/%s' does not parse as addr/mask: %s", map_name, net_str, mask_str, gai_strerror(addr_err));
-            rv = true;
-            break;
+            return true;
         }
 
         unsigned mask;
@@ -103,22 +98,19 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
             mask = ntohs(tempsin.sin6.sin6_port);
             if (mask > 128) {
                 log_err("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv6 mask (>128)", map_name, net_str, mask_str);
-                rv = true;
-                break;
+                return true;
             }
             memcpy(ipv6, tempsin.sin6.sin6_addr.s6_addr, 16);
             if (check_v4_issues(ipv6, mask)) {
                 log_err("plugin_geoip: map '%s': 'nets' entry '%s/%s' covers illegal IPv4-like space, see the documentation for more info", map_name, net_str, mask_str);
-                rv = true;
-                break;
+                return true;
             }
         } else {
             gdnsd_assert(tempsin.sa.sa_family == AF_INET);
             mask = ntohs(tempsin.sin4.sin_port) + 96U;
             if (mask > 128) {
                 log_err("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv4 mask (>32)", map_name, net_str, mask_str);
-                rv = true;
-                break;
+                return true;
             }
             memset(ipv6, 0, 16);
             memcpy(&ipv6[12], &tempsin.sin4.sin_addr.s_addr, 4);
@@ -131,7 +123,7 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
         nlist_append(nl, ipv6, mask, dclist);
     }
 
-    return rv;
+    return false;
 }
 
 nlist_t* nets_make_list(vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name)

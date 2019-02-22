@@ -431,19 +431,15 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
     cset_t* cur = oldest;
     while (cur) {
         if ((now + TIME_FUDGE) < cur->expiry) {
+            if (unlikely((ct + 1 >= 0xFFFFFFu) || (used + CHAL_MAX_SERIAL > UINT32_MAX))) {
+                log_err("Handing off partial ACME challenge data, size exceeds design limits");
+                break;
+            }
             if (used + CHAL_MAX_SERIAL > allocated) {
-                if (unlikely(used + CHAL_MAX_SERIAL > UINT32_MAX)) {
-                    log_err("Handing off partial ACME challenge data, total data length exceeds design limits");
-                    break;
-                }
                 allocated += CHAL_MAX_SERIAL;
                 rv = xrealloc(rv, allocated);
             }
             used += cset_serialize(now, cur, &rv[used]);
-            if (unlikely(ct == 0xFFFFFFu)) {
-                log_err("Handing off partial ACME challenge data, total count exceeds design limits");
-                break;
-            }
             ct++;
         }
         cur = cur->next_newer;
@@ -458,41 +454,44 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
 // an RCU read-side critical section.  Must be fast, non-blocking, no syscalls.
 bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response)
 {
-    bool matched = false;
     const bool qname_is_chal = dname_is_acme_chal(qname);
     const chal_tbl_t* t = rcu_dereference(chal_tbl);
-    if (t) {
-        uint8_t qn_stripped[256];
-        if (qname_is_chal) {
-            // Make a copy we can edit, skip over the first label and inject a
-            // new overall length byte at offset 16, then set qname->that.
-            dname_copy(qn_stripped, qname);
-            qn_stripped[16] = qn_stripped[0] - 16U;
-            qname = &qn_stripped[16];
-        }
-        const uint32_t qname_hash = dname_hash(qname);
-        chal_collide_t* coll = t->tbl[qname_hash & t->mask];
-        if (coll) {
-            for (unsigned i = 0; i < coll->count; i++) {
-                const chal_t* ch = coll->chals[i];
-                if (ch->dnhash == qname_hash && likely(!dname_cmp(qname, ch->dname))) {
-                    matched = true;
-                    if (qname_is_chal && qtype == DNS_TYPE_TXT) {
-                        if ((*offset_p + 2U + CHAL_RR_LEN) > this_max_response)
-                            break; // do not run off the end of the buffer!
-                        gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
-                        (*offset_p) += 2;
-                        memcpy(&packet[*offset_p], ch->txt, CHAL_RR_LEN);
-                        (*offset_p) += CHAL_RR_LEN;
-                        (*ancount_p)++;
-                    } else {
-                        // no need for multi-match if not encoding responses
-                        break;
-                    }
+    if (!t)
+        return false;
+    bool matched = false;
+
+    uint8_t qn_stripped[256];
+    if (qname_is_chal) {
+        // Make a copy we can edit, skip over the first label and inject a
+        // new overall length byte at offset 16, then set qname->that.
+        dname_copy(qn_stripped, qname);
+        qn_stripped[16] = qn_stripped[0] - 16U;
+        qname = &qn_stripped[16];
+    }
+
+    const uint32_t qname_hash = dname_hash(qname);
+    chal_collide_t* coll = t->tbl[qname_hash & t->mask];
+    if (coll) {
+        for (unsigned i = 0; i < coll->count; i++) {
+            const chal_t* ch = coll->chals[i];
+            if (ch->dnhash == qname_hash && likely(!dname_cmp(qname, ch->dname))) {
+                matched = true;
+                if (qname_is_chal && qtype == DNS_TYPE_TXT) {
+                    if ((*offset_p + 2U + CHAL_RR_LEN) > this_max_response)
+                        return true; // do not run off the end of the buffer!
+                    gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
+                    (*offset_p) += 2;
+                    memcpy(&packet[*offset_p], ch->txt, CHAL_RR_LEN);
+                    (*offset_p) += CHAL_RR_LEN;
+                    (*ancount_p)++;
+                } else {
+                    // no need for multi-match if not encoding responses
+                    return true;
                 }
             }
         }
     }
+
     return matched;
 }
 
