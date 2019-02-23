@@ -847,7 +847,7 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
 // compressed LHS name, 2 type, 2 class, 4 ttl, 2 rdlen
 
 F_WUNUSED F_NONNULL
-static bool p1_rrset_size(ltree_rrset_t* rrset, const bool in_deleg)
+static size_t p1_rrset_size(ltree_rrset_t* rrset, const bool in_deleg)
 {
     size_t set_size = 0;
 
