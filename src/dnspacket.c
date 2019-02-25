@@ -1612,6 +1612,7 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
     unsigned deleg_mod = 0;
 
     while (!rv_node && current) {
+        gdnsd_assert(rval == DNAME_AUTH);
         if (current->flags & LTNFLAG_DELEG) {
             rval = DNAME_DELEG;
             *auth_depth_p -= deleg_mod;
@@ -1625,8 +1626,8 @@ static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zo
             deleg_mod += *child_label;
             deleg_mod++;
             ltree_node_t* next = ltree_node_find_child(current, child_label);
-            // If in auth space and no deeper match, try wildcard
-            if (!next && rval == DNAME_AUTH) {
+            // If no deeper match, try wildcard
+            if (!next) {
                 static const uint8_t label_wild[2] =  { '\001', '*' };
                 rv_node = ltree_node_find_child(current, label_wild);
             }
