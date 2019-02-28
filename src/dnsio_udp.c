@@ -258,9 +258,8 @@ static unsigned get_pgsz(void)
 #define CMSG_BUFSIZE CMSG_SPACE(sizeof(struct in6_pktinfo))
 
 F_HOT F_NONNULL
-static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const bool use_cmsg)
+static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats)
 {
-    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
 
@@ -272,14 +271,14 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
     };
     struct msghdr msg_hdr;
     union {
+        struct cmsghdr chdr;
         char cbuf[CMSG_BUFSIZE];
-        struct cmsghdr align;
     } cmsg_buf;
     memset(&msg_hdr, 0, sizeof(msg_hdr));
     msg_hdr.msg_name       = &sa.sa;
     msg_hdr.msg_iov        = &iov;
     msg_hdr.msg_iovlen     = 1;
-    msg_hdr.msg_control    = use_cmsg ? cmsg_buf.cbuf : NULL;
+    msg_hdr.msg_control    = cmsg_buf.cbuf;
 
     const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
     const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
@@ -292,7 +291,7 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
             break;
 
         iov.iov_len = DNS_RECV_SIZE;
-        msg_hdr.msg_controllen = cmsg_size;
+        msg_hdr.msg_controllen = CMSG_BUFSIZE;
         msg_hdr.msg_namelen    = GDNSD_ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
         memset(cmsg_buf.cbuf, 0, sizeof(cmsg_buf));
@@ -368,10 +367,8 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
 #ifdef USE_MMSG
 
 F_HOT F_NONNULL
-static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const bool use_cmsg)
+static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats)
 {
-    const unsigned cmsg_size = use_cmsg ? CMSG_BUFSIZE : 0U;
-
     // MAX_RESPONSE_BUF, rounded up to the next nearest multiple of the page size
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
@@ -383,8 +380,8 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         struct iovec iov[1];
         gdnsd_anysin_t sa;
         union {
+            struct cmsghdr chdr;
             char cbuf[CMSG_BUFSIZE];
-            struct cmsghdr align;
         } cmsg_buf;
     } msgdata[MMSG_WIDTH];
 
@@ -395,7 +392,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         dgrams[i].msg_hdr.msg_iov        = msgdata[i].iov;
         dgrams[i].msg_hdr.msg_iovlen     = 1;
         dgrams[i].msg_hdr.msg_name       = &msgdata[i].sa.sa;
-        dgrams[i].msg_hdr.msg_control    = use_cmsg ? msgdata[i].cmsg_buf.cbuf : NULL;
+        dgrams[i].msg_hdr.msg_control    = msgdata[i].cmsg_buf.cbuf;
     }
 
     const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
@@ -412,7 +409,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         for (unsigned i = 0; i < MMSG_WIDTH; i++) {
             dgrams[i].msg_hdr.msg_iov[0].iov_len = DNS_RECV_SIZE;
             dgrams[i].msg_hdr.msg_namelen        = GDNSD_ANYSIN_MAXLEN;
-            dgrams[i].msg_hdr.msg_controllen     = cmsg_size;
+            dgrams[i].msg_hdr.msg_controllen     = CMSG_BUFSIZE;
             dgrams[i].msg_hdr.msg_flags          = 0;
             memset(msgdata[i].cmsg_buf.cbuf, 0, sizeof(msgdata[i].cmsg_buf));
         }
@@ -536,17 +533,6 @@ static bool is_ipv6(const gdnsd_anysin_t* sa)
     return (sa->sa.sa_family == AF_INET6);
 }
 
-// We need to use cmsg stuff in the case of any IPv6 address (at minimum,
-//  to copy the flow label correctly, if not the interface + source addr),
-//  as well as the IPv4 any-address (for correct source address).
-F_NONNULL F_PURE
-static bool needs_cmsg(const gdnsd_anysin_t* sa)
-{
-    return (is_ipv6(sa) || gdnsd_anysin_is_anyaddr(sa))
-           ? true
-           : false;
-}
-
 void* dnsio_udp_start(void* thread_asvoid)
 {
     gdnsd_thread_setname("gdnsd-io-udp");
@@ -569,16 +555,14 @@ void* dnsio_udp_start(void* thread_asvoid)
     if (pthread_sigmask(SIG_SETMASK, &sigmask_dnsio_udp, NULL))
         log_fatal("pthread_sigmask() failed");
 
-    const bool need_cmsg = needs_cmsg(&addrconf->addr);
-
     rcu_register_thread();
 
 #ifdef USE_MMSG
     if (use_mmsg)
-        mainloop_mmsg(t->sock, pctx, stats, need_cmsg);
+        mainloop_mmsg(t->sock, pctx, stats);
     else
 #endif
-        mainloop(t->sock, pctx, stats, need_cmsg);
+        mainloop(t->sock, pctx, stats);
 
     rcu_unregister_thread();
     dnspacket_ctx_cleanup(pctx);
