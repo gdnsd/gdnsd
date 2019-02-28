@@ -125,18 +125,30 @@ const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa);
 // The "bool" variants use an integer type, but only compare get-vs-set as
 // booleans (e.g. get returning 16 will still match a desired set value of 1):
 
-#define sockopt_int_fatal(proto, sa, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, false, sa, #level, #optname, #proto)
+typedef struct gso_args {
+    const int sock;
+    const int level;
+    const int optname;
+    const int wantval;
+    const bool fatal;
+    const bool is_bool;
+    const gdnsd_anysin_t* sa;
+    const char* level_str;
+    const char* optname_str;
+    const char* proto_str;
+} gso_args;
+void gdnsd_sockopt_idem_int_(gso_args args);
 
-#define sockopt_bool_fatal(proto, sa, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, true, true, sa, #level, #optname, #proto)
+#define sockopt_int_warn(_proto, _sa, _sock, _lvl, _opt, _want) \
+    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = false, .is_bool = false, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
-#define sockopt_int_warn(proto, sa, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, false, sa, #level, #optname, #proto)
+#define sockopt_bool_warn(_proto, _sa, _sock, _lvl, _opt, _want) \
+    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = false, .is_bool = true, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
-#define sockopt_bool_warn(proto, sa, sock, level, optname, wantval) \
-    gdnsd_sockopt_idem_int_(sock, level, optname, wantval, false, true, sa, #level, #optname, #proto)
+#define sockopt_int_fatal(_proto, _sa, _sock, _lvl, _opt, _want) \
+    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = true, .is_bool = false, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
-void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* sa, const char* level_str, const char* optname_str, const char* proto_str);
+#define sockopt_bool_fatal(_proto, _sa, _sock, _lvl, _opt, _want) \
+    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = true, .is_bool = true, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
 #endif // GDNSD_NET_H

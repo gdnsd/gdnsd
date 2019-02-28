@@ -517,40 +517,42 @@ bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* r
     return false;
 }
 
-bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned priority, const unsigned weight, const unsigned port)
+bool ltree_add_rec_srv_args(const zone_t* zone, const uint8_t* dname, lt_srv_args args)
 {
-    if (priority > 65535U)
-        log_zfatal("Name '%s%s': SRV priority value %u too large", logf_dname(dname), logf_dname(zone->dname), priority);
-    if (weight > 65535U)
-        log_zfatal("Name '%s%s': SRV weight value %u too large", logf_dname(dname), logf_dname(zone->dname), weight);
-    if (port > 65535U)
-        log_zfatal("Name '%s%s': SRV port value %u too large", logf_dname(dname), logf_dname(zone->dname), port);
+    if (args.priority > 65535U)
+        log_zfatal("Name '%s%s': SRV priority value %u too large", logf_dname(dname), logf_dname(zone->dname), args.priority);
+    if (args.weight > 65535U)
+        log_zfatal("Name '%s%s': SRV weight value %u too large", logf_dname(dname), logf_dname(zone->dname), args.weight);
+    if (args.port > 65535U)
+        log_zfatal("Name '%s%s': SRV port value %u too large", logf_dname(dname), logf_dname(zone->dname), args.port);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
+    unsigned ttl = args.ttl; // for macro below
     INSERT_NEXT_RR(srv, srv, "SRV", 1)
-    new_rdata->dname = lta_dnamedup(zone->arena, rhs);
-    new_rdata->priority = htons(priority);
-    new_rdata->weight = htons(weight);
-    new_rdata->port = htons(port);
+    new_rdata->dname = lta_dnamedup(zone->arena, args.rhs);
+    new_rdata->priority = htons(args.priority);
+    new_rdata->weight = htons(args.weight);
+    new_rdata->port = htons(args.port);
     return false;
 }
 
-bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned text_len, uint8_t* text)
+bool ltree_add_rec_naptr_args(const zone_t* zone, const uint8_t* dname, lt_naptr_args args)
 {
-    if (order > 65535U)
-        log_zfatal("Name '%s%s': NAPTR order value %u too large", logf_dname(dname), logf_dname(zone->dname), order);
-    if (pref > 65535U)
-        log_zfatal("Name '%s%s': NAPTR preference value %u too large", logf_dname(dname), logf_dname(zone->dname), pref);
+    if (args.order > 65535U)
+        log_zfatal("Name '%s%s': NAPTR order value %u too large", logf_dname(dname), logf_dname(zone->dname), args.order);
+    if (args.pref > 65535U)
+        log_zfatal("Name '%s%s': NAPTR preference value %u too large", logf_dname(dname), logf_dname(zone->dname), args.pref);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
+    unsigned ttl = args.ttl; // for macro below
     INSERT_NEXT_RR(naptr, naptr, "NAPTR", 1)
-    new_rdata->dname = lta_dnamedup(zone->arena, rhs);
-    new_rdata->order = htons(order);
-    new_rdata->pref = htons(pref);
-    new_rdata->text_len = text_len;
-    new_rdata->text = text;
+    new_rdata->dname = lta_dnamedup(zone->arena, args.rhs);
+    new_rdata->order = htons(args.order);
+    new_rdata->pref = htons(args.pref);
+    new_rdata->text_len = args.text_len;
+    new_rdata->text = args.text;
     return false;
 }
 
@@ -580,14 +582,14 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
     return false;
 }
 
-bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, const unsigned serial, const unsigned refresh, const unsigned retry, const unsigned expire, unsigned ncache)
+bool ltree_add_rec_soa_args(const zone_t* zone, const uint8_t* dname, lt_soa_args args)
 {
-    if (ncache > gcfg->max_ncache_ttl) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(dname), ncache, gcfg->max_ncache_ttl);
-        ncache = gcfg->max_ncache_ttl;
-    } else if (ncache < gcfg->min_ttl) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too small, clamped to min_ttl setting of %u", logf_dname(dname), ncache, gcfg->min_ttl);
-        ncache = gcfg->min_ttl;
+    if (args.ncache > gcfg->max_ncache_ttl) {
+        log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(dname), args.ncache, gcfg->max_ncache_ttl);
+        args.ncache = gcfg->max_ncache_ttl;
+    } else if (args.ncache < gcfg->min_ttl) {
+        log_zwarn("Zone '%s': SOA negative-cache field %u too small, clamped to min_ttl setting of %u", logf_dname(dname), args.ncache, gcfg->min_ttl);
+        args.ncache = gcfg->min_ttl;
     }
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -599,15 +601,15 @@ bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* 
         log_zfatal("Zone '%s': SOA defined twice", logf_dname(dname));
 
     ltree_rrset_soa_t* soa = ltree_node_add_rrset_soa(node);
-    soa->email = lta_dnamedup(zone->arena, email);
-    soa->master = lta_dnamedup(zone->arena, master);
+    soa->email = lta_dnamedup(zone->arena, args.email);
+    soa->master = lta_dnamedup(zone->arena, args.master);
 
-    soa->gen.ttl = htonl(ttl < ncache ? ttl : ncache);
-    soa->times[0] = htonl(serial);
-    soa->times[1] = htonl(refresh);
-    soa->times[2] = htonl(retry);
-    soa->times[3] = htonl(expire);
-    soa->times[4] = htonl(ncache);
+    soa->gen.ttl = htonl(args.ttl < args.ncache ? args.ttl : args.ncache);
+    soa->times[0] = htonl(args.serial);
+    soa->times[1] = htonl(args.refresh);
+    soa->times[2] = htonl(args.retry);
+    soa->times[3] = htonl(args.expire);
+    soa->times[4] = htonl(args.ncache);
 
     return false;
 }

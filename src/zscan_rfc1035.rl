@@ -540,7 +540,18 @@ static void rec_soa(zscan_t* z)
     validate_lhs_not_ooz(z);
     if (z->lhs_dname[0] != 1)
         parse_error_noargs("SOA record can only be defined for the root of the zone");
-    if (ltree_add_rec_soa(z->zone, z->lhs_dname, z->rhs_dname, z->eml_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3, z->uv_4, z->uv_5))
+    if (ltree_add_rec_soa(
+                z->zone,
+                z->lhs_dname,
+                .master = z->rhs_dname,
+                .email = z->eml_dname,
+                .ttl = z->ttl,
+                .serial = z->uv_1,
+                .refresh = z->uv_2,
+                .retry = z->uv_3,
+                .expire = z->uv_4,
+                .ncache = z->uv_5)
+       )
         siglongjmp(z->jbuf, 1);
 }
 
@@ -594,7 +605,15 @@ F_NONNULL
 static void rec_srv(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_srv(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->uv_3))
+    if (ltree_add_rec_srv(
+                z->zone,
+                z->lhs_dname,
+                .rhs = z->rhs_dname,
+                .ttl = z->ttl,
+                .priority = z->uv_1,
+                .weight = z->uv_2,
+                .port = z->uv_3)
+       )
         siglongjmp(z->jbuf, 1);
 }
 
@@ -611,7 +630,16 @@ F_NONNULL
 static void rec_naptr(zscan_t* z)
 {
     validate_lhs_not_ooz(z);
-    if (ltree_add_rec_naptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uv_1, z->uv_2, z->text_len, z->text))
+    if (ltree_add_rec_naptr(
+                z->zone,
+                z->lhs_dname,
+                .rhs = z->rhs_dname,
+                .ttl = z->ttl,
+                .order = z->uv_1,
+                .pref = z->uv_2,
+                .text_len = z->text_len,
+                .text = z->text)
+       )
         siglongjmp(z->jbuf, 1);
     z->text = NULL; // storage handed off to ltree
     text_cleanup(z);

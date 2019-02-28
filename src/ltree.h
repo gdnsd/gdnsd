@@ -352,9 +352,40 @@ bool ltree_postproc_zone(zone_t* zone);
 F_NONNULL
 void ltree_destroy(ltree_node_t* node);
 
+// parameter structures for arguments to ltree_add_rec that otherwise
+// have confusingly-long parameter lists
+typedef struct lt_soa_args {
+    const uint8_t* master;
+    const uint8_t* email;
+    unsigned ttl;
+    const unsigned serial;
+    const unsigned refresh;
+    const unsigned retry;
+    const unsigned expire;
+    unsigned ncache;
+} lt_soa_args;
+
+typedef struct lt_srv_args {
+    const uint8_t* rhs;
+    const unsigned ttl;
+    const unsigned priority;
+    const unsigned weight;
+    const unsigned port;
+} lt_srv_args;
+
+typedef struct lt_naptr_args {
+    const uint8_t* rhs;
+    const unsigned ttl;
+    const unsigned order;
+    const unsigned pref;
+    const unsigned text_len;
+    uint8_t* text;
+} lt_naptr_args;
+
 // Adding data to the ltree (called from parser)
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_soa(const zone_t* zone, const uint8_t* dname, const uint8_t* master, const uint8_t* email, unsigned ttl, const unsigned serial, const unsigned refresh, const unsigned retry, const unsigned expire, unsigned ncache);
+bool ltree_add_rec_soa_args(const zone_t* zone, const uint8_t* dname, lt_soa_args args);
+#define ltree_add_rec_soa(_z,_d,...) ltree_add_rec_soa_args(_z,_d,(lt_soa_args){__VA_ARGS__})
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, const bool ooz);
 F_WUNUSED F_NONNULL
@@ -372,9 +403,11 @@ bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* r
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned pref);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_srv(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned priority, const unsigned weight, const unsigned port);
+bool ltree_add_rec_srv_args(const zone_t* zone, const uint8_t* dname, lt_srv_args args);
+#define ltree_add_rec_srv(_z,_d,...) ltree_add_rec_srv_args(_z,_d,(lt_srv_args){__VA_ARGS__})
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_naptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned order, const unsigned pref, const unsigned text_len, uint8_t* text);
+bool ltree_add_rec_naptr_args(const zone_t* zone, const uint8_t* dname, lt_naptr_args args);
+#define ltree_add_rec_naptr(_z,_d,...) ltree_add_rec_naptr_args(_z,_d,(lt_naptr_args){__VA_ARGS__})
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl);
 F_WUNUSED F_NONNULLX(1)

@@ -95,37 +95,37 @@ static int tcpdefaccept_xlate_secs(int seconds)
  * End block of Linux TCP_DEFER_ACCEPT hackery
  *****************************************************************************/
 
-void gdnsd_sockopt_idem_int_(const int sock, const int level, const int optname, const int wantval, const bool fatal, const bool is_bool, const gdnsd_anysin_t* sa, const char* level_str, const char* optname_str, const char* proto_str)
+void gdnsd_sockopt_idem_int_(gso_args args)
 {
     int current = 0;
     socklen_t s_current = sizeof(current);
-    int compare = wantval;
+    int compare = args.wantval;
 #ifdef __linux__
     // Linux hack: buffers are reported back at 2x configured value
-    if (level == SOL_SOCKET && (optname == SO_RCVBUF || optname == SO_SNDBUF))
+    if (args.level == SOL_SOCKET && (args.optname == SO_RCVBUF || args.optname == SO_SNDBUF))
         compare *= 2;
     // Linux hack: defer accept timeout is translated from seconds to
     // retransmits on set, then back to seconds on get, which rounds it up
     // based on tcp retransmit timing algorithm.
-    if (level == SOL_TCP && optname == TCP_DEFER_ACCEPT)
+    if (args.level == SOL_TCP && args.optname == TCP_DEFER_ACCEPT)
         compare = tcpdefaccept_xlate_secs(compare);
 #endif
-    if (getsockopt(sock, level, optname, &current, &s_current)) {
-        if (fatal)
-            log_fatal("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, logf_errno());
+    if (getsockopt(args.sock, args.level, args.optname, &current, &s_current)) {
+        if (args.fatal)
+            log_fatal("getsockopt(%s:%s, %s, %s) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, logf_errno());
         else
-            log_warn("getsockopt(%s:%s, %s, %s) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, logf_errno());
+            log_warn("getsockopt(%s:%s, %s, %s) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, logf_errno());
     } else {
         bool ok;
-        if (is_bool)
+        if (args.is_bool)
             ok = (!current == !compare);
         else
             ok = (current == compare);
-        if (!ok && setsockopt(sock, level, optname, &wantval, sizeof(wantval))) {
-            if (fatal)
-                log_fatal("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, wantval, logf_errno());
+        if (!ok && setsockopt(args.sock, args.level, args.optname, &args.wantval, sizeof(args.wantval))) {
+            if (args.fatal)
+                log_fatal("setsockopt(%s:%s, %s, %s, %i) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, args.wantval, logf_errno());
             else
-                log_warn("setsockopt(%s:%s, %s, %s, %i) failed: %s", proto_str, logf_anysin(sa), level_str, optname_str, wantval, logf_errno());
+                log_warn("setsockopt(%s:%s, %s, %s, %i) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, args.wantval, logf_errno());
         }
     }
 }
