@@ -3,6 +3,7 @@ dist: xenial
 branches:
   only:
     - master
+    - /^[0-9]+\.[0-9]+\.x$/
 language: c
 cache:
   apt: true
