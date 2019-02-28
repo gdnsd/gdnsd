@@ -258,6 +258,57 @@ static unsigned get_pgsz(void)
 #define CMSG_BUFSIZE CMSG_SPACE(sizeof(struct in6_pktinfo))
 
 F_HOT F_NONNULL
+static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct msghdr* msg_hdr, ssize_t recvmsg_rv)
+{
+    if (unlikely(recvmsg_rv < 0)) {
+        log_err("UDP recvmsg() error: %s", logf_errno());
+        stats_own_inc(&stats->udp.recvfail);
+        return;
+    }
+
+    gdnsd_anysin_t* sa = msg_hdr->msg_name;
+    if (unlikely(
+                (sa->sa.sa_family == AF_INET && !sa->sin4.sin_port)
+                || (sa->sa.sa_family == AF_INET6 && !sa->sin6.sin6_port)
+            )) {
+        stats_own_inc(&stats->dropped);
+        return;
+    }
+
+#if defined __FreeBSD__ && defined IPV6_PKTINFO
+    if (sa->sa.sa_family == AF_INET6) {
+        struct cmsghdr* cmsg;
+        for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(msg_hdr); cmsg;
+                cmsg = (struct cmsghdr*)CMSG_NXTHDR(msg_hdr, cmsg)) {
+            if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
+                struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
+                if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
+                    pi->ipi6_ifindex = 0;
+                continue;
+            }
+        }
+    }
+#endif
+
+    size_t buf_in_len = (size_t)recvmsg_rv;
+    sa->len = msg_hdr->msg_namelen;
+    struct iovec* iov = msg_hdr->msg_iov;
+    iov->iov_len = process_dns_query(pctx, sa, iov->iov_base, NULL, buf_in_len);
+    if (likely(iov->iov_len)) {
+        while (1) {
+            int sent = sendmsg(fd, msg_hdr, 0);
+            if (unlikely(sent < 0)) {
+                if (errno == EINTR || ERRNO_WOULDBLOCK)
+                    continue;
+                stats_own_inc(&stats->udp.sendfail);
+                log_err("UDP sendmsg() of %zu bytes to client %s failed: %s", iov->iov_len, logf_anysin(sa), logf_errno());
+            }
+            break;
+        }
+    }
+}
+
+F_HOT F_NONNULL
 static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats)
 {
     const unsigned pgsz = get_pgsz();
@@ -286,10 +337,7 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats)
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
     bool is_online = true;
 
-    while (1) {
-        if (unlikely(thread_shutdown))
-            break;
-
+    while (likely(!thread_shutdown)) {
         iov.iov_len = DNS_RECV_SIZE;
         msg_hdr.msg_controllen = CMSG_BUFSIZE;
         msg_hdr.msg_namelen    = GDNSD_ANYSIN_MAXLEN;
@@ -320,51 +368,99 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats)
             rcu_thread_online();
         }
 
-        if (unlikely(recvmsg_rv < 0)) {
-            log_err("UDP recvmsg() error: %s", logf_errno());
-            stats_own_inc(&stats->udp.recvfail);
-        } else if (unlikely(
-                       (sa.sa.sa_family == AF_INET && !sa.sin4.sin_port)
-                       || (sa.sa.sa_family == AF_INET6 && !sa.sin6.sin6_port)
-                   )) {
-            stats_own_inc(&stats->dropped);
-        } else {
-#if defined __FreeBSD__ && defined IPV6_PKTINFO
-            if (sa.sa.sa_family == AF_INET6) {
-                struct cmsghdr* cmsg;
-                for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(&msg_hdr); cmsg;
-                        cmsg = (struct cmsghdr*)CMSG_NXTHDR(&msg_hdr, cmsg)) {
-                    if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
-                        struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
-                        if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
-                            pi->ipi6_ifindex = 0;
-                        continue;
-                    }
-                }
-            }
-#endif
-            size_t buf_in_len = (size_t)recvmsg_rv;
-            sa.len = msg_hdr.msg_namelen;
-            iov.iov_len = process_dns_query(pctx, &sa, buf, NULL, buf_in_len);
-            if (likely(iov.iov_len)) {
-                while (1) {
-                    int sent = sendmsg(fd, &msg_hdr, 0);
-                    if (unlikely(sent < 0)) {
-                        if (errno == EINTR || ERRNO_WOULDBLOCK)
-                            continue;
-                        stats_own_inc(&stats->udp.sendfail);
-                        log_err("UDP sendmsg() of %zu bytes to client %s failed: %s", iov.iov_len, logf_anysin(&sa), logf_errno());
-                    }
-                    break;
-                }
-            }
-        }
+        process_msg(fd, pctx, stats, &msg_hdr, recvmsg_rv);
     }
 
     free(buf);
 }
 
 #ifdef USE_MMSG
+
+F_HOT F_NONNULL
+static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct mmsghdr* dgrams, ssize_t mmsg_rv)
+{
+    gdnsd_assert(mmsg_rv != 0);
+    if (unlikely(mmsg_rv < 0)) {
+        stats_own_inc(&stats->udp.recvfail);
+        log_err("UDP recvmmsg() error: %s", logf_errno());
+        return;
+    }
+
+    unsigned pkts = (unsigned)mmsg_rv;
+    gdnsd_assert(pkts <= MMSG_WIDTH);
+    for (unsigned i = 0; i < pkts; i++) {
+        gdnsd_anysin_t* asp = dgrams[i].msg_hdr.msg_name;
+#if defined __FreeBSD__ && defined IPV6_PKTINFO
+        if (asp->sa.sa_family == AF_INET6) {
+            struct msghdr* mhdr = &dgrams[i].msg_hdr;
+            struct cmsghdr* cmsg;
+            for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(mhdr); cmsg;
+                    cmsg = (struct cmsghdr*)CMSG_NXTHDR(mhdr, cmsg)) {
+                if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
+                    struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
+                    if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
+                        pi->ipi6_ifindex = 0;
+                    continue;
+                }
+            }
+        }
+#endif
+        struct iovec* iop = &dgrams[i].msg_hdr.msg_iov[0];
+        if (unlikely((asp->sa.sa_family == AF_INET && !asp->sin4.sin_port)
+                     || (asp->sa.sa_family == AF_INET6 && !asp->sin6.sin6_port))) {
+            // immediately fail with no log output for packets with source port zero
+            stats_own_inc(&stats->dropped);
+            iop->iov_len = 0; // skip send, same as if process_dns_query() rejected it
+        } else {
+            asp->len = dgrams[i].msg_hdr.msg_namelen;
+            iop->iov_len = process_dns_query(pctx, asp, iop->iov_base, NULL, dgrams[i].msg_len);
+        }
+    }
+
+    // We have an array of datagrams to potentially send.  There are "pkts"
+    // entries, but any with iov_len == 0 should not be sent, and sendmmsg can
+    // only send contiguous chunks of the array.  Therefore, some magic here
+    // has to skip past blocks of zeros while sending blocks of non-zeros:
+
+    struct mmsghdr* dgptr = dgrams;
+    while (pkts) {
+        // skip any leading run of zeros
+        while (pkts && unlikely(!dgptr[0].msg_hdr.msg_iov[0].iov_len)) {
+            dgptr++;
+            pkts--;
+        }
+
+        // count the next run of non-zeros, transferring their accounting
+        // from pkts to spkts
+        unsigned spkts = 0;
+        for (unsigned i = 0; i < pkts; i++) {
+            if (likely(dgptr[i].msg_hdr.msg_iov[0].iov_len))
+                spkts++;
+            else
+                break;
+        }
+        pkts -= spkts;
+
+        // send next run of non-zero entries
+        while (spkts) {
+            mmsg_rv = sendmmsg(fd, dgptr, spkts, 0);
+            gdnsd_assert(mmsg_rv != 0); // not possible, sendmmsg returns >0 or -1+errno
+            if (unlikely(mmsg_rv < 0)) {
+                if (errno == EINTR || ERRNO_WOULDBLOCK)
+                    continue; // retry same sendmmsg() call
+                stats_own_inc(&stats->udp.sendfail);
+                log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
+                mmsg_rv = 1; // count as one packet "handled", so we
+                // don't re-send the erroring packet
+            }
+            gdnsd_assert(mmsg_rv >= 1);
+            gdnsd_assert(mmsg_rv <= (int)spkts);
+            const unsigned sent = (unsigned)mmsg_rv;
+            dgptr += sent; // skip past the handled packets
+            spkts -= sent; // drop the count of all handled packets
+        }
+    }
+}
 
 F_HOT F_NONNULL
 static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats)
@@ -401,10 +497,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
     bool is_online = true;
 
-    while (1) {
-        if (unlikely(thread_shutdown))
-            break;
-
+    while (likely(!thread_shutdown)) {
         // Re-set values changed by previous syscalls
         for (unsigned i = 0; i < MMSG_WIDTH; i++) {
             dgrams[i].msg_hdr.msg_iov[0].iov_len = DNS_RECV_SIZE;
@@ -438,87 +531,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
             rcu_thread_online();
         }
 
-        gdnsd_assert(mmsg_rv != 0);
-        if (unlikely(mmsg_rv < 0)) {
-            stats_own_inc(&stats->udp.recvfail);
-            log_err("UDP recvmmsg() error: %s", logf_errno());
-            continue;
-        }
-
-        unsigned pkts = (unsigned)mmsg_rv;
-        gdnsd_assert(pkts <= MMSG_WIDTH);
-        for (unsigned i = 0; i < pkts; i++) {
-            gdnsd_anysin_t* asp = &msgdata[i].sa;
-#if defined __FreeBSD__ && defined IPV6_PKTINFO
-            if (asp->sa.sa_family == AF_INET6) {
-                struct msghdr* mhdr = &dgrams[i].msg_hdr;
-                struct cmsghdr* cmsg;
-                for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(mhdr); cmsg;
-                        cmsg = (struct cmsghdr*)CMSG_NXTHDR(mhdr, cmsg)) {
-                    if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
-                        struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
-                        if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
-                            pi->ipi6_ifindex = 0;
-                        continue;
-                    }
-                }
-            }
-#endif
-            struct iovec* iop = &msgdata[i].iov[0];
-            if (unlikely((asp->sa.sa_family == AF_INET && !asp->sin4.sin_port)
-                         || (asp->sa.sa_family == AF_INET6 && !asp->sin6.sin6_port))) {
-                // immediately fail with no log output for packets with source port zero
-                stats_own_inc(&stats->dropped);
-                iop->iov_len = 0; // skip send, same as if process_dns_query() rejected it
-            } else {
-                asp->len = dgrams[i].msg_hdr.msg_namelen;
-                iop->iov_len = process_dns_query(pctx, asp, iop->iov_base, NULL, dgrams[i].msg_len);
-            }
-        }
-
-        // We have an array of datagrams to potentially send.  There are "pkts"
-        // entries, but any with iov_len == 0 should not be sent, and sendmmsg can
-        // only send contiguous chunks of the array.  Therefore, some magic here
-        // has to skip past blocks of zeros while sending blocks of non-zeros:
-
-        struct mmsghdr* dgptr = dgrams;
-        while (pkts) {
-            // skip any leading run of zeros
-            while (pkts && unlikely(!dgptr[0].msg_hdr.msg_iov[0].iov_len)) {
-                dgptr++;
-                pkts--;
-            }
-
-            // count the next run of non-zeros, transferring their accounting
-            // from pkts to spkts
-            unsigned spkts = 0;
-            for (unsigned i = 0; i < pkts; i++) {
-                if (likely(dgptr[i].msg_hdr.msg_iov[0].iov_len))
-                    spkts++;
-                else
-                    break;
-            }
-            pkts -= spkts;
-
-            // send next run of non-zero entries
-            while (spkts) {
-                mmsg_rv = sendmmsg(fd, dgptr, spkts, 0);
-                gdnsd_assert(mmsg_rv != 0); // not possible, sendmmsg returns >0 or -1+errno
-                if (unlikely(mmsg_rv < 0)) {
-                    if (errno == EINTR || ERRNO_WOULDBLOCK)
-                        continue; // retry same sendmmsg() call
-                    stats_own_inc(&stats->udp.sendfail);
-                    log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
-                    mmsg_rv = 1; // count as one packet "handled", so we
-                    // don't re-send the erroring packet
-                }
-                gdnsd_assert(mmsg_rv >= 1);
-                gdnsd_assert(mmsg_rv <= (int)spkts);
-                const unsigned sent = (unsigned)mmsg_rv;
-                dgptr += sent; // skip past the handled packets
-                spkts -= sent; // drop the count of all handled packets
-            }
-        }
+        process_mmsgs(fd, pctx, stats, dgrams, mmsg_rv);
     }
 
     free(bufs);
