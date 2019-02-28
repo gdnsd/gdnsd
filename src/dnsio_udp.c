@@ -321,14 +321,14 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
             rcu_thread_online();
         }
 
-        if (unlikely(
-                    (sa.sa.sa_family == AF_INET && !sa.sin4.sin_port)
-                    || (sa.sa.sa_family == AF_INET6 && !sa.sin6.sin6_port)
-                )) {
-            stats_own_inc(&stats->dropped);
-        } else if (unlikely(recvmsg_rv < 0)) {
+        if (unlikely(recvmsg_rv < 0)) {
             log_err("UDP recvmsg() error: %s", logf_errno());
             stats_own_inc(&stats->udp.recvfail);
+        } else if (unlikely(
+                       (sa.sa.sa_family == AF_INET && !sa.sin4.sin_port)
+                       || (sa.sa.sa_family == AF_INET6 && !sa.sin6.sin6_port)
+                   )) {
+            stats_own_inc(&stats->dropped);
         } else {
 #if defined __FreeBSD__ && defined IPV6_PKTINFO
             if (sa.sa.sa_family == AF_INET6) {
