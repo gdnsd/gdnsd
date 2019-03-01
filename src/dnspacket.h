@@ -51,6 +51,9 @@ typedef struct {
             stats_t close_s_kill;
             stats_t proxy;
             stats_t proxy_fail;
+            stats_t dso_estab;
+            stats_t dso_protoerr;
+            stats_t dso_typeni;
         } tcp;
     };
 

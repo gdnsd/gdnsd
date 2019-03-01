@@ -43,6 +43,7 @@ typedef struct {
     bool     zones_strict_data;
     bool     disable_cookies;
     bool     experimental_no_chain;
+    bool     disable_tcp_dso;
     unsigned max_nocookie_response;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;

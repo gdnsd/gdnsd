@@ -78,6 +78,7 @@ typedef struct {
     double server_timeout;
     size_t max_clients;
     bool do_proxy;
+    bool tcp_pad;
     // The rest below will mutate:
     ev_io accept_watcher;
     ev_prepare prep_watcher;
@@ -290,7 +291,13 @@ static void connq_append_new_conn(thread_t* thr, conn_t* conn)
 
     connq_assert_sane(thr);
 
-    // and then if we've just maxed out the connection count, we have to kill a conn
+    // If we've just maxed out the connection count, we have to kill a conn ungracefully.
+    // Arguably, we could do smarter things sooner for DSO clients (e.g. on
+    // reaching X% of max connection count, send the most-idle DSO session a
+    // zero inactivity unidirectional keepalive, or a retrydelay), but it's
+    // tricky to think through the implications here given mixed clients
+    // (fairness between DSO and non-DSO, whether the most-idle DSO is anywhere
+    // near the most-idle end of the list, etc)
     if (thr->num_conns == thr->max_clients) {
         log_debug("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&thr->connq_head->sa));
         stats_own_inc(&conn->thr->stats->tcp.close_s_kill);
@@ -328,6 +335,79 @@ static void connq_refresh_conn(thread_t* thr, conn_t* conn)
     thr->connq_tail = conn;
     thr->num_conns++; // connq_pull_conn decrements, but we're re-inserting here
     connq_assert_sane(thr);
+}
+
+// Expects response data to already be in conn->pktbuf, of size resp_size.
+// Used for writing normal responses, and also for DSO unidirectionals
+F_NONNULL
+static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
+{
+    gdnsd_assert(resp_size);
+    conn->pktbuf_size_hdr = htons((uint16_t)resp_size);
+    const size_t resp_send_size = resp_size + 2U;
+    ev_io* readw = &conn->read_watcher;
+    const ssize_t send_rv = send(readw->fd, &conn->pktbuf_size_hdr, resp_send_size, 0);
+    if (unlikely(send_rv < (ssize_t)resp_send_size)) {
+        if (send_rv < 0 && !ERRNO_WOULDBLOCK)
+            log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->sa), logf_errno());
+        else
+            log_debug("TCP DNS conn from %s reset by server: cannot buffer whole response", logf_anysin(&conn->sa));
+        stats_own_inc(&thr->stats->tcp.sendfail);
+        stats_own_inc(&thr->stats->tcp.close_s_err);
+        connq_destruct_conn(thr, conn, true, true);
+        return true;
+    }
+    return false;
+}
+
+// DSO unidirectional send (server push at will, used during shutdown phases)
+// rd:true -> RetryDelay with Delay=0 (asks client to immediately close)
+// rd:false -> KeepAlive with KA=inf + Inact=0 (asks client to close at next idle point)
+F_NONNULL
+static void conn_send_dso_uni(thread_t* thr, conn_t* conn, const bool rd)
+{
+    uint8_t* buf = conn->pktbuf;
+
+    // For DSO uni, the 12 byte header is all zero except the opcode
+    memset(buf, 0, 12U);
+    buf[2] = DNS_OPCODE_DSO << 3;
+    size_t offset = 12;
+
+    // The basic 4 byte TLV header
+    const uint16_t tlv_type = rd ? DNS_DSO_RETRY_DELAY : DNS_DSO_KEEPALIVE;
+    const uint16_t tlv_len = rd ? 4U : 8U;
+    gdnsd_put_una16(htons(tlv_type), &buf[offset]);
+    offset += 2;
+    gdnsd_put_una16(htons(tlv_len), &buf[offset]);
+    offset += 2;
+
+    // Type-specific data
+    if (rd) {
+        gdnsd_put_una32(0, &buf[offset]);
+        offset += 4;
+        gdnsd_assert(offset == 20U);
+    } else {
+        gdnsd_put_una32(0xFFFFFFFFU, &buf[offset]);
+        offset += 4;
+        gdnsd_put_una32(0, &buf[offset]);
+        offset += 4;
+        gdnsd_assert(offset == 24U);
+    }
+
+    // Add crypto padding if configured for the listener
+    if (thr->tcp_pad) {
+        const unsigned pad_dlen = PAD_BLOCK_SIZE - offset - 4U;
+        gdnsd_put_una16(htons(DNS_DSO_PADDING), &buf[offset]);
+        offset += 2U;
+        gdnsd_put_una16(htons(pad_dlen), &buf[offset]);
+        offset += 2U;
+        memset(&buf[offset], 0, pad_dlen);
+        offset += pad_dlen;
+        gdnsd_assert(offset == PAD_BLOCK_SIZE);
+    }
+
+    // write response, may tear down connection if no immediate full write
+    conn_write_packet(thr, conn, offset);
 }
 
 F_NONNULL
@@ -381,16 +461,23 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
             conn->readbuf_bytes = 0;
             conn->readbuf_head = 0;
             if (conn->dso.estab) {
-                // send unidirectional RetryDelay, could destroy conn if cannot send
+                conn_send_dso_uni(thr, conn, true); // send RetryDelay
             } else {
                 shutdown(conn->read_watcher.fd, SHUT_WR);
             }
             conn = next_conn;
         }
-        gdnsd_assert(!thr->check_mode_conns);
+
+        // Start the timer for the final 5s, if any clients are left (some may
+        // get closed above if we fail to write DSO unidirectionals to them).
         ev_timer* tmo = &thr->timeout_watcher;
-        tmo->repeat = 5.0;
-        ev_timer_again(thr->loop, tmo);
+        if (thr->num_conns) {
+            gdnsd_assert(!thr->check_mode_conns);
+            tmo->repeat = 5.0;
+            ev_timer_again(thr->loop, tmo);
+        } else {
+            gdnsd_assert(!ev_is_active(tmo));
+        }
         return;
     }
 
@@ -456,20 +543,30 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     conn_t* conn = thr->connq_head;
     gdnsd_assert(conn);
     while (conn) {
-        if (conn->dso.estab) {
-            // send unidirectional KeepAlive w/ inactivity=0, could destroy conn if cannot send
-        }
-        conn = conn->next;
+        conn_t* next_conn = conn->next;
+        if (conn->dso.estab)
+            conn_send_dso_uni(thr, conn, false);
+        conn = next_conn;
     }
 
     // Up until now, the timeout watcher was firing dynamically according to
     // connection idleness, always pointing at the expiry point of the
     // head-most (most-idle) connection in the queue.  Now it is reset to fire
     // once 5 seconds from now to transition from TH_GRACE to TH_SHUT and wait
-    // another 5 seconds there before exiting.
-    ev_timer* tmo = &thr->timeout_watcher;
-    tmo->repeat = 5.0;
-    ev_timer_again(thr->loop, tmo);
+    // another 5 seconds there before exiting.  However, we won't bother if
+    // there's no clients left (it's possible in the case that they're all DSO
+    // connections, and they all experienced a write failure of their
+    // unidirectional keepalive above, causing termination).
+    if (thr->num_conns) {
+        // Start the timer for the final 5s, if any clients are left (some may
+        // get closed above if we fail to write DSO unidirectionals to them).
+        ev_timer* tmo = &thr->timeout_watcher;
+        tmo->repeat = 5.0;
+        ev_timer_again(thr->loop, tmo);
+    } else {
+        ev_timer* tw V_UNUSED = &thr->timeout_watcher;
+        gdnsd_assert(!ev_is_active(tw));
+    }
 }
 
 // Checks the status of the next request in the buffer, if any, and takes a few
@@ -557,19 +654,8 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
     // responsible then we need to tear down anyways.
 
     gdnsd_assert(resp_size <= MAX_RESPONSE_BUF);
-    conn->pktbuf_size_hdr = htons((uint16_t)resp_size);
-    const size_t resp_send_size = resp_size + 2U;
-    const ssize_t send_rv = send(readw->fd, &conn->pktbuf_size_hdr, resp_send_size, 0);
-    if (unlikely(send_rv < (ssize_t)resp_send_size)) {
-        if (send_rv < 0 && !ERRNO_WOULDBLOCK)
-            log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->sa), logf_errno());
-        else
-            log_debug("TCP DNS conn from %s reset by server: cannot buffer whole response", logf_anysin(&conn->sa));
-        stats_own_inc(&thr->stats->tcp.sendfail);
-        stats_own_inc(&thr->stats->tcp.close_s_err);
-        connq_destruct_conn(thr, conn, true, true);
-        return;
-    }
+    if (conn_write_packet(thr, conn, resp_size))
+        return; // writer ended up destroying conn
 
     // We don't refresh timeout if this txn was just a DSO KA
     if (!conn->dso.last_was_ka)
@@ -960,6 +1046,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
     thr->server_timeout = (double)(addrconf->tcp_timeout * 2);
     thr->max_clients = addrconf->tcp_clients_per_thread;
     thr->do_proxy = addrconf->tcp_proxy;
+    thr->tcp_pad = addrconf->tcp_pad;
 
     ev_idle* idle_watcher = &thr->idle_watcher;
     ev_idle_init(idle_watcher, idle_handler);

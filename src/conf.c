@@ -53,6 +53,7 @@ static const cfg_t cfg_defaults = {
     .zones_strict_data = false,
     .disable_cookies = false,
     .experimental_no_chain = false,
+    .disable_tcp_dso = false,
     .max_nocookie_response = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
@@ -297,6 +298,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_BOOL(options, zones_strict_data);
         CFG_OPT_BOOL(options, disable_cookies);
         CFG_OPT_BOOL(options, experimental_no_chain);
+        CFG_OPT_BOOL(options, disable_tcp_dso);
         CFG_OPT_UINT_NOMIN(options, max_nocookie_response, 1024LU);
         if (cfg->max_nocookie_response && cfg->max_nocookie_response < 128U)
             log_fatal("The global option 'max_nocookie_response' (%u) must be zero, or in the range 128 - 1024", cfg->max_nocookie_response);

@@ -116,8 +116,8 @@ typedef struct {
     // set here at the start of every request
     uint8_t* packet;
 
-    // DSO state tracking, NULL in UDP case.  Like "packet" this is passed in
-    // as a pointer on each request, overwriting this every time.
+    // RFC 8490 DSO state tracking, NULL in UDP case.  Like "packet" this is
+    // passed in as a pointer on each request, overwriting this every time.
     dso_state_t* dso;
 
     // Max response size for this individual request, as determined
@@ -180,7 +180,7 @@ struct dnsp_ctx {
     // set permanently at startup
     bool is_udp;
 
-    // Whether to use EDNS Padding in TCP responses (encrypted transport)
+    // Whether to use EDNS and DSO Padding in TCP responses (encrypted transport)
     bool tcp_pad;
 
     // For UDP, the configured maximum response size, set permanently at
@@ -282,10 +282,12 @@ void dnspacket_ctx_cleanup(dnsp_ctx_t* ctx)
 
 typedef enum {
     DECODE_IGNORE  = -4, // totally invalid packet (len < header len or QR-bit set in query) - NO RESPONSE PACKET
+    // (^ also used for immediate connection abort in case of DSO session + edns keepalive)
     DECODE_FORMERR = -3, // slightly better but still invalid input, we return FORMERR
     DECODE_BADVERS = -2, // EDNS version higher than ours (0)
-    DECODE_NOTIMP  = -1, // non-QUERY opcode or [AI]XFER, we return NOTIMP
-    DECODE_OK      =  0, // normal and valid
+    DECODE_NOTIMP  = -1, // unsupported opcode or QUERY meta-type, we return NOTIMP
+    DECODE_OK      =  0, // normal and valid, QUERY opcode
+    DECODE_DSO     =  1, // DSO opcode, kicks out to special handling
 } rcode_rv_t;
 
 F_NONNULL
@@ -404,14 +406,18 @@ static rcode_rv_t handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigne
             rv = DECODE_FORMERR; // nsid req MUST NOT have data
         }
     } else if (opt_code == EDNS_TCP_KEEPALIVE_OPTCODE) {
-        log_devdebug("Got client edns tcp keepalive option, no use for it");
-        // no-op
-        // Note we don't explicitly parse RFC 7828 edns tcp keepalive here, but
-        // this is where we'd install the handler function if we did.  We
-        // ignore whether the client sent the option and just always send our
-        // own anytime EDNS over TCP is in use and DSO isn't (yet) established.
+        // DSO Protoerr F: EDNS TCP Keepalive inside established DSO session
+        if (!ctx->is_udp) {
+            gdnsd_assert(ctx->txn.dso);
+            if (ctx->txn.dso->estab) {
+                log_devdebug("Got EDNS Keepalive during DSO session, Proto Err -> Conn Abort");
+                stats_own_inc(&ctx->stats->tcp.dso_protoerr);
+                rv = DECODE_IGNORE; // causes retval 0 to TCP, forcing conn abort
+            }
+        }
+        // Otherwise we ignore the client values sent here since we always send
+        // the response version of this when legal, with our own fixed values.
     } else if (opt_code == EDNS_PADDING) {
-        log_devdebug("Got client edns padding option, no use for it");
         // Ditto, we emit padding in response to any EDNS request over TCP when
         // tcp_pad is enabled, so we don't care what padding they did (or
         // didn't) send.
@@ -431,10 +437,8 @@ static rcode_rv_t handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uin
 {
     gdnsd_assert(rdlen);
 
-    rcode_rv_t rv = DECODE_OK;
-
     // minimum edns option length is 4 bytes (2 byte option code, 2 byte data len)
-    while (rdlen && rv == DECODE_OK) {
+    do {
         if (rdlen < 4) {
             log_devdebug("EDNS option too short");
             return DECODE_FORMERR;
@@ -448,12 +452,14 @@ static rcode_rv_t handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uin
             log_devdebug("EDNS option too long");
             return DECODE_FORMERR;
         }
-        rv = handle_edns_option(ctx, opt_code, opt_dlen, rdata);
+        rcode_rv_t rv = handle_edns_option(ctx, opt_code, opt_dlen, rdata);
+        if (rv != DECODE_OK)
+            return rv;
         rdlen -= opt_dlen;
         rdata += opt_dlen;
-    }
+    } while (rdlen);
 
-    return rv;
+    return DECODE_OK;
 }
 
 F_NONNULL
@@ -688,11 +694,6 @@ static rcode_rv_t parse_query_rrs(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, 
             return DECODE_FORMERR;
     }
 
-    // If there's trailing junk bytes left in the query packet either it's
-    // malformed or we've critically failed to parse it correctly:
-    if (offset != packet_len)
-        return DECODE_FORMERR;
-
     return DECODE_OK;
 }
 
@@ -722,28 +723,40 @@ static rcode_rv_t decode_query(dnsp_ctx_t* ctx, unsigned* output_offset_ptr, con
     if (rcode != DECODE_OK)
         return rcode;
 
-    if (unlikely(DNSH_GET_OPCODE(hdr))) {
-        log_devdebug("Non-QUERY request (NOTIMP), opcode is %i", DNSH_GET_OPCODE(hdr));
-        return DECODE_NOTIMP;
+    const unsigned opcode = DNSH_GET_OPCODE(hdr);
+
+    if (opcode == DNS_OPCODE_QUERY) {
+        // We could FORMERR-reject QUERY operations here if they have trailing
+        // junk beyond the parsed RRs, but we'll choose not to for now and just
+        // ignore such data.  For other opcodes, whether any data after the
+        // indicated RR counts is illegal or not depends on the opcode, so we'd
+        // rather NOTIMP them.
+
+        // Require exactly one question, except in the case that an EDNS cookie
+        // was received, in which case that standard allows zero questions as a
+        // cookie-refresh ping.
+        const unsigned hdr_qdcount = DNSH_GET_QDCOUNT(hdr);
+        if (unlikely(hdr_qdcount > 1U || (!hdr_qdcount && !ctx->txn.edns.cookie.recvd))) {
+            log_devdebug("Received QUERY request with %hu questions, FORMERR", DNSH_GET_QDCOUNT(hdr));
+            return DECODE_FORMERR;
+        }
+
+        if (unlikely(ctx->txn.qtype > 127 && ctx->txn.qtype < 255)) {
+            // Range 128-255 is meta-query types, not data types.  We implement ANY
+            // (255) in normal response process, but we do not implement any others
+            // (e.g. IXFR, AXFR, MAILA, MAILB, TKEY, TSIG, etc).
+            log_devdebug("Unsupported meta-query type %u (NOTIMP) attempted", ctx->txn.qtype);
+            return DECODE_NOTIMP;
+        }
+
+        return DECODE_OK;
     }
 
-    const unsigned hdr_qdcount = DNSH_GET_QDCOUNT(hdr);
-    if (hdr_qdcount != 1) {
-        if (!hdr_qdcount && ctx->txn.edns.cookie.recvd)
-            return DECODE_OK; // QDCOUNT==0 + Cookie is ok
-        log_devdebug("Received QUERY request with %hu questions, FORMERR", DNSH_GET_QDCOUNT(hdr));
-        return DECODE_FORMERR;
-    }
+    if (opcode == DNS_OPCODE_DSO && !gcfg->disable_tcp_dso)
+        return DECODE_DSO;
 
-    if (unlikely(ctx->txn.qtype > 127 && ctx->txn.qtype < 255)) {
-        // Range 128-255 is meta-query types, not data types.  We implement ANY
-        // (255) in normal response process, but we do not implement any others
-        // (e.g. IXFR, AXFR, MAILA, MAILB, TKEY, TSIG, etc).
-        log_devdebug("Unsupported meta-query type %u (NOTIMP) attempted", ctx->txn.qtype);
-        return DECODE_NOTIMP;
-    }
-
-    return DECODE_OK;
+    log_devdebug("NOTIMP: unsupported opcode %u", opcode);
+    return DECODE_NOTIMP;
 }
 
 // Always first thing added, once we hit a situation where general compression is warranted
@@ -1939,14 +1952,17 @@ static unsigned do_edns_output(dnsp_ctx_t* ctx, uint8_t* packet, unsigned res_of
     // TCP if DSO isn't established, using either the fixed timeout set
     // from config at startup, or zero if we're in shutdown_grace mode and
     // trying to get clients to disconnect.
-    if (!ctx->is_udp && !ctx->txn.dso->estab) {
-        rdlen += 6U;
-        gdnsd_put_una16(htons(EDNS_TCP_KEEPALIVE_OPTCODE), &packet[res_offset]);
-        res_offset += 2;
-        gdnsd_put_una16(htons(2), &packet[res_offset]);
-        res_offset += 2;
-        gdnsd_put_una16(htons(ctx->edns_tcp_keepalive), &packet[res_offset]);
-        res_offset += 2;
+    if (!ctx->is_udp) {
+        gdnsd_assert(ctx->txn.dso);
+        if (!ctx->txn.dso->estab) {
+            rdlen += 6U;
+            gdnsd_put_una16(htons(EDNS_TCP_KEEPALIVE_OPTCODE), &packet[res_offset]);
+            res_offset += 2;
+            gdnsd_put_una16(htons(2), &packet[res_offset]);
+            res_offset += 2;
+            gdnsd_put_una16(htons(ctx->edns_tcp_keepalive), &packet[res_offset]);
+            res_offset += 2;
+        }
     }
 
     // NSID, if configured by user
@@ -2008,6 +2024,148 @@ static unsigned do_edns_output(dnsp_ctx_t* ctx, uint8_t* packet, unsigned res_of
     return res_offset;
 }
 
+F_NONNULL
+static size_t handle_dso(dnsp_ctx_t* ctx, const size_t packet_len)
+{
+    uint8_t* packet = ctx->txn.packet;
+    gdnsd_assert(packet);
+    wire_dns_header_t* hdr = (wire_dns_header_t*)packet;
+
+    // Ensure all the Z-bits (flags) are clear in any DSO response:
+    // The main process_dns_query code already clears TC and AA from flags1,
+    // but leaves RD as-is and sets QR for us, and we assign our rcodes
+    // unmasked to flags2, which clears the other 4 bits in them (RA, reserved,
+    // AD, CD) implicitly.  So all we *should* have to do here on top of that
+    // is ensure we don't reflect client's RD bit, but better safe than sorry
+    // in case of code changes elsewhere, so clear all but QR+Opcode:
+    hdr->flags1 &= 0xF8;
+    hdr->flags2 = 0;
+
+    // If we get a DSO opcode over UDP, send a FORMERR response with no data
+    // Non-zero RR counts with DSO *MUST* generate a FORMERR by the standard
+    if (ctx->is_udp || (hdr->qdcount | hdr->ancount | hdr->nscount | hdr->arcount)) {
+        log_devdebug("Got DSO packet over UDP or with non-zero RR counts, FORMERR");
+        hdr->qdcount = 0;
+        hdr->ancount = 0;
+        hdr->nscount = 0;
+        hdr->arcount = 0;
+        stats_own_inc(&ctx->stats->formerr);
+        hdr->flags2 = DNS_RCODE_FORMERR;
+        return sizeof(wire_dns_header_t);
+    }
+
+    gdnsd_assert(ctx->txn.dso); // TCP always has this pointer
+
+    // All of these cases are protocol-fatal and the standard requires immediate connection abort:
+    //    A. Any unidirectional of any TLV type (ID = 0)
+    //    B. Lack of a primary TLV
+    //    C. Any known non-Keepalive TLV (RetryDelay, Padding) as primary
+    //    D. Any length errors in blindly parsing all TLVs (TLV runs off end of
+    //       packet, junk data at end of packet, etc).
+    //    E. A Keepalive TLV with a data length other than 8.
+    //    F. If we see EDNS Keepalive in an established DSO session (elsewhere)
+
+    if (!hdr->id || packet_len < sizeof(wire_dns_header_t) + 4U) { // Protoerr A||B
+        log_devdebug("Got DSO packet with zero id (uni) or no room for primary TLV, Proto Err -> Conn Abort");
+        stats_own_inc(&ctx->stats->tcp.dso_protoerr);
+        return 0;
+    }
+
+    // Offset used to parse primary TLV
+    size_t offset = sizeof(wire_dns_header_t);
+
+    // Grab type primary request TLV
+    const unsigned dtype = ntohs(gdnsd_get_una16(&packet[offset]));
+    offset += 2;
+
+    if (dtype == DNS_DSO_RETRY_DELAY || dtype == DNS_DSO_PADDING) { // Protoerr C
+        log_devdebug("Got DSO packet with primary TLV known and illegal (retry or padding), Proto Err -> Conn Abort");
+        stats_own_inc(&ctx->stats->tcp.dso_protoerr);
+        return 0;
+    }
+
+    // Grab data len of primary request TLV
+    const size_t dlen = ntohs(gdnsd_get_una16(&packet[offset]));
+    offset += 2;
+
+    // Consume and ignore primary TLV data bytes (dlen) and all additional TLVs
+    // so long as there's still room in the packet for them
+    size_t atlv_offset = offset + dlen; // start of first atlv
+    while (packet_len >= (atlv_offset + 4U)) { // while 1+ ATLVs present
+        const size_t adlen = ntohs(gdnsd_get_una16(&packet[atlv_offset + 2U]));
+        atlv_offset += (4U + adlen);
+    }
+
+    if (atlv_offset != packet_len) { // Protoerr D
+        log_devdebug("Got DSO packet with a length parsing error, Proto Err -> Conn Abort");
+        stats_own_inc(&ctx->stats->tcp.dso_protoerr);
+        return 0;
+    }
+
+    if (dtype == DNS_DSO_KEEPALIVE) {
+        if (dlen != 8) { // Protoerr E
+            log_devdebug("Got DSO KeepAlive Request with data len %zu, should be 8, Proto Err -> Conn Abort", dlen);
+            stats_own_inc(&ctx->stats->tcp.dso_protoerr);
+            return 0;
+        }
+
+        // We have a legitimate well-formed client KeepAlive, establishing a
+        // session and requiring a matching response from us.  last_was_ka
+        // informs the TCP layer not to reset the inactivity timer.
+        ctx->txn.dso->last_was_ka = true;
+        if (!ctx->txn.dso->estab) {
+            ctx->txn.dso->estab = true;
+            stats_own_inc(&ctx->stats->tcp.dso_estab);
+        }
+
+        // offset is already sitting just past the keepalive type+len, just add our data:
+        gdnsd_put_una32(0xFFFFFFFFU, &packet[offset]); // keepalive interval = infinite
+        offset += 4U;
+        gdnsd_put_una32(htonl(ctx->dso_inactivity), &packet[offset]); // inactivity interval
+        offset += 4U;
+        gdnsd_assert(offset == 24U); // 12 hdr + 12 KA primary tlv response
+        return offset;
+    }
+
+    // A DSO request with an unknown primary TLV type causes a DSOTYPENI error
+    // response and does not establish a DSO session, but keeps the connection.
+    log_devdebug("Got DSO Request of unknown type %u, DSOTYPENI", dtype);
+    stats_own_inc(&ctx->stats->tcp.dso_typeni);
+    hdr->flags2 = DNS_RCODE_DSOTYPENI;
+    return sizeof(wire_dns_header_t);
+}
+
+F_NONNULL
+static size_t handle_dso_with_padding(dnsp_ctx_t* ctx, const size_t packet_len)
+{
+    size_t offset = handle_dso(ctx, packet_len);
+
+    // assert that all our known responses from above are small enough to use
+    // the simplest padding case (always fits in the first padding block with
+    // room for the padding option itself with zero or more bytes of pad).
+    gdnsd_assert(offset <= (PAD_BLOCK_SIZE - 4U));
+
+    // Crypto padding Additional TLV if appropriate (note that it's ok to have
+    // an Additional TLV in cases where no Primary is required/allowed, such as
+    // DSOTYPENI and FORMERR responses):
+    if (ctx->tcp_pad && offset) {
+        gdnsd_assert(!ctx->is_udp);
+        gdnsd_assert(offset >= sizeof(wire_dns_header_t)); // non-zero offsets are 12+
+        uint8_t* packet = ctx->txn.packet;
+        gdnsd_assert(packet);
+        const size_t pad_dlen = PAD_BLOCK_SIZE - offset - 4U;
+        gdnsd_put_una16(htons(DNS_DSO_PADDING), &packet[offset]);
+        offset += 2U;
+        gdnsd_put_una16(htons(pad_dlen), &packet[offset]);
+        offset += 2U;
+        memset(&packet[offset], 0, pad_dlen);
+        offset += pad_dlen;
+        gdnsd_assert(offset == PAD_BLOCK_SIZE);
+    }
+
+    return offset;
+}
+
 unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* packet, dso_state_t* dso, const unsigned packet_len)
 {
     // iothreads don't allow queries larger than this
@@ -2048,6 +2206,9 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* p
     wire_dns_header_t* hdr = (wire_dns_header_t*)packet;
     hdr->flags1 &= 0x79; // Clears QR, TC, AA bits, preserves RD and Opcode
     hdr->flags1 |= 0x80; // Sets QR
+
+    if (status == DECODE_DSO)
+        return handle_dso_with_padding(ctx, packet_len);
 
     if (likely(status == DECODE_OK)) {
         hdr->flags2 = DNS_RCODE_NOERROR;

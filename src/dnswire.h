@@ -80,6 +80,15 @@ typedef struct S_PACKED {
 #define DNSH_GET_NSCOUNT(_h) (ntohs((_h)->nscount))
 #define DNSH_GET_ARCOUNT(_h) (ntohs((_h)->arcount))
 
+// DNS Opcodes we know about
+#define DNS_OPCODE_QUERY 0
+#define DNS_OPCODE_DSO 6
+
+// RFC 8490 DSO TLV types we know about:
+#define DNS_DSO_KEEPALIVE 1
+#define DNS_DSO_RETRY_DELAY 2
+#define DNS_DSO_PADDING 3
+
 /* DNS Response Codes */
 #define DNS_RCODE_NOERROR 0
 #define DNS_RCODE_FORMERR 1
@@ -87,6 +96,7 @@ typedef struct S_PACKED {
 #define DNS_RCODE_NXDOMAIN 3
 #define DNS_RCODE_NOTIMP 4
 #define DNS_RCODE_REFUSED 5
+#define DNS_RCODE_DSOTYPENI 11
 #define DNS_EXT_RCODE_BADVERS 1
 
 // EDNS option codes

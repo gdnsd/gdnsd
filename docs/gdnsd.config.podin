@@ -194,7 +194,7 @@ Integer seconds, default 37, min 5, max 1800.
 
 This determines the client-side idle timeout for TCP connections, which
 is sent by the server to applicable clients supporting signalling mechanisms
-like EDNS TCP Keepalive (or in the future, DNS Stateful Operations (DSO)).
+like RFC 7828 EDNS TCP Keepalive or RFC 8490 DNS Stateful Operations (DSO).
 
 There is a corresponding server-side timeout which determines when gdnsd will
 give up on a client it believes to be delinquent (one that keeps a connection
@@ -226,8 +226,24 @@ established).  The timeout value will be sent with the fixed value that is
 configured here until the server begins shutting down, at which point the zero
 value is sent in such responses in an attempt to get clients to cleanly close.
 
-DSO is not yet implemented, but the current TCP code and state structures are
-designed for it, it just needs the protocol bits implemented.
+Clients which establish DSO via the Keepalive TLV will get the same client-side
+timeout sent to them as the DSO Inactivity timeout, with the DSO KeepAlive
+interval set to Infinite (this means we don't request the client to ever send
+artificial keepalive pings, and our client-side timeout applies to the interval
+between real DNS request transactions in the session).  DSO clients will also
+get better and more-timely information when the server is shutting down or
+being replaced (we can push immediate DSO unidirectional messages towards them
+asking that they close their session gracefully).
+
+=item B<disable_tcp_dso>
+
+Boolean, default false.  This disables RFC 8490 DNS Stateful Operations (DSO)
+support for TCP threads.
+
+Probably the only good reasons to disable would be finding interop issues or
+misbehaviors in this new code and/or standard, as otherwise it offers a
+superior mechanism for managing stateful client connections versus the previous
+best available solution (RFC 7828 EDNS TCP Keepalive).
 
 =item B<tcp_backlog>
 

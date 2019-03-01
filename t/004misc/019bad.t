@@ -11,7 +11,7 @@
 
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 33;
+use Test::More tests => 34;
 
 my $recvbuf = '';
 
@@ -42,6 +42,17 @@ sub make_query {
 sub make_tcp_query {
     my $data = make_query(@_);
     return pack("n", length($data)) . $data;
+}
+
+sub make_dso_ka {
+    return pack('nCCnnnn nnNN',
+        $_id++,
+        48, # flags1 (opcode=6, other bits zero)
+        0, # flags2
+        0, 0, 0, 0, # RR counts
+        1, 8, # Keepalive with proper length 8 bytes
+        1234, 5678 # Arbitrary KA/Inact timer values
+    );
 }
 
 my $pid = _GDT->test_spawn_daemon();
@@ -442,8 +453,6 @@ eval {_GDT->check_stats(
 ok(!$@) or diag $@;
 # resp check: 1/0/0/1, aa=>0, rcode=>refused, matches question, EDNS Cookie output matching client cookie from *first* cookie sent
 
-close($sock);
-
 # T28
 # TCP pipelining test.  We'll send a raw single send() with 5x minimal
 # questions (REFUSED due to root name) followed by a "real" question (NOERROR)
@@ -538,7 +547,30 @@ shutdown($tcp_sock, 1); # SHUT_WR
 shutdown($proxy_sock, 1); # SHUT_WR
 shutdown($proxy2_sock, 1); # SHUT_WR
 
-# T31
+# Test DSO over UDP, which would normally be illegal anyways and cause a
+# FORMERR, but in this particular case DSO is disabled globally by config, so
+# we send a NOTIMP
+my $test31 = make_dso_ka();
+send($sock, $test31, 0);
+recv($sock, $recvbuf, 4096, 0);
+close($sock);
+eval {_GDT->check_stats(
+    udp_reqs => 27,
+    tcp_reqs => 18,
+    noerror => 7,
+    formerr => 17,
+    refused => 18,
+    edns => 10,
+    notimp => 2,
+    badvers => 1,
+    edns_cookie_init => 1,
+    tcp_proxy => 2,
+    tcp_proxy_fail => 0,
+    tcp_conns => 3,
+)};
+ok(!$@) or diag $@;
+
+# T32
 # Test a valid query to make sure the server is still functioning
 eval {_GDT->query_server(
     undef,
@@ -551,15 +583,15 @@ eval {_GDT->query_server(
 )};
 ok(!$@) or diag $@;
 
-# T32
+# T33
 eval {_GDT->check_stats(
-    udp_reqs => 27,
+    udp_reqs => 28,
     tcp_reqs => 18,
     noerror => 8,
     formerr => 17,
     refused => 18,
     edns => 10,
-    notimp => 1,
+    notimp => 2,
     badvers => 1,
     edns_cookie_init => 1,
     tcp_proxy => 2,
@@ -568,5 +600,5 @@ eval {_GDT->check_stats(
 )};
 ok(!$@) or diag $@;
 
-# T33
+# T34
 _GDT->test_kill_daemon($pid);
