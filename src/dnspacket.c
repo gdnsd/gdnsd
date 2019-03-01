@@ -280,13 +280,20 @@ void dnspacket_ctx_cleanup(dnsp_ctx_t* ctx)
     free(ctx);
 }
 
-// retval: true -> FORMERR, false -> OK
+typedef enum {
+    DECODE_IGNORE  = -4, // totally invalid packet (len < header len or QR-bit set in query) - NO RESPONSE PACKET
+    DECODE_FORMERR = -3, // slightly better but still invalid input, we return FORMERR
+    DECODE_BADVERS = -2, // EDNS version higher than ours (0)
+    DECODE_NOTIMP  = -1, // non-QUERY opcode or [AI]XFER, we return NOTIMP
+    DECODE_OK      =  0, // normal and valid
+} rcode_rv_t;
+
 F_NONNULL
-static bool handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint8_t* opt_data)
+static rcode_rv_t handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint8_t* opt_data)
 {
     if (opt_len < 4) {
         log_devdebug("edns_client_subnet data too short (%u bytes)", opt_len);
-        return true;
+        return DECODE_FORMERR;
     }
 
     const unsigned family = ntohs(gdnsd_get_una16(opt_data));
@@ -295,23 +302,23 @@ static bool handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint
     const unsigned scope_mask = *opt_data++;
     if (scope_mask) {
         log_devdebug("edns_client_subnet: non-zero scope mask in request: %u", scope_mask);
-        return true;
+        return DECODE_FORMERR;
     }
 
     // Validate family and validate non-zero src_mask as appropriate
     if (family == 1U) { // IPv4
         if (src_mask > 32U) {
             log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv4", src_mask);
-            return true;
+            return DECODE_FORMERR;
         }
     } else if (family == 2U) { // IPv6
         if (src_mask > 128U) {
             log_devdebug("edns_client_subnet: invalid src_mask of %u for IPv6", src_mask);
-            return true;
+            return DECODE_FORMERR;
         }
     } else {
         log_devdebug("edns_client_subnet has unknown family %u", family);
-        return true;
+        return DECODE_FORMERR;
     }
 
     // There should be exactly enough address bytes to cover the provided source mask (possibly 0)
@@ -320,7 +327,7 @@ static bool handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint
     const unsigned addr_bytes = whole_bytes + (trailing_bits ? 1 : 0);
     if (opt_len != 4 + addr_bytes) {
         log_devdebug("edns_client_subnet: option length %u mismatches src_mask of %u", opt_len, src_mask);
-        return true;
+        return DECODE_FORMERR;
     }
 
     // Also, we need to check that any unmasked trailing bits in the final
@@ -330,7 +337,7 @@ static bool handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint
         const unsigned final_mask = ~(0xFFU << (8U - trailing_bits)) & 0xFFU;
         if (final_byte & final_mask) {
             log_devdebug("edns_client_subnet: non-zero bits beyond src_mask");
-            return true;
+            return DECODE_FORMERR;
         }
     }
 
@@ -351,18 +358,17 @@ static bool handle_edns_client_subnet(edns_t* edns, unsigned opt_len, const uint
     edns->respond_client_subnet = true;
     edns->client_info.edns_client_mask = src_mask;
     edns->client_family = family; // copy family for output
-    return false;
+    return DECODE_OK;
 }
 
-// retval: true -> FORMERR, false -> OK
 F_NONNULL
-static bool handle_edns_cookie(dnsp_ctx_t* ctx, unsigned opt_len, const uint8_t* opt_data)
+static rcode_rv_t handle_edns_cookie(dnsp_ctx_t* ctx, unsigned opt_len, const uint8_t* opt_data)
 {
     ctx->txn.edns.cookie.recvd = true;
     // FORMERR if illegal data len, only legal lens are 8, or 16-40
     if (opt_len != 8U && (opt_len < 16U || opt_len > 40U)) {
         stats_own_inc(&ctx->stats->edns_cookie_formerr);
-        return true;
+        return DECODE_FORMERR;
     }
     ctx->txn.edns.cookie.respond = true;
     ctx->txn.edns.out_bytes += 20U;
@@ -373,16 +379,15 @@ static bool handle_edns_cookie(dnsp_ctx_t* ctx, unsigned opt_len, const uint8_t*
         stats_own_inc(&ctx->stats->edns_cookie_init);
     else
         stats_own_inc(&ctx->stats->edns_cookie_bad);
-    return false;
+    return DECODE_OK;
 }
 
-// retval: true -> FORMERR, false -> OK
 F_NONNULL
-static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_len, const uint8_t* opt_data)
+static rcode_rv_t handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_len, const uint8_t* opt_data)
 {
     gdnsd_assert(ctx->stats);
 
-    bool rv = false;
+    rcode_rv_t rv = DECODE_OK;
     if (opt_code == EDNS_CLIENTSUB_OPTCODE) {
         if (gcfg->edns_client_subnet) {
             stats_own_inc(&ctx->stats->edns_clientsub);
@@ -396,7 +401,7 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
                 ctx->txn.edns.respond_nsid = true;
             }
         } else {
-            rv = true; // nsid req MUST NOT have data
+            rv = DECODE_FORMERR; // nsid req MUST NOT have data
         }
     } else if (opt_code == EDNS_TCP_KEEPALIVE_OPTCODE) {
         log_devdebug("Got client edns tcp keepalive option, no use for it");
@@ -421,17 +426,18 @@ static bool handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_
     return rv;
 }
 
-// retval: true -> FORMERR, false -> OK
 F_NONNULL
-static bool handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uint8_t* rdata)
+static rcode_rv_t handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uint8_t* rdata)
 {
     gdnsd_assert(rdlen);
 
+    rcode_rv_t rv = DECODE_OK;
+
     // minimum edns option length is 4 bytes (2 byte option code, 2 byte data len)
-    while (rdlen) {
+    while (rdlen && rv == DECODE_OK) {
         if (rdlen < 4) {
             log_devdebug("EDNS option too short");
-            return true;
+            return DECODE_FORMERR;
         }
         unsigned opt_code = ntohs(gdnsd_get_una16(rdata));
         rdata += 2;
@@ -440,24 +446,15 @@ static bool handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uint8_t* 
         rdlen -= 4;
         if (opt_dlen > rdlen) {
             log_devdebug("EDNS option too long");
-            return true;
+            return DECODE_FORMERR;
         }
-        if (handle_edns_option(ctx, opt_code, opt_dlen, rdata))
-            return true; // option handler indicated FORMERR
+        rv = handle_edns_option(ctx, opt_code, opt_dlen, rdata);
         rdlen -= opt_dlen;
         rdata += opt_dlen;
     }
 
-    return false;
+    return rv;
 }
-
-typedef enum {
-    DECODE_IGNORE  = -4, // totally invalid packet (len < header len or QR-bit set in query) - NO RESPONSE PACKET
-    DECODE_FORMERR = -3, // slightly better but still invalid input, we return FORMERR
-    DECODE_BADVERS = -2, // EDNS version higher than ours (0)
-    DECODE_NOTIMP  = -1, // non-QUERY opcode or [AI]XFER, we return NOTIMP
-    DECODE_OK      =  0, // normal and valid
-} rcode_rv_t;
 
 F_NONNULL
 static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsigned packet_len)
@@ -510,8 +507,8 @@ static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsig
             if (packet_len < offset + edns_rdlen) {
                 log_devdebug("Received EDNS OPT RR with options data longer than packet length");
                 rcode = DECODE_FORMERR;
-            } else if (handle_edns_options(ctx, edns_rdlen, &packet[offset])) {
-                rcode = DECODE_FORMERR;
+            } else {
+                rcode = handle_edns_options(ctx, edns_rdlen, &packet[offset]);
             }
             offset += edns_rdlen;
         }
