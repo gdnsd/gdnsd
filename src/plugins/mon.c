@@ -411,14 +411,14 @@ static void init_max_states_len(void);
 //  initial round of monitoring.
 void gdnsd_mon_start(struct ev_loop* mloop)
 {
+    init_max_states_len();
+
     // Fall out quickly if nothing to monitor
     if (!num_smgrs)
         return;
 
     if (getenv("GDNSD_TESTSUITE_NODELAY"))
         testsuite_nodelay = true;
-
-    init_max_states_len();
 
     // saved for timer usage later
     mon_loop = mloop;
