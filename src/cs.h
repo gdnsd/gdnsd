@@ -58,22 +58,22 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 }
 
 // Legal values for "key"
-#define REQ_TAK1  '1'
-#define REQ_TAK2  '2'
-#define RESP_ACK  'A'
-#define REQ_CHALF 'c'
-#define REQ_CHAL  'C'
-#define REQ_STATE 'E'
-#define RESP_FAIL 'F'
-#define RESP_LATR 'L'
-#define REQ_INFO  'I'
-#define REQ_REPL  'R'
-#define REQ_STAT  'S'
-#define REQ_SHAND 's'
-#define REQ_TAKE  'T'
-#define RESP_UNK  'U'
-#define REQ_STOP  'X'
-#define REQ_ZREL  'Z'
+#define REQ_TAK1  '1' // takeover-related (inter-daemon)
+#define REQ_TAK2  '2' // takeover-related (inter-daemon)
+#define RESP_ACK  'A' // response: OK
+#define REQ_CHALF 'c' // rw req: flush challenges
+#define REQ_CHAL  'C' // rw req: add challenges
+#define REQ_STATE 'E' // ro req: get states
+#define RESP_FAIL 'F' // response: Failed
+#define RESP_LATR 'L' // response: Try Later
+#define REQ_INFO  'I' // ro req: get pid/version
+#define REQ_REPL  'R' // rw req: ask daemon to replace itself
+#define REQ_STAT  'S' // ro req: get stats
+#define REQ_SHAND 's' // takeover-related (inter-daemon)
+#define REQ_TAKE  'T' // takeover-related (inter-daemon)
+#define RESP_UNK  'U' // response: Unknown request type
+#define REQ_STOP  'X' // rw req: ask daemon to shut down
+#define REQ_ZREL  'Z' // rw req: ask daemon to reload zones
 
 // AFAIK there's no portable way to know the max FDs that can be sent in an
 // SCM_RIGHTS message.  I only know the Linux limit for sure, so in the
