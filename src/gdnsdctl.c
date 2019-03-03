@@ -85,7 +85,6 @@ static void usage(void)
             "  -l - Send logs to syslog rather than stderr\n"
             "  -t - Timeout in seconds (def %u, range %u - %u)\n"
             "  -o - One-shot mode: do not retry soft failures (comms errors, replace-in-progress)\n"
-            "  -i - Idempotent mode for stop, reload-zones, replace, and acme-dns-01-flush: success if no daemon running\n"
             "  -i - Ignore lack of a running daemon for stop, reload-zones, replace,\n"
             "       and acme-dns-01-flush, reporting success instead of failure in those cases.\n"
             "Actions:\n"
