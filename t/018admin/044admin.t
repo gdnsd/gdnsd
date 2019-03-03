@@ -1,6 +1,6 @@
 use _GDT ();
 use Net::DNS;
-use Test::More tests => 59;
+use Test::More tests => 60;
 
 my $pid = _GDT->test_spawn_daemon();
 
@@ -357,6 +357,8 @@ _GDT->write_statefile('extfile/extf_admin', qq{
     127.3.3.3 => down
     192.0.2.3 => down
 });
+
+_GDT->test_run_gdnsdctl("states");
 
 _GDT->test_log_output(q{state of '127.3.3.3/extf_admin' changed from UP/MAX to DOWN/MAX});
 
