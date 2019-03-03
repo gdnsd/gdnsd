@@ -50,10 +50,18 @@ typedef struct {
 } dns_thread_t;
 
 typedef struct {
+    gdnsd_anysin_t addr;
+    bool chal_ok; // add/flush challenge data
+    bool ctl_ok;  // reload-zones, replace, stop
+} ctl_addr_t;
+
+typedef struct {
     dns_addr_t* dns_addrs;
     dns_thread_t* dns_threads;
+    ctl_addr_t* ctl_addrs;
     unsigned num_dns_addrs;
     unsigned num_dns_threads;
+    unsigned num_ctl_addrs;
 } socks_cfg_t;
 
 F_RETNN

@@ -39,7 +39,7 @@
 struct csc_s_ {
     int fd;
     pid_t server_pid;
-    char* path;
+    char* path; // resolved absolute unix socket path, or tcp address string
     char server_vers[16];
     uint8_t svers_major;
     uint8_t svers_minor;
@@ -69,16 +69,9 @@ static bool csc_get_status(csc_t* csc)
     return false;
 }
 
-csc_t* csc_new(const unsigned timeout, const char* pfx)
+F_NONNULL
+static void set_timeout(const int fd, const unsigned timeout, const char* pfx)
 {
-    csc_t* csc = xcalloc(sizeof(*csc));
-    csc->path = gdnsd_resolve_path_run("control.sock", NULL);
-
-    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (fd < 0)
-        log_fatal("%sCreating AF_UNIX socket failed: %s", pfx, logf_errno());
-    csc->fd = fd;
-
     if (timeout) {
         const struct timeval tmout = { .tv_sec = timeout, .tv_usec = 0 };
         if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout, sizeof(tmout)))
@@ -86,21 +79,73 @@ csc_t* csc_new(const unsigned timeout, const char* pfx)
         if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tmout, sizeof(tmout)))
             log_fatal("%sFailed to set SO_SNDTIMEO on control socket: %s", pfx, logf_errno());
     }
+}
+
+F_NONNULL
+static bool tcp_sock_connect(csc_t* csc, const char* tcp_addr, const unsigned timeout)
+{
+    csc->path = xstrdup(tcp_addr);
+
+    gdnsd_anysin_t asin;
+    memset(&asin, 0, sizeof(asin));
+    const int addr_err = gdnsd_anysin_fromstr(csc->path, 0, &asin);
+    if (addr_err)
+        log_fatal("Could not parse TCP address '%s': %s", csc->path, gai_strerror(addr_err));
+    gdnsd_assert(asin.sa.sa_family == AF_INET || asin.sa.sa_family == AF_INET6);
+    if (!((asin.sa.sa_family == AF_INET) ? asin.sin4.sin_port : asin.sin6.sin6_port))
+        log_fatal("TCP address '%s': non-zero port number required", csc->path);
+
+    csc->fd = socket(asin.sa.sa_family, SOCK_STREAM | SOCK_CLOEXEC, IPPROTO_TCP);
+    if (csc->fd < 0)
+        log_fatal("Creating TCP socket failed: %s", logf_errno());
+    set_timeout(csc->fd, timeout, "");
+
+    return !!connect(csc->fd, &asin.sa, asin.len);
+}
+
+F_NONNULL
+static bool unix_sock_connect(csc_t* csc, const char* pfx, const unsigned timeout)
+{
+    csc->path = gdnsd_resolve_path_run("control.sock", NULL);
+
+    csc->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (csc->fd < 0)
+        log_fatal("%sCreating AF_UNIX socket failed: %s", pfx, logf_errno());
+    set_timeout(csc->fd, timeout, pfx);
 
     struct sockaddr_un addr;
     const socklen_t addr_len = gdnsd_sun_set_path(&addr, csc->path);
-    if (connect(fd, (struct sockaddr*)&addr, addr_len)) {
-        log_err("%sconnect() to unix domain socket %s failed: %s", pfx, csc->path, logf_errno());
-        close(fd);
+    return !!connect(csc->fd, (struct sockaddr*)&addr, addr_len);
+}
+
+csc_t* csc_new(const unsigned timeout, const char* pfx, const char* tcp_addr)
+{
+    if (tcp_addr)
+        gdnsd_assert(!pfx); // pfx is for inter-daemon, which does not use TCP
+
+    // Switch NULL to empty string for printf ease-of-use
+    if (!pfx)
+        pfx = "";
+
+    csc_t* csc = xcalloc(sizeof(*csc));
+
+    const bool conn_rv = tcp_addr
+                         ? tcp_sock_connect(csc, tcp_addr, timeout)
+                         : unix_sock_connect(csc, pfx, timeout);
+    if (conn_rv) {
+        log_err("%sconnect() to socket %s failed: %s", pfx, csc->path, logf_errno());
+        close(csc->fd);
         free(csc->path);
         free(csc);
-        csc = NULL;
-    } else if (csc_get_status(csc)) {
+        return NULL;
+    }
+
+    if (csc_get_status(csc)) {
         log_err("%sFailed to get daemon status over control socket %s", pfx, csc->path);
-        close(fd);
+        close(csc->fd);
         free(csc->path);
         free(csc);
-        csc = NULL;
+        return NULL;
     }
 
     return csc;
@@ -240,6 +285,8 @@ csc_txn_rv_t csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp)
     if (resp->key == RESP_LATR)
         return CSC_TXN_FAIL_SOFT;
 
+    if (resp->key == RESP_DENY)
+        log_err("Server actively denied request by policy");
     return CSC_TXN_FAIL_HARD;
 }
 

@@ -35,7 +35,8 @@ typedef struct csc_s_ csc_t;
 
 // Enum for certain transaction retvals below
 // OK -> Transaction successful
-// FAIL_HARD -> Transaction actively rejected by daemon with RESP_FAIL
+// FAIL_HARD -> Transaction actively rejected by daemon with RESP_FAIL or
+//              RESP_DENY (or anything else we don't understand)
 // FAIL_SOFT -> Communications error or daemon sent RESP_LATR
 typedef enum {
     CSC_TXN_OK = 0,
@@ -52,14 +53,20 @@ typedef enum {
 // "timeout" is in seconds, and sets socket-level send+receive timeouts.
 //           if this is zero, no timeouts are set and blocking is indefinite.
 // "pfx" is a constant string used to prefix log outputs for the replace case
-// Fails fatally on certain un-retryable failures (failure to allocate a unix
-// socket fd, failure set timeouts on socket, or control socket pathname too
+// (meaning it's only set when csc_new() is invoked by a daemon attempting to
+// takeover another daemon, which never happens over TCP).
+// If "tcp_addr" is set, it should be a string of the form "IP:port" to connect
+// to in place of the normal UNIX socket connection.  In this case there is no
+// need to do gdnsd_init_paths() beforehand, as csc will use nothing from the
+// server config.
+//
+// csc_new fails fatally on certain un-retryable failures (failure to allocate
+// a socket, failure set timeouts on socket, or control socket pathname too
 // long for platform limits).  Returns NULL on retryable failures (failure to
 // connect, failure to get a valid response to a basic status inquiry over the
 // new socket).  If return value is non-NULL, the object is connected validly
 // to a live daemon and knows the daemon's basic status info (pid, version).
-F_NONNULL
-csc_t* csc_new(const unsigned timeout, const char* pfx);
+csc_t* csc_new(const unsigned timeout, const char* pfx, const char* tcp_addr);
 
 // Get basic info about server on other side of controlsock (this is fetched
 // via the "status" command immediately after starting a new connection above,

@@ -63,6 +63,7 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 #define RESP_ACK  'A' // response: OK
 #define REQ_CHALF 'c' // rw req: flush challenges
 #define REQ_CHAL  'C' // rw req: add challenges
+#define RESP_DENY 'D' // response: Denied by policy (e.g. for TCP)
 #define REQ_STATE 'E' // ro req: get states
 #define RESP_FAIL 'F' // response: Failed
 #define RESP_LATR 'L' // response: Try Later

@@ -322,6 +322,51 @@ Integer, min 4096, max 1048576, default 0.  If set to a non-zero value, this
 value will be used to set the C<SO_SNDBUF> socket option on the UDP listening
 socket(s), otherwise we leave the OS defaults alone.
 
+=item B<tcp_control>
+
+B<DANGER> - Exposing the control socket over TCP is dangerous.  The control
+socket server code is not designed to be robust against arbitrary attack
+traffic, and does not have any authentication or encryption.  Listen addresses
+defined here should be well-protected and confined by network firewall policies
+to internal, privileged clients, and should B<definitely> not be exposed on the
+public Internet.
+
+This specifies one or more secondary TCP listen addresses for control socket
+connections (alongside the required primary UNIX domain socket), which must be
+explicitly configured if desired.  It is similar to B<listen> above in that it
+accepts either a single address spec, an array of address specs, or a hash
+whose keys are address specs and whose values are address-specific options.
+All address specs must include an explicit address and non-zero port number.
+
+The only two address-specific options are C<chal_ok> and C<ctl_ok>, which are
+booleans defaulting to false.  By default, a TCP control socket is restricted
+to read-only operations (C<gdnsdctl status>, C<gdnsdctl stats>, and
+C<gdnsdctl states>).  C<chal_ok> allows ACME Challenge operations on the socket
+(C<gdnsdctl acme-dns-01> and C<gdnsdctl acme-dns-01-flush>).  C<ctl_ok> allows
+daemon control commands on the socket (C<gdnsdctl reload-zones> and C<gdnsdctl
+replace>).  The C<gdnsdctl stop> command isn't allowed over TCP at all.
+
+The standard unix control socket is also used for some inter-daemon
+coordination and resource handoff during replacements, which cannot be
+supported over the TCP variant.
+
+Examples:
+
+    options => { tcp_control => 127.0.0.1:885 } # read-only ops only
+
+    options => { tcp_control => [ 127.0.0.1:885, 127.0.0.2:885 ] } # ditto
+
+    options => { tcp_control => {
+        127.0.0.1:885 => {} # readonly
+        127.0.0.1:886 => { chal_ok => true } # allows challenge stuff
+        127.0.0.1:887 => { ctl_ok => true } # allows daemon control
+        127.0.0.1:888 => { chal_ok => true, ctl_ok => true } # allows both
+    }}
+
+The C<gdnsdctl> client has an option C<-s> for specifying a TCP socket to
+connect to for use with C<tcp_control> sockets, in which case it does not even
+attempt to parse the server configuration to find the normal unix socket path.
+
 =item B<zones_strict_data>
 
 Boolean, default C<false>

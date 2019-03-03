@@ -58,8 +58,10 @@ static const dns_addr_t addr_defs_defaults = {
 static const socks_cfg_t socks_cfg_defaults = {
     .dns_addrs = NULL,
     .dns_threads = NULL,
+    .ctl_addrs = NULL,
     .num_dns_addrs = 0U,
     .num_dns_threads = 0U,
+    .num_ctl_addrs = 0U,
 };
 
 // Generic iterator for catching bad config hash keys in various places below
@@ -70,9 +72,9 @@ static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UN
     log_fatal("Invalid %s key '%s'", which, key);
 }
 
+F_NONNULL
 static void make_addr(const char* lspec_txt, const unsigned def_port, gdnsd_anysin_t* result)
 {
-    gdnsd_assert(result);
     const int addr_err = gdnsd_anysin_fromstr(lspec_txt, def_port, result);
     if (addr_err)
         log_fatal("Could not process listen-address spec '%s': %s", lspec_txt, gai_strerror(addr_err));
@@ -270,6 +272,60 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
     gdnsd_assert(tnum == socks_cfg->num_dns_threads);
 }
 
+F_NONNULLX(1, 2)
+static void process_control_item(ctl_addr_t* item, const char* lspec, vscf_data_t* addr_opts)
+{
+    if (addr_opts) {
+        if (!vscf_is_hash(addr_opts))
+            log_fatal("Config option 'tcp_control': per-address config must be a hash");
+        CFG_OPT_BOOL_ALTSTORE(addr_opts, chal_ok, item->chal_ok);
+        CFG_OPT_BOOL_ALTSTORE(addr_opts, ctl_ok, item->ctl_ok);
+        vscf_hash_iterate_const(addr_opts, true, bad_key, "TCP Control Socket");
+    }
+
+    gdnsd_anysin_t* addr = &item->addr;
+    const int addr_err = gdnsd_anysin_fromstr(lspec, 0, addr);
+    if (addr_err)
+        log_fatal("Could not process tcp_control address spec '%s': %s", lspec, gai_strerror(addr_err));
+
+    unsigned lport = 0;
+    if (addr->sa.sa_family == AF_INET) {
+        lport = addr->sin4.sin_port;
+    } else {
+        gdnsd_assert(addr->sa.sa_family == AF_INET6);
+        lport = addr->sin6.sin6_port;
+    }
+    if (!lport)
+        log_fatal("Could not process tcp_control address spec '%s': port number required", lspec);
+}
+
+F_NONNULL
+static void process_tcp_control(socks_cfg_t* socks_cfg, vscf_data_t* ctl_opt)
+{
+    if (vscf_is_hash(ctl_opt)) {
+        socks_cfg->num_ctl_addrs = vscf_hash_get_len(ctl_opt);
+        if (!socks_cfg->num_ctl_addrs)
+            return;
+        socks_cfg->ctl_addrs = xcalloc_n(socks_cfg->num_ctl_addrs, sizeof(*socks_cfg->ctl_addrs));
+        for (unsigned i = 0; i < socks_cfg->num_ctl_addrs; i++) {
+            const char* lspec = vscf_hash_get_key_byindex(ctl_opt, i, NULL);
+            vscf_data_t* addr_opts = vscf_hash_get_data_byindex(ctl_opt, i);
+            process_control_item(&socks_cfg->ctl_addrs[i], lspec, addr_opts);
+        }
+    } else {
+        socks_cfg->num_ctl_addrs = vscf_array_get_len(ctl_opt);
+        if (!socks_cfg->num_ctl_addrs)
+            return;
+        socks_cfg->ctl_addrs = xcalloc_n(socks_cfg->num_ctl_addrs, sizeof(*socks_cfg->ctl_addrs));
+        for (unsigned i = 0; i < socks_cfg->num_ctl_addrs; i++) {
+            vscf_data_t* v_lspec = vscf_array_get_data(ctl_opt, i);
+            if (!vscf_is_simple(v_lspec))
+                log_fatal("Config option 'tcp_control': all listen specs must be strings");
+            process_control_item(&socks_cfg->ctl_addrs[i], vscf_simple_get_data(v_lspec), NULL);
+        }
+    }
+}
+
 socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
 {
     gdnsd_assert(!cfg_root || vscf_is_hash(cfg_root));
@@ -278,6 +334,7 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
     memcpy(socks_cfg, &socks_cfg_defaults, sizeof(*socks_cfg));
 
     vscf_data_t* listen_opt = NULL;
+    vscf_data_t* ctl_opt = NULL;
 
     dns_addr_t addr_defs;
     memcpy(&addr_defs, &addr_defs_defaults, sizeof(addr_defs));
@@ -296,9 +353,12 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
         CFG_OPT_UINT_ALTSTORE(options, tcp_threads, 1LU, 1024LU, addr_defs.tcp_threads);
 
         listen_opt = vscf_hash_get_data_byconstkey(options, "listen", true);
+        ctl_opt = vscf_hash_get_data_byconstkey(options, "tcp_control", true);
     }
 
     process_listen(socks_cfg, listen_opt, &addr_defs);
+    if (ctl_opt)
+        process_tcp_control(socks_cfg, ctl_opt);
 
     return socks_cfg;
 }

@@ -4,8 +4,9 @@ gdnsdctl - Control socket client for gdnsd
 
 =head1 SYNOPSIS
 
-  Usage: gdnsdctl [-c @GDNSD_DEFPATH_CONFIG@] [-D] [-l] [-t 47] [-o] [-i] <action> [...]
-    -c - Configuration directory (def @GDNSD_DEFPATH_CONFIG@)
+  Usage: gdnsdctl [-c @GDNSD_DEFPATH_CONFIG@] [-s <IP:port>] [-D] [-l] [-t 47] [-o] [-i] <action> [...]
+    -c - Configuration directory (def @GDNSD_DEFPATH_CONFIG@), for finding UNIX control socket path
+    -s - TCP control socket address
     -D - Enable verbose debug output
     -l - Send logs to syslog rather than stderr
     -t - Timeout in seconds (def 47, range 5 - 300)
@@ -53,7 +54,16 @@ or multiple C<acme-dns-01> requests.
 
 =item B<-c>
 
-Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.
+Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.  This
+is used to find the main daemon's configuration file and parse it, in case it
+sets a non-default C<run_dir>, which would change the location of the daemon's
+UNIX control socket path.
+
+=item B<-s>
+
+This tells gdnsdctl to connect to the daemon over a TCP control socket instead
+of the usual local UNIX domain socket.  See the L<gdnsd.config(5)> docs about
+C<tcp_control> for more information about configuring the server side of this.
 
 =item B<-D>
 

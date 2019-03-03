@@ -45,6 +45,10 @@
 #include <sys/un.h>
 #include <sys/file.h>
 #include <sys/wait.h>
+#include <netinet/in_systm.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
 
 // makes sides of int[] from pipe2() clearer
 #define PIPE_RD 0
@@ -78,6 +82,7 @@ struct css_conn_s_ {
     size_t size;
     size_t size_done;
     css_cstate_t state;
+    ctl_addr_t* ctl_addr; // if TCP, points at perms
 };
 
 typedef struct {
@@ -100,6 +105,12 @@ static void conn_queue_clear(conn_queue_t* queue)
     }
 }
 
+typedef struct {
+    css_t* css;
+    ctl_addr_t* ctl_addr; // points at &css->socks_cfg->ctl_addrs[x]
+    ev_io w_tcp_accept; // holds the listen fd inside as well
+} tcp_lsnr_t;
+
 struct css_s_ {
     int fd;
     int lock_fd;
@@ -107,6 +118,7 @@ struct css_s_ {
     uint32_t status_d;
     ev_io w_accept;
     ev_timer w_replace;
+    tcp_lsnr_t* tcp_lsnrs;
     struct ev_loop* loop;
     css_conn_t* clients;
     conn_queue_t reload_zones_queued;
@@ -371,6 +383,10 @@ static void css_watch_replace(struct ev_loop* loop, ev_timer* w, int revents V_U
         // Re-start our accept watcher
         ev_io* w_accept = &css->w_accept;
         ev_io_start(css->loop, w_accept);
+        for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
+            ev_io* w_tcp_accept = &css->tcp_lsnrs[i].w_tcp_accept;
+            ev_io_start(css->loop, w_tcp_accept);
+        }
     }
 }
 
@@ -659,7 +675,30 @@ static void handle_req_take(css_conn_t* c, css_t* css)
     log_info("REPLACE[old daemon]: Accepting takeover request from replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
     ev_io* w_accept = &css->w_accept;
     ev_io_stop(css->loop, w_accept); // there can be only one
+    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
+        ev_io* w_tcp_accept = &css->tcp_lsnrs[i].w_tcp_accept;
+        ev_io_stop(css->loop, w_tcp_accept);
+    }
     respond(c, RESP_ACK, 0, 0, NULL, true);
+}
+
+F_NONNULL
+static bool tcp_req_allowed(ctl_addr_t* ctl_addr, char key)
+{
+    switch (key) {
+    case REQ_INFO:
+    case REQ_STAT:
+    case REQ_STATE:
+        return true;
+    case REQ_CHAL:
+    case REQ_CHALF:
+        return ctl_addr->chal_ok;
+    case REQ_ZREL:
+    case REQ_REPL:
+        return ctl_addr->ctl_ok;
+    default:
+        return false;
+    }
 }
 
 F_NONNULL
@@ -689,6 +728,14 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         else
             log_err("control socket read of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
         css_conn_cleanup(c);
+        return;
+    }
+
+    // If this is TCP, check perms and explicitly RESP_DENY if warranted
+    if (c->ctl_addr && !tcp_req_allowed(c->ctl_addr, c->rbuf.key)) {
+        ev_io_stop(loop, w);
+        c->state = WAITING_SERVER;
+        respond(c, RESP_DENY, 0, 0, NULL, false);
         return;
     }
 
@@ -770,12 +817,8 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 }
 
 F_NONNULL
-static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED)
+static css_conn_t* css_accept(css_t* css, ev_io* w)
 {
-    gdnsd_assert(revents == EV_READ);
-    css_t* css = w->data;
-    gdnsd_assert(css);
-
     const int fd = accept4(w->fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
     if (unlikely(fd < 0)) {
@@ -790,7 +833,7 @@ static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UN
             log_err("control socket early connection failure: %s", logf_errno());
             break;
         }
-        return;
+        return NULL;
     }
 
     // set up the per-connection state and start reading requests...
@@ -814,6 +857,30 @@ static void css_accept(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UN
         css->clients->prev = c;
     }
     css->clients = c;
+
+    return c;
+}
+
+F_NONNULL
+static void css_accept_unix(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED)
+{
+    gdnsd_assert(revents == EV_READ);
+    css_t* css = w->data;
+    gdnsd_assert(css);
+    css_accept(css, w);
+}
+
+F_NONNULL
+static void css_accept_tcp(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED)
+{
+    gdnsd_assert(revents == EV_READ);
+    tcp_lsnr_t* lsnr = w->data;
+    gdnsd_assert(lsnr);
+    css_t* css = lsnr->css;
+    gdnsd_assert(css);
+    css_conn_t* c = css_accept(css, w);
+    if (c)
+        c->ctl_addr = lsnr->ctl_addr;
 }
 
 static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
@@ -862,6 +929,23 @@ static void socks_import_fds(socks_cfg_t* socks_cfg, const int* fds, const size_
 {
     for (size_t i = 0; i < nfds; i++)
         socks_import_fd(socks_cfg, fds[i]);
+}
+
+F_NONNULL
+static int make_tcp_lsnr_fd(gdnsd_anysin_t* addr)
+{
+    const int fd = socket(addr->sa.sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
+    if (fd < 0)
+        log_fatal("Failed to create TCP control socket: %s", logf_errno());
+    sockopt_bool_fatal(TCP, addr, fd, SOL_SOCKET, SO_REUSEADDR, 1);
+    sockopt_bool_fatal(TCP, addr, fd, SOL_SOCKET, SO_REUSEPORT, 1);
+    sockopt_bool_fatal(TCP, addr, fd, SOL_TCP, TCP_NODELAY, 1);
+    if (bind(fd, &addr->sa, addr->len))
+        log_fatal("bind() of TCP control socket %s failed: %s", logf_anysin(addr), logf_errno());
+    if (listen(fd, 100))
+        log_fatal("Failed to listen() on control socket %s: %s", logf_anysin(addr), logf_errno());
+    log_info("TCP control socket listener initialized @ %s", logf_anysin(addr));
+    return fd;
 }
 
 /*********************
@@ -962,8 +1046,22 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         free(sock_path);
     }
 
+    if (socks_cfg->num_ctl_addrs) {
+        css->tcp_lsnrs = xcalloc_n(socks_cfg->num_ctl_addrs, sizeof(*css->tcp_lsnrs));
+        for (unsigned i = 0; i < socks_cfg->num_ctl_addrs; i++) {
+            tcp_lsnr_t* lsnr = &css->tcp_lsnrs[i];
+            lsnr->css = css;
+            ctl_addr_t* ca = &socks_cfg->ctl_addrs[i];
+            lsnr->ctl_addr = ca;
+            ev_io* w_tcp_accept = &lsnr->w_tcp_accept;
+            const int fd = make_tcp_lsnr_fd(&ca->addr);
+            ev_io_init(w_tcp_accept, css_accept_tcp, fd, EV_READ);
+            w_tcp_accept->data = lsnr;
+        }
+    }
+
     ev_io* w_accept = &css->w_accept;
-    ev_io_init(w_accept, css_accept, css->fd, EV_READ);
+    ev_io_init(w_accept, css_accept_unix, css->fd, EV_READ);
     w_accept->data = css;
 
     ev_timer* w_replace = &css->w_replace;
@@ -978,6 +1076,10 @@ void css_start(css_t* css, struct ev_loop* loop)
     css->loop = loop;
     ev_io* w_accept = &css->w_accept;
     ev_io_start(css->loop, w_accept);
+    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
+        ev_io* w_tcp_accept = &css->tcp_lsnrs[i].w_tcp_accept;
+        ev_io_start(css->loop, w_tcp_accept);
+    }
     gdnsd_assert(css->socks_cfg->num_dns_threads);
     css->handoff_fds_count = css->socks_cfg->num_dns_threads + 2U;
     gdnsd_assert(css->handoff_fds_count <= 0xFFFFFF);
@@ -1058,6 +1160,14 @@ void css_delete(css_t* css)
         css_conn_cleanup(c);
         c = next;
     }
+
+    // close up and free any TCP listeners
+    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
+        ev_io* w = &css->tcp_lsnrs[i].w_tcp_accept;
+        close(w->fd);
+    }
+    if (css->socks_cfg->num_ctl_addrs)
+        free(css->tcp_lsnrs);
 
     // free up the reload queues
     conn_queue_clear(&css->reload_zones_queued);

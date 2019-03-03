@@ -48,6 +48,7 @@ static bool opt_syslog = false;
 static bool opt_oneshot = false;
 static bool opt_ignore_dead = false;
 static const char* opt_cfg_dir = NULL;
+static const char* opt_tcp_addr = NULL;
 
 static volatile sig_atomic_t alarm_raised = 0;
 static void sighand_alrm(int s V_UNUSED)
@@ -79,8 +80,9 @@ static void usage(void)
 {
     fprintf(stderr,
             "gdnsdctl version " PACKAGE_VERSION "\n"
-            "Usage: gdnsdctl [-c %s] [-D] [-l] [-t %u] [-o] [-i] <action> [...]\n"
-            "  -c - Configuration directory (def %s)\n"
+            "Usage: gdnsdctl [-c %s] [-s <IP:port>] [-D] [-l] [-t %u] [-o] [-i] <action> [...]\n"
+            "  -c - Configuration directory (def %s), for finding UNIX control socket path\n"
+            "  -s - TCP control socket address\n"
             "  -D - Enable verbose debug output\n"
             "  -l - Send logs to syslog rather than stderr\n"
             "  -t - Timeout in seconds (def %u, range %u - %u)\n"
@@ -170,7 +172,7 @@ static bool action_replace(csc_t* csc)
     if (csc_wait_stopping_server(csc))
         log_fatal("REPLACE[gdnsdctl]: Replace command to old daemon succeeded, but old daemon never finished exiting...");
 
-    csc_t* csc2 = csc_new(0, "");
+    csc_t* csc2 = csc_new(0, NULL, opt_tcp_addr);
     if (!csc2)
         log_fatal("REPLACE[gdnsdctl]: Cannot establish connection to new daemon for verification");
 
@@ -392,10 +394,13 @@ static const char* parse_args(const int argc, char** argv)
 {
     unsigned long timeo;
     int optchar;
-    while ((optchar = getopt(argc, argv, "c:Dloit:"))) {
+    while ((optchar = getopt(argc, argv, "c:s:Dloit:"))) {
         switch (optchar) {
         case 'c':
             opt_cfg_dir = optarg;
+            break;
+        case 's':
+            opt_tcp_addr = optarg;
             break;
         case 'D':
             opt_debug = true;
@@ -444,12 +449,14 @@ int main(int argc, char** argv)
     gdnsd_assert(action);
     gdnsd_log_set_debug(opt_debug);
     gdnsd_log_set_syslog(opt_syslog, "gdnsdctl");
-    vscf_data_t* cfg_root = gdnsd_init_paths(opt_cfg_dir, false);
-    vscf_destroy(cfg_root);
+
+    // We only need to parse config when not using a TCP socket
+    if (!opt_tcp_addr)
+        vscf_destroy(gdnsd_init_paths(opt_cfg_dir, false));
 
     install_alarm();
     while (1) {
-        csc_t* csc = csc_new(0, "");
+        csc_t* csc = csc_new(0, NULL, opt_tcp_addr);
         if (!csc) {
             if (opt_ignore_dead && can_ignore_dead(action)) {
                 log_info("No running daemon, succeeding");
