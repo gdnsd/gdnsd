@@ -979,7 +979,6 @@ L<gdnsd(8)>, L<gdnsd.zonefile(5)>, L<gdnsd-plugin-simplefo(8)>,
 L<gdnsd-plugin-multifo(8)>, L<gdnsd-plugin-weighted(8)>,
 L<gdnsd-plugin-metafo(8)>, L<gdnsd-plugin-geoip(8)>,
 L<gdnsd-plugin-extmon(8)>, L<gdnsd-plugin-extfile(8)>
-L<gdnsd-plugin-api(3)>
 
 The gdnsd manual.
 
