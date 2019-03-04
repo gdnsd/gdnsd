@@ -103,13 +103,11 @@ static void conn_queue_clear(conn_queue_t* queue)
 struct css_s_ {
     int fd;
     int lock_fd;
-    unsigned num_clients;
     uint32_t status_v;
     uint32_t status_d;
     ev_io w_accept;
     ev_timer w_replace;
     struct ev_loop* loop;
-    char* path;
     css_conn_t* clients;
     conn_queue_t reload_zones_queued;
     conn_queue_t reload_zones_active;
@@ -750,7 +748,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
             respond(c, RESP_LATR, 0, 0, NULL, false);
         } else {
             cset_flush(loop);
-            respond(c, RESP_ACK, 0, 0, 0, false);
+            respond(c, RESP_ACK, 0, 0, NULL, false);
         }
         break;
     case REQ_REPL:
@@ -1060,7 +1058,6 @@ void css_delete(css_t* css)
         css_conn_cleanup(c);
         c = next;
     }
-    gdnsd_assert(!css->num_clients);
 
     // free up the reload queues
     conn_queue_clear(&css->reload_zones_queued);
