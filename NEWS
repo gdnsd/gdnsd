@@ -1,3 +1,20 @@
+3.0.1 - 2019-03-04
+    * Bugfixes:
+      * The code which validates that loaded zonefile RRs are not oversized for
+        implementation limits (~16KB encoded response data per RR Set) was
+        having its results thrown away, nullifying the validation.  Now the
+        limit is checked properly, and zonefiles containing such data will be
+        rejected at load time.
+      * Minor fix for UDP error statistics, in a corner case on platforms that
+        do not have the recvmmsg()/sendmmsg() syscalls, where sometimes what
+        should've incremented the UDP "recvfail" stat instead incremented the
+        "dropped" stat.
+      * Daemon no longer exits with an error if asked for resource states info
+        over the control socket ("gdnsdctl states") when no such states are
+        configured at all.
+      * Removed redundant and outdated help string for "-i" from gdnsdctl's
+        usage output.
+
 3.0.0 - 2019-02-15
     * Note that this is a major version number bump, and for some users and
       configurations this means major compatibility-breaking changes.  Do not
