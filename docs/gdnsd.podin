@@ -300,9 +300,8 @@ Example:
         metafo/res_www/dc-jp => UP # exception to above
 
 All of the available monitored and virtual keys that can be matched in this
-file are listed in the daemon's HTML, CSV, and JSON -format outputs from
-the built-in status http server (default port 3506), as are their current
-monitors and admin_state-forced states.
+file, as well as their current monitored and/or forced states, are visible in
+the output of C<gdnsdctl states> in JSON format.
 
 =head1 SIGNALS
 
