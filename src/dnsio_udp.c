@@ -219,7 +219,7 @@ void udp_sock_setup(dns_thread_t* t)
 
     bool need_bind = false;
     if (t->sock == -1) { // not acquired via replace
-        t->sock = socket(isv6 ? PF_INET6 : PF_INET, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP);
+        t->sock = socket(sa->sa.sa_family, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP);
         if (t->sock == -1)
             log_fatal("Failed to create IPv%c UDP socket: %s", isv6 ? '6' : '4', logf_errno());
         need_bind = true;
