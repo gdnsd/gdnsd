@@ -1164,6 +1164,7 @@ void css_delete(css_t* css)
     // close up and free any TCP listeners
     for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
         ev_io* w = &css->tcp_lsnrs[i].w_tcp_accept;
+        ev_io_stop(css->loop, w);
         close(w->fd);
     }
     if (css->socks_cfg->num_ctl_addrs)
