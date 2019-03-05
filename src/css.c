@@ -931,8 +931,8 @@ static void socks_import_fds(socks_cfg_t* socks_cfg, const int* fds, const size_
         socks_import_fd(socks_cfg, fds[i]);
 }
 
-F_NONNULL
-static int make_tcp_lsnr_fd(gdnsd_anysin_t* addr)
+F_NONNULL F_WUNUSED
+static int make_tcp_listener_fd(gdnsd_anysin_t* addr)
 {
     const int fd = socket(addr->sa.sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
     if (fd < 0)
@@ -945,6 +945,52 @@ static int make_tcp_lsnr_fd(gdnsd_anysin_t* addr)
     if (listen(fd, 100))
         log_fatal("Failed to listen() on control socket %s: %s", logf_anysin(addr), logf_errno());
     log_info("TCP control socket listener initialized @ %s", logf_anysin(addr));
+    return fd;
+}
+
+F_NONNULL
+static void make_tcp_listeners(css_t* css)
+{
+    gdnsd_assert(css->socks_cfg->num_ctl_addrs);
+    css->tcp_lsnrs = xcalloc_n(css->socks_cfg->num_ctl_addrs, sizeof(*css->tcp_lsnrs));
+    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
+        tcp_lsnr_t* lsnr = &css->tcp_lsnrs[i];
+        lsnr->css = css;
+        ctl_addr_t* ca = &css->socks_cfg->ctl_addrs[i];
+        lsnr->ctl_addr = ca;
+        ev_io* w_tcp_accept = &lsnr->w_tcp_accept;
+        const int fd = make_tcp_listener_fd(&ca->addr);
+        ev_io_init(w_tcp_accept, css_accept_tcp, fd, EV_READ);
+        w_tcp_accept->data = lsnr;
+    }
+}
+
+F_WUNUSED
+static int make_unix_listener_fd(void)
+{
+    const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        log_fatal("Creating AF_UNIX socket failed: %s", logf_errno());
+
+    char* sock_path = gdnsd_resolve_path_run(base_sock, NULL);
+    struct sockaddr_un addr;
+    const socklen_t addr_len = gdnsd_sun_set_path(&addr, sock_path);
+    if (unlink(sock_path) && errno != ENOENT)
+        log_fatal("unlink(%s) failed: %s", sock_path, logf_errno());
+
+    // umask()-switching around the bind() seems safer against possible
+    // perms races on various platforms than doing a chmod between bind()
+    // and listen().  Note umask() isn't thread-safe, but css_new() is
+    // called before any threads are created.
+    const mode_t oldmask = umask(S_IXUSR | S_IRWXG | S_IRWXO); // 0177
+    if (bind(fd, (struct sockaddr*)&addr, addr_len))
+        log_fatal("bind() of unix domain socket %s failed: %s", sock_path, logf_errno());
+    umask(oldmask);
+
+    if (listen(fd, 100))
+        log_fatal("Failed to listen() on control socket %s: %s", sock_path, logf_errno());
+    free(sock_path);
+
     return fd;
 }
 
@@ -1019,46 +1065,13 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         log_fatal("BUG: Cannot parse our own package version");
     css->status_v = csbuf_make_v(x, y, z);
 
-    if (sock_fd > -1) {
+    if (sock_fd > -1)
         css->fd = sock_fd;
-    } else {
-        css->fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-        if (css->fd < 0)
-            log_fatal("Creating AF_UNIX socket failed: %s", logf_errno());
+    else
+        css->fd = make_unix_listener_fd();
 
-        char* sock_path = gdnsd_resolve_path_run(base_sock, NULL);
-        struct sockaddr_un addr;
-        const socklen_t addr_len = gdnsd_sun_set_path(&addr, sock_path);
-        if (unlink(sock_path) && errno != ENOENT)
-            log_fatal("unlink(%s) failed: %s", sock_path, logf_errno());
-
-        // umask()-switching around the bind() seems safer against possible
-        // perms races on various platforms than doing a chmod between bind()
-        // and listen().  Note umask() isn't thread-safe, but css_new() is
-        // called before any threads are created.
-        const mode_t oldmask = umask(S_IXUSR | S_IRWXG | S_IRWXO); // 0177
-        if (bind(css->fd, (struct sockaddr*)&addr, addr_len))
-            log_fatal("bind() of unix domain socket %s failed: %s", sock_path, logf_errno());
-        umask(oldmask);
-
-        if (listen(css->fd, 100))
-            log_fatal("Failed to listen() on control socket %s: %s", sock_path, logf_errno());
-        free(sock_path);
-    }
-
-    if (socks_cfg->num_ctl_addrs) {
-        css->tcp_lsnrs = xcalloc_n(socks_cfg->num_ctl_addrs, sizeof(*css->tcp_lsnrs));
-        for (unsigned i = 0; i < socks_cfg->num_ctl_addrs; i++) {
-            tcp_lsnr_t* lsnr = &css->tcp_lsnrs[i];
-            lsnr->css = css;
-            ctl_addr_t* ca = &socks_cfg->ctl_addrs[i];
-            lsnr->ctl_addr = ca;
-            ev_io* w_tcp_accept = &lsnr->w_tcp_accept;
-            const int fd = make_tcp_lsnr_fd(&ca->addr);
-            ev_io_init(w_tcp_accept, css_accept_tcp, fd, EV_READ);
-            w_tcp_accept->data = lsnr;
-        }
-    }
+    if (css->socks_cfg->num_ctl_addrs)
+        make_tcp_listeners(css);
 
     ev_io* w_accept = &css->w_accept;
     ev_io_init(w_accept, css_accept_unix, css->fd, EV_READ);
