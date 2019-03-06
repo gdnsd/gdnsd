@@ -362,7 +362,7 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
 
     // End of the 5s graceful phase (start 5s shutdown phase)
     if (unlikely(thr->st == TH_GRACE)) {
-        log_debug("TCP DNS thread shutdown: demanding clients to close %zu remaining conns immediatley and waiting up to 5s", thr->num_conns);
+        log_debug("TCP DNS thread shutdown: demanding clients to close %zu remaining conns immediately and waiting up to 5s", thr->num_conns);
         thr->st = TH_SHUT;
         while (conn) {
             conn_t* next_conn = conn->next;
