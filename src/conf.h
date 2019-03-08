@@ -37,6 +37,7 @@ typedef struct {
     bool     edns_client_subnet;
     bool     zones_strict_data;
     bool     disable_cookies;
+    bool     experimental_no_chain;
     unsigned max_nocookie_response;
     unsigned chaos_len;
     unsigned nsid_len;

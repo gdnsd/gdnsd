@@ -1721,6 +1721,11 @@ static ltree_dname_status_t db_lookup(dnsp_ctx_t* ctx, const uint8_t* qname, con
             gdnsd_assert(!res_rrsets->gen.next); // CNAME does not co-exist with other rrsets
             gdnsd_assert(status == DNAME_AUTH); // no CNAME inside deleg
 
+            if (gcfg->experimental_no_chain) {
+                ctx->txn.qtype = DNS_TYPE_CNAME;
+                break;
+            }
+
             wire_dns_header_t* res_hdr = (wire_dns_header_t*)ctx->txn.packet;
             res_hdr->flags1 |= 4; // pre-set AA bit, in case we go out of auth space later
             via_cname = true; // avoid REFUSED if we go out of zone in the target

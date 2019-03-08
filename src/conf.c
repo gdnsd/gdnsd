@@ -52,6 +52,7 @@ static const cfg_t cfg_defaults = {
     .edns_client_subnet = true,
     .zones_strict_data = false,
     .disable_cookies = false,
+    .experimental_no_chain = false,
     .max_nocookie_response = 0,
     .chaos_len = 0,
     .nsid_len = 0,
@@ -295,6 +296,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_UINT(options, acme_challenge_ttl, 60LU, 3600LU);
         CFG_OPT_BOOL(options, zones_strict_data);
         CFG_OPT_BOOL(options, disable_cookies);
+        CFG_OPT_BOOL(options, experimental_no_chain);
         CFG_OPT_UINT_NOMIN(options, max_nocookie_response, 1024LU);
         if (cfg->max_nocookie_response && cfg->max_nocookie_response < 128U)
             log_fatal("The global option 'max_nocookie_response' (%u) must be zero, or in the range 128 - 1024", cfg->max_nocookie_response);
