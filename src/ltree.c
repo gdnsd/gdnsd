@@ -955,7 +955,7 @@ static bool p1_check_deleg(const uint8_t** lstack, const ltree_node_t* node, con
 }
 
 F_WUNUSED F_NONNULL
-static bool p1_rsize_base(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool at_deleg)
+static size_t p1_rsize_base(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool at_deleg)
 {
     // First, the fixed portions:
     // sizeof(wire_dns_header_t): basic header bytes before query
