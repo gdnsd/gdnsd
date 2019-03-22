@@ -38,8 +38,7 @@ C<0.0.0.0> and C<::> using default settings.
 =item B<-c>
 
 Set the configuration directory, defaults to F<@GDNSD_DEFPATH_CONFIG@>.  The
-zones directory, if not explicitly configured in the main configuration file,
-defaults the F<zones/> subdirectory of the configuration directory.
+zones directory is the F<zones/> subdirectory of the configuration directory.
 
 =item B<-D>
 
