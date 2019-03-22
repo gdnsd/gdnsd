@@ -727,7 +727,6 @@ static void rfc3597_octet(zscan_t* z)
 bool zscan_rfc1035(zone_t* zone, const char* fn)
 {
     gdnsd_assert(zone->dname);
-    log_debug("rfc1035: Scanning zonefile '%s'", logf_dname(zone->dname));
     return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl);
 }
 

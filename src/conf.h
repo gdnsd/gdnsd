@@ -48,6 +48,7 @@ typedef struct {
     unsigned max_edns_response;
     unsigned max_edns_response_v6;
     unsigned acme_challenge_ttl;
+    unsigned zones_rfc1035_threads;
 } cfg_t;
 
 extern const cfg_t* gcfg;

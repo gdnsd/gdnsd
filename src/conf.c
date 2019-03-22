@@ -63,6 +63,7 @@ static const cfg_t cfg_defaults = {
     .max_edns_response = 1410U,
     .max_edns_response_v6 = 1212U,
     .acme_challenge_ttl = 600U,
+    .zones_rfc1035_threads = 2U,
 };
 
 F_NONNULL
@@ -294,6 +295,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_UINT(options, max_edns_response, 512LU, 16384LU);
         CFG_OPT_UINT(options, max_edns_response_v6, 512LU, 16384LU);
         CFG_OPT_UINT(options, acme_challenge_ttl, 60LU, 3600LU);
+        CFG_OPT_UINT(options, zones_rfc1035_threads, 1LU, 1024LU);
         CFG_OPT_BOOL(options, zones_strict_data);
         CFG_OPT_BOOL(options, disable_cookies);
         CFG_OPT_BOOL(options, experimental_no_chain);

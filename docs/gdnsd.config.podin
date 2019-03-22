@@ -379,6 +379,30 @@ If this is set to true, such warnings will be upgraded and treated
 the same as the more-serious class of zone data errors which prevent
 successful loading of zone data.
 
+=item B<zones_rfc1035_threads>
+
+Integer, default 2, min 1, max 1024.  When the standard RFC1035 zone files are
+(re-)loaded, up to this many ephemeral threads will be spawned in parallel to
+help load and parse them faster.
+
+The way the work is divided among the threads is relatively naive: As the zones
+directory on the filesystem is scanned for zone filenames, the names are
+divided evenly into N separate work lists (one per thread), and then the
+threads are all spawned and work on their own fixed lists in parallel, with the
+final splicing of the zone data into the root tree happening serially in the
+main zones thread as each worker thread finishes.  In the case that the total
+count of zonefiles is less than the configured thread count, the excess threads
+are not spawned.
+
+This simple strategy tends to work well for large counts of zonefiles where the
+per-zonefile parsing costs are roughly even, but in cases where a minority of
+zonefiles take much longer to parse than others, it will not always result in a
+very "fair" outcome (some threads may run much longer than others).
+
+Note that in general, improving the I/O performance of reading the zonefiles
+from disk (e.g. put them on an SSD) tends to help more than the parallelization
+here does, although both together is even better!
+
 =item B<lock_mem>
 
 Boolean, default false.  Causes the daemon to do
