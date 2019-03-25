@@ -28,74 +28,42 @@
 #include <string.h>
 #include <stdlib.h>
 
-// ltarena: used for dname/label strings only, pooled to
-//   reduce the per-alloc overhead of malloc aligning and
-//   tracking every single one needlessly.
-// Each pool is normally POOL_SIZE, non-growing to preserve
-//   *some* amount of locality-of-reference to the related
-//   objects referencing the strings.
-// We initially reserve room in the ltarena object to track
-//   4 pools, which expands by doubling to support far more
-//   pools than needed by even the largest zones in existence.
+//   ltarena: used for label or dname strings only, pooled to reduce the
+// per-alloc overhead of malloc aligning and tracking every single one
+// needlessly.  Labels max out at 64 bytes of storage, and dnames at 256, but
+// commonly in real-world use they're much smaller, very often more
+// like single-digit bytes for labels and maybe 20 bytes for domainnames.
+//   Pools start at POOL_SIZE, although after the initial INIT_POOLS_ALLOC
+// pools have been filled we'll start using POOL_SIZE*4 as the size of
+// further pools; this is mostly an optimization to avoid over-allocating on
+// initial pool size for per-zone arenas in the case of thousands of tiny
+// domains which each only contain a handful of labels.
+//   We initially reserve room in the ltarena object to track INIT_POOLS_ALLOC
+// pool pointers, which expands by doubling to support far more pools than
+// needed by even the largest zones in existence.
 #define MAX_OBJ 256U // Maximum that can be requested from lta_malloc
-#define POOL_SIZE 1024U // *must* be >= (MAX_OBJ + (red_size*2)) && multiple of 4
+#define POOL_SIZE 1024U // *must* be >= MAX_OBJ
 #define INIT_POOLS_ALLOC 4U // *must* be 2^n && > 0
-
-// Normally, our pools are initialized to all-zeros for us
-//   by xcalloc(), and no red zones are employed.  In debug
-//   builds, we initialize a whole pool to 0xDEADBEEF,
-//   define a redzone of 4 bytes before and after
-//   each block, and then zero out the valid allocated area
-//   of each block as it's handed out.
-#ifndef NDEBUG
-#  define RED_SIZE 4
-#else
-#  define RED_SIZE 0
-#endif
 
 #if __STDC_VERSION__ >= 201112L // C11
 _Static_assert(INIT_POOLS_ALLOC > 0, "Init pool alloc non-zero");
 _Static_assert((INIT_POOLS_ALLOC & (INIT_POOLS_ALLOC - 1)) == 0, "Init pool alloc is power of two");
-_Static_assert(POOL_SIZE >= (MAX_OBJ + RED_SIZE + RED_SIZE), "Pool size fits largest possible alloc");
-_Static_assert((POOL_SIZE & 3) == 0, "Pool size is a multiple of 4");
+_Static_assert(POOL_SIZE >= MAX_OBJ, "Pool size fits largest possible alloc");
 #endif
 
 struct ltarena {
-    uint8_t** pools;
-    size_t pool;
-    size_t poffs;
-    size_t palloc;
+    uint8_t** pools; // array of per-pool pointers
+    size_t pool;     // index of current pool for new writes
+    size_t poffs;    // offset in current pool for new writes
+    size_t palloc;   // allocation size of "pools"
 };
-
-static void* make_pool(void)
-{
-    void* p;
-    if (RED_SIZE) {
-        // malloc + fill in deadbeef if using redzones
-        p = xmalloc(POOL_SIZE);
-        uint32_t* p32 = p;
-        size_t idx = POOL_SIZE >> 2U;
-        while (idx--)
-            p32[idx] = 0xDEADBEEF;
-    } else {
-        // get mem from calloc
-        p = xcalloc(POOL_SIZE);
-    }
-
-    // let valgrind know what's going on, if running
-    //   and we're a debug build
-    VALGRIND_MAKE_MEM_NOACCESS(p, POOL_SIZE);
-    VALGRIND_CREATE_MEMPOOL(p, RED_SIZE, 1U);
-
-    return p;
-}
 
 ltarena_t* lta_new(void)
 {
     ltarena_t* rv = xcalloc(sizeof(*rv));
     rv->palloc = INIT_POOLS_ALLOC;
     rv->pools = xmalloc_n(INIT_POOLS_ALLOC, sizeof(*rv->pools));
-    rv->pools[0] = make_pool();
+    rv->pools[0] = xcalloc(POOL_SIZE);
     return rv;
 }
 
@@ -106,14 +74,30 @@ void lta_close(ltarena_t* lta)
 
 void lta_destroy(ltarena_t* lta)
 {
-    lta_close(lta);
     size_t whichp = lta->pool + 1U;
-    while (whichp--) {
-        VALGRIND_DESTROY_MEMPOOL(lta->pools[whichp]);
+    while (whichp--)
         free(lta->pools[whichp]);
-    }
     free(lta->pools);
     free(lta);
+}
+
+void lta_merge(ltarena_t* target, ltarena_t* source)
+{
+    uint8_t* target_last_pool = target->pools[target->pool];
+    const size_t source_pool_count = source->pool + 1U;
+    const size_t new_pool_count = source_pool_count + target->pool + 1U;
+    if (new_pool_count >= target->palloc) {
+        do {
+            target->palloc <<= 1U;
+        } while (new_pool_count >= target->palloc);
+        target->pools = xrealloc_n(target->pools, target->palloc, sizeof(*target->pools));
+    }
+    memcpy(&target->pools[target->pool], source->pools, source_pool_count * sizeof(*source->pools));
+    target->pool += source->pool;
+    target->pool++;
+    target->pools[target->pool] = target_last_pool;
+    free(source->pools);
+    free(source);
 }
 
 uint8_t* lta_malloc(ltarena_t* lta, const size_t size)
@@ -123,29 +107,20 @@ uint8_t* lta_malloc(ltarena_t* lta, const size_t size)
     gdnsd_assert(size);
     gdnsd_assert(size <= MAX_OBJ);
 
-    // the requested size + redzones on either end, giving the total
-    //   this allocation will steal from the pool
-    const size_t size_plus_red = size + RED_SIZE + RED_SIZE;
-
     // handle pool switch if we're out of room
     //   + take care to extend the pools array if necc.
-    if (unlikely((lta->poffs + size_plus_red > POOL_SIZE))) {
+    if (unlikely((lta->poffs + size > POOL_SIZE))) {
         if (unlikely(++lta->pool == lta->palloc)) {
             lta->palloc <<= 1U;
             lta->pools = xrealloc_n(lta->pools, lta->palloc, sizeof(*lta->pools));
         }
-        lta->pools[lta->pool] = make_pool();
+        lta->pools[lta->pool] = xcalloc(POOL_SIZE);
         lta->poffs = 0;
     }
 
     // assign the space and move our poffs pointer
-    uint8_t* rval = &lta->pools[lta->pool][lta->poffs + RED_SIZE];
-    lta->poffs += size_plus_red;
-
-    // mark the allocation for valgrind and zero it if doing redzone stuff
-    VALGRIND_MEMPOOL_ALLOC(lta->pools[lta->pool], rval, size);
-    if (RED_SIZE)
-        memset(rval, 0, size);
+    uint8_t* rval = &lta->pools[lta->pool][lta->poffs];
+    lta->poffs += size;
 
     return rval;
 }

@@ -1,4 +1,4 @@
-# The point here is to exercise the ztree code a little
+# The point here is to exercise the ltree code a little
 #   better re: hash table growth/collisions, etc.
 use _GDT ();
 use Test::More tests => 102;

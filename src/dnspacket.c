@@ -23,7 +23,7 @@
 #include "conf.h"
 #include "socks.h"
 #include "dnswire.h"
-#include "ztree.h"
+#include "ltree.h"
 #include "chal.h"
 #include "cookie.h"
 
@@ -1163,7 +1163,7 @@ static unsigned encode_rrs_ptr(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrs
         offset += 4;
         gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
         offset += 6;
-        const unsigned newlen = store_dname_nocomp(packet, rrset->rdata[i].dname, offset);
+        const unsigned newlen = store_dname_nocomp(packet, rrset->rdata[i], offset);
         gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
         offset += newlen;
     }
@@ -1591,51 +1591,62 @@ static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned 
 }
 
 F_NONNULL
-static ltree_dname_status_t search_zone_for_dname(const uint8_t* dname, const zone_t* zone, const ltree_node_t** node_out, unsigned* auth_depth_p)
+static ltree_dname_status_t search_ltree_for_dname(const uint8_t* dname, const ltree_node_t** node_out, const ltree_node_t** auth_out, unsigned* auth_depth_p)
 {
     gdnsd_assert(*dname != 0);
     gdnsd_assert(*dname != 2); // these are always illegal dnames
-    gdnsd_assert(dname_isinzone(zone->dname, dname));
 
-    ltree_dname_status_t rval = DNAME_AUTH;
-    ltree_node_t* rv_node = NULL;
-    uint8_t local_dname[256];
-    gdnsd_dname_copy(local_dname, dname);
-    gdnsd_dname_drop_zone(local_dname, zone->dname);
+    ltree_dname_status_t rval = DNAME_NOAUTH;
+    const ltree_node_t* rv_node = NULL;
 
     // construct label ptr stack
     const uint8_t* lstack[127];
-    unsigned lcount = dname_to_lstack(local_dname, lstack);
+    unsigned lcount = dname_to_lstack(dname, lstack);
 
-    ltree_node_t* current = zone->root;
-    gdnsd_assert(zone->root);
-    unsigned deleg_mod = 0;
-
+    const ltree_node_t* current = rcu_dereference(root_tree);
+    const ltree_node_t* auth = NULL;
+    unsigned depth_lc = lcount;
     while (!rv_node && current) {
-        gdnsd_assert(rval == DNAME_AUTH);
-        if (current->flags & LTNFLAG_DELEG) {
+        if (LTN_GET_FLAG_ZCUT(current) && auth) {
+            gdnsd_assert(rval == DNAME_AUTH);
             rval = DNAME_DELEG;
-            *auth_depth_p -= deleg_mod;
-            rv_node = current;
-        } else if (!lcount) {
-            // exact match of full label count
+            depth_lc = lcount;
             rv_node = current;
         } else {
-            lcount--;
-            const uint8_t* child_label = lstack[lcount];
-            deleg_mod += *child_label;
-            deleg_mod++;
-            ltree_node_t* next = ltree_node_find_child(current, child_label);
-            // If no deeper match, try wildcard
-            if (!next) {
-                static const uint8_t label_wild[2] =  { '\001', '*' };
-                rv_node = ltree_node_find_child(current, label_wild);
+            if (LTN_GET_FLAG_ZCUT(current)) {
+                gdnsd_assert(rval == DNAME_NOAUTH);
+                gdnsd_assert(!auth);
+                rval = DNAME_AUTH;
+                depth_lc = lcount;
+                auth = current;
             }
-            current = next;
+            if (!lcount) {
+                rv_node = current; // exact match of full label count
+            } else  {
+                lcount--;
+                const uint8_t* child_label = lstack[lcount];
+                ltree_node_t* next = ltree_node_find_child(current, child_label);
+                // If no deeper match, try wildcard if in auth space
+                if (!next && rval == DNAME_AUTH) {
+                    static const uint8_t label_wild[2] =  { '\001', '*' };
+                    rv_node = ltree_node_find_child(current, label_wild);
+                }
+                current = next;
+            }
         }
     }
 
+    // Calculate auth depth for cases where it matters
+    unsigned auth_depth = 0;
+    if (rval != DNAME_NOAUTH) {
+        auth_depth = depth_lc;
+        while (depth_lc--)
+            auth_depth += lstack[depth_lc][0];
+    }
+
+    *auth_depth_p = auth_depth;
     *node_out = rv_node;
+    *auth_out = auth;
     return rval;
 }
 
@@ -1679,18 +1690,33 @@ static const ltree_rrset_t* process_dync(dnsp_ctx_t* ctx, const ltree_rrset_dync
     return rv;
 }
 
+// like dname_isinzone, but the zone is in raw wire format (no existing length
+// prefix), used only for hacky CNAME-chasing stuff.
+F_NONNULL
+static bool dname_is_in_wire_zone(const uint8_t* wire_zone, const uint8_t* check)
+{
+    // transform wire_zone into dname format (give it a prefix byte in local storage)
+    uint8_t zone_to_check[256];
+    unsigned oal = 0;
+    uint8_t llen;
+    while ((llen = wire_zone[oal])) {
+        llen++;
+        oal += llen;
+    }
+    oal++; // terminal \0
+    zone_to_check[0] = oal;
+    memcpy(&zone_to_check[1], wire_zone, oal);
+    // use standard comparator from dname.h
+    return dname_isinzone(zone_to_check, check);
+}
+
 F_NONNULL
 static ltree_dname_status_t db_lookup(dnsp_ctx_t* ctx, const uint8_t* qname, const ltree_node_t** resdom_p, const ltree_node_t** resauth_p, const ltree_rrset_t** res_rrsets_p, unsigned* offset_p, bool* via_cname_p)
 {
     unsigned auth_depth = 0;
-    zone_t* query_zone = ztree_find_zone_for(qname, &auth_depth);
-    if (!query_zone)
-        return DNAME_NOAUTH;
-
-    // an early output assignment
-    *resauth_p = query_zone->root;
     // All of these end up as outputs at the bottom as well
     const ltree_node_t* resdom = NULL;
+    const ltree_node_t* resauth = NULL;
     const ltree_rrset_t* res_rrsets = NULL;
     unsigned offset = *offset_p;
     bool via_cname = false;
@@ -1698,7 +1724,10 @@ static ltree_dname_status_t db_lookup(dnsp_ctx_t* ctx, const uint8_t* qname, con
     bool iterating_for_cname = false;
     ltree_dname_status_t status;
     do {
-        status = search_zone_for_dname(qname, query_zone, &resdom, &auth_depth);
+        status = search_ltree_for_dname(qname, &resdom, &resauth, &auth_depth);
+        if (status == DNAME_NOAUTH)
+            break;
+
         gdnsd_assert(status == DNAME_AUTH || status == DNAME_DELEG);
 
         res_rrsets = resdom ? resdom->rrsets : NULL;
@@ -1732,14 +1761,9 @@ static ltree_dname_status_t db_lookup(dnsp_ctx_t* ctx, const uint8_t* qname, con
 
             const ltree_rrset_cname_t* cname = &res_rrsets->cname;
             offset = encode_rr_cname_chain(ctx, offset, cname);
-            if (dname_isinzone(query_zone->dname, cname->dname)) {
-                // If the target is in-zone, we recurse through it,
-                // resetting various things that affect the behaviors from
-                // search_zone_for_dname() onwards
+
+            if (dname_is_in_wire_zone(&ctx->txn.packet[ctx->txn.auth_comp], cname->dname)) {
                 qname = cname->dname;
-                int len_diff = *qname - *query_zone->dname;
-                gdnsd_assert(len_diff >= 0);
-                auth_depth = (unsigned)len_diff;
                 iterating_for_cname = true;
             } else {
                 status = DNAME_NOAUTH;
@@ -1750,6 +1774,7 @@ static ltree_dname_status_t db_lookup(dnsp_ctx_t* ctx, const uint8_t* qname, con
     // These are all outputs of this function.  It might pay to create a new
     // compound type representing the results of a lookup?
     *resdom_p = resdom;
+    *resauth_p = resauth;
     *res_rrsets_p = res_rrsets;
     *offset_p = offset;
     *via_cname_p = via_cname;

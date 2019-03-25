@@ -22,7 +22,7 @@
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
-#include <gdnsd/misc.h>
+#include <gdnsd/log.h>
 
 #include <inttypes.h>
 #include <string.h>
@@ -226,14 +226,6 @@ static void gdnsd_dname_terminate(uint8_t* dname)
     dname[len] = 0;
 }
 
-// Return a hash for a dname, may crash on invalid input!
-F_PURE F_NONNULL F_UNUSED
-static unsigned gdnsd_dname_hash(const uint8_t* input)
-{
-    const uint32_t len = *input++ - 1U;
-    return gdnsd_lookup2(input, len);
-}
-
 // Check the status of a known-good dname.  It is assumed that the dname was
 //  constructed correctly by other code, and merely differentiates quickly
 //  between the partial and fully-qualfied cases.  If the input is invalid,
@@ -267,16 +259,17 @@ static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source)
 }
 
 // Allocate new storage (via xmalloc()), clone the input dname into it, and return.
-// The second argument "exact" determines whether the new copy will be allocated
-//  to 256 bytes or to the exact amount necessary to hold the data.
+// Allocates exactly enough storage, so you can't edit it afterwards.
+// Also works for labels, hence the define:
 F_MALLOC F_NONNULL F_UNUSED F_RETNN
-static uint8_t* gdnsd_dname_dup(const uint8_t* dname, bool exact)
+static uint8_t* gdnsd_dname_dup(const uint8_t* dname)
 {
-    gdnsd_assert(*dname);
-    uint8_t* out = xmalloc(exact ? (*dname + 1U) : 256U);
-    gdnsd_dname_copy(out, dname);
+    const size_t sz = *dname + 1U;
+    uint8_t* out = xmalloc(sz);
+    memcpy(out, dname, sz);
     return out;
 }
+#define gdnsd_label_dup gdnsd_dname_dup
 
 // Returns memcmp()-like return values, primary sort is
 //  on overall length (<0 means dn1 is shorter than dn2).
@@ -401,6 +394,7 @@ typedef gdnsd_dname_status_t dname_status_t;
 #define dname_cmp gdnsd_dname_cmp
 #define dname_isinzone gdnsd_dname_isinzone
 #define dname_iswild gdnsd_dname_iswild
-#define dname_hash gdnsd_dname_hash
+#define label_cmp gdnsd_label_cmp
+#define label_dup gdnsd_dname_dup
 
 #endif // GDNSD_DNAME_H

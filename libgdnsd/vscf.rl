@@ -23,6 +23,7 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/file.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/mm3.h>
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -123,7 +124,7 @@ typedef struct {
 F_NONNULL F_PURE
 static unsigned key_hash(const char* k, unsigned klen, const unsigned hash_mask)
 {
-    return gdnsd_lookup2((const uint8_t*)k, klen) & hash_mask;
+    return hash_mm3_u32((const uint8_t*)k, klen) & hash_mask;
 }
 
 F_WUNUSED

@@ -33,73 +33,57 @@ labels, e.g:
                 /   \
               www   ns1
 
-  A whole ltree represents a whole zone as a linked tree of per-label nodes
-starting at the root of the zone (the root zone of DNS in the example above).
-The actual root node of the tree has no label, as the labels are only useful
-in searching the children of a node.  The root node itself is tracked and
-searched through another data structure, the "zones tree" in ztree.h.
+  A whole ltree represents the whole of the DNS (for those zones defined in our
+authoritative dataset, anyways) as a linked tree of per-label nodes starting at
+the root.  During zone loading, detached per-zone trees are rooted at their
+own zone root, and are later grafted onto the global ltree that starts at the
+real root of the DNS.
 
   Each node in the ltree (ltree_node_t) contains a resizable hash table of
 child nodes, as well as the data for its own local rrsets and a flags field for
-identifying important properties like delegation points.
+identifying important properties like zone roots or delegation points.
 
-  The zonefile parser (zscan.rl) constructs the label tree by making
-ltree_add_rec_* calls into the ltree.c code.  After a zonefile has been
-parsed and its raw data added to its ltree, the ltree code does multiple
-phases of post-processing where it walks the entire tree, doing many data
-validation checks and setting up inter-node references (such as NS->A glue,
-MX->A additionals, etc).
+  The zonefile parser (zscan.rl) constructs the label tree for a zone by making
+ltree_add_rec_* calls into the ltree.c code.  After a zonefile has been parsed,
+the ltree code does multiple phases of post-processing where it walks the
+entire tree, doing many data validation checks and setting up inter-node
+references for e.g. CNAMEs and NS->A glue.
 
-  At runtime, the dnspacket.c code searches the ltree database directly, using
-its own local search function that understands the ltree structure.
-
-  The child node hash tables within each node are doubled in size every time
-the load factor reaches 1.0 (and rehashed all over again into the new table).
-Collisions are handled by linked lists of nodes.  The rrsets of a node are
-represented by a linked list, and the rdata items within an rrset are
-represented as a resizable array of objects.
-
-  There have been several design iterations, both in checked-in code and
-private testing.  Past experiments that failed: A flat hash table of all
-domainnames with lots of string-chopping to find the parents of failed lookups
-(and some parent/deleg pointers in the nodes).  Various uses of Judy Arrays of
-various types at various levels of the structure.  Ditto for crit-bit trees
-(using the agl code which came from the djb code).  Ditto for "khash.h" from
-AttractiveChaos.  Ditto for many other trie/tree/hash structures, and other
-variations on the current setup (open addressing with various jump schemes,
-etc).  I'm actually using a clever open-addressing variant over in ltarena.c
-for the temporary hashtable that de-duplicates domainname storage within the
-ltree, but it doesn't really apply here.
-
-  I really want to find a better, faster, and more space-efficient advanced
-data structure to use, but I just haven't found anything that beats the current
-"naive (but highly optimized to the problem space) hashing + linked lists"
-solution all-around on real-world data.  Recently I dropped a couple of space-
-efficiency hacks from the current implementation to gain speed (the space waste
-was quite minimal).  One of the biggest space efficiency gains in the current
-setup though is the use of the "ltarena" pool allocator, which saves on some
-of the wasted alignment of strings, and saves all the pointless resize/free-tracking
-that malloc would normally use (all ltarena objects are static and persistent until
-daemon exit time).
+  At runtime, the dnspacket.c code searches the ltree database directly via the
+global root node, using its own local search function that understands the
+ltree structure.
 
 */
 
 #include "dnswire.h"
 
-// [zl]tree.h have a mutual dependency due to type definitions:
-struct ltree_node;
-typedef struct ltree_node ltree_node_t;
-#include "ztree.h"
-
 #include <gdnsd/compiler.h>
 #include "plugins/plugapi.h"
 #include <gdnsd/misc.h>
+#include <gdnsd/mm3.h>
 
+#include "ltarena.h"
+
+#include <stddef.h>
 #include <inttypes.h>
 #include <stdbool.h>
 
+// Maximum count of NS RRs in an NS rr-set.  Nobody should realistically ever
+// hit this, but we needed some sane value here to size a stack-based array to
+// hold glue offsets during dnspacket.c output generation.
+#define MAX_NS_COUNT 64U
+
+// Maximum we'll recurse CNAME chains within the local data of one zone
+#define MAX_CNAME_DEPTH 16U
+
+// Result type used by search functions in ltree.c and dnspacket.c
+typedef enum {
+    DNAME_NOAUTH = 0,
+    DNAME_AUTH = 1,
+    DNAME_DELEG = 2
+} ltree_dname_status_t;
+
 struct ltree_rdata_ns;
-struct ltree_rdata_ptr;
 struct ltree_rdata_mx;
 struct ltree_rdata_srv;
 struct ltree_rdata_naptr;
@@ -120,7 +104,7 @@ struct ltree_rrset_txt;
 struct ltree_rrset_rfc3597;
 
 typedef struct ltree_rdata_ns ltree_rdata_ns_t;
-typedef struct ltree_rdata_ptr ltree_rdata_ptr_t;
+typedef uint8_t* ltree_rdata_ptr_t;
 typedef struct ltree_rdata_mx ltree_rdata_mx_t;
 typedef struct ltree_rdata_srv ltree_rdata_srv_t;
 typedef struct ltree_rdata_naptr ltree_rdata_naptr_t;
@@ -143,29 +127,25 @@ typedef struct ltree_rrset_txt ltree_rrset_txt_t;
 typedef struct ltree_rrset_rfc3597 ltree_rrset_rfc3597_t;
 
 struct ltree_rdata_ns {
-    const uint8_t* dname;
+    uint8_t* dname;
     ltree_rrset_a_t* glue_v4;
     ltree_rrset_aaaa_t* glue_v6;
 };
 
-struct ltree_rdata_ptr {
-    const uint8_t* dname;
-};
-
 struct ltree_rdata_mx {
-    const uint8_t* dname;
+    uint8_t* dname;
     uint16_t pref; // net-order
 };
 
 struct ltree_rdata_srv {
-    const uint8_t* dname;
+    uint8_t* dname;
     uint16_t priority; // net-order
     uint16_t weight; // net-order
     uint16_t port; // net-order
 };
 
 struct ltree_rdata_naptr {
-    const uint8_t* dname;
+    uint8_t* dname;
     uint8_t* text;
     uint16_t text_len;
     uint16_t order; // net-order
@@ -238,14 +218,14 @@ struct ltree_rrset_aaaa {
 
 struct ltree_rrset_soa {
     ltree_rrset_gen_t gen;
-    const uint8_t* email;
-    const uint8_t* master;
+    uint8_t* email;
+    uint8_t* master;
     uint32_t times[5];
 };
 
 struct ltree_rrset_cname {
     ltree_rrset_gen_t gen;
-    const uint8_t* dname;
+    uint8_t* dname;
 };
 
 struct ltree_rrset_dync {
@@ -309,48 +289,55 @@ union ltree_rrset {
     ltree_rrset_rfc3597_t rfc3597;
 };
 
-// For ltree_node_t.flags:
-// This is the exact start of a delegated zone.
-// These nodes *must* have an NS rrset (that's how they're
-//  detected in the first place), and otherwise can only have
-//  addr rrsets, and child nodes which contain only addr rrsets
-//  (for NS glue)
-#define LTNFLAG_DELEG 0x1
-// For nodes at or below DELEG points which contain addresses, this
-//  is set when the glue is used, and later checked for "glue unused"
-//  warnings.  Also re-used in the same manner for out-of-zone glue,
-//  which is stored under a special child node of the zone root.
-#define LTNFLAG_GUSED 0x2
+struct ltree_node;
+typedef struct ltree_node ltree_node_t;
 
-// Maximum count of NS RRs in an NS rr-set.  Nobody should realistically ever
-// hit this, but we needed some sane value here to size a stack-based array to
-// hold glue offsets during dnspacket.c output generation.
-#define MAX_NS_COUNT 64U
-
-// Maximum we'll recurse CNAME chains within the local data of one zone
-#define MAX_CNAME_DEPTH 16U
+typedef struct ltree_hslot {
+    size_t hash;
+    ltree_node_t* node;
+} ltree_hslot;
 
 struct ltree_node {
-    uint32_t flags;
-    // During the ltree_add_rec_* (parsing) phase of ltree.c, an accurate count
-    //  is maintained in child_hash_mask, and the effective mask is computed from
-    //  the count (next power of 2, -1).  After all records are added the raw count
-    //  becomes useless, and this value is converted to a directly stored mask for
-    //  use during post-processing and by the runtime code in dnspacket.c
-    uint32_t child_hash_mask;
-    const uint8_t* label;
-    ltree_node_t* next;         // next node in this child_table hash slot
-    ltree_node_t** child_table; // The table of children.
-    ltree_rrset_t* rrsets;     // The list of rrsets
+    size_t ccount_and_flags; // 62- or 30- bit count + 2 MSB flag bits
+    uint8_t* label;
+    ltree_hslot* child_table;
+    ltree_rrset_t* rrsets;
 };
 
-// ztree/zone code uses these to create and destroy per-zone ltrees:
+// Bit-level hacks for ltree_node.ccount_and_flags:
+
+#define SZT_TOP_BIT ((SIZEOF_SIZE_T * 8) - 1)
+#define SZT_NXT_BIT ((SIZEOF_SIZE_T * 8) - 2)
+#if SIZEOF_SIZE_T == SIZEOF_UNSIGNED_LONG
+#  define SZT1 1LU
+#else
+#  define SZT1 1LLU
+#endif
+#define LTN_GET_CCOUNT(_n)     (_n->ccount_and_flags & ((SZT1 << SZT_NXT_BIT) - SZT1))
+#define LTN_INC_CCOUNT(_n)     (_n->ccount_and_flags++)
+#define LTN_GET_FLAG_ZCUT(_n)  (_n->ccount_and_flags &  (SZT1 << SZT_TOP_BIT))
+#define LTN_SET_FLAG_ZCUT(_n)  (_n->ccount_and_flags |= (SZT1 << SZT_TOP_BIT))
+#define LTN_GET_FLAG_GUSED(_n) (_n->ccount_and_flags &  (SZT1 << SZT_NXT_BIT))
+#define LTN_SET_FLAG_GUSED(_n) (_n->ccount_and_flags |= (SZT1 << SZT_NXT_BIT))
+
+// This is a temporary per-zone structure used during zone construction
+typedef struct {
+    ltree_node_t* root; // root of this zone
+    uint8_t* dname; // name of this zone
+    ltarena_t* arena; // storage for all node->label in "root" above
+    unsigned serial; // serial copied from SOA for reporting successful loads
+} zone_t;
+
 F_NONNULL
-void ltree_init_zone(zone_t* zone);
+zone_t* ltree_new_zone(const char* zname);
+F_NONNULL
+bool ltree_merge_zone(ltree_node_t* new_root_tree, ltarena_t* new_root_arena, zone_t* new_zone);
+
+void* ltree_zones_reloader_thread(void* init_asvoid);
 F_WUNUSED F_NONNULL
 bool ltree_postproc_zone(zone_t* zone);
 F_NONNULL
-void ltree_destroy(ltree_node_t* node);
+void ltree_destroy_zone(zone_t* zone);
 
 // parameter structures for arguments to ltree_add_rec that otherwise
 // have confusingly-long parameter lists
@@ -419,25 +406,57 @@ void ltree_load_zones(void);
 // One-shot init at startup, after config load
 void ltree_init(void);
 
-typedef enum {
-    DNAME_NOAUTH = 0,
-    DNAME_AUTH = 1,
-    DNAME_DELEG = 2
-} ltree_dname_status_t;
+// These are pretty safe assumptions on platforms we reasonably support
+// (modern-ish *nixes on mainstream-ish CPUs), and we're relying on them below
+// for count2mask_sz in combination with the size_t-ified murmur3 functions and
+// the layout efficiency of the ltree structure in general, but they're not
+// generally gauranteed by C to be fully portable assumptions:
+
+#if SIZEOF_SIZE_T != SIZEOF_UINTPTR_T
+#  error This platform has non-matching size_t and pointer widths
+#endif
+#if SIZEOF_SIZE_T != 8 && SIZEOF_SIZE_T != 4
+#  error This platform has a pointer/size_t width other than 64 or 32 bit
+#endif
+#if SIZEOF_UNSIGNED_LONG != SIZEOF_SIZE_T && SIZEOF_UNSIGNED_LONG_LONG != SIZEOF_SIZE_T
+#  error Neither unsigned long nor unsigned long long matches size_t
+#endif
+
+F_CONST F_UNUSED
+static size_t count2mask_sz(const size_t x)
+{
+#ifndef HAVE_BUILTIN_CLZ
+    x |= 1U;
+    x |= x >> 1U;
+    x |= x >> 2U;
+    x |= x >> 4U;
+    x |= x >> 8U;
+    x |= x >> 16U;
+#if SIZEOF_SIZE_T == 8
+    // cppcheck-suppress shiftTooManyBits
+    x |= x >> 32U;
+#endif
+    return x;
+#elif SIZEOF_SIZE_T == SIZEOF_UNSIGNED_LONG
+    return ((1LU << (((sizeof(size_t) * 8LU) - 1LU) - (unsigned long)__builtin_clzl(x | 1LU))) << 1LU) - 1LU;
+#else
+    return ((1LLU << (((sizeof(size_t) * 8LLU) - 1LLU) - (unsigned long long)__builtin_clzll(x | 1LLU))) << 1LLU) - 1LLU;
+#endif
+}
 
 // this hash wrapper is for labels encoded as one length-byte followed
 //  by N characters.  Thus the label "www" is "\003www" (4 bytes)
-F_UNUSED F_PURE F_WUNUSED F_NONNULL F_UNUSED
-static uint32_t ltree_hash(const uint8_t* input, const uint32_t hash_mask)
+F_UNUSED F_PURE F_WUNUSED F_NONNULL F_HOT
+static size_t ltree_hash(const uint8_t* input)
 {
-    const unsigned len = *input++;
-    return gdnsd_lookup2(input, len) & hash_mask;
+    const size_t len = *input++;
+    return hash_mm3_sz(input, len);
 }
 
 // "lstack" must be allocated to 127 pointers
 // "dname" must be valid
 // retval is label count (not including zero-width root label)
-F_UNUSED F_WUNUSED F_NONNULL
+F_UNUSED F_WUNUSED F_NONNULL F_HOT
 static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack)
 {
     gdnsd_assert(dname_status(dname) == DNAME_VALID);
@@ -459,22 +478,25 @@ static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack)
 F_NONNULL F_PURE F_UNUSED F_HOT
 static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8_t* child_label)
 {
-    ltree_node_t* rv = NULL;
-
     if (node->child_table) {
-        const uint32_t child_mask = count2mask(node->child_hash_mask);
-        const uint32_t child_hash = ltree_hash(child_label, child_mask);
-        ltree_node_t* child = node->child_table[child_hash];
-        while (child) {
-            if (!gdnsd_label_cmp(child_label, child->label)) {
-                rv = child;
+        const size_t ccount = LTN_GET_CCOUNT(node);
+        const size_t mask = count2mask_sz(ccount);
+        const size_t kh = ltree_hash(child_label);
+        size_t probe_dist = 0;
+        do {
+            const size_t slot = (kh + probe_dist) & mask;
+            ltree_hslot* s = &node->child_table[slot];
+            if (!s->node || ((slot - s->hash) & mask) < probe_dist)
                 break;
-            }
-            child = child->next;
-        }
+            if (s->hash == kh && likely(!label_cmp(s->node->label, child_label)))
+                return s->node;
+            probe_dist++;
+        } while (1);
     }
-
-    return rv;
+    return NULL;
 }
+
+// ltree_root is RCU-managed and accessed by reader threads, defined in ltree.c
+extern ltree_node_t* root_tree;
 
 #endif // GDNSD_LTREE_H

@@ -64,4 +64,7 @@ void lta_close(ltarena_t* lta);
 F_NONNULL
 void lta_destroy(ltarena_t* lta);
 
+// moves all source pools into target's pool list, destroying the source container
+void lta_merge(ltarena_t* target, ltarena_t* source);
+
 #endif // GDNSD_LTARENA_H

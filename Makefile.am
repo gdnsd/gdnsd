@@ -137,8 +137,6 @@ src_gdnsd_SOURCES = \
 	src/kdf_compat.h \
 	src/zsrc_rfc1035.c \
 	src/zsrc_rfc1035.h \
-	src/ztree.c \
-	src/ztree.h \
 	src/ltarena.c \
 	src/ltarena.h \
 	src/ltree.c \
@@ -224,6 +222,7 @@ libgdnsd_libgdnsd_a_SOURCES = \
 	include/gdnsd/rand.h \
 	include/gdnsd/file.h \
 	include/gdnsd/alloc.h \
+	include/gdnsd/mm3.h \
 	libgdnsd/dname.c \
 	libgdnsd/net.c \
 	libgdnsd/log.c \

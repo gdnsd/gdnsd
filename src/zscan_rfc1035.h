@@ -20,7 +20,7 @@
 #ifndef GDNSD_ZSCAN_H
 #define GDNSD_ZSCAN_H
 
-#include "ztree.h"
+#include "ltree.h"
 
 #include <gdnsd/compiler.h>
 

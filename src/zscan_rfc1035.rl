@@ -22,7 +22,6 @@
 
 #include "conf.h"
 #include "ltree.h"
-#include "ltarena.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>

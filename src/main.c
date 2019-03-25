@@ -27,7 +27,6 @@
 #include "dnsio_udp.h"
 #include "dnspacket.h"
 #include "statio.h"
-#include "ztree.h"
 #include "ltree.h"
 #include "css.h"
 #include "csc.h"
@@ -124,7 +123,7 @@ static void spawn_zones_reloader_thread(const bool initial)
     pthread_attr_setdetachstate(&attribs, PTHREAD_CREATE_JOINABLE);
     pthread_attr_setscope(&attribs, PTHREAD_SCOPE_SYSTEM);
 
-    int pthread_err = pthread_create(&zones_reloader_threadid, &attribs, &ztree_zones_reloader_thread, (void*)initial);
+    int pthread_err = pthread_create(&zones_reloader_threadid, &attribs, &ltree_zones_reloader_thread, (void*)initial);
     if (pthread_err)
         log_fatal("pthread_create() of zone data thread failed: %s", logf_strerror(pthread_err));
 
@@ -185,7 +184,7 @@ static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a 
         spawn_async_zones_reloader_thread();
 }
 
-// called by ztree reloader thread just before it exits
+// called by ltree reloader thread just before it exits
 void notify_reload_zones_done(void)
 {
     ev_async* p_async_reloadz = &async_reloadz;
@@ -595,11 +594,8 @@ int main(int argc, char** argv)
     if (csc)
         do_tak2(def_loop, csc);
 
-    // init DYNA packet sizing stuff
+    // initialize the zone storage and load zone data synchronously
     ltree_init();
-
-    // Load zone data (final step if checkconf) synchronously
-    ztree_init();
     if (initialize_zones())
         log_fatal("Initial load of zone data failed");
 

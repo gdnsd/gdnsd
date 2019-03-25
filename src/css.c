@@ -32,6 +32,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/net.h>
+#include <gdnsd/misc.h>
 #include "plugins/mon.h"
 
 #include <stddef.h>

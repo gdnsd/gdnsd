@@ -540,7 +540,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
         this_smgr->is_cname = true;
         this_smgr->cname = xstrdup(cname);
         gdnsd_downcase_str(this_smgr->cname);
-        this_smgr->dname = gdnsd_dname_dup(dname, true);
+        this_smgr->dname = gdnsd_dname_dup(dname);
     }
 
     this_smgr->n_failure = 0;

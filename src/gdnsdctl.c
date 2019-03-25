@@ -37,6 +37,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <time.h>
 
 #define MIN_TIMEO 5U
 #define DEF_TIMEO 47U

@@ -20,7 +20,7 @@
 #ifndef GDNSD_ZSRC_RFC1035_H
 #define GDNSD_ZSRC_RFC1035_H
 
-#include "ztree.h"
+#include "ltree.h"
 
 #include <gdnsd/compiler.h>
 
@@ -29,6 +29,6 @@
 void zsrc_rfc1035_init(void);
 
 F_NONNULL
-bool zsrc_rfc1035_load_zones(ztree_t* tree);
+bool zsrc_rfc1035_load_zones(ltree_node_t* new_root_tree, ltarena_t* new_root_arena);
 
 #endif // GDNSD_ZSRC_RFC1035_H

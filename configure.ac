@@ -27,8 +27,11 @@ AC_COMPILE_IFELSE(
 [CLANG=yes], [CLANG=no])
 AC_MSG_RESULT([$CLANG])
 
-# pointer width...
+# Various type widths
 AC_CHECK_SIZEOF(uintptr_t)
+AC_CHECK_SIZEOF(size_t)
+AC_CHECK_SIZEOF(unsigned long)
+AC_CHECK_SIZEOF(unsigned long long)
 
 # Some tooling we need in our makefiles
 AM_PROG_AR
@@ -303,8 +306,6 @@ AC_ARG_WITH([testport],[AS_HELP_STRING([--with-testport=N],
 
 TESTPORT_START=$with_testport
 AC_SUBST([TESTPORT_START])
-
-AC_CHECK_HEADERS([valgrind/memcheck.h])
 
 # Allow specifying an alternate rundir (default $localstatedir/run) for distros
 #   that prefer e.g. /run to /var/run

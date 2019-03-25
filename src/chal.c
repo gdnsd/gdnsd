@@ -28,6 +28,8 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/dname.h>
+#include <gdnsd/misc.h>
+#include <gdnsd/mm3.h>
 
 #include <ev.h>
 #include <urcu-qsbr.h>
@@ -97,6 +99,14 @@
 // Seconds of fudge-factor on expiries to avoid edge-cases with timers and
 // communication delays, etc
 #define TIME_FUDGE 3.2
+
+// Return a hash for a dname, may crash on invalid input!
+F_PURE F_NONNULL F_UNUSED
+static unsigned dname_hash(const uint8_t* input)
+{
+    const uint32_t len = *input++ - 1U;
+    return hash_mm3_u32(input, len);
+}
 
 // A single challenge
 typedef struct {

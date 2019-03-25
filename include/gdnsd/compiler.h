@@ -182,23 +182,16 @@ struct gdnsd_una16_ {
 struct gdnsd_una32_ {
     uint32_t x;
 } S_PACKED;
+struct gdnsd_una64_ {
+    uint64_t x;
+} S_PACKED;
 #define gdnsd_get_una16(_p) (((const struct gdnsd_una16_*)(_p))->x)
 #define gdnsd_get_una32(_p) (((const struct gdnsd_una32_*)(_p))->x)
+#define gdnsd_get_una64(_p) (((const struct gdnsd_una64_*)(_p))->x)
 #define gdnsd_put_una16(_v, _p) (((struct gdnsd_una16_*)(_p))->x) = (_v)
 #define gdnsd_put_una32(_v, _p) (((struct gdnsd_una32_*)(_p))->x) = (_v)
 
 // Generic useful macros
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
-
-// Valgrind hooks for debug builds
-#if !defined(NDEBUG) && defined(HAVE_VALGRIND_MEMCHECK_H) && !defined(_CPPCHECK)
-#  include <valgrind/memcheck.h>
-#else
-#  define RUNNING_ON_VALGRIND 0
-#  define VALGRIND_MAKE_MEM_NOACCESS(x, y) ((void)(0))
-#  define VALGRIND_CREATE_MEMPOOL(x, y, z) ((void)(0))
-#  define VALGRIND_DESTROY_MEMPOOL(x)      ((void)(0))
-#  define VALGRIND_MEMPOOL_ALLOC(x, y, z)  ((void)(0))
-#endif
 
 #endif // GDNSD_COMPILER_H

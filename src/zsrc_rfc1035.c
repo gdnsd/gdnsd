@@ -22,7 +22,7 @@
 
 #include "zscan_rfc1035.h"
 #include "conf.h"
-#include "ztree.h"
+#include "ltree.h"
 #include "main.h"
 
 #include <gdnsd/alloc.h>
@@ -70,31 +70,36 @@ static char* make_zone_name(const char* zf_name)
 }
 
 F_NONNULL
-static bool process_zonefile(ztree_t* tree, const char* fn, const char* full_fn)
+static bool process_zonefile(ltree_node_t* new_root_tree, ltarena_t* new_root_arena, const char* fn, const char* full_fn)
 {
+    // v --- This block could be parallelized with subthreads
     char* name = make_zone_name(fn);
-    if (name) {
-        char* src = gdnsd_str_combine("rfc1035:", fn, NULL);
-        zone_t* z = zone_new(name, src);
-        free(src);
-        free(name);
+    if (!name)
+        return true;
 
-        if (z) {
-            if (zscan_rfc1035(z, full_fn) || zone_finalize(z))
-                zone_delete(z);
-            else if (!ztree_insert_zone(tree, z))
-                return false;
-        }
+    zone_t* z = ltree_new_zone(name);
+    free(name);
+    if (!z)
+        return true;
+
+    if (zscan_rfc1035(z, full_fn) || ltree_postproc_zone(z)) {
+        ltree_destroy_zone(z);
+        return true;
     }
+    // ^ --- This block could be parallelized with subthreads
 
-    return true;
+    if (ltree_merge_zone(new_root_tree, new_root_arena, z)) {
+        ltree_destroy_zone(z);
+        return true;
+    }
+    return false; // success
 }
 
 /*************************/
 /*** Public interfaces ***/
 /*************************/
 
-bool zsrc_rfc1035_load_zones(ztree_t* tree)
+bool zsrc_rfc1035_load_zones(ltree_node_t* new_root_tree, ltarena_t* new_root_arena)
 {
     gdnsd_assert(rfc1035_dir);
 
@@ -124,7 +129,7 @@ bool zsrc_rfc1035_load_zones(ztree_t* tree)
                     log_err("rfc1035: stat(%s) failed: %s", full_fn, logf_errno());
                     failed = true;
                 } else if (S_ISREG(st.st_mode)) {
-                    failed = process_zonefile(tree, fn, full_fn);
+                    failed = process_zonefile(new_root_tree, new_root_arena, fn, full_fn);
                     zone_count++;
                 }
                 free(full_fn);

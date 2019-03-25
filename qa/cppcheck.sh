@@ -66,9 +66,10 @@ DEFS="
 set -x
 set -e
 
-for plat in unix64 unix32; do
-  cppcheck -j4 --platform=$plat --std=c11 --std=posix \
-    --enable=warning,performance,portability,information,style,missingInclude \
-    --inline-suppr --max-configs=999 --quiet --error-exitcode=42 \
-    $INCDIRS $SKIPFILES $DEFS .
-done
+# We used to check unix32 too, but it got complicated to get accurate reports
+# with code that depends on platform-specific config.h values, and I only tend
+# to run this when the local configuration is unix64
+cppcheck -j4 --platform=unix64 --std=c11 --std=posix \
+  --enable=warning,performance,portability,information,style,missingInclude \
+  --inline-suppr --max-configs=999 --quiet --error-exitcode=42 \
+  $INCDIRS $SKIPFILES $DEFS .

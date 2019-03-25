@@ -23,6 +23,8 @@
 #include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/net.h>
+#include <gdnsd/dname.h>
+#include <gdnsd/misc.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
