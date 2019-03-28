@@ -395,9 +395,9 @@ static rcode_rv_t handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigne
         }
     } else if (opt_code == EDNS_NSID_OPTCODE) {
         if (!opt_len) {
-            if (gcfg->nsid_len) {
-                gdnsd_assert(gcfg->nsid);
-                ctx->txn.edns.out_bytes += (4U + gcfg->nsid_len);
+            if (gcfg->nsid.len) {
+                gdnsd_assert(gcfg->nsid.data);
+                ctx->txn.edns.out_bytes += (4U + gcfg->nsid.len);
                 ctx->txn.edns.respond_nsid = true;
             }
         } else {
@@ -1951,15 +1951,15 @@ static unsigned do_edns_output(dnsp_ctx_t* ctx, uint8_t* packet, unsigned res_of
 
     // NSID, if configured by user
     if (ctx->txn.edns.respond_nsid) {
-        gdnsd_assert(gcfg->nsid);
-        gdnsd_assert(gcfg->nsid_len);
-        rdlen += (4U + gcfg->nsid_len);
+        gdnsd_assert(gcfg->nsid.data);
+        gdnsd_assert(gcfg->nsid.len);
+        rdlen += (4U + gcfg->nsid.len);
         gdnsd_put_una16(htons(EDNS_NSID_OPTCODE), &packet[res_offset]);
         res_offset += 2;
-        gdnsd_put_una16(htons(gcfg->nsid_len), &packet[res_offset]);
+        gdnsd_put_una16(htons(gcfg->nsid.len), &packet[res_offset]);
         res_offset += 2;
-        memcpy(&packet[res_offset], gcfg->nsid, gcfg->nsid_len);
-        res_offset += gcfg->nsid_len;
+        memcpy(&packet[res_offset], gcfg->nsid.data, gcfg->nsid.len);
+        res_offset += gcfg->nsid.len;
     }
 
     // predicted edns.out_bytes correctly earlier for truncation.  note
@@ -2056,8 +2056,8 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* p
                 res_offset = answer_from_db(ctx, res_offset);
             } else if (ctx->txn.qclass == DNS_CLASS_CH) {
                 ctx->txn.ancount = 1;
-                memcpy(&packet[res_offset], gcfg->chaos, gcfg->chaos_len);
-                res_offset += gcfg->chaos_len;
+                memcpy(&packet[res_offset], gcfg->chaos.data, gcfg->chaos.len);
+                res_offset += gcfg->chaos.len;
             } else {
                 hdr->flags2 = DNS_RCODE_REFUSED;
                 stats_own_inc(&ctx->stats->refused);

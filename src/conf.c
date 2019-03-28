@@ -44,8 +44,8 @@ static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00"
 static const char chaos_def[] = "gdnsd/3";
 
 static const cfg_t cfg_defaults = {
-    .chaos = NULL,
-    .nsid = NULL,
+    .chaos = { .data = NULL, .len = 0 },
+    .nsid = { .data = NULL, .len = 0 },
     .cookie_key_file = NULL,
     .lock_mem = false,
     .disable_text_autosplit = false,
@@ -54,8 +54,6 @@ static const cfg_t cfg_defaults = {
     .disable_cookies = false,
     .experimental_no_chain = false,
     .max_nocookie_response = 0,
-    .chaos_len = 0,
-    .nsid_len = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
     .max_ttl = 3600000U,
@@ -80,8 +78,8 @@ static void set_chaos(cfg_t* cfg, const char* data)
     combined[chaos_prefix_len + 1] = dlen + 1;
     combined[chaos_prefix_len + 2] = dlen;
     memcpy(combined + chaos_prefix_len + 3, data, dlen);
-    cfg->chaos = combined;
-    cfg->chaos_len = overall_len;
+    cfg->chaos.data = combined;
+    cfg->chaos.len = overall_len;
 }
 
 static const uint8_t ahex[] = {
@@ -96,9 +94,9 @@ static void set_nsid(cfg_t* cfg, const char* data)
     const unsigned dlen = strlen(data);
     if (!dlen || dlen > 256U || dlen & 1U || dlen != strspn(data, "0123456789ABCDEFabcdef"))
         log_fatal("Option 'nsid' must be a hex string up to 256 characters (128 encoded bytes) long");
-    cfg->nsid_len = dlen >> 1U;
+    cfg->nsid.len = dlen >> 1U;
     uint8_t* nsid;
-    cfg->nsid = nsid = xmalloc(cfg->nsid_len);
+    cfg->nsid.data = nsid = xmalloc(cfg->nsid.len);
     for (unsigned i = 0; i < dlen; i += 2)
         nsid[i >> 1] = (ahex[(data[i] & 0x1F) ^ 0x10] << 4)
                        | ahex[(data[i + 1] & 0x1F) ^ 0x10];
@@ -118,8 +116,8 @@ static void set_nsid_ascii(cfg_t* cfg, const char* data)
     }
     if (fail)
         log_fatal("Option 'nsid_ascii' must be a string of printable ASCII characters up to 128 bytes long");
-    cfg->nsid_len = dlen;
-    cfg->nsid = (uint8_t*)xstrdup(data);
+    cfg->nsid.len = dlen;
+    cfg->nsid.data = (uint8_t*)xstrdup(data);
 }
 
 // Generic iterator for catching bad config hash keys in various places below

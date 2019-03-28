@@ -970,8 +970,8 @@ static size_t p1_rsize_base(const uint8_t** lstack, const ltree_node_t* node, co
         rsize += 24U;
 
     // Optional NSID if configured (4U is 2 bytes optcode + 2 bytes datalen)
-    if (gcfg->nsid_len)
-        rsize += (4U + gcfg->nsid_len);
+    if (gcfg->nsid.len)
+        rsize += (4U + gcfg->nsid.len);
 
     // EDNS cookies (our output is fixed 8 byte server cookies)
     if (!gcfg->disable_cookies)

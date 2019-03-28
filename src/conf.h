@@ -28,9 +28,14 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+typedef struct binstr_t {
+    const uint8_t* data;
+    unsigned len;
+} binstr_t;
+
 typedef struct {
-    const uint8_t* chaos;
-    const uint8_t* nsid;
+    binstr_t chaos;
+    binstr_t nsid;
     const char*    cookie_key_file;
     bool     lock_mem;
     bool     disable_text_autosplit;
@@ -39,8 +44,6 @@ typedef struct {
     bool     disable_cookies;
     bool     experimental_no_chain;
     unsigned max_nocookie_response;
-    unsigned chaos_len;
-    unsigned nsid_len;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;
     unsigned max_ttl;
