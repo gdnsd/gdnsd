@@ -1,3 +1,21 @@
+3.1.0 - 2019-03-30
+    * RFC 8490 "DNS Stateful Operations" (DSO) implemented and enabled by
+      default for all TCP listeners.  Can be disabled in case of interop or
+      other issues via the new global config option "disable_tcp_dso".
+    * Zonefile parsing can now use multiple threads for speed.  There's a new
+      config option "zones_rfc1035_threads" (default: 2) to specify how many
+      threads to use when parsing zones on start or reload.  You'll have to do
+      some testing to find an optimal value for your setup.
+    * TCP control sockets: you can now define a limited-functionality TCP
+      control socket listener which gdnsdctl can connect to from another
+      machine.  See the documentation for the new config option "tcp_control".
+    * experimental_no_chain config option: As the name implies, this is for
+      experimentation only.  If set to true, gdnsd will never chain through
+      zone-local CNAME entries while generating responses, instead emitting
+      just a singular CNAME RR.  See the documentation for more details!
+    * Some substantial internal refactoring was done for code cleanliness and
+      for making runtime queries more CPU/cache-efficient.
+
 3.0.0 - 2019-02-15
     * Note that this is a major version number bump, and for some users and
       configurations this means major compatibility-breaking changes.  Do not
