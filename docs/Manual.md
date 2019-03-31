@@ -137,15 +137,13 @@ The "main" thread of execution (the first thread of the process) primarily handl
 
 The geoip plugin spawns a separate persistent functional thread, whose only job is to watch for updates to configured GeoIP databases and handle the asynchronous reloading of their data.
 
-When zone data reloads are requested, a temporary separate pthread is spawned just for the purpose of loading the zone data, which terminates after the operation is complete.
+When zone data reloads are requested, a temporary separate pthread is spawned just for the purpose of loading the zone data, which terminates after the operation is complete.  This thread may spawn other temporary sub-threads to parallelize zonefile loading.
 
 The rest of the threads are all dedicated DNS I/O threads.  The general model employed is that every configured listening address (address/port/protocol combination) creates multiple `SO_REUSEPORT` listening sockets.  The number of duplicate listening sockets per address is controlled by the `udp_threads` and `tcp_threads` parameters, which default to 2.  There's exactly one I/O thread per listening socket, and they exist for the life of the daemon.  It's intended that the tcp/udp threads options should be tuned to roughly the CPU core count of the host machine.  For example, if two listen addresses are configured at 192.0.2.1:53 and 192.0.2.42:53, and the threads parameters are at their default value of two, there will be a total of 8 I/O threads created (2 tcp + 2 udp for each of the two IP:port, each thread having its own separate `SO_REUSEPORT` listening socket).
 
-The TCP DNS threads use a libev event loop to multiplex the handling of all traffic for all connections they accept on their listening socket.  The UDP DNS threads use a tight loop over the raw send and receive calls for the given socket.
+The UDP DNS threads use a tight loop over blocking network syscalls for their singular socket.  All of the code executed in the UDP threads at runtime is carefully crafted to avoid all syscalls (other than the necessary network syscalls) and other expensive or potentially-blocking operations (e.g. locks and dynamic memory allocation).  These threads should never block on anything other than their send/recv calls, and should execute ~2 syscalls per request.  It's sometimes a little over 2 under very light load due to excess setsockopt() calls to control blocking timeouts when there are multi-second idle periods, and sometimes significantly less than 2 under heavy load thanks to the multi-packet `sendmmsg()` and `recvmmsg()` interfaces.
 
-All of the code executed in the UDP threads at runtime is carefully crafted to avoid all syscalls (other than the necessary send/recv ones) and other expensive or potentially-blocking operations (e.g. locks and dynamic memory allocation).  These threads should never block on anything other than their send/recv calls, and should execute at most 2 syscalls per request (significantly less under heavy traffic loads if sendmmsg() support is detected and used at runtime).
-
-The TCP code shares the efficient core DNS parsing and response code of the UDP threads, but it does use dynamic memory allocation and a plethora of per-request syscalls (some via the eventloop library) at the TCP connection-handling layer.
+The TCP DNS threads use a libev event loop to multiplex the handling of all traffic for all connections they accept on their listening socket and use non-blocking I/O.  The TCP code shares the efficient core DNS parsing and response code of the UDP threads, but it does use dynamic memory allocation and a plethora of per-request syscalls (some via the eventloop library) at the TCP connection-handling layer.
 
 ### Runtime data updates
 
@@ -227,6 +225,9 @@ The TCP threads also count this stuff:
 * tcp.close\_s\_kill - Count of TCP connections closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
 * tcp.proxy - TCP conns initiated on PROXY protocol listeners (also incs `tcp.conns`)
 * tcp.proxy\_fail - TCP PROXY conns killed for failure to parse an acceptable PROXY protocol header (also incs `tcp.close_s_err`)
+* tcp.dso\_estab - TCP connections which established an RFC 8490 DSO session (can only happen up to once per connection)
+* tcp.dso\_protoerr - TCP DSO sessions terminated un-gracefully due to client protocol violation (can only happen up to once per DSO session)
+* tcp.dso\_typeni - Unrecognized DSO Request type received over TCP (could be with or without an established DSO session, and many times per connection/session).
 
 These statistics are usually tracked in either 32-bit or 64-bit counters (depending on the platform) and exported to the user via `gdnsdctl stats`.  The implementation of the stats avoids stalls or locks in the I/O threads to minimize overhead.
 
