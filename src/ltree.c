@@ -132,7 +132,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
 {
     const size_t ccount = LTN_GET_CCOUNT(node);
     const size_t kh = ltree_hash(child_label);
-    size_t mask = count2mask_sz(ccount);
+    size_t mask = count2mask_sz(ccount | 1U);
     size_t probe_dist = 0;
     if (ccount) {
         do {

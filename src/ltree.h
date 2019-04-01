@@ -425,8 +425,8 @@ void ltree_init(void);
 F_CONST F_UNUSED
 static size_t count2mask_sz(const size_t x)
 {
+    gdnsd_assert(x);
 #ifndef HAVE_BUILTIN_CLZ
-    x |= 1U;
     x |= x >> 1U;
     x |= x >> 2U;
     x |= x >> 4U;
@@ -438,9 +438,9 @@ static size_t count2mask_sz(const size_t x)
 #endif
     return x;
 #elif SIZEOF_SIZE_T == SIZEOF_UNSIGNED_LONG
-    return ((1LU << (((sizeof(size_t) * 8LU) - 1LU) - (unsigned long)__builtin_clzl(x | 1LU))) << 1LU) - 1LU;
+    return ((1LU << (((sizeof(size_t) * 8LU) - 1LU) ^ (unsigned long)__builtin_clzl(x))) << 1LU) - 1LU;
 #else
-    return ((1LLU << (((sizeof(size_t) * 8LLU) - 1LLU) - (unsigned long long)__builtin_clzll(x | 1LLU))) << 1LLU) - 1LLU;
+    return ((1LLU << (((sizeof(size_t) * 8LLU) - 1LLU) ^ (unsigned long long)__builtin_clzll(x))) << 1LLU) - 1LLU;
 #endif
 }
 
@@ -480,6 +480,7 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 {
     if (node->child_table) {
         const size_t ccount = LTN_GET_CCOUNT(node);
+        gdnsd_assert(ccount);
         const size_t mask = count2mask_sz(ccount);
         const size_t kh = ltree_hash(child_label);
         size_t probe_dist = 0;
