@@ -42,7 +42,6 @@ struct cfg {
     bool     edns_client_subnet;
     bool     zones_strict_data;
     bool     disable_cookies;
-    bool     experimental_no_chain;
     bool     disable_tcp_dso;
     unsigned max_nocookie_response;
     unsigned zones_default_ttl;

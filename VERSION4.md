@@ -46,6 +46,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ### Options removed completely
 
+* `experimental_no_chain` - This option has been removed.  It will still parse successfully for now to ease transitions, but will emit a warning on startup about being useless.  The new behavior is the previous default `true` value for this option.  This option was added in v3.1.0 with a `false` default, and then in v3.4.0 the default was changed to `true` and an error message was emitted on startup asking for reports of anyone who found a need for it to be `false`.  No such reports were received.  Remove this line from your config before 5.x makes it a parse error.
+
 ## Commandline changes for the main daemon
 
 * The options `-f`, `-s`, and `-x`, which were deprecated and useless throughout 3.x, are now removed.

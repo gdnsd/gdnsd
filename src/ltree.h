@@ -72,9 +72,6 @@ ltree structure.
 // hold glue offsets during dnspacket.c output generation.
 #define MAX_NS_COUNT 64U
 
-// Maximum we'll recurse CNAME chains within the local data of one zone
-#define MAX_CNAME_DEPTH 16U
-
 // Result type used by search functions in ltree.c and dnspacket.c
 enum ltree_dnstatus {
     DNAME_NOAUTH = 0,

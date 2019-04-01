@@ -52,7 +52,6 @@ static const struct cfg cfg_defaults = {
     .edns_client_subnet = true,
     .zones_strict_data = false,
     .disable_cookies = false,
-    .experimental_no_chain = true,
     .disable_tcp_dso = false,
     .max_nocookie_response = 0,
     .zones_default_ttl = 86400U,
@@ -260,6 +259,8 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
 
     const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
+        CFG_OPT_REMOVED(options, experimental_no_chain);
+
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
@@ -278,7 +279,6 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
         CFG_OPT_UINT(options, zones_rfc1035_threads, 1LU, 1024LU);
         CFG_OPT_BOOL(options, zones_strict_data);
         CFG_OPT_BOOL(options, disable_cookies);
-        CFG_OPT_BOOL(options, experimental_no_chain);
         CFG_OPT_BOOL(options, disable_tcp_dso);
         CFG_OPT_UINT_NOMIN(options, max_nocookie_response, 1024LU);
         if (cfg->max_nocookie_response && cfg->max_nocookie_response < 128U)
@@ -290,9 +290,6 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
         CFG_OPT_STR_NOCOPY(options, nsid_ascii, nsid_data_ascii);
         vscf_hash_iterate_const(options, true, bad_key, "options");
     }
-
-    if (!cfg->experimental_no_chain)
-        log_err("!!! Please file a bug report so that we can understand any case where disabling 'experimental_no_chain' was necessary!");
 
     // if cmdline forced, override any default or config setting
     if (force_zsd)

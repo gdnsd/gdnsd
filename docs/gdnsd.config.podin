@@ -548,55 +548,6 @@ This is an convenience alternative to C<nsid> above, allowing the binary NSID
 data to be configured with the bytes of a printable ASCII string up to 128
 bytes in length.  Only one of C<nsid> or C<nsid_ascii> may be specified.
 
-=item B<experimental_no_chain>
-
-Boolean, default true.
-
-If set to true (the default), when a query for any RR type encounters a
-C<CNAME> RR in the zone data, the behavior of the server will be as if the
-queried type was C<CNAME>.  This implies no chasing of the target
-(right-hand-side) name to emit any further answer-section records or
-delegations related to the target, even if they exist in the local data of the
-same zone.
-
-This option is likely to become the fixed behavior (no option to disable) in a
-future release.  If this new default behavior causes a problem, you can (for
-now!) set the option to false to revert to the traditional behavior of emitting
-chained multi-RR responses for zone-local CNAMEs as a workaround.  Please file
-a bug report if so, otherwise we'll have no feedback to go on!
-
-This behavior is desirable for a few reasons:
-
-RFC 7871 (edns-client-subnet) actually recommends it for at least subnet
-differentiated responses, because otherwise it's ambiguous which of the
-multiple answer-section records the subnet scoping applies to, and caches
-invariably have to take a pessimistic view and subnet-fragment cache entries
-pointlessly.  This is the most-compelling rationale, and it has impact on what
-kind of efficient geodns setups can work at all for certain use-cases.
-
-It also adheres to the general principle of minimal responses we adhere to
-elsewhere (caches may have the target cached already anyways), and it helps
-minimize response sizes (reduce reflection, and esp helpful for DNSSEC in the
-future).
-
-Also, if this were the fixed behavior of the server, rather than configurable,
-it would significantly simplify the code and make lookups more efficient (these
-gains are not realized by the experimental optional version).
-
-However, it's also RFC-questionable.  The original RFC1034 algorithms ask that
-authoritative servers complete local CNAME chains from local data (which this
-violates), but also requires recursors to complete them remotely (which makes
-this work, and which most do now, but historically some older implementations
-implicitly relied on the authserver doing it).  RFC 2308 also touches on this
-topic, and the TL;DR there is that recursors can tell our incomplete responses
-from actual negative "No Data" responses about the next name in the chain by
-the fact that we don't emit an SOA record in the auth section.
-
-Update 2020-11: this has now been tested pretty widely on the Internet (by a
-major site with a global audience of millions), for a very long time (nearly
-two years), and there has been no evidence so far of breakage or failure
-reports from real users.
-
 =item B<disable_cookies>
 
 Boolean, default false.  Disables support for RFC 7873 EDNS Cookies.  Not
