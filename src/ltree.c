@@ -251,6 +251,7 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
 {
     ltree_node_t* node;
     if (ooz) {
+        log_zwarn("'%s A' in zone '%s': pointless out of zone glue will not be supported in a future version, please delete the record!", logf_dname(dname), logf_dname(zone->dname));
         ltree_node_t* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
         node = ltree_node_find_or_add_child(zone->arena, ooz_node, dname);
     } else {
@@ -295,6 +296,7 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
 {
     ltree_node_t* node;
     if (ooz) {
+        log_zwarn("'%s AAAA' in zone '%s': pointless out of zone glue will not be supported in a future version, please delete the record!", logf_dname(dname), logf_dname(zone->dname));
         ltree_node_t* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
         node = ltree_node_find_or_add_child(zone->arena, ooz_node, dname);
     } else {
