@@ -54,7 +54,6 @@ struct zscan {
     uint8_t  ipv6[16];
     uint32_t ipv4;
     bool     zn_err_detect;
-    bool     lhs_is_ooz;
     unsigned lcount;
     unsigned text_len;
     unsigned def_ttl;
@@ -145,13 +144,6 @@ static void validate_origin_in_zone(struct zscan* z, const uint8_t* origin)
         parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zone->dname));
 }
 
-F_NONNULL
-static void validate_lhs_not_ooz(struct zscan* z)
-{
-    if (z->lhs_is_ooz)
-        parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
-}
-
 F_NONNULL F_PURE
 static unsigned dn_find_final_label_offset(const uint8_t* dname)
 {
@@ -240,11 +232,9 @@ static void dname_set(struct zscan* z, uint8_t* dname, unsigned len, bool lhs)
         break;
     case DNAME_VALID:
         if (lhs) {
-            const bool inzone = dname_isinzone(z->zone->dname, dname);
-            z->lhs_is_ooz = !inzone;
-            // in-zone LHS dnames are made relative to zroot
-            if (inzone)
-                gdnsd_dname_drop_zone(dname, z->zone->dname);
+            if (!dname_isinzone(z->zone->dname, dname))
+                parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zone->dname));
+            gdnsd_dname_drop_zone(dname, z->zone->dname);
         }
         break;
     case DNAME_PARTIAL:
@@ -255,10 +245,8 @@ static void dname_set(struct zscan* z, uint8_t* dname, unsigned len, bool lhs)
         if (catstat == DNAME_INVALID)
             parse_error_noargs("illegal domainname");
         gdnsd_assert(catstat == DNAME_VALID);
-        if (lhs) {
-            z->lhs_is_ooz = false;
+        if (lhs)
             gdnsd_dname_drop_zone(dname, z->zone->dname);
-        }
         break;
     default:
         gdnsd_assume(0);
@@ -548,7 +536,6 @@ static void set_caa_prop(struct zscan* z, const char* fpc)
 F_NONNULL
 static void rec_soa(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (z->lhs_dname[0] != 1)
         parse_error_noargs("SOA record can only be defined for the root of the zone");
     if (ltree_add_rec_soa(
@@ -569,21 +556,20 @@ static void rec_soa(struct zscan* z)
 F_NONNULL
 static void rec_a(struct zscan* z)
 {
-    if (ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->lhs_is_ooz))
+    if (ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_aaaa(struct zscan* z)
 {
-    if (ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->lhs_is_ooz))
+    if (ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_ns(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
@@ -591,7 +577,6 @@ static void rec_ns(struct zscan* z)
 F_NONNULL
 static void rec_cname(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
@@ -599,7 +584,6 @@ static void rec_cname(struct zscan* z)
 F_NONNULL
 static void rec_ptr(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
@@ -607,7 +591,6 @@ static void rec_ptr(struct zscan* z)
 F_NONNULL
 static void rec_mx(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uval))
         siglongjmp(z->jbuf, 1);
 }
@@ -615,7 +598,6 @@ static void rec_mx(struct zscan* z)
 F_NONNULL
 static void rec_srv(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_srv(
                 z->zone,
                 z->lhs_dname,
@@ -640,7 +622,6 @@ static void text_cleanup(struct zscan* z)
 F_NONNULL
 static void rec_naptr(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_naptr(
                 z->zone,
                 z->lhs_dname,
@@ -659,7 +640,6 @@ static void rec_naptr(struct zscan* z)
 F_NONNULL
 static void rec_txt(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_txt(z->zone, z->lhs_dname, z->text_len, z->text, z->ttl))
         siglongjmp(z->jbuf, 1);
     z->text = NULL; // storage handed off to ltree
@@ -669,7 +649,6 @@ static void rec_txt(struct zscan* z)
 F_NONNULL
 static void rec_dyna(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
@@ -677,7 +656,6 @@ static void rec_dyna(struct zscan* z)
 F_NONNULL
 static void rec_dync(struct zscan* z)
 {
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
@@ -687,7 +665,6 @@ static void rec_rfc3597(struct zscan* z)
 {
     if (z->rfc3597_data_written < z->rfc3597_data_len)
         parse_error("RFC3597 generic RR claimed rdata length of %u, but only %u bytes of data present", z->rfc3597_data_len, z->rfc3597_data_written);
-    validate_lhs_not_ooz(z);
     if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data))
         siglongjmp(z->jbuf, 1);
     z->rfc3597_data = NULL;
@@ -698,8 +675,6 @@ static void rec_caa(struct zscan* z)
 {
     if (z->uval > 255)
         parse_error("CAA flags byte value %u is >255", z->uval);
-
-    validate_lhs_not_ooz(z);
 
     const unsigned prop_len = strlen(z->caa_prop);
     gdnsd_assume(prop_len < 256); // parser-enforced

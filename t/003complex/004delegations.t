@@ -110,11 +110,6 @@ _GDT->test_dns(
         'subsemiext.example.com 21600 NS ns3.*.example.org',
         'subsemiext.example.com 21600 NS ns4.example.org',
     ],
-    addtl => [
-        'ns1.example.org 21600 A 192.0.2.200',
-        'ns2.example.org 21600 A 192.0.2.207',
-        'ns3.*.example.org 21600 A 192.0.2.209',
-    ],
 );
 
 _GDT->test_dns(
@@ -126,11 +121,6 @@ _GDT->test_dns(
         'subsemiext.example.com 21600 NS ns3.*.example.org',
         'subsemiext.example.com 21600 NS ns4.example.org',
     ],
-    addtl => [
-        'ns1.example.org 21600 A 192.0.2.200',
-        'ns2.example.org 21600 A 192.0.2.207',
-        'ns3.*.example.org 21600 A 192.0.2.209',
-    ],
 );
 
 _GDT->test_dns(
@@ -141,11 +131,6 @@ _GDT->test_dns(
         'subsemiext.example.com 21600 NS ns2.example.org',
         'subsemiext.example.com 21600 NS ns3.*.example.org',
         'subsemiext.example.com 21600 NS ns4.example.org',
-    ],
-    addtl => [
-        'ns1.example.org 21600 A 192.0.2.200',
-        'ns2.example.org 21600 A 192.0.2.207',
-        'ns3.*.example.org 21600 A 192.0.2.209',
     ],
 );
 
@@ -160,7 +145,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
-        'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
 
@@ -175,7 +159,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
-        'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
 
@@ -190,7 +173,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
-        'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
 
@@ -205,7 +187,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
-        'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
 
@@ -220,7 +201,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
-        'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
 
@@ -235,7 +215,6 @@ _GDT->test_dns(
     ],
     addtl => [
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
-        'ns1.example.org 21600 A 192.0.2.200',
     ],
 );
 
@@ -272,11 +251,6 @@ _GDT->test_dns(
         'subooz.example.com 21600 NS ns1.example.net',
         'subooz.example.com 21600 NS ns2.example.net',
     ],
-    addtl => [
-        'ns1.example.net 21600 A 192.0.2.77',
-        'ns2.example.net 21600 A 192.0.2.78',
-        'ns2.example.net 21600 AAAA 2001:DB8::1',
-    ],
 );
 
 _GDT->test_dns(
@@ -286,10 +260,7 @@ _GDT->test_dns(
         'submixooz.example.com 21600 NS ns1.example.net',
         'submixooz.example.com 21600 NS ns1.submixooz.example.com',
     ],
-    addtl => [
-        'ns1.example.net 21600 A 192.0.2.77',
-        'ns1.submixooz.example.com 21600 A 192.0.2.79',
-    ],
+    addtl => 'ns1.submixooz.example.com 21600 A 192.0.2.79',
 );
 
 # These checks verify that "unused.glue.example.net" doesn't
@@ -305,7 +276,6 @@ _GDT->test_dns(
     auth => 'example.org 120 SOA ns1.example.org r00t.example.net 1 7200 1800 259200 120',
 );
 
-# check that the minimal out-of-zone-glue domain mostly works
 _GDT->test_dns(
     qname => 'example.xxx', qtype => 'NS',
     answer => 'example.xxx 21600 NS somewhere.over.the.rainbow'

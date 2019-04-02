@@ -41,9 +41,6 @@ foo.*.sub A 192.0.2.223
 ;  important CNAME chaining code in dnspacket.c
 ct22	CNAME	foo
 
-; trigger unused glue warning
-unused.glue.example.net.	A	192.0.2.254
-
 ; trigger CNAME->NXD warning (note explicit '*' to get past wildcard)
 ;   which also tests logging of unprintable chars via logf_lstack()
 asdf\003	CNAME	deep.layers.of.nxd.subdomain.*.example.org.

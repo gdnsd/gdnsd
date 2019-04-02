@@ -39,10 +39,6 @@
 #include <unistd.h>
 #include <limits.h>
 
-// special label used to hide out-of-zone glue
-//  inside zone root node child lists
-static const uint8_t ooz_glue_label[1] = { 0 };
-
 // initialized to realistic value by ltree_init(), is the total response size
 // of all A+AAAA RRs from a DYNA that returns the maximal configured set (of
 // all global plugin configurations).
@@ -256,20 +252,11 @@ static unsigned clamp_ttl(const struct zone* zone, const uint8_t* dname, const c
     return ttl;
 }
 
-bool ltree_add_rec_a(const struct zone* zone, const uint8_t* dname, const uint32_t addr, unsigned ttl, const bool ooz)
+bool ltree_add_rec_a(const struct zone* zone, const uint8_t* dname, const uint32_t addr, unsigned ttl)
 {
-    struct ltree_node* node;
-    if (ooz) {
-        log_zwarn("'%s A' in zone '%s': pointless out of zone glue will not be supported in a future version, please delete the record!", logf_dname(dname), logf_dname(zone->dname));
-        struct ltree_node* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
-        node = ltree_node_find_or_add_child(zone->arena, ooz_node, dname);
-    } else {
-        node = ltree_find_or_add_dname(zone, dname);
-    }
-
-    ttl = clamp_ttl(zone, dname, "A", ttl);
-
+    struct ltree_node* node = ltree_find_or_add_dname(zone, dname);
     struct ltree_rrset_a* rrset = ltree_node_get_rrset_a(node);
+    ttl = clamp_ttl(zone, dname, "A", ttl);
     if (!rrset) {
         rrset = ltree_node_add_rrset_a(node);
         rrset->gen.count = 1;
@@ -302,20 +289,11 @@ bool ltree_add_rec_a(const struct zone* zone, const uint8_t* dname, const uint32
     return false;
 }
 
-bool ltree_add_rec_aaaa(const struct zone* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const bool ooz)
+bool ltree_add_rec_aaaa(const struct zone* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl)
 {
-    struct ltree_node* node;
-    if (ooz) {
-        log_zwarn("'%s AAAA' in zone '%s': pointless out of zone glue will not be supported in a future version, please delete the record!", logf_dname(dname), logf_dname(zone->dname));
-        struct ltree_node* ooz_node = ltree_node_find_or_add_child(zone->arena, zone->root, ooz_glue_label);
-        node = ltree_node_find_or_add_child(zone->arena, ooz_node, dname);
-    } else {
-        node = ltree_find_or_add_dname(zone, dname);
-    }
-
-    ttl = clamp_ttl(zone, dname, "AAAA", ttl);
-
+    struct ltree_node* node = ltree_find_or_add_dname(zone, dname);
     struct ltree_rrset_aaaa* rrset = ltree_node_get_rrset_aaaa(node);
+    ttl = clamp_ttl(zone, dname, "AAAA", ttl);
     if (!rrset) {
         rrset = ltree_node_add_rrset_aaaa(node);
         rrset->addrs = xmalloc(16);
@@ -797,48 +775,36 @@ static bool p1_proc_ns(const struct zone* zone, struct ltree_rdata_ns* this_ns, 
     struct ltree_node* ns_target = NULL;
     enum ltree_dnstatus target_status = ltree_search_dname_zone(this_ns->dname, zone, &ns_target);
 
-    // Don't attach glue for names in auth space, only delegation space and ooz
-    if (target_status == DNAME_AUTH)
+    // Only attach glue from delegated spaces
+    if (target_status != DNAME_DELEG)
         return false;
 
     struct ltree_rrset_a* target_a = NULL;
     struct ltree_rrset_aaaa* target_aaaa = NULL;
-
-    // if NOAUTH, look for explicit out-of-zone glue
-    if (target_status == DNAME_NOAUTH) {
-        gdnsd_assume(!ns_target);
-        const struct ltree_node* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
-        if (ooz)
-            ns_target = ltree_node_find_child(ooz, this_ns->dname);
-    }
 
     if (ns_target) {
         target_a = ltree_node_get_rrset_a(ns_target);
         target_aaaa = ltree_node_get_rrset_aaaa(ns_target);
     }
 
-    if (target_status != DNAME_NOAUTH) {
-        // if !NOAUTH, target must be in auth or deleg space for this
-        //   same zone, and we *must* have a legal address for it
-        if (!target_a && !target_aaaa)
-            log_zfatal("Missing A and/or AAAA records for target nameserver in '%s%s NS %s'",
-                       logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
-        // Explicitly disallowing NS->DYNA avoids a number of pitfalls.  Most
-        // importantly, it evades the question-marks around practices with this
-        // in RFC7871, but also it makes delegation max response sizes much
-        // more predictable, and they're otherwise our worst-case scenario for
-        // predicting overlong responses.
-        if ((target_a && !target_a->gen.count) || (target_aaaa && !target_aaaa->gen.count))
-            log_zfatal("Target nameserver in '%s%s NS %s' cannot have DYNA addresses",
-                       logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
-    }
+    if (!target_a && !target_aaaa)
+        log_zfatal("Missing A and/or AAAA records for target nameserver in '%s%s NS %s'",
+                   logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
 
-    // use target_addr found via either path above for all cases.
-    if (target_a || target_aaaa) {
-        gdnsd_assume(ns_target);
-        this_ns->glue_v4 = target_a;
-        this_ns->glue_v6 = target_aaaa;
-    }
+    // Implied by above logic + fatal error
+    gdnsd_assume(ns_target);
+
+    // Explicitly disallowing NS->DYNA avoids a number of pitfalls.  Most
+    // importantly, it evades the question-marks around practices with this
+    // in RFC7871, but also it makes delegation max response sizes much
+    // more predictable, and they're otherwise our worst-case scenario for
+    // predicting overlong responses.
+    if ((target_a && !target_a->gen.count) || (target_aaaa && !target_aaaa->gen.count))
+        log_zfatal("Target nameserver in '%s%s NS %s' cannot have DYNA addresses",
+                   logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
+
+    this_ns->glue_v4 = target_a;
+    this_ns->glue_v6 = target_aaaa;
 
     return false;
 }
@@ -1172,7 +1138,7 @@ static bool ltree_postproc(const struct zone* zone, bool (*fn)(const uint8_t**, 
 }
 
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_zroot_phase1(struct zone* zone)
+static bool ltree_postproc_zroot(struct zone* zone)
 {
     const struct ltree_node* zroot = zone->root;
     gdnsd_assume(zroot);
@@ -1217,42 +1183,13 @@ static bool ltree_postproc_zroot_phase1(struct zone* zone)
     return false;
 }
 
-F_NONNULL
-static bool ltree_postproc_zroot_phase2(const struct zone* zone)
-{
-    const struct ltree_node* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
-    if (ooz) {
-        gdnsd_assume(ooz->ccount); // only created if we have to add child nodes
-        const uint32_t mask = count2mask_u32_lf80(ooz->ccount);
-        for (unsigned i = 0; i <= mask; i++) {
-            const struct ltree_node* ooz_node = ooz->child_table[i].node;
-            if (ooz_node) {
-                // This block of asserts effectively says: an ooz node must
-                // have exactly either one or two rrsets, and they must both be
-                // type A or AAAA, and they must differ in type if there's two.
-                gdnsd_assume(ooz_node->rrsets);
-                gdnsd_assert(ooz_node->rrsets->gen.type == DNS_TYPE_A || ooz_node->rrsets->gen.type == DNS_TYPE_AAAA);
-                const union ltree_rrset* next_rrsets = ooz_node->rrsets->gen.next;
-                if (next_rrsets) {
-                    gdnsd_assert(next_rrsets->gen.type == DNS_TYPE_A || next_rrsets->gen.type == DNS_TYPE_AAAA);
-                    gdnsd_assert(next_rrsets->gen.type != ooz_node->rrsets->gen.type);
-                    gdnsd_assert(!next_rrsets->gen.next);
-                }
-            }
-        }
-    }
-
-    return false;
-}
-
 bool ltree_postproc_zone(struct zone* zone)
 {
     gdnsd_assume(zone->dname);
     gdnsd_assume(zone->root);
 
-    // zroot phase1 is a readonly check of zone basics
-    //   (e.g. NS/SOA existence), also sets zone->serial
-    if (unlikely(ltree_postproc_zroot_phase1(zone)))
+    // readonly check of zone root basics; also sets zone->serial
+    if (unlikely(ltree_postproc_zroot(zone)))
         return true;
 
     // tree phase1 does a ton of readonly per-node checks
@@ -1260,10 +1197,6 @@ bool ltree_postproc_zone(struct zone* zone)
     //    and DYNC do not have partner rrsets, response sizing)
     // It also sets glue pointers for NS->A/AAAA
     if (unlikely(ltree_postproc(zone, ltree_postproc_phase1)))
-        return true;
-
-    // zroot phase2 checks for unused out-of-zone glue addresses,
-    if (unlikely(ltree_postproc_zroot_phase2(zone)))
         return true;
 
     return false;

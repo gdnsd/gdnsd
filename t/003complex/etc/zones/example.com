@@ -35,17 +35,11 @@ subext		21600 IN NS	ns-subext1.example.net.
 subext		NS	ns-subext2.example.net.
 
 ; subzone w/ NS records in an unrelated domain that we *do* serve
-;  these will be handled as follows:
-;  1) If specified as out-of-zone glue in this file, we use that
-;   1a) If ooz def here doesn't match the real zonefile, warn about it
-;  2) If not, no address given
+; which will be glue-less.
 subsemiext	IN 21600 NS	ns1.example.org.
 subsemiext	NS	ns2.example.org.
 subsemiext	NS	ns3.*.example.org. ; using * to skip wildcard...
 subsemiext	NS	ns4.example.org. ; no glue provided for this
-ns1.example.org. A	192.0.2.200 ; overlaps real example.org, same addr
-ns2.example.org. A	192.0.2.207 ; overlaps real example.org, diff addr
-ns3.*.example.org. A	192.0.2.209 ; no record in example.org
 
 ; subzone that mixes all of the above in one go:
 subfubar	NS	subeasyns1
@@ -65,14 +59,11 @@ subfubar.x.y.z	NS	ns1.example.org.
 subselfglue	A	192.0.2.12
 subselfglue	NS	subselfglue
 
-; out-of-zone glue - domain not known locally
+; out-of-zone nameservers - domain not known locally, glueless
 subooz		NS	ns1.example.net.
 subooz		NS	ns2.example.net.
-ns1.example.net. A	192.0.2.77
-ns2.example.net. A	192.0.2.78
-ns2.example.net. AAAA	2001:DB8::1
 
-; mixed out-of-zone glue
+; mixed out-of-zone and in-zone nameservers
 submixooz	NS	ns1.example.net.
 submixooz	NS	ns1.submixooz
 ns1.submixooz	A	192.0.2.79
