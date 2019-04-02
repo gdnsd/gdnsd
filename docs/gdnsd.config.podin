@@ -552,23 +552,25 @@ C<CNAME>.  This implies no chasing of the target (right-hand-side) name to emit
 any further answer-section records or delegations related to the target, even if
 they exist in the local data of the same zone.
 
-This behavior is desirable because:
-* RFC 7871 (edns-client-subnet) actually recommends it for at least subnet
-  differentiated responses, because otherwise it's ambiguous which
-  of the multiple answer-section records the subnet scoping applies to, and
-  caches invariably have to take a pessimistic view and subnet-fragment cache
-  entries pointlessly.  This is the most-compelling rationale, and it has impact
-  on what kind of efficient geodns setups can work at all for certain use-cases.
-* It adheres to the general principle we're following in all other responses: to
-  not send data the recursor didn't explicitly ask for, as other records may
-  already be cached and unecessary to transfer.
-* It helps minimize response sizes, which is a good thing in general and will
-  especially help if we implement DNSSEC in the future.
-* If this were the fixed behavior of the server, rather than configurable, it
-  would significantly simplify the code and make lookups more efficient (these
-  gains are not realized by the experimental optional version).
+This behavior is desirable for a few reasons:
 
-It's also RFC-questionable.  The original RFC1034 algorithms ask that
+RFC 7871 (edns-client-subnet) actually recommends it for at least subnet
+differentiated responses, because otherwise it's ambiguous which of the
+multiple answer-section records the subnet scoping applies to, and caches
+invariably have to take a pessimistic view and subnet-fragment cache entries
+pointlessly.  This is the most-compelling rationale, and it has impact on what
+kind of efficient geodns setups can work at all for certain use-cases.
+
+It also adheres to the general principle of minimal responses we adhere to
+elsewhere (caches may have the target cached already anyways), and it helps
+minimize response sizes (reduce reflection, and esp helpful for DNSSEC in the
+future).
+
+Also, if this were the fixed behavior of the server, rather than configurable,
+it would significantly simplify the code and make lookups more efficient (these
+gains are not realized by the experimental optional version).
+
+However, it's also RFC-questionable.  The original RFC1034 algorithms ask that
 authoritative servers complete local CNAME chains from local data (which this
 violates), but also requires recursors to complete them remotely (which makes
 this work, and which most do now, but historically some older implementations
