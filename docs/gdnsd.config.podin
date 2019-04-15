@@ -513,13 +513,26 @@ against a gdnsd server.
 =item B<acme_challenge_ttl>
 
 Integer seconds, range 60-3600, default 600.  For temporary ACME DNS-01
-challenge data added via C<gdnsdctl acme-dns-01 ...>, this sets both the
-time until the TXT records auto-expire from the server and dissappear,
-and also the TTL of the RRs themselves.  The TTL of static TXT records
-in zonefiles which happen to have C<_acme-challenge> as their leading
-label are also forced to this TTL regardless of the zonefile-level TTL,
+challenge data added via C<gdnsdctl acme-dns-01 ...>, this sets the time
+until the TXT records auto-expire from the server and dissappear.
+
+See the L<gdnsdctl(8)> documentation about C<acme-dns-01> for more details.
+
+=item B<acme_challenge_dns_ttl>
+
+Integer seconds, range 0-3600, default 0.  For temporary ACME DNS-01
+challenge data added via C<gdnsdctl acme-dns-01 ...>, this sets the DNS TTL
+value which is used in response TXT RRs.
+
+In previous versions, the DNS TTL value mirrored the expiry TTL from
+C<acme_challenge_ttl> above.  However, this (non-zero DNS TTLs for these
+records in general) has lead to confusing issues in the real world with ACME
+servers under certain conditions.
+
+Note that static zonefile RRs with C<_acme-challenge> as their leading label
+are also forced to this TTL regardless of the zonefile-level explicit TTL,
 to avoid cases of mixed TTLs when mixing static and dynamic records in
-server outputs.  See the L<gdnsdctl(8)> documentation for more details.
+server outputs.
 
 =item B<nsid>
 

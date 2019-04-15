@@ -305,7 +305,7 @@ static void mk_chal_rr(uint8_t* out, const uint8_t* payload)
     size_t idx = 0;
     gdnsd_put_una32(DNS_RRFIXED_TXT, &out[idx]);
     idx += 4;
-    gdnsd_put_una32(htonl(gcfg->acme_challenge_ttl), &out[idx]);
+    gdnsd_put_una32(htonl(gcfg->acme_challenge_dns_ttl), &out[idx]);
     idx += 4;
     gdnsd_put_una16(htons(44), &out[idx]);
     idx += 2;

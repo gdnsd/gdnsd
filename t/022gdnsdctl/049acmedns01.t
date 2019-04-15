@@ -25,9 +25,9 @@ sub check_data_acme {
     _GDT->test_dns(
         qname => '_acme-challenge.ns1.example.com', qtype => 'TXT',
         answer => [
-            '_acme-challenge.ns1.example.com 600 TXT "Z123456789012345678901234567890123456789012"',
-            '_acme-challenge.ns1.example.com 600 TXT "B123456789012345678901234567890123456789012"',
-            '_acme-challenge.ns1.example.com 600 TXT "A123456789012345678901234567890123456789012"',
+            '_acme-challenge.ns1.example.com 0 TXT "Z123456789012345678901234567890123456789012"',
+            '_acme-challenge.ns1.example.com 0 TXT "B123456789012345678901234567890123456789012"',
+            '_acme-challenge.ns1.example.com 0 TXT "A123456789012345678901234567890123456789012"',
         ],
     );
 
@@ -36,8 +36,8 @@ sub check_data_acme {
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'TXT',
         answer => [
-            '_acme-challenge.exists.example.com 600 TXT "abcde"',
-            '_acme-challenge.exists.example.com 600 TXT "0123456789012345678901234567890123456789012"',
+            '_acme-challenge.exists.example.com 0 TXT "abcde"',
+            '_acme-challenge.exists.example.com 0 TXT "0123456789012345678901234567890123456789012"',
         ],
     );
     _GDT->test_dns(
@@ -55,7 +55,7 @@ sub check_data_acme {
     # _acme-challenge.other A 192.0.2.43
     _GDT->test_dns(
         qname => '_acme-challenge.other.example.com', qtype => 'TXT',
-        answer => '_acme-challenge.other.example.com 600 TXT "X123456789012345678901234567890123456789012"',
+        answer => '_acme-challenge.other.example.com 0 TXT "X123456789012345678901234567890123456789012"',
     );
     _GDT->test_dns(
         qname => '_acme-challenge.other.example.com', qtype => 'A',
@@ -69,7 +69,7 @@ sub check_data_acme {
     # *NO* static data for this name:
     _GDT->test_dns(
         qname => '_acme-challenge.snxd.example.com', qtype => 'TXT',
-        answer => '_acme-challenge.snxd.example.com 600 TXT "Y123456789012345678901234567890123456789012"',
+        answer => '_acme-challenge.snxd.example.com 0 TXT "Y123456789012345678901234567890123456789012"',
     );
     _GDT->test_dns(
         qname => '_acme-challenge.snxd.example.com', qtype => 'A',
@@ -123,7 +123,7 @@ foreach my $i (0, 1) {
     # "_acme-challenge" as its first label.
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'TXT',
-        answer => '_acme-challenge.exists.example.com 600 TXT "abcde"',
+        answer => '_acme-challenge.exists.example.com 0 TXT "abcde"',
     );
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'A',

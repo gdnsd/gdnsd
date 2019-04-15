@@ -202,10 +202,6 @@ static ltree_rrset_ ## _typ ## _t* ltree_node_get_rrset_ ## _typ (const ltree_no
 MK_RRSET_GET(a, DNS_TYPE_A)
 MK_RRSET_GET(aaaa, DNS_TYPE_AAAA)
 MK_RRSET_GET(soa, DNS_TYPE_SOA)
-F_UNUSED
-MK_RRSET_GET(cname, DNS_TYPE_CNAME)
-F_UNUSED
-MK_RRSET_GET(dync, DNS_TYPE_DYNC)
 MK_RRSET_GET(ns, DNS_TYPE_NS)
 MK_RRSET_GET(ptr, DNS_TYPE_PTR)
 MK_RRSET_GET(mx, DNS_TYPE_MX)
@@ -237,15 +233,20 @@ MK_RRSET_ADD(srv, DNS_TYPE_SRV)
 MK_RRSET_ADD(naptr, DNS_TYPE_NAPTR)
 MK_RRSET_ADD(txt, DNS_TYPE_TXT)
 
-// standard chunk for clamping TTLs in ltree_add_rec_*
-#define CLAMP_TTL(_t) \
-        if (ttl > gcfg->max_ttl) {\
-            log_zwarn("Name '%s%s': %s TTL %u too large, clamped to max_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), _t, ttl, gcfg->max_ttl);\
-            ttl = gcfg->max_ttl;\
-        } else if (ttl < gcfg->min_ttl) {\
-            log_zwarn("Name '%s%s': %s TTL %u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), _t, ttl, gcfg->min_ttl);\
-            ttl = gcfg->min_ttl;\
-        }
+// for clamping TTLs in ltree_add_rec_*
+static unsigned clamp_ttl(const zone_t* zone, const uint8_t* dname, const char* rrtype, const unsigned ttl)
+{
+    if (ttl > gcfg->max_ttl) {
+        log_zwarn("Name '%s%s': %s TTL %u too large, clamped to max_ttl setting of %u",
+                  logf_dname(dname), logf_dname(zone->dname), rrtype, ttl, gcfg->max_ttl);
+        return gcfg->max_ttl;
+    } else if (ttl < gcfg->min_ttl) {
+        log_zwarn("Name '%s%s': %s TTL %u too small, clamped to min_ttl setting of %u",
+                  logf_dname(dname), logf_dname(zone->dname), rrtype, ttl, gcfg->min_ttl);
+        return gcfg->min_ttl;
+    }
+    return ttl;
+}
 
 bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t addr, unsigned ttl, const bool ooz)
 {
@@ -258,9 +259,10 @@ bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, const uint32_t ad
         node = ltree_find_or_add_dname(zone, dname);
     }
 
+    ttl = clamp_ttl(zone, dname, "A", ttl);
+
     ltree_rrset_a_t* rrset = ltree_node_get_rrset_a(node);
     if (!rrset) {
-        CLAMP_TTL("A")
         rrset = ltree_node_add_rrset_a(node);
         rrset->gen.count = 1;
         rrset->gen.ttl = htonl(ttl);
@@ -303,9 +305,10 @@ bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t*
         node = ltree_find_or_add_dname(zone, dname);
     }
 
+    ttl = clamp_ttl(zone, dname, "AAAA", ttl);
+
     ltree_rrset_aaaa_t* rrset = ltree_node_get_rrset_aaaa(node);
     if (!rrset) {
-        CLAMP_TTL("AAAA")
         rrset = ltree_node_add_rrset_aaaa(node);
         rrset->addrs = xmalloc(16);
         memcpy(rrset->addrs, addr, 16);
@@ -339,7 +342,8 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char*
         log_zfatal("Name '%s%s': DYNA defined twice for the same name", logf_dname(dname), logf_dname(zone->dname));
     }
 
-    CLAMP_TTL("DYNA")
+    ttl = clamp_ttl(zone, dname, "DYNA", ttl);
+
     if (ttl_min < gcfg->min_ttl) {
         log_zwarn("Name '%s%s': DYNA Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), ttl_min, gcfg->min_ttl);
         ttl_min = gcfg->min_ttl;
@@ -388,7 +392,7 @@ bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char*
 
 bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl)
 {
-    CLAMP_TTL("CNAME")
+    ttl = clamp_ttl(zone, dname, "CNAME", ttl);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
     if (node->rrsets)
@@ -403,7 +407,7 @@ bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t
 
 bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min)
 {
-    CLAMP_TTL("DYNC")
+    ttl = clamp_ttl(zone, dname, "DYNC", ttl);
 
     if (ttl_min < gcfg->min_ttl) {
         log_zwarn("Name '%s%s': DYNC Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), logf_dname(zone->dname), ttl_min, gcfg->min_ttl);
@@ -459,7 +463,6 @@ bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rh
     ltree_rrset_ ## _typ ## _t* rrset = ltree_node_get_rrset_ ## _nam (node);\
 {\
     if (!rrset) {\
-        CLAMP_TTL(_pnam) \
         rrset = ltree_node_add_rrset_ ## _nam (node);\
         rrset->gen.count = 1;\
         rrset->gen.ttl = htonl(ttl);\
@@ -479,6 +482,7 @@ bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* 
 {
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
+    ttl = clamp_ttl(zone, dname, "PTR", ttl);
     INSERT_NEXT_RR(ptr, ptr, "PTR", 1);
     *new_rdata = lta_dnamedup(zone->arena, rhs);
     if (dname_isinzone(zone->dname, rhs))
@@ -498,6 +502,7 @@ bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* r
             log_zfatal("Name '%s%s': Cannot delegate via wildcards", logf_dname(dname), logf_dname(zone->dname));
     }
 
+    ttl = clamp_ttl(zone, dname, "NS", ttl);
     INSERT_NEXT_RR(ns, ns, "NS", 2)
     if (rrset->gen.count > MAX_NS_COUNT)
         log_zfatal("Name '%s%s': Too many NS records in one NS RRset (%u > %u)", logf_dname(dname), logf_dname(zone->dname), rrset->gen.count, MAX_NS_COUNT);
@@ -514,6 +519,7 @@ bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* r
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
+    ttl = clamp_ttl(zone, dname, "MX", ttl);
     INSERT_NEXT_RR(mx, mx, "MX", 2)
     new_rdata->dname = lta_dnamedup(zone->arena, rhs);
     new_rdata->pref = htons(pref);
@@ -531,7 +537,7 @@ bool ltree_add_rec_srv_args(const zone_t* zone, const uint8_t* dname, lt_srv_arg
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
-    unsigned ttl = args.ttl; // for macro below
+    const unsigned ttl = clamp_ttl(zone, dname, "SRV", args.ttl);
     INSERT_NEXT_RR(srv, srv, "SRV", 1)
     new_rdata->dname = lta_dnamedup(zone->arena, args.rhs);
     new_rdata->priority = htons(args.priority);
@@ -549,7 +555,7 @@ bool ltree_add_rec_naptr_args(const zone_t* zone, const uint8_t* dname, lt_naptr
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
-    unsigned ttl = args.ttl; // for macro below
+    const unsigned ttl = clamp_ttl(zone, dname, "NAPTR", args.ttl);
     INSERT_NEXT_RR(naptr, naptr, "NAPTR", 1)
     new_rdata->dname = lta_dnamedup(zone->arena, args.rhs);
     new_rdata->order = htons(args.order);
@@ -564,20 +570,20 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
-    // RFC 2181 disallows mixed TTLs within a single RR-set.  Our choices here
-    // in light of ACME response injection are:
-    // 1) When ACME responses are injected, mask (replace) any conflicting
-    //    statically-configured TXT RRs from zonefiles
-    // -or-
-    // 2) Mix injected ACME TXT with statically configured TXT in a single
-    //    RR-set, and somehow force the TTLs to be the same
-    // We've chosen the latter, and chosen to force all TTLs for names that
-    // start with _acme-challenge to the configured ACME challenge TTL
-    // regardless of whether there was any injection to mix with them because
-    // it makes things simpler and quicker, and shouldn't be a major issue.
+    // RFC 2181 disallows mixed TTLs within a single RR-set, so to avoid other
+    // runtime complexity we choose to set all static _acme-challenge TXT
+    // record TTLs to the same value configured for dynamic ones injected by
+    // gdnsdctl, which is controlled by the config setting
+    // acme_challenge_dns_ttl, defaulting to zero.  Note also that in this
+    // case, no clamping to min_ttl applies (it's impossible for max_ttl to
+    // conflict with acme_challenge_dns_ttl due to their limits).
 
-    if (dname_is_acme_chal(dname) && ttl != gcfg->acme_challenge_ttl)
-        ttl = gcfg->acme_challenge_ttl;
+    if (dname_is_acme_chal(dname) && ttl != gcfg->acme_challenge_dns_ttl) {
+        log_zwarn("Name '%s%s': ACME challenge TXT record TTL %u overriden to %u from 'acme_challenge_dns_ttl' config setting", logf_dname(dname), logf_dname(zone->dname), ttl, gcfg->acme_challenge_dns_ttl);
+        ttl = gcfg->acme_challenge_dns_ttl;
+    } else {
+        ttl = clamp_ttl(zone, dname, "TXT", ttl);
+    }
 
     INSERT_NEXT_RR(txt, txt, "TXT", 1)
     new_rdata->text_len = text_len;
