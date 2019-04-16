@@ -285,7 +285,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);
         CFG_OPT_UINT(options, zones_default_ttl, 1LU, 2147483647LU);
-        CFG_OPT_UINT(options, min_ttl, 1LU, 86400LU);
+        CFG_OPT_UINT_NOMIN(options, min_ttl, 86400LU);
         CFG_OPT_UINT(options, max_ttl, 3600LU, (unsigned long)GDNSD_STTL_TTL_MAX);
         if (cfg->max_ttl < cfg->min_ttl)
             log_fatal("The global option 'max_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ttl, cfg->min_ttl);
