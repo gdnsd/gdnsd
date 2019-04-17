@@ -1170,13 +1170,8 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, const bool in_deleg)
 {
-    if (in_deleg) {
-        gdnsd_assert(!ltree_node_get_rrset_cname(node));
-        gdnsd_assert(!ltree_node_get_rrset_dync(node));
-        if ((ltree_node_get_rrset_a(node) || ltree_node_get_rrset_aaaa(node)) && !LTN_GET_FLAG_GUSED(node))
-            log_zwarn("Delegation glue address(es) at domainname '%s%s' are unused and ignored", logf_lstack(lstack, depth, zone->dname));
-    }
-
+    if (in_deleg && (ltree_node_get_rrset_a(node) || ltree_node_get_rrset_aaaa(node)) && !LTN_GET_FLAG_GUSED(node))
+        log_zwarn("Delegation glue address(es) at domainname '%s%s' are unused and ignored", logf_lstack(lstack, depth, zone->dname));
     return false;
 }
 
