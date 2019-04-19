@@ -593,21 +593,14 @@ from actual negative "No Data" responses about the next name in the chain by
 the fact that we don't emit an SOA record in the auth section.
 
 This was originally intended to be the fixed behavior of gdnsd-3, but it was
-reverted at the last minute over interoperability fears.  I believe it works
-well with almost all recursors in the world, and has been explicitly tested
-with good results against a number of major modern implementations and open
-recursors.
+reverted at the last minute over interoperability fears.
 
-However, in late 2018 I was able to find a very small handful of random open
-recursors on the Internet, of unknown software version and provenance, which
-didn't like it (they would fail to chase a zone-local CNAME chain with multiple
-queries to the authserver in response to a singular query from one of their
-clients, but would eventually assemble the whole chain into their caches in
-response to multiple client queries over time).  These random broken servers
-may not be important in the big picture, though, and are likely poorly
-unmaintained, little-used, and/or easily compromised.  For now, I think it's
-worth having the option here for experimentation.  We may try again to turn
-this on by default with gdnsd-4, depending on how such experimentation goes!
+Update 2019-04: this has now been tested pretty widely on the Internet and
+there has been no evidence so far of breakage or failure reports from real
+users.  Assuming it continues to work over the longer term, this
+C<experimental_no_chain> behavior will likely become the default, fixed
+behavior of gdnsd 4.x with no option to disable it, so that we can build other
+assumptions on top of this.
 
 =item B<disable_cookies>
 
