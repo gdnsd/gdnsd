@@ -6,6 +6,7 @@ This manual attempts to cover things that don't logically fit in the man pages o
 
 This manual is not intended to be an exhaustive reference. For a complete rundown of every configuration and commandline option and its precise technical meaning, see the man pages.
 
+
 ## General Portability Notes
 
 Modern 64-bit Linux/x86\_64 is the primary development and deployment platform, with 32-bit Linux/x86 and the in-between Linux/x32 ABI being close seconds.
