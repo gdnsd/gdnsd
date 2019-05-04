@@ -234,7 +234,7 @@ bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* sa)
     gdnsd_assert(sa->sa.sa_family == AF_INET || sa->sa.sa_family == AF_INET6);
 
     if (sa->sa.sa_family == AF_INET6) {
-        if (!memcmp(&sa->sin6.sin6_addr.s6_addr, &in6addr_any, sizeof(in6addr_any)))
+        if (!memcmp(&sa->sin6.sin6_addr.s6_addr, &in6addr_any.s6_addr, sizeof(in6addr_any.s6_addr)))
             return true;
     } else if (sa->sin4.sin_addr.s_addr == INADDR_ANY) {
         return true;
@@ -307,4 +307,20 @@ const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa)
     char* buf = gdnsd_fmtbuf_alloc(copylen);
     memcpy(buf, tmpbuf, copylen);
     return buf;
+}
+
+int gdnsd_anysin_cmp(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b)
+{
+    if (a->len == b->len || a->sa.sa_family == b->sa.sa_family) {
+        if (a->sa.sa_family == AF_INET
+                && a->sin4.sin_addr.s_addr == b->sin4.sin_addr.s_addr
+                && a->sin4.sin_port == b->sin4.sin_port)
+            return 0;
+        if (a->sa.sa_family == AF_INET6
+                && !memcmp(a->sin6.sin6_addr.s6_addr, b->sin6.sin6_addr.s6_addr, 16U)
+                && a->sin6.sin6_port == b->sin6.sin6_port)
+            return 0;
+    }
+
+    return 1;
 }

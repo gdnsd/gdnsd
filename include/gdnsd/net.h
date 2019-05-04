@@ -98,6 +98,18 @@ int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gd
 F_NONNULL F_PURE
 bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* sa);
 
+// Compare two gdnsd_anysin_t for exact equality of type, size, and sockaddr
+// struct contents (which in other words means: same family, address, and
+// port).  We did this before with a memcmp of the two over the size of
+// gdnsd_anysin_t, but this technically compared padding bytes as well, which
+// isn't entirely sane and only happens to work because we usually zero those
+// parts of the struct in practice where they matter...)
+//
+// retval type is the same as memcmp, but we're not attempting to provide any
+// stable-sort meaning, so it's just: "zero is match, non-zero is non-match"
+F_NONNULL F_PURE
+int gdnsd_anysin_cmp(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b);
+
 // convert "sa" to numeric ASCII of the form "ipv4:port" or "[ipv6]:port"
 // NULL input results in the string "(null)"
 // note that buf *must* be pre-allocated to at least GDNSD_ANYSIN_MAXSTR bytes!

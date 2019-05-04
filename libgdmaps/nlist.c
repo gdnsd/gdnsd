@@ -99,7 +99,7 @@ static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask)
         while (++bbyte < 16)
             gdnsd_assert(!ipv6[bbyte]);
     } else {
-        gdnsd_assert(!memcmp(ipv6, &ip6_zero, 16));
+        gdnsd_assert(!memcmp(ipv6, &ip6_zero.s6_addr, 16));
     }
 }
 #else
@@ -129,7 +129,7 @@ static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned 
                 ipv6[bbyte] = 0;
             }
         }
-    } else if (memcmp(ipv6, &ip6_zero, 16)) {
+    } else if (memcmp(ipv6, &ip6_zero.s6_addr, 16)) {
         maskbad = true;
         memset(ipv6, 0, 16);
     }

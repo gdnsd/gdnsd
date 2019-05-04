@@ -916,7 +916,7 @@ static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
         dns_thread_t* dt = &socks_cfg->dns_threads[i];
         if (dt->sock == -1 && dt->is_udp == fd_sin_is_udp
-                && !memcmp(&dt->ac->addr, &fd_sin, sizeof(fd_sin))) {
+                && !gdnsd_anysin_cmp(&dt->ac->addr, &fd_sin)) {
             dt->sock = fd;
             return;
         }
