@@ -311,7 +311,7 @@ const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa)
 
 int gdnsd_anysin_cmp(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b)
 {
-    if (a->len == b->len || a->sa.sa_family == b->sa.sa_family) {
+    if (a->len == b->len && a->sa.sa_family == b->sa.sa_family) {
         if (a->sa.sa_family == AF_INET
                 && a->sin4.sin_addr.s_addr == b->sin4.sin_addr.s_addr
                 && a->sin4.sin_port == b->sin4.sin_port)
