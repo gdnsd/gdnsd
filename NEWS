@@ -1,3 +1,18 @@
+3.2.0 - 2019-05-05
+    * ACME challenge response TXT RRs are now emitted with a TTL of zero by
+      default, which makes things work reliably in some tricky corner cases
+      with ACME providers.  This can be overridden via the new config option
+      "acme_challenge_dns_ttl".
+    * The minimum configurable value for "min_ttl" was reduced from 1 to 0.
+    * The "min_ttl" setting now correctly clamps small TTLs for SOA records.
+    * All out of zone glue addresses (truly out of zone, not just within a
+      local delegation) now generate a warning on zonefile loading (or an error
+      if zones_strict_data is in effect).  Support for out of zone glue will
+      likely be removed in a future major version bump, as it's basically
+      useless and non-recommended in the DNS in general at this point in
+      history, and supporting it is needlessly complicated.
+    * Minor refactorings, nit-fixes, and docs updates.
+
 3.1.0 - 2019-03-30
     * RFC 8490 "DNS Stateful Operations" (DSO) implemented and enabled by
       default for all TCP listeners.  Can be disabled in case of interop or
