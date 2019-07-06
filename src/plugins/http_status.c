@@ -372,7 +372,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 //   and printf templates (%s) either.
 
 static const char REQ_TMPL[] = "GET %s HTTP/1.0\r\nUser-Agent: gdnsd-monitor\r\n\r\n";
-static const char REQ_TMPL_VHOST[] = "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: gdnsd-monitor\r\n\r\n";
+static const char REQ_TMPL_VHOST[] = "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\nUser-Agent: gdnsd-monitor\r\n\r\n";
 #define REQ_TMPL_LEN (sizeof(REQ_TMPL) - 2U - 1U)
 #define REQ_TMPL_VHOST_LEN (sizeof(REQ_TMPL_VHOST) - 2U - 2U - 1U)
 
