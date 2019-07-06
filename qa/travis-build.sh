@@ -26,6 +26,10 @@ case "$GDNSD_TRAVIS_BUILD" in
         SLOW_TESTS=1 make -j$TEST_CPUS check
     ;;
     sonarcloud)
+        if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then
+            echo "Skipping Sonar checks for pull requests (encrypted env var issue)"
+            exit 0
+        fi
         CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage" CPPFLAGS="-DGDNSD_NO_UNREACH_BUILTIN -DGDNSD_NO_FATAL_COVERAGE -DGDNSD_COVERTEST_EXIT" ./configure --without-hardening
         SLOW_TESTS=1 make -j$TEST_CPUS check
         gcov -a -b -p src/*.o src/plugins/*.o libgdmaps/*.o libgdnsd/*.o
