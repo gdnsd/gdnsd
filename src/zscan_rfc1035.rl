@@ -96,6 +96,8 @@ static void set_ipv4(zscan_t* z, const char* end)
 {
     char txt[16];
     unsigned len = end - z->tstart;
+    if (len > 15)
+        parse_error_noargs("IPv4 address unparseable (too long)");
     memcpy(txt, z->tstart, len);
     txt[len] = 0;
     z->tstart = NULL;
@@ -112,6 +114,8 @@ static void set_ipv6(zscan_t* z, const char* end)
 {
     char txt[INET6_ADDRSTRLEN + 1];
     unsigned len = end - z->tstart;
+    if (len > INET6_ADDRSTRLEN)
+        parse_error_noargs("IPv6 address unparseable (too long)");
     memcpy(txt, z->tstart, len);
     txt[len] = 0;
     z->tstart = NULL;
