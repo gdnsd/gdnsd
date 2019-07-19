@@ -1,3 +1,8 @@
+2.4.3 - 2019-07-19
+    * Fix CVE-2019-13952: IPv6 addresses in local zone file data which are
+      longer than the maximum legitimate IPv6 address cause a stack buffer
+      overflow and crash.
+
 2.4.2 - 2019-02-11
     * FreeBSD: Fix EADDRNOTAVAIL issue for IPv6 sockets when the listening IP
       is bound to the loopback and traffic is routed indirectly, by resetting
