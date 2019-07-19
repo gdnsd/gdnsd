@@ -48,15 +48,15 @@ The daemon also listens on a local Unix domain socket for control operations.  A
 
 ## Security History
 
-All past versions that were stable public releases are in scope here, but bugs that existed in some commits between releases or only in beta releases are not considered in scope, as only actual release code is expected to live up to rigorous standards.  As far as I'm aware, there has never been a case where a released security flaw was found and then covered up silently.  All such flaws have been noted in the commits that fixed them and in the NEWS update of the next official release.  There's never been a CVE released that specifically affected gdnsd.  Arguably the two historical entries here should've had them, but I didn't do so at the time.  In the future, I plan to do so when it makes sense.
+All past versions that were stable public releases are in scope here, but bugs that existed in some commits between releases or only in beta releases are not considered in scope, as only actual release code is expected to live up to rigorous standards.  As far as I'm aware, there has never been a case where a released security flaw was found and then covered up silently.  All such flaws have been noted in the commits that fixed them and in the NEWS update of the next official release.  Arguably the first two historical entries here should've had CVEs, but I didn't do so at the time.
 
 Notes on the general history and timeline of gdnsd stable releases that are relevant for context:
 
 * The first public release was version 0.02, released on 2008-06-09 (it's now over 10 years old!)
-* As of this writing (just before 3.0.0 in late 2018) there have been 56 stable release versions in this time
+* As of this writing (just after 3.2.1 in mid-2019) there have been 62 stable release versions in this time
 * All public stable releases, from 0.02 through the present, have seen significant public exposure as daemons on the Internet running DNS services for major production services for real users; none of the historical stable releases existed merely in some private vacuum.
 
-On to the list itself:
+On to the list itself (version listed is the first version with the report and fix):
 
 * 1.0.2 - 2010-04-08 - Network-level reflective/volumetric DoS
 
@@ -71,3 +71,9 @@ Versions affected: 1.8.0 - 1.10.0
 CVE Assigned: No
 Observed/Reported in the wild: No
 Explanation: gdnsd can be built with the configure argument ``--enable-developer``, which turns on a large number of runtime assertions that abort execution with specific log output about the failed assertion.  There was one such assertion that was faulty, and could be violated by network input with a carefully crafted, unusual packet.  The rest of the code didn't actually rely on the assumption of this faulty assertion, so in production builds (which lacked the assertion) this wasn't capable of causing a problem.  However, if one were running a non-production `--enable-developer` build of these releases exposed to the Internet (e.g. hunting for other bugs?), it could be easily killed with a single packet.  Note this wasn't a crash: the code willfully exited with a fatal error message in this case.
+
+* 3.2.1 and 2.4.3 - 2019-07-19 - Stack corruption with invalid zonefile input data
+Versions affected: 3.0.0 -> 3.2.0 (for the ipv4 variant), 1.0 -> 3.2.0 (for the ipv6 variant)
+CVEs: CVE-2019-13951 (ipv4) CVE-2019-13952 (ipv6)
+Observed/Reported in the wild: No
+Explanation: Frederic Cambus ran an AFL fuzz test against gdnsd's zonefile parser, and found two related bugs in the parsing of IPv4 and IPv6 addresses.  In both cases, the IP address strings gathered up by the Ragel-based parser were memcpy()'d to a stack buffer of small size with no bounds checking.  If the data is too long, this trashes the stack and crashes (or if built with hardening compiler flags, aborts execution as expected).  The vector for exploitation is control of the local authoritative zone files on the disk of the server.  Arguably that makes it a limited local exploit at best, as it requires server access as well as obtaining the permissions of the uid that controls the zonefiles and/or that the daemon runs as, which are arguably already more-impactful than this specific crash.  Still, it could be a more-serious issue for a DNS service hoster which takes raw zonefile or IP address data from client users and places it into gdnsd zonefiles without doing any input validation first.  The fixes are included in actual releases of 2.4.3 and 3.2.1, and the fix is also ported into the github branches for 1.x, 2.1.x, 2.2.x, 3.0.x, and 3.1.x for those that might need to patch other versions.
