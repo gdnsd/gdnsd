@@ -1,3 +1,11 @@
+3.2.1 - 2019-07-19
+    * Fix CVE-2019-13951: IPv4 addresses in local zone file data which are
+      longer than the maximum legitimate IPv4 address cause a stack buffer
+      overflow and crash.
+    * Fix CVE-2019-13952: IPv6 addresses in local zone file data which are
+      longer than the maximum legitimate IPv6 address cause a stack buffer
+      overflow and crash.
+
 3.2.0 - 2019-05-05
     * ACME challenge response TXT RRs are now emitted with a TTL of zero by
       default, which makes things work reliably in some tricky corner cases
