@@ -485,10 +485,6 @@ int main(int argc, char** argv)
     if (!def_loop)
         log_fatal("Could not initialize the default libev loop");
 
-    // import challenge data in takeover case
-    if (csc)
-        do_tak2(def_loop, csc);
-
     // init DYNA packet sizing stuff
     ltree_init();
 
@@ -516,6 +512,10 @@ int main(int argc, char** argv)
 
     // set up monitoring, which expects an initially empty loop
     gdnsd_mon_start(def_loop);
+
+    // import challenge data in takeover case
+    if (csc)
+        do_tak2(def_loop, csc);
 
     // Set up timer hook in the default loop for cookie key rotation
     if (!gcfg->disable_cookies)
