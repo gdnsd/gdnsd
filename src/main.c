@@ -439,6 +439,10 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // set up monitoring, which expects an initially empty loop
     gdnsd_mon_start(def_loop);
 
+    // import challenge data in takeover case
+    if (csc)
+        do_tak2(def_loop, csc);
+
     // Set up timer hook in the default loop for cookie key rotation
     if (!gcfg->disable_cookies)
         cookie_runtime_init(def_loop);
@@ -589,10 +593,6 @@ int main(int argc, char** argv)
     def_loop = ev_default_loop(EVFLAG_AUTO);
     if (!def_loop)
         log_fatal("Could not initialize the default libev loop");
-
-    // import challenge data in takeover case
-    if (csc)
-        do_tak2(def_loop, csc);
 
     // initialize the zone storage and load zone data synchronously
     ltree_init();
