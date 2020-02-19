@@ -57,16 +57,13 @@
 #include <pwd.h>
 #include <time.h>
 
-// Signal we were killed by, for final raise()
+// This is set by the signal handler for terminal signals, and consumed as
+// the correct signal to re-raise for final termination
 static int killed_by = 0;
 
-// primary/default libev loop for main thread
-static struct ev_loop* def_loop = NULL;
-
-// libev watchers for signals+async
-static ev_signal sig_int;
-static ev_signal sig_term;
-static ev_signal sig_usr1;
+// These are used for the libev "async" watcher mechanism for cross-thread
+// notifications of zone reload completion during runtime.
+static struct ev_loop* async_reloadz_loop = NULL;
 static ev_async async_reloadz;
 
 // custom atexit-like stuff for resource deallocation
@@ -187,16 +184,20 @@ static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a 
 // called by ltree reloader thread just before it exits
 void notify_reload_zones_done(void)
 {
+    gdnsd_assert(async_reloadz_loop);
     ev_async* p_async_reloadz = &async_reloadz;
-    ev_async_send(def_loop, p_async_reloadz);
+    ev_async_send(async_reloadz_loop, p_async_reloadz);
 }
 
-static void setup_reload_zones(css_t* css)
+static void setup_reload_zones(css_t* css, struct ev_loop* loop)
 {
+    // Copy loop pointer to a global for access from the above helper
+    // function from another thread:
+    async_reloadz_loop = loop;
     ev_async* p_async_reloadz = &async_reloadz;
     ev_async_init(p_async_reloadz, reload_zones_done);
     p_async_reloadz->data = css;
-    ev_async_start(def_loop, p_async_reloadz);
+    ev_async_start(loop, p_async_reloadz);
 }
 
 F_NONNULL F_NORETURN
@@ -420,6 +421,7 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
     usage(argv[0]);
 }
 
+F_NORETURN
 static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* css, csc_t* csc)
 {
     // init the stats code
@@ -436,16 +438,25 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // Initialize dnspacket stuff
     dnspacket_global_setup(socks_cfg);
 
+    // Set up libev error callback
+    ev_set_syserr_cb(&syserr_for_ev);
+
+    // default ev loop in main process to handle statio, monitors, control
+    // socket, signals, etc.
+    struct ev_loop* loop = ev_default_loop(EVFLAG_AUTO);
+    if (!loop)
+        log_fatal("Could not initialize the default libev loop");
+
     // set up monitoring, which expects an initially empty loop
-    gdnsd_mon_start(def_loop);
+    gdnsd_mon_start(loop);
 
     // import challenge data in takeover case
     if (csc)
-        do_tak2(def_loop, csc);
+        do_tak2(loop, csc);
 
     // Set up timer hook in the default loop for cookie key rotation
     if (!gcfg->disable_cookies)
-        cookie_runtime_init(def_loop);
+        cookie_runtime_init(loop);
 
     // Call plugin pre-run actions
     gdnsd_plugins_action_pre_run();
@@ -457,17 +468,20 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
         css = css_new(argv0, socks_cfg, &csc);
 
     // setup main thread signal handlers
+    ev_signal sig_int;
+    ev_signal sig_term;
+    ev_signal sig_usr1;
     ev_signal* p_sig_int = &sig_int;
     ev_signal* p_sig_term = &sig_term;
     ev_signal* p_sig_usr1 = &sig_usr1;
     ev_signal_init(p_sig_int, terminal_signal, SIGINT);
     p_sig_int->data = css;
-    ev_signal_start(def_loop, p_sig_int);
+    ev_signal_start(loop, p_sig_int);
     ev_signal_init(p_sig_term, terminal_signal, SIGTERM);
     p_sig_term->data = css;
-    ev_signal_start(def_loop, p_sig_term);
+    ev_signal_start(loop, p_sig_term);
     ev_signal_init(p_sig_usr1, usr1_signal, SIGUSR1);
-    ev_signal_start(def_loop, p_sig_usr1);
+    ev_signal_start(loop, p_sig_usr1);
 
     // Initialize+bind DNS listening sockets
     socks_dns_lsocks_init(socks_cfg);
@@ -505,14 +519,61 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     }
 
     // Set up zone reload mechanism and control socket handlers in the loop
-    setup_reload_zones(css);
-    css_start(css, def_loop);
+    setup_reload_zones(css, loop);
+    css_start(css, loop);
 
     // The daemon stays in this libev loop for life,
     // until there's a reason to cleanly exit
-    ev_run(def_loop, 0);
+    ev_run(loop, 0);
 
-    return css;
+    // request i/o threads to exit
+    request_io_threads_stop(socks_cfg);
+
+    // get rid of child procs (e.g. extmon helper)
+    gdnsd_kill_registered_children();
+
+    // wait for i/o threads to exit
+    wait_io_threads_stop(socks_cfg);
+
+    // deallocate resources
+    atexit_execute();
+
+    // If we were replaced, this sends a final dump of stats to the new daemon
+    // for stats counter continuity
+    css_send_stats_handoff(css);
+
+    // We delete this last, because in the case of "gdnsdctl stop" or "gdnsdctl
+    // replace" this is where the active connection to gdnsdctl will be broken,
+    // sending it into a loop waiting on our PID to cease existing.
+    css_delete(css);
+
+    // Stop the terminal signal handlers very late in the game.  Any terminal
+    // signal received since ev_run() returned above will simply not be
+    // processed because we never re-entered the eventloop since the handlers
+    // saw it.  ev_signal_stop() will restore default signal behavior, which
+    // will be to terminate the process, which we'll rely on in raise() below.
+    // Regardless of our reason for exiting, it doesn't cause a problem if a
+    // new terminal signal races us from here through exit()/raise() below.  It
+    // is kinda problematic if we do this earlier (e.g. above i/o thread exit)
+    // as it could abort our clean shutdown sequence.
+    ev_signal_stop(loop, p_sig_term);
+    ev_signal_stop(loop, p_sig_int);
+
+#ifdef GDNSD_COVERTEST_EXIT
+    // We have to use exit() when testing coverage, as raise()
+    //   skips over writing out gcov data
+    exit(0);
+#else
+    // kill self with same signal, so that our exit status is correct
+    //   for any parent/manager/whatever process that may be watching
+    if (killed_by)
+        raise(killed_by);
+    else
+        exit(0);
+#endif
+
+    // raise should not return
+    gdnsd_assert(0);
 }
 
 int main(int argc, char** argv)
@@ -585,15 +646,6 @@ int main(int argc, char** argv)
     // Basic init for the acme challenge code
     chal_init();
 
-    // Set up libev error callback
-    ev_set_syserr_cb(&syserr_for_ev);
-
-    // default ev loop in main process to handle statio, monitors, control
-    // socket, signals, etc.
-    def_loop = ev_default_loop(EVFLAG_AUTO);
-    if (!def_loop)
-        log_fatal("Could not initialize the default libev loop");
-
     // initialize the zone storage and load zone data synchronously
     ltree_init();
     if (initialize_zones())
@@ -603,60 +655,9 @@ int main(int argc, char** argv)
         exit(0);
 
     // Initalize for a real runtime daemon and enter a libev loop for the life
-    // of the daemon.  Note if css is NULL because we're doing a takeover, it
-    // will get created and handed back here for use during shutdown.
-    css = runtime_execute(argv[0], socks_cfg, css, csc);
-    // We've returned from runtime_execute, which means we're exiting cleanly
-    // for some reason, such as a stop or takeover...
+    // of the daemon.
+    runtime_execute(argv[0], socks_cfg, css, csc);
 
-    // request i/o threads to exit
-    request_io_threads_stop(socks_cfg);
-
-    // get rid of child procs (e.g. extmon helper)
-    gdnsd_kill_registered_children();
-
-    // wait for i/o threads to exit
-    wait_io_threads_stop(socks_cfg);
-
-    // deallocate resources
-    atexit_execute();
-
-    // If we were replaced, this sends a final dump of stats to the new daemon
-    // for stats counter continuity
-    css_send_stats_handoff(css);
-
-    // We delete this last, because in the case of "gdnsdctl stop" or "gdnsdctl
-    // replace" this is where the active connection to gdnsdctl will be broken,
-    // sending it into a loop waiting on our PID to cease existing.
-    css_delete(css);
-
-    // Stop the terminal signal handlers very late in the game.  Any terminal
-    // signal received since ev_run() returned above will simply not be
-    // processed because we never re-entered the eventloop since the handlers
-    // saw it.  ev_signal_stop() will restore default signal behavior, which
-    // will be to terminate the process, which we'll rely on in raise() below.
-    // Regardless of our reason for exiting, it doesn't cause a problem if a
-    // new terminal signal races us from here through exit()/raise() below.  It
-    // is kinda problematic if we do this earlier (e.g. above i/o thread exit)
-    // as it could abort our clean shutdown sequence.
-    ev_signal* p_sig_int = &sig_int;
-    ev_signal* p_sig_term = &sig_term;
-    ev_signal_stop(def_loop, p_sig_term);
-    ev_signal_stop(def_loop, p_sig_int);
-
-#ifdef GDNSD_COVERTEST_EXIT
-    // We have to use exit() when testing coverage, as raise()
-    //   skips over writing out gcov data
-    exit(0);
-#else
-    // kill self with same signal, so that our exit status is correct
-    //   for any parent/manager/whatever process that may be watching
-    if (killed_by)
-        raise(killed_by);
-    else
-        exit(0);
-#endif
-
-    // raise should not return
+    // Above does not return
     gdnsd_assert(0);
 }
