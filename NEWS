@@ -1,3 +1,13 @@
+3.2.2 - 2020-02-19
+    * Bugfix: In the case that a "replace" daemon takeover happened while
+      unexpired ephemeral ACME challenge data was present (which is handed
+      off to the new replacement daemon), the new daemon could pause for the
+      entire value of "acme_challenge_ttl" (default: 10 minutes) during its
+      startup sequence.  The takeover/replace process would eventually succeed
+      between the two daemons, but the long wait would cause various timeouts
+      for control/notification by default (e.g. gdnsdctl won't wait that long
+      to report the success).
+
 3.2.1 - 2019-07-19
     * Fix CVE-2019-13951: IPv4 addresses in local zone file data which are
       longer than the maximum legitimate IPv4 address cause a stack buffer
