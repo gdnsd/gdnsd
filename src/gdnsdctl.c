@@ -116,7 +116,7 @@ static void usage(void)
 /**** Action functions ****/
 
 F_NONNULL
-static bool action_stop(csc_t* csc)
+static bool action_stop(const csc_t* csc)
 {
     csc_txn_rv_t crv = csc_stop_server(csc);
     if (crv == CSC_TXN_OK) {
@@ -133,7 +133,7 @@ static bool action_stop(csc_t* csc)
 }
 
 F_NONNULL
-static bool action_reloadz(csc_t* csc)
+static bool action_reloadz(const csc_t* csc)
 {
     csbuf_t req;
     csbuf_t resp;
@@ -152,7 +152,7 @@ static bool action_reloadz(csc_t* csc)
 }
 
 F_NONNULL
-static bool action_replace(csc_t* csc)
+static bool action_replace(const csc_t* csc)
 {
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
@@ -185,7 +185,7 @@ static bool action_replace(csc_t* csc)
 }
 
 F_NONNULL
-static bool action_status(csc_t* csc)
+static bool action_status(const csc_t* csc)
 {
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
@@ -194,7 +194,7 @@ static bool action_status(csc_t* csc)
 }
 
 F_NONNULL
-static bool action_stats(csc_t* csc)
+static bool action_stats(const csc_t* csc)
 {
     char* resp_data;
     csbuf_t req;
@@ -221,7 +221,7 @@ static bool action_stats(csc_t* csc)
 }
 
 F_NONNULL
-static bool action_states(csc_t* csc)
+static bool action_states(const csc_t* csc)
 {
     char* resp_data;
     csbuf_t req;
@@ -269,7 +269,7 @@ static const unsigned b64u_legal[256] = {
 };
 
 F_NONNULL
-static bool action_chal(csc_t* csc, int argc, char** argv)
+static bool action_chal(const csc_t* csc, int argc, char** argv)
 {
     // Requires 2+ additional arguments, in pairs
     if (!argc || argc & 1 || argc > (int)(CHAL_MAX_COUNT * 2))
@@ -325,7 +325,7 @@ static bool action_chal(csc_t* csc, int argc, char** argv)
 }
 
 F_NONNULL
-static bool action_chalf(csc_t* csc)
+static bool action_chalf(const csc_t* csc)
 {
     csbuf_t req;
     csbuf_t resp;
@@ -343,7 +343,7 @@ static bool action_chalf(csc_t* csc)
     return false;
 }
 
-static bool do_action(csc_t* csc, const char* action, int argc, char** argv)
+static bool do_action(const csc_t* csc, const char* action, int argc, char** argv)
 {
     if (!strcasecmp(action, "acme-dns-01"))
         return action_chal(csc, argc, argv);

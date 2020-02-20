@@ -225,7 +225,7 @@ static int safe_read_keyfile(const char* key_fn, uint8_t* keybuf)
 }
 
 F_NONNULL
-static int safe_write_keyfile(const char* key_fn, uint8_t* keybuf)
+static int safe_write_keyfile(const char* key_fn, const uint8_t* keybuf)
 {
     const int key_fd = open(key_fn, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR);
     if (key_fd < 0)

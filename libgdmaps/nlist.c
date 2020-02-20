@@ -200,7 +200,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
         assert_clear_mask_bits(this_net->ipv6, mask);
         unsigned idx = nl->count;
         while (--idx > 0) {
-            net_t* nb = &nl->nets[idx];
+            const net_t* nb = &nl->nets[idx];
             net_t* na = &nl->nets[idx - 1];
             if (mergeable_nets(na, nb)) {
                 if (na->mask == nb->mask)

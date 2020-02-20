@@ -193,7 +193,7 @@ static size_t get_control_fds(struct msghdr* msg, int* fds, const size_t fds_rec
 }
 
 F_NONNULL
-size_t csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds)
+size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds)
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8) {
@@ -265,7 +265,7 @@ size_t csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_
     return fds_recvd;
 }
 
-csc_txn_rv_t csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp)
+csc_txn_rv_t csc_txn(const csc_t* csc, const csbuf_t* req, csbuf_t* resp)
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8) {
@@ -290,7 +290,7 @@ csc_txn_rv_t csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp)
     return CSC_TXN_FAIL_HARD;
 }
 
-csc_txn_rv_t csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data)
+csc_txn_rv_t csc_txn_getdata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data)
 {
     csc_txn_rv_t rv = csc_txn(csc, req, resp);
     if (rv != CSC_TXN_OK)
@@ -319,7 +319,7 @@ csc_txn_rv_t csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char
     return CSC_TXN_OK;
 }
 
-csc_txn_rv_t csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data)
+csc_txn_rv_t csc_txn_senddata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data)
 {
     gdnsd_assert(req->d);
 
@@ -360,7 +360,7 @@ csc_txn_rv_t csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, cha
     return CSC_TXN_FAIL_HARD;
 }
 
-bool csc_wait_stopping_server(csc_t* csc)
+bool csc_wait_stopping_server(const csc_t* csc)
 {
     // Wait for server to close our csock fd as it exits
     char x;
@@ -370,7 +370,7 @@ bool csc_wait_stopping_server(csc_t* csc)
     return true;
 }
 
-csc_txn_rv_t csc_stop_server(csc_t* csc)
+csc_txn_rv_t csc_stop_server(const csc_t* csc)
 {
     csbuf_t req;
     csbuf_t resp;
@@ -379,7 +379,7 @@ csc_txn_rv_t csc_stop_server(csc_t* csc)
     return csc_txn(csc, &req, &resp);
 }
 
-size_t csc_get_stats_handoff(csc_t* csc, uint64_t** raw_u64)
+size_t csc_get_stats_handoff(const csc_t* csc, uint64_t** raw_u64)
 {
     // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
     // assuming all daemons with listening control sockets have a major >= 3

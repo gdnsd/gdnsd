@@ -486,7 +486,7 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
         size_t probe_dist = 0;
         do {
             const size_t slot = (kh + probe_dist) & mask;
-            ltree_hslot* s = &node->child_table[slot];
+            const ltree_hslot* s = &node->child_table[slot];
             if (!s->node || ((slot - s->hash) & mask) < probe_dist)
                 break;
             if (s->hash == kh && likely(!label_cmp(s->node->label, child_label)))

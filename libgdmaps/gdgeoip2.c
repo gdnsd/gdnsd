@@ -119,7 +119,7 @@ static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_
         return NULL;
     }
 
-    MMDB_metadata_s* meta = &db->mmdb.metadata;
+    const MMDB_metadata_s* meta = &db->mmdb.metadata;
     if (!geoip2_mmdb_log_meta(meta, map_name, pathname)) {
         geoip2_destroy(db);
         return NULL;

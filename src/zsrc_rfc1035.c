@@ -256,7 +256,7 @@ bool zsrc_rfc1035_load_zones(ltree_node_t* new_root_tree, ltarena_t* new_root_ar
     zf_threads_t* zft = zf_threads_new(gcfg->zones_rfc1035_threads);
 
     bool failed = false;
-    struct dirent* result = NULL;
+    const struct dirent* result = NULL;
     do {
         errno = 0;
         // cppcheck-suppress readdirCalled

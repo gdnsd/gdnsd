@@ -249,7 +249,7 @@ static void cset_expire(struct ev_loop* loop, ev_timer* t, const int revents V_U
     const ev_tstamp cutoff = ev_now(loop) + TIME_FUDGE;
 
     // Skip past the to-be-expired without actually deleting them yet
-    cset_t* iter_old = oldest;
+    const cset_t* iter_old = oldest;
     while (iter_old && iter_old->expiry <= cutoff)
         iter_old = iter_old->next_newer;
 
@@ -392,7 +392,7 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
 
 // Serialize a cset_t back into controlsock wire format
 F_NONNULL F_WUNUSED
-static size_t cset_serialize(ev_tstamp now, cset_t* cset, uint8_t* dptr)
+static size_t cset_serialize(ev_tstamp now, const cset_t* cset, uint8_t* dptr)
 {
     gdnsd_assert(cset->count <= CHAL_MAX_COUNT);
     gdnsd_assert(cset->count);
@@ -438,7 +438,7 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
     size_t ct = 0;
     ev_tstamp now = ev_now(loop);
 
-    cset_t* cur = oldest;
+    const cset_t* cur = oldest;
     while (cur) {
         if ((now + TIME_FUDGE) < cur->expiry) {
             if (unlikely((ct + 1 >= 0xFFFFFFu) || (used + CHAL_MAX_SERIAL > UINT32_MAX))) {
@@ -480,7 +480,7 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
     }
 
     const uint32_t qname_hash = dname_hash(qname);
-    chal_collide_t* coll = t->tbl[qname_hash & t->mask];
+    const chal_collide_t* coll = t->tbl[qname_hash & t->mask];
     if (coll) {
         for (unsigned i = 0; i < coll->count; i++) {
             const chal_t* ch = coll->chals[i];

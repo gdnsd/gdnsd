@@ -134,7 +134,7 @@ static size_t json_buffer_max = 0;
 
 static void accumulate_statio(unsigned threadnum)
 {
-    dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
+    const dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
     gdnsd_assert(this_stats);
 
     const stats_uint_t l_noerror   = stats_get(&this_stats->noerror);

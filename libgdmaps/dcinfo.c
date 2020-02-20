@@ -27,7 +27,7 @@
 #include <math.h>
 
 F_NONNULL
-static unsigned dcinfo_init_auto(dcinfo_t* info, vscf_data_t* dc_auto_cfg, const char* map_name)
+static unsigned dcinfo_init_auto(const dcinfo_t* info, const vscf_data_t* dc_auto_cfg, const char* map_name)
 {
     if (!vscf_is_hash(dc_auto_cfg))
         log_fatal("plugin_geoip: map '%s': auto_dc_coords must be a key-value hash", map_name);
@@ -84,7 +84,7 @@ static unsigned dcinfo_init_auto(dcinfo_t* info, vscf_data_t* dc_auto_cfg, const
 //  names go into a hash requiring uniqueness, and the count is required
 //  to match (ditto for auto_dc_coords never succeeding with dupes in the
 //  datacenters list).
-void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name, monreg_func_t mrf)
+void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name, monreg_func_t mrf)
 {
     const unsigned num_dcs = vscf_array_get_len(dc_cfg);
     unsigned num_auto = num_dcs;

@@ -147,7 +147,7 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal* w, const int
 {
     gdnsd_assert(revents == EV_SIGNAL);
     gdnsd_assert(w->signum == SIGTERM || w->signum == SIGINT);
-    css_t* css = w->data;
+    const css_t* css = w->data;
     if (!css_stop_ok(css)) {
         log_err("Ignoring terminating signal %i because a replace attempt is in progress!", w->signum);
     } else {
@@ -229,7 +229,7 @@ static void usage(const char* argv0)
 }
 
 F_NONNULL
-static void start_threads(socks_cfg_t* socks_cfg)
+static void start_threads(const socks_cfg_t* socks_cfg)
 {
     dnsio_udp_init(getpid());
     size_t num_tcp_threads = 0;
@@ -274,21 +274,21 @@ static void start_threads(socks_cfg_t* socks_cfg)
 }
 
 F_NONNULL
-static void request_io_threads_stop(socks_cfg_t* socks_cfg)
+static void request_io_threads_stop(const socks_cfg_t* socks_cfg)
 {
     dnsio_tcp_request_threads_stop();
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &socks_cfg->dns_threads[i];
+        const dns_thread_t* t = &socks_cfg->dns_threads[i];
         if (t->is_udp)
             pthread_kill(t->threadid, SIGUSR2);
     }
 }
 
 F_NONNULL
-static void wait_io_threads_stop(socks_cfg_t* socks_cfg)
+static void wait_io_threads_stop(const socks_cfg_t* socks_cfg)
 {
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &socks_cfg->dns_threads[i];
+        const dns_thread_t* t = &socks_cfg->dns_threads[i];
         void* raw_exit_status = (void*)42U;
         int pthread_err = pthread_join(t->threadid, &raw_exit_status);
         if (pthread_err)
@@ -298,7 +298,7 @@ static void wait_io_threads_stop(socks_cfg_t* socks_cfg)
     }
 }
 
-static void do_tak1(csc_t* csc)
+static void do_tak1(const csc_t* csc)
 {
     // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
     // assuming all daemons with listening control sockets have a major >= 3
@@ -314,7 +314,7 @@ static void do_tak1(csc_t* csc)
     }
 }
 
-static void do_tak2(struct ev_loop* loop, csc_t* csc)
+static void do_tak2(struct ev_loop* loop, const csc_t* csc)
 {
     // As above for compat
     if (csc_server_version_gte(csc, 2, 99, 200)) {

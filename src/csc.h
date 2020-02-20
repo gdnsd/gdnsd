@@ -84,13 +84,13 @@ bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t
 // Performs a basic req->resp transaction using csbuf_t objects, with no
 // extra or ancillary data moving in either direction.
 F_NONNULL
-csc_txn_rv_t csc_txn(csc_t* csc, const csbuf_t* req, csbuf_t* resp);
+csc_txn_rv_t csc_txn(const csc_t* csc, const csbuf_t* req, csbuf_t* resp);
 
 // As above, but expects server's resp.d to contain a length of followup data,
 // which will be received and placed in newly-allocated storage at *resp_data
 // for the caller to consume and free
 F_NONNULL
-csc_txn_rv_t csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data);
+csc_txn_rv_t csc_txn_getdata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data);
 
 // As above, but data is sent with the request instead of received from the
 // response.  req_data must be non-NULL and heap-allocated, and will be freed
@@ -98,7 +98,7 @@ csc_txn_rv_t csc_txn_getdata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char
 // to the length of the req_data in bytes (non-zero), and req.v to whatever
 // value is appropriate for the action.
 F_NONNULL
-csc_txn_rv_t csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data);
+csc_txn_rv_t csc_txn_senddata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data);
 
 // As above, but expects server's resp.v to contain a count of file descriptors
 // sent over SCM_RIGHTS, which will be received and placed in newly-allocated
@@ -108,25 +108,25 @@ csc_txn_rv_t csc_txn_senddata(csc_t* csc, const csbuf_t* req, csbuf_t* resp, cha
 // Retval zero indicates something went wrong, otherwise you can assert it's >=
 // 3 (control sock, control lock, 1+ DNS listen sockets).
 F_NONNULL
-size_t csc_txn_getfds(csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds);
+size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds);
 
 // Request the server to shut down.  Non-failing response (false) means the
 // server accepted the command and intends to stop, but does not mean it has
 // actually finished shutdown yet.  This is just a simple wrapper around
 // csc_txn() sending REQ_STOP.
 F_NONNULL
-csc_txn_rv_t csc_stop_server(csc_t* csc);
+csc_txn_rv_t csc_stop_server(const csc_t* csc);
 
 // This function witnesses a server stop by watching for the daemon to
 // close the csc object's control socket connection as it is exiting.
 // rv true == failure, false == success
 F_NONNULL
-bool csc_wait_stopping_server(csc_t* csc);
+bool csc_wait_stopping_server(const csc_t* csc);
 
 // Used during daemon->daemon takeover, to hand off final stats into the
 // baseline of the new daemon.
 F_NONNULL
-size_t csc_get_stats_handoff(csc_t* csc, uint64_t** raw_u64);
+size_t csc_get_stats_handoff(const csc_t* csc, uint64_t** raw_u64);
 
 // destructs the control socket handle
 F_NONNULL

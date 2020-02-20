@@ -26,6 +26,6 @@
 #include <gdnsd/vscf.h>
 
 F_NONNULLX(2, 3)
-nlist_t* nets_make_list(vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name);
+nlist_t* nets_make_list(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name);
 
 #endif // NETS_H

@@ -259,7 +259,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     const char* nsid_data = NULL;
     const char* nsid_data_ascii = NULL;
 
-    vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
+    const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
         CFG_OPT_REMOVED(options, username);
         CFG_OPT_REMOVED(options, weaker_security);
@@ -335,7 +335,7 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
     gdnsd_mon_cfg_stypes_p1(stypes_cfg);
 
     // Load plugins
-    vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
+    const vscf_data_t* plugins_hash = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "plugins", true) : NULL;
     if (plugins_hash) {
         if (!vscf_is_hash(plugins_hash))
             log_fatal("Config setting 'plugins' must have a hash value");

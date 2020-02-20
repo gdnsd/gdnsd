@@ -137,7 +137,7 @@ vscf_data_t* gdnsd_init_paths(const char* config_dir, const bool create_dirs)
     const char* run_dir = GDNSD_DEFPATH_RUN;
     const char* state_dir = GDNSD_DEFPATH_STATE;
     if (cfg_root) {
-        vscf_data_t* options = vscf_hash_get_data_byconstkey(cfg_root, "options", true);
+        const vscf_data_t* options = vscf_hash_get_data_byconstkey(cfg_root, "options", true);
         if (options) {
             if (!vscf_is_hash(options))
                 log_fatal("Config key 'options': wrong type (must be hash)");

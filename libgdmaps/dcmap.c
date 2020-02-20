@@ -75,7 +75,7 @@ static bool dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t*
     return true;
 }
 
-dcmap_t* dcmap_new(vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto)
+dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto)
 {
     gdnsd_assert(vscf_is_hash(map_cfg));
 
@@ -143,7 +143,7 @@ static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* dat
         if (!lookup[0])
             break;
         for (unsigned i = 0; i < dcmap->num_children; i++) {
-            dcmap_child_t* child = &dcmap->children[i];
+            const dcmap_child_t* child = &dcmap->children[i];
             if (!strcasecmp(lookup, child->name)) {
                 if (child->dcmap)
                     return dcmap_llc_(child->dcmap, cb, data, level);
@@ -163,7 +163,7 @@ uint32_t dcmap_lookup_loc_callback(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, v
 void dcmap_destroy(dcmap_t* dcmap)
 {
     for (unsigned i = 0; i < dcmap->num_children; i++) {
-        dcmap_child_t* child = &dcmap->children[i];
+        const dcmap_child_t* child = &dcmap->children[i];
         if (child->name)
             free(child->name);
         if (child->dcmap)

@@ -94,7 +94,7 @@ static bool gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* v
 }
 
 F_NONNULLX(1, 2, 3)
-static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, monreg_func_t mrf)
+static void gdmap_init(gdmap_t* gdmap, const char* name, const vscf_data_t* map_cfg, monreg_func_t mrf)
 {
     // basics
     gdmap->name = xstrdup(name);
@@ -105,7 +105,7 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, m
     vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(map_cfg, "datacenters", true);
     if (!dc_cfg)
         log_fatal("plugin_geoip: map '%s': missing required 'datacenters' array", name);
-    vscf_data_t* dc_auto_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_coords", true);
+    const vscf_data_t* dc_auto_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_coords", true);
     vscf_data_t* dc_auto_limit_cfg = vscf_hash_get_data_byconstkey(map_cfg, "auto_dc_limit", true);
     gdmap->city_auto_mode = dc_auto_cfg ? true : false;
     dcinfo_init(&gdmap->dcinfo, dc_cfg, dc_auto_cfg, dc_auto_limit_cfg, name, mrf);
@@ -120,7 +120,7 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, vscf_data_t* map_cfg, m
     }
 
     // map config
-    vscf_data_t* map_map = vscf_hash_get_data_byconstkey(map_cfg, "map", true);
+    const vscf_data_t* map_map = vscf_hash_get_data_byconstkey(map_cfg, "map", true);
     if (map_map) {
         if (!vscf_is_hash(map_map))
             log_fatal("plugin_geoip: map '%s': 'map' stanza must be a hash", name);
@@ -487,7 +487,7 @@ static bool gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t
     return true;
 }
 
-gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg, monreg_func_t mrf)
+gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg, monreg_func_t mrf)
 {
     gdnsd_assert(vscf_is_hash(maps_cfg));
 
@@ -594,7 +594,7 @@ const uint8_t* gdmaps_lookup(const gdmaps_t* gdmaps, const unsigned gdmap_idx, c
     return gdmap_lookup(&gdmaps->maps[gdmap_idx], client, scope_mask);
 }
 
-void gdmaps_load_databases(gdmaps_t* gdmaps)
+void gdmaps_load_databases(const gdmaps_t* gdmaps)
 {
     for (unsigned i = 0; i < gdmaps->count; i++)
         gdmap_initial_load_all(&gdmaps->maps[i]);

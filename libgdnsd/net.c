@@ -193,7 +193,7 @@ int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gd
         if (port) {
             // If two colons present in addr_port_text without [],
             //   assume IPv6 with no port info
-            char* check_v6 = strchr(port + 1, ':');
+            const char* check_v6 = strchr(port + 1, ':');
             if (check_v6) {
                 port = NULL;
             } else if (port == addr) {

@@ -339,7 +339,7 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
     dns_addr_t addr_defs;
     memcpy(&addr_defs, &addr_defs_defaults, sizeof(addr_defs));
 
-    vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
+    const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
         CFG_OPT_REMOVED(options, udp_recv_width);
         CFG_OPT_UINT_ALTSTORE(options, dns_port, 1LU, 65535LU, addr_defs.dns_port);

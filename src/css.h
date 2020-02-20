@@ -80,10 +80,10 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed);
 // Check whether a stop (e.g. via signal) is currently ok or not (due to
 // impending replacement/replace operation)
 F_NONNULL F_PURE
-bool css_stop_ok(css_t* css);
+bool css_stop_ok(const css_t* css);
 
 F_NONNULL
-void css_send_stats_handoff(css_t* css);
+void css_send_stats_handoff(const css_t* css);
 
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL

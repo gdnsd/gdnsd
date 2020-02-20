@@ -30,9 +30,9 @@ typedef struct gdmaps_t gdmaps_t;
 typedef unsigned(*monreg_func_t)(const char* desc);
 
 F_NONNULLX(1) F_WUNUSED F_RETNN
-gdmaps_t* gdmaps_new(vscf_data_t* maps_cfg, monreg_func_t mrf);
+gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg, monreg_func_t mrf);
 F_NONNULL
-void gdmaps_load_databases(gdmaps_t* gdmaps);
+void gdmaps_load_databases(const gdmaps_t* gdmaps);
 F_NONNULL F_PURE
 int gdmaps_name2idx(const gdmaps_t* gdmaps, const char* map_name);
 F_NONNULL F_PURE

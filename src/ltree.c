@@ -104,7 +104,7 @@ static const char* logf_lstack_labels(const uint8_t** lstack, unsigned depth)
     logf_lstack_labels(_lstack, _depth), logf_dname(_zdname)
 
 F_NONNULL
-static void ltree_node_insert(ltree_node_t* node, ltree_node_t* child, size_t child_hash, size_t probe_dist, const size_t mask)
+static void ltree_node_insert(const ltree_node_t* node, ltree_node_t* child, size_t child_hash, size_t probe_dist, const size_t mask)
 {
     do {
         const size_t slot = (child_hash + probe_dist) & mask;
@@ -137,7 +137,7 @@ static ltree_node_t* ltree_node_find_or_add_child(ltarena_t* arena, ltree_node_t
     if (ccount) {
         do {
             const size_t slot = (kh + probe_dist) & mask;
-            ltree_hslot* s = &node->child_table[slot];
+            const ltree_hslot* s = &node->child_table[slot];
             if (!s->node || ((slot - s->hash) & mask) < probe_dist)
                 break;
             if (s->hash == kh && likely(!label_cmp(s->node->label, child_label)))
@@ -789,7 +789,7 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
     // if NOAUTH, look for explicit out-of-zone glue
     if (target_status == DNAME_NOAUTH) {
         gdnsd_assert(!ns_target);
-        ltree_node_t* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
+        const ltree_node_t* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
         if (ooz)
             ns_target = ltree_node_find_child(ooz, this_ns->dname);
     }
@@ -1072,7 +1072,7 @@ static bool p1_chase_cname(const ltree_rrset_t** rrset_p, size_t* rsize_rrs_p, s
         // negative responses, which are always possible):
         if (cn_target && cn_target->rrsets)
             rrset = cn_target->rrsets;
-        ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(zone->root);
+        const ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(zone->root);
         gdnsd_assert(soa); // checked in zroot phase1
         // Put zone-level soa into the max rrset calc:
         *rsize_rrs_p += (12U + *soa->master + *soa->email + 20U);
@@ -1176,7 +1176,7 @@ static bool ltree_postproc_phase2(const uint8_t** lstack, const ltree_node_t* no
 }
 
 F_WUNUSED F_NONNULLX(1, 2, 3)
-static bool ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool), const uint8_t** lstack, ltree_node_t* node, const zone_t* zone, const unsigned depth, bool in_deleg)
+static bool ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, const zone_t*, const unsigned, const bool), const uint8_t** lstack, const ltree_node_t* node, const zone_t* zone, const unsigned depth, bool in_deleg)
 {
     if (LTN_GET_FLAG_ZCUT(node) && node != zone->root) {
         gdnsd_assert(node->label);
@@ -1194,7 +1194,7 @@ static bool ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, co
         gdnsd_assert(node->child_table);
         const uint32_t cmask = count2mask_sz(ccount);
         for (uint32_t i = 0; i <= cmask; i++) {
-            ltree_node_t* child = node->child_table[i].node;
+            const ltree_node_t* child = node->child_table[i].node;
             if (child) {
                 lstack[depth] = child->label;
                 if (unlikely(ltree_proc_inner(fn, lstack, child, zone, depth + 1, in_deleg)))
@@ -1220,13 +1220,13 @@ static bool ltree_postproc(const zone_t* zone, bool (*fn)(const uint8_t**, const
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_zroot_phase1(zone_t* zone)
 {
-    ltree_node_t* zroot = zone->root;
+    const ltree_node_t* zroot = zone->root;
     gdnsd_assert(zroot);
 
-    ltree_rrset_soa_t* zroot_soa = NULL;
-    ltree_rrset_ns_t* zroot_ns = NULL;
+    const ltree_rrset_soa_t* zroot_soa = NULL;
+    const ltree_rrset_ns_t* zroot_ns = NULL;
 
-    ltree_rrset_t* rrset = zroot->rrsets;
+    const ltree_rrset_t* rrset = zroot->rrsets;
     while (rrset) {
         switch (rrset->gen.type) {
         case DNS_TYPE_SOA:
@@ -1266,20 +1266,20 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone)
 F_NONNULL
 static bool ltree_postproc_zroot_phase2(const zone_t* zone)
 {
-    ltree_node_t* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
+    const ltree_node_t* ooz = ltree_node_find_child(zone->root, ooz_glue_label);
     if (ooz) {
         const size_t ccount = LTN_GET_CCOUNT(ooz);
         gdnsd_assert(ccount); // only created if we have to add child nodes
         const uint32_t mask = count2mask_sz(ccount);
         for (unsigned i = 0; i <= mask; i++) {
-            ltree_node_t* ooz_node = ooz->child_table[i].node;
+            const ltree_node_t* ooz_node = ooz->child_table[i].node;
             if (ooz_node) {
                 // This block of asserts effectively says: an ooz node must
                 // have exactly either one or two rrsets, and they must both be
                 // type A or AAAA, and they must differ in type if there's two.
                 gdnsd_assert(ooz_node->rrsets);
                 gdnsd_assert(ooz_node->rrsets->gen.type == DNS_TYPE_A || ooz_node->rrsets->gen.type == DNS_TYPE_AAAA);
-                ltree_rrset_t* next_rrsets = ooz_node->rrsets->gen.next;
+                const ltree_rrset_t* next_rrsets = ooz_node->rrsets->gen.next;
                 if (next_rrsets) {
                     gdnsd_assert(next_rrsets->gen.type == DNS_TYPE_A || next_rrsets->gen.type == DNS_TYPE_AAAA);
                     gdnsd_assert(next_rrsets->gen.type != ooz_node->rrsets->gen.type);

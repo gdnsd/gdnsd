@@ -349,7 +349,7 @@ static void respond_tak2(struct ev_loop* loop, css_conn_t* c)
     respond(c, RESP_ACK, (uint32_t)csets_count, (uint32_t)csets_size, (char*)csets_data, false);
 }
 
-bool css_stop_ok(css_t* css)
+bool css_stop_ok(const css_t* css)
 {
     return !css->replacement_pid;
 }
@@ -507,7 +507,7 @@ static void latr_all_reloaders(css_t* css)
 }
 
 F_NONNULL
-static void recv_challenge_data(struct ev_loop* loop, ev_io* w, css_conn_t* c, css_t* css)
+static void recv_challenge_data(struct ev_loop* loop, ev_io* w, css_conn_t* c, const css_t* css)
 {
     gdnsd_assert(c->data);
     gdnsd_assert(c->size);
@@ -649,7 +649,7 @@ static void handle_req_tak1(css_conn_t* c, css_t* css)
 }
 
 F_NONNULL
-static void handle_req_tak2(css_conn_t* c, css_t* css)
+static void handle_req_tak2(css_conn_t* c, const css_t* css)
 {
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
@@ -684,7 +684,7 @@ static void handle_req_take(css_conn_t* c, css_t* css)
 }
 
 F_NONNULL
-static bool tcp_req_allowed(ctl_addr_t* ctl_addr, char key)
+static bool tcp_req_allowed(const ctl_addr_t* ctl_addr, char key)
 {
     switch (key) {
     case REQ_INFO:
@@ -818,7 +818,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 }
 
 F_NONNULL
-static css_conn_t* css_accept(css_t* css, ev_io* w)
+static css_conn_t* css_accept(css_t* css, const ev_io* w)
 {
     const int fd = accept4(w->fd, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
@@ -875,7 +875,7 @@ F_NONNULL
 static void css_accept_tcp(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_READ);
-    tcp_lsnr_t* lsnr = w->data;
+    const tcp_lsnr_t* lsnr = w->data;
     gdnsd_assert(lsnr);
     css_t* css = lsnr->css;
     gdnsd_assert(css);
@@ -884,7 +884,7 @@ static void css_accept_tcp(struct ev_loop* loop V_UNUSED, ev_io* w, int revents 
         c->ctl_addr = lsnr->ctl_addr;
 }
 
-static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
+static void socks_import_fd(const socks_cfg_t* socks_cfg, const int fd)
 {
     gdnsd_anysin_t fd_sin;
     memset(&fd_sin, 0, sizeof(fd_sin));
@@ -926,14 +926,14 @@ static void socks_import_fd(socks_cfg_t* socks_cfg, const int fd)
     close(fd);
 }
 
-static void socks_import_fds(socks_cfg_t* socks_cfg, const int* fds, const size_t nfds)
+static void socks_import_fds(const socks_cfg_t* socks_cfg, const int* fds, const size_t nfds)
 {
     for (size_t i = 0; i < nfds; i++)
         socks_import_fd(socks_cfg, fds[i]);
 }
 
 F_NONNULL F_WUNUSED
-static int make_tcp_listener_fd(gdnsd_anysin_t* addr)
+static int make_tcp_listener_fd(const gdnsd_anysin_t* addr)
 {
     const int fd = socket(addr->sa.sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
     if (fd < 0)
@@ -1128,13 +1128,13 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed)
 // return (new sent REQ_STOP to old, and old ACK'd it), stats continuity
 // isn't critical to operations, and no further communications are intended
 // (including no response to this message) so failures here are non-fatal.
-void css_send_stats_handoff(css_t* css)
+void css_send_stats_handoff(const css_t* css)
 {
     // no-op if we don't have a takeover connection from a newer daemon
     if (!css->replace_conn_dmn)
         return;
 
-    css_conn_t* c = css->replace_conn_dmn;
+    const css_conn_t* c = css->replace_conn_dmn;
     size_t dlen = 0;
     char* data = statio_serialize(&dlen);
 

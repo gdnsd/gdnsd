@@ -135,7 +135,7 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
 }
 
 // replace the first (default) dclist...
-void dclists_replace_list0(dclists_t* lists, uint8_t* newlist)
+void dclists_replace_list0(const dclists_t* lists, uint8_t* newlist)
 {
     free(lists->list[0]);
     lists->list[0] = newlist;
@@ -143,7 +143,7 @@ void dclists_replace_list0(dclists_t* lists, uint8_t* newlist)
 
 // We should probably check for dupes in these map dclists, but really the fallout
 //  is just some redundant lookup work if the user screws that up.
-bool dclists_xlate_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto)
+bool dclists_xlate_vscf(const dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto)
 {
     const unsigned count = vscf_array_get_len(vscf_list);
 

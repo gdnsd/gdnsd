@@ -209,7 +209,7 @@ static void udp_sock_opts_v6(const gdnsd_anysin_t* sa, const int sock)
 
 void udp_sock_setup(dns_thread_t* t)
 {
-    dns_addr_t* addrconf = t->ac;
+    const dns_addr_t* addrconf = t->ac;
     gdnsd_assert(addrconf);
 
     const gdnsd_anysin_t* sa = &addrconf->addr;
@@ -258,7 +258,7 @@ static unsigned get_pgsz(void)
 #define CMSG_BUFSIZE CMSG_SPACE(sizeof(struct in6_pktinfo))
 
 F_HOT F_NONNULL
-static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct msghdr* msg_hdr, ssize_t recvmsg_rv)
+static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const struct msghdr* msg_hdr, ssize_t recvmsg_rv)
 {
     if (unlikely(recvmsg_rv < 0)) {
         log_err("UDP recvmsg() error: %s", logf_errno());

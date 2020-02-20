@@ -62,7 +62,7 @@ static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask)
 // arguably, with at least some of the v4-like spaces we could simply translate and hope to de-dupe,
 //   if we upgraded nlist_normalize1 to de-dupe matching dclists instead of failing them
 F_NONNULL
-static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name, nlist_t* nl)
+static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name, nlist_t* nl)
 {
     const unsigned input_nnets = vscf_hash_get_len(nets_cfg);
 
@@ -126,7 +126,7 @@ static bool nets_parse(vscf_data_t* nets_cfg, dclists_t* dclists, const char* ma
     return false;
 }
 
-nlist_t* nets_make_list(vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name)
+nlist_t* nets_make_list(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name)
 {
     nlist_t* nl = nlist_new(map_name, false);
 

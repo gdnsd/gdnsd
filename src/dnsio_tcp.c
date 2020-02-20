@@ -151,7 +151,7 @@ static void register_thread(thread_t* thr)
 // not always true while things are under manipulation, but they should all be
 // true once a given set of manipulations are complete.
 F_NONNULL
-static void connq_assert_sane(thread_t* thr V_UNUSED)
+static void connq_assert_sane(const thread_t* thr)
 {
     if (!thr->num_conns) {
         gdnsd_assert(!thr->connq_head);
@@ -205,7 +205,7 @@ static void connq_adjust_timer(thread_t* thr)
 // touch the value of the next or prev pointers of the conn, but does touch the
 // neighbors reachable through them.
 F_NONNULL
-static void connq_pull_conn(thread_t* thr, conn_t* conn)
+static void connq_pull_conn(thread_t* thr, const conn_t* conn)
 {
     connq_assert_sane(thr);
     gdnsd_assert(thr->num_conns);
@@ -345,7 +345,7 @@ static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
     gdnsd_assert(resp_size);
     conn->pktbuf_size_hdr = htons((uint16_t)resp_size);
     const size_t resp_send_size = resp_size + 2U;
-    ev_io* readw = &conn->read_watcher;
+    const ev_io* readw = &conn->read_watcher;
     const ssize_t send_rv = send(readw->fd, &conn->pktbuf_size_hdr, resp_send_size, 0);
     if (unlikely(send_rv < (ssize_t)resp_send_size)) {
         if (send_rv < 0 && !ERRNO_WOULDBLOCK)
