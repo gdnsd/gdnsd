@@ -1618,6 +1618,9 @@ static ltree_dname_status_t search_ltree_for_dname(const uint8_t* dname, search_
     // construct label ptr stack
     const uint8_t* lstack[127];
     unsigned lcount = dname_to_lstack(dname, lstack);
+    // Asserted indirectly by dname_to_lstack's assertions, but made clearer
+    // here for analysis:
+    gdnsd_assert(lcount < 128U);
 
     const ltree_node_t* current = rcu_dereference(root_tree);
     const ltree_node_t* auth = NULL;
@@ -1651,6 +1654,12 @@ static ltree_dname_status_t search_ltree_for_dname(const uint8_t* dname, search_
             }
         }
     }
+
+    // Implied by above logic, but may not be obvious to analyzers:
+    // depth_lc is only set by copying the value of lcount, and lcount starts
+    // with this constraint and can only be decremented, and the decrement can
+    // only happen if the value is non-zero (thus it can't wrap).
+    gdnsd_assert(depth_lc < 128U);
 
     // Calculate auth depth for cases where it matters
     unsigned auth_depth = 0;
