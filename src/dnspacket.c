@@ -2187,14 +2187,6 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* p
     // parse_optrr() will raise this value in the udp edns case as necc.
     ctx->txn.this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE_DATA;
 
-    /*
-        log_devdebug("Processing %sv%u DNS query of length %u from %s",
-            (ctx->is_udp ? "UDP" : "TCP"),
-            (sa->sa.sa_family == AF_INET6) ? 6 : 4,
-            packet_len,
-            logf_anysin(sa));
-    */
-
     unsigned res_offset = sizeof(wire_dns_header_t);
     const rcode_rv_t status = decode_query(ctx, &res_offset, packet_len);
 
