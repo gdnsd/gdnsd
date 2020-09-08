@@ -71,7 +71,7 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
         unsigned net_str_len = 0;
         const char* net_str_cfg = vscf_hash_get_key_byindex(nets_cfg, i, &net_str_len);
         if (net_str_len >= GDNSD_ANYSIN_MAXSTR) {
-            log_err("plguin_geoip: map '%s': nets entry '%s' is too long", map_name, net_str_cfg);
+            log_err("plugin_geoip: map '%s': nets entry '%s' is too long", map_name, net_str_cfg);
             return true;
         }
         char net_str[GDNSD_ANYSIN_MAXSTR];

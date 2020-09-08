@@ -443,7 +443,7 @@ static void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNU
     if (num_res > MAX_RESOURCES)
         log_fatal("plugin_" PNSTR ": Maximum number of resources (%u) exceeded", MAX_RESOURCES);
     if (!num_res)
-        log_fatal("plguin_" PNSTR ": No resources defined");
+        log_fatal("plugin_" PNSTR ": No resources defined");
 
     resources = xcalloc_n(num_res, sizeof(*resources));
 
