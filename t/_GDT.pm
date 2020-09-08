@@ -1030,10 +1030,11 @@ sub query_server {
         foreach my $k (keys %saveopts) {
            # Bug introduced in Net::DNS 1.11 makes resetting udppacketsize to
            # 512 not work correctly (it keeps sending EDNS with new queries @
-           # 512), but setting it to 511 has nearly the same effect as
-           # intended (no more ENDS in future queries).
+           # 512).   Setting it to 511 worked up until version 1.23, when this
+           # broke again, and now we're setting to zero in this case, which
+           # seems to work at least from 1.03 to 1.26 (latest at this time).
            if ($k eq "udppacketsize" && $saveopts{$k} == 512) {
-               $res->udppacketsize(511);
+               $res->udppacketsize(0);
            } else {
                $res->$k($saveopts{$k});
            }
