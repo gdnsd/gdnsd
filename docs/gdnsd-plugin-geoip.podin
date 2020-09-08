@@ -335,13 +335,24 @@ separate manpage L<gdnsd_geoip_test(1)>.
 Resource-level configuration within the C<resources> stanza is nearly
 identical to the resources configuration of the metafo plugin, with all of
 the same basic behaviors about synthesizing or directly referencing the
-configuration of other plugins per-datacenter.  The only real difference
-is that metafo's per-resource C<datacenters> array is replaced with
-C<map =E<gt> mapname>, which references one of the maps defined in the
-C<maps> stanza, described in detail earlier.  The set of defined
-datacenters in the C<dcmap> stanza must match the total set of datacenters
-defined by the referenced map, unless C<undefined_datacenters_ok> is set to
-C<true> (see warnings and documentation above).
+configuration of other plugins per-datacenter.
+
+One difference is that metafo's per-resource C<datacenters> array is replaced
+with C<map =E<gt> mapname>, which references one of the maps defined in the
+C<maps> stanza, described in detail earlier.  The set of defined datacenters in
+the C<dcmap> stanza must match the total set of datacenters defined by the
+referenced map, unless C<undefined_datacenters_ok> is set to C<true> (see
+warnings and documentation above).
+
+The C<skip_first> flag can also be set per resource, and is much more useful
+with the geoip plugin than it is with the basic metafo plugin.  If this flag is
+set, the first datacenter in the failover list for a given lookup will be
+skipped, allowing the definition of a "second choice" resource using the same
+basic map definition as the first choice.  In this case the original first
+choice is *never* a possible answer, and the rest of the logic (e.g. skipping
+datacenters marked as down) proceeds as normal with the remaining list.  If the
+map entry and/or the resource definition have already reduced the effective
+datacenter count to one, the flag has no effect.
 
 =head1 META-PLUGIN INTERACTION
 

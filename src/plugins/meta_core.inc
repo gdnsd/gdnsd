@@ -74,12 +74,18 @@ typedef struct {
 //       and all-zeros.  Any dc from the map which is not defined for this
 //       resource will also be all-zeros, and thus we detect this case by
 //       checking NULL-ness of dcs[x].dc_name
+// skip_first - Boolean - if true, if there is more than one defined datacenter
+//       result for a resource, the first datacenter will be skipped.  This
+//       allows defining a "second choice" resource from the same map
+//       definition as the primary choice for geoip.
+
 typedef struct {
     char* name;
     dc_t* dcs;
     unsigned map;
     unsigned num_dcs;
     unsigned num_dcs_defined;
+    bool skip_first;
 } resource_t;
 
 static unsigned num_res;
@@ -286,6 +292,11 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
     res->map = res_get_mapnum(res_cfg, res_name);
     res->num_dcs = map_get_len(res->map);
     gdnsd_assert(res->num_dcs); // empty lists not allowed!
+
+    res->skip_first = false;
+    vscf_data_t* skip_first_cfg = vscf_hash_get_data_byconstkey(res_cfg, "skip_first", true);
+    if (skip_first_cfg && !vscf_simple_get_as_bool(skip_first_cfg, &res->skip_first))
+        log_fatal("plugin_" PNSTR ": resource '%s': option 'skip_first' must have the value 'true' or 'false'", res_name);
 
     // the core item: dcmap (dc -> result map)
     vscf_data_t* dcs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "dcmap", true);
@@ -517,6 +528,10 @@ static gdnsd_sttl_t CB_RES(unsigned resnum, const client_info_t* cinfo, dyn_resu
         *dclist_filtered_iter = 0;
         dclist = dclist_filtered;
     }
+
+    // If the real dclist has 2+ entries, allow skip_first to take effect
+    if (res->skip_first && dclist[0] && dclist[1])
+        dclist++;
 
     const unsigned first_dc_num = *dclist;
     if (first_dc_num) {

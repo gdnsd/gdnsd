@@ -68,7 +68,7 @@ configuring the resource itself.  Lightweight structural example:
     }
   }
 
-Within a resource, there are only two specifically meaningful keys:
+Within a resource, there are only three specifically meaningful keys:
 
 =over 4
 
@@ -101,6 +101,12 @@ Another minimal structural example down to this level:
 
 There are several forms the per-datacenter values (C<???> above) can take,
 documented in the next section.
+
+=item C<skip_first = true>
+
+If this boolean configuration flag is set, the resolver code will skip the
+first datacenter when resolving this resource.  This is mostly useful in the
+context of the geoip plugin, and is discussed in more detail there.
 
 =back
 

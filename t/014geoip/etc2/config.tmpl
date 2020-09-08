@@ -63,6 +63,18 @@ plugins => {
      ap => { lb01 => 192.0.2.7, lb02 => 192.0.2.8, lb03 => 192.0.2.9 },
     }
    }
+   res1sf => {
+    service_types => up
+    plugin => multifo
+    map => map1,
+    dcmap = {
+     eu => { lb01 => 192.0.2.6, lb02 => 192.0.2.5 },
+     na => 192.0.2.1
+     sa => { lb01 => 192.0.2.3, lb02 => 192.0.2.4 },
+     ap => { lb01 => 192.0.2.7, lb02 => 192.0.2.8, lb03 => 192.0.2.9 },
+    }
+    skip_first = true
+   }
    res2 => {
     service_types => up
     plugin => multifo

@@ -10,6 +10,7 @@
 ns1	A	192.0.2.1
 
 res1	DYNA	geoip!res1
+res1sf	DYNA	geoip!res1sf
 res1na	DYNA	geoip!res1/na
 res1sa	DYNA	geoip!res1/sa
 res1eu	DYNA	geoip!res1/eu

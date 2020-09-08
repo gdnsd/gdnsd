@@ -1,7 +1,7 @@
 # Basic geoip plugin tests
 
 use _GDT ();
-use Test::More tests => 56 * 2;
+use Test::More tests => 58 * 2;
 
 my $test_bin = $ENV{INSTALLCHECK_BINDIR}
     ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_geoip_test"
@@ -60,6 +60,25 @@ _GDT->test_dns(
     qname => 'res1.example.com', qtype => 'A',
     q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
     answer => [ 'res1.example.com 86400 A 192.0.2.5', 'res1.example.com 86400 A 192.0.2.6' ],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+
+# res1sf skip_first tests:
+# US clientsub, which map1 defines failover as: NA => [ na, sa ]
+# Then skip_first skips "na" result and uses next entry "sa" instead:
+_GDT->test_dns(
+    qname => 'res1sf.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16),
+    answer => [ 'res1sf.example.com 86400 A 192.0.2.3', 'res1sf.example.com 86400 A 192.0.2.4'],
+    addtl => _GDT::optrr_clientsub(addr_v4 => '10.10.0.0', src_mask => 16, scope_mask => 1),
+    stats => [qw/udp_reqs edns edns_clientsub noerror/],
+);
+# As above, but french clientsub which skips the first "eu" entry and uses "na" instead
+_GDT->test_dns(
+    qname => 'res1sf.example.com', qtype => 'A',
+    q_optrr => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32),
+    answer => 'res1sf.example.com 86400 A 192.0.2.1',
     addtl => _GDT::optrr_clientsub(addr_v4 => '192.0.2.1', src_mask => 32, scope_mask => 1),
     stats => [qw/udp_reqs edns edns_clientsub noerror/],
 );
