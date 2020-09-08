@@ -1196,9 +1196,8 @@ static bool ltree_proc_inner(bool (*fn)(const uint8_t**, const ltree_node_t*, co
         for (uint32_t i = 0; i <= cmask; i++) {
             const ltree_node_t* child = node->child_table[i].node;
             if (child) {
-                gdnsd_assert(child->label); // only root-of-DNS node (which is
-                                            // by definition root-of-tree) can
-                                            // have a NULL label
+                // only root-of-DNS node (root-of-tree) has a NULL label
+                gdnsd_assert(child->label);
                 lstack[depth] = child->label;
                 if (unlikely(ltree_proc_inner(fn, lstack, child, zone, depth + 1, in_deleg)))
                     return true;
