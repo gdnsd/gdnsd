@@ -1,3 +1,9 @@
+3.3.0 - 2020-09-09
+    * New Feature: 'skip_first' flag added for geoip resource definitions.
+      This allows defining a backup geoip resource which shares the same map as
+      a primary resource, but always resolves to the second-best choice for a
+      given client, as if the (dynamic) first choice were down.
+
 3.2.2 - 2020-02-19
     * Bugfix: In the case that a "replace" daemon takeover happened while
       unexpired ephemeral ACME challenge data was present (which is handed
