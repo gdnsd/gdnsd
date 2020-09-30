@@ -932,6 +932,10 @@ static void socks_import_fds(const socks_cfg_t* socks_cfg, const int* fds, const
         socks_import_fd(socks_cfg, fds[i]);
 }
 
+#ifndef SOL_TCP
+#define SOL_TCP IPPROTO_TCP
+#endif
+
 F_NONNULL F_WUNUSED
 static int make_tcp_listener_fd(const gdnsd_anysin_t* addr)
 {
