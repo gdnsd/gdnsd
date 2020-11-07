@@ -62,6 +62,7 @@ typedef struct {
     unsigned num_dns_addrs;
     unsigned num_dns_threads;
     unsigned num_ctl_addrs;
+    unsigned long fd_estimate;
 } socks_cfg_t;
 
 F_RETNN

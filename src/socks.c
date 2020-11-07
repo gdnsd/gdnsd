@@ -62,6 +62,7 @@ static const socks_cfg_t socks_cfg_defaults = {
     .num_dns_addrs = 0U,
     .num_dns_threads = 0U,
     .num_ctl_addrs = 0U,
+    .fd_estimate = 0LU,
 };
 
 // Generic iterator for catching bad config hash keys in various places below
@@ -359,6 +360,21 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
     process_listen(socks_cfg, listen_opt, &addr_defs);
     if (ctl_opt)
         process_tcp_control(socks_cfg, ctl_opt);
+
+    // Estimate the number of socket fds needed, for later rlimit auto-tuning:
+    for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
+        dns_addr_t* da = &socks_cfg->dns_addrs[i];
+        socks_cfg->fd_estimate += da->udp_threads; // listener
+        socks_cfg->fd_estimate +=
+            (da->tcp_threads * (da->tcp_clients_per_thread + 5U));
+        // Note for TCP threads, there will be up to a few miscellaneous fds
+        // from the eventloop and polling mechanisms, separately from the
+        // listen socket, hence the constant "5" buffer there.
+    }
+
+    // There's no actual limit on client connections to control sockets, but
+    // let's estimate that 16 clients is enough for a default here.
+    socks_cfg->fd_estimate += (socks_cfg->num_ctl_addrs * 17U);
 
     return socks_cfg;
 }
