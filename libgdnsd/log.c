@@ -97,6 +97,77 @@ bool gdnsd_log_get_syslog(void)
     return do_syslog;
 }
 
+// gdnsd_log_neterr_rate_ok(): used by logging macros to implement a
+// per-thread-ratelimited log output for network-driven log events, so that
+// they can't excessively spam syslog when things go off the rails.  It's
+// per-thread so that we don't have to harm scaling with some kind of
+// synchronization in a critical path.
+//
+// For calling macros: if this function returns true, log the original message
+// using gdnsd_logger().  If it returns false, do nothing.
+//
+// The behavior is fairly simple:  Time is binned (imprecisely in edge cases,
+// which is fine for a rough sanity-check like this) by time() return values.
+// If more than 10 messages happen during a single clock second, this code will
+// replace the 10th message with a meta-message about suppressing excessive
+// events and then suppress them for the remainder of the second.  Once this
+// happens the code goes into a defensive mode which supresses all further
+// messages and sends at most one new message per second about the ongoing
+// suppression.
+//
+// Defensive mode can be exited by either of:
+// (a) A full second (or more) passing with zero attempted log messages
+// (b) 2 consecutive seconds pass during which there are messages (which are
+//     all suppressed), but the rate of them does not re-trip the threshold
+bool gdnsd_log_neterr_rate_ok(void)
+{
+    static __thread time_t rate_second = 0;
+    static __thread unsigned count = 0;
+    static __thread unsigned defensive = 0;
+
+    static const unsigned rate_limit = 10U;
+
+    const time_t now_second = time(NULL);
+
+    // The clock has advanced one or more seconds
+    if (now_second != rate_second) {
+        // If we were already being defensive...
+        if (defensive) {
+            if (now_second > (rate_second + 1U)) {
+                // If the clock jumped by more than one, we had at least a full
+                // second of radio silence, so let's clear defensive state:
+                defensive = 0;
+            } else if (count < rate_limit) {
+                // Otherwise for a single-second jump, decrement our defensiveness
+                // by one if the previous second managed to stay under the limit:
+                defensive--;
+            }
+        }
+
+        // Update the clock and reset the count
+        rate_second = now_second;
+        count = 0;
+    } else {
+        // Clock didn't change, just update count:
+        count++;
+    }
+
+    // Allow the original message if under the threshold and not defensive
+    if (count < rate_limit && !defensive)
+        return true;
+
+    // Otherwise...
+
+    // Meta-log and reset defenses at the threshold
+    if (count == rate_limit) {
+        defensive = 2U;
+        gdnsd_logger(LOG_ERR, "Excessive network error messages are being suppressed");
+    }
+
+    // At-or-above the threshold (or defensive), do not allow the original message
+    return false;
+}
+
 // 4K is the limit for all strings formatted by the log formatters to use in a
 // single log message.  In other words, for any invocation like:
 // log_warn("...", logf_dname(x), logf_strerror(y))

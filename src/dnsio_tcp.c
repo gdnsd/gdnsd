@@ -245,10 +245,10 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
     if (rst) {
         const struct linger lin = { .l_onoff = 1, .l_linger = 0 };
         if (setsockopt(read_watcher->fd, SOL_SOCKET, SO_LINGER, &lin, sizeof(lin)))
-            log_err("setsockopt(%s, SO_LINGER, {1, 0}) failed: %s", logf_anysin(&conn->sa), logf_errno());
+            log_neterr("setsockopt(%s, SO_LINGER, {1, 0}) failed: %s", logf_anysin(&conn->sa), logf_errno());
     }
     if (close(fd))
-        log_err("close(%s) failed: %s", logf_anysin(&conn->sa), logf_errno());
+        log_neterr("close(%s) failed: %s", logf_anysin(&conn->sa), logf_errno());
 
     if (manage_queue)
         connq_pull_conn(thr, conn);
@@ -837,7 +837,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
             log_debug("TCP DNS: early tcp socket death: %s", logf_errno());
             break;
         default:
-            log_err("TCP DNS: accept() failed: %s", logf_errno());
+            log_neterr("TCP DNS: accept4() failed: %s", logf_errno());
         }
         return;
     }
