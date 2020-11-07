@@ -37,7 +37,7 @@ typedef struct {
 } vscf_key_t;
 
 // Invokes the scanner, returning the root-level hash or array on success
-// On error, NULL is returned and the error is emitted with gdnsd_log_err()
+// On error, NULL is returned and the error is emitted with log_err()
 F_NONNULL
 vscf_data_t* vscf_scan_filename(const char* fn);
 

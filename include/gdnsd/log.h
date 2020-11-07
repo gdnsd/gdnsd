@@ -54,12 +54,12 @@ void gdnsd_logger(int level, const char* fmt, ...);
 // interfaces with different levels.  The _fatal variant exits after emitting
 // the logged statement, and the _debug variant's output is toggled with the
 // runtime gdnsd_log_set_debug() call (defaults off)
-#define gdnsd_log_info(...) gdnsd_logger(LOG_INFO, __VA_ARGS__)
-#define gdnsd_log_warn(...) gdnsd_logger(LOG_WARNING, __VA_ARGS__)
-#define gdnsd_log_err(...) gdnsd_logger(LOG_ERR, __VA_ARGS__)
+#define log_info(...) gdnsd_logger(LOG_INFO, __VA_ARGS__)
+#define log_warn(...) gdnsd_logger(LOG_WARNING, __VA_ARGS__)
+#define log_err(...) gdnsd_logger(LOG_ERR, __VA_ARGS__)
 
 // log_debug() messages will only be emitted if the runtime debug flag is set
-#define gdnsd_log_debug(...) do {\
+#define log_debug(...) do {\
      if (gdnsd_log_get_debug())\
          gdnsd_logger(LOG_DEBUG, __VA_ARGS__);\
      } while (0)
@@ -71,9 +71,9 @@ void gdnsd_logger(int level, const char* fmt, ...);
 //   exercise a fatal case; it will probably cause random
 //   bugs leading to test failures otherwise.
 #ifdef GDNSD_NO_FATAL_COVERAGE
-#  define gdnsd_log_fatal(...) ((void)(0))
+#  define log_fatal(...) ((void)(0))
 #else
-#  define gdnsd_log_fatal(...) do {\
+#  define log_fatal(...) do {\
      gdnsd_logger(LOG_CRIT, __VA_ARGS__);\
      exit(42);\
    } while (0)
@@ -81,7 +81,7 @@ void gdnsd_logger(int level, const char* fmt, ...);
 
 // GDNSD_NO_UNREACH_BUILTIN is to work around gcov coverage testing, which
 //   flags un-taken branches for all of the __builtin_unreachable()
-// gdnsd_log_devdebug() is suppressed at the preprocessor level if -DNDEBUG
+// log_devdebug() is suppressed at the preprocessor level if -DNDEBUG
 //   is set; use this in performance-critical areas (to avoid the runtime
 //   check of the debug flag) or for spammy messages that only developers need
 #ifdef NDEBUG
@@ -90,7 +90,7 @@ void gdnsd_logger(int level, const char* fmt, ...);
 #  else
 #    define gdnsd_assert(expr) ((void)(0))
 #  endif
-#  define gdnsd_log_devdebug(...) ((void)(0))
+#  define log_devdebug(...) ((void)(0))
 #else
 #  define gdnsd_assert(expr) do {\
      if (!(expr)) {\
@@ -99,7 +99,7 @@ void gdnsd_logger(int level, const char* fmt, ...);
        abort();\
      }\
    } while (0)
-#  define gdnsd_log_devdebug(...) do {\
+#  define log_devdebug(...) do {\
      if (gdnsd_log_get_debug())\
          gdnsd_logger(LOG_DEBUG, __VA_ARGS__);\
      } while (0)
@@ -125,7 +125,7 @@ void gdnsd_logger(int level, const char* fmt, ...);
 //     return buf;
 //  }
 //
-//  gdnsd_log_warn("The integer had value %s!", my_int_formatter(someint));
+//  log_warn("The integer had value %s!", my_int_formatter(someint));
 //
 F_RETNN F_COLD
 char* gdnsd_fmtbuf_alloc(const size_t size);
@@ -142,7 +142,7 @@ void gdnsd_fmtbuf_reset(void);
 //  and POSIX strerror_r() variants.
 F_RETNN F_COLD
 const char* gdnsd_logf_strerror(const int errnum);
-#define gdnsd_logf_errno() gdnsd_logf_strerror(errno)
+#define logf_errno() gdnsd_logf_strerror(errno)
 
 // Adds a strack trace to the log message, iff built w/ libunwind
 F_RETNN F_COLD
@@ -156,22 +156,14 @@ const char* gdnsd_logf_in6a(const struct in6_addr* in6a);
 F_RETNN F_COLD
 const char* gdnsd_logf_dname(const uint8_t* dname);
 
-// shortcut defines for basic log levels + formatters, avoids the gdnsd_ prefix
-// in the common case to keep lines shorter, but doesn't pollute symbol table,
-// where the full names are still used.
+// We prefer to use these shortcuts to save line-length for common formatting
+// functions, but since they're backed by real functions, we don't want to
+// pollute the symbol table, hence the gdnsd_ prefix on the real symbols:
 
-#define log_info gdnsd_log_info
-#define log_warn gdnsd_log_warn
-#define log_err gdnsd_log_err
-#define log_fatal gdnsd_log_fatal
-#define log_debug gdnsd_log_debug
-#define log_devdebug gdnsd_log_devdebug
-
-#define logf_errno() gdnsd_logf_strerror(errno)
 #define logf_strerror gdnsd_logf_strerror
 #define logf_bt gdnsd_logf_bt
-#define logf_dname gdnsd_logf_dname
 #define logf_ipv6 gdnsd_logf_ipv6
 #define logf_in6a gdnsd_logf_in6a
+#define logf_dname gdnsd_logf_dname
 
 #endif // GDNSD_LOG_H
