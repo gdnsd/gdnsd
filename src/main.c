@@ -421,9 +421,50 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
     usage(argv[0]);
 }
 
+static void try_raise_open_files(socks_cfg_t* socks_cfg)
+{
+    // this is just a default guestimate anyways; it tries to account for all
+    // the known network socket needs, and then bumps by a hundred to handle
+    // most zonefile (keeping in mind we only open one file at a time, but
+    // there can be parallel threads) and/or geoip database needs and other
+    // miscellaneous bits.  It should at least get us in the ballpark.
+
+    rlim_t files_desired = socks_cfg->fd_estimate + 100U;
+
+    struct rlimit rlim;
+    if (getrlimit(RLIMIT_NOFILE, &rlim)) {
+        log_warn("getrlimit(RLIMIT_NOFILE) failed: %s", logf_errno());
+        return;
+    }
+
+    if (rlim.rlim_cur != RLIM_INFINITY && rlim.rlim_cur < files_desired) {
+        if (rlim.rlim_max != RLIM_INFINITY && rlim.rlim_max < files_desired)
+            log_warn("Open files ulimit is capped at %llu, "
+                     "but the daemon guesses we need about %llu",
+                     (unsigned long long)rlim.rlim_max,
+                     (unsigned long long)files_desired);
+
+        if (rlim.rlim_max == RLIM_INFINITY || rlim.rlim_max > rlim.rlim_cur) {
+            if (rlim.rlim_max == RLIM_INFINITY || rlim.rlim_max >= files_desired)
+                rlim.rlim_cur = files_desired;
+            else
+                rlim.rlim_cur = rlim.rlim_max;
+
+            if (setrlimit(RLIMIT_NOFILE, &rlim))
+                log_warn("setrlimit(RLIMIT_NOFILE, cur = %llu) failed: %s",
+                         (unsigned long long)rlim.rlim_cur, logf_errno());
+            else
+                log_info("Raised open files soft limit to %llu",
+                         (unsigned long long)rlim.rlim_cur);
+        }
+    }
+}
+
 F_NORETURN
 static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* css, csc_t* csc)
 {
+    try_raise_open_files(socks_cfg);
+
     // init the stats code
     statio_init(socks_cfg->num_dns_threads);
 
