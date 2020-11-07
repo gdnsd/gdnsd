@@ -45,6 +45,9 @@ void gdnsd_log_set_syslog(bool set_syslog, const char* ident);
 F_PURE
 bool gdnsd_log_get_syslog(void);
 
+// network error ratelimiter for below macros
+bool gdnsd_log_neterr_rate_ok(void);
+
 // This is a syslog()-like interface that will log
 //  to stderr and is thread-safe
 F_COLD F_NONNULLX(2) F_PRINTF(2, 3)
@@ -57,6 +60,12 @@ void gdnsd_logger(int level, const char* fmt, ...);
 #define log_info(...) gdnsd_logger(LOG_INFO, __VA_ARGS__)
 #define log_warn(...) gdnsd_logger(LOG_WARNING, __VA_ARGS__)
 #define log_err(...) gdnsd_logger(LOG_ERR, __VA_ARGS__)
+
+// Ratelimited network error logging:
+#define log_neterr(...) do {\
+    if (gdnsd_log_neterr_rate_ok())\
+         gdnsd_logger(LOG_ERR, __VA_ARGS__);\
+    } while (0)
 
 // log_debug() messages will only be emitted if the runtime debug flag is set
 #define log_debug(...) do {\

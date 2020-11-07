@@ -261,7 +261,7 @@ F_HOT F_NONNULL
 static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const struct msghdr* msg_hdr, ssize_t recvmsg_rv)
 {
     if (unlikely(recvmsg_rv < 0)) {
-        log_err("UDP recvmsg() error: %s", logf_errno());
+        log_neterr("UDP recvmsg() error: %s", logf_errno());
         stats_own_inc(&stats->udp.recvfail);
         return;
     }
@@ -301,7 +301,7 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
                 if (errno == EINTR || ERRNO_WOULDBLOCK)
                     continue;
                 stats_own_inc(&stats->udp.sendfail);
-                log_err("UDP sendmsg() of %zu bytes to client %s failed: %s", iov->iov_len, logf_anysin(sa), logf_errno());
+                log_neterr("UDP sendmsg() of %zu bytes to client %s failed: %s", iov->iov_len, logf_anysin(sa), logf_errno());
             }
             break;
         }
@@ -382,7 +382,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
     gdnsd_assert(mmsg_rv != 0);
     if (unlikely(mmsg_rv < 0)) {
         stats_own_inc(&stats->udp.recvfail);
-        log_err("UDP recvmmsg() error: %s", logf_errno());
+        log_neterr("UDP recvmmsg() error: %s", logf_errno());
         return;
     }
 
@@ -449,7 +449,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
                 if (errno == EINTR || ERRNO_WOULDBLOCK)
                     continue; // retry same sendmmsg() call
                 stats_own_inc(&stats->udp.sendfail);
-                log_err("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
+                log_neterr("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
                 mmsg_rv = 1; // count as one packet "handled", so we
                 // don't re-send the erroring packet
             }
