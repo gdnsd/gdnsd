@@ -821,24 +821,11 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
     const int sock = accept4(w->fd, &sa.sa, &sa.len, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
     if (unlikely(sock < 0)) {
-        switch (errno) {
-        case EAGAIN:
-#if EWOULDBLOCK != EAGAIN
-        case EWOULDBLOCK:
-#endif
-#ifdef ENONET
-        case ENONET:
-#endif
-        case ENETDOWN:
-#ifdef EPROTO
-        case EPROTO:
-#endif
-        case EHOSTDOWN:
-        case EHOSTUNREACH:
-        case ENETUNREACH:
-            log_debug("TCP DNS: early tcp socket death: %s", logf_errno());
-            break;
-        default:
+        if (ERRNO_WOULDBLOCK || errno == EINTR) {
+            // Simple retryable failures, do nothing
+        } else {
+            // For all other errnos just do a ratelimited log output and bump
+            // the stat.
             stats_own_inc(&thr->stats->tcp.acceptfail);
             log_neterr("TCP DNS: accept4() failed: %s", logf_errno());
         }
