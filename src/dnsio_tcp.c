@@ -823,9 +823,19 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
     if (unlikely(sock < 0)) {
         if (ERRNO_WOULDBLOCK || errno == EINTR) {
             // Simple retryable failures, do nothing
+        } else if ((errno == ENFILE || errno == EMFILE) && thr->connq_head) {
+            // If we ran out of fds and there's an idle one we can close, try
+            // to do that, just like we do when we hit our internal limits
+            stats_own_inc(&thr->stats->tcp.acceptfail);
+            stats_own_inc(&thr->stats->tcp.close_s_kill);
+            log_neterr("TCP DNS conn from %s reset by server: attempting to"
+                       " free resources because: accept4() failed: %s",
+                       logf_anysin(&thr->connq_head->sa), logf_errno());
+            connq_destruct_conn(thr, thr->connq_head, true, true);
         } else {
-            // For all other errnos just do a ratelimited log output and bump
-            // the stat.
+            // For all other errnos (or E[MN]FILE without a conn to kill,
+            // because we're not actually the offending thread...), just do a
+            // ratelimited log output and bump the stat.
             stats_own_inc(&thr->stats->tcp.acceptfail);
             log_neterr("TCP DNS: accept4() failed: %s", logf_errno());
         }
