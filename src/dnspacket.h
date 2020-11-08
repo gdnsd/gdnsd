@@ -54,6 +54,7 @@ typedef struct {
             stats_t dso_estab;
             stats_t dso_protoerr;
             stats_t dso_typeni;
+            stats_t acceptfail;
         } tcp;
     };
 
