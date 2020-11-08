@@ -812,6 +812,8 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 {
     gdnsd_assert(revents == EV_READ);
 
+    thread_t* thr = w->data;
+
     gdnsd_anysin_t sa;
     memset(&sa, 0, sizeof(sa));
     sa.len = GDNSD_ANYSIN_MAXLEN;
@@ -837,14 +839,13 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
             log_debug("TCP DNS: early tcp socket death: %s", logf_errno());
             break;
         default:
+            stats_own_inc(&thr->stats->tcp.acceptfail);
             log_neterr("TCP DNS: accept4() failed: %s", logf_errno());
         }
         return;
     }
 
     log_debug("Received TCP DNS connection from %s", logf_anysin(&sa));
-
-    thread_t* thr = w->data;
 
     conn_t* conn = xcalloc(sizeof(*conn));
     memcpy(&conn->sa, &sa, sizeof(sa));
