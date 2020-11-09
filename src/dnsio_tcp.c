@@ -299,8 +299,8 @@ static void connq_append_new_conn(thread_t* thr, conn_t* conn)
     // (fairness between DSO and non-DSO, whether the most-idle DSO is anywhere
     // near the most-idle end of the list, etc)
     if (thr->num_conns == thr->max_clients) {
-        log_debug("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&thr->connq_head->sa));
         stats_own_inc(&conn->thr->stats->tcp.close_s_kill);
+        log_neterr("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&thr->connq_head->sa));
         connq_destruct_conn(thr, thr->connq_head, true, true);
     }
 }
@@ -785,7 +785,7 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
         const size_t consumed = proxy_parse(&conn->sa, &conn->proxy_hdr, conn->readbuf_bytes);
         gdnsd_assert(consumed <= conn->readbuf_bytes);
         if (!consumed) {
-            log_debug("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->sa));
+            log_neterr("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->sa));
             stats_own_inc(&thr->stats->tcp.proxy_fail);
             stats_own_inc(&thr->stats->tcp.close_s_err);
             connq_destruct_conn(thr, conn, true, true);
