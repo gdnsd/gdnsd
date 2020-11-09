@@ -555,15 +555,20 @@ bytes in length.  Only one of C<nsid> or C<nsid_ascii> may be specified.
 
 =item B<experimental_no_chain>
 
-Boolean, default false.  Note that as an experimental option, this feature is
-unstable and there are no gaurantees about the option's compatibility or
-existence across versions!
+Boolean, default true.
 
-If set to true, when a query for any RR type encounters a C<CNAME> RR in the
-zone data, the behavior of the server will be as if the queried type was
-C<CNAME>.  This implies no chasing of the target (right-hand-side) name to emit
-any further answer-section records or delegations related to the target, even if
-they exist in the local data of the same zone.
+If set to true (the default), when a query for any RR type encounters a
+C<CNAME> RR in the zone data, the behavior of the server will be as if the
+queried type was C<CNAME>.  This implies no chasing of the target
+(right-hand-side) name to emit any further answer-section records or
+delegations related to the target, even if they exist in the local data of the
+same zone.
+
+This option is likely to become the fixed behavior (no option to disable) in a
+future release.  If this new default behavior causes a problem, you can (for
+now!) set the option to false to revert to the traditional behavior of emitting
+chained multi-RR responses for zone-local CNAMEs as a workaround.  Please file
+a bug report if so, otherwise we'll have no feedback to go on!
 
 This behavior is desirable for a few reasons:
 
@@ -592,15 +597,10 @@ topic, and the TL;DR there is that recursors can tell our incomplete responses
 from actual negative "No Data" responses about the next name in the chain by
 the fact that we don't emit an SOA record in the auth section.
 
-This was originally intended to be the fixed behavior of gdnsd-3, but it was
-reverted at the last minute over interoperability fears.
-
-Update 2019-04: this has now been tested pretty widely on the Internet and
-there has been no evidence so far of breakage or failure reports from real
-users.  Assuming it continues to work over the longer term, this
-C<experimental_no_chain> behavior will likely become the default, fixed
-behavior of gdnsd 4.x with no option to disable it, so that we can build other
-assumptions on top of this.
+Update 2020-11: this has now been tested pretty widely on the Internet (by a
+major site with a global audience of millions), for a very long time (nearly
+two years), and there has been no evidence so far of breakage or failure
+reports from real users.
 
 =item B<disable_cookies>
 

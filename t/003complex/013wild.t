@@ -38,10 +38,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'bar.example.org', qtype => 'AAAA',
-    answer => [
-        'bar.example.org 43201 CNAME bar.baz.fox.example.org',
-        'bar.baz.fox.example.org 43201 AAAA ::1',
-    ],
+    answer => 'bar.example.org 43201 CNAME bar.baz.fox.example.org',
 );
 
 _GDT->test_dns(

@@ -1,4 +1,17 @@
 Not yet released:
+    * The default value of 'experimental_no_chain' has changed from false to
+      true.  This change affects on-the-wire DNS responses in the case of a
+      CNAME record which points to another record in the same zone. This is
+      kind of an edge case for a semver minor version bump: this is not
+      strictly a feature-add, but the behavioral change here is deep in the
+      weeds most users will never see and has been about as widely tested as it
+      can be without becoming a default like it is now.  In case of issues, it
+      can still be disabled by explicitly configuring it to false (which will
+      also emit an error to syslog at startup pleading for bug reports about
+      any such necessary case).  This path seemed better than putting all the
+      risks of this change in a future 4.0 release for the first time, where
+      there would already be a ton of other core work built on top of it,
+      making reversion much more difficult.
     * A new statistic 'tcp_acceptfail' was created to track all non-trivial
       failure returns from accept4().
     * The daemon now makes a soft, non-fatal attempt to raise the soft limit on

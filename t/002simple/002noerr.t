@@ -46,12 +46,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'alias.example.com', qtype => 'A',
-    answer => [
-        'alias.example.com 86400 CNAME www.example.com',
-        'www.example.com 3600 A 192.0.2.1',
-        'www.example.com 3600 A 192.0.2.2',
-        'www.example.com 3600 A 192.0.2.3',
-    ],
+    answer => 'alias.example.com 86400 CNAME www.example.com',
 );
 
 _GDT->test_dns(

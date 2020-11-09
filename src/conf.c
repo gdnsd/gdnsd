@@ -52,7 +52,7 @@ static const cfg_t cfg_defaults = {
     .edns_client_subnet = true,
     .zones_strict_data = false,
     .disable_cookies = false,
-    .experimental_no_chain = false,
+    .experimental_no_chain = true,
     .disable_tcp_dso = false,
     .max_nocookie_response = 0,
     .zones_default_ttl = 86400U,
@@ -311,6 +311,9 @@ cfg_t* conf_load(const vscf_data_t* cfg_root, const socks_cfg_t* socks_cfg, cons
         CFG_OPT_STR_NOCOPY(options, nsid_ascii, nsid_data_ascii);
         vscf_hash_iterate_const(options, true, bad_key, "options");
     }
+
+    if (!cfg->experimental_no_chain)
+        log_err("!!! Please file a bug report so that we can understand any case where disabling 'experimental_no_chain' was necessary!");
 
     // if cmdline forced, override any default or config setting
     if (force_zsd)

@@ -79,10 +79,7 @@ _GDT->test_dns(
 # chain from static to dynamic cname and back to A record
 _GDT->test_dns(
     qname => 'ctodyn.example.com', qtype => 'A',
-    answer => [
-        'ctodyn.example.com 86400 CNAME toa.example.com',
-        'toa.example.com 86400 CNAME a.example.net',
-    ],
+    answer => 'ctodyn.example.com 86400 CNAME toa.example.com',
 );
 
 # Chain through 3 DYNC's to an A
