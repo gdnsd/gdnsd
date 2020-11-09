@@ -1,3 +1,20 @@
+Not yet released:
+    * A new statistic 'tcp_acceptfail' was created to track all non-trivial
+      failure returns from accept4().
+    * The daemon now makes a soft, non-fatal attempt to raise the soft limit on
+      total file descriptors if internal calculations indicate it may be too
+      small for the configuration (especially tcp listener config).  It will
+      complain to syslog on startup if it sees a potentially-bad fd limit
+      situation that it can't fix due to the hard limits.
+    * The TCP code now at least attempts to handle running into such a file
+      descriptor limit more-gracefully by shutting down the most-idle of its
+      older connections if possible, which is the same mechanism used by our
+      existing internal limiter tcp_clients_per_thread.
+    * Several sites in the code which may emit syslog errors driven by network
+      input (e.g. recv() errors, accept4() errors, etc) now use a different
+      logging call which applies some sanity-level ratelimiting to avoid
+      excessive log spam.
+
 3.3.0 - 2020-09-09
     * New Feature: 'skip_first' flag added for geoip resource definitions.
       This allows defining a backup geoip resource which shares the same map as
