@@ -421,7 +421,7 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
     usage(argv[0]);
 }
 
-static void try_raise_open_files(socks_cfg_t* socks_cfg)
+static void try_raise_open_files(const socks_cfg_t* socks_cfg)
 {
     // this is just a default guestimate anyways; it tries to account for all
     // the known network socket needs, and then bumps by a hundred to handle

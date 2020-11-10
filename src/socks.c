@@ -363,7 +363,7 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
 
     // Estimate the number of socket fds needed, for later rlimit auto-tuning:
     for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-        dns_addr_t* da = &socks_cfg->dns_addrs[i];
+        const dns_addr_t* da = &socks_cfg->dns_addrs[i];
         socks_cfg->fd_estimate += da->udp_threads; // listener
         socks_cfg->fd_estimate +=
             (da->tcp_threads * (da->tcp_clients_per_thread + 5U));
