@@ -95,7 +95,7 @@ static int tcpdefaccept_xlate_secs(int seconds)
  * End block of Linux TCP_DEFER_ACCEPT hackery
  *****************************************************************************/
 
-void gdnsd_sockopt_idem_int_(gso_args args)
+int gdnsd_sockopt_idem_int_(gso_args args)
 {
     int current = 0;
     socklen_t s_current = sizeof(current);
@@ -115,6 +115,7 @@ void gdnsd_sockopt_idem_int_(gso_args args)
             log_fatal("getsockopt(%s:%s, %s, %s) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, logf_errno());
         else
             log_warn("getsockopt(%s:%s, %s, %s) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, logf_errno());
+        return -1;
     } else {
         bool ok;
         if (args.is_bool)
@@ -126,8 +127,11 @@ void gdnsd_sockopt_idem_int_(gso_args args)
                 log_fatal("setsockopt(%s:%s, %s, %s, %i) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, args.wantval, logf_errno());
             else
                 log_warn("setsockopt(%s:%s, %s, %s, %i) failed: %s", args.proto_str, logf_anysin(args.sa), args.level_str, args.optname_str, args.wantval, logf_errno());
+            return -1;
         }
     }
+
+    return 0;
 }
 
 socklen_t gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)

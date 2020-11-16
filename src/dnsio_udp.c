@@ -136,7 +136,10 @@ void dnsio_udp_init(const pid_t main_pid)
 static void udp_sock_opts_v4(const gdnsd_anysin_t* sa, const int sock V_UNUSED)
 {
 #if defined IP_MTU_DISCOVER && defined IP_PMTUDISC_DONT
-    sockopt_int_fatal(UDP, sa, sock, SOL_IP, IP_MTU_DISCOVER, IP_PMTUDISC_DONT);
+#  if defined IP_PMTUDISC_OMIT
+    if (sockopt_int_warn(UDP, sa, sock, SOL_IP, IP_MTU_DISCOVER, IP_PMTUDISC_OMIT))
+#  endif
+        sockopt_int_fatal(UDP, sa, sock, SOL_IP, IP_MTU_DISCOVER, IP_PMTUDISC_DONT);
 #elif defined IP_DONTFRAG
     sockopt_bool_fatal(UDP, sa, sock, SOL_IP, IP_DONTFRAG, 0);
 #else
@@ -181,7 +184,10 @@ static void udp_sock_opts_v6(const gdnsd_anysin_t* sa, const int sock)
 #endif
 
 #if defined IPV6_MTU_DISCOVER && defined IPV6_PMTUDISC_DONT
-    sockopt_int_fatal(UDP, sa, sock, SOL_IPV6, IPV6_MTU_DISCOVER, IPV6_PMTUDISC_DONT);
+#  if defined IPV6_PMTUDISC_OMIT
+    if (sockopt_int_warn(UDP, sa, sock, SOL_IPV6, IPV6_MTU_DISCOVER, IPV6_PMTUDISC_OMIT))
+#  endif
+        sockopt_int_fatal(UDP, sa, sock, SOL_IPV6, IPV6_MTU_DISCOVER, IPV6_PMTUDISC_DONT);
 #elif defined IPV6_DONTFRAG
     // There have been reports in https://github.com/gdnsd/gdnsd/issues/115 of
     // the IPV6_DONTFRAG setsockopt failing within the context of some

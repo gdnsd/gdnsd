@@ -149,7 +149,7 @@ typedef struct gso_args {
     const char* optname_str;
     const char* proto_str;
 } gso_args;
-void gdnsd_sockopt_idem_int_(gso_args args);
+int gdnsd_sockopt_idem_int_(gso_args args);
 
 #define sockopt_int_warn(_proto, _sa, _sock, _lvl, _opt, _want) \
     gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = false, .is_bool = false, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})

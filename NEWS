@@ -29,6 +29,10 @@ Not yet released:
       excessive log spam.
     * max_edns_response[_v6] default values both changed to 1232, from previous
       defaults of 1410 and 1212, respectively.
+    * The server now prefers the Linux IP_PMTUDISC_OMIT socket option over
+      IP_PMTUDISC_DONT, when OMIT exists at compile time and works at runtime,
+      which increases resilience against certain kinds of fragmentation
+      attacks.
 
 3.3.0 - 2020-09-09
     * New Feature: 'skip_first' flag added for geoip resource definitions.
