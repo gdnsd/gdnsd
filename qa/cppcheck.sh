@@ -69,7 +69,7 @@ set -e
 # We used to check unix32 too, but it got complicated to get accurate reports
 # with code that depends on platform-specific config.h values, and I only tend
 # to run this when the local configuration is unix64
-cppcheck -j4 --platform=unix64 --std=c11 --std=posix \
+cppcheck -j4 --platform=unix64 --std=c11 \
   --enable=warning,performance,portability,information,style,missingInclude \
   --inline-suppr --max-configs=999 --quiet --error-exitcode=42 \
   $INCDIRS $SKIPFILES $DEFS .

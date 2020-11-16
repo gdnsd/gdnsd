@@ -259,7 +259,6 @@ bool zsrc_rfc1035_load_zones(ltree_node_t* new_root_tree, ltarena_t* new_root_ar
     const struct dirent* result = NULL;
     do {
         errno = 0;
-        // cppcheck-suppress readdirCalled
         result = readdir(zdhandle);
         if (likely(result)) {
             if (result->d_name[0] != '.') {

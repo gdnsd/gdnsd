@@ -9,4 +9,4 @@ set -x
 set -e
 CFLAGS="-std=c11" ./configure --enable-developer --without-hardening
 make clean
-scan-build-7 --status-bugs make
+scan-build-10 --status-bugs make

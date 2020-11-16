@@ -10,6 +10,6 @@ fi
 set -x
 set -e
 export ASAN_OPTIONS="check_initialization_order=true:detect_invalid_pointer_pairs=10:strict_string_checks=true:detect_stack_use_after_return=true"
-CFLAGS="-O1 -fno-omit-frame-pointer -fno-common -fno-sanitize-recover=all -fsanitize=address -fsanitize=leak -fsanitize=undefined -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fsanitize-address-use-after-scope" CC=gcc-8 ./configure --enable-developer --without-hardening
+CFLAGS="-O1 -fno-omit-frame-pointer -fno-common -fno-sanitize-recover=all -fsanitize=address -fsanitize=leak -fsanitize=undefined -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fsanitize-address-use-after-scope" CC=gcc-10 ./configure --enable-developer --without-hardening
 make clean
 SLOW_TESTS=1 make check

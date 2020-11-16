@@ -1049,7 +1049,6 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         gdnsd_assert(fds_recvd > 2U);
         gdnsd_assert(sock_fd == -1);
         gdnsd_assert(lock_fd == -1);
-        // cppcheck-suppress resourceLeak // (cppcheck can't follow the logic)
         lock_fd = resp_fds[0];
         sock_fd = resp_fds[1];
         const size_t dns_fd_count = fds_recvd - 2U;
