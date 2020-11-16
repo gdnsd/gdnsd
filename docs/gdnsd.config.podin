@@ -453,17 +453,15 @@ be considered a syntax error.
 
 =item B<max_edns_response>
 
-Integer, default 1410, min 512, max 16384.  This is the maximum size
+Integer, default 1232, min 512, max 16384.  This is the maximum size
 of a UDP edns response to a client over IPv4, acting as a cap on
 the edns buffer size advertised by the client in its request.
 
-The default of 1410 is the largest size suggested in RFC 6891 when
-falling back from the inability to deliver 4K-sized packets, and it
-seems very likely to be a successful size for unfragmented delivery
-on most ~ethernet MTU networks today even some reasonable tunneling.
+It is recommended that you do not raise this value from the default for
+a server facing the public Internet.
 
 Setting this in the ~4-16K range might be desirable if you have large
-response RR-sets and/or are willing to tolerate some fragmentation,
+response RR-sets and are willing to tolerate some fragmentation,
 especially in a private network where a larger path MTU (e.g. ~9K for
 ethernet jumbo frames) can be guaranteed.
 
@@ -472,16 +470,10 @@ large response datasets in your zones in the first place.
 
 =item B<max_edns_response_v6>
 
-Integer, default 1212, min 512, max 16384.
+Integer, default 1232, min 512, max 16384.
 
-As above for UDP edns responses over IPv6.  This has a separate
-setting with a separate default because it has been observed that
-IPv6 fragmentation (which is done by the sending host, not
-routers) is fairly lossy on the real Internet, and also that some
-IPv6 networks and/or implementations artificially clamp the
-effective MTU to the IPv6 minimum MTU of 1280.  The default value
-B<should> avoid MTU/fragmentation -related loss for IPv6 on
-today's Internet.
+As above for UDP edns responses over IPv6.  Once again, raising this
+above its default value is not recommended for a public-facing server.
 
 =item B<edns_client_subnet>
 

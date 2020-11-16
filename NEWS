@@ -27,6 +27,8 @@ Not yet released:
       input (e.g. recv() errors, accept4() errors, etc) now use a different
       logging call which applies some sanity-level ratelimiting to avoid
       excessive log spam.
+    * max_edns_response[_v6] default values both changed to 1232, from previous
+      defaults of 1410 and 1212, respectively.
 
 3.3.0 - 2020-09-09
     * New Feature: 'skip_first' flag added for geoip resource definitions.
