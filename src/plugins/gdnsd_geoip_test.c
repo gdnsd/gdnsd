@@ -37,7 +37,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-static gdmaps_t* gdmaps = NULL;
+static gdmaps_t* gd_maps = NULL;
 
 F_NONNULL F_NORETURN
 static void usage(const char* argv0)
@@ -51,10 +51,8 @@ static void usage(const char* argv0)
 }
 
 F_NONNULL
-static void do_lookup(const char* map_name, const char* ip_arg)
+static void do_lookup(gdmaps_t* gdmaps, const char* map_name, const char* ip_arg)
 {
-    gdnsd_assert(gdmaps);
-
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if (rv < 0) {
         log_err("Mapping name '%s' not found in configuration", map_name);
@@ -105,10 +103,9 @@ static void do_lookup(const char* map_name, const char* ip_arg)
     gdnsd_fmtbuf_reset();
 }
 
-static void do_repl(void)
+F_NONNULL
+static void do_repl(gdmaps_t* gdmaps)
 {
-    gdnsd_assert(gdmaps);
-
     char linebuf[256];
     char map_name[128];
     char ip_addr[128];
@@ -131,7 +128,7 @@ static void do_repl(void)
             continue;
         }
 
-        do_lookup(map_name, ip_addr);
+        do_lookup(gdmaps, map_name, ip_addr);
     }
 }
 
@@ -218,13 +215,13 @@ int main(int argc, char* argv[])
         usage(argv[0]);
     }
 
-    gdmaps = gdmaps_standalone_init(input_cfgdir);
+    gd_maps = gdmaps_standalone_init(input_cfgdir);
 
     if (map_name) {
         gdnsd_assert(ip_arg);
-        do_lookup(map_name, ip_arg);
+        do_lookup(gd_maps, map_name, ip_arg);
     } else {
-        do_repl();
+        do_repl(gd_maps);
     }
 
     return 0;
