@@ -468,7 +468,6 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
     const chal_tbl_t* t = rcu_dereference(chal_tbl);
     if (!t)
         return false;
-    bool matched = false;
 
     uint8_t qn_stripped[256];
     if (qname_is_chal) {
@@ -481,23 +480,25 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
 
     const uint32_t qname_hash = dname_hash(qname);
     const chal_collide_t* coll = t->tbl[qname_hash & t->mask];
-    if (coll) {
-        for (unsigned i = 0; i < coll->count; i++) {
-            const chal_t* ch = coll->chals[i];
-            if (ch->dnhash == qname_hash && likely(!dname_cmp(qname, ch->dname))) {
-                matched = true;
-                if (qname_is_chal && qtype == DNS_TYPE_TXT) {
-                    if ((*offset_p + 2U + CHAL_RR_LEN) > this_max_response)
-                        return true; // do not run off the end of the buffer!
-                    gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
-                    (*offset_p) += 2;
-                    memcpy(&packet[*offset_p], ch->txt, CHAL_RR_LEN);
-                    (*offset_p) += CHAL_RR_LEN;
-                    (*ancount_p)++;
-                } else {
-                    // no need for multi-match if not encoding responses
-                    return true;
-                }
+    if (!coll)
+        return false;
+
+    bool matched = false;
+    for (unsigned i = 0; i < coll->count; i++) {
+        const chal_t* ch = coll->chals[i];
+        if (ch->dnhash == qname_hash && likely(!dname_cmp(qname, ch->dname))) {
+            matched = true;
+            if (qname_is_chal && qtype == DNS_TYPE_TXT) {
+                if ((*offset_p + 2U + CHAL_RR_LEN) > this_max_response)
+                    return true; // do not run off the end of the buffer!
+                gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
+                (*offset_p) += 2;
+                memcpy(&packet[*offset_p], ch->txt, CHAL_RR_LEN);
+                (*offset_p) += CHAL_RR_LEN;
+                (*ancount_p)++;
+            } else {
+                // no need for multi-match if not encoding responses
+                return true;
             }
         }
     }

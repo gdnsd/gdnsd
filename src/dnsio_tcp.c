@@ -724,39 +724,40 @@ static bool conn_do_recv(thread_t* thr, conn_t* conn)
     const size_t wanted = sizeof(conn->readbuf) - conn->readbuf_bytes;
 
     const ssize_t recvrv = recv(conn->read_watcher.fd, &conn->readbuf[conn->readbuf_bytes], wanted, 0);
-    if (recvrv < 1) {
-        if (!recvrv) { // 0 (EOF)
-            if (conn->readbuf_bytes) {
-                log_debug("TCP DNS conn from %s closed by client while reading: unexpected EOF", logf_anysin(&conn->sa));
-                stats_own_inc(&thr->stats->tcp.recvfail);
-                stats_own_inc(&thr->stats->tcp.close_s_err);
-            } else {
-                if (unlikely(thr->st == TH_SHUT)) {
-                    if (conn->dso.estab) {
-                        log_debug("TCP DNS conn from %s closed by client while shutting down after DSO RetryDelay", logf_anysin(&conn->sa));
-                        stats_own_inc(&thr->stats->tcp.close_c);
-                    } else {
-                        log_debug("TCP DNS conn from %s closed by client while shutting down after server half-close", logf_anysin(&conn->sa));
-                        stats_own_inc(&thr->stats->tcp.close_s_ok);
-                    }
-                } else {
-                    log_debug("TCP DNS conn from %s closed by client while idle (ideal close)", logf_anysin(&conn->sa));
+
+    if (recvrv == 0) { // (EOF)
+        if (conn->readbuf_bytes) {
+            log_debug("TCP DNS conn from %s closed by client while reading: unexpected EOF", logf_anysin(&conn->sa));
+            stats_own_inc(&thr->stats->tcp.recvfail);
+            stats_own_inc(&thr->stats->tcp.close_s_err);
+        } else {
+            if (unlikely(thr->st == TH_SHUT)) {
+                if (conn->dso.estab) {
+                    log_debug("TCP DNS conn from %s closed by client while shutting down after DSO RetryDelay", logf_anysin(&conn->sa));
                     stats_own_inc(&thr->stats->tcp.close_c);
+                } else {
+                    log_debug("TCP DNS conn from %s closed by client while shutting down after server half-close", logf_anysin(&conn->sa));
+                    stats_own_inc(&thr->stats->tcp.close_s_ok);
                 }
-            }
-            connq_destruct_conn(thr, conn, false, true);
-        } else { // -1 (errno)
-            if (!ERRNO_WOULDBLOCK) {
-                log_debug("TCP DNS conn from %s reset by server: error while reading: %s", logf_anysin(&conn->sa), logf_errno());
-                stats_own_inc(&thr->stats->tcp.recvfail);
-                stats_own_inc(&thr->stats->tcp.close_s_err);
-                connq_destruct_conn(thr, conn, true, true);
             } else {
-                // else it's -1 + errno=EAGAIN|EWOULDBLOCK and we just return true
+                log_debug("TCP DNS conn from %s closed by client while idle (ideal close)", logf_anysin(&conn->sa));
+                stats_own_inc(&thr->stats->tcp.close_c);
             }
+        }
+        connq_destruct_conn(thr, conn, false, true);
+        return true;
+    }
+
+    if (recvrv < 0) { // negative return -> errno
+        if (!ERRNO_WOULDBLOCK) {
+            log_debug("TCP DNS conn from %s reset by server: error while reading: %s", logf_anysin(&conn->sa), logf_errno());
+            stats_own_inc(&thr->stats->tcp.recvfail);
+            stats_own_inc(&thr->stats->tcp.close_s_err);
+            connq_destruct_conn(thr, conn, true, true);
         }
         return true;
     }
+
     size_t pktlen = (size_t)recvrv;
     gdnsd_assert(pktlen <= wanted);
     gdnsd_assert((conn->readbuf_bytes + pktlen) <= sizeof(conn->readbuf));
