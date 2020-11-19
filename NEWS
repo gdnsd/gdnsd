@@ -1,4 +1,4 @@
-Not yet released:
+3.4.0 - 2020-11-19
     * The default value of 'experimental_no_chain' has changed from false to
       true.  This change affects on-the-wire DNS responses in the case of a
       CNAME record which points to another record in the same zone. This is
