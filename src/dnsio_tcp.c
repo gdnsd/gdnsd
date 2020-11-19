@@ -244,7 +244,11 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
     ev_io* read_watcher = &conn->read_watcher;
     ev_io_stop(thr->loop, read_watcher);
     ev_check* check_watcher = &conn->check_watcher;
-    ev_check_stop(thr->loop, check_watcher);
+    if (ev_is_active(check_watcher)) {
+        ev_check_stop(thr->loop, check_watcher);
+        gdnsd_assert(thr->check_mode_conns);
+        thr->check_mode_conns--;
+    }
 
     const int fd = read_watcher->fd;
     if (rst) {
@@ -675,6 +679,7 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
             ev_check_stop(thr->loop, checkw);
             gdnsd_assert(!ev_is_active(readw));
             ev_io_start(thr->loop, readw);
+            gdnsd_assert(thr->check_mode_conns);
             thr->check_mode_conns--;
         } else {
             gdnsd_assert(ev_is_active(readw));
@@ -894,13 +899,17 @@ static void prep_handler(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, 
 
     ev_idle* iw = &thr->idle_watcher;
     if (thr->check_mode_conns) {
-        if (!ev_is_active(iw))
+        if (!ev_is_active(iw)) {
             ev_idle_start(thr->loop, iw);
+            ev_unref(thr->loop);
+        }
         if (thr->rcu_is_online)
             rcu_quiescent_state();
     } else {
-        if (ev_is_active(iw))
+        if (ev_is_active(iw)) {
+            ev_ref(thr->loop);
             ev_idle_stop(thr->loop, iw);
+        }
         if (thr->rcu_is_online) {
             thr->rcu_is_online = false;
             rcu_thread_offline();
