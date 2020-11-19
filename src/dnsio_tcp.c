@@ -114,11 +114,11 @@ struct conn {
     // they're one buffer.  This should be portable since uint8_t can't require
     // alignment padding after a uint16_t.
     union {
-	struct {
-             uint16_t pktbuf_size_hdr;
-             uint8_t pktbuf[MAX_RESPONSE_BUF];
-	};
-	uint8_t pktbuf_raw[MAX_RESPONSE_BUF + 2U];
+        struct {
+            uint16_t pktbuf_size_hdr;
+            uint8_t pktbuf[MAX_RESPONSE_BUF];
+        };
+        uint8_t pktbuf_raw[MAX_RESPONSE_BUF + 2U];
     };
 };
 
