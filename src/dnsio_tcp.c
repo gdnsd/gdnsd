@@ -113,8 +113,13 @@ struct conn {
     // These two must be adjacent, as a single send() points at them as if
     // they're one buffer.  This should be portable since uint8_t can't require
     // alignment padding after a uint16_t.
-    uint16_t pktbuf_size_hdr;
-    uint8_t pktbuf[MAX_RESPONSE_BUF];
+    union {
+	struct {
+             uint16_t pktbuf_size_hdr;
+             uint8_t pktbuf[MAX_RESPONSE_BUF];
+	};
+	uint8_t pktbuf_raw[MAX_RESPONSE_BUF + 2U];
+    };
 };
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -346,7 +351,7 @@ static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
     conn->pktbuf_size_hdr = htons((uint16_t)resp_size);
     const size_t resp_send_size = resp_size + 2U;
     const ev_io* readw = &conn->read_watcher;
-    const ssize_t send_rv = send(readw->fd, &conn->pktbuf_size_hdr, resp_send_size, 0);
+    const ssize_t send_rv = send(readw->fd, conn->pktbuf_raw, resp_send_size, 0);
     if (unlikely(send_rv < (ssize_t)resp_send_size)) {
         if (send_rv < 0 && !ERRNO_WOULDBLOCK)
             log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->sa), logf_errno());

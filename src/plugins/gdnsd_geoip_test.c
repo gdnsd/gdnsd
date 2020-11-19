@@ -51,7 +51,7 @@ static void usage(const char* argv0)
 }
 
 F_NONNULL
-static void do_lookup(gdmaps_t* gdmaps, const char* map_name, const char* ip_arg)
+static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* ip_arg)
 {
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if (rv < 0) {
@@ -104,7 +104,7 @@ static void do_lookup(gdmaps_t* gdmaps, const char* map_name, const char* ip_arg
 }
 
 F_NONNULL
-static void do_repl(gdmaps_t* gdmaps)
+static void do_repl(const gdmaps_t* gdmaps)
 {
     char linebuf[256];
     char map_name[128];
