@@ -1,3 +1,8 @@
+3.4.1 - 2020-11-20
+    * Bugfix for a rare TCP connection state management issue which can cause a
+      TCP thread to consume excess CPU and prevent the clean exit of the daemon
+      process on shutdown.
+
 3.4.0 - 2020-11-19
     * The default value of 'experimental_no_chain' has changed from false to
       true.  This change affects on-the-wire DNS responses in the case of a
