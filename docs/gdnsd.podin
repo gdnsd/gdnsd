@@ -327,14 +327,6 @@ initialization.  When started via C<start>, C<SIGHUP> handling is left
 at defaults, which will normally result in unclean process termination
 on reception.
 
-=item B<SIGUSR1>
-
-This signal is "handled" by the main daemon for compatibility reasons, as
-previous versions used it to request asynchronous zone data reloads.  It merely
-logs an error now which notes the new C<gdnsdctl> mechanism, and has no real
-effect.  This compatibility handling may be removed in a future major version
-update.
-
 =item B<SIGUSR2>
 
 Used internally as an inter-thread signal, no documented use from the outside.

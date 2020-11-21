@@ -14,7 +14,30 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ### Feature Regressions
 
+* The `USR1` signal is no longer handled at all, and thus may terminate the daemon.  It was previously handled as a no-op in 3.x, for backwards compatibility with dead 2.x features.
+
 ## Configuration changes
+
+* A long list of config options which were effectively-removed in the 3.0 release, but still parsed as no-ops to ease transition, are now completely removed and have become syntax errors:
+  * `username`
+  * `weaker_security`
+  * `include_optional_ns`
+  * `realtime_stats`
+  * `zones_strict_startup`
+  * `zones_rfc1035_auto`
+  * `any_mitigation`
+  * `priority`
+  * `log_stats`
+  * `max_response`
+  * `max_cname_depth`
+  * `max_addtl_rrsets`
+  * `zones_rfc1035_auto_interval`
+  * `zones_rfc1035_quiesce`
+  * `http_listen`
+  * `max_http_clients`
+  * `http_timeout`
+  * `http_port`
+  * `plugin_search_path`
 
 ### New options
 
@@ -23,6 +46,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 ### Options removed completely
 
 ## Commandline changes for the main daemon
+
+* The options `-f`, `-s`, and `-x`, which were deprecated and useless throughout 3.x, are now removed.
 
 ## Other changes of interest to builders and packagers
 

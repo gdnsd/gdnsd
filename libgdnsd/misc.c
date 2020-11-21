@@ -311,8 +311,6 @@ void gdnsd_reset_signals_for_exec(void)
         log_fatal_safe("sigaction() failed");
     if (sigaction(SIGCHLD, &defaultme, NULL))
         log_fatal_safe("sigaction() failed");
-    if (sigaction(SIGUSR1, &defaultme, NULL))
-        log_fatal_safe("sigaction() failed");
     if (sigaction(SIGUSR2, &defaultme, NULL))
         log_fatal_safe("sigaction() failed");
 

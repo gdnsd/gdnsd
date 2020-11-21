@@ -260,26 +260,6 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
 
     const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
     if (options) {
-        CFG_OPT_REMOVED(options, username);
-        CFG_OPT_REMOVED(options, weaker_security);
-        CFG_OPT_REMOVED(options, include_optional_ns);
-        CFG_OPT_REMOVED(options, realtime_stats);
-        CFG_OPT_REMOVED(options, zones_strict_startup);
-        CFG_OPT_REMOVED(options, zones_rfc1035_auto);
-        CFG_OPT_REMOVED(options, any_mitigation);
-        CFG_OPT_REMOVED(options, priority);
-        CFG_OPT_REMOVED(options, log_stats);
-        CFG_OPT_REMOVED(options, max_response);
-        CFG_OPT_REMOVED(options, max_cname_depth);
-        CFG_OPT_REMOVED(options, max_addtl_rrsets);
-        CFG_OPT_REMOVED(options, zones_rfc1035_auto_interval);
-        CFG_OPT_REMOVED(options, zones_rfc1035_quiesce);
-        CFG_OPT_REMOVED(options, http_listen);
-        CFG_OPT_REMOVED(options, max_http_clients);
-        CFG_OPT_REMOVED(options, http_timeout);
-        CFG_OPT_REMOVED(options, http_port);
-        CFG_OPT_REMOVED(options, plugin_search_path);
-
         CFG_OPT_BOOL(options, lock_mem);
         CFG_OPT_BOOL(options, disable_text_autosplit);
         CFG_OPT_BOOL(options, edns_client_subnet);

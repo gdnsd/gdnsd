@@ -192,14 +192,6 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal* w, const int
 }
 
 F_NONNULL
-static void usr1_signal(struct ev_loop* loop V_UNUSED, struct ev_signal* w V_UNUSED, const int revents V_UNUSED)
-{
-    gdnsd_assert(revents == EV_SIGNAL);
-    gdnsd_assert(w->signum == SIGUSR1);
-    log_err("Ignoring SIGUSR1 - use 'gdnsdctl reload-zones' to reload zone data!");
-}
-
-F_NONNULL
 static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a V_UNUSED, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_ASYNC);
@@ -398,9 +390,6 @@ struct cli_opts {
     bool force_zsd;
     bool replace_ok;
     bool idempotent;
-    bool deadopt_f;
-    bool deadopt_s;
-    bool deadopt_x;
     enum cli_action action;
 };
 
@@ -408,7 +397,7 @@ F_NONNULL
 static void parse_args(const int argc, char** argv, struct cli_opts* copts)
 {
     int optchar;
-    while ((optchar = getopt(argc, argv, "c:DlSRifsx"))) {
+    while ((optchar = getopt(argc, argv, "c:DlSRi"))) {
         switch (optchar) {
         case 'c':
             copts->cfg_dir = optarg;
@@ -427,15 +416,6 @@ static void parse_args(const int argc, char** argv, struct cli_opts* copts)
             break;
         case 'i':
             copts->idempotent = true;
-            break;
-        case 'f':
-            copts->deadopt_f = true;
-            break;
-        case 's':
-            copts->deadopt_s = true;
-            break;
-        case 'x':
-            copts->deadopt_x = true;
             break;
         case -1:
             if (optind == (argc - 1)) {
@@ -551,18 +531,14 @@ static struct css* runtime_execute(const char* argv0, struct socks_cfg* socks_cf
     // setup main thread signal handlers
     ev_signal sig_int;
     ev_signal sig_term;
-    ev_signal sig_usr1;
     ev_signal* p_sig_int = &sig_int;
     ev_signal* p_sig_term = &sig_term;
-    ev_signal* p_sig_usr1 = &sig_usr1;
     ev_signal_init(p_sig_int, terminal_signal, SIGINT);
     p_sig_int->data = css;
     ev_signal_start(loop, p_sig_int);
     ev_signal_init(p_sig_term, terminal_signal, SIGTERM);
     p_sig_term->data = css;
     ev_signal_start(loop, p_sig_term);
-    ev_signal_init(p_sig_usr1, usr1_signal, SIGUSR1);
-    ev_signal_start(loop, p_sig_usr1);
 
     // Initialize+bind DNS listening sockets.  For TCP this also invokes
     // listen, so all of the sockets are accepting requests when this returns,
@@ -665,20 +641,11 @@ int main(int argc, char** argv)
         .force_zsd = false,
         .replace_ok = false,
         .idempotent = false,
-        .deadopt_s = false,
-        .deadopt_x = false,
         .action = ACT_UNDEF
     };
 
     parse_args(argc, argv, &copts);
     gdnsd_assume(copts.action != ACT_UNDEF);
-
-    if (copts.deadopt_f)
-        log_err("The commandline option '-f' has been removed.  This will be an error in a future major version update!");
-    if (copts.deadopt_s)
-        log_err("The commandline option '-s' has been removed.  This will be an error in a future major version update!");
-    if (copts.deadopt_x)
-        log_err("The commandline option '-x' has been removed.  This will be an error in a future major version update!");
 
     if (copts.replace_ok && copts.idempotent)
         usage(argv[0]);
