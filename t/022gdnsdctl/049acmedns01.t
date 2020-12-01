@@ -1,6 +1,6 @@
 use _GDT ();
 use Net::DNS;
-use Test::More tests => 1 + (2 * (16 + 13)) + 1 + 13 + 1 + 13 + 1;
+use Test::More tests => 1 + (2 * (16 + 13)) + 1 + 13 + 1 + 13 + 1 + 1;
 
 my $soa_neg = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
 
@@ -197,5 +197,11 @@ _GDT->reset_for_replace_daemon();
 
 # Make sure the data survived (13 tests)
 check_data_acme(1);
+
+# Check corner case for TTL alignment of static records
+_GDT->test_dns(
+    qname => '_acme-challenge.defttl.example.com', qtype => 'TXT',
+    answer => '_acme-challenge.defttl.example.com 0 TXT "0 is the default acme TTL, but 5 is the default min_ttl"',
+);
 
 _GDT->test_run_gdnsdctl("stop");
