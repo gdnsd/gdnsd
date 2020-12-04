@@ -6,10 +6,17 @@
         900    ; ncache
 )
 
-@	NS	ns1
-@	NS	ns2
-ns1	A	192.0.2.1
-ns2	A	192.0.2.2
+; Note the first two root NS are in delegated space (see com delegation below),
+; while the third is directly within the undelegated portion of the root zone,
+; and the fourth is similar but is actually *at* the root node of the DNS
+; (which is a crazy edge case, but still)
+@	NS	ns1.root-servers.com.
+@	NS	ns2.root-servers.com.
+@	NS	ns3.
+@	NS	.
+ns1.root-servers.com.	A	192.0.2.1
+ns2.root-servers.com.	A	192.0.2.2
+ns3.	A	192.0.2.9
 
 @	A	192.0.2.3
 www	A	192.0.2.4

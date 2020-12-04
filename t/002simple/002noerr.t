@@ -32,6 +32,12 @@ _GDT->test_dns(
         'example.com 86400 NS ns3.goober.example.com',
         'example.com 86400 NS ns4.goober.example.com',
     ],
+    addtl => [
+        'ns1.example.com 86400 A 192.0.2.5',
+        'ns2.example.com 86400 A 192.0.2.6',
+        'ns3.goober.example.com 86400 A 192.0.2.7',
+        'ns4.goober.example.com 86400 A 192.0.2.8',
+    ],
 );
 
 _GDT->test_dns(

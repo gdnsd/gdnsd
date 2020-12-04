@@ -26,6 +26,7 @@ my $pid = _GDT->test_spawn_daemon($etcdir);
 _GDT->test_dns(
     qname => 'example.com', qtype => 'NS',
     answer => 'example.com 86400 NS ns1.example.com',
+    addtl => 'ns1.example.com 86400 A 192.0.2.1',
 );
 
 # res1

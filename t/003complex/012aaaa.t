@@ -81,6 +81,16 @@ _GDT->test_dns(
         '46deleg.example.com 21600 NS 46mix.example.com',
         '46deleg.example.com 21600 NS v6basic.example.com',
     ],
+    addtl => [
+        'v6minmax.example.com 21600 AAAA FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF',
+        'v6minmax.example.com 21600 AAAA ::1',
+        'v6minmax.example.com 21600 AAAA ::',
+        '46mix.example.com 21600 A 192.0.2.200',
+        '46mix.example.com 21600 A 192.0.2.201',
+        '46mix.example.com 21600 AAAA ABCD::DCBA',
+        '46mix.example.com 21600 AAAA DEAD::BEEF',
+        'v6basic.example.com 1234 AAAA 1234:5678:90AB:CDEF:FDEC:BA09:8765:4321',
+    ],
 );
 
 _GDT->test_dns(

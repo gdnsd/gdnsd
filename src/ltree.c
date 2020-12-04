@@ -780,7 +780,7 @@ static bool check_valid_addr(const uint8_t* dname, const zone_t* zone)
 // because it has to do this before checking a CNAME-into-delegation, and it
 // can't known if it was yet done by the rest of the ltree walk or not.
 F_WUNUSED F_NONNULL
-static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t* this_ns, const uint8_t** lstack, const unsigned depth)
+static bool p1_proc_ns(const zone_t* zone, ltree_rdata_ns_t* this_ns, const uint8_t** lstack, const unsigned depth)
 {
     ltree_node_t* ns_target = NULL;
     ltree_dname_status_t target_status = ltree_search_dname_zone(this_ns->dname, zone, &ns_target, NULL);
@@ -817,17 +817,13 @@ static bool p1_proc_ns(const zone_t* zone, const bool in_deleg, ltree_rdata_ns_t
                        logf_lstack(lstack, depth, zone->dname), logf_dname(this_ns->dname));
     }
 
-    // use target_addr found via either path above, if it's OOZ glue or
-    // deleg-space glue and this is a delegation.  If someone happens to put
-    // their zone root nameservers in deleg space or define OOZ glue for them,
-    // we're not going to help with that (and it's not going to help anyways,
-    // it's the delegator above them that needs to emit that glue in the OOZ
-    // case, and the delegated-NS case is just nuts...).
-    if ((target_a || target_aaaa) && target_status != DNAME_AUTH && in_deleg) {
+    // use target_addr found via either path above for all cases.
+    if (target_a || target_aaaa) {
         gdnsd_assert(ns_target);
         this_ns->glue_v4 = target_a;
         this_ns->glue_v6 = target_aaaa;
-        LTN_SET_FLAG_GUSED(ns_target);
+        if (target_status != DNAME_AUTH)
+            LTN_SET_FLAG_GUSED(ns_target);
     }
 
     return false;
@@ -1145,7 +1141,7 @@ static bool ltree_postproc_phase1(const uint8_t** lstack, const ltree_node_t* no
         // Check NS->A and set glue (which is needed for sizing below)
         if (rrset->gen.type == DNS_TYPE_NS)
             for (unsigned i = 0; i < rrset->gen.count; i++)
-                if (p1_proc_ns(zone, in_deleg, &(rrset->ns.rdata[i]), lstack, depth))
+                if (p1_proc_ns(zone, &(rrset->ns.rdata[i]), lstack, depth))
                     return true;
 
         // Only check MX/SRV targets when !via_cname, so we don't warn about

@@ -13,7 +13,7 @@ ns1		( A	192.0.2.1 )
 ns2		A	(192.0.2.2		
 )
 
-; subzone w/ NS records that are in our zone and not the subzone, no glue (not allowed)
+; subzone w/ NS records that are in our zone and not the subzone
 subeasy		IN (NS ; single-line comment within ( ) multi-line record
 			subeasyns1)
 subeasy		NS subeasyns2

@@ -866,12 +866,9 @@ static unsigned store_dname_nocomp(uint8_t* packet, const uint8_t* dn, const uns
 // We know a given name was stored at packet+orig_offset already.  We
 //  want to repeat it at packet+store_at_offset by using simple compression.
 //  if the original is also compressed, copy the compression bytes instead of
-//  creating a compression pointer-to-pointer scenario needlessly.  Note this
-//  doesn't prevent 2-byte compression pointers pointing at 1-byte names (which
-//  is the root of the DNS), which makes root zone responses slightly
-//  less-efficient in some cases.  However, I doubt anyone's running a public
-//  global root on gdnsd, and it will make other code simpler later if we can
-//  assume all compressions are 2-byte results.
+//  creating a compression pointer-to-pointer scenario needlessly.  It also
+//  handles the root case efficiently by copying the single-byte name instead
+//  of inflating it via counterproductive compression.
 F_NONNULL
 static unsigned repeat_name(uint8_t* packet, unsigned store_at_offset, unsigned orig_offset)
 {
@@ -1084,40 +1081,12 @@ static unsigned encode_rrs_aaaa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
     return offset;
 }
 
-// This is only used when qtype == NS and the qname doesn't land in a
-// delegation cut, which implies it only gets called for explicit output of NS
-// records at a zone root.  ltree doesn't currently allow these to have glue.
+// This is used for both deleg and non-deleg cases, and always emits whatever
+// glue was placed there by the ltree code.  It updates ancount (as if
+// qtype=NS), which needs workaround fixups for the deleg case to transfer the
+// answers to the auth section.
 F_NONNULL
 static unsigned encode_rrs_ns(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_ns_t* rrset)
-{
-    gdnsd_assert(offset);
-    gdnsd_assert(rrset->gen.count); // we never call encode_rrs_ns without an NS record present
-
-    uint8_t* packet = ctx->txn.packet;
-
-    const unsigned rrct = rrset->gen.count;
-    gdnsd_assert(rrct <= MAX_NS_COUNT);
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, ctx->txn.qname_comp);
-        gdnsd_put_una32(DNS_RRFIXED_NS, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 6;
-        const unsigned newlen = store_dname_comp(&ctx->txn, rrset->rdata[i].dname, offset, true);
-        gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
-        gdnsd_assert(!rrset->rdata[i].glue_v4 && !rrset->rdata[i].glue_v6);
-        offset += newlen;
-    }
-
-    return offset;
-}
-
-// This is called for all delegation outputs, which may have glue from
-// addresses inside (possibly a different) delegation or defined as explicit
-// out-of-zone glue
-F_NONNULL
-static unsigned encode_rrs_ns_deleg(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_ns_t* rrset)
 {
     gdnsd_assert(offset);
     gdnsd_assert(rrset->gen.count); // we never call encode_rrs_ns without an NS record present
@@ -1128,7 +1097,7 @@ static unsigned encode_rrs_ns_deleg(dnsp_ctx_t* ctx, unsigned offset, const ltre
 
     const unsigned rrct = rrset->gen.count;
     gdnsd_assert(rrct <= MAX_NS_COUNT);
-    ctx->txn.nscount += rrct;
+    ctx->txn.ancount += rrct;
     for (unsigned i = 0; i < rrct; i++) {
         offset += repeat_name(packet, offset, ctx->txn.auth_comp);
         gdnsd_put_una32(DNS_RRFIXED_NS, &packet[offset]);
@@ -1851,7 +1820,13 @@ static unsigned db_lookup(dnsp_ctx_t* ctx, const uint8_t* qname, unsigned offset
         gdnsd_assert(res.dom);
         const ltree_rrset_ns_t* ns = ltree_node_get_rrset_ns(res.dom);
         gdnsd_assert(ns);
-        return encode_rrs_ns_deleg(ctx, offset, ns);
+        // DNAME_DELEG uses the same code we'd use for zroot qtype=NS, but we
+        // have to transfer the count of NS RRs over to the auth section
+        // afterwards as a hackaround.
+        unsigned rv = encode_rrs_ns(ctx, offset, ns);
+        ctx->txn.nscount = ctx->txn.ancount;
+        ctx->txn.ancount = 0;
+        return rv;
     }
 
     gdnsd_assert(status == DNAME_AUTH);
