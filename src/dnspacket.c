@@ -890,6 +890,41 @@ static unsigned repeat_name(uint8_t* packet, unsigned store_at_offset, unsigned 
 }
 
 F_NONNULL
+static void shuffle_addrs_rdata(gdnsd_rstate32_t* rs, uint8_t* rrset_rdata, const size_t rr_count, size_t rr_len)
+{
+    gdnsd_assert(rr_count); // non-zero rr_count is a given!
+
+    // These are the lengths for A and AAAA, respectively, when the
+    // left-hand-side is a fully-compressed name with a two byte pointer.
+    gdnsd_assert(rr_len == 16U || rr_len == 28U);
+
+    // The first byte of the first (and all other) RR's name is either the
+    // first byte of a compression pointer, or it's the root of the DNS.  The
+    // root case results in RRs which are one byte shorter than expected, so we
+    // need to adjust rr_len
+    gdnsd_assert(*rrset_rdata & 0xC0 || *rrset_rdata == 0x0);
+    if (*rrset_rdata == 0x0)
+        rr_len--;
+
+    // Fisher/Yates(/Durstenfeld/Knuth) shuffle of the fixed-length RRs within
+    // the rdata chunk:
+    for (size_t i = rr_count - 1U; i > 0; i--) {
+        const size_t j = gdnsd_rand32_bounded(rs, i + 1U);
+        // Logically there's little reason for the extra branch here, but
+        // memcpy is undefined when given the same pointer as src and dst in
+        // the middle copy below, so we may as well take the branch cost.
+        if (j != i) {
+            uint8_t* i_ptr = &rrset_rdata[i * rr_len];
+            uint8_t* j_ptr = &rrset_rdata[j * rr_len];
+            uint8_t temp[28];
+            memcpy(temp, i_ptr, rr_len);
+            memcpy(i_ptr, j_ptr, rr_len);
+            memcpy(j_ptr, temp, rr_len);
+        }
+    }
+}
+
+F_NONNULL
 static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset_a_t* rrset, const unsigned nameptr, const bool is_addtl)
 {
     gdnsd_assert(rrset->gen.count);
@@ -904,12 +939,12 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
     else
         ctx->txn.ancount += total;
 
+    const unsigned rrset_start_offset = offset;
+
     const uint32_t* addr_ptr = (total <= LTREE_V4A_SIZE)
                                ? &rrset->v4a[0]
                                : rrset->addrs;
-    unsigned ct = total;
-    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
-    while (ct--) {
+    for (unsigned i = 0; i < total; i++) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
@@ -919,9 +954,10 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
         offset += 2;
         gdnsd_put_una32(addr_ptr[i], &packet[offset]);
         offset += 4;
-        if (++i == total)
-            i = 0;
     }
+
+    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 16U);
+
     return offset;
 }
 
@@ -940,9 +976,9 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
     else
         ctx->txn.ancount += total;
 
-    unsigned ct = total;
-    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
-    while (ct--) {
+    const unsigned rrset_start_offset = offset;
+
+    for (unsigned i = 0; i < total; i++) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -952,9 +988,10 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
         offset += 2;
         memcpy(&packet[offset], rrset->addrs + (i << 4), 16);
         offset += 16;
-        if (++i == total)
-            i = 0;
     }
+
+    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 28U);
+
     return offset;
 }
 
@@ -972,9 +1009,9 @@ static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigned n
 
     ctx->txn.ancount += total;
 
-    unsigned ct = total;
-    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
-    while (ct--) {
+    const unsigned rrset_start_offset = offset;
+
+    for (unsigned i = 0; i < total; i++) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
         offset += 4;
@@ -984,9 +1021,10 @@ static unsigned enc_a_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigned n
         offset += 2;
         gdnsd_put_una32(dr->v4[i], &packet[offset]);
         offset += 4;
-        if (++i == total)
-            i = 0;
     }
+
+    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 16U);
+
     return offset;
 }
 
@@ -1004,10 +1042,10 @@ static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigne
 
     ctx->txn.ancount += total;
 
+    const unsigned rrset_start_offset = offset;
+
     const uint8_t* v6 = &dr->storage[result_v6_offset];
-    unsigned ct = total;
-    unsigned i = gdnsd_rand32_bounded(&ctx->rand_state, total);
-    while (ct--) {
+    for (unsigned i = 0; i < total; i++) {
         offset += repeat_name(packet, offset, nameptr);
         gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
         offset += 4;
@@ -1017,9 +1055,10 @@ static unsigned enc_aaaa_dynamic(dnsp_ctx_t* ctx, unsigned offset, const unsigne
         offset += 2;
         memcpy(&packet[offset], &v6[i << 4], 16);
         offset += 16;
-        if (++i == total)
-            i = 0;
     }
+
+    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 28U);
+
     return offset;
 }
 
