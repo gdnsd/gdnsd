@@ -365,3 +365,15 @@ const char* gdnsd_logf_dname(const uint8_t* dname)
     memcpy(dnbuf, tmpbuf, len);
     return dnbuf;
 }
+
+const char* gdnsd_logf_name(const uint8_t* name)
+{
+    if (!name)
+        return generic_nullstr;
+
+    char tmpbuf[1024];
+    const unsigned len = gdnsd_name_to_string(name, tmpbuf);
+    char* nbuf = gdnsd_fmtbuf_alloc(len);
+    memcpy(nbuf, tmpbuf, len);
+    return nbuf;
+}

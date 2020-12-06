@@ -132,12 +132,12 @@ src_gdnsd_SOURCES = \
 	src/conf.h \
 	src/chal.c \
 	src/chal.h \
+	src/comp.c \
+	src/comp.h \
 	src/cookie.c \
 	src/cookie.h \
 	src/zsrc_rfc1035.c \
 	src/zsrc_rfc1035.h \
-	src/ltarena.c \
-	src/ltarena.h \
 	src/ltree.c \
 	src/ltree.h \
 	src/dnspacket.c \

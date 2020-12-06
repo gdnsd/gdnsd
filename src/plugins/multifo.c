@@ -27,6 +27,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include "plugins.h"
+#include "dnswire.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -360,7 +361,7 @@ static int plugin_multifo_map_res(const char* resname, const uint8_t* zone_name)
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* aset, struct dyn_result* result, const bool isv6)
+static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* aset, struct dyn_result* result)
 {
     gdnsd_assume(aset->count);
 
@@ -382,10 +383,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* ase
     if (notdown < aset->up_thresh) {
         rv |= GDNSD_STTL_DOWN;
         if (!aset->ignore_health) {
-            if (isv6)
-                gdnsd_result_wipe_v6(result);
-            else
-                gdnsd_result_wipe_v4(result);
+            gdnsd_result_wipe(result);
             for (unsigned i = 0; i < aset->count; i++)
                 gdnsd_result_add_anysin(result, &aset->as[i].addr);
         }
@@ -400,25 +398,15 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* ase
     return rv;
 }
 
-static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
+static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const unsigned qtype, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
-
     struct res* res = &resources[resnum];
-
-    gdnsd_sttl_t rv;
-
-    if (res->aset_v4) {
-        rv = resolve(sttl_tbl, res->aset_v4, result, false);
-        if (res->aset_v6) {
-            const unsigned v6_rv = resolve(sttl_tbl, res->aset_v6, result, true);
-            rv = gdnsd_sttl_min2(rv, v6_rv);
-        }
-    } else {
-        gdnsd_assume(res->aset_v6);
-        rv = resolve(sttl_tbl, res->aset_v6, result, true);
-    }
-
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
+    if (qtype == DNS_TYPE_A && res->aset_v4)
+        rv = resolve(sttl_tbl, res->aset_v4, result);
+    else if (qtype == DNS_TYPE_AAAA && res->aset_v6)
+        rv = resolve(sttl_tbl, res->aset_v6, result);
     assert_valid_sttl(rv);
     return rv;
 }

@@ -14,6 +14,10 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * Out-of-zone glue address records are no longer supported and will cause zonefile load failure.
 * Unused glue addresses in delegated parts of a zone no longer cause any kind of warning or error.
 * Legacy `DYNC` records must reference legacy plugin resources which return only `CNAME` results, not address (`A`, `AAAA`) results.  This was deprecated and warned about starting in v3.4.2.
+* NS RRSets are no longer limited to 64 RRs
+* All RRSets are now limited to 1024 RRs
+* The zone parser continues to require that all possible responses must fit in a 16KiB response packet.  Previously, we conservatively rejected responses which even heuristically looked like they *might* exceed this threshold.  Now the calculation is precise (because the responses are entirely pre-generated at zone load time), and thus will afford more edge cases close to the limit.
+* Most warnings about trivial zonefile data consistency issues (e.g. MX pointing at a non-existent name in the same zone) have been dropped.  If the data can be legally loaded and served at the protocol level, that's all that matters in this sense.
 
 ### Feature Regressions
 
@@ -73,6 +77,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ## Revamping internals
 
+* All response packets are pre-generated at zone loading time, rather than assembled during runtime query processing.  This unlocks significant efficiency gains and code simplifications, and will make it easier to add more RR-types to the parser.  It's also a critical design element in how we'll approach DNSSEC implementation.
+* DNS packet compression is now more aggressive and thorough, because we can afford the expense now that it's done during pre-generation as well.
 * Most uses of `typedef` removed from the codebase, other than a few cases with reasonable justification.
 * All uses of `volatile` (cross-thread stats sharing + signal handlers) have been replaced by the appropriate use of equivalent C11 atomics.
 * Many internal efficiency improvements

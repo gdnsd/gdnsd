@@ -15,10 +15,14 @@
 @	NS	ns3.
 @	NS	.
 ns1.root-servers.com.	A	192.0.2.1
+ns1.root-servers.com.	AAAA	::192.0.2.11
 ns2.root-servers.com.	A	192.0.2.2
 ns3.	A	192.0.2.9
 
 @	A	192.0.2.3
+@	A	192.0.2.33
+@	AAAA	::192.0.2.3
+@	AAAA	::192.0.2.33
 www	A	192.0.2.4
 
 com	NS	ns1.com

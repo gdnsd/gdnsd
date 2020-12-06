@@ -66,7 +66,4 @@ void dnspacket_ctx_set_grace(struct dnsp_ctx* ctx);
 F_NONNULL
 void dnspacket_ctx_cleanup(struct dnsp_ctx* ctx);
 
-F_NONNULL
-void dnspacket_global_setup(void);
-
 #endif // GDNSD_DNSPACKET_H

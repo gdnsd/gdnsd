@@ -486,9 +486,6 @@ static struct css* runtime_execute(const char* argv0, struct socks_cfg* socks_cf
     if (!gcfg->disable_cookies)
         cookie_config(gcfg->cookie_key_file);
 
-    // Initialize dnspacket stuff
-    dnspacket_global_setup();
-
     // Set up libev error+allocator callbacks
     ev_set_syserr_cb(&syserr_for_ev);
     ev_set_allocator(&alloc_for_ev);

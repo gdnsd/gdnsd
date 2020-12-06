@@ -189,18 +189,15 @@ enum dname_status gdnsd_dname_from_string(uint8_t* restrict dname, const char* r
     return DNAME_VALID;
 }
 
-unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str)
+unsigned gdnsd_name_to_string(const uint8_t* restrict name, char* restrict str)
 {
-    gdnsd_assert(dname_get_status(dname) != DNAME_INVALID);
-
     const char* str_base = str; // for output length later
-    dname++; // skip overall length byte, we don't use it here
 
     unsigned llen; // label len
-    while ((llen = *dname++) && llen != 255U) {
+    while ((llen = *name++)) {
         // output "label."
         for (uint8_t i = 0; i < llen; i++) {
-            uint8_t x = *dname++;
+            uint8_t x = *name++;
             if (x > 0x20 && x < 0x7F) {
                 *str++ = (char)x;
             } else {
@@ -213,14 +210,30 @@ unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str
         *str++ = '.';
     }
 
-    // In the special case that logf_dname() was called on a DNAME_PARTIAL
-    //   we need to undo any final dot added at the end of the last loop above
-    if (llen == 255U && str > str_base)
-        str--;
+    // root-of-DNS case: while loop body never ran, so emit a lone dot:
+    if (str == str_base)
+        *str++ = '.';
+
     *str++ = '\0';
 
     gdnsd_assume(str > str_base);
     return (unsigned)(str - str_base);
+}
+
+unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str)
+{
+    const enum dname_status st = dname_get_status(dname);
+    if (st == DNAME_VALID)
+        return gdnsd_name_to_string(&dname[1], str);
+    gdnsd_assert(st == DNAME_PARTIAL);
+    // Convert partial to fqdn for the above function, then strip the terminal dot
+    uint8_t dncopy[256];
+    dname_copy(dncopy, dname);
+    dname_terminate(dncopy);
+    unsigned str_len = gdnsd_name_to_string(&dncopy[1], str);
+    str_len--;
+    str[str_len - 1] = '\0';
+    return str_len;
 }
 
 enum dname_status gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2)

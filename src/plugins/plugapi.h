@@ -66,14 +66,6 @@ void gdnsd_result_add_cname(struct dyn_result* result, const uint8_t* dname);
 F_NONNULL
 void gdnsd_result_wipe(struct dyn_result* result);
 
-// Wipe just one address family from a result.  Does not affect the other address family,
-//   and has no effect at all if the result contained a CNAME instead.
-// (does not affect scope mask!)
-F_NONNULL
-void gdnsd_result_wipe_v4(struct dyn_result* result);
-F_NONNULL
-void gdnsd_result_wipe_v6(struct dyn_result* result);
-
 // Resets the edns scope mask to the default value of zero, meaning global (unspecified) scope
 F_NONNULL
 void gdnsd_result_reset_scope_mask(struct dyn_result* result);
@@ -92,7 +84,7 @@ typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* zone_name)
 typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(void);
 typedef void (*gdnsd_iothread_cleanup_cb_t)(void);
-typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned resnum, const struct client_info* cinfo, struct dyn_result* result);
+typedef gdnsd_sttl_t (*gdnsd_resolve_cb_t)(unsigned resnum, const unsigned qtype, const struct client_info* cinfo, struct dyn_result* result);
 
 /**** New callbacks for monitoring plugins ****/
 
@@ -141,33 +133,15 @@ struct dyn_result {
     // edns_scope_mask inits to zero,  should remain zero for global results,
     // and should be set to cinfo->edns_client_mask if result depends only on cinfo->dns_source
     unsigned edns_scope_mask;
-    bool     is_cname; // storage contains a CNAME in dname format, assert count_v[46] == 0
-    unsigned count_v4; // count of IPv4 in v4[], assert !is_cname
-    unsigned count_v6; // count of IPv6 starting at &storage[v6_offset], assert !is_cname
-    union {
-        uint32_t v4[0];
-        uint8_t  storage[0];
-    };
+    unsigned count; // rr items in storage (always 1 for CNAME)
+    unsigned storage_len; // bytes in storage
+    uint8_t  storage[];
 };
-
-// Intended for result consumers (dnspacket.c), only valid
-//   after all resolver plugins are finished configuring,
-//   and is static for the life of the daemon from that
-//   point forward (can be cached locally).
-// Return value is the offset into dyn_result.storage where
-//   IPv6 address data begins
-F_PURE
-unsigned gdnsd_result_get_v6_offset(void);
 
 // Same rules as above, returns the memory size that
 //   should be allocated for dyn_result
 F_PURE
 unsigned gdnsd_result_get_alloc(void);
-
-// As above, but returns an rrset allocation for response sizing, as the
-// maximum encoded size of all the A and AAAA RRs
-F_PURE
-size_t gdnsd_result_get_max_response(void);
 
 // call _load_config() for all plugins which are loaded but have not
 //   yet had that callback called

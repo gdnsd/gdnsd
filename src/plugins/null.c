@@ -26,6 +26,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include "plugins.h"
+#include "dnswire.h"
 
 #include <string.h>
 #include <inttypes.h>
@@ -44,14 +45,14 @@ static int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone
     return 0;
 }
 
-static gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
+static gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const unsigned qtype, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
     struct anysin tmpsin;
-    gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
+    if (qtype == DNS_TYPE_A)
+        gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
+    else
+        gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
     gdnsd_result_add_anysin(result, &tmpsin);
-    gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
-    gdnsd_result_add_anysin(result, &tmpsin);
-
     return GDNSD_STTL_TTL_MAX;
 }
 

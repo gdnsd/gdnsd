@@ -26,6 +26,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include "plugins.h"
+#include "dnswire.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -118,12 +119,20 @@ static int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
     map_res_err("plugin_static: resource name required");
 }
 
-static gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
+static gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const unsigned qtype, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
-    if (resources[resnum].is_addr)
-        gdnsd_result_add_anysin(result, &resources[resnum].addr);
-    else
+    if (qtype == DNS_TYPE_CNAME) {
+        gdnsd_assert(!resources[resnum].is_addr);
         gdnsd_result_add_cname(result, resources[resnum].dname);
+    } else if (qtype == DNS_TYPE_A) {
+        gdnsd_assert(resources[resnum].is_addr);
+        if (resources[resnum].addr.sa.sa_family == AF_INET)
+            gdnsd_result_add_anysin(result, &resources[resnum].addr);
+    } else if (qtype == DNS_TYPE_AAAA) {
+        gdnsd_assert(resources[resnum].is_addr);
+        if (resources[resnum].addr.sa.sa_family == AF_INET6)
+            gdnsd_result_add_anysin(result, &resources[resnum].addr);
+    }
 
     return GDNSD_STTL_TTL_MAX;
 }

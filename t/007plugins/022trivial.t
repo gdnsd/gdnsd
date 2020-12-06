@@ -118,8 +118,8 @@ _GDT->test_dns(
 );
 
 _GDT->test_dns(
-    qname => 'sfo5.example.com', qtype => 'AAAA',
-    answer => 'sfo5.example.com 86399 AAAA 2001:DB8::AAA',
+    qname => 'sfo5.example.com', qtype => 'A',
+    answer => 'sfo5.example.com 86399 A 192.0.2.170',
 );
 
 _GDT->test_dns(

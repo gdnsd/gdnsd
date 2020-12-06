@@ -1,3 +1,12 @@
+; Basic NS records (required)
+@()		NS	ns1
+@		(NS)	ns2
+ns1		( A	192.0.2.1 )
+ns2		A	(192.0.2.2		
+)
+
+; SOA not first data in the file, and not the first data at the zone root node,
+; to test ltree moving it to the top of the rrset list
 @	SOA ns1 dns-admin.example.net. (
 	1      ; serial
 	7200   ; refresh
@@ -6,12 +15,6 @@
         900    ; ncache
 )
 
-; Basic NS records (required)
-@()		NS	ns1
-@		(NS)	ns2
-ns1		( A	192.0.2.1 )
-ns2		A	(192.0.2.2		
-)
 
 ; subzone w/ NS records that are in our zone and not the subzone
 subeasy		IN (NS ; single-line comment within ( ) multi-line record
@@ -26,8 +29,9 @@ A
 ; subzone w/ NS records that are inside itself, with (required) glue
 subhard		NS	ns1.subhard
 subhard		21600 NS	ns2.subhard
-ns1.subhard	A	192.0.2.5
-ns1.subhard	A	192.0.2.55
+; Note mismatched TTL here - generates a warning and gets corrected to match the first one
+ns1.subhard	21600 A	192.0.2.5
+ns1.subhard	1234  A	192.0.2.55
 ns2.subhard	A	192.0.2.6
 
 ; subzone w/ NS records in a totally unrelated domain that we don't serve, without glue

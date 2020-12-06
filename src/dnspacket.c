@@ -43,22 +43,9 @@
 // The fixed offset of qname compression target
 #define QNAME_COMP sizeof(struct wire_dns_hdr)
 
-// Max number of compression targets we'll store info about, to avoid
-// performance regression for crazy response packets.  Note there are separate
-// targets per super-domain, e.g. storing targets for "www.example.com"
-// consumes 3 entries.
-#define COMPTARGETS_MAX 16U
-
 // Fixed HINFO record with TTL=3600 for RFC 8482
-static const char hinfo_for_any[] = "\0\015\0\01\0\0\016\020\0\011\07RFC8482";
+static const char hinfo_for_any[] = "\300\14\0\15\0\1\0\0\16\20\0\11\7RFC8482";
 #define hinfo_for_any_len sizeof(hinfo_for_any)
-
-// Storage for general-purpose compression target info
-struct ctarget {
-    const uint8_t* orig; // aliases original dname storage, starting at first label len (no compression in this copy)
-    unsigned len; // the length of this dname (what would be in the first byte of a proper "dname" in ltree)
-    unsigned offset; // where this named was stored in the packet (this & 0xC000 is our target if match)
-};
 
 // EDNS Cookie-related states:
 struct cookie {
@@ -134,8 +121,13 @@ struct txn {
     // The queried class.
     unsigned qclass;
 
-    // As above, but for the authority within the qname (zone/deleg start point)
-    unsigned auth_comp;
+    // This is used to fixup compression offsets when the query name has
+    // unknown stuff to the left of whatever we're matching.  These cases are
+    // split because we can have a NODATA negative SOA response against a
+    // wildcard node, in which case a unified "comp_fixup" would carry the
+    // wrong value for the SOA.
+    unsigned comp_fixup_auth; // For delegations and SOA-negatives
+    unsigned comp_fixup_wild; // For RHS compression in wildcard MX, CNAME, PTR
 
     unsigned qdcount;
     unsigned ancount;
@@ -147,15 +139,8 @@ struct txn {
     // prefixing the wire version with an overall length byte.
     uint8_t lqname[256];
 
-    // synthetic rrsets for DYNC
-    union ltree_rrset dync_synth_rrset;
-
-    // needs room for 1x CNAME target
-    uint8_t dync_store[256];
-
-    // Compression targets, for the few cases where we do general-case compression
-    unsigned ctarget_count;
-    struct ctarget ctargets[COMPTARGETS_MAX];
+    // synthetic rrsets for DYN[AC]
+    struct ltree_rrset_raw dynac_synth_rrset;
 
     // EDNS-related states
     struct edns edns;
@@ -194,14 +179,6 @@ struct dnsp_ctx {
     // stats for this thread:
     struct dns_stats* stats;
 };
-
-static unsigned result_v6_offset = 0;
-
-// Called from main thread before I/O threads are spawned.
-void dnspacket_global_setup(void)
-{
-    result_v6_offset = gdnsd_result_get_v6_offset();
-}
 
 static struct dnsp_ctx* dnspacket_ctx_init(struct dns_stats** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad, const unsigned tcp_timeout_secs)
 {
@@ -729,138 +706,6 @@ static enum rcode_rv decode_query(struct dnsp_ctx* ctx, unsigned* output_offset_
     return DECODE_NOTIMP;
 }
 
-// Always first thing added, once we hit a situation where general compression is warranted
-F_NONNULL
-static void ctargets_add_qname(struct txn* txn)
-{
-    gdnsd_assume(!txn->ctarget_count);
-    unsigned offset = QNAME_COMP;
-    const uint8_t* orig = &txn->lqname[1];
-    unsigned len = txn->lqname[0];
-    // root is "." => "\0" => len==1 and is not worth compressing
-    // next-shortest is "a." => "\1a\0" => len==3, and is worth compressing
-    while (len > 2 && txn->ctarget_count < COMPTARGETS_MAX) {
-        txn->ctargets[txn->ctarget_count].orig = orig;
-        txn->ctargets[txn->ctarget_count].len = len;
-        txn->ctargets[txn->ctarget_count].offset = offset;
-        txn->ctarget_count++;
-        const unsigned jump = *orig + 1U;
-        orig += jump;
-        offset += jump;
-        len -= jump;
-    }
-}
-
-// When it's necessary to store a dname into the packet, and compression
-// against existing targets is desired, this is the function to call.
-// "dname" should be straight from ltree
-// "offset" is where the name (in possibly-compressed form) should be stored at.
-// "make_targets" means use this name to create new compression targets for future invocations
-static unsigned store_dname_comp(struct txn* txn, const uint8_t* dname, const unsigned offset, const bool make_targets)
-{
-    uint8_t* packet = txn->pkt->raw;
-
-    // most response types don't use general compression at all, so we only
-    // initialize qname into the set on the first use of this per response
-    if (!txn->ctarget_count)
-        ctargets_add_qname(txn);
-
-    const unsigned dn_full_len = *dname++; // dname now starts at first label len
-    const uint8_t* dname_read = dname;
-    unsigned dnread_len = dn_full_len;
-    unsigned dnread_offset = offset;
-
-    // Search for a match, take the first match found since they're pre-sorted by len
-    for (unsigned i = 0; i < txn->ctarget_count; i++) {
-        // So long as the target (longest remaining in sorted list) is shorter
-        // than the input, we must iterate storing new names into the list
-        while (txn->ctargets[i].len < dnread_len) {
-            if (make_targets && txn->ctarget_count < COMPTARGETS_MAX) {
-                gdnsd_assume(dnread_len > 2U); // implied by rest of the logic...
-                unsigned to_move = txn->ctarget_count - i;
-                memmove(txn->ctargets + i + 1U, txn->ctargets + i, to_move * sizeof(struct ctarget));
-                txn->ctargets[i].orig = dname_read;
-                txn->ctargets[i].len = dnread_len;
-                txn->ctargets[i].offset = dnread_offset;
-                i++;
-                txn->ctarget_count++;
-            }
-            const unsigned jump = *dname_read + 1U;
-            dname_read += jump;
-            dnread_offset += jump;
-            dnread_len -= jump;
-        }
-
-        if (txn->ctargets[i].len == dnread_len && !memcmp(dname_read, txn->ctargets[i].orig, dnread_len)) {
-            // exact match!
-            unsigned match_depth = dn_full_len - dnread_len;
-            memcpy(&packet[offset], dname, match_depth);
-            gdnsd_put_una16(htons(0xC000u | txn->ctargets[i].offset), &packet[offset + match_depth]);
-            gdnsd_assert(!(packet[txn->ctargets[i].offset] & 0xC0u)); // no ptr-to-ptr
-            return match_depth + 2U;
-        }
-
-        // otherwise txn->ctargets[i].len is > dnread_len, or == dnread_len but no
-        // match yet, so we iterate further in the sorted list to find a case
-        // that triggers one of the above
-    }
-
-    // Target list exhausted without any match.
-    // For the make_targets case, we may still have one or more new entries to
-    // add to the txn.ctargets set, all at the end (<= len of shortest existing)
-    if (make_targets) {
-        while (dnread_len > 2U && txn->ctarget_count < COMPTARGETS_MAX) {
-            txn->ctargets[txn->ctarget_count].orig = dname_read;
-            txn->ctargets[txn->ctarget_count].len = dnread_len;
-            txn->ctargets[txn->ctarget_count].offset = dnread_offset;
-            txn->ctarget_count++;
-            const unsigned jump = *dname_read + 1U;
-            dname_read += jump;
-            dnread_offset += jump;
-            dnread_len -= jump;
-        }
-    }
-
-    // store dname in full
-    memcpy(&packet[offset], dname, dn_full_len);
-    return dn_full_len;
-}
-
-// store a dname without attempting compression-related things at all
-F_NONNULL
-static unsigned store_dname_nocomp(uint8_t* packet, const uint8_t* dn, const unsigned offset)
-{
-    const unsigned sz = *dn++;
-    memcpy(&packet[offset], dn, sz);
-    return sz;
-}
-
-// We know a given name was stored at packet+orig_offset already.  We
-//  want to repeat it at packet+store_at_offset by using simple compression.
-//  if the original is also compressed, copy the compression bytes instead of
-//  creating a compression pointer-to-pointer scenario needlessly.  It also
-//  handles the root case efficiently by copying the single-byte name instead
-//  of inflating it via counterproductive compression.
-F_NONNULL
-static unsigned repeat_name(uint8_t* packet, unsigned store_at_offset, unsigned orig_offset)
-{
-    unsigned rv = 2;
-
-    if (packet[orig_offset]) {
-        // Copy a compression start, or point at a non-compression start
-        if (packet[orig_offset] & 0xC0)
-            gdnsd_put_una16(gdnsd_get_una16(&packet[orig_offset]), &packet[store_at_offset]);
-        else
-            gdnsd_put_una16(htons(0xC000 | orig_offset), &packet[store_at_offset]);
-    } else {
-        // If orig is the root of DNS, no point compressing
-        packet[store_at_offset] = 0;
-        rv = 1;
-    }
-
-    return rv;
-}
-
 F_NONNULL
 static void shuffle_addrs_rdata(struct rstate32* rs, uint8_t* rrset_rdata, const size_t rr_count, size_t rr_len)
 {
@@ -896,141 +741,6 @@ static void shuffle_addrs_rdata(struct rstate32* rs, uint8_t* rrset_rdata, const
     }
 }
 
-F_NONNULL
-static unsigned enc_a_static(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_a* rrset, const unsigned nameptr, const bool is_addtl)
-{
-    gdnsd_assume(rrset->gen.count);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-
-    const unsigned total = rrset->gen.count;
-
-    if (is_addtl)
-        ctx->txn.arcount += total;
-    else
-        ctx->txn.ancount += total;
-
-    const unsigned rrset_start_offset = offset;
-
-    const uint32_t* addr_ptr = (total <= LTREE_V4A_SIZE)
-                               ? &rrset->v4a[0]
-                               : rrset->addrs;
-    for (unsigned i = 0; i < total; i++) {
-        offset += repeat_name(packet, offset, nameptr);
-        gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una16(htons(4), &packet[offset]);
-        offset += 2;
-        gdnsd_put_una32(addr_ptr[i], &packet[offset]);
-        offset += 4;
-    }
-
-    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 16U);
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned enc_aaaa_static(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_aaaa* rrset, const unsigned nameptr, const bool is_addtl)
-{
-    gdnsd_assume(rrset->gen.count);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    const unsigned total = rrset->gen.count;
-
-    if (is_addtl)
-        ctx->txn.arcount += total;
-    else
-        ctx->txn.ancount += total;
-
-    const unsigned rrset_start_offset = offset;
-
-    for (unsigned i = 0; i < total; i++) {
-        offset += repeat_name(packet, offset, nameptr);
-        gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una16(htons(16), &packet[offset]);
-        offset += 2;
-        memcpy(&packet[offset], rrset->addrs + (i << 4), 16);
-        offset += 16;
-    }
-
-    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 28U);
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned enc_a_dynamic(struct dnsp_ctx* ctx, unsigned offset, const unsigned nameptr, const unsigned ttl)
-{
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-    const struct dyn_result* dr = ctx->dyn;
-    gdnsd_assume(!dr->is_cname);
-
-    const unsigned total = dr->count_v4;
-    gdnsd_assume(total);
-
-    ctx->txn.ancount += total;
-
-    const unsigned rrset_start_offset = offset;
-
-    for (unsigned i = 0; i < total; i++) {
-        offset += repeat_name(packet, offset, nameptr);
-        gdnsd_put_una32(DNS_RRFIXED_A, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(ttl, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una16(htons(4), &packet[offset]);
-        offset += 2;
-        gdnsd_put_una32(dr->v4[i], &packet[offset]);
-        offset += 4;
-    }
-
-    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 16U);
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned enc_aaaa_dynamic(struct dnsp_ctx* ctx, unsigned offset, const unsigned nameptr, const unsigned ttl)
-{
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-    const struct dyn_result* dr = ctx->dyn;
-    gdnsd_assume(!dr->is_cname);
-
-    const unsigned total = dr->count_v6;
-    gdnsd_assume(total);
-
-    ctx->txn.ancount += total;
-
-    const unsigned rrset_start_offset = offset;
-
-    const uint8_t* v6 = &dr->storage[result_v6_offset];
-    for (unsigned i = 0; i < total; i++) {
-        offset += repeat_name(packet, offset, nameptr);
-        gdnsd_put_una32(DNS_RRFIXED_AAAA, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(ttl, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una16(htons(16), &packet[offset]);
-        offset += 2;
-        memcpy(&packet[offset], &v6[i << 4], 16);
-        offset += 16;
-    }
-
-    shuffle_addrs_rdata(&ctx->rand_state, &packet[rrset_start_offset], total, 28U);
-
-    return offset;
-}
-
 // Invoke dyna callback for DYN[AC], taking care of zeroing
 //   out ctx->dyn and cleaning up the ttl + scope_mask issues,
 //   returning the TTL to actually use, in network order.
@@ -1039,592 +749,175 @@ static unsigned do_dyn_callback(struct dnsp_ctx* ctx, gdnsd_resolve_cb_t func, c
 {
     struct dyn_result* dr = ctx->dyn;
     memset(dr, 0, sizeof(*dr));
-    const gdnsd_sttl_t sttl = func(res, &ctx->txn.edns.client_info, dr);
+    const gdnsd_sttl_t sttl = func(res, ctx->txn.qtype, &ctx->txn.edns.client_info, dr);
     if (dr->edns_scope_mask > ctx->txn.edns.client_scope_mask)
         ctx->txn.edns.client_scope_mask = dr->edns_scope_mask;
     assert_valid_sttl(sttl);
     unsigned ttl = sttl & GDNSD_STTL_TTL_MASK;
-    if (ttl > ntohl(ttl_max_net))
+    if (ttl > ttl_max_net)
         ttl = ttl_max_net;
     else if (ttl < ttl_min)
-        ttl = htonl(ttl_min);
-    else
-        ttl = htonl(ttl);
+        ttl = ttl_min;
     return ttl;
 }
 
 F_NONNULL
-static unsigned encode_rrs_a(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_a* rrset)
+static struct ltree_rrset_raw* synthesize_dynac(struct dnsp_ctx* ctx, const struct ltree_rrset_dynac* rd)
 {
-    gdnsd_assume(offset);
-    gdnsd_assume(ctx->txn.qtype == DNS_TYPE_A);
+    const unsigned ttl = do_dyn_callback(ctx, rd->func, rd->resource, rd->ttl_max, rd->ttl_min);
+    struct dyn_result* dr = ctx->dyn;
+    struct ltree_rrset_raw* synth = &ctx->txn.dynac_synth_rrset;
+    synth->gen.type = rd->gen.type;
+    synth->gen.count = dr->count;
+    synth->data = dr->storage;
+    synth->data_len = dr->storage_len;
 
-    if (rrset->gen.count) {
-        offset = enc_a_static(ctx, offset, rrset, QNAME_COMP, false);
-    } else {
-        const unsigned ttl = do_dyn_callback(ctx, rrset->dyn.func, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
-        gdnsd_assume(!ctx->dyn->is_cname);
-        if (ctx->dyn->count_v4)
-            offset = enc_a_dynamic(ctx, offset, QNAME_COMP, ttl);
-    }
+    // Inject final calculated TTLs into the wire copies of all RRs
+    unsigned rrlen = 16U; // this is for A, and the value doesn't matter for CNAME (1 RR)
+    if (rd->gen.type == DNS_TYPE_AAAA)
+        rrlen = 28U;
+    for (unsigned i = 0; i < dr->count; i++)
+        gdnsd_put_una32(htonl(ttl), &dr->storage[(rrlen * i) + 6U]);
 
-    return offset;
+    return synth;
 }
 
 F_NONNULL
-static unsigned encode_rrs_aaaa(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_aaaa* rrset)
+static unsigned encode_rrs_raw(struct dnsp_ctx* ctx, const unsigned offset, const struct ltree_rrset_raw* rrset)
 {
     gdnsd_assume(offset);
-    gdnsd_assume(ctx->txn.qtype == DNS_TYPE_AAAA);
+    gdnsd_assume(rrset->gen.count);
+    gdnsd_assume(rrset->data);
+    gdnsd_assume(rrset->data_len);
 
-    if (rrset->gen.count) {
-        offset = enc_aaaa_static(ctx, offset, rrset, QNAME_COMP, false);
-    } else {
-        const unsigned ttl = do_dyn_callback(ctx, rrset->dyn.func, rrset->dyn.resource, rrset->gen.ttl, rrset->dyn.ttl_min);
-        gdnsd_assume(!ctx->dyn->is_cname);
-        if (ctx->dyn->count_v6)
-            offset = enc_aaaa_dynamic(ctx, offset, QNAME_COMP, ttl);
-    }
-
-    return offset;
-}
-
-// This is used for both deleg and non-deleg cases, and always emits whatever
-// glue was placed there by the ltree code.  It updates ancount (as if
-// qtype=NS), which needs workaround fixups for the deleg case to transfer the
-// answers to the auth section.
-F_NONNULL
-static unsigned encode_rrs_ns(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_ns* rrset)
-{
-    gdnsd_assume(offset);
-    gdnsd_assume(rrset->gen.count); // we never call encode_rrs_ns without an NS record present
-
-    uint16_t glue_name_offset[MAX_NS_COUNT];
-
+    ctx->txn.ancount += rrset->gen.count;
+    ctx->txn.arcount += rrset->num_addtl;
     uint8_t* packet = ctx->txn.pkt->raw;
     gdnsd_assume(packet);
 
-    const unsigned rrct = rrset->gen.count;
-    gdnsd_assume(rrct <= MAX_NS_COUNT);
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, ctx->txn.auth_comp);
-        gdnsd_put_una32(DNS_RRFIXED_NS, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 6;
-        const unsigned newlen = store_dname_comp(&ctx->txn, rrset->rdata[i].dname, offset, true);
-        gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
-        glue_name_offset[i] = offset;
-        offset += newlen;
-    }
-
-    for (unsigned i = 0; i < rrct; i++) {
-        const struct ltree_rrset_a* glue_v4 = rrset->rdata[i].glue_v4;
-        if (glue_v4) {
-            gdnsd_assume(glue_v4->gen.count);
-            offset = enc_a_static(ctx, offset, glue_v4, glue_name_offset[i], true);
-        }
-        const struct ltree_rrset_aaaa* glue_v6 = rrset->rdata[i].glue_v6;
-        if (glue_v6) {
-            gdnsd_assume(glue_v6->gen.count);
-            offset = enc_aaaa_static(ctx, offset, glue_v6, glue_name_offset[i], true);
+    memcpy(&packet[offset], rrset->data, rrset->data_len);
+    if (rrset->num_comp_offsets) { // only set for wild mx/cname/ptr, deleg NS, and SOA
+        // Choosing which fixup to use: NS and SOA aren't allowed at wildcards, and
+        // are used in delegation and negative responses and need the _auth
+        // variant.  All other uses should be wildcards fixing up right-hand-side
+        // compression.
+        unsigned fixup_by;
+        if (rrset->gen.type == DNS_TYPE_SOA || rrset->gen.type == DNS_TYPE_NS)
+            fixup_by = ctx->txn.comp_fixup_auth;
+        else
+            fixup_by = ctx->txn.comp_fixup_wild;
+        if (fixup_by) {
+            for (unsigned i = 0; i < rrset->num_comp_offsets; i++) {
+                uint8_t* pkt_ptr = &packet[rrset->comp_offsets[i] + fixup_by];
+                unsigned comp_ptr = ntohs(gdnsd_get_una16(pkt_ptr));
+                gdnsd_assume(comp_ptr & 0xC000u);
+                comp_ptr += fixup_by;
+                gdnsd_assume(comp_ptr & 0xC000u);
+                gdnsd_put_una16(htons(comp_ptr), pkt_ptr);
+            }
         }
     }
 
-    return offset;
+    if (rrset->gen.type == DNS_TYPE_A)
+        shuffle_addrs_rdata(&ctx->rand_state, &packet[offset], rrset->gen.count, 16U);
+    else if (rrset->gen.type == DNS_TYPE_AAAA)
+        shuffle_addrs_rdata(&ctx->rand_state, &packet[offset], rrset->gen.count, 28U);
+
+    return offset + rrset->data_len;
 }
 
 F_NONNULL
-static unsigned encode_rrs_ptr(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_ptr* rrset)
+static unsigned encode_rrs_dynac(struct dnsp_ctx* ctx, const unsigned offset, const struct ltree_rrset_dynac* rrset)
 {
     gdnsd_assume(offset);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    const unsigned rrct = rrset->gen.count;
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, QNAME_COMP);
-        gdnsd_put_una32(DNS_RRFIXED_PTR, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 6;
-        const unsigned newlen = store_dname_nocomp(packet, rrset->rdata[i].dname, offset);
-        gdnsd_put_una16(htons(newlen), &packet[offset - 2]);
-        offset += newlen;
-    }
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned encode_rrs_mx(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_mx* rrset)
-{
-    gdnsd_assume(offset);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    const unsigned rrct = rrset->gen.count;
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, QNAME_COMP);
-        gdnsd_put_una32(DNS_RRFIXED_MX, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 6;
-        const struct ltree_rdata_mx* rd = &rrset->rdata[i];
-        gdnsd_put_una16(rd->pref, &packet[offset]);
-        offset += 2;
-        const unsigned newlen = store_dname_comp(&ctx->txn, rd->dname, offset, true);
-        gdnsd_put_una16(htons(newlen + 2), &packet[offset - 4]);
-        offset += newlen;
-    }
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned encode_rrs_srv(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_srv* rrset)
-{
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    const unsigned rrct = rrset->gen.count;
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, QNAME_COMP);
-        gdnsd_put_una32(DNS_RRFIXED_SRV, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 6;
-        const struct ltree_rdata_srv* rd = &rrset->rdata[i];
-        gdnsd_put_una16(rd->priority, &packet[offset]);
-        offset += 2;
-        gdnsd_put_una16(rd->weight, &packet[offset]);
-        offset += 2;
-        gdnsd_put_una16(rd->port, &packet[offset]);
-        offset += 2;
-        // SRV target can't be compressed
-        const unsigned newlen = store_dname_nocomp(packet, rd->dname, offset);
-        gdnsd_put_una16(htons(newlen + 6), &packet[offset - 8]);
-        offset += newlen;
-    }
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned encode_rrs_naptr(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_naptr* rrset)
-{
-    gdnsd_assume(offset);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    const unsigned rrct = rrset->gen.count;
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, QNAME_COMP);
-        gdnsd_put_una32(DNS_RRFIXED_NAPTR, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 6;
-        const unsigned rdata_offset = offset;
-        const struct ltree_rdata_naptr* rd = &rrset->rdata[i];
-        gdnsd_put_una16(rd->order, &packet[offset]);
-        offset += 2;
-        gdnsd_put_una16(rd->pref, &packet[offset]);
-        offset += 2;
-        memcpy(&packet[offset], rd->text, rd->text_len);
-        offset += rd->text_len;
-
-        // NAPTR target can't be compressed
-        offset += store_dname_nocomp(packet, rd->dname, offset);
-        gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
-    }
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned encode_rrs_txt(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_txt* rrset)
-{
-    gdnsd_assume(offset);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    const unsigned rrct = rrset->gen.count;
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, QNAME_COMP);
-        gdnsd_put_una32(DNS_RRFIXED_TXT, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 4;
-        const struct ltree_rdata_txt* rd = &rrset->rdata[i];
-        gdnsd_put_una16(htons(rd->text_len), &packet[offset]);
-        offset += 2;
-        memcpy(&packet[offset], rd->text, rd->text_len);
-        offset += rd->text_len;
-    }
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned encode_rr_cname(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_cname* rd)
-{
-    gdnsd_assume(offset);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-    ctx->txn.ancount++;
-
-    offset += repeat_name(packet, offset, QNAME_COMP);
-    gdnsd_put_una32(DNS_RRFIXED_CNAME, &packet[offset]);
-    offset += 4;
-    gdnsd_put_una32(rd->gen.ttl, &packet[offset]);
-    offset += 6;
-    const unsigned rdata_offset = offset;
-    offset += store_dname_comp(&ctx->txn, rd->dname, offset, false);
-    gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
-
-    return offset;
-}
-
-F_NONNULL
-static unsigned encode_rr_soa(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_soa* rdata)
-{
-    gdnsd_assume(offset);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    offset += repeat_name(packet, offset, ctx->txn.auth_comp);
-    gdnsd_put_una32(DNS_RRFIXED_SOA, &packet[offset]);
-    offset += 4;
-    gdnsd_put_una32(rdata->gen.ttl, &packet[offset]);
-    offset += 6;
-
-    // fill in the rdata
-    const unsigned rdata_offset = offset;
-    offset += store_dname_comp(&ctx->txn, rdata->mname, offset, true);
-    offset += store_dname_comp(&ctx->txn, rdata->rname, offset, false);
-    memcpy(&packet[offset], &rdata->times, 20);
-    offset += 20; // 5x 32-bits
-
-    // set rdata_len
-    gdnsd_put_una16(htons(offset - rdata_offset), &packet[rdata_offset - 2]);
-
-    ctx->txn.ancount++;
-
-    return offset;
-}
-
-static unsigned encode_rrs_rfc3597(struct dnsp_ctx* ctx, unsigned offset, const struct ltree_rrset_rfc3597* rrset)
-{
-    gdnsd_assume(offset);
-
-    // assert that DYNC (which is technically in the range
-    //  served exclusively by this function, but which we
-    //  should be translating earlier and never serving on
-    //  the wire) never appears here.
-    gdnsd_assert(rrset->gen.type != DNS_TYPE_DYNC);
-
-    uint8_t* packet = ctx->txn.pkt->raw;
-    gdnsd_assume(packet);
-
-    const unsigned rrct = rrset->gen.count;
-    ctx->txn.ancount += rrct;
-    for (unsigned i = 0; i < rrct; i++) {
-        offset += repeat_name(packet, offset, QNAME_COMP);
-        gdnsd_put_una16(htons(rrset->gen.type), &packet[offset]);
-        offset += 2;
-        gdnsd_put_una16(htons(DNS_CLASS_IN), &packet[offset]);
-        offset += 2;
-        gdnsd_put_una32(rrset->gen.ttl, &packet[offset]);
-        offset += 4;
-        gdnsd_put_una16(htons(rrset->rdata[i].rdlen), &packet[offset]);
-        offset += 2;
-        memcpy(&packet[offset], rrset->rdata[i].rd, rrset->rdata[i].rdlen);
-        offset += rrset->rdata[i].rdlen;
-    }
-
-    return offset;
-}
-
-// These have no test for falling out with a NULL if we reach the end
-//  of the list because ltree already validated at startup that in all
-//  cases where we call these, the given RRset exists.
-#define MK_RRSET_GET(_typ, _nam, _dtyp) \
-F_NONNULL F_PURE \
-static const struct ltree_rrset_ ## _typ * ltree_node_get_rrset_ ## _nam (const struct ltree_node* node) {\
-    const union ltree_rrset* rrsets = node->rrsets;\
-    gdnsd_assume(rrsets);\
-    while (rrsets->gen.type != _dtyp) {\
-        rrsets = rrsets->gen.next;\
-        gdnsd_assume(rrsets);\
-    }\
-    return &rrsets-> _typ;\
-}
-MK_RRSET_GET(soa, soa, DNS_TYPE_SOA)
-MK_RRSET_GET(ns, ns, DNS_TYPE_NS)
-
-// typedef+cast for the encode funcs in the funcptr table
-typedef unsigned(*encode_funcptr)(struct dnsp_ctx*, unsigned, const void*);
-#define EC (encode_funcptr)
-
-static encode_funcptr encode_funcptrs[128] = {
-    EC encode_rrs_rfc3597, // 000
-    EC encode_rrs_a,       // 001 - DNS_TYPE_A
-    EC encode_rrs_ns,      // 002 - DNS_TYPE_NS
-    EC encode_rrs_rfc3597, // 003
-    EC encode_rrs_rfc3597, // 004
-    EC encode_rr_cname,    // 005 - DNS_TYPE_CNAME
-    EC encode_rr_soa,      // 006 - DNS_TYPE_SOA
-    EC encode_rrs_rfc3597, // 007
-    EC encode_rrs_rfc3597, // 008
-    EC encode_rrs_rfc3597, // 009
-    EC encode_rrs_rfc3597, // 010
-    EC encode_rrs_rfc3597, // 011
-    EC encode_rrs_ptr,     // 012 - DNS_TYPE_PTR
-    EC encode_rrs_rfc3597, // 013
-    EC encode_rrs_rfc3597, // 014
-    EC encode_rrs_mx,      // 015 - DNS_TYPE_MX
-    EC encode_rrs_txt,     // 016 - DNS_TYPE_TXT
-    EC encode_rrs_rfc3597, // 017
-    EC encode_rrs_rfc3597, // 018
-    EC encode_rrs_rfc3597, // 019
-    EC encode_rrs_rfc3597, // 020
-    EC encode_rrs_rfc3597, // 021
-    EC encode_rrs_rfc3597, // 022
-    EC encode_rrs_rfc3597, // 023
-    EC encode_rrs_rfc3597, // 024
-    EC encode_rrs_rfc3597, // 025
-    EC encode_rrs_rfc3597, // 026
-    EC encode_rrs_rfc3597, // 027
-    EC encode_rrs_aaaa,    // 028 - DNS_TYPE_AAAA
-    EC encode_rrs_rfc3597, // 029
-    EC encode_rrs_rfc3597, // 030
-    EC encode_rrs_rfc3597, // 031
-    EC encode_rrs_rfc3597, // 032
-    EC encode_rrs_srv,     // 033 - DNS_TYPE_SRV
-    EC encode_rrs_rfc3597, // 034
-    EC encode_rrs_naptr,   // 035 - DNS_TYPE_NAPTR
-    EC encode_rrs_rfc3597, // 036
-    EC encode_rrs_rfc3597, // 037
-    EC encode_rrs_rfc3597, // 038
-    EC encode_rrs_rfc3597, // 039
-    EC encode_rrs_rfc3597, // 040
-    EC encode_rrs_rfc3597, // 041
-    EC encode_rrs_rfc3597, // 042
-    EC encode_rrs_rfc3597, // 043
-    EC encode_rrs_rfc3597, // 044
-    EC encode_rrs_rfc3597, // 045
-    EC encode_rrs_rfc3597, // 046
-    EC encode_rrs_rfc3597, // 047
-    EC encode_rrs_rfc3597, // 048
-    EC encode_rrs_rfc3597, // 049
-    EC encode_rrs_rfc3597, // 050
-    EC encode_rrs_rfc3597, // 051
-    EC encode_rrs_rfc3597, // 052
-    EC encode_rrs_rfc3597, // 053
-    EC encode_rrs_rfc3597, // 054
-    EC encode_rrs_rfc3597, // 055
-    EC encode_rrs_rfc3597, // 056
-    EC encode_rrs_rfc3597, // 057
-    EC encode_rrs_rfc3597, // 058
-    EC encode_rrs_rfc3597, // 059
-    EC encode_rrs_rfc3597, // 060
-    EC encode_rrs_rfc3597, // 061
-    EC encode_rrs_rfc3597, // 062
-    EC encode_rrs_rfc3597, // 063
-    EC encode_rrs_rfc3597, // 064
-    EC encode_rrs_rfc3597, // 065
-    EC encode_rrs_rfc3597, // 066
-    EC encode_rrs_rfc3597, // 067
-    EC encode_rrs_rfc3597, // 068
-    EC encode_rrs_rfc3597, // 069
-    EC encode_rrs_rfc3597, // 070
-    EC encode_rrs_rfc3597, // 071
-    EC encode_rrs_rfc3597, // 072
-    EC encode_rrs_rfc3597, // 073
-    EC encode_rrs_rfc3597, // 074
-    EC encode_rrs_rfc3597, // 075
-    EC encode_rrs_rfc3597, // 076
-    EC encode_rrs_rfc3597, // 077
-    EC encode_rrs_rfc3597, // 078
-    EC encode_rrs_rfc3597, // 079
-    EC encode_rrs_rfc3597, // 080
-    EC encode_rrs_rfc3597, // 081
-    EC encode_rrs_rfc3597, // 082
-    EC encode_rrs_rfc3597, // 083
-    EC encode_rrs_rfc3597, // 084
-    EC encode_rrs_rfc3597, // 085
-    EC encode_rrs_rfc3597, // 086
-    EC encode_rrs_rfc3597, // 087
-    EC encode_rrs_rfc3597, // 088
-    EC encode_rrs_rfc3597, // 089
-    EC encode_rrs_rfc3597, // 090
-    EC encode_rrs_rfc3597, // 091
-    EC encode_rrs_rfc3597, // 092
-    EC encode_rrs_rfc3597, // 093
-    EC encode_rrs_rfc3597, // 094
-    EC encode_rrs_rfc3597, // 095
-    EC encode_rrs_rfc3597, // 096
-    EC encode_rrs_rfc3597, // 097
-    EC encode_rrs_rfc3597, // 098
-    EC encode_rrs_rfc3597, // 099 (SPF, deprecated)
-    EC encode_rrs_rfc3597, // 100
-    EC encode_rrs_rfc3597, // 101
-    EC encode_rrs_rfc3597, // 102
-    EC encode_rrs_rfc3597, // 103
-    EC encode_rrs_rfc3597, // 104
-    EC encode_rrs_rfc3597, // 105
-    EC encode_rrs_rfc3597, // 106
-    EC encode_rrs_rfc3597, // 107
-    EC encode_rrs_rfc3597, // 108
-    EC encode_rrs_rfc3597, // 109
-    EC encode_rrs_rfc3597, // 110
-    EC encode_rrs_rfc3597, // 111
-    EC encode_rrs_rfc3597, // 112
-    EC encode_rrs_rfc3597, // 113
-    EC encode_rrs_rfc3597, // 114
-    EC encode_rrs_rfc3597, // 115
-    EC encode_rrs_rfc3597, // 116
-    EC encode_rrs_rfc3597, // 117
-    EC encode_rrs_rfc3597, // 118
-    EC encode_rrs_rfc3597, // 119
-    EC encode_rrs_rfc3597, // 120
-    EC encode_rrs_rfc3597, // 121
-    EC encode_rrs_rfc3597, // 122
-    EC encode_rrs_rfc3597, // 123
-    EC encode_rrs_rfc3597, // 124
-    EC encode_rrs_rfc3597, // 125
-    EC encode_rrs_rfc3597, // 126
-    EC encode_rrs_rfc3597, // 127
-};
-
-F_NONNULL
-static unsigned construct_normal_response(struct dnsp_ctx* ctx, unsigned offset, const union ltree_rrset* node_rrset)
-{
-    gdnsd_assume(ctx->txn.qtype < 128 || ctx->txn.qtype & 0xFF00);
-    do {
-        if (node_rrset->gen.type == ctx->txn.qtype) {
-            if (unlikely(ctx->txn.qtype & 0xFF00))
-                offset = encode_rrs_rfc3597(ctx, offset, &node_rrset->rfc3597);
-            else
-                offset = encode_funcptrs[ctx->txn.qtype](ctx, offset, node_rrset);
-            break;
-        }
-        node_rrset = node_rrset->gen.next;
-    } while (node_rrset);
-
-    return offset;
+    gdnsd_assume(!rrset->gen.count);
+    struct ltree_rrset_raw* synth = synthesize_dynac(ctx, rrset);
+    if (!synth->gen.count)
+        return offset;
+    return encode_rrs_raw(ctx, offset, synth);
 }
 
 struct search_result {
     const struct ltree_node* dom;
     const struct ltree_node* auth;
-    unsigned auth_depth;
+    unsigned comp_fixup_wild;
+    unsigned comp_fixup_auth;
 };
 
 F_NONNULL
-static enum ltree_dnstatus search_ltree_for_dname(const uint8_t* dname, struct search_result* res)
+static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct search_result* res)
 {
-    gdnsd_assume(*dname != 0);
-    gdnsd_assume(*dname != 2); // these are always illegal dnames
+    memset(res, 0, sizeof(*res));
+
+    // Construct a treepath, which is a valid uncompressed domainname, but with
+    // the label order reversed (still terminates in \0)
+    uint8_t treepath[255];
+    const unsigned name_len = treepath_len_from_name(treepath, name);
+    gdnsd_assume(name_len); // legit names are always length 1+
 
     enum ltree_dnstatus rval = DNAME_NOAUTH;
-    const struct ltree_node* rv_node = NULL;
-
-    // construct label ptr stack
-    const uint8_t* lstack[127];
-    unsigned lcount = dname_to_lstack(dname, lstack);
-    // Asserted indirectly by dname_to_lstack's assertions, but made clearer
-    // here for analysis:
-    gdnsd_assume(lcount < 128U);
-
-    const struct ltree_node* current;
-    grcu_dereference(current, root_tree);
-    const struct ltree_node* auth = NULL;
-    unsigned depth_lc = lcount;
-    while (!rv_node && current) {
-        if (auth && current->zone_cut) {
-            gdnsd_assume(rval == DNAME_AUTH);
-            rval = DNAME_DELEG;
-            depth_lc = lcount;
-            rv_node = current;
-        } else {
-            if (current->zone_cut) {
-                gdnsd_assume(rval == DNAME_NOAUTH);
-                gdnsd_assume(!auth);
-                rval = DNAME_AUTH;
-                depth_lc = lcount;
-                auth = current;
+    struct ltree_node* cur_node;
+    grcu_dereference(cur_node, root_tree);
+    const uint8_t* cur_label = treepath;
+    unsigned cur_label_len = *cur_label;
+    unsigned name_remaining_depth = name_len - 1U;
+    while (cur_node) {
+        if (cur_node->zone_cut) {
+            if (res->auth) {
+                gdnsd_assume(rval == DNAME_AUTH);
+                gdnsd_assume(cur_label >= treepath);
+                res->comp_fixup_auth = name_remaining_depth;
+                res->dom = cur_node;
+                return DNAME_DELEG;
             }
-            if (!lcount) {
-                rv_node = current; // exact match of full label count
-            } else  {
-                lcount--;
-                const uint8_t* child_label = lstack[lcount];
-                const struct ltree_node* next = ltree_node_find_child(current, child_label);
-                // If no deeper match, try wildcard if in auth space
-                if (!next && rval == DNAME_AUTH) {
-                    static const uint8_t label_wild[2] =  { '\001', '*' };
-                    rv_node = ltree_node_find_child(current, label_wild);
-                }
-                current = next;
+            gdnsd_assert(rval == DNAME_NOAUTH);
+            gdnsd_assert(!res->auth);
+            rval = DNAME_AUTH;
+            res->comp_fixup_auth = name_remaining_depth;
+            res->auth = cur_node;
+        }
+
+        if (!cur_label_len) {
+            res->dom = cur_node;
+            return rval; // could be DNAME_AUTH or DNAME_NOAUTH
+        }
+
+        struct ltree_node* next = NULL;
+
+        static const uint8_t label_wild[2] =  { '\001', '*' };
+
+        // Special case: skip the lookup here iff we're already in auth space
+        // and this is the last label of the input, *and* the input label is an
+        // explicit '*'.  This is because we need this to take the
+        // wildcard-matching clause below, just as if it were a lookup on 'foo'
+        // matching the '*', so that we get the same logic and comp_fixup_wild
+        if (rval == DNAME_AUTH && !cur_label[cur_label_len + 1U] && !memcmp(cur_label, label_wild, 2U)) {
+            // no-op, leave "next" as NULL to use the wildcard matching below
+        } else {
+            next = ltree_node_find_child(cur_node, cur_label);
+        }
+
+        // If no deeper match and we're in auth space, try wildcard
+        if (!next && rval == DNAME_AUTH) {
+            cur_node = ltree_node_find_child(cur_node, label_wild);
+            if (cur_node) {
+                res->comp_fixup_wild = name_remaining_depth;
+                res->dom = cur_node;
+                return DNAME_AUTH;
             }
         }
+
+        // Advance the cur_ stuff and iterate
+        const unsigned jump_by = cur_label_len + 1U;
+        gdnsd_assume(name_remaining_depth >= jump_by);
+        name_remaining_depth -= jump_by;
+        cur_label += jump_by;
+        cur_label_len = *cur_label;
+        cur_node = next;
     }
 
-    // Implied by above logic, but may not be obvious to analyzers:
-    // depth_lc is only set by copying the value of lcount, and lcount starts
-    // with this constraint and can only be decremented, and the decrement can
-    // only happen if the value is non-zero (thus it can't wrap).
-    gdnsd_assume(depth_lc < 128U);
-
-    // Calculate auth depth for cases where it matters
-    unsigned auth_depth = 0;
-    if (rval != DNAME_NOAUTH) {
-        auth_depth = depth_lc;
-        while (depth_lc--)
-            auth_depth += lstack[depth_lc][0];
-    }
-
-    res->dom = rv_node;
-    res->auth = auth;
-    res->auth_depth = auth_depth;
-    return rval;
-}
-
-// DYNC handling.  This translates a DYNC RR from the ltree into
-//   a new rrset (possibly NULL) via the plugin, using context
-//   storage.
-F_NONNULL
-static const union ltree_rrset* process_dync(struct dnsp_ctx* ctx, const struct ltree_rrset_dync* rd)
-{
-    gdnsd_assume(!rd->gen.next); // DYNC does not co-exist with other rrsets
-
-    const unsigned ttl = do_dyn_callback(ctx, rd->func, rd->resource, rd->gen.ttl, rd->ttl_min);
-    struct dyn_result* dr = ctx->dyn;
-
-    if (dr->is_cname) {
-        gdnsd_assert(dname_get_status(dr->storage) == DNAME_VALID);
-        dname_copy(ctx->txn.dync_store, dr->storage);
-        ctx->txn.dync_synth_rrset.gen.type = DNS_TYPE_CNAME;
-        ctx->txn.dync_synth_rrset.gen.count = 1;
-        ctx->txn.dync_synth_rrset.gen.ttl = ttl;
-        ctx->txn.dync_synth_rrset.cname.dname = ctx->txn.dync_store;
-        return &ctx->txn.dync_synth_rrset;
-    }
-
-    return NULL;
+    gdnsd_assert(!res->dom);
+    return rval; // could be DNAME_AUTH or DNAME_NOAUTH
 }
 
 F_NONNULLX(1, 3)
@@ -1637,18 +930,24 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct ltree_node* 
 
     const union ltree_rrset* rrsets = dom ? dom->rrsets : NULL;
 
-    if (rrsets && rrsets->gen.type == DNS_TYPE_DYNC) {
-        gdnsd_assert(!rrsets->gen.next); // DYNC does not co-exist with other rrsets
-        rrsets = process_dync(ctx, &rrsets->dync);
-    }
-
     if (rrsets) {
         if (rrsets->gen.type == DNS_TYPE_CNAME) {
             gdnsd_assert(!rrsets->gen.next); // CNAME does not co-exist with other rrsets
             ctx->txn.qtype = DNS_TYPE_CNAME;
         }
-        if (ctx->txn.qtype != DNS_TYPE_ANY)
-            offset = construct_normal_response(ctx, offset, rrsets);
+        if (ctx->txn.qtype != DNS_TYPE_ANY) {
+            const union ltree_rrset* search_rrset = rrsets;
+            do {
+                if (search_rrset->gen.type == ctx->txn.qtype) {
+                    if (search_rrset->gen.count)
+                        offset = encode_rrs_raw(ctx, offset, &search_rrset->raw);
+                    else
+                        offset = encode_rrs_dynac(ctx, offset, &search_rrset->dynac);
+                    break;
+                }
+                search_rrset = search_rrset->gen.next;
+            } while (search_rrset);
+        }
     }
 
     bool chal_matched = false;
@@ -1666,14 +965,16 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct ltree_node* 
         // The conditional here basically means "if this wouldn't be an NXDOMAIN below"
         if (dom || chal_matched) {
             ctx->txn.ancount = 1;
-            offset += repeat_name(packet, offset, QNAME_COMP);
             memcpy(&packet[offset], hinfo_for_any, hinfo_for_any_len);
             offset += hinfo_for_any_len;
         }
     }
 
     if (!ctx->txn.ancount) {
-        offset = encode_rr_soa(ctx, offset, ltree_node_get_rrset_soa(auth));
+        // ltree ensures SOA is the first rrset in the zone root node
+        gdnsd_assume(auth->rrsets);
+        gdnsd_assert(auth->rrsets->gen.type == DNS_TYPE_SOA);
+        offset = encode_rrs_raw(ctx, offset, &auth->rrsets->raw);
         // Transfer the singleton SOA's count from answer to auth section.
         gdnsd_assert(ctx->txn.ancount == 1 && !ctx->txn.nscount);
         ctx->txn.nscount = 1;
@@ -1692,7 +993,7 @@ static unsigned db_lookup(struct dnsp_ctx* ctx, unsigned offset)
 {
     enum ltree_dnstatus status;
     struct search_result res;
-    status = search_ltree_for_dname(ctx->txn.lqname, &res);
+    status = search_ltree_for_name(&ctx->txn.lqname[1], &res);
     if (status == DNAME_NOAUTH) {
         ctx->txn.pkt->hdr.flags2 = DNS_RCODE_REFUSED;
         stats_own_inc(&ctx->stats->refused);
@@ -1700,22 +1001,18 @@ static unsigned db_lookup(struct dnsp_ctx* ctx, unsigned offset)
     }
 
     gdnsd_assume(res.auth);
-
-    // auth_comp points at the start of the zone name in the original query's
-    // wire copy, for use as a compression pointer for the left-hand-side in
-    // two cases:
-    // 1) Negative SOA records in auth section
-    // 2) Delegation NS records in auth section
-    ctx->txn.auth_comp = QNAME_COMP + res.auth_depth;
+    ctx->txn.comp_fixup_auth = res.comp_fixup_auth;
+    ctx->txn.comp_fixup_wild = res.comp_fixup_wild;
 
     if (status == DNAME_DELEG) {
         gdnsd_assume(res.dom);
-        const struct ltree_rrset_ns* ns = ltree_node_get_rrset_ns(res.dom);
-        gdnsd_assume(ns);
+        gdnsd_assume(res.dom->rrsets);
+        gdnsd_assume(res.dom->rrsets->gen.type == DNS_TYPE_NS);
+        const struct ltree_rrset_raw* ns = &res.dom->rrsets->raw;
         // DNAME_DELEG uses the same code we'd use for zroot qtype=NS, but we
         // have to transfer the count of NS RRs over to the auth section
         // afterwards as a hackaround.
-        unsigned rv = encode_rrs_ns(ctx, offset, ns);
+        unsigned rv = encode_rrs_raw(ctx, offset, ns);
         ctx->txn.nscount = ctx->txn.ancount;
         ctx->txn.ancount = 0;
         return rv;
@@ -1833,7 +1130,7 @@ static unsigned do_edns_output(struct dnsp_ctx* ctx, uint8_t* packet, unsigned r
         }
     }
 
-    // NSID, if configured by user
+    // NSID, if configured by user and requested by query
     if (ctx->txn.edns.respond_nsid) {
         gdnsd_assume(gcfg->nsid.data);
         gdnsd_assume(gcfg->nsid.len);

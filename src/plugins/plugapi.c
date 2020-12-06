@@ -19,6 +19,7 @@
 
 #include <config.h>
 #include "plugapi.h"
+#include "dnswire.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -28,6 +29,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <dlfcn.h>
+#include <arpa/inet.h>
 
 #include "plugins.h"
 
@@ -48,90 +50,101 @@ static struct plugin* plugins[NUM_PLUGINS] = {
     &plugin_extmon_funcs,
 };
 
-// The default (minimum) values here amount to 240 bytes of address
-//   storage (12*4+12*16), which is less than the minimum allocation
-//   of 256 to store a CNAME, therefore there's no savings trying to
-//   go any smaller.
-static unsigned addrlimit_v4 = 12U;
-static unsigned addrlimit_v6 = 12U;
-static unsigned v6_offset = 12U * 4U;
-
-unsigned gdnsd_result_get_v6_offset(void)
-{
-    return v6_offset;
-}
+static unsigned addrlimit_v4 = 1U;
+static unsigned addrlimit_v6 = 1U;
 
 unsigned gdnsd_result_get_alloc(void)
 {
-    unsigned storage = (addrlimit_v4 * 4U) + (addrlimit_v6 * 16U);
-    if (storage < 256U)
-        storage = 256U; // true minimum set by CNAME storage
-    return sizeof(struct dyn_result) + storage;
-}
-
-size_t gdnsd_result_get_max_response(void)
-{
-    return (addrlimit_v4 * (12U + 4U)) + (addrlimit_v6 * (12U + 16U));
+    const unsigned storage_v4 = addrlimit_v4 * 16U;
+    const unsigned storage_v6 = addrlimit_v6 * 28U;
+    const unsigned storage_cn = 12U + 255U;
+    unsigned biggest = storage_v4 > storage_v6 ? storage_v4 : storage_v6;
+    biggest = storage_cn > biggest ? storage_cn : biggest;
+    return sizeof(struct dyn_result) + biggest;
 }
 
 void gdnsd_dyn_addr_max(unsigned v4, unsigned v6)
 {
-    // 360+360 as limits here ensures that a completely maxed-out DYNA response
-    // still fits just under 16K in the worst-case scenario.  A zonefile could
-    // still be rejected, but only if it uses a maximally-configured DYNA
-    // alongside other data which combine to bring it past the 16K mark.
-    if (v4 > 360U)
-        log_fatal("gdnsd cannot cope with plugin configurations which add >360 IPv4 addresses to a single result!");
-    if (v6 > 360U)
-        log_fatal("gdnsd cannot cope with plugin configurations which add >360 IPv6 addresses to a single result!");
+    // 255 ensures even v6 can't even come close to exceeding 16K response packet size
+    if (v4 > 255U)
+        log_fatal("gdnsd cannot cope with plugin configurations which add >255 IPv4 addresses to a single result!");
+    if (v6 > 255U)
+        log_fatal("gdnsd cannot cope with plugin configurations which add >255 IPv6 addresses to a single result!");
 
-    if (v4 > addrlimit_v4) {
+    if (v4 > addrlimit_v4)
         addrlimit_v4 = v4;
-        v6_offset = v4 * 4U;
-    }
     if (v6 > addrlimit_v6)
         addrlimit_v6 = v6;
 }
 
 void gdnsd_result_add_anysin(struct dyn_result* result, const struct anysin* sa)
 {
-    gdnsd_assume(!result->is_cname);
+    unsigned rrfixed;
+    unsigned this_rr_rdlen;
     if (sa->sa.sa_family == AF_INET6) {
-        gdnsd_assume(result->count_v6 < addrlimit_v6);
-        memcpy(&result->storage[v6_offset + (result->count_v6++ * 16U)], sa->sin6.sin6_addr.s6_addr, 16);
+        rrfixed = DNS_RRFIXED_AAAA;
+        this_rr_rdlen = 16U;
     } else {
-        gdnsd_assume(sa->sa.sa_family == AF_INET);
-        gdnsd_assume(result->count_v4 < addrlimit_v4);
-        result->v4[result->count_v4++] = sa->sin4.sin_addr.s_addr;
+        gdnsd_assert(sa->sa.sa_family == AF_INET);
+        rrfixed = DNS_RRFIXED_A;
+        this_rr_rdlen = 4U;
     }
+
+    uint8_t* buf = &result->storage[result->storage_len];
+    unsigned offs = 0;
+    // Note this doesn't efficiently handle the root case, don't care...
+    gdnsd_put_una16(htons(0xC00C), &buf[offs]);
+    offs += 2U;
+    gdnsd_put_una32(rrfixed, &buf[offs]);
+    offs += 4U;
+    // Note no TTL yet.  Filled in at runtime
+    gdnsd_put_una32(0, &buf[offs]);
+    offs += 4U;
+    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
+    offs += 2U;
+
+    if (sa->sa.sa_family == AF_INET6) {
+        gdnsd_assert(result->count < addrlimit_v6);
+        memcpy(&buf[offs], sa->sin6.sin6_addr.s6_addr, 16U);
+        offs += 16U;
+    } else {
+        gdnsd_assert(sa->sa.sa_family == AF_INET);
+        gdnsd_assert(result->count < addrlimit_v4);
+        memcpy(&buf[offs], &sa->sin4.sin_addr.s_addr, 4U);
+        offs += 4U;
+    }
+
+    result->storage_len += offs;
+    result->count++;
 }
 
 void gdnsd_result_add_cname(struct dyn_result* result, const uint8_t* dname)
 {
-    gdnsd_assume(dname_get_status(dname) == DNAME_VALID);
-    gdnsd_assume(!result->is_cname);
-    gdnsd_assume(!result->count_v4);
-    gdnsd_assume(!result->count_v6);
+    gdnsd_assert(dname_get_status(dname) == DNAME_VALID);
+    gdnsd_assert(!result->count);
+    gdnsd_assert(!result->storage_len);
 
-    result->is_cname = true;
-    dname_copy(result->storage, dname);
+    uint8_t* buf = result->storage;
+    const unsigned this_rr_rdlen = dname[0];
+    unsigned offs = 0;
+    gdnsd_put_una16(htons(0xC00C), &buf[offs]);
+    offs += 2U;
+    gdnsd_put_una32(DNS_RRFIXED_CNAME, &buf[offs]);
+    offs += 4U;
+    // Note no TTL yet.  Filled in at runtime
+    gdnsd_put_una32(0, &buf[offs]);
+    offs += 4U;
+    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
+    offs += 2U;
+    memcpy(&buf[offs], &dname[1], dname[0]);
+    result->storage_len = 12U + dname[0];
+    result->count = 1U;
 }
 
 void gdnsd_result_wipe(struct dyn_result* result)
 {
-    result->is_cname = false;
-    result->count_v4 = 0;
-    result->count_v6 = 0;
-}
-
-void gdnsd_result_wipe_v4(struct dyn_result* result)
-{
-    result->count_v4 = 0;
-}
-
-void gdnsd_result_wipe_v6(struct dyn_result* result)
-{
-    result->count_v6 = 0;
+    result->count = 0;
+    result->storage_len = 0;
 }
 
 void gdnsd_result_add_scope_mask(struct dyn_result* result, unsigned scope)

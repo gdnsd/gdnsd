@@ -26,6 +26,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include "plugins.h"
+#include "dnswire.h"
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -265,24 +266,18 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const struct addr
     return sttl_out;
 }
 
-static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
+static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const unsigned qtype, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
     struct res* res = &resources[resnum];
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
-    gdnsd_sttl_t rv;
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
 
-    if (res->addrs_v4) {
+    if (qtype == DNS_TYPE_A && res->addrs_v4)
         rv = resolve_addr(sttl_tbl, res->addrs_v4, result);
-        if (res->addrs_v6) {
-            const gdnsd_sttl_t v6_rv = resolve_addr(sttl_tbl, res->addrs_v6, result);
-            rv = gdnsd_sttl_min2(rv, v6_rv);
-        }
-    } else {
-        gdnsd_assume(res->addrs_v6);
+    else if (qtype == DNS_TYPE_AAAA && res->addrs_v6)
         rv = resolve_addr(sttl_tbl, res->addrs_v6, result);
-    }
 
     assert_valid_sttl(rv);
     return rv;

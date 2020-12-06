@@ -1,4 +1,4 @@
-/* Copyright © 2012 Brandon L Black <blblack@gmail.com>
+/* Copyright © 2020 Brandon L Black <blblack@gmail.com>
  *
  * This file is part of gdnsd.
  *
@@ -17,15 +17,23 @@
  *
  */
 
-#ifndef GDNSD_ZSCAN_H
-#define GDNSD_ZSCAN_H
-
-#include "ltree.h"
+#ifndef GDNSD_COMP_H
+#define GDNSD_COMP_H
 
 #include <gdnsd/compiler.h>
 
-// Actually scan the zonefile, creating the data.  A true retval means failure.
-F_NONNULL
-bool zscan_rfc1035(struct ltree_node* zroot, const char* fn);
+#include "ltree.h"
 
-#endif // GDNSD_ZSCAN_H
+#include <stddef.h>
+#include <inttypes.h>
+
+F_NONNULL
+void comp_do_mx_cname_ptr(struct ltree_rrset_raw* rrset, const uint8_t* node_dname);
+
+F_WUNUSED F_NONNULL
+bool comp_do_ns(struct ltree_rrset_raw* rrset, struct ltree_node* zroot, const uint8_t* node_dname, const bool in_deleg);
+
+F_NONNULL
+void comp_do_soa(struct ltree_rrset_raw* rrset, const uint8_t* node_dname);
+
+#endif // GDNSD_COMP_H

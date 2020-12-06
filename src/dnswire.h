@@ -54,6 +54,18 @@
 // MAX_RESPONSE_BUF)
 #define MAX_RESPONSE_DATA 16376U
 
+// This defines all the potential output bytes we account for other than the
+// query name and the response data RRs, for use in calculating specific cases
+// against the limit above:
+// 12: basic DNS header
+// 4: the fixed parts of the query (qtype and qclass)
+// 11: edns OPT RR with no options
+// 6: edns tcp-keepalive option
+// 24: ends-client-subnet option
+// 132: edns NSID with maximal data len
+// 20: edns cookie option
+#define BASE_RESP_SIZE (12U + 4U + 11U + 6U + 24U + 132U + 20U)
+
 /*** Wire formats ***/
 
 /* DNS Header */
@@ -130,15 +142,6 @@ struct wire_dns_hdr {
 #define DNS_CLASS_IN 1U
 #define DNS_CLASS_CH 3U
 #define DNS_CLASS_ANY 255U
-
-// Our own synthetic 'type' for DYNC
-//   Note that current standards mark
-//   the range 0xFF00 -> 0xFFFF for
-//   "private use".  We never intend
-//   to read this from or write this
-//   to packets on the wire, it's just
-//   for the internal database...
-#define DNS_TYPE_DYNC    0xFF0F
 
 /* Network-order TYPE+CLASS as a 32-bit uint */
 

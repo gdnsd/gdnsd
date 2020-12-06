@@ -12,11 +12,10 @@ use Test::More tests => 4;
 
 my $_MX = 'foo.compression-torture.foo.Example.com 21600 MX';
 
-# compression targets numbered from zero above each new name, and become 'X'
-# after we run out of our 16 compression target slots, representing missed
-# opportunities to create further compression targets to optimize further names
-# against.  The trailing #N shows which previous target is compressed-against
-# from that point onwards.  The query name is added as 5 targets at the start:
+# Compression targets numbered from zero above each new name.
+# The trailing #N shows which previous target is compressed-against
+# from that point onwards.
+# The query name is added as 5 targets at the start:
 #           0   1                   2   3       4
 #          "foo.compression-torture.foo.Example.com"
 my $compt_mxset = [
@@ -28,44 +27,37 @@ my $compt_mxset = [
     "${_MX} 2           bar.foo.foo.foo.Example.com",
     #                           12  #2
     "${_MX} 3                   fox.foo.Example.com",
-    #                   13  14   15  X  #3
+    #                   13  14   15  16  #3
     "${_MX} 4           foo.fooo.foo.fo.Example.com",
     #                           #7
     "${_MX} 5                   foo.fox.Example.com",
-    #                   X   #10
+    #                   17  #10
     "${_MX} 6           fox.foo.foo.foo.Example.com",
     #                       #10
     "${_MX} 7               foo.foo.foo.Example.com",
-    #                   X   X   #11
+    #                   18  19  #11
     "${_MX} 8           foo.fox.foo.foo.Example.com",
-    #                   X   #10
+    #                   20  #10
     "${_MX} 9           foo.foo.foo.foo.Example.com",
-    #                   X   X   X   X   #3
+    #                   21  22  23  24  #3
     "${_MX} 10          foo.foo.foo.bar.Example.com",
     #                           #11
     "${_MX} 11                  foo.foo.Example.com",
-    #                   X  X   X   X    #3
+    #                   25 26  27  28   #3
     "${_MX} 12          fo.foo.foo.fooo.Example.com",
     #                               #2
     "${_MX} 13                      foo.Example.com",
-    #          X    X   X   X   X   X   X       X
+    #          29   30  31  32  33  34  35      36
     "${_MX} 14 asdf.xyz.foo.foo.fox.foo.example.org",
-    #                   X   X   X   #2
+    #                   37  38  39  #2
     "${_MX} 15          foo.foo.bar.foo.Example.com",
-    #                   X    X   #15
+    #                   40   41  #15
     "${_MX} 16          fooo.foo.foo.fo.Example.com",
-    #                       X   #12
+    #                       42  #12
     "${_MX} 17              foo.fox.foo.Example.com",
-
-    # These next two names should, in a perfectly-optimal response, compress
-    # more than they do.  However, we ran out of compression target count
-    # before we could record the longer names above they could've matched with
-
-    # Could've been:    X   X   X    #16 (from MX 4 above)
-    # But instead:      X   X   X    X  #3
+    #                   43  44  45   #16
     "${_MX} 18          foo.foo.fooo.fo.Example.com",
-    # Could've been:    X   #42 (from MX 17 above)
-    # But instead:      X   X   #12
+    #                   46  #42
     "${_MX} 19          foo.foo.fox.foo.Example.com",
 ];
 
@@ -87,6 +79,6 @@ my $size = _GDT->test_dns(
     addtl => $optrr,
     stats => [qw/udp_reqs edns udp_edns_big noerror/],
 );
-is($size, 569, "Packet size as expected");
+is($size, 562, "Packet size as expected");
 
 _GDT->test_kill_daemon($pid);

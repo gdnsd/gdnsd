@@ -28,6 +28,7 @@
 #include "mon.h"
 #include "plugapi.h"
 #include "plugins.h"
+#include "dnswire.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -915,40 +916,21 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* ase
     return rv;
 }
 
-F_NONNULL
-static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const struct wres* res, struct dyn_result* result)
+static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const unsigned qtype, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
-    gdnsd_sttl_t rv;
+    const struct wres* res = &resources[resnum];
+    gdnsd_assume(res);
 
-    if (res->addrs_v4) {
-        rv = resolve(sttl_tbl, res->addrs_v4, result);
-        if (res->addrs_v6) {
-            const gdnsd_sttl_t v6_rv = resolve(sttl_tbl, res->addrs_v6, result);
-            rv = gdnsd_sttl_min2(rv, v6_rv);
-        }
-    } else {
-        gdnsd_assume(res->addrs_v6);
-        rv = resolve(sttl_tbl, res->addrs_v6, result);
-    }
-
-    assert_valid_sttl(rv);
-    return rv;
-}
-
-static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
-{
-    const struct wres* resource = &resources[resnum];
-    gdnsd_assume(resource);
-
-    gdnsd_sttl_t rv;
+    gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
-    if (resource->cnames) {
-        rv = resolve_cname(sttl_tbl, resource, result);
-    } else {
-        rv = resolve_addr(sttl_tbl, resource, result);
-    }
+    if (qtype == DNS_TYPE_CNAME && res->cnames)
+        rv = resolve_cname(sttl_tbl, res, result);
+    else if (qtype == DNS_TYPE_A && res->addrs_v4)
+        rv = resolve(sttl_tbl, res->addrs_v4, result);
+    else if (qtype == DNS_TYPE_AAAA && res->addrs_v6)
+        rv = resolve(sttl_tbl, res->addrs_v6, result);
 
     assert_valid_sttl(rv);
     return rv;

@@ -40,13 +40,13 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zone->dname), z->curfn, z->lcount, __VA_ARGS__);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount, __VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zone->dname), z->curfn, z->lcount);\
+        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
@@ -68,7 +68,7 @@ struct zscan {
     unsigned rfc3597_data_len;
     unsigned rfc3597_data_written;
     uint8_t* rfc3597_data;
-    struct zone* zone;
+    struct ltree_node* zroot;
     const char* tstart;
     const char* curfn;
     char* include_filename;
@@ -137,11 +137,19 @@ static void set_uval(struct zscan* z)
 }
 
 F_NONNULL
+static void set_uval16(struct zscan* z)
+{
+    set_uval(z);
+    if (z->uval > 65535)
+        parse_error("Value %u exceeds 16-bit limit", z->uval);
+}
+
+F_NONNULL
 static void validate_origin_in_zone(struct zscan* z, const uint8_t* origin)
 {
-    gdnsd_assume(z->zone->dname);
-    if (!dname_isinzone(z->zone->dname, origin))
-        parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zone->dname));
+    gdnsd_assume(z->zroot->dname);
+    if (!dname_isinzone(z->zroot->dname, origin))
+        parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zroot->dname));
 }
 
 F_NONNULL F_PURE
@@ -214,7 +222,7 @@ static enum dname_status dn_qualify(uint8_t* dname, const uint8_t* origin, uint8
 F_NONNULL
 static void dname_set(struct zscan* z, uint8_t* dname, unsigned len, bool lhs)
 {
-    gdnsd_assume(z->zone->dname);
+    gdnsd_assume(z->zroot->dname);
     enum dname_status catstat;
     enum dname_status status;
 
@@ -231,22 +239,17 @@ static void dname_set(struct zscan* z, uint8_t* dname, unsigned len, bool lhs)
         parse_error_noargs("unparseable domainname");
         break;
     case DNAME_VALID:
-        if (lhs) {
-            if (!dname_isinzone(z->zone->dname, dname))
-                parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zone->dname));
-            gdnsd_dname_drop_zone(dname, z->zone->dname);
-        }
+        if (lhs && !dname_isinzone(z->zroot->dname, dname))
+            parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zroot->dname));
         break;
     case DNAME_PARTIAL:
         // even though in the lhs case we commonly trim
         //   back most or all of z->origin from dname, we
         //   still have to construct it just for validity checks
-        catstat = dn_qualify(dname, z->origin, z->file_origin, z->zone->dname);
+        catstat = dn_qualify(dname, z->origin, z->file_origin, z->zroot->dname);
         if (catstat == DNAME_INVALID)
             parse_error_noargs("illegal domainname");
         gdnsd_assert(catstat == DNAME_VALID);
-        if (lhs)
-            gdnsd_dname_drop_zone(dname, z->zone->dname);
         break;
     default:
         gdnsd_assume(0);
@@ -269,9 +272,9 @@ static bool _scan_isolate_jmp(struct zscan* z, char* buf, const size_t bufsize)
 }
 
 F_NONNULL
-static bool zscan_do(struct zone* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg)
+static bool zscan_do(struct ltree_node* zroot, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg)
 {
-    log_debug("rfc1035: Scanning file '%s' for zone '%s'", fn, logf_dname(zone->dname));
+    log_debug("rfc1035: Scanning file '%s' for zone '%s'", fn, logf_dname(zroot->dname));
 
     bool failed = false;
 
@@ -287,11 +290,11 @@ static bool zscan_do(struct zone* zone, const uint8_t* origin, const char* fn, c
     struct zscan* z = xcalloc(sizeof(*z));
     z->lcount = 1;
     z->def_ttl = def_ttl_arg;
-    z->zone = zone;
+    z->zroot = zroot;
     z->curfn = fn;
     dname_copy(z->origin, origin);
     dname_copy(z->file_origin, origin);
-    z->lhs_dname[0] = 1; // set lhs to relative origin initially
+    dname_copy(z->lhs_dname, origin); // set lhs to relative origin initially
 
     sij_func_t sij = &_scan_isolate_jmp;
     if (sij(z, buf, bufsize))
@@ -452,7 +455,7 @@ static void process_include(struct zscan* z)
     char* zfn = _make_zfn(z->curfn, z->include_filename);
     free(z->include_filename);
     z->include_filename = NULL;
-    bool subfailed = zscan_do(z->zone, z->rhs_dname, zfn, z->def_ttl);
+    bool subfailed = zscan_do(z->zroot, z->rhs_dname, zfn, z->def_ttl);
     free(zfn);
     if (subfailed)
         siglongjmp(z->jbuf, 1);
@@ -536,10 +539,10 @@ static void set_caa_prop(struct zscan* z, const char* fpc)
 F_NONNULL
 static void rec_soa(struct zscan* z)
 {
-    if (z->lhs_dname[0] != 1)
+    if (dname_cmp(z->lhs_dname, z->zroot->dname))
         parse_error_noargs("SOA record can only be defined for the root of the zone");
     if (ltree_add_rec_soa(
-                z->zone,
+                z->zroot,
                 z->lhs_dname,
                 .mname = z->rhs_dname,
                 .rname = z->eml_dname,
@@ -556,42 +559,42 @@ static void rec_soa(struct zscan* z)
 F_NONNULL
 static void rec_a(struct zscan* z)
 {
-    if (ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl))
+    if (ltree_add_rec_a(z->zroot, z->lhs_dname, z->ipv4, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_aaaa(struct zscan* z)
 {
-    if (ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl))
+    if (ltree_add_rec_aaaa(z->zroot, z->lhs_dname, z->ipv6, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_ns(struct zscan* z)
 {
-    if (ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+    if (ltree_add_rec_ns(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_cname(struct zscan* z)
 {
-    if (ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+    if (ltree_add_rec_cname(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_ptr(struct zscan* z)
 {
-    if (ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
+    if (ltree_add_rec_ptr(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_mx(struct zscan* z)
 {
-    if (ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uval))
+    if (ltree_add_rec_mx(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl, z->uval))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -599,7 +602,7 @@ F_NONNULL
 static void rec_srv(struct zscan* z)
 {
     if (ltree_add_rec_srv(
-                z->zone,
+                z->zroot,
                 z->lhs_dname,
                 .rhs = z->rhs_dname,
                 .ttl = z->ttl,
@@ -623,7 +626,7 @@ F_NONNULL
 static void rec_naptr(struct zscan* z)
 {
     if (ltree_add_rec_naptr(
-                z->zone,
+                z->zroot,
                 z->lhs_dname,
                 .rhs = z->rhs_dname,
                 .ttl = z->ttl,
@@ -633,30 +636,28 @@ static void rec_naptr(struct zscan* z)
                 .text = z->text)
        )
         siglongjmp(z->jbuf, 1);
-    z->text = NULL; // storage handed off to ltree
     text_cleanup(z);
 }
 
 F_NONNULL
 static void rec_txt(struct zscan* z)
 {
-    if (ltree_add_rec_txt(z->zone, z->lhs_dname, z->text_len, z->text, z->ttl))
+    if (ltree_add_rec_txt(z->zroot, z->lhs_dname, z->text_len, z->text, z->ttl))
         siglongjmp(z->jbuf, 1);
-    z->text = NULL; // storage handed off to ltree
     text_cleanup(z);
 }
 
 F_NONNULL
 static void rec_dyna(struct zscan* z)
 {
-    if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
+    if (ltree_add_rec_dynaddr(z->zroot, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
 static void rec_dync(struct zscan* z)
 {
-    if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
+    if (ltree_add_rec_dync(z->zroot, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
 
@@ -665,8 +666,9 @@ static void rec_rfc3597(struct zscan* z)
 {
     if (z->rfc3597_data_written < z->rfc3597_data_len)
         parse_error("RFC3597 generic RR claimed rdata length of %u, but only %u bytes of data present", z->rfc3597_data_len, z->rfc3597_data_written);
-    if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data))
+    if (ltree_add_rec_rfc3597(z->zroot, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data))
         siglongjmp(z->jbuf, 1);
+    free(z->rfc3597_data);
     z->rfc3597_data = NULL;
 }
 
@@ -689,10 +691,10 @@ static void rec_caa(struct zscan* z)
     caa_write += prop_len;
     memcpy(caa_write, z->text, value_len);
 
-    if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata)) {
-        free(caa_rdata);
+    const bool failed = ltree_add_rec_rfc3597(z->zroot, z->lhs_dname, 257, z->ttl, total_len, caa_rdata);
+    free(caa_rdata);
+    if (failed)
         siglongjmp(z->jbuf, 1);
-    }
     text_cleanup(z);
 }
 
@@ -713,10 +715,10 @@ static void rfc3597_octet(struct zscan* z)
 }
 
 // The external entrypoint to the parser
-bool zscan_rfc1035(struct zone* zone, const char* fn)
+bool zscan_rfc1035(struct ltree_node* zroot, const char* fn)
 {
-    gdnsd_assume(zone->dname);
-    return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl);
+    gdnsd_assume(zroot->dname);
+    return zscan_do(zroot, zroot->dname, fn, gcfg->zones_default_ttl);
 }
 
 // This pre-processor does two important things that vastly simplify the real
@@ -734,7 +736,7 @@ bool zscan_rfc1035(struct zone* zone, const char* fn)
 
 #define preproc_err(_msg) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile preprocessing error at file %s line %zu: " _msg, logf_dname(z->zone->dname), z->curfn, line_num);\
+        log_err("rfc1035: Zone %s: Zonefile preprocessing error at file %s line %zu: " _msg, logf_dname(z->zroot->dname), z->curfn, line_num);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
@@ -852,6 +854,7 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     action set_ipv4 { set_ipv4(z, fpc); }
     action set_ipv6 { set_ipv6(z, fpc); }
     action set_uval { set_uval(z); }
+    action set_uval16 { set_uval16(z); }
     action mult_uval { mult_uval(z, fc); }
 
     action set_ttl     { z->ttl  = z->uval; }
@@ -940,6 +943,7 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     # Unsigned integer values, with "ttl" being a special
     #  case with an optional multiplier suffix
     uval      = digit+ >token_start %set_uval;
+    uval16    = digit+ >token_start %set_uval16;
     uval_mult = [MHDWmhdw] @mult_uval;
     ttl       = (uval uval_mult?);
     ttl_dyn   = (uval uval_mult? %set_uv_1) ('/' uval uval_mult? %set_uv_2)?;
@@ -954,7 +958,7 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     naptr_txt = (txt_item_255 ws txt_item_255 ws txt_item_255) $1 %0 >start_txt;
 
     # NAPTR's rdata as a whole
-    naptr_rdata = uval %set_uv_1 ws uval %set_uv_2 ws naptr_txt ws dname_rhs;
+    naptr_rdata = uval16 %set_uv_1 ws uval16 %set_uv_2 ws naptr_txt ws dname_rhs;
 
     rfc3597_octet = ([0-9A-Fa-f]{2}) >token_start %rfc3597_octet;
     rfc3597_rdata = uval %set_uv_1 ws '\\' '#' ws uval %rfc3597_data_setup ws
@@ -987,10 +991,10 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
         | ('NS'i    ws dname_rhs) %rec_ns
         | ('CNAME'i ws dname_rhs) %rec_cname
         | ('PTR'i   ws dname_rhs) %rec_ptr
-        | ('MX'i    ws uval ws dname_rhs) %rec_mx
+        | ('MX'i    ws uval16 ws dname_rhs) %rec_mx
         | ('TXT'i   ws txt_rdata) %rec_txt
-        | ('SRV'i   ws uval %set_uv_1 ws uval %set_uv_2
-                    ws uval %set_uv_3 ws dname_rhs) %rec_srv
+        | ('SRV'i   ws uval16 %set_uv_1 ws uval16 %set_uv_2
+                    ws uval16 %set_uv_3 ws dname_rhs) %rec_srv
         | ('NAPTR'i ws naptr_rdata) %rec_naptr
         | ('SOA'i   ws dname_rhs ws dname_eml ws ttl %set_uv_1
                     ws ttl %set_uv_2 ws ttl %set_uv_3 ws ttl %set_uv_4

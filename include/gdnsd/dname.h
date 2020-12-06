@@ -183,6 +183,10 @@ enum dname_status gdnsd_dname_from_string(uint8_t* restrict dname, const char* r
 F_NONNULL
 unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str);
 
+// Exactly as above, but for wire-format (uncompressed!) names, meaning there
+// is no initial overall length byte
+unsigned gdnsd_name_to_string(const uint8_t* restrict name, char* restrict str);
+
 // Concatenate one dname onto the end of another.  Invalid inputs are not allowed.
 //  You are responsible for ensuring this is the case before calling, or crashes
 //  could ensue.  As before, "dn1" must have a full 256 bytes of storage.
