@@ -397,7 +397,7 @@ bool ltree_add_rec_naptr_args(const zone_t* zone, const uint8_t* dname, lt_naptr
 #define ltree_add_rec_naptr(_z,_d,...) ltree_add_rec_naptr_args(_z,_d,(lt_naptr_args){__VA_ARGS__})
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl);
-F_WUNUSED F_NONNULLX(1)
+F_WUNUSED F_NONNULLX(1, 2)
 bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd);
 
 // Load zonefiles (called from main, invokes parser)
