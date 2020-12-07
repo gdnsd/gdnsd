@@ -11,8 +11,6 @@ set -e
 for comp in gcc-10 clang-10; do
     CC=${comp} ./configure --enable-developer --with-werror
     make clean all
-    SLOW_TESTS=1 make check
     CC=${comp} CFLAGS=-O3 ./configure --disable-developer --enable-extrawarn --with-werror
     make clean all
-    SLOW_TESTS=1 make check
 done
