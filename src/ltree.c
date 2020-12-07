@@ -663,6 +663,13 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, c
 
 bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd)
 {
+    // For various error/log outputs, some of which are indirect
+    char type_desc[64];
+    int snp_rv = snprintf(type_desc, 64, "RFC3597 TYPE%u", rrtype);
+    if (snp_rv < 0 || snp_rv > 63)
+        log_fatal("BUG: snprintf() failed: error: %s retval: %i trace: %s",
+                  logf_errno(), snp_rv, logf_bt());
+
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
     if (rrtype == DNS_TYPE_A
@@ -675,13 +682,15 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
             || rrtype == DNS_TYPE_SRV
             || rrtype == DNS_TYPE_NAPTR
             || rrtype == DNS_TYPE_TXT)
-        log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed, please use the explicit support built in for this RR type", logf_dname(dname), logf_dname(zone->dname), rrtype);
+        log_zfatal("Name '%s%s': %s not allowed, please use the explicit support built in for this RR type", logf_dname(dname), logf_dname(zone->dname), type_desc);
 
     if (rrtype == DNS_TYPE_HINFO
             || rrtype == DNS_TYPE_DYNC
             || (rrtype > 127 && rrtype < 256)
             || rrtype == 0)
-        log_zfatal("Name '%s%s': RFC3597 TYPE%u not allowed", logf_dname(dname), logf_dname(zone->dname), rrtype);
+        log_zfatal("Name '%s%s': %s not allowed", logf_dname(dname), logf_dname(zone->dname), type_desc);
+
+    ttl = clamp_ttl(zone, dname, type_desc, ttl);
 
     ltree_rrset_rfc3597_t* rrset = ltree_node_get_rrset_rfc3597(node, rrtype);
 
@@ -694,9 +703,9 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
         new_rdata = rrset->rdata = xmalloc(sizeof(*new_rdata));
     } else {
         if (ntohl(rrset->gen.ttl) != ttl)
-            log_zwarn("Name '%s%s': All TTLs for type RFC3597 TYPE%u should match (using %u)", logf_dname(dname), logf_dname(zone->dname), rrtype, ntohl(rrset->gen.ttl));
+            log_zwarn("Name '%s%s': All TTLs for %s should match (using %u)", logf_dname(dname), logf_dname(zone->dname), type_desc, ntohl(rrset->gen.ttl));
         if (rrset->gen.count == UINT16_MAX)
-            log_zfatal("Name '%s%s': Too many RFC3597 RRs of type TYPE%u", logf_dname(dname), logf_dname(zone->dname), rrtype);
+            log_zfatal("Name '%s%s': Too many RRs for %s", logf_dname(dname), logf_dname(zone->dname), type_desc);
         rrset->rdata = xrealloc_n(rrset->rdata, 1U + rrset->gen.count, sizeof(*rrset->rdata));
         new_rdata = &rrset->rdata[rrset->gen.count++];
     }
