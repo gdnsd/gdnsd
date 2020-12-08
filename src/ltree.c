@@ -597,19 +597,19 @@ bool ltree_add_rec_soa_args(const zone_t* zone, const uint8_t* dname, lt_soa_arg
 {
     // Here we clamp the negative TTL using min_ttl and max_ncache_ttl
     if (args.ncache > gcfg->max_ncache_ttl) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(dname), args.ncache, gcfg->max_ncache_ttl);
+        log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(zone->dname), args.ncache, gcfg->max_ncache_ttl);
         args.ncache = gcfg->max_ncache_ttl;
     } else if (args.ncache < gcfg->min_ttl) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too small, clamped to min_ttl setting of %u", logf_dname(dname), args.ncache, gcfg->min_ttl);
+        log_zwarn("Zone '%s': SOA negative-cache field %u too small, clamped to min_ttl setting of %u", logf_dname(zone->dname), args.ncache, gcfg->min_ttl);
         args.ncache = gcfg->min_ttl;
     }
 
     // And here, we clamp the real RR TTL using min_ttl and the ncache value derived above
     if (args.ttl > args.ncache) {
-        log_zwarn("Zone '%s': SOA TTL %u > ncache field %u, clamped to ncache value", logf_dname(dname), args.ttl, args.ncache);
+        log_zwarn("Zone '%s': SOA TTL %u > ncache field %u, clamped to ncache value", logf_dname(zone->dname), args.ttl, args.ncache);
         args.ttl = args.ncache;
     } else if (args.ttl < gcfg->min_ttl) {
-        log_zwarn("Zone '%s': SOA TTL %u too small, clamped to min_ttl setting of %u", logf_dname(dname), args.ttl, gcfg->min_ttl);
+        log_zwarn("Zone '%s': SOA TTL %u too small, clamped to min_ttl setting of %u", logf_dname(zone->dname), args.ttl, gcfg->min_ttl);
         args.ttl = gcfg->min_ttl;
     }
 
@@ -619,7 +619,7 @@ bool ltree_add_rec_soa_args(const zone_t* zone, const uint8_t* dname, lt_soa_arg
     gdnsd_assert(zone->root == node);
 
     if (ltree_node_get_rrset_soa(node))
-        log_zfatal("Zone '%s': SOA defined twice", logf_dname(dname));
+        log_zfatal("Zone '%s': SOA defined twice", logf_dname(zone->dname));
 
     ltree_rrset_soa_t* soa = ltree_node_add_rrset_soa(node);
     soa->email = lta_dnamedup(zone->arena, args.email);
