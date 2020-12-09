@@ -10,7 +10,7 @@
 use _GDT ();
 use Test::More tests => 4;
 
-my $_MX = 'foo.compression-torture.foo.example.com 21600 MX';
+my $_MX = 'foo.compression-torture.foo.Example.com 21600 MX';
 
 # compression targets numbered from zero above each new name, and become 'X'
 # after we run out of our 16 compression target slots, representing missed
@@ -18,44 +18,44 @@ my $_MX = 'foo.compression-torture.foo.example.com 21600 MX';
 # against.  The trailing #N shows which previous target is compressed-against
 # from that point onwards.  The query name is added as 5 targets at the start:
 #           0   1                   2   3       4
-#          "foo.compression-torture.foo.example.com"
+#          "foo.compression-torture.foo.Example.com"
 my $compt_mxset = [
     #                   5   6   7   8   #3
-    "${_MX} 0           foo.foo.foo.fox.example.com",
+    "${_MX} 0           foo.foo.foo.fox.Example.com",
     #                               #8
-    "${_MX} 1                       fox.example.com",
+    "${_MX} 1                       fox.Example.com",
     #                   9   10  11  #2
-    "${_MX} 2           bar.foo.foo.foo.example.com",
+    "${_MX} 2           bar.foo.foo.foo.Example.com",
     #                           12  #2
-    "${_MX} 3                   fox.foo.example.com",
+    "${_MX} 3                   fox.foo.Example.com",
     #                   13  14   15  X  #3
-    "${_MX} 4           foo.fooo.foo.fo.example.com",
+    "${_MX} 4           foo.fooo.foo.fo.Example.com",
     #                           #7
-    "${_MX} 5                   foo.fox.example.com",
+    "${_MX} 5                   foo.fox.Example.com",
     #                   X   #10
-    "${_MX} 6           fox.foo.foo.foo.example.com",
+    "${_MX} 6           fox.foo.foo.foo.Example.com",
     #                       #10
-    "${_MX} 7               foo.foo.foo.example.com",
+    "${_MX} 7               foo.foo.foo.Example.com",
     #                   X   X   #11
-    "${_MX} 8           foo.fox.foo.foo.example.com",
+    "${_MX} 8           foo.fox.foo.foo.Example.com",
     #                   X   #10
-    "${_MX} 9           foo.foo.foo.foo.example.com",
+    "${_MX} 9           foo.foo.foo.foo.Example.com",
     #                   X   X   X   X   #3
-    "${_MX} 10          foo.foo.foo.bar.example.com",
+    "${_MX} 10          foo.foo.foo.bar.Example.com",
     #                           #11
-    "${_MX} 11                  foo.foo.example.com",
+    "${_MX} 11                  foo.foo.Example.com",
     #                   X  X   X   X    #3
-    "${_MX} 12          fo.foo.foo.fooo.example.com",
+    "${_MX} 12          fo.foo.foo.fooo.Example.com",
     #                               #2
-    "${_MX} 13                      foo.example.com",
+    "${_MX} 13                      foo.Example.com",
     #          X    X   X   X   X   X   X       X
     "${_MX} 14 asdf.xyz.foo.foo.fox.foo.example.org",
     #                   X   X   X   #2
-    "${_MX} 15          foo.foo.bar.foo.example.com",
+    "${_MX} 15          foo.foo.bar.foo.Example.com",
     #                   X    X   #15
-    "${_MX} 16          fooo.foo.foo.fo.example.com",
+    "${_MX} 16          fooo.foo.foo.fo.Example.com",
     #                       X   #12
-    "${_MX} 17              foo.fox.foo.example.com",
+    "${_MX} 17              foo.fox.foo.Example.com",
 
     # These next two names should, in a perfectly-optimal response, compress
     # more than they do.  However, we ran out of compression target count
@@ -63,10 +63,10 @@ my $compt_mxset = [
 
     # Could've been:    X   X   X    #16 (from MX 4 above)
     # But instead:      X   X   X    X  #3
-    "${_MX} 18          foo.foo.fooo.fo.example.com",
+    "${_MX} 18          foo.foo.fooo.fo.Example.com",
     # Could've been:    X   #42 (from MX 17 above)
     # But instead:      X   X   #12
-    "${_MX} 19          foo.foo.fox.foo.example.com",
+    "${_MX} 19          foo.foo.fox.foo.Example.com",
 ];
 
 my $optrr = Net::DNS::RR->new(
@@ -82,7 +82,7 @@ my $pid = _GDT->test_spawn_daemon();
 
 my $size = _GDT->test_dns(
     resopts => { usevc => 0, igntc => 1, udppacketsize => 1024 },
-    qname => 'foo.compression-torture.foo.example.com', qtype => 'MX',
+    qname => 'foo.compression-torture.foo.Example.com', qtype => 'MX',
     answer => $compt_mxset,
     addtl => $optrr,
     stats => [qw/udp_reqs edns udp_edns_big noerror/],
