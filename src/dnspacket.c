@@ -765,7 +765,7 @@ static void ctargets_add_qname(txn_t* txn)
 {
     gdnsd_assert(!txn->ctarget_count);
     unsigned offset = sizeof(wire_dns_header_t);
-    const uint8_t* orig = &txn->packet[offset];
+    const uint8_t* orig = &txn->lqname[1];
     unsigned len = txn->lqname[0];
     // root is "." => "\0" => len==1 and is not worth compressing
     // next-shortest is "a." => "\1a\0" => len==3, and is worth compressing
