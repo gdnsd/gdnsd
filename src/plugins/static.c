@@ -96,8 +96,11 @@ static int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
     if (resname) {
         for (unsigned i = 0; i < num_resources; i++) {
             if (!strcmp(resname, resources[i].name)) {
-                if (resources[i].is_addr)
+                if (resources[i].is_addr) {
+                    if (zone_name)
+                        log_warn("plugin_static: resource %s used from zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", resname, logf_dname(zone_name));
                     return (int)i;
+                }
                 if (!zone_name)
                     map_res_err("plugin_static: CNAME resource '%s' cannot be used for a DYNA record", resources[i].name);
                 uint8_t* dname = resources[i].dname;
