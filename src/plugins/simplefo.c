@@ -210,9 +210,11 @@ static void plugin_simplefo_load_config(vscf_data_t* config, const unsigned num_
     }
 }
 
-static int plugin_simplefo_map_res(const char* resname, const uint8_t* zone_name V_UNUSED)
+static int plugin_simplefo_map_res(const char* resname, const uint8_t* zone_name)
 {
     if (resname) {
+        if (zone_name)
+            log_warn("plugin_simplefo: resource %s used from zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", resname, logf_dname(zone_name));
         for (unsigned i = 0; i < num_resources; i++)
             if (!strcmp(resname, resources[i].name))
                 return (int)i;
