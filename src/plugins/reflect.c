@@ -54,8 +54,10 @@ static void plugin_reflect_load_config(vscf_data_t* config V_UNUSED)
 //  one of four response types above, defaulting to "best".
 static int plugin_reflect_map_res(const char* resname, const uint8_t* zone_name)
 {
-    if (zone_name)
-        log_warn("plugin_reflect: zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", logf_dname(zone_name));
+    if (zone_name) {
+        log_err("plugin_reflect: zone %s: DYNC cannot point to resources which can return IP address results!", logf_dname(zone_name));
+        return -1;
+    }
 
     if (!resname)
         return RESPONSE_BEST;

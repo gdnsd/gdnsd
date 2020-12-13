@@ -344,8 +344,10 @@ static void plugin_multifo_load_config(vscf_data_t* config)
 static int plugin_multifo_map_res(const char* resname, const uint8_t* zone_name)
 {
     if (resname) {
-        if (zone_name)
-            log_warn("plugin_multifo: resource %s used from zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", resname, logf_dname(zone_name));
+        if (zone_name) {
+            log_err("plugin_multifo: resource %s used from zone %s: DYNC cannot point to resources which can return IP address results!", resname, logf_dname(zone_name));
+            return -1;
+        }
         for (unsigned i = 0; i < num_resources; i++)
             if (!strcmp(resname, resources[i].name))
                 return (int)i;

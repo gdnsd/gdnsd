@@ -1,7 +1,7 @@
 # Basic geoip plugin tests
 
 use _GDT ();
-use Test::More tests => 61 * 2;
+use Test::More tests => 58 * 2;
 
 my $test_bin = $ENV{INSTALLCHECK_BINDIR}
     ? "$ENV{INSTALLCHECK_BINDIR}/gdnsd_geoip_test"
@@ -307,24 +307,6 @@ _GDT->test_dns(
     ],
     stats => [qw/udp_reqs noerror/],
 );
-_GDT->test_dns(
-    qname => 'res4-lots-dync.example.com', qtype => 'AAAA',
-    answer => [
-        'res4-lots-dync.example.com 86400 AAAA 2001:DB8::2:123',
-        'res4-lots-dync.example.com 86400 AAAA 2001:DB8::2:456',
-        'res4-lots-dync.example.com 86400 AAAA 2001:DB8::2:789',
-    ],
-    stats => [qw/udp_reqs noerror/],
-);
-_GDT->test_dns(
-    qname => 'res44-lots-dync.example.com', qtype => 'A',
-    answer => [
-        'res44-lots-dync.example.com 86400 A 192.0.2.111',
-        'res44-lots-dync.example.com 86400 A 192.0.2.112',
-        'res44-lots-dync.example.com 86400 A 192.0.2.113',
-    ],
-    stats => [qw/udp_reqs noerror/],
-);
 
 # DYNC that loops on itself
 _GDT->test_dns(
@@ -436,12 +418,6 @@ _GDT->test_dns(
 # geoip -> empty addresses, no data (via DYNA then DYNC)
 _GDT->test_dns(
     qname => 'res-empty-a.example.com', qtype => 'A',
-    answer => [],
-    auth => $neg_soa,
-    stats => [qw/udp_reqs noerror/],
-);
-_GDT->test_dns(
-    qname => 'res-empty-c.example.com', qtype => 'A',
     answer => [],
     auth => $neg_soa,
     stats => [qw/udp_reqs noerror/],

@@ -4,7 +4,7 @@
 #  screw up the results.
 
 use _GDT ();
-use Test::More tests => 13;
+use Test::More tests => 12;
 
 my $soa = 'example.com 900 SOA ns1.example.com dns-admin.example.com 1 7200 1800 259200 900';
 
@@ -104,17 +104,6 @@ _GDT->test_dns(
         # -- group break --
         'weightgm.example.com 86400 A 192.0.2.203',
         'weightgm.example.com 86400 A 192.0.2.204',
-    ],
-);
-
-_GDT->test_dns(
-    qname => 'weightmixc.example.com', qtype => 'A',
-    rep => 20,
-    wrr_v4 => { 'weightmixc.example.com' => 0 },
-    wrr_v6 => { 'weightmixc.example.com' => 1 },
-    answer => [
-        'weightmixc.example.com 86400 A 192.0.2.22',
-        'weightmixc.example.com 86400 A 192.0.2.33',
     ],
 );
 

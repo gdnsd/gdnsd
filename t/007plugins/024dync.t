@@ -7,7 +7,7 @@
 # things like "Chain through DYNC"...
 
 use _GDT ();
-use Test::More tests => 16;
+use Test::More tests => 14;
 
 my $soa = 'example.com 900 SOA ns1.example.com dns-admin.example.com 1 7200 1800 259200 900';
 
@@ -18,22 +18,10 @@ _GDT->test_dns(
     answer => $soa,
 );
 
-# null dynamic CNAME plugin
-_GDT->test_dns(
-    qname => 'cn.example.com', qtype => 'A',
-    answer => 'cn.example.com 86400 A 0.0.0.0'
-);
-
 # dynamic CNAME to A
 _GDT->test_dns(
     qname => 'toa.example.com', qtype => 'A',
     answer => 'toa.example.com 86400 CNAME a.example.net.',
-);
-
-# null dynamic CNAME plugin
-_GDT->test_dns(
-    qname => 'cn-x.example.com', qtype => 'A',
-    answer => 'cn-x.example.com 86400 A 0.0.0.0'
 );
 
 # dynamic CNAME to A (again)
@@ -94,15 +82,15 @@ _GDT->test_dns(
     answer => 'f43.example.com 86400 CNAME cn-x.example.net',
 );
 
-# DYNC -> 5xA + 0xAAAA (exercise dnspacket v4a logic)
+# DYNA -> 5xA + 0xAAAA (exercise dnspacket v4a logic)
 _GDT->test_dns(
-    qname => 'fivec.example.com', qtype => 'A',
+    qname => 'fivea.example.com', qtype => 'A',
     answer => [
-        'fivec.example.com 86400 A 192.0.2.131',
-        'fivec.example.com 86400 A 192.0.2.132',
-        'fivec.example.com 86400 A 192.0.2.133',
-        'fivec.example.com 86400 A 192.0.2.134',
-        'fivec.example.com 86400 A 192.0.2.135',
+        'fivea.example.com 86400 A 192.0.2.131',
+        'fivea.example.com 86400 A 192.0.2.132',
+        'fivea.example.com 86400 A 192.0.2.133',
+        'fivea.example.com 86400 A 192.0.2.134',
+        'fivea.example.com 86400 A 192.0.2.135',
     ],
 );
 

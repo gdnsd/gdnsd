@@ -12,6 +12,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 * Out-of-zone glue address records are no longer supported and will cause zonefile load failure.
 * Unused glue addresses in delegated parts of a zone no longer cause any kind of warning or error.
+* Legacy `DYNC` records must reference legacy plugin resources which return only `CNAME` results, not address (`A`, `AAAA`) results.  This was deprecated and warned about starting in v3.4.2.
 
 ### Feature Regressions
 

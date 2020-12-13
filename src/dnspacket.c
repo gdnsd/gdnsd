@@ -1607,13 +1607,12 @@ static enum ltree_dnstatus search_ltree_for_dname(const uint8_t* dname, struct s
 //   a new rrset (possibly NULL) via the plugin, using context
 //   storage.
 F_NONNULL
-static const union ltree_rrset* process_dync(struct dnsp_ctx* ctx, const struct ltree_rrset_dync* rd, const unsigned qtype)
+static const union ltree_rrset* process_dync(struct dnsp_ctx* ctx, const struct ltree_rrset_dync* rd)
 {
     gdnsd_assume(!rd->gen.next); // DYNC does not co-exist with other rrsets
 
     const unsigned ttl = do_dyn_callback(ctx, rd->func, rd->resource, rd->gen.ttl, rd->ttl_min);
     struct dyn_result* dr = ctx->dyn;
-    const union ltree_rrset* rv = NULL;
 
     if (dr->is_cname) {
         gdnsd_assert(dname_get_status(dr->storage) == DNAME_VALID);
@@ -1622,25 +1621,10 @@ static const union ltree_rrset* process_dync(struct dnsp_ctx* ctx, const struct 
         ctx->txn.dync_synth_rrset.gen.count = 1;
         ctx->txn.dync_synth_rrset.gen.ttl = ttl;
         ctx->txn.dync_synth_rrset.cname.dname = ctx->txn.dync_store;
-        rv = &ctx->txn.dync_synth_rrset;
-    } else if (qtype == DNS_TYPE_A && dr->count_v4) {
-        ctx->txn.dync_synth_rrset.gen.type = DNS_TYPE_A;
-        ctx->txn.dync_synth_rrset.gen.ttl = ttl;
-        ctx->txn.dync_synth_rrset.gen.count = dr->count_v4;
-        if (dr->count_v4 <= LTREE_V4A_SIZE)
-            memcpy(ctx->txn.dync_synth_rrset.a.v4a, dr->v4, sizeof(*dr->v4) * dr->count_v4);
-        else
-            ctx->txn.dync_synth_rrset.a.addrs = dr->v4;
-        rv = &ctx->txn.dync_synth_rrset;
-    } else if (qtype == DNS_TYPE_AAAA && dr->count_v6) {
-        ctx->txn.dync_synth_rrset.gen.type = DNS_TYPE_AAAA;
-        ctx->txn.dync_synth_rrset.gen.ttl = ttl;
-        ctx->txn.dync_synth_rrset.gen.count = dr->count_v6;
-        ctx->txn.dync_synth_rrset.aaaa.addrs = &dr->storage[result_v6_offset];
-        rv = &ctx->txn.dync_synth_rrset;
+        return &ctx->txn.dync_synth_rrset;
     }
 
-    return rv;
+    return NULL;
 }
 
 F_NONNULLX(1, 3)
@@ -1655,7 +1639,7 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct ltree_node* 
 
     if (rrsets && rrsets->gen.type == DNS_TYPE_DYNC) {
         gdnsd_assert(!rrsets->gen.next); // DYNC does not co-exist with other rrsets
-        rrsets = process_dync(ctx, &rrsets->dync, ctx->txn.qtype);
+        rrsets = process_dync(ctx, &rrsets->dync);
     }
 
     if (rrsets) {

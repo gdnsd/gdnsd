@@ -37,8 +37,10 @@ static void plugin_null_load_config(vscf_data_t* config V_UNUSED)
 
 static int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone_name)
 {
-    if (zone_name)
-        log_warn("plugin_null: zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", logf_dname(zone_name));
+    if (zone_name) {
+        log_err("plugin_null: zone %s: DYNC cannot point to resources which can return IP address results!", logf_dname(zone_name));
+        return -1;
+    }
     return 0;
 }
 

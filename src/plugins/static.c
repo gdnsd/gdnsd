@@ -98,8 +98,10 @@ static int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
         for (unsigned i = 0; i < num_resources; i++) {
             if (!strcmp(resname, resources[i].name)) {
                 if (resources[i].is_addr) {
-                    if (zone_name)
-                        log_warn("plugin_static: resource %s used from zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", resname, logf_dname(zone_name));
+                    if (zone_name) {
+                        log_err("plugin_static: resource %s used from zone %s: DYNC cannot point to resources which can return IP address results!", resname, logf_dname(zone_name));
+                        return -1;
+                    }
                     return (int)i;
                 }
                 if (!zone_name)

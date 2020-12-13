@@ -36,9 +36,7 @@ dmx	MX	1 res2
 dmx	MX	2 res3
 
 res4-lots	DYNA	geoip!res4
-res4-lots-dync	DYNC	geoip!res4
 res44-lots	DYNA	geoip!res44
-res44-lots-dync	DYNC	geoip!res44
 
 res5	DYNC	geoip!res5
 dc2cn-loop CNAME res5
@@ -52,7 +50,6 @@ resA	DYNA	geoip!resA
 metascope DYNA metafo!metascope
 
 res-empty-a DYNA geoip!res-e
-res-empty-c DYNC geoip!res-e
 
 res-undef DYNA geoip!res-u
 

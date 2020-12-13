@@ -40,12 +40,9 @@ weightg		DYNA weighted!weightg
 weightgm	DYNA weighted!weightgm
 weightc		DYNC weighted!weightc
 weightmixa	DYNA weighted!weightmix
-weightmixc	DYNC weighted!weightmix
 
 ctodyn	CNAME	toa
 
-cn		DYNC null
-cn-x		DYNC null!x
 f43		DYNC static!foo43
 toa		DYNC static!toa
 tomissing	DYNC static!missing
@@ -62,13 +59,4 @@ chain4	A 192.0.2.3
 meta1	DYNA metafo!meta1
 meta2	DYNA metafo!meta2
 
-fivec	DYNC multifo!fivec
-
-; A-via-DYNC
-adyn DYNC static!bar41
-
-; AAAA-via-DYNC
-aaaadyn DYNC static!bar416
-
-; metafo addr->cname failover
-acfail DYNC metafo!meta-ac
+fivea	DYNA multifo!fivea

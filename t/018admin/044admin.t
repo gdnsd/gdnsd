@@ -91,7 +91,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 29 A 192.0.2.1',
+    answer => 'm1.example.com 29 CNAME m1cname-dc2.example.net',
 );
 
 ### Leave m1cname down, remove the wildcard, but replace it with
@@ -119,7 +119,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 29 A 127.0.0.1',
+    answer => 'm1.example.com 29 CNAME m1cname-dc2.example.net',
 );
 
 ### Remove the r2 primary entry
@@ -145,7 +145,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 29 A 127.0.0.1',
+    answer => 'm1.example.com 29 CNAME m1cname-dc2.example.net',
 );
 
 ### Empty the state file completely, back to original query results
@@ -196,7 +196,7 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'm1.example.com', qtype => 'A',
-    answer => 'm1.example.com 42 A 127.0.0.1',
+    answer => 'm1.example.com 42 CNAME m1cname-dc2.example.net',
 );
 
 ### down dc1+dc2 at the datacenter level (so result is back to dc1)

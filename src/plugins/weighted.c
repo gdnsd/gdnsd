@@ -723,7 +723,8 @@ static int plugin_weighted_map_res(const char* resname, const uint8_t* zone_name
                         map_res_err("plugin_weighted: Resource '%s' CNAME value '%s' cannot be used within zone '%s'", resources[i].name, logf_dname(dname), logf_dname(zone_name));
                 }
             } else if (zone_name) {
-                log_warn("plugin_weighted: resource %s used from zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", resname, logf_dname(zone_name));
+                log_err("plugin_weighted: resource %s used from zone %s: DYNC cannot point to resources which can return IP address results!", resname, logf_dname(zone_name));
+                return -1;
             }
             log_debug("plugin_weighted: resource '%s' mapped", resources[i].name);
             return (int)i;
