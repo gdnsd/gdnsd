@@ -35,8 +35,10 @@ static void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
 }
 
-static int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone_name V_UNUSED)
+static int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone_name)
 {
+    if (zone_name)
+        log_warn("plugin_null: zone %s: DYNC configurations which can return IP address results are DEPRECATED and will be removed in a future version!", logf_dname(zone_name));
     return 0;
 }
 
