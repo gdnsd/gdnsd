@@ -339,8 +339,10 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
     unsigned newlen = len;
     if (len) {
         newlen = dns_unescape(text_temp, z->tstart, len);
-        if (!newlen)
+        if (!newlen) {
+            free(text_temp);
             parse_error_noargs("Text chunk has bad escape sequence");
+        }
         gdnsd_assert(newlen <= len);
     }
 
@@ -356,8 +358,10 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
         const unsigned remainder = newlen % 255;
         const unsigned num_whole_chunks = (newlen - remainder) / 255;
         unsigned new_alloc = newlen + num_whole_chunks + (remainder ? 1 : 0);
-        if (new_alloc + z->text_len > 16000U)
+        if (new_alloc + z->text_len > 16000U) {
+            free(text_temp);
             parse_error_noargs("Text record too long (>16000 in rdata form)");
+        }
 
         z->text = xrealloc(z->text, z->text_len + new_alloc);
         unsigned write_offset = z->text_len;
@@ -398,8 +402,10 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
     unsigned newlen = len;
     if (len) {
         newlen = dns_unescape(storage, z->tstart, len);
-        if (!newlen)
+        if (!newlen) {
+            free(storage);
             parse_error_noargs("Text chunk has bad escape sequence");
+        }
         gdnsd_assert(newlen <= len);
     }
 
@@ -422,8 +428,10 @@ static void set_filename(zscan_t* z, const unsigned len)
 {
     char* fn = xmalloc(len + 1);
     const unsigned newlen = dns_unescape(fn, z->tstart, len);
-    if (!newlen)
+    if (!newlen) {
+        free(fn);
         parse_error_noargs("Filename has bad escape sequence");
+    }
     gdnsd_assert(newlen <= len);
     z->include_filename = fn = xrealloc(fn, newlen + 1);
     fn[newlen] = 0;
@@ -706,8 +714,10 @@ static void rec_caa(zscan_t* z)
     caa_write += prop_len;
     memcpy(caa_write, z->text, value_len);
 
-    if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata))
+    if (ltree_add_rec_rfc3597(z->zone, z->lhs_dname, 257, z->ttl, total_len, caa_rdata)) {
+        free(caa_rdata);
         siglongjmp(z->jbuf, 1);
+    }
     text_cleanup(z);
 }
 
