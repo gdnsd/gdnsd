@@ -127,10 +127,6 @@
 #include <sodium.h>
 #include <ev.h>
 
-// Workaround to ensure we can compile/run on any libsodium-1.x, to be removed
-// when we can require libsodium-1.0.12+
-#include "kdf_compat.h"
-
 // Defined by RFC
 #define CCOOKIE_LEN 8
 
@@ -141,9 +137,9 @@
 #define SCOOKIE_INPUT_LEN (16 + CCOOKIE_LEN)
 
 // shorthand for alg-specific calls/values
-#define KDF_FUNC gdnsd_crypto_kdf_blake2b_derive_from_key
-#define KDF_KEYBYTES gdnsd_crypto_kdf_blake2b_KEYBYTES
-#define KDF_CTXBYTES gdnsd_crypto_kdf_blake2b_CONTEXTBYTES
+#define KDF_FUNC crypto_kdf_blake2b_derive_from_key
+#define KDF_KEYBYTES crypto_kdf_blake2b_KEYBYTES
+#define KDF_CTXBYTES crypto_kdf_blake2b_CONTEXTBYTES
 #define SHORTHASH_FUNC crypto_shorthash_siphash24
 #define SHORTHASH_BYTES crypto_shorthash_siphash24_BYTES
 #define SHORTHASH_KEYBYTES crypto_shorthash_siphash24_KEYBYTES
@@ -248,9 +244,6 @@ static void cookie_destroy(void)
 void cookie_config(const char* key_file)
 {
     gdnsd_assume(primary_key == NULL); // config only happens once!
-
-    if (sodium_init() < 0)
-        log_fatal("Could not initialize libsodium: %s", logf_errno());
 
     primary_key = sodium_malloc(KDF_KEYBYTES);
     if (!primary_key)

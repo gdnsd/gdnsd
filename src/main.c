@@ -79,6 +79,8 @@ static void check_atomic_assumptions(void)
 #endif
 }
 
+#include <sodium.h>
+
 // This is set by the signal handler for terminal signals, and consumed as
 // the correct signal to re-raise for final termination
 static int killed_by = 0;
@@ -684,6 +686,10 @@ int main(int argc, char** argv)
     log_info("gdnsd version " PACKAGE_VERSION " @ pid %li", (long)getpid());
 
     check_atomic_assumptions(); // ensure all our atomics are truly lock-free!
+
+    // Initialize libsodium very early, so we don't have to worry about it again
+    if (sodium_init() < 0)
+        log_fatal("Could not initialize libsodium: %s", logf_errno());
 
     // Load and init basic pathname config (but no mkdir/chmod if checkconf)
     vscf_data_t* cfg_root = gdnsd_init_paths(copts.cfg_dir, copts.action != ACT_CHECKCONF);

@@ -13,7 +13,7 @@ If your starting point is a tarball, the following prerequisites apply:
   generation (this may be in the package perl-podlaters)
 * liburcu aka userspace-rcu headers and libraries. Use distro pkg or
   http://lttng.org/urcu/
-* libsodium-1.x cryptography library, should be avail for most platforms!
+* libsodium-1.0.12 or higher, should be avail for most platforms!
 
 The following are recommended but optional:
 

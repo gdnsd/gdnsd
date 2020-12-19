@@ -52,8 +52,6 @@ typedef struct gdnsd_rstate32_t {
 F_NONNULL F_UNUSED
 static void gdnsd_rand32_init(gdnsd_rstate32_t* st)
 {
-    if (sodium_init() < 0)
-        log_fatal("Could not initialize libsodium: %s", logf_errno());
     do {
         randombytes_buf(st, sizeof(*st));
     } while (!st->y); // y==0 is bad for jkiss32
