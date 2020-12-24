@@ -45,11 +45,9 @@
 #define POOL_SIZE 1024U // *must* be >= MAX_OBJ
 #define INIT_POOLS_ALLOC 4U // *must* be 2^n && > 0
 
-#if __STDC_VERSION__ >= 201112L // C11
-_Static_assert(INIT_POOLS_ALLOC > 0, "Init pool alloc non-zero");
-_Static_assert((INIT_POOLS_ALLOC & (INIT_POOLS_ALLOC - 1)) == 0, "Init pool alloc is power of two");
-_Static_assert(POOL_SIZE >= MAX_OBJ, "Pool size fits largest possible alloc");
-#endif
+static_assert(INIT_POOLS_ALLOC > 0, "Init pool alloc non-zero");
+static_assert((INIT_POOLS_ALLOC & (INIT_POOLS_ALLOC - 1)) == 0, "Init pool alloc is power of two");
+static_assert(POOL_SIZE >= MAX_OBJ, "Pool size fits largest possible alloc");
 
 struct ltarena {
     uint8_t** pools; // array of per-pool pointers

@@ -609,7 +609,7 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
     vscf_destroy(res_cfg_noparams);
 }
 
-F_NONNULL F_NORETURN
+F_NONNULL noreturn
 static bool res_mixed_fail(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* rname_asvoid)
 {
     const char* rname = rname_asvoid;

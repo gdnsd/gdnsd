@@ -30,6 +30,16 @@ AC_DEFINE_UNQUOTED([PACKAGE_V_PATCH], [PKG_V_PATCH], [Patch version])
 AC_USE_SYSTEM_EXTENSIONS
 AC_PROG_CC
 m4_version_prereq([2.70], [], [AC_PROG_CC_STDC])
+AC_MSG_CHECKING([For C11 support in the C compiler])
+AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([[
+        #include <assert.h>
+        static_assert(__STDC_VERSION__ >= 201112L, "C11");
+    ]],[])],
+    [AC_MSG_RESULT([yes])],
+    [AC_MSG_RESULT([no])
+     AC_MSG_ERROR([C11 Compiler is required])]
+)
 
 # POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
@@ -331,6 +341,7 @@ AS_IF([test $developer = yes -o $extrawarn = yes],[
         -Walloc-zero \
         -Warray-bounds=2 \
         -Wbad-function-cast \
+        -Wc11-c2x-compat \
         -Wcast-align \
         -Wcast-align=strict \
         -Wcast-qual \

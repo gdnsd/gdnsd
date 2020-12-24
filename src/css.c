@@ -425,7 +425,7 @@ static void send_pidval_(const int writefd, const uint32_t pidval)
 
 // Handles the second fork into the real exec, and also sends back a pid value
 // (or zero for certain error paths) through the pipe socket to the parent.
-F_NORETURN F_NONNULL
+noreturn F_NONNULL
 static void replacement_proc(const char* argv0, const char* cfpath, const char* flags, const int* pipefd)
 {
     close(pipefd[PIPE_RD]); // only the parent reads from the pipe

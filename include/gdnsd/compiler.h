@@ -20,21 +20,22 @@
 #ifndef GDNSD_COMPILER_H
 #define GDNSD_COMPILER_H
 
-// Compiler features we can take advantage of
-
-#if defined __GNUC__ && (__GNUC__ < 3 || (__GNUC__ == 3 && __GNUC_MINOR__ < 4))
-#  error Your GCC is way too old (< 3.4)...
+// Require C11 here, in a way that works back to C89
+#if __STDC_VERSION__ < 201112L
+#  error C11 compiler required!
 #endif
 
-#define PRAG_(x) _Pragma(#x)
+// Headers for compiler features we can take advantage of with C11 broadly:
+#include <stdnoreturn.h>
+#include <assert.h>
 
-// Basic features common to clang and gcc-3.4+
+// Basic features common to C11-era versions of clang and gcc
 #if defined __clang__ || defined __GNUC__
 #  define F_PRINTF(X, Y)  __attribute__((__format__(__printf__, X, Y)))
 #  define F_NONNULLX(...) __attribute__((__nonnull__(__VA_ARGS__)))
 #  define F_NONNULL       __attribute__((__nonnull__))
-#  define F_NORETURN      __attribute__((__noreturn__))
 #  define HAVE_BUILTIN_CLZ 1
+#  define GDNSD_HAVE_UNREACH_BUILTIN 1
 #  define likely(_x)      __builtin_expect(!!(_x), 1)
 #  define unlikely(_x)    __builtin_expect(!!(_x), 0)
 #  define V_UNUSED        __attribute__((__unused__))
@@ -45,55 +46,23 @@
 #  define F_NOINLINE      __attribute__((__noinline__))
 #  define F_WUNUSED       __attribute__((__warn_unused_result__))
 #  define F_DEPRECATED    __attribute__((__deprecated__))
+#  define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
+#  define F_HOT           __attribute__((__hot__))
+#  define F_COLD          __attribute__((__cold__))
+#  define F_RETNN         __attribute__((__returns_nonnull__))
+#  define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
+#  define S_FALLTHROUGH   __attribute__((__fallthrough__))
 #endif
 
-// Newer features
+#define PRAG_(x) _Pragma(#x)
 #ifdef __clang__
 #  define GDNSD_DIAG_PUSH_IGNORED(x) _Pragma("clang diagnostic push") \
                                    PRAG_(clang diagnostic ignored x)
 #  define GDNSD_DIAG_POP             _Pragma("clang diagnostic pop")
-#  if __has_builtin(__builtin_unreachable)
-#    define GDNSD_HAVE_UNREACH_BUILTIN 1
-#  endif
-#  if __has_attribute(cold)
-#    define F_COLD __attribute__((__cold__))
-#  endif
-#  if __has_attribute(returns_nonnull)
-#    define F_RETNN         __attribute__((__returns_nonnull__))
-#  endif
-#  if __has_attribute(hot)
-#    define F_HOT           __attribute__((__hot__))
-#  endif
-#  if __has_attribute(alloc_size)
-#    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
-#  endif
-#  if __has_attribute(alloc_align)
-#    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
-#  endif
-#  if __has_attribute(fallthrough)
-#    define S_FALLTHROUGH __attribute__((__fallthrough__))
-#  endif
 #elif defined __GNUC__
-#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)
-#    define F_ALLOCSZ(...)  __attribute__((__alloc_size__(__VA_ARGS__)))
-#    define F_HOT           __attribute__((__hot__))
-#    define F_COLD __attribute__((__cold__))
-#  endif
-#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
-#    define GDNSD_HAVE_UNREACH_BUILTIN 1
-#  endif
-#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
-#    define GDNSD_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push") \
-                                     PRAG_(GCC diagnostic ignored x)
-#    define GDNSD_DIAG_POP             _Pragma("GCC diagnostic pop")
-#  endif
-#  if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)
-#    define F_RETNN         __attribute__((__returns_nonnull__))
-#    define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
-#  endif
-#  if __GNUC__ > 7 || (__GNUC__ == 7 && __GNUC_MINOR__ >= 1)
-#    define S_FALLTHROUGH __attribute__((__fallthrough__))
-#  endif
+#  define GDNSD_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push") \
+                                   PRAG_(GCC diagnostic ignored x)
+#  define GDNSD_DIAG_POP             _Pragma("GCC diagnostic pop")
 #endif
 
 // defaults for unknown compilers and things left unset above
@@ -105,13 +74,6 @@
 #endif
 #ifndef F_NONNULL
 #  define F_NONNULL
-#endif
-#ifndef F_NORETURN
-#  if __STDC_VERSION__ >= 201112L // C11
-#    define F_NORETURN _Noreturn
-#  else
-#    define F_NORETURN
-#  endif
 #endif
 #ifndef F_COLD
 #  define F_COLD

@@ -369,7 +369,7 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
     const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
 
     gdnsd_anysin_t sa;
-    void* buf = gdnsd_xpmalign(pgsz, max_rounded);
+    void* buf = xaligned_alloc(pgsz, max_rounded);
     struct iovec iov = {
         .iov_base = buf,
         .iov_len  = 0
@@ -501,7 +501,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
 
-    uint8_t* bufs = gdnsd_xpmalign_n(pgsz, MMSG_WIDTH, max_rounded);
+    uint8_t* bufs = xaligned_alloc_n(pgsz, MMSG_WIDTH, max_rounded);
 
     struct mmsghdr dgrams[MMSG_WIDTH];
     struct {

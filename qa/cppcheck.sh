@@ -36,6 +36,7 @@ INCDIRS="
 # anyways.  Note the last few entries are critical to work around
 # unused-variable warnings related to debug/coverage/valgrind constructs
 DEFS="
+-D__STDC_VERSION__=201112L
 -D__linux__=1
 -DPR_SET_NO_NEW_PRIVS=38
 -DIPV6_PKTINFO=50

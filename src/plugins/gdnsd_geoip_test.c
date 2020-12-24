@@ -39,7 +39,7 @@
 
 static gdmaps_t* gd_maps = NULL;
 
-F_NONNULL F_NORETURN
+noreturn F_NONNULL
 static void usage(const char* argv0)
 {
     fprintf(stderr, "\nUsage: %s [-c %s] [map_name addr]\n"

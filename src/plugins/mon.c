@@ -608,7 +608,7 @@ unsigned gdnsd_mon_admin(const char* desc)
         } \
     } while (0)
 
-F_NONNULL F_NORETURN
+F_NONNULL noreturn
 static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* svcname_asvoid)
 {
     const char* svcname = svcname_asvoid;

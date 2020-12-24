@@ -93,24 +93,22 @@ void* gdnsd_xrealloc_n(void* ptr, size_t nmemb, size_t size)
     return rv;
 }
 
-void* gdnsd_xpmalign(size_t alignment, size_t size)
+void* gdnsd_xaligned_alloc(size_t alignment, size_t size)
 {
-    void* rv = NULL;
-    const int pmrv = posix_memalign(&rv, alignment, size);
-    if (unlikely(!size) || unlikely(pmrv) || unlikely(!rv))
+    void* rv = aligned_alloc(alignment, size);
+    if (unlikely(!size) || unlikely(!rv))
         log_fatal("Cannot allocate %zu bytes aligned to %zu (%s)! backtrace:%s",
-                  size, alignment, logf_strerror(pmrv), logf_bt());
+                  size, alignment, logf_errno(), logf_bt());
     return rv;
 }
 
-void* gdnsd_xpmalign_n(size_t alignment, size_t nmemb, size_t size)
+void* gdnsd_xaligned_alloc_n(size_t alignment, size_t nmemb, size_t size)
 {
     const size_t full_size = nmemb * size;
-    void* rv = NULL;
-    const int pmrv = posix_memalign(&rv, alignment, full_size);
-    if (unlikely(!full_size) || unlikely(pmrv) || unlikely(!rv) || unlikely(!mul_ok(nmemb, size, full_size)))
+    void* rv = aligned_alloc(alignment, full_size);
+    if (unlikely(!full_size) || unlikely(!rv) || unlikely(!mul_ok(nmemb, size, full_size)))
         log_fatal("Cannot allocate %zu * %zu bytes aligned to %zu (%s)! backtrace:%s",
-                  nmemb, size, alignment, logf_strerror(pmrv), logf_bt());
+                  nmemb, size, alignment, logf_errno(), logf_bt());
     return rv;
 }
 

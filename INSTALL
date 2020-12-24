@@ -6,7 +6,7 @@ In general, this is a standard autoconf-style project:
 
 If your starting point is a tarball, the following prerequisites apply:
 
-* A basically functional POSIX build environment with a C99 compiler
+* A basically functional POSIX build environment with a C11 compiler
 * libev headers and libraries, version 4.x: distro pkg
   or http://software.schmorp.de/pkg/libev.html
 * Perl 5.10.1 or higher and the perl "pod2man" command for document

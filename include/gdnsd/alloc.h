@@ -49,10 +49,10 @@ F_ALLOCSZ(2, 3) F_WUNUSED F_RETNN
 void* gdnsd_xrealloc_n(void* ptr, size_t nmemb, size_t size);
 
 F_MALLOC F_ALLOCSZ(2) F_ALLOCAL(1) F_RETNN
-void* gdnsd_xpmalign(size_t alignment, size_t size);
+void* gdnsd_xaligned_alloc(size_t alignment, size_t size);
 
 F_MALLOC F_ALLOCSZ(2, 3) F_ALLOCAL(1) F_RETNN
-void* gdnsd_xpmalign_n(size_t alignment, size_t nmemb, size_t size);
+void* gdnsd_xaligned_alloc_n(size_t alignment, size_t nmemb, size_t size);
 
 F_MALLOC F_NONNULL F_RETNN
 char* gdnsd_xstrdup(const char* s);
@@ -64,5 +64,7 @@ char* gdnsd_xstrdup(const char* s);
 #define xrealloc gdnsd_xrealloc
 #define xrealloc_n gdnsd_xrealloc_n
 #define xstrdup gdnsd_xstrdup
+#define xaligned_alloc gdnsd_xaligned_alloc
+#define xaligned_alloc_n gdnsd_xaligned_alloc_n
 
 #endif // GDNSD_ALLOC_H

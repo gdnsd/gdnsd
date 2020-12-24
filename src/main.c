@@ -84,7 +84,7 @@ static void atexit_execute(void)
         exitfuncs[exitfuncs_pending]();
 }
 
-F_NONNULL F_NORETURN
+noreturn F_NONNULL
 static void syserr_for_ev(const char* msg)
 {
     log_fatal("%s: %s", msg, logf_errno());
@@ -211,7 +211,7 @@ static void setup_reload_zones(css_t* css, struct ev_loop* loop)
     ev_async_start(loop, p_async_reloadz);
 }
 
-F_NONNULL F_NORETURN
+noreturn F_NONNULL
 static void usage(const char* argv0)
 {
     const char* def_cfdir = gdnsd_get_default_config_dir();
@@ -424,7 +424,7 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
                     return;
                 }
             }
-            S_FALLTHROUGH; // FALLTHROUGH
+            usage(argv[0]);
         default:
             usage(argv[0]);
         }
@@ -471,7 +471,7 @@ static void try_raise_open_files(const socks_cfg_t* socks_cfg)
     }
 }
 
-F_NORETURN
+noreturn
 static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* css, csc_t* csc)
 {
     try_raise_open_files(socks_cfg);

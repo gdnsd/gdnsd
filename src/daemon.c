@@ -96,7 +96,7 @@ static void sysd_notify_ready(void)
 
 /************ end systemd stuff *************/
 
-F_NORETURN
+noreturn
 static void daemon_fg_waiter(const pid_t middle_pid, const int readpipe)
 {
     // First, reap the middle_pid

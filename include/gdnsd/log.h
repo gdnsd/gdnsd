@@ -109,7 +109,7 @@ void gdnsd_logger(int level, const char* fmt, ...);
 #  define log_fatal_safe(M) ((void)(0))
 #else
 #  define log_fatal_safe(M) log_fatal_safe_(M "\n", sizeof(M "\n") - 1U)
-F_UNUSED F_NORETURN
+F_UNUSED noreturn
 static void log_fatal_safe_(const char* const msg, const size_t len)
 {
     ssize_t x V_UNUSED = // cppcheck-suppress unreadVariable

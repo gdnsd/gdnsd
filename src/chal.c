@@ -123,7 +123,7 @@ struct cset_s_ {
     size_t count;
     ev_tstamp expiry;
     cset_t* next_newer;
-    chal_t chals[0];
+    chal_t chals[];
 };
 
 // The total list of all active cset_t is managed as a single-linked list as a
@@ -147,14 +147,14 @@ static ev_timer expire_timer;
 // isn't a great idea either.
 typedef struct {
     size_t count;
-    const chal_t* chals[0];
+    const chal_t* chals[];
 } chal_collide_t;
 
 // chal_tbl_t is a hashtable indexing into all the chal_t of all the current
 // cset_t, used for runtime lookups.
 typedef struct {
     uint32_t mask;
-    chal_collide_t* tbl[0];
+    chal_collide_t* tbl[];
 } chal_tbl_t;
 
 // This is the table reference used for runtime lookups.  It's replaced by

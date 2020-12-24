@@ -52,7 +52,7 @@ static mon_t* mons = NULL;
 
 static unsigned num_proc = 0;
 
-F_NONNULL F_NORETURN
+noreturn F_NONNULL
 static void syserr_for_ev(const char* msg)
 {
     log_fatal("%s: %s", msg, logf_errno());

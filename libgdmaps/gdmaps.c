@@ -86,7 +86,7 @@ typedef struct {
     bool ignore_ecs;
 } gdmap_t;
 
-F_NONNULL F_NORETURN
+F_NONNULL noreturn
 static bool gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* val V_UNUSED, const void* mapname_asvoid)
 {
     const char* mapname = mapname_asvoid;

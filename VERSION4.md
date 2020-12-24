@@ -26,6 +26,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 * Autoconf: min version bumped from 2.64 to 2.69 (2.70+ recommended!)
 * Automake: min version bumped from 1.13 to 1.14
+* C: Minimum standards version bumped from C99 to C11
 
 ## Revamping internals
 

@@ -77,7 +77,7 @@ static void install_alarm(void)
     alarm(opt_timeo);
 }
 
-F_NONNULL F_NORETURN
+noreturn F_NONNULL
 static void usage(void)
 {
     fprintf(stderr,

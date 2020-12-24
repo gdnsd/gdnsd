@@ -148,9 +148,7 @@
 #define SHORTHASH_BYTES crypto_shorthash_siphash24_BYTES
 #define SHORTHASH_KEYBYTES crypto_shorthash_siphash24_KEYBYTES
 
-#if __STDC_VERSION__ >= 201112L // C11
-_Static_assert(SHORTHASH_BYTES == SCOOKIE_LEN, "libsodium shorthash output size == server cookie len");
-#endif
+static_assert(SHORTHASH_BYTES == SCOOKIE_LEN, "libsodium shorthash output size == server cookie len");
 
 typedef struct {
     uint8_t previous[SHORTHASH_KEYBYTES];
