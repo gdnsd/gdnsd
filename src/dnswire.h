@@ -53,7 +53,7 @@
 /*** Wire formats ***/
 
 /* DNS Header */
-typedef struct S_PACKED {
+typedef struct {
     uint16_t id;
     uint8_t flags1;
     uint8_t flags2;

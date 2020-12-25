@@ -110,17 +110,19 @@ struct conn {
         proxy_hdr_t proxy_hdr;
         uint8_t readbuf[TCP_READBUF];
     };
-    // These two must be adjacent, as a single send() points at them as if
-    // they're one buffer.  This should be portable since uint8_t can't require
-    // alignment padding after a uint16_t.
     union {
         struct {
             uint16_t pktbuf_size_hdr;
-            uint8_t pktbuf[MAX_RESPONSE_BUF];
+            pkt_t pkt;
         };
-        uint8_t pktbuf_raw[MAX_RESPONSE_BUF + 2U];
+        uint8_t pktbuf_raw[sizeof(uint16_t) + sizeof(pkt_t)];
     };
 };
+
+// Ensure no padding between pktbuf_size_hdr and pkt, above
+#if __STDC_VERSION__ >= 201112L // C11
+static_assert(_Alignof(pkt_t) <= _Alignof(uint16_t), "No padding for pkt");
+#endif
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
 static thread_t** registry = NULL;
@@ -375,7 +377,7 @@ static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
 F_NONNULL
 static void conn_send_dso_uni(thread_t* thr, conn_t* conn, const bool rd)
 {
-    uint8_t* buf = conn->pktbuf;
+    uint8_t* buf = conn->pkt.raw;
 
     // For DSO uni, the 12 byte header is all zero except the opcode
     memset(buf, 0, 12U);
@@ -632,8 +634,8 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
 {
     gdnsd_assert(req_size >= 12U && req_size <= DNS_RECV_SIZE);
 
-    // Move 1 full request from readbuf to pktbuf, advancing head and decrementing bytes
-    memcpy(conn->pktbuf, &conn->readbuf[conn->readbuf_head + 2U], req_size);
+    // Move 1 full request from readbuf to pkt, advancing head and decrementing bytes
+    memcpy(conn->pkt.raw, &conn->readbuf[conn->readbuf_head + 2U], req_size);
     const size_t req_bufsize = req_size + 2U;
     conn->readbuf_head += req_bufsize;
     conn->readbuf_bytes -= req_bufsize;
@@ -644,7 +646,7 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
         rcu_thread_online();
     }
     conn->dso.last_was_ka = false;
-    size_t resp_size = process_dns_query(thr->pctx, &conn->sa, conn->pktbuf, &conn->dso, req_size);
+    size_t resp_size = process_dns_query(thr->pctx, &conn->sa, &conn->pkt, &conn->dso, req_size);
     if (!resp_size) {
         log_debug("TCP DNS conn from %s reset by server: dropped invalid query", logf_anysin(&conn->sa));
         stats_own_inc(&thr->stats->tcp.close_s_err);

@@ -21,6 +21,7 @@
 #define GDNSD_DNSPACKET_H
 
 #include "socks.h"
+#include "dnswire.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/stats.h>
@@ -108,8 +109,13 @@ typedef struct {
 struct dnsp_ctx; // opaque to outsiders
 typedef struct dnsp_ctx dnsp_ctx_t;
 
+typedef union {
+    wire_dns_header_t hdr;
+    uint8_t raw[MAX_RESPONSE_BUF];
+} pkt_t;
+
 F_HOT F_NONNULLX(1, 2, 3)
-unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, uint8_t* packet, dso_state_t* dso, const unsigned packet_len);
+unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, pkt_t* packet, dso_state_t* dso, const unsigned packet_len);
 
 F_NONNULL F_WUNUSED F_RETNN
 dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6);
