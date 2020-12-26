@@ -39,7 +39,10 @@
 // Sizes our output buffers, we never generate packets longer than this.
 // This can't be changed arbitrarily to another number by editing the define
 // here, as the 16K boundary has other magic effects (e.g. on DNS compression).
-#define MAX_RESPONSE_BUF 16384U
+// Note the values is actually (16K - 2U), so that TCP can allocate an exactly
+// 4-page-sized buffer and UDP is using the same limits (but will round up to a
+// page for allocation as well)
+#define MAX_RESPONSE_BUF 16382U
 
 // EDNS Padding block size from RFC 8467
 #define PAD_BLOCK_SIZE 468U
@@ -47,7 +50,8 @@
 // This is similar to MAX_RESPONSE_BUF, but for checking real data output
 // lengths, so that there's always room within MAX_RESPONSE_BUF to pad to a
 // multiple of 468 bytes for EDNS Padding, which has a min padding size of 4
-// bytes: (468*35 - 4) = 16376
+// bytes: (468 * 35 - 4) = 16376 (which would pad to 16380, just shy of
+// MAX_RESPONSE_BUF)
 #define MAX_RESPONSE_DATA 16376U
 
 /*** Wire formats ***/

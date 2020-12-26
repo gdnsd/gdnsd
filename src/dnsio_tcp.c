@@ -41,6 +41,7 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <sys/uio.h>
+#include <math.h>
 
 #include <ev.h>
 #include <urcu-qsbr.h>
@@ -55,9 +56,31 @@
 // Size of our read buffer.  We always attempt filling it on a read if TCP
 // buffers have anything avail, and then drain all full requests from it and
 // move any remaining partial request to the bottom before reading again.
-#define TCP_READBUF 4096U
+// It's sized to fit several typical requests, and also such that "struct conn"
+// comes in just a little under a 4K page in size on x86_64/Linux (and thus
+// probably is no more than 1 page on all reasonable targets).  If the rest of
+// the structure grows later, this may need adjustment.  There's a static
+// assert about this below the definition of "struct conn".  This is just an
+// efficiency hack of course.
+#define TCP_READBUF 3840U
 #if __STDC_VERSION__ >= 201112L // C11
-_Static_assert(TCP_READBUF >= (DNS_RECV_SIZE + 2U), "TCP readbuf fits >= 1 maximal req");
+static_assert(TCP_READBUF >= (DNS_RECV_SIZE + 2U), "TCP readbuf fits >= 1 maximal req");
+static_assert(TCP_READBUF >= sizeof(proxy_hdr_t), "TCP readbuf >= PROXY header");
+#endif
+
+typedef union {
+    // These two must be adjacent, as a single send() points at them as if
+    // they're one buffer.
+    struct {
+        uint16_t pktbuf_size_hdr;
+        pkt_t pkt;
+    };
+    uint8_t pktbuf_raw[sizeof(uint16_t) + sizeof(pkt_t)];
+} tcp_pkt_t;
+
+// Ensure no padding between pktbuf_size_hdr and pkt, above
+#if __STDC_VERSION__ >= 201112L // C11
+static_assert(_Alignof(pkt_t) <= _Alignof(uint16_t), "No padding for pkt");
 #endif
 
 typedef enum {
@@ -75,8 +98,11 @@ typedef struct {
     dnspacket_stats_t* stats;
     dnsp_ctx_t* pctx;
     struct ev_loop* loop;
+    conn_t** churn; // save conn_t allocations from previously-closed conns
+    tcp_pkt_t* tpkt;
     double server_timeout;
     size_t max_clients;
+    unsigned churn_alloc;
     bool do_proxy;
     bool tcp_pad;
     // The rest below will mutate:
@@ -89,6 +115,7 @@ typedef struct {
     conn_t* connq_tail; // last element, least-idle
     size_t num_conns; // count of all conns, also len of connq list
     size_t check_mode_conns; // conns using check_watcher at present
+    unsigned churn_count; // number of conn_t cached in "churn"
     thr_state_t st;
     bool rcu_is_online;
 } thread_t;
@@ -110,18 +137,11 @@ struct conn {
         proxy_hdr_t proxy_hdr;
         uint8_t readbuf[TCP_READBUF];
     };
-    union {
-        struct {
-            uint16_t pktbuf_size_hdr;
-            pkt_t pkt;
-        };
-        uint8_t pktbuf_raw[sizeof(uint16_t) + sizeof(pkt_t)];
-    };
 };
 
-// Ensure no padding between pktbuf_size_hdr and pkt, above
+// See above at definition of TCP_READBUF
 #if __STDC_VERSION__ >= 201112L // C11
-static_assert(_Alignof(pkt_t) <= _Alignof(uint16_t), "No padding for pkt");
+static_assert(sizeof(conn_t) <= 4096U, "TCP conn <= 4KB");
 #endif
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -263,7 +283,13 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
 
     if (manage_queue)
         connq_pull_conn(thr, conn);
-    free(conn);
+
+    if (thr->churn_count < thr->churn_alloc) {
+        memset(conn, 0, sizeof(*conn));
+        thr->churn[thr->churn_count++] = conn;
+    } else {
+        free(conn);
+    }
 }
 
 // Append a new connection at the tail of the idle list and set its idle_start
@@ -354,10 +380,11 @@ F_NONNULL
 static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
 {
     gdnsd_assert(resp_size);
-    conn->pktbuf_size_hdr = htons((uint16_t)resp_size);
+    tcp_pkt_t* tpkt = thr->tpkt;
+    tpkt->pktbuf_size_hdr = htons((uint16_t)resp_size);
     const size_t resp_send_size = resp_size + 2U;
     const ev_io* readw = &conn->read_watcher;
-    const ssize_t send_rv = send(readw->fd, conn->pktbuf_raw, resp_send_size, 0);
+    const ssize_t send_rv = send(readw->fd, tpkt->pktbuf_raw, resp_send_size, 0);
     if (unlikely(send_rv < (ssize_t)resp_send_size)) {
         if (send_rv < 0 && !ERRNO_WOULDBLOCK)
             log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->sa), logf_errno());
@@ -377,7 +404,7 @@ static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
 F_NONNULL
 static void conn_send_dso_uni(thread_t* thr, conn_t* conn, const bool rd)
 {
-    uint8_t* buf = conn->pkt.raw;
+    uint8_t* buf = thr->tpkt->pkt.raw;
 
     // For DSO uni, the 12 byte header is all zero except the opcode
     memset(buf, 0, 12U);
@@ -633,9 +660,10 @@ F_NONNULL
 static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
 {
     gdnsd_assert(req_size >= 12U && req_size <= DNS_RECV_SIZE);
+    tcp_pkt_t* tpkt = thr->tpkt;
 
     // Move 1 full request from readbuf to pkt, advancing head and decrementing bytes
-    memcpy(conn->pkt.raw, &conn->readbuf[conn->readbuf_head + 2U], req_size);
+    memcpy(tpkt->pkt.raw, &conn->readbuf[conn->readbuf_head + 2U], req_size);
     const size_t req_bufsize = req_size + 2U;
     conn->readbuf_head += req_bufsize;
     conn->readbuf_bytes -= req_bufsize;
@@ -646,7 +674,7 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
         rcu_thread_online();
     }
     conn->dso.last_was_ka = false;
-    size_t resp_size = process_dns_query(thr->pctx, &conn->sa, &conn->pkt, &conn->dso, req_size);
+    size_t resp_size = process_dns_query(thr->pctx, &conn->sa, &tpkt->pkt, &conn->dso, req_size);
     if (!resp_size) {
         log_debug("TCP DNS conn from %s reset by server: dropped invalid query", logf_anysin(&conn->sa));
         stats_own_inc(&thr->stats->tcp.close_s_err);
@@ -718,18 +746,15 @@ static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int 
 }
 
 // This does the actual recv() call and immediate post-processing (incl conn
-// termination on EOF or error), expects no empty space at buffer start.
+// termination on EOF or error).
 // rv true means caller should return immediately (connection closed or read
 // gave no new bytes and wants to block in the eventloop again).  rv false
 // means one or more new bytes were added to the readbuf.
 F_NONNULL
 static bool conn_do_recv(thread_t* thr, conn_t* conn)
 {
-    gdnsd_assert(!conn->readbuf_head);
-    gdnsd_assert(conn->readbuf_bytes < (DNS_RECV_SIZE + 2U));
     gdnsd_assert(conn->readbuf_bytes < sizeof(conn->readbuf));
     const size_t wanted = sizeof(conn->readbuf) - conn->readbuf_bytes;
-
     const ssize_t recvrv = recv(conn->read_watcher.fd, &conn->readbuf[conn->readbuf_bytes], wanted, 0);
 
     if (recvrv == 0) { // (EOF)
@@ -781,8 +806,6 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
     thread_t* thr = conn->thr;
     gdnsd_assert(thr);
 
-    // The read handler is never invoked with empty space at the buffer start
-    gdnsd_assert(!conn->readbuf_head);
     if (conn_do_recv(thr, conn))
         return; // no new bytes or conn closed
     gdnsd_assert(conn->readbuf_bytes);
@@ -805,13 +828,7 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
             return;
         }
         conn->readbuf_bytes -= consumed;
-        if (conn->readbuf_bytes) {
-            // If there's more data avail after PROXY, move it down so we're
-            // transparent to the normal handling of the first req below.
-            memmove(conn->readbuf, &conn->readbuf[consumed], conn->readbuf_bytes);
-        } else {
-            return;
-        }
+        conn->readbuf_head += consumed;
     }
 
     const ssize_t ccnr_rv = conn_check_next_req(thr, conn);
@@ -857,7 +874,11 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 
     log_debug("Received TCP DNS connection from %s", logf_anysin(&sa));
 
-    conn_t* conn = xcalloc(sizeof(*conn));
+    conn_t* conn;
+    if (thr->churn_count)
+        conn = thr->churn[--thr->churn_count];
+    else
+        conn = xcalloc(sizeof(*conn));
     memcpy(&conn->sa, &sa, sizeof(sa));
 
     stats_own_inc(&thr->stats->tcp.conns);
@@ -1063,6 +1084,15 @@ void* dnsio_tcp_start(void* thread_asvoid)
     thr->do_proxy = addrconf->tcp_proxy;
     thr->tcp_pad = addrconf->tcp_pad;
 
+    // Set up the conn_t churn buffer, which saves some per-new-connection
+    // memory allocation churn by saving up to sqrt(max_clients) old conn_t
+    // storage for reuse
+    thr->churn_alloc = lrint(floor(sqrt(addrconf->tcp_clients_per_thread)));
+    gdnsd_assert(thr->churn_alloc >= 4U); // because tcp_cpt min is 16U
+    thr->churn = xmalloc_n(thr->churn_alloc, sizeof(*thr->churn));
+
+    thr->tpkt = xcalloc(sizeof(*thr->tpkt));
+
     ev_idle* idle_watcher = &thr->idle_watcher;
     ev_idle_init(idle_watcher, idle_handler);
     ev_set_priority(idle_watcher, -2);
@@ -1119,6 +1149,10 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     ev_loop_destroy(loop);
     dnspacket_ctx_cleanup(thr->pctx);
+    for (unsigned i = 0; i < thr->churn_count; i++)
+        free(thr->churn[i]);
+    free(thr->churn);
+    free(thr->tpkt);
     free(thr);
 
     return NULL;
