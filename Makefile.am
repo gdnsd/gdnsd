@@ -50,7 +50,7 @@ INSTALL_EXEC_HOOK_DEPS =
 # repo root
 #=====================================
 
-dist_doc_DATA += README.md VERSION3.md INSTALL AUTHORS COPYING NEWS
+dist_doc_DATA += README.md INSTALL AUTHORS COPYING NEWS
 
 # This is technically a subdir, but the build process doesn't use it,
 #   it's just distributed for people to run things manually
