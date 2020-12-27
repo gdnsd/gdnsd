@@ -237,12 +237,12 @@ MK_RRSET_ADD(txt, DNS_TYPE_TXT)
 static unsigned clamp_ttl(const zone_t* zone, const uint8_t* dname, const char* rrtype, const unsigned ttl)
 {
     if (ttl > gcfg->max_ttl) {
-        log_zwarn("Name '%s%s': %s TTL %u too large, clamped to max_ttl setting of %u",
-                  logf_dname(dname), logf_dname(zone->dname), rrtype, ttl, gcfg->max_ttl);
+        log_warn("Name '%s%s': %s TTL %u too large, clamped to max_ttl setting of %u",
+                 logf_dname(dname), logf_dname(zone->dname), rrtype, ttl, gcfg->max_ttl);
         return gcfg->max_ttl;
     } else if (ttl < gcfg->min_ttl) {
-        log_zwarn("Name '%s%s': %s TTL %u too small, clamped to min_ttl setting of %u",
-                  logf_dname(dname), logf_dname(zone->dname), rrtype, ttl, gcfg->min_ttl);
+        log_warn("Name '%s%s': %s TTL %u too small, clamped to min_ttl setting of %u",
+                 logf_dname(dname), logf_dname(zone->dname), rrtype, ttl, gcfg->min_ttl);
         return gcfg->min_ttl;
     }
     return ttl;
