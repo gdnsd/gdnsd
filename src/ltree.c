@@ -98,8 +98,10 @@ static struct ltree_node* ltree_node_find_or_add_child(struct ltree_node* node, 
             probe_dist++;
         } while (1);
     }
-    if (unlikely((ccount + (ccount >> 2U)) == LTREE_NODE_MAX_SLOTS))
+    if (unlikely((ccount + (ccount >> 2U)) == LTREE_NODE_MAX_SLOTS)) {
+        log_err("Failed to create node '%s': Too many nodes at this level", logf_name(child_name));
         return NULL;
+    }
     const uint32_t next_mask = count2mask_u32_lf80(ccount + 1U);
     if (next_mask != mask) {
         struct ltree_hslot* old_table = node->child_table;
@@ -160,12 +162,28 @@ static struct ltree_node* ltree_zone_find_or_add_dname(struct ltree_node* zroot,
     return current;
 }
 
-F_WUNUSED F_NONNULL
-static bool ltree_add_rr_raw(struct ltree_node* zroot, const uint8_t* dname, uint8_t* data, const unsigned data_size, const char* rrtype_desc, unsigned ttl, unsigned rrtype)
+// rdata_cmp() intends to compare rdata according to DNSSEC canonical ordering
+// for RRSets, which is specified in RFC 4034 sec 6.3 as:
+// [RRs] are sorted by treating the RDATA portion of the canonical form of each
+// RR as a left-justified unsigned octet sequence in which the absence of an
+// octet sorts before a zero octet.
+F_NONNULL
+static int rdata_cmp(const uint8_t* r1, const uint8_t* r2)
+{
+    const int r1_len = (int)ntohs(gdnsd_get_una16(r1));
+    const int r2_len = (int)ntohs(gdnsd_get_una16(r2));
+    const int len_diff = r1_len - r2_len;
+    int rv = memcmp(r1 + 2, r2 + 2, (size_t)((len_diff < 0) ? r1_len : r2_len));
+    if (!rv)
+        rv = len_diff;
+    return rv;
+}
+
+bool ltree_add_rec(struct ltree_node* zroot, const uint8_t* dname, uint8_t* rdata, unsigned rrtype, unsigned ttl)
 {
     struct ltree_node* node = ltree_zone_find_or_add_dname(zroot, dname);
     if (unlikely(!node))
-        log_zfatal("Too many domainnames at one level in zone '%s'", logf_dname(zroot->dname));
+        return true; // find_or_add already logged about it
 
     // Check both directions: Adding CNAME with any other existing rrset, and
     // adding anything to a node that already has a CNAME:
@@ -181,66 +199,67 @@ static bool ltree_add_rr_raw(struct ltree_node* zroot, const uint8_t* dname, uin
 
     struct ltree_rrset_raw* rrset = NULL;
     union ltree_rrset** store_at = &node->rrsets;
-    while (*store_at) {
-        if ((*store_at)->gen.type == rrtype) {
+    while (!rrset && *store_at) {
+        if ((*store_at)->gen.type == rrtype)
             rrset = (struct ltree_rrset_raw*)*store_at;
-            if (!rrset->gen.count)
-                log_zfatal("Name '%s': %s dynamic and static results of the same type cannot co-exist", logf_dname(dname), rrtype_desc);
-            if (rrset->gen.count == LTREE_RRSET_MAX_RRS)
-                log_zfatal("Name '%s': Too many RRs of type %s", logf_dname(dname), rrtype_desc);
-            gdnsd_assume(rrset->data); // we asserted count earlier
-            const unsigned first_ttl = ntohl(gdnsd_get_una32(&rrset->data[6U]));
-            if (ttl != first_ttl) {
-                log_zwarn("Name '%s': All TTLs for type %s should match (using %u)", logf_dname(dname), rrtype_desc, first_ttl);
-                gdnsd_put_una32(htonl(first_ttl), &data[6U]); // correct the new RR data
-            }
-            rrset->gen.count++;
-            break;
-        }
-        store_at = &(*store_at)->gen.next;
+        else
+            store_at = &(*store_at)->gen.next;
     }
 
-    if (!rrset) {
+    if (rrset) {
+        if (!rrset->gen.count)
+            log_zfatal("Name '%s': dynamic and static results for type %s cannot co-exist", logf_dname(dname), logf_rrtype(rrtype));
+        if (rrset->gen.count == LTREE_RRSET_MAX_RRS)
+            log_zfatal("Name '%s': Too many RRs of type %s", logf_dname(dname), logf_rrtype(rrtype));
+        if (rrset->ttl != ttl)
+            log_zwarn("Name '%s': All TTLs for type %s should match (using %u)", logf_dname(dname), logf_rrtype(rrtype), rrset->ttl);
+        if (rrtype == DNS_TYPE_SOA) {
+            // Parsers only allow SOA at zone root
+            gdnsd_assert(zroot == node);
+            if (rrset->gen.count)
+                log_zfatal("Zone '%s': SOA defined twice", logf_dname(dname));
+        }
+        gdnsd_assert(!rrset->data_len);
+    } else {
         rrset = xcalloc(sizeof(*rrset));
         *store_at = (union ltree_rrset*)rrset;
         rrset->gen.type = rrtype;
-        rrset->gen.count = 1U;
+        rrset->ttl = ttl;
     }
 
-    if (rrtype == DNS_TYPE_SOA) {
-        // Parsers only allow SOA at zone root
-        gdnsd_assert(zroot == node);
-        if (rrset->gen.count > 1U)
-            log_zfatal("Zone '%s': SOA defined twice", logf_dname(dname));
+    // Find the DNSSEC-sorted insert position for the new RR, and check for
+    // dupes while we're at it.
+    unsigned pos;
+    for (pos = 0; pos < rrset->gen.count; pos++) {
+        int c = rdata_cmp(rdata, rrset->scan_rdata[pos]);
+        if (!c) {
+            // We want different messages for the strict and non-strict cases
+            // here, so we're not using the standard log_zwarn macro:
+            if (gcfg->zones_strict_data) {
+                log_err("Name '%s': duplicate RR of type %s detected", logf_dname(dname), logf_rrtype(rrtype));
+                return true; // On return true (failure), the caller (parser) frees the rdata
+            }
+            log_err("Name '%s': duplicate RR of type %s ignored", logf_dname(dname), logf_rrtype(rrtype));
+            free(rdata); // On return false (success), we have to free the duplicate we're ignoring
+            return false;
+        }
+        if (c < 0)
+            break;
     }
 
-    const unsigned new_size = rrset->data_len + data_size;
-    rrset->data = xrealloc(rrset->data, new_size);
-    memcpy(&rrset->data[rrset->data_len], data, data_size);
-    rrset->data_len = new_size;
-
+    // Realloc array and insert at the sorted position
+    rrset->scan_rdata = xrealloc(rrset->scan_rdata, (rrset->gen.count + 1U) * sizeof(*rrset->scan_rdata));
+    gdnsd_assume(pos <= rrset->gen.count);
+    unsigned to_move = rrset->gen.count - pos;
+    if (to_move)
+        memmove(&rrset->scan_rdata[pos + 1U], &rrset->scan_rdata[pos], to_move * sizeof(*rrset->scan_rdata));
+    rrset->scan_rdata[pos] = rdata;
+    rrset->gen.count++;
     return false;
-}
-
-// for clamping TTLs in ltree_add_rec_*
-F_NONNULL
-static unsigned clamp_ttl(const uint8_t* dname, const char* rrtype, const unsigned ttl)
-{
-    if (ttl > gcfg->max_ttl) {
-        log_warn("Name '%s': %s TTL %u too large, clamped to max_ttl setting of %u",
-                 logf_dname(dname), rrtype, ttl, gcfg->max_ttl);
-        return gcfg->max_ttl;
-    } else if (ttl < gcfg->min_ttl) {
-        log_warn("Name '%s': %s TTL %u too small, clamped to min_ttl setting of %u",
-                 logf_dname(dname), rrtype, ttl, gcfg->min_ttl);
-        return gcfg->min_ttl;
-    }
-    return ttl;
 }
 
 bool ltree_add_rec_dynaddr(struct ltree_node* zroot, const uint8_t* dname, const char* rhs, unsigned ttl_max, unsigned ttl_min)
 {
-    ttl_max = clamp_ttl(dname, "DYNA", ttl_max);
     if (ttl_min < gcfg->min_ttl) {
         log_zwarn("Name '%s': DYNA Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), ttl_min, gcfg->min_ttl);
         ttl_min = gcfg->min_ttl;
@@ -252,7 +271,7 @@ bool ltree_add_rec_dynaddr(struct ltree_node* zroot, const uint8_t* dname, const
 
     struct ltree_node* node = ltree_zone_find_or_add_dname(zroot, dname);
     if (unlikely(!node))
-        log_zfatal("Too many domainnames at one level in zone '%s'", logf_dname(zroot->dname));
+        return true; // find_or_add already logged about it
 
     struct ltree_rrset_raw* rrset = NULL;
     union ltree_rrset** store_at = &node->rrsets;
@@ -309,7 +328,6 @@ bool ltree_add_rec_dynaddr(struct ltree_node* zroot, const uint8_t* dname, const
 
 bool ltree_add_rec_dync(struct ltree_node* zroot, const uint8_t* dname, const char* rhs, unsigned ttl_max, unsigned ttl_min)
 {
-    ttl_max = clamp_ttl(dname, "DYNC", ttl_max);
     if (ttl_min < gcfg->min_ttl) {
         log_zwarn("Name '%s': DYNC Min-TTL /%u too small, clamped to min_ttl setting of %u", logf_dname(dname), ttl_min, gcfg->min_ttl);
         ttl_min = gcfg->min_ttl;
@@ -321,7 +339,7 @@ bool ltree_add_rec_dync(struct ltree_node* zroot, const uint8_t* dname, const ch
 
     struct ltree_node* node = ltree_zone_find_or_add_dname(zroot, dname);
     if (unlikely(!node))
-        log_zfatal("Too many domainnames at one level in zone '%s'", logf_dname(zroot->dname));
+        return true; // find_or_add already logged about it
     if (node->rrsets)
         log_zfatal("Name '%s': DYNC not allowed alongside other data", logf_dname(dname));
     struct ltree_rrset_dynac* rrset = xcalloc(sizeof(*rrset));
@@ -358,300 +376,6 @@ bool ltree_add_rec_dync(struct ltree_node* zroot, const uint8_t* dname, const ch
 }
 
 F_WUNUSED F_NONNULL
-static unsigned store_qname_comp(uint8_t* buf, const uint8_t* dname)
-{
-    if (dname[1] == '\0') {
-        *buf = '\0';
-        return 1U;
-    }
-    gdnsd_put_una16(htons(0xC00C), buf);
-    return 2U;
-}
-
-bool ltree_add_rec_a(struct ltree_node* zroot, const uint8_t* dname, const uint32_t addr, unsigned ttl)
-{
-    ttl = clamp_ttl(dname, "A", ttl);
-    unsigned offs = 0;
-    uint8_t buf[16U];
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_A, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(4U), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una32(addr, &buf[offs]);
-    offs += 4U;
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "A", ttl, DNS_TYPE_A);
-}
-
-bool ltree_add_rec_aaaa(struct ltree_node* zroot, const uint8_t* dname, const uint8_t* addr, unsigned ttl)
-{
-    ttl = clamp_ttl(dname, "AAAA", ttl);
-    unsigned offs = 0;
-    uint8_t buf[28U];
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_AAAA, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(16U), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], addr, 16U);
-    offs += 16U;
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "AAAA", ttl, DNS_TYPE_AAAA);
-}
-
-bool ltree_add_rec_ns(struct ltree_node* zroot, const uint8_t* dname, const uint8_t* rhs, unsigned ttl)
-{
-    ttl = clamp_ttl(dname, "NS", ttl);
-    const unsigned this_rr_rdlen = rhs[0];
-    unsigned offs = 0;
-    uint8_t buf[12U + 255U];
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_NS, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], &rhs[1], rhs[0]);
-    offs += rhs[0];
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "NS", ttl, DNS_TYPE_NS);
-}
-
-bool ltree_add_rec_soa_args(struct ltree_node* zroot, const uint8_t* dname, struct lt_soa_args args)
-{
-    // Here we clamp the negative TTL using min_ttl and max_ncache_ttl
-    if (args.ncache > gcfg->max_ncache_ttl) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", logf_dname(dname), args.ncache, gcfg->max_ncache_ttl);
-        args.ncache = gcfg->max_ncache_ttl;
-    } else if (args.ncache < gcfg->min_ttl) {
-        log_zwarn("Zone '%s': SOA negative-cache field %u too small, clamped to min_ttl setting of %u", logf_dname(dname), args.ncache, gcfg->min_ttl);
-        args.ncache = gcfg->min_ttl;
-    }
-
-    // And here, we clamp the real RR TTL using min_ttl and the ncache value derived above
-    if (args.ttl > args.ncache) {
-        log_zwarn("Zone '%s': SOA TTL %u > ncache field %u, clamped to ncache value", logf_dname(dname), args.ttl, args.ncache);
-        args.ttl = args.ncache;
-    } else if (args.ttl < gcfg->min_ttl) {
-        log_zwarn("Zone '%s': SOA TTL %u too small, clamped to min_ttl setting of %u", logf_dname(dname), args.ttl, gcfg->min_ttl);
-        args.ttl = gcfg->min_ttl;
-    }
-
-    const unsigned this_rr_rdlen = args.mname[0] + args.rname[0] + 20U;
-    unsigned offs = 0;
-    uint8_t buf[12U + 255U + 255U + 20U];
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_SOA, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(args.ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-
-    memcpy(&buf[offs], &args.mname[1], args.mname[0]);
-    offs += args.mname[0];
-    memcpy(&buf[offs], &args.rname[1], args.rname[0]);
-    offs += args.rname[0];
-    gdnsd_put_una32(htonl(args.serial), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(args.refresh), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(args.retry), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(args.expire), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(args.ncache), &buf[offs]);
-    offs += 4U;
-
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "SOA", args.ttl, DNS_TYPE_SOA);
-}
-
-bool ltree_add_rec_cname(struct ltree_node* zroot, const uint8_t* dname, const uint8_t* rhs, unsigned ttl)
-{
-    ttl = clamp_ttl(dname, "CNAME", ttl);
-
-    const unsigned this_rr_rdlen = rhs[0];
-    unsigned offs = 0;
-    uint8_t buf[12U + 255U];
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_CNAME, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], &rhs[1], rhs[0]);
-    offs += rhs[0];
-
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "CNAME", ttl, DNS_TYPE_CNAME);
-}
-
-bool ltree_add_rec_mx(struct ltree_node* zroot, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned pref)
-{
-    ttl = clamp_ttl(dname, "MX", ttl);
-
-    const unsigned this_rr_rdlen = 2U + rhs[0];
-    unsigned offs = 0;
-    uint8_t buf[12U + 2U + 255U];
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_MX, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una16(htons(pref), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], &rhs[1], rhs[0]);
-    offs += rhs[0];
-
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "MX", ttl, DNS_TYPE_MX);
-}
-
-bool ltree_add_rec_ptr(struct ltree_node* zroot, const uint8_t* dname, const uint8_t* rhs, unsigned ttl)
-{
-    ttl = clamp_ttl(dname, "PTR", ttl);
-
-    const unsigned this_rr_rdlen = rhs[0];
-    unsigned offs = 0;
-    uint8_t buf[12U + 255U];
-
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_PTR, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], &rhs[1], rhs[0]);
-    offs += rhs[0];
-
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "PTR", ttl, DNS_TYPE_PTR);
-}
-
-bool ltree_add_rec_srv_args(struct ltree_node* zroot, const uint8_t* dname, struct lt_srv_args args)
-{
-    const unsigned ttl = clamp_ttl(dname, "SRV", args.ttl);
-
-    const unsigned this_rr_rdlen = 6U + args.rhs[0];
-    unsigned offs = 0;
-    uint8_t buf[12U + 6U + 255U];
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_SRV, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una16(htons(args.priority), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una16(htons(args.weight), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una16(htons(args.port), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], &args.rhs[1], args.rhs[0]);
-    offs += args.rhs[0];
-
-    return ltree_add_rr_raw(zroot, dname, buf, offs, "SRV", ttl, DNS_TYPE_SRV);
-}
-
-bool ltree_add_rec_naptr_args(struct ltree_node* zroot, const uint8_t* dname, struct lt_naptr_args args)
-{
-    unsigned ttl = clamp_ttl(dname, "NAPTR", args.ttl);
-
-    const unsigned this_rr_rdlen = 4U + args.text_len + args.rhs[0];
-    uint8_t* buf = xmalloc(12U + this_rr_rdlen);
-    unsigned offs = 0;
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_NAPTR, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una16(htons(args.order), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una16(htons(args.pref), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], args.text, args.text_len);
-    offs += args.text_len;
-    memcpy(&buf[offs], &args.rhs[1], args.rhs[0]);
-    offs += args.rhs[0];
-    const bool rv = ltree_add_rr_raw(zroot, dname, buf, offs, "NAPTR", ttl, DNS_TYPE_NAPTR);
-    free(buf);
-    return rv;
-}
-
-bool ltree_add_rec_txt(struct ltree_node* zroot, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl)
-{
-    ttl = clamp_ttl(dname, "TXT", ttl);
-
-    const unsigned this_rr_rdlen = text_len;
-    uint8_t* buf = xmalloc(12U + this_rr_rdlen);
-    unsigned offs = 0;
-
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una32(DNS_RRFIXED_TXT, &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(this_rr_rdlen), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], text, text_len);
-    offs += text_len;
-    const bool rv = ltree_add_rr_raw(zroot, dname, buf, offs, "TXT", ttl, DNS_TYPE_TXT);
-    free(buf);
-    return rv;
-}
-
-bool ltree_add_rec_rfc3597(struct ltree_node* zroot, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd)
-{
-    // For various error/log outputs, some of which are indirect
-    char type_desc[64];
-    int snp_rv = snprintf(type_desc, 64, "RFC3597 TYPE%u", rrtype);
-    gdnsd_assert(snp_rv > 0 && snp_rv < 64);
-
-    if (rrtype == DNS_TYPE_A
-            || rrtype == DNS_TYPE_AAAA
-            || rrtype == DNS_TYPE_SOA
-            || rrtype == DNS_TYPE_CNAME
-            || rrtype == DNS_TYPE_NS
-            || rrtype == DNS_TYPE_PTR
-            || rrtype == DNS_TYPE_MX
-            || rrtype == DNS_TYPE_SRV
-            || rrtype == DNS_TYPE_NAPTR
-            || rrtype == DNS_TYPE_TXT)
-        log_zfatal("Name '%s': %s not allowed, please use the explicit support built in for this RR type", logf_dname(dname), type_desc);
-
-    if (rrtype == DNS_TYPE_HINFO
-            || (rrtype > 127 && rrtype < 256)
-            || rrtype == 0)
-        log_zfatal("Name '%s': %s not allowed", logf_dname(dname), type_desc);
-
-    ttl = clamp_ttl(dname, type_desc, ttl);
-
-    unsigned offs = 0;
-    uint8_t* buf = xmalloc(12U + rdlen);
-    offs += store_qname_comp(buf, dname);
-    gdnsd_put_una16(htons(rrtype), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una16(htons(DNS_CLASS_IN), &buf[offs]);
-    offs += 2U;
-    gdnsd_put_una32(htonl(ttl), &buf[offs]);
-    offs += 4U;
-    gdnsd_put_una16(htons(rdlen), &buf[offs]);
-    offs += 2U;
-    memcpy(&buf[offs], rd, rdlen);
-    offs += rdlen;
-    const bool rv = ltree_add_rr_raw(zroot, dname, buf, offs, type_desc, ttl, rrtype);
-    free(buf);
-    return rv;
-}
-
-F_WUNUSED F_NONNULL
 static bool check_deleg(const struct ltree_node* node, const bool at_deleg)
 {
     if (dname_iswild(node->dname))
@@ -666,6 +390,80 @@ static bool check_deleg(const struct ltree_node* node, const bool at_deleg)
         rrset_dchk = rrset_dchk->gen.next;
     }
 
+    return false;
+}
+
+F_WUNUSED F_NONNULL
+static unsigned store_qname_comp(uint8_t* buf, const uint8_t* dname)
+{
+    if (dname[1] == '\0') {
+        *buf = '\0';
+        return 1U;
+    }
+    gdnsd_put_una16(htons(0xC00C), buf);
+    return 2U;
+}
+
+void realize_rdata(const struct ltree_node* node, struct ltree_rrset_raw* raw)
+{
+    // This makes this method idempotent, which is important because we don't
+    // know whether the compressor code will need to realize additional nodes
+    // for additional data before the postproc walk naturally reaches them
+    // (currently only used for A/AAAA glue for NSes, but there may for better
+    // or worse be other future uses of the additional section that are
+    // warranted)
+    if (raw->data_len)
+        return;
+
+    // DNSSEC TODO - Generate an uncompressed copy at this stage as well, and
+    // sign it for RRSIG, and then add the completed RRSIG to raw->data
+
+    // Encode a compressed left side (name, type, class, ttl)
+    uint8_t left[10];
+    unsigned left_len = 0;
+    left_len += store_qname_comp(left, node->dname);
+    gdnsd_put_una16(htons(raw->gen.type), &left[left_len]);
+    left_len += 2U;
+    gdnsd_put_una16(htons(DNS_CLASS_IN), &left[left_len]);
+    left_len += 2U;
+    gdnsd_put_una32(htonl(raw->ttl), &left[left_len]);
+    left_len += 4U;
+    gdnsd_assert(left_len == 10U || left_len == 9U); // latter is root-of-dns case
+
+    unsigned total_size = raw->gen.count * (left_len + 2U);
+    for (unsigned i = 0; i < raw->gen.count; i++)
+        total_size += ntohs(gdnsd_get_una16(raw->scan_rdata[i]));
+
+    uint8_t* data = xmalloc(total_size);
+    unsigned offs = 0;
+    for (unsigned i = 0; i < raw->gen.count; i++) {
+        memcpy(&data[offs], left, left_len);
+        offs += left_len;
+        uint8_t* rd = raw->scan_rdata[i];
+        unsigned rd_copy = ntohs(gdnsd_get_una16(rd)) + 2U;
+        memcpy(&data[offs], rd, rd_copy);
+        offs += rd_copy;
+        free(raw->scan_rdata[i]);
+    }
+    free(raw->scan_rdata);
+
+    gdnsd_assert(offs == total_size);
+    raw->data = data;
+    raw->data_len = offs;
+}
+
+F_WUNUSED F_NONNULL
+static bool postproc_static_rrset(const struct ltree_node* node, struct ltree_rrset_raw* raw, struct ltree_node* zroot, const bool in_deleg)
+{
+    realize_rdata(node, raw);
+    // Type-specific compression for raw (and gluing in the case of NS):
+    if (raw->gen.type == DNS_TYPE_MX || raw->gen.type == DNS_TYPE_CNAME || raw->gen.type == DNS_TYPE_PTR)
+        comp_do_mx_cname_ptr(raw, node->dname);
+    else if (raw->gen.type == DNS_TYPE_SOA)
+        comp_do_soa(raw, node->dname);
+    else if (raw->gen.type == DNS_TYPE_NS)
+        if (comp_do_ns(raw, zroot, node->dname, in_deleg))
+            return true;
     return false;
 }
 
@@ -696,20 +494,15 @@ static bool ltree_postproc_node(struct ltree_node* node, struct ltree_node* zroo
         // dynamics skip all of this: they're known-small and don't have data to
         // glue or compress:
         if (rrset->gen.count) {
-            // Type-specific compression for raw (and gluing in the case of NS):
-            if (rrset->gen.type == DNS_TYPE_MX || rrset->gen.type == DNS_TYPE_CNAME || rrset->gen.type == DNS_TYPE_PTR) {
-                comp_do_mx_cname_ptr(&rrset->raw, node->dname);
-            } else if (rrset->gen.type == DNS_TYPE_SOA) {
-                comp_do_soa(&rrset->raw, node->dname);
-            } else if (rrset->gen.type == DNS_TYPE_NS) {
-                if (comp_do_ns(&rrset->raw, zroot, node->dname, in_deleg))
-                    return true;
-            }
+            if (postproc_static_rrset(node, &rrset->raw, zroot, in_deleg))
+                return true;
+            // assert that the above converted scan_rdata -> data
+            gdnsd_assert(rrset->raw.data_len);
             // deterministic output size check
             unsigned rsize_resp = rsize_base + rrset->raw.data_len;
             if (rsize_resp > MAX_RESPONSE_DATA)
-                log_zfatal("'%s TYPE %u' has too much data (%u > %u)",
-                           logf_dname(node->dname), (unsigned)rrset->gen.type,
+                log_zfatal("'%s %s' has too much data (%u > %u)",
+                           logf_dname(node->dname), logf_rrtype(rrset->gen.type),
                            rsize_resp, MAX_RESPONSE_DATA);
         }
         rrset = rrset->gen.next;
@@ -867,10 +660,17 @@ void ltree_destroy(struct ltree_node* node)
         union ltree_rrset* next = rrset->gen.next;
         // Everything is in raw form, except !count dynac entries
         if (rrset->gen.count) {
-            if (rrset->raw.data)
-                free(rrset->raw.data);
-            if (rrset->raw.comp_offsets)
-                free(rrset->raw.comp_offsets);
+            struct ltree_rrset_raw* r = &rrset->raw;
+            if (!r->data_len && r->scan_rdata) {
+                for (unsigned i = 0; i < rrset->gen.count; i++)
+                    free(r->scan_rdata[i]);
+                free(r->scan_rdata);
+                gdnsd_assert(!r->comp_offsets);
+            } else if (r->data) {
+                free(r->data);
+                if (r->comp_offsets)
+                    free(r->comp_offsets);
+            }
         }
         free(rrset);
         rrset = next;
@@ -994,7 +794,7 @@ bool ltree_merge_zone(struct ltree_node* new_root_tree, struct ltree_node* zroot
         lcount--;
         n = ltree_node_find_or_add_child(n, lstack[lcount], lstack_len[lcount]);
         if (unlikely(!n))
-            log_zfatal("Too many zones!");
+            return true; // find_or_add already logged about it
     }
 
     if (n->zone_cut) {

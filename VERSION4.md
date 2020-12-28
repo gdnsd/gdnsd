@@ -8,6 +8,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ### DNS
 
+* RRSets are now sorted in DNSSEC canonical order when loading zone data.  Most RRSets will be served in this same order on the wire, regardless of original zonefile order (except for address RR-sets, which continue to be randomly shuffled at output time).
+
 ### Zonefiles
 
 * Static `_acme_challenge` records now override anything supplied by the dynamic system for temporary uses.  Removing a static entry will expose dynamic ones on zone reload.

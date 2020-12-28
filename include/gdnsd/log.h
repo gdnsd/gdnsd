@@ -200,6 +200,8 @@ F_RETNN F_COLD
 const char* gdnsd_logf_dname(const uint8_t* dname);
 F_RETNN F_COLD
 const char* gdnsd_logf_name(const uint8_t* name);
+F_RETNN F_COLD
+const char* gdnsd_logf_rrtype(const unsigned rrtype);
 
 // We prefer to use these shortcuts to save line-length for common formatting
 // functions, but since they're backed by real functions, we don't want to
@@ -211,5 +213,6 @@ const char* gdnsd_logf_name(const uint8_t* name);
 #define logf_in6a gdnsd_logf_in6a
 #define logf_dname gdnsd_logf_dname
 #define logf_name gdnsd_logf_name
+#define logf_rrtype gdnsd_logf_rrtype
 
 #endif // GDNSD_LOG_H

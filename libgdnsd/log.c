@@ -377,3 +377,59 @@ const char* gdnsd_logf_name(const uint8_t* name)
     memcpy(nbuf, tmpbuf, len);
     return nbuf;
 }
+
+#define num_rr_names 66U
+static const char* const rr_names[num_rr_names] = {
+    "[zero]",  "A",          "NS",     "MD",         // 0-3
+    "MF",      "CNAME",      "SOA",    "MB",         // 4-9
+    "MG",      "MR",         "NULL",   "WKS",        // 8-11
+    "PTR",     "HINFO",      "MINFO",  "MX",         // 12-15
+    "TXT",     "RP",         "AFSDB",  "X25",        // 16-19
+    "ISDN",    "RT",         "NSAP",   "NSAP-PTR",   // 20-23
+    "SIG",     "KEY",        "PX",     "GPOS",       // 24-27
+    "AAAA",    "LOC",        "NXT",    "EID",        // 28-31
+    "NIMLOC",  "SRV",        "ATMA",   "NAPTR",      // 32-35
+    "KX",      "CERT",       "A6",     "DNAME",      // 36-39
+    "SINK",    "OPT",        "APL",    "DS",         // 40-43
+    "SSHFP",   "IPSECKEY",   "RRSIG",  "NSEC",       // 44-47
+    "DNSKEY",  "DHCID",      "NSEC3",  "NSEC3PARAM", // 48-51
+    "TLSA",    "SMIMEA",     "TYPE54", "HIP",        // 52-55
+    "NINFO",   "RKEY",       "TALINK", "CDS",        // 56-59
+    "CDNSKEY", "OPENPGPKEY", "CSYNC",  "ZONEMD",     // 60-63
+    "SVCB",    "HTTPS",                              // 64-65
+    // In the future, we could add the whole set from IANA, but this covers
+    // reasonable cases we support for now and then some.
+};
+
+// These are worth supporting explicitly, but not worth building out the rest
+// of the array just for them at this point:
+static const char rr_name_255[] = { "ANY" };
+static const char rr_name_256[] = { "URI" };
+static const char rr_name_257[] = { "CAA" };
+
+const char* gdnsd_logf_rrtype(const unsigned rrtype)
+{
+    char tmp[32];
+    const char* src = tmp;
+    unsigned len = 0U;
+
+    if (rrtype < num_rr_names) {
+        src = rr_names[rrtype];
+    } else if (rrtype == 255U) {
+        src = rr_name_255;
+    } else if (rrtype == 256U) {
+        src = rr_name_256;
+    } else if (rrtype == 257U) {
+        src = rr_name_257;
+    } else {
+        int snp_rv = snprintf(tmp, 32, "TYPE%u", rrtype);
+        gdnsd_assert(snp_rv > 4 && snp_rv < 32);
+        len = (unsigned)snp_rv + 1U;
+    }
+
+    if (!len)
+        len = strlen(src) + 1U;
+    char* buf = gdnsd_fmtbuf_alloc(len);
+    memcpy(buf, src, len);
+    return buf;
+}

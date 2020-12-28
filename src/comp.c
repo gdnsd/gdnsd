@@ -383,8 +383,8 @@ static bool ns_add_glue(struct ltree_rrset_raw* glue_fake, struct ltree_node* zr
     if (target_status != DNAME_DELEG)
         return false;
 
-    const struct ltree_rrset_raw* target_a = NULL;
-    const struct ltree_rrset_raw* target_aaaa = NULL;
+    struct ltree_rrset_raw* target_a = NULL;
+    struct ltree_rrset_raw* target_aaaa = NULL;
 
     if (ns_target) {
         union ltree_rrset* target_rrset = ns_target->rrsets;
@@ -408,10 +408,16 @@ static bool ns_add_glue(struct ltree_rrset_raw* glue_fake, struct ltree_node* zr
     if (glue_name_offset > 16383U)
         log_zfatal("Too many NS records for %s, exceeds glue compression limits", logf_dname(node_dname));
 
-    if (target_a)
+    gdnsd_assume(ns_target); // If this were false, we'd lack a+aaaa and fatal out above
+
+    if (target_a) {
+        realize_rdata(ns_target, target_a);
         ns_add_glue_data(glue_fake, target_a, glue_name_offset, 16U, in_deleg);
-    if (target_aaaa)
+    }
+    if (target_aaaa) {
+        realize_rdata(ns_target, target_aaaa);
         ns_add_glue_data(glue_fake, target_aaaa, glue_name_offset, 28U, in_deleg);
+    }
 
     return false;
 }

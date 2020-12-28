@@ -22,6 +22,7 @@
 
 #include "conf.h"
 #include "ltree.h"
+#include "chal.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -40,14 +41,21 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount, __VA_ARGS__);\
+        log_err("rfc1035: Zone %s: parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount, __VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount);\
+        log_err("rfc1035: Zone %s: parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount);\
         siglongjmp(z->jbuf, 1);\
+    } while (0)
+
+#define parse_warn(_fmt, ...) \
+    do {\
+        log_warn("rfc1035: Zone %s: parse warning at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount, __VA_ARGS__);\
+        if (gcfg->zones_strict_data)\
+            siglongjmp(z->jbuf, 1);\
     } while (0)
 
 struct zscan {
@@ -536,81 +544,151 @@ static void set_caa_prop(struct zscan* z, const char* fpc)
     z->tstart = NULL;
 }
 
+static unsigned clamp_ttl(struct zscan* z, const uint8_t* dname, const unsigned rrtype, const unsigned ttl)
+{
+    if (ttl > gcfg->max_ttl) {
+        parse_warn("Name '%s': TTL %u for type %s too large, clamped to max_ttl setting of %u",
+                   logf_dname(dname), ttl, logf_rrtype(rrtype), gcfg->max_ttl);
+        return gcfg->max_ttl;
+    } else if (ttl < gcfg->min_ttl) {
+        parse_warn("Name '%s': TTL %u for type %s too small, clamped to min_ttl setting of %u",
+                   logf_dname(dname), ttl, logf_rrtype(rrtype), gcfg->min_ttl);
+        return gcfg->min_ttl;
+    }
+    return ttl;
+}
+
 F_NONNULL
 static void rec_soa(struct zscan* z)
 {
     if (dname_cmp(z->lhs_dname, z->zroot->dname))
         parse_error_noargs("SOA record can only be defined for the root of the zone");
-    if (ltree_add_rec_soa(
-                z->zroot,
-                z->lhs_dname,
-                .mname = z->rhs_dname,
-                .rname = z->eml_dname,
-                .ttl = z->ttl,
-                .serial = z->uv_1,
-                .refresh = z->uv_2,
-                .retry = z->uv_3,
-                .expire = z->uv_4,
-                .ncache = z->uv_5)
-       )
+
+    unsigned ncache = z->uv_5;
+    // Here we clamp the negative TTL using min_ttl and max_ncache_ttl
+    if (ncache > gcfg->max_ncache_ttl) {
+        parse_warn("SOA negative-cache field %u too large, clamped to max_ncache_ttl setting of %u", ncache, gcfg->max_ncache_ttl);
+        ncache = gcfg->max_ncache_ttl;
+    } else if (ncache < gcfg->min_ttl) {
+        parse_warn("SOA negative-cache field %u too small, clamped to min_ttl setting of %u", ncache, gcfg->min_ttl);
+        ncache = gcfg->min_ttl;
+    }
+
+    // And here, we clamp the real RR TTL using min_ttl and the ncache value derived above
+    if (z->ttl > ncache) {
+        parse_warn("SOA TTL %u > ncache field %u, clamped to ncache value", z->ttl, ncache);
+        z->ttl = ncache;
+    } else if (z->ttl < gcfg->min_ttl) {
+        parse_warn("SOA TTL %u too small, clamped to min_ttl setting of %u", z->ttl, gcfg->min_ttl);
+        z->ttl = gcfg->min_ttl;
+    }
+
+    const unsigned rrtype = DNS_TYPE_SOA;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    const unsigned ma_len = z->rhs_dname[0];
+    const unsigned em_len = z->eml_dname[0];
+    const unsigned rdlen = ma_len + em_len + 20U;
+    uint8_t* rdata = xmalloc(2U + rdlen);
+    uint8_t* rdwrite = rdata;
+    gdnsd_put_una16(htons(rdlen), rdwrite);
+    rdwrite += 2U;
+    memcpy(rdwrite, &z->rhs_dname[1], ma_len);
+    rdwrite += ma_len;
+    memcpy(rdwrite, &z->eml_dname[1], em_len);
+    rdwrite += em_len;
+    gdnsd_put_una32(htonl(z->uv_1), rdwrite);
+    rdwrite += 4U;
+    gdnsd_put_una32(htonl(z->uv_2), rdwrite);
+    rdwrite += 4U;
+    gdnsd_put_una32(htonl(z->uv_3), rdwrite);
+    rdwrite += 4U;
+    gdnsd_put_una32(htonl(z->uv_4), rdwrite);
+    rdwrite += 4U;
+    gdnsd_put_una32(htonl(ncache), rdwrite);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
+    }
 }
 
 F_NONNULL
 static void rec_a(struct zscan* z)
 {
-    if (ltree_add_rec_a(z->zroot, z->lhs_dname, z->ipv4, z->ttl))
+    const unsigned rrtype = DNS_TYPE_A;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    uint8_t* rdata = xmalloc(6U);
+    rdata[0] = 0;
+    rdata[1] = 4U;
+    memcpy(&rdata[2], &z->ipv4, 4U);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
+    }
 }
 
 F_NONNULL
 static void rec_aaaa(struct zscan* z)
 {
-    if (ltree_add_rec_aaaa(z->zroot, z->lhs_dname, z->ipv6, z->ttl))
+    const unsigned rrtype = DNS_TYPE_AAAA;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    uint8_t* rdata = xmalloc(18U);
+    rdata[0] = 0;
+    rdata[1] = 16U;
+    memcpy(&rdata[2], z->ipv6, 16U);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
+    }
 }
 
 F_NONNULL
-static void rec_ns(struct zscan* z)
+static void rec_1name(struct zscan* z, unsigned rrtype)
 {
-    if (ltree_add_rec_ns(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl))
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    const unsigned rdlen = z->rhs_dname[0];
+    uint8_t* rdata = xmalloc(2U + rdlen);
+    gdnsd_put_una16(htons(rdlen), rdata);
+    memcpy(&rdata[2], &z->rhs_dname[1], rdlen);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
-}
-
-F_NONNULL
-static void rec_cname(struct zscan* z)
-{
-    if (ltree_add_rec_cname(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl))
-        siglongjmp(z->jbuf, 1);
-}
-
-F_NONNULL
-static void rec_ptr(struct zscan* z)
-{
-    if (ltree_add_rec_ptr(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl))
-        siglongjmp(z->jbuf, 1);
+    }
 }
 
 F_NONNULL
 static void rec_mx(struct zscan* z)
 {
-    if (ltree_add_rec_mx(z->zroot, z->lhs_dname, z->rhs_dname, z->ttl, z->uval))
+    const unsigned rrtype = DNS_TYPE_MX;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    const unsigned dnlen = z->rhs_dname[0];
+    const unsigned rdlen = 2U + dnlen;
+    uint8_t* rdata = xmalloc(2U + rdlen);
+    gdnsd_put_una16(htons(rdlen), rdata);
+    gdnsd_put_una16(htons(z->uval), &rdata[2]);
+    memcpy(&rdata[4], &z->rhs_dname[1], dnlen);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
+    }
 }
 
 F_NONNULL
 static void rec_srv(struct zscan* z)
 {
-    if (ltree_add_rec_srv(
-                z->zroot,
-                z->lhs_dname,
-                .rhs = z->rhs_dname,
-                .ttl = z->ttl,
-                .priority = z->uv_1,
-                .weight = z->uv_2,
-                .port = z->uv_3)
-       )
+    const unsigned rrtype = DNS_TYPE_SRV;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    const unsigned dnlen = z->rhs_dname[0];
+    const unsigned rdlen = 6U + dnlen;
+    uint8_t* rdata = xmalloc(2U + rdlen);
+    gdnsd_put_una16(htons(rdlen), rdata);
+    gdnsd_put_una16(htons(z->uv_1), &rdata[2]);
+    gdnsd_put_una16(htons(z->uv_2), &rdata[4]);
+    gdnsd_put_una16(htons(z->uv_3), &rdata[6]);
+    memcpy(&rdata[8], &z->rhs_dname[1], dnlen);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
+    }
 }
 
 F_NONNULL
@@ -625,31 +703,43 @@ static void text_cleanup(struct zscan* z)
 F_NONNULL
 static void rec_naptr(struct zscan* z)
 {
-    if (ltree_add_rec_naptr(
-                z->zroot,
-                z->lhs_dname,
-                .rhs = z->rhs_dname,
-                .ttl = z->ttl,
-                .order = z->uv_1,
-                .pref = z->uv_2,
-                .text_len = z->text_len,
-                .text = z->text)
-       )
+    const unsigned rrtype = DNS_TYPE_NAPTR;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    const unsigned dnlen = z->rhs_dname[0];
+    const unsigned rdlen = 4U + dnlen + z->text_len;
+    uint8_t* rdata = xmalloc(2U + rdlen);
+    gdnsd_put_una16(htons(rdlen), rdata);
+    gdnsd_put_una16(htons(z->uv_1), &rdata[2]);
+    gdnsd_put_una16(htons(z->uv_2), &rdata[4]);
+    memcpy(&rdata[6], z->text, z->text_len);
+    memcpy(&rdata[6U + z->text_len], &z->rhs_dname[1], dnlen);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
+    }
     text_cleanup(z);
 }
 
 F_NONNULL
 static void rec_txt(struct zscan* z)
 {
-    if (ltree_add_rec_txt(z->zroot, z->lhs_dname, z->text_len, z->text, z->ttl))
+    const unsigned rrtype = DNS_TYPE_TXT;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    const unsigned rdlen = z->text_len;
+    uint8_t* rdata = xmalloc(2U + z->text_len);
+    gdnsd_put_una16(htons(rdlen), rdata);
+    memcpy(&rdata[2], z->text, z->text_len);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, rdata, rrtype, z->ttl)) {
+        free(rdata);
         siglongjmp(z->jbuf, 1);
+    }
     text_cleanup(z);
 }
 
 F_NONNULL
 static void rec_dyna(struct zscan* z)
 {
+    z->ttl = clamp_ttl(z, z->lhs_dname, DNS_TYPE_A, z->ttl);
     if (ltree_add_rec_dynaddr(z->zroot, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
@@ -657,6 +747,7 @@ static void rec_dyna(struct zscan* z)
 F_NONNULL
 static void rec_dync(struct zscan* z)
 {
+    z->ttl = clamp_ttl(z, z->lhs_dname, DNS_TYPE_CNAME, z->ttl);
     if (ltree_add_rec_dync(z->zroot, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
         siglongjmp(z->jbuf, 1);
 }
@@ -665,16 +756,44 @@ F_NONNULL
 static void rec_rfc3597(struct zscan* z)
 {
     if (z->rfc3597_data_written < z->rfc3597_data_len)
-        parse_error("RFC3597 generic RR claimed rdata length of %u, but only %u bytes of data present", z->rfc3597_data_len, z->rfc3597_data_written);
-    if (ltree_add_rec_rfc3597(z->zroot, z->lhs_dname, z->uv_1, z->ttl, z->rfc3597_data_len, z->rfc3597_data))
+        parse_error("RFC3597 %s claimed rdata length of %u, but only %u bytes of data present", logf_rrtype(z->uv_1), z->rfc3597_data_len - 2U, z->rfc3597_data_written - 2U);
+
+    // There are good reasons to not allow RFC3597 definitions for these types,
+    // because the rest of the code critically relies on correct rdata lengths
+    // and the ability to process legit right-hand-side names, and the names
+    // must be downcased for DNSSEC to work, etc.
+    const unsigned rrtype = z->uv_1;
+    if (rrtype == DNS_TYPE_A
+            || rrtype == DNS_TYPE_AAAA
+            || rrtype == DNS_TYPE_SOA
+            || rrtype == DNS_TYPE_CNAME
+            || rrtype == DNS_TYPE_NS
+            || rrtype == DNS_TYPE_PTR
+            || rrtype == DNS_TYPE_MX
+            || rrtype == DNS_TYPE_SRV
+            || rrtype == DNS_TYPE_NAPTR)
+        parse_error("Name '%s': type %s not allowed, please use the explicit support built in for this RR type",
+                    logf_dname(z->lhs_dname), logf_rrtype(rrtype));
+
+    // These are just not allowed in any form
+    if (rrtype == DNS_TYPE_HINFO
+            || (rrtype == DNS_TYPE_OPT)
+            || (rrtype > 127 && rrtype < 256)
+            || rrtype == 0)
+        parse_error("Name '%s': type %s not allowed",
+                    logf_dname(z->lhs_dname), logf_rrtype(rrtype));
+
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, z->rfc3597_data, rrtype, z->ttl))
         siglongjmp(z->jbuf, 1);
-    free(z->rfc3597_data);
     z->rfc3597_data = NULL;
 }
 
 F_NONNULL
 static void rec_caa(struct zscan* z)
 {
+    const unsigned rrtype = DNS_TYPE_CAA;
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
     if (z->uval > 255)
         parse_error("CAA flags byte value %u is >255", z->uval);
 
@@ -683,27 +802,31 @@ static void rec_caa(struct zscan* z)
     const unsigned value_len = z->text_len;
     const unsigned total_len = 2 + prop_len + value_len;
 
-    uint8_t* caa_rdata = xmalloc(total_len);
+    gdnsd_assume(total_len < 65536U);
+    uint8_t* caa_rdata = xmalloc(2U + total_len);
     uint8_t* caa_write = caa_rdata;
+    gdnsd_put_una16(htons(total_len), caa_write);
+    caa_write += 2U;
     *caa_write++ = z->uval;
     *caa_write++ = prop_len;
     memcpy(caa_write, z->caa_prop, prop_len);
     caa_write += prop_len;
     memcpy(caa_write, z->text, value_len);
 
-    const bool failed = ltree_add_rec_rfc3597(z->zroot, z->lhs_dname, 257, z->ttl, total_len, caa_rdata);
-    free(caa_rdata);
-    if (failed)
+    if (ltree_add_rec(z->zroot, z->lhs_dname, caa_rdata, rrtype, z->ttl)) {
+        free(caa_rdata);
         siglongjmp(z->jbuf, 1);
+    }
     text_cleanup(z);
 }
 
 F_NONNULL
 static void rfc3597_data_setup(struct zscan* z)
 {
-    z->rfc3597_data_len = z->uval;
-    z->rfc3597_data_written = 0;
-    z->rfc3597_data = xmalloc(z->uval);
+    z->rfc3597_data_len = z->uval + 2U;
+    z->rfc3597_data = xmalloc(z->rfc3597_data_len);
+    gdnsd_put_una16(htons(z->uval), z->rfc3597_data);
+    z->rfc3597_data_written = 2U;
 }
 
 F_NONNULL
@@ -874,9 +997,9 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     action rec_soa { rec_soa(z); }
     action rec_a { rec_a(z); }
     action rec_aaaa { rec_aaaa(z); }
-    action rec_ns { rec_ns(z); }
-    action rec_cname { rec_cname(z); }
-    action rec_ptr { rec_ptr(z); }
+    action rec_ns { rec_1name(z, DNS_TYPE_NS); }
+    action rec_cname { rec_1name(z, DNS_TYPE_CNAME); }
+    action rec_ptr { rec_1name(z, DNS_TYPE_PTR); }
     action rec_mx { rec_mx(z); }
     action rec_srv { rec_srv(z); }
     action rec_naptr { rec_naptr(z); }
@@ -1000,8 +1123,6 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
                     ws ttl %set_uv_2 ws ttl %set_uv_3 ws ttl %set_uv_4
                     ws ttl %set_uv_5) %rec_soa
         | ('TYPE'i  rfc3597_rdata) %rec_rfc3597
-        # From here down, these are parser-only RR-types, which look
-        # identical to RFC3597 to the rest of the core code
         | ('CAA'i   ws caa_rdata) %rec_caa
     );
 
