@@ -12,10 +12,6 @@ _GDT->test_dns(
         'subeasy.example.com 21600 NS subeasyns1.example.com',
         'subeasy.example.com 21600 NS subeasyns2.example.com',
     ],
-    addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
-        'subeasyns2.example.com 21600 A 192.0.2.4',
-    ],
 );
 
 _GDT->test_dns(
@@ -25,10 +21,6 @@ _GDT->test_dns(
         'subeasy.example.com 21600 NS subeasyns1.example.com',
         'subeasy.example.com 21600 NS subeasyns2.example.com',
     ],
-    addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
-        'subeasyns2.example.com 21600 A 192.0.2.4',
-    ],
 );
 
 _GDT->test_dns(
@@ -37,10 +29,6 @@ _GDT->test_dns(
     auth => [
         'subeasy.example.com 21600 NS subeasyns1.example.com',
         'subeasy.example.com 21600 NS subeasyns2.example.com',
-    ],
-    addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
-        'subeasyns2.example.com 21600 A 192.0.2.4',
     ],
 );
 
@@ -171,7 +159,6 @@ _GDT->test_dns(
         'subfubar.example.com 21600 NS ns1.example.org',
     ],
     addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
@@ -187,7 +174,6 @@ _GDT->test_dns(
         'subfubar.example.com 21600 NS ns1.example.org',
     ],
     addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
@@ -203,7 +189,6 @@ _GDT->test_dns(
         'subfubar.example.com 21600 NS ns1.example.org',
     ],
     addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.subfubar.example.com 21600 A 192.0.2.9',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
@@ -219,7 +204,6 @@ _GDT->test_dns(
         'subfubar.x.y.z.example.com 21600 NS ns1.example.org',
     ],
     addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
@@ -235,7 +219,6 @@ _GDT->test_dns(
         'subfubar.x.y.z.example.com 21600 NS ns1.example.org',
     ],
     addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
         'ns1.example.org 21600 A 192.0.2.200',
     ],
@@ -251,7 +234,6 @@ _GDT->test_dns(
         'subfubar.x.y.z.example.com 21600 NS ns1.example.org',
     ],
     addtl => [
-        'subeasyns1.example.com 21600 A 192.0.2.3',
         'ns1.subfubar.x.y.z.example.com 21600 A 192.0.2.11',
         'ns1.example.org 21600 A 192.0.2.200',
     ],

@@ -794,6 +794,10 @@ static bool p1_proc_ns(const zone_t* zone, ltree_rdata_ns_t* this_ns, const uint
     ltree_node_t* ns_target = NULL;
     ltree_dname_status_t target_status = ltree_search_dname_zone(this_ns->dname, zone, &ns_target, NULL);
 
+    // Don't attach glue for names in auth space, only delegation space and ooz
+    if (target_status == DNAME_AUTH)
+        return false;
+
     ltree_rrset_a_t* target_a = NULL;
     ltree_rrset_aaaa_t* target_aaaa = NULL;
 
@@ -831,8 +835,7 @@ static bool p1_proc_ns(const zone_t* zone, ltree_rdata_ns_t* this_ns, const uint
         gdnsd_assert(ns_target);
         this_ns->glue_v4 = target_a;
         this_ns->glue_v6 = target_aaaa;
-        if (target_status != DNAME_AUTH)
-            LTN_SET_FLAG_GUSED(ns_target);
+        LTN_SET_FLAG_GUSED(ns_target);
     }
 
     return false;

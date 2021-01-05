@@ -32,8 +32,7 @@ _GDT->test_dns(
 
 # The first two NS here are roughly analogous to how the real rootservers'
 # config works, where the root NS records must be glue within some delegated
-# subzone (e.g. root-servers.net), and we must return their addresses as "glue"
-# even though it's not properly a delegation response.
+# subzone (root-servers.com), and we must return their addresses as glue
 _GDT->test_dns(
     qname => '.', qtype => 'NS',
     header => { aa => 1 },
@@ -46,8 +45,6 @@ _GDT->test_dns(
     addtl => [
         'ns1.root-servers.com 86400 IN A 192.0.2.1',
         'ns2.root-servers.com 86400 IN A 192.0.2.2',
-        'ns3 86400 IN A 192.0.2.9',
-        '. 86400 IN A 192.0.2.3',
     ],
 );
 

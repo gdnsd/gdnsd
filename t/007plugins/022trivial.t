@@ -85,10 +85,6 @@ _GDT->test_dns(
         'example.com 86400 NS ns2.example.com',
         'example.com 86400 NS ns1.example.net',
     ],
-    addtl => [
-        'ns1.example.com 86400 A 192.0.2.1',
-        'ns2.example.com 86400 A 192.0.2.2',
-    ],
 );
 
 _GDT->test_dns(
