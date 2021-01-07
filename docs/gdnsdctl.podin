@@ -227,14 +227,9 @@ still be C<REFUSED> (until such a zone later appears, if ever).
 If more than one payload is configured for a given name (in the same command,
 or in separate commands less than the TTL window apart), multiple TXT records
 will be emitted.  If there is any statically-configured TXT data from zonefiles
-at a conflicting C<_acme-challenge> name, the static TXT RRs will also be
-served alongside any data from this mechanism.
-
-As an implementail detail (quirk?) of this mechanism, any static zonefile RRs
-which have a first label of C<_acme-challenge> will automatically have their
-TTLs forced to the C<acme_challenge_dns_ttl> regardless of the TTL specified in
-the zonefile.  This was the easiest way to ensure that we never serve mixed TTL
-values in a single RR-set of TXT records, which is forbidden by RFC 2181.
+at a conflicting C<_acme-challenge> name, the static TXT RRs will be served and
+any temporary ones defined by this mechanism will be invisible until the zone
+data is reloaded to remove the covering static name.
 
 The data injected by this mechanism persists through daemon C<replace>
 operations, but not through a full C<stop> of the daemon.  It also persists

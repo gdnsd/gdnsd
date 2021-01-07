@@ -68,12 +68,14 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
 void cset_flush(struct ev_loop* loop);
 
 // Runtime lookup from dnspacket, must happen inside RCU read-side critical
-// section.  Places all matching TXT records into packet starting at offset,
-// updates the answer count at *ancount_p, and returns the new end-of-packet
-// offset.  If no matching records, returns the offset it was given and does
-// not affect packet or *ancount_p.
+// section.  If the query name matches the full challenge name, or matches one
+// label shorter (the encloser of the _acme_challenge name), this will return
+// "true" to indicate a match (and thus can prevent NXDOMAIN just beneat the
+// challenge name, too), or false for no match.
+// iff qtype == DNS_TYPE_TXT, and the name was a full match, it will also write
+// TXT records to packet, and update *ancount_p and *offset_p for the consumer.
 F_NONNULL F_HOT
-bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response);
+bool chal_respond(const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response);
 
 // Does some basic initialization early
 void chal_init(void);

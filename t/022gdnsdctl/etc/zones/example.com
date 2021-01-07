@@ -18,9 +18,6 @@ _acme-challenge.exists TXT "abcde"
 ; for checking ANY-queries and general matching
 _acme-challenge.other A 192.0.2.43
 
-; regression check for accidental TTL clamping
-_acme-challenge.defttl 0 TXT "0 is the default acme TTL, but 5 is the default min_ttl"
-
 ; These aren't used directly in tests, but by exercising other RR types
 ; we increase coverage in ltree_destroy() in case of any bugs in the zone
 ; destruction there:

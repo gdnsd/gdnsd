@@ -1,6 +1,6 @@
 use _GDT ();
 use Net::DNS;
-use Test::More tests => 1 + (2 * (16 + 13)) + 1 + 13 + 1 + 13 + 1 + 1;
+use Test::More tests => 1 + (2 * (16 + 13)) + 1 + 13 + 1 + 13 + 1;
 
 my $soa_neg = 'example.com 900 SOA ns1.example.com dns-admin.example.com 1 7200 1800 259200 900';
 
@@ -31,13 +31,12 @@ sub check_data_acme {
         ],
     );
 
-    # Static data for this name:
+    # Static data for this name, blocks dynamic!
     # _acme-challenge.exists TXT "abcde"
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'TXT',
         answer => [
-            '_acme-challenge.exists.example.com 0 TXT "abcde"',
-            '_acme-challenge.exists.example.com 0 TXT "0123456789012345678901234567890123456789012"',
+            '_acme-challenge.exists.example.com 86400 TXT "abcde"',
         ],
     );
     _GDT->test_dns(
@@ -119,11 +118,9 @@ foreach my $i (0, 1) {
 
     # Static data for this name:
     # _acme-challenge.exists TXT "abcde"
-    # Note static RR has TTL of 86400, but is forced to 600 because it has
-    # "_acme-challenge" as its first label.
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'TXT',
-        answer => '_acme-challenge.exists.example.com 0 TXT "abcde"',
+        answer => '_acme-challenge.exists.example.com 86400 TXT "abcde"',
     );
     _GDT->test_dns(
         qname => '_acme-challenge.exists.example.com', qtype => 'A',
@@ -197,11 +194,5 @@ _GDT->reset_for_replace_daemon();
 
 # Make sure the data survived (13 tests)
 check_data_acme(1);
-
-# Check corner case for TTL alignment of static records
-_GDT->test_dns(
-    qname => '_acme-challenge.defttl.example.com', qtype => 'TXT',
-    answer => '_acme-challenge.defttl.example.com 0 TXT "0 is the default acme TTL, but 5 is the default min_ttl"',
-);
 
 _GDT->test_run_gdnsdctl("stop");

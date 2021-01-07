@@ -84,10 +84,9 @@
 #define CHAL_COLLIDE_SANITY_MAX 200
 
 // Challenge payload TXT RR len, fully pre-encoded
-// 2 bytes type, 2 bytes class, 4 bytes ttl,
-// 2 bytes rdlen, 1 byte txt chunklen
-// 43 bytes payload
-#define CHAL_RR_FIELDS (2U + 2U + 4U + 2U + 1U)
+// 2 bytes 0xC00C (qname ptr), 2 bytes type, 2 bytes class, 4 bytes ttl,
+// 2 bytes rdlen, 1 byte txt chunklen 43 bytes payload
+#define CHAL_RR_FIELDS (2U + 2U + 2U + 4U + 2U + 1U)
 #define CHAL_RR_PAYLOAD (43U)
 #define CHAL_RR_LEN (CHAL_RR_FIELDS + CHAL_RR_PAYLOAD)
 
@@ -300,6 +299,8 @@ void cset_flush(struct ev_loop* loop)
 static void mk_chal_rr(uint8_t* out, const uint8_t* payload)
 {
     size_t idx = 0;
+    gdnsd_put_una16(htons(0xC00C), &out[idx]);
+    idx += 2;
     gdnsd_put_una32(DNS_RRFIXED_TXT, &out[idx]);
     idx += 4;
     gdnsd_put_una32(htonl(gcfg->acme_challenge_dns_ttl), &out[idx]);
@@ -459,7 +460,7 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
 
 // runtime lookup called in dns i/o thread context from dnspacket.c from within
 // an RCU read-side critical section.  Must be fast, non-blocking, no syscalls.
-bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response)
+bool chal_respond(const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response)
 {
     const bool qname_is_chal = dname_is_acme_chal(qname);
     const struct chal_tbl* t;
@@ -487,10 +488,8 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
         if (ch->dnhash == qname_hash && likely(!dname_cmp(qname, ch->dname))) {
             matched = true;
             if (qname_is_chal && qtype == DNS_TYPE_TXT) {
-                if ((*offset_p + 2U + CHAL_RR_LEN) > this_max_response)
+                if ((*offset_p + CHAL_RR_LEN) > this_max_response)
                     return true; // do not run off the end of the buffer!
-                gdnsd_put_una16(htons(qname_comp | 0xC000), &packet[*offset_p]);
-                (*offset_p) += 2;
                 memcpy(&packet[*offset_p], ch->txt, CHAL_RR_LEN);
                 (*offset_p) += CHAL_RR_LEN;
                 (*ancount_p)++;

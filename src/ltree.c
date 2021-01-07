@@ -553,26 +553,9 @@ bool ltree_add_rec_naptr_args(const struct zone* zone, const uint8_t* dname, str
 
 bool ltree_add_rec_txt(const struct zone* zone, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl)
 {
-
     struct ltree_node* node = ltree_find_or_add_dname(zone, dname);
 
-    // RFC 2181 disallows mixed TTLs within a single RR-set, so to avoid other
-    // runtime complexity we choose to set all static _acme-challenge TXT
-    // record TTLs to the same value configured for dynamic ones injected by
-    // gdnsdctl, which is controlled by the config setting
-    // acme_challenge_dns_ttl, defaulting to zero.  Note also that in this
-    // case, no clamping to min_ttl applies (it's impossible for max_ttl to
-    // conflict with acme_challenge_dns_ttl due to their limits).
-
-    if (dname_is_acme_chal(dname)) {
-        if (ttl != gcfg->acme_challenge_dns_ttl) {
-            log_zwarn("Name '%s%s': ACME challenge TXT record TTL %u overridden to %u from 'acme_challenge_dns_ttl' config setting", logf_dname(dname), logf_dname(zone->dname), ttl, gcfg->acme_challenge_dns_ttl);
-            ttl = gcfg->acme_challenge_dns_ttl;
-        }
-    } else {
-        ttl = clamp_ttl(zone, dname, "TXT", ttl);
-    }
-
+    ttl = clamp_ttl(zone, dname, "TXT", ttl);
     INSERT_NEXT_RR(txt, txt, "TXT", 1)
     new_rdata->text_len = text_len;
     new_rdata->text = text;

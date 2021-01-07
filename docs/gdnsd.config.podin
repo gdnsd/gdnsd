@@ -524,11 +524,6 @@ C<acme_challenge_ttl> above.  However, this (non-zero DNS TTLs for these
 records in general) has lead to confusing issues in the real world with ACME
 servers under certain conditions.
 
-Note that static zonefile RRs with C<_acme-challenge> as their leading label
-are also forced to this TTL regardless of the zonefile-level explicit TTL,
-to avoid cases of mixed TTLs when mixing static and dynamic records in
-server outputs.
-
 =item B<nsid>
 
 String, no default, 2-256 chars in length.  Character count must be
