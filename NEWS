@@ -1,3 +1,26 @@
+3.4.2 - 2021-01-11
+    * Several bugfixes are included here which came to light while reworking
+      major chunks of the code in a 4.x prototype branch.  All are also
+      backported to the 3.[23].x branches for packagers.
+    * Fixed a few memory leaks that can happen in certain uncommon zonefile
+      parsing failures related to TXT data, CAA data, and/or the zone
+      filename itself
+    * Fixed some missed response packet compression opportunities when the
+      query name from the client was not already normalized to lower case.
+    * Fixed some log message output bugs when complaining about SOA records
+    * Added missing min_ttl/max_ttl clamping to RFC 3597 records' TTLs.
+    * Fixed a corner case that could cause mixed TTLs in a single rrset, in
+      the case of ACME challenges defined for the same name both statically
+      in zone data and via gdnsdctl.
+    * Fixed a bug which could force an RR's TTL to the value "1" if it were
+      outside the range declared by ttl_min and ttl_max (default 5 and
+      3600000) and the non-default "zones_strict_data" (or -S flag) was
+      enabled.
+    * Configurations of plugins and zone data which allow DYNC to return
+      address (A/AAAA) records are deprecated.  They still work, but they
+      emit a log warning message every time a zone is loaded which creates
+      such a situation.
+
 3.4.1 - 2020-11-20
     * Bugfix for a rare TCP connection state management issue which can cause a
       TCP thread to consume excess CPU and prevent the clean exit of the daemon
