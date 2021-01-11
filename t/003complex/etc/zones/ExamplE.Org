@@ -21,6 +21,21 @@ foo	A	192.0.2.202
 *	AAAA	::1
 bar	CNAME	bar.baz.fox
 barmx	MX	0 barmx.xmrab.xxx.fox
+*	MX	0 wildmx0
+*	MX	1 wildmx1
+*	MX	2 wildmx2
+*.zzz	MX	0 wildsubmx0
+*.zzz	MX	1 wildsubmx1
+*.zzz	MX	2 wildsubmx2
+*.cnwild	CNAME	ns1
+
+; Implicit ENT wildcard
+asdf.*.xyz	A 192.0.2.203
+
+; Something beneath an explicit wildcard which is not at the first level of the
+; zone's hierarchy
+*.sub A 192.0.2.222
+foo.*.sub A 192.0.2.223
 
 ; This is referenced by ct21.example.com and exercises
 ;  important CNAME chaining code in dnspacket.c
