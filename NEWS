@@ -1,3 +1,16 @@
+3.5.0 - 2021-01-11
+    * Multiple efficiency improvements for TCP conn handling, primarily aimed
+      at reducing the per-conn memory footprint and malloc churn.
+    * Address (A/AAAA) records are now properly randomly shuffled each time
+      they're emitted in responses.  Previously we were doing a basic rotation
+      of them in the supplied order.  Shuffling has better load distribution
+      characteristics in some scenarios.
+    * NS responses now include true glue, when warranted, for qtype=NS at the
+      root of a zone.  This covers some important corner cases, including the
+      root-of-dns delegated glue hints case.  Previously, we were only
+      attempting to attach glue to delegation responses, but never zone root
+      qtype=NS responses.
+
 3.4.2 - 2021-01-11
     * Several bugfixes are included here which came to light while reworking
       major chunks of the code in a 4.x prototype branch.  All are also
