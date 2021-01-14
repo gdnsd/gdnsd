@@ -73,9 +73,9 @@ static char* make_zone_name(const char* zf_name)
 // Threaded parallel processing of zonefiles:
 
 struct zf_list {
-    char* full_fn;   // worker input
-    const char* fn;  // (aliases into above, needs no free)
-    struct ltree_node* zroot;    // worker output
+    char* full_fn; // worker input
+    const char* fn; // (aliases into above, needs no free)
+    struct ltree_node_zroot* zroot; // worker output
     struct zf_list* next; // next in list
 };
 
@@ -145,7 +145,7 @@ static void* zones_worker(void* list_asvoid)
         char* name = make_zone_name(zfl->fn);
         if (!name)
             return (void*)1;
-        struct ltree_node* zroot = ltree_new_zone(name);
+        struct ltree_node_zroot* zroot = ltree_new_zone(name);
         free(name);
         if (!zroot)
             return (void*)1;
@@ -159,7 +159,7 @@ static void* zones_worker(void* list_asvoid)
 }
 
 F_NONNULL
-static bool harvest_zone_worker(pthread_t threadid, struct zf_list* zfl, struct ltree_node* new_root_tree, bool failed)
+static bool harvest_zone_worker(pthread_t threadid, struct zf_list* zfl, union ltree_node** root_of_dns_p, bool failed)
 {
     void* raw_exit_status = (void*)1;
     int pthread_err = pthread_join(threadid, &raw_exit_status);
@@ -172,10 +172,10 @@ static bool harvest_zone_worker(pthread_t threadid, struct zf_list* zfl, struct 
         free(zfl->full_fn);
         if (!failed) {
             gdnsd_assume(zfl->zroot);
-            failed = ltree_merge_zone(new_root_tree, zfl->zroot);
+            failed = ltree_merge_zone(root_of_dns_p, zfl->zroot);
         }
         if (failed && zfl->zroot)
-            ltree_destroy(zfl->zroot);
+            ltree_destroy((union ltree_node*)zfl->zroot);
         zfl->zroot = NULL;
         struct zf_list* next = zfl->next;
         free(zfl);
@@ -192,7 +192,7 @@ static bool harvest_zone_worker(pthread_t threadid, struct zf_list* zfl, struct 
 // struct zf_threads/struct zf_list resources by the time it returns, even if things fail
 // partially or wholly.
 F_NONNULL
-static bool zf_threads_load_zones(struct zf_threads* zft, struct ltree_node* new_root_tree)
+static union ltree_node* zf_threads_load_zones(struct zf_threads* zft, union ltree_node* root_of_dns)
 {
     sigset_t sigmask_all;
     sigfillset(&sigmask_all);
@@ -220,7 +220,7 @@ static bool zf_threads_load_zones(struct zf_threads* zft, struct ltree_node* new
 
     bool failed = false;
     for (size_t i = 0; i < useful_threads; i++)
-        failed = harvest_zone_worker(zft->threadids[i], zft->lists[i], new_root_tree, failed);
+        failed = harvest_zone_worker(zft->threadids[i], zft->lists[i], &root_of_dns, failed);
 
     if (!failed)
         log_info("rfc1035: Loaded %zu zonefiles from '%s'", zft->total_count, rfc1035_dir);
@@ -229,25 +229,34 @@ static bool zf_threads_load_zones(struct zf_threads* zft, struct ltree_node* new
     free(zft->threadids);
     free(zft);
 
-    return failed;
+    if (failed) {
+        ltree_destroy(root_of_dns);
+        root_of_dns = NULL;
+    }
+
+    return root_of_dns;
 }
 
 /*************************/
 /*** Public interfaces ***/
 /*************************/
 
-bool zsrc_rfc1035_load_zones(struct ltree_node* new_root_tree)
+union ltree_node* zsrc_rfc1035_load_zones(void)
 {
-    gdnsd_assume(rfc1035_dir);
+    union ltree_node* root_of_dns = xcalloc(sizeof(*root_of_dns));
+    root_of_dns->c.dname = xmalloc(2U);
+    root_of_dns->c.dname[0] = '\1';
+    root_of_dns->c.dname[1] = '\0';
 
+    gdnsd_assume(rfc1035_dir);
     DIR* zdhandle = opendir(rfc1035_dir);
     if (!zdhandle) {
         if (errno == ENOENT) {
             log_debug("rfc1035: Zones directory '%s' does not exist", rfc1035_dir);
-            return false;
+            return root_of_dns;
         }
         log_err("rfc1035: Cannot open zones directory '%s': %s", rfc1035_dir, logf_errno());
-        return true;
+        return NULL;
     }
 
     struct zf_threads* zft = zf_threads_new(gcfg->zones_rfc1035_threads);
@@ -283,12 +292,13 @@ bool zsrc_rfc1035_load_zones(struct ltree_node* new_root_tree)
         failed = true;
     }
 
-    if (failed)
+    if (failed) {
+        ltree_destroy(root_of_dns);
         zf_threads_early_destroy(zft);
-    else
-        failed = zf_threads_load_zones(zft, new_root_tree);
+        return NULL;
+    }
 
-    return failed;
+    return zf_threads_load_zones(zft, root_of_dns);
 }
 
 void zsrc_rfc1035_init(void)

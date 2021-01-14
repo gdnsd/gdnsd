@@ -838,8 +838,8 @@ static unsigned encode_rrs_dynac(struct dnsp_ctx* ctx, const unsigned offset, co
 }
 
 struct search_result {
-    const struct ltree_node* dom;
-    const struct ltree_node* auth;
+    const union ltree_node* dom;
+    const union ltree_node* auth;
     unsigned comp_fixup_wild;
     unsigned comp_fixup_auth;
 };
@@ -856,25 +856,25 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
     gdnsd_assume(name_len); // legit names are always length 1+
 
     enum ltree_dnstatus rval = DNAME_NOAUTH;
-    struct ltree_node* cur_node;
+    union ltree_node* cur_node;
     grcu_dereference(cur_node, root_tree);
     const uint8_t* cur_label = treepath;
     unsigned cur_label_len = *cur_label;
     unsigned name_remaining_depth = name_len - 1U;
     while (cur_node) {
-        if (cur_node->zone_cut) {
-            if (res->auth) {
-                gdnsd_assume(rval == DNAME_AUTH);
-                gdnsd_assume(cur_label >= treepath);
-                res->comp_fixup_auth = name_remaining_depth;
-                res->dom = cur_node;
-                return DNAME_DELEG;
-            }
+        if (cur_node->c.zone_cut_root) {
             gdnsd_assert(rval == DNAME_NOAUTH);
             gdnsd_assert(!res->auth);
             rval = DNAME_AUTH;
             res->comp_fixup_auth = name_remaining_depth;
             res->auth = cur_node;
+        } else if (cur_node->c.zone_cut_deleg) {
+            gdnsd_assert(res->auth);
+            gdnsd_assert(rval == DNAME_AUTH);
+            gdnsd_assert(cur_label >= treepath);
+            res->comp_fixup_auth = name_remaining_depth;
+            res->dom = cur_node;
+            return DNAME_DELEG;
         }
 
         if (!cur_label_len) {
@@ -882,7 +882,7 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
             return rval; // could be DNAME_AUTH or DNAME_NOAUTH
         }
 
-        struct ltree_node* next = NULL;
+        union ltree_node* next = NULL;
 
         static const uint8_t label_wild[2] =  { '\001', '*' };
 
@@ -921,14 +921,14 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
 }
 
 F_NONNULLX(1, 3)
-static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct ltree_node* dom, const struct ltree_node* auth, unsigned offset)
+static unsigned do_auth_response(struct dnsp_ctx* ctx, const union ltree_node* dom, const union ltree_node* auth, unsigned offset)
 {
     uint8_t* packet = ctx->txn.pkt->raw;
     gdnsd_assume(packet);
     struct wire_dns_hdr* res_hdr = &ctx->txn.pkt->hdr;
     res_hdr->flags1 |= 4; // AA bit
 
-    const union ltree_rrset* rrsets = dom ? dom->rrsets : NULL;
+    const union ltree_rrset* rrsets = dom ? dom->c.rrsets : NULL;
 
     if (rrsets) {
         if (rrsets->gen.type == DNS_TYPE_CNAME) {
@@ -972,9 +972,9 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct ltree_node* 
 
     if (!ctx->txn.ancount) {
         // ltree ensures SOA is the first rrset in the zone root node
-        gdnsd_assume(auth->rrsets);
-        gdnsd_assert(auth->rrsets->gen.type == DNS_TYPE_SOA);
-        offset = encode_rrs_raw(ctx, offset, &auth->rrsets->raw);
+        gdnsd_assume(auth->c.rrsets);
+        gdnsd_assert(auth->c.rrsets->gen.type == DNS_TYPE_SOA);
+        offset = encode_rrs_raw(ctx, offset, &auth->c.rrsets->raw);
         // Transfer the singleton SOA's count from answer to auth section.
         gdnsd_assert(ctx->txn.ancount == 1 && !ctx->txn.nscount);
         ctx->txn.nscount = 1;
@@ -1006,9 +1006,9 @@ static unsigned db_lookup(struct dnsp_ctx* ctx, unsigned offset)
 
     if (status == DNAME_DELEG) {
         gdnsd_assume(res.dom);
-        gdnsd_assume(res.dom->rrsets);
-        gdnsd_assume(res.dom->rrsets->gen.type == DNS_TYPE_NS);
-        const struct ltree_rrset_raw* ns = &res.dom->rrsets->raw;
+        gdnsd_assume(res.dom->c.rrsets);
+        gdnsd_assume(res.dom->c.rrsets->gen.type == DNS_TYPE_NS);
+        const struct ltree_rrset_raw* ns = &res.dom->c.rrsets->raw;
         // DNAME_DELEG uses the same code we'd use for zroot qtype=NS, but we
         // have to transfer the count of NS RRs over to the auth section
         // afterwards as a hackaround.

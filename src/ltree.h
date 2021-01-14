@@ -43,7 +43,7 @@ the root.  During zone loading, detached per-zone trees are rooted at their
 own zone root, and are later grafted onto the global ltree that starts at the
 real root of the DNS.
 
-  Each node in the ltree (struct ltree_node) contains a resizable hash table of
+  Each node in the ltree (union ltree_node) contains a resizable hash table of
 child nodes, as well as the data for its own local rrsets and a flags field for
 identifying important properties like zone roots or delegation points.
 
@@ -119,25 +119,27 @@ union ltree_rrset {
     struct ltree_rrset_dynac dynac;
 };
 
-struct ltree_node;
+union ltree_node;
 
 struct ltree_hslot {
     uintptr_t hash;
-    struct ltree_node* node;
+    union ltree_node* node;
 };
 
-struct ltree_node {
+struct ltree_node_core {
 #if SIZEOF_UINTPTR_T == 8
 #  define LTREE_NODE_MAX_SLOTS UINT32_MAX
     uint32_t ccount;
     struct {
-        uint32_t zone_cut : 1;
+        uint32_t zone_cut_root : 1;
+        uint32_t zone_cut_deleg : 1;
     };
 #elif SIZEOF_UINTPTR_T == 4
-#  define LTREE_NODE_MAX_SLOTS (UINT32_MAX >> 1U)
+#  define LTREE_NODE_MAX_SLOTS (UINT32_MAX >> 2U)
     struct {
-        uint32_t ccount : 31;
-        uint32_t zone_cut : 1;
+        uint32_t ccount : 30;
+        uint32_t zone_cut_root : 1;
+        uint32_t zone_cut_deleg : 1;
     };
 #endif
     uint8_t* dname;
@@ -147,23 +149,33 @@ struct ltree_node {
     union ltree_rrset* rrsets;
 };
 
+struct ltree_node_zroot {
+    struct ltree_node_core c;
+    uint32_t serial;
+};
+
+union ltree_node {
+    struct ltree_node_core c;
+    struct ltree_node_zroot z;
+};
+
 F_NONNULL
-void ltree_destroy(struct ltree_node* node);
+void ltree_destroy(union ltree_node* node);
 F_WUNUSED F_NONNULL
-struct ltree_node* ltree_new_zone(const char* zname);
+struct ltree_node_zroot* ltree_new_zone(const char* zname);
 F_WUNUSED F_NONNULL
-bool ltree_merge_zone(struct ltree_node* new_root_tree, struct ltree_node* new_zone);
+bool ltree_merge_zone(union ltree_node** root_of_dns_p, struct ltree_node_zroot* new_zone);
 void* ltree_zones_reloader_thread(void* init_asvoid);
 F_WUNUSED F_NONNULL
-bool ltree_postproc_zone(struct ltree_node* zroot);
+bool ltree_postproc_zone(struct ltree_node_zroot* zroot);
 
 // Adding data to the ltree (called from parser)
 F_WUNUSED F_NONNULL
-bool ltree_add_rec(struct ltree_node* zroot, const uint8_t* dname, uint8_t* rdata, const unsigned rrtype, unsigned ttl);
+bool ltree_add_rec(struct ltree_node_zroot* zroot, const uint8_t* dname, uint8_t* rdata, const unsigned rrtype, unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dynaddr(struct ltree_node* zroot, const uint8_t* dname, const char* rhs, unsigned ttl_max, unsigned ttl_min);
+bool ltree_add_rec_dynaddr(struct ltree_node_zroot* zroot, const uint8_t* dname, const char* rhs, unsigned ttl_max, unsigned ttl_min);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dync(struct ltree_node* zroot, const uint8_t* dname, const char* rhs, unsigned ttl_max, unsigned ttl_min);
+bool ltree_add_rec_dync(struct ltree_node_zroot* zroot, const uint8_t* dname, const char* rhs, unsigned ttl_max, unsigned ttl_min);
 
 // Load zonefiles (called from main, invokes parser)
 void ltree_load_zones(void);
@@ -274,19 +286,19 @@ static unsigned len_from_name(const uint8_t* name)
 // Used within ltree.c in many places, and also from dnspacket while traversing
 // the tree for runtime lookups
 F_NONNULL F_PURE F_UNUSED F_HOT
-static struct ltree_node* ltree_node_find_child(const struct ltree_node* node, const uint8_t* child_label)
+static union ltree_node* ltree_node_find_child(const union ltree_node* node, const uint8_t* child_label)
 {
-    if (node->child_table) {
-        gdnsd_assume(node->ccount);
-        const uint32_t mask = count2mask_u32_lf80(node->ccount);
+    if (node->c.child_table) {
+        gdnsd_assume(node->c.ccount);
+        const uint32_t mask = count2mask_u32_lf80(node->c.ccount);
         const uintptr_t kh = ltree_hash_label(child_label);
         uint32_t probe_dist = 0;
         do {
             const uint32_t slot = ((uint32_t)kh + probe_dist) & mask;
-            const struct ltree_hslot* s = &node->child_table[slot];
+            const struct ltree_hslot* s = &node->c.child_table[slot];
             if (!s->node || ((slot - s->hash) & mask) < probe_dist)
                 break;
-            if (s->hash == kh && likely(!label_cmp(&s->node->dname[1], child_label)))
+            if (s->hash == kh && likely(!label_cmp(&s->node->c.dname[1], child_label)))
                 return s->node;
             probe_dist++;
         } while (1);
@@ -296,7 +308,7 @@ static struct ltree_node* ltree_node_find_child(const struct ltree_node* node, c
 
 // Mostly internal to ltree, but also used by comp.c to realize glue addresses as necc
 F_NONNULL
-void realize_rdata(const struct ltree_node* node, struct ltree_rrset_raw* raw);
+void realize_rdata(const union ltree_node* node, struct ltree_rrset_raw* raw);
 
 // These defines are mainly used in ltree.c, but are also used in comp.c
 #define log_zfatal(...)\
@@ -316,6 +328,6 @@ void realize_rdata(const struct ltree_node* node, struct ltree_rrset_raw* raw);
     } while (0)
 
 // ltree_root is RCU-managed and accessed by reader threads, defined in ltree.c
-GRCU_PUB_DECL(struct ltree_node*, root_tree);
+GRCU_PUB_DECL(union ltree_node*, root_tree);
 
 #endif // GDNSD_LTREE_H

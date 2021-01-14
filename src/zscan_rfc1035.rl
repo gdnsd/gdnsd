@@ -41,19 +41,19 @@
 
 #define parse_error(_fmt, ...) \
     do {\
-        log_err("rfc1035: Zone %s: parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount, __VA_ARGS__);\
+        log_err("rfc1035: Zone %s: parse error at file %s line %u: " _fmt, logf_dname(z->zroot->c.dname), z->curfn, z->lcount, __VA_ARGS__);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
 #define parse_error_noargs(_fmt) \
     do {\
-        log_err("rfc1035: Zone %s: parse error at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount);\
+        log_err("rfc1035: Zone %s: parse error at file %s line %u: " _fmt, logf_dname(z->zroot->c.dname), z->curfn, z->lcount);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
 #define parse_warn(_fmt, ...) \
     do {\
-        log_warn("rfc1035: Zone %s: parse warning at file %s line %u: " _fmt, logf_dname(z->zroot->dname), z->curfn, z->lcount, __VA_ARGS__);\
+        log_warn("rfc1035: Zone %s: parse warning at file %s line %u: " _fmt, logf_dname(z->zroot->c.dname), z->curfn, z->lcount, __VA_ARGS__);\
         if (gcfg->zones_strict_data)\
             siglongjmp(z->jbuf, 1);\
     } while (0)
@@ -76,7 +76,7 @@ struct zscan {
     unsigned rfc3597_data_len;
     unsigned rfc3597_data_written;
     uint8_t* rfc3597_data;
-    struct ltree_node* zroot;
+    struct ltree_node_zroot* zroot;
     const char* tstart;
     const char* curfn;
     char* include_filename;
@@ -155,9 +155,9 @@ static void set_uval16(struct zscan* z)
 F_NONNULL
 static void validate_origin_in_zone(struct zscan* z, const uint8_t* origin)
 {
-    gdnsd_assume(z->zroot->dname);
-    if (!dname_isinzone(z->zroot->dname, origin))
-        parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zroot->dname));
+    gdnsd_assume(z->zroot->c.dname);
+    if (!dname_isinzone(z->zroot->c.dname, origin))
+        parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zroot->c.dname));
 }
 
 F_NONNULL F_PURE
@@ -230,7 +230,7 @@ static enum dname_status dn_qualify(uint8_t* dname, const uint8_t* origin, uint8
 F_NONNULL
 static void dname_set(struct zscan* z, uint8_t* dname, unsigned len, bool lhs)
 {
-    gdnsd_assume(z->zroot->dname);
+    gdnsd_assume(z->zroot->c.dname);
     enum dname_status catstat;
     enum dname_status status;
 
@@ -247,14 +247,14 @@ static void dname_set(struct zscan* z, uint8_t* dname, unsigned len, bool lhs)
         parse_error_noargs("unparseable domainname");
         break;
     case DNAME_VALID:
-        if (lhs && !dname_isinzone(z->zroot->dname, dname))
-            parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zroot->dname));
+        if (lhs && !dname_isinzone(z->zroot->c.dname, dname))
+            parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(dname), logf_dname(z->zroot->c.dname));
         break;
     case DNAME_PARTIAL:
         // even though in the lhs case we commonly trim
         //   back most or all of z->origin from dname, we
         //   still have to construct it just for validity checks
-        catstat = dn_qualify(dname, z->origin, z->file_origin, z->zroot->dname);
+        catstat = dn_qualify(dname, z->origin, z->file_origin, z->zroot->c.dname);
         if (catstat == DNAME_INVALID)
             parse_error_noargs("illegal domainname");
         gdnsd_assert(catstat == DNAME_VALID);
@@ -280,9 +280,9 @@ static bool _scan_isolate_jmp(struct zscan* z, char* buf, const size_t bufsize)
 }
 
 F_NONNULL
-static bool zscan_do(struct ltree_node* zroot, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg)
+static bool zscan_do(struct ltree_node_zroot* zroot, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg)
 {
-    log_debug("rfc1035: Scanning file '%s' for zone '%s'", fn, logf_dname(zroot->dname));
+    log_debug("rfc1035: Scanning file '%s' for zone '%s'", fn, logf_dname(zroot->c.dname));
 
     bool failed = false;
 
@@ -561,7 +561,7 @@ static unsigned clamp_ttl(struct zscan* z, const uint8_t* dname, const unsigned 
 F_NONNULL
 static void rec_soa(struct zscan* z)
 {
-    if (dname_cmp(z->lhs_dname, z->zroot->dname))
+    if (dname_cmp(z->lhs_dname, z->zroot->c.dname))
         parse_error_noargs("SOA record can only be defined for the root of the zone");
 
     unsigned ncache = z->uv_5;
@@ -838,10 +838,10 @@ static void rfc3597_octet(struct zscan* z)
 }
 
 // The external entrypoint to the parser
-bool zscan_rfc1035(struct ltree_node* zroot, const char* fn)
+bool zscan_rfc1035(struct ltree_node_zroot* zroot, const char* fn)
 {
-    gdnsd_assume(zroot->dname);
-    return zscan_do(zroot, zroot->dname, fn, gcfg->zones_default_ttl);
+    gdnsd_assume(zroot->c.dname);
+    return zscan_do(zroot, zroot->c.dname, fn, gcfg->zones_default_ttl);
 }
 
 // This pre-processor does two important things that vastly simplify the real
@@ -859,7 +859,7 @@ bool zscan_rfc1035(struct ltree_node* zroot, const char* fn)
 
 #define preproc_err(_msg) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile preprocessing error at file %s line %zu: " _msg, logf_dname(z->zroot->dname), z->curfn, line_num);\
+        log_err("rfc1035: Zone %s: Zonefile preprocessing error at file %s line %zu: " _msg, logf_dname(z->zroot->c.dname), z->curfn, line_num);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
