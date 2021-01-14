@@ -15,6 +15,7 @@
 # Built, installed binaries
 /src/gdnsd
 /src/gdnsdctl
+/src/gdnsd_dnssec_bench
 /src/plugins/gdnsd_extmon_helper
 /src/plugins/gdnsd_geoip_test
 # old pathnames for above two:

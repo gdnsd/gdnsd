@@ -52,6 +52,12 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ### New options
 
+Experimental DNSSEC options (see bottom of this file) - no guarantees on the stability of these!
+
+* `dnssec_enabled` - Boolean, default `false`
+* `dnssec_deterministic_ecdsa` - Boolean, default `false`
+* `dnssec_max_active_zsks` - Integer, default `1`, range `1 - 4`
+
 ### Options with changed defaults or allowed values
 
 * `max_edns_response` and `max_edns_response_v6` - Minimum value changed from `512` to `1220`.
@@ -79,6 +85,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * Must support lock-free C11 atomics on pointers.
 * libsodium: min version bumped to 1.0.12
 * `recvmmsg()` and `sendmmsg()` are now hard requirements.  The compile- and run- time detection and fallback to plain `recvmsg()` and `sendmsg()` has been removed.
+* autoconf can detect and link libgnutls as an optional part of the experimental DNSSEC support code (more on this at the bottom of this doc), however, this is *not* recommended for any kind of distribution or other shared build, as this code is not production-ready.
 
 ## Revamping internals
 
@@ -89,3 +96,15 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * Many internal efficiency improvements
 
 ## DNSSEC on the horizon
+
+This version has **partial**, **experimental** support for DNSSEC in the core code.  This experimental DNSSEC code is completely unsupported and is not intended for real production use!  A lot of the really heavy internal redesign that was needed is complete, and a lot of basic things (generating signatures, etc) are more-or-less working.  However:
+
+  * Zonefile parser support is incomplete.  It can parse simple DS records for delegation cases, but has no support for other necessary bits, especially at the zone root for DNSKEY, CDNSKEY, CDS, RRSIG for managing real keys.  We may opt to manage these outside the zonefile anyways and have them injected as appropriate.
+  * Key management and loading real keys is completely non-existent in general.  The only way to test the code is to let the daemon auto-generate randomized keys, using special zonefile directives that are appropriately-named `$BREAK_MY_ZONE_ED25519` and `$BREAK_MY_ZONE_P256`.  These auto-generate one ZSK of a given algorithm per use, and can be used multiple times.
+  * The DNSSEC-specific code has no tests.  It has only been manually tested by me during development.
+  * The existing mechanisms for dynamic ACME challenge responses is not DNSSEC-integrated.  This can likely be fixed without major changes.
+  * The existing plugin-based DYN[AC] records are not supported with DNSSEC.  This one isn't at all trivial.  We'll either have to pare back the features and capabilities of this model significantly, or replace it with a simpler equivalent that covers most reasoanble use-cases.  I lean towards the latter, as then we can leave the old DYN[AC] stuff as deprecated-but-working in 4.x alongside the new stuff.
+
+For these and many other reasons, it is not at all advisable to use this with production zones or servers yet.  It may iteratively become more-complete and better tested in future 4.x releases.  I intend for it to be really usable, somehow, before we get to 5.0.
+
+There's some nascent design-level documentation in docs/DNSSEC.md that goes into more details about what's currently working and how, and what design decisions have been made so far.

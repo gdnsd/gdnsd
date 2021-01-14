@@ -27,6 +27,7 @@
 #include "chal.h"
 #include "cookie.h"
 #include "statio.h"
+#include "dnssec.h"
 
 #include "plugins/plugapi.h"
 #include <gdnsd/alloc.h>
@@ -783,6 +784,74 @@ static struct ltree_rrset_raw* synthesize_dynac(struct dnsp_ctx* ctx, const stru
 }
 
 F_NONNULL
+static void fixup_comp_offsets(uint8_t* packet, uint16_t* offsets, const unsigned num_offsets, const unsigned pkt_offset, const unsigned fixup_by)
+{
+    if (fixup_by) {
+        gdnsd_assume(num_offsets);
+        const unsigned pkt_fixup = pkt_offset + fixup_by;
+        for (unsigned i = 0; i < num_offsets; i++) {
+            uint8_t* pkt_ptr = &packet[offsets[i] + pkt_fixup];
+            unsigned comp_ptr = ntohs(gdnsd_get_una16(pkt_ptr));
+            gdnsd_assert(comp_ptr & 0xC000u);
+            comp_ptr += fixup_by;
+            gdnsd_assert(comp_ptr & 0xC000u);
+            gdnsd_put_una16(htons(comp_ptr), pkt_ptr);
+        }
+    }
+}
+
+F_NONNULL
+static unsigned encode_rrs_signed_deleg(struct dnsp_ctx* ctx, const union ltree_node* node, unsigned offset)
+{
+    gdnsd_assert(offset);
+    gdnsd_assert(ctx->txn.edns.do_bit);
+
+    // These rrsets were pre-ordered during ltree post-processing:
+    struct ltree_rrset_raw* ns = &node->c.rrsets->raw;
+    gdnsd_assume(ns);
+    gdnsd_assert(ns->gen.type == DNS_TYPE_NS);
+    struct ltree_rrset_raw* dnssec = &ns->gen.next->raw;
+    gdnsd_assume(dnssec);
+    gdnsd_assert(dnssec->gen.type == DNS_TYPE_DS || dnssec->gen.type == DNS_TYPE_NSEC);
+    gdnsd_assert(!dnssec->gen.next);
+
+    uint8_t* packet = ctx->txn.pkt->raw;
+    const unsigned fixup_by = ctx->txn.comp_fixup_auth;
+
+    // Copy and fixup only the NS RRs (no glue yet!)
+    const unsigned ns_data_len = ns->deleg_glue_offset
+                                 ? ns->deleg_glue_offset : ns->data_len;
+    memcpy(&packet[offset], ns->data, ns_data_len);
+    offset += ns_data_len;
+    gdnsd_assume(ns->num_comp_offsets >= ns->deleg_comp_offsets);
+    unsigned num_ns_comp_offsets = ns->num_comp_offsets - ns->deleg_comp_offsets;
+    if (num_ns_comp_offsets) {
+        gdnsd_assume(ns->comp_offsets);
+        fixup_comp_offsets(packet, ns->comp_offsets, num_ns_comp_offsets, 0, fixup_by);
+    }
+
+    // Now do basically the same thing for "dnssec" (DS or NSEC + RRSIG)
+    memcpy(&packet[offset], dnssec->data, dnssec->data_len);
+    offset += dnssec->data_len;
+    gdnsd_assume(dnssec->num_comp_offsets);
+    gdnsd_assume(dnssec->comp_offsets);
+    fixup_comp_offsets(packet, dnssec->comp_offsets, dnssec->num_comp_offsets, ns_data_len, fixup_by);
+
+    // Now the glue
+    if (ns->num_addtl) {
+        const unsigned glue_len = ns->data_len - ns->deleg_glue_offset;
+        memcpy(&packet[offset], &ns->data[ns->deleg_glue_offset], glue_len);
+        offset += glue_len;
+        if (ns->deleg_comp_offsets)
+            fixup_comp_offsets(packet, &ns->comp_offsets[num_ns_comp_offsets], ns->deleg_comp_offsets, dnssec->data_len, fixup_by);
+        ctx->txn.arcount = ns->num_addtl;
+    }
+
+    ctx->txn.nscount = ns->gen.count + dnssec->gen.count + dnssec->num_rrsig;
+    return offset;
+}
+
+F_NONNULL
 static unsigned encode_rrs_raw(struct dnsp_ctx* ctx, const unsigned offset, const struct ltree_rrset_raw* rrset)
 {
     gdnsd_assume(offset);
@@ -790,40 +859,62 @@ static unsigned encode_rrs_raw(struct dnsp_ctx* ctx, const unsigned offset, cons
     gdnsd_assume(rrset->data);
     gdnsd_assume(rrset->data_len);
 
+    const unsigned do_bit = ctx->txn.edns.do_bit;
+
     ctx->txn.ancount += rrset->gen.count;
+    if (do_bit)
+        ctx->txn.ancount += rrset->num_rrsig;
     ctx->txn.arcount += rrset->num_addtl;
+
+    unsigned data_len = rrset->data_len;
     uint8_t* packet = ctx->txn.pkt->raw;
     gdnsd_assume(packet);
 
     memcpy(&packet[offset], rrset->data, rrset->data_len);
-    if (rrset->num_comp_offsets) { // only set for wild mx/cname/ptr, deleg NS, and SOA
-        // Choosing which fixup to use: NS and SOA aren't allowed at wildcards, and
-        // are used in delegation and negative responses and need the _auth
-        // variant.  All other uses should be wildcards fixing up right-hand-side
-        // compression.
-        unsigned fixup_by;
-        if (rrset->gen.type == DNS_TYPE_SOA || rrset->gen.type == DNS_TYPE_NS)
-            fixup_by = ctx->txn.comp_fixup_auth;
-        else
-            fixup_by = ctx->txn.comp_fixup_wild;
-        if (fixup_by) {
-            for (unsigned i = 0; i < rrset->num_comp_offsets; i++) {
-                uint8_t* pkt_ptr = &packet[rrset->comp_offsets[i] + fixup_by];
-                unsigned comp_ptr = ntohs(gdnsd_get_una16(pkt_ptr));
-                gdnsd_assume(comp_ptr & 0xC000u);
-                comp_ptr += fixup_by;
-                gdnsd_assume(comp_ptr & 0xC000u);
-                gdnsd_put_una16(htons(comp_ptr), pkt_ptr);
-            }
+
+    // Do we need to strip rrsig?
+    if (!do_bit && rrset->num_rrsig) {
+        // The complex case is where "data" has the main rrset, rrsig, and
+        // additional records (which are always NS glue), and we need to pull
+        // the rrsig out of the middle.  Luckily this case is very rare in
+        // practice: it only happens when the NS records at the apex of a zone
+        // have their names in delegated subspaces that need glue (unusual for
+        // non-infrastructure zones, but for example it's the norm at the root
+        // of the DNS itself for serving root hints in root-servers.net beneath
+        // the net delegation).
+        if (rrset->num_addtl) {
+            // Currently we don't have to do any complex adjustments to the compression offset fixups, because:
+            // a) The only addtl-section records are true NS glue
+            // b) The only time we sign an NS rrset is at the zone root, not delegation NS
+            // c) Zone root NS do not use fixups, since they're not accounting for an unpredictable delegation qname
+            // The asserts below, in this conditional context, captures the effect of these constraints:
+            gdnsd_assert(rrset->gen.type == DNS_TYPE_NS);
+            gdnsd_assert(!rrset->num_comp_offsets);
+            gdnsd_assert(!ctx->txn.comp_fixup_auth);
+            gdnsd_assert(!ctx->txn.comp_fixup_wild);
+            // Shift the glue down, overwriting the RRSIG data
+            const unsigned glue_offset = rrset->rrsig_offset + rrset->rrsig_len;
+            gdnsd_assume(data_len > glue_offset);
+            const unsigned glue_len = data_len - glue_offset;
+            memmove(&packet[offset + rrset->rrsig_offset], &packet[offset + glue_offset], glue_len);
         }
+        data_len -= rrset->rrsig_len;
     }
+
+    unsigned fixup_by;
+    if (rrset->gen.type == DNS_TYPE_SOA || rrset->gen.type == DNS_TYPE_NS)
+        fixup_by = ctx->txn.comp_fixup_auth;
+    else
+        fixup_by = ctx->txn.comp_fixup_wild;
+    if (rrset->comp_offsets)
+        fixup_comp_offsets(packet, rrset->comp_offsets, rrset->num_comp_offsets, 0, fixup_by);
 
     if (rrset->gen.type == DNS_TYPE_A)
         shuffle_addrs_rdata(&ctx->rand_state, &packet[offset], rrset->gen.count, 16U);
     else if (rrset->gen.type == DNS_TYPE_AAAA)
         shuffle_addrs_rdata(&ctx->rand_state, &packet[offset], rrset->gen.count, 28U);
 
-    return offset + rrset->data_len;
+    return offset + data_len;
 }
 
 F_NONNULL
@@ -839,9 +930,10 @@ static unsigned encode_rrs_dynac(struct dnsp_ctx* ctx, const unsigned offset, co
 
 struct search_result {
     const union ltree_node* dom;
-    const union ltree_node* auth;
+    const struct ltree_node_zroot* auth;
     unsigned comp_fixup_wild;
     unsigned comp_fixup_auth;
+    unsigned comp_fixup_dnssec_nxd;
     uint64_t gen;
 };
 
@@ -870,7 +962,7 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
             gdnsd_assert(!res->auth);
             rval = DNAME_AUTH;
             res->comp_fixup_auth = name_remaining_depth;
-            res->auth = cur_node;
+            res->auth = &cur_node->z;
         } else if (cur_node->c.zone_cut_deleg) {
             gdnsd_assert(res->auth);
             gdnsd_assert(rval == DNAME_AUTH);
@@ -914,6 +1006,7 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
         const unsigned jump_by = cur_label_len + 1U;
         gdnsd_assume(name_remaining_depth >= jump_by);
         name_remaining_depth -= jump_by;
+        res->comp_fixup_dnssec_nxd = name_remaining_depth;
         cur_label += jump_by;
         cur_label_len = *cur_label;
         cur_node = next;
@@ -923,33 +1016,72 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
     return rval; // could be DNAME_AUTH or DNAME_NOAUTH
 }
 
-F_NONNULLX(1, 3)
-static unsigned do_auth_response(struct dnsp_ctx* ctx, const union ltree_node* dom, const union ltree_node* auth, unsigned offset)
+F_NONNULL
+static const union ltree_rrset* find_rrset(const union ltree_rrset* rrset, unsigned rrtype)
+{
+    do {
+        if (rrset->gen.type == rrtype)
+            return rrset;
+        rrset = rrset->gen.next;
+    } while (rrset);
+    return NULL;
+}
+
+F_NONNULL
+static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct search_result* res, unsigned offset)
 {
     uint8_t* packet = ctx->txn.pkt->raw;
     gdnsd_assume(packet);
     struct wire_dns_hdr* res_hdr = &ctx->txn.pkt->hdr;
     res_hdr->flags1 |= 4; // AA bit
 
+    const struct ltree_node_zroot* auth = res->auth;
+    gdnsd_assume(auth);
+    const union ltree_node* dom = res->dom;
     const union ltree_rrset* rrsets = dom ? dom->c.rrsets : NULL;
 
+    // Note that for signed zones, since all extant nodes have at least an NSEC
+    // RR, the !rrsets case is only the nxdomain case (whereas for unsigned
+    // zones, it can also be the NODATA case)
     if (rrsets) {
-        if (rrsets->gen.type == DNS_TYPE_CNAME) {
-            gdnsd_assert(!rrsets->gen.next); // CNAME does not co-exist with other rrsets
-            ctx->txn.qtype = DNS_TYPE_CNAME;
+        // In cases other than NXDOMAIN, for a non-DO-bit RRSIG query we can
+        // just naturally and cheaply return zero records (since we don't store
+        // RRSIG as an explicit RRSet in our data), but for a DO-bit RRSIG
+        // against a signed zone, we return REFUSED with no answers.  Most
+        // implementations actually return all the RRSIGs for all the RRSets of
+        // the node, but this seems to serve no pragmatic purpose and is a very
+        // large and inefficient response.  PowerDNS seems to use REFUSED like
+        // we're doing here though (although perhaps in a broader set of
+        // conditions), so we're not alone in this decision.
+        if (ctx->txn.qtype == DNS_TYPE_RRSIG && auth->sec && ctx->txn.edns.do_bit) {
+            res_hdr->flags2 = DNS_RCODE_REFUSED;
+            stats_own_inc(&ctx->stats->refused);
+            return offset;
         }
+
+        // If CNAME exists, it's either solo or followed by an NSEC rrset.  In
+        // the general case we convert the client's qtype to CNAME for internal
+        // purposes on hitting a CNAME node, but we should not do this for
+        // DO-bit queries with qtype=NSEC in a signed zone!
+        if (rrsets->gen.type == DNS_TYPE_CNAME) {
+            if (rrsets->gen.next && ctx->txn.qtype == DNS_TYPE_NSEC && ctx->txn.edns.do_bit)
+                gdnsd_assert(rrsets->gen.next->gen.type == DNS_TYPE_NSEC);
+            else
+                ctx->txn.qtype = DNS_TYPE_CNAME;
+        }
+
+        // If zone signed, use NSEC for ANY instead of HINFO, regardless of DO
+        if (ctx->txn.qtype == DNS_TYPE_ANY && auth->sec)
+            ctx->txn.qtype = DNS_TYPE_NSEC;
+
         if (ctx->txn.qtype != DNS_TYPE_ANY) {
-            const union ltree_rrset* search_rrset = rrsets;
-            do {
-                if (search_rrset->gen.type == ctx->txn.qtype) {
-                    if (search_rrset->gen.count)
-                        offset = encode_rrs_raw(ctx, offset, &search_rrset->raw);
-                    else
-                        offset = encode_rrs_dynac(ctx, offset, &search_rrset->dynac);
-                    break;
-                }
-                search_rrset = search_rrset->gen.next;
-            } while (search_rrset);
+            const union ltree_rrset* rrset = find_rrset(rrsets, ctx->txn.qtype);
+            if (rrset) {
+                if (rrset->gen.count)
+                    offset = encode_rrs_raw(ctx, offset, &rrset->raw);
+                else
+                    offset = encode_rrs_dynac(ctx, offset, &rrset->dynac);
+            }
         }
     }
 
@@ -957,35 +1089,56 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const union ltree_node* d
     if (!ctx->txn.ancount)
         chal_matched = chal_respond(ctx->txn.qtype, ctx->txn.lqname, packet, &ctx->txn.ancount, &offset, ctx->txn.this_max_response);
 
+    const bool nxd_case = !dom && !chal_matched;
+
     if (ctx->txn.qtype == DNS_TYPE_ANY) {
-        // construct_normal_response is not called for ANY, and
-        // chal_respond does not inject an RR for ANY, so there should
-        // still be zero answers here:
+        // Note that for signed zones, ANY was converted to NSEC, so this is
+        // just for the unsigned case, which skipped encode_rrs above to opt
+        // for the special handling here.  chal_respond above does not inject
+        // an RR for ANY, so there should still be zero answers here:
+        // ANY->CNAME was already handled above by changing ctx->txn.qtype
         gdnsd_assert(!ctx->txn.ancount);
-        // ANY->CNAME was already handled above construct_normal_response by changing ctx->txn.qtype
         gdnsd_assert(!rrsets || rrsets->gen.type != DNS_TYPE_CNAME);
 
-        // The conditional here basically means "if this wouldn't be an NXDOMAIN below"
-        if (dom || chal_matched) {
+        if (!nxd_case) {
             ctx->txn.ancount = 1;
             memcpy(&packet[offset], hinfo_for_any, hinfo_for_any_len);
             offset += hinfo_for_any_len;
         }
     }
 
-    if (!ctx->txn.ancount) {
+    if (!ctx->txn.ancount) { // NODATA or NXDOMAIN handling:
+        gdnsd_assert(!ctx->txn.nscount);
+        gdnsd_assert(!ctx->txn.arcount);
         // ltree ensures SOA is the first rrset in the zone root node
         gdnsd_assume(auth->c.rrsets);
         gdnsd_assert(auth->c.rrsets->gen.type == DNS_TYPE_SOA);
         offset = encode_rrs_raw(ctx, offset, &auth->c.rrsets->raw);
-        // Transfer the singleton SOA's count from answer to auth section.
-        gdnsd_assert(ctx->txn.ancount == 1 && !ctx->txn.nscount);
-        ctx->txn.nscount = 1;
-        ctx->txn.ancount = 0;
-        if (!dom && !chal_matched) {
+        if (ctx->txn.edns.do_bit && auth->sec) {
+            if (nxd_case) {
+                gdnsd_assume(ctx->txn.lqname[0] > res->comp_fixup_dnssec_nxd);
+                const uint8_t* nxd_name = &ctx->txn.lqname[1U + res->comp_fixup_dnssec_nxd];
+                const unsigned nxd_name_len = ctx->txn.lqname[0] - res->comp_fixup_dnssec_nxd;
+                const unsigned resp_len = dnssec_synth_nxd(auth->sec, nxd_name, &packet[offset], nxd_name_len);
+                if (res->comp_fixup_dnssec_nxd) {
+                    dnssec_nxd_fixup(auth->sec, packet, offset, res->comp_fixup_dnssec_nxd);
+                    res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
+                }
+                offset += resp_len;
+                ctx->txn.nscount += (1U + dnssec_num_zsks(auth->sec));
+                stats_own_inc(&ctx->stats->nxdomain);
+            } else if (rrsets) {
+                const union ltree_rrset* nsec = find_rrset(rrsets, DNS_TYPE_NSEC);
+                gdnsd_assume(nsec); // all NODATA cases for signed zones have NSEC
+                offset = encode_rrs_raw(ctx, offset, &nsec->raw);
+            }
+        } else if (nxd_case) {
             res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
             stats_own_inc(&ctx->stats->nxdomain);
         }
+        // Transfer the ancounts to nscount for negative cases (SOA and/or NSEC that land in answer first)
+        ctx->txn.nscount += ctx->txn.ancount;
+        ctx->txn.ancount = 0;
     }
 
     return offset;
@@ -1007,23 +1160,38 @@ static unsigned db_lookup(struct dnsp_ctx* ctx, unsigned offset)
     ctx->txn.comp_fixup_auth = res.comp_fixup_auth;
     ctx->txn.comp_fixup_wild = res.comp_fixup_wild;
 
+    // This is the special case for landing exactly at a delegation node, in a
+    // signed zone, with explicit qtype=DS.  In this case, we *must* act
+    // authoritatively (with an AA bit too!) in response to the DS query, as if
+    // the delegated name were in regular auth space.  If the DO bit is set on
+    // the query, that means returning either a signed DS or a signed SOA with
+    // a signed NSEC denying the DS.  Without a DO bit, we still return an AA
+    // bit and either a regular NODATA response or the unsigned DS.  This all
+    // happens to be exactly what would happen if we merely convert our status
+    // from DNAME_DELEG to DNAME_AUTH!
+    if (status == DNAME_DELEG && res.auth->sec
+            && ctx->txn.qtype == DNS_TYPE_DS && !res.comp_fixup_auth)
+        status = DNAME_AUTH;
+
     if (status == DNAME_DELEG) {
-        gdnsd_assume(res.dom);
-        gdnsd_assume(res.dom->c.rrsets);
-        gdnsd_assume(res.dom->c.rrsets->gen.type == DNS_TYPE_NS);
-        const struct ltree_rrset_raw* ns = &res.dom->c.rrsets->raw;
-        // DNAME_DELEG uses the same code we'd use for zroot qtype=NS, but we
-        // have to transfer the count of NS RRs over to the auth section
-        // afterwards as a hackaround.
-        unsigned rv = encode_rrs_raw(ctx, offset, ns);
-        ctx->txn.nscount = ctx->txn.ancount;
-        ctx->txn.ancount = 0;
-        return rv;
+        if (res.auth->sec && ctx->txn.edns.do_bit) {
+            return encode_rrs_signed_deleg(ctx, res.dom, offset);
+        } else {
+            gdnsd_assume(res.dom->c.rrsets);
+            gdnsd_assume(res.dom->c.rrsets->gen.type == DNS_TYPE_NS);
+            // DNAME_DELEG uses the same code we'd use for zroot qtype=NS, but we
+            // have to transfer the count of NS RRs over to the auth section
+            // afterwards as a hackaround.
+            unsigned rv = encode_rrs_raw(ctx, offset, &res.dom->c.rrsets->raw);
+            ctx->txn.nscount = ctx->txn.ancount;
+            ctx->txn.ancount = 0;
+            return rv;
+        }
     }
 
     gdnsd_assume(status == DNAME_AUTH);
 
-    return do_auth_response(ctx, res.dom, res.auth, offset);
+    return do_auth_response(ctx, &res, offset);
 }
 
 F_NONNULL
@@ -1356,6 +1524,7 @@ unsigned process_dns_query(struct dnsp_ctx* ctx, const struct anysin* sa, union 
 
     unsigned res_offset = sizeof(struct wire_dns_hdr);
     const enum rcode_rv status = decode_query(ctx, &res_offset, packet_len);
+    gdnsd_assert(res_offset <= MAX_RESP_START);
 
     if (status == DECODE_IGNORE) {
         stats_own_inc(&ctx->stats->dropped);

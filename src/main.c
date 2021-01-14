@@ -32,6 +32,7 @@
 #include "csc.h"
 #include "chal.h"
 #include "cookie.h"
+#include "dnssec.h"
 
 #include "plugins/plugapi.h"
 #include "plugins/mon.h"
@@ -682,6 +683,9 @@ int main(int argc, char** argv)
     // Load full configuration and expose through the global "gcfg"
     gcfg = conf_load(cfg_root, copts.force_zsd);
     vscf_destroy(cfg_root);
+
+    // Global early init for DNSSEC stuff
+    dnssec_init_global();
 
     // Basic init for the acme challenge code
     chal_init();

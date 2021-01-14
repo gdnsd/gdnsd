@@ -43,6 +43,9 @@ struct cfg {
     bool     zones_strict_data;
     bool     disable_cookies;
     bool     disable_tcp_dso;
+    bool     dnssec_enabled;
+    bool     dnssec_deterministic_ecdsa;
+    unsigned dnssec_max_active_zsks;
     unsigned max_nocookie_response;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;

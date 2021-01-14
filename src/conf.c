@@ -53,6 +53,9 @@ static const struct cfg cfg_defaults = {
     .zones_strict_data = false,
     .disable_cookies = false,
     .disable_tcp_dso = false,
+    .dnssec_enabled = false,
+    .dnssec_deterministic_ecdsa = false,
+    .dnssec_max_active_zsks = 1U,
     .max_nocookie_response = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
@@ -288,6 +291,9 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
         CFG_OPT_STR_NOCOPY(options, chaos_response, chaos_data);
         CFG_OPT_STR_NOCOPY(options, nsid, nsid_data);
         CFG_OPT_STR_NOCOPY(options, nsid_ascii, nsid_data_ascii);
+        CFG_OPT_BOOL(options, dnssec_enabled);
+        CFG_OPT_BOOL(options, dnssec_deterministic_ecdsa);
+        CFG_OPT_UINT(options, dnssec_max_active_zsks, 1LU, 4LU);
         vscf_hash_iterate_const(options, true, bad_key, "options");
     }
 

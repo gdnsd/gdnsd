@@ -26,6 +26,7 @@
 #include "chal.h"
 #include "main.h"
 #include "comp.h"
+#include "dnssec.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/dname.h>
@@ -385,18 +386,33 @@ static bool check_deleg(const union ltree_node* node)
         log_zfatal("Domainname '%s': Wildcards not allowed for delegation/glue data",
                    logf_dname(node->c.dname));
 
-    const union ltree_rrset* rrset_dchk = node->c.rrsets;
-    while (rrset_dchk) {
-        if (!(rrset_dchk->gen.type == DNS_TYPE_A || rrset_dchk->gen.type == DNS_TYPE_AAAA || (rrset_dchk->gen.type == DNS_TYPE_NS && node->c.zone_cut_deleg)))
-            log_zfatal("Domainname '%s' is inside a delegated subzone, and can only have NS and/or address records as appropriate",
-                       logf_dname(node->c.dname));
-        rrset_dchk = rrset_dchk->gen.next;
+    const union ltree_rrset* rrset = node->c.rrsets;
+    while (rrset) {
+        bool good = true;
+        switch (rrset->gen.type) {
+        case DNS_TYPE_A:
+        case DNS_TYPE_AAAA:
+            break;
+        case DNS_TYPE_NS:
+        case DNS_TYPE_DS:
+            good = node->c.zone_cut_deleg;
+            break;
+        default:
+            good = false;
+        }
+        if (!good)
+            log_zfatal("Domainname '%s' cannot have type '%s' in a delegation",
+                       logf_dname(node->c.dname), logf_rrtype(rrset->gen.type));
+        rrset = rrset->gen.next;
     }
 
     return false;
 }
 
-F_WUNUSED F_NONNULL
+// This always stores either 0x00 or 0xC00C to "buf", depending on whether
+// dname is the root of the DNS or not, and returns the number of bytes added
+// to the buffer.
+F_NONNULL
 static unsigned store_qname_comp(uint8_t* buf, const uint8_t* dname)
 {
     if (dname[1] == '\0') {
@@ -407,7 +423,7 @@ static unsigned store_qname_comp(uint8_t* buf, const uint8_t* dname)
     return 2U;
 }
 
-void realize_rdata(const union ltree_node* node, struct ltree_rrset_raw* raw)
+void realize_rdata(const union ltree_node* node, struct ltree_rrset_raw* raw, const struct ltree_node_zroot* zroot, const bool in_deleg)
 {
     // This makes this method idempotent, which is important because we don't
     // know whether the compressor code will need to realize additional nodes
@@ -418,8 +434,19 @@ void realize_rdata(const union ltree_node* node, struct ltree_rrset_raw* raw)
     if (raw->data_len)
         return;
 
-    // DNSSEC TODO - Generate an uncompressed copy at this stage as well, and
-    // sign it for RRSIG, and then add the completed RRSIG to raw->data
+    bool do_sign = false;
+    if (zroot->sec) {
+        if (!in_deleg) {
+            do_sign = true;
+        } else if (node->c.zone_cut_deleg) {
+            if (raw->gen.type == DNS_TYPE_DS || raw->gen.type == DNS_TYPE_NSEC)
+                do_sign = true;
+        }
+    }
+
+    uint8_t* data_store = NULL;
+    if (do_sign)
+        data_store = dnssec_sign_rrset(node, raw, zroot->sec);
 
     // Encode a compressed left side (name, type, class, ttl)
     uint8_t left[10];
@@ -437,48 +464,78 @@ void realize_rdata(const union ltree_node* node, struct ltree_rrset_raw* raw)
     for (unsigned i = 0; i < raw->gen.count; i++)
         total_size += ntohs(gdnsd_get_una16(raw->scan_rdata[i]));
 
-    uint8_t* data = xmalloc(total_size);
-    unsigned offs = 0;
+    unsigned data_len = 0;
+    if (data_store) {
+        // If rrsigs exist, realloc and move them to the end, then fill in the
+        // real rrset before the rrsigs and store the offset to rrsig_offset
+        gdnsd_assert(raw->num_rrsig);
+        gdnsd_assume(raw->rrsig_len);
+        raw->rrsig_offset = total_size;
+        data_len = total_size + raw->rrsig_len;
+        data_store = xrealloc(data_store, data_len);
+        memmove(&data_store[total_size], data_store, raw->rrsig_len);
+    } else {
+        data_len = total_size;
+        data_store = xmalloc(total_size);
+    }
+
+    unsigned d_offs = 0;
     for (unsigned i = 0; i < raw->gen.count; i++) {
-        memcpy(&data[offs], left, left_len);
-        offs += left_len;
+        memcpy(&data_store[d_offs], left, left_len);
+        d_offs += left_len;
         uint8_t* rd = raw->scan_rdata[i];
         unsigned rd_copy = ntohs(gdnsd_get_una16(rd)) + 2U;
-        memcpy(&data[offs], rd, rd_copy);
-        offs += rd_copy;
+        memcpy(&data_store[d_offs], rd, rd_copy);
+        d_offs += rd_copy;
         free(raw->scan_rdata[i]);
     }
     free(raw->scan_rdata);
 
-    gdnsd_assert(offs == total_size);
-    raw->data = data;
-    raw->data_len = offs;
+    gdnsd_assert(d_offs == total_size);
+    raw->data = data_store;
+    raw->data_len = data_len;
 }
 
 F_WUNUSED F_NONNULL
 static bool postproc_static_rrset(const union ltree_node* node, struct ltree_rrset_raw* raw, struct ltree_node_zroot* zroot, const bool in_deleg)
 {
-    realize_rdata(node, raw);
+    realize_rdata(node, raw, zroot, in_deleg);
+
     // Type-specific compression for raw (and gluing in the case of NS):
-    if (raw->gen.type == DNS_TYPE_MX || raw->gen.type == DNS_TYPE_CNAME || raw->gen.type == DNS_TYPE_PTR)
+    if (raw->gen.type == DNS_TYPE_MX || raw->gen.type == DNS_TYPE_CNAME || raw->gen.type == DNS_TYPE_PTR) {
         comp_do_mx_cname_ptr(raw, node->c.dname);
-    else if (raw->gen.type == DNS_TYPE_SOA)
+    } else if (raw->gen.type == DNS_TYPE_SOA) {
         comp_do_soa(raw, node->c.dname);
-    else if (raw->gen.type == DNS_TYPE_NS)
-        if (comp_do_ns(raw, zroot, node->c.dname, in_deleg))
+    } else if (raw->gen.type == DNS_TYPE_NS) {
+        if (comp_do_ns(raw, zroot, node, in_deleg))
             return true;
+    } else if (node->c.zone_cut_deleg && (raw->gen.type == DNS_TYPE_DS || raw->gen.type == DNS_TYPE_NSEC)) {
+        comp_do_deleg_ds_nsec(raw, node->c.dname);
+    }
+
     return false;
 }
 
 F_WUNUSED F_NONNULL
 static bool ltree_postproc_node(union ltree_node* node, struct ltree_node_zroot* zroot, const bool in_deleg)
 {
+    // For now, we're opting to simply not support wildcards+DNSSEC, because I
+    // don't have any great design options; they all have bad tradeoffs.  Could
+    // be revisited at some later date!
+    if (dname_iswild(node->c.dname) && zroot->sec)
+        log_fatal("Name %s: Wildcard records not allowed in DNSSEC-signed zones", logf_dname(node->c.dname));
+
     // This checks for junk/excess/wildcard data in delegations, imposing the
     // constraint that within a delegation cut (which starts at any NS record
     // other than at a zone root), only A and AAAA records with non-wildcard
     // labels can exist.
     if (in_deleg && check_deleg(node))
         return true;
+
+    // NSEC all the nodes in a signed zone, other than glue space inside deleg
+    // (the function itself also excludes DS deleg nodes, because we never use the NSEC there)
+    if (zroot->sec && (!in_deleg || node->c.zone_cut_deleg))
+        dnssec_node_add_nsec(node, zroot->sec);
 
     // Size for everything but the actual response RRs:
     unsigned rsize_base = BASE_RESP_SIZE;
@@ -492,6 +549,18 @@ static bool ltree_postproc_node(union ltree_node* node, struct ltree_node_zroot*
     // work and finally checking their response packet size limits:
     union ltree_rrset* rrset = node->c.rrsets;
     while (rrset) {
+        // Enforce that DS can only exist at a signed delegation cut
+        if (rrset->gen.type == DNS_TYPE_DS) {
+            if (!node->c.zone_cut_deleg)
+                log_zfatal("DS record found at '%s', which is not a delegation cut", logf_dname(node->c.dname));
+            // Technically we could allow DS in unsigned zones, but it doesn't
+            // do anything secure and it's misleading to allow it (also we
+            // wouldn't do special processing on it as authentic data in this
+            // case anyways)
+            if (!zroot->sec)
+                log_zfatal("DS record at '%s' not allowed in unsigned zone", logf_dname(node->c.dname));
+        }
+
         // dynamics skip all of this: they're known-small and don't have data to
         // glue or compress:
         if (rrset->gen.count) {
@@ -505,6 +574,8 @@ static bool ltree_postproc_node(union ltree_node* node, struct ltree_node_zroot*
                 log_zfatal("'%s %s' has too much data (%u > %u)",
                            logf_dname(node->c.dname), logf_rrtype(rrset->gen.type),
                            rsize_resp, MAX_RESPONSE_DATA);
+        } else if (zroot->sec) {
+            log_zfatal("Deprecated DYN[AC] RRs are not allowed in DNSSEC-signed zone '%s'", logf_dname(zroot->c.dname));
         }
         rrset = rrset->gen.next;
     }
@@ -513,7 +584,7 @@ static bool ltree_postproc_node(union ltree_node* node, struct ltree_node_zroot*
 }
 
 F_WUNUSED F_NONNULL
-static bool ltree_postproc_zroot(struct ltree_node_zroot* zroot)
+static bool ltree_postproc_zroot(struct ltree_node_zroot* zroot, const uint32_t tstamp)
 {
     union ltree_rrset* zroot_soa = NULL;
     const union ltree_rrset* zroot_ns = NULL;
@@ -556,9 +627,12 @@ static bool ltree_postproc_zroot(struct ltree_node_zroot* zroot)
 
     // Extract SOA serial to zone->serial
     struct ltree_rrset_raw* zsoa = &zroot_soa->raw;
-    gdnsd_assert(!zsoa->num_comp_offsets); // still in scan_rdata mode
+    gdnsd_assert(!zsoa->data_len);
     gdnsd_assume(zsoa->scan_rdata && zsoa->scan_rdata[0]);
-    const unsigned serial_offset = ntohs(gdnsd_get_una16(zsoa->scan_rdata[0])) - 18U;
+    const unsigned ncache_offset = ntohs(gdnsd_get_una16(zsoa->scan_rdata[0])) - 2U;
+    if (zroot->sec)
+        dnssec_set_tstamp_ncache(zroot->sec, tstamp, ntohl(gdnsd_get_una32(&zsoa->scan_rdata[0][ncache_offset])));
+    const unsigned serial_offset = ncache_offset - 16U;
     zroot->serial = ntohl(gdnsd_get_una32(&zsoa->scan_rdata[0][serial_offset]));
 
     return false;
@@ -619,16 +693,22 @@ static void ltree_postproc_recurse_phase2(union ltree_node* node, struct ltree_n
         }
     }
 
-    // As we unwind from recursion at a deleg cut, unless we already have a
-    // singular NS RRset, delete the excess address rrsets leaving only the NS
-    if (node->c.zone_cut_deleg && (node->c.rrsets->gen.type != DNS_TYPE_NS || (node->c.rrsets->gen.next))) {
+    // As we unwind from recursion at a deleg cut:
+    // First, destroy any address rrsets while taking note of any NS, DS, and/or NSEC
+    if (node->c.zone_cut_deleg) {
         union ltree_rrset* ns = NULL;
+        union ltree_rrset* ds = NULL;
+        union ltree_rrset* nsec = NULL;
         union ltree_rrset* srch = node->c.rrsets;
         gdnsd_assume(srch); // always has at least NS
         do {
             union ltree_rrset* next = srch->gen.next;
             if (srch->gen.type == DNS_TYPE_NS) {
                 ns = srch;
+            } else if (srch->gen.type == DNS_TYPE_DS) {
+                ds = srch;
+            } else if (srch->gen.type == DNS_TYPE_NSEC) {
+                nsec = srch;
             } else {
                 gdnsd_assert(srch->gen.type == DNS_TYPE_A || srch->gen.type == DNS_TYPE_AAAA);
                 free(srch->raw.data);
@@ -636,15 +716,33 @@ static void ltree_postproc_recurse_phase2(union ltree_node* node, struct ltree_n
             }
             srch = next;
         } while (srch);
+
+        // Then, set up the remaining 1-2 RRs in a determinstic order.  NS is
+        // always first, and if it's a signed zone, the DS (secure deleg) or
+        // NSEC (insecure deleg) is second.
         gdnsd_assume(ns);
-        ns->gen.next = NULL;
         node->c.rrsets = ns;
+        if (zroot->sec) {
+            if (ds) {
+                gdnsd_assert(!nsec);
+                ns->gen.next = ds;
+                ds->gen.next = NULL;
+            } else {
+                gdnsd_assert(nsec);
+                ns->gen.next = nsec;
+                nsec->gen.next = NULL;
+            }
+        } else {
+            gdnsd_assert(!ds);
+            gdnsd_assert(!nsec);
+            ns->gen.next = NULL;
+        }
     }
 }
 
-bool ltree_postproc_zone(struct ltree_node_zroot* zroot)
+bool ltree_postproc_zone(struct ltree_node_zroot* zroot, const uint32_t tstamp)
 {
-    if (unlikely(ltree_postproc_zroot(zroot)))
+    if (unlikely(ltree_postproc_zroot(zroot, tstamp)))
         return true;
 
     // Recursively process tree nodes breadth-first for things like data sanity
@@ -692,6 +790,8 @@ void ltree_destroy(union ltree_node* node)
         free(node->c.child_table);
     }
     free(node->c.dname);
+    if (node->c.zone_cut_root && node->z.sec)
+        dnssec_destroy(node->z.sec);
     free(node);
 }
 
@@ -761,6 +861,7 @@ struct ltree_node_zroot* ltree_new_zone(const char* zname)
     struct ltree_node_zroot* zroot = xcalloc(sizeof(*zroot));
     zroot->c.zone_cut_root = true;
     zroot->c.dname = dname_dup(dname);
+
     return zroot;
 }
 

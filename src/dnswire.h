@@ -56,6 +56,10 @@
 // MAX_RESPONSE_BUF)
 #define MAX_RESPONSE_DATA 16376U
 
+// MAX_RESP_START is the furthest offset into the packet at which our response
+// could start, assuming a max-length qname.
+#define MAX_RESP_START (12U + 255U + 4U)
+
 // This defines all the potential output bytes we account for other than the
 // query name and the response data RRs, for use in calculating specific cases
 // against the limit above:
@@ -137,10 +141,18 @@ struct wire_dns_hdr {
 #define DNS_TYPE_SRV 33U
 #define DNS_TYPE_NAPTR 35U
 #define DNS_TYPE_OPT 41U
+#define DNS_TYPE_DS 43U
+#define DNS_TYPE_RRSIG 46U
+#define DNS_TYPE_NSEC 47U
+#define DNS_TYPE_DNSKEY 48U
 #define DNS_TYPE_IXFR 251U
 #define DNS_TYPE_AXFR 252U
 #define DNS_TYPE_ANY 255U
 #define DNS_TYPE_CAA 257U
+
+// DNSSEC Algorithm identifiers
+#define DNSSEC_ALG_ECDSAP256SHA256 13U
+#define DNSSEC_ALG_ED25519 15U
 
 #define DNS_CLASS_IN 1U
 #define DNS_CLASS_CH 3U

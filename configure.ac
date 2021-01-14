@@ -209,6 +209,25 @@ AS_IF([test -n "$with_systemdsystemunitdir"],[
 AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 AM_CONDITIONAL(DO_SYSD_UNITFILE, [test -n "$with_systemdsystemunitdir"])
 
+# gdnsd can make optional use of libgnutls to support P256 signing.
+HAVE_GNUTLS=0
+AC_ARG_WITH([gnutls],
+    [AS_HELP_STRING([--with-gnutls=yes|no|check],
+        [Require or disable gnutls support @<:@default=no@:>@])],
+    [],
+    [with_gnutls=no])
+AS_IF([test "x$with_gnutls" != xno], [
+    PKG_CHECK_MODULES([GNUTLS], [gnutls >= 3.6.10], [HAVE_GNUTLS=1], [HAVE_GNUTLS=0])
+    AS_IF([test $HAVE_GNUTLS -eq 1],[
+          AC_DEFINE([HAVE_GNUTLS],1,[gnutls 3.6.10 or higher available])
+    ])
+    AC_SUBST([GNUTLS_CFLAGS])
+    AC_SUBST([GNUTLS_LIBS])
+])
+AS_IF([test "x$with_gnutls" = xyes -a $HAVE_GNUTLS -ne 1],[
+    AC_MSG_ERROR([gnutls >= 3.6.10 not found, but --with-gnutls was requested explicitly])
+])
+
 #---------------------------------------------
 # pthread setname (3 non-portable variants...)
 #---------------------------------------------
@@ -353,6 +372,7 @@ B_FEAT="prod"
 if test "x$developer" != xno;    then B_FEAT="dev";               fi
 if test "x$HAVE_LIBUNWIND" = x1; then B_FEAT="$B_FEAT unwind";    fi
 if test "x$HAVE_GEOIP2" = x1;    then B_FEAT="$B_FEAT geoip2";    fi
+if test "x$HAVE_GNUTLS" = x1;    then B_FEAT="$B_FEAT gnutls";    fi
 AC_DEFINE_UNQUOTED([BUILD_FEATURES], ["$B_FEAT"], [Build Features])
 
 # BUILD_INFO for cmdline output

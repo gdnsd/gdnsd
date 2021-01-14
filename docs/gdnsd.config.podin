@@ -612,6 +612,49 @@ startup.  As with a manually-defined C<cookie_key_file>, any time the automatic
 key must be regenerated, this will invalidate all outstanding server cookies
 held by clients.
 
+=item B<dnssec_enabled>
+
+Boolean, default false.
+
+If true, DNSSEC signed zones can be loaded, otherwise they're disallowed.
+
+=item B<dnssec_deterministic_ecdsa>
+
+Boolean, default false.
+
+If true, DNSSEC ECDSA signing keys will use RFC 6979 deterministic signatures,
+as recommended (C<SHOULD>) by RFC 8624.  This isn't defaulted on because there
+has been some debate on whether this was a universally good recommendation for
+all use-cases and it has some performance tradeoffs (which can be checked for
+your build on your host with C<gdnsd_dnssec_bench>).
+
+A better option for deterministic signing is Ed25519 keys, but this may not be
+a viable option for all users at this point in the Internet's adoption of
+support for it.
+
+This option can only work if GnuTLS support was compiled in; it will cause a
+config failure on startup otherwise.  You can check for compile-time GnuTLS
+support by looking at the C<Features:> line in the help output emitted when
+C<gdnsd> is run with no arguments.
+
+=item B<dnssec_max_active_zsks>
+
+Integer, default 1, min 1, max 4.
+
+This sets the maximum number of Zone Signing Keys that may be active for a
+single zone.  Every such key is used to sign all responses, and thus having too
+many active ones can greatly inflate response sizes.  Setting this value
+larger than it needs to be can also have other negative effects, such as
+inflating the size of the cache used for synthetic C<NXDOMAIN> responses below.
+One active key at a time is enough for most normal purposes, assuming good key
+management practices such as pre-publishing, and two is generally enough even
+for unplanned rollovers.
+
+In the case that your operational plans indicate that this value needs to be
+higher only rarely (e.g. during some kind of emergency key procedure), the
+server could be reconfigured temporarily with the larger value only during the
+necessary parts of the procedure.
+
 =item B<run_dir>
 
 String, defaults to F<@GDNSD_DEFPATH_RUN@>.  This is the directory which the

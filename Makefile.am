@@ -106,6 +106,11 @@ bin_PROGRAMS += src/gdnsdctl
 src_gdnsdctl_SOURCES = src/gdnsdctl.c
 src_gdnsdctl_LDADD = src/libcsc.a libgdnsd/libgdnsd.a -lm -lsodium $(LIBUNWIND_LIBS)
 
+bin_PROGRAMS += src/gdnsd_dnssec_bench
+src_gdnsd_dnssec_bench_CPPFLAGS = $(AM_CPPFLAGS) $(GNUTLS_CFLAGS)
+src_gdnsd_dnssec_bench_SOURCES = src/conf.h src/dnssec_alg.c src/dnssec_alg.h src/dnssec_bench.c
+src_gdnsd_dnssec_bench_LDADD = libgdnsd/libgdnsd.a -lm -lsodium $(LIBUNWIND_LIBS) $(GNUTLS_LIBS)
+
 sbin_PROGRAMS += src/gdnsd
 
 src/zscan_rfc1035.c: src/zscan_rfc1035.rl
@@ -115,7 +120,7 @@ EXTRA_DIST += src/zscan_rfc1035.rl src/zscan_rfc1035.c
 # The reason for -I$(srcdir)/src below is that zscan_rfc1035.c is
 #   created in the builddir, so the compiler won't otherwise pick
 #   up includes from $(srcdir)/src when compiling it.
-src_gdnsd_CPPFLAGS = -I$(srcdir)/src $(AM_CPPFLAGS)
+src_gdnsd_CPPFLAGS = -I$(srcdir)/src $(AM_CPPFLAGS) $(GNUTLS_CFLAGS)
 
 src_gdnsd_SOURCES = \
 	src/zscan_rfc1035.c \
@@ -146,6 +151,10 @@ src_gdnsd_SOURCES = \
 	src/dnsio_udp.h \
 	src/dnsio_tcp.c \
 	src/dnsio_tcp.h \
+	src/dnssec.c \
+	src/dnssec.h \
+	src/dnssec_alg.c \
+	src/dnssec_alg.h \
 	src/proxy.c \
 	src/proxy.h \
 	src/socks.c \
@@ -178,7 +187,7 @@ src_gdnsd_LDADD = \
 	src/plugins/libextmon_comms.a \
 	libgdnsd/libgdnsd.a \
 	libgdmaps/libgdmaps.a \
-	-lm -lurcu-qsbr -lev -lsodium $(LIBUNWIND_LIBS) $(GEOIP2_LIBS)
+	-lm -lurcu-qsbr -lev -lsodium $(LIBUNWIND_LIBS) $(GEOIP2_LIBS) $(GNUTLS_LIBS)
 
 #=====================================
 # libgdmaps/
@@ -286,6 +295,7 @@ noinst_SCRIPTS += init/gdnsd.init
 
 # dist + install simple docs
 dist_doc_DATA += \
+	docs/DNSSEC.md \
 	docs/Manual.md \
 	docs/ControlSocket.md \
 	docs/Security.md

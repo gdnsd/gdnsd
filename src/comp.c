@@ -185,7 +185,7 @@ void comp_do_mx_cname_ptr(struct ltree_rrset_raw* rrset, const uint8_t* node_dna
     const bool is_wild = (node_name[0] == '\1' && node_name[1] == '*');
     if (is_wild) {
         node_name += 2U;
-        gdnsd_assume(node_name_len >= 2U);
+        gdnsd_assume(node_name_len > 2U);
         node_name_len -= 2U;
     }
 
@@ -226,6 +226,19 @@ void comp_do_mx_cname_ptr(struct ltree_rrset_raw* rrset, const uint8_t* node_dna
     comp_destroy(cs);
 
     if (cbuf_offset != input_offset) {
+        gdnsd_assert(cbuf_offset < input_offset); // savings, not expansion!
+        // If RRSIG was present at end, copy it over as well.
+        if (rrset->num_rrsig) {
+            gdnsd_assert(rrset->rrsig_len);
+            gdnsd_assert(rrset->rrsig_offset);
+            gdnsd_assert(rrset->rrsig_offset + rrset->rrsig_len == rrset->data_len);
+            gdnsd_assert(input_offset == rrset->rrsig_offset);
+            memcpy(&comp_buffer[cbuf_offset], &input[input_offset], rrset->rrsig_len);
+            cbuf_offset += rrset->rrsig_len;
+            gdnsd_assert(cbuf_offset < rrset->data_len);
+        } else {
+            gdnsd_assert(input_offset == rrset->data_len);
+        }
         free(rrset->data);
         comp_buffer = xrealloc(comp_buffer, cbuf_offset);
         rrset->data = comp_buffer;
@@ -233,6 +246,22 @@ void comp_do_mx_cname_ptr(struct ltree_rrset_raw* rrset, const uint8_t* node_dna
     } else {
         // No point replacing the existing if nothing happened
         free(comp_buffer);
+    }
+}
+
+static void fixup_all_lhs(struct ltree_rrset_raw* rrset, uint8_t* rrset_data, const unsigned num_rrs, const unsigned pkt_voffset)
+{
+    // Skip if it was an uncompressed root-of-dns case
+    unsigned d_offs = 0;
+    if (rrset_data[d_offs] == 0x00)
+        return;
+
+    rrset->comp_offsets = xrealloc_n(rrset->comp_offsets, rrset->num_comp_offsets + num_rrs, sizeof(*rrset->comp_offsets));
+    for (unsigned i = 0; i < num_rrs; i++) {
+        gdnsd_assert(rrset_data[d_offs] == 0xC0 && rrset_data[d_offs + 1U] == 0x0C);
+        rrset->comp_offsets[rrset->num_comp_offsets++] = pkt_voffset + d_offs;
+        const unsigned rdlen = ntohs(gdnsd_get_una16(&rrset_data[d_offs + 10U]));
+        d_offs += (rdlen + 12U);
     }
 }
 
@@ -288,11 +317,25 @@ void comp_do_soa(struct ltree_rrset_raw* rrset, const uint8_t* node_dname)
 
     comp_destroy(cs);
 
-    // Copy the final 20 bytes (5x 32-bit numeric values, the various SOA TTL-ish fields)
-    memcpy(&comp_buffer[cbuf_offset], &input[input_offset], 20U);
-    cbuf_offset += 20U;
-
     if (total_savings) {
+        // Copy the final 20 bytes (5x 32-bit numeric values, the various SOA TTL-ish fields)
+        memcpy(&comp_buffer[cbuf_offset], &input[input_offset], 20U);
+        cbuf_offset += 20U;
+        input_offset += 20U;
+        // If RRSIG was present at end, copy it over as well.
+        if (rrset->num_rrsig) {
+            gdnsd_assert(rrset->rrsig_len);
+            gdnsd_assert(rrset->rrsig_offset);
+            gdnsd_assert(rrset->rrsig_offset + rrset->rrsig_len == rrset->data_len);
+            gdnsd_assert(input_offset == rrset->rrsig_offset);
+            memcpy(&comp_buffer[cbuf_offset], &input[input_offset], rrset->rrsig_len);
+            cbuf_offset += rrset->rrsig_len;
+            gdnsd_assert(cbuf_offset < rrset->data_len);
+            gdnsd_assert(total_savings < rrset->rrsig_offset);
+            rrset->rrsig_offset -= total_savings;
+        } else {
+            gdnsd_assert(input_offset == rrset->data_len);
+        }
         const unsigned rdlen_offset = 10U;
         unsigned rdlen = ntohs(gdnsd_get_una16(&comp_buffer[rdlen_offset]));
         rdlen -= total_savings;
@@ -305,6 +348,24 @@ void comp_do_soa(struct ltree_rrset_raw* rrset, const uint8_t* node_dname)
         // No point replacing the existing if nothing happened
         free(comp_buffer);
     }
+
+    // Create LHS fixups for the SOA RRSIG, since it's used in auth-adjusted responses alongside the SOA
+    if (rrset->num_rrsig)
+        fixup_all_lhs(rrset, &rrset->data[rrset->rrsig_offset], rrset->num_rrsig, pkt_voffset + rrset->rrsig_offset);
+}
+
+// This one doesn't do any real compression, it just records comp_offset stuff
+// for dnspacket to use in delegation output cases
+void comp_do_deleg_ds_nsec(struct ltree_rrset_raw* rrset, const uint8_t* node_dname)
+{
+    gdnsd_assert(rrset->gen.type == DNS_TYPE_DS || rrset->gen.type == DNS_TYPE_NSEC);
+    gdnsd_assert(rrset->num_rrsig);
+    gdnsd_assert(!rrset->num_comp_offsets);
+    gdnsd_assert(!rrset->comp_offsets);
+    gdnsd_assert(dname_get_status(node_dname) == DNAME_VALID);
+
+    fixup_all_lhs(rrset, rrset->data, rrset->gen.count + rrset->num_rrsig,
+                  12U + node_dname[0] + 2U + 2U);
 }
 
 F_NONNULL
@@ -411,22 +472,24 @@ static bool ns_add_glue(struct ltree_rrset_raw* glue_fake, struct ltree_node_zro
     gdnsd_assume(ns_target); // If this were false, we'd lack a+aaaa and fatal out above
 
     if (target_a) {
-        realize_rdata(ns_target, target_a);
+        realize_rdata(ns_target, target_a, zroot, true);
         ns_add_glue_data(glue_fake, target_a, glue_name_offset, 16U, in_deleg);
     }
     if (target_aaaa) {
-        realize_rdata(ns_target, target_aaaa);
+        realize_rdata(ns_target, target_aaaa, zroot, true);
         ns_add_glue_data(glue_fake, target_aaaa, glue_name_offset, 28U, in_deleg);
     }
 
     return false;
 }
 
-bool comp_do_ns(struct ltree_rrset_raw* rrset, struct ltree_node_zroot* zroot, const uint8_t* node_dname, const bool in_deleg)
+bool comp_do_ns(struct ltree_rrset_raw* rrset, struct ltree_node_zroot* zroot, const union ltree_node* node, const bool in_deleg)
 {
+    gdnsd_assume(node->c.dname);
     gdnsd_assert(rrset->gen.type == DNS_TYPE_NS);
-    gdnsd_assert(dname_get_status(node_dname) == DNAME_VALID);
+    gdnsd_assert(dname_get_status(node->c.dname) == DNAME_VALID);
 
+    const uint8_t* node_dname = node->c.dname;
     const unsigned node_name_len = node_dname[0];
     const uint8_t* node_name = &node_dname[1];
 
@@ -482,6 +545,27 @@ bool comp_do_ns(struct ltree_rrset_raw* rrset, struct ltree_node_zroot* zroot, c
 
     comp_destroy(cs);
 
+    // If rrsig, copy it over now as well, before we get to glue and/or realloc
+    if (rrset->num_rrsig) {
+        gdnsd_assert(rrset->rrsig_len);
+        gdnsd_assert(rrset->rrsig_offset);
+        gdnsd_assert(rrset->rrsig_offset + rrset->rrsig_len == rrset->data_len);
+        gdnsd_assert(input_offset == rrset->rrsig_offset);
+        memcpy(&comp_buffer[cbuf_offset], &input[input_offset], rrset->rrsig_len);
+        cbuf_offset += rrset->rrsig_len;
+        input_offset += rrset->rrsig_len;
+        gdnsd_assume(cbuf_offset <= rrset->data_len);
+        // Adjust rrsig offset for compression savings:
+        if (cbuf_offset != input_offset) {
+            gdnsd_assume(cbuf_offset < input_offset); // savings, not expansion!
+            const unsigned savings = input_offset - cbuf_offset;
+            gdnsd_assume(savings < rrset->rrsig_offset);
+            rrset->rrsig_offset -= savings;
+        }
+    } else {
+        gdnsd_assert(input_offset == rrset->data_len);
+    }
+
     if (glue_fake.gen.count) {
         // merge glue_fake data
         free(rrset->data);
@@ -503,6 +587,14 @@ bool comp_do_ns(struct ltree_rrset_raw* rrset, struct ltree_node_zroot* zroot, c
             memcpy(&rrset->comp_offsets[rrset->num_comp_offsets], glue_fake.comp_offsets, glue_fake.num_comp_offsets * sizeof(*glue_fake.comp_offsets));
             rrset->num_comp_offsets = total_comp_offsets;
             free(glue_fake.comp_offsets);
+        }
+
+        if (node->c.zone_cut_deleg) {
+            gdnsd_assert(!rrset->num_rrsig);
+            gdnsd_assert(!rrset->rrsig_offset);
+            gdnsd_assert(!rrset->rrsig_len);
+            rrset->deleg_glue_offset = cbuf_offset;
+            rrset->deleg_comp_offsets = glue_fake.num_comp_offsets;
         }
     } else if (cbuf_offset != input_offset) {
         gdnsd_assert(cbuf_offset < input_offset); // savings, not expansion!

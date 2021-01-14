@@ -22,6 +22,15 @@ The following are recommended but optional:
   https://github.com/maxmind/libmaxminddb/releases
 * libunwind headers and libraries. (for stacktrace on some fatals)
 
+Finally:
+
+* For the experimental DNSSEC code, there is also an optional dependency on
+  libgnutls (>= 3.6.10) to enable support for the legacy ECDSAP256SHA256
+  signing algorithm.  Without it, the daemon only supports ED25519 via
+  libsodium.  It is not currently recommended to link libgnutls in
+  distribution packaging at this time, as this code is not at all ready for
+  production use anyways.
+
 The following have no real effect on the build or runtime, but are
 required in order to run the testsuite:
 

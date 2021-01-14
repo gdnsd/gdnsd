@@ -23,6 +23,7 @@
 #include "conf.h"
 #include "ltree.h"
 #include "chal.h"
+#include "dnssec.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -142,6 +143,14 @@ static void set_uval(struct zscan* z)
     z->tstart = NULL;
     if (errno)
         parse_error("Integer conversion error: %s", logf_errno());
+}
+
+F_NONNULL
+static void set_uval8(struct zscan* z)
+{
+    set_uval(z);
+    if (z->uval > 255)
+        parse_error("Value %u exceeds 8-bit limit", z->uval);
 }
 
 F_NONNULL
@@ -771,17 +780,73 @@ static void rec_rfc3597(struct zscan* z)
             || rrtype == DNS_TYPE_PTR
             || rrtype == DNS_TYPE_MX
             || rrtype == DNS_TYPE_SRV
-            || rrtype == DNS_TYPE_NAPTR)
+            || rrtype == DNS_TYPE_NAPTR
+            || rrtype == DNS_TYPE_RRSIG)
         parse_error("Name '%s': type %s not allowed, please use the explicit support built in for this RR type",
                     logf_dname(z->lhs_dname), logf_rrtype(rrtype));
 
     // These are just not allowed in any form
     if (rrtype == DNS_TYPE_HINFO
             || (rrtype == DNS_TYPE_OPT)
+            || (rrtype == DNS_TYPE_NSEC)
             || (rrtype > 127 && rrtype < 256)
             || rrtype == 0)
-        parse_error("Name '%s': type %s not allowed",
+        parse_error("Name '%s': %s not allowed",
                     logf_dname(z->lhs_dname), logf_rrtype(rrtype));
+
+    z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
+    if (ltree_add_rec(z->zroot, z->lhs_dname, z->rfc3597_data, rrtype, z->ttl))
+        siglongjmp(z->jbuf, 1);
+    z->rfc3597_data = NULL;
+}
+
+F_NONNULL
+static void rec_ds(struct zscan* z)
+{
+    const unsigned rrtype = DNS_TYPE_DS;
+
+    // The parser already constrained the max values for these:
+    const unsigned key_tag = z->uv_1;
+    const unsigned dnssec_alg = z->uv_2;
+    const unsigned digest_type = z->uv_3;
+
+    if (!dnssec_alg)
+        parse_error_noargs("DS record has reserved algorithm type zero");
+    if (!digest_type)
+        parse_error_noargs("DS record has reserved digest type zero");
+
+    // The parse definition gives us 0-64 bytes of digest in an attempt to be
+    // maximally compatible with future digests.  For the types we already know
+    // about we should check for the right length here though:
+    unsigned check_len = 0;
+    switch (digest_type) {
+    case 1: // SHA-1
+        check_len = 20U;
+        break;
+    case 2: // SHA-256
+        check_len = 32U;
+        break;
+    case 3: // GOST R 34.11-94
+        check_len = 32U;
+        break;
+    case 4: // SHA-384
+        check_len = 48U;
+        break;
+    default:
+        check_len = 0;
+    }
+    if (check_len && z->rfc3597_data_written != check_len)
+        parse_error("DS record digest length %u incorrect for algorithm %u",
+                    z->rfc3597_data_len, digest_type);
+
+    // Re-form rfc3597_data to be actual rdata by moving the digest up
+    const unsigned rdlen = 2U + 1U + 1U + z->rfc3597_data_written;
+    z->rfc3597_data = xrealloc(z->rfc3597_data, 2U + rdlen);
+    memmove(&z->rfc3597_data[6], z->rfc3597_data, z->rfc3597_data_written);
+    gdnsd_put_una16(htons(rdlen), z->rfc3597_data);
+    gdnsd_put_una16(htons(key_tag), &z->rfc3597_data[2]);
+    z->rfc3597_data[4] = dnssec_alg;
+    z->rfc3597_data[5] = digest_type;
 
     z->ttl = clamp_ttl(z, z->lhs_dname, rrtype, z->ttl);
     if (ltree_add_rec(z->zroot, z->lhs_dname, z->rfc3597_data, rrtype, z->ttl))
@@ -835,6 +900,29 @@ static void rfc3597_octet(struct zscan* z)
     if (z->rfc3597_data_written == z->rfc3597_data_len)
         parse_error_noargs("RFC3597 generic RR: more rdata is present than the indicated length");
     z->rfc3597_data[z->rfc3597_data_written++] = hexbyte(z->tstart);
+}
+
+F_NONNULL
+static void dsdig_setup(struct zscan* z)
+{
+    z->rfc3597_data_len = 64U; // all known digests are <= 48U to date
+    z->rfc3597_data = xmalloc(z->rfc3597_data_len);
+    z->rfc3597_data_written = 0U;
+}
+
+F_NONNULL
+static void dsdig_octet(struct zscan* z)
+{
+    if (z->rfc3597_data_written == z->rfc3597_data_len)
+        parse_error_noargs("DS Digest field too long");
+    z->rfc3597_data[z->rfc3597_data_written++] = hexbyte(z->tstart);
+}
+
+F_NONNULL
+static void zone_add_zsk(struct zscan* z, unsigned algid)
+{
+    if (dnssec_add_ephemeral_zsk(z->zroot, algid))
+        siglongjmp(z->jbuf, 1);
 }
 
 // The external entrypoint to the parser
@@ -977,6 +1065,7 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     action set_ipv4 { set_ipv4(z, fpc); }
     action set_ipv6 { set_ipv6(z, fpc); }
     action set_uval { set_uval(z); }
+    action set_uval8 { set_uval8(z); }
     action set_uval16 { set_uval16(z); }
     action mult_uval { mult_uval(z, fc); }
 
@@ -1008,9 +1097,15 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     action rec_dync { rec_dync(z); }
     action rec_rfc3597 { rec_rfc3597(z); }
     action rec_caa { rec_caa(z); }
+    action rec_ds { rec_ds(z); }
 
     action rfc3597_data_setup { rfc3597_data_setup(z); }
     action rfc3597_octet { rfc3597_octet(z); }
+    action dsdig_setup { dsdig_setup(z); }
+    action dsdig_octet { dsdig_octet(z); }
+
+    action break_my_zone_ed25519 { zone_add_zsk(z, DNSSEC_ALG_ED25519); }
+    action break_my_zone_p256 { zone_add_zsk(z, DNSSEC_ALG_ECDSAP256SHA256); }
 
     # newlines, count them
     nl  = '\n' %{ z->lcount++; };
@@ -1066,6 +1161,7 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     # Unsigned integer values, with "ttl" being a special
     #  case with an optional multiplier suffix
     uval      = digit+ >token_start %set_uval;
+    uval8     = digit+ >token_start %set_uval8;
     uval16    = digit+ >token_start %set_uval16;
     uval_mult = [MHDWmhdw] @mult_uval;
     ttl       = (uval uval_mult?);
@@ -1089,6 +1185,21 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
 
     caa_prop = [0-9A-Za-z]+ >token_start %set_caa_prop;
     caa_rdata = uval ws caa_prop ws txt_item_huge >start_txt;
+
+    # For mnemonics in DNSKEY and DS: since users can always fall back to using
+    # a raw integer, we only care to parse mnemonics for the reasonably-modern
+    # cases.  These are the five algorithms that are in state MUST, MAY, or
+    # RECOMMENDED for signing as of RFC 8624's updated list in mid-2019.
+    dnssec_alg = uval8
+        | 'RSASHA256'          %{ z->uval = 8U; }
+        | 'ECDSAP256SHA256'    %{ z->uval = 13U; }
+        | 'ECDSAP384SHA384'    %{ z->uval = 14U; }
+        | 'ED25519'            %{ z->uval = 15U; }
+        | 'ED448'              %{ z->uval = 16U; }
+        ;
+
+    dsdig_octet = ([0-9A-Fa-f]{2}) >token_start %dsdig_octet;
+    ds_digest = ws %dsdig_setup (dsdig_octet+ ws?)**;
 
     # The left half of a resource record, which for our purposes here
     #  is the optional domainname and/or the optional ttl and/or the
@@ -1124,6 +1235,8 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
                     ws ttl %set_uv_5) %rec_soa
         | ('TYPE'i  rfc3597_rdata) %rec_rfc3597
         | ('CAA'i   ws caa_rdata) %rec_caa
+        | ('DS'i    ws uval16 %set_uv_1 ws dnssec_alg %set_uv_2
+                    ws uval8 %set_uv_3 ds_digest) %rec_ds
     );
 
     # Again, separate copy for the DYN[AC] TTL stuff
@@ -1140,6 +1253,8 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
           ('TTL'i ws ttl %set_def_ttl)
         | ('ORIGIN'i ws dname_rhs %reset_origin)
         | ('INCLUDE'i %reset_rhs_origin ws filename (ws dname_rhs)?) $1 %0 %process_include
+        | ('BREAK_MY_ZONE_ED25519' %break_my_zone_ed25519)
+        | ('BREAK_MY_ZONE_P256' %break_my_zone_p256)
     );
 
     # A zonefile is composed of many resource records

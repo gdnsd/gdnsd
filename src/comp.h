@@ -31,9 +31,12 @@ F_NONNULL
 void comp_do_mx_cname_ptr(struct ltree_rrset_raw* rrset, const uint8_t* node_dname);
 
 F_WUNUSED F_NONNULL
-bool comp_do_ns(struct ltree_rrset_raw* rrset, struct ltree_node_zroot* zroot, const uint8_t* node_dname, const bool in_deleg);
+bool comp_do_ns(struct ltree_rrset_raw* rrset, struct ltree_node_zroot* zroot, const union ltree_node* node, const bool in_deleg);
 
 F_NONNULL
 void comp_do_soa(struct ltree_rrset_raw* rrset, const uint8_t* node_dname);
+
+F_NONNULL
+void comp_do_deleg_ds_nsec(struct ltree_rrset_raw* rrset, const uint8_t* node_dname);
 
 #endif // GDNSD_COMP_H
