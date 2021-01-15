@@ -48,14 +48,14 @@ sub recv_tcp {
     }
 }
 
-# Just a basic OPT RR with size=1024
-my $basic_optrr = "\x00\x00\x29\x04\x00\x00\x00\x00\x00\x00\x00";
+# Just a basic OPT RR with size=1232
+my $basic_optrr = "\x00\x00\x29\x04\xD0\x00\x00\x00\x00\x00\x00";
 
 # When DSO isn't established, we expect gdnsd to respond with the RFC 7828 keepalive option at 37s like this:
-my $rfc7828_optrr = "\x00\x00\x29\x04\x00\x00\x00\x00\x00\x00\x06\x00\x0B\x00\x02\x01\x72";
+my $rfc7828_optrr = "\x00\x00\x29\x04\xD0\x00\x00\x00\x00\x00\x06\x00\x0B\x00\x02\x01\x72";
 
 # This is tailored to the ns1 query response below, and includes EDNS padding to 468
-my $padded_optrr = "\x00\x00\x29\x04\x00\x00\x00\x00\x00\x01\x98\x00\x0C\x01\x94" . ("\x00" x 404);
+my $padded_optrr = "\x00\x00\x29\x04\xD0\x00\x00\x00\x00\x01\x98\x00\x0C\x01\x94" . ("\x00" x 404);
 
 # This manually creates a basic "ns1.example.com A" query, and manually creates
 # the expected response packet with QR+AA bits, full name compression, and the

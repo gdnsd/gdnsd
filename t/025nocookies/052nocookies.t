@@ -9,7 +9,7 @@ sub _mk_optrr_cookie {
         type => "OPT",
         version => 0,
         name => "",
-        size => 1024,
+        size => 1232,
         rcode => 0,
         flags => 0,
     );
@@ -28,7 +28,7 @@ my $optrr_plain_1k = Net::DNS::RR->new(
     type => "OPT",
     version => 0,
     name => "",
-    size => 1024,
+    size => 1232,
     rcode => 0,
     flags => 0,
 );

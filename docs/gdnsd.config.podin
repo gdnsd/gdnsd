@@ -456,7 +456,7 @@ be considered a syntax error.
 
 =item B<max_edns_response>
 
-Integer, default 1232, min 512, max 16384.  This is the maximum size
+Integer, default 1232, min 1220, max 16384.  This is the maximum size
 of a UDP edns response to a client over IPv4, acting as a cap on
 the edns buffer size advertised by the client in its request.
 
@@ -473,7 +473,7 @@ large response datasets in your zones in the first place.
 
 =item B<max_edns_response_v6>
 
-Integer, default 1232, min 512, max 16384.
+Integer, default 1232, min 1220, max 16384.
 
 As above for UDP edns responses over IPv6.  Once again, raising this
 above its default value is not recommended for a public-facing server.

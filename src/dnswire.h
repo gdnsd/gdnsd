@@ -26,14 +26,16 @@
 #include <arpa/inet.h>
 
 // Our UDP input buffers are shared with output buffer space, and the output
-// buffer size is 16K.
-// However, we only advertise a buffer size of 1024, to be absolutely sure that
-// even in the face of an IPv6 min-MTU link and lots of extra headers and
-// whatnot, it will always be a single fragment.
+// buffer size is ~16K.
+// However, we only advertise a buffer size of 1232U, which is the new
+// recommended default as of flag day 2020 in general.  We don't expect queries
+// to actually be this big, because we don't support any features requiring
+// large queries, but the value here serves as a useful signal to the rest of
+// the internet that this server is aware of modern practices and defaults.
 // We use this size as our recvmsg() limit as well, discarding anything larger
 // to save ourselves processing it.  And in the TCP case, we immediately close
 // if a size greater than this is sent as the message length field.
-#define DNS_EDNS_SIZE 1024U
+#define DNS_EDNS_SIZE 1232U
 #define DNS_RECV_SIZE DNS_EDNS_SIZE
 
 // Sizes our output buffers, we never generate packets longer than this.

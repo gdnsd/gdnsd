@@ -65,7 +65,7 @@ my $optrr = Net::DNS::RR->new(
     type => "OPT",
     version => 0,
     name => "",
-    size => 1024,
+    size => 1232,
     rcode => 0,
     flags => 0,
 );
@@ -73,7 +73,7 @@ my $optrr = Net::DNS::RR->new(
 my $pid = _GDT->test_spawn_daemon();
 
 my $size = _GDT->test_dns(
-    resopts => { usevc => 0, igntc => 1, udppacketsize => 1024 },
+    resopts => { usevc => 0, igntc => 1, udppacketsize => 1232 },
     qname => 'foo.compression-torture.foo.Example.com', qtype => 'MX',
     answer => $compt_mxset,
     addtl => $optrr,

@@ -272,8 +272,8 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
         CFG_OPT_UINT(options, max_ncache_ttl, 10LU, 86400LU);
         if (cfg->max_ncache_ttl < cfg->min_ttl)
             log_fatal("The global option 'max_ncache_ttl' (%u) cannot be smaller than 'min_ttl' (%u)", cfg->max_ncache_ttl, cfg->min_ttl);
-        CFG_OPT_UINT(options, max_edns_response, 512LU, 16384LU);
-        CFG_OPT_UINT(options, max_edns_response_v6, 512LU, 16384LU);
+        CFG_OPT_UINT(options, max_edns_response, 1220LU, 16384LU);
+        CFG_OPT_UINT(options, max_edns_response_v6, 1220LU, 16384LU);
         CFG_OPT_UINT(options, acme_challenge_ttl, 60LU, 3600LU);
         CFG_OPT_UINT_NOMIN(options, acme_challenge_dns_ttl, 3600LU);
         CFG_OPT_UINT(options, zones_rfc1035_threads, 1LU, 1024LU);

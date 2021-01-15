@@ -11,7 +11,7 @@ my $optrr = Net::DNS::RR->new(
     type => "OPT",
     version => 0,
     name => "",
-    size => 1024,
+    size => 1232,
     rcode => 0,
     flags => 0,
 );
@@ -82,7 +82,7 @@ _GDT->test_dns(
     $qpacket->push('auth', Net::DNS::RR->new('. AAAA ::192.0.2.1')) for 1..13;
     $qpacket->push('additional', Net::DNS::RR->new('. MX 0 192.0.2.1')) for 1..11;
     _GDT->test_dns(
-        resopts => { usevc => 0, igntc => 1, udppacketsize => 1024 },
+        resopts => { usevc => 0, igntc => 1, udppacketsize => 1232 },
         qpacket => $qpacket,
         answer => 'foo.example.com 86400 A 192.0.2.3',
         addtl => $optrr,
@@ -121,7 +121,7 @@ _GDT->test_dns(
         type => "OPT",
         version => 0,
         name => "",
-        size => 1024,
+        size => 1232,
         rcode => 0,
         flags => 0x8000,
     );

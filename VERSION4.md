@@ -9,6 +9,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 ### DNS
 
 * RRSets are now sorted in DNSSEC canonical order when loading zone data.  Most RRSets will be served in this same order on the wire, regardless of original zonefile order (except for address RR-sets, which continue to be randomly shuffled at output time).
+* Our advertised EDNS buffer size for incoming queries has changed from `1024` to `1232`.
 
 ### Zonefiles
 
@@ -52,6 +53,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 ### New options
 
 ### Options with changed defaults or allowed values
+
+* `max_edns_response` and `max_edns_response_v6` - Minimum value changed from `512` to `1220`.
 
 ### Options removed completely
 

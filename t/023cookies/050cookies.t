@@ -11,7 +11,7 @@ sub _mk_optrr_cookie {
         type => "OPT",
         version => 0,
         name => "",
-        size => 1024,
+        size => 1232,
         rcode => 0,
         flags => 0,
     );
@@ -155,7 +155,7 @@ foreach my $proto (qw/v4_only v6_only/) {
 
     _GDT->test_dns(
         $proto => 1,
-        resopts => { udppacketsize => 1024, usevc => 1 },
+        resopts => { udppacketsize => 1232, usevc => 1 },
         qname => 'ns1.example.com',
         q_optrr => $all_the_opts_query,
         answer => 'ns1.example.com 86400 A 192.0.2.42',

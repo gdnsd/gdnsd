@@ -9,7 +9,7 @@ sub _mk_optrr_cookie {
         type => "OPT",
         version => 0,
         name => "",
-        size => 1024,
+        size => 1232,
         rcode => 0,
         flags => 0,
     );
@@ -42,7 +42,7 @@ foreach my $proto (qw/v4_only v6_only/) {
     # reuse the good cookie to fetch large record over UDP, should get _ok stat
     _GDT->test_dns(
         $proto => 1,
-        resopts => { usevc => 0, igntc => 1, udppacketsize => 1024, },
+        resopts => { usevc => 0, igntc => 1, udppacketsize => 1232, },
         qname => 'txt600.example.com', qtype => 'TXT',
         q_optrr => _mk_optrr_cookie($save_good),
         answer => $txt_600,
@@ -82,7 +82,7 @@ foreach my $proto (qw/v4_only v6_only/) {
         type => "OPT",
         version => 0,
         name => "",
-        size => 1024,
+        size => 1232,
         rcode => 0,
         flags => 0,
     );
