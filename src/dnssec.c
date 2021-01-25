@@ -36,7 +36,7 @@
 // Used to decide if we ask the alg layer to use deterministic ECDSA or not
 static unsigned alg_req_flags = 0;
 
-// For now, this stores up to 16 keys directly per-zone.  Later (when we have
+// For now, this stores up to 4 keys directly per-zone.  Later (when we have
 // real, persistent keys), to be efficient in the common use-case of multiple
 // zones sharing ZSKs, we'll probably want to load them all up once in a
 // tree-global keystore, and then reference the subset for each zone at the
@@ -488,7 +488,7 @@ unsigned dnssec_synth_nxd(const struct dnssec* sec, const uint8_t* nxd_name, uin
     gdnsd_put_una16(htons(offset - rdata_offset), &buf[rdata_offset - 2U]); // write rdlen
     const unsigned nsec_full_len = offset - nxd_name_offset;
 
-    // Since we only allow up to 16x ZSKs, and the max length of our RRSIG RRs
+    // Since we only allow up to 4x ZSKs, and the max length of our RRSIG RRs
     // is 349 bytes, and the length of the above NSEC RR maxes out at 275
     // bytes, we shouldn't ever have to runtime-check for overflows:
     gdnsd_assert(MAX_RESP_START + offset + dnssec_rrsigs_len(sec, preimage_len, 12U) <= MAX_RESPONSE_BUF);

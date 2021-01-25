@@ -46,6 +46,8 @@ struct cfg {
     bool     dnssec_enabled;
     bool     dnssec_deterministic_ecdsa;
     unsigned dnssec_max_active_zsks;
+    unsigned dnssec_nxd_cache_scale;
+    unsigned dnssec_nxd_sign_rate;
     unsigned max_nocookie_response;
     unsigned zones_default_ttl;
     unsigned max_ncache_ttl;

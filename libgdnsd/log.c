@@ -24,6 +24,7 @@
 #include <gdnsd/net.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/dname.h>
+#include <gdnsd/misc.h>
 
 #include <stdbool.h>
 #include <inttypes.h>
@@ -106,13 +107,13 @@ bool gdnsd_log_get_syslog(void)
 // using gdnsd_logger().  If it returns false, do nothing.
 //
 // The behavior is fairly simple:  Time is binned (imprecisely in edge cases,
-// which is fine for a rough sanity-check like this) by time() return values.
-// If more than 10 messages happen during a single clock second, this code will
-// replace the 10th message with a meta-message about suppressing excessive
-// events and then suppress them for the remainder of the second.  Once this
-// happens the code goes into a defensive mode which supresses all further
-// messages and sends at most one new message per second about the ongoing
-// suppression.
+// which is fine for a rough sanity-check like this) in 1 second increments by
+// a clock.  If more than 10 messages happen during a single clock second, this
+// code will replace the 10th message with a meta-message about suppressing
+// excessive events and then suppress them for the remainder of the second.
+// Once this happens the code goes into a defensive mode which supresses all
+// further messages and sends at most one new message per second about the
+// ongoing suppression.
 //
 // Defensive mode can be exited by either of:
 // (a) A full second (or more) passing with zero attempted log messages
@@ -126,7 +127,7 @@ bool gdnsd_log_neterr_rate_ok(void)
 
     static const unsigned rate_limit = 10U;
 
-    const time_t now_second = time(NULL);
+    const time_t now_second = gdnsd_qtime_s();
 
     // The clock has advanced one or more seconds
     if (now_second != rate_second) {

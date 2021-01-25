@@ -82,6 +82,7 @@ union  ltree_rrset;
 struct ltree_rrset_gen;
 struct ltree_rrset_raw;
 struct ltree_rrset_dynac;
+struct ltree_rrset_enxd;
 
 // rrset structs
 
@@ -123,6 +124,12 @@ struct ltree_rrset_dynac {
     gdnsd_resolve_cb_t func;
 };
 
+struct ltree_rrset_enxd {
+    struct ltree_rrset_gen gen;
+    unsigned data_len;
+    uint8_t* data;
+};
+
 // This is never allocated, it's just used
 //  for pointer types to cast between generic
 //  rrset_t and the specific rrset_t's
@@ -130,6 +137,7 @@ union ltree_rrset {
     struct ltree_rrset_gen gen;
     struct ltree_rrset_raw raw;
     struct ltree_rrset_dynac dynac;
+    struct ltree_rrset_enxd enxd;
 };
 
 union ltree_node;
@@ -146,13 +154,15 @@ struct ltree_node_core {
     struct {
         uint32_t zone_cut_root : 1;
         uint32_t zone_cut_deleg : 1;
+        uint32_t explicit_nxd : 1;
     };
 #elif SIZEOF_UINTPTR_T == 4
-#  define LTREE_NODE_MAX_SLOTS (UINT32_MAX >> 2U)
+#  define LTREE_NODE_MAX_SLOTS (UINT32_MAX >> 3U)
     struct {
-        uint32_t ccount : 30;
+        uint32_t ccount : 29;
         uint32_t zone_cut_root : 1;
         uint32_t zone_cut_deleg : 1;
+        uint32_t explicit_nxd : 1;
     };
 #endif
     uint8_t* dname;
@@ -193,6 +203,8 @@ bool ltree_postproc_zone(struct ltree_node_zroot* zroot, const uint32_t tstamp);
 // Adding data to the ltree (called from parser)
 F_WUNUSED F_NONNULL
 bool ltree_add_rec(struct ltree_node_zroot* zroot, const uint8_t* dname, uint8_t* rdata, const unsigned rrtype, unsigned ttl);
+F_WUNUSED F_NONNULL
+bool ltree_add_rec_enxd(struct ltree_node_zroot* zroot, const uint8_t* dname);
 F_WUNUSED F_NONNULL
 bool ltree_add_rec_dynaddr(struct ltree_node_zroot* zroot, const uint8_t* dname, const char* rhs, unsigned ttl_max, unsigned ttl_min);
 F_WUNUSED F_NONNULL

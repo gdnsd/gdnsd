@@ -56,6 +56,8 @@ static const struct cfg cfg_defaults = {
     .dnssec_enabled = false,
     .dnssec_deterministic_ecdsa = false,
     .dnssec_max_active_zsks = 1U,
+    .dnssec_nxd_cache_scale = 10U,
+    .dnssec_nxd_sign_rate = 2U,
     .max_nocookie_response = 0,
     .zones_default_ttl = 86400U,
     .max_ncache_ttl = 10800U,
@@ -294,6 +296,8 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
         CFG_OPT_BOOL(options, dnssec_enabled);
         CFG_OPT_BOOL(options, dnssec_deterministic_ecdsa);
         CFG_OPT_UINT(options, dnssec_max_active_zsks, 1LU, 4LU);
+        CFG_OPT_UINT(options, dnssec_nxd_cache_scale, 8LU, 20LU);
+        CFG_OPT_UINT(options, dnssec_nxd_sign_rate, 1LU, 1000LU);
         vscf_hash_iterate_const(options, true, bad_key, "options");
     }
 

@@ -44,3 +44,5 @@ x.y.z	TXT	"\010\000\0259 some complicated stuff here \"\"\"\\"	"asdf""xyz
 
 9.2.0.192	PTR	foo
 		PTR	ns2 ; namerepeat by using blank left-hand-side name
+
+enxd	NXDOMAIN

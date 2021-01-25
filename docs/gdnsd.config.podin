@@ -655,6 +655,77 @@ higher only rarely (e.g. during some kind of emergency key procedure), the
 server could be reconfigured temporarily with the larger value only during the
 necessary parts of the procedure.
 
+=item B<dnssec_nxd_cache_scale>
+
+Integer, default 10, range 8-20
+
+This sets the scale of the fixed size of the DNSSEC NXDOMAIN cache, which is
+used to cache NXDOMAIN responses from DNSSEC zones which are synthesized and
+signed in realtime (which is all but the fixed static responses declared in
+zonefiles via the C<NXDOMAIN> pseudo-RR).
+
+The cache's implementation tries to be efficiently resilient in the face of
+realistic organic traffic patterns and mild scan attacks, but it can always be
+overwhelmed and made ineffective by an aggressive-enough attacker with a
+high-volume stream of randomized names designed to defeat it.  The ratelimiter
+below can also help mitigate this, to some degree, when tuned in concert with
+the cache scale.
+
+The number of entries the cache can hold and the allocated size of the
+underlying storage roughly doubles with every increment of this scaling
+parameter.  Each I/O thread gets its own independent per-thread cache, which
+can multiply the storage cost considerably for large thread counts!
+
+Size Scaling Details:
+
+The actual number of entries that can be stored in the cache is
+C<(floor(2^(n + 1) / 3)>, and so the capacity of the min, default, and max
+would be about 170, 682, and 699050, respectively.
+
+The raw storage space for each cache entry also depends on the parameter
+C<dnssec_max_active_zsks>, which has a narrow possible range of 1-4.  The
+approximate formula for the total bytes of storage space (per-thread!) is:
+
+   floor(2^(n + 1) / 3) * (532 + (349 * dnssec_max_active_zsks))
+
+This gives the defaults settings (size=10, zsks=1) a per-thread storage cost of
+~600KB.  Reducing this size parameter to its minimum value C<8> would reduce
+that number to ~150KB.  The maximal possible config (size=20, zsks=4) would be
+~1.25GB.
+
+If C<dnssec_enabled> is false, the per-thread caches will never be allocated.
+
+=item B<dnssec_nxd_sign_rate>
+
+Integer, default 2, range 1-1000.
+
+This configures the per-thread rate limit for DNSSEC NXDOMAIN responses which
+are synthesized and signed in realtime and were not hits in the cache above.
+The rate number represents the allowed number of signatures per millisecond.
+If a zone has multiple active Zone Signing Keys, then a single NXDOMAIN
+response would be counted as multiple signatures under this rate limiter.
+
+The ratelimiter is implemented as small token bucket filter.  The burst is
+fixed at ten times the rate (per ms) defined here, so at most ~10ms worth of
+rate could be processed nearly-instantaneously after an idle stretch.  Explicit
+C<NXDOMAIN> pseudo-RRs and hits from the cache above are intended to handle
+most reasonable organic C<NXDOMAIN> traffic, and the purpose of the ratelimiter
+is to limit the CPU and latency impacts of malicious or simply buggy
+C<NXDOMAIN> spam traffic.
+
+There is a benchark program C<gdnsd_dnssec_bench> shipped with gdnsd which can
+benchmark the single-threaded signs/ms rate of the available algorithms on your
+server hosts.  It's recommended that the rate configured here be set to a value
+well under what's reported by the benchmark, perhaps 10-25% of that rate.
+
+Queries in violation of the ratelimit are dropped; no output generation or
+signing takes place, and no response is sent.  This is generally acceptable for
+C<NXDOMAIN>, as the response to even legitimate C<NXDOMAIN> queries wasn't
+going to provide a very useful answer to a client anyways.  In cases where
+certain known-common C<NXDOMAIN> queries must be answered quickly, it's best to
+configure them as explicit C<NXDOMAIN> pseudo-RRs in the zonefile so that
+they're not signed in realtime and thus not subject to the limits.
+
 =item B<run_dir>
 
 String, defaults to F<@GDNSD_DEFPATH_RUN@>.  This is the directory which the

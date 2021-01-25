@@ -320,3 +320,40 @@ void gdnsd_reset_signals_for_exec(void)
     if (pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
         log_fatal_safe("pthread_sigmask() failed");
 }
+
+// gdnsd_qtime_[m]s: Get a rough timestamp in milliseconds or seconds, with as
+// little overhead as possible, suitable for per-thread ratelimiters.  We
+// expect these COARSE/FAST clocks to commonly have resolutions in the ballpark
+// of ~1ms to ~10ms.  We could check this on startup I guess, but it hardly
+// seems worth it.
+
+#if defined CLOCK_MONOTONIC_COARSE
+#  define COARSE_MONO CLOCK_MONOTONIC_COARSE
+#elif defined CLOCK_MONOTONIC_FAST
+#  define COARSE_MONO CLOCK_MONOTONIC_FAST
+#else
+#  define COARSE_MONO CLOCK_MONOTONIC
+#endif
+
+#define MS_PER_S 1000U
+#define NS_PER_MS 1000000U
+
+// This one is exported for log.c's neterr_rate_ok()
+time_t gdnsd_qtime_s(void)
+{
+    struct timespec tp;
+    if (unlikely(clock_gettime(COARSE_MONO, &tp)))
+        log_fatal("clock_gettime() failed: %s, bt: %s", logf_errno(), logf_bt());
+    return tp.tv_sec;
+}
+
+// This one's for nxdc's token bucket filter
+uint64_t gdnsd_qtime_ms(void)
+{
+    struct timespec tp;
+    if (unlikely(clock_gettime(COARSE_MONO, &tp)))
+        log_fatal("clock_gettime() failed: %s, bt: %s", logf_errno(), logf_bt());
+    uint64_t out_ms = (uint64_t)tp.tv_sec * (uint64_t)MS_PER_S;
+    out_ms += (uint64_t)tp.tv_nsec / NS_PER_MS;
+    return out_ms;
+}

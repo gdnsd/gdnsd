@@ -21,6 +21,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 * All RRSets are now limited to 1024 RRs
 * The zone parser continues to require that all possible responses must fit in a 16KiB response packet.  Previously, we conservatively rejected responses which even heuristically looked like they *might* exceed this threshold.  Now the calculation is precise (because the responses are entirely pre-generated at zone load time), and thus will afford more edge cases close to the limit.
 * Most warnings about trivial zonefile data consistency issues (e.g. MX pointing at a non-existent name in the same zone) have been dropped.  If the data can be legally loaded and served at the protocol level, that's all that matters in this sense.
+* A new pseudo RR type `NXDOMAIN` exists to create an explicit NXDOMAIN at a given name.  These have no rdata at all.  Attempting to create other RRs at or beneath these names will result in a zonefile parse error.  These can be useful as policy or history communication mechanisms to other editors of the zonefile, and they're envisioned to help more in the future with DNSSEC operational issues.
 
 ### Feature Regressions
 
@@ -57,6 +58,8 @@ Experimental DNSSEC options (see bottom of this file) - no guarantees on the sta
 * `dnssec_enabled` - Boolean, default `false`
 * `dnssec_deterministic_ecdsa` - Boolean, default `false`
 * `dnssec_max_active_zsks` - Integer, default `1`, range `1 - 4`
+* `dnssec_nxd_cache_scale` - Integer, default `10`, range `8 - 20`
+* `dnssec_nxd_sign_rate` - Integer, default `2`, range `1 - 1000`
 
 ### Options with changed defaults or allowed values
 

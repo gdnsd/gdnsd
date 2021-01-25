@@ -2,7 +2,7 @@
 #  001noerr.t.  Just basic NOERROR+0answers, NXDOMAIN, REFUSED, etc.
 
 use _GDT ();
-use Test::More tests => 15;
+use Test::More tests => 18;
 
 my $neg_soa = 'example.com 900 SOA ns1.example.com dns-admin.example.com 1 7200 1800 259200 900';
 
@@ -60,6 +60,28 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'x.y.z.nxd.example.com', qtype => 'A',
+    header => { rcode => 'NXDOMAIN' },
+    auth => $neg_soa,
+    stats => [qw/udp_reqs nxdomain/],
+);
+
+# Explicit NXD tombstone record, non-dnssec
+_GDT->test_dns(
+    qname => 'enxd.example.com', qtype => 'A',
+    header => { rcode => 'NXDOMAIN' },
+    auth => $neg_soa,
+    stats => [qw/udp_reqs nxdomain/],
+);
+
+_GDT->test_dns(
+    qname => 'z.enxd.example.com', qtype => 'A',
+    header => { rcode => 'NXDOMAIN' },
+    auth => $neg_soa,
+    stats => [qw/udp_reqs nxdomain/],
+);
+
+_GDT->test_dns(
+    qname => 'x.y.z.enxd.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
     auth => $neg_soa,
     stats => [qw/udp_reqs nxdomain/],

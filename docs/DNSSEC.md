@@ -297,6 +297,41 @@ Note that these responses also implicitly deny all possible wildcard matches
 for the QNAME, and thus (like Black Lies) they don't ever need an excess NSEC
 record (plus RRSIG) to disprove a wildcard, either.
 
-## Caching and Ratelimiting of Synthesized NXDOMAIN Responses
+### Explicit NXDOMAIN Records
 
-[TODO] all of this
+gdnsd's zonefile parser supports an explicit `NXDOMAIN` RR with no rdata.  This
+pre-generates the same synthesized negative response we would normally serve
+for that name (and all children) at zone load time, thus avoiding the costs
+(CPU, and/or room in a cache and/or rate in a ratelimiter) for known cases of
+common NXDOMAIN traffic to a given zone, such as recently removed names that
+were formerly popular, or commonly-probed names the zone doesn't support.
+
+### Caching and Ratelimiting of Synthesized NXDOMAIN Responses
+
+For `NXDOMAIN` cases other than those covered by static zonefile records above,
+online synthesis must happen.  Online signing is relatively-expensive in CPU
+terms, and therefore it would be easy for a malicious attacker or benign but
+broken software to spam enough NXDOMAIN traffic at the server to seriously
+impact CPU load and the latency of other more-legitimate positive responses.
+
+To help mitigate this, gdnsd implements a per-thread cache of previously-signed
+NXDOMAIN responses.  The cache size can be tuned by the option
+`dnssec_nxd_cache_scale`.  The cache is designed to be reasonably good at its
+job against typical organic traffic patterns, and is even capable of
+withstanding reasonable scan attacks (random query names at high volume),
+within some boundaries of "reasonable" for the configured cache size.
+
+Backing all this up as a further line of defense against the not-so-reasonable
+cases, all cache misses are subject to a ratelimiter.  NXDOMAIN cache misses in
+excess of the rate are dropped without any synthesis (and thus no new cache
+entry or response to the client, either).  Since they were negative responses
+anyways, it shouldn't be too harmful to legitimate clients if we have to drop
+some while under a scan attack.  Even if they hadn't been dropped, NXDOMAINs
+are by their nature not actually carrying useful data the client can act on
+quickly.
+
+The ratelimiter defaults to two misses per millisecond per thread (configurable
+via option `dnssec_nxd_sign_rate`), and the token bucket burst level is fixed
+at 10 milliseconds worth of rate, which is a very tiny burst capacity.  This is
+intentional, as allowing large miss bursts could harm the latency of other
+query traffic.

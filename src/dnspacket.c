@@ -28,6 +28,7 @@
 #include "cookie.h"
 #include "statio.h"
 #include "dnssec.h"
+#include "dnssec_nxdc.h"
 
 #include "plugins/plugapi.h"
 #include <gdnsd/alloc.h>
@@ -155,6 +156,9 @@ struct dnsp_ctx {
     // allocated at startup, memset to zero before each callback
     struct dyn_result* dyn;
 
+    // DNSSEC NXDOMAIN-synthesis ratelimiting cache
+    struct nxdc* nxdc;
+
     // whether the thread using this context is a udp or tcp thread,
     // set permanently at startup
     bool is_udp;
@@ -194,6 +198,8 @@ static struct dnsp_ctx* dnspacket_ctx_init(struct dns_stats** stats_out, const b
     *stats_out = ctx->stats = xaligned_alloc(CACHE_ALIGN, sizeof(*(ctx->stats)));
     memset(ctx->stats, 0, sizeof(*(ctx->stats)));
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
+    if (gcfg->dnssec_enabled)
+        ctx->nxdc = nxdc_new(ctx->stats, gcfg->dnssec_nxd_cache_scale, gcfg->dnssec_nxd_sign_rate, gcfg->dnssec_max_active_zsks);
     gdnsd_rand32_init(&ctx->rand_state);
     gdnsd_plugins_action_iothread_init();
 
@@ -227,7 +233,8 @@ void dnspacket_ctx_set_grace(struct dnsp_ctx* ctx)
 void dnspacket_ctx_cleanup(struct dnsp_ctx* ctx)
 {
     gdnsd_plugins_action_iothread_cleanup();
-
+    if (ctx->nxdc)
+        nxdc_destroy(ctx->nxdc);
     free(ctx->dyn);
     free(ctx);
 }
@@ -970,6 +977,10 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
             res->comp_fixup_auth = name_remaining_depth;
             res->dom = cur_node;
             return DNAME_DELEG;
+        } else if (cur_node->c.explicit_nxd) {
+            gdnsd_assert(rval == DNAME_AUTH);
+            res->dom = cur_node;
+            return DNAME_AUTH;
         }
 
         if (!cur_label_len) {
@@ -1037,8 +1048,25 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct search_resul
 
     const struct ltree_node_zroot* auth = res->auth;
     gdnsd_assume(auth);
-    const union ltree_node* dom = res->dom;
-    const union ltree_rrset* rrsets = dom ? dom->c.rrsets : NULL;
+    const union ltree_node* dom = NULL;
+    const union ltree_node* enxd = NULL;
+    const union ltree_rrset* rrsets = NULL;
+    if (res->dom) {
+        if (res->dom->c.explicit_nxd) {
+            enxd = res->dom;
+            if (auth->sec) {
+                gdnsd_assume(enxd->c.rrsets);
+                gdnsd_assume(enxd->c.rrsets->gen.count);
+                gdnsd_assume(!enxd->c.rrsets->gen.type);
+                gdnsd_assume(!enxd->c.rrsets->gen.next);
+            } else {
+                gdnsd_assume(!enxd->c.rrsets);
+            }
+        } else {
+            dom = res->dom;
+            rrsets = dom->c.rrsets;
+        }
+    }
 
     // Note that for signed zones, since all extant nodes have at least an NSEC
     // RR, the !rrsets case is only the nxdomain case (whereas for unsigned
@@ -1089,9 +1117,9 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct search_resul
     if (!ctx->txn.ancount)
         chal_matched = chal_respond(ctx->txn.qtype, ctx->txn.lqname, packet, &ctx->txn.ancount, &offset, ctx->txn.this_max_response);
 
-    const bool nxd_case = !dom && !chal_matched;
+    const bool nxd_case = (!dom && !chal_matched);
 
-    if (ctx->txn.qtype == DNS_TYPE_ANY) {
+    if (ctx->txn.qtype == DNS_TYPE_ANY && !nxd_case) {
         // Note that for signed zones, ANY was converted to NSEC, so this is
         // just for the unsigned case, which skipped encode_rrs above to opt
         // for the special handling here.  chal_respond above does not inject
@@ -1100,11 +1128,9 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct search_resul
         gdnsd_assert(!ctx->txn.ancount);
         gdnsd_assert(!rrsets || rrsets->gen.type != DNS_TYPE_CNAME);
 
-        if (!nxd_case) {
-            ctx->txn.ancount = 1;
-            memcpy(&packet[offset], hinfo_for_any, hinfo_for_any_len);
-            offset += hinfo_for_any_len;
-        }
+        ctx->txn.ancount = 1;
+        memcpy(&packet[offset], hinfo_for_any, hinfo_for_any_len);
+        offset += hinfo_for_any_len;
     }
 
     if (!ctx->txn.ancount) { // NODATA or NXDOMAIN handling:
@@ -1116,16 +1142,28 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct search_resul
         offset = encode_rrs_raw(ctx, offset, &auth->c.rrsets->raw);
         if (ctx->txn.edns.do_bit && auth->sec) {
             if (nxd_case) {
-                gdnsd_assume(ctx->txn.lqname[0] > res->comp_fixup_dnssec_nxd);
-                const uint8_t* nxd_name = &ctx->txn.lqname[1U + res->comp_fixup_dnssec_nxd];
-                const unsigned nxd_name_len = ctx->txn.lqname[0] - res->comp_fixup_dnssec_nxd;
-                const unsigned resp_len = dnssec_synth_nxd(auth->sec, nxd_name, &packet[offset], nxd_name_len);
+                const unsigned num_zsks = dnssec_num_zsks(auth->sec);
+                unsigned resp_len = 0;
+                if (enxd) {
+                    struct ltree_rrset_enxd* enxd_rrset = &enxd->c.rrsets->enxd;
+                    resp_len = enxd_rrset->data_len;
+                    memcpy(&packet[offset], enxd_rrset->data, enxd_rrset->data_len);
+                } else {
+                    gdnsd_assume(ctx->txn.lqname[0] > res->comp_fixup_dnssec_nxd);
+                    const uint8_t* nxd_name = &ctx->txn.lqname[1U + res->comp_fixup_dnssec_nxd];
+                    const unsigned nxd_name_len = ctx->txn.lqname[0] - res->comp_fixup_dnssec_nxd;
+                    gdnsd_assert(gcfg->dnssec_enabled);
+                    gdnsd_assume(ctx->nxdc);
+                    resp_len = nxdc_synth(ctx->nxdc, auth->sec,  nxd_name, &packet[offset], res->gen, nxd_name_len);
+                    if (!resp_len)
+                        return 0; // this causes a general "dropped" stat at outer scope, no output
+                }
                 if (res->comp_fixup_dnssec_nxd) {
                     dnssec_nxd_fixup(auth->sec, packet, offset, res->comp_fixup_dnssec_nxd);
                     res_hdr->flags2 = DNS_RCODE_NXDOMAIN;
                 }
                 offset += resp_len;
-                ctx->txn.nscount += (1U + dnssec_num_zsks(auth->sec));
+                ctx->txn.nscount += (1U + num_zsks);
                 stats_own_inc(&ctx->stats->nxdomain);
             } else if (rrsets) {
                 const union ltree_rrset* nsec = find_rrset(rrsets, DNS_TYPE_NSEC);
@@ -1207,7 +1245,7 @@ static unsigned answer_from_db(struct dnsp_ctx* ctx, unsigned offset)
     grcu_read_unlock();
 
     // UDP truncation handling
-    if (ctx->is_udp) {
+    if (offset && ctx->is_udp) {
         if (!ctx->txn.edns.cookie.valid && gcfg->max_nocookie_response && gcfg->max_nocookie_response < ctx->txn.this_max_response)
             ctx->txn.this_max_response = gcfg->max_nocookie_response;
 
@@ -1543,6 +1581,10 @@ unsigned process_dns_query(struct dnsp_ctx* ctx, const struct anysin* sa, union 
         if (likely(DNSH_GET_QDCOUNT(hdr) == 1U)) {
             if (likely(ctx->txn.qclass == DNS_CLASS_IN) || ctx->txn.qclass == DNS_CLASS_ANY) {
                 res_offset = answer_from_db(ctx, res_offset);
+                if (!res_offset) {
+                    stats_own_inc(&ctx->stats->dropped);
+                    return 0;
+                }
             } else if (ctx->txn.qclass == DNS_CLASS_CH) {
                 ctx->txn.ancount = 1;
                 memcpy(&pkt->raw[res_offset], gcfg->chaos.data, gcfg->chaos.len);

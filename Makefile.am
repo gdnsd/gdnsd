@@ -96,7 +96,7 @@ src_plugins_libextmon_comms_a_SOURCES = src/plugins/extmon_comms.c src/plugins/e
 
 pkglibexec_PROGRAMS += src/plugins/gdnsd_extmon_helper
 src_plugins_gdnsd_extmon_helper_SOURCES = src/plugins/extmon_helper.c
-src_plugins_gdnsd_extmon_helper_LDADD   = src/plugins/libextmon_comms.a libgdnsd/libgdnsd.a -lm -lev $(LIBUNWIND_LIBS)
+src_plugins_gdnsd_extmon_helper_LDADD   = src/plugins/libextmon_comms.a libgdnsd/libgdnsd.a -lm -lev -lsodium $(LIBUNWIND_LIBS)
 
 bin_PROGRAMS += src/plugins/gdnsd_geoip_test
 src_plugins_gdnsd_geoip_test_SOURCES  = src/plugins/gdnsd_geoip_test.c
@@ -155,6 +155,8 @@ src_gdnsd_SOURCES = \
 	src/dnssec.h \
 	src/dnssec_alg.c \
 	src/dnssec_alg.h \
+	src/dnssec_nxdc.c \
+	src/dnssec_nxdc.h \
 	src/proxy.c \
 	src/proxy.h \
 	src/socks.c \

@@ -95,6 +95,15 @@ struct dns_stats {
     stats_t edns_cookie_ok;      // Valid server cookie issued by us
     stats_t edns_cookie_init;    // No server cookie sent at all
     stats_t edns_cookie_bad;     // Invalid server cookie (e.g. expired)
+
+    // DNSSEC NXDC stats:
+    stats_t dnssec_nxdc_hit;   // cache hit (previously synthed+cached)
+    stats_t dnssec_nxdc_synth; // cache miss -> rate ok -> synth+cache+respond
+    // nxdc_signs mirrors nxdc_synth if all signed zones always have exactly
+    // one ZSK, but will be larger otherwise, and in mixed/variable ZSK
+    // scenarios this will more-closely correlate with CPU impact of crypto ops
+    stats_t dnssec_nxdc_signs;
+    stats_t dnssec_nxdc_drop;  // cache miss -> rate exceeded -> drop
 };
 
 F_NONNULL

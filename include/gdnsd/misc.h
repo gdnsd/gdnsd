@@ -142,4 +142,10 @@ void gdnsd_thread_reduce_prio(void);
 // daemons, and the extmon helper process).
 void gdnsd_reset_signals_for_exec(void);
 
+// Quick rough ~1s timestamps, truncated from a fast monotonic source
+time_t gdnsd_qtime_s(void);
+
+// Quick millisecond timestamps, with accuracy probably around single-digit ms
+uint64_t gdnsd_qtime_ms(void);
+
 #endif // GDNSD_MISC_H

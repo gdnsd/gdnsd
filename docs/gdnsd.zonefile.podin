@@ -150,8 +150,37 @@ C<SOA> records' negative-caching TTL is set to the minimum of the traditional
 actual TTL of the SOA record any time it is emitted, whether for negative or
 positive answers.
 
-Additionally, gdnsd supports two special-case, non-standard
-virtual resource record types DYNA and DYNC:
+Additionally, gdnsd supports some other type names which are local extensions:
+
+=head2 NXDOMAIN
+
+The C<NXDOMAIN> virtual type does not have any rdata.  The record explicitly
+declares an NXDOMAIN at the given name, but actual wire responses will use the
+normal SOA negative caching TTLs (the TTL field of this virtual C<NXDOMAIN> RR
+is ignored for all functional purposes).
+
+As one would expect, an explicit C<NXDOMAIN> cannot co-exist with other
+resource records at the same name, and can have no child nodes beneath it in
+the hierarchy, either.  Both of those things would cause the zonefile to fail
+to load.
+
+In zones which are not DNSSEC-signed, these records have no affect on server
+ouputs, so their only purpose in this case is to make a policy declaration
+about the name to other tools and/or humans.  For example, after removing a
+name from a zonefile which used to get frequent public queries, replacing it
+with C<NXDOMAIN> as a sort of "tombstone" might help the next human looking at
+the file to not inadvertently re-use the same name for an entirely different
+purpose without realizing the implications (e.g. that there could be hoards of
+Internet traffic waiting to pounce on any address that appears in the future at
+that name).
+
+In zones which B<are> DNSSEC-signed, the C<NXDOMAIN> record serves an
+additional functional purpose.  It causes the zonefile loader to pre-synthesize
+a static, signed negative response for this case.  For names that have been
+recently-removed, or commonly-queried names that your zone does not support
+(say, a certain kind of mail authentication hostname), pre-synthesizing
+known-common NXDOMAIN responses avoids the need to do truly online signing for
+them, reducing CPU load from crypto operations.
 
 =head2 DYNA
 

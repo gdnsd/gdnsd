@@ -395,7 +395,6 @@ AS_IF([test $developer = yes -o $extrawarn = yes],[
     AX_APPEND_COMPILE_FLAGS([\
         -Wmost \
         -Wextra \
-        -Waggregate-return \
         -Walloca \
         -Walloc-zero \
         -Warray-bounds=2 \

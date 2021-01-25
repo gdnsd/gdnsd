@@ -568,6 +568,13 @@ static unsigned clamp_ttl(struct zscan* z, const uint8_t* dname, const unsigned 
 }
 
 F_NONNULL
+static void rec_nxd(struct zscan* z)
+{
+    if (ltree_add_rec_enxd(z->zroot, z->lhs_dname))
+        siglongjmp(z->jbuf, 1);
+}
+
+F_NONNULL
 static void rec_soa(struct zscan* z)
 {
     if (dname_cmp(z->lhs_dname, z->zroot->c.dname))
@@ -1098,6 +1105,7 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
     action rec_rfc3597 { rec_rfc3597(z); }
     action rec_caa { rec_caa(z); }
     action rec_ds { rec_ds(z); }
+    action rec_nxd { rec_nxd(z); }
 
     action rfc3597_data_setup { rfc3597_data_setup(z); }
     action rfc3597_octet { rfc3597_octet(z); }
@@ -1237,6 +1245,7 @@ static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
         | ('CAA'i   ws caa_rdata) %rec_caa
         | ('DS'i    ws uval16 %set_uv_1 ws dnssec_alg %set_uv_2
                     ws uval8 %set_uv_3 ds_digest) %rec_ds
+        | 'NXDOMAIN'i %rec_nxd
     );
 
     # Again, separate copy for the DYN[AC] TTL stuff
