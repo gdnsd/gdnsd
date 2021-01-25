@@ -315,6 +315,8 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
     }
     memcpy(&scookie_input[16], cookie_data_in, CCOOKIE_LEN);
 
+    rcu_read_lock();
+
     bool valid = false;
     const timekeys_t* keys = rcu_dereference(keys_inuse);
 
@@ -337,6 +339,8 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
         const int inlen_check = ((int)cookie_data_in_len) ^ (CCOOKIE_LEN + SCOOKIE_LEN);
         valid = !((c1 & c2 & c3) | inlen_check);
     }
+
+    rcu_read_unlock();
 
     memcpy(cookie_data_out, cookie_data_in, CCOOKIE_LEN);
     memcpy(&cookie_data_out[CCOOKIE_LEN], scookie_current, SCOOKIE_LEN);
