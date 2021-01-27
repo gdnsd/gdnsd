@@ -24,6 +24,9 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ## Other changes of interest to builders and packagers
 
+* Autoconf: min version bumped from 2.64 to 2.69 (2.70+ recommended!)
+* Automake: min version bumped from 1.13 to 1.14
+
 ## Revamping internals
 
 ## DNSSEC on the horizon

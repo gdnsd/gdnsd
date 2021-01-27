@@ -4,12 +4,12 @@ m4_define([PKG_V_PATCH],[0])
 m4_define([PKG_V_EXTRA],[])
 m4_define([PVER],[PKG_V_MAJOR().PKG_V_MINOR().PKG_V_PATCH()PKG_V_EXTRA()])
 
-AC_PREREQ([2.64])
+AC_PREREQ([2.69])
 AC_INIT([gdnsd],[PVER],[https://github.com/gdnsd/gdnsd/issues],[gdnsd],[https://gdnsd.org])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_AUX_DIR([acaux])
 AC_CANONICAL_TARGET
-AM_INIT_AUTOMAKE([1.13 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wall])
+AM_INIT_AUTOMAKE([1.14 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wall])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
@@ -28,9 +28,8 @@ AC_DEFINE_UNQUOTED([PACKAGE_V_MINOR], [PKG_V_MINOR], [Minor version])
 AC_DEFINE_UNQUOTED([PACKAGE_V_PATCH], [PKG_V_PATCH], [Patch version])
 
 AC_USE_SYSTEM_EXTENSIONS
-# We're hoping for C11, but anything C99 or higher will work
-AC_PROG_CC_STDC
-AM_PROG_CC_C_O
+AC_PROG_CC
+m4_version_prereq([2.70], [], [AC_PROG_CC_STDC])
 
 # POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
@@ -59,7 +58,7 @@ AM_PROG_AR
 AC_PROG_RANLIB
 AC_PROG_LN_S
 
-# Check for --enable-developer
+# Check for --enable-developer and --enable-extrawarn
 developer=no
 AC_ARG_ENABLE([developer],
     [  --enable-developer      Turn on gcc developer warnings, debugging, etc (default=no)],
@@ -73,14 +72,14 @@ AC_ARG_ENABLE([extrawarn],
 # normal builds set -DNDEBUG because we make very very heavy
 #   use of assertions that really slow stuff down.
 # --enable-developer sets liburcu debug stuff and doesn't set -DNDEBUG,
-if test "x$developer" != xno; then
+AS_IF([test "x$developer" != xno],[
     AC_DEFINE([DEBUG_RCU], 1, [liburcu verification checks])
     AC_DEFINE([RCU_DEBUG], 1, [liburcu verification checks])
     TRY_DEBUG_CFLAGS=-g
-else
+],[
     CPPFLAGS="-DNDEBUG ${CPPFLAGS}"
     TRY_DEBUG_CFLAGS=
-fi
+])
 
 # These are only for urcu header stuff currently
 AC_DEFINE([_LGPL_SOURCE], 1, [LGPL-compatible source])
@@ -99,20 +98,23 @@ AC_ARG_WITH([hardening],[AS_HELP_STRING([--without-hardening],
         harden=0
     fi
 ])
-if test $harden = 1; then
+AS_IF([test $harden = 1],[
     AS_CASE([$CFLAGS], [*-O[[1-6]]*], [CPPFLAGS="-D_FORTIFY_SOURCE=2 ${CPPFLAGS}"])
     AX_APPEND_COMPILE_FLAGS([-fPIE -fstack-protector-strong -fstack-clash-protection -fexceptions -ftrapv],[CFLAGS],[$CLANG_WERROR])
-    if test $CLANG != yes; then
+    AS_IF([test $CLANG != yes],[
         # We'll only turn this on by default for real GCC-8 for now, because at
         # least clang-7 seems to cause all binutils (ranlib, ar, ld) to emit
         # strange errors on Linux with fcf-protection (yet linking succeeds
         # anyways, which is odd in itself).  The errors look like:
         # /usr/bin/ld: error: src/src_gdnsd-main.o: <corrupt x86 feature size: 0x8>
         AX_APPEND_COMPILE_FLAGS([-mshstk -fcf-protection=full],[CFLAGS],[])
-    fi
+    ])
     AX_APPEND_LINK_FLAGS([-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack],[LDFLAGS],[$CLANG_WERROR])
-fi
+])
 
+# Note "-Wno-pragmas" below is because our only use of pragmas is to suppress
+# warnings, and sometimes this in turn causes a warning on older GCC versions
+# that don't support the warning we're trying to suppress...
 AX_APPEND_COMPILE_FLAGS([\
     $TRY_DEBUG_CFLAGS \
     -fno-common \
@@ -120,54 +122,6 @@ AX_APPEND_COMPILE_FLAGS([\
     -Wall \
     -Wno-pragmas \
 ],[CFLAGS],[$CLANG_WERROR])
-
-if test $developer = yes -o $extrawarn = yes; then
-    AX_APPEND_COMPILE_FLAGS([\
-        -Wmost \
-        -Wextra \
-        -Waggregate-return \
-        -Walloca \
-        -Walloc-zero \
-        -Warray-bounds=2 \
-        -Wbad-function-cast \
-        -Wcast-align \
-        -Wcast-align=strict \
-        -Wcast-qual \
-        -Wdate-time \
-        -Wdouble-promotion \
-        -Wduplicated-branches \
-        -Wduplicated-cond \
-        -Werror=vla \
-        -Wfloat-equal \
-        -Wfloat-conversion \
-        -Wformat=2 \
-        -Wformat-signedness \
-        -Winit-self \
-        -Wjump-misses-init \
-        -Wlogical-op \
-        -Wmissing-declarations \
-        -Wmissing-include-dirs \
-        -Wmissing-prototypes \
-        -Wnull-dereference \
-        -Wold-style-definition \
-        -Wpointer-arith \
-        -Wredundant-decls \
-        -Wshadow \
-        -Wsign-conversion \
-        -Wshift-overflow=2 \
-        -Wstrict-overflow=5 \
-        -Wstrict-prototypes \
-        -Wstringop-overflow=3 \
-        -Wswitch-default \
-        -Wswitch-enum \
-        -Wtrampolines \
-        -Wtautological-compare \
-        -Wundef \
-        -Wunused \
-        -Wwrite-strings \
-        -Wthis-does-not-exist \
-    ],[CFLAGS],[$CLANG_WERROR])
-fi
 
 # Note "-Wno-pragmas" above is because our only use of pragmas is to suppress
 # warnings, and sometimes this in turn causes a warning on older GCC versions
@@ -183,9 +137,9 @@ m4_include([libgdmaps/libgdmaps.m4])
 USE_MMSG=1
 AC_CHECK_DECLS([sendmmsg, recvmmsg, MSG_WAITFORONE],,[USE_MMSG=0],[[#include <sys/socket.h>]])
 AC_CHECK_FUNCS([sendmmsg recvmmsg],,[USE_MMSG=0])
-if test $USE_MMSG -eq 1; then
+AS_IF([test $USE_MMSG -eq 1],[
     AC_DEFINE([USE_MMSG],1,[recvmmsg and sendmmsg look usable])
-fi
+])
 
 # systemd unit dir for "make install" of gdnsd.service
 PKG_CHECK_VAR([SYSD_UNITDIR], [systemd], [systemdsystemunitdir])
@@ -197,11 +151,11 @@ AC_ARG_WITH([systemdsystemunitdir],
         fi,
         [with_systemdsystemunitdir="$SYSD_UNITDIR"]
 )
-if test -n "$with_systemdsystemunitdir"; then
+AS_IF([test -n "$with_systemdsystemunitdir"],[
     AC_MSG_RESULT([$with_systemdsystemunitdir])
-else
+],[
     AC_MSG_RESULT([none])
-fi
+])
 AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 AM_CONDITIONAL(DO_SYSD_UNITFILE, [test -n "$with_systemdsystemunitdir"])
 
@@ -253,31 +207,31 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM(pthread_np_preamble, [
 
 # Basic perl 5.10.1+
 AC_ARG_VAR([PERL],[path to Perl 5.10.1 or higher])
-if test "x$ac_cv_env_PERL_set" != "xset"; then
+AS_IF([test "x$ac_cv_env_PERL_set" != "xset"],[
     AC_PATH_PROG([PERL],[perl],[missing])
-fi
-if test x"$PERL" = xmissing; then
+])
+AS_IF([test x"$PERL" = xmissing],[
     AC_MSG_ERROR([Cannot find required perl binary])
-fi
+])
 AX_PROG_PERL_VERSION([5.10.1],,[AC_MSG_ERROR([Perl 5.10.1 or higher required])])
 
 # pod2man
 AC_ARG_VAR([POD2MAN],[path to the Perl "pod2man" command])
-if test "x$ac_cv_env_POD2MAN_set" != "xset"; then
+AS_IF([test "x$ac_cv_env_POD2MAN_set" != "xset"],[
     AC_PATH_PROG([POD2MAN],[pod2man],[missing])
-fi
-if test x"$POD2MAN" = xmissing; then
+])
+AS_IF([test x"$POD2MAN" = xmissing],[
     AC_MSG_ERROR([Cannot find required pod2man binary (perl podlater)])
-fi
+])
 
 # prove for test harness (optional)
 AC_ARG_VAR([PROVE], [path to the Perl Test::Harness "prove" command])
-if test "x$ac_cv_env_PROVE_set" != "xset"; then
+AS_IF([test "x$ac_cv_env_PROVE_set" != "xset"],[
     AC_PATH_PROG([PROVE],[prove],[missing])
-fi
-if test x"$PROVE" = xmissing; then
+])
+AS_IF([test x"$PROVE" = xmissing],[
     AC_MSG_WARN([Cannot "make check" without the Perl Test::Harness "prove" command])
-fi
+])
 
 # various perl modules for the testsuites (optional)
 HAVE_TESTSUITE_MODULES=0
@@ -301,19 +255,19 @@ AC_SUBST([HAVE_TESTSUITE_MODULES])
 #  is auto-detected but can be overridden at configure time.
 AC_ARG_VAR([TEST_CPUS],[number of CPUs to assume when parallelizing the testsuite])
 AC_MSG_CHECKING([number of CPUs available for testing])
-if test "x$ac_cv_env_TEST_CPUS_set" = "xset"; then
+AS_IF([test "x$ac_cv_env_TEST_CPUS_set" = "xset"],[
     AC_MSG_RESULT([$TEST_CPUS (user-specified)])
-else
+],[
     # These two methods should work for the *BSDs and Linux
     TEST_CPUS=$(sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
     AC_MSG_RESULT([$TEST_CPUS])
-fi
+])
 
 # Decompressor for compressed test data from git submodule
 AC_ARG_VAR([XZ],[path to xz compression utility])
-if test "x$ac_cv_env_XZ_set" != "xset"; then
+AS_IF([test "x$ac_cv_env_XZ_set" != "xset"],[
     AC_PATH_PROG([XZ], [xz], [missing])
-fi
+])
 AM_CONDITIONAL(HAS_XZ, [test x$XZ != xmissing])
 
 # Allow user to override the port range we use for testing
@@ -362,6 +316,59 @@ AC_ARG_WITH([buildinfo],[AS_HELP_STRING([--with-buildinfo=v1.2.3-4],
     fi]
 )
 AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
+
+# Add various extreme warnings flags, if enabled by arguments.  We do this at
+# the bottom so they don't cause issues with other macros above, since at least
+# one of them is a Werror subset, and none of the warnings are helpful earlier
+# anyways and might slow things down.
+
+AS_IF([test $developer = yes -o $extrawarn = yes],[
+    AX_APPEND_COMPILE_FLAGS([\
+        -Wmost \
+        -Wextra \
+        -Waggregate-return \
+        -Walloca \
+        -Walloc-zero \
+        -Warray-bounds=2 \
+        -Wbad-function-cast \
+        -Wcast-align \
+        -Wcast-align=strict \
+        -Wcast-qual \
+        -Wdate-time \
+        -Wdouble-promotion \
+        -Wduplicated-branches \
+        -Wduplicated-cond \
+        -Werror=vla \
+        -Wfloat-equal \
+        -Wfloat-conversion \
+        -Wformat=2 \
+        -Wformat-signedness \
+        -Winit-self \
+        -Wjump-misses-init \
+        -Wlogical-op \
+        -Wmissing-declarations \
+        -Wmissing-include-dirs \
+        -Wmissing-prototypes \
+        -Wnull-dereference \
+        -Wold-style-definition \
+        -Wpointer-arith \
+        -Wredundant-decls \
+        -Wshadow \
+        -Wsign-conversion \
+        -Wshift-overflow=2 \
+        -Wstrict-overflow=5 \
+        -Wstrict-prototypes \
+        -Wstringop-overflow=3 \
+        -Wswitch-default \
+        -Wswitch-enum \
+        -Wtrampolines \
+        -Wtautological-compare \
+        -Wundef \
+        -Wunused \
+        -Wwrite-strings \
+        -Wthis-does-not-exist \
+    ],[CFLAGS],[$CLANG_WERROR])
+])
 
 werror=0
 AC_ARG_WITH([werror],[AS_HELP_STRING([--with-werror],
