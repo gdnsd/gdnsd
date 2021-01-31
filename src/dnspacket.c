@@ -842,6 +842,7 @@ struct search_result {
     const union ltree_node* auth;
     unsigned comp_fixup_wild;
     unsigned comp_fixup_auth;
+    uint64_t gen;
 };
 
 F_NONNULL
@@ -856,8 +857,10 @@ static enum ltree_dnstatus search_ltree_for_name(const uint8_t* name, struct sea
     gdnsd_assume(name_len); // legit names are always length 1+
 
     enum ltree_dnstatus rval = DNAME_NOAUTH;
-    union ltree_node* cur_node;
-    grcu_dereference(cur_node, root_tree);
+    struct ltree_root* cur_lroot;
+    grcu_dereference(cur_lroot, lroot);
+    res->gen = cur_lroot->gen;
+    union ltree_node* cur_node = cur_lroot->root;
     const uint8_t* cur_label = treepath;
     unsigned cur_label_len = *cur_label;
     unsigned name_remaining_depth = name_len - 1U;

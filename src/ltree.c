@@ -40,8 +40,8 @@
 #include <unistd.h>
 #include <limits.h>
 
-// root_tree is RCU-managed and accessed by reader threads.
-GRCU_PUB_DEF(root_tree, NULL);
+// lroot is RCU-managed and accessed by reader threads.
+GRCU_PUB_DEF(lroot, NULL);
 
 F_NONNULL
 static void ltree_node_insert(const union ltree_node* node, union ltree_node* child, uintptr_t child_hash, uint32_t probe_dist, const uint32_t mask)
@@ -702,25 +702,32 @@ void* ltree_zones_reloader_thread(void* init_asvoid)
     gdnsd_thread_setname("gdnsd-zreload");
     const bool init = (bool)init_asvoid;
     if (init) {
-        gdnsd_assert(!GRCU_OWN_READ(root_tree));
+        gdnsd_assert(!GRCU_OWN_READ(lroot));
     } else {
-        gdnsd_assert(GRCU_OWN_READ(root_tree));
+        gdnsd_assert(GRCU_OWN_READ(lroot));
         gdnsd_thread_reduce_prio();
     }
 
     uintptr_t rv = 0;
 
-    // This does not fail if the zones data directory doesn't exist
-    union ltree_node* new_root_tree = zsrc_rfc1035_load_zones();
+    struct ltree_root* old_lroot = GRCU_OWN_READ(lroot);
+    struct ltree_root* new_lroot = xcalloc(sizeof(*new_lroot));
+    if (old_lroot)
+        new_lroot->gen = old_lroot->gen + 1U;
 
-    if (!new_root_tree) {
+    // This does not fail if the zones data directory doesn't exist
+    new_lroot->root = zsrc_rfc1035_load_zones();
+
+    if (!new_lroot->root) {
+        free(new_lroot);
         rv = 1; // the zsrc already logged why
     } else {
-        union ltree_node* old_root_tree = GRCU_OWN_READ(root_tree);
-        grcu_assign_pointer(root_tree, new_root_tree);
+        grcu_assign_pointer(lroot, new_lroot);
         grcu_synchronize_rcu();
-        if (old_root_tree)
-            ltree_destroy(old_root_tree);
+        if (old_lroot) {
+            ltree_destroy(old_lroot->root);
+            free(old_lroot);
+        }
     }
 
     if (!init)
