@@ -45,6 +45,7 @@
 #include <time.h>
 #include <signal.h>
 #include <poll.h>
+#include <stdatomic.h>
 
 #include <urcu-qsbr.h>
 
@@ -105,11 +106,11 @@ static sigset_t sigmask_notusr2; // blocks all sigs except USR2
 // signals sent by outsiders:
 static pid_t mainpid = 0;
 
-static _Thread_local volatile sig_atomic_t thread_shutdown = 0;
+static _Thread_local atomic_uintptr_t thread_shutdown = 0;
 static void sighand_stop(int s V_UNUSED, siginfo_t* info, void* ucontext V_UNUSED)
 {
     if (!info || info->si_pid == mainpid)
-        thread_shutdown = 1;
+        atomic_store_explicit(&thread_shutdown, 1U, memory_order_relaxed);
 }
 
 void dnsio_udp_init(const pid_t main_pid)
@@ -313,7 +314,7 @@ static void slow_idle_poll(const int fd)
 
     // check thread_shutdown one more time here to catch any USR2 that landed
     // since the last mainloop check but before the sigmask above.
-    if (likely(!thread_shutdown)) {
+    if (likely(!atomic_load_explicit(&thread_shutdown, memory_order_relaxed))) {
         // ppoll once for fd input + SIGUSR2, for up to infinite time
         struct pollfd ppfd = {
             .fd = fd,
@@ -389,7 +390,7 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
 
-    while (likely(!thread_shutdown)) {
+    while (likely(!atomic_load_explicit(&thread_shutdown, memory_order_relaxed))) {
         iov.iov_len = DNS_RECV_SIZE;
         msg_hdr.msg_namelen    = GDNSD_ANYSIN_MAXLEN;
         msg_hdr.msg_flags      = 0;
@@ -527,7 +528,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
 
-    while (likely(!thread_shutdown)) {
+    while (likely(!atomic_load_explicit(&thread_shutdown, memory_order_relaxed))) {
         // Re-set values changed by previous syscalls
         for (unsigned i = 0; i < MMSG_WIDTH; i++) {
             dgrams[i].msg_hdr.msg_iov[0].iov_len = DNS_RECV_SIZE;

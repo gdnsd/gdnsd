@@ -678,8 +678,8 @@ by a different uid than the daemon is currently running as), the daemon will
 not start.
 
 The contents of this directory are private to the daemon and
-shouldn't be interfered with.  This can live on a filesystem that's
-volatile across reboots, and doesn't require much disk space.
+shouldn't be interfered with.  This can live on a filesystem that
+does not persist across reboots, and doesn't require much disk space.
 
 The daemon's control socket and lock files live here.
 

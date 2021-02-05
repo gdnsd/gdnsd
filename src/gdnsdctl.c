@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <time.h>
+#include <stdatomic.h>
 
 #define MIN_TIMEO 5U
 #define DEF_TIMEO 47U
@@ -52,10 +53,9 @@ static bool opt_ignore_dead = false;
 static const char* opt_cfg_dir = NULL;
 static const char* opt_tcp_addr = NULL;
 
-static volatile sig_atomic_t alarm_raised = 0;
+static atomic_uintptr_t alarm_raised = 0;
 static void sighand_alrm(int s V_UNUSED)
 {
-    alarm_raised = 1;
     // We only check the alarm_raised flag once per outer retry loop.  Several
     // separate calls are made which could/should fail all the way out
     // immediately with EINTR, but the alarm could also arrive between such
@@ -63,6 +63,7 @@ static void sighand_alrm(int s V_UNUSED)
     // spite of a lack of SA_RESTART, and at least some of the i/o calls will
     // block indefinitely if there is no alarm signal received.  Therefore, we
     // re-arm indefinitely at 1s intervals to plow through such cases.
+    atomic_store_explicit(&alarm_raised, 1U, memory_order_relaxed);
     alarm(1U);
 }
 
@@ -472,10 +473,10 @@ int main(int argc, char** argv)
 
         if (!retry)
             return 0;
-
-        if (opt_oneshot || alarm_raised) {
-            if (alarm_raised)
-                log_err("Operation timed out");
+        if (opt_oneshot)
+            return 1;
+        if (atomic_load_explicit(&alarm_raised, memory_order_relaxed)) {
+            log_err("Operation timed out");
             return 1;
         }
 
