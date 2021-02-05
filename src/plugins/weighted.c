@@ -115,7 +115,7 @@ static resource_t* resources = NULL;
 static unsigned num_resources = 0;
 
 // Per-thread PRNGs
-static __thread gdnsd_rstate32_t rstate;
+static _Thread_local gdnsd_rstate32_t rstate;
 
 static void init_rand(void)
 {
@@ -138,7 +138,7 @@ static uint64_t get_rand(const uint64_t modval)
 // (2) malloc during resolve() is undesirable in perf terms.
 // The values set here are either the configured weight or zero, depending on
 // the runtime-variable monitored status of the items in question.
-static __thread unsigned(*dyn_addr_weights)[MAX_ADDRS_PER_GROUP] = NULL;
+static _Thread_local unsigned(*dyn_addr_weights)[MAX_ADDRS_PER_GROUP] = NULL;
 
 static void init_dyn_addr_weights(void)
 {

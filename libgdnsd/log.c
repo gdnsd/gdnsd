@@ -120,9 +120,9 @@ bool gdnsd_log_get_syslog(void)
 //     all suppressed), but the rate of them does not re-trip the threshold
 bool gdnsd_log_neterr_rate_ok(void)
 {
-    static __thread time_t rate_second = 0;
-    static __thread unsigned count = 0;
-    static __thread unsigned defensive = 0;
+    static _Thread_local time_t rate_second = 0;
+    static _Thread_local unsigned count = 0;
+    static _Thread_local unsigned defensive = 0;
 
     static const unsigned rate_limit = 10U;
 
@@ -175,8 +175,8 @@ bool gdnsd_log_neterr_rate_ok(void)
 // fmtbuf_common is private to the two functions below it
 static char* fmtbuf_common(const size_t size)
 {
-    static __thread size_t buf_used = 0;
-    static __thread char buf[FMTBUF_SIZE] = { 0 };
+    static _Thread_local size_t buf_used = 0;
+    static _Thread_local char buf[FMTBUF_SIZE] = { 0 };
 
     char* rv = NULL;
 

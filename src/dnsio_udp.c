@@ -105,7 +105,7 @@ static sigset_t sigmask_notusr2; // blocks all sigs except USR2
 // signals sent by outsiders:
 static pid_t mainpid = 0;
 
-static __thread volatile sig_atomic_t thread_shutdown = 0;
+static _Thread_local volatile sig_atomic_t thread_shutdown = 0;
 static void sighand_stop(int s V_UNUSED, siginfo_t* info, void* ucontext V_UNUSED)
 {
     if (!info || info->si_pid == mainpid)
