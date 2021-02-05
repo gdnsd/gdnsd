@@ -22,9 +22,9 @@
 
 #include "socks.h"
 #include "dnswire.h"
+#include "stats.h"
 
 #include <gdnsd/compiler.h>
-#include <gdnsd/stats.h>
 
 #include <inttypes.h>
 #include <stdbool.h>

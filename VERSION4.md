@@ -34,6 +34,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * `long long` must be exactly 64 bits wide.
   * pointers can be either 32 or 64 bits wide.
   * `long`, `size_t`, `intptr_t`, and `ptrdiff_t` must match the pointer width.
+  * Must support lock-free C11 atomics on pointers.
 
 ## Revamping internals
 

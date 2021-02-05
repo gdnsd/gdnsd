@@ -22,7 +22,6 @@
 #include <gdnsd/log.h>
 #include <gdnsd/compiler.h>
 #include <gdnsd/net.h>
-#include <gdnsd/stats.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/dname.h>
 

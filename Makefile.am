@@ -153,6 +153,7 @@ src_gdnsd_SOURCES = \
 	src/socks.h \
 	src/statio.c \
 	src/statio.h \
+	src/stats.h \
 	src/dnswire.h \
 	src/plugins/http_status.c \
 	src/plugins/multifo.c \
@@ -215,7 +216,6 @@ libgdnsd_libgdnsd_a_SOURCES = \
 	include/gdnsd/dname.h \
 	include/gdnsd/log.h \
 	include/gdnsd/compiler.h \
-	include/gdnsd/stats.h \
 	include/gdnsd/net.h \
 	include/gdnsd/misc.h \
 	include/gdnsd/paths.h \

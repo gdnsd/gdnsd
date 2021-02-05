@@ -38,7 +38,8 @@ AC_COMPILE_IFELSE(
         // compilers, and/or platforms, but they form the basis of some
         // "reasonable" assumptions we are making in the rest of our code and
         // are generally true on the kinds of server platforms we target, so we
-        // will be explicit about them.  These include basic C11 features.
+        // will be explicit about them.  These include basic C11 features and
+        // support for lock-free atomics on pointer-sized variables.
         //   Probably the one that will raise the most eyebrows is requiring
         // "int" to be exactly 32 bits, which does not allow for the ILP64
         // model. Basically, if you cannot lock down the width of "int", it is
@@ -47,16 +48,17 @@ AC_COMPILE_IFELSE(
         // can surprisingly become signed and then be subject to undefined
         // behavior for e.g. shifts and overflows.
         //   In terms of ABI models, we only support ILP32 and LP64 with 8-bit
-        // char and 64-bit LL, and all the pointer-ish types matching the
-        // pointer width.  The only room for variance is whether the pointer
-        // and all related types (including long) are collectively 32 or 64
-        // bits wide.
+        // char, 16-bit short, and 64-bit LL, and all the pointer-ish types
+        // matching the pointer width.  The only room for variance is whether
+        // the pointer and all related types (including long) are collectively
+        // 32 or 64 bits wide.
 
         #include <assert.h>
         #include <limits.h>
         #include <stddef.h>
         #include <stdint.h>
         #include <sys/types.h> // for ssize_t, which is POSIX not C...
+        #include <stdatomic.h>
         static_assert(__STDC_VERSION__ >= 201112L, "C11");
         static_assert(CHAR_BIT == 8, "8-bit char");
         static_assert(sizeof(short) == sizeof(int16_t), "short is 16 bits");
@@ -72,6 +74,10 @@ AC_COMPILE_IFELSE(
         static_assert(sizeof(char*) == sizeof(ssize_t), "pointer and ssize_t widths match");
         static_assert(sizeof(char*) == sizeof(size_t), "pointer and size_t widths match");
         static_assert(sizeof(char*) == sizeof(ptrdiff_t), "pointer and ptrdiff_t widths match");
+        static_assert(ATOMIC_POINTER_LOCK_FREE, "has lock-free pointer");
+        atomic_uintptr_t v = 0;
+        _Atomic uintptr_t v2 = 0;
+        _Atomic(char*) p = NULL;
     ]],[])],
     [AC_MSG_RESULT([yes])],
     [AC_MSG_RESULT([no])

@@ -57,6 +57,27 @@
 #include <sys/resource.h>
 #include <pwd.h>
 #include <time.h>
+#include <stdatomic.h>
+
+// Most platforms will report ATOMIC_POINTER_LOCK_FREE==2 allowing us to know
+// at compile-time that our assumptions hold.  One known real-world exception
+// is some compilers targeting older ARM platforms in their default mode, which
+// will give a value of 1, meaning that lock free pointers are possibly
+// supported at runtime, but we can't be sure at compiletime.  There may be
+// other such cases today or in the future, so the only general purpose
+// solution is to include an early runtime check for them here and ensure the
+// daemon can't successfully run if our assumption of a lock-free atomic
+// pointer doesn't hold.
+static void check_atomic_assumptions(void)
+{
+    // Our configure script checks this before even building, but JIC:
+    static_assert(ATOMIC_POINTER_LOCK_FREE, "atomic lock-free pointer possible");
+#if ATOMIC_POINTER_LOCK_FREE < 2
+    atomic_uintptr_t aup = 0;
+    if (!atomic_is_lock_free(&aup))
+        log_fatal("This build fails to support the required lock-free C11 atomic pointers.  For some targets, this might be fixable by using more specific and/or modern -march or -mcpu sorts of settings!");
+#endif
+}
 
 // This is set by the signal handler for terminal signals, and consumed as
 // the correct signal to re-raise for final termination
@@ -665,6 +686,8 @@ int main(int argc, char** argv)
         gdnsd_init_daemon(copts.action == ACT_DAEMONIZE);
 
     log_info("gdnsd version " PACKAGE_VERSION " @ pid %li", (long)getpid());
+
+    check_atomic_assumptions(); // ensure all our atomics are truly lock-free!
 
     // Load and init basic pathname config (but no mkdir/chmod if checkconf)
     vscf_data_t* cfg_root = gdnsd_init_paths(copts.cfg_dir, copts.action != ACT_CHECKCONF);
