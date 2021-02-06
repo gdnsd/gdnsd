@@ -15,6 +15,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 ### Feature Regressions
 
 * The `USR1` signal is no longer handled at all, and thus may terminate the daemon.  It was previously handled as a no-op in 3.x, for backwards compatibility with dead 2.x features.
+* The control socket protocol is no longer compatible with the old 2.99-beta releases of gdnsd.
 
 ## Configuration changes
 

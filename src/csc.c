@@ -64,8 +64,8 @@ static bool csc_get_status(struct csc* csc)
     csc->svers_minor = resp.v1;
     csc->svers_patch = resp.v2;
 
-    // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
-    // making resp.v0 < 3 a fatal condition
+    if (!csc_server_version_gte(csc, 3, 0, 0))
+        return true;
 
     int snp_rv = snprintf(csc->server_vers, 16, "%hhu.%hhu.%hhu",
                           resp.v0, resp.v1, resp.v2);
@@ -383,12 +383,6 @@ enum csc_txn_rv csc_stop_server(const struct csc* csc)
 
 size_t csc_get_stats_handoff(const struct csc* csc, uint64_t** raw_u64)
 {
-    // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
-    // assuming all daemons with listening control sockets have a major >= 3
-    // and send stats handoff
-    if (!csc_server_version_gte(csc, 2, 99, 200))
-        return 0;
-
     union csbuf handoff;
     memset(&handoff, 0, sizeof(handoff));
 
