@@ -32,9 +32,13 @@
 #include <stdlib.h>
 #include <fcntl.h>
 
+// Avoid mmap for smaller files (<1MB)
+#define SIZE_CUTOFF_MMAP 1048576U
+
 struct gdnsd_fmap_s_ {
     void* buf;
     size_t len;
+    bool is_mapped;
 };
 
 gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
@@ -62,8 +66,9 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
 
     const size_t len = (size_t)st.st_size;
     char* mapbuf = NULL;
+    bool is_mapped = false;
 
-    if (len) {
+    if (len >= SIZE_CUTOFF_MMAP) {
         const int prot = mod ? (PROT_READ | PROT_WRITE) : PROT_READ;
         const int flags = mod ? MAP_PRIVATE : MAP_SHARED;
         mapbuf = mmap(NULL, len, prot, flags, fd, 0);
@@ -78,11 +83,26 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
         else
             advice |= POSIX_MADV_RANDOM;
         (void)posix_madvise(mapbuf, len, advice);
+        is_mapped = true;
+    } else if (len) {
+        mapbuf = xmalloc(len);
+        size_t have_slurped = 0;
+        do {
+            ssize_t readrv = read(fd, mapbuf + have_slurped, len - have_slurped);
+            if (unlikely(readrv < 0)) {
+                if (errno == EINTR)
+                    continue;
+                log_err("read of '%s' failed: %s", fn, logf_errno());
+                free(mapbuf);
+                close(fd);
+                return NULL;
+            }
+            have_slurped += (size_t)readrv;
+        } while (have_slurped < len);
     } else {
-        // mmap doesn't always work for zero-length files, and we also
-        //   don't want callers to have to care about cases where this call
-        //   was successful but the buffer pointer is NULL due to len == 0,
-        //   so allocate a 1-byte buffer containing a NUL for these cases.
+        // we don't want callers to have to care about cases where this call
+        // was successful but the buffer pointer is NULL due to len == 0, so
+        // allocate a 1-byte buffer containing a NUL for these cases.
         mapbuf = xcalloc(1);
     }
 
@@ -92,7 +112,7 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
     gdnsd_fmap_t* fmap = xmalloc(sizeof(*fmap));
     fmap->buf = mapbuf;
     fmap->len = len;
-
+    fmap->is_mapped = is_mapped;
     return fmap;
 }
 
@@ -113,7 +133,7 @@ bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap)
     gdnsd_assert(fmap->buf);
 
     bool rv = false; // true == error
-    if (fmap->len) {
+    if (fmap->is_mapped) {
         if (munmap(fmap->buf, fmap->len)) {
             log_err("Cannot munmap() %p: %s", fmap->buf, logf_errno());
             rv = true;
