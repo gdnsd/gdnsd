@@ -482,7 +482,7 @@ sub test_run_gdnsdctl {
         : qq{$GDNSDCTL_BIN -t 17 -Dc $OUTDIR/etc $args};
 
     # Because gdnsdctl could intentionally cause a daemon to exit and then wait
-    # on it to fully dissappear, we must install an auto-reaper for the daemon
+    # on it to fully disappear, we must install an auto-reaper for the daemon
     # itself while testing a gdnsdctl command.
     local $SIG{CHLD} = sub {
         local ($!, $?);
