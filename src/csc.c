@@ -173,33 +173,27 @@ bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t
 F_NONNULL
 static size_t get_control_fds(struct msghdr* msg, int* fds, const size_t fds_recvd, const size_t fds_wanted)
 {
-    if (!msg->msg_controllen)
-        return 0;
-
-    for (struct cmsghdr* cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR(msg, cmsg)) {
-        if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
-            const size_t dlen = cmsg->cmsg_len - CMSG_LEN(0);
-            const size_t nfds = dlen / sizeof(int);
-            if (dlen % sizeof(int) || nfds + fds_recvd > fds_wanted) {
-                log_err("REPLACE[new daemon]: Received bad SCM_RIGHTS byte count or more than expected!");
-                return 0;
+    if (msg->msg_controllen) {
+        for (struct cmsghdr* cmsg = CMSG_FIRSTHDR(msg); cmsg; cmsg = CMSG_NXTHDR(msg, cmsg)) {
+            if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+                const size_t dlen = cmsg->cmsg_len - CMSG_LEN(0);
+                const size_t nfds = dlen / sizeof(int);
+                if (!nfds || dlen % sizeof(int) || nfds + fds_recvd > fds_wanted)
+                    log_fatal("REPLACE[new daemon]: takeover socket handoff failed: bad SCM_RIGHTS size/count");
+                memcpy(&fds[fds_recvd], CMSG_DATA(cmsg), dlen);
+                return nfds;
             }
-            memcpy(&fds[fds_recvd], CMSG_DATA(cmsg), dlen);
-            return nfds;
         }
     }
-
-    return 0;
+    log_fatal("REPLACE[new daemon]: takeover socket handoff failed: no SCM_RIGHTS messages at all");
 }
 
 F_NONNULL
 size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds)
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
-    if (pktlen != 8) {
-        log_err("8-byte send() failed with retval %zi: %s", pktlen, logf_errno());
-        return 0;
-    }
+    if (pktlen != 8)
+        log_fatal("REPLACE[new daemon]: takeover socket handoff failed: 8 byte send() retval %zi: %s", pktlen, logf_errno());
 
     size_t fds_wanted = 0; // don't know till first recvmsg
     size_t fds_recvd = 0;
@@ -220,47 +214,34 @@ size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int**
         msg.msg_controllen = sizeof(u.cmsg_buf);
 
         pktlen = recvmsg(csc->fd, &msg, MSG_CMSG_CLOEXEC);
-        if (pktlen != 8) {
-            log_err("8-byte recvmsg() failed with retval %zi: %s", pktlen, logf_errno());
-            free(fds);
-            return 0;
-        }
-        if (msg.msg_flags & MSG_CTRUNC) {
-            log_err("recvmsg(): ancillary data for socket handoff was truncated (open files ulimit too small?)");
-            free(fds);
-            return 0;
-        }
+        if (pktlen != 8)
+            log_fatal("REPLACE[new daemon]: takeover socket handoff failed: recvmsg() header retval %zi: %s", pktlen, logf_errno());
+
+        if (msg.msg_flags & MSG_CTRUNC)
+            log_fatal("REPLACE[new daemon]: takeover socket handoff failed: recvmsg() gave MSG_CTRUNC (open files ulimit too small?)");
 
         if (!fds) {
             // first time through loop, get ACK + total fd count, which must be
             // 3+ because there's always 2 for control sock+lock plus at least
             // one dns listener.
             fds_wanted = csbuf_get_v(resp);
-            if (resp->key != RESP_ACK || fds_wanted < 3) {
-                log_err("REPLACE[new daemon]: takeover protocol error during socket handoff (first msg)");
-                return 0;
-            }
+            if (resp->key != RESP_ACK || fds_wanted < 3)
+                log_fatal("REPLACE[new daemon]: takeover socket handoff failed: bad first message");
             fds = xmalloc_n(fds_wanted, sizeof(*fds));
         } else {
             // followup messages carry same ACK + total fd count as initial msg
             gdnsd_assert(fds);
             gdnsd_assert(fds_wanted > 2);
-            if (RESP_ACK != resp->key || fds_wanted != csbuf_get_v(resp)) {
-                free(fds);
-                log_err("REPLACE[new daemon]: takeover protocol error during socket handoff (followup msg)");
-                return 0;
-            }
+            if (RESP_ACK != resp->key || fds_wanted != csbuf_get_v(resp))
+                log_fatal("REPLACE[new daemon]: takeover socket handoff failed: bad followup message");
         }
 
         const size_t nfds = get_control_fds(&msg, fds, fds_recvd, fds_wanted);
-        if (!nfds) {
-            log_err("REPLACE[new daemon]: recvmsg() failed to get SCM_RIGHTS fds after %zu of %zu expected", fds_recvd, fds_wanted);
-            free(fds);
-            return 0;
-        }
+        gdnsd_assert(nfds)
         fds_recvd += nfds;
     } while (fds_recvd < fds_wanted);
 
+    gdnsd_assert(fds_recvd == fds_wanted);
     *resp_fds = fds;
     return fds_recvd;
 }
