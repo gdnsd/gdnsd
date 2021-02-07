@@ -580,7 +580,7 @@ bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned 
 
     if (dname_is_acme_chal(dname)) {
         if (ttl != gcfg->acme_challenge_dns_ttl) {
-            log_zwarn("Name '%s%s': ACME challenge TXT record TTL %u overriden to %u from 'acme_challenge_dns_ttl' config setting", logf_dname(dname), logf_dname(zone->dname), ttl, gcfg->acme_challenge_dns_ttl);
+            log_zwarn("Name '%s%s': ACME challenge TXT record TTL %u overridden to %u from 'acme_challenge_dns_ttl' config setting", logf_dname(dname), logf_dname(zone->dname), ttl, gcfg->acme_challenge_dns_ttl);
             ttl = gcfg->acme_challenge_dns_ttl;
         }
     } else {

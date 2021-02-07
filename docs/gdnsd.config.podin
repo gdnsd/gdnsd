@@ -506,7 +506,7 @@ against a gdnsd server.
 
 Integer seconds, range 60-3600, default 600.  For temporary ACME DNS-01
 challenge data added via C<gdnsdctl acme-dns-01 ...>, this sets the time
-until the TXT records auto-expire from the server and dissappear.
+until the TXT records auto-expire from the server and disappear.
 
 See the L<gdnsdctl(8)> documentation about C<acme-dns-01> for more details.
 
