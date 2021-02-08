@@ -335,9 +335,13 @@ AC_DEFINE_UNQUOTED([BUILD_FEATURES], ["$B_FEAT"], [Build Features])
 
 # BUILD_INFO for cmdline output
 B_INFO=non-git
-if test -d ${srcdir}/${GIT_DIR:-.git} -o -f ${srcdir}/.git; then
-    [B_INFO=`cd ${srcdir}; git describe --match 'v[0-9]*' --always --dirty`]
-fi
+AC_ARG_WITH([buildinfo],[AS_HELP_STRING([--with-buildinfo=v1.2.3-4],
+    [Overrides the "Build Info" string which is output by CLI tools and normally contains version info derived directly from a git checkout])],
+    [B_INFO=$with_buildinfo],
+    [if test -d ${srcdir}/${GIT_DIR:-.git} -o -f ${srcdir}/.git; then
+        [B_INFO=`cd ${srcdir}; git describe --match 'v[0-9]*' --always --dirty`]
+    fi]
+)
 AC_DEFINE_UNQUOTED([BUILD_INFO],["$B_INFO"],[Build Info])
 
 werror=0
