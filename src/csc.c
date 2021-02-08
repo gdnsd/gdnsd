@@ -213,7 +213,11 @@ size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int**
         msg.msg_control = u.cmsg_buf;
         msg.msg_controllen = sizeof(u.cmsg_buf);
 
+#ifndef MSG_CMSG_CLOEXEC
+        pktlen = recvmsg(csc->fd, &msg, 0);
+#else
         pktlen = recvmsg(csc->fd, &msg, MSG_CMSG_CLOEXEC);
+#endif
         if (pktlen != 8)
             log_fatal("REPLACE[new daemon]: takeover socket handoff failed: recvmsg() header retval %zi: %s", pktlen, logf_errno());
 
@@ -242,6 +246,13 @@ size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int**
     } while (fds_recvd < fds_wanted);
 
     gdnsd_assert(fds_recvd == fds_wanted);
+
+#ifndef MSG_CMSG_CLOEXEC
+    for (size_t i = 0; i < fds_recvd; i++)
+        if (fcntl(fds[i], F_SETFD, FD_CLOEXEC))
+            log_fatal("REPLACE[new daemon]: takeover socket handoff failed: Cannot set FD_CLOEXEC on received sockets: %s", logf_errno());
+#endif
+
     *resp_fds = fds;
     return fds_recvd;
 }
