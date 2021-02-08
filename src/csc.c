@@ -241,7 +241,7 @@ size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int**
         }
 
         const size_t nfds = get_control_fds(&msg, fds, fds_recvd, fds_wanted);
-        gdnsd_assert(nfds)
+        gdnsd_assert(nfds);
         fds_recvd += nfds;
     } while (fds_recvd < fds_wanted);
 
