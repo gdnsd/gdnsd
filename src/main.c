@@ -429,7 +429,7 @@ static void try_raise_open_files(const socks_cfg_t* socks_cfg)
     // there can be parallel threads) and/or geoip database needs and other
     // miscellaneous bits.  It should at least get us in the ballpark.
 
-    rlim_t files_desired = socks_cfg->fd_estimate + 100U;
+    rlim_t files_desired = (rlim_t)(socks_cfg->fd_estimate + 100U);
 
     struct rlimit rlim;
     if (getrlimit(RLIMIT_NOFILE, &rlim)) {
