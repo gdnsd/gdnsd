@@ -275,7 +275,7 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
         return;
     }
 
-#if defined __FreeBSD__ && defined IPV6_PKTINFO
+#ifdef IPV6_PKTINFO
     if (sa->sa.sa_family == AF_INET6) {
         struct cmsghdr* cmsg;
         for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(msg_hdr); cmsg;
@@ -390,7 +390,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
     gdnsd_assert(pkts <= MMSG_WIDTH);
     for (unsigned i = 0; i < pkts; i++) {
         gdnsd_anysin_t* asp = dgrams[i].msg_hdr.msg_name;
-#if defined __FreeBSD__ && defined IPV6_PKTINFO
+#ifdef IPV6_PKTINFO
         if (asp->sa.sa_family == AF_INET6) {
             struct msghdr* mhdr = &dgrams[i].msg_hdr;
             struct cmsghdr* cmsg;
