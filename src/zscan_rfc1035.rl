@@ -759,7 +759,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn)
 
 #define preproc_err(_msg) \
     do {\
-        log_err("rfc1035: Zone %s: Zonefile preprocessing error at file %s line %lu: " _msg, logf_dname(z->zone->dname), z->curfn, line_num);\
+        log_err("rfc1035: Zone %s: Zonefile preprocessing error at file %s line %zu: " _msg, logf_dname(z->zone->dname), z->curfn, line_num);\
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
