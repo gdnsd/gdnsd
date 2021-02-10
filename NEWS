@@ -1,3 +1,26 @@
+3.5.1 - 2021-02-10
+    * [Fixes marked with [BP] are also backported to 3.[234].x branches for
+      convenience, but new releases from those branches are not imminent]
+    * Fixed issue #202, which was causing non-ANY UDPv4 listen sockets to fail
+      to work correctly on FreeBSD 12.2 due to some new strictness in its
+      parsing of sendmsg() msg_hdr contents since sometime after 12.0. [BP]
+    * Fixed a bug which may have caused issues listening on global unicast
+      UDPv6 addresses bound to loopback interfaces on some platforms.  This
+      was previously fixed for just FreeBSD in 2.4.2 and 3.0.0.  The existing
+      fix was just extended to all other platforms, as it probably should've
+      been the first time around. [BP]
+    * Fixed a bug that was causing escape sequences for binary bytes in
+      domainnames to be emitted incorrectly in log message outputs. [BP]
+    * A workaround was added for building on platforms which lack
+      MSG_CMSG_CLOEXEC for SCM_RIGHTS socket handoff.
+    * Some fatal error message outputs in the case of a failed "replace"
+      operation were cleaned up for consistency.
+    * A new configure argument "--with-buildinfo=FOO" was added so that
+      packagers can build with a consistent version output encoded in the
+      binary regardless of whether they're building directly from git.
+    * Some docs, comments, and log message typos fixed by lintian
+    * A few small code QA nits of no real consequence
+
 3.5.0 - 2021-01-11
     * Multiple efficiency improvements for TCP conn handling, primarily aimed
       at reducing the per-conn memory footprint and malloc churn.
