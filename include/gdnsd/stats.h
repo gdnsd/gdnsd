@@ -65,8 +65,10 @@
 
 #if defined __x86_64__ && defined __ILP32__
 typedef uint64_t stats_uint_t;
+#define PRISTATS PRIu64
 #else
 typedef uintptr_t stats_uint_t;
+#define PRISTATS PRIuPTR
 #endif
 
 typedef struct {
