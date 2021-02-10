@@ -263,6 +263,28 @@ static unsigned get_pgsz(void)
 // think it works for the *BSDs as well.
 #define CMSG_BUFSIZE CMSG_SPACE(sizeof(struct in6_pktinfo))
 
+// Clear the ipi6_ifindex value of an IPV6_PKTINFO unless the address is
+// link-local.  Leaving it set to its original value in other cases can cause
+// mis-routing of responses (e.g. receiving a request packet through a real
+// interface, with a global unicast destination address which is configured
+// only on the local loopback interface, as is common behind certain kinds of
+// loadbalancer/router setups).
+F_NONNULL
+static void ipv6_pktinfo_ifindex_fixup(struct msghdr* msg_hdr)
+{
+    gdnsd_assert(((struct sockaddr*)msg_hdr->msg_name)->sa_family == AF_INET6);
+    struct cmsghdr* cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(msg_hdr);
+    while (cmsg) {
+        if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
+            struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
+            if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
+                pi->ipi6_ifindex = 0;
+            break;
+        }
+        cmsg = (struct cmsghdr*)CMSG_NXTHDR(msg_hdr, cmsg);
+    }
+}
+
 F_HOT F_NONNULL
 static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct msghdr* msg_hdr, ssize_t recvmsg_rv)
 {
@@ -281,20 +303,8 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
         return;
     }
 
-#ifdef IPV6_PKTINFO
-    if (sa->sa.sa_family == AF_INET6) {
-        struct cmsghdr* cmsg;
-        for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(msg_hdr); cmsg;
-                cmsg = (struct cmsghdr*)CMSG_NXTHDR(msg_hdr, cmsg)) {
-            if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
-                struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
-                if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
-                    pi->ipi6_ifindex = 0;
-                continue;
-            }
-        }
-    }
-#endif
+    if (sa->sa.sa_family == AF_INET6)
+        ipv6_pktinfo_ifindex_fixup(msg_hdr);
 
     size_t buf_in_len = (size_t)recvmsg_rv;
     sa->len = msg_hdr->msg_namelen;
@@ -398,21 +408,8 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
     gdnsd_assert(pkts <= MMSG_WIDTH);
     for (unsigned i = 0; i < pkts; i++) {
         gdnsd_anysin_t* asp = dgrams[i].msg_hdr.msg_name;
-#ifdef IPV6_PKTINFO
-        if (asp->sa.sa_family == AF_INET6) {
-            struct msghdr* mhdr = &dgrams[i].msg_hdr;
-            struct cmsghdr* cmsg;
-            for (cmsg = (struct cmsghdr*)CMSG_FIRSTHDR(mhdr); cmsg;
-                    cmsg = (struct cmsghdr*)CMSG_NXTHDR(mhdr, cmsg)) {
-                if ((cmsg->cmsg_level == IPPROTO_IPV6) && (cmsg->cmsg_type == IPV6_PKTINFO)) {
-                    struct in6_pktinfo* pi = (void*)CMSG_DATA(cmsg);
-                    if (!IN6_IS_ADDR_LINKLOCAL(&pi->ipi6_addr))
-                        pi->ipi6_ifindex = 0;
-                    continue;
-                }
-            }
-        }
-#endif
+        if (asp->sa.sa_family == AF_INET6)
+            ipv6_pktinfo_ifindex_fixup(&dgrams[i].msg_hdr);
         struct iovec* iop = &dgrams[i].msg_hdr.msg_iov[0];
         if (unlikely((asp->sa.sa_family == AF_INET && !asp->sin4.sin_port)
                      || (asp->sa.sa_family == AF_INET6 && !asp->sin6.sin6_port))) {
