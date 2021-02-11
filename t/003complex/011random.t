@@ -8,7 +8,7 @@
 
 use _GDT ();
 use Scalar::Util ();
-use Test::More tests => 4 + $_GDT::RAND_LOOPS;
+use Test::More tests => 4 + ($_GDT::RAND_LOOPS * 2);
 
 # Initialize the random seed and diag() it, so that
 #  failures can be reproduced and sorted out
@@ -114,6 +114,22 @@ foreach (1..$_GDT::RAND_LOOPS) {
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
+    close($sock);
+    $rand_reqs += 36;
+
+    eval {_GDT->query_server(
+        undef,
+        Net::DNS::Packet->new('foo.example.com', 'A'),
+        _GDT->mkanswer({ },
+            Net::DNS::Question->new('foo.example.com', 'A'),
+            [Net::DNS::rr_add('foo.example.com 21600 A 192.0.2.160')], [], [],
+        ),
+        _GDT->get_resolver(), {},
+    )};
+    ok(!$@) or diag $@;
+    $valid_reqs += 1;
+
+    $sock = get_socket();
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
     send($sock, gen_random_packet(), 0);
@@ -151,8 +167,7 @@ foreach (1..$_GDT::RAND_LOOPS) {
     send($sock, gen_random_packet_good_header(), 0);
     send($sock, gen_random_packet_good_header(), 0);
     close($sock);
-
-    $rand_reqs += 72;
+    $rand_reqs += 36;
 
     eval {_GDT->query_server(
         undef,
@@ -164,7 +179,6 @@ foreach (1..$_GDT::RAND_LOOPS) {
         _GDT->get_resolver(), {},
     )};
     ok(!$@) or diag $@;
-
     $valid_reqs += 1;
 }
 
