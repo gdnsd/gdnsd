@@ -534,7 +534,7 @@ static void recv_challenge_data(struct ev_loop* loop, ev_io* w, css_conn_t* c, c
 
         char resp_key = RESP_ACK;
         if (css->replacement_pid) {
-            log_info("Deferring acme-dns-01 request while replace in progress");
+            log_info("REPLACE[old daemon]: Deferring a new acme-dns-01 request while replace in progress");
             resp_key = RESP_LATR;
         } else if (cset_create(loop, 0, csbuf_get_v(&c->rbuf), c->size_done, (uint8_t*)c->data)) {
             resp_key = RESP_FAIL;
@@ -553,7 +553,7 @@ static void handle_req_stop(css_conn_t* c, css_t* css)
 {
     if (css->replacement_pid) {
         if (c != css->replace_conn_dmn) {
-            log_info("Deferring stop request while replace in progress");
+            log_info("REPLACE[old daemon]: Deferring a new stop request while replace in progress");
             respond(c, RESP_LATR, 0, 0, NULL, false);
             return;
         } else {
@@ -598,7 +598,7 @@ F_NONNULL
 static void handle_req_zrel(css_conn_t* c, css_t* css)
 {
     if (css->replacement_pid) {
-        log_info("Deferring reload-zones request while replace in progress");
+        log_info("REPLACE[old daemon]: Deferring a new reload-zones request while replace in progress");
         respond(c, RESP_LATR, 0, 0, NULL, false);
         return;
     }
@@ -613,7 +613,7 @@ F_NONNULL
 static void handle_req_repl(css_conn_t* c, css_t* css)
 {
     if (css->replacement_pid) {
-        log_info("Deferring replace request while another replace already in progress");
+        log_info("REPLACE[old daemon]: Deferring a new replace request while another replace already in progress");
         respond(c, RESP_LATR, 0, 0, NULL, false);
         return;
     }
@@ -633,12 +633,12 @@ static void handle_req_tak1(css_conn_t* c, css_t* css)
 {
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (css->replacement_pid && css->replacement_pid != take_pid) {
-        log_warn("Denying takeover notification from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+        log_warn("REPLACE[old daemon]: Denying takeover notification from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
         // could argue for LATR or FAIL here, but currently the new daemon doesn't wait and retry anyways
         respond(c, RESP_LATR, 0, 0, NULL, false);
         return;
     }
-    log_debug("Accepted takeover notification from PID %li", (long)take_pid);
+    log_debug("REPLACE[old daemon]: Accepted takeover notification from PID %li", (long)take_pid);
     css->replacement_pid = take_pid;
     gdnsd_assert(!css->replace_conn_dmn);
     css->replace_conn_dmn = c;
@@ -653,11 +653,17 @@ static void handle_req_tak2(css_conn_t* c, const css_t* css)
 {
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
-        log_warn("Denying illegal takeover phase 2 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+        if (!css->replacement_pid)
+            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 2 from PID %li without pre-notification", (long)take_pid);
+        else if (take_pid != css->replacement_pid)
+            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 2 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+        else
+            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 2 from PID %li which did not arrive on the existing takeover socket", (long)take_pid);
         respond(c, RESP_FAIL, 0, 0, NULL, false);
+        css_conn_cleanup(c);
         return;
     }
-    log_debug("Accepted takeover phase 2 (challenge data req) from PID %li", (long)take_pid);
+    log_debug("REPLACE[old daemon]: Accepted takeover phase 2 (challenge data req) from PID %li", (long)take_pid);
     respond_tak2(css->loop, c);
 }
 
@@ -666,7 +672,12 @@ static void handle_req_take(css_conn_t* c, css_t* css)
 {
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
-        log_err("Denying illegal takeover request without pre-notification");
+        if (!css->replacement_pid)
+            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 3 from PID %li without pre-notification", (long)take_pid);
+        else if (take_pid != css->replacement_pid)
+            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 3 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
+        else
+            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 3 from PID %li which did not arrive on the existing takeover socket", (long)take_pid);
         respond(c, RESP_FAIL, 0, 0, NULL, false);
         css_conn_cleanup(c);
         return;
