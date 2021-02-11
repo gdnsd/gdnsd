@@ -226,16 +226,22 @@ size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int**
 
         if (!fds) {
             // first time through loop, get ACK + total fd count, which must be
-            // 3+ because there's always 2 for control sock+lock plus at least
-            // one dns listener.
+            // 2+ because there's always 2 for control sock+lock.  We may not
+            // always get DNS listener handoffs in all scenarios in the future.
+            // --
+            // Compatibility warning to the future: in versions 3.0.0 -> 3.5.1,
+            // the requirement here was 3+ sockets, and so future daemons that
+            // might choose to not send any DNS fds may have to deal with that
+            // (by e.g. sending over a fake/useless 3rd socket that doesn't
+            // match anything).
             fds_wanted = csbuf_get_v(resp);
-            if (resp->key != RESP_ACK || fds_wanted < 3)
+            if (resp->key != RESP_ACK || fds_wanted < 2)
                 log_fatal("REPLACE[new daemon]: takeover socket handoff failed: bad first message");
             fds = xmalloc_n(fds_wanted, sizeof(*fds));
         } else {
             // followup messages carry same ACK + total fd count as initial msg
             gdnsd_assert(fds);
-            gdnsd_assert(fds_wanted > 2);
+            gdnsd_assert(fds_wanted >= 2);
             if (RESP_ACK != resp->key || fds_wanted != csbuf_get_v(resp))
                 log_fatal("REPLACE[new daemon]: takeover socket handoff failed: bad followup message");
         }

@@ -1044,7 +1044,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         req.d = (uint32_t)getpid();
         int* resp_fds = NULL;
         const size_t fds_recvd = csc_txn_getfds(csc, &req, &resp, &resp_fds);
-        gdnsd_assert(fds_recvd > 2U);
+        gdnsd_assert(fds_recvd >= 2U);
         gdnsd_assert(sock_fd == -1);
         gdnsd_assert(lock_fd == -1);
         lock_fd = resp_fds[0];
