@@ -147,12 +147,15 @@ Finally, it can also be set to the special string value C<any>, as in:
 
   options => { listen => any }
 
-This is the default mode if no explicit C<listen> option is provided.  In this
-mode, the daemon will listen on the C<dns_port> port (default 53) on the IPv4
-and IPv6 C<ANY> addresses C<0.0.0.0> and C<::>.  gdnsd's C<ANY>-address
-sockets should correctly handle sending outgoing datagrams via the interface
-they were received on with a source address matching the destination address of
-the request.
+In this mode, the daemon will listen on the C<dns_port> port (default 53) on
+the IPv4 and IPv6 C<ANY> addresses C<0.0.0.0> and C<::>.  gdnsd's
+C<ANY>-address sockets should correctly handle sending outgoing datagrams via
+the interface they were received on with a source address matching the
+destination address of the request.
+
+Production configurations should always explicitly define their C<listen>
+option, as the default could be subject to breaking changes in major version
+upgrades.  The current default is the C<any> behavior above.
 
 =item B<tcp_threads>
 

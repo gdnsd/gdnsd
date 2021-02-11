@@ -184,6 +184,7 @@ F_NONNULLX(1, 3)
 static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
 {
     if (!listen_opt) {
+        log_warn("Defaulting to listen=>any for lack of explicit listen config.  Please explicitly configure it, as default behaviors may change in future releases!");
         dns_listen_any(socks_cfg, addr_defs);
         return;
     }
