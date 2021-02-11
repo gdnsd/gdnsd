@@ -992,7 +992,14 @@ void tcp_dns_listen_setup(dns_thread_t* t)
     }
 
     sockopt_bool_fatal(TCP, sa, t->sock, SOL_SOCKET, SO_REUSEADDR, 1);
+    // We need SO_REUSEPORT for functional reasons
     sockopt_bool_fatal(TCP, sa, t->sock, SOL_SOCKET, SO_REUSEPORT, 1);
+#ifdef SO_REUSEPORT_LB
+    // If BSD's SO_REUSEPORT_LB is available, try to upgrade to that for better
+    // balancing, but merely warn on failure because it's new and there could
+    // be a compiletime vs runtime diff.
+    sockopt_bool_warn(TCP, sa, t->sock, SOL_SOCKET, SO_REUSEPORT_LB, 1);
+#endif
 
     sockopt_bool_fatal(TCP, sa, t->sock, SOL_TCP, TCP_NODELAY, 1);
 
