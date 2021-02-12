@@ -685,11 +685,14 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
     conn->readbuf_head += req_bufsize;
     conn->readbuf_bytes -= req_bufsize;
 
-    // Bring RCU online and generate an answer
+    // Bring RCU online (or quiesce) and generate an answer
     if (!thr->rcu_is_online) {
         thr->rcu_is_online = true;
         rcu_thread_online();
+    } else {
+        rcu_quiescent_state();
     }
+
     conn->dso.last_was_ka = false;
     size_t resp_size = process_dns_query(thr->pctx, &conn->sa, &tpkt->pkt, &conn->dso, req_size);
     if (!resp_size) {
