@@ -157,12 +157,16 @@ void dnsio_tcp_init(size_t num_threads)
 
 void dnsio_tcp_request_threads_stop(void)
 {
+    pthread_mutex_lock(&registry_lock);
     gdnsd_assert(registry_size == registry_init);
     for (size_t i = 0; i < registry_init; i++) {
         thread_t* thr = registry[i];
-        ev_async* stop_watcher = &thr->stop_watcher;
-        ev_async_send(thr->loop, stop_watcher);
+        if (thr) {
+            ev_async* stop_watcher = &thr->stop_watcher;
+            ev_async_send(thr->loop, stop_watcher);
+        }
     }
+    pthread_mutex_unlock(&registry_lock);
 }
 
 F_NONNULL
@@ -171,6 +175,19 @@ static void register_thread(thread_t* thr)
     pthread_mutex_lock(&registry_lock);
     gdnsd_assert(registry_init < registry_size);
     registry[registry_init++] = thr;
+    pthread_mutex_unlock(&registry_lock);
+}
+
+F_NONNULL
+static void unregister_thread(thread_t* thr)
+{
+    pthread_mutex_lock(&registry_lock);
+    for (unsigned i = 0; i < registry_init; i++) {
+        if (registry[i] == thr) {
+            registry[i] = NULL;
+            break;
+        }
+    }
     pthread_mutex_unlock(&registry_lock);
 }
 
@@ -1147,6 +1164,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     rcu_unregister_thread();
 
+    unregister_thread(thr);
     ev_loop_destroy(loop);
     dnspacket_ctx_cleanup(thr->pctx);
     for (unsigned i = 0; i < thr->churn_count; i++)
