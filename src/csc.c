@@ -52,6 +52,9 @@ static bool csc_get_status(csc_t* csc)
     csbuf_t resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_INFO;
+    req.v0 = PACKAGE_V_MAJOR;
+    req.v1 = PACKAGE_V_MINOR;
+    req.v2 = PACKAGE_V_PATCH;
     if (csc_txn(csc, &req, &resp))
         return true;
 
