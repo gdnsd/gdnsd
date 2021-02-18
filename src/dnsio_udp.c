@@ -68,7 +68,7 @@
 // corner-case race condition.  Normally, SIGUSR2 will interrupt recvmsg() and
 // we'll immediately catch the thread_shutdown!=0 condition at the top of the
 // runtime loop, exiting fairly quickly.  However, it's rarely possible that
-// the interrupt arrives in the short time interval between checking the
+// the signal arrives in the short time interval between checking the
 // variable at the top and entry into a long-delay recvmsg() call shortly
 // afterwards.  The long delay value is set by this parameter.  The tradeoff
 // pressure against making this smaller to keep the maximum shutdown delay

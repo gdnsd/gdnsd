@@ -243,9 +243,9 @@ static void spawn_helper(void)
     int writepipe[2];
     int readpipe[2];
     if (pipe2(writepipe, O_CLOEXEC))
-        log_fatal("plugin_extmon: pipe2() failed: %s", logf_errno());
+        log_fatal("plugin_extmon: pipe2(O_CLOEXEC) failed: %s", logf_errno());
     if (pipe2(readpipe, O_CLOEXEC))
-        log_fatal("plugin_extmon: pipe2() failed: %s", logf_errno());
+        log_fatal("plugin_extmon: pipe2(O_CLOEXEC) failed: %s", logf_errno());
 
     // Before forking, block all signals and save the old mask
     //   to avoid a race condition where local sighandlers execute

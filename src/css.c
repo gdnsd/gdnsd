@@ -431,7 +431,7 @@ static pid_t spawn_replacement(const char* argv0)
 
     int pipefd[2];
     if (pipe2(pipefd, O_CLOEXEC))
-        log_fatal("pipe() failed: %s", logf_errno());
+        log_fatal("pipe2(O_CLOEXEC) failed: %s", logf_errno());
 
     pid_t middle_pid = fork();
     if (middle_pid == -1)

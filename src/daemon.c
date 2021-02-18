@@ -138,7 +138,7 @@ static void do_daemonize(void)
     // determination.
     int pipefd[2];
     if (pipe2(pipefd, O_CLOEXEC))
-        log_fatal("pipe() failed: %s", logf_errno());
+        log_fatal("pipe2(O_CLOEXEC) failed: %s", logf_errno());
 
     // Fork for the first time...
     const pid_t middle_pid = fork();
