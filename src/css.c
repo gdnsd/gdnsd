@@ -1121,7 +1121,7 @@ bool css_notify_zone_reloaders(css_t* css, const bool failed)
 {
     // Notify log and all waiting control sock clients of success/fail
     for (size_t i = 0; i < css->reload_zones_active.len; i++)
-        respond(css->reload_zones_active.q[i], failed ? RESP_FAIL : RESP_ACK, 0, 0, NULL, NULL);
+        respond(css->reload_zones_active.q[i], failed ? RESP_FAIL : RESP_ACK, 0, 0, NULL, false);
 
     // clear out the queue of clients waiting for reload status
     conn_queue_clear(&css->reload_zones_active);
