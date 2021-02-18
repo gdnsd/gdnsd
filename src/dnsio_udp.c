@@ -44,6 +44,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <signal.h>
+#include <poll.h>
 
 #include <urcu-qsbr.h>
 
@@ -55,29 +56,27 @@
 #define SOL_IP IPPROTO_IP
 #endif
 
-// RCU perf magic value:
-// This is the longest time for which we'll delay writers in rcu_synchronize()
-// (e.g. geoip/zonefile data reloaders waiting to reclaim dead data) in the
-// worst case.  Note the current value is a prime number of us, and also a
-// prime number of ms at lower resolution.  This is to help avoid getting into
-// ugly patterns.
-#define MAX_PRCU_DELAY_US 109367
-
-// Similar to the above, this is added to the above amount as the maximum we'll
-// artificially delay a thread shutdown request on daemon termination, in a
-// corner-case race condition.  Normally, SIGUSR2 will interrupt recvmsg() and
-// we'll immediately catch the thread_shutdown!=0 condition at the top of the
-// runtime loop, exiting fairly quickly.  However, it's rarely possible that
-// the signal arrives in the short time interval between checking the
-// variable at the top and entry into a long-delay recvmsg() call shortly
-// afterwards.  The long delay value is set by this parameter.  The tradeoff
-// pressure against making this smaller to keep the maximum shutdown delay
-// shorter is that an idle dnsio_udp thread that's receiving no traffic will
-// wake up once per this interval "pointlessly" by returning from recvmsg()
-// with EAGAIN then re-entering recvmsg() again.
-// Note that when combined with the above number, this number is also still
-// prime at us (3109367) and ms (3109) resolution for the same reasons.
-#define MAX_SHUTDOWN_DELAY_S 3
+// "Fast" SO_RCVTIMEO for recvmsg(), in microseconds:
+// In the fast path with fairly constant network input, this is the maximum
+// time we'll block in recvmsg().  This timeout value has three critical
+// effects:
+// 1) It sets an upper bound on the time a UDP thread could delay an RCU
+//    writer's grace period in synchronize_rcu() (for e.g. geoip or zone data
+//    reloads waiting to free old data) in the worst case scenario.  In the
+//    common case of faster traffic, the delay will approximate the packet
+//    arrival timing, and in the case of truly-long idle periods the delay is
+//    usually zero.
+// 2) It sets a similar worst-corner-case upper bound on the time that a UDP
+//    thread could delay reacting to a request to stop for shutdown.
+// 3) If no packets arrive for this long, the thread will switch to a slower
+//    and more-efficient idle path that waits indefinitely in ppoll() for new
+//    traffic or a shutdown signal.  This path is more efficient for long idle
+//    periods, but costs a few extra syscalls (2x pthread_sigmask + 1x ppoll)
+//    every time we use it.
+// Note the current value is a prime number of us, and also a prime number of
+// ms at lower resolution.  This is to help avoid getting into ugly timing
+// patterns.  The current value is ~257ms.
+#define FAST_RCVTIMEO_US 257123
 
 // This is the width of our recvmmsg + sendmmsg operations.  It used to be
 // configurable, but really a fixed value is probably better, as it makes
@@ -97,6 +96,10 @@
 #ifdef USE_MMSG
 static bool use_mmsg = false;
 #endif
+
+// These are initialized once at process start by dnsio_udp_init():
+static sigset_t sigmask_all;     // blocks all sigs
+static sigset_t sigmask_notusr2; // blocks all sigs except USR2
 
 // Used to check the sender of USR2 as the main pid, to ignore erroneous
 // signals sent by outsiders:
@@ -131,6 +134,11 @@ void dnsio_udp_init(const pid_t main_pid)
     sa.sa_flags = SA_SIGINFO;
     if (sigaction(SIGUSR2, &sa, 0))
         log_fatal("Cannot install SIGUSR2 handler for dnsio_udp threads!");
+
+    // Pre-fill a couple of commonly-used static signal masks
+    sigfillset(&sigmask_all);
+    sigfillset(&sigmask_notusr2);
+    sigdelset(&sigmask_notusr2, SIGUSR2);
 }
 
 static void udp_sock_opts_v4(const gdnsd_anysin_t* sa, const int sock V_UNUSED)
@@ -332,6 +340,38 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
     }
 }
 
+// Once traffic has become "idle", the mainloop invokes this function, which is
+// intended to reliably block as long as it can, until either the terminal
+// signal or fresh network traffic arrives.  We have to be careful about signal
+// handler races which could cause indefinite ignorance of shutdown here!
+static bool slow_idle_poll(const int fd)
+{
+    // Block all signals
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_all, NULL))
+        log_fatal("pthread_sigmask() failed");
+
+    // check thread_shutdown one more time here to catch any USR2 that landed
+    // since the last mainloop check but before the sigmask above.
+    if (unlikely(thread_shutdown))
+        return true;
+
+    // ppoll once for fd input + SIGUSR2, for up to infinite time
+    struct pollfd ppfd = {
+        .fd = fd,
+        .events = (POLLIN | POLLERR | POLLHUP),
+        .revents = 0 // we don't care what results land here
+    };
+    errno = 0;
+    const int pprv = ppoll(&ppfd, 1, NULL, &sigmask_notusr2);
+    if (pprv < 0 && errno != EINTR)
+        log_neterr("UDP ppoll() error: %s", logf_errno());
+
+    // Restore the unblocked-USR2 setup for the fast path
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_notusr2, NULL))
+        log_fatal("pthread_sigmask() failed");
+    return false;
+}
+
 F_HOT F_NONNULL
 static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const bool use_cmsg)
 {
@@ -355,11 +395,9 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
     msg_hdr.msg_iovlen     = 1;
     msg_hdr.msg_control    = use_cmsg ? cmsg_buf.cbuf : NULL;
 
-    const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
-    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
+    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = FAST_RCVTIMEO_US };
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
-    bool is_online = true;
 
     while (likely(!thread_shutdown)) {
         iov.iov_len = DNS_RECV_SIZE;
@@ -370,30 +408,19 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
             memset(cmsg_buf.cbuf, 0, sizeof(cmsg_buf));
         }
 
-        ssize_t recvmsg_rv;
-
-        if (likely(is_online)) {
-            rcu_quiescent_state();
-            recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-            if (unlikely(recvmsg_rv < 0)) {
-                if (errno == EINTR)
-                    continue;
-                if (ERRNO_WOULDBLOCK) {
-                    rcu_thread_offline();
-                    is_online = false;
-                    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long));
-                    continue;
-                }
-            }
-        } else {
-            recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-            if (unlikely(recvmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
+        rcu_quiescent_state();
+        const ssize_t recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
+        if (unlikely(recvmsg_rv < 0)) {
+            if (errno == EINTR)
                 continue;
-            (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
-            is_online = true;
-            rcu_thread_online();
+            if (ERRNO_WOULDBLOCK) {
+                rcu_thread_offline();
+                if (slow_idle_poll(fd))
+                    break;
+                rcu_thread_online();
+                continue;
+            }
         }
-
         process_msg(fd, pctx, stats, &msg_hdr, recvmsg_rv);
     }
 
@@ -504,11 +531,9 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         dgrams[i].msg_hdr.msg_control    = use_cmsg ? msgdata[i].cmsg_buf.cbuf : NULL;
     }
 
-    const struct timeval tmout_long  = { .tv_sec = MAX_SHUTDOWN_DELAY_S, .tv_usec = MAX_PRCU_DELAY_US };
-    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = MAX_PRCU_DELAY_US };
+    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = FAST_RCVTIMEO_US };
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
         log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
-    bool is_online = true;
 
     while (likely(!thread_shutdown)) {
         // Re-set values changed by previous syscalls
@@ -522,30 +547,19 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
             }
         }
 
-        int mmsg_rv;
-
-        if (likely(is_online)) {
-            rcu_quiescent_state();
-            mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
-            if (unlikely(mmsg_rv < 0)) {
-                if (errno == EINTR)
-                    continue;
-                if (ERRNO_WOULDBLOCK) {
-                    rcu_thread_offline();
-                    is_online = false;
-                    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_long, sizeof(tmout_long));
-                    continue;
-                }
-            }
-        } else {
-            mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
-            if (unlikely(mmsg_rv < 0 && (ERRNO_WOULDBLOCK || errno == EINTR)))
+        rcu_quiescent_state();
+        const int mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
+        if (unlikely(mmsg_rv < 0)) {
+            if (errno == EINTR)
                 continue;
-            (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short));
-            is_online = true;
-            rcu_thread_online();
+            if (ERRNO_WOULDBLOCK) {
+                rcu_thread_offline();
+                if (slow_idle_poll(fd))
+                    break;
+                rcu_thread_online();
+                continue;
+            }
         }
-
         process_mmsgs(fd, pctx, stats, dgrams, mmsg_rv);
     }
 
@@ -577,10 +591,7 @@ void* dnsio_udp_start(void* thread_asvoid)
 
     // main thread blocks all sigs when spawning both tcp and udp io threads.
     // for dnsio_udp, unblock SIGUSR2, which we use to stop cleanly
-    sigset_t sigmask_dnsio_udp;
-    sigfillset(&sigmask_dnsio_udp);
-    sigdelset(&sigmask_dnsio_udp, SIGUSR2);
-    if (pthread_sigmask(SIG_SETMASK, &sigmask_dnsio_udp, NULL))
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_notusr2, NULL))
         log_fatal("pthread_sigmask() failed");
 
     rcu_register_thread();
