@@ -64,8 +64,8 @@
 // efficiency hack of course.
 #define TCP_READBUF 3840U
 #if __STDC_VERSION__ >= 201112L // C11
-static_assert(TCP_READBUF >= (DNS_RECV_SIZE + 2U), "TCP readbuf fits >= 1 maximal req");
-static_assert(TCP_READBUF >= sizeof(proxy_hdr_t), "TCP readbuf >= PROXY header");
+_Static_assert(TCP_READBUF >= (DNS_RECV_SIZE + 2U), "TCP readbuf fits >= 1 maximal req");
+_Static_assert(TCP_READBUF >= sizeof(proxy_hdr_t), "TCP readbuf >= PROXY header");
 #endif
 
 typedef union {
@@ -80,7 +80,7 @@ typedef union {
 
 // Ensure no padding between pktbuf_size_hdr and pkt, above
 #if __STDC_VERSION__ >= 201112L // C11
-static_assert(_Alignof(pkt_t) <= _Alignof(uint16_t), "No padding for pkt");
+_Static_assert(_Alignof(pkt_t) <= _Alignof(uint16_t), "No padding for pkt");
 #endif
 
 typedef enum {
@@ -141,7 +141,7 @@ struct conn {
 
 // See above at definition of TCP_READBUF
 #if __STDC_VERSION__ >= 201112L // C11
-static_assert(sizeof(conn_t) <= 4096U, "TCP conn <= 4KB");
+_Static_assert(sizeof(conn_t) <= 4096U, "TCP conn <= 4KB");
 #endif
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
