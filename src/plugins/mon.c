@@ -856,7 +856,7 @@ static void init_max_states_len(void)
     for (unsigned i = 0; i < num_smgrs; i++)
         max_states_len += strlen(smgrs[i].desc);
 
-    max_states_len++; // leave room for trailing pointless sprintf \0, JIC
+    max_states_len++; // leave room for trailing pointless snprintf \0, JIC
 
     max_states_len <<= 1U; // double in case anything above is faulty
 }

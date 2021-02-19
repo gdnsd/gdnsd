@@ -70,7 +70,7 @@ static void sysd_notify_ready(void)
     char msg[64];
     int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
     if (snp_rv < 0 || snp_rv >= 64)
-        log_fatal("BUG: sprintf()=>%i in sysd_notify_ready()", snp_rv);
+        log_fatal("BUG: snprintf()=>%i in sysd_notify_ready()", snp_rv);
 
     int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
