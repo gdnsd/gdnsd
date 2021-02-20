@@ -84,6 +84,7 @@ static void sendq_init(void)
     sendq_alloc = SENDQ_INITSIZE;
 }
 
+F_PURE
 static bool sendq_empty(void)
 {
     return !sendq_len;

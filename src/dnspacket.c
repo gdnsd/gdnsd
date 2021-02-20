@@ -934,7 +934,6 @@ static unsigned enc_a_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrset
     uint8_t* packet = ctx->txn.pkt->raw;
 
     const unsigned total = rrset->gen.count;
-    gdnsd_assert(total);
 
     if (is_addtl)
         ctx->txn.arcount += total;
@@ -972,7 +971,6 @@ static unsigned enc_aaaa_static(dnsp_ctx_t* ctx, unsigned offset, const ltree_rr
     gdnsd_assert(packet);
 
     const unsigned total = rrset->gen.count;
-    gdnsd_assert(total);
 
     if (is_addtl)
         ctx->txn.arcount += total;
@@ -1591,7 +1589,7 @@ static unsigned chase_auth_ptr(const uint8_t* packet, unsigned offset, unsigned 
 {
     gdnsd_assert(offset);
     gdnsd_assert(offset < MAX_RESPONSE_DATA);
-    gdnsd_assert(auth_depth < 256);
+    gdnsd_assert(auth_depth < 256U);
 
     unsigned llen = packet[offset];
     while (auth_depth || llen & 0xC0) {

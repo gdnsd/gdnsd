@@ -51,7 +51,7 @@ static uint32_t csbuf_get_v(const csbuf_t* c)
 F_UNUSED F_NONNULL
 static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 {
-    gdnsd_assert(!(v & 0xFF000000));
+    gdnsd_assert(v <= 0xFFFFFF);
     c->v0 = v >> 16;
     c->v1 = v >> 8;
     c->v2 = v;

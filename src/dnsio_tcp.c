@@ -979,7 +979,6 @@ void tcp_dns_listen_setup(dns_thread_t* t)
     gdnsd_assert(addrconf);
 
     const gdnsd_anysin_t* sa = &addrconf->addr;
-    gdnsd_assert(sa);
 
     const bool isv6 = sa->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || sa->sa.sa_family == AF_INET);

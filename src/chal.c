@@ -317,7 +317,7 @@ static void mk_chal_rr(uint8_t* out, const uint8_t* payload)
 bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t dlen, uint8_t* data)
 {
     if (!count || !dlen || count > CHAL_MAX_COUNT || dlen > CHAL_MAX_DLEN) {
-        log_err("Control socket send illegal ACME dns-01 challenge data");
+        log_err("Control socket sent illegal ACME dns-01 challenge data");
         return true;
     }
 

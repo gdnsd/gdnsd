@@ -326,7 +326,7 @@ static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const 
 /********** TXT ******************/
 
 F_NONNULL
-static void text_start(zscan_t* z)
+static void text_start(zscan_t* z V_UNUSED)
 {
     gdnsd_assert(z->text == NULL);
     gdnsd_assert(z->text_len == 0);

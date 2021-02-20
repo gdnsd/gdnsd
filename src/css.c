@@ -207,8 +207,8 @@ static void css_conn_write_data(css_conn_t* c)
     gdnsd_assert(c->state == WRITING_RESP_DATA);
     gdnsd_assert(c->data);
     gdnsd_assert(c->size);
+    gdnsd_assert(c->size > c->size_done);
     const size_t wanted = c->size - c->size_done;
-    gdnsd_assert(wanted > 0);
     const ssize_t pktlen = send(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
     if (pktlen < 0) {
         if (ERRNO_WOULDBLOCK)
@@ -249,6 +249,7 @@ static bool css_conn_write_resp(css_conn_t* c)
 
     size_t send_fd_count = SCM_MAX_FDS;
     if (c->state == WRITING_RESP_FDS) {
+        gdnsd_assert(c->size > c->size_done);
         const size_t fd_todo = c->size - c->size_done;
         if (fd_todo < SCM_MAX_FDS)
             send_fd_count = fd_todo;
@@ -317,7 +318,7 @@ static void respond(css_conn_t* c, const char key, const uint32_t v, const uint3
     gdnsd_assert(c->css);
     gdnsd_assert(c->state == WAITING_SERVER);
     gdnsd_assert(v <= 0xFFFFFF);
-    gdnsd_assert(!(data && send_fds)); // we don't support setting both
+    gdnsd_assert(!data || !send_fds); // we don't support setting both
 
     c->wbuf.key = key;
     csbuf_set_v(&c->wbuf, v);
@@ -511,9 +512,8 @@ static void recv_challenge_data(struct ev_loop* loop, ev_io* w, css_conn_t* c, c
 {
     gdnsd_assert(c->data);
     gdnsd_assert(c->size);
+    gdnsd_assert(c->size > c->size_done);
     size_t wanted = c->size - c->size_done;
-    gdnsd_assert(wanted > 0);
-
     ssize_t pktlen = recv(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
     if (pktlen <= 0) {
         if (pktlen < 0 && ERRNO_WOULDBLOCK)
@@ -718,8 +718,8 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_READ);
     css_conn_t* c = w->data;
-    css_t* css = c->css;
     gdnsd_assert(c);
+    css_t* css = c->css;
     gdnsd_assert(css);
     gdnsd_assert(c->state == READING_REQ || c->state == READING_DATA);
 
@@ -967,6 +967,7 @@ static int make_tcp_listener_fd(const gdnsd_anysin_t* addr)
 F_NONNULL
 static void make_tcp_listeners(css_t* css)
 {
+    gdnsd_assert(css->socks_cfg);
     gdnsd_assert(css->socks_cfg->num_ctl_addrs);
     css->tcp_lsnrs = xcalloc_n(css->socks_cfg->num_ctl_addrs, sizeof(*css->tcp_lsnrs));
     for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {

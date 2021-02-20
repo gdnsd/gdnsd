@@ -51,6 +51,7 @@
 #define LINUX_TCP_RTO_MAX 120
 #define LINUX_TCP_TIMEOUT_INIT 1
 
+F_CONST
 static uint8_t secs_to_retrans(int seconds)
 {
     uint8_t res = 0;
@@ -69,6 +70,7 @@ static uint8_t secs_to_retrans(int seconds)
     return res;
 }
 
+F_CONST
 static int retrans_to_secs(uint8_t retrans)
 {
     int period = 0;
@@ -85,6 +87,7 @@ static int retrans_to_secs(uint8_t retrans)
     return period;
 }
 
+F_CONST
 static int tcpdefaccept_xlate_secs(int seconds)
 {
     return retrans_to_secs(secs_to_retrans(seconds));

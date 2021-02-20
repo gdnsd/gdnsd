@@ -317,12 +317,9 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
     config_res_dcmap(res, res_cfg, dcs_cfg, res_name);
 }
 
+F_NONNULL
 static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, const client_info_t* cinfo, dyn_result_t* result)
 {
-    gdnsd_assert(dc);
-    gdnsd_assert(cinfo);
-    gdnsd_assert(result);
-
     gdnsd_sttl_t rv;
 
     if (dc->is_cname) { // direct CNAME
