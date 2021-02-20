@@ -41,8 +41,8 @@ static const char proxy_v2sig[12] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x5
 F_NONNULL
 static size_t parse_proxy_v1(char* v1, const size_t dlen, gdnsd_anysin_t* sa)
 {
-    gdnsd_assert(dlen >= 8U);
-    gdnsd_assert(!memcmp(v1, "PROXY ", 6));
+    gdnsd_assume(dlen >= 8U);
+    gdnsd_assume(!memcmp(v1, "PROXY ", 6));
 
     char* end = memchr(v1, '\r', dlen - 1U);
     if (unlikely(!end || end[1] != '\n' || (end - v1) < 16)) {
@@ -86,10 +86,10 @@ static size_t parse_proxy_v1(char* v1, const size_t dlen, gdnsd_anysin_t* sa)
         return 0;
     }
 
-    gdnsd_assert(end >= v1);
+    gdnsd_assume(end >= v1);
     const size_t skip_read = (size_t)(end + 2 - v1); // skip header through CRLF
-    gdnsd_assert(skip_read);
-    gdnsd_assert(skip_read <= sizeof(proxy_hdr_t));
+    gdnsd_assume(skip_read);
+    gdnsd_assume(skip_read <= sizeof(proxy_hdr_t));
     return skip_read;
 }
 

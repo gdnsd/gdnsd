@@ -31,7 +31,7 @@
 
 unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const unsigned len)
 {
-    gdnsd_assert(len);
+    gdnsd_assume(len);
 
     char* optr = out;
     for (unsigned i = 0; i < len; i++) {
@@ -219,7 +219,7 @@ unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str
         str--;
     *str++ = '\0';
 
-    gdnsd_assert(str > str_base);
+    gdnsd_assume(str > str_base);
     return (unsigned)(str - str_base);
 }
 

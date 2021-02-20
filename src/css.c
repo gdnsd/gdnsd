@@ -145,7 +145,7 @@ F_NONNULL
 static void css_conn_cleanup(css_conn_t* c)
 {
     css_t* css = c->css;
-    gdnsd_assert(css);
+    gdnsd_assume(css);
 
     if (c == css->replace_conn_ctl)
         css->replace_conn_ctl = NULL;
@@ -186,7 +186,7 @@ static void css_conn_cleanup(css_conn_t* c)
 F_NONNULL
 static bool respond_blocking_ack(css_conn_t* c)
 {
-    gdnsd_assert(c->css);
+    gdnsd_assume(c->css);
     gdnsd_assert(c->state == WAITING_SERVER);
     c->wbuf.key = RESP_ACK;
     csbuf_set_v(&c->wbuf, 0);
@@ -205,9 +205,9 @@ F_NONNULL
 static void css_conn_write_data(css_conn_t* c)
 {
     gdnsd_assert(c->state == WRITING_RESP_DATA);
-    gdnsd_assert(c->data);
-    gdnsd_assert(c->size);
-    gdnsd_assert(c->size > c->size_done);
+    gdnsd_assume(c->data);
+    gdnsd_assume(c->size);
+    gdnsd_assume(c->size > c->size_done);
     const size_t wanted = c->size - c->size_done;
     const ssize_t pktlen = send(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
     if (pktlen < 0) {
@@ -235,7 +235,7 @@ static void css_conn_write_data(css_conn_t* c)
 F_NONNULL
 static bool css_conn_write_resp(css_conn_t* c)
 {
-    gdnsd_assert(c->state == WRITING_RESP || c->state == WRITING_RESP_FDS);
+    gdnsd_assume(c->state == WRITING_RESP || c->state == WRITING_RESP_FDS);
 
     union {
         struct cmsghdr c;
@@ -249,7 +249,7 @@ static bool css_conn_write_resp(css_conn_t* c)
 
     size_t send_fd_count = SCM_MAX_FDS;
     if (c->state == WRITING_RESP_FDS) {
-        gdnsd_assert(c->size > c->size_done);
+        gdnsd_assume(c->size > c->size_done);
         const size_t fd_todo = c->size - c->size_done;
         if (fd_todo < SCM_MAX_FDS)
             send_fd_count = fd_todo;
@@ -258,7 +258,7 @@ static bool css_conn_write_resp(css_conn_t* c)
         msg.msg_control = u.cmsg_buf;
         msg.msg_controllen = CMSG_LEN(send_fd_len);
         struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
-        gdnsd_assert(cmsg);
+        gdnsd_assume(cmsg);
         cmsg->cmsg_level = SOL_SOCKET;
         cmsg->cmsg_type = SCM_RIGHTS;
         cmsg->cmsg_len = CMSG_LEN(send_fd_len);
@@ -298,7 +298,7 @@ static void css_conn_write(struct ev_loop* loop V_UNUSED, ev_io* w, int revents 
 {
     gdnsd_assert(revents == EV_WRITE);
     css_conn_t* c = w->data;
-    gdnsd_assert(c);
+    gdnsd_assume(c);
     gdnsd_assert(c->state == WRITING_RESP || c->state == WRITING_RESP_FDS || c->state == WRITING_RESP_DATA);
 
 
@@ -315,10 +315,10 @@ static void css_conn_write(struct ev_loop* loop V_UNUSED, ev_io* w, int revents 
 F_NONNULLX(1)
 static void respond(css_conn_t* c, const char key, const uint32_t v, const uint32_t d, char* data, bool send_fds)
 {
-    gdnsd_assert(c->css);
+    gdnsd_assume(c->css);
     gdnsd_assert(c->state == WAITING_SERVER);
-    gdnsd_assert(v <= 0xFFFFFF);
-    gdnsd_assert(!data || !send_fds); // we don't support setting both
+    gdnsd_assume(v <= 0xFFFFFF);
+    gdnsd_assume(!data || !send_fds); // we don't support setting both
 
     c->wbuf.key = key;
     csbuf_set_v(&c->wbuf, v);
@@ -329,9 +329,9 @@ static void respond(css_conn_t* c, const char key, const uint32_t v, const uint3
         c->size = d;
         c->size_done = 0;
     } else if (send_fds) {
-        gdnsd_assert(key == RESP_ACK);
-        gdnsd_assert(!v);
-        gdnsd_assert(!d);
+        gdnsd_assume(key == RESP_ACK);
+        gdnsd_assume(!v);
+        gdnsd_assume(!d);
         c->state = WRITING_RESP_FDS;
         csbuf_set_v(&c->wbuf, c->css->handoff_fds_count);
         c->size = c->css->handoff_fds_count;
@@ -360,8 +360,8 @@ static void css_watch_replace(struct ev_loop* loop, ev_timer* w, int revents V_U
 {
     gdnsd_assert(revents == EV_TIMER);
     css_t* css = w->data;
-    gdnsd_assert(css);
-    gdnsd_assert(css->replacement_pid);
+    gdnsd_assume(css);
+    gdnsd_assume(css->replacement_pid);
 
     // libev's default SIGCHLD handler auto-reaps for us
     // If the process that was attempting a replace operation died, and we're
@@ -543,9 +543,9 @@ static void latr_all_reloaders(css_t* css)
 F_NONNULL
 static void recv_challenge_data(struct ev_loop* loop, ev_io* w, css_conn_t* c, const css_t* css)
 {
-    gdnsd_assert(c->data);
-    gdnsd_assert(c->size);
-    gdnsd_assert(c->size > c->size_done);
+    gdnsd_assume(c->data);
+    gdnsd_assume(c->size);
+    gdnsd_assume(c->size > c->size_done);
     size_t wanted = c->size - c->size_done;
     ssize_t pktlen = recv(c->fd, &c->data[c->size_done], wanted, MSG_DONTWAIT);
     if (pktlen <= 0) {
@@ -725,7 +725,7 @@ static void handle_req_take(css_conn_t* c, css_t* css)
         css_conn_cleanup(c);
         return;
     }
-    gdnsd_assert(css->handoff_fds_count >= 2LU);
+    gdnsd_assume(css->handoff_fds_count >= 2LU);
     const size_t dns_fds_send = css->handoff_fds_count - 2LU;
     log_info("REPLACE[old daemon]: Accepting takeover request from replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
     ev_io* w_accept = &css->w_accept;
@@ -761,9 +761,9 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_READ);
     css_conn_t* c = w->data;
-    gdnsd_assert(c);
+    gdnsd_assume(c);
     css_t* css = c->css;
-    gdnsd_assert(css);
+    gdnsd_assume(css);
     gdnsd_assert(c->state == READING_REQ || c->state == READING_DATA);
 
     if (c->state == READING_DATA) {
@@ -832,13 +832,13 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         nowish = ev_now(loop);
         stats_size = 0;
         stats_msg = statio_get_json((time_t)nowish, &stats_size);
-        gdnsd_assert(stats_size <= UINT32_MAX);
+        gdnsd_assume(stats_size <= UINT32_MAX);
         respond(c, RESP_ACK, 0, (uint32_t)stats_size, stats_msg, false);
         break;
     case REQ_STATE:
         states_size = 0;
         states_msg = gdnsd_mon_states_get_json(&states_size);
-        gdnsd_assert(states_size <= UINT32_MAX);
+        gdnsd_assume(states_size <= UINT32_MAX);
         respond(c, RESP_ACK, 0, (uint32_t)states_size, states_msg, false);
         break;
     case REQ_ZREL:
@@ -921,7 +921,7 @@ static void css_accept_unix(struct ev_loop* loop V_UNUSED, ev_io* w, int revents
 {
     gdnsd_assert(revents == EV_READ);
     css_t* css = w->data;
-    gdnsd_assert(css);
+    gdnsd_assume(css);
     css_accept(css, w);
 }
 
@@ -930,9 +930,9 @@ static void css_accept_tcp(struct ev_loop* loop V_UNUSED, ev_io* w, int revents 
 {
     gdnsd_assert(revents == EV_READ);
     const tcp_lsnr_t* lsnr = w->data;
-    gdnsd_assert(lsnr);
+    gdnsd_assume(lsnr);
     css_t* css = lsnr->css;
-    gdnsd_assert(css);
+    gdnsd_assume(css);
     css_conn_t* c = css_accept(css, w);
     if (c)
         c->ctl_addr = lsnr->ctl_addr;
@@ -1010,8 +1010,8 @@ static int make_tcp_listener_fd(const gdnsd_anysin_t* addr)
 F_NONNULL
 static void make_tcp_listeners(css_t* css)
 {
-    gdnsd_assert(css->socks_cfg);
-    gdnsd_assert(css->socks_cfg->num_ctl_addrs);
+    gdnsd_assume(css->socks_cfg);
+    gdnsd_assume(css->socks_cfg->num_ctl_addrs);
     css->tcp_lsnrs = xcalloc_n(css->socks_cfg->num_ctl_addrs, sizeof(*css->tcp_lsnrs));
     for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
         tcp_lsnr_t* lsnr = &css->tcp_lsnrs[i];
@@ -1063,7 +1063,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
     csc_t* csc = NULL;
     if (csc_p) {
         csc = *csc_p;
-        gdnsd_assert(csc);
+        gdnsd_assume(csc);
     }
 
     int sock_fd = -1;
@@ -1099,7 +1099,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
         req.d = (uint32_t)getpid();
         int* resp_fds = NULL;
         const size_t fds_recvd = csc_txn_getfds(csc, &req, &resp, &resp_fds);
-        gdnsd_assert(fds_recvd >= 2U);
+        gdnsd_assume(fds_recvd >= 2U);
         gdnsd_assert(sock_fd == -1);
         gdnsd_assert(lock_fd == -1);
         lock_fd = resp_fds[0];
@@ -1145,9 +1145,9 @@ void css_start(css_t* css, struct ev_loop* loop)
         ev_io* w_tcp_accept = &css->tcp_lsnrs[i].w_tcp_accept;
         ev_io_start(css->loop, w_tcp_accept);
     }
-    gdnsd_assert(css->socks_cfg->num_dns_threads);
+    gdnsd_assume(css->socks_cfg->num_dns_threads);
     css->handoff_fds_count = css->socks_cfg->num_dns_threads + 2U;
-    gdnsd_assert(css->handoff_fds_count <= 0xFFFFFF);
+    gdnsd_assume(css->handoff_fds_count <= 0xFFFFFF);
     css->handoff_fds = xmalloc_n(css->handoff_fds_count, sizeof(*css->handoff_fds));
     css->handoff_fds[0] = css->lock_fd;
     css->handoff_fds[1] = css->fd;

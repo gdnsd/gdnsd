@@ -102,7 +102,7 @@ typedef struct zf_threads_t {
 
 static zf_threads_t* zf_threads_new(const size_t threads)
 {
-    gdnsd_assert(threads);
+    gdnsd_assume(threads);
     zf_threads_t* zft = xcalloc(sizeof(*zft));
     zft->threads = threads;
     zft->threadids = xcalloc_n(threads, sizeof(*zft->threadids));
@@ -116,7 +116,7 @@ static void zf_threads_add_zone(zf_threads_t* zft, char* full_fn, const char* fn
     zf_list_t* zfl = xcalloc(sizeof(*zfl));
     zfl->full_fn = full_fn;
     zfl->fn = fn;
-    gdnsd_assert(zft->next_thread < zft->threads);
+    gdnsd_assume(zft->next_thread < zft->threads);
     zf_list_t** slot = &zft->lists[zft->next_thread];
     while (*slot)
         slot = &(*slot)->next;
@@ -174,7 +174,7 @@ static bool harvest_zone_worker(pthread_t threadid, zf_list_t* zfl, ltree_node_t
     do {
         free(zfl->full_fn);
         if (!failed) {
-            gdnsd_assert(zfl->zone);
+            gdnsd_assume(zfl->zone);
             failed = ltree_merge_zone(new_root_tree, new_root_arena, zfl->zone);
         }
         if (failed && zfl->zone)
@@ -241,7 +241,7 @@ static bool zf_threads_load_zones(zf_threads_t* zft, ltree_node_t* new_root_tree
 
 bool zsrc_rfc1035_load_zones(ltree_node_t* new_root_tree, ltarena_t* new_root_arena)
 {
-    gdnsd_assert(rfc1035_dir);
+    gdnsd_assume(rfc1035_dir);
 
     DIR* zdhandle = opendir(rfc1035_dir);
     if (!zdhandle) {

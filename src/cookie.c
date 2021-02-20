@@ -176,7 +176,7 @@ static const char base_autokey[] = "cookie.autokey";
 static void rotate_timekeys(void)
 {
     // cookie_config() must have already happened
-    gdnsd_assert(primary_key);
+    gdnsd_assume(primary_key);
 
     const uint64_t current_ctr = ((uint64_t)time(NULL)) / 3600U;
     const uint64_t previous_ctr = current_ctr - 1U;
@@ -248,7 +248,7 @@ static void cookie_destroy(void)
 
 void cookie_config(const char* key_file)
 {
-    gdnsd_assert(primary_key == NULL); // config only happens once!
+    gdnsd_assume(primary_key == NULL); // config only happens once!
 
     if (sodium_init() < 0)
         log_fatal("Could not initialize libsodium: %s", logf_errno());
@@ -295,11 +295,11 @@ void cookie_runtime_init(struct ev_loop* loop)
 bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const gdnsd_anysin_t* client, const size_t cookie_data_in_len)
 {
     // Assert that cookie_config() and cookie_runtime_init() were called to define the keys
-    gdnsd_assert(primary_key);
-    gdnsd_assert(keys_inuse);
+    gdnsd_assume(primary_key);
+    gdnsd_assume(keys_inuse);
 
     // This is required of the caller:
-    gdnsd_assert(cookie_data_in_len == CCOOKIE_LEN
+    gdnsd_assume(cookie_data_in_len == CCOOKIE_LEN
                  || (cookie_data_in_len >= (CCOOKIE_LEN + SCOOKIE_LEN)
                      && cookie_data_in_len <= 40U));
 
@@ -308,7 +308,7 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
     if (client->sa.sa_family == AF_INET) {
         memcpy(scookie_input, &client->sin4.sin_addr.s_addr, 4LU);
     } else {
-        gdnsd_assert(client->sa.sa_family == AF_INET6);
+        gdnsd_assume(client->sa.sa_family == AF_INET6);
         memcpy(scookie_input, client->sin6.sin6_addr.s6_addr, 16LU);
     }
     memcpy(&scookie_input[16], cookie_data_in, CCOOKIE_LEN);
@@ -330,9 +330,9 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
         const int c1 = sodium_memcmp(scookie_previous, &cookie_data_in[CCOOKIE_LEN], SCOOKIE_LEN);
         const int c2 = sodium_memcmp(scookie_current, &cookie_data_in[CCOOKIE_LEN], SCOOKIE_LEN);
         const int c3 = sodium_memcmp(scookie_next, &cookie_data_in[CCOOKIE_LEN], SCOOKIE_LEN);
-        gdnsd_assert(c1 == 0 || c1 == -1); // sodium API claims this
-        gdnsd_assert(c2 == 0 || c2 == -1); // sodium API claims this
-        gdnsd_assert(c3 == 0 || c3 == -1); // sodium API claims this
+        gdnsd_assume(c1 == 0 || c1 == -1); // sodium API claims this
+        gdnsd_assume(c2 == 0 || c2 == -1); // sodium API claims this
+        gdnsd_assume(c3 == 0 || c3 == -1); // sodium API claims this
 
         const int inlen_check = ((int)cookie_data_in_len) ^ (CCOOKIE_LEN + SCOOKIE_LEN);
         valid = !((c1 & c2 & c3) | inlen_check);

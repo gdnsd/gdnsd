@@ -90,11 +90,11 @@ static void mon_quick_fail(http_events_t* md)
 F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(revents == EV_TIMER);
 
     http_events_t* md = t->data;
 
-    gdnsd_assert(md);
+    gdnsd_assume(md);
 
     if (md->hstate != HTTP_STATE_WAITING) {
         log_warn("plugin_http_status: A monitoring request attempt seems to have "
@@ -107,9 +107,9 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     ev_io* w_watcher = &md->write_watcher;
     ev_timer* t_watcher = &md->timeout_watcher;
 
-    gdnsd_assert(md->sock == -1);
-    gdnsd_assert(!ev_is_active(w_watcher));
-    gdnsd_assert(!ev_is_active(t_watcher) && !ev_is_pending(t_watcher));
+    gdnsd_assume(md->sock == -1);
+    gdnsd_assume(!ev_is_active(w_watcher));
+    gdnsd_assume(!ev_is_active(t_watcher) && !ev_is_pending(t_watcher));
 
     log_debug("plugin_http_status: Starting state poll of %s", md->desc);
 
@@ -155,7 +155,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 F_NONNULL
 static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_WRITE);
+    gdnsd_assume(revents == EV_WRITE);
 
     http_events_t* md = io->data;
 
@@ -163,12 +163,12 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
     ev_io* w_watcher = &md->write_watcher;
     ev_timer* t_watcher = &md->timeout_watcher;
 
-    gdnsd_assert(md);
-    gdnsd_assert(md->hstate == HTTP_STATE_WRITING);
-    gdnsd_assert(!ev_is_active(r_watcher));
-    gdnsd_assert(ev_is_active(w_watcher));
-    gdnsd_assert(ev_is_active(t_watcher) || ev_is_pending(t_watcher));
-    gdnsd_assert(md->sock > -1);
+    gdnsd_assume(md);
+    gdnsd_assume(md->hstate == HTTP_STATE_WRITING);
+    gdnsd_assume(!ev_is_active(r_watcher));
+    gdnsd_assume(ev_is_active(w_watcher));
+    gdnsd_assume(ev_is_active(t_watcher) || ev_is_pending(t_watcher));
+    gdnsd_assume(md->sock > -1);
 
     int sock = md->sock;
     if (likely(!md->already_connected)) {
@@ -201,9 +201,9 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
         md->already_connected = true;
     }
 
-    gdnsd_assert(md->done < md->http_svc->req_data_len);
+    gdnsd_assume(md->done < md->http_svc->req_data_len);
     const unsigned to_send = md->http_svc->req_data_len - md->done;
-    gdnsd_assert(to_send > 0);
+    gdnsd_assume(to_send > 0);
 
     const ssize_t send_rv = send(sock, md->http_svc->req_data + md->done, to_send, 0);
     if (unlikely(send_rv < 0)) {
@@ -235,7 +235,7 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
     }
 
     const size_t sent = (size_t)send_rv;
-    gdnsd_assert(sent <= to_send);
+    gdnsd_assume(sent <= to_send);
 
     if (unlikely(sent != to_send)) {
         md->done += sent;
@@ -252,17 +252,17 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
 F_NONNULL
 static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_READ);
+    gdnsd_assume(revents == EV_READ);
 
     http_events_t* md = io->data;
 
     ev_io* r_watcher = &md->read_watcher;
     ev_timer* t_watcher = &md->timeout_watcher;
 
-    gdnsd_assert(md);
-    gdnsd_assert(md->hstate == HTTP_STATE_READING);
-    gdnsd_assert(ev_is_active(r_watcher));
-    gdnsd_assert(md->sock > -1);
+    gdnsd_assume(md);
+    gdnsd_assume(md->hstate == HTTP_STATE_READING);
+    gdnsd_assume(ev_is_active(r_watcher));
+    gdnsd_assume(md->sock > -1);
 
     bool final_status = false;
     const unsigned to_recv = 13U - md->done;
@@ -321,16 +321,16 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
 F_NONNULL
 static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(revents == EV_TIMER);
 
     http_events_t* md = t->data;
 
     ev_io* r_watcher = &md->read_watcher;
     ev_io* w_watcher = &md->write_watcher;
 
-    gdnsd_assert(md);
-    gdnsd_assert(md->sock != -1);
-    gdnsd_assert(
+    gdnsd_assume(md);
+    gdnsd_assume(md->sock != -1);
+    gdnsd_assume(
         (md->hstate == HTTP_STATE_READING && ev_is_active(r_watcher))
         || (md->hstate == HTTP_STATE_WRITING && ev_is_active(w_watcher))
     );
@@ -456,13 +456,13 @@ static void plugin_http_status_add_mon_addr(const char* desc, const char* svc_na
         }
     }
 
-    gdnsd_assert(this_mon->http_svc);
+    gdnsd_assume(this_mon->http_svc);
 
     memcpy(&this_mon->addr, addr, sizeof(this_mon->addr));
     if (this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin4.sin_port = htons(this_mon->http_svc->port);
     } else {
-        gdnsd_assert(this_mon->addr.sa.sa_family == AF_INET6);
+        gdnsd_assume(this_mon->addr.sa.sa_family == AF_INET6);
         this_mon->addr.sin6.sin6_port = htons(this_mon->http_svc->port);
     }
 
@@ -493,7 +493,7 @@ static void plugin_http_status_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = &mons[i]->interval_watcher;
-        gdnsd_assert(mons[i]->sock == -1);
+        gdnsd_assume(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
     }
@@ -503,7 +503,7 @@ static void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         http_events_t* mon = mons[i];
-        gdnsd_assert(mon->sock == -1);
+        gdnsd_assume(mon->sock == -1);
         const unsigned ival = mon->http_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
         ev_timer* ival_watcher = &mon->interval_watcher;

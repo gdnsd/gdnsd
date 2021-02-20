@@ -102,8 +102,8 @@ uint8_t* lta_malloc(ltarena_t* lta, const size_t size)
 {
     // Currently, all allocations obey this assertion.
     // Only labels + dnames are stored here
-    gdnsd_assert(size);
-    gdnsd_assert(size <= MAX_OBJ);
+    gdnsd_assume(size);
+    gdnsd_assume(size <= MAX_OBJ);
 
     // handle pool switch if we're out of room
     //   + take care to extend the pools array if necc.

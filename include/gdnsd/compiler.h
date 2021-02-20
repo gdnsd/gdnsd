@@ -59,7 +59,15 @@
 #  define GDNSD_DIAG_PUSH_IGNORED(x) _Pragma("clang diagnostic push") \
                                    PRAG_(clang diagnostic ignored x)
 #  define GDNSD_DIAG_POP             _Pragma("clang diagnostic pop")
+#  if __has_builtin(__builtin_assume)
+#    define GDNSD_HAVE_ASSUME_BUILTIN 1
+#  endif
 #elif defined __GNUC__
+#  if __GNUC__ >= 10 // gcc-10 doesn't have assume yet, but some future version might!
+#    if __has_builtin(__builtin_assume)
+#      define GDNSD_HAVE_ASSUME_BUILTIN 1
+#    endif
+#  endif
 #  define GDNSD_DIAG_PUSH_IGNORED(x) _Pragma("GCC diagnostic push") \
                                    PRAG_(GCC diagnostic ignored x)
 #  define GDNSD_DIAG_POP             _Pragma("GCC diagnostic pop")

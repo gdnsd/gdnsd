@@ -100,8 +100,8 @@ static ev_timer sttl_update_timer;
 F_NONNULL
 static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) // cppcheck-suppress constParameter
 {
-    gdnsd_assert(w == &sttl_update_timer);
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(w == &sttl_update_timer);
+    gdnsd_assume(revents == EV_TIMER);
 
     // rcu-swap of the two tables
     gdnsd_sttl_t* saved_old_consumer = smgr_sttl_consumer_;
@@ -143,7 +143,7 @@ const char* gdnsd_logf_sttl(const gdnsd_sttl_t s)
     else
         snp_rv = snprintf(tmpbuf, 15, "%s/%u", state, ttl);
 
-    gdnsd_assert(snp_rv >= 4 && snp_rv <= 14);
+    gdnsd_assume(snp_rv >= 4 && snp_rv <= 14);
     const unsigned snp_len = (unsigned)snp_rv;
     char* out = gdnsd_fmtbuf_alloc(snp_len + 1U);
     memcpy(out, tmpbuf, snp_len + 1U);
@@ -198,7 +198,7 @@ F_NONNULL
 static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdnsd_sttl_t update_val)
 {
     assert_valid_sttl(update_val);
-    gdnsd_assert(update_val & GDNSD_STTL_FORCED);
+    gdnsd_assume(update_val & GDNSD_STTL_FORCED);
 
     bool success = true;
     bool matched = false;
@@ -273,7 +273,7 @@ static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
             } else if (smgr_sttl[i] & GDNSD_STTL_FORCED) { // was forced before, isn't now
                 log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
                 smgr_sttl[i] = smgrs[i].real_sttl;
-                gdnsd_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
+                gdnsd_assume(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
                 affected = true;
             }
         }
@@ -328,7 +328,7 @@ static void admin_deleted_file(const char* pathname)
         if (smgr_sttl[i] & GDNSD_STTL_FORCED) {
             log_info("admin_state: state of '%s' no longer forced (was forced to %s), real and current state is %s", smgrs[i].desc, logf_sttl(smgr_sttl[i]), smgrs[i].type ? logf_sttl(smgrs[i].real_sttl) : "NA");
             smgr_sttl[i] = smgrs[i].real_sttl;
-            gdnsd_assert(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
+            gdnsd_assume(!(smgr_sttl[i] & GDNSD_STTL_FORCED));
             affected = true;
         }
     }
@@ -344,7 +344,7 @@ static void admin_deleted_file(const char* pathname)
 F_NONNULL
 static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(revents == EV_TIMER);
     ev_timer_stop(loop, w);
     ev_stat* afw = &admin_file_watcher;
     if (afw->attr.st_nlink)
@@ -356,7 +356,7 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 F_NONNULL
 static void admin_file_cb(struct ev_loop* loop, ev_stat* w V_UNUSED, int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_STAT);
+    gdnsd_assume(revents == EV_STAT);
     ev_timer* aqt = &admin_quiesce_timer;
     if (testsuite_nodelay)
         admin_timer_cb(loop, aqt, EV_TIMER);
@@ -462,7 +462,7 @@ void gdnsd_mon_start(struct ev_loop* mloop)
 F_NONNULL
 static bool addr_eq(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b)
 {
-    gdnsd_assert(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
+    gdnsd_assume(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
 
     bool rv = false;
     if (a->sa.sa_family == b->sa.sa_family) {
@@ -478,9 +478,9 @@ F_NONNULLX(1)
 static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, const char* cname, const uint8_t* dname)
 {
     if (addr)
-        gdnsd_assert(!cname && !dname);
+        gdnsd_assume(!cname && !dname);
     else
-        gdnsd_assert(cname && dname);
+        gdnsd_assume(cname && dname);
 
     // first, sort out what svctype_name actually means to us
     service_type_t* this_svc = NULL;
@@ -670,18 +670,18 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
     if (!need_p2)
         return;
 
-    gdnsd_assert(num_svc_types > 1); // up, down always exist
+    gdnsd_assume(num_svc_types > 1); // up, down always exist
 
     for (unsigned i = 0; i < (num_svc_types - 2); i++) {
-        gdnsd_assert(svctypes_cfg);
+        gdnsd_assume(svctypes_cfg);
         service_type_t* this_svc = &service_types[i];
 
         // assert same ordering as _p1
         gdnsd_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, i, NULL)));
-        gdnsd_assert(this_svc->plugin);
+        gdnsd_assume(this_svc->plugin);
 
         vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
-        gdnsd_assert(svctype_cfg);
+        gdnsd_assume(svctype_cfg);
 
         this_svc->up_thresh = DEF_UP_THRESH;
         this_svc->ok_thresh = DEF_OK_THRESH;
@@ -715,13 +715,13 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
     //   the monitoring requests resolver plugins asked about earlier
     for (unsigned i = 0; i < num_smgrs; i++) {
         smgr_t* this_smgr = &smgrs[i];
-        gdnsd_assert(this_smgr);
+        gdnsd_assume(this_smgr);
         if (this_smgr->type && this_smgr->type->plugin) {
             if (this_smgr->is_cname) {
-                gdnsd_assert(this_smgr->type->plugin->add_mon_cname);
+                gdnsd_assume(this_smgr->type->plugin->add_mon_cname);
                 this_smgr->type->plugin->add_mon_cname(this_smgr->desc, this_smgr->type->name, this_smgr->cname, i);
             } else {
-                gdnsd_assert(this_smgr->type->plugin->add_mon_addr);
+                gdnsd_assume(this_smgr->type->plugin->add_mon_addr);
                 this_smgr->type->plugin->add_mon_addr(this_smgr->desc, this_smgr->type->name, this_smgr->cname, &this_smgr->addr, i);
             }
         }
@@ -731,12 +731,12 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
 F_NONNULL
 static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl)
 {
-    gdnsd_assert(idx < num_smgrs);
+    gdnsd_assume(idx < num_smgrs);
 
     // Note that the updater interfaces from monitoring plugins cannot set
     //  the FORCED bit - only the admin-state interface can do that.
     assert_valid_sttl(new_sttl);
-    gdnsd_assert(!(new_sttl & GDNSD_STTL_FORCED));
+    gdnsd_assume(!(new_sttl & GDNSD_STTL_FORCED));
 
     if (initial_round) {
         log_info("state of '%s' initialized to %s", smgr->desc, logf_sttl(new_sttl));
@@ -764,13 +764,13 @@ static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl)
 
 void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl)
 {
-    gdnsd_assert(idx < num_smgrs);
+    gdnsd_assume(idx < num_smgrs);
     raw_sttl_update(&smgrs[idx], idx, new_sttl);
 }
 
 void gdnsd_mon_state_updater(unsigned idx, const bool latest)
 {
-    gdnsd_assert(idx < num_smgrs);
+    gdnsd_assume(idx < num_smgrs);
     smgr_t* smgr = &smgrs[idx];
 
     // a bit spammy to leave in all debug builds, but handy at times...
@@ -785,8 +785,8 @@ void gdnsd_mon_state_updater(unsigned idx, const bool latest)
     //   been demonstrated.  For now, just going with pretending initial
     //   state is stable.
     if (initial_round) {
-        gdnsd_assert(!smgr->n_failure);
-        gdnsd_assert(!smgr->n_success);
+        gdnsd_assume(!smgr->n_failure);
+        gdnsd_assume(!smgr->n_success);
         down = !latest;
     } else {
         // First handle basic up/down state and the counters
@@ -852,7 +852,7 @@ static const char json_foot[] = "\n}\n";
 // Initialize max_states_len for runtime use
 static void init_max_states_len(void)
 {
-    gdnsd_assert(!max_states_len);
+    gdnsd_assume(!max_states_len);
 
     //  Note that json_var_len doesn't include the service name length,
     //    and that 5 is the longest state_txt string "DOWN!", and it
@@ -901,7 +901,7 @@ static const char* state_str_map[2][2][2] = {
 F_NONNULL
 static void get_state_texts(const unsigned i, const char** cur_state_out, const char** real_state_out)
 {
-    gdnsd_assert(i < num_smgrs);
+    gdnsd_assume(i < num_smgrs);
 
     *cur_state_out = state_str_map
                      [!!smgrs[i].type]
@@ -915,7 +915,7 @@ static void get_state_texts(const unsigned i, const char** cur_state_out, const 
 
 char* gdnsd_mon_states_get_json(size_t* len)
 {
-    gdnsd_assert(max_states_len);
+    gdnsd_assume(max_states_len);
 
     char* buf = xmalloc(max_states_len);
     char* buf_start = buf;
@@ -934,16 +934,16 @@ char* gdnsd_mon_states_get_json(size_t* len)
         get_state_texts(i, &cur_st, &real_st);
         const size_t avail = (size_t)(max_states_len - (size_t)(buf - buf_start));
         const int snp_rv = snprintf(buf, avail, json_tmpl, smgrs[i].desc, cur_st, real_st);
-        gdnsd_assert(snp_rv > 0 && (size_t)snp_rv < avail);
+        gdnsd_assume(snp_rv > 0 && (size_t)snp_rv < avail);
         buf += (size_t)snp_rv;
     }
 
     memcpy(buf, json_foot, json_foot_len);
     buf += json_foot_len;
 
-    gdnsd_assert(buf > buf_start);
+    gdnsd_assume(buf > buf_start);
     const size_t written = (size_t)(buf - buf_start);
-    gdnsd_assert(written < max_states_len);
+    gdnsd_assume(written < max_states_len);
 
     *len = written;
     return buf_start;

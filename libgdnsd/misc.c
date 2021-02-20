@@ -73,7 +73,7 @@ typedef struct {
 
 char* gdnsd_str_combine_n(const unsigned count, ...)
 {
-    gdnsd_assert(count <= 16);
+    gdnsd_assume(count <= 16);
     str_with_len_t strs[16];
     unsigned oal = 1; // for terminating NUL
 
@@ -101,7 +101,7 @@ char* gdnsd_str_combine_n(const unsigned count, ...)
 
 char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t needle_len, const char* repl, const size_t repl_len)
 {
-    gdnsd_assert(needle_len);
+    gdnsd_assume(needle_len);
     static const size_t half_size_bits = SIZE_MAX >> (sizeof(size_t) * 8 / 2);
     const size_t haystack_len = strlen(haystack);
     if (unlikely(haystack_len >= half_size_bits || needle_len >= half_size_bits || repl_len >= half_size_bits))
@@ -117,7 +117,7 @@ char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t nee
     }
 
     // The whole string can't be this big, and the needle len has to be non-zero...
-    gdnsd_assert(needle_count < half_size_bits);
+    gdnsd_assume(needle_count < half_size_bits);
 
     // Fast-path out if no needles
     if (!needle_count)
@@ -141,7 +141,7 @@ char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t nee
     // Actual search/replace into the output in chunks via memcpy
     haystack_srch = haystack;
     while ((ssrv = strstr(haystack_srch, needle))) {
-        gdnsd_assert(ssrv >= haystack_srch);
+        gdnsd_assume(ssrv >= haystack_srch);
         size_t before_bytes = (size_t)(ssrv - haystack_srch);
         if (before_bytes) {
             memcpy(outptr, haystack_srch, before_bytes);
@@ -155,7 +155,7 @@ char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t nee
 
     // Handle final literal chunk, if any
     const char* haystack_nul = &haystack[haystack_len];
-    gdnsd_assert(haystack_srch <= haystack_nul);
+    gdnsd_assume(haystack_srch <= haystack_nul);
     if (haystack_srch < haystack_nul) {
         size_t trailing_bytes = (size_t)(haystack_nul - haystack_srch);
         memcpy(outptr, haystack_srch, trailing_bytes);
@@ -205,7 +205,7 @@ static unsigned n_children = 0;
 
 void gdnsd_register_child_pid(pid_t child)
 {
-    gdnsd_assert(child);
+    gdnsd_assume(child);
     children = xrealloc_n(children, n_children + 1, sizeof(*children));
     children[n_children++] = child;
 }
@@ -259,10 +259,10 @@ void gdnsd_kill_registered_children(void)
 
 unsigned gdnsd_uscale_ceil(unsigned v, double s)
 {
-    gdnsd_assert(s >= 0.0);
-    gdnsd_assert(s <= 1.0);
+    gdnsd_assume(s >= 0.0);
+    gdnsd_assume(s <= 1.0);
     const double sv = ceil(v * s);
-    gdnsd_assert(sv <= (double)v);
+    gdnsd_assume(sv <= (double)v);
     return (unsigned)sv;
 }
 

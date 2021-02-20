@@ -69,7 +69,7 @@ static bool csc_get_status(csc_t* csc)
 
     int snp_rv = snprintf(csc->server_vers, 16, "%hhu.%hhu.%hhu",
                           resp.v0, resp.v1, resp.v2);
-    gdnsd_assert(snp_rv >= 5 && snp_rv < 16);
+    gdnsd_assume(snp_rv >= 5 && snp_rv < 16);
     return false;
 }
 
@@ -95,7 +95,7 @@ static bool tcp_sock_connect(csc_t* csc, const char* tcp_addr, const unsigned ti
     const int addr_err = gdnsd_anysin_fromstr(csc->path, 0, &addr);
     if (addr_err)
         log_fatal("Could not parse TCP address '%s': %s", csc->path, gai_strerror(addr_err));
-    gdnsd_assert(addr.sa.sa_family == AF_INET || addr.sa.sa_family == AF_INET6);
+    gdnsd_assume(addr.sa.sa_family == AF_INET || addr.sa.sa_family == AF_INET6);
     if (!((addr.sa.sa_family == AF_INET) ? addr.sin4.sin_port : addr.sin6.sin6_port))
         log_fatal("TCP address '%s': non-zero port number required", csc->path);
 
@@ -125,7 +125,7 @@ static bool unix_sock_connect(csc_t* csc, const char* pfx, const unsigned timeou
 csc_t* csc_new(const unsigned timeout, const char* pfx, const char* tcp_addr)
 {
     if (tcp_addr)
-        gdnsd_assert(!pfx); // pfx is for inter-daemon, which does not use TCP
+        gdnsd_assume(!pfx); // pfx is for inter-daemon, which does not use TCP
 
     // Switch NULL to empty string for printf ease-of-use
     if (!pfx)
@@ -244,18 +244,18 @@ size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int**
             fds = xmalloc_n(fds_wanted, sizeof(*fds));
         } else {
             // followup messages carry same ACK + total fd count as initial msg
-            gdnsd_assert(fds);
-            gdnsd_assert(fds_wanted >= 2);
+            gdnsd_assume(fds);
+            gdnsd_assume(fds_wanted >= 2);
             if (RESP_ACK != resp->key || fds_wanted != csbuf_get_v(resp))
                 log_fatal("REPLACE[new daemon]: takeover socket handoff failed: bad followup message");
         }
 
         const size_t nfds = get_control_fds(&msg, fds, fds_recvd, fds_wanted);
-        gdnsd_assert(nfds);
+        gdnsd_assume(nfds);
         fds_recvd += nfds;
     } while (fds_recvd < fds_wanted);
 
-    gdnsd_assert(fds_recvd == fds_wanted);
+    gdnsd_assume(fds_recvd == fds_wanted);
 
 #ifndef MSG_CMSG_CLOEXEC
     for (size_t i = 0; i < fds_recvd; i++)
@@ -323,7 +323,7 @@ csc_txn_rv_t csc_txn_getdata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp
 
 csc_txn_rv_t csc_txn_senddata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data)
 {
-    gdnsd_assert(req->d);
+    gdnsd_assume(req->d);
 
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8) {

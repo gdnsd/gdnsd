@@ -63,7 +63,7 @@ extmon_cmd_t* emc_read_command(const int fd);
 F_CONST F_UNUSED
 static uint32_t emc_encode_mon(const unsigned idx, const bool failed)
 {
-    gdnsd_assert(idx < 0x10000);
+    gdnsd_assume(idx < 0x10000);
     return (idx << 16)
            | (failed
               ? (((unsigned)'F' << 8) | (unsigned)'A')

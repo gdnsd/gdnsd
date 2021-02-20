@@ -137,7 +137,7 @@ static size_t json_buffer_max = 0;
 static void accumulate_statio(unsigned threadnum)
 {
     const dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
-    gdnsd_assert(this_stats);
+    gdnsd_assume(this_stats);
 
     const stats_uint_t l_noerror   = stats_get(&this_stats->noerror);
     const stats_uint_t l_refused   = stats_get(&this_stats->refused);
@@ -205,7 +205,7 @@ char* statio_get_json(time_t nowish, size_t* len)
     uint64_t uptime64 = (uint64_t)nowish - (uint64_t)start_time;
     char* buf = xmalloc(json_buffer_max);
     int snp_rv = snprintf(buf, json_buffer_max, json_fixed, uptime64, statio[DNS_NOERROR], statio[DNS_REFUSED], statio[DNS_NXDOMAIN], statio[DNS_NOTIMP], statio[DNS_BADVERS], statio[DNS_FORMERR], statio[DNS_DROPPED], statio[DNS_V6], statio[DNS_EDNS], statio[DNS_EDNS_CLIENTSUB], statio[DNS_EDNS_DO], statio[DNS_EDNS_COOKIE_ERR], statio[DNS_EDNS_COOKIE_OK], statio[DNS_EDNS_COOKIE_INIT], statio[DNS_EDNS_COOKIE_BAD], statio[UDP_REQS], statio[UDP_RECVFAIL], statio[UDP_SENDFAIL], statio[UDP_TC], statio[UDP_EDNS_BIG], statio[UDP_EDNS_TC], statio[TCP_REQS], statio[TCP_RECVFAIL], statio[TCP_SENDFAIL], statio[TCP_CONNS], statio[TCP_CLOSE_C], statio[TCP_CLOSE_S_OK], statio[TCP_CLOSE_S_ERR], statio[TCP_CLOSE_S_KILL], statio[TCP_PROXY], statio[TCP_PROXY_FAIL], statio[TCP_DSO_ESTAB], statio[TCP_DSO_PROTOERR], statio[TCP_DSO_TYPENI], statio[TCP_ACCEPTFAIL]);
-    gdnsd_assert(snp_rv > 0 && (size_t)snp_rv < json_buffer_max);
+    gdnsd_assume(snp_rv > 0 && (size_t)snp_rv < json_buffer_max);
     *len = (size_t)snp_rv;
     return buf;
 }

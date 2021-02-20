@@ -80,7 +80,7 @@ static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d 
 F_NONNULL
 static vscf_data_t* addrs_hash_from_array(vscf_data_t* ary, const char* resname, const char* stanza)
 {
-    gdnsd_assert(!vscf_is_hash(ary));
+    gdnsd_assume(!vscf_is_hash(ary));
 
     vscf_data_t* parent = vscf_get_parent(ary);
     gdnsd_assert(vscf_is_hash(parent));
@@ -260,7 +260,7 @@ static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg)
         res->aset_v6 = xcalloc(sizeof(*res->aset_v6));
         config_addrs(res->name, stanza, res->aset_v6, true, auto_cfg);
     } else {
-        gdnsd_assert(temp_asin.sa.sa_family == AF_INET);
+        gdnsd_assume(temp_asin.sa.sa_family == AF_INET);
         res->aset_v4 = xcalloc(sizeof(*res->aset_v4));
         config_addrs(res->name, stanza, res->aset_v4, false, auto_cfg);
     }
@@ -360,7 +360,7 @@ static int plugin_multifo_map_res(const char* resname, const uint8_t* zone_name)
 F_NONNULL
 static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result, const bool isv6)
 {
-    gdnsd_assert(aset->count);
+    gdnsd_assume(aset->count);
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
     unsigned notdown = 0;
@@ -413,7 +413,7 @@ static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t*
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     } else {
-        gdnsd_assert(res->aset_v6);
+        gdnsd_assume(res->aset_v6);
         rv = resolve(sttl_tbl, res->aset_v6, result, true);
     }
 

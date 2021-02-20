@@ -89,7 +89,7 @@ dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigne
             uint8_t newlist[256];
             bool is_auto = dclists_xlate_vscf(dclists, def_cfg, map_name, newlist, allow_auto);
             if (is_auto) {
-                gdnsd_assert(allow_auto);
+                gdnsd_assume(allow_auto);
                 dcmap->def_dclist = DCLIST_AUTO;
             } else {
                 dcmap->def_dclist = 0;

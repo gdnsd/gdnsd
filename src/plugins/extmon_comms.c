@@ -73,7 +73,7 @@ bool emc_read_nbytes(const int fd, const size_t len, uint8_t* out)
 bool emc_read_exact(const int fd, const char* str)
 {
     const unsigned len = strlen(str);
-    gdnsd_assert(len <= 256);
+    gdnsd_assume(len <= 256);
     uint8_t buf[256];
     return (emc_read_nbytes(fd, len, buf)
             || !!memcmp(str, buf, len));

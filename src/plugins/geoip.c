@@ -86,20 +86,20 @@ static bool top_config_hook(vscf_data_t* top_config)
 
 static void bottom_config_hook(void)
 {
-    gdnsd_assert(gdmaps);
+    gdnsd_assume(gdmaps);
     gdmaps_load_databases(gdmaps);
 }
 
 static void plugin_geoip_pre_run(void)
 {
-    gdnsd_assert(gdmaps);
+    gdnsd_assume(gdmaps);
     gdmaps_setup_watchers(gdmaps);
 }
 
 F_NONNULL
 static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo, unsigned* scope_out)
 {
-    gdnsd_assert(gdmaps);
+    gdnsd_assume(gdmaps);
     return gdmaps_lookup(gdmaps, mapnum, cinfo, scope_out);
 }
 

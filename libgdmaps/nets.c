@@ -35,7 +35,7 @@
 F_NONNULL F_PURE
 static bool v6_subnet_of(const uint8_t* check, const unsigned check_mask, const uint8_t* v4, const unsigned v4_mask)
 {
-    gdnsd_assert(!(v4_mask & 7)); // all v4_mask are whole byte masks
+    gdnsd_assume(!(v4_mask & 7)); // all v4_mask are whole byte masks
 
     bool rv = false;
 
@@ -48,7 +48,7 @@ static bool v6_subnet_of(const uint8_t* check, const unsigned check_mask, const 
 F_NONNULL F_PURE
 static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask)
 {
-    gdnsd_assert(mask < 129);
+    gdnsd_assume(mask < 129);
 
     return (
                v6_subnet_of(ipv6, mask, start_v4mapped, 96)
@@ -106,7 +106,7 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
                 return true;
             }
         } else {
-            gdnsd_assert(tempsin.sa.sa_family == AF_INET);
+            gdnsd_assume(tempsin.sa.sa_family == AF_INET);
             mask = ntohs(tempsin.sin4.sin_port) + 96U;
             if (mask > 128) {
                 log_err("plugin_geoip: map '%s': nets entry '%s/%s': illegal IPv4 mask (>32)", map_name, net_str, mask_str);
@@ -119,7 +119,7 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
         // get dclist integer from rhs
         vscf_data_t* dc_cfg = vscf_hash_get_data_byindex(nets_cfg, i);
         const uint32_t dclist = dclists_find_or_add_vscf(dclists, dc_cfg, map_name, false);
-        gdnsd_assert(dclist <= DCLIST_MAX); // auto not allowed here
+        gdnsd_assume(dclist <= DCLIST_MAX); // auto not allowed here
         nlist_append(nl, ipv6, mask, dclist);
     }
 

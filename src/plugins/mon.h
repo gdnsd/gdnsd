@@ -45,7 +45,7 @@ typedef uint32_t gdnsd_sttl_t;
 // ^ identical to above, but better semantics when reading code
 
 // the only hard rule on this data type is zero in the reserved bits for now
-#define assert_valid_sttl(_x) gdnsd_assert(!((_x) & GDNSD_STTL_RESERVED_MASK))
+#define assert_valid_sttl(_x) gdnsd_assume(!((_x) & GDNSD_STTL_RESERVED_MASK))
 
 // Parses a string of the form STATE[/TTL], where STATE is UP or DOWN and
 //   the TTL is in the legal range 0 through 2^28-1.  Returns 0 on success.

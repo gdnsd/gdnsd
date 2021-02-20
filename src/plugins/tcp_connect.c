@@ -75,11 +75,11 @@ static tcp_events_t** mons = NULL;
 F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
 
-    gdnsd_assert(md);
+    gdnsd_assume(md);
 
     if (md->tcp_state != TCP_STATE_WAITING) {
         log_warn("plugin_tcp_connect: A monitoring request attempt seems to have "
@@ -92,9 +92,9 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
     ev_io* c_watcher = &md->connect_watcher;
     ev_timer* t_watcher = &md->timeout_watcher;
 
-    gdnsd_assert(md->sock == -1);
-    gdnsd_assert(!ev_is_active(c_watcher));
-    gdnsd_assert(!ev_is_active(t_watcher) && !ev_is_pending(t_watcher));
+    gdnsd_assume(md->sock == -1);
+    gdnsd_assume(!ev_is_active(c_watcher));
+    gdnsd_assume(!ev_is_active(t_watcher) && !ev_is_pending(t_watcher));
 
     log_debug("plugin_tcp_connect: Starting state poll of %s", md->desc);
 
@@ -140,16 +140,16 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 F_NONNULL
 static void mon_connect_cb(struct ev_loop* loop, struct ev_io* w, const int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_WRITE);
+    gdnsd_assume(revents == EV_WRITE);
 
     tcp_events_t* md = w->data;
     ev_timer* t_watcher = &md->timeout_watcher;
 
-    gdnsd_assert(md);
-    gdnsd_assert(md->tcp_state == TCP_STATE_CONNECTING);
-    gdnsd_assert(ev_is_active(w));
-    gdnsd_assert(ev_is_active(t_watcher) || ev_is_pending(t_watcher));
-    gdnsd_assert(md->sock > -1);
+    gdnsd_assume(md);
+    gdnsd_assume(md->tcp_state == TCP_STATE_CONNECTING);
+    gdnsd_assume(ev_is_active(w));
+    gdnsd_assume(ev_is_active(t_watcher) || ev_is_pending(t_watcher));
+    gdnsd_assume(md->sock > -1);
 
     // nonblocking connect() just finished, need to check status
     bool success = false;
@@ -186,15 +186,15 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* w, const int reve
 F_NONNULL
 static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(revents == EV_TIMER);
 
     tcp_events_t* md = t->data;
     ev_io* c_watcher = &md->connect_watcher;
 
-    gdnsd_assert(md);
-    gdnsd_assert(md->sock > -1);
-    gdnsd_assert(md->tcp_state == TCP_STATE_CONNECTING);
-    gdnsd_assert(ev_is_active(c_watcher));
+    gdnsd_assume(md);
+    gdnsd_assume(md->sock > -1);
+    gdnsd_assume(md->tcp_state == TCP_STATE_CONNECTING);
+    gdnsd_assume(ev_is_active(c_watcher));
 
     log_debug("plugin_tcp_connect: State poll of %s timed out", md->desc);
     ev_io_stop(loop, c_watcher);
@@ -249,13 +249,13 @@ static void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_na
         }
     }
 
-    gdnsd_assert(this_mon->tcp_svc);
+    gdnsd_assume(this_mon->tcp_svc);
 
     memcpy(&this_mon->addr, addr, sizeof(this_mon->addr));
     if (this_mon->addr.sa.sa_family == AF_INET) {
         this_mon->addr.sin4.sin_port = htons(this_mon->tcp_svc->port);
     } else {
-        gdnsd_assert(this_mon->addr.sa.sa_family == AF_INET6);
+        gdnsd_assume(this_mon->addr.sa.sa_family == AF_INET6);
         this_mon->addr.sin6.sin6_port = htons(this_mon->tcp_svc->port);
     }
 
@@ -282,7 +282,7 @@ static void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         ev_timer* ival_watcher = &mons[i]->interval_watcher;
-        gdnsd_assert(mons[i]->sock == -1);
+        gdnsd_assume(mons[i]->sock == -1);
         ev_timer_set(ival_watcher, 0, 0);
         ev_timer_start(mon_loop, ival_watcher);
     }
@@ -292,7 +292,7 @@ static void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
         tcp_events_t* mon = mons[i];
-        gdnsd_assert(mon->sock == -1);
+        gdnsd_assume(mon->sock == -1);
         const unsigned ival = mon->tcp_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
         ev_timer* ival_watcher = &mon->interval_watcher;

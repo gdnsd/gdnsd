@@ -112,7 +112,7 @@ static char* get_defaulted_plugname(vscf_data_t* cfg, const char* resname, const
 F_NONNULL
 static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_data_t* cfg)
 {
-    gdnsd_assert(this_dc->dc_name);
+    gdnsd_assume(this_dc->dc_name);
 
     char* child_resname = gdnsd_str_combine_n(5, PNSTR, "_", resname, "_", this_dc->dc_name);
     this_dc->res_name = child_resname;
@@ -121,7 +121,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
     vscf_data_t* res_cfg = cfg;
     for (unsigned i = 0; i < 2; i++) {
         res_cfg = vscf_get_parent(res_cfg);
-        gdnsd_assert(res_cfg);
+        gdnsd_assume(res_cfg);
     }
 
     // Move up 3 more layers:
@@ -129,7 +129,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
     vscf_data_t* plugins_top = res_cfg;
     for (unsigned i = 0; i < 3; i++) {
         plugins_top = vscf_get_parent(plugins_top);
-        gdnsd_assert(plugins_top);
+        gdnsd_assume(plugins_top);
     }
 
     // synth multifo stanza for: dc1 => 192.0.2.1, or dc1 => [ 192.0.2.1, ... ]
@@ -272,7 +272,7 @@ static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t*
         const unsigned dc_idx = map_get_dcidx(res->map, dc_name);
         if (!dc_idx)
             log_fatal("plugin_" PNSTR ": resource '%s': datacenter name '%s' is not valid", resname, dc_name);
-        gdnsd_assert(dc_idx <= res->num_dcs);
+        gdnsd_assume(dc_idx <= res->num_dcs);
         dc_t* this_dc = &res->dcs[dc_idx];
 #if META_MAP_ADMIN == 1
         this_dc->map_mon_idx = map_get_mon_idx(res->map, dc_idx);
@@ -292,7 +292,7 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
 
     res->map = res_get_mapnum(res_cfg, res_name);
     res->num_dcs = map_get_len(res->map);
-    gdnsd_assert(res->num_dcs); // empty lists not allowed!
+    gdnsd_assume(res->num_dcs); // empty lists not allowed!
 
     res->skip_first = false;
     vscf_data_t* skip_first_cfg = vscf_hash_get_data_byconstkey(res_cfg, "skip_first", true);
@@ -324,11 +324,11 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, con
     gdnsd_sttl_t rv;
 
     if (dc->is_cname) { // direct CNAME
-        gdnsd_assert(dc->dname);
+        gdnsd_assume(dc->dname);
         gdnsd_result_add_cname(result, dc->dname);
         rv = gdnsd_sttl_min(sttl_tbl, dc->indices, dc->num_svcs);
     } else {
-        gdnsd_assert(dc->plugin && dc->plugin->resolve); // detected at map_res time
+        gdnsd_assume(dc->plugin && dc->plugin->resolve); // detected at map_res time
         rv = dc->plugin->resolve(dc->res_num, cinfo, result);
     }
 
@@ -381,7 +381,7 @@ static int map_res_inner(const char* resname, const uint8_t* zone_name, const ch
                 fixed_dc_idx = map_get_dcidx(resources[i].map, dcname);
                 if (!fixed_dc_idx)
                     map_res_err("plugin_" PNSTR ": synthetic resource '%s/%s': datacenter '%s' does not exist for this resource", resname, dcname, dcname);
-                gdnsd_assert(fixed_dc_idx < 256);
+                gdnsd_assume(fixed_dc_idx < 256);
             }
 
             const unsigned min_dc = fixed_dc_idx ? fixed_dc_idx : 1;
@@ -535,7 +535,7 @@ static gdnsd_sttl_t CB_RES(unsigned resnum, const client_info_t* cinfo, dyn_resu
     if (first_dc_num) {
         // iterate datacenters until we find a success or exhaust the list
         while ((dcnum = *dclist++)) {
-            gdnsd_assert(dcnum <= res->num_dcs);
+            gdnsd_assume(dcnum <= res->num_dcs);
             gdnsd_result_wipe(result);
             gdnsd_result_reset_scope_mask(result);
             gdnsd_sttl_t this_rv = resolve_dc(sttl_tbl, &res->dcs[dcnum], cinfo, result);

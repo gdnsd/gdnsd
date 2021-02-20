@@ -425,7 +425,7 @@ void ltree_init(void);
 F_CONST F_UNUSED
 static size_t count2mask_sz(const size_t x)
 {
-    gdnsd_assert(x);
+    gdnsd_assume(x);
 #ifndef HAVE_BUILTIN_CLZ
     x |= x >> 1U;
     x |= x >> 2U;
@@ -465,7 +465,7 @@ static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack)
     unsigned lcount = 0;
     unsigned llen; // current label len
     while ((llen = *dname)) {
-        gdnsd_assert(lcount < 127);
+        gdnsd_assume(lcount < 127);
         lstack[lcount++] = dname++;
         dname += llen;
     }
@@ -480,7 +480,7 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 {
     if (node->child_table) {
         const size_t ccount = LTN_GET_CCOUNT(node);
-        gdnsd_assert(ccount);
+        gdnsd_assume(ccount);
         const size_t mask = count2mask_sz(ccount);
         const size_t kh = ltree_hash(child_label);
         size_t probe_dist = 0;

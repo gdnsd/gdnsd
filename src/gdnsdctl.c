@@ -213,7 +213,7 @@ static bool action_stats(const csc_t* csc)
     gdnsd_assert(crv == CSC_TXN_OK);
 
     if (resp_data) {
-        gdnsd_assert(resp.d);
+        gdnsd_assume(resp.d);
         fwrite(resp_data, 1, resp.d, stdout);
         free(resp_data);
     }
@@ -241,7 +241,7 @@ static bool action_states(const csc_t* csc)
     gdnsd_assert(crv == CSC_TXN_OK);
 
     if (resp_data) {
-        gdnsd_assert(resp.d);
+        gdnsd_assume(resp.d);
         fwrite(resp_data, 1, resp.d, stdout);
         free(resp_data);
     }
@@ -280,7 +280,7 @@ static bool action_chal(const csc_t* csc, int argc, char** argv)
     unsigned dlen = 0;
     uint8_t* buf = xmalloc(CHAL_MAX_DLEN);
     for (int i = 0; i < argc; i += 2) {
-        gdnsd_assert(CHAL_MAX_DLEN - dlen >= (240U + 44U));
+        gdnsd_assume(CHAL_MAX_DLEN - dlen >= (240U + 44U));
         const char* dname_input = argv[i];
         const char* chal_input = argv[i + 1];
         // If the user mistakenly puts the _acme-challenge. prefix on the
@@ -303,7 +303,7 @@ static bool action_chal(const csc_t* csc, int argc, char** argv)
         memcpy(&buf[dlen], chal_input, 43);
         dlen += 43;
         buf[dlen++] = 0;
-        gdnsd_assert(dlen <= CHAL_MAX_DLEN);
+        gdnsd_assume(dlen <= CHAL_MAX_DLEN);
     }
 
     csbuf_t req;
@@ -448,7 +448,7 @@ int main(int argc, char** argv)
     const char* action = parse_args(argc, argv);
     unsetenv("POSIXLY_CORRECT");
 
-    gdnsd_assert(action);
+    gdnsd_assume(action);
     gdnsd_log_set_debug(opt_debug);
     gdnsd_log_set_syslog(opt_syslog, "gdnsdctl");
 

@@ -237,7 +237,7 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
         socks_cfg->num_dns_threads += (socks_cfg->dns_addrs[i].udp_threads + socks_cfg->dns_addrs[i].tcp_threads);
 
     // Because we require thread counts to be non-zero
-    gdnsd_assert(socks_cfg->num_dns_threads);
+    gdnsd_assume(socks_cfg->num_dns_threads);
 
     socks_cfg->dns_threads = xcalloc_n(socks_cfg->num_dns_threads, sizeof(*socks_cfg->dns_threads));
 

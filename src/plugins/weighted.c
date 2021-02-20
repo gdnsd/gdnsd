@@ -124,7 +124,7 @@ static void init_rand(void)
 
 static uint64_t get_rand(const uint64_t modval)
 {
-    gdnsd_assert(modval);
+    gdnsd_assume(modval);
     return gdnsd_rand32_bounded(&rstate, modval);
 }
 
@@ -200,7 +200,7 @@ typedef struct {
 F_NONNULL
 static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len V_UNUSED, vscf_data_t* lb_data, void* iaga_asvoid)
 {
-    gdnsd_assert(lb_name_len);
+    gdnsd_assume(lb_name_len);
 
     iaga_t* iaga = iaga_asvoid;
 
@@ -306,7 +306,7 @@ static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, v
 
     // autodetect if not set
     if (unlikely(addrset->gmode == RES_ASET_UNKNOWN)) {
-        gdnsd_assert(!item_idx); // should get set on first iteration
+        gdnsd_assume(!item_idx); // should get set on first iteration
         if (vscf_is_hash(cfg_data)) {
             addrset->gmode = RES_ASET_GROUPED;
         } else {
@@ -320,7 +320,7 @@ static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, v
     if (addrset->gmode == RES_ASET_UNGROUPED) {
         config_item_addrs(res_item, res_name, stanza, item_name, ipv6, cfg_data, addrset);
     } else {
-        gdnsd_assert(addrset->gmode == RES_ASET_GROUPED);
+        gdnsd_assume(addrset->gmode == RES_ASET_GROUPED);
         config_item_addr_groups(res_item, res_name, stanza, item_name, ipv6, cfg_data, addrset);
     }
 
@@ -406,8 +406,8 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     for (unsigned i = 0; i < addrset->count; i++) {
         const unsigned iwt = addrset->items[i].weight;
         const unsigned num_addrs = addrset->items[i].count;
-        gdnsd_assert(iwt);
-        gdnsd_assert(addrset->items[i].max_weight);
+        gdnsd_assume(iwt);
+        gdnsd_assume(addrset->items[i].max_weight);
         addrset->weight += iwt;
         if (addrset->max_weight < iwt)
             addrset->max_weight = iwt;
@@ -415,11 +415,11 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
             addrset->max_addrs_pergroup = num_addrs;
     }
 
-    gdnsd_assert(addrset->weight);
-    gdnsd_assert(addrset->max_weight);
+    gdnsd_assume(addrset->weight);
+    gdnsd_assume(addrset->max_weight);
 
     addrset->up_weight = gdnsd_uscale_ceil(addrset->weight, up_thresh);
-    gdnsd_assert(addrset->up_weight);
+    gdnsd_assume(addrset->up_weight);
 }
 
 typedef struct {
@@ -459,7 +459,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
         log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' is not a legal domainname", res_name, stanza, item_name, cname_txt);
     if (dnstat == DNAME_PARTIAL)
         log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' must be fully qualified (end in dot)", res_name, stanza, item_name, cname_txt);
-    gdnsd_assert(dnstat == DNAME_VALID);
+    gdnsd_assume(dnstat == DNAME_VALID);
     dname = dname_trim(dname);
     res_item->cname = dname;
 
@@ -535,11 +535,11 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
     cnset->weight = 0;
     for (unsigned i = 0; i < cnset->count; i++) {
         const unsigned cwt = cnset->items[i].weight;
-        gdnsd_assert(cwt);
+        gdnsd_assume(cwt);
         cnset->weight += cwt;
     }
 
-    gdnsd_assert(cnset->weight);
+    gdnsd_assume(cnset->weight);
 
     cnset->up_weight = gdnsd_uscale_ceil(cnset->weight, up_thresh);
 }
@@ -578,7 +578,7 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
             res->addrs_v6 = xcalloc(sizeof(*res->addrs_v6));
             config_addrset(res->name, "direct", true, res->addrs_v6, res_cfg);
         } else {
-            gdnsd_assert(temp_sin.sa.sa_family == AF_INET);
+            gdnsd_assume(temp_sin.sa.sa_family == AF_INET);
             res->addrs_v4 = xcalloc(sizeof(*res->addrs_v4));
             config_addrset(res->name, "direct", false, res->addrs_v4, res_cfg);
         }
@@ -597,7 +597,7 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
                 res->addrs_v6 = xcalloc(sizeof(*res->addrs_v6));
                 config_addrset(res->name, "direct", true, res->addrs_v6, res_cfg);
             } else {
-                gdnsd_assert(temp_sin.sa.sa_family == AF_INET);
+                gdnsd_assume(temp_sin.sa.sa_family == AF_INET);
                 res->addrs_v4 = xcalloc(sizeof(*res->addrs_v4));
                 config_addrset(res->name, "direct", false, res->addrs_v4, res_cfg);
             }
@@ -664,7 +664,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
 
 static void plugin_weighted_load_config(vscf_data_t* config)
 {
-    gdnsd_assert(config);
+    gdnsd_assume(config);
     gdnsd_assert(vscf_is_hash(config));
 
     num_resources = vscf_hash_get_len(config);
@@ -748,8 +748,8 @@ F_NONNULL
 static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, dyn_result_t* result)
 {
     cnset_t* cnset = resource->cnames;
-    gdnsd_assert(cnset);
-    gdnsd_assert(cnset->weight);
+    gdnsd_assume(cnset);
+    gdnsd_assume(cnset->weight);
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
 
@@ -790,7 +790,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
         rv &= ~GDNSD_STTL_DOWN;
     }
 
-    gdnsd_assert(dyn_sum);
+    gdnsd_assume(dyn_sum);
 
     // choose the first item that breaks the random threshold
     const unsigned item_rand = get_rand(dyn_sum);
@@ -866,8 +866,8 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
         rv &= ~GDNSD_STTL_DOWN;
     }
 
-    gdnsd_assert(dyn_items_sum);
-    gdnsd_assert(dyn_items_max);
+    gdnsd_assume(dyn_items_sum);
+    gdnsd_assume(dyn_items_max);
 
     if (aset->multi) {
         // Outer decision: choose multiple items based on dyn_items_max
@@ -876,7 +876,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
             const unsigned item_rand = get_rand(dyn_items_max);
             const unsigned isum = dyn_item_sums[item_idx];
             if (item_rand < isum) {
-                gdnsd_assert(isum); // given that they're both uints
+                gdnsd_assume(isum); // given that they're both uints
                 // Inner decision: choose one addr based on dyn_item->sum
                 const unsigned addr_rand = get_rand(isum);
                 unsigned addr_running_total = 0;
@@ -899,7 +899,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
                 const res_aitem_t* chosen = &aset->items[item_idx];
                 // Inner decision: choose multiple addrs based on chosen's dynamic max
                 const unsigned addr_max = dyn_item_maxs[item_idx];
-                gdnsd_assert(addr_max);
+                gdnsd_assume(addr_max);
                 for (unsigned addr_idx = 0; addr_idx < chosen->count; addr_idx++) {
                     const unsigned addr_rand = get_rand(addr_max);
                     if (addr_rand < dyn_addr_weights[item_idx][addr_idx])
@@ -926,7 +926,7 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t*
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     } else {
-        gdnsd_assert(res->addrs_v6);
+        gdnsd_assume(res->addrs_v6);
         rv = resolve(sttl_tbl, res->addrs_v6, result);
     }
 
@@ -937,7 +937,7 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t*
 static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
 {
     const resource_t* resource = &resources[resnum];
-    gdnsd_assert(resource);
+    gdnsd_assume(resource);
 
     gdnsd_sttl_t rv;
 

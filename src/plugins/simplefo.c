@@ -161,7 +161,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         if (which == A_IPv4) {
             res->addrs_v4 = as;
         } else {
-            gdnsd_assert(which == A_IPv6);
+            gdnsd_assume(which == A_IPv6);
             res->addrs_v6 = as;
         }
     } else {
@@ -278,7 +278,7 @@ static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const client_info_t
             rv = gdnsd_sttl_min2(rv, v6_rv);
         }
     } else {
-        gdnsd_assert(res->addrs_v6);
+        gdnsd_assume(res->addrs_v6);
         rv = resolve_addr(sttl_tbl, res->addrs_v6, result);
     }
 

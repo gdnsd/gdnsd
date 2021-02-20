@@ -44,13 +44,13 @@ void ntree_destroy(ntree_t* tree)
 
 unsigned ntree_add_node(ntree_t* tree)
 {
-    gdnsd_assert(tree->alloc);
+    gdnsd_assume(tree->alloc);
     if (tree->count == tree->alloc) {
         tree->alloc <<= 1;
         tree->store = xrealloc_n(tree->store, tree->alloc, sizeof(*tree->store));
     }
     const unsigned rv = tree->count;
-    gdnsd_assert(rv < (1U << 24));
+    gdnsd_assume(rv < (1U << 24));
     tree->count++;
     return rv;
 }
@@ -66,7 +66,7 @@ static unsigned ntree_find_v4root(const ntree_t* tree)
     unsigned offset = 0;
     unsigned mask_depth = 96;
     do {
-        gdnsd_assert(offset < tree->count);
+        gdnsd_assume(offset < tree->count);
         offset = tree->store[offset].zero;
     } while (--mask_depth && !NN_IS_DCLIST(offset));
 
@@ -96,7 +96,7 @@ static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, con
         memcpy(&tempsin.sin6.sin6_addr, &ipv6, sizeof(tempsin.sin6.sin6_addr));
         log_debug("%s/%u -> %u", logf_anysin_noport(&tempsin), 128U - bitdepth, NN_GET_DCLIST(val));
     } else {
-        gdnsd_assert(bitdepth);
+        gdnsd_assume(bitdepth);
         ntree_dump_recurse(tree, bitdepth - 1, val, ipv6);
     }
 }
@@ -127,7 +127,7 @@ void ntree_assert_optimal(const ntree_t* tree)
     if (tree->count > 1) {
         for (unsigned offs = 0; offs < tree->count; offs++) {
             const nnode_t* current = &tree->store[offs];
-            gdnsd_assert(current->zero != current->one);
+            gdnsd_assume(current->zero != current->one);
         }
     }
 }
@@ -137,7 +137,7 @@ void ntree_assert_optimal(const ntree_t* tree)
 F_NONNULL
 static bool CHKBIT_v6(const uint8_t* ipv6, const unsigned bit)
 {
-    gdnsd_assert(bit < 128);
+    gdnsd_assume(bit < 128);
     return ipv6[bit >> 3] & (1UL << (~bit & 7));
 }
 
@@ -147,22 +147,22 @@ static unsigned ntree_lookup_v6(const ntree_t* tree, const uint8_t* ip, unsigned
     unsigned chkbit = 0;
     unsigned offset = 0;
     do {
-        gdnsd_assert(offset < tree->count);
+        gdnsd_assume(offset < tree->count);
         const nnode_t* current = &tree->store[offset];
-        gdnsd_assert(current->one && current->zero);
+        gdnsd_assume(current->one && current->zero);
         offset = CHKBIT_v6(ip, chkbit) ? current->one : current->zero;
         chkbit++;
-        gdnsd_assert(chkbit < 129);
+        gdnsd_assume(chkbit < 129);
     } while (!NN_IS_DCLIST(offset));
 
     *mask_out = chkbit;
-    gdnsd_assert(offset != NN_UNDEF); // the special v4-like undefined areas
+    gdnsd_assume(offset != NN_UNDEF); // the special v4-like undefined areas
     return NN_GET_DCLIST(offset);
 }
 
 static bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit)
 {
-    gdnsd_assert(maskbit < 32U);
+    gdnsd_assume(maskbit < 32U);
     return ip & (1U << (31U - maskbit));
 }
 
@@ -174,21 +174,21 @@ static bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit)
 F_NONNULL
 static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned* mask_out)
 {
-    gdnsd_assert(tree->ipv4);
+    gdnsd_assume(tree->ipv4);
 
     unsigned chkbit = 0;
     unsigned offset = tree->ipv4;
     while (!NN_IS_DCLIST(offset)) {
-        gdnsd_assert(offset < tree->count);
+        gdnsd_assume(offset < tree->count);
         const nnode_t* current = &tree->store[offset];
-        gdnsd_assert(current->one && current->zero);
+        gdnsd_assume(current->one && current->zero);
         offset = CHKBIT_v4(ip, chkbit) ? current->one : current->zero;
         chkbit++;
-        gdnsd_assert(chkbit < 33);
+        gdnsd_assume(chkbit < 33);
     }
 
     *mask_out = chkbit;
-    gdnsd_assert(offset != NN_UNDEF); // the special v4-like undefined areas
+    gdnsd_assume(offset != NN_UNDEF); // the special v4-like undefined areas
     return NN_GET_DCLIST(offset);
 }
 
@@ -225,7 +225,7 @@ static unsigned ntree_lookup_inner(const ntree_t* tree, const gdnsd_anysin_t* cl
     if (client_addr->sa.sa_family == AF_INET) {
         rv = ntree_lookup_v4(tree, ntohl(client_addr->sin4.sin_addr.s_addr), scope_mask);
     } else {
-        gdnsd_assert(client_addr->sa.sa_family == AF_INET6);
+        gdnsd_assume(client_addr->sa.sa_family == AF_INET6);
         unsigned mask_adj = 0; // for v4-like conversions...
         const uint32_t ipv4 = v6_v4fixup(client_addr->sin6.sin6_addr.s6_addr, &mask_adj);
         if (mask_adj) {
@@ -242,8 +242,8 @@ static unsigned ntree_lookup_inner(const ntree_t* tree, const gdnsd_anysin_t* cl
 
 unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask, const bool ignore_ecs)
 {
-    gdnsd_assert(!tree->alloc); // ntree_finish() was called
-    gdnsd_assert(tree->ipv4); // must be a non-zero node offset or a dclist w/ high-bit set
+    gdnsd_assume(!tree->alloc); // ntree_finish() was called
+    gdnsd_assume(tree->ipv4); // must be a non-zero node offset or a dclist w/ high-bit set
 
     unsigned rv;
 

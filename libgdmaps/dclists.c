@@ -91,14 +91,14 @@ dclists_t* dclists_clone(const dclists_t* old)
 
 unsigned dclists_get_count(const dclists_t* lists)
 {
-    gdnsd_assert(lists->count <= (DCLIST_MAX + 1U));
+    gdnsd_assume(lists->count <= (DCLIST_MAX + 1U));
     return lists->count;
 }
 
 const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx)
 {
-    gdnsd_assert(idx < lists->count);
-    gdnsd_assert(idx <= DCLIST_MAX);
+    gdnsd_assume(idx < lists->count);
+    gdnsd_assume(idx <= DCLIST_MAX);
     return lists->list[idx];
 }
 
@@ -123,7 +123,7 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
     lists->list = xrealloc_n(lists->list, lists->count, sizeof(*lists->list));
     lists->list[newidx] = (uint8_t*)xstrdup((const char*)newlist);
 
-    gdnsd_assert(newidx <= DCLIST_MAX);
+    gdnsd_assume(newidx <= DCLIST_MAX);
     return newidx;
 }
 
@@ -162,7 +162,7 @@ uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, cons
     uint8_t newlist[256];
     bool is_auto = dclists_xlate_vscf(lists, vscf_list, map_name, newlist, allow_auto);
     if (is_auto) {
-        gdnsd_assert(allow_auto);
+        gdnsd_assume(allow_auto);
         return DCLIST_AUTO;
     }
     return dclists_find_or_add_raw(lists, newlist, map_name);
@@ -192,7 +192,7 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
 
     // Copy the default datacenter list to local storage for sorting
     const unsigned num_dcs = dcinfo_get_count(lists->info);
-    gdnsd_assert(num_dcs <= MAX_NUM_DCS);
+    gdnsd_assume(num_dcs <= MAX_NUM_DCS);
 
     const unsigned store_len = num_dcs + 1;
     uint8_t sortlist[MAX_NUM_DCS + 1];
@@ -247,7 +247,7 @@ void dclists_destroy(dclists_t* lists, dclists_destroy_depth_t depth)
         // no-op
         break;
     default:
-        gdnsd_assert(0); // unreachable
+        gdnsd_assume(0); // unreachable
     }
     free(lists->list);
     free(lists);

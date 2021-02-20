@@ -126,7 +126,7 @@ void dnsio_udp_init(const pid_t main_pid)
     }
     errno = 0;
 #endif
-    gdnsd_assert(main_pid);
+    gdnsd_assume(main_pid);
     mainpid = main_pid;
     struct sigaction sa;
     sa.sa_sigaction = sighand_stop;
@@ -224,7 +224,7 @@ static void udp_sock_opts_v6(const gdnsd_anysin_t* sa, const int sock)
 void udp_sock_setup(dns_thread_t* t)
 {
     const dns_addr_t* addrconf = t->ac;
-    gdnsd_assert(addrconf);
+    gdnsd_assume(addrconf);
 
     const gdnsd_anysin_t* sa = &addrconf->addr;
 
@@ -469,8 +469,8 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
             do {
                 mmsg_rv = sendmmsg(fd, first, to_send, MSG_DONTWAIT);
                 // sendmmsg returns [1 - to_send] or -1, never zero:
-                gdnsd_assert(mmsg_rv != 0);
-                gdnsd_assert(mmsg_rv <= (int)to_send);
+                gdnsd_assume(mmsg_rv != 0);
+                gdnsd_assume(mmsg_rv <= (int)to_send);
             } while (unlikely(mmsg_rv < 0 && errno == EINTR));
 
             // Handle non-EINTR errors as a failure of the first packet only
@@ -552,8 +552,8 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
             }
             continue;
         }
-        gdnsd_assert(mmsg_rv <= MMSG_WIDTH); // never returns more than we ask
-        gdnsd_assert(mmsg_rv > 0); // never returns zero
+        gdnsd_assume(mmsg_rv <= MMSG_WIDTH); // never returns more than we ask
+        gdnsd_assume(mmsg_rv > 0); // never returns zero
         process_mmsgs(fd, pctx, stats, dgrams, (unsigned)mmsg_rv);
     }
 
@@ -565,7 +565,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
 F_NONNULL F_PURE
 static bool is_ipv6(const gdnsd_anysin_t* sa)
 {
-    gdnsd_assert(sa->sa.sa_family == AF_INET6 || sa->sa.sa_family == AF_INET);
+    gdnsd_assume(sa->sa.sa_family == AF_INET6 || sa->sa.sa_family == AF_INET);
     return (sa->sa.sa_family == AF_INET6);
 }
 

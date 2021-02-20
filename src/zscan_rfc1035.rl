@@ -140,7 +140,7 @@ static void set_uval(zscan_t* z)
 F_NONNULL
 static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin)
 {
-    gdnsd_assert(z->zone->dname);
+    gdnsd_assume(z->zone->dname);
     if (!dname_isinzone(z->zone->dname, origin))
         parse_error("Origin '%s' is not within this zonefile's zone (%s)", logf_dname(origin), logf_dname(z->zone->dname));
 }
@@ -190,7 +190,7 @@ static dname_status_t dn_qualify(uint8_t* dname, const uint8_t* origin, uint8_t*
 
     // Lone "@" case:
     if (dname[0] == 3U && dname[2] == '@') {
-        gdnsd_assert(dname[1] == 1U && dname[3] == 0xff);
+        gdnsd_assume(dname[1] == 1U && dname[3] == 0xff);
         dname_copy(dname, origin);
         return DNAME_VALID;
     }
@@ -198,7 +198,7 @@ static dname_status_t dn_qualify(uint8_t* dname, const uint8_t* origin, uint8_t*
     // @Z/@F handling (note @X for any other char is illegal for now):
     const unsigned final_label_offset = dn_find_final_label_offset(dname);
     const unsigned final_label_len = dname[final_label_offset];
-    gdnsd_assert(final_label_len != 0);
+    gdnsd_assume(final_label_len != 0);
 
     if (final_label_len == 2U && dname[final_label_offset + 1] == '@') {
         const uint8_t which = dname[final_label_offset + 2];
@@ -222,14 +222,14 @@ static dname_status_t dn_qualify(uint8_t* dname, const uint8_t* origin, uint8_t*
 F_NONNULL
 static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
 {
-    gdnsd_assert(z->zone->dname);
+    gdnsd_assume(z->zone->dname);
     dname_status_t catstat;
     dname_status_t status;
 
     if (len) {
         status = dname_from_string(dname, z->tstart, len);
     } else {
-        gdnsd_assert(lhs);
+        gdnsd_assume(lhs);
         dname_copy(dname, z->origin);
         status = DNAME_VALID;
     }
@@ -261,7 +261,7 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
         }
         break;
     default:
-        gdnsd_assert(0);
+        gdnsd_assume(0);
     }
 }
 
@@ -343,7 +343,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
             free(text_temp);
             parse_error_noargs("Text chunk has bad escape sequence");
         }
-        gdnsd_assert(newlen <= len);
+        gdnsd_assume(newlen <= len);
     }
 
     if (newlen > 255U) {
@@ -377,7 +377,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
             z->text[write_offset++] = remainder;
             memcpy(&z->text[write_offset], readptr, remainder);
         }
-        gdnsd_assert(write_offset + remainder == z->text_len);
+        gdnsd_assume(write_offset + remainder == z->text_len);
     } else { // 0-255 bytes, one chunk
         const unsigned new_alloc = newlen + 1;
         if (new_alloc + z->text_len > 16000U) {
@@ -406,7 +406,7 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
             free(storage);
             parse_error_noargs("Text chunk has bad escape sequence");
         }
-        gdnsd_assert(newlen <= len);
+        gdnsd_assume(newlen <= len);
     }
 
     if (newlen > 16000U) {
@@ -415,8 +415,8 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
     }
 
     // _huge is only used alone, not in a set
-    gdnsd_assert(!z->text_len);
-    gdnsd_assert(!z->text);
+    gdnsd_assume(!z->text_len);
+    gdnsd_assume(!z->text);
 
     z->text = (uint8_t*)storage;
     z->text_len = newlen;
@@ -432,7 +432,7 @@ static void set_filename(zscan_t* z, const unsigned len)
         free(fn);
         parse_error_noargs("Filename has bad escape sequence");
     }
-    gdnsd_assert(newlen <= len);
+    gdnsd_assume(newlen <= len);
     z->include_filename = fn = xrealloc(fn, newlen + 1);
     fn[newlen] = 0;
     z->tstart = NULL;
@@ -458,7 +458,7 @@ static char* _make_zfn(const char* curfn, const char* include_fn)
 F_NONNULL
 static void process_include(zscan_t* z)
 {
-    gdnsd_assert(z->include_filename);
+    gdnsd_assume(z->include_filename);
 
     validate_origin_in_zone(z, z->rhs_dname);
     char* zfn = _make_zfn(z->curfn, z->include_filename);
@@ -474,12 +474,12 @@ static void process_include(zscan_t* z)
 F_NONNULL
 static unsigned hexbyte(const char* intxt)
 {
-    gdnsd_assert(
+    gdnsd_assume(
         (intxt[0] >= '0' && intxt[0] <= '9')
         || (intxt[0] >= 'A' && intxt[0] <= 'F')
         || (intxt[0] >= 'a' && intxt[0] <= 'f')
     );
-    gdnsd_assert(
+    gdnsd_assume(
         (intxt[1] >= '0' && intxt[1] <= '9')
         || (intxt[1] >= 'A' && intxt[1] <= 'F')
         || (intxt[1] >= 'a' && intxt[1] <= 'f')
@@ -497,7 +497,7 @@ static unsigned hexbyte(const char* intxt)
     else
         out |= ((intxt[1] | 0x20) - ('a' - 10));
 
-    gdnsd_assert(out >= 0 && out < 256);
+    gdnsd_assume(out >= 0 && out < 256);
     return (unsigned)out;
 }
 
@@ -519,7 +519,7 @@ static void mult_uval(zscan_t* z, int fc)
         z->uval *= 604800;
         break;
     default:
-        gdnsd_assert(0);
+        gdnsd_assume(0);
     }
 }
 
@@ -702,7 +702,7 @@ static void rec_caa(zscan_t* z)
     validate_lhs_not_ooz(z);
 
     const unsigned prop_len = strlen(z->caa_prop);
-    gdnsd_assert(prop_len < 256); // parser-enforced
+    gdnsd_assume(prop_len < 256); // parser-enforced
     const unsigned value_len = z->text_len;
     const unsigned total_len = 2 + prop_len + value_len;
 
@@ -740,7 +740,7 @@ static void rfc3597_octet(zscan_t* z)
 // The external entrypoint to the parser
 bool zscan_rfc1035(zone_t* zone, const char* fn)
 {
-    gdnsd_assert(zone->dname);
+    gdnsd_assume(zone->dname);
     return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl);
 }
 
@@ -767,7 +767,7 @@ F_NONNULL
 static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 {
     // This is validated with a user-facing error before calling this function!
-    gdnsd_assert(buf[buflen - 1] == '\n');
+    gdnsd_assume(buf[buflen - 1] == '\n');
 
     bool in_quotes = false;
     bool in_parens = false;
@@ -1054,7 +1054,7 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 F_NONNULL
 static void scanner(zscan_t* z, char* buf, const size_t bufsize)
 {
-    gdnsd_assert(bufsize);
+    gdnsd_assume(bufsize);
 
     // This avoids the unfortunately common case of files with final lines
     //   that are unterminated by bailing out early.  This also incidentally

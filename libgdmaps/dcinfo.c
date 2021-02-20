@@ -58,8 +58,8 @@ static unsigned dcinfo_init_auto(const dcinfo_t* info, const vscf_data_t* dc_aut
             log_fatal("plugin_geoip: map '%s': auto_dc_coords value for datacenter '%s' must be an array of two values", map_name, dcname);
         vscf_data_t* lat_cfg = vscf_array_get_data(coord_cfg, 0);
         vscf_data_t* lon_cfg = vscf_array_get_data(coord_cfg, 1);
-        gdnsd_assert(lat_cfg);
-        gdnsd_assert(lon_cfg);
+        gdnsd_assume(lat_cfg);
+        gdnsd_assume(lon_cfg);
 
         double lat;
         double lon;
@@ -136,7 +136,7 @@ unsigned dcinfo_get_limit(const dcinfo_t* info)
 
 const dcinfo_coords_t* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum)
 {
-    gdnsd_assert(dcnum < info->num_dcs);
+    gdnsd_assume(dcnum < info->num_dcs);
     return &info->dcs[dcnum].coords;
 }
 
@@ -159,6 +159,6 @@ const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum)
 
 unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum)
 {
-    gdnsd_assert(dcnum && dcnum <= info->num_dcs);
+    gdnsd_assume(dcnum && dcnum <= info->num_dcs);
     return info->dcs[dcnum - 1].mon_index;
 }

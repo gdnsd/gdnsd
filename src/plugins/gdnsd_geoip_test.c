@@ -80,8 +80,8 @@ static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* 
     // (and regardless, dclist should also always be set and contain something)
     unsigned scope_mask = 175U;
     const uint8_t* dclist = gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope_mask);
-    gdnsd_assert(scope_mask != 175U);
-    gdnsd_assert(dclist);
+    gdnsd_assume(scope_mask != 175U);
+    gdnsd_assume(dclist);
 
     // Scope was set to Source.  Since we always query as edns, this implies
     //  the database was V4-only and the address input was a non-v4-compat v6 address,
@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
     gd_maps = gdmaps_standalone_init(input_cfgdir);
 
     if (map_name) {
-        gdnsd_assert(ip_arg);
+        gdnsd_assume(ip_arg);
         do_lookup(gd_maps, map_name, ip_arg);
     } else {
         do_repl(gd_maps);

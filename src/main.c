@@ -195,7 +195,7 @@ static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a 
 // called by ltree reloader thread just before it exits
 void notify_reload_zones_done(void)
 {
-    gdnsd_assert(async_reloadz_loop);
+    gdnsd_assume(async_reloadz_loop);
     ev_async* p_async_reloadz = &async_reloadz;
     ev_async_send(async_reloadz_loop, p_async_reloadz);
 }
@@ -564,7 +564,7 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
             uint64_t* stats_raw = NULL;
             const size_t dlen = csc_get_stats_handoff(csc, &stats_raw);
             if (dlen) {
-                gdnsd_assert(stats_raw);
+                gdnsd_assume(stats_raw);
                 statio_deserialize(stats_raw, dlen);
             }
             free(stats_raw);
@@ -628,7 +628,7 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
 #endif
 
     // raise should not return
-    gdnsd_assert(0);
+    gdnsd_assume(0);
 }
 
 int main(int argc, char** argv)
@@ -648,7 +648,7 @@ int main(int argc, char** argv)
     };
 
     parse_args(argc, argv, &copts);
-    gdnsd_assert(copts.action != ACT_UNDEF);
+    gdnsd_assume(copts.action != ACT_UNDEF);
 
     if (copts.deadopt_f)
         log_err("The commandline option '-f' has been removed.  This will be an error in a future major version update!");
@@ -714,5 +714,5 @@ int main(int argc, char** argv)
     runtime_execute(argv[0], socks_cfg, css, csc);
 
     // Above does not return
-    gdnsd_assert(0);
+    gdnsd_assume(0);
 }

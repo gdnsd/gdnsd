@@ -120,10 +120,10 @@ static void bump_local_timeout(struct ev_loop* loop, mon_t* mon)
 
 static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 {
-    gdnsd_assert(loop);
-    gdnsd_assert(w);
-    gdnsd_assert(revents == EV_READ);
-    gdnsd_assert(w->fd == helper_read_fd);
+    gdnsd_assume(loop);
+    gdnsd_assume(w);
+    gdnsd_assume(revents == EV_READ);
+    gdnsd_assume(w->fd == helper_read_fd);
 
     while (1) { // loop on all immediately-available results
         uint32_t data;
@@ -182,12 +182,12 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 //   updated us about a given monitored resource
 static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
-    gdnsd_assert(loop);
-    gdnsd_assert(w);
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(loop);
+    gdnsd_assume(w);
+    gdnsd_assume(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
-    gdnsd_assert(&this_mon->local_timeout == w);
+    gdnsd_assume(&this_mon->local_timeout == w);
 
     log_info("plugin_extmon: '%s': helper is very late for a status update, locally applying a negative update...", this_mon->desc);
     gdnsd_mon_state_updater(this_mon->idx, false);
@@ -195,7 +195,7 @@ static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UN
         bump_local_timeout(loop, this_mon);
     } else {
         ev_timer_stop(loop, w);
-        gdnsd_assert(!this_mon->seen_once);
+        gdnsd_assume(!this_mon->seen_once);
         this_mon->seen_once = true;
         if (++init_phase_count == num_mons) {
             ev_io* hrw = &helper_read_watcher;
@@ -285,7 +285,7 @@ static void spawn_helper(void)
         log_fatal("pthread_sigmask() failed");
 
     // parent;
-    gdnsd_assert(helper_pid);
+    gdnsd_assume(helper_pid);
     gdnsd_register_child_pid(helper_pid);
 
     close(writepipe[0]);
@@ -407,9 +407,9 @@ static void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, co
 
 static void add_mon_any(const char* desc, const char* svc_name, const char* thing, const unsigned idx)
 {
-    gdnsd_assert(desc);
-    gdnsd_assert(svc_name);
-    gdnsd_assert(thing);
+    gdnsd_assume(desc);
+    gdnsd_assume(svc_name);
+    gdnsd_assume(thing);
 
     mons = xrealloc_n(mons, num_mons + 1, sizeof(*mons));
     mon_t* this_mon = &mons[num_mons++];
@@ -424,7 +424,7 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
             break;
         }
     }
-    gdnsd_assert(this_mon->svc);
+    gdnsd_assume(this_mon->svc);
 
     this_mon->thing = xstrdup(thing);
     this_mon->seen_once = false;
@@ -442,7 +442,7 @@ static void plugin_extmon_add_mon_cname(const char* desc, const char* svc_name, 
 
 static void plugin_extmon_init_monitors(struct ev_loop* mon_loop)
 {
-    gdnsd_assert(helper_path);
+    gdnsd_assume(helper_path);
     if (num_mons) {
         spawn_helper();
         ev_io* hrw = &helper_read_watcher;

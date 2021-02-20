@@ -95,23 +95,23 @@ void gdnsd_dyn_addr_max(unsigned v4, unsigned v6)
 
 void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* sa)
 {
-    gdnsd_assert(!result->is_cname);
+    gdnsd_assume(!result->is_cname);
     if (sa->sa.sa_family == AF_INET6) {
-        gdnsd_assert(result->count_v6 < addrlimit_v6);
+        gdnsd_assume(result->count_v6 < addrlimit_v6);
         memcpy(&result->storage[v6_offset + (result->count_v6++ * 16U)], sa->sin6.sin6_addr.s6_addr, 16);
     } else {
-        gdnsd_assert(sa->sa.sa_family == AF_INET);
-        gdnsd_assert(result->count_v4 < addrlimit_v4);
+        gdnsd_assume(sa->sa.sa_family == AF_INET);
+        gdnsd_assume(result->count_v4 < addrlimit_v4);
         result->v4[result->count_v4++] = sa->sin4.sin_addr.s_addr;
     }
 }
 
 void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname)
 {
-    gdnsd_assert(dname_status(dname) == DNAME_VALID);
-    gdnsd_assert(!result->is_cname);
-    gdnsd_assert(!result->count_v4);
-    gdnsd_assert(!result->count_v6);
+    gdnsd_assume(dname_status(dname) == DNAME_VALID);
+    gdnsd_assume(!result->is_cname);
+    gdnsd_assume(!result->count_v4);
+    gdnsd_assume(!result->count_v6);
 
     result->is_cname = true;
     dname_copy(result->storage, dname);

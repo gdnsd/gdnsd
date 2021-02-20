@@ -221,8 +221,8 @@ F_NONNULL F_UNUSED
 static void gdnsd_dname_terminate(uint8_t* dname)
 {
     const unsigned len = *dname;
-    gdnsd_assert(len > 0U);
-    gdnsd_assert(len < 256U);
+    gdnsd_assume(len > 0U);
+    gdnsd_assume(len < 256U);
     dname[len] = 0;
 }
 
@@ -233,7 +233,7 @@ static void gdnsd_dname_terminate(uint8_t* dname)
 F_NONNULL F_UNUSED
 static bool gdnsd_dname_is_partial(const uint8_t* dname)
 {
-    gdnsd_assert(*dname);
+    gdnsd_assume(*dname);
     return dname[*dname] == 255;
 }
 
@@ -243,7 +243,7 @@ static bool gdnsd_dname_is_partial(const uint8_t* dname)
 F_WUNUSED F_NONNULL F_UNUSED F_RETNN
 static uint8_t* gdnsd_dname_trim(uint8_t* dname)
 {
-    gdnsd_assert(*dname);
+    gdnsd_assume(*dname);
     return xrealloc(dname, *dname + 1U);
 }
 
@@ -253,8 +253,8 @@ F_NONNULL F_UNUSED
 static void gdnsd_dname_copy(uint8_t* dest, const uint8_t* source)
 {
     const unsigned len = *source;
-    gdnsd_assert(len > 0U);
-    gdnsd_assert(len < 256U);
+    gdnsd_assume(len > 0U);
+    gdnsd_assume(len < 256U);
     memcpy(dest, source, len + 1U);
 }
 
@@ -317,8 +317,8 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child)
     // label in both cases:
     const unsigned plen = *parent++;
     const unsigned clen = *child++;
-    gdnsd_assert(plen); // implied by DNAME_VALID check above
-    gdnsd_assert(clen); // implied by DNAME_VALID check above
+    gdnsd_assume(plen); // implied by DNAME_VALID check above
+    gdnsd_assume(clen); // implied by DNAME_VALID check above
 
     // if child shorter than parent, cannot be in zone:
     if (plen > clen)
@@ -353,9 +353,9 @@ static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot)
 {
     gdnsd_assert(gdnsd_dname_status(dname) == DNAME_VALID);
     gdnsd_assert(gdnsd_dname_status(zroot) == DNAME_VALID);
-    gdnsd_assert((*dname) >= (*zroot));
+    gdnsd_assume((*dname) >= (*zroot));
     const unsigned newterm = (*dname) - ((*zroot) - 1U);
-    gdnsd_assert(dname[newterm] == zroot[1]);
+    gdnsd_assume(dname[newterm] == zroot[1]);
     dname[0] = newterm;
     dname[newterm] = 0;
 }

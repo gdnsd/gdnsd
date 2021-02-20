@@ -70,7 +70,7 @@ static int plugin_reflect_map_res(const char* resname, const uint8_t* zone_name)
 
 static gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
 {
-    gdnsd_assert(resnum < NUM_RTYPES);
+    gdnsd_assume(resnum < NUM_RTYPES);
 
     if (resnum == RESPONSE_BOTH || resnum == RESPONSE_DNS || (resnum == RESPONSE_BEST && !cinfo->edns_client_mask)) {
         gdnsd_result_add_anysin(result, &cinfo->dns_source);

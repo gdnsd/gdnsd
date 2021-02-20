@@ -332,7 +332,7 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
 
     size_t didx = 0;
     for (size_t i = 0; i < count; i++) {
-        gdnsd_assert(didx <= dlen);
+        gdnsd_assume(didx <= dlen);
         if (dname_status_buflen(&data[didx], (dlen - didx)) == DNAME_INVALID) {
             log_err("Control socket sent invalid domainname in acme-dns-01 request");
             free(cset);
@@ -344,7 +344,7 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
         didx += (data[didx] + 1U);
         c->dnhash = dname_hash(c->dname);
 
-        gdnsd_assert(didx <= dlen);
+        gdnsd_assume(didx <= dlen);
         if ((dlen - didx) < 44U) {
             log_err("Control socket sent too little payload data in acme-dns-01 request");
             free(cset);
@@ -372,14 +372,14 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
 
     // Update linked list and deal with timer
     if (!oldest) {
-        gdnsd_assert(!newest); // empty before this creation
+        gdnsd_assume(!newest); // empty before this creation
         oldest = newest = cset;
         ev_timer* expire = &expire_timer;
         ev_timer_set(expire, gcfg->acme_challenge_ttl, 0);
         ev_timer_start(loop, expire);
     } else {
-        gdnsd_assert(newest); // non-empty lists have both ends defined
-        gdnsd_assert(!newest->next_newer);
+        gdnsd_assume(newest); // non-empty lists have both ends defined
+        gdnsd_assume(!newest->next_newer);
         newest->next_newer = cset;
         newest = cset;
     }
@@ -394,12 +394,12 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
 F_NONNULL F_WUNUSED
 static size_t cset_serialize(ev_tstamp now, const cset_t* cset, uint8_t* dptr)
 {
-    gdnsd_assert(cset->count <= CHAL_MAX_COUNT);
-    gdnsd_assert(cset->count);
+    gdnsd_assume(cset->count <= CHAL_MAX_COUNT);
+    gdnsd_assume(cset->count);
 
     uint16_t ttl_remain = 0;
-    gdnsd_assert(now < cset->expiry);
-    gdnsd_assert(gcfg->acme_challenge_ttl <= UINT16_MAX);
+    gdnsd_assume(now < cset->expiry);
+    gdnsd_assume(gcfg->acme_challenge_ttl <= UINT16_MAX);
     ev_tstamp remain_raw = cset->expiry - now;
     if (remain_raw > gcfg->acme_challenge_ttl)
         ttl_remain = gcfg->acme_challenge_ttl;
@@ -420,11 +420,11 @@ static size_t cset_serialize(ev_tstamp now, const cset_t* cset, uint8_t* dptr)
         dptr[offset++] = 0;
     }
 
-    gdnsd_assert(offset > 5U);
-    gdnsd_assert(offset <= CHAL_MAX_SERIAL);
+    gdnsd_assume(offset > 5U);
+    gdnsd_assume(offset <= CHAL_MAX_SERIAL);
 
     const size_t dlen = offset - 5U;
-    gdnsd_assert(dlen <= UINT16_MAX);
+    gdnsd_assume(dlen <= UINT16_MAX);
     gdnsd_put_una16(dlen, dptr);
 
     return offset;

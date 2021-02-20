@@ -121,13 +121,13 @@ static void sendq_enq(uint32_t new_data)
 
 static uint32_t sendq_deq_peek(void)
 {
-    gdnsd_assert(!sendq_empty());
+    gdnsd_assume(!sendq_empty());
     return sendq[sendq_head];
 }
 
 static void sendq_deq_commit(void)
 {
-    gdnsd_assert(!sendq_empty());
+    gdnsd_assume(!sendq_empty());
     sendq_head++;
     sendq_head &= (sendq_alloc - 1);
     sendq_len--;
@@ -137,12 +137,12 @@ static void sendq_deq_commit(void)
 
 static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
-    gdnsd_assert(loop);
-    gdnsd_assert(w);
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(loop);
+    gdnsd_assume(w);
+    gdnsd_assume(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
-    gdnsd_assert(this_mon->result_pending);
+    gdnsd_assume(this_mon->result_pending);
     log_warn("Monitor child process for '%s' timed out after %u seconds.  Marking failed and sending SIGKILL...", this_mon->cmd->desc, this_mon->cmd->timeout);
     kill(this_mon->cmd_pid, SIGKILL);
     // note we don't stop the child_watcher because we still
@@ -165,9 +165,9 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 
 static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED)
 {
-    gdnsd_assert(loop);
-    gdnsd_assert(w);
-    gdnsd_assert(revents == EV_CHILD);
+    gdnsd_assume(loop);
+    gdnsd_assume(w);
+    gdnsd_assume(revents == EV_CHILD);
 
     ev_child_stop(loop, w); // always single-shot
 
@@ -205,12 +205,12 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
 
 static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
-    gdnsd_assert(loop);
-    gdnsd_assert(w);
-    gdnsd_assert(revents == EV_TIMER);
+    gdnsd_assume(loop);
+    gdnsd_assume(w);
+    gdnsd_assume(revents == EV_TIMER);
 
     mon_t* this_mon = w->data;
-    gdnsd_assert(!this_mon->result_pending);
+    gdnsd_assume(!this_mon->result_pending);
 
     if (this_mon->cmd->max_proc > 0 && num_proc >= this_mon->cmd->max_proc) {
         // If more than max_proc processes are running, reschedule excess
@@ -285,11 +285,11 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
 
 static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
 {
-    gdnsd_assert(loop);
-    gdnsd_assert(w);
-    gdnsd_assert(revents == EV_WRITE);
+    gdnsd_assume(loop);
+    gdnsd_assume(w);
+    gdnsd_assume(revents == EV_WRITE);
 
-    gdnsd_assert(plugin_write_fd > -1);
+    gdnsd_assume(plugin_write_fd > -1);
     while (!sendq_empty()) {
         const uint32_t data = sendq_deq_peek();
         ssize_t write_rv = write(plugin_write_fd, &data, 4);
@@ -323,7 +323,7 @@ static void plugin_write_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED
 F_NONNULL
 static void die_gracefully(struct ev_loop* loop)
 {
-    gdnsd_assert(killed_by);
+    gdnsd_assume(killed_by);
     static bool done_once = false;
     if (!done_once) { // avoid repetition
         done_once = true;
@@ -350,7 +350,7 @@ static void die_gracefully(struct ev_loop* loop)
 F_NONNULL
 static void sig_cb(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED)
 {
-    gdnsd_assert(revents == EV_SIGNAL);
+    gdnsd_assume(revents == EV_SIGNAL);
     switch (w->signum) {
     case SIGINT:
     case SIGTERM:
@@ -359,7 +359,7 @@ static void sig_cb(struct ev_loop* loop, ev_signal* w, int revents V_UNUSED)
         die_gracefully(loop);
         break;
     default:
-        gdnsd_assert(0);
+        gdnsd_assume(0);
     }
 }
 

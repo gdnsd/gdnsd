@@ -37,7 +37,7 @@
 F_NONNULL F_UNUSED
 static void SETBIT_v6(uint8_t* ipv6, const unsigned bit)
 {
-    gdnsd_assert(bit < 128);
+    gdnsd_assume(bit < 128);
     ipv6[bit >> 3] |= (1UL << (~bit & 7));
 }
 

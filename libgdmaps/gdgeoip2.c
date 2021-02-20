@@ -251,7 +251,7 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level)
     }
 
     // used to search/fetch subdivision array elements
-    gdnsd_assert(level >= 2U && level <= 11U);
+    gdnsd_assume(level >= 2U && level <= 11U);
     const unsigned subd_level = level - 2U;
     const char idx[2] = { '0' + subd_level, '\0' };
     const char* path_subd[] = { "subdivisions", &idx[0], "iso_code", NULL };
@@ -294,7 +294,7 @@ F_NONNULL
 static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry)
 {
     // lack of both would be pointless, and is checked at outer scope
-    gdnsd_assert(db->dcmap || db->city_auto_mode);
+    gdnsd_assume(db->dcmap || db->city_auto_mode);
 
     geoip2_dcmap_cb_data_t state = {
         .db = db,
@@ -306,11 +306,11 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry)
 
     if (db->dcmap) {
         dclist = dcmap_lookup_loc_callback(db->dcmap, geoip2_dcmap_cb, &state);
-        gdnsd_assert(dclist == DCLIST_AUTO || dclist <= DCLIST_MAX);
+        gdnsd_assume(dclist == DCLIST_AUTO || dclist <= DCLIST_MAX);
     }
 
     if (dclist == DCLIST_AUTO) {
-        gdnsd_assert(db->city_auto_mode && db->is_city);
+        gdnsd_assume(db->city_auto_mode && db->is_city);
         dclist = 0; // default to the default dclist
 
         MMDB_entry_data_s val;
@@ -326,8 +326,8 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry)
         }
     }
 
-    gdnsd_assert(dclist != DCLIST_AUTO);
-    gdnsd_assert(dclist <= DCLIST_MAX);
+    gdnsd_assume(dclist != DCLIST_AUTO);
+    gdnsd_assume(dclist <= DCLIST_MAX);
     return dclist;
 }
 
@@ -347,18 +347,18 @@ static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry)
 
     const uint32_t dclist = geoip2_get_dclist(db, db_entry);
     db->offset_cache[ndx] = xrealloc_n(db->offset_cache[ndx], bucket_size + 2, sizeof(*db->offset_cache[ndx]));
-    gdnsd_assert(db->offset_cache[ndx]);
+    gdnsd_assume(db->offset_cache[ndx]);
     db->offset_cache[ndx][bucket_size].offset = offset;
     db->offset_cache[ndx][bucket_size].dclist = dclist;
     db->offset_cache[ndx][bucket_size + 1].dclist = UINT32_MAX;
-    gdnsd_assert(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
+    gdnsd_assume(dclist <= DCLIST_MAX); // auto not allowed here, should have been resolved earlier
     return dclist;
 }
 
 F_NONNULL
 static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr ip, unsigned depth, const uint32_t node_num)
 {
-    gdnsd_assert(depth < 129U);
+    gdnsd_assume(depth < 129U);
 
     if (!depth) {
         log_err("plugin_geoip: map '%s': GeoIP2 database '%s': Error while traversing tree nodes: depth too low", db->map_name, db->pathname);
@@ -464,9 +464,9 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
 
 nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists V_UNUSED, const dcmap_t* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED)
 {
-    gdnsd_assert(pathname);
-    gdnsd_assert(map_name);
-    gdnsd_assert(dclists);
+    gdnsd_assume(pathname);
+    gdnsd_assume(map_name);
+    gdnsd_assume(dclists);
     log_fatal("plugin_geoip: map '%s': GeoIP2 support needed by '%s' not included in this build!", map_name, pathname);
     return NULL; // unreachable
 }

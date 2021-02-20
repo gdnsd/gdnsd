@@ -152,7 +152,7 @@ void dnsio_tcp_init(size_t num_threads)
 void dnsio_tcp_request_threads_stop(void)
 {
     pthread_mutex_lock(&registry_lock);
-    gdnsd_assert(registry_size == registry_init);
+    gdnsd_assume(registry_size == registry_init);
     for (size_t i = 0; i < registry_init; i++) {
         thread_t* thr = registry[i];
         if (thr) {
@@ -167,7 +167,7 @@ F_NONNULL
 static void register_thread(thread_t* thr)
 {
     pthread_mutex_lock(&registry_lock);
-    gdnsd_assert(registry_init < registry_size);
+    gdnsd_assume(registry_init < registry_size);
     registry[registry_init++] = thr;
     pthread_mutex_unlock(&registry_lock);
 }
@@ -247,22 +247,22 @@ F_NONNULL
 static void connq_pull_conn(thread_t* thr, const conn_t* conn)
 {
     connq_assert_sane(thr);
-    gdnsd_assert(thr->num_conns);
+    gdnsd_assume(thr->num_conns);
     thr->num_conns--;
 
     if (conn->next) {
-        gdnsd_assert(conn != thr->connq_tail);
+        gdnsd_assume(conn != thr->connq_tail);
         conn->next->prev = conn->prev;
     } else {
-        gdnsd_assert(conn == thr->connq_tail);
+        gdnsd_assume(conn == thr->connq_tail);
         thr->connq_tail = conn->prev;
     }
 
     if (conn->prev) {
-        gdnsd_assert(conn != thr->connq_head);
+        gdnsd_assume(conn != thr->connq_head);
         conn->prev->next = conn->next;
     } else {
-        gdnsd_assert(conn == thr->connq_head);
+        gdnsd_assume(conn == thr->connq_head);
         thr->connq_head = conn->next;
         connq_adjust_timer(thr);
     }
@@ -273,14 +273,14 @@ static void connq_pull_conn(thread_t* thr, const conn_t* conn)
 F_NONNULL
 static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, const bool manage_queue)
 {
-    gdnsd_assert(thr->num_conns);
+    gdnsd_assume(thr->num_conns);
 
     ev_io* read_watcher = &conn->read_watcher;
     ev_io_stop(thr->loop, read_watcher);
     ev_check* check_watcher = &conn->check_watcher;
     if (ev_is_active(check_watcher)) {
         ev_check_stop(thr->loop, check_watcher);
-        gdnsd_assert(thr->check_mode_conns);
+        gdnsd_assume(thr->check_mode_conns);
         thr->check_mode_conns--;
     }
 
@@ -310,11 +310,11 @@ static void connq_append_new_conn(thread_t* thr, conn_t* conn)
 {
     connq_assert_sane(thr);
     // This element is not part of the linked list yet
-    gdnsd_assert(thr->connq_head != conn);
-    gdnsd_assert(thr->connq_tail != conn);
-    gdnsd_assert(!conn->next);
-    gdnsd_assert(!conn->prev);
-    // accept() handler is gone when in grace phase
+    gdnsd_assume(thr->connq_head != conn);
+    gdnsd_assume(thr->connq_tail != conn);
+    gdnsd_assume(!conn->next);
+    gdnsd_assume(!conn->prev);
+    // accept() handler is gone when in either shutdown phase
     gdnsd_assert(!thr->grace_mode);
 
     conn->idle_start = ev_now(thr->loop);
@@ -391,7 +391,7 @@ static void connq_refresh_conn(thread_t* thr, conn_t* conn)
 F_NONNULL
 static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
 {
-    gdnsd_assert(resp_size);
+    gdnsd_assume(resp_size);
     tcp_pkt_t* tpkt = thr->tpkt;
     tpkt->pktbuf_size_hdr = htons((uint16_t)resp_size);
     const size_t resp_send_size = resp_size + 2U;
@@ -453,12 +453,12 @@ static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const in
 {
     gdnsd_assert(revents == EV_TIMER);
     thread_t* thr = t->data;
-    gdnsd_assert(thr);
+    gdnsd_assume(thr);
     connq_assert_sane(thr);
 
     // Timer never fires unless there are connections, in all cases
     conn_t* conn = thr->connq_head;
-    gdnsd_assert(conn);
+    gdnsd_assume(conn);
 
     // End of the 5s final shutdown phase: immediately close all connections and let the thread exit
     if (unlikely(thr->grace_mode)) {
@@ -508,7 +508,7 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
 {
     gdnsd_assert(revents == EV_ASYNC);
     thread_t* thr = w->data;
-    gdnsd_assert(thr);
+    gdnsd_assume(thr);
     gdnsd_assert(!thr->grace_mode); // this handler stops itself on grace entry
     connq_assert_sane(thr);
 
@@ -538,7 +538,7 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
 
     // send unidirectional KeepAlive w/ inactivity=0 to all DSO clients
     conn_t* conn = thr->connq_head;
-    gdnsd_assert(conn);
+    gdnsd_assume(conn);
     while (conn) {
         conn_t* next_conn = conn->next;
         if (conn->dso.estab)
@@ -618,7 +618,7 @@ static ssize_t conn_check_next_req(thread_t* thr, conn_t* conn)
 F_NONNULL
 static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
 {
-    gdnsd_assert(req_size >= 12U && req_size <= DNS_RECV_SIZE);
+    gdnsd_assume(req_size >= 12U && req_size <= DNS_RECV_SIZE);
     tcp_pkt_t* tpkt = thr->tpkt;
 
     // Move 1 full request from readbuf to pkt, advancing head and decrementing bytes
@@ -654,7 +654,7 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
     // buffers can't handle the resulting responses, and if some fault is
     // responsible then we need to tear down anyways.
 
-    gdnsd_assert(resp_size <= MAX_RESPONSE_BUF);
+    gdnsd_assume(resp_size <= MAX_RESPONSE_BUF);
     if (conn_write_packet(thr, conn, resp_size))
         return; // writer ended up destroying conn
 
@@ -669,9 +669,9 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
     if (!ccnr_rv) { // No full req available, need to hit the read_handler next
         if (ev_is_active(checkw)) {
             ev_check_stop(thr->loop, checkw);
-            gdnsd_assert(!ev_is_active(readw));
+            gdnsd_assume(!ev_is_active(readw));
             ev_io_start(thr->loop, readw);
-            gdnsd_assert(thr->check_mode_conns);
+            gdnsd_assume(thr->check_mode_conns);
             thr->check_mode_conns--;
         } else {
             gdnsd_assert(ev_is_active(readw));
@@ -679,7 +679,7 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
     } else { // Full req available, need to hit the check_handler next
         if (ev_is_active(readw)) {
             ev_io_stop(thr->loop, readw);
-            gdnsd_assert(!ev_is_active(checkw));
+            gdnsd_assume(!ev_is_active(checkw));
             ev_check_start(thr->loop, checkw);
             thr->check_mode_conns++;
         } else {
@@ -693,17 +693,17 @@ static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int 
 {
     gdnsd_assert(revents == EV_CHECK);
     conn_t* conn = w->data;
-    gdnsd_assert(conn);
+    gdnsd_assume(conn);
     thread_t* thr = conn->thr;
-    gdnsd_assert(thr);
+    gdnsd_assume(thr);
 
     gdnsd_assert(!conn->need_proxy_init);
 
     // We only arrive here if we have a legit-sized fully-buffered request
-    gdnsd_assert(conn->readbuf_bytes > 2U);
+    gdnsd_assume(conn->readbuf_bytes > 2U);
     const size_t req_size = (((size_t)conn->readbuf[conn->readbuf_head + 0] << 8U) + (size_t)conn->readbuf[conn->readbuf_head + 1]);
-    gdnsd_assert(req_size >= 12U && req_size <= DNS_RECV_SIZE);
-    gdnsd_assert(conn->readbuf_bytes >= (req_size + 2U));
+    gdnsd_assume(req_size >= 12U && req_size <= DNS_RECV_SIZE);
+    gdnsd_assume(conn->readbuf_bytes >= (req_size + 2U));
     conn_respond(thr, conn, req_size);
 }
 
@@ -715,7 +715,7 @@ static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int 
 F_NONNULL
 static bool conn_do_recv(thread_t* thr, conn_t* conn)
 {
-    gdnsd_assert(conn->readbuf_bytes < sizeof(conn->readbuf));
+    gdnsd_assume(conn->readbuf_bytes < sizeof(conn->readbuf));
     const size_t wanted = sizeof(conn->readbuf) - conn->readbuf_bytes;
     const ssize_t recvrv = recv(conn->read_watcher.fd, &conn->readbuf[conn->readbuf_bytes], wanted, 0);
 
@@ -743,8 +743,8 @@ static bool conn_do_recv(thread_t* thr, conn_t* conn)
     }
 
     size_t pktlen = (size_t)recvrv;
-    gdnsd_assert(pktlen <= wanted);
-    gdnsd_assert((conn->readbuf_bytes + pktlen) <= sizeof(conn->readbuf));
+    gdnsd_assume(pktlen <= wanted);
+    gdnsd_assume((conn->readbuf_bytes + pktlen) <= sizeof(conn->readbuf));
     conn->readbuf_bytes += pktlen;
     return false;
 }
@@ -754,18 +754,18 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
 {
     gdnsd_assert(revents == EV_READ);
     conn_t* conn = w->data;
-    gdnsd_assert(conn);
+    gdnsd_assume(conn);
     thread_t* thr = conn->thr;
-    gdnsd_assert(thr);
+    gdnsd_assume(thr);
 
     if (conn_do_recv(thr, conn))
         return; // no new bytes or conn closed
-    gdnsd_assert(conn->readbuf_bytes);
+    gdnsd_assume(conn->readbuf_bytes);
 
     if (conn->need_proxy_init) {
         conn->need_proxy_init = false;
         const size_t consumed = proxy_parse(&conn->sa, &conn->proxy_hdr, conn->readbuf_bytes);
-        gdnsd_assert(consumed <= conn->readbuf_bytes);
+        gdnsd_assume(consumed <= conn->readbuf_bytes);
         if (!consumed) {
             log_neterr("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->sa));
             stats_own_inc(&thr->stats->tcp.proxy_fail);
@@ -864,7 +864,7 @@ F_NONNULL
 static void prep_handler(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED)
 {
     thread_t* thr = w->data;
-    gdnsd_assert(thr);
+    gdnsd_assume(thr);
 
     ev_idle* iw = &thr->idle_watcher;
     if (thr->check_mode_conns) {
@@ -905,7 +905,7 @@ static void prep_handler(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, 
 void tcp_dns_listen_setup(dns_thread_t* t)
 {
     const dns_addr_t* addrconf = t->ac;
-    gdnsd_assert(addrconf);
+    gdnsd_assume(addrconf);
 
     const gdnsd_anysin_t* sa = &addrconf->addr;
 
@@ -1040,7 +1040,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
     // memory allocation churn by saving up to sqrt(max_clients) old conn_t
     // storage for reuse
     thr.churn_alloc = lrint(floor(sqrt(addrconf->tcp_clients_per_thread)));
-    gdnsd_assert(thr.churn_alloc >= 4U); // because tcp_cpt min is 16U
+    gdnsd_assume(thr.churn_alloc >= 4U); // because tcp_cpt min is 16U
     thr.churn = xmalloc_n(thr.churn_alloc, sizeof(*thr.churn));
 
     thr.tpkt = xcalloc(sizeof(*thr.tpkt));
