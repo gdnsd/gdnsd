@@ -576,12 +576,12 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // wait for i/o threads to exit
     wait_io_threads_stop(socks_cfg);
 
-    // deallocate resources
-    atexit_execute();
-
     // If we were replaced, this sends a final dump of stats to the new daemon
     // for stats counter continuity
     css_send_stats_handoff(css);
+
+    // deallocate resources
+    atexit_execute();
 
     // We delete this last, because it will break connections with random
     // control socket clients, who may then try to reconnect, and in the case

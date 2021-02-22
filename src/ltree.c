@@ -1450,25 +1450,10 @@ void* ltree_zones_reloader_thread(void* init_asvoid)
     return (void*)rv;
 }
 
-static void ltree_cleanup(void)
-{
-    // Should we clean up any still-running reload thread?
-    if (root_tree) {
-        ltree_destroy(root_tree);
-        root_tree = NULL;
-        gdnsd_assert(root_arena);
-        lta_destroy(root_arena);
-        root_arena = NULL;
-    } else {
-        gdnsd_assert(!root_arena);
-    }
-}
-
 void ltree_init(void)
 {
     dyna_max_response = gdnsd_result_get_max_response();
     zsrc_rfc1035_init();
-    gdnsd_atexit(ltree_cleanup);
 }
 
 /****** zone_t code ********/

@@ -506,11 +506,6 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
     return matched;
 }
 
-static void chal_cleanup(void)
-{
-    cset_flush(NULL);
-}
-
 // called from main.c early in daemon life, before any other functions in this
 // file could possibly be called
 void chal_init(void)
@@ -518,5 +513,4 @@ void chal_init(void)
     ev_timer* expire_ptr = &expire_timer;
     memset(expire_ptr, 0, sizeof(*expire_ptr));
     ev_timer_init(expire_ptr, cset_expire, 0., 0.);
-    gdnsd_atexit(chal_cleanup);
 }
