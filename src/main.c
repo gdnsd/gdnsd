@@ -671,7 +671,7 @@ int main(int argc, char** argv)
             }
             if (!copts.replace_ok)
                 log_fatal("Another instance is running and has the control socket locked, failing");
-            csc = csc_new(13, "REPLACE[new daemon]: ", NULL);
+            csc = csc_new(37U, "REPLACE[new daemon]: ", NULL);
             if (!csc)
                 log_fatal("Another daemon appears to be running, but cannot establish a connection to its control socket for takeover, exiting!");
             do_tak1(csc);
