@@ -583,9 +583,9 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // for stats counter continuity
     css_send_stats_handoff(css);
 
-    // We delete this last, because in the case of "gdnsdctl stop" or "gdnsdctl
-    // replace" this is where the active connection to gdnsdctl will be broken,
-    // sending it into a loop waiting on our PID to cease existing.
+    // We delete this last, because it will break connections with random
+    // control socket clients, who may then try to reconnect, and in the case
+    // of replace should quickly get connected to the new daemon from here.
     css_delete(css);
 
     // Stop the terminal signal handlers very late in the game.  Any terminal
