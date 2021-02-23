@@ -70,7 +70,7 @@ static ltarena_t* root_arena = NULL;
         } else {\
             log_warn(__VA_ARGS__);\
         }\
-    } while (0);
+    } while (0)
 
 // don't use this directly, use macro below
 // this logs the lstack labels as a partial domainname (possibly empty),

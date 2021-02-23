@@ -179,7 +179,7 @@ static void register_thread(thread_t* thr)
 }
 
 F_NONNULL
-static void unregister_thread(thread_t* thr)
+static void unregister_thread(const thread_t* thr)
 {
     pthread_mutex_lock(&registry_lock);
     for (unsigned i = 0; i < registry_init; i++) {
