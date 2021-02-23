@@ -1,3 +1,40 @@
+3.5.2 - 2021-02-23
+    * Fixed a very rare potential inter-thread race on daemon shutdown due to a
+      'stop' or 'replace'.  If a still-in-progress zone reload operation had
+      started just before the stop/replace, and happened to finish its job at
+      nearly the exact same moment that the main thread was deallocating the
+      zone data, both the reloader thread and the main thread could attempt to
+      deallocate it at the same time.  This happens after DNS listeners are
+      stopped, but it's still an unclean crash instead of a clean termination.
+      In the 'replace' case it would also cause the new daemon to get no stats
+      data handoff thanks to the crash (but the new daemon would still
+      successfully start).  This issue hasn't ever been observed or reported in
+      the wild, but I'm pretty sure it was possible with some extremely low
+      probability.
+    * The timeout for some control socket network operations between two
+      daemons during a 'replace' takeover was extended from a fixed 13s to a
+      fixed 37s.  There is no perfect value here that balances all concerns
+      without adding a ton of new code complexity, but this new value should be
+      more robust in edge cases in practice.  Making it configurable for those
+      with known edge cases would be an easy next step!
+    * Fixed an snprintf format bug that effectively limited stats outputs to
+      32-bit counters on x86_64 x32 ABI builds, even though they were being
+      tracked as 64-bit internally.
+    * Fixed a minor snprintf format bug in a log message about very early
+      failures in zonefile processing, which probably wasn't causing any real
+      bug on most platforms
+    * Hopefully improved the reliability of the 011random.t test on hosts
+      that are slower and/or have smaller default UDP receive buffers.
+    * Added a docs and log warning about not relying on the default 'any'
+      listen option without explicitly requesting it, for compat with future
+      versions.
+    * Relaxed a constraint in the socket handoff process between daemons
+      during 'replace' in the interest of compat with future versions.
+    * Added some additional pedantic safety measures to how TCP thread
+      shutdowns are sequenced.
+    * Improved the utility and/or accuracy of various error log messages
+    * A few small code QA nits of no real consequence
+
 3.5.1 - 2021-02-10
     * [Fixes marked with [BP] are also backported to 3.[234].x branches for
       convenience, but new releases from those branches are not imminent]
