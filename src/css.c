@@ -648,17 +648,23 @@ static void handle_req_tak1(css_conn_t* c, css_t* css)
     respond(c, RESP_ACK, 0, 0, NULL, false);
 }
 
+// Common 3-way logging function for the next two handlers
+static void log_illegal_takeover(const char phase, const long take_pid, const long repl_pid)
+{
+    if (!repl_pid)
+        log_warn("REPLACE[old daemon]: Denying illegal takeover phase %c from PID %li without pre-notification", phase, take_pid);
+    else if (take_pid != repl_pid)
+        log_warn("REPLACE[old daemon]: Denying illegal takeover phase %c from PID %li while replace is already in progress with PID %li", phase, take_pid, repl_pid);
+    else
+        log_warn("REPLACE[old daemon]: Denying illegal takeover phase %c from PID %li which did not arrive on the existing takeover socket", phase, take_pid);
+}
+
 F_NONNULL
 static void handle_req_tak2(css_conn_t* c, const css_t* css)
 {
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
-        if (!css->replacement_pid)
-            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 2 from PID %li without pre-notification", (long)take_pid);
-        else if (take_pid != css->replacement_pid)
-            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 2 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
-        else
-            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 2 from PID %li which did not arrive on the existing takeover socket", (long)take_pid);
+        log_illegal_takeover('2', (long)take_pid, (long)css->replacement_pid);
         respond(c, RESP_FAIL, 0, 0, NULL, false);
         css_conn_cleanup(c);
         return;
@@ -672,12 +678,7 @@ static void handle_req_take(css_conn_t* c, css_t* css)
 {
     const pid_t take_pid = (pid_t)c->rbuf.d;
     if (!css->replacement_pid || take_pid != css->replacement_pid || c != css->replace_conn_dmn) {
-        if (!css->replacement_pid)
-            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 3 from PID %li without pre-notification", (long)take_pid);
-        else if (take_pid != css->replacement_pid)
-            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 3 from PID %li while replace is already in progress with PID %li", (long)take_pid, (long)css->replacement_pid);
-        else
-            log_warn("REPLACE[old daemon]: Denying illegal takeover phase 3 from PID %li which did not arrive on the existing takeover socket", (long)take_pid);
+        log_illegal_takeover('3', (long)take_pid, (long)css->replacement_pid);
         respond(c, RESP_FAIL, 0, 0, NULL, false);
         css_conn_cleanup(c);
         return;
