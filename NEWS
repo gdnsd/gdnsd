@@ -1,3 +1,27 @@
+3.6.0 - 2021-02-24
+    * UDP DNS threads now idle much more efficiently when there's little to no
+      network traffic arriving for them.  Previously all such threads woke up
+      and re-executed recvmsg() at least once every ~3.1 seconds.  Now they
+      block indefinitely in a ppoll() call once they've been idle for ~257ms or
+      longer.  This reduces thread wakeup churn and thus power/cpu efficiency
+      waste in the case of unused threads for extra listen addresses.  It also
+      reduces the worst corner case for daemon shutdown delays caused by UDP
+      threads from ~3.1s to ~257ms.
+    * TCP DNS threads now invoke rcu_quiescent_state() more often, which
+      can help data reloads complete faster when there are many active TCP
+      clients per thread.  Previously they quiesced or went offline from RCU
+      once per eventloop iteration, where one iteration could handle up to 1
+      pending request per client connection for many connections.  Now they
+      also quiesce once for each response sent.
+    * SO_REUSEPORT_LB is now used for better UDP and TCP socket loadbalancing
+      on BSDs which have this socket option available.
+    * Zone and config files are now loaded more efficiently when there are many
+      small ones, by switching to a malloc()+read() pattern instead of mmap()
+      for files that are smaller than 1MB.  mmap modifies process-global memory
+      mappings once per file, which is expensive for a multi-threaded daemon
+      loading many small files (especially in parallel!), so it's just not
+      worth it unless the files are large-ish.
+
 3.5.2 - 2021-02-23
     * Fixed a very rare potential inter-thread race on daemon shutdown due to a
       'stop' or 'replace'.  If a still-in-progress zone reload operation had
