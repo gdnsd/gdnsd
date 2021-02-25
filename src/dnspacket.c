@@ -2259,10 +2259,10 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, pkt_t* pkt
     if (ctx->txn.edns.req_edns)
         res_offset = do_edns_output(ctx, pkt->raw, res_offset, status);
 
-    gdnsd_put_una16(htons(ctx->txn.qdcount), &hdr->qdcount);
-    gdnsd_put_una16(htons(ctx->txn.ancount + ctx->txn.cname_ancount), &hdr->ancount);
-    gdnsd_put_una16(htons(ctx->txn.nscount), &hdr->nscount);
-    gdnsd_put_una16(htons(ctx->txn.arcount), &hdr->arcount);
+    hdr->qdcount = htons(ctx->txn.qdcount);
+    hdr->ancount = htons(ctx->txn.ancount + ctx->txn.cname_ancount);
+    hdr->nscount = htons(ctx->txn.nscount);
+    hdr->arcount = htons(ctx->txn.arcount);
 
     gdnsd_assert(res_offset <= MAX_RESPONSE_BUF);
 
