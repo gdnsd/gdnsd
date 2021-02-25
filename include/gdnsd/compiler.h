@@ -169,25 +169,45 @@
 #endif
 
 // Unaligned memory access stuff
-// "packed" is a GCC-ism which also seems to be supported
-//    by other common compilers on our platforms.  If it
-//    breaks for you, please file a bug report and we'll
-//    find a way to fix it.
+
 #include <inttypes.h>
-struct gdnsd_una16_ {
-    uint16_t x;
-} __attribute__((__packed__));
-struct gdnsd_una32_ {
-    uint32_t x;
-} __attribute__((__packed__));
-struct gdnsd_una64_ {
-    uint64_t x;
-} __attribute__((__packed__));
-#define gdnsd_get_una16(_p) (((const struct gdnsd_una16_*)(_p))->x)
-#define gdnsd_get_una32(_p) (((const struct gdnsd_una32_*)(_p))->x)
-#define gdnsd_get_una64(_p) (((const struct gdnsd_una64_*)(_p))->x)
-#define gdnsd_put_una16(_v, _p) (((struct gdnsd_una16_*)(_p))->x) = (_v)
-#define gdnsd_put_una32(_v, _p) (((struct gdnsd_una32_*)(_p))->x) = (_v)
+#include <string.h>
+
+F_UNUSED F_NONNULL
+static uint16_t gdnsd_get_una16(const uint8_t* p)
+{
+    uint16_t v;
+    memcpy(&v, p, sizeof(v));
+    return v;
+}
+
+F_UNUSED F_NONNULL
+static uint32_t gdnsd_get_una32(const uint8_t* p)
+{
+    uint32_t v;
+    memcpy(&v, p, sizeof(v));
+    return v;
+}
+
+F_UNUSED F_NONNULL
+static uint64_t gdnsd_get_una64(const uint8_t* p)
+{
+    uint64_t v;
+    memcpy(&v, p, sizeof(v));
+    return v;
+}
+
+F_UNUSED F_NONNULL
+static void gdnsd_put_una16(const uint16_t v, uint8_t* p)
+{
+    memcpy(p, &v, sizeof(v));
+}
+
+F_UNUSED F_NONNULL
+static void gdnsd_put_una32(const uint32_t v, uint8_t* p)
+{
+    memcpy(p, &v, sizeof(v));
+}
 
 // Generic useful macros
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
