@@ -33,10 +33,11 @@ AC_CHECK_SIZEOF(size_t)
 AC_CHECK_SIZEOF(unsigned long)
 AC_CHECK_SIZEOF(unsigned long long)
 
-# Some tooling we need in our makefiles
+# Some tooling we need in our makefiles or here:
 AM_PROG_AR
 AC_PROG_RANLIB
 AC_PROG_LN_S
+AC_PROG_EGREP
 
 # Check for --enable-developer
 developer=no
@@ -354,6 +355,36 @@ AC_ARG_WITH([werror],[AS_HELP_STRING([--with-werror],
 if test $werror = 1; then
     CFLAGS="${CFLAGS} -Werror"
 fi
+
+# Ensure $PACKAGE_VERSION starts with three components which are all decimal
+# numeric strings with no excess leading zeros, which are separated by dots,
+# and also allow any other trailing junk at the tail end of the string after
+# the last digit of the legitimate patch field.  This is basically the semver
+# rules for the major, minor, and patch fields, but more-liberal than semver
+# for the trailing "pre-release" and "build metadata" suffix stuff.
+AS_IF([echo $PACKAGE_VERSION | $EGREP ['^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([^0-9]|$)'] >/dev/null],
+    [],
+    [AC_MSG_ERROR("Invalid package version string")]
+)
+
+# Break up our PACKAGE_VERSION into major.minor.patch defines for easier
+# numeric consumption in C without sscanf().  Note this relies on the regex
+# validation above!
+PACKAGE_V_MAJOR=$(echo $PACKAGE_VERSION | cut -f 1 -d .)
+PACKAGE_V_MINOR=$(echo $PACKAGE_VERSION | cut -f 2 -d .)
+PACKAGE_V_PATCH=$(echo $PACKAGE_VERSION | cut -f 3 -d . | sed ['s/[^0-9].*$//'])
+AC_DEFINE_UNQUOTED([PACKAGE_V_MAJOR], [$PACKAGE_V_MAJOR], [Major version])
+AC_DEFINE_UNQUOTED([PACKAGE_V_MINOR], [$PACKAGE_V_MINOR], [Minor version])
+AC_DEFINE_UNQUOTED([PACKAGE_V_PATCH], [$PACKAGE_V_PATCH], [Patch version])
+
+# Also, guard against version components that are out of range for the positive
+# half of a signed byte value.  Really we could use unsigned values too, but it
+# seems safer to be more-restrictive by default here so that we don't ever have
+# to worry about some integer conversion rule.  The major constraint here is
+# that our control socket protocol communicates these as unsigned byte values.
+AS_IF([test $PACKAGE_V_MAJOR -gt 127 -o $PACKAGE_V_MINOR -gt 127 -o $PACKAGE_V_PATCH -gt 127],
+    [AC_MSG_ERROR([Package version components must be <= 127])]
+)
 
 # Output generation
 AC_CONFIG_HEADERS([config.h])

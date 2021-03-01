@@ -1073,12 +1073,7 @@ css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p)
     css->argv0 = xstrdup(argv0);
     css->socks_cfg = socks_cfg;
     css->status_d = (uint32_t)getpid();
-    uint8_t x;
-    uint8_t y;
-    uint8_t z;
-    if (3 != sscanf(PACKAGE_VERSION, "%hhu.%hhu.%hhu", &x, &y, &z))
-        log_fatal("BUG: Cannot parse our own package version");
-    css->status_v = csbuf_make_v(x, y, z);
+    css->status_v = csbuf_make_v(PACKAGE_V_MAJOR, PACKAGE_V_MINOR, PACKAGE_V_PATCH);
 
     if (sock_fd > -1)
         css->fd = sock_fd;
