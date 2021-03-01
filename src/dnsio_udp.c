@@ -27,6 +27,7 @@
 
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/grcu.h>
 
 #include <netdb.h>
 #include <unistd.h>
@@ -46,8 +47,6 @@
 #include <signal.h>
 #include <poll.h>
 #include <stdatomic.h>
-
-#include <urcu-qsbr.h>
 
 #ifndef SOL_IPV6
 #define SOL_IPV6 IPPROTO_IPV6
@@ -399,13 +398,13 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, co
             memset(cmsg_buf.cbuf, 0, sizeof(cmsg_buf));
         }
 
-        rcu_quiescent_state();
+        grcu_quiescent_state();
         const ssize_t recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
         if (unlikely(recvmsg_rv < 0)) {
             if (ERRNO_WOULDBLOCK) {
-                rcu_thread_offline();
+                grcu_thread_offline();
                 slow_idle_poll(fd);
-                rcu_thread_online();
+                grcu_thread_online();
             } else if (errno != EINTR) {
                 log_neterr("UDP recvmsg() error: %s", logf_errno());
                 stats_own_inc(&stats->udp.recvfail);
@@ -540,13 +539,13 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stat
             }
         }
 
-        rcu_quiescent_state();
+        grcu_quiescent_state();
         const ssize_t mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
         if (unlikely(mmsg_rv < 0)) {
             if (ERRNO_WOULDBLOCK) {
-                rcu_thread_offline();
+                grcu_thread_offline();
                 slow_idle_poll(fd);
-                rcu_thread_online();
+                grcu_thread_online();
             } else if (errno != EINTR) {
                 stats_own_inc(&stats->udp.recvfail);
                 log_neterr("UDP recvmmsg() error: %s", logf_errno());
@@ -589,7 +588,7 @@ void* dnsio_udp_start(void* thread_asvoid)
     if (pthread_sigmask(SIG_SETMASK, &sigmask_notusr2, NULL))
         log_fatal("pthread_sigmask() failed");
 
-    rcu_register_thread();
+    grcu_register_thread();
 
     const bool use_cmsg = addrconf->addr.sa.sa_family == AF_INET6
                           ? true
@@ -602,7 +601,7 @@ void* dnsio_udp_start(void* thread_asvoid)
 #endif
         mainloop(t->sock, pctx, stats, use_cmsg);
 
-    rcu_unregister_thread();
+    grcu_unregister_thread();
     dnspacket_ctx_cleanup(pctx);
     return NULL;
 }

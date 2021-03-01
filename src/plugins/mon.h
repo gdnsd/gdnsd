@@ -23,10 +23,10 @@
 #include <gdnsd/compiler.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/net.h>
+#include <gdnsd/grcu.h>
 
 #include <inttypes.h>
 
-#include <urcu-qsbr.h>
 #include <ev.h>
 
 // gdnsd_sttl_t
@@ -96,7 +96,7 @@ unsigned gdnsd_mon_admin(const char* desc);
 
 // do not ref this directly in a plugin!
 // use gdnsd_mon_get_sttl_table() below for access!
-extern gdnsd_sttl_t* smgr_sttl_consumer_;
+GRCU_PUB_DECL(gdnsd_sttl_t*, smgr_sttl_consumer_);
 
 // conf.c calls these.  the order of execution is important due
 //   to chicken-and-egg problems with explicit plugin configuration
@@ -136,7 +136,9 @@ char* gdnsd_mon_states_get_json(size_t* len);
 F_UNUSED
 static const gdnsd_sttl_t* gdnsd_mon_get_sttl_table(void)
 {
-    return rcu_dereference(smgr_sttl_consumer_);
+    const gdnsd_sttl_t* s;
+    grcu_dereference(s, smgr_sttl_consumer_);
+    return s;
 }
 
 // Given two sttl values, combine them according to the following rules:

@@ -26,6 +26,7 @@
 #include "plugapi.h"
 #include <gdnsd/vscf.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/grcu.h>
 
 #include <string.h>
 #include <strings.h>
@@ -33,7 +34,6 @@
 #include <fnmatch.h>
 
 #include <ev.h>
-#include <urcu-qsbr.h>
 
 typedef struct {
     const char* name;
@@ -82,7 +82,7 @@ static smgr_t* smgrs = NULL;
 //   and copied over each other.
 // (see sttl_table_update() below)
 static gdnsd_sttl_t* smgr_sttl = NULL;
-gdnsd_sttl_t* smgr_sttl_consumer_ = NULL;
+GRCU_PUB_DEF(smgr_sttl_consumer_, NULL);
 
 static size_t max_states_len = 0;
 
@@ -104,14 +104,14 @@ static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSE
     gdnsd_assume(revents == EV_TIMER);
 
     // rcu-swap of the two tables
-    gdnsd_sttl_t* saved_old_consumer = smgr_sttl_consumer_;
-    rcu_assign_pointer(smgr_sttl_consumer_, smgr_sttl);
-    synchronize_rcu();
+    gdnsd_sttl_t* saved_old_consumer = GRCU_OWN_READ(smgr_sttl_consumer_);
+    grcu_assign_pointer(smgr_sttl_consumer_, smgr_sttl);
+    grcu_synchronize_rcu();
     smgr_sttl = saved_old_consumer;
 
     // now copy the (new) consumer table back over the old one
     //   that we're using for future offline updates until the next swap
-    memcpy(smgr_sttl, smgr_sttl_consumer_, sizeof(*smgr_sttl) * num_smgrs);
+    memcpy(smgr_sttl, GRCU_OWN_READ(smgr_sttl_consumer_), sizeof(*smgr_sttl) * num_smgrs);
 }
 
 // anything that ends up changing a value in smgr_sttl[] calls
@@ -559,8 +559,12 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
         this_smgr->real_sttl |= GDNSD_STTL_DOWN;
 
     smgr_sttl = xrealloc_n(smgr_sttl, num_smgrs, sizeof(*smgr_sttl));
-    smgr_sttl_consumer_ = xrealloc_n(smgr_sttl_consumer_, num_smgrs, sizeof(*smgr_sttl_consumer_));
-    smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
+    // XXX The ".val_" is a hack and not really legitimate, but it works here
+    // because this is during single-threaded startup / config load, and it
+    // would be a major PITA to refactor around this, and this code will
+    // probably die soon:
+    smgr_sttl_consumer_.val_ = xrealloc_n(smgr_sttl_consumer_.val_, num_smgrs, sizeof(*smgr_sttl_consumer_.val_));
+    smgr_sttl_consumer_.val_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
 
     return idx;
 }
@@ -585,12 +589,16 @@ unsigned gdnsd_mon_admin(const char* desc)
     num_smgrs++;
     smgrs = xrealloc_n(smgrs, num_smgrs, sizeof(*smgrs));
     smgr_sttl = xrealloc_n(smgr_sttl, num_smgrs, sizeof(*smgr_sttl));
-    smgr_sttl_consumer_ = xrealloc_n(smgr_sttl_consumer_, num_smgrs, sizeof(*smgr_sttl_consumer_));
     smgr_t* this_smgr = &smgrs[idx];
     memset(this_smgr, 0, sizeof(*this_smgr));
     this_smgr->desc = xstrdup(desc);
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
-    smgr_sttl_consumer_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
+    // XXX The ".val_" is a hack and not really legitimate, but it works here
+    // because this is during single-threaded startup / config load, and it
+    // would be a major PITA to refactor around this, and this code will
+    // probably die soon:
+    smgr_sttl_consumer_.val_ = xrealloc_n(smgr_sttl_consumer_.val_, num_smgrs, sizeof(*smgr_sttl_consumer_.val_));
+    smgr_sttl_consumer_.val_[idx] = smgr_sttl[idx] = this_smgr->real_sttl;
     return idx;
 }
 

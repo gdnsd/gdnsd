@@ -35,6 +35,7 @@
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/grcu.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -49,7 +50,6 @@
 #include <pthread.h>
 
 #include <ev.h>
-#include <urcu-qsbr.h>
 
 // When an input file change is detected, we wait this long
 //  for a followup change notification before processing.  Every time we get
@@ -70,13 +70,13 @@ typedef struct {
     char* nets_path;
     dcinfo_t dcinfo; // basic datacenter list/info
     dcmap_t* dcmap; // map of locinfo -> dclist
-    dclists_t* dclists; // corresponds to ->tree
+    GRCU_FIELD(dclists_t*, dclists); // corresponds to ->tree
     // Pending modified dclist for latest update(s) to ->foo_list, eventually promoted to
     // ->dclists when ->tree is updated, NULL when no pending update(s) are outstanding
     dclists_t* dclists_pend;
     nlist_t* geoip_list; // optional main geoip db
     nlist_t* nets_list; // net overrides, optional
-    ntree_t* tree; // merged->translated from the lists above
+    GRCU_FIELD(ntree_t*, tree); // merged->translated from the lists above
     ev_stat geoip_stat_watcher;
     ev_stat nets_stat_watcher;
     ev_timer geoip_reload_timer;
@@ -165,20 +165,20 @@ static void gdmap_tree_update(gdmap_t* gdmap)
         merged = nlist_xlate_tree(gdmap->nets_list);
     }
 
-    ntree_t* old_tree = gdmap->tree;
-    dclists_t* old_lists = gdmap->dclists;
+    ntree_t* old_tree = GRCU_OWN_READ(gdmap->tree);
+    dclists_t* old_lists = GRCU_OWN_READ(gdmap->dclists);
 
-    rcu_assign_pointer(gdmap->dclists, gdmap->dclists_pend);
-    rcu_assign_pointer(gdmap->tree, merged);
-    synchronize_rcu();
+    grcu_assign_pointer(gdmap->dclists, gdmap->dclists_pend);
+    grcu_assign_pointer(gdmap->tree, merged);
+    grcu_synchronize_rcu();
 
-    gdmap->dclists_pend = NULL;
     if (old_tree)
         ntree_destroy(old_tree);
     if (old_lists)
         dclists_destroy(old_lists, KILL_NO_LISTS);
 
-    log_info("plugin_geoip: map '%s' runtime db updated. nets: %u dclists: %u", gdmap->name, gdmap->tree->count + 1, dclists_get_count(gdmap->dclists));
+    log_info("plugin_geoip: map '%s' runtime db updated. nets: %u dclists: %u", gdmap->name, merged->count + 1, dclists_get_count(gdmap->dclists_pend));
+    gdmap->dclists_pend = NULL;
 }
 
 F_NONNULL
@@ -187,8 +187,9 @@ static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_l
     dclists_t* update_dclists;
 
     if (!gdmap->dclists_pend) {
-        gdnsd_assume(gdmap->dclists);
-        update_dclists = dclists_clone(gdmap->dclists);
+        update_dclists = GRCU_OWN_READ(gdmap->dclists);
+        gdnsd_assume(update_dclists);
+        update_dclists = dclists_clone(update_dclists);
     } else {
         update_dclists = gdmap->dclists_pend;
     }
@@ -227,8 +228,9 @@ static bool gdmap_update_nets(gdmap_t* gdmap)
     dclists_t* update_dclists;
 
     if (!gdmap->dclists_pend) {
-        gdnsd_assume(gdmap->dclists);
-        update_dclists = dclists_clone(gdmap->dclists);
+        update_dclists = GRCU_OWN_READ(gdmap->dclists);
+        gdnsd_assume(update_dclists);
+        update_dclists = dclists_clone(update_dclists);
     } else {
         update_dclists = gdmap->dclists_pend;
     }
@@ -452,21 +454,17 @@ static const char* gdmap_get_name(const gdmap_t* gdmap)
 F_NONNULL
 static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, unsigned* scope_mask)
 {
-    // rcu_thread_online() + rcu_read_lock()
+    // grcu_thread_online() + grcu_read_lock()
     //   is handled by the iothread and dns lookup code
     //   in the main daemon, in a far outer scope from
     //   this code in runtime terms.
 
-    const unsigned dclist_u = ntree_lookup(
-                                  rcu_dereference(gdmap->tree),
-                                  client,
-                                  scope_mask,
-                                  gdmap->ignore_ecs
-                              );
-    const uint8_t* dclist_u8 = dclists_get_list(
-                                   rcu_dereference(gdmap->dclists),
-                                   dclist_u
-                               );
+    const ntree_t* tree;
+    grcu_dereference(tree, gdmap->tree);
+    const unsigned dclist_u = ntree_lookup(tree, client, scope_mask, gdmap->ignore_ecs);
+    const dclists_t* dclists;
+    grcu_dereference(dclists, gdmap->dclists);
+    const uint8_t* dclist_u8 = dclists_get_list(dclists, dclist_u);
 
     gdnsd_assume(dclist_u8);
     return dclist_u8;

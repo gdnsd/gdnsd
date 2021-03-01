@@ -498,6 +498,6 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 }
 
 // ltree_root is RCU-managed and accessed by reader threads, defined in ltree.c
-extern ltree_node_t* root_tree;
+GRCU_PUB_DECL(ltree_node_t*, root_tree);
 
 #endif // GDNSD_LTREE_H

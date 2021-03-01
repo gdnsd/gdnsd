@@ -30,6 +30,7 @@
 #include <gdnsd/dname.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
+#include <gdnsd/grcu.h>
 #include "plugins/plugapi.h"
 
 #include <string.h>
@@ -37,8 +38,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <limits.h>
-
-#include <urcu-qsbr.h>
 
 // special label used to hide out-of-zone glue
 //  inside zone root node child lists
@@ -50,7 +49,7 @@ static const uint8_t ooz_glue_label[1] = { 0 };
 static size_t dyna_max_response = 65536U;
 
 // root_tree is RCU-managed and accessed by reader threads.
-ltree_node_t* root_tree = NULL;
+GRCU_PUB_DEF(root_tree, NULL);
 
 // root_arena doesn't need RCU and is local here, but holds strings referenced
 // by root_tree, so needs to be deleted after it
@@ -1409,10 +1408,10 @@ void* ltree_zones_reloader_thread(void* init_asvoid)
     gdnsd_thread_setname("gdnsd-zreload");
     const bool init = (bool)init_asvoid;
     if (init) {
-        gdnsd_assume(!root_tree);
+        gdnsd_assert(!GRCU_OWN_READ(root_tree));
         gdnsd_assume(!root_arena);
     } else {
-        gdnsd_assume(root_tree);
+        gdnsd_assert(GRCU_OWN_READ(root_tree));
         gdnsd_assume(root_arena);
         gdnsd_thread_reduce_prio();
     }
@@ -1430,9 +1429,9 @@ void* ltree_zones_reloader_thread(void* init_asvoid)
         lta_destroy(new_root_arena);
         rv = 1; // the zsrc already logged why
     } else {
-        ltree_node_t* old_root_tree = root_tree;
-        rcu_assign_pointer(root_tree, new_root_tree);
-        synchronize_rcu();
+        ltree_node_t* old_root_tree = GRCU_OWN_READ(root_tree);
+        grcu_assign_pointer(root_tree, new_root_tree);
+        grcu_synchronize_rcu();
         if (old_root_tree) {
             ltree_destroy(old_root_tree);
             gdnsd_assume(root_arena);

@@ -25,6 +25,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
+#include <gdnsd/grcu.h>
 
 #include <gdmaps.h>
 
@@ -79,7 +80,9 @@ static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* 
     // w/ edns_client_mask set, scope_mask should *always* be set by gdmaps_lookup();
     // (and regardless, dclist should also always be set and contain something)
     unsigned scope_mask = 175U;
+    grcu_read_lock();
     const uint8_t* dclist = gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope_mask);
+    grcu_read_unlock();
     gdnsd_assume(scope_mask != 175U);
     gdnsd_assume(dclist);
 
@@ -161,6 +164,10 @@ static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root)
 
 static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir)
 {
+    // Fake RCU init for single-threaded test, otherwise grcu_dereference deep
+    // inside libgdmaps will fail an assertion about it.
+    grcu_register_thread();
+
     vscf_data_t* cfg_root = gdnsd_init_paths(input_cfgdir, false);
     if (!cfg_root)
         log_fatal("gdnsd_geoip_test cannot proceed without an actual config file");

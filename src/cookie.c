@@ -113,6 +113,7 @@
 
 #include <gdnsd/log.h>
 #include <gdnsd/paths.h>
+#include <gdnsd/grcu.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -124,7 +125,6 @@
 #include <fcntl.h>
 
 #include <sodium.h>
-#include <urcu-qsbr.h>
 #include <ev.h>
 
 // Workaround to ensure we can compile/run on any libsodium-1.x, to be removed
@@ -157,10 +157,10 @@ typedef struct {
 } timekeys_t;
 
 // The secret primary key used to derive the time-evolving keys_in_use below
-static void* primary_key = NULL;
+static uint8_t* primary_key = NULL;
 
 // RCU-swapped for runtime use in actual cookie validation/generation
-static timekeys_t* keys_inuse = NULL;
+GRCU_STATIC(timekeys_t*, keys_inuse, NULL);
 
 // libev periodic timer for secret rotation
 static ev_periodic hourly;
@@ -197,9 +197,9 @@ static void rotate_timekeys(void)
     if (sodium_mprotect_readonly(keys_new))
         log_fatal("sodium_mprotect_readonly() failed: %s", logf_errno());
 
-    timekeys_t* keys_old = keys_inuse;
-    rcu_assign_pointer(keys_inuse, keys_new);
-    synchronize_rcu();
+    timekeys_t* keys_old = GRCU_OWN_READ(keys_inuse);
+    grcu_assign_pointer(keys_inuse, keys_new);
+    grcu_synchronize_rcu();
     if (keys_old)
         sodium_free(keys_old);
 }
@@ -236,12 +236,11 @@ static int safe_write_keyfile(const char* key_fn, const uint8_t* keybuf)
 // Must happen after iothreads are done using keys and the eventloop has exited
 static void cookie_destroy(void)
 {
-    if (keys_inuse)
-        sodium_free(keys_inuse);
+    timekeys_t* kiu = GRCU_OWN_READ(keys_inuse);
+    if (kiu)
+        sodium_free(kiu);
     if (primary_key)
         sodium_free(primary_key);
-    keys_inuse = NULL;
-    primary_key = NULL;
 }
 
 /************* Public functions *************/
@@ -294,9 +293,7 @@ void cookie_runtime_init(struct ev_loop* loop)
 
 bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const gdnsd_anysin_t* client, const size_t cookie_data_in_len)
 {
-    // Assert that cookie_config() and cookie_runtime_init() were called to define the keys
-    gdnsd_assume(primary_key);
-    gdnsd_assume(keys_inuse);
+    gdnsd_assume(primary_key); // cookie_config() was run
 
     // This is required of the caller:
     gdnsd_assume(cookie_data_in_len == CCOOKIE_LEN
@@ -313,10 +310,12 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
     }
     memcpy(&scookie_input[16], cookie_data_in, CCOOKIE_LEN);
 
-    rcu_read_lock();
+    grcu_read_lock();
 
     bool valid = false;
-    const timekeys_t* keys = rcu_dereference(keys_inuse);
+    const timekeys_t* keys;
+    grcu_dereference(keys, keys_inuse);
+    gdnsd_assume(keys); // cookie_runtime_init() was run
 
     uint8_t scookie_current[SHORTHASH_BYTES];
     SHORTHASH_FUNC(scookie_current, scookie_input, SCOOKIE_INPUT_LEN, keys->current);
@@ -338,7 +337,7 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
         valid = !((c1 & c2 & c3) | inlen_check);
     }
 
-    rcu_read_unlock();
+    grcu_read_unlock();
 
     memcpy(cookie_data_out, cookie_data_in, CCOOKIE_LEN);
     memcpy(&cookie_data_out[CCOOKIE_LEN], scookie_current, SCOOKIE_LEN);

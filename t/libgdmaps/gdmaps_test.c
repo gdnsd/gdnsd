@@ -23,6 +23,7 @@
 #include <gdnsd/log.h>
 #include <gdnsd/vscf.h>
 #include <gdnsd/paths.h>
+#include <gdnsd/grcu.h>
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -70,7 +71,9 @@ void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, cons
     if (addr_err)
         log_fatal("Cannot parse address '%s': %s", addr_txt, gai_strerror(addr_err));
 
+    grcu_read_lock();
     const uint8_t* dclist = gdmaps_lookup(gdmaps, map_idx, &cinfo, &scope);
+    grcu_read_unlock();
 
     ok(!strcmp((const char*)dclist, dclist_cmp),
        "gdmaps_lookup(%s, %s) returns dclist %s (got %s)",
@@ -90,6 +93,10 @@ void gdmaps_test_init(const char* cfg_dir)
 
 gdmaps_t* gdmaps_test_load(const char* cfg_data)
 {
+    // Fake RCU init for single-threaded test, otherwise grcu_dereference deep
+    // inside libgdmaps will fail an assertion about it.
+    grcu_register_thread();
+
     vscf_data_t* maps_cfg = vscf_scan_buf(strlen(cfg_data), cfg_data, "(test maps)", false);
     if (!maps_cfg)
         log_fatal("Test config load failed");

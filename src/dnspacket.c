@@ -33,13 +33,12 @@
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/rand.h>
+#include <gdnsd/grcu.h>
 
 #include <string.h>
 #include <stddef.h>
 #include <pthread.h>
 #include <time.h>
-
-#include <urcu-qsbr.h>
 
 // Max number of compression targets we'll store info about, to avoid
 // performance regression for crazy response packets.  Note there are separate
@@ -1603,7 +1602,8 @@ static ltree_dname_status_t search_ltree_for_dname(const uint8_t* dname, search_
     // here for analysis:
     gdnsd_assume(lcount < 128U);
 
-    const ltree_node_t* current = rcu_dereference(root_tree);
+    const ltree_node_t* current;
+    grcu_dereference(current, root_tree);
     const ltree_node_t* auth = NULL;
     unsigned depth_lc = lcount;
     while (!rv_node && current) {
@@ -1858,9 +1858,9 @@ static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
     const uint8_t* qname = ctx->txn.lqname;
 
     // Respond from the DB
-    rcu_read_lock();
+    grcu_read_lock();
     offset = db_lookup(ctx, qname, offset, false);
-    rcu_read_unlock();
+    grcu_read_unlock();
 
     // UDP truncation handling
     if (ctx->is_udp) {

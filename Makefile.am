@@ -224,6 +224,7 @@ libgdnsd_libgdnsd_a_SOURCES = \
 	include/gdnsd/file.h \
 	include/gdnsd/alloc.h \
 	include/gdnsd/mm3.h \
+	include/gdnsd/grcu.h \
 	libgdnsd/dname.c \
 	libgdnsd/net.c \
 	libgdnsd/log.c \

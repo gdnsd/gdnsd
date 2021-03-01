@@ -30,9 +30,9 @@
 #include <gdnsd/dname.h>
 #include <gdnsd/misc.h>
 #include <gdnsd/mm3.h>
+#include <gdnsd/grcu.h>
 
 #include <ev.h>
-#include <urcu-qsbr.h>
 
 // General implementation notes:
 // --
@@ -160,7 +160,7 @@ typedef struct {
 // This is the table reference used for runtime lookups.  It's replaced by
 // RCU-swap as cset_t are added (from controlsock) and removed (due to
 // expiry).
-static chal_tbl_t* chal_tbl = NULL;
+GRCU_STATIC(chal_tbl_t*, chal_tbl, NULL);
 
 F_NONNULL
 static void chal_tbl_destruct(chal_tbl_t* destructme)
@@ -234,9 +234,9 @@ static chal_tbl_t* chal_tbl_create(const cset_t* oldest_set, const cset_t* addin
 // Can swap in NULL with this, e.g. for flush
 static void chal_tbl_swap_and_free(chal_tbl_t* new_chal_tbl)
 {
-    chal_tbl_t* old_chal_tbl = chal_tbl;
-    rcu_assign_pointer(chal_tbl, new_chal_tbl);
-    synchronize_rcu();
+    chal_tbl_t* old_chal_tbl = GRCU_OWN_READ(chal_tbl);
+    grcu_assign_pointer(chal_tbl, new_chal_tbl);
+    grcu_synchronize_rcu();
     if (old_chal_tbl)
         chal_tbl_destruct(old_chal_tbl);
 }
@@ -465,7 +465,8 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
 bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response)
 {
     const bool qname_is_chal = dname_is_acme_chal(qname);
-    const chal_tbl_t* t = rcu_dereference(chal_tbl);
+    const chal_tbl_t* t;
+    grcu_dereference(t, chal_tbl);
     if (!t)
         return false;
 
