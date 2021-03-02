@@ -100,7 +100,7 @@ typedef struct {
     // request was a DSO KeepAlive, so that dnsio_tcp knows not to bump the
     // server-side inactivity timer like it would for any other request.
     bool last_was_ka;
-    // estab: False by default at thread start, PDQ sets permanently to true if
+    // estab: False by default at conn start, PDQ sets permanently to true if
     // DSO is established by client DSO KeepAlive reception, which changes some
     // code behaviors on both sides.
     bool estab;
