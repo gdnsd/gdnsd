@@ -1149,7 +1149,7 @@ void css_send_stats_handoff(const css_t* css)
 
     csbuf_t handoff;
     memset(&handoff, 0, sizeof(handoff));
-    handoff.key = REQ_SHAND;
+    handoff.key = PSH_SHAND;
     csbuf_set_v(&handoff, 0);
     handoff.d = (uint32_t)dlen;
     ssize_t pktlen = send(c->fd, handoff.raw, 8, 0);

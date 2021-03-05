@@ -60,17 +60,17 @@ static void csbuf_set_v(csbuf_t* c, const uint32_t v)
 // Legal values for "key"
 #define REQ_TAK1  '1' // takeover-related (inter-daemon)
 #define REQ_TAK2  '2' // takeover-related (inter-daemon)
-#define RESP_ACK  'A' // response: OK
+#define RESP_ACK  'A' // response: OK (V, D, and following data defined by the request type)
 #define REQ_CHALF 'c' // rw req: flush challenges
 #define REQ_CHAL  'C' // rw req: add challenges
 #define RESP_DENY 'D' // response: Denied by policy (e.g. for TCP)
 #define REQ_STATE 'E' // ro req: get states
-#define RESP_FAIL 'F' // response: Failed
-#define RESP_LATR 'L' // response: Try Later
+#define RESP_FAIL 'F' // response: Failed (generic failure, bubble up to user)
+#define RESP_LATR 'L' // response: Try Again Later (delay and/or reconnect!)
 #define REQ_INFO  'I' // ro req: get pid/version
 #define REQ_REPL  'R' // rw req: ask daemon to replace itself
 #define REQ_STAT  'S' // ro req: get stats
-#define REQ_SHAND 's' // takeover-related (inter-daemon)
+#define PSH_SHAND 's' // takeover-related (inter-daemon)
 #define REQ_TAKE  'T' // takeover-related (inter-daemon)
 #define RESP_UNK  'U' // response: Unknown request type
 #define REQ_STOP  'X' // rw req: ask daemon to shut down
