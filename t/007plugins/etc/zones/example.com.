@@ -1,4 +1,4 @@
-@	SOA ns1 hostmaster (
+@	SOA ns1 dns-admin (
 	1      ; serial
 	7200   ; refresh
 	1800   ; retry

@@ -1,4 +1,4 @@
-@   SOA  ns1 hostmaster 1 7200 30M 3D 900
+@   SOA  ns1 dns-admin 1 7200 30M 3D 900
 @   NS   ns1
 @   NS   ns2
 ns1 A    192.0.2.1

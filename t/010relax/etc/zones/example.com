@@ -1,4 +1,4 @@
-@	SOA foo hostmaster (
+@	SOA foo dns-admin (
 	1      ; serial
 	7200   ; refresh
 	30M    ; retry

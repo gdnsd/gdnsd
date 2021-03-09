@@ -218,8 +218,8 @@ struct ltree_rrset_aaaa {
 
 struct ltree_rrset_soa {
     ltree_rrset_gen_t gen;
-    uint8_t* email;
-    uint8_t* master;
+    uint8_t* rname;
+    uint8_t* mname;
     uint32_t times[5];
 };
 
@@ -342,8 +342,8 @@ void ltree_destroy_zone(zone_t* zone);
 // parameter structures for arguments to ltree_add_rec that otherwise
 // have confusingly-long parameter lists
 typedef struct lt_soa_args {
-    const uint8_t* master;
-    const uint8_t* email;
+    const uint8_t* mname;
+    const uint8_t* rname;
     unsigned ttl;
     const unsigned serial;
     const unsigned refresh;

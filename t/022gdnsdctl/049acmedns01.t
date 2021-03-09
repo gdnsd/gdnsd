@@ -2,7 +2,7 @@ use _GDT ();
 use Net::DNS;
 use Test::More tests => 1 + (2 * (16 + 13)) + 1 + 13 + 1 + 13 + 1 + 1;
 
-my $soa_neg = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
+my $soa_neg = 'example.com 900 SOA ns1.example.com dns-admin.example.com 1 7200 1800 259200 900';
 
 # 13 tests here
 sub check_data_acme {

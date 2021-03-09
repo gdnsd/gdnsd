@@ -8,7 +8,7 @@ my $test_bin = $ENV{INSTALLCHECK_BINDIR}
     : "$ENV{TOP_BUILDDIR}/src/plugins/gdnsd_geoip_test";
 my $test_exec = qq|$test_bin -c ${_GDT::OUTDIR}/etc|;
 
-my $neg_soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com dns-admin.example.com 1 7200 1800 259200 900';
 
 # We re-run the same suite of tests against
 #  multiple config files with identical meaning,

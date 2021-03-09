@@ -622,8 +622,8 @@ bool ltree_add_rec_soa_args(const zone_t* zone, const uint8_t* dname, lt_soa_arg
         log_zfatal("Zone '%s': SOA defined twice", logf_dname(zone->dname));
 
     ltree_rrset_soa_t* soa = ltree_node_add_rrset_soa(node);
-    soa->email = lta_dnamedup(zone->arena, args.email);
-    soa->master = lta_dnamedup(zone->arena, args.master);
+    soa->rname = lta_dnamedup(zone->arena, args.rname);
+    soa->mname = lta_dnamedup(zone->arena, args.mname);
 
     soa->gen.ttl = htonl(args.ttl);
     soa->times[0] = htonl(args.serial);
@@ -899,7 +899,7 @@ static size_t p1_rrset_size(const ltree_rrset_t* rrset, const bool in_deleg)
 
     switch (rrset->gen.type) {
     case DNS_TYPE_SOA:
-        set_size = (12U + *rrset->soa.master + *rrset->soa.email + 20U);
+        set_size = (12U + *rrset->soa.mname + *rrset->soa.rname + 20U);
         break;
     case DNS_TYPE_CNAME:
         gdnsd_assert(0);
@@ -1085,7 +1085,7 @@ static bool p1_chase_cname(const ltree_rrset_t** rrset_p, size_t* rsize_rrs_p, s
         const ltree_rrset_soa_t* soa = ltree_node_get_rrset_soa(zone->root);
         gdnsd_assert(soa); // checked in zroot phase1
         // Put zone-level soa into the max rrset calc:
-        *rsize_rrs_p += (12U + *soa->master + *soa->email + 20U);
+        *rsize_rrs_p += (12U + *soa->mname + *soa->rname + 20U);
     } else if (cnstat == DNAME_DELEG) {
         // Size the delegation response below
         gdnsd_assert(deleg_cut && deleg_cut->rrsets);
@@ -1262,13 +1262,13 @@ static bool ltree_postproc_zroot_phase1(zone_t* zone)
     if (zroot_ns->gen.count < 2)
         log_zwarn("Zone '%s' only has one NS record, this is (probably) bad practice", logf_dname(zone->dname));
     for (unsigned i = 0; i < zroot_ns->gen.count; i++) {
-        if (!gdnsd_dname_cmp(zroot_soa->master, zroot_ns->rdata[i].dname)) {
+        if (!gdnsd_dname_cmp(zroot_soa->mname, zroot_ns->rdata[i].dname)) {
             ok = true;
             break;
         }
     }
     if (!ok)
-        log_zwarn("Zone '%s': SOA Master does not match any NS records for this zone", logf_dname(zone->dname));
+        log_zwarn("Zone '%s': SOA MNAME does not match any NS records for this zone", logf_dname(zone->dname));
 
     // copy SOA Serial field up to zone_t
     zone->serial = ntohl(zroot_soa->times[0]);

@@ -3,7 +3,7 @@
 use _GDT ();
 use Test::More tests => 15;
 
-my $neg_soa = 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900';
+my $neg_soa = 'example.com 900 SOA ns1.example.com dns-admin.example.net 1 7200 1800 259200 900';
 
 my $pid = _GDT->test_spawn_daemon();
 

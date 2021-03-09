@@ -626,7 +626,7 @@ become the default setting in some future version.
 =item B<cookie_key_file>
 
 String, default undefined.  When this is defined, the file's contents are read
-as the persistent master key value for generating EDNS Cookie responses.
+as the persistent primary key value for generating EDNS Cookie responses.
 
 If the file exists, it must be readable by the daemon, and it must contain 32
 bytes of binary data.  Failure to properly read a key file defined here is
@@ -651,7 +651,7 @@ The primary reason to define C<cookie_key_file> to your own pathname and key
 contents is to have synchronized cookie keys across an anycasted or otherwise
 loadbalanced set of servers, so that they all agree on server cookies.
 
-If this file is not defined, then the daemon manages the cookie master key
+If this file is not defined, then the daemon manages the cookie primary key
 value automatically.  Under automatic management of the key, it will attempt to
 read a key from F<@GDNSD_DEFPATH_RUN@/cookie.autokey> at startup.  If that
 doesn't work, it will generate a new random key in memory and attempt to write

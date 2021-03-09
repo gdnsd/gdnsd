@@ -14,7 +14,7 @@ _GDT->daemon_reload_zones();
 foreach my $tld (qw/com org/) {
     _GDT->test_dns(
         qname => "example.${tld}", qtype => "SOA",
-        answer => "example.${tld} 900 SOA ns1.example.${tld} hostmaster.example.${tld} 1 7200 1800 259200 900",
+        answer => "example.${tld} 900 SOA ns1.example.${tld} dns-admin.example.${tld} 1 7200 1800 259200 900",
     );
 
     _GDT->test_dns(

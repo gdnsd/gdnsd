@@ -241,20 +241,20 @@ _GDT->test_dns(
 
 _GDT->test_dns(
     qname => 'x.y.z.example.com', qtype => 'A',
-    auth => 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com dns-admin.example.net 1 7200 1800 259200 900',
 );
 
 _GDT->test_dns(
     qname => 'foo.y.z.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com dns-admin.example.net 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 
 _GDT->test_dns(
     qname => 'foo.x.y.z.example.com', qtype => 'A',
     header => { rcode => 'NXDOMAIN' },
-    auth => 'example.com 900 SOA ns1.example.com hmaster.example.net 1 7200 1800 259200 900',
+    auth => 'example.com 900 SOA ns1.example.com dns-admin.example.net 1 7200 1800 259200 900',
     stats => [qw/udp_reqs nxdomain/],
 );
 

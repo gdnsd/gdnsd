@@ -1364,8 +1364,8 @@ static unsigned encode_rr_soa(dnsp_ctx_t* ctx, unsigned offset, const ltree_rrse
 
     // fill in the rdata
     const unsigned rdata_offset = offset;
-    offset += store_dname_comp(&ctx->txn, rdata->master, offset, true);
-    offset += store_dname_comp(&ctx->txn, rdata->email, offset, false);
+    offset += store_dname_comp(&ctx->txn, rdata->mname, offset, true);
+    offset += store_dname_comp(&ctx->txn, rdata->rname, offset, false);
     memcpy(&packet[offset], &rdata->times, 20);
     offset += 20; // 5x 32-bits
 

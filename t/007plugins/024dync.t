@@ -9,7 +9,7 @@
 use _GDT ();
 use Test::More tests => 16;
 
-my $soa = 'example.com 900 SOA ns1.example.com hostmaster.example.com 1 7200 1800 259200 900';
+my $soa = 'example.com 900 SOA ns1.example.com dns-admin.example.com 1 7200 1800 259200 900';
 
 my $pid = _GDT->test_spawn_daemon();
 

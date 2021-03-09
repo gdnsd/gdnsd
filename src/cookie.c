@@ -19,18 +19,18 @@
 
 /*************************************************
  * EDNS Cookies implementation/design notes:
- * * Master Key:
- *   By default, we use a random master key generated at first startup, which
+ * * Primary Key:
+ *   By default, we use a random primary key generated at first startup, which
  *   affords no cross-server sync.  The daemon attempts to persist this to the
  *   rundir and read it back on replace/restart to minimize cookie disruption,
  *   but key i/o to the rundir fails non-fatally with a logged error, in which
  *   case a new key is being generated on every daemon start.  Commonly on
  *   Linux/systemd, the rundir is empty after a reboot, which will cause a new
- *   key to be generated once per server reboot.  Master key changes cause a
+ *   key to be generated once per server reboot.  Primary key changes cause a
  *   less-desirable (but probably commonly ok) abrupt rift in client cookie
  *   validities.  For cross-server sync (and avoiding said rifts even for
  *   singular servers on reboots), the admin can define a keyfile containing a
- *   pre-defined master key, which must contain at least 32 bytes of data,
+ *   pre-defined primary key, which must contain at least 32 bytes of data,
  *   which should be securely-generated random data.  The keyfile can be
  *   updated with a new key from time to time, but this can happen on slow
  *   timescales (e.g. once a year or whatever makes sense for generic secret
@@ -45,11 +45,11 @@
  *
  * * Runtime Server Secrets used for Server Cookie output:
  *   The runtime secret key is defined by the output of a high-quality
- *   cryptographic KDF function, using the master key as its secret key, and
+ *   cryptographic KDF function, using the primary key as its secret key, and
  *   the unix hour counter as the subkey id.  While the unix hour is
- *   deterministic and predictable, the master key isn't, and so the anycast
+ *   deterministic and predictable, the primary key isn't, and so the anycast
  *   pool's sequence of runtime secrets isn't predictable by attackers who lack
- *   the secret master key.
+ *   the secret primary key.
  *
  * * Runtime Secret Rotation/Overlap:
  *   Roughly once per hour (keeping in mind all the blah blah about unix time
@@ -102,7 +102,7 @@
  *   version upgrades of libsodium, which could change the underlying
  *   algorithms used by those APIs.
  *   Our current algorithm choices are:
- *   blake2b KDF for master key + salted hour counter -> hourly keys
+ *   blake2b KDF for primary key + salted hour counter -> hourly keys
  *   siphash-2-4 for hourly key + client cookie/ip -> server cookie
  */
 
@@ -158,8 +158,8 @@ typedef struct {
     uint8_t next[SHORTHASH_KEYBYTES];
 } timekeys_t;
 
-// The secret master key used to derive the time-evolving keys_in_use below
-static void* master_key = NULL;
+// The secret primary key used to derive the time-evolving keys_in_use below
+static void* primary_key = NULL;
 
 // RCU-swapped for runtime use in actual cookie validation/generation
 static timekeys_t* keys_inuse = NULL;
@@ -178,7 +178,7 @@ static const char base_autokey[] = "cookie.autokey";
 static void rotate_timekeys(void)
 {
     // cookie_config() must have already happened
-    gdnsd_assert(master_key);
+    gdnsd_assert(primary_key);
 
     const uint64_t current_ctr = ((uint64_t)time(NULL)) / 3600U;
     const uint64_t previous_ctr = current_ctr - 1U;
@@ -188,12 +188,12 @@ static void rotate_timekeys(void)
     if (!keys_new)
         log_fatal("sodium_malloc() failed: %s", logf_errno());
 
-    if (sodium_mprotect_readonly(master_key))
+    if (sodium_mprotect_readonly(primary_key))
         log_fatal("sodium_mprotect_readonly() failed: %s", logf_errno());
-    KDF_FUNC(keys_new->previous, sizeof(keys_new->previous), previous_ctr, kdf_ctx, master_key);
-    KDF_FUNC(keys_new->current, sizeof(keys_new->current), current_ctr, kdf_ctx, master_key);
-    KDF_FUNC(keys_new->next, sizeof(keys_new->next), next_ctr, kdf_ctx, master_key);
-    if (sodium_mprotect_noaccess(master_key))
+    KDF_FUNC(keys_new->previous, sizeof(keys_new->previous), previous_ctr, kdf_ctx, primary_key);
+    KDF_FUNC(keys_new->current, sizeof(keys_new->current), current_ctr, kdf_ctx, primary_key);
+    KDF_FUNC(keys_new->next, sizeof(keys_new->next), next_ctr, kdf_ctx, primary_key);
+    if (sodium_mprotect_noaccess(primary_key))
         log_fatal("sodium_mprotect_noaccess() failed: %s", logf_errno());
 
     if (sodium_mprotect_readonly(keys_new))
@@ -240,39 +240,39 @@ static void cookie_destroy(void)
 {
     if (keys_inuse)
         sodium_free(keys_inuse);
-    if (master_key)
-        sodium_free(master_key);
+    if (primary_key)
+        sodium_free(primary_key);
     keys_inuse = NULL;
-    master_key = NULL;
+    primary_key = NULL;
 }
 
 /************* Public functions *************/
 
 void cookie_config(const char* key_file)
 {
-    gdnsd_assert(master_key == NULL); // config only happens once!
+    gdnsd_assert(primary_key == NULL); // config only happens once!
 
     if (sodium_init() < 0)
         log_fatal("Could not initialize libsodium: %s", logf_errno());
 
-    master_key = sodium_malloc(KDF_KEYBYTES);
-    if (!master_key)
+    primary_key = sodium_malloc(KDF_KEYBYTES);
+    if (!primary_key)
         log_fatal("sodium_malloc() failed: %s", logf_errno());
 
     if (key_file) {
-        if (safe_read_keyfile(key_file, master_key))
+        if (safe_read_keyfile(key_file, primary_key))
             log_fatal("Cannot read %zu bytes from '%s': %s", (size_t)KDF_KEYBYTES, key_file, logf_errno());
     } else {
         char* autokey_path = gdnsd_resolve_path_run(base_autokey, NULL);
-        if (safe_read_keyfile(autokey_path, master_key)) {
-            randombytes_buf(master_key, KDF_KEYBYTES);
-            if (safe_write_keyfile(autokey_path, master_key))
+        if (safe_read_keyfile(autokey_path, primary_key)) {
+            randombytes_buf(primary_key, KDF_KEYBYTES);
+            if (safe_write_keyfile(autokey_path, primary_key))
                 log_err("Can neither correctly read nor overwrite persistent auto-generated edns cookie key file '%s'.  Delete any existing file and ensure the daemon can write to the directory!", autokey_path);
         }
         free(autokey_path);
     }
 
-    if (sodium_mprotect_noaccess(master_key))
+    if (sodium_mprotect_noaccess(primary_key))
         log_fatal("sodium_mprotect_noaccess() failed: %s", logf_errno());
 
     gdnsd_atexit(cookie_destroy);
@@ -297,7 +297,7 @@ void cookie_runtime_init(struct ev_loop* loop)
 bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const gdnsd_anysin_t* client, const size_t cookie_data_in_len)
 {
     // Assert that cookie_config() and cookie_runtime_init() were called to define the keys
-    gdnsd_assert(master_key);
+    gdnsd_assert(primary_key);
     gdnsd_assert(keys_inuse);
 
     // This is required of the caller:

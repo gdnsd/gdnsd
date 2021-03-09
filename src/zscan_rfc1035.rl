@@ -554,8 +554,8 @@ static void rec_soa(zscan_t* z)
     if (ltree_add_rec_soa(
                 z->zone,
                 z->lhs_dname,
-                .master = z->rhs_dname,
-                .email = z->eml_dname,
+                .mname = z->rhs_dname,
+                .rname = z->eml_dname,
                 .ttl = z->ttl,
                 .serial = z->uv_1,
                 .refresh = z->uv_2,
