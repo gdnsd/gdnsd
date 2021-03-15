@@ -330,8 +330,13 @@ static void admin_deleted_file(const char* pathname)
             affected = true;
         }
     }
-    if (affected)
+
+    if (affected) {
         kick_sttl_update_timer();
+        log_info("admin_state: load complete (file deleted)");
+    } else {
+        log_info("admin_state: load complete (file deleted), no net changes");
+    }
 }
 
 F_NONNULL

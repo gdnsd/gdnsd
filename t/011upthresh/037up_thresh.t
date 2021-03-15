@@ -89,6 +89,7 @@ _GDT->write_statefile('admin_state', qq{
 });
 _GDT->test_log_output([
     q{admin_state: state of '192.0.2.70/up' forced to DOWN/42, real state is UP/MAX},
+    q{admin_state: load complete},
 ]);
 
 # Marking one down doesn't fail the default 0.5 up_thresh check, but would
@@ -110,6 +111,7 @@ _GDT->write_statefile('admin_state', qq{
 });
 _GDT->test_log_output([
     q{admin_state: state of '192.0.2.71/up' forced to DOWN/42, real state is UP/MAX},
+    q{admin_state: load complete},
 ]);
 
 # Now we've marked 2/3 down, which will fail the default 0.5 up_thresh, causing

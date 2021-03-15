@@ -49,6 +49,7 @@ _GDT->write_statefile('admin_state', qq{
 _GDT->test_log_output([
     q{admin_state: state of '127.2.2.2/up' forced to DOWN/33, real state is UP/MAX},
     q{admin_state: state of '127.0.0.1/up' forced to DOWN/33, real state is UP/MAX},
+    q{admin_state: load complete},
 ]);
 
 _GDT->test_dns(
@@ -73,7 +74,10 @@ _GDT->write_statefile('admin_state', qq{
     m1cname.example.net./up => DOWN/29
 });
 
-_GDT->test_log_output(q{admin_state: state of 'm1cname.example.net./up' forced to DOWN/29, real state is UP/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of 'm1cname.example.net./up' forced to DOWN/29, real state is UP/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -98,7 +102,10 @@ _GDT->write_statefile('admin_state', qq{
     127.2.2.2/up => DOWN/33
 });
 
-_GDT->test_log_output(q{admin_state: state of '127.0.0.1/up' no longer forced (was forced to DOWN/33), real and current state is UP/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of '127.0.0.1/up' no longer forced (was forced to DOWN/33), real and current state is UP/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -121,7 +128,10 @@ _GDT->write_statefile('admin_state', qq{
     m1cname.example.net./up => DOWN/29
 });
 
-_GDT->test_log_output(q{admin_state: state of '127.2.2.2/up' no longer forced (was forced to DOWN/33), real and current state is UP/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of '127.2.2.2/up' no longer forced (was forced to DOWN/33), real and current state is UP/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -143,7 +153,10 @@ _GDT->test_dns(
 _GDT->write_statefile('admin_state', qq{
 });
 
-_GDT->test_log_output(q{admin_state: state of 'm1cname.example.net./up' no longer forced (was forced to DOWN/29), real and current state is UP/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of 'm1cname.example.net./up' no longer forced (was forced to DOWN/29), real and current state is UP/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -166,7 +179,10 @@ _GDT->write_statefile('admin_state', qq{
     metafo/m1/dc1 => DOWN
 });
 
-_GDT->test_log_output(q{admin_state: state of 'metafo/m1/dc1' forced to DOWN/MAX, real state is NA});
+_GDT->test_log_output([
+    q{admin_state: state of 'metafo/m1/dc1' forced to DOWN/MAX, real state is NA},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -189,7 +205,10 @@ _GDT->write_statefile('admin_state', qq{
     metafo/m1/dc? => DOWN
 });
 
-_GDT->test_log_output(q{admin_state: state of 'metafo/m1/dc2' forced to DOWN/MAX, real state is NA});
+_GDT->test_log_output([
+    q{admin_state: state of 'metafo/m1/dc2' forced to DOWN/MAX, real state is NA},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -213,7 +232,10 @@ _GDT->write_statefile('admin_state', qq{
     metafo/m1/dc2 => DOWN
 });
 
-_GDT->test_log_output(q{admin_state: state of 'metafo/m1/dc1' re-forced from DOWN/MAX to UP/MAX, real state is NA});
+_GDT->test_log_output([
+    q{admin_state: state of 'metafo/m1/dc1' re-forced from DOWN/MAX to UP/MAX, real state is NA},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -239,7 +261,10 @@ _GDT->write_statefile('admin_state', qq{
     m1cname.example.net./up => DOWN/25
 });
 
-_GDT->test_log_output(q{admin_state: state of 'm1cname.example.net./up' forced to DOWN/25, real state is UP/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of 'm1cname.example.net./up' forced to DOWN/25, real state is UP/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'r1.example.com', qtype => 'A',
@@ -267,7 +292,10 @@ _GDT->write_statefile('admin_state', qq{
     m1cname.example.net./up => DOWN/25
 });
 
-_GDT->test_log_output(q{admin_state: state of '127.3.3.3/extf_admin' forced to DOWN/MAX, real state is UP/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of '127.3.3.3/extf_admin' forced to DOWN/MAX, real state is UP/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'ra.example.com', qtype => 'A',
@@ -281,7 +309,10 @@ _GDT->write_statefile('extfile/extf_admin', qq{
     192.0.2.3 => down
 });
 
-_GDT->test_log_output(q{state of '192.0.2.3/extf_admin' changed from UP/MAX to DOWN/MAX});
+_GDT->test_log_output([
+    q{state of '192.0.2.3/extf_admin' changed from UP/MAX to DOWN/MAX},
+    q{plugin_extfile: Service type 'extf_admin': loaded new data from file }
+]);
 
 _GDT->test_dns(
     qname => 'ra.example.com', qtype => 'A',
@@ -297,7 +328,10 @@ _GDT->write_statefile('admin_state', qq{
     m1cname.example.net./up => DOWN/25
 });
 
-_GDT->test_log_output(q{admin_state: state of '192.0.2.3/extf_admin' forced to UP/MAX, real state is DOWN/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of '192.0.2.3/extf_admin' forced to UP/MAX, real state is DOWN/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'ra.example.com', qtype => 'A',
@@ -313,6 +347,7 @@ _GDT->write_statefile('extfile/extf_admin', qq{
 _GDT->test_log_output([
     q{state of '127.3.3.3/extf_admin' changed from UP/MAX to DOWN/MAX, effective state remains administratively forced to DOWN/MAX},
     q{state of '192.0.2.3/extf_admin' changed from DOWN/MAX to UP/MAX, effective state remains administratively forced to UP/MAX},
+    q{plugin_extfile: Service type 'extf_admin': loaded new data from file }
 ]);
 
 _GDT->test_dns(
@@ -329,6 +364,7 @@ _GDT->write_statefile('extfile/extf_admin', qq{
 _GDT->test_log_output([
     q{state of '127.3.3.3/extf_admin' changed from DOWN/MAX to UP/MAX, effective state remains administratively forced to DOWN/MAX},
     q{state of '192.0.2.3/extf_admin' changed from UP/MAX to DOWN/MAX, effective state remains administratively forced to UP/MAX},
+    q{plugin_extfile: Service type 'extf_admin': loaded new data from file }
 ]);
 
 _GDT->test_dns(
@@ -344,7 +380,10 @@ _GDT->write_statefile('admin_state', qq{
     m1cname.example.net./up => DOWN/25
 });
 
-_GDT->test_log_output(q{admin_state: state of '127.3.3.3/extf_admin' no longer forced (was forced to DOWN/MAX), real and current state is UP/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of '127.3.3.3/extf_admin' no longer forced (was forced to DOWN/MAX), real and current state is UP/MAX},
+    q{admin_state: load complete},
+]);
 
 _GDT->test_dns(
     qname => 'ra.example.com', qtype => 'A',
@@ -360,7 +399,10 @@ _GDT->write_statefile('extfile/extf_admin', qq{
 
 _GDT->test_run_gdnsdctl("states");
 
-_GDT->test_log_output(q{state of '127.3.3.3/extf_admin' changed from UP/MAX to DOWN/MAX});
+_GDT->test_log_output([
+    q{state of '127.3.3.3/extf_admin' changed from UP/MAX to DOWN/MAX},
+    q{plugin_extfile: Service type 'extf_admin': loaded new data from file }
+]);
 
 _GDT->test_dns(
     qname => 'ra.example.com', qtype => 'A',
@@ -371,7 +413,10 @@ _GDT->test_dns(
 # switching the answer back to 127
 unlink(${_GDT::OUTDIR} . "/var/lib/gdnsd/admin_state");
 
-_GDT->test_log_output(q{admin_state: state of '192.0.2.3/extf_admin' no longer forced (was forced to UP/MAX), real and current state is DOWN/MAX});
+_GDT->test_log_output([
+    q{admin_state: state of '192.0.2.3/extf_admin' no longer forced (was forced to UP/MAX), real and current state is DOWN/MAX},
+    q{admin_state: load complete (file deleted)},
+]);
 
 _GDT->test_dns(
     qname => 'ra.example.com', qtype => 'A',
