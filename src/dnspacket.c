@@ -228,7 +228,6 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
 
 static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad, const unsigned tcp_timeout_secs)
 {
-    dnsp_ctx_t* ctx = xcalloc(sizeof(*ctx));
     if (udp_is_ipv6)
         gdnsd_assert(is_udp);
     if (tcp_pad)
@@ -236,23 +235,24 @@ static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool 
     if (tcp_timeout_secs)
         gdnsd_assert(!is_udp);
 
+    dnsp_ctx_t* ctx = xcalloc(sizeof(*ctx));
+    ctx->stats = *stats_out = xcalloc(sizeof(*ctx->stats));
+    ctx->dyn = xmalloc(gdnsd_result_get_alloc());
     gdnsd_rand32_init(&ctx->rand_state);
+    gdnsd_plugins_action_iothread_init();
+
     ctx->is_udp = is_udp;
+    ctx->stats->is_udp = is_udp;
     ctx->udp_edns_max = udp_is_ipv6 ? gcfg->max_edns_response_v6 : gcfg->max_edns_response;
     ctx->tcp_pad = tcp_pad;
     ctx->edns_tcp_keepalive = tcp_timeout_secs * 10;
     ctx->dso_inactivity = tcp_timeout_secs * 1000;
-    ctx->dyn = xmalloc(gdnsd_result_get_alloc());
-
-    gdnsd_plugins_action_iothread_init();
 
     pthread_mutex_lock(&stats_init_mutex);
-    ctx->stats = dnspacket_stats[stats_initialized++] = xcalloc(sizeof(*ctx->stats));
-    ctx->stats->is_udp = is_udp;
-    pthread_cond_signal(&stats_init_cond);
+    dnspacket_stats[stats_initialized++] = ctx->stats;
     pthread_mutex_unlock(&stats_init_mutex);
+    pthread_cond_signal(&stats_init_cond);
 
-    *stats_out = ctx->stats;
     return ctx;
 }
 
