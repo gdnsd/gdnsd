@@ -2,6 +2,7 @@ AC_PREREQ([2.64])
 AC_INIT([gdnsd],[3.6.0],[https://github.com/gdnsd/gdnsd/issues],[gdnsd],[https://gdnsd.org])
 AC_CONFIG_SRCDIR([src/main.c])
 AC_CONFIG_AUX_DIR([acaux])
+AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([1.13 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wall])
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
