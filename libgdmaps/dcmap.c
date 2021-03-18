@@ -28,6 +28,7 @@
 #include <gdnsd/log.h>
 
 #include <stdbool.h>
+#include <strings.h>
 
 /***************************************
  * dcmap_t and related methods

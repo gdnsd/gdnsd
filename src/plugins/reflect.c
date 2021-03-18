@@ -28,6 +28,7 @@
 #include "plugins.h"
 
 #include <string.h>
+#include <strings.h>
 #include <inttypes.h>
 
 #define NUM_RTYPES 4

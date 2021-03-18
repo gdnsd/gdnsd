@@ -28,6 +28,7 @@
 #include <gdnsd/misc.h>
 
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <fnmatch.h>
 

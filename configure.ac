@@ -6,9 +6,9 @@ AM_INIT_AUTOMAKE([1.13 dist-xz no-dist-gzip foreign tar-ustar subdir-objects -Wa
 AC_CONFIG_MACRO_DIR([m4])
 AM_SILENT_RULES([yes])
 
+AC_USE_SYSTEM_EXTENSIONS
 # We're hoping for C11, but anything C99 or higher will work
 AC_PROG_CC_STDC
-AC_USE_SYSTEM_EXTENSIONS
 AM_PROG_CC_C_O
 
 # POSIX threads stuff
