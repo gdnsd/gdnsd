@@ -1094,7 +1094,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     const dns_addr_t* addrconf = t->ac;
 
-    thread_t* thr = xcalloc(sizeof(*thr));
+    thread_t thr = { 0 };
 
     const int backlog = (int)(addrconf->tcp_backlog ? addrconf->tcp_backlog : SOMAXCONN);
     if (listen(t->sock, backlog) == -1)
@@ -1105,48 +1105,48 @@ void* dnsio_tcp_start(void* thread_asvoid)
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
     // These are fixed values for the life of the thread based on config:
-    thr->server_timeout = (double)(addrconf->tcp_timeout * 2);
-    thr->max_clients = addrconf->tcp_clients_per_thread;
-    thr->do_proxy = addrconf->tcp_proxy;
-    thr->tcp_pad = addrconf->tcp_pad;
+    thr.server_timeout = (double)(addrconf->tcp_timeout * 2);
+    thr.max_clients = addrconf->tcp_clients_per_thread;
+    thr.do_proxy = addrconf->tcp_proxy;
+    thr.tcp_pad = addrconf->tcp_pad;
 
     // Set up the conn_t churn buffer, which saves some per-new-connection
     // memory allocation churn by saving up to sqrt(max_clients) old conn_t
     // storage for reuse
-    thr->churn_alloc = lrint(floor(sqrt(addrconf->tcp_clients_per_thread)));
-    gdnsd_assert(thr->churn_alloc >= 4U); // because tcp_cpt min is 16U
-    thr->churn = xmalloc_n(thr->churn_alloc, sizeof(*thr->churn));
+    thr.churn_alloc = lrint(floor(sqrt(addrconf->tcp_clients_per_thread)));
+    gdnsd_assert(thr.churn_alloc >= 4U); // because tcp_cpt min is 16U
+    thr.churn = xmalloc_n(thr.churn_alloc, sizeof(*thr.churn));
 
-    thr->tpkt = xcalloc(sizeof(*thr->tpkt));
+    thr.tpkt = xcalloc(sizeof(*thr.tpkt));
 
-    ev_idle* idle_watcher = &thr->idle_watcher;
+    ev_idle* idle_watcher = &thr.idle_watcher;
     ev_idle_init(idle_watcher, idle_handler);
     ev_set_priority(idle_watcher, -2);
-    idle_watcher->data = thr;
+    idle_watcher->data = &thr;
 
-    ev_io* accept_watcher = &thr->accept_watcher;
+    ev_io* accept_watcher = &thr.accept_watcher;
     ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
     ev_set_priority(accept_watcher, -1);
-    accept_watcher->data = thr;
+    accept_watcher->data = &thr;
 
-    ev_timer* timeout_watcher = &thr->timeout_watcher;
-    ev_timer_init(timeout_watcher, timeout_handler, 0, thr->server_timeout);
+    ev_timer* timeout_watcher = &thr.timeout_watcher;
+    ev_timer_init(timeout_watcher, timeout_handler, 0, thr.server_timeout);
     ev_set_priority(timeout_watcher, 0);
-    timeout_watcher->data = thr;
+    timeout_watcher->data = &thr;
 
-    ev_prepare* prep_watcher = &thr->prep_watcher;
+    ev_prepare* prep_watcher = &thr.prep_watcher;
     ev_prepare_init(prep_watcher, prep_handler);
-    prep_watcher->data = thr;
+    prep_watcher->data = &thr;
 
-    ev_async* stop_watcher = &thr->stop_watcher;
+    ev_async* stop_watcher = &thr.stop_watcher;
     ev_async_init(stop_watcher, stop_handler);
     ev_set_priority(stop_watcher, 2);
-    stop_watcher->data = thr;
+    stop_watcher->data = &thr;
 
     struct ev_loop* loop = ev_loop_new(EVFLAG_AUTO);
     if (!loop)
         log_fatal("ev_loop_new() failed");
-    thr->loop = loop;
+    thr.loop = loop;
 
     ev_async_start(loop, stop_watcher);
     ev_io_start(loop, accept_watcher);
@@ -1154,9 +1154,9 @@ void* dnsio_tcp_start(void* thread_asvoid)
     ev_unref(loop); // prepare should not hold a ref, but should run to the end
 
     // register_thread() hooks us into the ev_async-based shutdown-handling
-    // code, therefore we must have thr->loop and thr->stop_watcher initialized
+    // code, therefore we must have thr.loop and thr.stop_watcher initialized
     // and ready before we register here
-    register_thread(thr);
+    register_thread(&thr);
 
     // dnspacket_ctx_init() is what releases threads through the startup gates,
     // and main.c's call to dnspacket_wait_stats() waits for all threads to
@@ -1164,23 +1164,22 @@ void* dnsio_tcp_start(void* thread_asvoid)
     // Therefore, this must happen after register_thread() above, to ensure
     // that all tcp threads are properly registered with the shutdown handler
     // before we begin processing possible future shutdown events.
-    thr->pctx = dnspacket_ctx_init_tcp(&thr->stats, addrconf->tcp_pad, addrconf->tcp_timeout);
+    thr.pctx = dnspacket_ctx_init_tcp(&thr.stats, addrconf->tcp_pad, addrconf->tcp_timeout);
 
     rcu_register_thread();
-    thr->rcu_is_online = true;
+    thr.rcu_is_online = true;
 
     ev_run(loop, 0);
 
     rcu_unregister_thread();
 
-    unregister_thread(thr);
+    unregister_thread(&thr);
     ev_loop_destroy(loop);
-    dnspacket_ctx_cleanup(thr->pctx);
-    for (unsigned i = 0; i < thr->churn_count; i++)
-        free(thr->churn[i]);
-    free(thr->churn);
-    free(thr->tpkt);
-    free(thr);
+    dnspacket_ctx_cleanup(thr.pctx);
+    for (unsigned i = 0; i < thr.churn_count; i++)
+        free(thr.churn[i]);
+    free(thr.churn);
+    free(thr.tpkt);
 
     return NULL;
 }
