@@ -30,15 +30,52 @@ AC_DEFINE_UNQUOTED([PACKAGE_V_PATCH], [PKG_V_PATCH], [Patch version])
 AC_USE_SYSTEM_EXTENSIONS
 AC_PROG_CC
 m4_version_prereq([2.70], [], [AC_PROG_CC_STDC])
-AC_MSG_CHECKING([For C11 support in the C compiler])
+AC_MSG_CHECKING([For C11 support in the C compiler, and basic platform assumptions])
 AC_COMPILE_IFELSE(
     [AC_LANG_PROGRAM([[
+        // Documenting and enforcing platform assumptions:
+        //   These are things that are not guaranteed for all C architectures,
+        // compilers, and/or platforms, but they form the basis of some
+        // "reasonable" assumptions we are making in the rest of our code and
+        // are generally true on the kinds of server platforms we target, so we
+        // will be explicit about them.  These include basic C11 features.
+        //   Probably the one that will raise the most eyebrows is requiring
+        // "int" to be exactly 32 bits, which does not allow for the ILP64
+        // model. Basically, if you cannot lock down the width of "int", it is
+        // hard to write safe numeric code in the face of the standard C
+        // numeric promotions and conversions, because narrower unsigned types
+        // can surprisingly become signed and then be subject to undefined
+        // behavior for e.g. shifts and overflows.
+        //   In terms of ABI models, we only support ILP32 and LP64 with 8-bit
+        // char and 64-bit LL, and all the pointer-ish types matching the
+        // pointer width.  The only room for variance is whether the pointer
+        // and all related types (including long) are collectively 32 or 64
+        // bits wide.
+
         #include <assert.h>
+        #include <limits.h>
+        #include <stddef.h>
+        #include <stdint.h>
+        #include <sys/types.h> // for ssize_t, which is POSIX not C...
         static_assert(__STDC_VERSION__ >= 201112L, "C11");
+        static_assert(CHAR_BIT == 8, "8-bit char");
+        static_assert(sizeof(short) == sizeof(int16_t), "short is 16 bits");
+        static_assert(sizeof(unsigned short) == sizeof(uint16_t), "unsigned short is 16 bits");
+        static_assert(sizeof(int) == sizeof(int32_t), "int is 32 bits");
+        static_assert(sizeof(unsigned int) == sizeof(uint32_t), "unsigned int is 32 bits");
+        static_assert(sizeof(long long) == sizeof(int64_t), "long long is 64 bits");
+        static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "unsigned long long is 64 bits");
+        static_assert(sizeof(char*) == sizeof(uint32_t) || sizeof(char*) == sizeof(uint64_t), "pointers are 32 or 64 bits");
+        static_assert(sizeof(char*) == sizeof(long), "pointer and long widths match");
+        static_assert(sizeof(char*) == sizeof(intptr_t), "pointer and intptr_t widths match");
+        static_assert(sizeof(char*) == sizeof(uintptr_t), "pointer and uintptr_t widths match");
+        static_assert(sizeof(char*) == sizeof(ssize_t), "pointer and ssize_t widths match");
+        static_assert(sizeof(char*) == sizeof(size_t), "pointer and size_t widths match");
+        static_assert(sizeof(char*) == sizeof(ptrdiff_t), "pointer and ptrdiff_t widths match");
     ]],[])],
     [AC_MSG_RESULT([yes])],
     [AC_MSG_RESULT([no])
-     AC_MSG_ERROR([C11 Compiler is required])]
+    AC_MSG_ERROR([C compiler does not support C11 and/or basic platform assumptions violated])]
 )
 
 # POSIX threads stuff
