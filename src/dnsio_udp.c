@@ -328,9 +328,9 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
     iov->iov_len = process_dns_query(pctx, sa, iov->iov_base, NULL, buf_in_len);
     if (likely(iov->iov_len)) {
         while (1) {
-            int sent = sendmsg(fd, msg_hdr, 0);
+            const ssize_t sent = sendmsg(fd, msg_hdr, MSG_DONTWAIT);
             if (unlikely(sent < 0)) {
-                if (errno == EINTR || ERRNO_WOULDBLOCK)
+                if (unlikely(errno == EINTR))
                     continue;
                 stats_own_inc(&stats->udp.sendfail);
                 log_neterr("UDP sendmsg() of %zu bytes to client %s failed: %s", iov->iov_len, logf_anysin(sa), logf_errno());
@@ -411,7 +411,7 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
         rcu_quiescent_state();
         const ssize_t recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
         if (unlikely(recvmsg_rv < 0)) {
-            if (errno == EINTR)
+            if (unlikely(errno == EINTR))
                 continue;
             if (ERRNO_WOULDBLOCK) {
                 rcu_thread_offline();
@@ -483,10 +483,10 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
 
         // send next run of non-zero entries
         while (spkts) {
-            mmsg_rv = sendmmsg(fd, dgptr, spkts, 0);
+            mmsg_rv = sendmmsg(fd, dgptr, spkts, MSG_DONTWAIT);
             gdnsd_assert(mmsg_rv != 0); // not possible, sendmmsg returns >0 or -1+errno
             if (unlikely(mmsg_rv < 0)) {
-                if (errno == EINTR || ERRNO_WOULDBLOCK)
+                if (unlikely(errno == EINTR))
                     continue; // retry same sendmmsg() call
                 stats_own_inc(&stats->udp.sendfail);
                 log_neterr("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
@@ -548,9 +548,9 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         }
 
         rcu_quiescent_state();
-        const int mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
+        const ssize_t mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
         if (unlikely(mmsg_rv < 0)) {
-            if (errno == EINTR)
+            if (unlikely(errno == EINTR))
                 continue;
             if (ERRNO_WOULDBLOCK) {
                 rcu_thread_offline();
