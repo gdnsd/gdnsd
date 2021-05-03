@@ -124,6 +124,7 @@ src_gdnsd_SOURCES = \
 	src/main.h \
 	src/daemon.c \
 	src/daemon.h \
+	src/cdl.h \
 	src/css.c \
 	src/css.h \
 	src/cs.h \
