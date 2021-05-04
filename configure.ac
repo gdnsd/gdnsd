@@ -84,6 +84,15 @@ AC_COMPILE_IFELSE(
     AC_MSG_ERROR([C compiler does not support C11 and/or basic platform assumptions violated])]
 )
 
+# Optional --with-cache-alignment=N support.  Our compiler.h has some ifdef
+# checks for guesses at optimal values on common server CPUs, but
+# users/builders may want to specifically override a more-optimal value for
+# their target cpu/architecture here:
+AC_ARG_WITH([cache-alignment],
+    AS_HELP_STRING([--with-cache-alignment=N], [Override cpu cache alignment value]),
+    AC_DEFINE_UNQUOTED(CONFIG_CACHE_ALIGN, [$with_cache_alignment], [Overriden cpu cache alignment value])
+)
+
 # POSIX threads stuff
 AX_PTHREAD(,AC_MSG_ERROR([POSIX threads support is required]))
 LIBS="$PTHREAD_LIBS $LIBS"

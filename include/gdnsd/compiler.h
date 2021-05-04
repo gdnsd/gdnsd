@@ -27,6 +27,7 @@
 
 // Headers for compiler features we can take advantage of with C11 broadly:
 #include <stdnoreturn.h>
+#include <stdalign.h>
 #include <assert.h>
 
 // Basic features common to C11-era versions of clang and gcc
@@ -181,5 +182,40 @@ static void gdnsd_put_una32(const uint32_t v, uint8_t* p)
 
 // Generic useful macros
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
+// Attempt to set a reasonable cache line size define for use in alignas() for
+// avoiding destructive interference in data structure accesses shared between
+// threads.  The optimal value on a given CPU is not always obvious, and is
+// sometimes larger than the actual L1/L2 cacheline (e.g. because of streaming
+// prefetch to cachelines, or because L3 is important and has larger lines).
+//
+// This is a perf optimization - it'd be great to have a more-complete and
+// accurate set of conditions and values here, but it's not essential to
+// correctness, either.  The default of 64 is probably fairly universal in its
+// utility and better than nothing even on arches that happen to have larger
+// ideal values, and over-large values can be inefficient on small systems.
+//
+// This is my initial stab at some important cases, based on googling around
+// and staring at the values/rationales some other projects use.  This probably
+// needs more research and may be wrong for some (sub-)targets.  We're mainly
+// aiming at "modern" (as in, still being manufactured/warrantied and in
+// reasonably-widespread use) *nix server hardware.
+//
+// CONFIG_CACHE_ALIGN is from the optional --with-cache-alignment= configure
+// argument, in case someone wants to override for a build at that level.
+
+#if defined(CONFIG_CACHE_ALIGN)
+#  define CACHE_ALIGN CONFIG_CACHE_ALIGN
+#elif defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || defined(__amd64)
+#  define CACHE_ALIGN 128
+#elif defined(__s390__) || defined(__s390x__) || defined(__zarch__)
+#  define CACHE_ALIGN 256
+#elif defined(__ppc__) || defined(__ppc64__) || defined(__powerpc__) || defined(__powerpc64__)
+#  define CACHE_ALIGN 256
+#elif defined(__sparc__) || defined(__sparc64__) || defined(__sparc)
+#  define CACHE_ALIGN 256
+#else
+#  define CACHE_ALIGN 64
+#endif
 
 #endif // GDNSD_COMPILER_H
