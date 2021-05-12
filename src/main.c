@@ -90,6 +90,16 @@ static void syserr_for_ev(const char* msg)
     log_fatal("%s: %s", msg, logf_errno());
 }
 
+static void* alloc_for_ev(void* ptr, long size)
+{
+    if (unlikely(size < 0))
+        log_fatal("Invalid alloc_for_ev() size %li\n", size);
+    if (size)
+        return xrealloc(ptr, (size_t)size);
+    free(ptr);
+    return 0;
+}
+
 static pthread_t zones_reloader_threadid;
 
 static bool join_zones_reloader_thread(void)
@@ -480,8 +490,9 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // Initialize dnspacket stuff
     dnspacket_global_setup(socks_cfg);
 
-    // Set up libev error callback
+    // Set up libev error+allocator callbacks
     ev_set_syserr_cb(&syserr_for_ev);
+    ev_set_allocator(&alloc_for_ev);
 
     // default ev loop in main process to handle statio, monitors, control
     // socket, signals, etc.
