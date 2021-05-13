@@ -25,6 +25,7 @@
 #include "dnspacket.h"
 #include "socks.h"
 #include "proxy.h"
+#include "cdl.h"
 
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -85,16 +86,13 @@ typedef union {
 // Ensure no padding between pktbuf_size_hdr and pkt, above
 static_assert(alignof(pkt_t) <= alignof(uint16_t), "No padding for pkt");
 
-struct conn;
-typedef struct conn conn_t;
-
 // per-thread state
 typedef struct {
     // These pointers and values are fixed for the life of the thread:
     dnspacket_stats_t* stats;
     dnsp_ctx_t* pctx;
     struct ev_loop* loop;
-    conn_t** churn; // save conn_t allocations from previously-closed conns
+    struct conn** churn; // save struct conn allocations from previously-closed conns
     tcp_pkt_t* tpkt;
     double server_timeout;
     size_t max_clients;
@@ -107,19 +105,16 @@ typedef struct {
     ev_idle idle_watcher;
     ev_async stop_watcher;
     ev_timer timeout_watcher;
-    conn_t* connq_head; // doubly-linked-list, most-idle at head
-    conn_t* connq_tail; // last element, least-idle
-    size_t num_conns; // count of all conns, also len of connq list
+    CDL_ROOT(struct conn) connq; // cppcheck-suppress unusedStructMember
     size_t check_mode_conns; // conns using check_watcher at present
-    unsigned churn_count; // number of conn_t cached in "churn"
+    unsigned churn_count; // number of struct conn cached in "churn"
     bool grace_mode; // final 5s grace mode flag
     bool rcu_is_online;
 } thread_t;
 
 // per-connection state
 struct conn {
-    conn_t* next; // doubly-linked-list
-    conn_t* prev; // doubly-linked-list
+    CDL_ENTRY(struct conn) connq_entry;
     thread_t* thr;
     ev_io read_watcher;
     ev_check check_watcher;
@@ -136,7 +131,7 @@ struct conn {
 };
 
 // See above at definition of TCP_READBUF
-static_assert(sizeof(conn_t) <= 4096U, "TCP conn <= 4KB");
+static_assert(sizeof(struct conn) <= 4096U, "TCP conn <= 4KB");
 
 static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
 static thread_t** registry = NULL;
@@ -185,95 +180,30 @@ static void unregister_thread(const thread_t* thr)
     pthread_mutex_unlock(&registry_lock);
 }
 
-// Assert all the things we assume about connection tracking sanity.  They're
-// not always true while things are under manipulation, but they should all be
-// true once a given set of manipulations are complete.
 F_NONNULL
-static void connq_assert_sane(const thread_t* thr)
+static void connq_set_timer(thread_t* thr, struct conn* head)
 {
-    if (!thr->num_conns) {
-        gdnsd_assert(!thr->connq_head);
-        gdnsd_assert(!thr->connq_tail);
-    } else {
-        gdnsd_assert(thr->num_conns <= thr->max_clients);
-        gdnsd_assert(thr->connq_head);
-        gdnsd_assert(thr->connq_tail);
-        gdnsd_assert(!thr->connq_head->prev);
-        gdnsd_assert(!thr->connq_tail->next);
-#ifndef NDEBUG
-        size_t ct = 0;
-        conn_t* c = thr->connq_head;
-        while (c) {
-            ct++;
-            if (c != thr->connq_tail)
-                gdnsd_assert(c->next);
-            if (c != thr->connq_head)
-                gdnsd_assert(c->prev);
-            c = c->next;
-        }
-        gdnsd_assert(ct == thr->num_conns);
-#endif
+    gdnsd_assert(!CDL_IS_EMPTY(&thr->connq));
+    gdnsd_assert(CDL_IS_HEAD(&thr->connq, head));
+
+    if (likely(!thr->grace_mode)) {
+        ev_timer* tmo = &thr->timeout_watcher;
+        ev_tstamp next_interval = thr->server_timeout + TIMEOUT_FUDGE
+                                  - (ev_now(thr->loop) - head->idle_start);
+        if (next_interval < TIMEOUT_FUDGE)
+            next_interval = TIMEOUT_FUDGE;
+        tmo->repeat = next_interval;
+        ev_timer_again(thr->loop, tmo);
     }
 }
 
-// This adjust the timer to the next connq_head expiry or stops it if no
-// connections are left in the queue. when in either shutdown phase, we do not
-// update the timer, but we will stop it.
+// Closes and destroys a connection and removes it from the connq.  Does *not*
+// stop/adjust any timeout timer unless the final conn is destructed while in
+// the final 5s grace mode.
 F_NONNULL
-static void connq_adjust_timer(thread_t* thr)
+static void connq_destruct_conn(thread_t* thr, struct conn* conn, const bool rst)
 {
-    connq_assert_sane(thr);
-    ev_timer* tmo = &thr->timeout_watcher;
-    if (thr->connq_head) {
-        if (likely(!thr->grace_mode)) {
-            ev_tstamp next_interval = thr->server_timeout + TIMEOUT_FUDGE
-                                      - (ev_now(thr->loop) - thr->connq_head->idle_start);
-            if (next_interval < TIMEOUT_FUDGE)
-                next_interval = TIMEOUT_FUDGE;
-            tmo->repeat = next_interval;
-            ev_timer_again(thr->loop, tmo);
-        }
-    } else {
-        gdnsd_assert(!thr->num_conns);
-        ev_timer_stop(thr->loop, tmo);
-    }
-}
-
-// Pull a connection out of the queue and adjust everything else for sanity.
-// This could be to destroy it, or could be to move it to the tail.  Does not
-// touch the value of the next or prev pointers of the conn, but does touch the
-// neighbors reachable through them.
-F_NONNULL
-static void connq_pull_conn(thread_t* thr, const conn_t* conn)
-{
-    connq_assert_sane(thr);
-    gdnsd_assume(thr->num_conns);
-    thr->num_conns--;
-
-    if (conn->next) {
-        gdnsd_assume(conn != thr->connq_tail);
-        conn->next->prev = conn->prev;
-    } else {
-        gdnsd_assume(conn == thr->connq_tail);
-        thr->connq_tail = conn->prev;
-    }
-
-    if (conn->prev) {
-        gdnsd_assume(conn != thr->connq_head);
-        conn->prev->next = conn->next;
-    } else {
-        gdnsd_assume(conn == thr->connq_head);
-        thr->connq_head = conn->next;
-        connq_adjust_timer(thr);
-    }
-    connq_assert_sane(thr);
-}
-
-// Closes and destroys a connection, and optionally manages it out of the queue
-F_NONNULL
-static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, const bool manage_queue)
-{
-    gdnsd_assume(thr->num_conns);
+    gdnsd_assert(!CDL_IS_EMPTY(&thr->connq));
 
     ev_io* read_watcher = &conn->read_watcher;
     ev_io_stop(thr->loop, read_watcher);
@@ -293,8 +223,7 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
     if (close(fd))
         log_neterr("close(%s) failed: %s", logf_anysin(&conn->sa), logf_errno());
 
-    if (manage_queue)
-        connq_pull_conn(thr, conn);
+    CDL_DEL(&thr->connq, connq_entry, conn);
 
     if (thr->churn_count < thr->churn_alloc) {
         memset(conn, 0, sizeof(*conn));
@@ -302,94 +231,75 @@ static void connq_destruct_conn(thread_t* thr, conn_t* conn, const bool rst, con
     } else {
         free(conn);
     }
+
+    // If we're in grace mode and just removed the final connection, go ahead
+    // and stop the timer to let the thread exit without waiting the full 5s
+    // grace period pointlessly.
+    if (unlikely(thr->grace_mode) && CDL_IS_EMPTY(&thr->connq)) {
+        ev_timer* timeout_watcher = &thr->timeout_watcher;
+        ev_timer_stop(thr->loop, timeout_watcher);
+    }
 }
 
 // Append a new connection at the tail of the idle list and set its idle_start
 F_NONNULL
-static void connq_append_new_conn(thread_t* thr, conn_t* conn)
+static void connq_append_new_conn(thread_t* thr, struct conn* conn)
 {
-    connq_assert_sane(thr);
-    // This element is not part of the linked list yet
-    gdnsd_assume(thr->connq_head != conn);
-    gdnsd_assume(thr->connq_tail != conn);
-    gdnsd_assume(!conn->next);
-    gdnsd_assume(!conn->prev);
-    // accept() handler is gone when in either shutdown phase
+    // accept() handler is gone when in grace phase
     gdnsd_assert(!thr->grace_mode);
 
+    // Set the idle_start metadata for this connection:
     conn->idle_start = ev_now(thr->loop);
-    thr->num_conns++;
 
-    // If there's no existing head, the conn list was empty before this one, so
-    // it's a very simple case to handle:
-    if (!thr->connq_head) {
-        gdnsd_assert(thr->num_conns == 1);
-        gdnsd_assert(!thr->connq_tail);
-        thr->connq_head = thr->connq_tail = conn;
-        connq_adjust_timer(thr);
-        return;
-    }
+    // Add to the end of the list (the newest connection by definition has the
+    // longest expiry remaining):
+    CDL_ADD_TAIL(&thr->connq, connq_entry, conn);
 
-    // Otherwise we append to the tail of the list
-    gdnsd_assert(thr->connq_tail);
-    gdnsd_assert(!thr->connq_tail->next);
-    conn->prev = thr->connq_tail;
-    conn->next = NULL;
-    thr->connq_tail->next = conn;
-    thr->connq_tail = conn;
-
-    connq_assert_sane(thr);
-
-    // If we've just maxed out the connection count, we have to kill a conn ungracefully.
-    // Arguably, we could do smarter things sooner for DSO clients (e.g. on
-    // reaching X% of max connection count, send the most-idle DSO session a
-    // zero inactivity unidirectional keepalive, or a retrydelay), but it's
-    // tricky to think through the implications here given mixed clients
-    // (fairness between DSO and non-DSO, whether the most-idle DSO is anywhere
-    // near the most-idle end of the list, etc)
-    if (thr->num_conns == thr->max_clients) {
-        stats_own_inc(&conn->thr->stats->tcp.close_s_kill);
-        log_neterr("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&thr->connq_head->sa));
-        connq_destruct_conn(thr, thr->connq_head, true, true);
+    if (CDL_IS_HEAD(&thr->connq, conn)) {
+        // If the list was empty and we became the head by inserting at the
+        // end, and the timer was not running at all, we need to start it up
+        // (if it's still running from a previously-closed connection, we avoid
+        // timer churn as an optimization):
+        gdnsd_assert(CDL_GET_COUNT(&thr->connq) == 1U);
+        ev_timer* timeout_watcher = &thr->timeout_watcher;
+        if (!ev_is_active(timeout_watcher))
+            connq_set_timer(thr, conn);
+    } else if (CDL_GET_COUNT(&thr->connq) == thr->max_clients) {
+        // If we've just maxed out the connection count, we have to kill a conn
+        // ungracefully.  Arguably, we could do smarter things sooner for DSO
+        // clients (e.g. on reaching X% of max connection count, send the
+        // most-idle DSO session a zero inactivity unidirectional keepalive, or
+        // a retrydelay), but it's tricky to think through the implications
+        // here given mixed clients (fairness between DSO/non-DSO, whether the
+        // most-idle DSO is anywhere near the most-idle end of the list, etc)
+        struct conn* head = CDL_GET_HEAD(&thr->connq);
+        log_neterr("TCP DNS conn from %s reset by server: killed due to thread connection load (most-idle)", logf_anysin(&head->sa));
+        connq_destruct_conn(thr, head, true);
+        stats_own_inc(&thr->stats->tcp.close_s_kill);
     }
 }
 
-// Called when a connection completes a transaction (reads a legit request, and
+// Called when a connection completes a transaction (reads a legit request and
 // writes the full response to the TCP layer), causing us to reset its idleness
 F_NONNULL
-static void connq_refresh_conn(thread_t* thr, conn_t* conn)
+static void connq_refresh_conn(thread_t* thr, struct conn* conn)
 {
-    connq_assert_sane(thr);
     gdnsd_assert(!conn->need_proxy_init);
+    gdnsd_assert(!CDL_IS_EMPTY(&thr->connq));
+
+    // First, refresh the actual idle_start metadata of this conn; regardless
+    // of list position, this must be tracked accurately:
     conn->idle_start = ev_now(thr->loop);
 
-    // If this is the only connection, just adjust the timer
-    if (thr->num_conns == 1) {
-        gdnsd_assert(conn == thr->connq_head);
-        gdnsd_assert(conn == thr->connq_tail);
-        connq_adjust_timer(thr);
-        return;
-    }
-
-    // If we're already at the tail, nothing left to do
-    if (conn == thr->connq_tail)
-        return;
-
-    // Otherwise, pull it (which will adjust timer if the conn pulled was the
-    // head) and place it at the tail
-    connq_pull_conn(thr, conn);
-    conn->prev = thr->connq_tail;
-    conn->next = NULL;
-    thr->connq_tail->next = conn;
-    thr->connq_tail = conn;
-    thr->num_conns++; // connq_pull_conn decrements, but we're re-inserting here
-    connq_assert_sane(thr);
+    // Move to the end of the queue idempotently (the most recently-active is
+    // always the longest to next timeout expiry):
+    CDL_MOVE_TO_TAIL(&thr->connq, connq_entry, conn);
 }
 
 // Expects response data to already be in conn->pktbuf, of size resp_size.
 // Used for writing normal responses, and also for DSO unidirectionals
 F_NONNULL
-static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
+static bool conn_write_packet(thread_t* thr, struct conn* conn, size_t resp_size)
 {
     gdnsd_assume(resp_size);
     tcp_pkt_t* tpkt = thr->tpkt;
@@ -402,9 +312,9 @@ static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
             log_debug("TCP DNS conn from %s reset by server: failed while writing: %s", logf_anysin(&conn->sa), logf_errno());
         else
             log_debug("TCP DNS conn from %s reset by server: cannot buffer whole response", logf_anysin(&conn->sa));
+        connq_destruct_conn(thr, conn, true);
         stats_own_inc(&thr->stats->tcp.sendfail);
         stats_own_inc(&thr->stats->tcp.close_s_err);
-        connq_destruct_conn(thr, conn, true, true);
         return true;
     }
     return false;
@@ -412,7 +322,7 @@ static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
 
 // DSO unidirectional send of KeepAlive with KA=inf + Inact=0
 F_NONNULL
-static void conn_send_dso_uni(thread_t* thr, conn_t* conn)
+static void conn_send_dso_uni(thread_t* thr, struct conn* conn)
 {
     uint8_t* buf = thr->tpkt->pkt.raw;
 
@@ -449,58 +359,54 @@ static void conn_send_dso_uni(thread_t* thr, conn_t* conn)
 }
 
 F_NONNULL
-static void timeout_handler(struct ev_loop* loop V_UNUSED, ev_timer* t, const int revents V_UNUSED)
+static void timeout_handler(struct ev_loop* loop, ev_timer* timeout_watcher, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_TIMER);
-    thread_t* thr = t->data;
+    thread_t* thr = timeout_watcher->data;
     gdnsd_assume(thr);
-    connq_assert_sane(thr);
 
-    // Timer never fires unless there are connections, in all cases
-    conn_t* conn = thr->connq_head;
-    gdnsd_assume(conn);
-
-    // End of the 5s final shutdown phase: immediately close all connections and let the thread exit
+    // End of the 5s grace phase: immediately close all connections and let the thread exit
     if (unlikely(thr->grace_mode)) {
-        log_debug("TCP DNS thread shutdown: immediately dropping (RST) %zu delinquent connections while exiting", thr->num_conns);
-        while (conn) {
-            conn_t* next_conn = conn->next;
-            connq_destruct_conn(thr, conn, true, false); // no queue mgmt
+        log_debug("TCP DNS thread shutdown: immediately dropping (RST) %zu delinquent connections while exiting", CDL_GET_COUNT(&thr->connq));
+        CDL_FOR_EACH_SAFE(&thr->connq, struct conn, connq_entry, conn) {
+            connq_destruct_conn(thr, conn, true);
             stats_own_inc(&thr->stats->tcp.close_s_err);
-            conn = next_conn;
         }
-        // Stop ourselves, we should be the only remaining active watcher
-        ev_timer* tmo = &thr->timeout_watcher;
-        ev_timer_stop(thr->loop, tmo);
-        thr->connq_head = NULL;
-        thr->connq_tail = NULL;
-        thr->num_conns = 0;
-        return; // eventloop will end now, and shortly after the whole thread
+        gdnsd_assert(CDL_IS_EMPTY(&thr->connq));
+        // Stop timer, should be last remaining watcher, leading to loop end
+        ev_timer_stop(loop, timeout_watcher);
     }
 
-    // Normal runtime timer fire for real conn expiry, expire from head of idle
-    // list until we find an unexpired one (if any)
-    const double cutoff = ev_now(thr->loop) - thr->server_timeout;
-    while (conn && conn->idle_start <= cutoff) {
-        conn_t* next_conn = conn->next;
+    // Here we process normal runtime timeout expiries.  Note that during
+    // general runtime operations elsewhere in the code, we avoid excessive
+    // timer manipulations due to connections arriving, closing, or bumping
+    // activity, as an optimization.  We prefer to just leave the current timer
+    // running (which at worst fires a little earlier than necessary, not
+    // later) and then do our fixups here once per timeout event (vs lots of
+    // timer re-set churn when lots of connections are churning).
+    // Aside from things that happen at shutdown time, and the timer reset/stop
+    // at the bottom of this function, the only other time we explicitly re-set
+    // the timer is when a new connection arrives while the timer is stopped
+    // (initial state, or because this function found or caused an empty
+    // connection list earlier and stopped it).  When we arrive here on a timer
+    // firing, we have no idea whether the list has any connections left and/or
+    // whether any of them are actually expired, but we do know that it's
+    // sorted in timeout order, so we expire from the front of the list as
+    // warranted and then re-set the timer (or stop it) as appropriate:
+
+    const double cutoff = ev_now(loop) - thr->server_timeout;
+    CDL_FOR_EACH_SAFE(&thr->connq, struct conn, connq_entry, conn) {
+        if (conn->idle_start > cutoff)
+            break;
         log_debug("TCP DNS conn from %s reset by server: timeout", logf_anysin(&conn->sa));
-        stats_own_inc(&conn->thr->stats->tcp.close_s_ok);
-        // Note final "manage_queue" argument is false.
-        connq_destruct_conn(thr, conn, true, false);
-        thr->num_conns--;
-        conn = next_conn;
+        connq_destruct_conn(thr, conn, true);
+        stats_own_inc(&thr->stats->tcp.close_s_ok);
     }
 
-    // Manual queue management, since we only pulled from the head
-    if (!conn) {
-        gdnsd_assert(!thr->num_conns);
-        thr->connq_head = thr->connq_tail = NULL;
-    } else {
-        gdnsd_assert(thr->num_conns);
-        conn->prev = NULL;
-        thr->connq_head = conn;
-    }
-    connq_adjust_timer(thr);
+    if (!CDL_IS_EMPTY(&thr->connq))
+        connq_set_timer(thr, CDL_GET_HEAD(&thr->connq));
+    else
+        ev_timer_stop(loop, timeout_watcher);
 }
 
 F_NONNULL
@@ -510,7 +416,6 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     thread_t* thr = w->data;
     gdnsd_assume(thr);
     gdnsd_assert(!thr->grace_mode); // this handler stops itself on grace entry
-    connq_assert_sane(thr);
 
     // Stop the accept() watcher and the async watcher for this stop handler
     ev_async* stop_watcher = &thr->stop_watcher;
@@ -518,17 +423,17 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     ev_io* accept_watcher = &thr->accept_watcher;
     ev_io_stop(loop, accept_watcher);
 
-    // If there are no active connections, the thread's timeout watcher should
-    // be inactive as well, and so the two watchers we stopped above were the
-    // only ones keeping the loop running, and we can just return now without
-    // going through all our graceful behaviors for live connections.
-    if (!thr->num_conns) {
-        ev_timer* tw V_UNUSED = &thr->timeout_watcher;
-        gdnsd_assert(!ev_is_active(tw));
+    ev_timer* timeout_watcher = &thr->timeout_watcher;
+
+    // If there are no active connections, idempotently stop the timeout
+    // watcher in case it's still running (we don't always stop it immediately
+    // when the last conn closes in the general case).
+    if (CDL_IS_EMPTY(&thr->connq)) {
+        ev_timer_stop(loop, timeout_watcher);
         return;
     }
 
-    log_debug("TCP DNS thread shutdown: gracefully requesting clients to close %zu remaining conns when able and waiting up to 5s", thr->num_conns);
+    log_debug("TCP DNS thread shutdown: gracefully requesting clients to close %zu remaining conns when able and waiting up to 5s", CDL_GET_COUNT(&thr->connq));
 
     // Switch thread state to the "graceful" shutdown phase
     thr->grace_mode = true;
@@ -537,32 +442,24 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
     dnspacket_ctx_set_grace(thr->pctx);
 
     // send unidirectional KeepAlive w/ inactivity=0 to all DSO clients
-    conn_t* conn = thr->connq_head;
-    gdnsd_assume(conn);
-    while (conn) {
-        conn_t* next_conn = conn->next;
+    CDL_FOR_EACH_SAFE(&thr->connq, struct conn, connq_entry, conn) {
+        // conn_send_dso_uni can destruct on failure, hence the SAFE loop
         if (conn->dso.estab)
             conn_send_dso_uni(thr, conn);
-        conn = next_conn;
     }
 
-    // Up until now, the timeout watcher was firing dynamically according to
-    // connection idleness, always pointing at the expiry point of the
-    // head-most (most-idle) connection in the queue.  Now it is reset to fire
-    // once 5 seconds from now to end our grace period and exit the thread.
-    // However, we won't bother if there's no clients left (it's possible in
-    // the case that they're all DSO connections, and they all experienced a
-    // write failure of their unidirectional keepalive above, causing
-    // termination).
-    if (thr->num_conns) {
-        // Start the timer for the final 5s, if any clients are left (some may
-        // get closed above if we fail to write DSO unidirectionals to them).
-        ev_timer* tmo = &thr->timeout_watcher;
-        tmo->repeat = 5.0;
-        ev_timer_again(thr->loop, tmo);
+    if (CDL_IS_EMPTY(&thr->connq)) {
+        // The attempted DSO sends above could close (due to error) all the
+        // remaining connections, in which case we can stop the timer now,
+        // which is the last remaining watcher, and the loop will end.
+        ev_timer_stop(loop, timeout_watcher);
     } else {
-        ev_timer* tw V_UNUSED = &thr->timeout_watcher;
-        gdnsd_assert(!ev_is_active(tw));
+        // If we still have live connections at this point, we will wait 5 more
+        // seconds for them to naturally close (possibly in response to our DSO
+        // KA, or an EDNS KA on a response) in "grace" mode before RSTing all
+        // that remain:
+        timeout_watcher->repeat = 5.0;
+        ev_timer_again(loop, timeout_watcher);
     }
 }
 
@@ -570,7 +467,7 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
 // sanitizing actions along the way.
 // TLDR: -1 == killed conn, 0 == need more read, 1+ == size of full req avail
 F_NONNULL
-static ssize_t conn_check_next_req(thread_t* thr, conn_t* conn)
+static ssize_t conn_check_next_req(thread_t* thr, struct conn* conn)
 {
     // No bytes, just ensure head is reset to zero and ask for more reading
     if (!conn->readbuf_bytes) {
@@ -590,9 +487,9 @@ static ssize_t conn_check_next_req(thread_t* thr, conn_t* conn)
     }
     if (unlikely(undersized || req_size > DNS_RECV_SIZE)) {
         log_debug("TCP DNS conn from %s reset by server while reading: bad TCP request length", logf_anysin(&conn->sa));
+        connq_destruct_conn(thr, conn, true);
         stats_own_inc(&thr->stats->tcp.recvfail);
         stats_own_inc(&thr->stats->tcp.close_s_err);
-        connq_destruct_conn(thr, conn, true, true);
         return -1;
     }
 
@@ -616,7 +513,7 @@ static ssize_t conn_check_next_req(thread_t* thr, conn_t* conn)
 // max).  Will copy out the request, process it, write a response, and then
 // manage the read buffer state and the check/read watcher states.
 F_NONNULL
-static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
+static void conn_respond(thread_t* thr, struct conn* conn, const size_t req_size)
 {
     gdnsd_assume(req_size >= 12U && req_size <= DNS_RECV_SIZE);
     tcp_pkt_t* tpkt = thr->tpkt;
@@ -639,8 +536,8 @@ static void conn_respond(thread_t* thr, conn_t* conn, const size_t req_size)
     size_t resp_size = process_dns_query(thr->pctx, &conn->sa, &tpkt->pkt, &conn->dso, req_size);
     if (!resp_size) {
         log_debug("TCP DNS conn from %s reset by server: dropped invalid query", logf_anysin(&conn->sa));
+        connq_destruct_conn(thr, conn, true);
         stats_own_inc(&thr->stats->tcp.close_s_err);
-        connq_destruct_conn(thr, conn, true, true);
         return;
     }
 
@@ -692,7 +589,7 @@ F_NONNULL
 static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_CHECK);
-    conn_t* conn = w->data;
+    struct conn* conn = w->data;
     gdnsd_assume(conn);
     thread_t* thr = conn->thr;
     gdnsd_assume(thr);
@@ -713,7 +610,7 @@ static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int 
 // gave no new bytes and wants to block in the eventloop again).  rv false
 // means one or more new bytes were added to the readbuf.
 F_NONNULL
-static bool conn_do_recv(thread_t* thr, conn_t* conn)
+static bool conn_do_recv(thread_t* thr, struct conn* conn)
 {
     gdnsd_assume(conn->readbuf_bytes < sizeof(conn->readbuf));
     const size_t wanted = sizeof(conn->readbuf) - conn->readbuf_bytes;
@@ -728,16 +625,16 @@ static bool conn_do_recv(thread_t* thr, conn_t* conn)
             log_debug("TCP DNS conn from %s closed by client while idle (ideal close)", logf_anysin(&conn->sa));
             stats_own_inc(&thr->stats->tcp.close_c);
         }
-        connq_destruct_conn(thr, conn, false, true);
+        connq_destruct_conn(thr, conn, false);
         return true;
     }
 
     if (recvrv < 0) { // negative return -> errno
         if (!ERRNO_WOULDBLOCK) {
             log_debug("TCP DNS conn from %s reset by server: error while reading: %s", logf_anysin(&conn->sa), logf_errno());
+            connq_destruct_conn(thr, conn, true);
             stats_own_inc(&thr->stats->tcp.recvfail);
             stats_own_inc(&thr->stats->tcp.close_s_err);
-            connq_destruct_conn(thr, conn, true, true);
         }
         return true;
     }
@@ -753,7 +650,7 @@ F_NONNULL
 static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_READ);
-    conn_t* conn = w->data;
+    struct conn* conn = w->data;
     gdnsd_assume(conn);
     thread_t* thr = conn->thr;
     gdnsd_assume(thr);
@@ -768,9 +665,9 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
         gdnsd_assume(consumed <= conn->readbuf_bytes);
         if (!consumed) {
             log_neterr("PROXY parse fail from %s, resetting connection", logf_anysin(&conn->sa));
+            connq_destruct_conn(thr, conn, true);
             stats_own_inc(&thr->stats->tcp.proxy_fail);
             stats_own_inc(&thr->stats->tcp.close_s_err);
-            connq_destruct_conn(thr, conn, true, true);
             return;
         }
         conn->readbuf_bytes -= consumed;
@@ -799,28 +696,29 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
     if (unlikely(sock < 0)) {
         if (ERRNO_WOULDBLOCK || errno == EINTR) {
             // Simple retryable failures, do nothing
-        } else if ((errno == ENFILE || errno == EMFILE) && thr->connq_head) {
+        } else if ((errno == ENFILE || errno == EMFILE) && !CDL_IS_EMPTY(&thr->connq)) {
             // If we ran out of fds and there's an idle one we can close, try
             // to do that, just like we do when we hit our internal limits
-            stats_own_inc(&thr->stats->tcp.acceptfail);
-            stats_own_inc(&thr->stats->tcp.close_s_kill);
+            struct conn* head = CDL_GET_HEAD(&thr->connq);
             log_neterr("TCP DNS conn from %s reset by server: attempting to"
                        " free resources because: accept4() failed: %s",
-                       logf_anysin(&thr->connq_head->sa), logf_errno());
-            connq_destruct_conn(thr, thr->connq_head, true, true);
+                       logf_anysin(&head->sa), logf_errno());
+            connq_destruct_conn(thr, head, true);
+            stats_own_inc(&thr->stats->tcp.acceptfail);
+            stats_own_inc(&thr->stats->tcp.close_s_kill);
         } else {
             // For all other errnos (or E[MN]FILE without a conn to kill,
             // because we're not actually the offending thread...), just do a
             // ratelimited log output and bump the stat.
-            stats_own_inc(&thr->stats->tcp.acceptfail);
             log_neterr("TCP DNS: accept4() failed: %s", logf_errno());
+            stats_own_inc(&thr->stats->tcp.acceptfail);
         }
         return;
     }
 
     log_debug("Received TCP DNS connection from %s", logf_anysin(&sa));
 
-    conn_t* conn;
+    struct conn* conn;
     if (thr->churn_count)
         conn = thr->churn[--thr->churn_count];
     else
@@ -829,8 +727,8 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 
     stats_own_inc(&thr->stats->tcp.conns);
     if (thr->do_proxy) {
-        stats_own_inc(&thr->stats->tcp.proxy);
         conn->need_proxy_init = true;
+        stats_own_inc(&thr->stats->tcp.proxy);
     }
 
     conn->thr = thr;
@@ -861,7 +759,7 @@ static void idle_handler(struct ev_loop* loop V_UNUSED, ev_idle* w V_UNUSED, con
 }
 
 F_NONNULL
-static void prep_handler(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, int revents V_UNUSED)
+static void prep_handler(struct ev_loop* loop, ev_prepare* w V_UNUSED, int revents V_UNUSED)
 {
     thread_t* thr = w->data;
     gdnsd_assume(thr);
@@ -869,15 +767,15 @@ static void prep_handler(struct ev_loop* loop V_UNUSED, ev_prepare* w V_UNUSED, 
     ev_idle* iw = &thr->idle_watcher;
     if (thr->check_mode_conns) {
         if (!ev_is_active(iw)) {
-            ev_idle_start(thr->loop, iw);
-            ev_unref(thr->loop);
+            ev_idle_start(loop, iw);
+            ev_unref(loop);
         }
         if (thr->rcu_is_online)
             rcu_quiescent_state();
     } else {
         if (ev_is_active(iw)) {
-            ev_ref(thr->loop);
-            ev_idle_stop(thr->loop, iw);
+            ev_ref(loop);
+            ev_idle_stop(loop, iw);
         }
         if (thr->rcu_is_online) {
             thr->rcu_is_online = false;
@@ -1036,9 +934,9 @@ void* dnsio_tcp_start(void* thread_asvoid)
     thr.do_proxy = addrconf->tcp_proxy;
     thr.tcp_pad = addrconf->tcp_pad;
 
-    // Set up the conn_t churn buffer, which saves some per-new-connection
-    // memory allocation churn by saving up to sqrt(max_clients) old conn_t
-    // storage for reuse
+    // Set up the struct conn churn buffer, which saves some per-new-connection
+    // memory allocation churn by saving up to sqrt(max_clients) old struct
+    // conn storage for reuse
     thr.churn_alloc = lrint(floor(sqrt(addrconf->tcp_clients_per_thread)));
     gdnsd_assume(thr.churn_alloc >= 4U); // because tcp_cpt min is 16U
     thr.churn = xmalloc_n(thr.churn_alloc, sizeof(*thr.churn));

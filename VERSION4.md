@@ -39,5 +39,6 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 ## Revamping internals
 
 * All uses of `volatile` (cross-thread stats sharing + signal handlers) have been replaced by the appropriate use of equivalent C11 atomics.
+* Many internal efficiency improvements
 
 ## DNSSEC on the horizon
