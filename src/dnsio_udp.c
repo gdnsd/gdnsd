@@ -333,7 +333,7 @@ static void slow_idle_poll(const int fd)
 }
 
 F_HOT F_NONNULL
-static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct msghdr* msg_hdr, const size_t buf_in_len)
+static void process_msg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, struct msghdr* msg_hdr, const size_t buf_in_len)
 {
     gdnsd_anysin_t* sa = msg_hdr->msg_name;
     if (unlikely(
@@ -364,7 +364,7 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
 }
 
 F_HOT F_NONNULL
-static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const bool use_cmsg)
+static void mainloop(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, const bool use_cmsg)
 {
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
@@ -421,7 +421,7 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
 #ifdef USE_MMSG
 
 F_HOT F_NONNULL
-static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct mmsghdr* dgrams, const unsigned pkts)
+static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, struct mmsghdr* dgrams, const unsigned pkts)
 {
     // For each input packet, first check for source port zero (in which case
     // we instantly drop it at this layer), then process it through
@@ -496,7 +496,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
 }
 
 F_HOT F_NONNULL
-static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, const bool use_cmsg)
+static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, const bool use_cmsg)
 {
     // MAX_RESPONSE_BUF, rounded up to the next nearest multiple of the page size
     const unsigned pgsz = get_pgsz();
@@ -579,7 +579,7 @@ void* dnsio_udp_start(void* thread_asvoid)
 
     const dns_addr_t* addrconf = t->ac;
 
-    dnspacket_stats_t* stats;
+    struct dns_stats* stats;
     dnsp_ctx_t* pctx = dnspacket_ctx_init_udp(&stats, is_ipv6(&addrconf->addr));
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);

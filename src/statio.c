@@ -34,7 +34,27 @@
 #include <time.h>
 #include <string.h>
 #include <sys/uio.h>
-#include <pthread.h>
+#include <stdatomic.h>
+
+// All I/O threads register indirectly via dnspacket_ctx_init() in order to
+// publish their allocated stats structures with the statio core.
+// stats_list_head is a singly linked list, which we can trivially make
+// lock-free via CAS because we only insert at the head and we never delete.
+
+static _Atomic(struct dns_stats*) stats_list_head = NULL;
+
+void statio_register_thread_stats(struct dns_stats* stats)
+{
+    struct dns_stats* old_head = atomic_load_explicit(&stats_list_head, memory_order_acquire);
+    do {
+        stats->next = old_head;
+    } while (
+        !atomic_compare_exchange_weak_explicit(
+            &stats_list_head, &old_head, stats,
+            memory_order_acq_rel, memory_order_acquire
+        )
+    );
+}
 
 typedef enum {
     UDP_RECVFAIL         = 0,
@@ -137,9 +157,6 @@ static const size_t json_buffer_max = (
 // Start time of the daemon for "uptime" calculation
 static time_t start_time = 0;
 
-// Count of DNS I/O threads that will register stats
-static unsigned num_dns_threads = 0;
-
 // This is zero on startup, and then imports the final stats of the daemon we
 // replaced (if applicable), and becomes the baseline for the accumulations
 // into statio below.
@@ -148,11 +165,9 @@ static stats_uint_t statio_base[SLOT_COUNT] = { 0 };
 // This is reset to a copy of statio_base and used to accumulate thread stats
 static stats_uint_t statio[SLOT_COUNT] = { 0 };
 
-static void accumulate_statio(unsigned threadnum)
+F_NONNULL
+static void accumulate_statio(const struct dns_stats* this_stats)
 {
-    const dnspacket_stats_t* this_stats = dnspacket_stats[threadnum];
-    gdnsd_assume(this_stats);
-
     const stats_uint_t l_noerror   = stats_get(&this_stats->noerror);
     const stats_uint_t l_refused   = stats_get(&this_stats->refused);
     const stats_uint_t l_nxdomain  = stats_get(&this_stats->nxdomain);
@@ -208,8 +223,11 @@ static void accumulate_statio(unsigned threadnum)
 static void populate_statio(void)
 {
     memcpy(&statio, &statio_base, sizeof(statio));
-    for (unsigned i = 0; i < num_dns_threads; i++)
-        accumulate_statio(i);
+    struct dns_stats* this_stats = atomic_load_explicit(&stats_list_head, memory_order_acquire);
+    while (this_stats) {
+        accumulate_statio(this_stats);
+        this_stats = this_stats->next;
+    }
 }
 
 char* statio_get_json(time_t nowish, size_t* len)
@@ -259,8 +277,7 @@ void statio_deserialize(uint64_t* data, size_t dlen)
     }
 }
 
-void statio_init(unsigned arg_num_dns_threads)
+void statio_init(void)
 {
-    num_dns_threads = arg_num_dns_threads;
     start_time = time(NULL);
 }

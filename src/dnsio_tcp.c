@@ -44,6 +44,7 @@
 #include <sys/uio.h>
 #include <math.h>
 #include <stdalign.h>
+#include <stdatomic.h>
 
 #include <ev.h>
 #include <urcu-qsbr.h>
@@ -87,9 +88,9 @@ typedef union {
 static_assert(alignof(pkt_t) <= alignof(uint16_t), "No padding for pkt");
 
 // per-thread state
-typedef struct {
+struct thred {
     // These pointers and values are fixed for the life of the thread:
-    dnspacket_stats_t* stats;
+    struct dns_stats* stats;
     dnsp_ctx_t* pctx;
     struct ev_loop* loop;
     struct conn** churn; // save struct conn allocations from previously-closed conns
@@ -99,7 +100,8 @@ typedef struct {
     unsigned churn_alloc;
     bool do_proxy;
     bool tcp_pad;
-    // The rest below will mutate:
+    // The rest below will mutate at least somewhat:
+    struct thred* next;
     ev_io accept_watcher;
     ev_prepare prep_watcher;
     ev_idle idle_watcher;
@@ -110,12 +112,12 @@ typedef struct {
     unsigned churn_count; // number of struct conn cached in "churn"
     bool grace_mode; // final 5s grace mode flag
     bool rcu_is_online;
-} thread_t;
+};
 
 // per-connection state
 struct conn {
     CDL_ENTRY(struct conn) connq_entry;
-    thread_t* thr;
+    struct thred* thr;
     ev_io read_watcher;
     ev_check check_watcher;
     ev_tstamp idle_start;
@@ -133,55 +135,61 @@ struct conn {
 // See above at definition of TCP_READBUF
 static_assert(sizeof(struct conn) <= 4096U, "TCP conn <= 4KB");
 
-static pthread_mutex_t registry_lock = PTHREAD_MUTEX_INITIALIZER;
-static thread_t** registry = NULL;
-static size_t registry_size = 0;
-static size_t registry_init = 0;
+// The init/count and condvar-gating here are to ensure that all of the started
+// threads finish registering themselves before the main thread tries to stop
+// them all via the registry (otherwise we might leak a thread and never ask it
+// to stop).  Since only the stopping function needs to gate on this, we
+// execute the gating part at stop time, which in almost all cases will
+// already have the correct condition and not even wait or block on the mutex,
+// unless stop is attempted very very early.
+static pthread_mutex_t thred_reg_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t thred_reg_cond = PTHREAD_COND_INITIALIZER;
+static struct thred* thred_reg_head = NULL;
+static size_t threds_count = 0;
+static size_t threds_registered = 0;
 
 void dnsio_tcp_init(size_t num_threads)
 {
-    registry_size = num_threads;
-    registry = xcalloc_n(registry_size, sizeof(*registry));
+    threds_count = num_threads;
 }
 
+F_NONNULL
+static void thred_register(struct thred* thr)
+{
+    pthread_mutex_lock(&thred_reg_lock);
+    thr->next = thred_reg_head;
+    thred_reg_head = thr;
+    threds_registered++;
+    pthread_cond_signal(&thred_reg_cond);
+    pthread_mutex_unlock(&thred_reg_lock);
+}
+
+// Note the atomic_signal_fence below, which is intended to be a full barrier
+// against the *compiler* re-ordering the load of thr->next below the
+// ev_async_send.  Without this, there's technically a race: the thread running
+// this function could be preempted right after ev_async_send has done its main
+// job (notifying the affected thread via pipe write), and while it's suspended
+// the affected thread could receive its notification and terminate itself,
+// making the memory pointed at by thr invalid, and thus making any typical
+// load of thr->next at the bottom of the loop unsafe.
 void dnsio_tcp_request_threads_stop(void)
 {
-    pthread_mutex_lock(&registry_lock);
-    gdnsd_assume(registry_size == registry_init);
-    for (size_t i = 0; i < registry_init; i++) {
-        thread_t* thr = registry[i];
-        if (thr) {
-            ev_async* stop_watcher = &thr->stop_watcher;
-            ev_async_send(thr->loop, stop_watcher);
-        }
+    pthread_mutex_lock(&thred_reg_lock);
+    while (threds_registered < threds_count)
+        pthread_cond_wait(&thred_reg_cond, &thred_reg_lock);
+    struct thred* thr = thred_reg_head;
+    while (thr) {
+        struct thred* nxt = thr->next;
+        atomic_signal_fence(memory_order_seq_cst);
+        ev_async* stop_watcher = &thr->stop_watcher;
+        ev_async_send(thr->loop, stop_watcher);
+        thr = nxt;
     }
-    pthread_mutex_unlock(&registry_lock);
+    pthread_mutex_unlock(&thred_reg_lock);
 }
 
 F_NONNULL
-static void register_thread(thread_t* thr)
-{
-    pthread_mutex_lock(&registry_lock);
-    gdnsd_assume(registry_init < registry_size);
-    registry[registry_init++] = thr;
-    pthread_mutex_unlock(&registry_lock);
-}
-
-F_NONNULL
-static void unregister_thread(const thread_t* thr)
-{
-    pthread_mutex_lock(&registry_lock);
-    for (unsigned i = 0; i < registry_init; i++) {
-        if (registry[i] == thr) {
-            registry[i] = NULL;
-            break;
-        }
-    }
-    pthread_mutex_unlock(&registry_lock);
-}
-
-F_NONNULL
-static void connq_set_timer(thread_t* thr, struct conn* head)
+static void connq_set_timer(struct thred* thr, struct conn* head)
 {
     gdnsd_assert(!CDL_IS_EMPTY(&thr->connq));
     gdnsd_assert(CDL_IS_HEAD(&thr->connq, head));
@@ -201,7 +209,7 @@ static void connq_set_timer(thread_t* thr, struct conn* head)
 // stop/adjust any timeout timer unless the final conn is destructed while in
 // the final 5s grace mode.
 F_NONNULL
-static void connq_destruct_conn(thread_t* thr, struct conn* conn, const bool rst)
+static void connq_destruct_conn(struct thred* thr, struct conn* conn, const bool rst)
 {
     gdnsd_assert(!CDL_IS_EMPTY(&thr->connq));
 
@@ -243,7 +251,7 @@ static void connq_destruct_conn(thread_t* thr, struct conn* conn, const bool rst
 
 // Append a new connection at the tail of the idle list and set its idle_start
 F_NONNULL
-static void connq_append_new_conn(thread_t* thr, struct conn* conn)
+static void connq_append_new_conn(struct thred* thr, struct conn* conn)
 {
     // accept() handler is gone when in grace phase
     gdnsd_assert(!thr->grace_mode);
@@ -282,7 +290,7 @@ static void connq_append_new_conn(thread_t* thr, struct conn* conn)
 // Called when a connection completes a transaction (reads a legit request and
 // writes the full response to the TCP layer), causing us to reset its idleness
 F_NONNULL
-static void connq_refresh_conn(thread_t* thr, struct conn* conn)
+static void connq_refresh_conn(struct thred* thr, struct conn* conn)
 {
     gdnsd_assert(!conn->need_proxy_init);
     gdnsd_assert(!CDL_IS_EMPTY(&thr->connq));
@@ -299,7 +307,7 @@ static void connq_refresh_conn(thread_t* thr, struct conn* conn)
 // Expects response data to already be in conn->pktbuf, of size resp_size.
 // Used for writing normal responses, and also for DSO unidirectionals
 F_NONNULL
-static bool conn_write_packet(thread_t* thr, struct conn* conn, size_t resp_size)
+static bool conn_write_packet(struct thred* thr, struct conn* conn, size_t resp_size)
 {
     gdnsd_assume(resp_size);
     tcp_pkt_t* tpkt = thr->tpkt;
@@ -322,7 +330,7 @@ static bool conn_write_packet(thread_t* thr, struct conn* conn, size_t resp_size
 
 // DSO unidirectional send of KeepAlive with KA=inf + Inact=0
 F_NONNULL
-static void conn_send_dso_uni(thread_t* thr, struct conn* conn)
+static void conn_send_dso_uni(struct thred* thr, struct conn* conn)
 {
     uint8_t* buf = thr->tpkt->pkt.raw;
 
@@ -362,7 +370,7 @@ F_NONNULL
 static void timeout_handler(struct ev_loop* loop, ev_timer* timeout_watcher, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_TIMER);
-    thread_t* thr = timeout_watcher->data;
+    struct thred* thr = timeout_watcher->data;
     gdnsd_assume(thr);
 
     // End of the 5s grace phase: immediately close all connections and let the thread exit
@@ -413,7 +421,7 @@ F_NONNULL
 static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_ASYNC);
-    thread_t* thr = w->data;
+    struct thred* thr = w->data;
     gdnsd_assume(thr);
     gdnsd_assert(!thr->grace_mode); // this handler stops itself on grace entry
 
@@ -467,7 +475,7 @@ static void stop_handler(struct ev_loop* loop, ev_async* w, int revents V_UNUSED
 // sanitizing actions along the way.
 // TLDR: -1 == killed conn, 0 == need more read, 1+ == size of full req avail
 F_NONNULL
-static ssize_t conn_check_next_req(thread_t* thr, struct conn* conn)
+static ssize_t conn_check_next_req(struct thred* thr, struct conn* conn)
 {
     // No bytes, just ensure head is reset to zero and ask for more reading
     if (!conn->readbuf_bytes) {
@@ -513,7 +521,7 @@ static ssize_t conn_check_next_req(thread_t* thr, struct conn* conn)
 // max).  Will copy out the request, process it, write a response, and then
 // manage the read buffer state and the check/read watcher states.
 F_NONNULL
-static void conn_respond(thread_t* thr, struct conn* conn, const size_t req_size)
+static void conn_respond(struct thred* thr, struct conn* conn, const size_t req_size)
 {
     gdnsd_assume(req_size >= 12U && req_size <= DNS_RECV_SIZE);
     tcp_pkt_t* tpkt = thr->tpkt;
@@ -591,7 +599,7 @@ static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int 
     gdnsd_assert(revents == EV_CHECK);
     struct conn* conn = w->data;
     gdnsd_assume(conn);
-    thread_t* thr = conn->thr;
+    struct thred* thr = conn->thr;
     gdnsd_assume(thr);
 
     gdnsd_assert(!conn->need_proxy_init);
@@ -610,7 +618,7 @@ static void check_handler(struct ev_loop* loop V_UNUSED, ev_check* w, const int 
 // gave no new bytes and wants to block in the eventloop again).  rv false
 // means one or more new bytes were added to the readbuf.
 F_NONNULL
-static bool conn_do_recv(thread_t* thr, struct conn* conn)
+static bool conn_do_recv(struct thred* thr, struct conn* conn)
 {
     gdnsd_assume(conn->readbuf_bytes < sizeof(conn->readbuf));
     const size_t wanted = sizeof(conn->readbuf) - conn->readbuf_bytes;
@@ -652,7 +660,7 @@ static void read_handler(struct ev_loop* loop V_UNUSED, ev_io* w, const int reve
     gdnsd_assert(revents == EV_READ);
     struct conn* conn = w->data;
     gdnsd_assume(conn);
-    thread_t* thr = conn->thr;
+    struct thred* thr = conn->thr;
     gdnsd_assume(thr);
 
     if (conn_do_recv(thr, conn))
@@ -685,7 +693,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 {
     gdnsd_assert(revents == EV_READ);
 
-    thread_t* thr = w->data;
+    struct thred* thr = w->data;
 
     gdnsd_anysin_t sa;
     memset(&sa, 0, sizeof(sa));
@@ -761,7 +769,7 @@ static void idle_handler(struct ev_loop* loop V_UNUSED, ev_idle* w V_UNUSED, con
 F_NONNULL
 static void prep_handler(struct ev_loop* loop, ev_prepare* w V_UNUSED, int revents V_UNUSED)
 {
-    thread_t* thr = w->data;
+    struct thred* thr = w->data;
     gdnsd_assume(thr);
 
     ev_idle* iw = &thr->idle_watcher;
@@ -865,6 +873,10 @@ void tcp_dns_listen_setup(dns_thread_t* t)
 
     if (need_bind)
         socks_bind_sock("TCP DNS", t->sock, sa);
+
+    const int backlog = (int)(addrconf->tcp_backlog ? addrconf->tcp_backlog : SOMAXCONN);
+    if (listen(t->sock, backlog) == -1)
+        log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", backlog, logf_anysin(&addrconf->addr), logf_errno());
 }
 
 static void set_accf(const dns_addr_t* addrconf V_UNUSED, const int sock V_UNUSED)
@@ -918,11 +930,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     const dns_addr_t* addrconf = t->ac;
 
-    thread_t thr = { 0 };
-
-    const int backlog = (int)(addrconf->tcp_backlog ? addrconf->tcp_backlog : SOMAXCONN);
-    if (listen(t->sock, backlog) == -1)
-        log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", backlog, logf_anysin(&addrconf->addr), logf_errno());
+    struct thred thr = { 0 };
 
     set_accf(addrconf, t->sock);
 
@@ -977,17 +985,13 @@ void* dnsio_tcp_start(void* thread_asvoid)
     ev_prepare_start(loop, prep_watcher);
     ev_unref(loop); // prepare should not hold a ref, but should run to the end
 
-    // register_thread() hooks us into the ev_async-based shutdown-handling
+    // thred_register() hooks us into the ev_async-based shutdown-handling
     // code, therefore we must have thr.loop and thr.stop_watcher initialized
     // and ready before we register here
-    register_thread(&thr);
+    thred_register(&thr);
 
-    // dnspacket_ctx_init() is what releases threads through the startup gates,
-    // and main.c's call to dnspacket_wait_stats() waits for all threads to
-    // have reached this point before entering the main runtime loop.
-    // Therefore, this must happen after register_thread() above, to ensure
-    // that all tcp threads are properly registered with the shutdown handler
-    // before we begin processing possible future shutdown events.
+    // dnspacket_ctx_init() sets up our stats structure and dnspacket state for
+    // runtime use, and registers the stats with statio:
     thr.pctx = dnspacket_ctx_init_tcp(&thr.stats, addrconf->tcp_pad, addrconf->tcp_timeout);
 
     rcu_register_thread();
@@ -997,7 +1001,6 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     rcu_unregister_thread();
 
-    unregister_thread(&thr);
     ev_loop_destroy(loop);
     dnspacket_ctx_cleanup(thr.pctx);
     for (unsigned i = 0; i < thr.churn_count; i++)

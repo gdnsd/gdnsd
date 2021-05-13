@@ -26,6 +26,7 @@
 #include "ltree.h"
 #include "chal.h"
 #include "cookie.h"
+#include "statio.h"
 
 #include "plugins/plugapi.h"
 #include <gdnsd/alloc.h>
@@ -56,7 +57,6 @@ typedef struct {
     unsigned len; // the length of this dname (what would be in the first byte of a proper "dname" in ltree)
     unsigned offset; // where this named was stored in the packet (this & 0xC000 is our target if match)
 } ctarget_t;
-
 
 // EDNS Cookie-related states:
 typedef struct {
@@ -167,9 +167,6 @@ typedef struct {
 
 // per-thread persistent context
 struct dnsp_ctx {
-    // stats reference for this thread, permanent from startup
-    dnspacket_stats_t* stats;
-
     // used to pseudo-randomly rotate some RRsets (A, AAAA, and NS)
     gdnsd_rstate32_t rand_state;
 
@@ -197,36 +194,20 @@ struct dnsp_ctx {
 
     // The current transaction state
     txn_t txn;
+
+    // stats for this thread:
+    struct dns_stats* stats;
 };
 
-static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t stats_init_cond = PTHREAD_COND_INITIALIZER;
-static unsigned stats_initialized = 0;
 static unsigned result_v6_offset = 0;
 
-dnspacket_stats_t** dnspacket_stats;
-
-// Allocates the array of pointers to stats structures, one per I/O thread
 // Called from main thread before I/O threads are spawned.
-void dnspacket_global_setup(const socks_cfg_t* socks_cfg)
+void dnspacket_global_setup(void)
 {
-    dnspacket_stats = xcalloc_n(socks_cfg->num_dns_threads, sizeof(*dnspacket_stats));
     result_v6_offset = gdnsd_result_get_v6_offset();
 }
 
-// Called from main thread after starting all of the I/O threads,
-//  ensures they all finish allocating their stats and storing the pointers
-//  into dnspacket_stats before allowing the main thread to continue.
-void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
-{
-    const unsigned waitfor = socks_cfg->num_dns_threads;
-    pthread_mutex_lock(&stats_init_mutex);
-    while (stats_initialized < waitfor)
-        pthread_cond_wait(&stats_init_cond, &stats_init_mutex);
-    pthread_mutex_unlock(&stats_init_mutex);
-}
-
-static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad, const unsigned tcp_timeout_secs)
+static dnsp_ctx_t* dnspacket_ctx_init(struct dns_stats** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad, const unsigned tcp_timeout_secs)
 {
     if (udp_is_ipv6)
         gdnsd_assert(is_udp);
@@ -236,7 +217,8 @@ static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool 
         gdnsd_assert(!is_udp);
 
     dnsp_ctx_t* ctx = xcalloc(sizeof(*ctx));
-    ctx->stats = *stats_out = xcalloc(sizeof(*ctx->stats));
+    *stats_out = ctx->stats = xaligned_alloc(CACHE_ALIGN, sizeof(*(ctx->stats)));
+    memset(ctx->stats, 0, sizeof(*(ctx->stats)));
     ctx->dyn = xmalloc(gdnsd_result_get_alloc());
     gdnsd_rand32_init(&ctx->rand_state);
     gdnsd_plugins_action_iothread_init();
@@ -248,20 +230,16 @@ static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool 
     ctx->edns_tcp_keepalive = tcp_timeout_secs * 10;
     ctx->dso_inactivity = tcp_timeout_secs * 1000;
 
-    pthread_mutex_lock(&stats_init_mutex);
-    dnspacket_stats[stats_initialized++] = ctx->stats;
-    pthread_mutex_unlock(&stats_init_mutex);
-    pthread_cond_signal(&stats_init_cond);
-
+    statio_register_thread_stats(ctx->stats);
     return ctx;
 }
 
-dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6)
+dnsp_ctx_t* dnspacket_ctx_init_udp(struct dns_stats** stats_out, const bool is_ipv6)
 {
     return dnspacket_ctx_init(stats_out, true, is_ipv6, false, 0);
 }
 
-dnsp_ctx_t* dnspacket_ctx_init_tcp(dnspacket_stats_t** stats_out, const bool pad, const unsigned timeout_secs)
+dnsp_ctx_t* dnspacket_ctx_init_tcp(struct dns_stats** stats_out, const bool pad, const unsigned timeout_secs)
 {
     return dnspacket_ctx_init(stats_out, false, false, pad, timeout_secs);
 }
@@ -387,8 +365,6 @@ static rcode_rv_t handle_edns_cookie(dnsp_ctx_t* ctx, unsigned opt_len, const ui
 F_NONNULL
 static rcode_rv_t handle_edns_option(dnsp_ctx_t* ctx, unsigned opt_code, unsigned opt_len, const uint8_t* opt_data)
 {
-    gdnsd_assume(ctx->stats);
-
     rcode_rv_t rv = DECODE_OK;
     if (opt_code == EDNS_CLIENTSUB_OPTCODE) {
         if (gcfg->edns_client_subnet) {
@@ -465,8 +441,6 @@ static rcode_rv_t handle_edns_options(dnsp_ctx_t* ctx, unsigned rdlen, const uin
 F_NONNULL
 static rcode_rv_t parse_optrr(dnsp_ctx_t* ctx, unsigned* offset_ptr, const unsigned packet_len)
 {
-    gdnsd_assume(ctx->stats);
-
     const uint8_t* packet = ctx->txn.pkt->raw;
 
     unsigned offset = *offset_ptr;
@@ -1876,7 +1850,6 @@ F_NONNULL
 static unsigned answer_from_db(dnsp_ctx_t* ctx, unsigned offset)
 {
     gdnsd_assume(offset);
-    gdnsd_assume(ctx->stats);
 
     const unsigned full_trunc_offset = offset;
 
@@ -2047,7 +2020,7 @@ static unsigned do_edns_output(dnsp_ctx_t* ctx, uint8_t* packet, unsigned res_of
 }
 
 F_NONNULL
-static size_t handle_dso(const dnsp_ctx_t* ctx, const size_t packet_len)
+static size_t handle_dso(dnsp_ctx_t* ctx, const size_t packet_len)
 {
     uint8_t* packet = ctx->txn.pkt->raw;
     gdnsd_assume(packet);
@@ -2158,7 +2131,7 @@ static size_t handle_dso(const dnsp_ctx_t* ctx, const size_t packet_len)
 }
 
 F_NONNULL
-static size_t handle_dso_with_padding(const dnsp_ctx_t* ctx, const size_t packet_len)
+static size_t handle_dso_with_padding(dnsp_ctx_t* ctx, const size_t packet_len)
 {
     size_t offset = handle_dso(ctx, packet_len);
 
@@ -2194,7 +2167,6 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, pkt_t* pkt
     gdnsd_assume(packet_len <= DNS_RECV_SIZE);
 
     memset(&ctx->txn, 0, sizeof(ctx->txn));
-    gdnsd_assume(ctx->stats);
     if (ctx->is_udp)
         gdnsd_assume(!dso);
     else

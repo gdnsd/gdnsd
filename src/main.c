@@ -497,8 +497,8 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
 {
     try_raise_open_files(socks_cfg);
 
-    // init the stats code
-    statio_init(socks_cfg->num_dns_threads);
+    // init the stats output code
+    statio_init();
 
     // Lock whole daemon into memory, including all future allocations.
     if (gcfg->lock_mem && mlockall(MCL_CURRENT | MCL_FUTURE))
@@ -509,7 +509,7 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
         cookie_config(gcfg->cookie_key_file);
 
     // Initialize dnspacket stuff
-    dnspacket_global_setup(socks_cfg);
+    dnspacket_global_setup();
 
     // Set up libev error+allocator callbacks
     ev_set_syserr_cb(&syserr_for_ev);
@@ -558,19 +558,15 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     ev_signal_init(p_sig_usr1, usr1_signal, SIGUSR1);
     ev_signal_start(loop, p_sig_usr1);
 
-    // Initialize+bind DNS listening sockets
+    // Initialize+bind DNS listening sockets.  For TCP this also invokes
+    // listen, so all of the sockets are accepting requests when this returns,
+    // but the threads are not actively executing accept/recv code to pull them
+    // from the kernel's queues yet.
     socks_dns_lsocks_init(socks_cfg);
 
-    // Start up all of the UDP and TCP i/o threads
+    // Start up all of the UDP and TCP i/o threads, which will begin processing
+    // requests as soon as they can:
     start_threads(socks_cfg);
-
-    // This waits for all of the stat structures to be allocated by the i/o
-    //  threads before continuing on.  They must be ready before ev_run()
-    //  below, because statio event handlers hit them.
-    // This also incidentally waits for all TCP threads to have hit their
-    //  listen() call as well, whereas UDP is already at least buffering queued
-    //  requests at the socket layer from the time it's bound.
-    dnspacket_wait_stats(socks_cfg);
 
     // Notify 3rd parties of readiness (systemd, or fg process if daemonizing)
     gdnsd_daemon_notify_ready();
