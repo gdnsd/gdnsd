@@ -68,10 +68,15 @@ _Static_assert(TCP_READBUF >= (DNS_RECV_SIZE + 2U), "TCP readbuf fits >= 1 maxim
 _Static_assert(TCP_READBUF >= sizeof(proxy_hdr_t), "TCP readbuf >= PROXY header");
 #endif
 
+// TCP timeout timers may fire up to this many seconds late (even relative to
+// the ev_now of the loop, which may already be slightly-late) to be more
+// efficient at batching expiries and to deal better with timing edge cases.
+#define TIMEOUT_FUDGE 0.25
+
 typedef union {
-    // These two must be adjacent, as a single send() points at them as if
-    // they're one buffer.
     struct {
+        // These two must be adjacent, as a single send() points at them as if
+        // they're one buffer.
         uint16_t pktbuf_size_hdr;
         pkt_t pkt;
     };
@@ -224,7 +229,7 @@ static void connq_assert_sane(const thread_t* thr)
 
 // This adjust the timer to the next connq_head expiry or stops it if no
 // connections are left in the queue. when in either shutdown phase, we do not
-// update the timer, but we will stop it.  There is a 100ms floor/fudge factor
+// update the timer, but we will stop it.
 F_NONNULL
 static void connq_adjust_timer(thread_t* thr)
 {
@@ -232,9 +237,10 @@ static void connq_adjust_timer(thread_t* thr)
     ev_timer* tmo = &thr->timeout_watcher;
     if (thr->connq_head) {
         if (likely(thr->st == TH_RUN)) {
-            ev_tstamp next_interval = thr->server_timeout + 0.1 - (ev_now(thr->loop) - thr->connq_head->idle_start);
-            if (next_interval < 0.1)
-                next_interval = 0.1;
+            ev_tstamp next_interval = thr->server_timeout + TIMEOUT_FUDGE
+                                      - (ev_now(thr->loop) - thr->connq_head->idle_start);
+            if (next_interval < TIMEOUT_FUDGE)
+                next_interval = TIMEOUT_FUDGE;
             tmo->repeat = next_interval;
             ev_timer_again(thr->loop, tmo);
         }
