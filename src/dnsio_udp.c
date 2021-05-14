@@ -326,16 +326,15 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
     sa->len = msg_hdr->msg_namelen;
     struct iovec* iov = msg_hdr->msg_iov;
     iov->iov_len = process_dns_query(pctx, sa, iov->iov_base, NULL, buf_in_len);
-    if (likely(iov->iov_len)) {
-        while (1) {
-            const ssize_t sent = sendmsg(fd, msg_hdr, MSG_DONTWAIT);
-            if (unlikely(sent < 0)) {
-                if (unlikely(errno == EINTR))
-                    continue;
-                stats_own_inc(&stats->udp.sendfail);
-                log_neterr("UDP sendmsg() of %zu bytes to client %s failed: %s", iov->iov_len, logf_anysin(sa), logf_errno());
-            }
-            break;
+    if (iov->iov_len) {
+        ssize_t sent;
+        do {
+            sent = sendmsg(fd, msg_hdr, MSG_DONTWAIT);
+        } while (unlikely(sent < 0 && errno == EINTR));
+        if (unlikely(sent < 0)) {
+            stats_own_inc(&stats->udp.sendfail);
+            log_neterr("UDP sendmsg() of %zu bytes to %s failed: %s",
+                       iov->iov_len, logf_anysin(sa), logf_errno());
         }
     }
 }
@@ -439,6 +438,11 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         return;
     }
 
+    // For each input packet, first check for source port zero (in which case
+    // we instantly drop it at this layer), then process it through
+    // process_dns_query to generate a response (which may return a length of
+    // zero to indicate a need to drop the response as well).  The resulting
+    // response size (or zero for drop) is stored to the iov_len.
     unsigned pkts = (unsigned)mmsg_rv;
     gdnsd_assert(pkts <= MMSG_WIDTH);
     for (unsigned i = 0; i < pkts; i++) {
@@ -461,43 +465,48 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
     // entries, but any with iov_len == 0 should not be sent, and sendmmsg can
     // only send contiguous chunks of the array.  Therefore, some magic here
     // has to skip past blocks of zeros while sending blocks of non-zeros:
-
-    struct mmsghdr* dgptr = dgrams;
-    while (pkts) {
-        // skip any leading run of zeros
-        while (pkts && unlikely(!dgptr[0].msg_hdr.msg_iov[0].iov_len)) {
-            dgptr++;
-            pkts--;
-        }
-
-        // count the next run of non-zeros, transferring their accounting
-        // from pkts to spkts
-        unsigned spkts = 0;
-        for (unsigned i = 0; i < pkts; i++) {
-            if (likely(dgptr[i].msg_hdr.msg_iov[0].iov_len))
-                spkts++;
+    unsigned pkts_done = 0;
+    while (pkts_done < pkts) {
+        // In one for-loop here, we'll skip any leading zeros and count the
+        // next set of non-zeros as to_send:
+        unsigned to_send = 0;
+        for (unsigned i = pkts_done; i < pkts; i++) {
+            if (dgrams[i].msg_hdr.msg_iov[0].iov_len)
+                to_send++; // part of the first run of non-zeros
+            else if (!to_send)
+                pkts_done++; // leading-zeros case
             else
-                break;
+                break; // first zero after a non-zero run
         }
-        pkts -= spkts;
 
-        // send next run of non-zero entries
-        while (spkts) {
-            mmsg_rv = sendmmsg(fd, dgptr, spkts, MSG_DONTWAIT);
-            gdnsd_assert(mmsg_rv != 0); // not possible, sendmmsg returns >0 or -1+errno
+        // If there's a run to send:
+        if (to_send) {
+            // attempt to send next run of non-zeros, retrying on EINTR:
+            struct mmsghdr* first = &dgrams[pkts_done];
+            do {
+                mmsg_rv = sendmmsg(fd, first, to_send, MSG_DONTWAIT);
+                // sendmmsg returns [1 - to_send] or -1, never zero:
+                gdnsd_assert(mmsg_rv != 0);
+                gdnsd_assert(mmsg_rv <= (int)to_send);
+            } while (unlikely(mmsg_rv < 0 && errno == EINTR));
+
+            // Handle non-EINTR errors as a failure of the first packet only
+            // and then fake an mmsg_rv of 1 to skip over it:
             if (unlikely(mmsg_rv < 0)) {
-                if (unlikely(errno == EINTR))
-                    continue; // retry same sendmmsg() call
                 stats_own_inc(&stats->udp.sendfail);
-                log_neterr("UDP sendmmsg() of %zu bytes to client %s failed: %s", dgptr[0].msg_hdr.msg_iov[0].iov_len, logf_anysin((const gdnsd_anysin_t*)dgptr[0].msg_hdr.msg_name), logf_errno());
-                mmsg_rv = 1; // count as one packet "handled", so we
-                // don't re-send the erroring packet
+                log_neterr("UDP sendmmsg() of %zu bytes to %s failed: %s",
+                           first->msg_hdr.msg_iov[0].iov_len,
+                           logf_anysin((const gdnsd_anysin_t*)first->msg_hdr.msg_name),
+                           logf_errno());
+                mmsg_rv = 1;
             }
-            gdnsd_assert(mmsg_rv >= 1);
-            gdnsd_assert(mmsg_rv <= (int)spkts);
-            const unsigned sent = (unsigned)mmsg_rv;
-            dgptr += sent; // skip past the handled packets
-            spkts -= sent; // drop the count of all handled packets
+
+            // Account for progress and loop as necessary
+            pkts_done += (unsigned)mmsg_rv;
+        } else {
+            // if to_send was zero, logically we should be done with all
+            // packets and the outer while() will terminate at the top:
+            gdnsd_assert(pkts_done == pkts);
         }
     }
 }
