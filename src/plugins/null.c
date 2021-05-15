@@ -30,7 +30,7 @@
 #include <string.h>
 #include <inttypes.h>
 
-static void plugin_null_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
+static void plugin_null_load_config(vscf_data_t* config V_UNUSED)
 {
     gdnsd_dyn_addr_max(1, 1); // null only ever returns a single IP from each family
 }

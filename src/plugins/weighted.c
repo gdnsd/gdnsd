@@ -663,7 +663,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
 
 ////// exported callbacks start here
 
-static void plugin_weighted_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void plugin_weighted_load_config(vscf_data_t* config)
 {
     gdnsd_assert(config);
     gdnsd_assert(vscf_is_hash(config));

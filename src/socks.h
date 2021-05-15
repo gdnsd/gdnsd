@@ -44,7 +44,6 @@ typedef struct {
 typedef struct {
     dns_addr_t* ac;
     pthread_t threadid;
-    unsigned threadnum;
     int sock;
     bool is_udp;
 } dns_thread_t;

@@ -161,11 +161,11 @@ plugin_t* gdnsd_plugin_find(const char* pname)
 
 // The action iterators...
 
-void gdnsd_plugins_configure_all(const unsigned num_threads)
+void gdnsd_plugins_configure_all(void)
 {
     for (unsigned i = 0; i < NUM_PLUGINS; i++) {
         if (plugins[i]->used && plugins[i]->load_config && !plugins[i]->config_loaded) {
-            plugins[i]->load_config(NULL, num_threads);
+            plugins[i]->load_config(NULL);
             plugins[i]->config_loaded = true;
         }
     }

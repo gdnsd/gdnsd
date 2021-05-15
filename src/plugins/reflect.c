@@ -45,7 +45,7 @@ static const char* response_text[NUM_RTYPES] = {
     "both"
 };
 
-static void plugin_reflect_load_config(vscf_data_t* config V_UNUSED, const unsigned num_threads V_UNUSED)
+static void plugin_reflect_load_config(vscf_data_t* config V_UNUSED)
 {
     gdnsd_dyn_addr_max(2, 2); // up to two (dns+edns) in any address family
 }

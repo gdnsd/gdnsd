@@ -432,7 +432,7 @@ static int map_res_inner(const char* resname, const uint8_t* zone_name, const ch
 
 /********** Callbacks from gdnsd **************/
 
-static void CB_LOAD_CONFIG(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void CB_LOAD_CONFIG(vscf_data_t* config)
 {
     if (!config)
         log_fatal("plugin_" PNSTR ": configuration required in 'plugins' stanza");

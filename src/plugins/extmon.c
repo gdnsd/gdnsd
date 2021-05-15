@@ -326,7 +326,7 @@ static bool bad_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UN
     log_fatal("plugin_extmon: bad global option '%s'", key);
 }
 
-static void plugin_extmon_load_config(vscf_data_t* config, const unsigned num_threads V_UNUSED)
+static void plugin_extmon_load_config(vscf_data_t* config)
 {
     if (config) {
         vscf_data_t* helper_path_cfg = vscf_hash_get_data_byconstkey(config, "helper_path", true);

@@ -693,7 +693,7 @@ int main(int argc, char** argv)
     }
 
     // Load full configuration and expose through the global "gcfg"
-    gcfg = conf_load(cfg_root, socks_cfg, copts.force_zsd);
+    gcfg = conf_load(cfg_root, copts.force_zsd);
     vscf_destroy(cfg_root);
 
     // Basic init for the acme challenge code

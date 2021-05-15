@@ -88,7 +88,7 @@ void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope);
 /**** Typedefs for plugin callbacks ****/
 
 typedef unsigned(*gdnsd_apiv_cb_t)(void);
-typedef void (*gdnsd_load_config_cb_t)(vscf_data_t* pc, const unsigned num_threads);
+typedef void (*gdnsd_load_config_cb_t)(vscf_data_t* pc);
 typedef int (*gdnsd_map_res_cb_t)(const char* resname, const uint8_t* zone_name);
 typedef void (*gdnsd_pre_run_cb_t)(void);
 typedef void (*gdnsd_iothread_init_cb_t)(void);
@@ -172,7 +172,7 @@ size_t gdnsd_result_get_max_response(void);
 
 // call _load_config() for all plugins which are loaded but have not
 //   yet had that callback called
-void gdnsd_plugins_configure_all(const unsigned num_threads);
+void gdnsd_plugins_configure_all(void);
 
 // action iterators
 void gdnsd_plugins_action_pre_run(void);
