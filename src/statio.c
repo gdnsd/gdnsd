@@ -121,18 +121,32 @@ static const char json_fixed[] =
     "\t}\n"
     "}\n";
 
-static time_t start_time;
-static unsigned num_dns_threads;
+// *INDENT-OFF*
 
-// This is memset to zero on startup, and then imports the final stats of the
-// daemon we replaced (if applicable), and becomes the baseline for the
-// accumulations into statio below.
-static stats_uint_t statio_base[SLOT_COUNT];
+// This is the size we allocate for the JSON stats output buffer
+static const size_t json_buffer_max = (
+    (sizeof(json_fixed) - 1U) // json_fixed format string
+    + (20U - (sizeof(PRIu64) - 1U)) // uint64_t uptime
+    + (SLOT_COUNT * ( // foreach slot, depending on 64-vs-32 bit counters:
+        (sizeof(stats_uint_t) == 8U ? 20U : 10U) - (sizeof(PRISTATS) - 1U)
+    ))
+) * 2U; // Double the estimate in case of mistakes!
 
-// This is reset to statio_base and used to accumulate thread stats for output
-static stats_uint_t statio[SLOT_COUNT];
+// *INDENT-ON*
 
-static size_t json_buffer_max = 0;
+// Start time of the daemon for "uptime" calculation
+static time_t start_time = 0;
+
+// Count of DNS I/O threads that will register stats
+static unsigned num_dns_threads = 0;
+
+// This is zero on startup, and then imports the final stats of the daemon we
+// replaced (if applicable), and becomes the baseline for the accumulations
+// into statio below.
+static stats_uint_t statio_base[SLOT_COUNT] = { 0 };
+
+// This is reset to a copy of statio_base and used to accumulate thread stats
+static stats_uint_t statio[SLOT_COUNT] = { 0 };
 
 static void accumulate_statio(unsigned threadnum)
 {
@@ -249,17 +263,4 @@ void statio_init(unsigned arg_num_dns_threads)
 {
     num_dns_threads = arg_num_dns_threads;
     start_time = time(NULL);
-    memset(&statio_base, 0, sizeof(statio_base));
-    memset(&statio, 0, sizeof(statio_base));
-
-    // stats counters are 32-bit on 32-bit machines, and 64 on 64
-    const unsigned stat_len = sizeof(stats_uint_t) == 8 ? 20 : 10;
-    json_buffer_max =
-        (sizeof(json_fixed) - 1)               // json_fixed format string
-        + (20 - strlen(PRIu64))                // uint64_t uptime
-        + (SLOT_COUNT * (stat_len - strlen(PRISTATS))); // SLOT_COUNT stats, 10 or 20 bytes long each
-
-    // double it, because it's not that big and this gives us a lot of headroom for
-    //   having made any stupid mistakes in the max len calcuations :P
-    json_buffer_max <<= 1U;
 }
