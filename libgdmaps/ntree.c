@@ -27,22 +27,22 @@
 //   must be power of two due to alloc code,
 #define NT_SIZE_INIT 128U
 
-ntree_t* ntree_new(void)
+struct ntree* ntree_new(void)
 {
-    ntree_t* newtree = xmalloc(sizeof(*newtree));
+    struct ntree* newtree = xmalloc(sizeof(*newtree));
     newtree->store = xmalloc_n(NT_SIZE_INIT, sizeof(*newtree->store));
     newtree->count = 0;
     newtree->alloc = NT_SIZE_INIT; // set to zero on fixation
     return newtree;
 }
 
-void ntree_destroy(ntree_t* tree)
+void ntree_destroy(struct ntree* tree)
 {
     free(tree->store);
     free(tree);
 }
 
-unsigned ntree_add_node(ntree_t* tree)
+unsigned ntree_add_node(struct ntree* tree)
 {
     gdnsd_assume(tree->alloc);
     if (tree->count == tree->alloc) {
@@ -61,7 +61,7 @@ unsigned ntree_add_node(ntree_t* tree)
 //   for the tree to make various ipv4-related lookups
 //   faster and simpler.
 F_NONNULL
-static unsigned ntree_find_v4root(const ntree_t* tree)
+static unsigned ntree_find_v4root(const struct ntree* tree)
 {
     unsigned offset = 0;
     unsigned mask_depth = 96;
@@ -73,7 +73,7 @@ static unsigned ntree_find_v4root(const ntree_t* tree)
     return offset;
 }
 
-void ntree_finish(ntree_t* tree)
+void ntree_finish(struct ntree* tree)
 {
     tree->alloc = 0; // flag fixed, will fail asserts on add_node, etc now
     tree->store = xrealloc_n(tree->store, tree->count, sizeof(*tree->store));
@@ -83,13 +83,13 @@ void ntree_finish(ntree_t* tree)
 #ifndef NDEBUG // debug dump code
 
 F_NONNULL
-static void ntree_dump_recurse(const ntree_t* tree, const unsigned bitdepth, const unsigned offset, struct in6_addr ipv6);
+static void ntree_dump_recurse(const struct ntree* tree, const unsigned bitdepth, const unsigned offset, struct in6_addr ipv6);
 
 F_NONNULL
-static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, const unsigned val, struct in6_addr ipv6)
+static void ntree_dump_rec_sub(const struct ntree* tree, const unsigned bitdepth, const unsigned val, struct in6_addr ipv6)
 {
     if (NN_IS_DCLIST(val)) {
-        gdnsd_anysin_t tempsin;
+        struct anysin tempsin;
         memset(&tempsin, 0, sizeof(tempsin));
         tempsin.len = sizeof(struct sockaddr_in6);
         tempsin.sa.sa_family = AF_INET6;
@@ -101,15 +101,15 @@ static void ntree_dump_rec_sub(const ntree_t* tree, const unsigned bitdepth, con
     }
 }
 
-static void ntree_dump_recurse(const ntree_t* tree, const unsigned bitdepth, const unsigned offset, struct in6_addr ipv6)
+static void ntree_dump_recurse(const struct ntree* tree, const unsigned bitdepth, const unsigned offset, struct in6_addr ipv6)
 {
-    const nnode_t* this_node = &tree->store[offset];
+    const struct nnode* this_node = &tree->store[offset];
     ntree_dump_rec_sub(tree, bitdepth, this_node->zero, ipv6);
     SETBIT_v6(ipv6.s6_addr, 127 - bitdepth);
     ntree_dump_rec_sub(tree, bitdepth, this_node->one, ipv6);
 }
 
-void ntree_debug_dump(const ntree_t* tree)
+void ntree_debug_dump(const struct ntree* tree)
 {
     ntree_dump_recurse(tree, 127, 0, ip6_zero);
 }
@@ -118,7 +118,7 @@ void ntree_debug_dump(const ntree_t* tree)
 //   that's identical in the zero+one slots of a single node (which
 //   should have been merged up a layer to be optimal).  Note that
 //   we don't ever alias ntree subtrees...
-void ntree_assert_optimal(const ntree_t* tree)
+void ntree_assert_optimal(const struct ntree* tree)
 {
     // note that for tree->count == 1 and the whole space
     //   mapped to a single dclist, we can't optimize that to
@@ -126,7 +126,7 @@ void ntree_assert_optimal(const ntree_t* tree)
     //   so we don't check that case.
     if (tree->count > 1) {
         for (unsigned offs = 0; offs < tree->count; offs++) {
-            const nnode_t* current = &tree->store[offs];
+            const struct nnode* current = &tree->store[offs];
             gdnsd_assume(current->zero != current->one);
         }
     }
@@ -142,13 +142,13 @@ static bool CHKBIT_v6(const uint8_t* ipv6, const unsigned bit)
 }
 
 F_NONNULL
-static unsigned ntree_lookup_v6(const ntree_t* tree, const uint8_t* ip, unsigned* mask_out)
+static unsigned ntree_lookup_v6(const struct ntree* tree, const uint8_t* ip, unsigned* mask_out)
 {
     unsigned chkbit = 0;
     unsigned offset = 0;
     do {
         gdnsd_assume(offset < tree->count);
-        const nnode_t* current = &tree->store[offset];
+        const struct nnode* current = &tree->store[offset];
         gdnsd_assume(current->one && current->zero);
         offset = CHKBIT_v6(ip, chkbit) ? current->one : current->zero;
         chkbit++;
@@ -172,7 +172,7 @@ static bool CHKBIT_v4(const uint32_t ip, const unsigned maskbit)
 //   on teredo, etc...), even if that would technically be more optimal.  It's far
 //   more confusing and not worth optimizing for.
 F_NONNULL
-static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned* mask_out)
+static unsigned ntree_lookup_v4(const struct ntree* tree, const uint32_t ip, unsigned* mask_out)
 {
     gdnsd_assume(tree->ipv4);
 
@@ -180,7 +180,7 @@ static unsigned ntree_lookup_v4(const ntree_t* tree, const uint32_t ip, unsigned
     unsigned offset = tree->ipv4;
     while (!NN_IS_DCLIST(offset)) {
         gdnsd_assume(offset < tree->count);
-        const nnode_t* current = &tree->store[offset];
+        const struct nnode* current = &tree->store[offset];
         gdnsd_assume(current->one && current->zero);
         offset = CHKBIT_v4(ip, chkbit) ? current->one : current->zero;
         chkbit++;
@@ -218,7 +218,7 @@ static uint32_t v6_v4fixup(const uint8_t* in, unsigned* mask_adj)
 }
 
 F_NONNULL
-static unsigned ntree_lookup_inner(const ntree_t* tree, const gdnsd_anysin_t* client_addr, unsigned* scope_mask)
+static unsigned ntree_lookup_inner(const struct ntree* tree, const struct anysin* client_addr, unsigned* scope_mask)
 {
     unsigned rv;
 
@@ -240,7 +240,7 @@ static unsigned ntree_lookup_inner(const ntree_t* tree, const gdnsd_anysin_t* cl
     return rv;
 }
 
-unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask, const bool ignore_ecs)
+unsigned ntree_lookup(const struct ntree* tree, const struct client_info* client, unsigned* scope_mask, const bool ignore_ecs)
 {
     gdnsd_assume(!tree->alloc); // ntree_finish() was called
     gdnsd_assume(tree->ipv4); // must be a non-zero node offset or a dclist w/ high-bit set

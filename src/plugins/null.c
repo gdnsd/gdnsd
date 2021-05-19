@@ -42,9 +42,9 @@ static int plugin_null_map_res(const char* resname V_UNUSED, const uint8_t* zone
     return 0;
 }
 
-static gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
-    gdnsd_anysin_t tmpsin;
+    struct anysin tmpsin;
     gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
     gdnsd_result_add_anysin(result, &tmpsin);
     gdnsd_anysin_fromstr("[::]", 0, &tmpsin);
@@ -56,35 +56,35 @@ static gdnsd_sttl_t plugin_null_resolve(unsigned resnum V_UNUSED, const client_i
 // Obviously, we could implement "null" monitoring with simpler code,
 //  but this exercises some API bits, so it's useful for testing
 
-typedef struct {
+struct null_svc {
     const char* name;
     unsigned interval;
-} null_svc_t;
+};
 
-typedef struct {
+struct null_mon {
     unsigned idx;
-    null_svc_t* svc;
+    struct null_svc* svc;
     ev_timer interval_watcher;
-} null_mon_t;
+};
 
 static unsigned num_svcs = 0;
 static unsigned num_mons = 0;
-static null_svc_t** null_svcs = NULL;
-static null_mon_t** null_mons = NULL;
+static struct null_svc** null_svcs = NULL;
+static struct null_mon** null_mons = NULL;
 
 F_NONNULL
 static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, const int revents V_UNUSED)
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    null_mon_t* mon = t->data;
+    struct null_mon* mon = t->data;
     gdnsd_assume(mon);
     gdnsd_mon_state_updater(mon->idx, false);
 }
 
 static void plugin_null_add_svctype(const char* name, vscf_data_t* svc_cfg V_UNUSED, const unsigned interval, const unsigned timeout V_UNUSED)
 {
-    null_svc_t* this_svc = xmalloc(sizeof(*this_svc));
+    struct null_svc* this_svc = xmalloc(sizeof(*this_svc));
     null_svcs = xrealloc_n(null_svcs, num_svcs + 1, sizeof(*null_svcs));
     null_svcs[num_svcs] = this_svc;
     num_svcs++;
@@ -96,7 +96,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
 {
     gdnsd_assume(svc_name);
 
-    null_svc_t* this_svc = NULL;
+    struct null_svc* this_svc = NULL;
 
     for (unsigned i = 0; i < num_svcs; i++) {
         if (!strcmp(svc_name, null_svcs[i]->name)) {
@@ -106,7 +106,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     }
 
     gdnsd_assume(this_svc);
-    null_mon_t* this_mon = xmalloc(sizeof(*this_mon));
+    struct null_mon* this_mon = xmalloc(sizeof(*this_mon));
     null_mons = xrealloc_n(null_mons, num_mons + 1, sizeof(*null_mons));
     null_mons[num_mons] = this_mon;
     num_mons++;
@@ -117,7 +117,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     ival_watcher->data = this_mon;
 }
 
-static void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_null_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const struct anysin* addr V_UNUSED, const unsigned idx)
 {
     add_mon_any(svc_name, idx);
 }
@@ -139,7 +139,7 @@ static void plugin_null_init_monitors(struct ev_loop* mon_loop)
 static void plugin_null_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
-        null_mon_t* mon = null_mons[i];
+        struct null_mon* mon = null_mons[i];
         const unsigned ival = mon->svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
         ev_timer* ival_watcher = &mon->interval_watcher;
@@ -148,7 +148,7 @@ static void plugin_null_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-plugin_t plugin_null_funcs = {
+struct plugin plugin_null_funcs = {
     .name = "null",
     .config_loaded = false,
     .used = false,

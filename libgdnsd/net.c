@@ -98,7 +98,7 @@ static int tcpdefaccept_xlate_secs(int seconds)
  * End block of Linux TCP_DEFER_ACCEPT hackery
  *****************************************************************************/
 
-int gdnsd_sockopt_idem_int_(gso_args args)
+int gdnsd_sockopt_idem_int_(struct gso_args args)
 {
     int current = 0;
     socklen_t s_current = sizeof(current);
@@ -148,7 +148,7 @@ socklen_t gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
     return (offsetof(struct sockaddr_un, sun_path) + plen);
 }
 
-int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_anysin_t* result)
+int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, struct anysin* result)
 {
     struct addrinfo* ainfo = NULL;
     const struct addrinfo hints = {
@@ -181,7 +181,7 @@ int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_a
 
 static const char invalid_addr[] = "!!invalid!!";
 
-int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gdnsd_anysin_t* result)
+int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, struct anysin* result)
 {
     char* apcopy = xstrdup(addr_port_text);
 
@@ -236,7 +236,7 @@ int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gd
     return addr_err;
 }
 
-bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* sa)
+bool gdnsd_anysin_is_anyaddr(const struct anysin* sa)
 {
     gdnsd_assert(sa->sa.sa_family == AF_INET || sa->sa.sa_family == AF_INET6);
 
@@ -252,7 +252,7 @@ bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* sa)
 
 static const char generic_nullstr[] = "(null)";
 
-int gdnsd_anysin2str(const gdnsd_anysin_t* sa, char* buf)
+int gdnsd_anysin2str(const struct anysin* sa, char* buf)
 {
     int name_err = 0;
     buf[0] = 0;
@@ -276,7 +276,7 @@ int gdnsd_anysin2str(const gdnsd_anysin_t* sa, char* buf)
     return name_err;
 }
 
-const char* gdnsd_logf_anysin(const gdnsd_anysin_t* sa)
+const char* gdnsd_logf_anysin(const struct anysin* sa)
 {
     char tmpbuf[GDNSD_ANYSIN_MAXSTR];
     int name_err = gdnsd_anysin2str(sa, tmpbuf);
@@ -290,7 +290,7 @@ const char* gdnsd_logf_anysin(const gdnsd_anysin_t* sa)
     return buf;
 }
 
-int gdnsd_anysin2str_noport(const gdnsd_anysin_t* sa, char* buf)
+int gdnsd_anysin2str_noport(const struct anysin* sa, char* buf)
 {
     int name_err = 0;
     buf[0] = 0;
@@ -303,7 +303,7 @@ int gdnsd_anysin2str_noport(const gdnsd_anysin_t* sa, char* buf)
     return name_err;
 }
 
-const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa)
+const char* gdnsd_logf_anysin_noport(const struct anysin* sa)
 {
     char tmpbuf[GDNSD_ANYSIN_MAXSTR];
     int name_err = gdnsd_anysin2str_noport(sa, tmpbuf);
@@ -316,7 +316,7 @@ const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa)
     return buf;
 }
 
-int gdnsd_anysin_cmp(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b)
+int gdnsd_anysin_cmp(const struct anysin* a, const struct anysin* b)
 {
     if (a->len == b->len && a->sa.sa_family == b->sa.sa_family) {
         if (a->sa.sa_family == AF_INET

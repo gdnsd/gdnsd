@@ -53,69 +53,74 @@
 /*** Private data type definitions ***/
 /*************************************/
 
-typedef struct {
+enum vscf_type {
+    VSCF_HASH,
+    VSCF_ARRAY,
+    VSCF_SIMPLE
+};
+
+struct simple {
     vscf_data_t* parent;
-    vscf_type_t  type;
-    char*        rval;
-    char*        val;
-    unsigned     rlen;
-    unsigned     len;
-} vscf_simple_t;
+    enum vscf_type type;
+    char* rval;
+    char* val;
+    unsigned rlen;
+    unsigned len;
+};
 
-typedef struct {
-    vscf_data_t*  parent;
-    vscf_type_t   type;
-    unsigned      len;
+struct array {
+    vscf_data_t* parent;
+    enum vscf_type type;
+    unsigned len;
     vscf_data_t** vals;
-} vscf_array_t;
-
-typedef struct _vscf_hentry_t vscf_hentry_t;
-struct _vscf_hentry_t {
-    unsigned       klen;
-    char*          key;
-    unsigned       index;
-    bool           marked;
-    vscf_data_t*   val;
-    vscf_hentry_t* next;
 };
 
-typedef struct {
-    vscf_data_t*    parent;
-    vscf_type_t     type;
-    unsigned        child_count;
-    vscf_hentry_t** children;
-    vscf_hentry_t** ordered;
-} vscf_hash_t;
+struct hentry {
+    unsigned klen;
+    char* key;
+    unsigned index;
+    bool marked;
+    vscf_data_t* val;
+    struct hentry* next;
+};
 
-union vscf_data_t {
+struct hash {
+    vscf_data_t* parent;
+    enum vscf_type type;
+    unsigned child_count;
+    struct hentry** children;
+    struct hentry** ordered;
+};
+
+union vscf_data {
     struct {
-        vscf_data_t*    parent;
-        vscf_type_t     type;
+        vscf_data_t* parent;
+        enum vscf_type type;
     };
-    vscf_simple_t   simple;
-    vscf_array_t    array;
-    vscf_hash_t     hash;
+    struct simple simple;
+    struct array array;
+    struct hash hash;
 };
 
-typedef struct {
-    int           cs;
-    unsigned      top;
-    unsigned      cont_stack_top;
-    unsigned      cont_stack_alloc;
-    unsigned      cs_stack_alloc;
-    unsigned      lcount;
-    unsigned      cur_klen;
+struct scanner {
+    int cs;
+    unsigned top;
+    unsigned cont_stack_top;
+    unsigned cont_stack_alloc;
+    unsigned cs_stack_alloc;
+    unsigned lcount;
+    unsigned cur_klen;
     vscf_data_t** cont_stack;
-    int*          cs_stack;
-    const char*   p;
-    const char*   pe;
-    const char*   eof;
-    char*         cur_key;
-    const char*   fn;
-    const char*   desc;
-    const char*   tstart;
-    bool          err_emitted;
-} vscf_scnr_t;
+    int* cs_stack;
+    const char* p;
+    const char* pe;
+    const char* eof;
+    char* cur_key;
+    const char* fn;
+    const char* desc;
+    const char* tstart;
+    bool err_emitted;
+};
 
 /*************************/
 /*** Private functions ***/
@@ -128,25 +133,25 @@ static unsigned key_hash(const char* k, unsigned klen, const unsigned hash_mask)
 }
 
 F_WUNUSED
-static vscf_hash_t* hash_new(void)
+static struct hash* hash_new(void)
 {
-    vscf_hash_t* h = xcalloc(sizeof(*h));
-    h->type = VSCF_HASH_T;
+    struct hash* h = xcalloc(sizeof(*h));
+    h->type = VSCF_HASH;
     return h;
 }
 
 F_NONNULL
-static void hash_grow(vscf_hash_t* h)
+static void hash_grow(struct hash* h)
 {
     const unsigned old_hash_mask = count2mask(h->child_count);
     const unsigned new_hash_mask = (old_hash_mask << 1) | 1;
-    vscf_hentry_t** new_table = xcalloc_n(new_hash_mask + 1, sizeof(*new_table));
+    struct hentry** new_table = xcalloc_n(new_hash_mask + 1, sizeof(*new_table));
     for (unsigned i = 0; i <= old_hash_mask; i++) {
-        vscf_hentry_t* entry = h->children[i];
+        struct hentry* entry = h->children[i];
         while (entry) {
             const unsigned child_hash = key_hash(entry->key, entry->klen, new_hash_mask);
-            vscf_hentry_t* slot = new_table[child_hash];
-            vscf_hentry_t* next_entry = entry->next;
+            struct hentry* slot = new_table[child_hash];
+            struct hentry* next_entry = entry->next;
             entry->next = NULL;
 
             if (slot) {
@@ -168,7 +173,7 @@ static void hash_grow(vscf_hash_t* h)
 }
 
 F_NONNULL F_WUNUSED
-static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, vscf_data_t* v)
+static bool hash_add_val(const char* key, const unsigned klen, struct hash* h, vscf_data_t* v)
 {
     v->parent = (vscf_data_t*)h;
 
@@ -180,7 +185,7 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
     const unsigned child_mask = count2mask(h->child_count);
     const unsigned child_hash = key_hash(key, klen, child_mask);
 
-    vscf_hentry_t** store_at = &(h->children[child_hash]);
+    struct hentry** store_at = &(h->children[child_hash]);
     while (*store_at) {
         if ((klen == (*store_at)->klen)
                 && !memcmp(key, (*store_at)->key, klen)) {
@@ -189,7 +194,7 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
         store_at = &((*store_at)->next);
     }
 
-    vscf_hentry_t* new_hentry = *store_at = xcalloc(sizeof(*new_hentry));
+    struct hentry* new_hentry = *store_at = xcalloc(sizeof(*new_hentry));
     new_hentry->klen = klen;
     new_hentry->key = xmalloc(klen + 1);
     memcpy(new_hentry->key, key, klen + 1);
@@ -205,7 +210,7 @@ static bool hash_add_val(const char* key, const unsigned klen, vscf_hash_t* h, v
 }
 
 F_NONNULL F_WUNUSED
-static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v)
+static bool scnr_hash_add_val(struct scanner* scnr, struct hash* h, vscf_data_t* v)
 {
     gdnsd_assume(scnr->cur_key);
 
@@ -221,15 +226,15 @@ static bool scnr_hash_add_val(vscf_scnr_t* scnr, vscf_hash_t* h, vscf_data_t* v)
 }
 
 F_WUNUSED
-static vscf_array_t* array_new(void)
+static struct array* array_new(void)
 {
-    vscf_array_t* a = xcalloc(sizeof(*a));
-    a->type   = VSCF_ARRAY_T;
+    struct array* a = xcalloc(sizeof(*a));
+    a->type   = VSCF_ARRAY;
     return a;
 }
 
 F_NONNULL
-static void array_add_val(vscf_array_t* a, vscf_data_t* v)
+static void array_add_val(struct array* a, vscf_data_t* v)
 {
     v->parent = (vscf_data_t*)a;
     unsigned idx = a->len++;
@@ -250,7 +255,7 @@ static void array_add_val(vscf_array_t* a, vscf_data_t* v)
  *   probably many user-code cases too).
  */
 F_NONNULLX(2, 3, 4) F_WUNUSED
-static bool unescape_string(vscf_scnr_t* scnr, char** outp, unsigned* outlenp, const char* in, unsigned len)
+static bool unescape_string(struct scanner* scnr, char** outp, unsigned* outlenp, const char* in, unsigned len)
 {
     char* out = xmalloc(len + 1);
     unsigned newlen = len;
@@ -273,13 +278,13 @@ static bool unescape_string(vscf_scnr_t* scnr, char** outp, unsigned* outlenp, c
 }
 
 F_NONNULLX(2) F_WUNUSED
-static vscf_simple_t* simple_new(vscf_scnr_t* scnr, const char* rval, const unsigned rlen)
+static struct simple* simple_new(struct scanner* scnr, const char* rval, const unsigned rlen)
 {
-    vscf_simple_t* s = xcalloc(sizeof(*s));
+    struct simple* s = xcalloc(sizeof(*s));
     char* storage = xmalloc(rlen + 1U);
     memcpy(storage, rval, rlen);
     storage[rlen] = '\0';
-    s->type   = VSCF_SIMPLE_T;
+    s->type   = VSCF_SIMPLE;
     s->rlen   = rlen;
     s->rval   = storage;
     if (!unescape_string(scnr, &s->val, &s->len, storage, rlen)) {
@@ -294,11 +299,11 @@ F_NONNULL F_WUNUSED F_RETNN
 static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked);
 
 F_NONNULL F_RETNN
-static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked)
+static struct hash* hash_clone(const struct hash* h, const bool ignore_marked)
 {
-    vscf_hash_t* nh = hash_new();
+    struct hash* nh = hash_new();
     for (unsigned i = 0; i < h->child_count; i++) {
-        const vscf_hentry_t* hentry = h->ordered[i];
+        const struct hentry* hentry = h->ordered[i];
         if (!ignore_marked || !hentry->marked) {
             vscf_data_t* new_child = val_clone(hentry->val, ignore_marked);
             const bool add_ok V_UNUSED
@@ -310,9 +315,9 @@ static vscf_hash_t* hash_clone(const vscf_hash_t* h, const bool ignore_marked)
 }
 
 F_NONNULL F_WUNUSED F_RETNN
-static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked)
+static struct array* array_clone(const struct array* a, const bool ignore_marked)
 {
-    vscf_array_t* na = array_new();
+    struct array* na = array_new();
     for (unsigned i = 0; i < a->len; i++) {
         array_add_val(na, val_clone(a->vals[i], ignore_marked));
     }
@@ -320,10 +325,10 @@ static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked
 }
 
 F_NONNULL F_WUNUSED F_RETNN
-static vscf_simple_t* simple_clone(const vscf_simple_t* s)
+static struct simple* simple_clone(const struct simple* s)
 {
-    vscf_simple_t* new_s = xcalloc(sizeof(*new_s));
-    new_s->type = VSCF_SIMPLE_T;
+    struct simple* new_s = xcalloc(sizeof(*new_s));
+    new_s->type = VSCF_SIMPLE;
     new_s->rval = xmalloc(s->rlen + 1U);
     new_s->val = xmalloc(s->len + 1U);
     new_s->rlen = s->rlen;
@@ -338,13 +343,13 @@ static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked)
 {
     vscf_data_t* rv = NULL;
     switch (d->type) {
-    case VSCF_HASH_T:
+    case VSCF_HASH:
         rv = (vscf_data_t*)hash_clone(&d->hash, ignore_marked);
         break;
-    case VSCF_ARRAY_T:
+    case VSCF_ARRAY:
         rv = (vscf_data_t*)array_clone(&d->array, ignore_marked);
         break;
-    case VSCF_SIMPLE_T:
+    case VSCF_SIMPLE:
         rv = (vscf_data_t*)simple_clone(&d->simple);
         break;
     default:
@@ -354,7 +359,7 @@ static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked)
 }
 
 F_NONNULL F_WUNUSED
-static bool set_key(vscf_scnr_t* scnr, const char* end)
+static bool set_key(struct scanner* scnr, const char* end)
 {
     gdnsd_assume(scnr->tstart);
     if (!unescape_string(scnr, &scnr->cur_key, &scnr->cur_klen, scnr->tstart, end - scnr->tstart))
@@ -364,28 +369,28 @@ static bool set_key(vscf_scnr_t* scnr, const char* end)
 }
 
 F_NONNULL F_WUNUSED
-static bool add_to_cur_container(vscf_scnr_t* scnr, vscf_data_t* v)
+static bool add_to_cur_container(struct scanner* scnr, vscf_data_t* v)
 {
     vscf_data_t* cont = scnr->cont_stack[scnr->cont_stack_top];
     gdnsd_assume(cont);
 
-    if (cont->type == VSCF_HASH_T) {
-        vscf_hash_t* h = &cont->hash;
+    if (cont->type == VSCF_HASH) {
+        struct hash* h = &cont->hash;
         return scnr_hash_add_val(scnr, h, v);
     } else {
-        gdnsd_assume(cont->type == VSCF_ARRAY_T);
-        vscf_array_t* a = &cont->array;
+        gdnsd_assume(cont->type == VSCF_ARRAY);
+        struct array* a = &cont->array;
         array_add_val(a, v);
         return true;
     }
 }
 
 F_NONNULL F_WUNUSED
-static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end)
+static bool scnr_set_simple(struct scanner* scnr, const char* end)
 {
     gdnsd_assume(scnr->tstart);
     const unsigned rlen = end - scnr->tstart;
-    vscf_simple_t* s = simple_new(scnr, scnr->tstart, rlen);
+    struct simple* s = simple_new(scnr, scnr->tstart, rlen);
     if (!s)
         return false;
     scnr->tstart = NULL;
@@ -395,7 +400,7 @@ static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end)
 static void val_destroy(vscf_data_t* d);
 
 F_NONNULL F_WUNUSED
-static bool vscf_include_file(vscf_scnr_t* scnr, const char* fn)
+static bool vscf_include_file(struct scanner* scnr, const char* fn)
 {
     vscf_data_t* inc_data = vscf_scan_filename(fn);
 
@@ -414,8 +419,8 @@ static bool vscf_include_file(vscf_scnr_t* scnr, const char* fn)
 
         // destructively merge include stuff into parent, stealing values
         for (unsigned i = 0; i < inc_data->hash.child_count; i++) {
-            vscf_hentry_t* inc_he = inc_data->hash.ordered[i];
-            if (!hash_add_val(inc_he->key, inc_he->klen, (vscf_hash_t*)cont, inc_he->val)) {
+            struct hentry* inc_he = inc_data->hash.ordered[i];
+            if (!hash_add_val(inc_he->key, inc_he->klen, (struct hash*)cont, inc_he->val)) {
                 parse_error("Include file '%s' has duplicate key '%s' when merging into parent hash", fn, inc_he->key);
                 val_destroy(inc_data);
                 return false;
@@ -431,7 +436,7 @@ static bool vscf_include_file(vscf_scnr_t* scnr, const char* fn)
 }
 
 F_NONNULL F_WUNUSED
-static bool vscf_include_glob(vscf_scnr_t* scnr, const char* inc_glob, const int extraflags)
+static bool vscf_include_glob(struct scanner* scnr, const char* inc_glob, const int extraflags)
 {
     int globflags = GLOB_ERR | extraflags;
     glob_t globbuf;
@@ -465,7 +470,7 @@ static bool vscf_include_glob(vscf_scnr_t* scnr, const char* inc_glob, const int
 }
 
 F_NONNULL F_WUNUSED
-static bool vscf_include_glob_or_dir(vscf_scnr_t* scnr, const char* glob_or_dir)
+static bool vscf_include_glob_or_dir(struct scanner* scnr, const char* glob_or_dir)
 {
     struct stat st;
     if (!stat(glob_or_dir, &st) && S_ISDIR(st.st_mode)) {
@@ -489,7 +494,7 @@ static bool vscf_include_glob_or_dir(vscf_scnr_t* scnr, const char* glob_or_dir)
 }
 
 F_NONNULL F_WUNUSED
-static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end)
+static bool scnr_proc_include(struct scanner* scnr, const char* end)
 {
     gdnsd_assume(scnr->tstart);
 
@@ -538,7 +543,7 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end)
 }
 
 F_NONNULL F_WUNUSED
-static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c)
+static bool cont_stack_push(struct scanner* scnr, vscf_data_t* c)
 {
     if (!add_to_cur_container(scnr, c))
         return false;
@@ -551,7 +556,7 @@ static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c)
 }
 
 F_NONNULL
-static void cont_stack_pop(vscf_scnr_t* scnr)
+static void cont_stack_pop(struct scanner* scnr)
 {
     gdnsd_assume(scnr->cont_stack_top > 0);
     --scnr->cont_stack_top;
@@ -560,7 +565,7 @@ static void cont_stack_pop(vscf_scnr_t* scnr)
 /*** Destructors ***/
 
 F_NONNULL
-static void simple_destroy(vscf_simple_t* s)
+static void simple_destroy(struct simple* s)
 {
     free(s->rval);
     if (s->val)
@@ -569,7 +574,7 @@ static void simple_destroy(vscf_simple_t* s)
 }
 
 F_NONNULL
-static void array_destroy(vscf_array_t* a)
+static void array_destroy(struct array* a)
 {
     for (unsigned i = 0; i < a->len; i++)
         val_destroy(a->vals[i]);
@@ -578,10 +583,10 @@ static void array_destroy(vscf_array_t* a)
 }
 
 F_NONNULL
-static void hash_destroy(vscf_hash_t* h)
+static void hash_destroy(struct hash* h)
 {
     for (unsigned i = 0; i < h->child_count; i++) {
-        vscf_hentry_t* hentry = h->ordered[i];
+        struct hentry* hentry = h->ordered[i];
         val_destroy(hentry->val);
         free(hentry->key);
         free(hentry);
@@ -595,13 +600,13 @@ static void val_destroy(vscf_data_t* d)
 {
     if (d) {
         switch (d->type) {
-        case VSCF_HASH_T:
+        case VSCF_HASH:
             hash_destroy(&d->hash);
             break;
-        case VSCF_ARRAY_T:
+        case VSCF_ARRAY:
             array_destroy(&d->array);
             break;
-        case VSCF_SIMPLE_T:
+        case VSCF_SIMPLE:
             simple_destroy(&d->simple);
             break;
         default:
@@ -711,7 +716,7 @@ static void val_destroy(vscf_data_t* d)
     action top_array {
         gdnsd_assume(scnr->cont_stack_top == 0); // outermost
         gdnsd_assume(vscf_is_hash(scnr->cont_stack[0])); // default hash
-        hash_destroy((vscf_hash_t*)scnr->cont_stack[0]);
+        hash_destroy((struct hash*)scnr->cont_stack[0]);
         scnr->cont_stack[0] = (vscf_data_t*)array_new();
     }
 
@@ -776,7 +781,7 @@ vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source
 {
     (void)vscf_en_main; // silence unused var warning from generated code
 
-    vscf_scnr_t* scnr = xcalloc(sizeof(*scnr));
+    struct scanner* scnr = xcalloc(sizeof(*scnr));
     scnr->lcount = 1;
     if (source_is_fn)
         scnr->fn = source;
@@ -850,7 +855,7 @@ GDNSD_DIAG_POP
 vscf_data_t* vscf_scan_filename(const char* fn)
 {
     vscf_data_t* rv = NULL;
-    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true, false);
+    struct fmap* fmap = gdnsd_fmap_new(fn, true, false);
     if (fmap) {
         const size_t len = gdnsd_fmap_get_len(fmap);
         const char* buf = gdnsd_fmap_get_buf(fmap);
@@ -869,24 +874,19 @@ void vscf_destroy(vscf_data_t* d)
     val_destroy(d);
 }
 
-vscf_type_t vscf_get_type(const vscf_data_t* d)
-{
-    return d->type;
-}
-
 bool vscf_is_simple(const vscf_data_t* d)
 {
-    return d->type == VSCF_SIMPLE_T;
+    return d->type == VSCF_SIMPLE;
 }
 
 bool vscf_is_array(const vscf_data_t* d)
 {
-    return d->type == VSCF_ARRAY_T;
+    return d->type == VSCF_ARRAY;
 }
 
 bool vscf_is_hash(const vscf_data_t* d)
 {
-    return d->type == VSCF_HASH_T;
+    return d->type == VSCF_HASH;
 }
 
 bool vscf_is_root(const vscf_data_t* d)
@@ -913,14 +913,14 @@ const char* vscf_simple_get_data(vscf_data_t* d)
 
 unsigned vscf_array_get_len(const vscf_data_t* d)
 {
-    if (d->type != VSCF_ARRAY_T)
+    if (d->type != VSCF_ARRAY)
         return 1;
     return d->array.len;
 }
 
 vscf_data_t* vscf_array_get_data(vscf_data_t* d, unsigned idx)
 {
-    if (d->type != VSCF_ARRAY_T) {
+    if (d->type != VSCF_ARRAY) {
         if (idx)
             return NULL;
         return d;
@@ -942,7 +942,7 @@ vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, uns
     if (d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
         unsigned child_hash = key_hash(key, klen, child_mask);
-        vscf_hentry_t* he = d->hash.children[child_hash];
+        struct hentry* he = d->hash.children[child_hash];
         while (he) {
             if ((klen == he->klen) && !memcmp(key, he->key, klen)) {
                 if (set_mark)
@@ -984,7 +984,7 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
     if (d->hash.child_count) {
         unsigned child_mask = count2mask(d->hash.child_count);
         unsigned child_hash = key_hash(key, klen, child_mask);
-        vscf_hentry_t* he = d->hash.children[child_hash];
+        struct hentry* he = d->hash.children[child_hash];
         while (he) {
             if ((klen == he->klen) && !memcmp(key, he->key, klen))
                 return (int)he->index;
@@ -999,7 +999,7 @@ void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb
 {
     gdnsd_assume(vscf_is_hash(d));
     for (unsigned i = 0; i < d->hash.child_count; i++) {
-        const vscf_hentry_t* hentry = d->hash.ordered[i];
+        const struct hentry* hentry = d->hash.ordered[i];
         if (!ignore_mark || !hentry->marked)
             if (!f(hentry->key, hentry->klen, hentry->val, data))
                 return;
@@ -1010,21 +1010,11 @@ void vscf_hash_iterate_const(const vscf_data_t* d, bool ignore_mark, vscf_hash_i
 {
     gdnsd_assume(vscf_is_hash(d));
     for (unsigned i = 0; i < d->hash.child_count; i++) {
-        const vscf_hentry_t* hentry = d->hash.ordered[i];
+        const struct hentry* hentry = d->hash.ordered[i];
         if (!ignore_mark || !hentry->marked)
             if (!f(hentry->key, hentry->klen, hentry->val, data))
                 return;
     }
-}
-
-void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f)
-{
-    gdnsd_assume(vscf_is_hash(d));
-    qsort(d->hash.ordered, d->hash.child_count, sizeof(*d->hash.ordered),
-          (int(*)(const void*, const void*))f
-         );
-    for (unsigned i = 0; i < d->hash.child_count; i++)
-        d->hash.ordered[i]->index = i;
 }
 
 bool vscf_simple_get_as_ulong(vscf_data_t* d, unsigned long* out)
@@ -1106,7 +1096,7 @@ bool vscf_simple_get_as_bool(vscf_data_t* d, bool* out)
     return false;
 }
 
-dname_status_t vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname)
+enum dname_status vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname)
 {
     gdnsd_assume(vscf_is_simple(d));
     return dname_from_string(dname, d->simple.rval, d->simple.rlen);

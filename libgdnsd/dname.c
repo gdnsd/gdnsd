@@ -86,7 +86,7 @@ static unsigned gdnsd_dns_unescape_label(char* restrict out, const char* restric
     return rv;
 }
 
-gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len)
+enum dname_status gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len)
 {
     // If string len is >1004, it cannot possibly decode legally.
     if (len > 1004)
@@ -103,7 +103,7 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
     //  (rest of the code can't handle len == 0)
     if (!len) {
         *dname_cursor = 255;
-        gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
+        gdnsd_assert(dname_get_status(dname) == DNAME_PARTIAL);
         return DNAME_PARTIAL;
     }
 
@@ -180,18 +180,18 @@ gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char
 
     if (!cursor_has_dot) {
         *dname_cursor = 255;
-        gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
+        gdnsd_assert(dname_get_status(dname) == DNAME_PARTIAL);
         return DNAME_PARTIAL;
     }
 
     *dname_cursor = 0;
-    gdnsd_assert(dname_status(dname) == DNAME_VALID);
+    gdnsd_assert(dname_get_status(dname) == DNAME_VALID);
     return DNAME_VALID;
 }
 
 unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str)
 {
-    gdnsd_assert(dname_status(dname) != DNAME_INVALID);
+    gdnsd_assert(dname_get_status(dname) != DNAME_INVALID);
 
     const char* str_base = str; // for output length later
     dname++; // skip overall length byte, we don't use it here
@@ -223,12 +223,12 @@ unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str
     return (unsigned)(str - str_base);
 }
 
-gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2)
+enum dname_status gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2)
 {
-    gdnsd_assert(dname_status(dn1) != DNAME_INVALID);
-    gdnsd_assert(dname_status(dn2) != DNAME_INVALID);
+    gdnsd_assert(dname_get_status(dn1) != DNAME_INVALID);
+    gdnsd_assert(dname_get_status(dn2) != DNAME_INVALID);
 
-    gdnsd_dname_status_t rv = DNAME_INVALID;
+    enum dname_status rv = DNAME_INVALID;
     const unsigned dn1_len = *dn1;
     const unsigned dn2_len = *dn2;
     const unsigned final_len = (dn1_len + dn2_len - 1);
@@ -242,7 +242,7 @@ gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restr
     return rv;
 }
 
-gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname)
+enum dname_status gdnsd_dname_get_status(const uint8_t* dname)
 {
     // over-all length zero is invalid
     const unsigned oal = *dname++;

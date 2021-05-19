@@ -30,21 +30,21 @@
 *   unaligned string data in giant pools with no overhead.
 \******************************************************************/
 
-typedef struct ltarena ltarena_t;
+struct ltarena;
 
 // Allocate a new arena
 F_WUNUSED
-ltarena_t* lta_new(void);
+struct ltarena* lta_new(void);
 
 // Actual allocator, asserts size <= 256, cannot fail or return nonnull
 // (underlying allocator will abort the whole program if truly unable to make
 // space for new pools)
 F_MALLOC F_ALLOCSZ(2) F_RETNN F_NONNULL
-uint8_t* lta_malloc(ltarena_t* lta, const size_t size);
+uint8_t* lta_malloc(struct ltarena* lta, const size_t size);
 
 // Duplicate a label in arena storage
 F_MALLOC F_UNUSED F_RETNN F_NONNULL
-static uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label)
+static uint8_t* lta_labeldup(struct ltarena* lta, const uint8_t* label)
 {
     const size_t sz = *label + 1U;
     uint8_t* rv = lta_malloc(lta, sz);
@@ -58,13 +58,13 @@ static uint8_t* lta_labeldup(ltarena_t* lta, const uint8_t* label)
 // Close an arena to further allocations, idempotent.
 // After this call, the only valid operations are _close()/_destroy()
 F_NONNULL
-void lta_close(ltarena_t* lta);
+void lta_close(struct ltarena* lta);
 
 // Destroy an arena, freeing all storage associated with it
 F_NONNULL
-void lta_destroy(ltarena_t* lta);
+void lta_destroy(struct ltarena* lta);
 
 // moves all source pools into target's pool list, destroying the source container
-void lta_merge(ltarena_t* target, ltarena_t* source);
+void lta_merge(struct ltarena* target, struct ltarena* source);
 
 #endif // GDNSD_LTARENA_H

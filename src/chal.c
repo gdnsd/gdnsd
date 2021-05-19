@@ -36,10 +36,10 @@
 
 // General implementation notes:
 // --
-// A "challenge" (chal_t) is a singular challenge, i.e. one single response TXT
+// A "challenge" (struct chal) is a singular challenge, i.e. one single response TXT
 // value configured for one single domainname.
 // --
-// A "challenge set" (cset_t) is a set of up to 100 challenges that were sent
+// A "challenge set" (struct cset) is a set of up to 100 challenges that were sent
 // to the daemon together in a single control socket transaction (single
 // gdnsdctl invocation).
 // --
@@ -50,8 +50,8 @@
 // "oldest" and "newest" as the ends of the linked list, and a "next_newer"
 // pointer inside of each cset to link them up.
 // --
-// Separately from all of the above, there's a hashtable (chal_tbl, of type
-// chal_tbl_t) which is used by runtime lookups returning DNS response data.  A
+// Separately from all of the above, there's a hashtable (struct chal_tbl)
+// which is used by runtime lookups returning DNS response data.  A
 // fresh new hashtable is created every time a new cset is inserted or an old
 // expires, and then it's RCU-swapped into place for runtime lookups (before
 // deletion of old csets, in the case of expiry/flush).
@@ -109,61 +109,59 @@ static unsigned dname_hash(const uint8_t* input)
 }
 
 // A single challenge
-typedef struct {
+struct chal {
     uint32_t dnhash; // faster table re-creations and collision checks
     uint8_t dname[256]; // full dname, without _acme-challenge prefix
     uint8_t txt[CHAL_RR_LEN];
-} chal_t;
-
-// A cset_t is a set of challenges added in a single control socket transaction
-// which expire together.
-struct cset_s_;
-typedef struct cset_s_ cset_t;
-struct cset_s_ {
-    size_t count;
-    ev_tstamp expiry;
-    cset_t* next_newer;
-    chal_t chals[];
 };
 
-// The total list of all active cset_t is managed as a single-linked list as a
+// A cset is a set of challenges added in a single control socket transaction
+// which expire together.
+struct cset {
+    size_t count;
+    ev_tstamp expiry;
+    struct cset* next_newer;
+    struct chal chals[];
+};
+
+// The total list of all active struct cset is managed as a single-linked list as a
 // time-ordered FIFO (since all expiry relative times are identical) with
 // "oldest" and "newest" marking the current head and tail.  Insertion of new
 // elements happens at the "newest" end, and expiry of old elements happens at
 // the "oldest" end.  The "next_newer" pointer above points in the direction of
 // "newest", and is NULL only for the object referenced by "newest"
-static cset_t* oldest = NULL;
-static cset_t* newest = NULL;
+static struct cset* oldest = NULL;
+static struct cset* newest = NULL;
 
 // Global expiration timer, ticking towards "oldest" expire-time, if any
-// cset_t are active at all.
+// struct cset are active at all.
 static ev_timer expire_timer;
 
-// chal_collide_t is used to store all the chal_t* pointers in a single hash
+// struct ccollide is used to store all the struct chal* pointers in a single hash
 // collision slot, and is realloc'd as it grows.  We can't do linked-list using
-// a pointer within chal_t because it would break RCU guarantees during
+// a pointer within struct chal because it would break RCU guarantees during
 // updates, and we expect to store duplicate keys and thus collisions
 // commonly, and have to return the whole set of duplicates, so open addressing
 // isn't a great idea either.
-typedef struct {
+struct ccollide {
     size_t count;
-    const chal_t* chals[];
-} chal_collide_t;
+    const struct chal* chals[];
+};
 
-// chal_tbl_t is a hashtable indexing into all the chal_t of all the current
-// cset_t, used for runtime lookups.
-typedef struct {
+// struct chal_tbl is a hashtable indexing into all the struct chal of all the current
+// struct cset, used for runtime lookups.
+struct chal_tbl {
     uint32_t mask;
-    chal_collide_t* tbl[];
-} chal_tbl_t;
+    struct ccollide* tbl[];
+};
 
 // This is the table reference used for runtime lookups.  It's replaced by
-// RCU-swap as cset_t are added (from controlsock) and removed (due to
+// RCU-swap as struct cset are added (from controlsock) and removed (due to
 // expiry).
-GRCU_STATIC(chal_tbl_t*, chal_tbl, NULL);
+GRCU_STATIC(struct chal_tbl*, chal_tbl, NULL);
 
 F_NONNULL
-static void chal_tbl_destruct(chal_tbl_t* destructme)
+static void chal_tbl_destruct(struct chal_tbl* destructme)
 {
     for (size_t i = 0; i <= destructme->mask; i++)
         if (destructme->tbl[i])
@@ -174,11 +172,11 @@ static void chal_tbl_destruct(chal_tbl_t* destructme)
 // Add a cset to a challenge hash table as its being constructed, fails with
 // retval true if sanity-check size constraint fails, but only if check was true
 F_NONNULL
-static bool chal_tbl_hash_cset(chal_tbl_t* ctbl, const cset_t* cset, const bool check)
+static bool chal_tbl_hash_cset(struct chal_tbl* ctbl, const struct cset* cset, const bool check)
 {
     for (size_t i = 0; i < cset->count; i++) {
-        const chal_t* ch = &cset->chals[i];
-        chal_collide_t** slotptr = &ctbl->tbl[ch->dnhash & ctbl->mask];
+        const struct chal* ch = &cset->chals[i];
+        struct ccollide** slotptr = &ctbl->tbl[ch->dnhash & ctbl->mask];
         size_t old_ct = 0;
         if (*slotptr) {
             old_ct = (*slotptr)->count;
@@ -193,18 +191,18 @@ static bool chal_tbl_hash_cset(chal_tbl_t* ctbl, const cset_t* cset, const bool 
     return false;
 }
 
-// Create a new chal_tbl using whatever's currently in the linked list plus
+// Create a new struct chal_tbl using whatever's currently in the linked list plus
 // optionally one new cset we're attempting to add.  Will return NULL if cset
 // is NULL and there were no existing ones (e.g. re-create after deleting
 // last).
-static chal_tbl_t* chal_tbl_create(const cset_t* oldest_set, const cset_t* adding)
+static struct chal_tbl* chal_tbl_create(const struct cset* oldest_set, const struct cset* adding)
 {
-    chal_tbl_t* new_chal_tbl = NULL;
+    struct chal_tbl* new_tbl = NULL;
 
     // Calculate the total challenge count between all existing csets and the
     // optional new one:
     unsigned total_count = adding ? adding->count : 0;
-    const cset_t* iter_old = oldest_set;
+    const struct cset* iter_old = oldest_set;
     while (iter_old) {
         total_count += iter_old->count;
         iter_old = iter_old->next_newer;
@@ -212,33 +210,33 @@ static chal_tbl_t* chal_tbl_create(const cset_t* oldest_set, const cset_t* addin
 
     if (total_count) { // We have things to hash
         const uint32_t mask = count2mask(total_count << 1U);
-        new_chal_tbl = xcalloc(sizeof(*new_chal_tbl) + (sizeof(new_chal_tbl->tbl[0]) * (mask + 1U)));
-        new_chal_tbl->mask = mask;
+        new_tbl = xcalloc(sizeof(*new_tbl) + (sizeof(new_tbl->tbl[0]) * (mask + 1U)));
+        new_tbl->mask = mask;
         iter_old = oldest_set;
         while (iter_old) {
-            chal_tbl_hash_cset(new_chal_tbl, iter_old, false);
+            chal_tbl_hash_cset(new_tbl, iter_old, false);
             iter_old = iter_old->next_newer;
         }
         // Ask the hasher to check size constraints when adding new csets, and
         // can fail here, which means we need to destruct our new table and
         // return NULL.
-        if (adding && chal_tbl_hash_cset(new_chal_tbl, adding, true)) {
-            chal_tbl_destruct(new_chal_tbl);
-            new_chal_tbl = NULL;
+        if (adding && chal_tbl_hash_cset(new_tbl, adding, true)) {
+            chal_tbl_destruct(new_tbl);
+            new_tbl = NULL;
         }
     }
 
-    return new_chal_tbl;
+    return new_tbl;
 }
 
 // Can swap in NULL with this, e.g. for flush
-static void chal_tbl_swap_and_free(chal_tbl_t* new_chal_tbl)
+static void chal_tbl_swap_and_free(struct chal_tbl* new_tbl)
 {
-    chal_tbl_t* old_chal_tbl = GRCU_OWN_READ(chal_tbl);
-    grcu_assign_pointer(chal_tbl, new_chal_tbl);
+    struct chal_tbl* old_tbl = GRCU_OWN_READ(chal_tbl);
+    grcu_assign_pointer(chal_tbl, new_tbl);
     grcu_synchronize_rcu();
-    if (old_chal_tbl)
-        chal_tbl_destruct(old_chal_tbl);
+    if (old_tbl)
+        chal_tbl_destruct(old_tbl);
 }
 
 F_NONNULL
@@ -249,20 +247,20 @@ static void cset_expire(struct ev_loop* loop, ev_timer* t, const int revents V_U
     const ev_tstamp cutoff = ev_now(loop) + TIME_FUDGE;
 
     // Skip past the to-be-expired without actually deleting them yet
-    const cset_t* iter_old = oldest;
+    const struct cset* iter_old = oldest;
     while (iter_old && iter_old->expiry <= cutoff)
         iter_old = iter_old->next_newer;
 
     // Create new hashtable, RCU-swap, delete old hashtable.  New may be NULL
     // and implicitly empty, if iter_old is NULL because the above loop wants
     // to expire everything.
-    chal_tbl_t* new_chal_tbl = chal_tbl_create(iter_old, NULL);
-    chal_tbl_swap_and_free(new_chal_tbl);
+    struct chal_tbl* new_tbl = chal_tbl_create(iter_old, NULL);
+    chal_tbl_swap_and_free(new_tbl);
 
     // Delete expired csets now that RCU swap guaranteed no runtime references,
     // and actual move the global "oldest" as we go
     while (oldest && oldest->expiry <= cutoff) {
-        cset_t* nn = oldest->next_newer;
+        struct cset* nn = oldest->next_newer;
         free(oldest);
         oldest = nn;
     }
@@ -284,7 +282,7 @@ void cset_flush(struct ev_loop* loop)
     // Delete all csets, as if they all expired, updating "oldest" as we go
     // until it becomes NULL
     while (oldest) {
-        cset_t* nn = oldest->next_newer;
+        struct cset* nn = oldest->next_newer;
         free(oldest);
         oldest = nn;
     }
@@ -321,7 +319,7 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
         return true;
     }
 
-    cset_t* cset = xmalloc(sizeof(*cset) + (sizeof(cset->chals[0]) * count));
+    struct cset* cset = xmalloc(sizeof(*cset) + (sizeof(cset->chals[0]) * count));
     cset->count = count;
     if (!ttl_remain || ttl_remain > gcfg->acme_challenge_ttl)
         ttl_remain = gcfg->acme_challenge_ttl;
@@ -338,7 +336,7 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
             free(cset);
             return true;
         }
-        chal_t* c = &cset->chals[i];
+        struct chal* c = &cset->chals[i];
         dname_copy(c->dname, &data[didx]);
         dname_terminate(c->dname);
         didx += (data[didx] + 1U);
@@ -362,9 +360,9 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
         return true;
     }
 
-    chal_tbl_t* new_chal_tbl = chal_tbl_create(oldest, cset);
+    struct chal_tbl* new_tbl = chal_tbl_create(oldest, cset);
 
-    if (!new_chal_tbl) {
+    if (!new_tbl) {
         log_err("Rejected acme-dns-01 challenge creation: collision sanity constraints exceeded, likely a runaway ACME automation script");
         free(cset);
         return true;
@@ -385,14 +383,14 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
     }
 
     // Swap the new hashtable in for runtime lookups
-    chal_tbl_swap_and_free(new_chal_tbl);
+    chal_tbl_swap_and_free(new_tbl);
 
     return false;
 }
 
-// Serialize a cset_t back into controlsock wire format
+// Serialize a struct cset back into controlsock wire format
 F_NONNULL F_WUNUSED
-static size_t cset_serialize(ev_tstamp now, const cset_t* cset, uint8_t* dptr)
+static size_t cset_serialize(ev_tstamp now, const struct cset* cset, uint8_t* dptr)
 {
     gdnsd_assume(cset->count <= CHAL_MAX_COUNT);
     gdnsd_assume(cset->count);
@@ -411,8 +409,8 @@ static size_t cset_serialize(ev_tstamp now, const cset_t* cset, uint8_t* dptr)
     offset += 2U;
     dptr[offset++] = (uint8_t)cset->count;
     for (size_t i = 0; i < cset->count; i++) {
-        const chal_t* c = &cset->chals[i];
-        gdnsd_assert(dname_status(c->dname) == DNAME_VALID);
+        const struct chal* c = &cset->chals[i];
+        gdnsd_assert(dname_get_status(c->dname) == DNAME_VALID);
         dname_copy(&dptr[offset], c->dname);
         offset += c->dname[0] + 1U;
         memcpy(&dptr[offset], &c->txt[CHAL_RR_FIELDS], CHAL_RR_PAYLOAD);
@@ -438,7 +436,7 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
     size_t ct = 0;
     ev_tstamp now = ev_now(loop);
 
-    const cset_t* cur = oldest;
+    const struct cset* cur = oldest;
     while (cur) {
         if ((now + TIME_FUDGE) < cur->expiry) {
             if (unlikely((ct + 1 >= 0xFFFFFFu) || (used + CHAL_MAX_SERIAL > UINT32_MAX))) {
@@ -465,7 +463,7 @@ uint8_t* csets_serialize(struct ev_loop* loop, size_t* csets_count_p, size_t* cs
 bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t* qname, uint8_t* packet, unsigned* ancount_p, unsigned* offset_p, const unsigned this_max_response)
 {
     const bool qname_is_chal = dname_is_acme_chal(qname);
-    const chal_tbl_t* t;
+    const struct chal_tbl* t;
     grcu_dereference(t, chal_tbl);
     if (!t)
         return false;
@@ -480,13 +478,13 @@ bool chal_respond(const unsigned qname_comp, const unsigned qtype, const uint8_t
     }
 
     const uint32_t qname_hash = dname_hash(qname);
-    const chal_collide_t* coll = t->tbl[qname_hash & t->mask];
+    const struct ccollide* coll = t->tbl[qname_hash & t->mask];
     if (!coll)
         return false;
 
     bool matched = false;
     for (unsigned i = 0; i < coll->count; i++) {
-        const chal_t* ch = coll->chals[i];
+        const struct chal* ch = coll->chals[i];
         if (ch->dnhash == qname_hash && likely(!dname_cmp(qname, ch->dname))) {
             matched = true;
             if (qname_is_chal && qtype == DNS_TYPE_TXT) {

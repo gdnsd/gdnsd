@@ -30,41 +30,21 @@
 #include <stdbool.h>
 #include <strings.h>
 
-/***************************************
- * dcmap_t and related methods
- **************************************/
-
-// Exactly one of the following must be true:
-//  dclist is non-zero, indicating a direct dclist
-//  dcmap is non-null, indicating another level of depth
-typedef struct {
-    char* name;
-    dcmap_t* dcmap;
-    uint32_t dclist;
-} dcmap_child_t;
-
-struct dcmap {
-    // All 3 below are allocated to num_children entries.
-    dcmap_child_t* children;
-    unsigned def_dclist; // copied from parent if not specced in cfg, required at root
-    unsigned num_children;
-};
-
-typedef struct {
-    dcmap_t* dcmap;
-    dclists_t* dclists;
+struct dcmap_iter_data {
+    struct dcmap* dcmap;
+    struct dclists* dclists;
     const char* map_name;
     unsigned child_num;
     unsigned true_depth;
     bool allow_auto;
-} dcmap_iter_data;
+};
 
 F_NONNULL
 static bool dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
 {
-    dcmap_iter_data* did = data;
+    struct dcmap_iter_data* did = data;
 
-    dcmap_child_t* child = &did->dcmap->children[did->child_num];
+    struct dcmap_child* child = &did->dcmap->children[did->child_num];
     child->name = xstrdup(key);
     if (vscf_is_hash(val))
         child->dcmap = dcmap_new(val, did->dclists, did->dcmap->def_dclist, did->true_depth + 1, did->map_name, did->allow_auto);
@@ -76,11 +56,11 @@ static bool dcmap_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t*
     return true;
 }
 
-dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto)
+struct dcmap* dcmap_new(const vscf_data_t* map_cfg, struct dclists* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto)
 {
     gdnsd_assert(vscf_is_hash(map_cfg));
 
-    dcmap_t* dcmap = xcalloc(sizeof(*dcmap));
+    struct dcmap* dcmap = xcalloc(sizeof(*dcmap));
     unsigned nchild = vscf_hash_get_len(map_cfg);
 
     vscf_data_t* def_cfg = vscf_hash_get_data_byconstkey(map_cfg, "default", true);
@@ -110,7 +90,7 @@ dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigne
     if (nchild) {
         dcmap->num_children = nchild;
         dcmap->children = xcalloc_n(nchild, sizeof(*dcmap->children));
-        dcmap_iter_data did = {
+        struct dcmap_iter_data did = {
             .child_num = 0,
             .dcmap = dcmap,
             .dclists = dclists,
@@ -127,7 +107,7 @@ dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigne
 // as above, but supports abitrary levels of nesting in the map without regard
 //   to any named hierarchy, and without prefetching levels from the lookup source
 //   unless the map actually wants to see them.
-static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* data, unsigned level)
+static uint32_t dcmap_llc_(const struct dcmap* dcmap, dcmap_lookup_cb_t cb, void* data, unsigned level)
 {
     // map empty within this level, e.g. "US => {}" or "US => { default => [...] }"
     if (!dcmap->num_children)
@@ -144,7 +124,7 @@ static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* dat
         if (!lookup[0])
             break;
         for (unsigned i = 0; i < dcmap->num_children; i++) {
-            const dcmap_child_t* child = &dcmap->children[i];
+            const struct dcmap_child* child = &dcmap->children[i];
             if (!strcasecmp(lookup, child->name)) {
                 if (child->dcmap)
                     return dcmap_llc_(child->dcmap, cb, data, level);
@@ -156,15 +136,15 @@ static uint32_t dcmap_llc_(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* dat
     return dcmap->def_dclist;
 }
 
-uint32_t dcmap_lookup_loc_callback(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* data)
+uint32_t dcmap_lookup_loc_callback(const struct dcmap* dcmap, dcmap_lookup_cb_t cb, void* data)
 {
     return dcmap_llc_(dcmap, cb, data, 0);
 }
 
-void dcmap_destroy(dcmap_t* dcmap)
+void dcmap_destroy(struct dcmap* dcmap)
 {
     for (unsigned i = 0; i < dcmap->num_children; i++) {
-        const dcmap_child_t* child = &dcmap->children[i];
+        const struct dcmap_child* child = &dcmap->children[i];
         if (child->name)
             free(child->name);
         if (child->dcmap)

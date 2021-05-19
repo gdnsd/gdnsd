@@ -29,7 +29,7 @@
 #include <arpa/inet.h>
 
 /***************************************
- * ntree_t and related methods
+ * struct ntree and related methods
  **************************************/
 
 // ipv6 is a uint8_t[16]
@@ -121,44 +121,44 @@ static const struct in6_addr ip6_zero = { .s6_addr = { 0 } };
 #define NN_GET_DCLIST(x) ((x) & ~(1U << 31U)) // strips high bit
 #define NN_SET_DCLIST(x) ((x) | (1U << 31U)) // sets high bit
 
-typedef struct {
+struct nnode {
     uint32_t zero;
     uint32_t one;
-} nnode_t;
+};
 
-typedef struct {
-    nnode_t* store;
+struct ntree {
+    struct nnode* store;
     unsigned ipv4;  // cached ipv4 lookup hint
     unsigned count; // raw nodes, including interior ones
     unsigned alloc; // current allocation of store during construction, set to zero after _finish()
-} ntree_t;
+};
 
 F_WUNUSED F_RETNN
-ntree_t* ntree_new(void);
+struct ntree* ntree_new(void);
 
 F_NONNULL
-void ntree_destroy(ntree_t* tree);
+void ntree_destroy(struct ntree* tree);
 
 // keeps ->count up-to-date and resizes storage
 //   as necc by doubling.
 F_NONNULL
-unsigned ntree_add_node(ntree_t* tree);
+unsigned ntree_add_node(struct ntree* tree);
 
 // call this after done adding data
 F_NONNULL
-void ntree_finish(ntree_t* tree);
+void ntree_finish(struct ntree* tree);
 
 #ifndef NDEBUG
 F_NONNULL
-void ntree_debug_dump(const ntree_t* tree);
+void ntree_debug_dump(const struct ntree* tree);
 F_NONNULL
-void ntree_assert_optimal(const ntree_t* tree);
+void ntree_assert_optimal(const struct ntree* tree);
 #else
 #define ntree_debug_dump(x)
 #define ntree_assert_optimal(x)
 #endif
 
 F_NONNULL
-unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask, const bool ignore_ecs);
+unsigned ntree_lookup(const struct ntree* tree, const struct client_info* client, unsigned* scope_mask, const bool ignore_ecs);
 
 #endif // NTREE_H

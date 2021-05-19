@@ -30,7 +30,7 @@
 
 // Per-connection DSO state-tracking between dnsio_tcp (TCP) + dnspacket at the
 // boundary layer of invoking process_dns_query() (PDQ) for each req->resp
-typedef struct {
+struct dso_state {
     // last_was_ka: set false by TCP before PDQ always, PDQ sets true if
     // request was a DSO KeepAlive, so that dnsio_tcp knows not to bump the
     // server-side inactivity timer like it would for any other request.
@@ -39,33 +39,32 @@ typedef struct {
     // DSO is established by client DSO KeepAlive reception, which changes some
     // code behaviors on both sides.
     bool estab;
-} dso_state_t;
+};
 
 struct dnsp_ctx; // opaque to outsiders
-typedef struct dnsp_ctx dnsp_ctx_t;
 
-typedef union {
-    wire_dns_header_t hdr;
+union pkt {
+    struct wire_dns_hdr hdr;
     uint8_t raw[MAX_RESPONSE_BUF];
-} pkt_t;
+};
 
 F_HOT F_NONNULLX(1, 2, 3)
-unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, pkt_t* packet, dso_state_t* dso, const unsigned packet_len);
+unsigned process_dns_query(struct dnsp_ctx* ctx, const struct anysin* sa, union pkt* pkt, struct dso_state* dso, const unsigned packet_len);
 
 F_NONNULL F_WUNUSED F_RETNN
-dnsp_ctx_t* dnspacket_ctx_init_udp(struct dns_stats** stats_out, const bool is_ipv6);
+struct dnsp_ctx* dnspacket_ctx_init_udp(struct dns_stats** stats_out, const bool is_ipv6);
 
 F_NONNULL F_WUNUSED F_RETNN
-dnsp_ctx_t* dnspacket_ctx_init_tcp(struct dns_stats** stats_out, const bool pad, const unsigned timeout_secs);
+struct dnsp_ctx* dnspacket_ctx_init_tcp(struct dns_stats** stats_out, const bool pad, const unsigned timeout_secs);
 
 // TCP threads call this on their context when they start graceful shutdown,
 // telling the dnspacket layer to advertise inactivity timeouts of zero for the
 // remainder of the daemon's life.
 F_NONNULL
-void dnspacket_ctx_set_grace(dnsp_ctx_t* ctx);
+void dnspacket_ctx_set_grace(struct dnsp_ctx* ctx);
 
 F_NONNULL
-void dnspacket_ctx_cleanup(dnsp_ctx_t* ctx);
+void dnspacket_ctx_cleanup(struct dnsp_ctx* ctx);
 
 F_NONNULL
 void dnspacket_global_setup(void);

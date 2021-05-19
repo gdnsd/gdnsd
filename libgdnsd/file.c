@@ -35,13 +35,7 @@
 // Avoid mmap for smaller files (<1MB)
 #define SIZE_CUTOFF_MMAP 1048576U
 
-struct gdnsd_fmap_s_ {
-    void* buf;
-    size_t len;
-    bool is_mapped;
-};
-
-gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
+struct fmap* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
 {
     const int fd = open(fn, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
@@ -109,26 +103,14 @@ gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod)
     if (close(fd))
         log_err("Cannot close '%s', continuing anyways: %s", fn, logf_errno());
 
-    gdnsd_fmap_t* fmap = xmalloc(sizeof(*fmap));
+    struct fmap* fmap = xmalloc(sizeof(*fmap));
     fmap->buf = mapbuf;
     fmap->len = len;
     fmap->is_mapped = is_mapped;
     return fmap;
 }
 
-void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap)
-{
-    gdnsd_assume(fmap->buf);
-    return fmap->buf;
-}
-
-size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap)
-{
-    gdnsd_assume(fmap->buf);
-    return fmap->len;
-}
-
-bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap)
+bool gdnsd_fmap_delete(struct fmap* fmap)
 {
     gdnsd_assume(fmap->buf);
 

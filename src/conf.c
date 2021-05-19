@@ -36,14 +36,14 @@
 #include <limits.h>
 
 // Global config, read-only
-const cfg_t* gcfg = NULL;
+const struct cfg* gcfg = NULL;
 
 // just needs 16-bit rdlen followed by TXT strings with length byte prefixes...
 static const uint8_t chaos_prefix[] = "\xC0\x0C\x00\x10\x00\x03\x00\x00\x00\x00";
 #define chaos_prefix_len 10U
 static const char chaos_def[] = "gdnsd/X"; // XXX temporary for prototype branches
 
-static const cfg_t cfg_defaults = {
+static const struct cfg cfg_defaults = {
     .chaos = { .data = NULL, .len = 0 },
     .nsid = { .data = NULL, .len = 0 },
     .cookie_key_file = NULL,
@@ -67,7 +67,7 @@ static const cfg_t cfg_defaults = {
 };
 
 F_NONNULL
-static void set_chaos(cfg_t* cfg, const char* data)
+static void set_chaos(struct cfg* cfg, const char* data)
 {
     const unsigned dlen = strlen(data);
     if (dlen > 254)
@@ -91,7 +91,7 @@ static const uint8_t ahex[] = {
 };
 
 F_NONNULL
-static void set_nsid(cfg_t* cfg, const char* data)
+static void set_nsid(struct cfg* cfg, const char* data)
 {
     const unsigned dlen = strlen(data);
     if (!dlen || dlen > 256U || dlen & 1U || dlen != strspn(data, "0123456789ABCDEFabcdef"))
@@ -105,7 +105,7 @@ static void set_nsid(cfg_t* cfg, const char* data)
 }
 
 F_NONNULL
-static void set_nsid_ascii(cfg_t* cfg, const char* data)
+static void set_nsid_ascii(struct cfg* cfg, const char* data)
 {
     const unsigned dlen = strlen(data);
     bool fail = false;
@@ -136,7 +136,7 @@ static void plugin_configure(const char* name, vscf_data_t* pconf)
     if (pconf && !vscf_is_hash(pconf))
         log_fatal("Config data for plugin '%s' must be a hash", name);
 
-    plugin_t* plugin = gdnsd_plugin_find(name);
+    struct plugin* plugin = gdnsd_plugin_find(name);
     if (plugin->load_config) {
         plugin->load_config(pconf);
         plugin->config_loaded = true;
@@ -247,11 +247,11 @@ static bool cfg_plugin_iter(const char* name, unsigned namelen V_UNUSED, vscf_da
     } while (0)
 
 
-cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
+struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
 {
     gdnsd_assert(!cfg_root || vscf_is_hash(cfg_root));
 
-    cfg_t* cfg = xmalloc(sizeof(*cfg));
+    struct cfg* cfg = xmalloc(sizeof(*cfg));
     memcpy(cfg, &cfg_defaults, sizeof(*cfg));
 
     const char* chaos_data = chaos_def;

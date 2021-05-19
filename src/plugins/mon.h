@@ -81,7 +81,7 @@ void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl);
 // called during load_config to register address healthchecks, returns
 //   an index to check state with...
 F_NONNULL
-unsigned gdnsd_mon_addr(const char* svctype_name, const gdnsd_anysin_t* addr);
+unsigned gdnsd_mon_addr(const char* svctype_name, const struct anysin* addr);
 
 // as above for a CNAME
 F_NONNULL

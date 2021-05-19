@@ -41,7 +41,7 @@
 
 #include <ev.h>
 
-typedef struct {
+struct http_svc {
     const char* name;
     unsigned* ok_codes;
     char* req_data;
@@ -50,37 +50,37 @@ typedef struct {
     unsigned port;
     unsigned timeout;
     unsigned interval;
-} http_svc_t;
+};
 
-typedef enum {
+enum http_state {
     HTTP_STATE_WAITING = 0,   // waiting for interval to expire before next send
     HTTP_STATE_WRITING,   // trying to send the request
     HTTP_STATE_READING  // trying to receive the response
-} http_state_t;
+};
 
-typedef struct {
+struct http_events {
     const char* desc;
-    http_svc_t* http_svc;
+    struct http_svc* http_svc;
     ev_io read_watcher;
     ev_io write_watcher;
     ev_timer timeout_watcher;
     ev_timer interval_watcher;
     unsigned idx;
-    gdnsd_anysin_t addr;
+    struct anysin addr;
     char res_buf[14];
     int sock;
-    http_state_t hstate;
+    enum http_state hstate;
     unsigned done;
     bool already_connected;
-} http_events_t;
+};
 
 static unsigned num_http_svcs = 0;
 static unsigned num_mons = 0;
-static http_svc_t* service_types = NULL;
-static http_events_t** mons = NULL;
+static struct http_svc* service_types = NULL;
+static struct http_events** mons = NULL;
 
 F_NONNULL
-static void mon_quick_fail(http_events_t* md)
+static void mon_quick_fail(struct http_events* md)
 {
     log_debug("plugin_http_status: State poll of %s failed very quickly", md->desc);
     md->hstate = HTTP_STATE_WAITING;
@@ -92,7 +92,7 @@ static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int 
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    http_events_t* md = t->data;
+    struct http_events* md = t->data;
 
     gdnsd_assume(md);
 
@@ -157,7 +157,7 @@ static void mon_write_cb(struct ev_loop* loop, struct ev_io* io, const int reven
 {
     gdnsd_assume(revents == EV_WRITE);
 
-    http_events_t* md = io->data;
+    struct http_events* md = io->data;
 
     ev_io* r_watcher = &md->read_watcher;
     ev_io* w_watcher = &md->write_watcher;
@@ -254,7 +254,7 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
 {
     gdnsd_assume(revents == EV_READ);
 
-    http_events_t* md = io->data;
+    struct http_events* md = io->data;
 
     ev_io* r_watcher = &md->read_watcher;
     ev_timer* t_watcher = &md->timeout_watcher;
@@ -323,7 +323,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    http_events_t* md = t->data;
+    struct http_events* md = t->data;
 
     ev_io* r_watcher = &md->read_watcher;
     ev_io* w_watcher = &md->write_watcher;
@@ -380,7 +380,7 @@ static const char REQ_TMPL_VHOST[] = "GET %s HTTP/1.1\r\nHost: %s\r\nConnection:
 #define REQ_TMPL_VHOST_LEN (sizeof(REQ_TMPL_VHOST) - 2U - 2U - 1U)
 
 F_NONNULLX(1, 2)
-static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost)
+static void make_req_data(struct http_svc* s, const char* url_path, const char* vhost)
 {
     const unsigned url_len = strlen(url_path);
     if (vhost) {
@@ -402,7 +402,7 @@ static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cf
     unsigned port = 80;
 
     service_types = xrealloc_n(service_types, num_http_svcs + 1, sizeof(*service_types));
-    http_svc_t* this_svc = &service_types[num_http_svcs++];
+    struct http_svc* this_svc = &service_types[num_http_svcs++];
 
     this_svc->name = xstrdup(name);
     this_svc->num_ok_codes = 0;
@@ -443,9 +443,9 @@ static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cf
     this_svc->interval = interval;
 }
 
-static void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
+static void plugin_http_status_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const struct anysin* addr, const unsigned idx)
 {
-    http_events_t* this_mon = xcalloc(sizeof(*this_mon));
+    struct http_events* this_mon = xcalloc(sizeof(*this_mon));
     this_mon->desc = xstrdup(desc);
     this_mon->idx = idx;
 
@@ -502,7 +502,7 @@ static void plugin_http_status_init_monitors(struct ev_loop* mon_loop)
 static void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
-        http_events_t* mon = mons[i];
+        struct http_events* mon = mons[i];
         gdnsd_assume(mon->sock == -1);
         const unsigned ival = mon->http_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
@@ -512,7 +512,7 @@ static void plugin_http_status_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-plugin_t plugin_http_status_funcs = {
+struct plugin plugin_http_status_funcs = {
     .name = "http_status",
     .config_loaded = false,
     .used = false,

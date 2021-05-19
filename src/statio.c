@@ -56,7 +56,7 @@ void statio_register_thread_stats(struct dns_stats* stats)
     );
 }
 
-typedef enum {
+enum slot {
     UDP_RECVFAIL         = 0,
     UDP_SENDFAIL         = 1,
     UDP_TC               = 2,
@@ -93,7 +93,7 @@ typedef enum {
     TCP_DSO_TYPENI       = 33,
     TCP_ACCEPTFAIL       = 34,
     SLOT_COUNT           = 35,
-} slot_t;
+};
 
 static const char json_fixed[] =
     "{\n"

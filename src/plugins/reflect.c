@@ -68,7 +68,7 @@ static int plugin_reflect_map_res(const char* resname, const uint8_t* zone_name)
     return -1;
 }
 
-static gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
+static gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const struct client_info* cinfo, struct dyn_result* result)
 {
     gdnsd_assume(resnum < NUM_RTYPES);
 
@@ -81,7 +81,7 @@ static gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t*
         gdnsd_result_add_anysin(result, &cinfo->edns_client);
         gdnsd_result_add_scope_mask(result, cinfo->edns_client_mask);
     } else if (!cinfo->edns_client_mask && resnum == RESPONSE_EDNS) {
-        gdnsd_anysin_t tmpsin;
+        struct anysin tmpsin;
         gdnsd_anysin_fromstr("0.0.0.0", 0, &tmpsin);
         gdnsd_result_add_anysin(result, &tmpsin);
     }
@@ -89,7 +89,7 @@ static gdnsd_sttl_t plugin_reflect_resolve(unsigned resnum, const client_info_t*
     return GDNSD_STTL_TTL_MAX;
 }
 
-plugin_t plugin_reflect_funcs = {
+struct plugin plugin_reflect_funcs = {
     .name = "reflect",
     .config_loaded = false,
     .used = false,

@@ -181,7 +181,7 @@ static void terminal_signal(struct ev_loop* loop, struct ev_signal* w, const int
 {
     gdnsd_assert(revents == EV_SIGNAL);
     gdnsd_assert(w->signum == SIGTERM || w->signum == SIGINT);
-    const css_t* css = w->data;
+    const struct css* css = w->data;
     if (!css_stop_ok(css)) {
         log_err("Ignoring terminating signal %i because a replace attempt is in progress!", w->signum);
     } else {
@@ -203,7 +203,7 @@ F_NONNULL
 static void reload_zones_done(struct ev_loop* loop V_UNUSED, struct ev_async* a V_UNUSED, const int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_ASYNC);
-    css_t* css = a->data;
+    struct css* css = a->data;
     const bool failed = join_zones_reloader_thread();
 
     if (failed)
@@ -223,7 +223,7 @@ void notify_reload_zones_done(void)
     ev_async_send(async_reloadz_loop, p_async_reloadz);
 }
 
-static void setup_reload_zones(css_t* css, struct ev_loop* loop)
+static void setup_reload_zones(struct css* css, struct ev_loop* loop)
 {
     // Copy loop pointer to a global for access from the above helper
     // function from another thread:
@@ -263,7 +263,7 @@ static void usage(const char* argv0)
 }
 
 F_NONNULL
-static void start_threads(const socks_cfg_t* socks_cfg)
+static void start_threads(const struct socks_cfg* socks_cfg)
 {
     dnsio_udp_init(getpid());
     size_t num_tcp_threads = 0;
@@ -290,7 +290,7 @@ static void start_threads(const socks_cfg_t* socks_cfg)
     int pthread_err;
 
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &socks_cfg->dns_threads[i];
+        struct dns_thread* t = &socks_cfg->dns_threads[i];
         if (t->is_udp)
             pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, t);
         else
@@ -308,21 +308,21 @@ static void start_threads(const socks_cfg_t* socks_cfg)
 }
 
 F_NONNULL
-static void request_io_threads_stop(const socks_cfg_t* socks_cfg)
+static void request_io_threads_stop(const struct socks_cfg* socks_cfg)
 {
     dnsio_tcp_request_threads_stop();
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        const dns_thread_t* t = &socks_cfg->dns_threads[i];
+        const struct dns_thread* t = &socks_cfg->dns_threads[i];
         if (t->is_udp)
             pthread_kill(t->threadid, SIGUSR2);
     }
 }
 
 F_NONNULL
-static void wait_io_threads_stop(const socks_cfg_t* socks_cfg)
+static void wait_io_threads_stop(const struct socks_cfg* socks_cfg)
 {
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        const dns_thread_t* t = &socks_cfg->dns_threads[i];
+        const struct dns_thread* t = &socks_cfg->dns_threads[i];
         void* raw_exit_status = (void*)42U;
         int pthread_err = pthread_join(t->threadid, &raw_exit_status);
         if (pthread_err)
@@ -332,14 +332,14 @@ static void wait_io_threads_stop(const socks_cfg_t* socks_cfg)
     }
 }
 
-static void do_tak1(const csc_t* csc)
+static void do_tak1(const struct csc* csc)
 {
     // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
     // assuming all daemons with listening control sockets have a major >= 3
     // and support TAK1.
     if (csc_server_version_gte(csc, 2, 99, 200)) {
-        csbuf_t req;
-        csbuf_t resp;
+        union csbuf req;
+        union csbuf resp;
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAK1;
         req.d = (uint32_t)getpid();
@@ -348,13 +348,13 @@ static void do_tak1(const csc_t* csc)
     }
 }
 
-static void do_tak2(struct ev_loop* loop, const csc_t* csc)
+static void do_tak2(struct ev_loop* loop, const struct csc* csc)
 {
     // As above for compat
     if (csc_server_version_gte(csc, 2, 99, 200)) {
         uint8_t* chal_data = NULL;
-        csbuf_t req;
-        csbuf_t resp;
+        union csbuf req;
+        union csbuf resp;
         memset(&req, 0, sizeof(req));
         req.key = REQ_TAK2;
         req.d = (uint32_t)getpid();
@@ -382,14 +382,14 @@ static void do_tak2(struct ev_loop* loop, const csc_t* csc)
     }
 }
 
-typedef enum {
+enum cli_action {
     ACT_UNDEF = 0,
     ACT_CHECKCONF,
     ACT_START,
     ACT_DAEMONIZE
-} cmdline_action_t;
+};
 
-typedef struct {
+struct cli_opts {
     const char* cfg_dir;
     bool force_zsd;
     bool replace_ok;
@@ -397,11 +397,11 @@ typedef struct {
     bool deadopt_f;
     bool deadopt_s;
     bool deadopt_x;
-    cmdline_action_t action;
-} cmdline_opts_t;
+    enum cli_action action;
+};
 
 F_NONNULL
-static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
+static void parse_args(const int argc, char** argv, struct cli_opts* copts)
 {
     int optchar;
     while ((optchar = getopt(argc, argv, "c:DlSRifsx"))) {
@@ -455,7 +455,7 @@ static void parse_args(const int argc, char** argv, cmdline_opts_t* copts)
     usage(argv[0]);
 }
 
-static void try_raise_open_files(const socks_cfg_t* socks_cfg)
+static void try_raise_open_files(const struct socks_cfg* socks_cfg)
 {
     // this is just a default guestimate anyways; it tries to account for all
     // the known network socket needs, and then bumps by a hundred to handle
@@ -495,7 +495,7 @@ static void try_raise_open_files(const socks_cfg_t* socks_cfg)
 }
 
 noreturn
-static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* css, csc_t* csc)
+static struct css* runtime_execute(const char* argv0, struct socks_cfg* socks_cfg, struct css* css, struct csc* csc)
 {
     try_raise_open_files(socks_cfg);
 
@@ -656,7 +656,7 @@ int main(int argc, char** argv)
     // Parse args, getting the config path
     //   returning the action.  Exits on cmdline errors,
     //   does not use assert/log stuff.
-    cmdline_opts_t copts = {
+    struct cli_opts copts = {
         .cfg_dir = NULL,
         .force_zsd = false,
         .replace_ok = false,
@@ -695,12 +695,12 @@ int main(int argc, char** argv)
     vscf_data_t* cfg_root = gdnsd_init_paths(copts.cfg_dir, copts.action != ACT_CHECKCONF);
 
     // Load (but do not act on) socket config
-    socks_cfg_t* socks_cfg = socks_conf_load(cfg_root);
+    struct socks_cfg* socks_cfg = socks_conf_load(cfg_root);
 
     // init locked control socket if starting, can fail if concurrent daemon,
     // or begin a takeover process if CLI flag allows
-    csc_t* csc = NULL;
-    css_t* css = NULL;
+    struct csc* csc = NULL;
+    struct css* css = NULL;
     if (copts.action != ACT_CHECKCONF) {
         css = css_new(argv[0], socks_cfg, NULL);
         if (!css) {

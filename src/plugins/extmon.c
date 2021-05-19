@@ -42,7 +42,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-typedef struct {
+struct svc {
     char* name;
     char** args;
     unsigned num_args;
@@ -50,22 +50,22 @@ typedef struct {
     unsigned interval;
     unsigned max_proc;
     bool direct;
-} svc_t;
+};
 
-typedef struct {
+struct mon {
     const char* desc;
-    const svc_t* svc;
+    const struct svc* svc;
     ev_timer local_timeout;
     const char* thing;
     unsigned idx;
     bool seen_once;
-} mon_t;
+};
 
 static unsigned num_svcs = 0;
-static svc_t* svcs = NULL;
+static struct svc* svcs = NULL;
 
 static unsigned num_mons = 0;
-static mon_t* mons = NULL;
+static struct mon* mons = NULL;
 
 static const char* helper_path = NULL;
 static pid_t helper_pid = 0;
@@ -75,7 +75,7 @@ static int helper_read_fd = -1;
 static ev_io helper_read_watcher;
 
 // whether we're in the init phase or runtime phase,
-//   and how many distinct mon_t have been updated
+//   and how many distinct struct mon have been updated
 //   so far during init phase.
 static bool init_phase = true;
 static unsigned init_phase_count = 0;
@@ -111,7 +111,7 @@ static void helper_is_dead(struct ev_loop* loop, const bool graceful)
 // common code to bump the local_timeout timer for (interval+timeout)*2,
 //   starting it if not already running.
 F_NONNULL
-static void bump_local_timeout(struct ev_loop* loop, mon_t* mon)
+static void bump_local_timeout(struct ev_loop* loop, struct mon* mon)
 {
     ev_timer* lt = &mon->local_timeout;
     lt->repeat = ((mon->svc->timeout + mon->svc->interval) << 1);
@@ -152,7 +152,7 @@ static void helper_read_cb(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         const bool failed = emc_decode_mon_failed(data);
         if (idx >= num_mons)
             log_fatal("plugin_extmon: BUG: got helper result for out of range index %u", idx);
-        mon_t* this_mon = &mons[idx];
+        struct mon* this_mon = &mons[idx];
         if (this_mon->svc->direct) {
             gdnsd_sttl_t new_sttl = GDNSD_STTL_TTL_MAX;
             if (failed)
@@ -186,7 +186,7 @@ static void local_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UN
     gdnsd_assume(w);
     gdnsd_assume(revents == EV_TIMER);
 
-    mon_t* this_mon = w->data;
+    struct mon* this_mon = w->data;
     gdnsd_assume(&this_mon->local_timeout == w);
 
     log_info("plugin_extmon: '%s': helper is very late for a status update, locally applying a negative update...", this_mon->desc);
@@ -211,7 +211,7 @@ static char* num_to_str(const int i)
     return out;
 }
 
-static void send_cmd(const unsigned idx, const mon_t* mon)
+static void send_cmd(const unsigned idx, const struct mon* mon)
 {
     char** this_args = xmalloc_n(mon->svc->num_args, sizeof(*this_args));
 
@@ -219,7 +219,7 @@ static void send_cmd(const unsigned idx, const mon_t* mon)
     for (unsigned i = 0; i < mon->svc->num_args; i++)
         this_args[i] = gdnsd_str_subst(mon->svc->args[i], "%%ITEM%%", 8LU, mon->thing, thing_len);
 
-    extmon_cmd_t this_cmd = {
+    struct extmon_cmd this_cmd = {
         .idx = idx,
         .timeout = mon->svc->timeout,
         .interval = mon->svc->interval,
@@ -376,7 +376,7 @@ static void plugin_extmon_add_svctype(const char* name, vscf_data_t* svc_cfg, co
     unsigned max_proc = 0;
 
     svcs = xrealloc_n(svcs, num_svcs + 1, sizeof(*svcs));
-    svc_t* this_svc = &svcs[num_svcs++];
+    struct svc* this_svc = &svcs[num_svcs++];
     this_svc->name = xstrdup(name);
     this_svc->timeout = timeout;
     this_svc->interval = interval;
@@ -412,7 +412,7 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     gdnsd_assume(thing);
 
     mons = xrealloc_n(mons, num_mons + 1, sizeof(*mons));
-    mon_t* this_mon = &mons[num_mons++];
+    struct mon* this_mon = &mons[num_mons++];
     memset(this_mon, 0, sizeof(*this_mon));
     this_mon->desc = xstrdup(desc);
     this_mon->idx = idx;
@@ -430,7 +430,7 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
     this_mon->seen_once = false;
 }
 
-static void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_extmon_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const struct anysin* addr V_UNUSED, const unsigned idx)
 {
     add_mon_any(desc, svc_name, cname, idx);
 }
@@ -450,7 +450,7 @@ static void plugin_extmon_init_monitors(struct ev_loop* mon_loop)
         ev_set_priority(hrw, 2);
         ev_io_start(mon_loop, hrw);
         for (unsigned i = 0; i < num_mons; i++) {
-            mon_t* this_mon = &mons[i];
+            struct mon* this_mon = &mons[i];
             ev_timer* lt = &this_mon->local_timeout;
             ev_timer_init(lt, local_timeout_cb, 0., 0.);
             lt->data = this_mon;
@@ -471,7 +471,7 @@ static void plugin_extmon_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-plugin_t plugin_extmon_funcs = {
+struct plugin plugin_extmon_funcs = {
     .name = "extmon",
     .config_loaded = false,
     .used = false,

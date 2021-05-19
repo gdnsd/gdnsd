@@ -29,18 +29,18 @@
 #include <math.h>
 
 /***************************************
- * dclists_t and related methods
+ * struct dclists and related methods
  **************************************/
 
-// dclists_t is a storage container for unique ordered
+// struct dclists is a storage container for unique ordered
 //  lists of datacenters to be used for lookup results.
-// It keeps a const pointer to this map's dcinfo_t for reference
+// It keeps a const pointer to this map's struct dcinfo for reference
 //  because many of its operations require that data.
 // Because city-auto mode needs to add lists to this very
 //  late in the game (at db load time, which happens "late"
 //  on initial load, and randomly later when geoip db's are
 //  updated on the filesystem), we also have to be able
-//  to update this structure when we create the ntree_t
+//  to update this structure when we create the struct ntree
 //  later.
 // So it has a clone operation which clones the list and
 //  copies the string pointers, and various levels of
@@ -50,9 +50,9 @@
 //  side in the reload thread, it clones the current runtime
 //  tree and adds new strings to it as necc (which won't
 //  be often, most likely, since we've already stored most
-//  likely orderings the first time).  The dclists_t is
+//  likely orderings the first time).  The struct dclists is
 //  "owned" by the new tree, and the old tree destructs
-//  the old dclists_t without freeing the shared string
+//  the old struct dclists without freeing the shared string
 //  storage when it's destroyed after the locked tree swap.
 // The destruct-only-new-strings destroy is used when
 //  ntree construction fails partway through and has to
@@ -60,7 +60,7 @@
 //  used on true shutdown of the whole gdmap (only debug
 //  mode for the real plugin).
 
-dclists_t* dclists_new(const dcinfo_t* info)
+struct dclists* dclists_new(const struct dcinfo* info)
 {
     const unsigned num_dcs = dcinfo_get_count(info);
     uint8_t* deflist = xmalloc(num_dcs + 1);
@@ -68,7 +68,7 @@ dclists_t* dclists_new(const dcinfo_t* info)
         deflist[i] = i + 1;
     deflist[num_dcs] = 0;
 
-    dclists_t* newdcl = xmalloc(sizeof(*newdcl));
+    struct dclists* newdcl = xmalloc(sizeof(*newdcl));
     newdcl->count = 1;
     newdcl->old_count = 0;
     newdcl->list = xmalloc(sizeof(*newdcl->list));
@@ -78,9 +78,9 @@ dclists_t* dclists_new(const dcinfo_t* info)
     return newdcl;
 }
 
-dclists_t* dclists_clone(const dclists_t* old)
+struct dclists* dclists_clone(const struct dclists* old)
 {
-    dclists_t* dcl_clone = xmalloc(sizeof(*dcl_clone));
+    struct dclists* dcl_clone = xmalloc(sizeof(*dcl_clone));
     dcl_clone->info = old->info;
     dcl_clone->count = old->count;
     dcl_clone->old_count = old->count;
@@ -89,13 +89,13 @@ dclists_t* dclists_clone(const dclists_t* old)
     return dcl_clone;
 }
 
-unsigned dclists_get_count(const dclists_t* lists)
+unsigned dclists_get_count(const struct dclists* lists)
 {
     gdnsd_assume(lists->count <= (DCLIST_MAX + 1U));
     return lists->count;
 }
 
-const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx)
+const uint8_t* dclists_get_list(const struct dclists* lists, const uint32_t idx)
 {
     gdnsd_assume(idx < lists->count);
     gdnsd_assume(idx <= DCLIST_MAX);
@@ -109,7 +109,7 @@ const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx)
 //  search for comparisons, and it could realloc the list by doubling instead of 1-at-a-time.
 // Not terribly worried about this unless someone complains first.
 F_NONNULL
-static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist, const char* map_name)
+static uint32_t dclists_find_or_add_raw(struct dclists* lists, const uint8_t* newlist, const char* map_name)
 {
     for (uint32_t i = 0; i < lists->count; i++)
         if (!strcmp((const char*)newlist, (const char*)(lists->list[i])))
@@ -128,7 +128,7 @@ static uint32_t dclists_find_or_add_raw(dclists_t* lists, const uint8_t* newlist
 }
 
 // replace the first (default) dclist...
-void dclists_replace_list0(const dclists_t* lists, uint8_t* newlist)
+void dclists_replace_list0(const struct dclists* lists, uint8_t* newlist)
 {
     free(lists->list[0]);
     lists->list[0] = newlist;
@@ -136,7 +136,7 @@ void dclists_replace_list0(const dclists_t* lists, uint8_t* newlist)
 
 // We should probably check for dupes in these map dclists, but really the fallout
 //  is just some redundant lookup work if the user screws that up.
-bool dclists_xlate_vscf(const dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto)
+bool dclists_xlate_vscf(const struct dclists* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto)
 {
     const unsigned count = vscf_array_get_len(vscf_list);
 
@@ -157,7 +157,7 @@ bool dclists_xlate_vscf(const dclists_t* lists, vscf_data_t* vscf_list, const ch
     return false;
 }
 
-uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto)
+uint32_t dclists_find_or_add_vscf(struct dclists* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto)
 {
     uint8_t newlist[256];
     bool is_auto = dclists_xlate_vscf(lists, vscf_list, map_name, newlist, allow_auto);
@@ -185,7 +185,7 @@ static double geodist(double lat, double lon, double dc_lat, double dc_lon, doub
     return sin_half_dlat * sin_half_dlat + cos(lat) * cos_dc_lat * sin_half_dlon * sin_half_dlon;
 }
 
-uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const double lat, const double lon)
+uint32_t dclists_city_auto_map(struct dclists* lists, const char* map_name, const double lat, const double lon)
 {
     const double lat_rad = lat * DEG2RAD;
     const double lon_rad = lon * DEG2RAD;
@@ -205,7 +205,7 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
     //  indices into 'dists'
     double dists[MAX_NUM_DCS + 1];
     for (unsigned i = 0; i < num_dcs; i++) {
-        const dcinfo_coords_t* coords = dcinfo_get_coords(lists->info, i);
+        const struct dcinfo_coords* coords = dcinfo_get_coords(lists->info, i);
         GDNSD_DIAG_PUSH_IGNORED("-Wdouble-promotion")
         if (!isnan(coords->lat))
             dists[i + 1] = geodist(lat_rad, lon_rad, coords->lat, coords->lon, coords->cos_lat);
@@ -232,7 +232,7 @@ uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const dou
     return dclists_find_or_add_raw(lists, sortlist, map_name);
 }
 
-void dclists_destroy(dclists_t* lists, dclists_destroy_depth_t depth)
+void dclists_destroy(struct dclists* lists, enum dclists_destroy_depth depth)
 {
     switch (depth) {
     case KILL_ALL_LISTS:

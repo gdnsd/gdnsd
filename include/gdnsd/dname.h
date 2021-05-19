@@ -149,11 +149,11 @@
 //  DNAME_INVALID means the operation failed (invalid input), output contents are undefined.
 //  "PARTIAL" might be valid for your code for intermediate purposes, but is not considered
 //    a valid dname for normal use with the core code.
-typedef enum {
+enum dname_status {
     DNAME_VALID = 0,
     DNAME_PARTIAL,
     DNAME_INVALID,
-} gdnsd_dname_status_t;
+};
 
 // Unescape the string "in" into the storage at "out", using
 //  DNS zonefile escaping rules.
@@ -174,7 +174,7 @@ unsigned gdnsd_dns_unescape(char* restrict out, const char* restrict in, const u
 //  result.  Any less could result in random crashy bugs.
 // Note the use of "restrict": dname and instr cannot overlap
 F_NONNULL
-gdnsd_dname_status_t gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len);
+enum dname_status gdnsd_dname_from_string(uint8_t* restrict dname, const char* restrict instr, const unsigned len);
 
 // Turns a dname back into a printable string
 // "dname" must be DNAME_VALID or DNAME_PARTIAL
@@ -191,7 +191,7 @@ unsigned gdnsd_dname_to_string(const uint8_t* restrict dname, char* restrict str
 //  the status of the "origin" argument (VALID vs PARTIAL).
 // Note the use of "restrict": dn1 and dn2 cannot overlap
 F_NONNULL
-gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2);
+enum dname_status gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restrict dn2);
 
 // Check the status/validity of a dname.  The dname will be carefully parsed,
 //  and should handle any random input (although most random inputs will give
@@ -199,7 +199,7 @@ gdnsd_dname_status_t gdnsd_dname_cat(uint8_t* restrict dn1, const uint8_t* restr
 // If dname is allocated to less than 256 bytes, then crashes are possible with
 //  input that looks like a name longer than the allocation.
 F_NONNULL F_PURE
-gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
+enum dname_status gdnsd_dname_get_status(const uint8_t* dname);
 
 // As above, but takes a second argument specifying the known length of the
 // memory allocation at "dname", and pre-checks for running off the end of the
@@ -207,11 +207,11 @@ gdnsd_dname_status_t gdnsd_dname_status(const uint8_t* dname);
 // non-NULL pointer, but a buflen of zero is legal (which will always return
 // DNAME_INVALID).
 F_NONNULL F_PURE F_UNUSED
-static gdnsd_dname_status_t gdnsd_dname_status_buflen(const uint8_t* dname, size_t buflen)
+static enum dname_status gdnsd_dname_status_buflen(const uint8_t* dname, size_t buflen)
 {
     if (!buflen || ((*dname) + 1U) > buflen)
         return DNAME_INVALID;
-    return gdnsd_dname_status(dname);
+    return gdnsd_dname_get_status(dname);
 }
 
 // Terminate a DNAME_PARTIAL name, converting it to DNAME_VALID.  Idempotent
@@ -282,8 +282,8 @@ static uint8_t* gdnsd_dname_dup(const uint8_t* dname)
 F_NONNULL F_PURE F_UNUSED
 static int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2)
 {
-    gdnsd_assert(gdnsd_dname_status(dn1) != DNAME_INVALID);
-    gdnsd_assert(gdnsd_dname_status(dn2) != DNAME_INVALID);
+    gdnsd_assert(gdnsd_dname_get_status(dn1) != DNAME_INVALID);
+    gdnsd_assert(gdnsd_dname_get_status(dn2) != DNAME_INVALID);
     const uint8_t len1 = *dn1++;
     const uint8_t len2 = *dn2++;
     int rv = len1 - len2;
@@ -292,7 +292,7 @@ static int gdnsd_dname_cmp(const uint8_t* dn1, const uint8_t* dn2)
     return rv;
 }
 
-// As above but for labels (no dname_status() assertion)
+// As above but for labels (no dname_get_status() assertion)
 F_NONNULL F_PURE F_UNUSED
 static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2)
 {
@@ -310,8 +310,8 @@ static int gdnsd_label_cmp(const uint8_t* label1, const uint8_t* label2)
 F_NONNULL F_PURE F_UNUSED
 static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child)
 {
-    gdnsd_assert(gdnsd_dname_status(parent) == DNAME_VALID);
-    gdnsd_assert(gdnsd_dname_status(child) == DNAME_VALID);
+    gdnsd_assert(gdnsd_dname_get_status(parent) == DNAME_VALID);
+    gdnsd_assert(gdnsd_dname_get_status(child) == DNAME_VALID);
 
     // Grab the overall lens and advance the pointer to the start of the first
     // label in both cases:
@@ -351,8 +351,8 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child)
 F_NONNULL F_UNUSED
 static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot)
 {
-    gdnsd_assert(gdnsd_dname_status(dname) == DNAME_VALID);
-    gdnsd_assert(gdnsd_dname_status(zroot) == DNAME_VALID);
+    gdnsd_assert(gdnsd_dname_get_status(dname) == DNAME_VALID);
+    gdnsd_assert(gdnsd_dname_get_status(zroot) == DNAME_VALID);
     gdnsd_assume((*dname) >= (*zroot));
     const unsigned newterm = (*dname) - ((*zroot) - 1U);
     gdnsd_assume(dname[newterm] == zroot[1]);
@@ -365,18 +365,17 @@ static void gdnsd_dname_drop_zone(uint8_t* dname, const uint8_t* zroot)
 F_NONNULL F_PURE F_UNUSED
 static bool gdnsd_dname_iswild(const uint8_t* dname)
 {
-    gdnsd_assert(gdnsd_dname_status(dname) != DNAME_INVALID);
+    gdnsd_assert(gdnsd_dname_get_status(dname) != DNAME_INVALID);
     if (dname[1] == 1 && dname[2] == '*')
         return true;
     return false;
 }
 
-typedef gdnsd_dname_status_t dname_status_t;
 #define dns_unescape gdnsd_dns_unescape
 #define dname_from_string gdnsd_dname_from_string
 #define dname_cat gdnsd_dname_cat
 #define dname_terminate gdnsd_dname_terminate
-#define dname_status gdnsd_dname_status
+#define dname_get_status gdnsd_dname_get_status
 #define dname_status_buflen gdnsd_dname_status_buflen
 #define dname_is_partial gdnsd_dname_is_partial
 #define dname_trim gdnsd_dname_trim

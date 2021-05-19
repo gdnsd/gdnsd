@@ -41,7 +41,7 @@
 #include <netinet/tcp.h>
 
 // The "default defaults" for various address-level things
-static const dns_addr_t addr_defs_defaults = {
+static const struct dns_addr addr_defs_defaults = {
     .dns_port = 53U,
     .udp_rcvbuf = 0U,
     .udp_sndbuf = 0U,
@@ -55,7 +55,7 @@ static const dns_addr_t addr_defs_defaults = {
     .tcp_pad = false,
 };
 
-static const socks_cfg_t socks_cfg_defaults = {
+static const struct socks_cfg socks_cfg_defaults = {
     .dns_addrs = NULL,
     .dns_threads = NULL,
     .ctl_addrs = NULL,
@@ -74,7 +74,7 @@ static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UN
 }
 
 F_NONNULL
-static void make_addr(const char* lspec_txt, const unsigned def_port, gdnsd_anysin_t* result)
+static void make_addr(const char* lspec_txt, const unsigned def_port, struct anysin* result)
 {
     const int addr_err = gdnsd_anysin_fromstr(lspec_txt, def_port, result);
     if (addr_err)
@@ -129,20 +129,20 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, gdnsd_anys
     } while (0)
 
 F_NONNULL
-static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs)
+static void dns_listen_any(struct socks_cfg* socks_cfg, const struct dns_addr* addr_defs)
 {
     socks_cfg->num_dns_addrs = 2;
     socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
-    dns_addr_t* ac_v4 = &socks_cfg->dns_addrs[0];
+    struct dns_addr* ac_v4 = &socks_cfg->dns_addrs[0];
     memcpy(ac_v4, addr_defs, sizeof(*ac_v4));
     make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
-    dns_addr_t* ac_v6 = &socks_cfg->dns_addrs[1];
+    struct dns_addr* ac_v6 = &socks_cfg->dns_addrs[1];
     memcpy(ac_v6, addr_defs, sizeof(*ac_v6));
     make_addr("::", addr_defs->dns_port, &ac_v6->addr);
 }
 
 F_NONNULL
-static void process_listen_hashentry(dns_addr_t* addrconf, const char* lspec, vscf_data_t* addr_opts)
+static void process_listen_hashentry(struct dns_addr* addrconf, const char* lspec, vscf_data_t* addr_opts)
 {
     if (!vscf_is_hash(addr_opts))
         log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
@@ -181,7 +181,7 @@ static void process_listen_hashentry(dns_addr_t* addrconf, const char* lspec, vs
 }
 
 F_NONNULLX(1, 3)
-static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
+static void fill_dns_addrs(struct socks_cfg* socks_cfg, vscf_data_t* listen_opt, const struct dns_addr* addr_defs)
 {
     if (!listen_opt) {
         log_warn("Defaulting to listen=>any for lack of explicit listen config.  Please explicitly configure it, as default behaviors may change in future releases!");
@@ -201,7 +201,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
         socks_cfg->num_dns_addrs = vscf_hash_get_len(listen_opt);
         socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
         for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-            dns_addr_t* addrconf = &socks_cfg->dns_addrs[i];
+            struct dns_addr* addrconf = &socks_cfg->dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
             const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
             vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
@@ -211,7 +211,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
         socks_cfg->num_dns_addrs = vscf_array_get_len(listen_opt);
         socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
         for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-            dns_addr_t* addrconf = &socks_cfg->dns_addrs[i];
+            struct dns_addr* addrconf = &socks_cfg->dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
             vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
             if (!vscf_is_simple(lspec))
@@ -222,7 +222,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 }
 
 F_NONNULLX(1, 3)
-static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, const dns_addr_t* addr_defs)
+static void process_listen(struct socks_cfg* socks_cfg, vscf_data_t* listen_opt, const struct dns_addr* addr_defs)
 {
     // this fills in socks_cfg->dns_addrs raw data
     fill_dns_addrs(socks_cfg, listen_opt, addr_defs);
@@ -243,17 +243,17 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 
     unsigned tnum = 0;
     for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-        dns_addr_t* a = &socks_cfg->dns_addrs[i];
+        struct dns_addr* a = &socks_cfg->dns_addrs[i];
 
         for (unsigned j = 0; j < a->udp_threads; j++) {
-            dns_thread_t* t = &socks_cfg->dns_threads[tnum++];
+            struct dns_thread* t = &socks_cfg->dns_threads[tnum++];
             t->ac = a;
             t->is_udp = true;
             t->sock = -1;
         }
 
         for (unsigned j = 0; j < a->tcp_threads; j++) {
-            dns_thread_t* t = &socks_cfg->dns_threads[tnum++];
+            struct dns_thread* t = &socks_cfg->dns_threads[tnum++];
             t->ac = a;
             t->is_udp = false;
             t->sock = -1;
@@ -273,7 +273,7 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 }
 
 F_NONNULLX(1, 2)
-static void process_control_item(ctl_addr_t* item, const char* lspec, vscf_data_t* addr_opts)
+static void process_control_item(struct ctl_addr* item, const char* lspec, vscf_data_t* addr_opts)
 {
     if (addr_opts) {
         if (!vscf_is_hash(addr_opts))
@@ -283,7 +283,7 @@ static void process_control_item(ctl_addr_t* item, const char* lspec, vscf_data_
         vscf_hash_iterate_const(addr_opts, true, bad_key, "TCP Control Socket");
     }
 
-    gdnsd_anysin_t* addr = &item->addr;
+    struct anysin* addr = &item->addr;
     const int addr_err = gdnsd_anysin_fromstr(lspec, 0, addr);
     if (addr_err)
         log_fatal("Could not process tcp_control address spec '%s': %s", lspec, gai_strerror(addr_err));
@@ -300,7 +300,7 @@ static void process_control_item(ctl_addr_t* item, const char* lspec, vscf_data_
 }
 
 F_NONNULL
-static void process_tcp_control(socks_cfg_t* socks_cfg, vscf_data_t* ctl_opt)
+static void process_tcp_control(struct socks_cfg* socks_cfg, vscf_data_t* ctl_opt)
 {
     if (vscf_is_hash(ctl_opt)) {
         socks_cfg->num_ctl_addrs = vscf_hash_get_len(ctl_opt);
@@ -326,17 +326,17 @@ static void process_tcp_control(socks_cfg_t* socks_cfg, vscf_data_t* ctl_opt)
     }
 }
 
-socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
+struct socks_cfg* socks_conf_load(const vscf_data_t* cfg_root)
 {
     gdnsd_assert(!cfg_root || vscf_is_hash(cfg_root));
 
-    socks_cfg_t* socks_cfg = xmalloc(sizeof(*socks_cfg));
+    struct socks_cfg* socks_cfg = xmalloc(sizeof(*socks_cfg));
     memcpy(socks_cfg, &socks_cfg_defaults, sizeof(*socks_cfg));
 
     vscf_data_t* listen_opt = NULL;
     vscf_data_t* ctl_opt = NULL;
 
-    dns_addr_t addr_defs;
+    struct dns_addr addr_defs;
     memcpy(&addr_defs, &addr_defs_defaults, sizeof(addr_defs));
 
     const vscf_data_t* options = cfg_root ? vscf_hash_get_data_byconstkey(cfg_root, "options", true) : NULL;
@@ -362,7 +362,7 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
 
     // Estimate the number of socket fds needed, for later rlimit auto-tuning:
     for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-        const dns_addr_t* da = &socks_cfg->dns_addrs[i];
+        const struct dns_addr* da = &socks_cfg->dns_addrs[i];
         socks_cfg->fd_estimate += da->udp_threads; // listener
         socks_cfg->fd_estimate +=
             (da->tcp_threads * (da->tcp_clients_per_thread + 5U));
@@ -378,7 +378,7 @@ socks_cfg_t* socks_conf_load(const vscf_data_t* cfg_root)
     return socks_cfg;
 }
 
-void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* sa)
+void socks_bind_sock(const char* desc, const int sock, const struct anysin* sa)
 {
     int bind_errno = 0;
 
@@ -433,10 +433,10 @@ void socks_bind_sock(const char* desc, const int sock, const gdnsd_anysin_t* sa)
     log_fatal("bind() failed for %s socket %s: %s", desc, logf_anysin(sa), logf_strerror(bind_errno));
 }
 
-void socks_dns_lsocks_init(socks_cfg_t* socks_cfg)
+void socks_dns_lsocks_init(struct socks_cfg* socks_cfg)
 {
     for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        dns_thread_t* t = &socks_cfg->dns_threads[i];
+        struct dns_thread* t = &socks_cfg->dns_threads[i];
         if (t->is_udp)
             udp_sock_setup(t);
         else

@@ -49,6 +49,6 @@ void cookie_runtime_init(struct ev_loop* loop);
 //   true: Client provided a valid server cookie we believe we generated
 //   false: Client provided invalid or empty server cookie data
 F_NONNULL
-bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const gdnsd_anysin_t* client, const size_t cookie_data_in_len);
+bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const struct anysin* client, const size_t cookie_data_in_len);
 
 #endif // GDNSD_COOKIE_H

@@ -57,27 +57,27 @@ static const char DEFAULT_SVCNAME[] = "up";
   Will wait for someone to complain about the limits first, though...
 */
 
-typedef struct {
-    gdnsd_anysin_t addr;
+struct astate {
+    struct anysin addr;
     unsigned weight;
     unsigned* indices;
-} addrstate_t;
+};
 
-typedef struct {
-    addrstate_t* as;
+struct aitem {
+    struct astate* as;
     unsigned count;
     unsigned weight;
     unsigned max_weight;
-} res_aitem_t;
+};
 
-typedef enum {
+enum aset_mode {
     RES_ASET_UNKNOWN = 0,
     RES_ASET_UNGROUPED = 1,
     RES_ASET_GROUPED = 2,
-} res_aset_mode_t;
+};
 
-typedef struct {
-    res_aitem_t* items;
+struct aset {
+    struct aitem* items;
     char** svc_names;
     unsigned count;
     unsigned max_addrs_pergroup;
@@ -85,37 +85,37 @@ typedef struct {
     unsigned up_weight;
     unsigned max_weight;
     unsigned num_svcs;
-    res_aset_mode_t gmode;
+    enum aset_mode gmode;
     bool multi;
-} addrset_t;
+};
 
-typedef struct {
+struct citem {
     uint8_t* cname;
     unsigned weight;
     unsigned* indices;
-} res_citem_t;
+};
 
-typedef struct {
-    res_citem_t* items;
+struct cnset {
+    struct citem* items;
     char** svc_names;
     unsigned count;
     unsigned weight;
     unsigned up_weight;
     unsigned num_svcs;
-} cnset_t;
+};
 
-typedef struct {
+struct wres {
     const char* name;
-    cnset_t* cnames;
-    addrset_t* addrs_v4;
-    addrset_t* addrs_v6;
-} resource_t;
+    struct cnset* cnames;
+    struct aset* addrs_v4;
+    struct aset* addrs_v6;
+};
 
-static resource_t* resources = NULL;
+static struct wres* resources = NULL;
 static unsigned num_resources = 0;
 
 // Per-thread PRNGs
-static _Thread_local gdnsd_rstate32_t rstate;
+static _Thread_local struct rstate32 rstate;
 
 static void init_rand(void)
 {
@@ -153,7 +153,7 @@ static void clear_dyn_addr_weights(void)
 // Main config code starts here
 
 F_NONNULL
-static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, addrset_t* addrset)
+static void config_item_addrs(struct aitem* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, struct aset* addrset)
 {
     long wtemp = 0;
     if (!vscf_is_array(cfg_data)
@@ -187,25 +187,25 @@ static void config_item_addrs(res_aitem_t* res_item, const char* res_name, const
     log_debug("plugin_weighted: resource '%s' (%s), item '%s': A '%s' added w/ weight %u", res_name, stanza, item_name, addr_txt, res_item->weight);
 }
 
-typedef struct {
-    addrset_t* addrset;
-    res_aitem_t* res_item;
+struct iaga {
+    struct aset* addrset;
+    struct aitem* res_item;
     const char* res_name;
     const char* stanza;
     const char* item_name;
     bool ipv6;
     unsigned lb_idx;
-} iaga_t;
+};
 
 F_NONNULL
 static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_len V_UNUSED, vscf_data_t* lb_data, void* iaga_asvoid)
 {
     gdnsd_assume(lb_name_len);
 
-    iaga_t* iaga = iaga_asvoid;
+    struct iaga* iaga = iaga_asvoid;
 
-    addrset_t* addrset = iaga->addrset;
-    res_aitem_t* res_item = iaga->res_item;
+    struct aset* addrset = iaga->addrset;
+    struct aitem* res_item = iaga->res_item;
     unsigned lb_idx = iaga->lb_idx;
     iaga->lb_idx++;
     const char* res_name = iaga->res_name;
@@ -245,7 +245,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
 }
 
 F_NONNULL
-static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, addrset_t* addrset)
+static void config_item_addr_groups(struct aitem* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, struct aset* addrset)
 {
     if (!vscf_is_hash(cfg_data))
         log_fatal("plugin_weighted: resource '%s' (%s), group '%s': groups values must be a hashes", res_name, stanza, item_name);
@@ -260,7 +260,7 @@ static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name,
     res_item->count = num_addrs;
     res_item->as = xcalloc_n(num_addrs, sizeof(*res_item->as));
 
-    iaga_t iaga = {
+    struct iaga iaga = {
         .addrset = addrset,
         .res_item = res_item,
         .res_name = res_name,
@@ -284,22 +284,22 @@ static void config_item_addr_groups(res_aitem_t* res_item, const char* res_name,
     log_debug("plugin_weighted: resource '%s' (%s), group '%s' with %u addresses & weight %u added", res_name, stanza, item_name, num_addrs, res_item->weight);
 }
 
-typedef struct {
+struct addr_iter_data {
     unsigned item_idx;
-    addrset_t* addrset;
+    struct aset* addrset;
     const char* res_name;
     const char* stanza;
     bool ipv6;
-} addr_iter_data_t;
+};
 
 static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* cfg_data, void* aid_asvoid)
 {
 
-    // pull a bunch of data from addr_iter_data_t...
-    addr_iter_data_t* addr_iter_data = aid_asvoid;
+    // pull a bunch of data from struct addr_iter_data...
+    struct addr_iter_data* addr_iter_data = aid_asvoid;
     const unsigned item_idx = addr_iter_data->item_idx;
     addr_iter_data->item_idx++;
-    addrset_t* addrset = addr_iter_data->addrset;
+    struct aset* addrset = addr_iter_data->addrset;
     const char* res_name = addr_iter_data->res_name;
     const char* stanza = addr_iter_data->stanza;
     const bool ipv6 = addr_iter_data->ipv6;
@@ -316,7 +316,7 @@ static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, v
         }
     }
 
-    res_aitem_t* res_item = &addrset->items[item_idx];
+    struct aitem* res_item = &addrset->items[item_idx];
     if (addrset->gmode == RES_ASET_UNGROUPED) {
         config_item_addrs(res_item, res_name, stanza, item_name, ipv6, cfg_data, addrset);
     } else {
@@ -328,7 +328,7 @@ static bool config_addrset_item(const char* item_name, unsigned klen V_UNUSED, v
 }
 
 F_NONNULL
-static void config_addrset(const char* res_name, const char* stanza, const bool ipv6, addrset_t* addrset, vscf_data_t* cfg)
+static void config_addrset(const char* res_name, const char* stanza, const bool ipv6, struct aset* addrset, vscf_data_t* cfg)
 {
     if (!vscf_is_hash(cfg))
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
@@ -392,7 +392,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
 
     addrset->items = xcalloc_n(addrset->count, sizeof(*addrset->items));
     addrset->gmode = RES_ASET_UNKNOWN;
-    addr_iter_data_t aid = {
+    struct addr_iter_data aid = {
         .item_idx = 0,
         .addrset = addrset,
         .res_name = res_name,
@@ -422,24 +422,24 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     gdnsd_assume(addrset->up_weight);
 }
 
-typedef struct {
-    cnset_t* cnset;
+struct cname_iter_data {
+    struct cnset* cnset;
     const char* res_name;
     const char* stanza;
     unsigned item_idx;
-} cname_iter_data_t;
+};
 
 F_NONNULL
 static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* cfg_data, void* cid_asvoid)
 {
-    cname_iter_data_t* cid = cid_asvoid;
+    struct cname_iter_data* cid = cid_asvoid;
 
-    cnset_t* cnset = cid->cnset;
+    struct cnset* cnset = cid->cnset;
     const char* res_name = cid->res_name;
     const char* stanza = cid->stanza;
     const unsigned item_idx = cid->item_idx;
     cid->item_idx++;
-    res_citem_t* res_item = &cnset->items[item_idx];
+    struct citem* res_item = &cnset->items[item_idx];
 
     long wtemp = 0;
     if (!vscf_is_array(cfg_data)
@@ -454,7 +454,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
     vscf_data_t* cn = vscf_array_get_data(cfg_data, 0);
     const char* cname_txt = vscf_simple_get_data(cn);
     uint8_t* dname = xmalloc(256);
-    dname_status_t dnstat = vscf_simple_get_as_dname(cn, dname);
+    enum dname_status dnstat = vscf_simple_get_as_dname(cn, dname);
     if (dnstat == DNAME_INVALID)
         log_fatal("plugin_weighted: resource '%s' (%s), item '%s': '%s' is not a legal domainname", res_name, stanza, item_name, cname_txt);
     if (dnstat == DNAME_PARTIAL)
@@ -475,7 +475,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
 }
 
 F_NONNULL
-static void config_cnameset(const char* res_name, const char* stanza, cnset_t* cnset, vscf_data_t* cfg)
+static void config_cnameset(const char* res_name, const char* stanza, struct cnset* cnset, vscf_data_t* cfg)
 {
     if (!vscf_is_hash(cfg))
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
@@ -524,7 +524,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
         log_fatal("plugin_weighted: resource '%s' (%s): empty cname sets not allowed", res_name, stanza);
 
     cnset->items = xcalloc_n(cnset->count, sizeof(*cnset->items));
-    cname_iter_data_t cid = {
+    struct cname_iter_data cid = {
         .cnset = cnset,
         .res_name = res_name,
         .stanza = stanza,
@@ -545,7 +545,7 @@ static void config_cnameset(const char* res_name, const char* stanza, cnset_t* c
 }
 
 F_NONNULL
-static void config_auto(resource_t* res, vscf_data_t* res_cfg)
+static void config_auto(struct wres* res, vscf_data_t* res_cfg)
 {
     gdnsd_assert(vscf_is_hash(res_cfg));
 
@@ -570,7 +570,7 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
         if (!vscf_is_array(lb_cfg) || !vscf_array_get_len(lb_cfg) || !vscf_is_simple(vscf_array_get_data(lb_cfg, 0)))
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': item '%s': value must be an array of [ IP, weight ]", res->name, first_name, lb_name);
         const char* first_addr_txt = vscf_simple_get_data(vscf_array_get_data(lb_cfg, 0));
-        gdnsd_anysin_t temp_sin;
+        struct anysin temp_sin;
         int addr_err = gdnsd_anysin_getaddrinfo(first_addr_txt, NULL, &temp_sin);
         if (addr_err)
             log_fatal("plugin_weighted: resource '%s' (direct): group '%s': item '%s': could not parse '%s' as an IP address: %s", res->name, first_name, lb_name, first_addr_txt, gai_strerror(addr_err));
@@ -586,7 +586,7 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
         vscf_data_t* first_ac = vscf_array_get_data(first_cfg, 0);
         if (!first_ac || !vscf_is_simple(first_ac))
             log_fatal("plugin_weighted: resource '%s' (direct): item '%s': first element of array should be an IP address or CNAME string", res->name, first_name);
-        gdnsd_anysin_t temp_sin;
+        struct anysin temp_sin;
         if (gdnsd_anysin_getaddrinfo(vscf_simple_get_data(first_ac), NULL, &temp_sin)) {
             // was not a valid address, try cnames mode
             res->cnames = xcalloc(sizeof(*res->cnames));
@@ -619,7 +619,7 @@ static bool res_mixed_fail(const char* item_name, unsigned klen V_UNUSED, vscf_d
 static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t* res_cfg, void* idx_asvoid)
 {
     unsigned* idx_ptr = idx_asvoid;
-    resource_t* res = &resources[(*idx_ptr)++];
+    struct wres* res = &resources[(*idx_ptr)++];
     res->name = xstrdup(res_name);
     if (!vscf_is_hash(res_cfg))
         log_fatal("plugin_weighted: the value of resource '%s' must be a hash", res_name);
@@ -685,9 +685,9 @@ static void plugin_weighted_load_config(vscf_data_t* config)
     unsigned max_v4 = 0;
     unsigned max_v6 = 0;
     for (unsigned i = 0; i < num_resources; i++) {
-        resource_t* res = &resources[i];
+        struct wres* res = &resources[i];
         if (res->addrs_v4) {
-            addrset_t* aset = res->addrs_v4;
+            struct aset* aset = res->addrs_v4;
             const unsigned max = aset->multi
                                  ? aset->count
                                  : aset->max_addrs_pergroup;
@@ -695,7 +695,7 @@ static void plugin_weighted_load_config(vscf_data_t* config)
                 max_v4 = max;
         }
         if (res->addrs_v6) {
-            addrset_t* aset = res->addrs_v6;
+            struct aset* aset = res->addrs_v6;
             const unsigned max = aset->multi
                                  ? aset->count
                                  : aset->max_addrs_pergroup;
@@ -713,7 +713,7 @@ static int plugin_weighted_map_res(const char* resname, const uint8_t* zone_name
 
     for (unsigned i = 0; i < num_resources; i++) {
         if (!strcmp(resname, resources[i].name)) {
-            cnset_t* cnset = resources[i].cnames;
+            struct cnset* cnset = resources[i].cnames;
             if (cnset) {
                 if (!zone_name)
                     map_res_err("plugin_weighted: Resource '%s' used in a DYNA RR, but has CNAME data", resources[i].name);
@@ -745,9 +745,9 @@ static void plugin_weighted_iothread_cleanup(void)
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t* resource, dyn_result_t* result)
+static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const struct wres* resource, struct dyn_result* result)
 {
-    cnset_t* cnset = resource->cnames;
+    struct cnset* cnset = resource->cnames;
     gdnsd_assume(cnset);
     gdnsd_assume(cnset->weight);
 
@@ -760,7 +760,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
     unsigned dyn_sum = 0;
     unsigned dyn_weights[MAX_ITEMS_PER_SET];
     for (unsigned i = 0; i < ct; i++) {
-        const res_citem_t* citem = &cnset->items[i];
+        const struct citem* citem = &cnset->items[i];
         const gdnsd_sttl_t citem_sttl
             = gdnsd_sttl_min(sttl_tbl, citem->indices, cnset->num_svcs);
         rv = gdnsd_sttl_min2(rv, citem_sttl);
@@ -780,7 +780,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
         rv |= GDNSD_STTL_DOWN;
         dyn_sum = cnset->weight;
         for (unsigned i = 0; i < ct; i++) {
-            const res_citem_t* citem = &cnset->items[i];
+            const struct citem* citem = &cnset->items[i];
             dyn_weights[i] = citem->weight;
         }
     } else {
@@ -811,7 +811,7 @@ static gdnsd_sttl_t resolve_cname(const gdnsd_sttl_t* sttl_tbl, const resource_t
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result)
+static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* aset, struct dyn_result* result)
 {
     const unsigned num_items = aset->count;
     unsigned dyn_items_sum = 0; // sum of dyn_item_sums[]
@@ -825,11 +825,11 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
 
     // Get dynamic info about each item
     for (unsigned item_idx = 0; item_idx < num_items; item_idx++) {
-        const res_aitem_t* res_item = &aset->items[item_idx];
+        const struct aitem* res_item = &aset->items[item_idx];
         dyn_item_sums[item_idx] = 0;
         dyn_item_maxs[item_idx] = 0;
         for (unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++) {
-            const addrstate_t* addr = &res_item->as[addr_idx];
+            const struct astate* addr = &res_item->as[addr_idx];
             const gdnsd_sttl_t addr_sttl
                 = gdnsd_sttl_min(sttl_tbl, addr->indices, aset->num_svcs);
             rv = gdnsd_sttl_min2(rv, addr_sttl);
@@ -856,7 +856,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
         dyn_items_sum = aset->weight;
         dyn_items_max = aset->max_weight;
         for (unsigned item_idx = 0; item_idx < num_items; item_idx++) {
-            const res_aitem_t* res_item = &aset->items[item_idx];
+            const struct aitem* res_item = &aset->items[item_idx];
             dyn_item_sums[item_idx] = res_item->weight;
             dyn_item_maxs[item_idx] = res_item->max_weight;
             for (unsigned addr_idx = 0; addr_idx < res_item->count; addr_idx++)
@@ -872,7 +872,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     if (aset->multi) {
         // Outer decision: choose multiple items based on dyn_items_max
         for (unsigned item_idx = 0; item_idx < num_items; item_idx++) {
-            const res_aitem_t* res_item = &aset->items[item_idx];
+            const struct aitem* res_item = &aset->items[item_idx];
             const unsigned item_rand = get_rand(dyn_items_max);
             const unsigned isum = dyn_item_sums[item_idx];
             if (item_rand < isum) {
@@ -896,7 +896,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
         for (unsigned item_idx = 0; item_idx < num_items; item_idx++) {
             item_running_total += dyn_item_sums[item_idx];
             if (item_rand < item_running_total) {
-                const res_aitem_t* chosen = &aset->items[item_idx];
+                const struct aitem* chosen = &aset->items[item_idx];
                 // Inner decision: choose multiple addrs based on chosen's dynamic max
                 const unsigned addr_max = dyn_item_maxs[item_idx];
                 gdnsd_assume(addr_max);
@@ -915,7 +915,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t* res, dyn_result_t* result)
+static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const struct wres* res, struct dyn_result* result)
 {
     gdnsd_sttl_t rv;
 
@@ -934,9 +934,9 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const resource_t*
     return rv;
 }
 
-static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
-    const resource_t* resource = &resources[resnum];
+    const struct wres* resource = &resources[resnum];
     gdnsd_assume(resource);
 
     gdnsd_sttl_t rv;
@@ -953,7 +953,7 @@ static gdnsd_sttl_t plugin_weighted_resolve(unsigned resnum, const client_info_t
     return rv;
 }
 
-plugin_t plugin_weighted_funcs = {
+struct plugin plugin_weighted_funcs = {
     .name = "weighted",
     .config_loaded = false,
     .used = false,

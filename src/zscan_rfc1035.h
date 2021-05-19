@@ -26,6 +26,6 @@
 
 // Actually scan the zonefile, creating the data.  A true retval means failure.
 F_NONNULL
-bool zscan_rfc1035(zone_t* zone, const char* fn);
+bool zscan_rfc1035(struct zone* zone, const char* fn);
 
 #endif // GDNSD_ZSCAN_H

@@ -28,18 +28,32 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef struct dcmap dcmap_t;
+// Exactly one of the following must be true:
+//  dclist is non-zero, indicating a direct dclist
+//  dcmap is non-null, indicating another level of depth
+struct dcmap_child {
+    char* name;
+    struct dcmap* dcmap;
+    uint32_t dclist;
+};
+
+struct dcmap {
+    // All 3 below are allocated to num_children entries.
+    struct dcmap_child* children;
+    unsigned def_dclist; // copied from parent if not specced in cfg, required at root
+    unsigned num_children;
+};
 
 F_NONNULL F_WUNUSED F_RETNN
-dcmap_t* dcmap_new(const vscf_data_t* map_cfg, dclists_t* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto);
+struct dcmap* dcmap_new(const vscf_data_t* map_cfg, struct dclists* dclists, const unsigned parent_def, const unsigned true_depth, const char* map_name, const bool allow_auto);
 
 // size of "lookup" storage below, including terminal NUL
 #define DCMAP_LOOKUP_MAXLEN 128
 typedef void (*dcmap_lookup_cb_t)(void* data, char* lookup, const unsigned level);
 F_NONNULL
-uint32_t dcmap_lookup_loc_callback(const dcmap_t* dcmap, dcmap_lookup_cb_t cb, void* data);
+uint32_t dcmap_lookup_loc_callback(const struct dcmap* dcmap, dcmap_lookup_cb_t cb, void* data);
 
 F_NONNULL
-void dcmap_destroy(dcmap_t* dcmap);
+void dcmap_destroy(struct dcmap* dcmap);
 
 #endif // DCMAP_H

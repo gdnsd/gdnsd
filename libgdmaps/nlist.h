@@ -27,7 +27,19 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef struct nlist nlist_t;
+struct net {
+    uint8_t ipv6[16];
+    unsigned mask;
+    unsigned dclist;
+};
+
+struct nlist {
+    struct net* nets;
+    char* map_name;
+    unsigned alloc;
+    unsigned count;
+    bool normalized;
+};
 
 // pre_norm flag indicates that the data to be added via _append()
 //   will already be in fully normalized form and order other than
@@ -36,13 +48,13 @@ typedef struct nlist nlist_t;
 //   as GeoIP's data structure implies these guarantees when walked
 //   in order for _append().
 F_NONNULL F_WUNUSED F_RETNN
-nlist_t* nlist_new(const char* map_name, const bool pre_norm);
+struct nlist* nlist_new(const char* map_name, const bool pre_norm);
 
 F_NONNULL
-void nlist_destroy(nlist_t* nl);
+void nlist_destroy(struct nlist* nl);
 
 F_NONNULL
-void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist);
+void nlist_append(struct nlist* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist);
 
 // Call this when all nlist_append() are complete.  For lists
 //   which are not "pre_norm", this does a bunch of normalization
@@ -51,16 +63,16 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
 //   state assert()'d expensively in debug builds.
 // Regardless, storage is also realloc'd down to exact size.
 F_NONNULL
-void nlist_finish(nlist_t* nl);
+void nlist_finish(struct nlist* nl);
 
 // must pass through _finish() before *any* of the xlate/merge funcs below
 F_NONNULL F_RETNN
-ntree_t* nlist_xlate_tree(const nlist_t* nl_a);
+struct ntree* nlist_xlate_tree(const struct nlist* nl_a);
 F_NONNULL F_RETNN
-ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b);
+struct ntree* nlist_merge2_tree(const struct nlist* nl_a, const struct nlist* nl_b);
 
 // Just for debugging...
 F_NONNULL
-void nlist_debug_dump(const nlist_t* nl);
+void nlist_debug_dump(const struct nlist* nl);
 
 #endif // NLIST_H

@@ -35,15 +35,15 @@
 
 #include <ev.h>
 
-typedef struct {
+struct svc_type {
     const char* name;
-    const plugin_t* plugin;
+    const struct plugin* plugin;
     unsigned up_thresh;
     unsigned ok_thresh;
     unsigned down_thresh;
     unsigned interval;
     unsigned timeout;
-} service_type_t;
+};
 
 // if type is NULL, there is no real monitoring,
 //   it's only possible to administratively change
@@ -51,25 +51,25 @@ typedef struct {
 //   via mon_add_admin(), and cname/addr/dname
 //   are invalid.  Otherwise is_cname flags which
 //   member of the union is valid.
-typedef struct {
+struct smgr {
     const char* desc;
-    service_type_t* type;
+    struct svc_type* type;
     char* cname; // normalized text form of addr or dname below
     union {
-        gdnsd_anysin_t addr;
+        struct anysin addr;
         const uint8_t* dname; // dname-form of a CNAME
     };
     unsigned n_failure;
     unsigned n_success;
     bool is_cname;
     gdnsd_sttl_t real_sttl;
-} smgr_t;
+};
 
 static unsigned num_svc_types = 0;
-static service_type_t* service_types = NULL;
+static struct svc_type* service_types = NULL;
 
 static unsigned num_smgrs = 0;
-static smgr_t* smgrs = NULL;
+static struct smgr* smgrs = NULL;
 
 // There are two copies of the sttl table.
 // The "consumer" copy is always ready for consumption
@@ -204,7 +204,7 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
     bool matched = false;
 
     for (unsigned i = 0; i < num_smgrs; i++) {
-        smgr_t* smgr = &smgrs[i];
+        struct smgr* smgr = &smgrs[i];
         int err = fnmatch(matchme, smgr->desc, 0);
         if (err && err != FNM_NOMATCH) {
             log_err("admin_state: fnmatch() failed with error code %i: probably glob-parsing error on '%s'", err, matchme);
@@ -460,7 +460,7 @@ void gdnsd_mon_start(struct ev_loop* mloop)
 // We only have to check the address, because the port
 //  is determined by service type.
 F_NONNULL
-static bool addr_eq(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b)
+static bool addr_eq(const struct anysin* a, const struct anysin* b)
 {
     gdnsd_assume(a->sa.sa_family == AF_INET || a->sa.sa_family == AF_INET6);
 
@@ -475,7 +475,7 @@ static bool addr_eq(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b)
 }
 
 F_NONNULLX(1)
-static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, const char* cname, const uint8_t* dname)
+static unsigned mon_thing(const char* svctype_name, const struct anysin* addr, const char* cname, const uint8_t* dname)
 {
     if (addr)
         gdnsd_assume(!cname && !dname);
@@ -483,7 +483,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
         gdnsd_assume(cname && dname);
 
     // first, sort out what svctype_name actually means to us
-    service_type_t* this_svc = NULL;
+    struct svc_type* this_svc = NULL;
     for (unsigned i = 0; i < num_svc_types; i++) {
         if (!strcmp(svctype_name, service_types[i].name)) {
             this_svc = &service_types[i];
@@ -500,13 +500,13 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
     //   them the existing index
     if (addr) {
         for (unsigned i = 0; i < num_smgrs; i++) {
-            smgr_t* that_smgr = &smgrs[i];
+            struct smgr* that_smgr = &smgrs[i];
             if (!that_smgr->is_cname && addr_eq(addr, &that_smgr->addr) && this_svc == that_smgr->type)
                 return i;
         }
     } else {
         for (unsigned i = 0; i < num_smgrs; i++) {
-            smgr_t* that_smgr = &smgrs[i];
+            struct smgr* that_smgr = &smgrs[i];
             if (that_smgr->is_cname && !gdnsd_dname_cmp(dname, that_smgr->dname) && this_svc == that_smgr->type)
                 return i;
         }
@@ -516,7 +516,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
     const unsigned idx = num_smgrs;
     num_smgrs++;
     smgrs = xrealloc_n(smgrs, num_smgrs, sizeof(*smgrs));
-    smgr_t* this_smgr = &smgrs[idx];
+    struct smgr* this_smgr = &smgrs[idx];
     this_smgr->type = this_svc;
 
     // for a new stype+addr combo, check that the plugin supports addr monitoring
@@ -529,7 +529,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
         char addr_str[GDNSD_ANYSIN_MAXSTR];
         int name_err = gdnsd_anysin2str_noport(addr, addr_str);
         // this should basically never happen since the same family of functions will
-        //   have already converted it from gdnsd_anysin_t -> text earlier, but if it does,
+        //   have already converted it from struct anysin -> text earlier, but if it does,
         //   we really don't have much we can do about logging it informatively...
         if (name_err)
             log_fatal("Error converting address back to text form: %s", gai_strerror(errno));
@@ -571,7 +571,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
 
 // Called from plugins once per monitored service type+IP combination
 //  to request monitoring and initialize various data/state.
-unsigned gdnsd_mon_addr(const char* svctype_name, const gdnsd_anysin_t* addr)
+unsigned gdnsd_mon_addr(const char* svctype_name, const struct anysin* addr)
 {
     return mon_thing(svctype_name, addr, NULL, NULL);
 }
@@ -589,7 +589,7 @@ unsigned gdnsd_mon_admin(const char* desc)
     num_smgrs++;
     smgrs = xrealloc_n(smgrs, num_smgrs, sizeof(*smgrs));
     smgr_sttl = xrealloc_n(smgr_sttl, num_smgrs, sizeof(*smgr_sttl));
-    smgr_t* this_smgr = &smgrs[idx];
+    struct smgr* this_smgr = &smgrs[idx];
     memset(this_smgr, 0, sizeof(*this_smgr));
     this_smgr->desc = xstrdup(desc);
     this_smgr->real_sttl = GDNSD_STTL_TTL_MAX;
@@ -643,7 +643,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
     // if this loop executes at all, svctypes_cfg is defined
     //   (see if () block at top of func, and definition of num_svc_types)
     for (unsigned i = 0; i < num_svc_types_cfg; i++) {
-        service_type_t* this_svc = &service_types[i];
+        struct svc_type* this_svc = &service_types[i];
         this_svc->name = xstrdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
         if (!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
             log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
@@ -682,7 +682,7 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
 
     for (unsigned i = 0; i < (num_svc_types - 2); i++) {
         gdnsd_assume(svctypes_cfg);
-        service_type_t* this_svc = &service_types[i];
+        struct svc_type* this_svc = &service_types[i];
 
         // assert same ordering as _p1
         gdnsd_assert(!strcmp(this_svc->name, vscf_hash_get_key_byindex(svctypes_cfg, i, NULL)));
@@ -710,7 +710,7 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
 
     // dummy config for up+down
     for (unsigned i = (num_svc_types - 2); i < num_svc_types; i++) {
-        service_type_t* this_svc = &service_types[i];
+        struct svc_type* this_svc = &service_types[i];
         this_svc->plugin = NULL;
         this_svc->up_thresh = DEF_UP_THRESH;
         this_svc->ok_thresh = DEF_OK_THRESH;
@@ -722,7 +722,7 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
     // now that we've solved the chicken-and-egg, finish processing
     //   the monitoring requests resolver plugins asked about earlier
     for (unsigned i = 0; i < num_smgrs; i++) {
-        smgr_t* this_smgr = &smgrs[i];
+        struct smgr* this_smgr = &smgrs[i];
         gdnsd_assume(this_smgr);
         if (this_smgr->type && this_smgr->type->plugin) {
             if (this_smgr->is_cname) {
@@ -737,7 +737,7 @@ void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
 }
 
 F_NONNULL
-static void raw_sttl_update(smgr_t* smgr, unsigned idx, gdnsd_sttl_t new_sttl)
+static void raw_sttl_update(struct smgr* smgr, unsigned idx, gdnsd_sttl_t new_sttl)
 {
     gdnsd_assume(idx < num_smgrs);
 
@@ -779,7 +779,7 @@ void gdnsd_mon_sttl_updater(unsigned idx, gdnsd_sttl_t new_sttl)
 void gdnsd_mon_state_updater(unsigned idx, const bool latest)
 {
     gdnsd_assume(idx < num_smgrs);
-    smgr_t* smgr = &smgrs[idx];
+    struct smgr* smgr = &smgrs[idx];
 
     // a bit spammy to leave in all debug builds, but handy at times...
     //log_debug("'%s' new monitor result: %s", smgr->desc, latest ? "OK" : "FAIL");

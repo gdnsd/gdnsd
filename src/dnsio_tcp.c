@@ -67,34 +67,34 @@
 // efficiency hack of course.
 #define TCP_READBUF 3840U
 static_assert(TCP_READBUF >= (DNS_RECV_SIZE + 2U), "TCP readbuf fits >= 1 maximal req");
-static_assert(TCP_READBUF >= sizeof(proxy_hdr_t), "TCP readbuf >= PROXY header");
+static_assert(TCP_READBUF >= sizeof(union proxy_hdr), "TCP readbuf >= PROXY header");
 
 // TCP timeout timers may fire up to this many seconds late (even relative to
 // the ev_now of the loop, which may already be slightly-late) to be more
 // efficient at batching expiries and to deal better with timing edge cases.
 #define TIMEOUT_FUDGE 0.25
 
-typedef union {
+union tcp_pkt {
     struct {
         // These two must be adjacent, as a single send() points at them as if
         // they're one buffer.
         uint16_t pktbuf_size_hdr;
-        pkt_t pkt;
+        union pkt pkt;
     };
-    uint8_t pktbuf_raw[sizeof(uint16_t) + sizeof(pkt_t)];
-} tcp_pkt_t;
+    uint8_t pktbuf_raw[sizeof(uint16_t) + sizeof(union pkt)];
+};
 
 // Ensure no padding between pktbuf_size_hdr and pkt, above
-static_assert(alignof(pkt_t) <= alignof(uint16_t), "No padding for pkt");
+static_assert(alignof(union pkt) <= alignof(uint16_t), "No padding for pkt");
 
 // per-thread state
 struct thred {
     // These pointers and values are fixed for the life of the thread:
     struct dns_stats* stats;
-    dnsp_ctx_t* pctx;
+    struct dnsp_ctx* pctx;
     struct ev_loop* loop;
     struct conn** churn; // save struct conn allocations from previously-closed conns
-    tcp_pkt_t* tpkt;
+    union tcp_pkt* tpkt;
     double server_timeout;
     size_t max_clients;
     unsigned churn_alloc;
@@ -121,13 +121,13 @@ struct conn {
     ev_io read_watcher;
     ev_check check_watcher;
     ev_tstamp idle_start;
-    gdnsd_anysin_t sa;
+    struct anysin sa;
     bool need_proxy_init;
-    dso_state_t dso; // shared w/ dnspacket layer
+    struct dso_state dso; // shared w/ dnspacket layer
     size_t readbuf_head;
     size_t readbuf_bytes;
     union {
-        proxy_hdr_t proxy_hdr;
+        union proxy_hdr proxy_hdr;
         uint8_t readbuf[TCP_READBUF];
     };
 };
@@ -310,7 +310,7 @@ F_NONNULL
 static bool conn_write_packet(struct thred* thr, struct conn* conn, size_t resp_size)
 {
     gdnsd_assume(resp_size);
-    tcp_pkt_t* tpkt = thr->tpkt;
+    union tcp_pkt* tpkt = thr->tpkt;
     tpkt->pktbuf_size_hdr = htons((uint16_t)resp_size);
     const size_t resp_send_size = resp_size + 2U;
     const ev_io* readw = &conn->read_watcher;
@@ -524,7 +524,7 @@ F_NONNULL
 static void conn_respond(struct thred* thr, struct conn* conn, const size_t req_size)
 {
     gdnsd_assume(req_size >= 12U && req_size <= DNS_RECV_SIZE);
-    tcp_pkt_t* tpkt = thr->tpkt;
+    union tcp_pkt* tpkt = thr->tpkt;
 
     // Move 1 full request from readbuf to pkt, advancing head and decrementing bytes
     memcpy(tpkt->pkt.raw, &conn->readbuf[conn->readbuf_head + 2U], req_size);
@@ -695,7 +695,7 @@ static void accept_handler(struct ev_loop* loop, ev_io* w, const int revents V_U
 
     struct thred* thr = w->data;
 
-    gdnsd_anysin_t sa;
+    struct anysin sa;
     memset(&sa, 0, sizeof(sa));
     sa.len = GDNSD_ANYSIN_MAXLEN;
 
@@ -808,12 +808,12 @@ static void prep_handler(struct ev_loop* loop, ev_prepare* w V_UNUSED, int reven
 #define IPV6_MIN_MTU 1280
 #endif
 
-void tcp_dns_listen_setup(dns_thread_t* t)
+void tcp_dns_listen_setup(struct dns_thread* t)
 {
-    const dns_addr_t* addrconf = t->ac;
+    const struct dns_addr* addrconf = t->ac;
     gdnsd_assume(addrconf);
 
-    const gdnsd_anysin_t* sa = &addrconf->addr;
+    const struct anysin* sa = &addrconf->addr;
 
     const bool isv6 = sa->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || sa->sa.sa_family == AF_INET);
@@ -879,7 +879,7 @@ void tcp_dns_listen_setup(dns_thread_t* t)
         log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", backlog, logf_anysin(&addrconf->addr), logf_errno());
 }
 
-static void set_accf(const dns_addr_t* addrconf V_UNUSED, const int sock V_UNUSED)
+static void set_accf(const struct dns_addr* addrconf V_UNUSED, const int sock V_UNUSED)
 {
 #ifdef SO_ACCEPTFILTER
     struct accept_filter_arg afa_exist;
@@ -925,10 +925,10 @@ void* dnsio_tcp_start(void* thread_asvoid)
 {
     gdnsd_thread_setname("gdnsd-io-tcp");
 
-    const dns_thread_t* t = thread_asvoid;
+    const struct dns_thread* t = thread_asvoid;
     gdnsd_assert(!t->is_udp);
 
-    const dns_addr_t* addrconf = t->ac;
+    const struct dns_addr* addrconf = t->ac;
 
     struct thred thr = { 0 };
 

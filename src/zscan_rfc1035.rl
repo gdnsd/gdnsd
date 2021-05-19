@@ -50,7 +50,7 @@
         siglongjmp(z->jbuf, 1);\
     } while (0)
 
-typedef struct {
+struct zscan {
     uint8_t  ipv6[16];
     uint32_t ipv4;
     bool     zn_err_detect;
@@ -69,7 +69,7 @@ typedef struct {
     unsigned rfc3597_data_len;
     unsigned rfc3597_data_written;
     uint8_t* rfc3597_data;
-    zone_t* zone;
+    struct zone* zone;
     const char* tstart;
     const char* curfn;
     char* include_filename;
@@ -84,15 +84,15 @@ typedef struct {
     };
     uint8_t* text;
     sigjmp_buf jbuf;
-} zscan_t;
+};
 
 F_NONNULL
-static void scanner(zscan_t* z, char* buf, const size_t bufsize);
+static void scanner(struct zscan* z, char* buf, const size_t bufsize);
 
 /******** IP Addresses ********/
 
 F_NONNULL
-static void set_ipv4(zscan_t* z, const char* end)
+static void set_ipv4(struct zscan* z, const char* end)
 {
     char txt[16];
     unsigned len = end - z->tstart;
@@ -110,7 +110,7 @@ static void set_ipv4(zscan_t* z, const char* end)
 }
 
 F_NONNULL
-static void set_ipv6(zscan_t* z, const char* end)
+static void set_ipv6(struct zscan* z, const char* end)
 {
     char txt[INET6_ADDRSTRLEN + 1];
     unsigned len = end - z->tstart;
@@ -128,7 +128,7 @@ static void set_ipv6(zscan_t* z, const char* end)
 }
 
 F_NONNULL
-static void set_uval(zscan_t* z)
+static void set_uval(struct zscan* z)
 {
     errno = 0;
     z->uval = strtoul(z->tstart, NULL, 10);
@@ -138,7 +138,7 @@ static void set_uval(zscan_t* z)
 }
 
 F_NONNULL
-static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin)
+static void validate_origin_in_zone(struct zscan* z, const uint8_t* origin)
 {
     gdnsd_assume(z->zone->dname);
     if (!dname_isinzone(z->zone->dname, origin))
@@ -146,7 +146,7 @@ static void validate_origin_in_zone(zscan_t* z, const uint8_t* origin)
 }
 
 F_NONNULL
-static void validate_lhs_not_ooz(zscan_t* z)
+static void validate_lhs_not_ooz(struct zscan* z)
 {
     if (z->lhs_is_ooz)
         parse_error("Domainname '%s' is not within this zonefile's zone (%s)", logf_dname(z->lhs_dname), logf_dname(z->zone->dname));
@@ -155,7 +155,7 @@ static void validate_lhs_not_ooz(zscan_t* z)
 F_NONNULL F_PURE
 static unsigned dn_find_final_label_offset(const uint8_t* dname)
 {
-    gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
+    gdnsd_assert(dname_get_status(dname) == DNAME_PARTIAL);
 
     // Since we assert DNAME_PARTIAL, we just have to search forward until the
     // next potential label len is the partial terminator 0xff.
@@ -184,9 +184,9 @@ static unsigned dn_find_final_label_offset(const uint8_t* dname)
 // be any prefix label before them.
 
 F_NONNULL
-static dname_status_t dn_qualify(uint8_t* dname, const uint8_t* origin, uint8_t* const file_origin, const uint8_t* zone_origin)
+static enum dname_status dn_qualify(uint8_t* dname, const uint8_t* origin, uint8_t* const file_origin, const uint8_t* zone_origin)
 {
-    gdnsd_assert(dname_status(dname) == DNAME_PARTIAL);
+    gdnsd_assert(dname_get_status(dname) == DNAME_PARTIAL);
 
     // Lone "@" case:
     if (dname[0] == 3U && dname[2] == '@') {
@@ -220,11 +220,11 @@ static dname_status_t dn_qualify(uint8_t* dname, const uint8_t* origin, uint8_t*
 }
 
 F_NONNULL
-static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
+static void dname_set(struct zscan* z, uint8_t* dname, unsigned len, bool lhs)
 {
     gdnsd_assume(z->zone->dname);
-    dname_status_t catstat;
-    dname_status_t status;
+    enum dname_status catstat;
+    enum dname_status status;
 
     if (len) {
         status = dname_from_string(dname, z->tstart, len);
@@ -269,9 +269,9 @@ static void dname_set(zscan_t* z, uint8_t* dname, unsigned len, bool lhs)
 //   function pointer to eliminate the possibility of
 //   inlining on non-gcc compilers, I hope) to avoid issues with
 //   setjmp and all of the local auto variables in zscan_rfc1035() below.
-typedef bool (*sij_func_t)(zscan_t*, char*, const size_t);
+typedef bool (*sij_func_t)(struct zscan*, char*, const size_t);
 F_NONNULL F_NOINLINE
-static bool _scan_isolate_jmp(zscan_t* z, char* buf, const size_t bufsize)
+static bool _scan_isolate_jmp(struct zscan* z, char* buf, const size_t bufsize)
 {
     if (!sigsetjmp(z->jbuf, 0)) {
         scanner(z, buf, bufsize);
@@ -281,13 +281,13 @@ static bool _scan_isolate_jmp(zscan_t* z, char* buf, const size_t bufsize)
 }
 
 F_NONNULL
-static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg)
+static bool zscan_do(struct zone* zone, const uint8_t* origin, const char* fn, const unsigned def_ttl_arg)
 {
     log_debug("rfc1035: Scanning file '%s' for zone '%s'", fn, logf_dname(zone->dname));
 
     bool failed = false;
 
-    gdnsd_fmap_t* fmap = gdnsd_fmap_new(fn, true, true);
+    struct fmap* fmap = gdnsd_fmap_new(fn, true, true);
     if (!fmap) {
         failed = true;
         return failed;
@@ -296,7 +296,7 @@ static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const 
     const size_t bufsize = gdnsd_fmap_get_len(fmap);
     char* buf = gdnsd_fmap_get_buf(fmap);
 
-    zscan_t* z = xcalloc(sizeof(*z));
+    struct zscan* z = xcalloc(sizeof(*z));
     z->lcount = 1;
     z->def_ttl = def_ttl_arg;
     z->zone = zone;
@@ -326,14 +326,14 @@ static bool zscan_do(zone_t* zone, const uint8_t* origin, const char* fn, const 
 /********** TXT ******************/
 
 F_NONNULL
-static void text_start(zscan_t* z V_UNUSED)
+static void text_start(struct zscan* z V_UNUSED)
 {
     gdnsd_assert(z->text == NULL);
     gdnsd_assert(z->text_len == 0);
 }
 
 F_NONNULL
-static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
+static void text_add_tok(struct zscan* z, const unsigned len, const bool big_ok)
 {
     char* text_temp = xmalloc(len ? len : 1);
     unsigned newlen = len;
@@ -396,7 +396,7 @@ static void text_add_tok(zscan_t* z, const unsigned len, const bool big_ok)
 }
 
 F_NONNULL
-static void text_add_tok_huge(zscan_t* z, const unsigned len)
+static void text_add_tok_huge(struct zscan* z, const unsigned len)
 {
     char* storage = xmalloc(len ? len : 1);
     unsigned newlen = len;
@@ -424,7 +424,7 @@ static void text_add_tok_huge(zscan_t* z, const unsigned len)
 }
 
 F_NONNULL
-static void set_filename(zscan_t* z, const unsigned len)
+static void set_filename(struct zscan* z, const unsigned len)
 {
     char* fn = xmalloc(len + 1);
     const unsigned newlen = dns_unescape(fn, z->tstart, len);
@@ -456,7 +456,7 @@ static char* _make_zfn(const char* curfn, const char* include_fn)
 }
 
 F_NONNULL
-static void process_include(zscan_t* z)
+static void process_include(struct zscan* z)
 {
     gdnsd_assume(z->include_filename);
 
@@ -502,7 +502,7 @@ static unsigned hexbyte(const char* intxt)
 }
 
 F_NONNULL
-static void mult_uval(zscan_t* z, int fc)
+static void mult_uval(struct zscan* z, int fc)
 {
     fc |= 0x20;
     switch (fc) {
@@ -524,7 +524,7 @@ static void mult_uval(zscan_t* z, int fc)
 }
 
 F_NONNULL
-static void set_dyna(zscan_t* z, const char* fpc)
+static void set_dyna(struct zscan* z, const char* fpc)
 {
     unsigned dlen = fpc - z->tstart;
     if (dlen > 255)
@@ -535,7 +535,7 @@ static void set_dyna(zscan_t* z, const char* fpc)
 }
 
 F_NONNULL
-static void set_caa_prop(zscan_t* z, const char* fpc)
+static void set_caa_prop(struct zscan* z, const char* fpc)
 {
     unsigned dlen = fpc - z->tstart;
     if (dlen > 255)
@@ -546,7 +546,7 @@ static void set_caa_prop(zscan_t* z, const char* fpc)
 }
 
 F_NONNULL
-static void rec_soa(zscan_t* z)
+static void rec_soa(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (z->lhs_dname[0] != 1)
@@ -567,21 +567,21 @@ static void rec_soa(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_a(zscan_t* z)
+static void rec_a(struct zscan* z)
 {
     if (ltree_add_rec_a(z->zone, z->lhs_dname, z->ipv4, z->ttl, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_aaaa(zscan_t* z)
+static void rec_aaaa(struct zscan* z)
 {
     if (ltree_add_rec_aaaa(z->zone, z->lhs_dname, z->ipv6, z->ttl, z->lhs_is_ooz))
         siglongjmp(z->jbuf, 1);
 }
 
 F_NONNULL
-static void rec_ns(zscan_t* z)
+static void rec_ns(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_ns(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
@@ -589,7 +589,7 @@ static void rec_ns(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_cname(zscan_t* z)
+static void rec_cname(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_cname(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
@@ -597,7 +597,7 @@ static void rec_cname(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_ptr(zscan_t* z)
+static void rec_ptr(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_ptr(z->zone, z->lhs_dname, z->rhs_dname, z->ttl))
@@ -605,7 +605,7 @@ static void rec_ptr(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_mx(zscan_t* z)
+static void rec_mx(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_mx(z->zone, z->lhs_dname, z->rhs_dname, z->ttl, z->uval))
@@ -613,7 +613,7 @@ static void rec_mx(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_srv(zscan_t* z)
+static void rec_srv(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_srv(
@@ -629,7 +629,7 @@ static void rec_srv(zscan_t* z)
 }
 
 F_NONNULL
-static void text_cleanup(zscan_t* z)
+static void text_cleanup(struct zscan* z)
 {
     if (z->text)
         free(z->text);
@@ -638,7 +638,7 @@ static void text_cleanup(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_naptr(zscan_t* z)
+static void rec_naptr(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_naptr(
@@ -657,7 +657,7 @@ static void rec_naptr(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_txt(zscan_t* z)
+static void rec_txt(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_txt(z->zone, z->lhs_dname, z->text_len, z->text, z->ttl))
@@ -667,7 +667,7 @@ static void rec_txt(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_dyna(zscan_t* z)
+static void rec_dyna(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_dynaddr(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
@@ -675,7 +675,7 @@ static void rec_dyna(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_dync(zscan_t* z)
+static void rec_dync(struct zscan* z)
 {
     validate_lhs_not_ooz(z);
     if (ltree_add_rec_dync(z->zone, z->lhs_dname, z->rhs_dyn, z->ttl, z->ttl_min))
@@ -683,7 +683,7 @@ static void rec_dync(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_rfc3597(zscan_t* z)
+static void rec_rfc3597(struct zscan* z)
 {
     if (z->rfc3597_data_written < z->rfc3597_data_len)
         parse_error("RFC3597 generic RR claimed rdata length of %u, but only %u bytes of data present", z->rfc3597_data_len, z->rfc3597_data_written);
@@ -694,7 +694,7 @@ static void rec_rfc3597(zscan_t* z)
 }
 
 F_NONNULL
-static void rec_caa(zscan_t* z)
+static void rec_caa(struct zscan* z)
 {
     if (z->uval > 255)
         parse_error("CAA flags byte value %u is >255", z->uval);
@@ -722,7 +722,7 @@ static void rec_caa(zscan_t* z)
 }
 
 F_NONNULL
-static void rfc3597_data_setup(zscan_t* z)
+static void rfc3597_data_setup(struct zscan* z)
 {
     z->rfc3597_data_len = z->uval;
     z->rfc3597_data_written = 0;
@@ -730,7 +730,7 @@ static void rfc3597_data_setup(zscan_t* z)
 }
 
 F_NONNULL
-static void rfc3597_octet(zscan_t* z)
+static void rfc3597_octet(struct zscan* z)
 {
     if (z->rfc3597_data_written == z->rfc3597_data_len)
         parse_error_noargs("RFC3597 generic RR: more rdata is present than the indicated length");
@@ -738,7 +738,7 @@ static void rfc3597_octet(zscan_t* z)
 }
 
 // The external entrypoint to the parser
-bool zscan_rfc1035(zone_t* zone, const char* fn)
+bool zscan_rfc1035(struct zone* zone, const char* fn)
 {
     gdnsd_assume(zone->dname);
     return zscan_do(zone, zone->dname, fn, gcfg->zones_default_ttl);
@@ -764,7 +764,7 @@ bool zscan_rfc1035(zone_t* zone, const char* fn)
     } while (0)
 
 F_NONNULL
-static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
+static void preprocess_buf(struct zscan* z, char* buf, const size_t buflen)
 {
     // This is validated with a user-facing error before calling this function!
     gdnsd_assume(buf[buflen - 1] == '\n');
@@ -1052,7 +1052,7 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 // end-sonar-exclude
 
 F_NONNULL
-static void scanner(zscan_t* z, char* buf, const size_t bufsize)
+static void scanner(struct zscan* z, char* buf, const size_t bufsize)
 {
     gdnsd_assume(bufsize);
 

@@ -33,7 +33,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-static gdmaps_t* gdmaps;
+static struct gdmaps* gdmaps;
 
 F_NONNULL
 static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
@@ -97,7 +97,7 @@ static void plugin_geoip_pre_run(void)
 }
 
 F_NONNULL
-static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo, unsigned* scope_out)
+static const uint8_t* map_get_dclist(const unsigned mapnum, const struct client_info* cinfo, unsigned* scope_out)
 {
     gdnsd_assume(gdmaps);
     return gdmaps_lookup(gdmaps, mapnum, cinfo, scope_out);
@@ -115,7 +115,7 @@ static unsigned map_get_mon_idx(const unsigned mapnum, const unsigned dcnum)
 #define META_MAP_ADMIN 1
 #include "meta_core.inc"
 
-plugin_t plugin_geoip_funcs = {
+struct plugin plugin_geoip_funcs = {
     .name = "geoip",
     .config_loaded = false,
     .used = false,

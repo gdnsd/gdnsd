@@ -118,9 +118,9 @@ static void usage(void)
 /**** Action functions ****/
 
 F_NONNULL
-static bool action_stop(const csc_t* csc)
+static bool action_stop(const struct csc* csc)
 {
-    csc_txn_rv_t crv = csc_stop_server(csc);
+    enum csc_txn_rv crv = csc_stop_server(csc);
     if (crv == CSC_TXN_OK) {
         if (!csc_wait_stopping_server(csc)) {
             log_info("Stop command successful, daemon exited");
@@ -135,13 +135,13 @@ static bool action_stop(const csc_t* csc)
 }
 
 F_NONNULL
-static bool action_reloadz(const csc_t* csc)
+static bool action_reloadz(const struct csc* csc)
 {
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_ZREL;
-    csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
+    enum csc_txn_rv crv = csc_txn(csc, &req, &resp);
     if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
         crv = CSC_TXN_FAIL_HARD;
     if (crv == CSC_TXN_FAIL_HARD)
@@ -154,17 +154,17 @@ static bool action_reloadz(const csc_t* csc)
 }
 
 F_NONNULL
-static bool action_replace(const csc_t* csc)
+static bool action_replace(const struct csc* csc)
 {
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
     log_info("REPLACE[gdnsdctl]: Sending replace command to old daemon version %s running at PID %li", s_vers, (long)s_pid);
 
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_REPL;
-    csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
+    enum csc_txn_rv crv = csc_txn(csc, &req, &resp);
     if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
         crv = CSC_TXN_FAIL_HARD;
     if (crv == CSC_TXN_FAIL_HARD)
@@ -175,7 +175,7 @@ static bool action_replace(const csc_t* csc)
     if (csc_wait_stopping_server(csc))
         log_fatal("REPLACE[gdnsdctl]: Replace command to old daemon succeeded, but old daemon never finished exiting...");
 
-    csc_t* csc2 = csc_new(0, NULL, opt_tcp_addr);
+    struct csc* csc2 = csc_new(0, NULL, opt_tcp_addr);
     if (!csc2)
         log_fatal("REPLACE[gdnsdctl]: Cannot establish connection to new daemon for verification");
 
@@ -187,7 +187,7 @@ static bool action_replace(const csc_t* csc)
 }
 
 F_NONNULL
-static bool action_status(const csc_t* csc)
+static bool action_status(const struct csc* csc)
 {
     const pid_t s_pid = csc_get_server_pid(csc);
     const char* s_vers = csc_get_server_version(csc);
@@ -196,14 +196,14 @@ static bool action_status(const csc_t* csc)
 }
 
 F_NONNULL
-static bool action_stats(const csc_t* csc)
+static bool action_stats(const struct csc* csc)
 {
     char* resp_data;
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STAT;
-    csc_txn_rv_t crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
+    enum csc_txn_rv crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
     if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
         crv = CSC_TXN_FAIL_HARD;
     if (crv == CSC_TXN_FAIL_HARD)
@@ -223,14 +223,14 @@ static bool action_stats(const csc_t* csc)
 }
 
 F_NONNULL
-static bool action_states(const csc_t* csc)
+static bool action_states(const struct csc* csc)
 {
     char* resp_data;
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STATE;
-    csc_txn_rv_t crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
+    enum csc_txn_rv crv = csc_txn_getdata(csc, &req, &resp, &resp_data);
     if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
         crv = CSC_TXN_FAIL_HARD;
     if (crv == CSC_TXN_FAIL_HARD)
@@ -271,7 +271,7 @@ static const unsigned b64u_legal[256] = {
 };
 
 F_NONNULL
-static bool action_chal(const csc_t* csc, int argc, char** argv)
+static bool action_chal(const struct csc* csc, int argc, char** argv)
 {
     // Requires 2+ additional arguments, in pairs
     if (!argc || argc & 1 || argc > (int)(CHAL_MAX_COUNT * 2))
@@ -307,13 +307,13 @@ static bool action_chal(const csc_t* csc, int argc, char** argv)
         gdnsd_assume(dlen <= CHAL_MAX_DLEN);
     }
 
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_CHAL;
     csbuf_set_v(&req, chal_count);
     req.d = dlen;
-    csc_txn_rv_t crv = csc_txn_senddata(csc, &req, &resp, (char*)buf);
+    enum csc_txn_rv crv = csc_txn_senddata(csc, &req, &resp, (char*)buf);
     if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
         crv = CSC_TXN_FAIL_HARD;
     if (crv == CSC_TXN_FAIL_HARD)
@@ -327,13 +327,13 @@ static bool action_chal(const csc_t* csc, int argc, char** argv)
 }
 
 F_NONNULL
-static bool action_chalf(const csc_t* csc)
+static bool action_chalf(const struct csc* csc)
 {
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_CHALF;
-    csc_txn_rv_t crv = csc_txn(csc, &req, &resp);
+    enum csc_txn_rv crv = csc_txn(csc, &req, &resp);
     if (opt_oneshot && crv == CSC_TXN_FAIL_SOFT)
         crv = CSC_TXN_FAIL_HARD;
     if (crv == CSC_TXN_FAIL_HARD)
@@ -345,7 +345,7 @@ static bool action_chalf(const csc_t* csc)
     return false;
 }
 
-static bool do_action(const csc_t* csc, const char* action, int argc, char** argv)
+static bool do_action(const struct csc* csc, const char* action, int argc, char** argv)
 {
     if (!strcasecmp(action, "acme-dns-01"))
         return action_chal(csc, argc, argv);
@@ -459,7 +459,7 @@ int main(int argc, char** argv)
 
     install_alarm();
     while (1) {
-        csc_t* csc = csc_new(0, NULL, opt_tcp_addr);
+        struct csc* csc = csc_new(0, NULL, opt_tcp_addr);
         if (!csc) {
             if (opt_ignore_dead && can_ignore_dead(action)) {
                 log_info("No running daemon, succeeding");

@@ -43,41 +43,41 @@
 #include <netdb.h>
 #include <fcntl.h>
 
-typedef struct {
+struct tcp_svc {
     const char* name;
     unsigned port;
     unsigned timeout;
     unsigned interval;
-} tcp_svc_t;
+};
 
-typedef enum {
+enum tcp_state {
     TCP_STATE_WAITING = 0,
     TCP_STATE_CONNECTING
-} tcp_state_t;
+};
 
-typedef struct {
+struct tcp_events {
     const char* desc;
-    tcp_svc_t* tcp_svc;
+    struct tcp_svc* tcp_svc;
     ev_io connect_watcher;
     ev_timer timeout_watcher;
     ev_timer interval_watcher;
-    gdnsd_anysin_t addr;
+    struct anysin addr;
     unsigned idx;
-    tcp_state_t tcp_state;
+    enum tcp_state tcp_state;
     int sock;
-} tcp_events_t;
+};
 
 static unsigned num_tcp_svcs = 0;
 static unsigned num_mons = 0;
-static tcp_svc_t* service_types = NULL;
-static tcp_events_t** mons = NULL;
+static struct tcp_svc* service_types = NULL;
+static struct tcp_events** mons = NULL;
 
 F_NONNULL
 static void mon_interval_cb(struct ev_loop* loop, struct ev_timer* t, const int revents V_UNUSED)
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    tcp_events_t* md = t->data;
+    struct tcp_events* md = t->data;
 
     gdnsd_assume(md);
 
@@ -142,7 +142,7 @@ static void mon_connect_cb(struct ev_loop* loop, struct ev_io* w, const int reve
 {
     gdnsd_assume(revents == EV_WRITE);
 
-    tcp_events_t* md = w->data;
+    struct tcp_events* md = w->data;
     ev_timer* t_watcher = &md->timeout_watcher;
 
     gdnsd_assume(md);
@@ -188,7 +188,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    tcp_events_t* md = t->data;
+    struct tcp_events* md = t->data;
     ev_io* c_watcher = &md->connect_watcher;
 
     gdnsd_assume(md);
@@ -222,7 +222,7 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 static void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
     service_types = xrealloc_n(service_types, num_tcp_svcs + 1, sizeof(*service_types));
-    tcp_svc_t* this_svc = &service_types[num_tcp_svcs++];
+    struct tcp_svc* this_svc = &service_types[num_tcp_svcs++];
 
     this_svc->name = xstrdup(name);
     unsigned port = 0U;
@@ -236,9 +236,9 @@ static void plugin_tcp_connect_add_svctype(const char* name, vscf_data_t* svc_cf
     this_svc->interval = interval;
 }
 
-static void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr, const unsigned idx)
+static void plugin_tcp_connect_add_mon_addr(const char* desc, const char* svc_name, const char* cname V_UNUSED, const struct anysin* addr, const unsigned idx)
 {
-    tcp_events_t* this_mon = xcalloc(sizeof(*this_mon));
+    struct tcp_events* this_mon = xcalloc(sizeof(*this_mon));
     this_mon->desc = xstrdup(desc);
     this_mon->idx = idx;
 
@@ -291,7 +291,7 @@ static void plugin_tcp_connect_init_monitors(struct ev_loop* mon_loop)
 static void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
 {
     for (unsigned i = 0; i < num_mons; i++) {
-        tcp_events_t* mon = mons[i];
+        struct tcp_events* mon = mons[i];
         gdnsd_assume(mon->sock == -1);
         const unsigned ival = mon->tcp_svc->interval;
         const double stagger = (((double)i) / ((double)num_mons)) * ((double)ival);
@@ -301,7 +301,7 @@ static void plugin_tcp_connect_start_monitors(struct ev_loop* mon_loop)
     }
 }
 
-plugin_t plugin_tcp_connect_funcs = {
+struct plugin plugin_tcp_connect_funcs = {
     .name = "tcp_connect",
     .config_loaded = false,
     .used = false,

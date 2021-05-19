@@ -41,16 +41,16 @@
  *   libsodium sources.
  ***************/
 
-typedef struct gdnsd_rstate32_t {
+struct rstate32 {
     uint32_t x;
     uint32_t y;
     uint32_t z;
     uint32_t w;
     uint32_t c;
-} gdnsd_rstate32_t;
+};
 
 F_NONNULL F_UNUSED
-static void gdnsd_rand32_init(gdnsd_rstate32_t* st)
+static void gdnsd_rand32_init(struct rstate32* st)
 {
     do {
         randombytes_buf(st, sizeof(*st));
@@ -58,7 +58,7 @@ static void gdnsd_rand32_init(gdnsd_rstate32_t* st)
 }
 
 F_NONNULL F_UNUSED
-static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs)
+static uint32_t gdnsd_rand32_get(struct rstate32* rs)
 {
     uint32_t y = rs->y;
     y ^= y << 5;
@@ -83,7 +83,7 @@ static uint32_t gdnsd_rand32_get(gdnsd_rstate32_t* rs)
 // https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
 // https://lemire.me/blog/2016/06/30/fast-random-shuffling/
 F_NONNULL F_UNUSED
-static uint32_t gdnsd_rand32_bounded(gdnsd_rstate32_t* rs, const uint32_t bound)
+static uint32_t gdnsd_rand32_bounded(struct rstate32* rs, const uint32_t bound)
 {
     uint64_t mr = (uint64_t)gdnsd_rand32_get(rs) * bound;
     uint32_t leftover = (uint32_t)mr;

@@ -146,17 +146,17 @@
 
 static_assert(SHORTHASH_BYTES == SCOOKIE_LEN, "libsodium shorthash output size == server cookie len");
 
-typedef struct {
+struct timekeys {
     uint8_t previous[SHORTHASH_KEYBYTES];
     uint8_t current[SHORTHASH_KEYBYTES];
     uint8_t next[SHORTHASH_KEYBYTES];
-} timekeys_t;
+};
 
 // The secret primary key used to derive the time-evolving keys_in_use below
 static uint8_t* primary_key = NULL;
 
 // RCU-swapped for runtime use in actual cookie validation/generation
-GRCU_STATIC(timekeys_t*, keys_inuse, NULL);
+GRCU_STATIC(struct timekeys*, keys_inuse, NULL);
 
 // libev periodic timer for secret rotation
 static ev_periodic hourly;
@@ -178,7 +178,7 @@ static void rotate_timekeys(void)
     const uint64_t previous_ctr = current_ctr - 1U;
     const uint64_t next_ctr = current_ctr + 1U;
 
-    timekeys_t* keys_new = sodium_malloc(sizeof(*keys_new));
+    struct timekeys* keys_new = sodium_malloc(sizeof(*keys_new));
     if (!keys_new)
         log_fatal("sodium_malloc() failed: %s", logf_errno());
 
@@ -193,7 +193,7 @@ static void rotate_timekeys(void)
     if (sodium_mprotect_readonly(keys_new))
         log_fatal("sodium_mprotect_readonly() failed: %s", logf_errno());
 
-    timekeys_t* keys_old = GRCU_OWN_READ(keys_inuse);
+    struct timekeys* keys_old = GRCU_OWN_READ(keys_inuse);
     grcu_assign_pointer(keys_inuse, keys_new);
     grcu_synchronize_rcu();
     if (keys_old)
@@ -232,7 +232,7 @@ static int safe_write_keyfile(const char* key_fn, const uint8_t* keybuf)
 // Must happen after iothreads are done using keys and the eventloop has exited
 static void cookie_destroy(void)
 {
-    timekeys_t* kiu = GRCU_OWN_READ(keys_inuse);
+    struct timekeys* kiu = GRCU_OWN_READ(keys_inuse);
     if (kiu)
         sodium_free(kiu);
     if (primary_key)
@@ -284,7 +284,7 @@ void cookie_runtime_init(struct ev_loop* loop)
     ev_periodic_start(loop, hourly_p);
 }
 
-bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const gdnsd_anysin_t* client, const size_t cookie_data_in_len)
+bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, const struct anysin* client, const size_t cookie_data_in_len)
 {
     gdnsd_assume(primary_key); // cookie_config() was run
 
@@ -306,7 +306,7 @@ bool cookie_process(uint8_t* cookie_data_out, const uint8_t* cookie_data_in, con
     grcu_read_lock();
 
     bool valid = false;
-    const timekeys_t* keys;
+    const struct timekeys* keys;
     grcu_dereference(keys, keys_inuse);
     gdnsd_assume(keys); // cookie_runtime_init() was run
 

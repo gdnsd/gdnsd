@@ -41,24 +41,24 @@
 
 #include <maxminddb.h>
 
-typedef struct {
+struct offset_cache_item {
     unsigned offset; // cppcheck-suppress unusedStructMember
     uint32_t dclist; // cppcheck-suppress unusedStructMember
-} offset_cache_item_t;
+};
 #define OFFSET_CACHE_SIZE 129113 // prime
 
-typedef struct {
+struct geoip2 {
     MMDB_s mmdb;
-    const dcmap_t* dcmap;
-    dclists_t* dclists;
+    const struct dcmap* dcmap;
+    struct dclists* dclists;
     char* map_name;
     char* pathname;
     bool is_city;
     bool is_v4;
     bool city_auto_mode;
     sigjmp_buf jbuf;
-    offset_cache_item_t* offset_cache[OFFSET_CACHE_SIZE];
-} geoip2_t;
+    struct offset_cache_item* offset_cache[OFFSET_CACHE_SIZE];
+};
 
 F_NONNULL
 static bool geoip2_mmdb_log_meta(const MMDB_metadata_s* meta, const char* map_name, const char* pathname)
@@ -97,7 +97,7 @@ static bool geoip2_mmdb_log_meta(const MMDB_metadata_s* meta, const char* map_na
 }
 
 F_NONNULL
-static void geoip2_destroy(geoip2_t* db)
+static void geoip2_destroy(struct geoip2* db)
 {
     MMDB_close(&db->mmdb);
     free(db->map_name);
@@ -108,9 +108,9 @@ static void geoip2_destroy(geoip2_t* db)
 }
 
 F_NONNULLX(1, 2, 3)
-static geoip2_t* geoip2_new(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode)
+static struct geoip2* geoip2_new(const char* pathname, const char* map_name, struct dclists* dclists, const struct dcmap* dcmap, const bool city_auto_mode)
 {
-    geoip2_t* db = xcalloc(sizeof(*db));
+    struct geoip2* db = xcalloc(sizeof(*db));
     int status = MMDB_open(pathname, MMDB_MODE_MMAP, &db->mmdb);
     if (status != MMDB_SUCCESS) {
         log_err("plugin_geoip: map '%s': Failed to open GeoIP2 database '%s': %s",
@@ -208,16 +208,16 @@ static const char* GEOIP2_PATH_CITY[] = { "city", "names", "en", NULL };
     }\
 } while (0)
 
-typedef struct {
-    geoip2_t* db;
+struct geoip2_dcmap_cb_data {
+    struct geoip2* db;
     MMDB_entry_s* entry;
     bool out_of_data;
-} geoip2_dcmap_cb_data_t;
+};
 
 F_NONNULLX(1)
 static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level)
 {
-    geoip2_dcmap_cb_data_t* state = data;
+    struct geoip2_dcmap_cb_data* state = data;
 
     // Explicit out-of-data set from below
     if (state->out_of_data)
@@ -291,12 +291,12 @@ static const char* GEOIP2_PATH_LON[] = { "location", "longitude", NULL };
 } while (0)
 
 F_NONNULL
-static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry)
+static unsigned geoip2_get_dclist(struct geoip2* db, MMDB_entry_s* db_entry)
 {
     // lack of both would be pointless, and is checked at outer scope
     gdnsd_assume(db->dcmap || db->city_auto_mode);
 
-    geoip2_dcmap_cb_data_t state = {
+    struct geoip2_dcmap_cb_data state = {
         .db = db,
         .entry = db_entry,
         .out_of_data = false,
@@ -332,7 +332,7 @@ static unsigned geoip2_get_dclist(geoip2_t* db, MMDB_entry_s* db_entry)
 }
 
 F_NONNULL
-static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry)
+static uint32_t geoip2_get_dclist_cached(struct geoip2* db, MMDB_entry_s* db_entry)
 {
     const uint32_t offset = db_entry->offset;
 
@@ -356,7 +356,7 @@ static uint32_t geoip2_get_dclist_cached(geoip2_t* db, MMDB_entry_s* db_entry)
 }
 
 F_NONNULL
-static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr ip, unsigned depth, const uint32_t node_num)
+static void geoip2_list_xlate_recurse(struct geoip2* db, struct nlist* nl, struct in6_addr ip, unsigned depth, const uint32_t node_num)
 {
     gdnsd_assume(depth < 129U);
 
@@ -422,15 +422,15 @@ static void geoip2_list_xlate_recurse(geoip2_t* db, nlist_t* nl, struct in6_addr
 }
 
 F_NONNULL
-static void geoip2_list_xlate(geoip2_t* db, nlist_t* nl)
+static void geoip2_list_xlate(struct geoip2* db, struct nlist* nl)
 {
     const unsigned start_depth = db->is_v4 ? 32U : 128U;
     geoip2_list_xlate_recurse(db, nl, ip6_zero, start_depth, 0U);
 }
 
-typedef void (*ij_func_t)(geoip2_t*, nlist_t**);
+typedef void (*ij_func_t)(struct geoip2*, struct nlist**);
 F_NONNULL F_NOINLINE
-static void isolate_jmp(geoip2_t* db, nlist_t** nl)
+static void isolate_jmp(struct geoip2* db, struct nlist** nl)
 {
     *nl = nlist_new(db->map_name, true);
     if (!sigsetjmp(db->jbuf, 0)) {
@@ -442,11 +442,11 @@ static void isolate_jmp(geoip2_t* db, nlist_t** nl)
     }
 }
 
-nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode)
+struct nlist* gdgeoip2_make_list(const char* pathname, const char* map_name, struct dclists* dclists, const struct dcmap* dcmap, const bool city_auto_mode)
 {
-    nlist_t* nl = NULL;
+    struct nlist* nl = NULL;
 
-    geoip2_t* db = geoip2_new(pathname, map_name, dclists, dcmap, city_auto_mode);
+    struct geoip2* db = geoip2_new(pathname, map_name, dclists, dcmap, city_auto_mode);
     if (db) {
         if (!city_auto_mode && !dcmap) {
             log_warn("plugin_geoip: map %s: not processing GeoIP2 database '%s': no auto_dc_coords and no actual 'map', therefore nothing to do", map_name, pathname);
@@ -462,7 +462,7 @@ nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_
 
 #else // HAVE_GEOIP2
 
-nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists V_UNUSED, const dcmap_t* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED)
+struct nlist* gdgeoip2_make_list(const char* pathname, const char* map_name, struct dclists* dclists V_UNUSED, const struct dcmap* dcmap V_UNUSED, const bool city_auto_mode V_UNUSED)
 {
     gdnsd_assume(pathname);
     gdnsd_assume(map_name);

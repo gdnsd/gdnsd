@@ -141,7 +141,7 @@ void dnsio_udp_init(const pid_t main_pid)
     sigdelset(&sigmask_notusr2, SIGUSR2);
 }
 
-static void udp_sock_opts_v4(const gdnsd_anysin_t* sa, const int sock V_UNUSED)
+static void udp_sock_opts_v4(const struct anysin* sa, const int sock V_UNUSED)
 {
 #if defined IP_MTU_DISCOVER && defined IP_PMTUDISC_DONT
 #  if defined IP_PMTUDISC_OMIT
@@ -174,7 +174,7 @@ static void udp_sock_opts_v4(const gdnsd_anysin_t* sa, const int sock V_UNUSED)
 #define IPV6_MIN_MTU 1280
 #endif
 
-static void udp_sock_opts_v6(const gdnsd_anysin_t* sa, const int sock)
+static void udp_sock_opts_v6(const struct anysin* sa, const int sock)
 {
     sockopt_bool_fatal(UDP, sa, sock, SOL_IPV6, IPV6_V6ONLY, 1);
 
@@ -221,12 +221,12 @@ static void udp_sock_opts_v6(const gdnsd_anysin_t* sa, const int sock)
 #endif
 }
 
-void udp_sock_setup(dns_thread_t* t)
+void udp_sock_setup(struct dns_thread* t)
 {
-    const dns_addr_t* addrconf = t->ac;
+    const struct dns_addr* addrconf = t->ac;
     gdnsd_assume(addrconf);
 
-    const gdnsd_anysin_t* sa = &addrconf->addr;
+    const struct anysin* sa = &addrconf->addr;
 
     const bool isv6 = sa->sa.sa_family == AF_INET6 ? true : false;
     gdnsd_assert(isv6 || sa->sa.sa_family == AF_INET);
@@ -332,9 +332,9 @@ static void slow_idle_poll(const int fd)
 }
 
 F_HOT F_NONNULL
-static void process_msg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, struct msghdr* msg_hdr, const size_t buf_in_len)
+static void process_msg(const int fd, struct dnsp_ctx* pctx, struct dns_stats* stats, struct msghdr* msg_hdr, const size_t buf_in_len)
 {
-    gdnsd_anysin_t* sa = msg_hdr->msg_name;
+    struct anysin* sa = msg_hdr->msg_name;
     if (unlikely(
                 (sa->sa.sa_family == AF_INET && !sa->sin4.sin_port)
                 || (sa->sa.sa_family == AF_INET6 && !sa->sin6.sin6_port)
@@ -363,12 +363,12 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats,
 }
 
 F_HOT F_NONNULL
-static void mainloop(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, const bool use_cmsg)
+static void mainloop(const int fd, struct dnsp_ctx* pctx, struct dns_stats* stats, const bool use_cmsg)
 {
     const unsigned pgsz = get_pgsz();
     const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
 
-    gdnsd_anysin_t sa;
+    struct anysin sa;
     void* buf = xaligned_alloc(pgsz, max_rounded);
     struct iovec iov = {
         .iov_base = buf,
@@ -420,7 +420,7 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, co
 #ifdef USE_MMSG
 
 F_HOT F_NONNULL
-static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, struct mmsghdr* dgrams, const unsigned pkts)
+static void process_mmsgs(const int fd, struct dnsp_ctx* pctx, struct dns_stats* stats, struct mmsghdr* dgrams, const unsigned pkts)
 {
     // For each input packet, first check for source port zero (in which case
     // we instantly drop it at this layer), then process it through
@@ -428,7 +428,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stat
     // zero to indicate a need to drop the response as well).  The resulting
     // response size (or zero for drop) is stored to the iov_len.
     for (unsigned i = 0; i < pkts; i++) {
-        gdnsd_anysin_t* asp = dgrams[i].msg_hdr.msg_name;
+        struct anysin* asp = dgrams[i].msg_hdr.msg_name;
         struct iovec* iop = &dgrams[i].msg_hdr.msg_iov[0];
         if (unlikely((asp->sa.sa_family == AF_INET && !asp->sin4.sin_port)
                      || (asp->sa.sa_family == AF_INET6 && !asp->sin6.sin6_port))) {
@@ -479,7 +479,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stat
                 stats_own_inc(&stats->udp.sendfail);
                 log_neterr("UDP sendmmsg() of %zu bytes to %s failed: %s",
                            first->msg_hdr.msg_iov[0].iov_len,
-                           logf_anysin((const gdnsd_anysin_t*)first->msg_hdr.msg_name),
+                           logf_anysin((const struct anysin*)first->msg_hdr.msg_name),
                            logf_errno());
                 mmsg_rv = 1;
             }
@@ -495,7 +495,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stat
 }
 
 F_HOT F_NONNULL
-static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stats, const bool use_cmsg)
+static void mainloop_mmsg(const int fd, struct dnsp_ctx* pctx, struct dns_stats* stats, const bool use_cmsg)
 {
     // MAX_RESPONSE_BUF, rounded up to the next nearest multiple of the page size
     const unsigned pgsz = get_pgsz();
@@ -506,7 +506,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stat
     struct mmsghdr dgrams[MMSG_WIDTH];
     struct {
         struct iovec iov[1];
-        gdnsd_anysin_t sa;
+        struct anysin sa;
         union {
             struct cmsghdr chdr;
             char cbuf[CMSG_BUFSIZE];
@@ -563,7 +563,7 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, struct dns_stats* stat
 #endif // USE_MMSG
 
 F_NONNULL F_PURE
-static bool is_ipv6(const gdnsd_anysin_t* sa)
+static bool is_ipv6(const struct anysin* sa)
 {
     gdnsd_assume(sa->sa.sa_family == AF_INET6 || sa->sa.sa_family == AF_INET);
     return (sa->sa.sa_family == AF_INET6);
@@ -573,13 +573,13 @@ void* dnsio_udp_start(void* thread_asvoid)
 {
     gdnsd_thread_setname("gdnsd-io-udp");
 
-    const dns_thread_t* t = thread_asvoid;
+    const struct dns_thread* t = thread_asvoid;
     gdnsd_assert(t->is_udp);
 
-    const dns_addr_t* addrconf = t->ac;
+    const struct dns_addr* addrconf = t->ac;
 
     struct dns_stats* stats;
-    dnsp_ctx_t* pctx = dnspacket_ctx_init_udp(&stats, is_ipv6(&addrconf->addr));
+    struct dnsp_ctx* pctx = dnspacket_ctx_init_udp(&stats, is_ipv6(&addrconf->addr));
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 

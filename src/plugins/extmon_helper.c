@@ -38,17 +38,17 @@
 
 #include <ev.h>
 
-typedef struct {
-    extmon_cmd_t* cmd;
+struct mon {
+    struct extmon_cmd* cmd;
     ev_timer interval_timer;
     ev_timer cmd_timeout;
     ev_child child_watcher;
     pid_t cmd_pid;
     bool result_pending;
-} mon_t;
+};
 
 static unsigned num_mons = 0;
-static mon_t* mons = NULL;
+static struct mon* mons = NULL;
 
 static unsigned num_proc = 0;
 
@@ -141,7 +141,7 @@ static void mon_timeout_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
     gdnsd_assume(w);
     gdnsd_assume(revents == EV_TIMER);
 
-    mon_t* this_mon = w->data;
+    struct mon* this_mon = w->data;
     gdnsd_assume(this_mon->result_pending);
     log_warn("Monitor child process for '%s' timed out after %u seconds.  Marking failed and sending SIGKILL...", this_mon->cmd->desc, this_mon->cmd->timeout);
     kill(this_mon->cmd_pid, SIGKILL);
@@ -171,7 +171,7 @@ static void mon_child_cb(struct ev_loop* loop, ev_child* w, int revents V_UNUSED
 
     ev_child_stop(loop, w); // always single-shot
 
-    mon_t* this_mon = w->data;
+    struct mon* this_mon = w->data;
     ev_timer* ct = &this_mon->cmd_timeout;
     ev_timer_stop(loop, ct);
     this_mon->cmd_pid = 0;
@@ -209,7 +209,7 @@ static void mon_interval_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNU
     gdnsd_assume(w);
     gdnsd_assume(revents == EV_TIMER);
 
-    mon_t* this_mon = w->data;
+    struct mon* this_mon = w->data;
     gdnsd_assume(!this_mon->result_pending);
 
     if (this_mon->cmd->max_proc > 0 && num_proc >= this_mon->cmd->max_proc) {
@@ -469,7 +469,7 @@ int main(int argc, char** argv)
     // set up interval watchers for each monitor, initially for immediate firing
     //   for the daemon's monitoring init cycle, then repeating every interval.
     for (unsigned i = 0; i < num_mons; i++) {
-        mon_t* this_mon = &mons[i];
+        struct mon* this_mon = &mons[i];
         ev_timer* it = &this_mon->interval_timer;
         ev_timer_init(it, mon_interval_cb, 0., this_mon->cmd->interval);
         it->data = this_mon;

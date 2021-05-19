@@ -64,19 +64,19 @@
 //   swap of the data for the runtime lookup threads.
 #define ALL_RELOAD_WAIT 7.0
 
-typedef struct {
+struct gdmap {
     char* name;
     char* geoip_path;
     char* nets_path;
-    dcinfo_t dcinfo; // basic datacenter list/info
-    dcmap_t* dcmap; // map of locinfo -> dclist
-    GRCU_FIELD(dclists_t*, dclists); // corresponds to ->tree
+    struct dcinfo dcinfo; // basic datacenter list/info
+    struct dcmap* dcmap; // map of locinfo -> dclist
+    GRCU_FIELD(struct dclists*, dclists); // corresponds to ->tree
     // Pending modified dclist for latest update(s) to ->foo_list, eventually promoted to
     // ->dclists when ->tree is updated, NULL when no pending update(s) are outstanding
-    dclists_t* dclists_pend;
-    nlist_t* geoip_list; // optional main geoip db
-    nlist_t* nets_list; // net overrides, optional
-    GRCU_FIELD(ntree_t*, tree); // merged->translated from the lists above
+    struct dclists* dclists_pend;
+    struct nlist* geoip_list; // optional main geoip db
+    struct nlist* nets_list; // net overrides, optional
+    GRCU_FIELD(struct ntree*, tree); // merged->translated from the lists above
     ev_stat geoip_stat_watcher;
     ev_stat nets_stat_watcher;
     ev_timer geoip_reload_timer;
@@ -84,7 +84,7 @@ typedef struct {
     ev_timer tree_update_timer;
     bool city_auto_mode;
     bool ignore_ecs;
-} gdmap_t;
+};
 
 F_NONNULL noreturn
 static bool gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* val V_UNUSED, const void* mapname_asvoid)
@@ -94,7 +94,7 @@ static bool gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* v
 }
 
 F_NONNULLX(1, 2, 3)
-static void gdmap_init(gdmap_t* gdmap, const char* name, const vscf_data_t* map_cfg, monreg_func_t mrf)
+static void gdmap_init(struct gdmap* gdmap, const char* name, const vscf_data_t* map_cfg, monreg_func_t mrf)
 {
     // basics
     gdmap->name = xstrdup(name);
@@ -153,11 +153,11 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, const vscf_data_t* map_
 }
 
 F_NONNULL
-static void gdmap_tree_update(gdmap_t* gdmap)
+static void gdmap_tree_update(struct gdmap* gdmap)
 {
     gdnsd_assume(gdmap->dclists_pend);
 
-    ntree_t* merged;
+    struct ntree* merged;
 
     if (gdmap->geoip_list) {
         merged = nlist_merge2_tree(gdmap->geoip_list, gdmap->nets_list);
@@ -165,8 +165,8 @@ static void gdmap_tree_update(gdmap_t* gdmap)
         merged = nlist_xlate_tree(gdmap->nets_list);
     }
 
-    ntree_t* old_tree = GRCU_OWN_READ(gdmap->tree);
-    dclists_t* old_lists = GRCU_OWN_READ(gdmap->dclists);
+    struct ntree* old_tree = GRCU_OWN_READ(gdmap->tree);
+    struct dclists* old_lists = GRCU_OWN_READ(gdmap->dclists);
 
     grcu_assign_pointer(gdmap->dclists, gdmap->dclists_pend);
     grcu_assign_pointer(gdmap->tree, merged);
@@ -182,9 +182,9 @@ static void gdmap_tree_update(gdmap_t* gdmap)
 }
 
 F_NONNULL
-static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_list_ptr)
+static bool gdmap_update_geoip(struct gdmap* gdmap, const char* path, struct nlist** out_list_ptr)
 {
-    dclists_t* update_dclists;
+    struct dclists* update_dclists;
 
     if (!gdmap->dclists_pend) {
         update_dclists = GRCU_OWN_READ(gdmap->dclists);
@@ -194,13 +194,13 @@ static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_l
         update_dclists = gdmap->dclists_pend;
     }
 
-    nlist_t* new_list = gdgeoip2_make_list(
-                            path,
-                            gdmap->name,
-                            update_dclists,
-                            gdmap->dcmap,
-                            gdmap->city_auto_mode
-                        );
+    struct nlist* new_list = gdgeoip2_make_list(
+                                 path,
+                                 gdmap->name,
+                                 update_dclists,
+                                 gdmap->dcmap,
+                                 gdmap->city_auto_mode
+                             );
 
     bool rv = false;
 
@@ -221,11 +221,11 @@ static bool gdmap_update_geoip(gdmap_t* gdmap, const char* path, nlist_t** out_l
 }
 
 F_NONNULL
-static bool gdmap_update_nets(gdmap_t* gdmap)
+static bool gdmap_update_nets(struct gdmap* gdmap)
 {
     gdnsd_assume(gdmap->nets_path);
 
-    dclists_t* update_dclists;
+    struct dclists* update_dclists;
 
     if (!gdmap->dclists_pend) {
         update_dclists = GRCU_OWN_READ(gdmap->dclists);
@@ -236,7 +236,7 @@ static bool gdmap_update_nets(gdmap_t* gdmap)
     }
 
     vscf_data_t* nets_cfg = vscf_scan_filename(gdmap->nets_path);
-    nlist_t* new_list = NULL;
+    struct nlist* new_list = NULL;
     if (nets_cfg) {
         if (vscf_is_hash(nets_cfg)) {
             new_list = nets_make_list(nets_cfg, update_dclists, gdmap->name);
@@ -269,7 +269,7 @@ static bool gdmap_update_nets(gdmap_t* gdmap)
 }
 
 F_NONNULL
-static void gdmap_initial_load_all(gdmap_t* gdmap)
+static void gdmap_initial_load_all(struct gdmap* gdmap)
 {
     gdnsd_assume(gdmap->dclists_pend);
     gdnsd_assume(!gdmap->geoip_list);
@@ -287,7 +287,7 @@ static void gdmap_initial_load_all(gdmap_t* gdmap)
 }
 
 F_NONNULL
-static void gdmap_kick_tree_update(gdmap_t* gdmap, struct ev_loop* loop)
+static void gdmap_kick_tree_update(struct gdmap* gdmap, struct ev_loop* loop)
 {
     ev_timer* tut = &gdmap->tree_update_timer;
     if (!ev_is_active(tut) && !ev_is_pending(tut))
@@ -302,7 +302,7 @@ static void gdmap_geoip_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUS
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    gdmap_t* gdmap = w->data;
+    struct gdmap* gdmap = w->data;
     gdnsd_assume(gdmap);
     gdnsd_assume(gdmap->geoip_path);
 
@@ -319,7 +319,7 @@ static void gdmap_nets_reload_timer_cb(struct ev_loop* loop, ev_timer* w V_UNUSE
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    gdmap_t* gdmap = w->data;
+    struct gdmap* gdmap = w->data;
     gdnsd_assume(gdmap);
     gdnsd_assume(gdmap->nets_path);
 
@@ -336,7 +336,7 @@ static void gdmap_geoip_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int rev
 {
     gdnsd_assume(revents == EV_STAT);
 
-    gdmap_t* gdmap = w->data;
+    struct gdmap* gdmap = w->data;
     gdnsd_assume(gdmap);
 
     gdnsd_assume(gdmap->geoip_path == w->path);
@@ -362,7 +362,7 @@ static void gdmap_nets_reload_stat_cb(struct ev_loop* loop, ev_stat* w, int reve
 {
     gdnsd_assume(revents == EV_STAT);
 
-    gdmap_t* gdmap = w->data;
+    struct gdmap* gdmap = w->data;
     gdnsd_assume(gdmap);
     gdnsd_assume(gdmap->nets_path);
     gdnsd_assume(gdmap->nets_path == w->path);
@@ -386,14 +386,14 @@ static void gdmap_tree_update_cb(struct ev_loop* loop, ev_timer* w, int revents 
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    gdmap_t* gdmap = w->data;
+    struct gdmap* gdmap = w->data;
     gdnsd_assume(gdmap);
     ev_timer_stop(loop, w);
     gdmap_tree_update(gdmap);
 }
 
 F_NONNULL
-static void gdmap_setup_nets_watcher(gdmap_t* gdmap, struct ev_loop* loop)
+static void gdmap_setup_nets_watcher(struct gdmap* gdmap, struct ev_loop* loop)
 {
     gdnsd_assume(gdmap->nets_path);
 
@@ -411,7 +411,7 @@ static void gdmap_setup_nets_watcher(gdmap_t* gdmap, struct ev_loop* loop)
 }
 
 F_NONNULL
-static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop)
+static void gdmap_setup_geoip_watcher(struct gdmap* gdmap, struct ev_loop* loop)
 {
     gdnsd_assume(gdmap->geoip_path);
 
@@ -431,7 +431,7 @@ static void gdmap_setup_geoip_watcher(gdmap_t* gdmap, struct ev_loop* loop)
 }
 
 F_NONNULL
-static void gdmap_setup_watchers(gdmap_t* gdmap, struct ev_loop* loop)
+static void gdmap_setup_watchers(struct gdmap* gdmap, struct ev_loop* loop)
 {
     if (gdmap->geoip_path)
         gdmap_setup_geoip_watcher(gdmap, loop);
@@ -446,23 +446,23 @@ static void gdmap_setup_watchers(gdmap_t* gdmap, struct ev_loop* loop)
 }
 
 F_NONNULL F_PURE
-static const char* gdmap_get_name(const gdmap_t* gdmap)
+static const char* gdmap_get_name(const struct gdmap* gdmap)
 {
     return gdmap->name;
 }
 
 F_NONNULL
-static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, unsigned* scope_mask)
+static const uint8_t* gdmap_lookup(struct gdmap* gdmap, const struct client_info* client, unsigned* scope_mask)
 {
     // grcu_thread_online() + grcu_read_lock()
     //   is handled by the iothread and dns lookup code
     //   in the main daemon, in a far outer scope from
     //   this code in runtime terms.
 
-    const ntree_t* tree;
+    const struct ntree* tree;
     grcu_dereference(tree, gdmap->tree);
     const unsigned dclist_u = ntree_lookup(tree, client, scope_mask, gdmap->ignore_ecs);
-    const dclists_t* dclists;
+    const struct dclists* dclists;
     grcu_dereference(dclists, gdmap->dclists);
     const uint8_t* dclist_u8 = dclists_get_list(dclists, dclist_u);
 
@@ -470,32 +470,32 @@ static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, 
     return dclist_u8;
 }
 
-/***************************************
- * gdmaps_t and related methods
- **************************************/
+/************************************************
+ * struct gdmaps (struct gdmaps) and related methods *
+ ************************************************/
 
-struct gdmaps_t {
+struct gdmaps {
     pthread_t reload_tid;
     bool reload_thread_spawned;
     unsigned count;
     struct ev_loop* reload_loop;
-    gdmap_t* maps;
+    struct gdmap* maps;
     monreg_func_t mrf;
 };
 
 F_NONNULL
 static bool gdmaps_new_iter(const char* key, unsigned klen V_UNUSED, vscf_data_t* val, void* data)
 {
-    gdmaps_t* gdmaps = data;
+    struct gdmaps* gdmaps = data;
     gdmap_init(&gdmaps->maps[gdmaps->count++], key, val, gdmaps->mrf);
     return true;
 }
 
-gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg, monreg_func_t mrf)
+struct gdmaps* gdmaps_new(const vscf_data_t* maps_cfg, monreg_func_t mrf)
 {
     gdnsd_assert(vscf_is_hash(maps_cfg));
 
-    gdmaps_t* gdmaps = xcalloc(sizeof(*gdmaps));
+    struct gdmaps* gdmaps = xcalloc(sizeof(*gdmaps));
     gdmaps->mrf = mrf;
     const unsigned num_maps = vscf_hash_get_len(maps_cfg);
     gdmaps->maps = xcalloc_n(num_maps, sizeof(*gdmaps->maps));
@@ -504,7 +504,7 @@ gdmaps_t* gdmaps_new(const vscf_data_t* maps_cfg, monreg_func_t mrf)
     return gdmaps;
 }
 
-int gdmaps_name2idx(const gdmaps_t* gdmaps, const char* map_name)
+int gdmaps_name2idx(const struct gdmaps* gdmaps, const char* map_name)
 {
     for (unsigned i = 0; i < gdmaps->count; i++)
         if (!strcmp(map_name, gdmap_get_name(&gdmaps->maps[i])))
@@ -512,32 +512,32 @@ int gdmaps_name2idx(const gdmaps_t* gdmaps, const char* map_name)
     return -1;
 }
 
-const char* gdmaps_idx2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx)
+const char* gdmaps_idx2name(const struct gdmaps* gdmaps, const unsigned gdmap_idx)
 {
     if (gdmap_idx >= gdmaps->count)
         return NULL;
     return gdmap_get_name(&gdmaps->maps[gdmap_idx]);
 }
 
-unsigned gdmaps_get_dc_count(const gdmaps_t* gdmaps, const unsigned gdmap_idx)
+unsigned gdmaps_get_dc_count(const struct gdmaps* gdmaps, const unsigned gdmap_idx)
 {
     gdnsd_assume(gdmap_idx < gdmaps->count);
     return dcinfo_get_count(&gdmaps->maps[gdmap_idx].dcinfo);
 }
 
-unsigned gdmaps_dcname2num(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const char* dcname)
+unsigned gdmaps_dcname2num(const struct gdmaps* gdmaps, const unsigned gdmap_idx, const char* dcname)
 {
     gdnsd_assume(gdmap_idx < gdmaps->count);
     return dcinfo_name2num(&gdmaps->maps[gdmap_idx].dcinfo, dcname);
 }
 
-static const char* gdmaps_dcnum2name(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum)
+static const char* gdmaps_dcnum2name(const struct gdmaps* gdmaps, const unsigned gdmap_idx, const unsigned dcnum)
 {
     gdnsd_assume(gdmap_idx < gdmaps->count);
     return dcinfo_num2name(&gdmaps->maps[gdmap_idx].dcinfo, dcnum);
 }
 
-unsigned gdmaps_map_mon_idx(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const unsigned dcnum)
+unsigned gdmaps_map_mon_idx(const struct gdmaps* gdmaps, const unsigned gdmap_idx, const unsigned dcnum)
 {
     gdnsd_assume(gdmap_idx < gdmaps->count);
     return dcinfo_map_mon_idx(&gdmaps->maps[gdmap_idx].dcinfo, dcnum);
@@ -548,7 +548,7 @@ unsigned gdmaps_map_mon_idx(const gdmaps_t* gdmaps, const unsigned gdmap_idx, co
 //   running concurrently with an update swap.  It's only used from the testsuite and gdmaps_geoip_test
 //   stuff, though, so that's not important.
 static const char dclist_nodc[] = "<INVALID>";
-const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const uint8_t* dclist)
+const char* gdmaps_logf_dclist(const struct gdmaps* gdmaps, const unsigned gdmap_idx, const uint8_t* dclist)
 {
     gdnsd_assume(gdmap_idx < gdmaps->count);
 
@@ -592,13 +592,13 @@ const char* gdmaps_logf_dclist(const gdmaps_t* gdmaps, const unsigned gdmap_idx,
     return buf;
 }
 
-const uint8_t* gdmaps_lookup(const gdmaps_t* gdmaps, const unsigned gdmap_idx, const client_info_t* client, unsigned* scope_mask)
+const uint8_t* gdmaps_lookup(const struct gdmaps* gdmaps, const unsigned gdmap_idx, const struct client_info* client, unsigned* scope_mask)
 {
     gdnsd_assume(gdmap_idx < gdmaps->count);
     return gdmap_lookup(&gdmaps->maps[gdmap_idx], client, scope_mask);
 }
 
-void gdmaps_load_databases(const gdmaps_t* gdmaps)
+void gdmaps_load_databases(const struct gdmaps* gdmaps)
 {
     for (unsigned i = 0; i < gdmaps->count; i++)
         gdmap_initial_load_all(&gdmaps->maps[i]);
@@ -611,7 +611,7 @@ static void* gdmaps_reload_thread(void* arg)
     gdnsd_thread_setname("gdnsd-geoip-db");
     gdnsd_thread_reduce_prio();
 
-    gdmaps_t* gdmaps = arg;
+    struct gdmaps* gdmaps = arg;
     gdnsd_assume(gdmaps);
 
     gdmaps->reload_loop = ev_loop_new(EVFLAG_AUTO);
@@ -623,7 +623,7 @@ static void* gdmaps_reload_thread(void* arg)
     return NULL;
 }
 
-void gdmaps_setup_watchers(gdmaps_t* gdmaps)
+void gdmaps_setup_watchers(struct gdmaps* gdmaps)
 {
     pthread_attr_t attribs;
     pthread_attr_init(&attribs);

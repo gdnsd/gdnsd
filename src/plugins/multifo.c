@@ -41,26 +41,26 @@ static const char DEFAULT_SVCNAME[] = "up";
 static unsigned v4_max = 0;
 static unsigned v6_max = 0;
 
-typedef struct {
-    gdnsd_anysin_t addr;
+struct astate {
+    struct anysin addr;
     unsigned* indices;
-} addrstate_t;
+};
 
-typedef struct {
-    addrstate_t* as;
+struct aset {
+    struct astate* as;
     unsigned num_svcs;
     unsigned count;
     unsigned up_thresh;
     bool ignore_health;
-} addrset_t;
+};
 
-typedef struct {
+struct res {
     const char* name;
-    addrset_t* aset_v4;
-    addrset_t* aset_v6;
-} res_t;
+    struct aset* aset_v4;
+    struct aset* aset_v6;
+};
 
-static res_t* resources = NULL;
+static struct res* resources = NULL;
 static unsigned num_resources = 0;
 
 /*********************************/
@@ -103,28 +103,28 @@ static vscf_data_t* addrs_hash_from_array(vscf_data_t* ary, const char* resname,
     return newhash;
 }
 
-typedef struct {
+struct addrs_iter_data {
     const char* resname;
     const char* stanza;
     const char** svc_names;
-    addrset_t* aset;
+    struct aset* aset;
     unsigned idx;
     bool ipv6;
-} addrs_iter_data_t;
+};
 
 F_NONNULL
 static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, vscf_data_t* addr_data, void* aid_asvoid)
 {
-    addrs_iter_data_t* aid = aid_asvoid;
+    struct addrs_iter_data* aid = aid_asvoid;
 
     const char* resname = aid->resname;
     const char* stanza = aid->stanza;
     const char** svc_names = aid->svc_names;
-    addrset_t* aset = aid->aset;
+    struct aset* aset = aid->aset;
     const unsigned idx = aid->idx;
     aid->idx++;
     const bool ipv6 = aid->ipv6;
-    addrstate_t* as = &aset->as[idx];
+    struct astate* as = &aset->as[idx];
 
     if (!vscf_is_simple(addr_data))
         log_fatal("plugin_multifo: resource %s (%s): address %s: all addresses must be string values", resname, stanza, addr_desc);
@@ -148,7 +148,7 @@ static bool addr_setup(const char* addr_desc, unsigned klen V_UNUSED, vscf_data_
 }
 
 F_NONNULL
-static void config_addrs(const char* resname, const char* stanza, addrset_t* aset, const bool ipv6, vscf_data_t* cfg)
+static void config_addrs(const char* resname, const char* stanza, struct aset* aset, const bool ipv6, vscf_data_t* cfg)
 {
     bool destroy_cfg = false;
     if (!vscf_is_hash(cfg)) {
@@ -203,7 +203,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     aset->as = xcalloc_n(num_addrs, sizeof(*aset->as));
     aset->up_thresh = gdnsd_uscale_ceil(aset->count, up_thresh);
 
-    addrs_iter_data_t aid = {
+    struct addrs_iter_data aid = {
         .resname = resname,
         .stanza = stanza,
         .svc_names = svc_names,
@@ -227,7 +227,7 @@ static void config_addrs(const char* resname, const char* stanza, addrset_t* ase
     }
 }
 
-static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg)
+static void config_auto(struct res* res, const char* stanza, vscf_data_t* auto_cfg)
 {
     bool destroy_cfg = false;
     if (!vscf_is_hash(auto_cfg)) {
@@ -251,7 +251,7 @@ static void config_auto(res_t* res, const char* stanza, vscf_data_t* auto_cfg)
     if (!vscf_is_simple(first_cfg))
         log_fatal("plugin_multifo: resource '%s' (%s): The value of '%s' must be an IP address in string form", res->name, stanza, first_name);
     const char* addr_txt = vscf_simple_get_data(first_cfg);
-    gdnsd_anysin_t temp_asin;
+    struct anysin temp_asin;
     const int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &temp_asin);
     if (addr_err)
         log_fatal("plugin_multifo: resource %s (%s): failed to parse address '%s' for '%s': %s", res->name, stanza, addr_txt, first_name, gai_strerror(addr_err));
@@ -276,7 +276,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     unsigned* residx_ptr = data;
     unsigned rnum = *residx_ptr;
     (*residx_ptr)++;
-    res_t* res = &resources[rnum];
+    struct res* res = &resources[rnum];
     res->name = xstrdup(resname);
 
     vscf_data_t* addrs_v4_cfg = NULL;
@@ -358,14 +358,14 @@ static int plugin_multifo_map_res(const char* resname, const uint8_t* zone_name)
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset, dyn_result_t* result, const bool isv6)
+static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* aset, struct dyn_result* result, const bool isv6)
 {
     gdnsd_assume(aset->count);
 
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
     unsigned notdown = 0;
     for (unsigned i = 0; i < aset->count; i++) {
-        const addrstate_t* as = &aset->as[i];
+        const struct astate* as = &aset->as[i];
         const gdnsd_sttl_t as_sttl = gdnsd_sttl_min(sttl_tbl, as->indices, aset->num_svcs);
         rv = gdnsd_sttl_min2(rv, as_sttl);
         if (!(as_sttl & GDNSD_STTL_DOWN)) {
@@ -398,11 +398,11 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const addrset_t* aset,
     return rv;
 }
 
-static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
-    res_t* res = &resources[resnum];
+    struct res* res = &resources[resnum];
 
     gdnsd_sttl_t rv;
 
@@ -421,7 +421,7 @@ static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const client_info_t*
     return rv;
 }
 
-plugin_t plugin_multifo_funcs = {
+struct plugin plugin_multifo_funcs = {
     .name = "multifo",
     .config_loaded = false,
     .used = false,

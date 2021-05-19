@@ -28,7 +28,7 @@
 
 // this is all of the binary data that needs to pass
 //   from plugin->helper to describe an extmon command's execution
-typedef struct {
+struct extmon_cmd {
     unsigned idx;
     unsigned timeout;
     unsigned interval;
@@ -37,7 +37,7 @@ typedef struct {
     // all strings NUL-terminated
     char** args; // array-of-strings NULL-terminated
     const char* desc; // NUL-terminated, and we don't own it in plugin
-} extmon_cmd_t;
+};
 
 // these are used for simple protocol messages during
 //   initial plugin<->helper setup.  They automatically
@@ -52,9 +52,9 @@ bool emc_read_exact(const int fd, const char* str);
 F_WUNUSED F_NONNULL
 bool emc_read_nbytes(const int fd, const size_t len, uint8_t* out);
 F_WUNUSED F_NONNULL
-bool emc_write_command(const int fd, const extmon_cmd_t* cmd);
+bool emc_write_command(const int fd, const struct extmon_cmd* cmd);
 F_WUNUSED
-extmon_cmd_t* emc_read_command(const int fd);
+struct extmon_cmd* emc_read_command(const int fd);
 
 // encoding of helper -> daemon monitor results as uint32_t.
 // these uin32_t results are the only runtime traffic, and

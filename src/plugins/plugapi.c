@@ -33,7 +33,7 @@
 
 #define NUM_PLUGINS 12
 
-static plugin_t* plugins[NUM_PLUGINS] = {
+static struct plugin* plugins[NUM_PLUGINS] = {
     &plugin_geoip_funcs,
     &plugin_metafo_funcs,
     &plugin_http_status_funcs,
@@ -66,7 +66,7 @@ unsigned gdnsd_result_get_alloc(void)
     unsigned storage = (addrlimit_v4 * 4U) + (addrlimit_v6 * 16U);
     if (storage < 256U)
         storage = 256U; // true minimum set by CNAME storage
-    return sizeof(dyn_result_t) + storage;
+    return sizeof(struct dyn_result) + storage;
 }
 
 size_t gdnsd_result_get_max_response(void)
@@ -93,7 +93,7 @@ void gdnsd_dyn_addr_max(unsigned v4, unsigned v6)
         addrlimit_v6 = v6;
 }
 
-void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* sa)
+void gdnsd_result_add_anysin(struct dyn_result* result, const struct anysin* sa)
 {
     gdnsd_assume(!result->is_cname);
     if (sa->sa.sa_family == AF_INET6) {
@@ -106,9 +106,9 @@ void gdnsd_result_add_anysin(dyn_result_t* result, const gdnsd_anysin_t* sa)
     }
 }
 
-void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname)
+void gdnsd_result_add_cname(struct dyn_result* result, const uint8_t* dname)
 {
-    gdnsd_assume(dname_status(dname) == DNAME_VALID);
+    gdnsd_assume(dname_get_status(dname) == DNAME_VALID);
     gdnsd_assume(!result->is_cname);
     gdnsd_assume(!result->count_v4);
     gdnsd_assume(!result->count_v6);
@@ -117,38 +117,38 @@ void gdnsd_result_add_cname(dyn_result_t* result, const uint8_t* dname)
     dname_copy(result->storage, dname);
 }
 
-void gdnsd_result_wipe(dyn_result_t* result)
+void gdnsd_result_wipe(struct dyn_result* result)
 {
     result->is_cname = false;
     result->count_v4 = 0;
     result->count_v6 = 0;
 }
 
-void gdnsd_result_wipe_v4(dyn_result_t* result)
+void gdnsd_result_wipe_v4(struct dyn_result* result)
 {
     result->count_v4 = 0;
 }
 
-void gdnsd_result_wipe_v6(dyn_result_t* result)
+void gdnsd_result_wipe_v6(struct dyn_result* result)
 {
     result->count_v6 = 0;
 }
 
-void gdnsd_result_add_scope_mask(dyn_result_t* result, unsigned scope)
+void gdnsd_result_add_scope_mask(struct dyn_result* result, unsigned scope)
 {
     if (scope > result->edns_scope_mask)
         result->edns_scope_mask = scope;
 }
 
-void gdnsd_result_reset_scope_mask(dyn_result_t* result)
+void gdnsd_result_reset_scope_mask(struct dyn_result* result)
 {
     result->edns_scope_mask = 0;
 }
 
-plugin_t* gdnsd_plugin_find(const char* pname)
+struct plugin* gdnsd_plugin_find(const char* pname)
 {
     for (unsigned i = 0; i < NUM_PLUGINS; i++) {
-        plugin_t* p = plugins[i];
+        struct plugin* p = plugins[i];
         if (!strcmp(pname, p->name)) {
             if (!p->used)
                 p->used = true;

@@ -30,7 +30,7 @@
 void dnsio_udp_init(const pid_t main_pid);
 
 F_NONNULL
-void udp_sock_setup(dns_thread_t* t);
+void udp_sock_setup(struct dns_thread* t);
 
 F_NONNULL
 void* dnsio_udp_start(void* thread_asvoid);

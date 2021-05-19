@@ -21,12 +21,16 @@
 #define GDNSD_FILE_H
 
 #include <gdnsd/compiler.h>
+#include <gdnsd/log.h>
 
 #include <sys/types.h>
 #include <stdbool.h>
 
-struct gdnsd_fmap_s_;
-typedef struct gdnsd_fmap_s_ gdnsd_fmap_t;
+struct fmap {
+    void* buf;
+    size_t len;
+    bool is_mapped;
+};
 
 // Given a filename "fn", this will open the file for reading
 //   and mmap() it for readonly use.
@@ -37,15 +41,23 @@ typedef struct gdnsd_fmap_s_ gdnsd_fmap_t;
 //   pattern is sequential.
 // "mod" gives a writeable private buffer, instead of a readonly shared one
 F_NONNULL F_WUNUSED
-gdnsd_fmap_t* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod);
+struct fmap* gdnsd_fmap_new(const char* fn, const bool seq, const bool mod);
 
 // Get the length of the mapped file data (zero is possible)
-F_NONNULL F_PURE
-size_t gdnsd_fmap_get_len(const gdnsd_fmap_t* fmap);
+F_NONNULL F_UNUSED
+static size_t gdnsd_fmap_get_len(const struct fmap* fmap)
+{
+    gdnsd_assume(fmap->buf);
+    return fmap->len;
+}
 
 // Get the buffer pointer for the mapped file data (always a valid pointer)
-F_NONNULL F_RETNN F_PURE
-void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap);
+F_NONNULL F_RETNN F_UNUSED
+static void* gdnsd_fmap_get_buf(const struct fmap* fmap)
+{
+    gdnsd_assume(fmap->buf);
+    return fmap->buf;
+}
 
 // Destructs the fmap_t object, which includes unmap() of the memory
 //   returned via fmap_get_buf().
@@ -53,6 +65,6 @@ void* gdnsd_fmap_get_buf(const gdnsd_fmap_t* fmap);
 //   should perhaps be considered suspect, even if the caller managed to
 //   operate on it without error).
 F_NONNULL
-bool gdnsd_fmap_delete(gdnsd_fmap_t* fmap);
+bool gdnsd_fmap_delete(struct fmap* fmap);
 
 #endif // GDNSD_FILE_H

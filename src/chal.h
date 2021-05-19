@@ -82,7 +82,7 @@ void chal_init(void);
 F_NONNULL F_UNUSED F_PURE F_HOT
 static bool dname_is_acme_chal(const uint8_t* d)
 {
-    gdnsd_assert(dname_status(d) != DNAME_INVALID);
+    gdnsd_assert(dname_get_status(d) != DNAME_INVALID);
     return (d[0] > 16U && d[1] == 15U && !memcmp(&d[2], "_acme-challenge", 15U));
 }
 

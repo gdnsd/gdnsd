@@ -25,7 +25,7 @@
 
 #include <inttypes.h>
 
-typedef union {
+union csbuf {
     char raw[8];
     struct {
         char key;
@@ -34,7 +34,7 @@ typedef union {
         uint8_t v2;
         uint32_t d;
     };
-} csbuf_t;
+};
 
 F_UNUSED F_CONST
 static uint32_t csbuf_make_v(uint8_t v0, uint8_t v1, uint8_t v2)
@@ -43,13 +43,13 @@ static uint32_t csbuf_make_v(uint8_t v0, uint8_t v1, uint8_t v2)
 }
 
 F_UNUSED F_NONNULL
-static uint32_t csbuf_get_v(const csbuf_t* c)
+static uint32_t csbuf_get_v(const union csbuf* c)
 {
     return csbuf_make_v(c->v0, c->v1, c->v2);
 }
 
 F_UNUSED F_NONNULL
-static void csbuf_set_v(csbuf_t* c, const uint32_t v)
+static void csbuf_set_v(union csbuf* c, const uint32_t v)
 {
     gdnsd_assume(v <= 0xFFFFFF);
     c->v0 = v >> 16;

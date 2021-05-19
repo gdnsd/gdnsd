@@ -32,14 +32,14 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
-typedef struct {
+struct dclist {
     unsigned num_dcs; // count (e.g. 3)
     uint8_t* dc_list; // 1-based numeric indices (e.g. "\1\2\3\0"), this is always ordered in the metafo case
     char** dc_names;  // array of names, 1-based
-} dclist_t;
+};
 
 static unsigned num_dclists = 0;
-static dclist_t** dclists = NULL; // one per resource in metafo case
+static struct dclist** dclists = NULL; // one per resource in metafo case
 
 F_NONNULL
 static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
@@ -48,7 +48,7 @@ static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
     vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(res_cfg, "datacenters", true);
     if (!dc_cfg)
         log_fatal("plugin_metafo: resource '%s': required key 'datacenters' is missing", res_name);
-    dclist_t* dcl = xmalloc(sizeof(*dcl));
+    struct dclist* dcl = xmalloc(sizeof(*dcl));
     if (vscf_is_hash(dc_cfg))
         log_fatal("plugin_metafo: resource '%s': 'datacenters' value cannot be a hash", res_name);
     dcl->num_dcs = vscf_array_get_len(dc_cfg);
@@ -89,7 +89,7 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname)
 {
     gdnsd_assume(mapnum < num_dclists);
 
-    dclist_t* this_map = dclists[mapnum];
+    struct dclist* this_map = dclists[mapnum];
     for (unsigned i = 1; i <= this_map->num_dcs; i++)
         if (!strcmp(dcname, this_map->dc_names[i]))
             return i;
@@ -110,7 +110,7 @@ static void bottom_config_hook(void)
 }
 
 F_NONNULL
-static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t* cinfo V_UNUSED, unsigned* scope_out V_UNUSED)
+static const uint8_t* map_get_dclist(const unsigned mapnum, const struct client_info* cinfo V_UNUSED, unsigned* scope_out V_UNUSED)
 {
     gdnsd_assume(mapnum < num_dclists);
     return dclists[mapnum]->dc_list;
@@ -123,7 +123,7 @@ static const uint8_t* map_get_dclist(const unsigned mapnum, const client_info_t*
 #define META_MAP_ADMIN 0
 #include "meta_core.inc"
 
-plugin_t plugin_metafo_funcs = {
+struct plugin plugin_metafo_funcs = {
     .name = "metafo",
     .config_loaded = false,
     .used = false,

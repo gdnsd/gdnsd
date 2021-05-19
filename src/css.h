@@ -46,8 +46,7 @@
 //    the server's version in "v" and its PID in "d".
 
 // Opaque server objects
-struct css_s_;
-typedef struct css_s_ css_t;
+struct css;
 
 // Create a new control socket server:
 // * argv0 is the original argv[0] of gdnsd, intended to use for spawning a
@@ -64,29 +63,29 @@ typedef struct css_s_ css_t;
 // able to obtain the lock normally), csc will be closed/deleted and *csc_p set
 // to NULL.
 F_NONNULLX(1, 2)
-css_t* css_new(const char* argv0, socks_cfg_t* socks_cfg, csc_t** csc_p);
+struct css* css_new(const char* argv0, struct socks_cfg* socks_cfg, struct csc** csc_p);
 
 // Start accepting connections within libev loop "loop".
 F_NONNULL
-void css_start(css_t* css, struct ev_loop* loop);
+void css_start(struct css* css, struct ev_loop* loop);
 
 // After zone reloading completes in main.c, it calls here to notify waiting
 // control socket clients of success/fail.  Return value of true indicates that
 // more waiters queued up during the reload, so main.c needs to start yet
 // another reload operation.
 F_NONNULL
-bool css_notify_zone_reloaders(css_t* css, const bool failed);
+bool css_notify_zone_reloaders(struct css* css, const bool failed);
 
 // Check whether a stop (e.g. via signal) is currently ok or not (due to
 // impending replacement/replace operation)
 F_NONNULL F_PURE
-bool css_stop_ok(const css_t* css);
+bool css_stop_ok(const struct css* css);
 
 F_NONNULL
-void css_send_stats_handoff(const css_t* css);
+void css_send_stats_handoff(const struct css* css);
 
 // Stop all traffic and destruct all resources (css itself is freed as well)
 F_NONNULL
-void css_delete(css_t* css);
+void css_delete(struct css* css);
 
 #endif // GDNSD_CSS_H

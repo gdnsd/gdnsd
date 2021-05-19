@@ -39,7 +39,7 @@ the root.  During zone loading, detached per-zone trees are rooted at their
 own zone root, and are later grafted onto the global ltree that starts at the
 real root of the DNS.
 
-  Each node in the ltree (ltree_node_t) contains a resizable hash table of
+  Each node in the ltree (struct ltree_node) contains a resizable hash table of
 child nodes, as well as the data for its own local rrsets and a flags field for
 identifying important properties like zone roots or delegation points.
 
@@ -77,15 +77,16 @@ ltree structure.
 #define MAX_CNAME_DEPTH 16U
 
 // Result type used by search functions in ltree.c and dnspacket.c
-typedef enum {
+enum ltree_dnstatus {
     DNAME_NOAUTH = 0,
     DNAME_AUTH = 1,
     DNAME_DELEG = 2
-} ltree_dname_status_t;
+};
 
 struct ltree_rdata_ns;
 struct ltree_rdata_mx;
 struct ltree_rdata_srv;
+struct ltree_rdata_ptr;
 struct ltree_rdata_naptr;
 struct ltree_rdata_rfc3597;
 
@@ -103,33 +104,10 @@ struct ltree_rrset_naptr;
 struct ltree_rrset_txt;
 struct ltree_rrset_rfc3597;
 
-typedef struct ltree_rdata_ns ltree_rdata_ns_t;
-typedef uint8_t* ltree_rdata_ptr_t;
-typedef struct ltree_rdata_mx ltree_rdata_mx_t;
-typedef struct ltree_rdata_srv ltree_rdata_srv_t;
-typedef struct ltree_rdata_naptr ltree_rdata_naptr_t;
-typedef struct ltree_rdata_txt ltree_rdata_txt_t;
-typedef struct ltree_rdata_rfc3597 ltree_rdata_rfc3597_t;
-
-typedef union  ltree_rrset ltree_rrset_t;
-typedef struct ltree_rrset_gen ltree_rrset_gen_t;
-typedef struct ltree_rrset_a ltree_rrset_a_t;
-typedef struct ltree_rrset_aaaa ltree_rrset_aaaa_t;
-typedef struct ltree_rrset_soa ltree_rrset_soa_t;
-typedef struct ltree_rrset_cname ltree_rrset_cname_t;
-typedef struct ltree_rrset_dync ltree_rrset_dync_t;
-typedef struct ltree_rrset_ns ltree_rrset_ns_t;
-typedef struct ltree_rrset_ptr ltree_rrset_ptr_t;
-typedef struct ltree_rrset_mx ltree_rrset_mx_t;
-typedef struct ltree_rrset_srv ltree_rrset_srv_t;
-typedef struct ltree_rrset_naptr ltree_rrset_naptr_t;
-typedef struct ltree_rrset_txt ltree_rrset_txt_t;
-typedef struct ltree_rrset_rfc3597 ltree_rrset_rfc3597_t;
-
 struct ltree_rdata_ns {
     uint8_t* dname;
-    ltree_rrset_a_t* glue_v4;
-    ltree_rrset_aaaa_t* glue_v6;
+    struct ltree_rrset_a* glue_v4;
+    struct ltree_rrset_aaaa* glue_v6;
 };
 
 struct ltree_rdata_mx {
@@ -142,6 +120,10 @@ struct ltree_rdata_srv {
     uint16_t priority; // net-order
     uint16_t weight; // net-order
     uint16_t port; // net-order
+};
+
+struct ltree_rdata_ptr {
+    uint8_t* dname;
 };
 
 struct ltree_rdata_naptr {
@@ -165,7 +147,7 @@ struct ltree_rdata_rfc3597 {
 // rrset structs
 
 struct ltree_rrset_gen {
-    ltree_rrset_t* next;
+    union ltree_rrset* next;
     uint16_t type; // host-order
     uint16_t count; // host-order
     uint32_t ttl; // net-order
@@ -186,7 +168,7 @@ struct ltree_rrset_gen {
 #endif
 
 struct ltree_rrset_a {
-    ltree_rrset_gen_t gen;
+    struct ltree_rrset_gen gen;
     union {
         uint32_t* addrs;
         uint32_t v4a[LTREE_V4A_SIZE];
@@ -205,7 +187,7 @@ struct ltree_rrset_a {
 //       else "addrs" for array of addresses
 
 struct ltree_rrset_aaaa {
-    ltree_rrset_gen_t gen;
+    struct ltree_rrset_gen gen;
     union {
         uint8_t* addrs;
         struct {
@@ -217,91 +199,90 @@ struct ltree_rrset_aaaa {
 };
 
 struct ltree_rrset_soa {
-    ltree_rrset_gen_t gen;
+    struct ltree_rrset_gen gen;
     uint8_t* rname;
     uint8_t* mname;
     uint32_t times[5];
 };
 
 struct ltree_rrset_cname {
-    ltree_rrset_gen_t gen;
+    struct ltree_rrset_gen gen;
     uint8_t* dname;
 };
 
 struct ltree_rrset_dync {
-    ltree_rrset_gen_t gen;
+    struct ltree_rrset_gen gen;
     gdnsd_resolve_cb_t func;
     unsigned resource;
     uint32_t ttl_min; // host-order!
 };
 
 struct ltree_rrset_ns {
-    ltree_rrset_gen_t gen;
-    ltree_rdata_ns_t* rdata;
+    struct ltree_rrset_gen gen;
+    struct ltree_rdata_ns* rdata;
 };
 
 struct ltree_rrset_ptr {
-    ltree_rrset_gen_t gen;
-    ltree_rdata_ptr_t* rdata;
+    struct ltree_rrset_gen gen;
+    struct ltree_rdata_ptr* rdata;
 };
 
 struct ltree_rrset_mx {
-    ltree_rrset_gen_t gen;
-    ltree_rdata_mx_t* rdata;
+    struct ltree_rrset_gen gen;
+    struct ltree_rdata_mx* rdata;
 };
 
 struct ltree_rrset_srv {
-    ltree_rrset_gen_t gen;
-    ltree_rdata_srv_t* rdata;
+    struct ltree_rrset_gen gen;
+    struct ltree_rdata_srv* rdata;
 };
 
 struct ltree_rrset_naptr {
-    ltree_rrset_gen_t gen;
-    ltree_rdata_naptr_t* rdata;
+    struct ltree_rrset_gen gen;
+    struct ltree_rdata_naptr* rdata;
 };
 
 struct ltree_rrset_txt {
-    ltree_rrset_gen_t gen;
-    ltree_rdata_txt_t* rdata;
+    struct ltree_rrset_gen gen;
+    struct ltree_rdata_txt* rdata;
 };
 
 struct ltree_rrset_rfc3597 {
-    ltree_rrset_gen_t gen;
-    ltree_rdata_rfc3597_t* rdata;
+    struct ltree_rrset_gen gen;
+    struct ltree_rdata_rfc3597* rdata;
 };
 
 // This is never allocated, it's just used
 //  for pointer types to cast between generic
 //  rrset_t and the specific rrset_t's
 union ltree_rrset {
-    ltree_rrset_gen_t gen;
-    ltree_rrset_a_t a;
-    ltree_rrset_aaaa_t aaaa;
-    ltree_rrset_soa_t soa;
-    ltree_rrset_cname_t cname;
-    ltree_rrset_dync_t dync;
-    ltree_rrset_ns_t ns;
-    ltree_rrset_ptr_t ptr;
-    ltree_rrset_mx_t mx;
-    ltree_rrset_srv_t srv;
-    ltree_rrset_naptr_t naptr;
-    ltree_rrset_txt_t txt;
-    ltree_rrset_rfc3597_t rfc3597;
+    struct ltree_rrset_gen gen;
+    struct ltree_rrset_a a;
+    struct ltree_rrset_aaaa aaaa;
+    struct ltree_rrset_soa soa;
+    struct ltree_rrset_cname cname;
+    struct ltree_rrset_dync dync;
+    struct ltree_rrset_ns ns;
+    struct ltree_rrset_ptr ptr;
+    struct ltree_rrset_mx mx;
+    struct ltree_rrset_srv srv;
+    struct ltree_rrset_naptr naptr;
+    struct ltree_rrset_txt txt;
+    struct ltree_rrset_rfc3597 rfc3597;
 };
 
 struct ltree_node;
-typedef struct ltree_node ltree_node_t;
 
-typedef struct ltree_hslot {
+struct ltree_hslot {
     size_t hash;
-    ltree_node_t* node;
-} ltree_hslot;
+    struct ltree_node* node;
+};
 
 struct ltree_node {
     size_t ccount_and_flags; // 62- or 30- bit count + 2 MSB flag bits
     uint8_t* label;
-    ltree_hslot* child_table;
-    ltree_rrset_t* rrsets;
+    struct ltree_hslot* child_table;
+    union ltree_rrset* rrsets;
 };
 
 // Bit-level hacks for ltree_node.ccount_and_flags:
@@ -321,27 +302,27 @@ struct ltree_node {
 #define LTN_SET_FLAG_GUSED(_n) (_n->ccount_and_flags |= (SZT1 << SZT_NXT_BIT))
 
 // This is a temporary per-zone structure used during zone construction
-typedef struct {
-    ltree_node_t* root; // root of this zone
+struct zone {
+    struct ltree_node* root; // root of this zone
     uint8_t* dname; // name of this zone
-    ltarena_t* arena; // storage for all node->label in "root" above
+    struct ltarena* arena; // storage for all node->label in "root" above
     unsigned serial; // serial copied from SOA for reporting successful loads
-} zone_t;
+};
 
 F_NONNULL
-zone_t* ltree_new_zone(const char* zname);
+struct zone* ltree_new_zone(const char* zname);
 F_NONNULL
-bool ltree_merge_zone(ltree_node_t* new_root_tree, ltarena_t* new_root_arena, zone_t* new_zone);
+bool ltree_merge_zone(struct ltree_node* new_root_tree, struct ltarena* new_root_arena, struct zone* new_zone);
 
 void* ltree_zones_reloader_thread(void* init_asvoid);
 F_WUNUSED F_NONNULL
-bool ltree_postproc_zone(zone_t* zone);
+bool ltree_postproc_zone(struct zone* zone);
 F_NONNULL
-void ltree_destroy_zone(zone_t* zone);
+void ltree_destroy_zone(struct zone* zone);
 
 // parameter structures for arguments to ltree_add_rec that otherwise
 // have confusingly-long parameter lists
-typedef struct lt_soa_args {
+struct lt_soa_args {
     const uint8_t* mname;
     const uint8_t* rname;
     unsigned ttl;
@@ -350,55 +331,55 @@ typedef struct lt_soa_args {
     const unsigned retry;
     const unsigned expire;
     unsigned ncache;
-} lt_soa_args;
+};
 
-typedef struct lt_srv_args {
+struct lt_srv_args {
     const uint8_t* rhs;
     const unsigned ttl;
     const unsigned priority;
     const unsigned weight;
     const unsigned port;
-} lt_srv_args;
+};
 
-typedef struct lt_naptr_args {
+struct lt_naptr_args {
     const uint8_t* rhs;
     const unsigned ttl;
     const unsigned order;
     const unsigned pref;
     const unsigned text_len;
     uint8_t* text;
-} lt_naptr_args;
+};
 
 // Adding data to the ltree (called from parser)
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_soa_args(const zone_t* zone, const uint8_t* dname, lt_soa_args args);
-#define ltree_add_rec_soa(_z,_d,...) ltree_add_rec_soa_args(_z,_d,(lt_soa_args){__VA_ARGS__})
+bool ltree_add_rec_soa_args(const struct zone* zone, const uint8_t* dname, struct lt_soa_args args);
+#define ltree_add_rec_soa(_z,_d,...) ltree_add_rec_soa_args(_z,_d,(struct lt_soa_args){__VA_ARGS__})
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_a(const zone_t* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, const bool ooz);
+bool ltree_add_rec_a(const struct zone* zone, const uint8_t* dname, uint32_t addr, unsigned ttl, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_aaaa(const zone_t* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const bool ooz);
+bool ltree_add_rec_aaaa(const struct zone* zone, const uint8_t* dname, const uint8_t* addr, unsigned ttl, const bool ooz);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dynaddr(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min);
+bool ltree_add_rec_dynaddr(const struct zone* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_cname(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+bool ltree_add_rec_cname(const struct zone* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_dync(const zone_t* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min);
+bool ltree_add_rec_dync(const struct zone* zone, const uint8_t* dname, const char* rhs, unsigned ttl, unsigned ttl_min);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_ptr(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+bool ltree_add_rec_ptr(const struct zone* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
+bool ltree_add_rec_ns(const struct zone* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned pref);
+bool ltree_add_rec_mx(const struct zone* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned pref);
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_srv_args(const zone_t* zone, const uint8_t* dname, lt_srv_args args);
-#define ltree_add_rec_srv(_z,_d,...) ltree_add_rec_srv_args(_z,_d,(lt_srv_args){__VA_ARGS__})
+bool ltree_add_rec_srv_args(const struct zone* zone, const uint8_t* dname, struct lt_srv_args args);
+#define ltree_add_rec_srv(_z,_d,...) ltree_add_rec_srv_args(_z,_d,(struct lt_srv_args){__VA_ARGS__})
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_naptr_args(const zone_t* zone, const uint8_t* dname, lt_naptr_args args);
-#define ltree_add_rec_naptr(_z,_d,...) ltree_add_rec_naptr_args(_z,_d,(lt_naptr_args){__VA_ARGS__})
+bool ltree_add_rec_naptr_args(const struct zone* zone, const uint8_t* dname, struct lt_naptr_args args);
+#define ltree_add_rec_naptr(_z,_d,...) ltree_add_rec_naptr_args(_z,_d,(struct lt_naptr_args){__VA_ARGS__})
 F_WUNUSED F_NONNULL
-bool ltree_add_rec_txt(const zone_t* zone, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl);
+bool ltree_add_rec_txt(const struct zone* zone, const uint8_t* dname, const unsigned text_len, uint8_t* text, unsigned ttl);
 F_WUNUSED F_NONNULLX(1, 2)
-bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd);
+bool ltree_add_rec_rfc3597(const struct zone* zone, const uint8_t* dname, const unsigned rrtype, unsigned ttl, const unsigned rdlen, uint8_t* rd);
 
 // Load zonefiles (called from main, invokes parser)
 void ltree_load_zones(void);
@@ -459,7 +440,7 @@ static size_t ltree_hash(const uint8_t* input)
 F_UNUSED F_WUNUSED F_NONNULL F_HOT
 static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack)
 {
-    gdnsd_assert(dname_status(dname) == DNAME_VALID);
+    gdnsd_assert(dname_get_status(dname) == DNAME_VALID);
 
     dname++; // skip overall len byte
     unsigned lcount = 0;
@@ -476,7 +457,7 @@ static unsigned dname_to_lstack(const uint8_t* dname, const uint8_t** lstack)
 // Used within ltree.c in many places, and also from dnspacket while traversing
 // the tree for runtime lookups
 F_NONNULL F_PURE F_UNUSED F_HOT
-static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8_t* child_label)
+static struct ltree_node* ltree_node_find_child(const struct ltree_node* node, const uint8_t* child_label)
 {
     if (node->child_table) {
         const size_t ccount = LTN_GET_CCOUNT(node);
@@ -486,7 +467,7 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
         size_t probe_dist = 0;
         do {
             const size_t slot = (kh + probe_dist) & mask;
-            const ltree_hslot* s = &node->child_table[slot];
+            const struct ltree_hslot* s = &node->child_table[slot];
             if (!s->node || ((slot - s->hash) & mask) < probe_dist)
                 break;
             if (s->hash == kh && likely(!label_cmp(s->node->label, child_label)))
@@ -498,6 +479,6 @@ static ltree_node_t* ltree_node_find_child(const ltree_node_t* node, const uint8
 }
 
 // ltree_root is RCU-managed and accessed by reader threads, defined in ltree.c
-GRCU_PUB_DECL(ltree_node_t*, root_tree);
+GRCU_PUB_DECL(struct ltree_node*, root_tree);
 
 #endif // GDNSD_LTREE_H

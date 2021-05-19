@@ -35,23 +35,23 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-typedef struct {
+struct static_res {
     const char* name;
     bool is_addr;
     union {
-        gdnsd_anysin_t addr;
+        struct anysin addr;
         uint8_t* dname;
     };
-} static_resource_t;
+};
 
-static static_resource_t* resources = NULL;
+static struct static_res* resources = NULL;
 static unsigned num_resources = 0;
 
 static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_data_t* addr, void* data)
 {
     unsigned* residx_ptr = data;
 
-    if (vscf_get_type(addr) != VSCF_SIMPLE_T)
+    if (!vscf_is_simple(addr))
         log_fatal("plugin_static: resource %s: must be an IP address or a domainname in string form", resname);
 
     unsigned res = *residx_ptr;
@@ -63,7 +63,7 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         // Address-parsing failed, treat as domainname for DYNC
         resources[res].is_addr = false;
         resources[res].dname = xmalloc(256);
-        dname_status_t status = vscf_simple_get_as_dname(addr, resources[res].dname);
+        enum dname_status status = vscf_simple_get_as_dname(addr, resources[res].dname);
         if (status == DNAME_INVALID)
             log_fatal("plugin_static: resource %s: must be an IPv4 address or a domainname in string form", resname);
         if (status == DNAME_PARTIAL)
@@ -81,7 +81,7 @@ static void plugin_static_load_config(vscf_data_t* config)
 {
     if (!config)
         log_fatal("static plugin requires a 'plugins' configuration stanza");
-    gdnsd_assert(vscf_get_type(config) == VSCF_HASH_T);
+    gdnsd_assert(vscf_is_hash(config));
 
     num_resources = vscf_hash_get_len(config);
     if (num_resources) {
@@ -116,7 +116,7 @@ static int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
     map_res_err("plugin_static: resource name required");
 }
 
-static gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
     if (resources[resnum].is_addr)
         gdnsd_result_add_anysin(result, &resources[resnum].addr);
@@ -128,24 +128,24 @@ static gdnsd_sttl_t plugin_static_resolve(unsigned resnum V_UNUSED, const client
 
 // plugin_static as a monitoring plugin:
 
-typedef struct {
+struct static_svc {
     const char* name;
     gdnsd_sttl_t static_sttl;
-} static_svc_t;
+};
 
-typedef struct {
-    static_svc_t* svc;
+struct static_mon {
+    struct static_svc* svc;
     unsigned idx;
-} static_mon_t;
+};
 
 static unsigned num_svcs = 0;
 static unsigned num_mons = 0;
-static static_svc_t** static_svcs = NULL;
-static static_mon_t** static_mons = NULL;
+static struct static_svc** static_svcs = NULL;
+static struct static_mon** static_mons = NULL;
 
 static void plugin_static_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval V_UNUSED, const unsigned timeout V_UNUSED)
 {
-    static_svc_t* this_svc = xmalloc(sizeof(*this_svc));
+    struct static_svc* this_svc = xmalloc(sizeof(*this_svc));
     static_svcs = xrealloc_n(static_svcs, num_svcs + 1, sizeof(*static_svcs));
     static_svcs[num_svcs] = this_svc;
     num_svcs++;
@@ -179,7 +179,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
 {
     gdnsd_assume(svc_name);
 
-    static_svc_t* this_svc = NULL;
+    struct static_svc* this_svc = NULL;
 
     for (unsigned i = 0; i < num_svcs; i++) {
         if (!strcmp(svc_name, static_svcs[i]->name)) {
@@ -189,7 +189,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     }
     gdnsd_assume(this_svc);
 
-    static_mon_t* this_mon = xmalloc(sizeof(*this_mon));
+    struct static_mon* this_mon = xmalloc(sizeof(*this_mon));
     static_mons = xrealloc_n(static_mons, num_mons + 1, sizeof(*static_mons));
     static_mons[num_mons] = this_mon;
     num_mons++;
@@ -197,7 +197,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     this_mon->idx = idx;
 }
 
-static void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_static_add_mon_addr(const char* desc V_UNUSED, const char* svc_name, const char* cname V_UNUSED, const struct anysin* addr V_UNUSED, const unsigned idx)
 {
     add_mon_any(svc_name, idx);
 }
@@ -213,7 +213,7 @@ static void plugin_static_init_monitors(struct ev_loop* mon_loop V_UNUSED)
         gdnsd_mon_sttl_updater(static_mons[i]->idx, static_mons[i]->svc->static_sttl);
 }
 
-plugin_t plugin_static_funcs = {
+struct plugin plugin_static_funcs = {
     .name = "static",
     .config_loaded = false,
     .used = false,

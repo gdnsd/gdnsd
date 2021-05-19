@@ -31,16 +31,16 @@
 F_NONNULL
 void gdmaps_test_init(const char* cfg_dir);
 F_NONNULL
-gdmaps_t* gdmaps_test_load(const char* cfg_data);
+struct gdmaps* gdmaps_test_load(const char* cfg_data);
 
 // A complete results-checker.
 F_NONNULL
-void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp);
+void gdmaps_test_lookup_check(const struct gdmaps* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp);
 
 // This variant only validates that we can complete the lookup operation
 //   without crashing, it doesn't care about the data in the results
 F_NONNULL
-void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt);
+void gdmaps_test_lookup_noop(const struct gdmaps* gdmaps, const char* map_name, const char* addr_txt);
 
 // boolean for whether a given file exists in the geoip config dir
 F_NONNULL

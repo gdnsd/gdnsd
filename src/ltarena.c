@@ -56,21 +56,21 @@ struct ltarena {
     size_t palloc;   // allocation size of "pools"
 };
 
-ltarena_t* lta_new(void)
+struct ltarena* lta_new(void)
 {
-    ltarena_t* rv = xcalloc(sizeof(*rv));
+    struct ltarena* rv = xcalloc(sizeof(*rv));
     rv->palloc = INIT_POOLS_ALLOC;
     rv->pools = xmalloc_n(INIT_POOLS_ALLOC, sizeof(*rv->pools));
     rv->pools[0] = xcalloc(POOL_SIZE);
     return rv;
 }
 
-void lta_close(ltarena_t* lta)
+void lta_close(struct ltarena* lta)
 {
     lta->pools = xrealloc_n(lta->pools, lta->pool + 1, sizeof(*lta->pools));
 }
 
-void lta_destroy(ltarena_t* lta)
+void lta_destroy(struct ltarena* lta)
 {
     size_t whichp = lta->pool + 1U;
     while (whichp--)
@@ -79,7 +79,7 @@ void lta_destroy(ltarena_t* lta)
     free(lta);
 }
 
-void lta_merge(ltarena_t* target, ltarena_t* source)
+void lta_merge(struct ltarena* target, struct ltarena* source)
 {
     uint8_t* target_last_pool = target->pools[target->pool];
     const size_t source_pool_count = source->pool + 1U;
@@ -98,7 +98,7 @@ void lta_merge(ltarena_t* target, ltarena_t* source)
     free(source);
 }
 
-uint8_t* lta_malloc(ltarena_t* lta, const size_t size)
+uint8_t* lta_malloc(struct ltarena* lta, const size_t size)
 {
     // Currently, all allocations obey this assertion.
     // Only labels + dnames are stored here

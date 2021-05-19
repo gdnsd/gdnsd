@@ -79,7 +79,7 @@ bool emc_read_exact(const int fd, const char* str)
             || !!memcmp(str, buf, len));
 }
 
-bool emc_write_command(const int fd, const extmon_cmd_t* cmd)
+bool emc_write_command(const int fd, const struct extmon_cmd* cmd)
 {
     unsigned alloc = 256;
     unsigned len = 0;
@@ -146,10 +146,10 @@ static bool nul_within_n_bytes(const uint8_t* instr, const unsigned len)
     return rv;
 }
 
-extmon_cmd_t* emc_read_command(const int fd)
+struct extmon_cmd* emc_read_command(const int fd)
 {
 
-    extmon_cmd_t* cmd = NULL;
+    struct extmon_cmd* cmd = NULL;
     uint8_t* var_part = NULL;
 
     {

@@ -36,14 +36,14 @@
 
 #include <tap.h>
 
-void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt)
+void gdmaps_test_lookup_noop(const struct gdmaps* gdmaps, const char* map_name, const char* addr_txt)
 {
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if (rv < 0)
         log_fatal("Map name '%s' not found in configuration", map_name);
     const unsigned map_idx = (unsigned)rv;
 
-    client_info_t cinfo;
+    struct client_info cinfo;
     cinfo.edns_client_mask = 128U;
     unsigned scope = 175U;
 
@@ -55,7 +55,7 @@ void gdmaps_test_lookup_noop(const gdmaps_t* gdmaps, const char* map_name, const
     ok(1, "gdmaps_lookup(%s, %s) did not crash", map_name, addr_txt);
 }
 
-void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp)
+void gdmaps_test_lookup_check(const struct gdmaps* gdmaps, const char* map_name, const char* addr_txt, const char* dclist_cmp, const unsigned scope_cmp)
 {
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if (rv < 0)
@@ -63,7 +63,7 @@ void gdmaps_test_lookup_check(const gdmaps_t* gdmaps, const char* map_name, cons
 
     const unsigned map_idx = (unsigned)rv;
 
-    client_info_t cinfo;
+    struct client_info cinfo;
     cinfo.edns_client_mask = 128U;
     unsigned scope = 175U;
 
@@ -91,7 +91,7 @@ void gdmaps_test_init(const char* cfg_dir)
     gdnsd_init_paths(cfg_dir, false);
 }
 
-gdmaps_t* gdmaps_test_load(const char* cfg_data)
+struct gdmaps* gdmaps_test_load(const char* cfg_data)
 {
     // Fake RCU init for single-threaded test, otherwise grcu_dereference deep
     // inside libgdmaps will fail an assertion about it.
@@ -104,7 +104,7 @@ gdmaps_t* gdmaps_test_load(const char* cfg_data)
         log_fatal("Geoip plugin config for 'maps' must be a hash");
     if (!vscf_hash_get_len(maps_cfg))
         log_fatal("Geoip plugin config for 'maps' must contain one or more maps");
-    gdmaps_t* rv = gdmaps_new(maps_cfg, NULL);
+    struct gdmaps* rv = gdmaps_new(maps_cfg, NULL);
     vscf_destroy(maps_cfg);
 
     gdmaps_load_databases(rv);

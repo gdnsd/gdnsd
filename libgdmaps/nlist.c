@@ -31,23 +31,9 @@
 
 #define NLIST_INITSIZE 64
 
-typedef struct {
-    uint8_t ipv6[16];
-    unsigned mask;
-    unsigned dclist;
-} net_t;
-
-struct nlist {
-    net_t* nets;
-    char* map_name;
-    unsigned alloc;
-    unsigned count;
-    bool normalized;
-};
-
-nlist_t* nlist_new(const char* map_name, const bool pre_norm)
+struct nlist* nlist_new(const char* map_name, const bool pre_norm)
 {
-    nlist_t* nl = xmalloc(sizeof(*nl));
+    struct nlist* nl = xmalloc(sizeof(*nl));
     nl->nets = xmalloc_n(NLIST_INITSIZE, sizeof(*nl->nets));
     nl->map_name = xstrdup(map_name);
     nl->alloc = NLIST_INITSIZE;
@@ -58,9 +44,9 @@ nlist_t* nlist_new(const char* map_name, const bool pre_norm)
 
 // only used for normalization assertions in debug builds...
 F_UNUSED F_NONNULL
-static nlist_t* nlist_clone(const nlist_t* nl)
+static struct nlist* nlist_clone(const struct nlist* nl)
 {
-    nlist_t* nlc = xmalloc(sizeof(*nlc));
+    struct nlist* nlc = xmalloc(sizeof(*nlc));
     nlc->map_name = xstrdup(nl->map_name);
     nlc->alloc = nl->alloc;
     nlc->count = nl->count;
@@ -70,14 +56,14 @@ static nlist_t* nlist_clone(const nlist_t* nl)
     return nlc;
 }
 
-void nlist_debug_dump(const nlist_t* nl)
+void nlist_debug_dump(const struct nlist* nl)
 {
     log_debug(" --- nlist debug on %s --- ", nl->map_name);
     for (unsigned i = 0; i < nl->count; i++)
         log_debug("   %s/%u -> %u", logf_ipv6(nl->nets[i].ipv6), nl->nets[i].mask, nl->nets[i].dclist);
 }
 
-void nlist_destroy(nlist_t* nl)
+void nlist_destroy(struct nlist* nl)
 {
     free(nl->map_name);
     free(nl->nets);
@@ -138,13 +124,13 @@ static void clear_mask_bits(const char* map_name, uint8_t* ipv6, const unsigned 
         log_warn("plugin_geoip: map '%s': input network %s/%u had illegal bits beyond mask, which were cleared", map_name, logf_ipv6(ipv6), mask);
 }
 
-// Sort an array of net_t.  Sort prefers
+// Sort an array of struct net.  Sort prefers
 //   lowest network number, smallest mask.
 F_NONNULL F_PURE
 static int net_sorter(const void* a_void, const void* b_void)
 {
-    const net_t* a = a_void;
-    const net_t* b = b_void;
+    const struct net* a = a_void;
+    const struct net* b = b_void;
     int rv = memcmp(a->ipv6, b->ipv6, 16);
     if (!rv)
         rv = (int)a->mask - (int)b->mask;
@@ -165,7 +151,7 @@ static bool masked_net_eq(const uint8_t* v6a, const uint8_t* v6b, const unsigned
 }
 
 F_NONNULL F_PURE
-static bool mergeable_nets(const net_t* na, const net_t* nb)
+static bool mergeable_nets(const struct net* na, const struct net* nb)
 {
     bool rv = false;
     if (na->dclist == nb->dclist) {
@@ -177,13 +163,13 @@ static bool mergeable_nets(const net_t* na, const net_t* nb)
     return rv;
 }
 
-void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist)
+void nlist_append(struct nlist* nl, const uint8_t* ipv6, const unsigned mask, const unsigned dclist)
 {
     if (unlikely(nl->count == nl->alloc)) {
         nl->alloc <<= 1U;
         nl->nets = xrealloc_n(nl->nets, nl->alloc, sizeof(*nl->nets));
     }
-    net_t* this_net = &nl->nets[nl->count++];
+    struct net* this_net = &nl->nets[nl->count++];
     memcpy(this_net->ipv6, ipv6, 16U);
     this_net->mask = mask;
     this_net->dclist = dclist;
@@ -200,8 +186,8 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
         assert_clear_mask_bits(this_net->ipv6, mask);
         unsigned idx = nl->count;
         while (--idx > 0) {
-            const net_t* nb = &nl->nets[idx];
-            net_t* na = &nl->nets[idx - 1];
+            const struct net* nb = &nl->nets[idx];
+            struct net* na = &nl->nets[idx - 1];
             if (mergeable_nets(na, nb)) {
                 if (na->mask == nb->mask)
                     na->mask--;
@@ -218,7 +204,7 @@ void nlist_append(nlist_t* nl, const uint8_t* ipv6, const unsigned mask, const u
 }
 
 F_NONNULL F_PURE
-static bool net_eq(const net_t* na, const net_t* nb)
+static bool net_eq(const struct net* na, const struct net* nb)
 {
     return na->mask == nb->mask && !memcmp(na->ipv6, nb->ipv6, 16);
 }
@@ -226,7 +212,7 @@ static bool net_eq(const net_t* na, const net_t* nb)
 // do a single pass of forward-normalization
 //   on a sorted nlist, then sort the result.
 F_NONNULL
-static bool nlist_normalize_1pass(nlist_t* nl)
+static bool nlist_normalize_1pass(struct nlist* nl)
 {
     gdnsd_assume(nl->count);
 
@@ -236,10 +222,10 @@ static bool nlist_normalize_1pass(nlist_t* nl)
     unsigned newcount = nl->count;
     unsigned i = 0;
     while (i < oldcount) {
-        net_t* na = &nl->nets[i];
+        struct net* na = &nl->nets[i];
         unsigned j = i + 1;
         while (j < oldcount) {
-            net_t* nb = &nl->nets[j];
+            struct net* nb = &nl->nets[j];
             if (net_eq(na, nb)) { // net+mask match, dclist may or may not match
                 if (na->dclist != nb->dclist)
                     log_warn("plugin_geoip: map '%s' nets: Exact duplicate networks with conflicting dclists at %s/%u", nl->map_name, logf_ipv6(na->ipv6), na->mask);
@@ -273,7 +259,7 @@ static bool nlist_normalize_1pass(nlist_t* nl)
 }
 
 F_NONNULL
-static void nlist_normalize(nlist_t* nl, const bool post_merge)
+static void nlist_normalize(struct nlist* nl, const bool post_merge)
 {
     if (nl->count) {
         // initial sort, unless already sorted by the merge process
@@ -296,12 +282,12 @@ static void nlist_normalize(nlist_t* nl, const bool post_merge)
 }
 
 F_NONNULL
-void nlist_finish(nlist_t* nl)
+void nlist_finish(struct nlist* nl)
 {
     if (nl->normalized) {
 #ifndef NDEBUG
         // assert normalization in debug builds via clone->normalize->compare
-        nlist_t* nlc = nlist_clone(nl);
+        struct nlist* nlc = nlist_clone(nl);
         nlist_normalize(nlc, false);
         gdnsd_assume(nlc->count == nl->count);
         gdnsd_assume(!memcmp(nlc->nets, nl->nets, sizeof(*nlc->nets) * nlc->count));
@@ -313,7 +299,7 @@ void nlist_finish(nlist_t* nl)
 }
 
 F_NONNULL F_PURE
-static bool net_subnet_of(const net_t* sub, const net_t* super)
+static bool net_subnet_of(const struct net* sub, const struct net* super)
 {
     gdnsd_assume(sub->mask < 129);
     gdnsd_assume(super->mask < 129);
@@ -331,17 +317,17 @@ static bool net_subnet_of(const net_t* sub, const net_t* super)
 }
 
 F_NONNULL F_RETNN
-static nlist_t* nlist_merge(const nlist_t* nl_a, const nlist_t* nl_b)
+static struct nlist* nlist_merge(const struct nlist* nl_a, const struct nlist* nl_b)
 {
     gdnsd_assume(nl_a->normalized);
     gdnsd_assume(nl_b->normalized);
 
-    nlist_t* merged = nlist_new(nl_a->map_name, false);
+    struct nlist* merged = nlist_new(nl_a->map_name, false);
 
-    const net_t* n_a = &nl_a->nets[0];
-    const net_t* n_b = &nl_b->nets[0];
-    const net_t* end_a = &nl_a->nets[nl_a->count];
-    const net_t* end_b = &nl_b->nets[nl_b->count];
+    const struct net* n_a = &nl_a->nets[0];
+    const struct net* n_b = &nl_b->nets[0];
+    const struct net* end_a = &nl_a->nets[nl_a->count];
+    const struct net* end_b = &nl_b->nets[nl_b->count];
 
     while (n_a < end_a && n_b < end_b) {
         if (net_sorter(n_a, n_b) < 0) {
@@ -376,14 +362,14 @@ static nlist_t* nlist_merge(const nlist_t* nl_a, const nlist_t* nl_b)
 }
 
 F_NONNULL
-static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt, net_t tree_net);
+static unsigned nxt_rec(const struct net** nl, const struct net* const nl_end, struct ntree* nt, struct net tree_net);
 
 F_NONNULL
-static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* nt, net_t tree_net, const unsigned nt_idx, const bool direction)
+static void nxt_rec_dir(const struct net** nlp, const struct net* const nl_end, struct ntree* nt, struct net tree_net, const unsigned nt_idx, const bool direction)
 {
     gdnsd_assume(tree_net.mask < 129 && tree_net.mask > 0);
 
-    const net_t* nl = *nlp;
+    const struct net* nl = *nlp;
     unsigned cnode;
 
     // If items remain in the list, and the next list item
@@ -396,7 +382,7 @@ static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* n
             // need to pre-check for a deeper subnet next in the list.
             // We use the consumed entry as the new default and keep recursing
             //   if deeper subnets exist.  If they don't, we assign and end recursion...
-            const net_t* nl_next = *nlp;
+            const struct net* nl_next = *nlp;
             if (nl_next < nl_end && net_subnet_of(nl_next, nl)) {
                 tree_net.dclist = nl->dclist;
                 cnode = nxt_rec(nlp, nl_end, nt, tree_net);
@@ -424,7 +410,7 @@ static void nxt_rec_dir(const net_t** nlp, const net_t* const nl_end, ntree_t* n
 }
 
 F_NONNULL
-static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt, net_t tree_net)
+static unsigned nxt_rec(const struct net** nl, const struct net* const nl_end, struct ntree* nt, struct net tree_net)
 {
     gdnsd_assume(tree_net.mask < 128);
     tree_net.mask++; // now mask for zero/one stubs
@@ -445,14 +431,14 @@ static unsigned nxt_rec(const net_t** nl, const net_t* const nl_end, ntree_t* nt
     return rv;
 }
 
-ntree_t* nlist_xlate_tree(const nlist_t* nl)
+struct ntree* nlist_xlate_tree(const struct nlist* nl)
 {
     gdnsd_assume(nl->normalized);
 
-    ntree_t* nt = ntree_new();
-    const net_t* nlnet = &nl->nets[0];
-    const net_t* const nlnet_end = &nl->nets[nl->count];
-    net_t tree_net = {
+    struct ntree* nt = ntree_new();
+    const struct net* nlnet = &nl->nets[0];
+    const struct net* const nlnet_end = &nl->nets[nl->count];
+    struct net tree_net = {
         .ipv6 = { 0 },
         .mask = 0,
         .dclist = 0
@@ -483,10 +469,10 @@ ntree_t* nlist_xlate_tree(const nlist_t* nl)
     return nt;
 }
 
-ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b)
+struct ntree* nlist_merge2_tree(const struct nlist* nl_a, const struct nlist* nl_b)
 {
-    nlist_t* merged = nlist_merge(nl_a, nl_b);
-    ntree_t* rv = nlist_xlate_tree(merged);
+    struct nlist* merged = nlist_merge(nl_a, nl_b);
+    struct ntree* rv = nlist_xlate_tree(merged);
     nlist_destroy(merged);
     return rv;
 }

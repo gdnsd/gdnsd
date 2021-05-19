@@ -72,18 +72,15 @@ static char* make_zone_name(const char* zf_name)
 
 // Threaded parallel processing of zonefiles:
 
-struct zf_list_t;
-typedef struct zf_list_t zf_list_t;
-
-struct zf_list_t {
+struct zf_list {
     char* full_fn;   // worker input
     const char* fn;  // (aliases into above, needs no free)
-    zone_t* zone;    // worker output
-    zf_list_t* next; // next in list
+    struct zone* zone;    // worker output
+    struct zf_list* next; // next in list
 };
 
 F_NONNULL
-static void zf_list_early_destroy(zf_list_t* zfl)
+static void zf_list_early_destroy(struct zf_list* zfl)
 {
     if (zfl->next)
         zf_list_early_destroy(zfl->next);
@@ -92,18 +89,18 @@ static void zf_list_early_destroy(zf_list_t* zfl)
     free(zfl);
 }
 
-typedef struct zf_threads_t {
+struct zf_threads {
     size_t threads;
     size_t next_thread;
     size_t total_count;
-    zf_list_t** lists;
+    struct zf_list** lists;
     pthread_t* threadids;
-} zf_threads_t;
+};
 
-static zf_threads_t* zf_threads_new(const size_t threads)
+static struct zf_threads* zf_threads_new(const size_t threads)
 {
     gdnsd_assume(threads);
-    zf_threads_t* zft = xcalloc(sizeof(*zft));
+    struct zf_threads* zft = xcalloc(sizeof(*zft));
     zft->threads = threads;
     zft->threadids = xcalloc_n(threads, sizeof(*zft->threadids));
     zft->lists = xcalloc_n(threads, sizeof(*zft->lists));
@@ -111,13 +108,13 @@ static zf_threads_t* zf_threads_new(const size_t threads)
 }
 
 F_NONNULL
-static void zf_threads_add_zone(zf_threads_t* zft, char* full_fn, const char* fn)
+static void zf_threads_add_zone(struct zf_threads* zft, char* full_fn, const char* fn)
 {
-    zf_list_t* zfl = xcalloc(sizeof(*zfl));
+    struct zf_list* zfl = xcalloc(sizeof(*zfl));
     zfl->full_fn = full_fn;
     zfl->fn = fn;
     gdnsd_assume(zft->next_thread < zft->threads);
-    zf_list_t** slot = &zft->lists[zft->next_thread];
+    struct zf_list** slot = &zft->lists[zft->next_thread];
     while (*slot)
         slot = &(*slot)->next;
     *slot = zfl;
@@ -129,7 +126,7 @@ static void zf_threads_add_zone(zf_threads_t* zft, char* full_fn, const char* fn
 // If something fails while adding zones, but before invoking load_zones below
 // (e.g. readdir() failure), call this to clean up the structure built so far.
 F_NONNULL
-static void zf_threads_early_destroy(zf_threads_t* zft)
+static void zf_threads_early_destroy(struct zf_threads* zft)
 {
     for (size_t i = 0; i < zft->threads; i++)
         if (zft->lists[i])
@@ -143,12 +140,12 @@ F_NONNULL
 static void* zones_worker(void* list_asvoid)
 {
     gdnsd_thread_setname("rfc1035-worker");
-    zf_list_t* zfl = list_asvoid;
+    struct zf_list* zfl = list_asvoid;
     while (zfl) {
         char* name = make_zone_name(zfl->fn);
         if (!name)
             return (void*)1;
-        zone_t* z = ltree_new_zone(name);
+        struct zone* z = ltree_new_zone(name);
         free(name);
         if (!z)
             return (void*)1;
@@ -162,7 +159,7 @@ static void* zones_worker(void* list_asvoid)
 }
 
 F_NONNULL
-static bool harvest_zone_worker(pthread_t threadid, zf_list_t* zfl, ltree_node_t* new_root_tree, ltarena_t* new_root_arena, bool failed)
+static bool harvest_zone_worker(pthread_t threadid, struct zf_list* zfl, struct ltree_node* new_root_tree, struct ltarena* new_root_arena, bool failed)
 {
     void* raw_exit_status = (void*)1;
     int pthread_err = pthread_join(threadid, &raw_exit_status);
@@ -180,7 +177,7 @@ static bool harvest_zone_worker(pthread_t threadid, zf_list_t* zfl, ltree_node_t
         if (failed && zfl->zone)
             ltree_destroy_zone(zfl->zone);
         zfl->zone = NULL;
-        zf_list_t* next = zfl->next;
+        struct zf_list* next = zfl->next;
         free(zfl);
         zfl = next;
     } while (zfl);
@@ -192,10 +189,10 @@ static bool harvest_zone_worker(pthread_t threadid, zf_list_t* zfl, ltree_node_t
 // collects their output zone data, and merges it into the global root ltree
 // that's being constructed for this global load/reload operation.  It also
 // logs the final success count (if successful!) and always deallocates all
-// zf_threads_t/zf_list_t resources by the time it returns, even if things fail
+// struct zf_threads/struct zf_list resources by the time it returns, even if things fail
 // partially or wholly.
 F_NONNULL
-static bool zf_threads_load_zones(zf_threads_t* zft, ltree_node_t* new_root_tree, ltarena_t* new_root_arena)
+static bool zf_threads_load_zones(struct zf_threads* zft, struct ltree_node* new_root_tree, struct ltarena* new_root_arena)
 {
     sigset_t sigmask_all;
     sigfillset(&sigmask_all);
@@ -239,7 +236,7 @@ static bool zf_threads_load_zones(zf_threads_t* zft, ltree_node_t* new_root_tree
 /*** Public interfaces ***/
 /*************************/
 
-bool zsrc_rfc1035_load_zones(ltree_node_t* new_root_tree, ltarena_t* new_root_arena)
+bool zsrc_rfc1035_load_zones(struct ltree_node* new_root_tree, struct ltarena* new_root_arena)
 {
     gdnsd_assume(rfc1035_dir);
 
@@ -253,7 +250,7 @@ bool zsrc_rfc1035_load_zones(ltree_node_t* new_root_tree, ltarena_t* new_root_ar
         return true;
     }
 
-    zf_threads_t* zft = zf_threads_new(gcfg->zones_rfc1035_threads);
+    struct zf_threads* zft = zf_threads_new(gcfg->zones_rfc1035_threads);
 
     bool failed = false;
     const struct dirent* result = NULL;

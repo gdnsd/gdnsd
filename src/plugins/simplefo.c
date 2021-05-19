@@ -34,35 +34,35 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-typedef enum {
+enum res_which {
     A_PRI = 0,
     A_SEC = 1
-} res_which_t;
+};
 
-typedef enum {
+enum as_af {
     A_AUTO = 0,
     A_IPv4 = 1,
     A_IPv6 = 2,
-} as_af_t;
+};
 
 static const char* which_str[2] = {
     "primary",
     "secondary"
 };
 
-typedef struct {
-    gdnsd_anysin_t addrs[2];
+struct addrstate {
+    struct anysin addrs[2];
     unsigned num_svcs;
     unsigned* indices[2];
-} addrstate_t;
+};
 
-typedef struct {
+struct res {
     const char* name;
-    addrstate_t* addrs_v4;
-    addrstate_t* addrs_v6;
-} res_t;
+    struct addrstate* addrs_v4;
+    struct addrstate* addrs_v6;
+};
 
-static res_t* resources = NULL;
+static struct res* resources = NULL;
 static unsigned num_resources = 0;
 
 static const char DEFAULT_SVCNAME[] = "up";
@@ -79,7 +79,7 @@ static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d 
 }
 
 F_NONNULL
-static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname, const char* stanza, vscf_data_t* cfg)
+static enum as_af config_addrs(struct addrstate* as, enum as_af as_af, const char* resname, const char* stanza, vscf_data_t* cfg)
 {
     unsigned num_svcs = 0;
     const char** svc_names = NULL;
@@ -103,11 +103,11 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
 
     as->num_svcs = num_svcs;
 
-    const res_which_t both[2] = { A_PRI, A_SEC };
+    const enum res_which both[2] = { A_PRI, A_SEC };
     for (unsigned i = 0; i < 2; i++) {
-        res_which_t which = both[i];
+        enum res_which which = both[i];
         vscf_data_t* addrcfg = vscf_hash_get_data_bystringkey(cfg, which_str[which], true);
-        if (!addrcfg || VSCF_SIMPLE_T != vscf_get_type(addrcfg))
+        if (!addrcfg || !vscf_is_simple(addrcfg))
             log_fatal("plugin_simplefo: resource %s (%s): '%s' must be defined as an IP address string", resname, stanza, which_str[which]);
         const char* addr_txt = vscf_simple_get_data(addrcfg);
         int addr_err = gdnsd_anysin_getaddrinfo(addr_txt, NULL, &as->addrs[which]);
@@ -145,10 +145,10 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     unsigned* residx_ptr = data;
     unsigned rnum = *residx_ptr;
     (*residx_ptr)++;
-    res_t* res = &resources[rnum];
+    struct res* res = &resources[rnum];
     res->name = xstrdup(resname);
 
-    if (vscf_get_type(opts) != VSCF_HASH_T)
+    if (!vscf_is_hash(opts))
         log_fatal("plugin_simplefo: resource %s: value must be a hash", resname);
 
     vscf_hash_bequeath_all(opts, "service_types", true, false);
@@ -156,8 +156,8 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
     vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
     vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
     if (!addrs_v4_cfg && !addrs_v6_cfg) {
-        addrstate_t* as = xmalloc(sizeof(*as));
-        as_af_t which = config_addrs(as, A_AUTO, resname, "direct", opts);
+        struct addrstate* as = xmalloc(sizeof(*as));
+        enum as_af which = config_addrs(as, A_AUTO, resname, "direct", opts);
         if (which == A_IPv4) {
             res->addrs_v4 = as;
         } else {
@@ -168,14 +168,14 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
         if (addrs_v4_cfg) {
             if (!vscf_is_hash(addrs_v4_cfg))
                 log_fatal("plugin_simplefo: resource %s: The value of 'addrs_v4', if defined, must be a hash", resname);
-            addrstate_t* as = xmalloc(sizeof(*as));
+            struct addrstate* as = xmalloc(sizeof(*as));
             res->addrs_v4 = as;
             config_addrs(as, A_IPv4, resname, "addrs_v4", addrs_v4_cfg);
         }
         if (addrs_v6_cfg) {
             if (!vscf_is_hash(addrs_v6_cfg))
                 log_fatal("plugin_simplefo: resource %s: The value of 'addrs_v6', if defined, must be a hash", resname);
-            addrstate_t* as = xmalloc(sizeof(*as));
+            struct addrstate* as = xmalloc(sizeof(*as));
             res->addrs_v6 = as;
             config_addrs(as, A_IPv6, resname, "addrs_v6", addrs_v6_cfg);
         }
@@ -194,7 +194,7 @@ static void plugin_simplefo_load_config(vscf_data_t* config)
     if (!config)
         log_fatal("simplefo plugin requires a 'plugins' configuration stanza");
 
-    gdnsd_assert(vscf_get_type(config) == VSCF_HASH_T);
+    gdnsd_assert(vscf_is_hash(config));
 
     num_resources = vscf_hash_get_len(config);
 
@@ -233,11 +233,11 @@ static int plugin_simplefo_map_res(const char* resname, const uint8_t* zone_name
 // down down s        pri   yes
 // ----------------------------
 F_NONNULL
-static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const addrstate_t* as, dyn_result_t* result)
+static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const struct addrstate* as, struct dyn_result* result)
 {
     const gdnsd_sttl_t p_sttl = gdnsd_sttl_min(sttl_tbl, as->indices[A_PRI], as->num_svcs);
 
-    res_which_t which = A_PRI;
+    enum res_which which = A_PRI;
 
     gdnsd_sttl_t sttl_out;
     if (p_sttl & GDNSD_STTL_DOWN) {
@@ -263,9 +263,9 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const addrstate_t
     return sttl_out;
 }
 
-static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const client_info_t* cinfo V_UNUSED, dyn_result_t* result)
+static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
-    res_t* res = &resources[resnum];
+    struct res* res = &resources[resnum];
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 
@@ -286,7 +286,7 @@ static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const client_info_t
     return rv;
 }
 
-plugin_t plugin_simplefo_funcs = {
+struct plugin plugin_simplefo_funcs = {
     .name = "simplefo",
     .config_loaded = false,
     .used = false,

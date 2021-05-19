@@ -37,7 +37,7 @@
 #include <sys/file.h>
 #include <sys/time.h>
 
-struct csc_s_ {
+struct csc {
     int fd;
     pid_t server_pid;
     char* path; // resolved absolute unix socket path, or tcp address string
@@ -47,10 +47,10 @@ struct csc_s_ {
     uint8_t svers_patch;
 };
 
-static bool csc_get_status(csc_t* csc)
+static bool csc_get_status(struct csc* csc)
 {
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_INFO;
     req.v0 = PACKAGE_V_MAJOR;
@@ -86,11 +86,11 @@ static void set_timeout(const int fd, const unsigned timeout, const char* pfx)
 }
 
 F_NONNULL
-static bool tcp_sock_connect(csc_t* csc, const char* tcp_addr, const unsigned timeout)
+static bool tcp_sock_connect(struct csc* csc, const char* tcp_addr, const unsigned timeout)
 {
     csc->path = xstrdup(tcp_addr);
 
-    gdnsd_anysin_t addr;
+    struct anysin addr;
     memset(&addr, 0, sizeof(addr));
     const int addr_err = gdnsd_anysin_fromstr(csc->path, 0, &addr);
     if (addr_err)
@@ -108,7 +108,7 @@ static bool tcp_sock_connect(csc_t* csc, const char* tcp_addr, const unsigned ti
 }
 
 F_NONNULL
-static bool unix_sock_connect(csc_t* csc, const char* pfx, const unsigned timeout)
+static bool unix_sock_connect(struct csc* csc, const char* pfx, const unsigned timeout)
 {
     csc->path = gdnsd_resolve_path_run("control.sock", NULL);
 
@@ -122,7 +122,7 @@ static bool unix_sock_connect(csc_t* csc, const char* pfx, const unsigned timeou
     return !!connect(csc->fd, (struct sockaddr*)&addr, addr_len);
 }
 
-csc_t* csc_new(const unsigned timeout, const char* pfx, const char* tcp_addr)
+struct csc* csc_new(const unsigned timeout, const char* pfx, const char* tcp_addr)
 {
     if (tcp_addr)
         gdnsd_assume(!pfx); // pfx is for inter-daemon, which does not use TCP
@@ -131,7 +131,7 @@ csc_t* csc_new(const unsigned timeout, const char* pfx, const char* tcp_addr)
     if (!pfx)
         pfx = "";
 
-    csc_t* csc = xcalloc(sizeof(*csc));
+    struct csc* csc = xcalloc(sizeof(*csc));
 
     const bool conn_rv = tcp_addr
                          ? tcp_sock_connect(csc, tcp_addr, timeout)
@@ -155,17 +155,17 @@ csc_t* csc_new(const unsigned timeout, const char* pfx, const char* tcp_addr)
     return csc;
 }
 
-pid_t csc_get_server_pid(const csc_t* csc)
+pid_t csc_get_server_pid(const struct csc* csc)
 {
     return csc->server_pid;
 }
 
-const char* csc_get_server_version(const csc_t* csc)
+const char* csc_get_server_version(const struct csc* csc)
 {
     return csc->server_vers;
 }
 
-bool csc_server_version_gte(const csc_t* csc, const uint8_t major, const uint8_t minor, const uint8_t patch)
+bool csc_server_version_gte(const struct csc* csc, const uint8_t major, const uint8_t minor, const uint8_t patch)
 {
     return (
                csc->svers_major > major
@@ -193,7 +193,7 @@ static size_t get_control_fds(struct msghdr* msg, int* fds, const size_t fds_rec
 }
 
 F_NONNULL
-size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds)
+size_t csc_txn_getfds(const struct csc* csc, const union csbuf* req, union csbuf* resp, int** resp_fds)
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8)
@@ -267,7 +267,7 @@ size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int**
     return fds_recvd;
 }
 
-csc_txn_rv_t csc_txn(const csc_t* csc, const csbuf_t* req, csbuf_t* resp)
+enum csc_txn_rv csc_txn(const struct csc* csc, const union csbuf* req, union csbuf* resp)
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8) {
@@ -292,9 +292,9 @@ csc_txn_rv_t csc_txn(const csc_t* csc, const csbuf_t* req, csbuf_t* resp)
     return CSC_TXN_FAIL_HARD;
 }
 
-csc_txn_rv_t csc_txn_getdata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, char** resp_data)
+enum csc_txn_rv csc_txn_getdata(const struct csc* csc, const union csbuf* req, union csbuf* resp, char** resp_data)
 {
-    csc_txn_rv_t rv = csc_txn(csc, req, resp);
+    enum csc_txn_rv rv = csc_txn(csc, req, resp);
     if (rv != CSC_TXN_OK)
         return rv;
 
@@ -321,7 +321,7 @@ csc_txn_rv_t csc_txn_getdata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp
     return CSC_TXN_OK;
 }
 
-csc_txn_rv_t csc_txn_senddata(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, char* req_data)
+enum csc_txn_rv csc_txn_senddata(const struct csc* csc, const union csbuf* req, union csbuf* resp, char* req_data)
 {
     gdnsd_assume(req->d);
 
@@ -362,7 +362,7 @@ csc_txn_rv_t csc_txn_senddata(const csc_t* csc, const csbuf_t* req, csbuf_t* res
     return CSC_TXN_FAIL_HARD;
 }
 
-bool csc_wait_stopping_server(const csc_t* csc)
+bool csc_wait_stopping_server(const struct csc* csc)
 {
     // Wait for server to close our csock fd as it exits
     char x;
@@ -372,16 +372,16 @@ bool csc_wait_stopping_server(const csc_t* csc)
     return true;
 }
 
-csc_txn_rv_t csc_stop_server(const csc_t* csc)
+enum csc_txn_rv csc_stop_server(const struct csc* csc)
 {
-    csbuf_t req;
-    csbuf_t resp;
+    union csbuf req;
+    union csbuf resp;
     memset(&req, 0, sizeof(req));
     req.key = REQ_STOP;
     return csc_txn(csc, &req, &resp);
 }
 
-size_t csc_get_stats_handoff(const csc_t* csc, uint64_t** raw_u64)
+size_t csc_get_stats_handoff(const struct csc* csc, uint64_t** raw_u64)
 {
     // During some release >= 3.1.0, we can remove 2.99.x-beta compat here by
     // assuming all daemons with listening control sockets have a major >= 3
@@ -389,7 +389,7 @@ size_t csc_get_stats_handoff(const csc_t* csc, uint64_t** raw_u64)
     if (!csc_server_version_gte(csc, 2, 99, 200))
         return 0;
 
-    csbuf_t handoff;
+    union csbuf handoff;
     memset(&handoff, 0, sizeof(handoff));
 
     ssize_t pktlen = recv(csc->fd, handoff.raw, 8, 0);
@@ -431,7 +431,7 @@ size_t csc_get_stats_handoff(const csc_t* csc, uint64_t** raw_u64)
     return done;
 }
 
-void csc_delete(csc_t* csc)
+void csc_delete(struct csc* csc)
 {
     close(csc->fd);
     free(csc->path);

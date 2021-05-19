@@ -39,6 +39,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ## Revamping internals
 
+* Most uses of `typedef` removed from the codebase, other than a few cases with reasonable justification.
 * All uses of `volatile` (cross-thread stats sharing + signal handlers) have been replaced by the appropriate use of equivalent C11 atomics.
 * Many internal efficiency improvements
 

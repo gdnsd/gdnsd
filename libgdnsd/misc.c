@@ -66,15 +66,13 @@ char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs)
 // this isn't meant to be high-speed or elegant, it's just
 //   saving a lot of mundane grunt-code during configuration stuff
 
-typedef struct {
-    const char* ptr;
-    unsigned len;
-} str_with_len_t;
-
 char* gdnsd_str_combine_n(const unsigned count, ...)
 {
     gdnsd_assume(count <= 16);
-    str_with_len_t strs[16];
+    struct {
+        const char* ptr;
+        unsigned len;
+    } strs[16];
     unsigned oal = 1; // for terminating NUL
 
     va_list ap;

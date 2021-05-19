@@ -39,7 +39,7 @@
 static const char proxy_v2sig[12] = "\x0D\x0A\x0D\x0A\x00\x0D\x0A\x51\x55\x49\x54\x0A";
 
 F_NONNULL
-static size_t parse_proxy_v1(char* v1, const size_t dlen, gdnsd_anysin_t* sa)
+static size_t parse_proxy_v1(char* v1, const size_t dlen, struct anysin* sa)
 {
     gdnsd_assume(dlen >= 8U);
     gdnsd_assume(!memcmp(v1, "PROXY ", 6));
@@ -89,11 +89,11 @@ static size_t parse_proxy_v1(char* v1, const size_t dlen, gdnsd_anysin_t* sa)
     gdnsd_assume(end >= v1);
     const size_t skip_read = (size_t)(end + 2 - v1); // skip header through CRLF
     gdnsd_assume(skip_read);
-    gdnsd_assume(skip_read <= sizeof(proxy_hdr_t));
+    gdnsd_assume(skip_read <= sizeof(union proxy_hdr));
     return skip_read;
 }
 
-size_t proxy_parse(gdnsd_anysin_t* sa, proxy_hdr_t* hdrp, size_t dlen)
+size_t proxy_parse(struct anysin* sa, union proxy_hdr* hdrp, size_t dlen)
 {
     size_t skip_read = 0;
 
@@ -108,7 +108,7 @@ size_t proxy_parse(gdnsd_anysin_t* sa, proxy_hdr_t* hdrp, size_t dlen)
 
         const uint8_t cmd = hdrp->v2.ver_cmd & 0xF;
         if (likely(cmd == 0x01)) { // cmd: PROXY
-            gdnsd_anysin_t* a = sa;
+            struct anysin* a = sa;
             memset(a, 0, sizeof(*a));
             if (hdrp->v2.fam == 0x11 && skip_read >= (16U + 12U)) { // TCPv4
                 a->sin4.sin_family = AF_INET;

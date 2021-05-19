@@ -29,6 +29,6 @@
 #include <stdbool.h>
 
 F_NONNULLX(1, 2, 3)
-nlist_t* gdgeoip2_make_list(const char* pathname, const char* map_name, dclists_t* dclists, const dcmap_t* dcmap, const bool city_auto_mode);
+struct nlist* gdgeoip2_make_list(const char* pathname, const char* map_name, struct dclists* dclists, const struct dcmap* dcmap, const bool city_auto_mode);
 
 #endif // GDGEOIP2_H

@@ -57,7 +57,7 @@
 /*** Wire formats ***/
 
 /* DNS Header */
-typedef struct {
+struct wire_dns_hdr {
     uint16_t id;
     uint8_t flags1;
     uint8_t flags2;
@@ -65,7 +65,7 @@ typedef struct {
     uint16_t ancount;
     uint16_t nscount;
     uint16_t arcount;
-} wire_dns_header_t;
+};
 
 /* macros to pull data from wire_dns_header */
 #define DNSH_GET_ID(_h)      (ntohs((_h)->id))

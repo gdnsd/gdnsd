@@ -22,19 +22,19 @@
 
 #include "plugapi.h"
 
-// This just declares the exported plugin_t to hook up libplugins to the core
+// This just declares the exported struct plugin to hook up libplugins to the core
 // daemon's consuming code.
-extern plugin_t plugin_geoip_funcs;
-extern plugin_t plugin_metafo_funcs;
-extern plugin_t plugin_http_status_funcs;
-extern plugin_t plugin_multifo_funcs;
-extern plugin_t plugin_null_funcs;
-extern plugin_t plugin_reflect_funcs;
-extern plugin_t plugin_simplefo_funcs;
-extern plugin_t plugin_static_funcs;
-extern plugin_t plugin_tcp_connect_funcs;
-extern plugin_t plugin_weighted_funcs;
-extern plugin_t plugin_extfile_funcs;
-extern plugin_t plugin_extmon_funcs;
+extern struct plugin plugin_geoip_funcs;
+extern struct plugin plugin_metafo_funcs;
+extern struct plugin plugin_http_status_funcs;
+extern struct plugin plugin_multifo_funcs;
+extern struct plugin plugin_null_funcs;
+extern struct plugin plugin_reflect_funcs;
+extern struct plugin plugin_simplefo_funcs;
+extern struct plugin plugin_static_funcs;
+extern struct plugin plugin_tcp_connect_funcs;
+extern struct plugin plugin_weighted_funcs;
+extern struct plugin plugin_extfile_funcs;
+extern struct plugin plugin_extmon_funcs;
 
 #endif // GDNSD_PLUGINS_H

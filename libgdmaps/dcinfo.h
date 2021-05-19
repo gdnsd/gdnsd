@@ -39,48 +39,48 @@
 //  is used to terminate datacenter lists that are implemented
 //  as uint8_t* strings on which standard string ops work (e.g.
 //  strcmp(), strcpy()).
-// dcinfo_t holds a list of datacenters in the order
+// struct dcinfo holds a list of datacenters in the order
 //  specified in the config, which is the default order.  Therefore
 //  the default order, in dclist format, is e.g. for num_dcs == 3,
 //  \1\2\3\0.  It also tracks their monitoring index and coordinates.
-// dcinfo_t also holds auto_limit, which is the lesser of the
+// struct dcinfo also holds auto_limit, which is the lesser of the
 //  configured auto_dc_limit and the actual num_dcs, so that it's
 //  always the correct limit for direct application even if num_dcs
 //  is < auto_dc_limit.
 
 #define MAX_NUM_DCS 254
 
-typedef struct {
+struct dcinfo_coords {
     double lat;
     double lon;
     double cos_lat;
-} dcinfo_coords_t;
+};
 
-typedef struct {
+struct dci {
     char* name;
-    dcinfo_coords_t coords;
+    struct dcinfo_coords coords;
     unsigned mon_index;
-} dci_t;
+};
 
-typedef struct {
+struct dcinfo {
     unsigned num_dcs;    // count of datacenters
     unsigned auto_limit; // lesser of num_dcs and dc_auto_limit cfg
-    dci_t* dcs;          // ordered list of datacenters, #num_dcs
-} dcinfo_t;
+    struct dci* dcs;          // ordered list of datacenters, #num_dcs
+};
 
 F_NONNULLX(1, 2, 5)
-void dcinfo_init(dcinfo_t* info, vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name, monreg_func_t mrf);
+void dcinfo_init(struct dcinfo* info, vscf_data_t* dc_cfg, const vscf_data_t* dc_auto_cfg, vscf_data_t* dc_auto_limit_cfg, const char* map_name, monreg_func_t mrf);
 F_NONNULL F_PURE
-unsigned dcinfo_get_count(const dcinfo_t* info);
+unsigned dcinfo_get_count(const struct dcinfo* info);
 F_NONNULL F_PURE
-unsigned dcinfo_get_limit(const dcinfo_t* info);
+unsigned dcinfo_get_limit(const struct dcinfo* info);
 F_NONNULL F_PURE F_RETNN
-const dcinfo_coords_t* dcinfo_get_coords(const dcinfo_t* info, const unsigned dcnum);
+const struct dcinfo_coords* dcinfo_get_coords(const struct dcinfo* info, const unsigned dcnum);
 F_NONNULLX(1) F_PURE
-unsigned dcinfo_name2num(const dcinfo_t* info, const char* dcname);
+unsigned dcinfo_name2num(const struct dcinfo* info, const char* dcname);
 F_NONNULL F_PURE
-const char* dcinfo_num2name(const dcinfo_t* info, const unsigned dcnum);
+const char* dcinfo_num2name(const struct dcinfo* info, const unsigned dcnum);
 F_NONNULL F_PURE
-unsigned dcinfo_map_mon_idx(const dcinfo_t* info, const unsigned dcnum);
+unsigned dcinfo_map_mon_idx(const struct dcinfo* info, const unsigned dcnum);
 
 #endif // DCINFO_H

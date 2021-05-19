@@ -43,23 +43,23 @@ socklen_t gdnsd_sun_set_path(struct sockaddr_un* a, const char* path);
 /* Socket union type */
 // note anonymous union here, which gcc has supported
 //  forever, and is now becoming standard in C11
-typedef struct {
+struct anysin {
     union {
         struct sockaddr_in6 sin6;
         struct sockaddr_in  sin4;
         struct sockaddr     sa;
     };
     socklen_t len;
-} gdnsd_anysin_t;
+};
 
 // read-only for plugins
-typedef struct {
-    gdnsd_anysin_t dns_source;       // address of last source DNS cache/forwarder
-    gdnsd_anysin_t edns_client;      // edns-client-subnet address portion
+struct client_info {
+    struct anysin dns_source;       // address of last source DNS cache/forwarder
+    struct anysin edns_client;      // edns-client-subnet address portion
     unsigned edns_client_mask; // edns-client-subnet mask portion
-} client_info_t;               //  ^(if zero, edns_client is invalid (was not sent))
+};                             //  ^(if zero, edns_client is invalid (was not sent))
 
-// This is a maximum for the value of gdnsd_anysin_t.len
+// This is a maximum for the value of struct anysin.len
 #define GDNSD_ANYSIN_MAXLEN sizeof(struct sockaddr_in6)
 
 // max length of ASCII numeric ipv6 addr, with room for trailing NUL
@@ -77,55 +77,55 @@ typedef struct {
 // input text fields must be numeric, not hostnames or port names.
 // if false, hostnames and port names are possible, which may result
 //    in the libc doing DNS lookups and such on your behalf.
-// caller must allocate result to sizeof(gdnsd_anysin_t)
+// caller must allocate result to sizeof(struct anysin)
 // port_txt can be NULL, in which case the proto-specific port field will be zero
 // retval is retval from getaddrinfo() itself (if non-zero, error occurred and
 //   string representation is available from gai_strerror()).
 // result is unaffected if an error occurs.
 F_NONNULLX(1, 3)
-int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_anysin_t* result);
+int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, struct anysin* result);
 
 // As above, but for parsing the address and port from a single string of the form addr:port,
 //   where :port is optional, and addr may be surround by [] (to help with ipv6 [::1]:53 issues).
 // Port defaults to unsigned arg "def_port" if not specified in the input string.
 F_NONNULLX(1, 3)
-int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, gdnsd_anysin_t* result);
+int gdnsd_anysin_fromstr(const char* addr_port_text, const unsigned def_port, struct anysin* result);
 
 // Check if the sockaddr is the V4 or V6 ANY-address (0.0.0.0, or ::)
 F_NONNULL F_PURE
-bool gdnsd_anysin_is_anyaddr(const gdnsd_anysin_t* sa);
+bool gdnsd_anysin_is_anyaddr(const struct anysin* sa);
 
-// Compare two gdnsd_anysin_t for exact equality of type, size, and sockaddr
+// Compare two struct anysin for exact equality of type, size, and sockaddr
 // struct contents (which in other words means: same family, address, and
 // port).  We did this before with a memcmp of the two over the size of
-// gdnsd_anysin_t, but this technically compared padding bytes as well, which
+// struct anysin, but this technically compared padding bytes as well, which
 // isn't entirely sane and only happens to work because we usually zero those
 // parts of the struct in practice where they matter...)
 //
 // retval type is the same as memcmp, but we're not attempting to provide any
 // stable-sort meaning, so it's just: "zero is match, non-zero is non-match"
 F_NONNULL F_PURE
-int gdnsd_anysin_cmp(const gdnsd_anysin_t* a, const gdnsd_anysin_t* b);
+int gdnsd_anysin_cmp(const struct anysin* a, const struct anysin* b);
 
 // convert "sa" to numeric ASCII of the form "ipv4:port" or "[ipv6]:port"
 // NULL input results in the string "(null)"
 // note that buf *must* be pre-allocated to at least GDNSD_ANYSIN_MAXSTR bytes!
 // return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
 F_NONNULLX(2) F_COLD
-int gdnsd_anysin2str(const gdnsd_anysin_t* sa, char* buf);
+int gdnsd_anysin2str(const struct anysin* sa, char* buf);
 
 // convert just the address portion to ASCII in "buf"
 // NULL input results in the string "(null)"
 // note that buf *must* be pre-allocated to at least GDNSD_ANYSIN_MAXSTR bytes!
 // return value is from getaddrinfo() (0 for success, otherwise pass to gai_strerror())
 F_NONNULLX(2) F_COLD
-int gdnsd_anysin2str_noport(const gdnsd_anysin_t* sa, char* buf);
+int gdnsd_anysin2str_noport(const struct anysin* sa, char* buf);
 
-// Log-formatters for gdnsd_anysin_t + gdnsd_log_*(), which use the above...
+// Log-formatters for struct anysin + gdnsd_log_*(), which use the above...
 F_RETNN F_COLD
-const char* gdnsd_logf_anysin(const gdnsd_anysin_t* sa);
+const char* gdnsd_logf_anysin(const struct anysin* sa);
 F_RETNN F_COLD
-const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa);
+const char* gdnsd_logf_anysin_noport(const struct anysin* sa);
 
 #define logf_anysin gdnsd_logf_anysin
 #define logf_anysin_noport gdnsd_logf_anysin_noport
@@ -134,30 +134,30 @@ const char* gdnsd_logf_anysin_noport(const gdnsd_anysin_t* sa);
 // The "bool" variants use an integer type, but only compare get-vs-set as
 // booleans (e.g. get returning 16 will still match a desired set value of 1):
 
-typedef struct gso_args {
+struct gso_args {
     const int sock;
     const int level;
     const int optname;
     const int wantval;
     const bool fatal;
     const bool is_bool;
-    const gdnsd_anysin_t* sa;
+    const struct anysin* sa;
     const char* level_str;
     const char* optname_str;
     const char* proto_str;
-} gso_args;
-int gdnsd_sockopt_idem_int_(gso_args args);
+};
+int gdnsd_sockopt_idem_int_(struct gso_args args);
 
 #define sockopt_int_warn(_proto, _sa, _sock, _lvl, _opt, _want) \
-    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = false, .is_bool = false, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
+    gdnsd_sockopt_idem_int_((struct gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = false, .is_bool = false, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
 #define sockopt_bool_warn(_proto, _sa, _sock, _lvl, _opt, _want) \
-    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = false, .is_bool = true, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
+    gdnsd_sockopt_idem_int_((struct gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = false, .is_bool = true, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
 #define sockopt_int_fatal(_proto, _sa, _sock, _lvl, _opt, _want) \
-    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = true, .is_bool = false, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
+    gdnsd_sockopt_idem_int_((struct gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = true, .is_bool = false, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
 #define sockopt_bool_fatal(_proto, _sa, _sock, _lvl, _opt, _want) \
-    gdnsd_sockopt_idem_int_((gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = true, .is_bool = true, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
+    gdnsd_sockopt_idem_int_((struct gso_args){.sock = _sock, .level = _lvl, .optname = _opt, .wantval = _want, .fatal = true, .is_bool = true, .sa = _sa, .level_str = #_lvl, .optname_str = #_opt, .proto_str = #_proto})
 
 #endif // GDNSD_NET_H

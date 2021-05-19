@@ -50,16 +50,16 @@
 
 #include <ev.h>
 
-typedef struct {
+struct extf_mon {
     const char* name;
     unsigned midx; // mon idx within svc->mons[]
     unsigned sidx; // sttl idx for monitor core stuff
-} extf_mon_t;
+};
 
-typedef struct {
+struct extf_svc {
     const char* name;
     const char* path;
-    extf_mon_t* mons;
+    struct extf_mon* mons;
     ev_stat file_watcher; // only used in "direct" case
     ev_timer time_watcher; // used in both cases, differently
     bool direct;
@@ -67,10 +67,10 @@ typedef struct {
     unsigned interval;
     unsigned num_mons;
     gdnsd_sttl_t def_sttl;
-} extf_svc_t;
+};
 
 static unsigned num_svcs = 0;
-static extf_svc_t* service_types = NULL;
+static struct extf_svc* service_types = NULL;
 static bool testsuite_nodelay = false;
 
 #define SVC_OPT_UINT(_hash, _typnam, _nam, _loc, _min, _max) \
@@ -100,7 +100,7 @@ static bool testsuite_nodelay = false;
 static void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, const unsigned interval, const unsigned timeout)
 {
     service_types = xrealloc_n(service_types, num_svcs + 1, sizeof(*service_types));
-    extf_svc_t* svc = &service_types[num_svcs++];
+    struct extf_svc* svc = &service_types[num_svcs++];
     memset(svc, 0, sizeof(*svc));
 
     svc->name = xstrdup(name);
@@ -127,7 +127,7 @@ static void plugin_extfile_add_svctype(const char* name, vscf_data_t* svc_cfg, c
 
 static void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* svc_name, const char* cname, const unsigned idx)
 {
-    extf_svc_t* svc = NULL;
+    struct extf_svc* svc = NULL;
     for (unsigned i = 0; i < num_svcs; i++) {
         if (!strcmp(svc_name, service_types[i].name)) {
             svc = &service_types[i];
@@ -138,13 +138,13 @@ static void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* 
     gdnsd_assume(svc);
 
     svc->mons = xrealloc_n(svc->mons, svc->num_mons + 1, sizeof(*svc->mons));
-    extf_mon_t* mon = &svc->mons[svc->num_mons];
+    struct extf_mon* mon = &svc->mons[svc->num_mons];
     mon->name = xstrdup(cname);
     mon->sidx = idx;
     mon->midx = svc->num_mons++;
 }
 
-static void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const gdnsd_anysin_t* addr V_UNUSED, const unsigned idx)
+static void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, const char* cname, const struct anysin* addr V_UNUSED, const unsigned idx)
 {
     plugin_extfile_add_mon_cname(desc, svc_name, cname, idx);
 }
@@ -152,13 +152,13 @@ static void plugin_extfile_add_mon_addr(const char* desc, const char* svc_name, 
 F_NONNULL
 static int moncmp(const void* x, const void* y)
 {
-    const extf_mon_t* xm = x;
-    const extf_mon_t* ym = y;
+    const struct extf_mon* xm = x;
+    const struct extf_mon* ym = y;
     return strcmp(xm->name, ym->name);
 }
 
 F_NONNULL
-static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_t* val, gdnsd_sttl_t* results)
+static bool process_entry(const struct extf_svc* svc, const char* matchme, vscf_data_t* val, gdnsd_sttl_t* results)
 {
     bool success = false;
     if (!vscf_is_simple(val)) {
@@ -171,8 +171,8 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_
         } else {
             if (!svc->direct && ((result & GDNSD_STTL_TTL_MASK) != def_ttl))
                 log_warn("plugin_extfile: Service type '%s': TTL value for '%s' in file '%s' ignored in 'monitor' mode", svc->name, matchme, svc->path);
-            const extf_mon_t findme = { matchme, 0, 0 };
-            const extf_mon_t* found = bsearch(&findme, svc->mons, svc->num_mons, sizeof(findme), moncmp);
+            const struct extf_mon findme = { matchme, 0, 0 };
+            const struct extf_mon* found = bsearch(&findme, svc->mons, svc->num_mons, sizeof(findme), moncmp);
             if (found) {
                 results[found->midx] = result;
             } else {
@@ -186,7 +186,7 @@ static bool process_entry(const extf_svc_t* svc, const char* matchme, vscf_data_
 }
 
 F_NONNULL
-static void process_file(const extf_svc_t* svc)
+static void process_file(const struct extf_svc* svc)
 {
     if (!svc->num_mons) {
         log_warn("plugin_extfile: Service type '%s': NOT loading file '%s'; no resources are configured to use this service_type!", svc->name, svc->path);
@@ -253,7 +253,7 @@ static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    extf_svc_t* svc = w->data;
+    struct extf_svc* svc = w->data;
     gdnsd_assume(svc);
 
     if (svc->direct)
@@ -265,7 +265,7 @@ F_NONNULL
 static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED)
 {
     gdnsd_assume(revents == EV_STAT);
-    extf_svc_t* svc = w->data;
+    struct extf_svc* svc = w->data;
     gdnsd_assume(svc);
     gdnsd_assume(svc->direct);
 
@@ -277,7 +277,7 @@ static void file_cb(struct ev_loop* loop, ev_stat* w, int revents V_UNUSED)
 }
 
 F_NONNULL
-static void start_svc(extf_svc_t* svc, struct ev_loop* mon_loop)
+static void start_svc(struct extf_svc* svc, struct ev_loop* mon_loop)
 {
     const double delay = testsuite_nodelay ? 0.01 : svc->interval;
 
@@ -313,7 +313,7 @@ static void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED)
         testsuite_nodelay = true;
 
     for (unsigned i = 0; i < num_svcs; i++) {
-        extf_svc_t* svc = &service_types[i];
+        struct extf_svc* svc = &service_types[i];
         // qsort() sets up for the bsearch() in process_file at runtime
         // aftwerwards, the midx values must be rewritten to the new order
         qsort(svc->mons, svc->num_mons, sizeof(*svc->mons), moncmp);
@@ -323,7 +323,7 @@ static void plugin_extfile_init_monitors(struct ev_loop* mon_loop V_UNUSED)
     }
 }
 
-plugin_t plugin_extfile_funcs = {
+struct plugin plugin_extfile_funcs = {
     .name = "extfile",
     .config_loaded = false,
     .used = false,

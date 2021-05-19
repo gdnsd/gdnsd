@@ -45,14 +45,14 @@ static const unsigned DC_MASK       = 0xFF000000U;
 
 static const char DEFAULT_SVCNAME[] = "up";
 
-typedef struct {
+struct dc {
     char* dc_name; // if NULL, the whole structure is invalid (dc not defined for this res)
     unsigned map_mon_idx; // admin state for map-level datacenter, only used by plugin_geoip
     unsigned dc_mon_idx; // admin state for the datacenter itself, in this resource
     bool is_cname; // which union member below
     union {
         struct { // sub-plugin case
-            const plugin_t* plugin;
+            const struct plugin* plugin;
             char* plugin_name;
             char* res_name;
             unsigned res_num;
@@ -63,9 +63,9 @@ typedef struct {
             unsigned num_svcs;
         };
     };
-} dc_t;
+};
 
-// resource_t:
+// struct resource:
 // num_dcs - just copies the map-level total dc count
 // num_dcs_defined - the count of DCs actually defined in this resource
 // dcs - this is an array of structures, where the array indices are the dc
@@ -79,17 +79,17 @@ typedef struct {
 //       allows defining a "second choice" resource from the same map
 //       definition as the primary choice for geoip.
 
-typedef struct {
+struct resource {
     char* name;
-    dc_t* dcs;
+    struct dc* dcs;
     unsigned map;
     unsigned num_dcs;
     unsigned num_dcs_defined;
     bool skip_first;
-} resource_t;
+};
 
 static unsigned num_res;
-static resource_t* resources;
+static struct resource* resources;
 
 // retval is new storage.
 // "plugin", if existed in config, will be marked afterwards
@@ -110,7 +110,7 @@ static char* get_defaulted_plugname(vscf_data_t* cfg, const char* resname, const
 }
 
 F_NONNULL
-static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_data_t* cfg)
+static void inject_child_plugin_config(struct dc* this_dc, const char* resname, vscf_data_t* cfg)
 {
     gdnsd_assume(this_dc->dc_name);
 
@@ -190,7 +190,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
 }
 
 F_NONNULL
-static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, vscf_data_t* dc_data)
+static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, struct dc* this_dc, const char* dc_name, vscf_data_t* dc_data)
 {
     this_dc->dc_name = xstrdup(dc_name);
 
@@ -216,12 +216,12 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
             if (!strcmp(this_dc->plugin_name, PNSTR) && !strcmp(this_dc->res_name, resname))
                 log_fatal("plugin_" PNSTR ": resource '%s': not allowed to reference itself!", resname);
         } else {
-            gdnsd_anysin_t tempsin;
+            struct anysin tempsin;
             if (gdnsd_anysin_getaddrinfo(textdata, NULL, &tempsin)) {
                 // failed to parse as address, so set up direct CNAME if possible
                 this_dc->is_cname = true;
                 uint8_t* dname = xmalloc(256);
-                dname_status_t dnstat = vscf_simple_get_as_dname(dc_data, dname);
+                enum dname_status dnstat = vscf_simple_get_as_dname(dc_data, dname);
                 if (dnstat == DNAME_INVALID)
                     log_fatal("plugin_" PNSTR ": resource '%s': CNAME for datacenter '%s' is not a legal domainname", resname, dc_name);
                 if (dnstat == DNAME_PARTIAL)
@@ -261,7 +261,7 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
 }
 
 F_NONNULL
-static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t* dcmap_cfg, const char* resname)
+static void config_res_dcmap(struct resource* res, vscf_data_t* res_cfg, vscf_data_t* dcmap_cfg, const char* resname)
 {
     gdnsd_assert(vscf_is_hash(dcmap_cfg));
 
@@ -273,7 +273,7 @@ static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t*
         if (!dc_idx)
             log_fatal("plugin_" PNSTR ": resource '%s': datacenter name '%s' is not valid", resname, dc_name);
         gdnsd_assume(dc_idx <= res->num_dcs);
-        dc_t* this_dc = &res->dcs[dc_idx];
+        struct dc* this_dc = &res->dcs[dc_idx];
 #if META_MAP_ADMIN == 1
         this_dc->map_mon_idx = map_get_mon_idx(res->map, dc_idx);
 #endif
@@ -283,7 +283,7 @@ static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t*
 }
 
 F_NONNULL
-static void make_resource(resource_t* res, const char* res_name, vscf_data_t* res_cfg, const bool undef_dc_ok)
+static void make_resource(struct resource* res, const char* res_name, vscf_data_t* res_cfg, const bool undef_dc_ok)
 {
     res->name = xstrdup(res_name);
 
@@ -319,7 +319,7 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
 }
 
 F_NONNULL
-static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, const client_info_t* cinfo, dyn_result_t* result)
+static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const struct dc* dc, const struct client_info* cinfo, struct dyn_result* result)
 {
     gdnsd_sttl_t rv;
 
@@ -348,12 +348,12 @@ static gdnsd_sttl_t resolve_dc(const gdnsd_sttl_t* sttl_tbl, const dc_t* dc, con
 }
 
 F_UNUSED F_NONNULL
-static void resource_destroy(resource_t* res)
+static void resource_destroy(struct resource* res)
 {
     free(res->name);
     if (res->dcs) {
         for (unsigned i = 1; i <= res->num_dcs; i++) {
-            dc_t* dc = &res->dcs[i];
+            struct dc* dc = &res->dcs[i];
             if (dc->dc_name) {
                 free(dc->dc_name);
                 if (dc->is_cname) {
@@ -375,7 +375,7 @@ static int map_res_inner(const char* resname, const uint8_t* zone_name, const ch
 {
     for (unsigned i = 0; i < num_res; i++) {
         if (!strcmp(resname, resources[i].name)) { // match!
-            const resource_t* res = &resources[i];
+            const struct resource* res = &resources[i];
             unsigned fixed_dc_idx = 0;
             if (dcname) { // synthetic /dcname resource
                 fixed_dc_idx = map_get_dcidx(resources[i].map, dcname);
@@ -390,7 +390,7 @@ static int map_res_inner(const char* resname, const uint8_t* zone_name, const ch
                 // skip if this dc is not defined for this resource
                 if (!res->dcs[j].dc_name)
                     continue;
-                dc_t* this_dc = &res->dcs[j];
+                struct dc* this_dc = &res->dcs[j];
                 if (this_dc->is_cname) {
                     if (!zone_name)
                         map_res_err("plugin_" PNSTR ": resource '%s': datacenter '%s' is configured as the fixed CNAME '%s', therefore this resource cannot be used in an address-only DYNA RR", res->name, this_dc->dc_name, logf_dname(this_dc->dname));
@@ -457,7 +457,7 @@ static void CB_LOAD_CONFIG(vscf_data_t* config)
     resources = xcalloc_n(num_res, sizeof(*resources));
 
     for (unsigned i = 0; i < num_res; i++) {
-        resource_t* res = &resources[i];
+        struct resource* res = &resources[i];
         const char* res_name = vscf_hash_get_key_byindex(resources_cfg, i, NULL);
         vscf_data_t* res_cfg = vscf_hash_get_data_byindex(resources_cfg, i);
         if (!vscf_is_hash(res_cfg))
@@ -493,7 +493,7 @@ static int CB_MAP(const char* resname, const uint8_t* zone_name)
     return rv;
 }
 
-static gdnsd_sttl_t CB_RES(unsigned resnum, const client_info_t* cinfo, dyn_result_t* result)
+static gdnsd_sttl_t CB_RES(unsigned resnum, const struct client_info* cinfo, struct dyn_result* result)
 {
     // extract and clear any datacenter index from upper 8 bits
     //  (used for synthetic resname/dcname resources)
@@ -501,7 +501,7 @@ static gdnsd_sttl_t CB_RES(unsigned resnum, const client_info_t* cinfo, dyn_resu
     const uint8_t synth_dclist[2] = { synth_dc, 0 };
     resnum &= RES_MASK;
 
-    const resource_t* res = &resources[resnum];
+    const struct resource* res = &resources[resnum];
 
     unsigned scope_mask_out = 0;
     const uint8_t* dclist;

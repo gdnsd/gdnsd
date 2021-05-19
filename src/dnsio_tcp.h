@@ -35,6 +35,6 @@ F_NONNULL
 void* dnsio_tcp_start(void* thread_asvoid);
 
 F_NONNULL
-void tcp_dns_listen_setup(dns_thread_t* t);
+void tcp_dns_listen_setup(struct dns_thread* t);
 
 #endif // GDNSD_DNSIO_TCP_H

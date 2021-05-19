@@ -62,7 +62,7 @@ static bool check_v4_issues(const uint8_t* ipv6, const unsigned mask)
 // arguably, with at least some of the v4-like spaces we could simply translate and hope to de-dupe,
 //   if we upgraded nlist_normalize1 to de-dupe matching dclists instead of failing them
 F_NONNULL
-static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name, nlist_t* nl)
+static bool nets_parse(const vscf_data_t* nets_cfg, struct dclists* dclists, const char* map_name, struct nlist* nl)
 {
     const unsigned input_nnets = vscf_hash_get_len(nets_cfg);
 
@@ -83,7 +83,7 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
             return true;
         }
         *mask_str++ = '\0';
-        gdnsd_anysin_t tempsin;
+        struct anysin tempsin;
         int addr_err = gdnsd_anysin_getaddrinfo(net_str, mask_str, &tempsin);
         if (addr_err) {
             log_err("plugin_geoip: map '%s': nets entry '%s/%s' does not parse as addr/mask: %s", map_name, net_str, mask_str, gai_strerror(addr_err));
@@ -93,7 +93,7 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
         unsigned mask;
         uint8_t ipv6[16];
 
-        // now store the anysin data into net_t
+        // now store the anysin data into struct net
         if (tempsin.sa.sa_family == AF_INET6) {
             mask = ntohs(tempsin.sin6.sin6_port);
             if (mask > 128) {
@@ -126,9 +126,9 @@ static bool nets_parse(const vscf_data_t* nets_cfg, dclists_t* dclists, const ch
     return false;
 }
 
-nlist_t* nets_make_list(const vscf_data_t* nets_cfg, dclists_t* dclists, const char* map_name)
+struct nlist* nets_make_list(const vscf_data_t* nets_cfg, struct dclists* dclists, const char* map_name)
 {
-    nlist_t* nl = nlist_new(map_name, false);
+    struct nlist* nl = nlist_new(map_name, false);
 
     if (nets_cfg) {
         gdnsd_assert(vscf_is_hash(nets_cfg));

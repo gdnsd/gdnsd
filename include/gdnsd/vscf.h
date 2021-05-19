@@ -28,13 +28,7 @@
 #include <sys/types.h>
 
 // Opaque data type used for all complex data pointers in the public API
-typedef union vscf_data_t vscf_data_t;
-
-// Used in hash sorting callbacks
-typedef struct {
-    const char* const  key;
-    const unsigned     len;
-} vscf_key_t;
+typedef union vscf_data vscf_data_t;
 
 // Invokes the scanner, returning the root-level hash or array on success
 // On error, NULL is returned and the error is emitted with log_err()
@@ -56,31 +50,22 @@ vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source
 // Passing a NULL argument is harmless
 void vscf_destroy(vscf_data_t* d);
 
-/*
- * These are the data types vscf_get_type (below) can return.
- * vscf_simple_ functions can only be called on data of type VSCF_SIMPLE_T
- * vscf_hash_ functions can only be called on data of type VSCF_HASH_T
+/* Types and functions:
+ * A generic "vscf_data_t" can be type-checked with vscf_is_simple(),
+ * vscf_is_array(), and vscf_is_hash().
+ * vscf_simple_ functions can only be called on data which is "simple"
+ * vscf_hash_ functions can only be called on data which is "hash"
  * vscf_array_ functions can be called on any data type.  In the
  *   actual array case they act as expected.  In the hash and simple cases,
  *   they act as if there was a virtual array of length 1 around the data.
  *   This allows (if you wish) syntax flexibility to use a single data item
  *   in place of an array (except in the array-of-arrays case).  e.g.:
  *   "foo = [ 1 ]" and "foo = 1" will look identical if you blindly call
- *   vscf_array_ funcs on foo's data without explicitly checking for the
- *   VSCF_ARRAY_T type.
+ *   vscf_array_ funcs on foo's data without explicitly checking for
+ *   vscf_is_array().
  */
-typedef enum {
-    VSCF_HASH_T,
-    VSCF_ARRAY_T,
-    VSCF_SIMPLE_T
-} vscf_type_t;
 
-// Get the type of an otherwise opaque "const vscf_data_t*"
-F_NONNULL F_PURE
-vscf_type_t vscf_get_type(const vscf_data_t* d);
-
-// Boolean explicit basic type checks, more convenient
-//  than vscf_get_type(x) == VSCF_FOO_T
+// Boolean explicit basic type checks:
 F_NONNULL F_PURE
 bool vscf_is_simple(const vscf_data_t* d);
 F_NONNULL F_PURE
@@ -126,7 +111,7 @@ F_NONNULL bool vscf_simple_get_as_bool(vscf_data_t* d, bool* out);
 //  in gdnsd/dname.h.  The "dname" argument must be pre-allocated to
 //  256 bytes.
 F_NONNULL
-dname_status_t vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname);
+enum dname_status vscf_simple_get_as_dname(const vscf_data_t* d, uint8_t* dname);
 
 // Get the length of an array.  Zero means the array is empty.
 F_NONNULL F_PURE
@@ -187,14 +172,6 @@ void vscf_hash_iterate(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_cb
 typedef bool (*vscf_hash_iter_const_cb_t)(const char* key, unsigned klen, vscf_data_t* d, const void* data);
 F_NONNULLX(1, 3)
 void vscf_hash_iterate_const(const vscf_data_t* d, bool ignore_mark, vscf_hash_iter_const_cb_t f, const void* data);
-
-// Re-sort hash keys from default order (order defined in config file) to an arbitrary
-//  order of your choosing, using a qsort()-like compare callback.  Calls to vscf_hash_iterate
-//  after vscf_hash_sort will iterate in the new sort order.  Not thread-safe (all access to
-//  a given hash should be locked if it's being sorted in a threaded environment).
-typedef int (*vscf_key_cmp_cb_t)(const vscf_key_t* const* const a, const vscf_key_t* const* const b);
-F_NONNULL
-void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f);
 
 /****** interfaces that modify the vscf data tree ******/
 // These come with a lot of hidden caveats about affecting

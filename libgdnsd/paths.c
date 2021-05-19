@@ -68,12 +68,12 @@ static void gdnsd_ensure_dir(const char* dpath, const char* desc, mode_t dir_mod
     }
 }
 
-typedef enum {
+enum path_type {
     RUN     = 0,
     STATE   = 1,
     CFG     = 2,
     LIBEXEC = 3,
-} path_typ_t;
+};
 
 static const char* gdnsd_dirs[4] = { NULL, NULL, NULL, NULL };
 
@@ -169,7 +169,7 @@ const char* gdnsd_get_config_dir(void)
     return gdnsd_dirs[CFG];
 }
 
-static char* gdnsd_resolve_path(const path_typ_t p, const char* inpath, const char* pfx)
+static char* gdnsd_resolve_path(const enum path_type p, const char* inpath, const char* pfx)
 {
     gdnsd_assume(gdnsd_dirs[p]);
 

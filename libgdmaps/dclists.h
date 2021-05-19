@@ -32,21 +32,19 @@ struct dclists {
     unsigned count; // count of unique result lists
     unsigned old_count; // count from object we cloned from
     uint8_t** list;    // strings of dc numbers
-    const dcinfo_t* info; // dclists_t doesn't own "info", just uses it for reference a lot
+    const struct dcinfo* info; // struct dclists doesn't own "info", just uses it for reference a lot
 };
 
-typedef struct dclists dclists_t;
-
-typedef enum {
+enum dclists_destroy_depth {
     KILL_NO_LISTS,
     KILL_ALL_LISTS,
     KILL_NEW_LISTS
-} dclists_destroy_depth_t;
+};
 
 // At the nlist/ntree layer, a uint32_t node reference has the high bit set
 //   if it's a dclist, and cleared if it's an internal tree-node reference.
 // This implies that legal, real dclist indices used in the construction of
-//   nlist_t and ntree_t cannot have the high bit set, ever, and thus our
+//   struct nlist and struct ntree cannot have the high bit set, ever, and thus our
 //   list of real dclist indices is a 31-bit value.
 // As a further constraint, the maximal 31-bit value is not allowed for a real
 //   dclist index because it is used in two magic ways:
@@ -62,25 +60,25 @@ typedef enum {
 #define DCLIST_MAX  0x7FFFFFFE
 
 F_NONNULL F_WUNUSED F_RETNN
-dclists_t* dclists_new(const dcinfo_t* info);
+struct dclists* dclists_new(const struct dcinfo* info);
 F_NONNULL F_WUNUSED F_RETNN
-dclists_t* dclists_clone(const dclists_t* old);
+struct dclists* dclists_clone(const struct dclists* old);
 F_NONNULL F_PURE
-unsigned dclists_get_count(const dclists_t* lists);
+unsigned dclists_get_count(const struct dclists* lists);
 F_NONNULL F_PURE F_RETNN
-const uint8_t* dclists_get_list(const dclists_t* lists, const uint32_t idx);
+const uint8_t* dclists_get_list(const struct dclists* lists, const uint32_t idx);
 F_NONNULL
-void dclists_replace_list0(const dclists_t* lists, uint8_t* newlist);
+void dclists_replace_list0(const struct dclists* lists, uint8_t* newlist);
 
 // retval here: true -> "auto", false -> normal list
 F_NONNULL
-bool dclists_xlate_vscf(const dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto);
+bool dclists_xlate_vscf(const struct dclists* lists, vscf_data_t* vscf_list, const char* map_name, uint8_t* newlist, const bool allow_auto);
 
 F_NONNULL
-uint32_t dclists_find_or_add_vscf(dclists_t* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto);
+uint32_t dclists_find_or_add_vscf(struct dclists* lists, vscf_data_t* vscf_list, const char* map_name, const bool allow_auto);
 F_NONNULL
-uint32_t dclists_city_auto_map(dclists_t* lists, const char* map_name, const double lat, const double lon);
+uint32_t dclists_city_auto_map(struct dclists* lists, const char* map_name, const double lat, const double lon);
 F_NONNULL
-void dclists_destroy(dclists_t* lists, dclists_destroy_depth_t depth);
+void dclists_destroy(struct dclists* lists, enum dclists_destroy_depth depth);
 
 #endif // DCLISTS_H

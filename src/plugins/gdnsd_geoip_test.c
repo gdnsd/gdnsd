@@ -38,7 +38,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-static gdmaps_t* gd_maps = NULL;
+static struct gdmaps* gd_maps = NULL;
 
 noreturn F_NONNULL
 static void usage(const char* argv0)
@@ -52,7 +52,7 @@ static void usage(const char* argv0)
 }
 
 F_NONNULL
-static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* ip_arg)
+static void do_lookup(const struct gdmaps* gdmaps, const char* map_name, const char* ip_arg)
 {
     const int rv = gdmaps_name2idx(gdmaps, map_name);
     if (rv < 0) {
@@ -61,7 +61,7 @@ static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* 
     }
     const unsigned map_idx = (unsigned)rv;
 
-    client_info_t cinfo;
+    struct client_info cinfo;
 
     // mostly ignored, but needs to be nonzero, and 150 is interesting in that
     //  it easily differentiates source -> scope copies from actual database scope netmasks,
@@ -107,7 +107,7 @@ static void do_lookup(const gdmaps_t* gdmaps, const char* map_name, const char* 
 }
 
 F_NONNULL
-static void do_repl(const gdmaps_t* gdmaps)
+static void do_repl(const struct gdmaps* gdmaps)
 {
     char linebuf[256];
     char map_name[128];
@@ -162,7 +162,7 @@ static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root)
     return maps;
 }
 
-static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir)
+static struct gdmaps* gdmaps_standalone_init(const char* input_cfgdir)
 {
     // Fake RCU init for single-threaded test, otherwise grcu_dereference deep
     // inside libgdmaps will fail an assertion about it.
@@ -178,7 +178,7 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir)
         log_fatal("gdnsd_geoip_test: 'maps' stanza must be a hash");
     if (!vscf_hash_get_len(maps_cfg))
         log_fatal("gdnsd_geoip_test: 'maps' must contain one or more maps");
-    gdmaps_t* rv = gdmaps_new(maps_cfg, NULL);
+    struct gdmaps* rv = gdmaps_new(maps_cfg, NULL);
     vscf_destroy(cfg_root);
 
     gdmaps_load_databases(rv);

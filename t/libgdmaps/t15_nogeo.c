@@ -36,7 +36,7 @@ static const char cfg[] = QUOTE(
 );
 // *INDENT-ON*
 
-gdmaps_t* gdmaps = NULL;
+struct gdmaps* gdmaps = NULL;
 
 int main(int argc V_UNUSED, char* argv[] V_UNUSED)
 {

@@ -28,15 +28,15 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
-typedef struct binstr_t {
+struct binstr {
     const uint8_t* data;
     unsigned len;
-} binstr_t;
+};
 
-typedef struct {
-    binstr_t chaos;
-    binstr_t nsid;
-    const char*    cookie_key_file;
+struct cfg {
+    struct binstr chaos;
+    struct binstr nsid;
+    const char* cookie_key_file;
     bool     lock_mem;
     bool     disable_text_autosplit;
     bool     edns_client_subnet;
@@ -54,11 +54,11 @@ typedef struct {
     unsigned acme_challenge_ttl;
     unsigned acme_challenge_dns_ttl;
     unsigned zones_rfc1035_threads;
-} cfg_t;
+};
 
-extern const cfg_t* gcfg;
+extern const struct cfg* gcfg;
 
 F_RETNN
-cfg_t* conf_load(const vscf_data_t* cfg_root, const bool force_zsd);
+struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd);
 
 #endif // GDNSD_CONF_H
