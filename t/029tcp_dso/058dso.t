@@ -3,7 +3,7 @@
 
 use threads;
 use _GDT ();
-use Test::More tests => 42;
+use Test::More tests => 41;
 use strict;
 use warnings;
 
@@ -533,7 +533,7 @@ $ID += 10; # to avoid $ID clash between the threads
 
 my $client_close_rd;
 SKIP: {
-    skip "Not running slow tests", 6 unless $ENV{'SLOW_TESTS'};
+    skip "Not running slow tests", 5 unless $ENV{'SLOW_TESTS'};
 
 $client_close_rd = async {
     my $tcp_sock = make_tcp_sock(1);
@@ -548,13 +548,8 @@ $client_close_rd = async {
     ok($recvbuf eq $e_ka);
     # Send another query during the 5s grace time
     ok(test_ns1_query($tcp_sock, 1, $basic_optrr, $padded_optrr));
-    # Wait for unidirectional RD=0
-    my $recvbuf2 = recv_tcp($tcp_sock);
-    # RD unidirectional with delay=0 + pad to 468
-    my $e_rd = wrap_tcp_prefix(pack('nCCnnnn nnN nna*',
-        0, 48, 0, 0, 0, 0, 0, 2, 4, 0, 3, 444, ("\x00" x 444)
-    ));
-    ok($recvbuf2 eq $e_rd);
+    # Wait for RST instead of reacting to the KA above:
+    recv_tcp($tcp_sock);
 };
 # This will stall until the thread above reaches its waiting point (after it
 # has established DSO and sent its normal edns query, and is waiting with an

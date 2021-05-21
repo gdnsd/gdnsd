@@ -132,9 +132,9 @@ my @behave = (
     # delinquent and close us for timeout (in the guaranteed cases near the end
     # of the run that we're not killed as the most-idle client).  Later during
     # the daemon shutdown SLOW_TESTS phase, clients of this type will exit
-    # almost immediately after the initial 5 second grace window, because
-    # they'll exit/close on the client side as soon as the server sends us a
-    # SHUT_WR-generated FIN which causes the second recv() to return.
+    # almost immediately after the 5 second grace window, because they'll
+    # exit/close on the client side as soon as the server sends us a RST which
+    # causes the second recv() to return.
     sub {
         my $sock = shift;
         send($sock, $tcp_query_ns1, 0);
@@ -146,15 +146,14 @@ my @behave = (
     # 9 - Very similar in purpose to the above, but does an explicit usleep for
     # longer than the server-side timeout rather than the recv() blockage
     # above.  This will turn out pretty similar to 8 during the main run, but
-    # during the daemon shutdown testing these will have to be killed by the
-    # server after both grace windows (10s) have passed, since we ignore the
-    # FIN at the 5 second mark in the middle.
+    # gets RSTed in a slightly different state (still ~5s in) and sticks around
+    # for its full sleep value.
     sub {
         my $sock = shift;
         send($sock, $tcp_query_ns1, 0);
         recv($sock, $rbuf, 4096, 0);
         if ($ENV{'SLOW_TESTS'}) {
-            sleep_rand_ms(10100, 11000);
+            sleep_rand_ms(5100, 5500);
         }
     },
 );
@@ -230,10 +229,7 @@ $Data::Dumper::Sortkeys = 1;
 diag "Non-zero stats after " . $NUM_TCP . " connections: " . Dumper($raw);
 
 # In the SLOW_TESTS case, fire up two child processes using behaviors 8 and 9
-# above just before requesting daemon stop.  Behavior 8 will end via
-# client-side close 5 seconds later when the server sends its SHUT_WR-generated
-# FIN after the initial grace period, whereas behavior 9 the server will have
-# to RST after the full 10 seconds as unresponsive and delinquent.
+# above just before requesting daemon stop, which will stall for ~5s.
 SKIP: {
     skip "Not running slow tests", 1 unless $ENV{'SLOW_TESTS'};
 
@@ -251,6 +247,6 @@ SKIP: {
     ok(!$@) or diag $@;
 }
 
-# Here we'll see the ~10s delay during shutdown waiting on the above if
+# Here we'll see the ~5s delay during shutdown waiting on the above if
 # $SLOW_TESTS is set, and hopefully still a zero exit code regardless!
 _GDT->test_kill_daemon($pid);
