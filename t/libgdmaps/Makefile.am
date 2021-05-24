@@ -9,7 +9,7 @@ LDADD = \
 	$(top_builddir)/libgdmaps/libgdmaps.a \
 	$(top_builddir)/libgdnsd/libgdnsd.a \
 	$(top_builddir)/t/libtap/libtap.a \
-	-lm -lurcu-qsbr -lev $(GEOIP2_LIBS) $(LIBUNWIND_LIBS)
+	-lm -lurcu-qsbr -lev -lsodium $(GEOIP2_LIBS) $(LIBUNWIND_LIBS)
 
 TESTLIST = \
 	t50_g2_country \

@@ -52,7 +52,6 @@
 #  define F_COLD          __attribute__((__cold__))
 #  define F_RETNN         __attribute__((__returns_nonnull__))
 #  define F_ALLOCAL(_x)   __attribute__((__alloc_align__((_x))))
-#  define S_FALLTHROUGH   __attribute__((__fallthrough__))
 #endif
 
 #define PRAG_(x) _Pragma(#x)
@@ -135,9 +134,6 @@
 #ifndef   F_ALLOCAL
 #  define F_ALLOCAL(_x)
 #endif
-#ifndef   S_FALLTHROUGH
-#  define S_FALLTHROUGH ((void)(0))
-#endif
 
 // Unaligned memory access stuff
 
@@ -156,14 +152,6 @@ F_UNUSED F_NONNULL
 static uint32_t gdnsd_get_una32(const uint8_t* p)
 {
     uint32_t v;
-    memcpy(&v, p, sizeof(v));
-    return v;
-}
-
-F_UNUSED F_NONNULL
-static uint64_t gdnsd_get_una64(const uint8_t* p)
-{
-    uint64_t v;
     memcpy(&v, p, sizeof(v));
     return v;
 }

@@ -1607,13 +1607,13 @@ static enum ltree_dnstatus search_ltree_for_dname(const uint8_t* dname, struct s
     const struct ltree_node* auth = NULL;
     unsigned depth_lc = lcount;
     while (!rv_node && current) {
-        if (LTN_GET_FLAG_ZCUT(current) && auth) {
+        if (auth && current->zone_cut) {
             gdnsd_assume(rval == DNAME_AUTH);
             rval = DNAME_DELEG;
             depth_lc = lcount;
             rv_node = current;
         } else {
-            if (LTN_GET_FLAG_ZCUT(current)) {
+            if (current->zone_cut) {
                 gdnsd_assume(rval == DNAME_NOAUTH);
                 gdnsd_assume(!auth);
                 rval = DNAME_AUTH;

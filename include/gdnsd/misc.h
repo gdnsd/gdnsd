@@ -55,6 +55,13 @@ char* gdnsd_str_combine_n(const unsigned count, ...);
 F_NONNULL
 char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t needle_len, const char* repl, const size_t repl_len);
 
+// This is just an interface wrapper over libsodium shorthash, with per-process
+// random keying, to be used for hashtables.
+void gdnsd_shorthash_init(void);
+F_NONNULL
+uintptr_t gdnsd_shorthash_up(const uint8_t* data, const size_t len);
+#define gdnsd_shorthash_u32(_d,_l) ((uint32_t)gdnsd_shorthash_up(_d,_l))
+
 // set thread name (via pthread_setname_np or similar)
 void gdnsd_thread_setname(const char* n);
 
@@ -86,13 +93,13 @@ static void gdnsd_downcase_str(char* str)
     }
 }
 
-// count2mask converts a uint32_t to the next-largest power of two, minus 1.
+// count2mask_u32 converts a uint32_t to the next power of two, minus 1.
 // useful in sizing po2-sized hash tables and masking hash results for them.
 
 #ifndef HAVE_BUILTIN_CLZ
 
 F_CONST F_UNUSED
-static uint32_t count2mask(uint32_t x)
+static uint32_t count2mask_u32(uint32_t x)
 {
     x |= 1U;
     x |= x >> 1U;
@@ -106,7 +113,7 @@ static uint32_t count2mask(uint32_t x)
 #else
 
 F_CONST F_UNUSED
-static uint32_t count2mask(const uint32_t x)
+static uint32_t count2mask_u32(const uint32_t x)
 {
     // This variant is about twice as fast as the above, but
     //  only available w/ GCC 3.4 and above.

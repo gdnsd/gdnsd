@@ -10,6 +10,8 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
 
 ### Zonefiles
 
+* Unused glue addresses in delegated parts of a zone no longer cause any kind of warning or error.
+
 ### Feature Regressions
 
 ## Configuration changes

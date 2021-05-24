@@ -23,7 +23,6 @@
 #include <gdnsd/alloc.h>
 #include <gdnsd/file.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/mm3.h>
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -129,7 +128,7 @@ struct scanner {
 F_NONNULL F_PURE
 static unsigned key_hash(const char* k, unsigned klen, const unsigned hash_mask)
 {
-    return hash_mm3_u32((const uint8_t*)k, klen) & hash_mask;
+    return gdnsd_shorthash_u32((const uint8_t*)k, klen) & hash_mask;
 }
 
 F_WUNUSED
@@ -143,7 +142,7 @@ static struct hash* hash_new(void)
 F_NONNULL
 static void hash_grow(struct hash* h)
 {
-    const unsigned old_hash_mask = count2mask(h->child_count);
+    const unsigned old_hash_mask = count2mask_u32(h->child_count);
     const unsigned new_hash_mask = (old_hash_mask << 1) | 1;
     struct hentry** new_table = xcalloc_n(new_hash_mask + 1, sizeof(*new_table));
     for (unsigned i = 0; i <= old_hash_mask; i++) {
@@ -182,7 +181,7 @@ static bool hash_add_val(const char* key, const unsigned klen, struct hash* h, v
         h->ordered = xmalloc_n(2, sizeof(*h->ordered));
     }
 
-    const unsigned child_mask = count2mask(h->child_count);
+    const unsigned child_mask = count2mask_u32(h->child_count);
     const unsigned child_hash = key_hash(key, klen, child_mask);
 
     struct hentry** store_at = &(h->children[child_hash]);
@@ -779,6 +778,7 @@ static void val_destroy(vscf_data_t* d)
 
 vscf_data_t* vscf_scan_buf(const size_t len, const char* buf, const char* source, bool source_is_fn)
 {
+    gdnsd_shorthash_init(); // idempotent
     (void)vscf_en_main; // silence unused var warning from generated code
 
     struct scanner* scnr = xcalloc(sizeof(*scnr));
@@ -940,7 +940,7 @@ vscf_data_t* vscf_hash_get_data_bykey(const vscf_data_t* d, const char* key, uns
 {
     gdnsd_assume(vscf_is_hash(d));
     if (d->hash.child_count) {
-        unsigned child_mask = count2mask(d->hash.child_count);
+        unsigned child_mask = count2mask_u32(d->hash.child_count);
         unsigned child_hash = key_hash(key, klen, child_mask);
         struct hentry* he = d->hash.children[child_hash];
         while (he) {
@@ -982,7 +982,7 @@ int vscf_hash_get_index_bykey(const vscf_data_t* d, const char* key, unsigned kl
 {
     gdnsd_assume(vscf_is_hash(d));
     if (d->hash.child_count) {
-        unsigned child_mask = count2mask(d->hash.child_count);
+        unsigned child_mask = count2mask_u32(d->hash.child_count);
         unsigned child_hash = key_hash(key, klen, child_mask);
         struct hentry* he = d->hash.children[child_hash];
         while (he) {

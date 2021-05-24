@@ -60,7 +60,6 @@ ltree structure.
 #include <gdnsd/compiler.h>
 #include "plugins/plugapi.h"
 #include <gdnsd/misc.h>
-#include <gdnsd/mm3.h>
 
 #include "ltarena.h"
 
@@ -163,7 +162,7 @@ struct ltree_rrset_gen {
 
 #if SIZEOF_UINTPTR_T == 8
 #    define LTREE_V4A_SIZE 4
-#else
+#elif SIZEOF_UINTPTR_T == 4
 #    define LTREE_V4A_SIZE 3
 #endif
 
@@ -274,32 +273,28 @@ union ltree_rrset {
 struct ltree_node;
 
 struct ltree_hslot {
-    size_t hash;
+    uintptr_t hash;
     struct ltree_node* node;
 };
 
 struct ltree_node {
-    size_t ccount_and_flags; // 62- or 30- bit count + 2 MSB flag bits
+#if SIZEOF_UINTPTR_T == 8
+#  define LTREE_NODE_MAX_SLOTS UINT32_MAX
+    uint32_t ccount;
+    struct {
+        uint32_t zone_cut : 1;
+    };
+#elif SIZEOF_UINTPTR_T == 4
+#  define LTREE_NODE_MAX_SLOTS (UINT32_MAX >> 1U)
+    struct {
+        uint32_t ccount : 31;
+        uint32_t zone_cut : 1;
+    };
+#endif
     uint8_t* label;
     struct ltree_hslot* child_table;
     union ltree_rrset* rrsets;
 };
-
-// Bit-level hacks for ltree_node.ccount_and_flags:
-
-#define SZT_TOP_BIT ((SIZEOF_SIZE_T * 8) - 1)
-#define SZT_NXT_BIT ((SIZEOF_SIZE_T * 8) - 2)
-#if SIZEOF_SIZE_T == SIZEOF_UNSIGNED_LONG
-#  define SZT1 1LU
-#else
-#  define SZT1 1LLU
-#endif
-#define LTN_GET_CCOUNT(_n)     (_n->ccount_and_flags & ((SZT1 << SZT_NXT_BIT) - SZT1))
-#define LTN_INC_CCOUNT(_n)     (_n->ccount_and_flags++)
-#define LTN_GET_FLAG_ZCUT(_n)  (_n->ccount_and_flags &  (SZT1 << SZT_TOP_BIT))
-#define LTN_SET_FLAG_ZCUT(_n)  (_n->ccount_and_flags |= (SZT1 << SZT_TOP_BIT))
-#define LTN_GET_FLAG_GUSED(_n) (_n->ccount_and_flags &  (SZT1 << SZT_NXT_BIT))
-#define LTN_SET_FLAG_GUSED(_n) (_n->ccount_and_flags |= (SZT1 << SZT_NXT_BIT))
 
 // This is a temporary per-zone structure used during zone construction
 struct zone {
@@ -387,51 +382,21 @@ void ltree_load_zones(void);
 // One-shot init at startup, after config load
 void ltree_init(void);
 
-// These are pretty safe assumptions on platforms we reasonably support
-// (modern-ish *nixes on mainstream-ish CPUs), and we're relying on them below
-// for count2mask_sz in combination with the size_t-ified murmur3 functions and
-// the layout efficiency of the ltree structure in general, but they're not
-// generally gauranteed by C to be fully portable assumptions:
-
-#if SIZEOF_SIZE_T != SIZEOF_UINTPTR_T
-#  error This platform has non-matching size_t and pointer widths
-#endif
-#if SIZEOF_SIZE_T != 8 && SIZEOF_SIZE_T != 4
-#  error This platform has a pointer/size_t width other than 64 or 32 bit
-#endif
-#if SIZEOF_UNSIGNED_LONG != SIZEOF_SIZE_T && SIZEOF_UNSIGNED_LONG_LONG != SIZEOF_SIZE_T
-#  error Neither unsigned long nor unsigned long long matches size_t
-#endif
-
-F_CONST F_UNUSED
-static size_t count2mask_sz(const size_t x)
-{
-    gdnsd_assume(x);
-#ifndef HAVE_BUILTIN_CLZ
-    x |= x >> 1U;
-    x |= x >> 2U;
-    x |= x >> 4U;
-    x |= x >> 8U;
-    x |= x >> 16U;
-#if SIZEOF_SIZE_T == 8
-    // cppcheck-suppress shiftTooManyBits
-    x |= x >> 32U;
-#endif
-    return x;
-#elif SIZEOF_SIZE_T == SIZEOF_UNSIGNED_LONG
-    return ((1LU << (((sizeof(size_t) * 8LU) - 1LU) ^ (unsigned long)__builtin_clzl(x))) << 1LU) - 1LU;
-#else
-    return ((1LLU << (((sizeof(size_t) * 8LLU) - 1LLU) ^ (unsigned long long)__builtin_clzll(x))) << 1LLU) - 1LLU;
-#endif
-}
-
 // this hash wrapper is for labels encoded as one length-byte followed
 //  by N characters.  Thus the label "www" is "\003www" (4 bytes)
 F_UNUSED F_PURE F_WUNUSED F_NONNULL F_HOT
-static size_t ltree_hash(const uint8_t* input)
+static uintptr_t ltree_hash(const uint8_t* input)
 {
     const size_t len = *input++;
-    return hash_mm3_sz(input, len);
+    return gdnsd_shorthash_up(input, len);
+}
+
+// count2mask_u32 for a load factor of ~80%, by adding a rounded-down 25% (easy
+// 2-bit shift) to the current count before converting it to the next po2 mask
+F_CONST F_UNUSED
+static uint32_t count2mask_u32_lf80(const uint32_t x)
+{
+    return count2mask_u32(x + (x >> 2U));
 }
 
 // "lstack" must be allocated to 127 pointers
@@ -460,13 +425,12 @@ F_NONNULL F_PURE F_UNUSED F_HOT
 static struct ltree_node* ltree_node_find_child(const struct ltree_node* node, const uint8_t* child_label)
 {
     if (node->child_table) {
-        const size_t ccount = LTN_GET_CCOUNT(node);
-        gdnsd_assume(ccount);
-        const size_t mask = count2mask_sz(ccount);
-        const size_t kh = ltree_hash(child_label);
-        size_t probe_dist = 0;
+        gdnsd_assume(node->ccount);
+        const uint32_t mask = count2mask_u32_lf80(node->ccount);
+        const uintptr_t kh = ltree_hash(child_label);
+        uint32_t probe_dist = 0;
         do {
-            const size_t slot = (kh + probe_dist) & mask;
+            const uint32_t slot = ((uint32_t)kh + probe_dist) & mask;
             const struct ltree_hslot* s = &node->child_table[slot];
             if (!s->node || ((slot - s->hash) & mask) < probe_dist)
                 break;

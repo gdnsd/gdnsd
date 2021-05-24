@@ -100,11 +100,11 @@ src_plugins_gdnsd_extmon_helper_LDADD   = src/plugins/libextmon_comms.a libgdnsd
 
 bin_PROGRAMS += src/plugins/gdnsd_geoip_test
 src_plugins_gdnsd_geoip_test_SOURCES  = src/plugins/gdnsd_geoip_test.c
-src_plugins_gdnsd_geoip_test_LDADD    = libgdmaps/libgdmaps.a libgdnsd/libgdnsd.a -lm -lurcu-qsbr -lev $(LIBUNWIND_LIBS) $(GEOIP2_LIBS)
+src_plugins_gdnsd_geoip_test_LDADD    = libgdmaps/libgdmaps.a libgdnsd/libgdnsd.a -lm -lurcu-qsbr -lev -lsodium $(LIBUNWIND_LIBS) $(GEOIP2_LIBS)
 
 bin_PROGRAMS += src/gdnsdctl
 src_gdnsdctl_SOURCES = src/gdnsdctl.c
-src_gdnsdctl_LDADD = src/libcsc.a libgdnsd/libgdnsd.a -lm $(LIBUNWIND_LIBS)
+src_gdnsdctl_LDADD = src/libcsc.a libgdnsd/libgdnsd.a -lm -lsodium $(LIBUNWIND_LIBS)
 
 sbin_PROGRAMS += src/gdnsd
 
@@ -221,7 +221,6 @@ libgdnsd_libgdnsd_a_SOURCES = \
 	include/gdnsd/rand.h \
 	include/gdnsd/file.h \
 	include/gdnsd/alloc.h \
-	include/gdnsd/mm3.h \
 	include/gdnsd/grcu.h \
 	libgdnsd/dname.c \
 	libgdnsd/net.c \

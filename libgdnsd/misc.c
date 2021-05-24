@@ -46,6 +46,8 @@
 #  include <pthread_np.h>
 #endif
 
+#include <sodium.h>
+
 /* misc */
 
 char* gdnsd_str_combine(const char* s1, const char* s2, const char** s2_offs)
@@ -165,6 +167,34 @@ char* gdnsd_str_subst(const char* haystack, const char* needle, const size_t nee
     gdnsd_assert(output[output_len] == '\0');
 
     return output;
+}
+
+static uint8_t sh_key[crypto_shorthash_KEYBYTES] = { 0 };
+
+void gdnsd_shorthash_init(void)
+{
+    static bool init_done = false;
+    if (!init_done) {
+        // The main daemon does sodium_init() very early, but this safely
+        // covers other use-cases for simpler CLI tools that indirectly use
+        // these shorthash functions for config hashes and the like.
+        if (sodium_init() < 0)
+            log_fatal("Could not initialize libsodium: %s", logf_errno());
+        crypto_shorthash_keygen(sh_key);
+        init_done = true;
+    }
+}
+
+uintptr_t gdnsd_shorthash_up(const uint8_t* data, const size_t len)
+{
+    static_assert(sizeof(uintptr_t) <= crypto_shorthash_BYTES,
+                  "shorthash writes at least uintptr_t bytes");
+    union {
+        uint8_t u8[crypto_shorthash_BYTES];
+        uintptr_t up;
+    } output;
+    crypto_shorthash(output.u8, data, len, sh_key);
+    return output.up;
 }
 
 void gdnsd_thread_setname(const char* n V_UNUSED)

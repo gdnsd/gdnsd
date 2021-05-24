@@ -29,7 +29,6 @@
 #include <gdnsd/log.h>
 #include <gdnsd/dname.h>
 #include <gdnsd/misc.h>
-#include <gdnsd/mm3.h>
 #include <gdnsd/grcu.h>
 
 #include <ev.h>
@@ -105,7 +104,7 @@ F_PURE F_NONNULL F_UNUSED
 static unsigned dname_hash(const uint8_t* input)
 {
     const uint32_t len = *input++ - 1U;
-    return hash_mm3_u32(input, len);
+    return gdnsd_shorthash_u32(input, len);
 }
 
 // A single challenge
@@ -209,7 +208,7 @@ static struct chal_tbl* chal_tbl_create(const struct cset* oldest_set, const str
     }
 
     if (total_count) { // We have things to hash
-        const uint32_t mask = count2mask(total_count << 1U);
+        const uint32_t mask = count2mask_u32(total_count << 1U);
         new_tbl = xcalloc(sizeof(*new_tbl) + (sizeof(new_tbl->tbl[0]) * (mask + 1U)));
         new_tbl->mask = mask;
         iter_old = oldest_set;
@@ -512,4 +511,5 @@ void chal_init(void)
     ev_timer* expire_ptr = &expire_timer;
     memset(expire_ptr, 0, sizeof(*expire_ptr));
     ev_timer_init(expire_ptr, cset_expire, 0., 0.);
+    gdnsd_shorthash_init(); // idempotent
 }
