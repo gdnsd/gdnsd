@@ -371,7 +371,7 @@ static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end)
 static void val_destroy(vscf_data_t* d);
 
 F_NONNULL F_WUNUSED
-static bool vscf_include_file(vscf_scnr_t* scnr, const char* fn, const size_t idx)
+static bool vscf_include_file(vscf_scnr_t* scnr, const char* fn)
 {
     vscf_data_t* inc_data = vscf_scan_filename(fn);
 
@@ -400,11 +400,6 @@ static bool vscf_include_file(vscf_scnr_t* scnr, const char* fn, const size_t id
         }
         val_destroy(inc_data);
     } else { // value context
-        if (idx > 1) {
-            parse_error("Include file '%s': cannot include multiple files in value context", fn);
-            val_destroy(inc_data);
-            return false;
-        }
         return add_to_cur_container(scnr, inc_data);
     }
 
@@ -424,8 +419,17 @@ static bool vscf_include_glob(vscf_scnr_t* scnr, const char* inc_glob, const int
     }
 
     if (globrv != GLOB_NOMATCH) {
+        vscf_data_t* cont = scnr->cont_stack[scnr->cont_stack_top];
+        if (!vscf_is_hash(cont) || scnr->cur_key) { // value-context
+            if (globbuf.gl_pathc > 1U) {
+                parse_error("Including '%s': cannot include multiple files in value context", inc_glob);
+                globfree(&globbuf);
+                return false;
+            }
+        }
+
         for (size_t i = 0; i < globbuf.gl_pathc; i++) {
-            if (!vscf_include_file(scnr, globbuf.gl_pathv[i], i)) {
+            if (!vscf_include_file(scnr, globbuf.gl_pathv[i])) {
                 globfree(&globbuf);
                 return false;
             }
