@@ -137,6 +137,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
     if (!vscf_is_hash(cfg)) { // synthesize a hash for multifo for single/array
         vscf_data_t* newhash = vscf_hash_new();
         vscf_data_t* plugname_cfg = vscf_simple_new("multifo", 7);
+        gdnsd_assert(plugname_cfg);
         vscf_hash_add_val("plugin", 6, newhash, plugname_cfg);
         const unsigned alen = vscf_array_get_len(cfg);
         for (unsigned i = 0; i < alen; i++) {

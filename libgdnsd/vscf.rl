@@ -237,8 +237,43 @@ static void array_add_val(vscf_array_t* a, vscf_data_t* v)
     a->vals[idx] = v;
 }
 
-F_NONNULL F_WUNUSED
-static vscf_simple_t* simple_new(const char* rval, const unsigned rlen)
+/*
+ * Takes a pointer to a constant simple key/value with len
+ * Allocates necessary storage and stores the unescaped version
+ *  in *out, returning the new length, which will be <= the original length
+ * Note also that the returned storage is one byte longer than indicated and
+ *  terminated with a NUL in that extra byte.  It serves two purposes:
+ * (1) Ensuring that the data pointer of a zero-length string/key is not NULL
+ *   (it points to one byte of NUL)
+ * (2) Allowing the treatment of vscf strings as NUL-terminated in cases where
+ *   embedded NULs are irrelevant (such as our own numeric conversions, and
+ *   probably many user-code cases too).
+ */
+F_NONNULLX(2, 3, 4) F_WUNUSED
+static bool unescape_string(vscf_scnr_t* scnr, char** outp, unsigned* outlenp, const char* in, unsigned len)
+{
+    char* out = xmalloc(len + 1);
+    unsigned newlen = len;
+    if (len) {
+        newlen = dns_unescape(out, in, len);
+        gdnsd_assert(newlen <= len);
+        if (!newlen) {
+            if (scnr)
+                parse_error_noargs("Cannot unescape string by DNS escaping rules");
+            free(out);
+            return false;
+        }
+        if (newlen != len)
+            out = xrealloc(out, newlen + 1); // downsize
+    }
+    out[newlen] = 0;
+    *outp = out;
+    *outlenp = newlen;
+    return true;
+}
+
+F_NONNULLX(2) F_WUNUSED
+static vscf_simple_t* simple_new(vscf_scnr_t* scnr, const char* rval, const unsigned rlen)
 {
     vscf_simple_t* s = xcalloc(sizeof(*s));
     char* storage = xmalloc(rlen + 1U);
@@ -247,6 +282,11 @@ static vscf_simple_t* simple_new(const char* rval, const unsigned rlen)
     s->type   = VSCF_SIMPLE_T;
     s->rlen   = rlen;
     s->rval   = storage;
+    if (!unescape_string(scnr, &s->val, &s->len, storage, rlen)) {
+        free(storage);
+        free(s);
+        return NULL;
+    }
     return s;
 }
 
@@ -282,7 +322,15 @@ static vscf_array_t* array_clone(const vscf_array_t* a, const bool ignore_marked
 F_NONNULL F_WUNUSED F_RETNN
 static vscf_simple_t* simple_clone(const vscf_simple_t* s)
 {
-    return simple_new(s->rval, s->rlen);
+    vscf_simple_t* new_s = xcalloc(sizeof(*new_s));
+    new_s->type = VSCF_SIMPLE_T;
+    new_s->rval = xmalloc(s->rlen + 1U);
+    new_s->val = xmalloc(s->len + 1U);
+    new_s->rlen = s->rlen;
+    new_s->len = s->len;
+    memcpy(new_s->rval, s->rval, s->rlen + 1U);
+    memcpy(new_s->val, s->val, s->len + 1U);
+    return new_s;
 }
 
 F_WUNUSED F_RETNN
@@ -305,40 +353,14 @@ static vscf_data_t* val_clone(const vscf_data_t* d, const bool ignore_marked)
     return rv;
 }
 
-/*
- * Takes a pointer to a constant simple key/value with len
- * Allocates necessary storage and stores the unescaped version
- *  in *out, returning the new length, which will be <= the original length
- * Note also that the returned storage is one byte longer than indicated and
- *  terminated with a NUL in that extra byte.  It serves two purposes:
- * (1) Ensuring that the data pointer of a zero-length string/key is not NULL
- *   (it points to one byte of NUL)
- * (2) Allowing the treatment of vscf strings as NUL-terminated in cases where
- *   embedded NULs are irrelevant (such as our own numeric conversions, and
- *   probably many user-code cases too).
- */
-F_NONNULL
-static unsigned unescape_string(char** outp, const char* in, unsigned len)
-{
-    char* out = xmalloc(len + 1);
-    unsigned newlen = len;
-    if (len) {
-        newlen = dns_unescape(out, in, len);
-        gdnsd_assert(newlen && newlen <= len);
-        if (newlen != len)
-            out = xrealloc(out, newlen + 1); // downsize
-    }
-    out[newlen] = 0;
-    *outp = out;
-    return newlen;
-}
-
-F_NONNULL
-static void set_key(vscf_scnr_t* scnr, const char* end)
+F_NONNULL F_WUNUSED
+static bool set_key(vscf_scnr_t* scnr, const char* end)
 {
     gdnsd_assert(scnr->tstart);
-    scnr->cur_klen = unescape_string(&scnr->cur_key, scnr->tstart, end - scnr->tstart);
+    if (!unescape_string(scnr, &scnr->cur_key, &scnr->cur_klen, scnr->tstart, end - scnr->tstart))
+        return false;
     scnr->tstart = NULL;
+    return true;
 }
 
 F_NONNULL F_WUNUSED
@@ -363,7 +385,9 @@ static bool scnr_set_simple(vscf_scnr_t* scnr, const char* end)
 {
     gdnsd_assert(scnr->tstart);
     const unsigned rlen = end - scnr->tstart;
-    vscf_simple_t* s = simple_new(scnr->tstart, rlen);
+    vscf_simple_t* s = simple_new(scnr, scnr->tstart, rlen);
+    if (!s)
+        return false;
     scnr->tstart = NULL;
     return add_to_cur_container(scnr, (vscf_data_t*)s);
 }
@@ -513,13 +537,6 @@ static bool scnr_proc_include(vscf_scnr_t* scnr, const char* end)
     return rv;
 }
 
-F_NONNULL
-static void vscf_simple_ensure_val(vscf_simple_t* s)
-{
-    if (!s->val)
-        s->len = unescape_string(&s->val, s->rval, s->rlen);
-}
-
 F_NONNULL F_WUNUSED
 static bool cont_stack_push(vscf_scnr_t* scnr, vscf_data_t* c)
 {
@@ -608,11 +625,15 @@ static void val_destroy(vscf_data_t* d)
 
     action token_start { scnr->tstart = fpc; }
 
-    action set_key { set_key(scnr, fpc); }
+    action set_key {
+        if (!set_key(scnr, fpc))
+            fbreak;
+    }
 
     action set_key_q {
         scnr->tstart++;
-        set_key(scnr, fpc - 1);
+        if (!set_key(scnr, fpc - 1))
+            fbreak;
     }
 
     action set_simple {
@@ -881,14 +902,12 @@ vscf_data_t* vscf_get_parent(const vscf_data_t* d)
 unsigned vscf_simple_get_len(vscf_data_t* d)
 {
     gdnsd_assert(vscf_is_simple(d));
-    vscf_simple_ensure_val(&d->simple);
     return d->simple.len;
 }
 
 const char* vscf_simple_get_data(vscf_data_t* d)
 {
     gdnsd_assert(vscf_is_simple(d));
-    vscf_simple_ensure_val(&d->simple);
     return d->simple.val;
 }
 
@@ -1011,7 +1030,6 @@ void vscf_hash_sort(const vscf_data_t* d, vscf_key_cmp_cb_t f)
 bool vscf_simple_get_as_ulong(vscf_data_t* d, unsigned long* out)
 {
     gdnsd_assert(vscf_is_simple(d));
-    vscf_simple_ensure_val(&d->simple);
     if (!d->simple.len)
         return false;
     char* eptr;
@@ -1030,7 +1048,6 @@ bool vscf_simple_get_as_ulong(vscf_data_t* d, unsigned long* out)
 bool vscf_simple_get_as_long(vscf_data_t* d, long* out)
 {
     gdnsd_assert(vscf_is_simple(d));
-    vscf_simple_ensure_val(&d->simple);
     if (!d->simple.len)
         return false;
     char* eptr;
@@ -1049,7 +1066,6 @@ bool vscf_simple_get_as_long(vscf_data_t* d, long* out)
 bool vscf_simple_get_as_double(vscf_data_t* d, double* out)
 {
     gdnsd_assert(vscf_is_simple(d));
-    vscf_simple_ensure_val(&d->simple);
     if (!d->simple.len)
         return false;
     char* eptr;
@@ -1068,7 +1084,6 @@ bool vscf_simple_get_as_double(vscf_data_t* d, double* out)
 bool vscf_simple_get_as_bool(vscf_data_t* d, bool* out)
 {
     gdnsd_assert(vscf_is_simple(d));
-    vscf_simple_ensure_val(&d->simple);
     if (d->simple.len == 4
             && (d->simple.val[0] == 'T' || d->simple.val[0] == 't')
             && (d->simple.val[1] == 'R' || d->simple.val[1] == 'r')
@@ -1109,7 +1124,7 @@ vscf_data_t* vscf_array_new(void)
 
 vscf_data_t* vscf_simple_new(const char* rval, const unsigned rlen)
 {
-    return (vscf_data_t*)simple_new(rval, rlen);
+    return (vscf_data_t*)simple_new(NULL, rval, rlen);
 }
 
 void vscf_array_add_val(vscf_data_t* a, vscf_data_t* v)
