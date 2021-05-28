@@ -31,9 +31,6 @@
 #include <netdb.h>
 #include <errno.h>
 
-#define gdnsd_anysin_getaddrinfo gdnsd_anysin_getaddrinfo
-#define gdnsd_anysin_fromstr gdnsd_anysin_fromstr
-
 #if EAGAIN == EWOULDBLOCK
 #  define ERRNO_WOULDBLOCK (errno == EAGAIN)
 #else
