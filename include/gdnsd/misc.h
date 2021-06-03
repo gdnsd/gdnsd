@@ -110,7 +110,7 @@ static uint32_t count2mask(const uint32_t x)
 {
     // This variant is about twice as fast as the above, but
     //  only available w/ GCC 3.4 and above.
-    return ((1U << (31U ^ (unsigned)__builtin_clz(x | 1U))) << 1U) - 1U;
+    return (2U << (31 ^ __builtin_clz(x | 1U))) - 1U;
 }
 
 #endif
