@@ -313,42 +313,33 @@ static bool gdnsd_dname_isinzone(const uint8_t* parent, const uint8_t* child)
     gdnsd_assert(gdnsd_dname_status(parent) == DNAME_VALID);
     gdnsd_assert(gdnsd_dname_status(child) == DNAME_VALID);
 
-    bool rv = false;
+    // Grab the overall lens and advance the pointer to the start of the first
+    // label in both cases:
     const unsigned plen = *parent++;
     const unsigned clen = *child++;
     gdnsd_assert(plen); // implied by DNAME_VALID check above
     gdnsd_assert(clen); // implied by DNAME_VALID check above
 
-    if (plen <= clen) { // if child shorter than parent, cannot be isinzone
-        // child_pstart is the hypothetical location of
-        //   the trailing "parent" in "child" if isinzone
-        const uint8_t* child_pstart = child + (clen - plen);
-        if (!memcmp(child_pstart, parent, plen)) { // basic trailing ~match
-            // There are corner cases that can fool the quick memcmp check
-            //   into a false positive.  Basically, picture www.xfoo.com vs
-            //   foo.com, where 'x' happens to be the integer value 3 (the
-            //   length of "foo") within child's label. This is more
-            //   realistic for long labels where the length byte could be
-            //   in the ASCII range for numerals, so we must iterate
-            //   child's actual labels and make sure that one of them falls
-            //   exactly on child_pstart.
-            while (*child) { // not reached the terminal \0
-                if (child == child_pstart) { // definite match
-                    rv = true;
-                    break;
-                }
-                // jump to next start-of-label
-                const unsigned llen = *child++;
-                child += llen;
-            }
-            // the above misses the case of both parent and child being the
-            //   root zone of the DNS, and this catches it.
-            if (plen == 1)
-                rv = true;
-        }
+    // if child shorter than parent, cannot be in zone:
+    if (plen > clen)
+        return false;
+
+    // Quick memcmp check: if the same bytes as "parent" exist at the end of
+    // "child", this *might* be in-zone, otherwise definitely not.
+    const unsigned parent_start = clen - plen;
+    if (memcmp(&child[parent_start], parent, plen))
+        return false;
+
+    // Now we know the final bytes match, but we need to ensure the match
+    // starts at a label boundary in the child...
+    unsigned child_label_idx = 0;
+    while (child_label_idx < parent_start) {
+        const unsigned llen = child[child_label_idx++];
+        child_label_idx += llen;
     }
 
-    return rv;
+    // If we land right on the money, the child is in the zone!
+    return child_label_idx == parent_start;
 }
 
 // both arguments must be DNAME_VALID, and dname must be known
