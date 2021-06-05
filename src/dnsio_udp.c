@@ -301,15 +301,39 @@ static void ipv6_pktinfo_ifindex_fixup(struct msghdr* msg_hdr)
     }
 }
 
-F_HOT F_NONNULL
-static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct msghdr* msg_hdr, ssize_t recvmsg_rv)
+// Once traffic has become "idle", the mainloop invokes this function, which is
+// intended to reliably block as long as it can, until either the terminal
+// signal or fresh network traffic arrives.  We have to be careful about signal
+// handler races which could cause indefinite ignorance of shutdown here!
+static void slow_idle_poll(const int fd)
 {
-    if (unlikely(recvmsg_rv < 0)) {
-        log_neterr("UDP recvmsg() error: %s", logf_errno());
-        stats_own_inc(&stats->udp.recvfail);
-        return;
+    // Block all signals
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_all, NULL))
+        log_fatal("pthread_sigmask() failed");
+
+    // check thread_shutdown one more time here to catch any USR2 that landed
+    // since the last mainloop check but before the sigmask above.
+    if (likely(!thread_shutdown)) {
+        // ppoll once for fd input + SIGUSR2, for up to infinite time
+        struct pollfd ppfd = {
+            .fd = fd,
+            .events = (POLLIN | POLLERR | POLLHUP),
+            .revents = 0 // we don't care what results land here
+        };
+        errno = 0;
+        const int pprv = ppoll(&ppfd, 1, NULL, &sigmask_notusr2);
+        if (pprv < 0 && errno != EINTR)
+            log_neterr("UDP ppoll() error: %s", logf_errno());
     }
 
+    // Restore the unblocked-USR2 setup for the fast path
+    if (pthread_sigmask(SIG_SETMASK, &sigmask_notusr2, NULL))
+        log_fatal("pthread_sigmask() failed");
+}
+
+F_HOT F_NONNULL
+static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct msghdr* msg_hdr, const size_t buf_in_len)
+{
     gdnsd_anysin_t* sa = msg_hdr->msg_name;
     if (unlikely(
                 (sa->sa.sa_family == AF_INET && !sa->sin4.sin_port)
@@ -322,7 +346,6 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
     if (sa->sa.sa_family == AF_INET6)
         ipv6_pktinfo_ifindex_fixup(msg_hdr);
 
-    size_t buf_in_len = (size_t)recvmsg_rv;
     sa->len = msg_hdr->msg_namelen;
     struct iovec* iov = msg_hdr->msg_iov;
     iov->iov_len = process_dns_query(pctx, sa, iov->iov_base, NULL, buf_in_len);
@@ -337,38 +360,6 @@ static void process_msg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats
                        iov->iov_len, logf_anysin(sa), logf_errno());
         }
     }
-}
-
-// Once traffic has become "idle", the mainloop invokes this function, which is
-// intended to reliably block as long as it can, until either the terminal
-// signal or fresh network traffic arrives.  We have to be careful about signal
-// handler races which could cause indefinite ignorance of shutdown here!
-static bool slow_idle_poll(const int fd)
-{
-    // Block all signals
-    if (pthread_sigmask(SIG_SETMASK, &sigmask_all, NULL))
-        log_fatal("pthread_sigmask() failed");
-
-    // check thread_shutdown one more time here to catch any USR2 that landed
-    // since the last mainloop check but before the sigmask above.
-    if (unlikely(thread_shutdown))
-        return true;
-
-    // ppoll once for fd input + SIGUSR2, for up to infinite time
-    struct pollfd ppfd = {
-        .fd = fd,
-        .events = (POLLIN | POLLERR | POLLHUP),
-        .revents = 0 // we don't care what results land here
-    };
-    errno = 0;
-    const int pprv = ppoll(&ppfd, 1, NULL, &sigmask_notusr2);
-    if (pprv < 0 && errno != EINTR)
-        log_neterr("UDP ppoll() error: %s", logf_errno());
-
-    // Restore the unblocked-USR2 setup for the fast path
-    if (pthread_sigmask(SIG_SETMASK, &sigmask_notusr2, NULL))
-        log_fatal("pthread_sigmask() failed");
-    return false;
 }
 
 F_HOT F_NONNULL
@@ -410,17 +401,17 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
         rcu_quiescent_state();
         const ssize_t recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
         if (unlikely(recvmsg_rv < 0)) {
-            if (unlikely(errno == EINTR))
-                continue;
             if (ERRNO_WOULDBLOCK) {
                 rcu_thread_offline();
-                if (slow_idle_poll(fd))
-                    break;
+                slow_idle_poll(fd);
                 rcu_thread_online();
-                continue;
+            } else if (errno != EINTR) {
+                log_neterr("UDP recvmsg() error: %s", logf_errno());
+                stats_own_inc(&stats->udp.recvfail);
             }
+            continue;
         }
-        process_msg(fd, pctx, stats, &msg_hdr, recvmsg_rv);
+        process_msg(fd, pctx, stats, &msg_hdr, (size_t)recvmsg_rv);
     }
 
     free(buf);
@@ -429,26 +420,15 @@ static void mainloop(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, c
 #ifdef USE_MMSG
 
 F_HOT F_NONNULL
-static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct mmsghdr* dgrams, ssize_t mmsg_rv)
+static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* stats, struct mmsghdr* dgrams, const unsigned pkts)
 {
-    gdnsd_assert(mmsg_rv != 0);
-    if (unlikely(mmsg_rv < 0)) {
-        stats_own_inc(&stats->udp.recvfail);
-        log_neterr("UDP recvmmsg() error: %s", logf_errno());
-        return;
-    }
-
     // For each input packet, first check for source port zero (in which case
     // we instantly drop it at this layer), then process it through
     // process_dns_query to generate a response (which may return a length of
     // zero to indicate a need to drop the response as well).  The resulting
     // response size (or zero for drop) is stored to the iov_len.
-    unsigned pkts = (unsigned)mmsg_rv;
-    gdnsd_assert(pkts <= MMSG_WIDTH);
     for (unsigned i = 0; i < pkts; i++) {
         gdnsd_anysin_t* asp = dgrams[i].msg_hdr.msg_name;
-        if (asp->sa.sa_family == AF_INET6)
-            ipv6_pktinfo_ifindex_fixup(&dgrams[i].msg_hdr);
         struct iovec* iop = &dgrams[i].msg_hdr.msg_iov[0];
         if (unlikely((asp->sa.sa_family == AF_INET && !asp->sin4.sin_port)
                      || (asp->sa.sa_family == AF_INET6 && !asp->sin6.sin6_port))) {
@@ -456,6 +436,8 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
             stats_own_inc(&stats->dropped);
             iop->iov_len = 0; // skip send, same as if process_dns_query() rejected it
         } else {
+            if (asp->sa.sa_family == AF_INET6)
+                ipv6_pktinfo_ifindex_fixup(&dgrams[i].msg_hdr);
             asp->len = dgrams[i].msg_hdr.msg_namelen;
             iop->iov_len = process_dns_query(pctx, asp, iop->iov_base, NULL, dgrams[i].msg_len);
         }
@@ -483,6 +465,7 @@ static void process_mmsgs(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         if (to_send) {
             // attempt to send next run of non-zeros, retrying on EINTR:
             struct mmsghdr* first = &dgrams[pkts_done];
+            ssize_t mmsg_rv;
             do {
                 mmsg_rv = sendmmsg(fd, first, to_send, MSG_DONTWAIT);
                 // sendmmsg returns [1 - to_send] or -1, never zero:
@@ -559,17 +542,19 @@ static void mainloop_mmsg(const int fd, dnsp_ctx_t* pctx, dnspacket_stats_t* sta
         rcu_quiescent_state();
         const ssize_t mmsg_rv = recvmmsg(fd, dgrams, MMSG_WIDTH, MSG_WAITFORONE, NULL);
         if (unlikely(mmsg_rv < 0)) {
-            if (unlikely(errno == EINTR))
-                continue;
             if (ERRNO_WOULDBLOCK) {
                 rcu_thread_offline();
-                if (slow_idle_poll(fd))
-                    break;
+                slow_idle_poll(fd);
                 rcu_thread_online();
-                continue;
+            } else if (errno != EINTR) {
+                stats_own_inc(&stats->udp.recvfail);
+                log_neterr("UDP recvmmsg() error: %s", logf_errno());
             }
+            continue;
         }
-        process_mmsgs(fd, pctx, stats, dgrams, mmsg_rv);
+        gdnsd_assert(mmsg_rv <= MMSG_WIDTH); // never returns more than we ask
+        gdnsd_assert(mmsg_rv > 0); // never returns zero
+        process_mmsgs(fd, pctx, stats, dgrams, (unsigned)mmsg_rv);
     }
 
     free(bufs);
