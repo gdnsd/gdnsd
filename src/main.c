@@ -266,11 +266,7 @@ F_NONNULL
 static void start_threads(const struct socks_cfg* socks_cfg)
 {
     dnsio_udp_init(getpid());
-    size_t num_tcp_threads = 0;
-    for (size_t i = 0; i < socks_cfg->num_dns_threads; i++)
-        if (!socks_cfg->dns_threads[i].is_udp)
-            num_tcp_threads++;
-    dnsio_tcp_init(num_tcp_threads);
+    dnsio_tcp_init(CDL_GET_COUNT(&socks_cfg->dns_tcp_threads));
 
     // Block all signals using the pthreads interface while starting threads,
     //  which causes them to inherit the same mask.
@@ -289,15 +285,17 @@ static void start_threads(const struct socks_cfg* socks_cfg)
 
     int pthread_err;
 
-    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        struct dns_thread* t = &socks_cfg->dns_threads[i];
-        if (t->is_udp)
-            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, t);
-        else
-            pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, t);
+    CDL_FOR_EACH(&socks_cfg->dns_udp_threads, struct dns_thread, dns_threads_entry, t) {
+        pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_udp_start, t);
         if (pthread_err)
-            log_fatal("pthread_create() of DNS thread %u (for %s:%s) failed: %s",
-                      i, t->is_udp ? "UDP" : "TCP", logf_anysin(&t->ac->addr), logf_strerror(pthread_err));
+            log_fatal("pthread_create() of DNS thread for UDP %s failed: %s",
+                      logf_anysin(&t->ac->addr), logf_strerror(pthread_err));
+    }
+    CDL_FOR_EACH(&socks_cfg->dns_tcp_threads, struct dns_thread, dns_threads_entry, t) {
+        pthread_err = pthread_create(&t->threadid, &attribs, &dnsio_tcp_start, t);
+        if (pthread_err)
+            log_fatal("pthread_create() of DNS thread for TCP %s failed: %s",
+                      logf_anysin(&t->ac->addr), logf_strerror(pthread_err));
     }
 
     // Restore the original mask in the main thread, so
@@ -311,24 +309,30 @@ F_NONNULL
 static void request_io_threads_stop(const struct socks_cfg* socks_cfg)
 {
     dnsio_tcp_request_threads_stop();
-    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        const struct dns_thread* t = &socks_cfg->dns_threads[i];
-        if (t->is_udp)
-            pthread_kill(t->threadid, SIGUSR2);
+    CDL_FOR_EACH(&socks_cfg->dns_udp_threads, struct dns_thread, dns_threads_entry, t) {
+        pthread_kill(t->threadid, SIGUSR2);
     }
+}
+
+F_NONNULL
+static void wait_io_thread_stop(const struct dns_thread* t)
+{
+    void* raw_exit_status = (void*)42U;
+    const int pthread_err = pthread_join(t->threadid, &raw_exit_status);
+    if (pthread_err)
+        log_err("pthread_join() of DNS thread failed: %s", logf_strerror(pthread_err));
+    if (raw_exit_status != NULL)
+        log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
 }
 
 F_NONNULL
 static void wait_io_threads_stop(const struct socks_cfg* socks_cfg)
 {
-    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        const struct dns_thread* t = &socks_cfg->dns_threads[i];
-        void* raw_exit_status = (void*)42U;
-        int pthread_err = pthread_join(t->threadid, &raw_exit_status);
-        if (pthread_err)
-            log_err("pthread_join() of DNS thread failed: %s", logf_strerror(pthread_err));
-        if (raw_exit_status != NULL)
-            log_err("pthread_join() of DNS thread returned %p", raw_exit_status);
+    CDL_FOR_EACH(&socks_cfg->dns_udp_threads, struct dns_thread, dns_threads_entry, t) {
+        wait_io_thread_stop(t);
+    }
+    CDL_FOR_EACH(&socks_cfg->dns_tcp_threads, struct dns_thread, dns_threads_entry, t) {
+        wait_io_thread_stop(t);
     }
 }
 

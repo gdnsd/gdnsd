@@ -55,16 +55,6 @@ static const struct dns_addr addr_defs_defaults = {
     .tcp_pad = false,
 };
 
-static const struct socks_cfg socks_cfg_defaults = {
-    .dns_addrs = NULL,
-    .dns_threads = NULL,
-    .ctl_addrs = NULL,
-    .num_dns_addrs = 0U,
-    .num_dns_threads = 0U,
-    .num_ctl_addrs = 0U,
-    .fd_estimate = 0LU,
-};
-
 // Generic iterator for catching bad config hash keys in various places below
 F_NONNULL noreturn
 static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* which_asvoid)
@@ -131,14 +121,14 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, struct any
 F_NONNULL
 static void dns_listen_any(struct socks_cfg* socks_cfg, const struct dns_addr* addr_defs)
 {
-    socks_cfg->num_dns_addrs = 2;
-    socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
-    struct dns_addr* ac_v4 = &socks_cfg->dns_addrs[0];
+    struct dns_addr* ac_v4 = xcalloc(sizeof(*ac_v4));
     memcpy(ac_v4, addr_defs, sizeof(*ac_v4));
     make_addr("0.0.0.0", addr_defs->dns_port, &ac_v4->addr);
-    struct dns_addr* ac_v6 = &socks_cfg->dns_addrs[1];
+    CDL_ADD_TAIL(&socks_cfg->dns_addrs, dns_addrs_entry, ac_v4);
+    struct dns_addr* ac_v6 = xcalloc(sizeof(*ac_v6));
     memcpy(ac_v6, addr_defs, sizeof(*ac_v6));
     make_addr("::", addr_defs->dns_port, &ac_v6->addr);
+    CDL_ADD_TAIL(&socks_cfg->dns_addrs, dns_addrs_entry, ac_v6);
 }
 
 F_NONNULL
@@ -198,25 +188,25 @@ static void fill_dns_addrs(struct socks_cfg* socks_cfg, vscf_data_t* listen_opt,
     }
 
     if (vscf_is_hash(listen_opt)) {
-        socks_cfg->num_dns_addrs = vscf_hash_get_len(listen_opt);
-        socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
-        for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-            struct dns_addr* addrconf = &socks_cfg->dns_addrs[i];
+        const unsigned n_addrs = vscf_hash_get_len(listen_opt);
+        for (unsigned i = 0; i < n_addrs; i++) {
+            struct dns_addr* addrconf = xcalloc(sizeof(*addrconf));
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
             const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
             vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
             process_listen_hashentry(addrconf, lspec, addr_opts);
+            CDL_ADD_TAIL(&socks_cfg->dns_addrs, dns_addrs_entry, addrconf);
         }
     } else {
-        socks_cfg->num_dns_addrs = vscf_array_get_len(listen_opt);
-        socks_cfg->dns_addrs = xcalloc_n(socks_cfg->num_dns_addrs, sizeof(*socks_cfg->dns_addrs));
-        for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-            struct dns_addr* addrconf = &socks_cfg->dns_addrs[i];
+        const unsigned n_addrs = vscf_array_get_len(listen_opt);
+        for (unsigned i = 0; i < n_addrs; i++) {
+            struct dns_addr* addrconf = xcalloc(sizeof(*addrconf));
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
             vscf_data_t* lspec = vscf_array_get_data(listen_opt, i);
             if (!vscf_is_simple(lspec))
                 log_fatal("Config option 'listen': all listen specs must be strings");
             make_addr(vscf_simple_get_data(lspec), addr_defs->dns_port, &addrconf->addr);
+            CDL_ADD_TAIL(&socks_cfg->dns_addrs, dns_addrs_entry, addrconf);
         }
     }
 }
@@ -227,49 +217,35 @@ static void process_listen(struct socks_cfg* socks_cfg, vscf_data_t* listen_opt,
     // this fills in socks_cfg->dns_addrs raw data
     fill_dns_addrs(socks_cfg, listen_opt, addr_defs);
 
-    if (!socks_cfg->num_dns_addrs)
+    if (CDL_IS_EMPTY(&socks_cfg->dns_addrs))
         log_fatal("DNS listen addresses explicitly configured as an empty set - cannot continue without at least one address!");
 
     // use dns_addrs to populate dns_threads....
 
-    socks_cfg->num_dns_threads = 0;
-    for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++)
-        socks_cfg->num_dns_threads += (socks_cfg->dns_addrs[i].udp_threads + socks_cfg->dns_addrs[i].tcp_threads);
-
-    // Because we require thread counts to be non-zero
-    gdnsd_assume(socks_cfg->num_dns_threads);
-
-    socks_cfg->dns_threads = xcalloc_n(socks_cfg->num_dns_threads, sizeof(*socks_cfg->dns_threads));
-
-    unsigned tnum = 0;
-    for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-        struct dns_addr* a = &socks_cfg->dns_addrs[i];
-
-        for (unsigned j = 0; j < a->udp_threads; j++) {
-            struct dns_thread* t = &socks_cfg->dns_threads[tnum++];
-            t->ac = a;
-            t->is_udp = true;
+    CDL_FOR_EACH(&socks_cfg->dns_addrs, struct dns_addr, dns_addrs_entry, da) {
+        for (unsigned j = 0; j < da->udp_threads; j++) {
+            struct dns_thread* t = xcalloc(sizeof(*t));
+            t->ac = da;
             t->sock = -1;
+            CDL_ADD_TAIL(&socks_cfg->dns_udp_threads, dns_threads_entry, t);
         }
 
-        for (unsigned j = 0; j < a->tcp_threads; j++) {
-            struct dns_thread* t = &socks_cfg->dns_threads[tnum++];
-            t->ac = a;
-            t->is_udp = false;
+        for (unsigned j = 0; j < da->tcp_threads; j++) {
+            struct dns_thread* t = xcalloc(sizeof(*t));
+            t->ac = da;
             t->sock = -1;
+            CDL_ADD_TAIL(&socks_cfg->dns_tcp_threads, dns_threads_entry, t);
         }
 
-        if (a->tcp_proxy) {
-            gdnsd_assert(!a->udp_threads);
+        if (da->tcp_proxy) {
+            gdnsd_assert(!da->udp_threads);
             log_info("DNS listener threads (%u TCP PROXY) configured for %s",
-                     a->tcp_threads, logf_anysin(&a->addr));
+                     da->tcp_threads, logf_anysin(&da->addr));
         } else {
             log_info("DNS listener threads (%u UDP + %u TCP) configured for %s",
-                     a->udp_threads, a->tcp_threads, logf_anysin(&a->addr));
+                     da->udp_threads, da->tcp_threads, logf_anysin(&da->addr));
         }
     }
-
-    gdnsd_assert(tnum == socks_cfg->num_dns_threads);
 }
 
 F_NONNULLX(1, 2)
@@ -303,25 +279,23 @@ F_NONNULL
 static void process_tcp_control(struct socks_cfg* socks_cfg, vscf_data_t* ctl_opt)
 {
     if (vscf_is_hash(ctl_opt)) {
-        socks_cfg->num_ctl_addrs = vscf_hash_get_len(ctl_opt);
-        if (!socks_cfg->num_ctl_addrs)
-            return;
-        socks_cfg->ctl_addrs = xcalloc_n(socks_cfg->num_ctl_addrs, sizeof(*socks_cfg->ctl_addrs));
-        for (unsigned i = 0; i < socks_cfg->num_ctl_addrs; i++) {
+        const unsigned n_ctl = vscf_hash_get_len(ctl_opt);
+        for (unsigned i = 0; i < n_ctl; i++) {
             const char* lspec = vscf_hash_get_key_byindex(ctl_opt, i, NULL);
             vscf_data_t* addr_opts = vscf_hash_get_data_byindex(ctl_opt, i);
-            process_control_item(&socks_cfg->ctl_addrs[i], lspec, addr_opts);
+            struct ctl_addr* ca = xcalloc(sizeof(*ca));
+            process_control_item(ca, lspec, addr_opts);
+            CDL_ADD_TAIL(&socks_cfg->ctl_addrs, ctl_addrs_entry, ca);
         }
     } else {
-        socks_cfg->num_ctl_addrs = vscf_array_get_len(ctl_opt);
-        if (!socks_cfg->num_ctl_addrs)
-            return;
-        socks_cfg->ctl_addrs = xcalloc_n(socks_cfg->num_ctl_addrs, sizeof(*socks_cfg->ctl_addrs));
-        for (unsigned i = 0; i < socks_cfg->num_ctl_addrs; i++) {
+        const unsigned n_ctl = vscf_array_get_len(ctl_opt);
+        for (unsigned i = 0; i < n_ctl; i++) {
             vscf_data_t* v_lspec = vscf_array_get_data(ctl_opt, i);
             if (!vscf_is_simple(v_lspec))
                 log_fatal("Config option 'tcp_control': all listen specs must be strings");
-            process_control_item(&socks_cfg->ctl_addrs[i], vscf_simple_get_data(v_lspec), NULL);
+            struct ctl_addr* ca = xcalloc(sizeof(*ca));
+            process_control_item(ca, vscf_simple_get_data(v_lspec), NULL);
+            CDL_ADD_TAIL(&socks_cfg->ctl_addrs, ctl_addrs_entry, ca);
         }
     }
 }
@@ -330,8 +304,7 @@ struct socks_cfg* socks_conf_load(const vscf_data_t* cfg_root)
 {
     gdnsd_assert(!cfg_root || vscf_is_hash(cfg_root));
 
-    struct socks_cfg* socks_cfg = xmalloc(sizeof(*socks_cfg));
-    memcpy(socks_cfg, &socks_cfg_defaults, sizeof(*socks_cfg));
+    struct socks_cfg* socks_cfg = xcalloc(sizeof(*socks_cfg));
 
     vscf_data_t* listen_opt = NULL;
     vscf_data_t* ctl_opt = NULL;
@@ -361,8 +334,7 @@ struct socks_cfg* socks_conf_load(const vscf_data_t* cfg_root)
         process_tcp_control(socks_cfg, ctl_opt);
 
     // Estimate the number of socket fds needed, for later rlimit auto-tuning:
-    for (unsigned i = 0; i < socks_cfg->num_dns_addrs; i++) {
-        const struct dns_addr* da = &socks_cfg->dns_addrs[i];
+    CDL_FOR_EACH(&socks_cfg->dns_addrs, struct dns_addr, dns_addrs_entry, da) {
         socks_cfg->fd_estimate += da->udp_threads; // listener
         socks_cfg->fd_estimate +=
             (da->tcp_threads * (da->tcp_clients_per_thread + 5U));
@@ -373,7 +345,7 @@ struct socks_cfg* socks_conf_load(const vscf_data_t* cfg_root)
 
     // There's no actual limit on client connections to control sockets, but
     // let's estimate that 16 clients is enough for a default here.
-    socks_cfg->fd_estimate += (socks_cfg->num_ctl_addrs * 17U);
+    socks_cfg->fd_estimate += CDL_GET_COUNT(&socks_cfg->ctl_addrs) * 17U;
 
     return socks_cfg;
 }
@@ -435,11 +407,10 @@ void socks_bind_sock(const char* desc, const int sock, const struct anysin* sa)
 
 void socks_dns_lsocks_init(struct socks_cfg* socks_cfg)
 {
-    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        struct dns_thread* t = &socks_cfg->dns_threads[i];
-        if (t->is_udp)
-            udp_sock_setup(t);
-        else
-            tcp_dns_listen_setup(t);
+    CDL_FOR_EACH(&socks_cfg->dns_udp_threads, struct dns_thread, dns_threads_entry, t) {
+        udp_sock_setup(t);
+    }
+    CDL_FOR_EACH(&socks_cfg->dns_tcp_threads, struct dns_thread, dns_threads_entry, t) {
+        tcp_dns_listen_setup(t);
     }
 }

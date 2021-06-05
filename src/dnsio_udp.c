@@ -574,9 +574,8 @@ void* dnsio_udp_start(void* thread_asvoid)
     gdnsd_thread_setname("gdnsd-io-udp");
 
     const struct dns_thread* t = thread_asvoid;
-    gdnsd_assert(t->is_udp);
-
     const struct dns_addr* addrconf = t->ac;
+    gdnsd_assume(addrconf);
 
     struct dns_stats* stats;
     struct dnsp_ctx* pctx = dnspacket_ctx_init_udp(&stats, is_ipv6(&addrconf->addr));

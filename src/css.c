@@ -26,6 +26,7 @@
 #include "main.h"
 #include "socks.h"
 #include "chal.h"
+#include "cdl.h"
 
 #include <gdnsd/compiler.h>
 #include <gdnsd/alloc.h>
@@ -103,9 +104,10 @@ static void conn_queue_clear(struct css_connq* queue)
     }
 }
 
-struct css_tcp_lsnr {
+struct tcp_lsnr {
+    CDL_ENTRY(struct tcp_lsnr) tcp_lsnrs_entry;
     struct css* css;
-    struct ctl_addr* ctl_addr; // points at &css->socks_cfg->ctl_addrs[x]
+    struct ctl_addr* ctl_addr;
     ev_io w_tcp_accept; // holds the listen fd inside as well
 };
 
@@ -116,7 +118,7 @@ struct css {
     uint32_t status_d;
     ev_io w_accept;
     ev_timer w_replace;
-    struct css_tcp_lsnr* tcp_lsnrs;
+    CDL_ROOT(struct tcp_lsnr) tcp_lsnrs; // cppcheck-suppress unusedStructMember
     struct ev_loop* loop;
     struct css_conn* clients;
     struct css_connq reload_zones_queued;
@@ -382,8 +384,8 @@ static void css_watch_replace(struct ev_loop* loop, ev_timer* w, int revents V_U
         // Re-start our accept watcher
         ev_io* w_accept = &css->w_accept;
         ev_io_start(css->loop, w_accept);
-        for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
-            ev_io* w_tcp_accept = &css->tcp_lsnrs[i].w_tcp_accept;
+        CDL_FOR_EACH(&css->tcp_lsnrs, struct tcp_lsnr, tcp_lsnrs_entry, l) {
+            ev_io* w_tcp_accept = &l->w_tcp_accept;
             ev_io_start(css->loop, w_tcp_accept);
         }
     }
@@ -727,8 +729,8 @@ static void handle_req_take(struct css_conn* c, struct css* css)
     log_info("REPLACE[old daemon]: Accepting takeover request from replacement PID %li, sending %zu DNS sockets", (long)take_pid, dns_fds_send);
     ev_io* w_accept = &css->w_accept;
     ev_io_stop(css->loop, w_accept); // there can be only one
-    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
-        ev_io* w_tcp_accept = &css->tcp_lsnrs[i].w_tcp_accept;
+    CDL_FOR_EACH(&css->tcp_lsnrs, struct tcp_lsnr, tcp_lsnrs_entry, l) {
+        ev_io* w_tcp_accept = &l->w_tcp_accept;
         ev_io_stop(css->loop, w_tcp_accept);
     }
     respond(c, RESP_ACK, 0, 0, NULL, true);
@@ -926,7 +928,7 @@ F_NONNULL
 static void css_accept_tcp(struct ev_loop* loop V_UNUSED, ev_io* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_READ);
-    const struct css_tcp_lsnr* lsnr = w->data;
+    const struct tcp_lsnr* lsnr = w->data;
     gdnsd_assume(lsnr);
     struct css* css = lsnr->css;
     gdnsd_assume(css);
@@ -962,14 +964,21 @@ static void socks_import_fd(const struct socks_cfg* socks_cfg, const int fd)
         close(fd);
         return;
     }
-    const bool fd_sin_is_udp = (fd_sin_type == SOCK_DGRAM);
 
-    for (unsigned i = 0; i < socks_cfg->num_dns_threads; i++) {
-        struct dns_thread* dt = &socks_cfg->dns_threads[i];
-        if (dt->sock == -1 && dt->is_udp == fd_sin_is_udp
-                && !gdnsd_anysin_cmp(&dt->ac->addr, &fd_sin)) {
-            dt->sock = fd;
-            return;
+    if (fd_sin_type == SOCK_DGRAM) {
+        CDL_FOR_EACH(&socks_cfg->dns_udp_threads, struct dns_thread, dns_threads_entry, t) {
+            if (t->sock == -1 && !gdnsd_anysin_cmp(&t->ac->addr, &fd_sin)) {
+                t->sock = fd;
+                return;
+            }
+        }
+    } else {
+        gdnsd_assert(fd_sin_type == SOCK_STREAM);
+        CDL_FOR_EACH(&socks_cfg->dns_tcp_threads, struct dns_thread, dns_threads_entry, t) {
+            if (t->sock == -1 && !gdnsd_anysin_cmp(&t->ac->addr, &fd_sin)) {
+                t->sock = fd;
+                return;
+            }
         }
     }
 
@@ -1008,17 +1017,15 @@ F_NONNULL
 static void make_tcp_listeners(struct css* css)
 {
     gdnsd_assume(css->socks_cfg);
-    gdnsd_assume(css->socks_cfg->num_ctl_addrs);
-    css->tcp_lsnrs = xcalloc_n(css->socks_cfg->num_ctl_addrs, sizeof(*css->tcp_lsnrs));
-    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
-        struct css_tcp_lsnr* lsnr = &css->tcp_lsnrs[i];
+    CDL_FOR_EACH(&css->socks_cfg->ctl_addrs, struct ctl_addr, ctl_addrs_entry, ca) {
+        struct tcp_lsnr* lsnr = xmalloc(sizeof(*lsnr));
         lsnr->css = css;
-        struct ctl_addr* ca = &css->socks_cfg->ctl_addrs[i];
         lsnr->ctl_addr = ca;
         ev_io* w_tcp_accept = &lsnr->w_tcp_accept;
         const int fd = make_tcp_listener_fd(&ca->addr);
         ev_io_init(w_tcp_accept, css_accept_tcp, fd, EV_READ);
         w_tcp_accept->data = lsnr;
+        CDL_ADD_TAIL(&css->tcp_lsnrs, tcp_lsnrs_entry, lsnr);
     }
 }
 
@@ -1119,8 +1126,7 @@ struct css* css_new(const char* argv0, struct socks_cfg* socks_cfg, struct csc**
     else
         css->fd = make_unix_listener_fd();
 
-    if (css->socks_cfg->num_ctl_addrs)
-        make_tcp_listeners(css);
+    make_tcp_listeners(css);
 
     ev_io* w_accept = &css->w_accept;
     ev_io_init(w_accept, css_accept_unix, css->fd, EV_READ);
@@ -1138,18 +1144,25 @@ void css_start(struct css* css, struct ev_loop* loop)
     css->loop = loop;
     ev_io* w_accept = &css->w_accept;
     ev_io_start(css->loop, w_accept);
-    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
-        ev_io* w_tcp_accept = &css->tcp_lsnrs[i].w_tcp_accept;
+    CDL_FOR_EACH(&css->tcp_lsnrs, struct tcp_lsnr, tcp_lsnrs_entry, l) {
+        ev_io* w_tcp_accept = &l->w_tcp_accept;
         ev_io_start(css->loop, w_tcp_accept);
     }
-    gdnsd_assume(css->socks_cfg->num_dns_threads);
-    css->handoff_fds_count = css->socks_cfg->num_dns_threads + 2U;
+    struct socks_cfg* socks_cfg = css->socks_cfg;
+    size_t total_threads = CDL_GET_COUNT(&socks_cfg->dns_udp_threads) + CDL_GET_COUNT(&socks_cfg->dns_tcp_threads);
+    gdnsd_assume(total_threads);
+    css->handoff_fds_count = total_threads + 2U;
     gdnsd_assume(css->handoff_fds_count <= 0xFFFFFF);
     css->handoff_fds = xmalloc_n(css->handoff_fds_count, sizeof(*css->handoff_fds));
-    css->handoff_fds[0] = css->lock_fd;
-    css->handoff_fds[1] = css->fd;
-    for (unsigned i = 0; i < css->socks_cfg->num_dns_threads; i++)
-        css->handoff_fds[i + 2] = css->socks_cfg->dns_threads[i].sock;
+    size_t handoff_idx = 0;
+    css->handoff_fds[handoff_idx++] = css->lock_fd;
+    css->handoff_fds[handoff_idx++] = css->fd;
+    CDL_FOR_EACH(&socks_cfg->dns_udp_threads, struct dns_thread, dns_threads_entry, t) {
+        css->handoff_fds[handoff_idx++] = t->sock;
+    }
+    CDL_FOR_EACH(&socks_cfg->dns_tcp_threads, struct dns_thread, dns_threads_entry, t) {
+        css->handoff_fds[handoff_idx++] = t->sock;
+    }
     log_debug("Entering runtime loop in main thread, listening to control socket");
 }
 
@@ -1224,13 +1237,13 @@ void css_delete(struct css* css)
     }
 
     // close up and free any TCP listeners
-    for (unsigned i = 0; i < css->socks_cfg->num_ctl_addrs; i++) {
-        ev_io* w = &css->tcp_lsnrs[i].w_tcp_accept;
+    CDL_FOR_EACH_SAFE(&css->tcp_lsnrs, struct tcp_lsnr, tcp_lsnrs_entry, l) {
+        ev_io* w = &l->w_tcp_accept;
         ev_io_stop(css->loop, w);
         close(w->fd);
+        CDL_DEL(&css->tcp_lsnrs, tcp_lsnrs_entry, l);
+        free(l);
     }
-    if (css->socks_cfg->num_ctl_addrs)
-        free(css->tcp_lsnrs);
 
     // free up the reload queues
     conn_queue_clear(&css->reload_zones_queued);

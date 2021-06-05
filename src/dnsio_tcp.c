@@ -926,9 +926,8 @@ void* dnsio_tcp_start(void* thread_asvoid)
     gdnsd_thread_setname("gdnsd-io-tcp");
 
     const struct dns_thread* t = thread_asvoid;
-    gdnsd_assert(!t->is_udp);
-
     const struct dns_addr* addrconf = t->ac;
+    gdnsd_assume(addrconf);
 
     struct thred thr = { 0 };
 

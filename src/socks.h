@@ -20,6 +20,8 @@
 #ifndef GDNSD_SOCKS_H
 #define GDNSD_SOCKS_H
 
+#include "cdl.h"
+
 #include <gdnsd/net.h>
 #include <gdnsd/vscf.h>
 
@@ -27,6 +29,7 @@
 #include <pthread.h>
 
 struct dns_addr {
+    CDL_ENTRY(struct dns_addr) dns_addrs_entry;
     struct anysin addr;
     unsigned dns_port;
     unsigned udp_sndbuf;
@@ -42,25 +45,24 @@ struct dns_addr {
 };
 
 struct dns_thread {
+    CDL_ENTRY(struct dns_thread) dns_threads_entry;
     struct dns_addr* ac;
     pthread_t threadid;
     int sock;
-    bool is_udp;
 };
 
 struct ctl_addr {
+    CDL_ENTRY(struct ctl_addr) ctl_addrs_entry;
     struct anysin addr;
     bool chal_ok; // add/flush challenge data
     bool ctl_ok;  // reload-zones, replace, stop
 };
 
 struct socks_cfg {
-    struct dns_addr* dns_addrs;
-    struct dns_thread* dns_threads;
-    struct ctl_addr* ctl_addrs;
-    unsigned num_dns_addrs;
-    unsigned num_dns_threads;
-    unsigned num_ctl_addrs;
+    CDL_ROOT(struct dns_addr) dns_addrs;
+    CDL_ROOT(struct dns_thread) dns_tcp_threads;
+    CDL_ROOT(struct dns_thread) dns_udp_threads;
+    CDL_ROOT(struct ctl_addr) ctl_addrs;
     unsigned long fd_estimate;
 };
 
