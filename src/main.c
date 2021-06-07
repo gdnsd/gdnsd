@@ -339,7 +339,7 @@ static void do_tak2(struct ev_loop* loop, const csc_t* csc)
             log_fatal("REPLACE[new daemon]: takeover phase 2 notification attempt failed");
         const size_t chal_count = csbuf_get_v(&resp);
         const size_t chal_dlen = resp.d;
-        log_devdebug("TAK2 challenge handoff got count %zu dlen %zu", chal_count, chal_dlen);
+        log_debug("TAK2 challenge handoff got count %zu dlen %zu", chal_count, chal_dlen);
         size_t offset = 0;
         for (size_t i = 0; i < chal_count; i++) {
             if (offset + 5U > chal_dlen)

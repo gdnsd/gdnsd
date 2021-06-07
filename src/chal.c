@@ -352,7 +352,7 @@ bool cset_create(struct ev_loop* loop, size_t ttl_remain, size_t count, size_t d
         }
         data[didx + 43U] = '\0'; // should already be there, but enforce JIC
         mk_chal_rr(c->txt, &data[didx]);
-        log_devdebug("ACME DNS-01 record created: dname '%s' payload '%s'", logf_dname(c->dname), &data[didx]);
+        log_debug("ACME DNS-01 record created: dname '%s' payload '%s'", logf_dname(c->dname), &data[didx]);
         didx += 44U;
     }
 

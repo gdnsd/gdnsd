@@ -741,7 +741,7 @@ static void css_conn_read(struct ev_loop* loop, ev_io* w, int revents V_UNUSED)
         if (pktlen < 0 && ERRNO_WOULDBLOCK)
             return;
         if (pktlen == 0)
-            log_devdebug("control socket client disconnected cleanly during read");
+            log_debug("control socket client disconnected cleanly during read");
         else
             log_err("control socket read of 8 bytes failed with retval %zi, closing: %s", pktlen, logf_errno());
         css_conn_cleanup(c);

@@ -122,7 +122,7 @@ void dnsio_udp_init(const pid_t main_pid)
         recvmmsg(-1, 0, 0, 0, 0);
         use_mmsg = (errno != ENOSYS);
         if (use_mmsg)
-            log_devdebug("using sendmmsg()/recvmmsg() interfaces for UDP");
+            log_debug("using sendmmsg()/recvmmsg() interfaces for UDP");
     }
     errno = 0;
 #endif
