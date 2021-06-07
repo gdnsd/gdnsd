@@ -6,7 +6,7 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-CPPFLAGS="-DGDNSD_COVERTEST_EXIT" CFLAGS="-O0" ./configure --enable-developer --without-hardening
+CPPFLAGS="-DGDNSD_COVERTEST_EXIT -DGDNSD_VALGRIND" CFLAGS="-O0" ./configure --enable-developer --without-hardening
 make clean
 make
 SLOW_TESTS=1 TEST_RUNNER="valgrind --trace-children=yes --trace-children-skip=/bin/true,/bin/false,/bin/sh --error-exitcode=99 --leak-check=full --suppressions=$PWD/qa/gdnsd.supp" make check

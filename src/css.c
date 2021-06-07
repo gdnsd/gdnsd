@@ -455,7 +455,11 @@ static pid_t spawn_replacement(const char* argv0)
         uint32_t sendpid = (uint32_t)replacement_pid;
         if (write(pipefd[PIPE_WR], &sendpid, 4) != 4)
             log_fatal("write() of PID during replacement spawn failed: %s", logf_errno());
+#ifdef GDNSD_VALGRIND
+        execl("/bin/true", "/bin/true", NULL);
+#else
         _exit(0);
+#endif
     }
 
     // --- original-parent code

@@ -9,21 +9,5 @@
   fun:_dl_allocate_tls
   ...
   fun:pthread_create*
-}
-
-# This one is tricky.  When the testsuite exercises replacement-spawning, we
-# *do* want valgrind looking at the final new child, thus we must trace through
-# children to the end.  However, there's also the temporary "middle_pid"
-# process to consider.  It's used to orphan the final child and calls _exit(0)
-# fairly quickly.  Because we've already forked, allocations made by the dnsio
-# threads which aren't tracked in static storage that's still accessible to the
-# main thread become "definite" losses, even though we don't care about this
-# case as it has no pragmatic impact.  I tried VALGRIND_DISABLE_ERROR_REPORTING
-# in either the dnsio_udp thread or the middle_pid, but neither of those seem
-# to suppress this either...
-{
-  replace_dnsio_udp
-  Memcheck:Leak
-  ...
-  fun:dnsio_udp_start
+  fun:spawn_zones_reloader_thread
 }
