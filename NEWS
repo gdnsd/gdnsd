@@ -1,3 +1,25 @@
+3.7.0 - 2021-06-08
+    * TCP threads now shut down faster on daemon stop/replace with active
+      connections; previously they took up to 10s in a two-phased shutdown
+      approach, now they take up to 5s in a single phase.
+    * TCP threads' timeout management fudge factor for coalescing timer events
+      from multiple connections was increased from 100ms to 250ms.
+    * The UDP send-side code is now non-blocking; it will immediately fail for
+      lack of SO_SNDBUF space for the response instead of blocking up to ~257ms
+      in an attempt to wait for for buffer availability.  This has less chance
+      of negatively impacting other requests waiting in the receive buffer
+      during short spikes, at the cost of burning a little more CPU (to create
+      answers which are quickly dropped on the output side) when buffers are
+      overwhelmed with traffic.
+    * Control sock proto now documented (imperfectly!) at docs/ControlSock.md
+    * Control sock clients now send their version in REQ_INFO
+    * Clearer messaging about certain corner-case configuration parser failures
+      related to bad DNS escapes and $include files.
+    * Bugfix for parsing zonefiles > 4GiB in size
+    * Some possible race conditions in the testsuite which could cause false
+      failures were fixed
+    * Various internal refactorings and code QA improvements
+
 3.6.0 - 2021-02-24
     * UDP DNS threads now idle much more efficiently when there's little to no
       network traffic arriving for them.  Previously all such threads woke up
