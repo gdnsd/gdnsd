@@ -55,3 +55,5 @@ res-empty-a DYNA geoip!res-e
 res-empty-c DYNC geoip!res-e
 
 res-undef DYNA geoip!res-u
+
+*.res-w DYNA geoip!res-w
