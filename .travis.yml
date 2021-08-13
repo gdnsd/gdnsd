@@ -1,4 +1,4 @@
-sudo: required
+os: linux
 dist: bionic
 branches:
   only:
@@ -36,19 +36,13 @@ before_install:
 before_script:
   - autoreconf -vif
 script: ./qa/travis-build.sh
-matrix:
+jobs:
   include:
     - name: "SonarCloud Coverage and Analysis"
       compiler: gcc
       env: GDNSD_TRAVIS_BUILD=sonarcloud
     - name: "GCC - Optimized Build and Test"
       compiler: gcc
-      env: GDNSD_TRAVIS_BUILD=optimized
-    - name: "GCC - Developer Build and Test"
-      compiler: gcc
-      env: GDNSD_TRAVIS_BUILD=developer
-    - name: "Clang - Optimized Build and Test"
-      compiler: clang
       env: GDNSD_TRAVIS_BUILD=optimized
     - name: "Clang - Developer Build and Test"
       compiler: clang
