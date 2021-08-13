@@ -240,17 +240,19 @@ static unsigned ntree_lookup_inner(const ntree_t* tree, const gdnsd_anysin_t* cl
     return rv;
 }
 
-unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask)
+unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask, const bool ignore_ecs)
 {
     gdnsd_assert(!tree->alloc); // ntree_finish() was called
     gdnsd_assert(tree->ipv4); // must be a non-zero node offset or a dclist w/ high-bit set
 
     unsigned rv;
 
-    if (client->edns_client_mask)
+    if (client->edns_client_mask && !ignore_ecs) {
         rv = ntree_lookup_inner(tree, &client->edns_client, scope_mask);
-    else
+    } else {
         rv = ntree_lookup_inner(tree, &client->dns_source, scope_mask);
+        *scope_mask = 0;
+    }
 
     return rv;
 }

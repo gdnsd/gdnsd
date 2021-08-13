@@ -170,6 +170,23 @@ anyone requires it.  The order specified here is the fallback default
 result ordering in various default cases (e.g. if no explicit top-level map
 default list is given).
 
+=head2 C<ignore_ecs = true>
+
+Boolean, default false.  If this is set to C<true>, all resources using
+this map will ignore EDNS Client Subnet (ECS) information when
+performing lookups against the map, relying solely on the DNS source IP
+for the lookup.  If the client provided ECS in such a query, the
+response will also contain the ECS option to signal that we're ECS aware
+in general, but the response scope mask will be set to zero to signal
+the cache that the ECS data wasn't used and the result is globally
+cacheable.
+
+This is useful for situations in which the map is intentionally meant to
+operate solely on recursor IPs rather than ECS IPs, but other maps
+serviced by the same authserver do make use of ECS data, and thus the
+global B<edns_client_subnet> config option can't be used to disable
+handling the option completely for the whole server.
+
 =head2 C<nets = { ... }>
 
 Key-value hash, optional (see below for alternate form).  If specified, the

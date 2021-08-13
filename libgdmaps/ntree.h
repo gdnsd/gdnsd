@@ -159,6 +159,6 @@ void ntree_assert_optimal(const ntree_t* tree);
 #endif
 
 F_NONNULL
-unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask);
+unsigned ntree_lookup(const ntree_t* tree, const client_info_t* client, unsigned* scope_mask, const bool ignore_ecs);
 
 #endif // NTREE_H

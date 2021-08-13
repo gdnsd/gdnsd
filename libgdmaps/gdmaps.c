@@ -83,6 +83,7 @@ typedef struct {
     ev_timer nets_reload_timer;
     ev_timer tree_update_timer;
     bool city_auto_mode;
+    bool ignore_ecs;
 } gdmap_t;
 
 F_NONNULL
@@ -110,6 +111,11 @@ static void gdmap_init(gdmap_t* gdmap, const char* name, const vscf_data_t* map_
     gdmap->city_auto_mode = dc_auto_cfg ? true : false;
     dcinfo_init(&gdmap->dcinfo, dc_cfg, dc_auto_cfg, dc_auto_limit_cfg, name, mrf);
     gdmap->dclists_pend = dclists_new(&gdmap->dcinfo);
+
+    // ignore_ecs config
+    vscf_data_t* ignore_ecs_cfg = vscf_hash_get_data_byconstkey(map_cfg, "ignore_ecs", true);
+    if (ignore_ecs_cfg && !vscf_simple_get_as_bool(ignore_ecs_cfg, &gdmap->ignore_ecs))
+        log_fatal("plugin_geoip: map '%s': value for 'ignore_ecs' must be 'true' or 'false'", name);
 
     // geoip2 config
     vscf_data_t* gdb2_cfg = vscf_hash_get_data_byconstkey(map_cfg, "geoip2_db", true);
@@ -455,7 +461,8 @@ static const uint8_t* gdmap_lookup(gdmap_t* gdmap, const client_info_t* client, 
     const unsigned dclist_u = ntree_lookup(
                                   rcu_dereference(gdmap->tree),
                                   client,
-                                  scope_mask
+                                  scope_mask,
+                                  gdmap->ignore_ecs
                               );
     const uint8_t* dclist_u8 = dclists_get_list(
                                    rcu_dereference(gdmap->dclists),

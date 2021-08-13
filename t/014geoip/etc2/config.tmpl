@@ -49,6 +49,20 @@ plugins => {
     datacenters => [ DC-A, DC-B, DC-C ]
     map => { NA => { US => [ DC-A ] } }
    }
+   map-noecs => {
+    geoip2_db => "FakeCountry.mmdb"
+    datacenters => [ na, eu, ap, sa ]
+    ignore_ecs => true
+    map => {
+     AS => [ ap, eu ]
+     OC => [ ap, na ]
+     AN => [ ap, sa ]
+     NA => [ na, sa ]
+     SA => [ sa, na ]
+     EU => [ eu, na ]
+     AF => [ eu, ap ]
+    }
+   }
   }
   plugin => weighted,
   resources => {
@@ -199,6 +213,17 @@ plugins => {
     service_types => up
     plugin => multifo
     map => map1,
+    dcmap = {
+     eu => { lb01 => 192.0.2.6, lb02 => 192.0.2.5 },
+     na => 192.0.2.1
+     sa => { lb01 => 192.0.2.3, lb02 => 192.0.2.4 },
+     ap => { lb01 => 192.0.2.7, lb02 => 192.0.2.8, lb03 => 192.0.2.9 },
+    }
+   }
+   res-noecs => {
+    service_types => up
+    plugin => multifo
+    map => map-noecs,
     dcmap = {
      eu => { lb01 => 192.0.2.6, lb02 => 192.0.2.5 },
      na => 192.0.2.1

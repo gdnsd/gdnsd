@@ -38,6 +38,20 @@ plugins => {
      NA => { US => [ DC-A ] }
     }
    }
+   map-noecs => {
+    geoip2_db => "FakeCountry.mmdb"
+    datacenters => [ na, eu, ap, sa ]
+    ignore_ecs => true
+    map => {
+     NA => [ na, sa ]
+     SA => [ sa, na ]
+     EU => [ eu, na ]
+     AF => [ eu, ap ]
+     AS => [ ap, eu ]
+     OC => [ ap, na ]
+     AN => [ ap, sa ]
+    }
+   }
   }
   service_types => up
   resources => {
@@ -184,6 +198,15 @@ plugins => {
    }
    res-w => {
     map => map1,
+    dcmap = {
+     na => 192.0.2.1
+     sa => { lb01 => 192.0.2.3, lb02 => 192.0.2.4 },
+     eu => { lb01 => 192.0.2.6, lb02 => 192.0.2.5 },
+     ap => { lb01 => 192.0.2.7, lb02 => 192.0.2.8, lb03 => 192.0.2.9 },
+    }
+   }
+   res-noecs => {
+    map => map-noecs,
     dcmap = {
      na => 192.0.2.1
      sa => { lb01 => 192.0.2.3, lb02 => 192.0.2.4 },
