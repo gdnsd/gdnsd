@@ -292,11 +292,14 @@ static void mon_read_cb(struct ev_loop* loop, struct ev_io* io, const int revent
         md->res_buf[13] = '\0';
         char code_str[4] = { 0 };
         if (1 == sscanf(md->res_buf, "HTTP/1.%*1[01]%*1[ ]%3c%*1[ ]", code_str)) {
+            errno = 0;
             unsigned lcode = (unsigned)strtoul(code_str, NULL, 10);
-            for (unsigned i = 0; i < md->http_svc->num_ok_codes; i++) {
-                if (lcode == md->http_svc->ok_codes[i]) {
-                    final_status = true;
-                    break;
+            if (!errno) {
+                for (unsigned i = 0; i < md->http_svc->num_ok_codes; i++) {
+                    if (lcode == md->http_svc->ok_codes[i]) {
+                        final_status = true;
+                        break;
+                    }
                 }
             }
         }
