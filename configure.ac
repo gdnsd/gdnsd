@@ -1,5 +1,5 @@
 m4_define([PKG_V_MAJOR],[3])
-m4_define([PKG_V_MINOR],[7])
+m4_define([PKG_V_MINOR],[8])
 m4_define([PKG_V_PATCH],[0])
 m4_define([PKG_V_EXTRA],[])
 m4_define([PVER],[PKG_V_MAJOR().PKG_V_MINOR().PKG_V_PATCH()PKG_V_EXTRA()])

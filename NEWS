@@ -1,3 +1,17 @@
+3.8.0 - 2021-08-13
+    * The geoip plugin gained a new feature flag 'ignore_ecs' at the map level,
+      which can be used to ignore EDNS Client Subnet data for all resources
+      which use a given map.  This is primarily for the use-case where the
+      authserver has maps and resources which *do* use ECS data (thus ECS
+      support can't be turned off globally), but one or more specific maps are
+      intended explicitly to use only the DNS source addresses of the queries
+      to make routing decisions.
+    * Added more-pedantic error checking to a couple of strtoul uses (which
+      were otherwise range validated numerically, but this will prevent oddball
+      input cases from "working" in ways they shouldn't).
+    * Added a missing regression test for DYN[AC] on a wildcard hostname
+    * A few meta-updates for the Travis CI migration to .com.
+
 3.7.0 - 2021-06-08
     * TCP threads now shut down faster on daemon stop/replace with active
       connections; previously they took up to 10s in a two-phased shutdown
