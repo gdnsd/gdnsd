@@ -33,6 +33,10 @@
 #include "chal.h"
 #include "cookie.h"
 
+#ifdef USE_DNSTAP
+#include "dnstap.h"
+#endif
+
 #include "plugins/plugapi.h"
 #include "plugins/mon.h"
 #include <gdnsd/alloc.h>
@@ -539,6 +543,11 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // Initialize+bind DNS listening sockets
     socks_dns_lsocks_init(socks_cfg);
 
+#ifdef USE_DNSTAP
+    // Start dnstap
+    dnstap_start(socks_cfg->num_dns_threads);
+#endif
+
     // Start up all of the UDP and TCP i/o threads
     start_threads(socks_cfg);
 
@@ -578,6 +587,11 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // The daemon stays in this libev loop for life,
     // until there's a reason to cleanly exit
     ev_run(loop, 0);
+
+#ifdef USE_DNSTAP
+    // dnstap unload
+    dnstap_stop();
+#endif    
 
     // request i/o threads to exit
     request_io_threads_stop(socks_cfg);
@@ -669,6 +683,11 @@ int main(int argc, char** argv)
 
     // Load (but do not act on) socket config
     socks_cfg_t* socks_cfg = socks_conf_load(cfg_root);
+
+#ifdef USE_DNSTAP
+    // Load dnstap config
+    dnstap_conf_load(cfg_root);
+#endif
 
     // init locked control socket if starting, can fail if concurrent daemon,
     // or begin a takeover process if CLI flag allows

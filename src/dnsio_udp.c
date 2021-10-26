@@ -25,6 +25,10 @@
 #include "dnspacket.h"
 #include "socks.h"
 
+#ifdef USE_DNSTAP
+#include "dnstap.h"
+#endif
+
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
 
@@ -578,8 +582,14 @@ void* dnsio_udp_start(void* thread_asvoid)
 
     const dns_addr_t* addrconf = t->ac;
 
+    void* dnstap_ctx = NULL;
+    
+#ifdef USE_DNSTAP
+    dnstap_ctx = dnstap_ctx_init(true);
+#endif
+
     dnspacket_stats_t* stats;
-    dnsp_ctx_t* pctx = dnspacket_ctx_init_udp(&stats, is_ipv6(&addrconf->addr));
+    dnsp_ctx_t* pctx = dnspacket_ctx_init_udp(&stats, is_ipv6(&addrconf->addr), dnstap_ctx);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -602,6 +612,11 @@ void* dnsio_udp_start(void* thread_asvoid)
         mainloop(t->sock, pctx, stats, use_cmsg);
 
     rcu_unregister_thread();
+
+#ifdef USE_DNSTAP    
+    dnstap_ctx_cleanup((dnstap_ctx_t**) &dnstap_ctx);
+#endif
+
     dnspacket_ctx_cleanup(pctx);
     return NULL;
 }
