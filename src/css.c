@@ -392,6 +392,7 @@ static void css_watch_replace(struct ev_loop* loop, ev_timer* w, int revents V_U
     }
 }
 
+// spawn_replacement() (and its subfunction for the forked processes):
 //   We have to do a double-fork here to satisfy systemd, otherwise when we
 // notify it of the new MainPID from the new child while the old parent daemon
 // still exists, the new child's parent isn't (yet) systemd, and so it
@@ -408,8 +409,56 @@ static void css_watch_replace(struct ev_loop* loop, ev_timer* w, int revents V_U
 // we'll also have to set up a pipe() to communicate the final PID back to the
 // parent from the middle process.
 // Thanks, systemd :P
+
+// Everything after the first fork happens in these first two functions, for
+// clarity about which lines of code are executing in which process context.
+// Because this is a forked child process and the parent has multiple threads
+// running, everything here must be async-signal-safe!
+
+// helper function used a few times below:
+F_NONNULL
+static void send_pidval_(const int writefd, const uint32_t pidval)
+{
+    if (write(writefd, &pidval, 4) != 4)
+        log_fatal_safe("write() of PID failed during replacement spawn");
+}
+
+// Handles the second fork into the real exec, and also sends back a pid value
+// (or zero for certain error paths) through the pipe socket to the parent.
+F_NORETURN F_NONNULL
+static void replacement_proc(const char* argv0, const char* cfpath, const char* flags, const int* pipefd)
+{
+    close(pipefd[PIPE_RD]); // only the parent reads from the pipe
+
+    const pid_t replacement_pid = fork();
+    if (replacement_pid == -1) {
+        send_pidval_(pipefd[PIPE_WR], 0);
+        log_fatal_safe("second fork() failed during replacement spawn");
+    }
+
+    if (!replacement_pid) { // final child, new proc for just this block:
+        // write side of pipe doesn't need close here, because it's O_CLOEXEC
+        gdnsd_reset_signals_for_exec();
+        execlp(argv0, argv0, "-c", cfpath, flags, "start", NULL);
+        send_pidval_(pipefd[PIPE_WR], 0);
+        log_fatal_safe("execlp() failed during replacement spawn");
+    }
+
+    send_pidval_(pipefd[PIPE_WR], (uint32_t)replacement_pid);
+#ifdef GDNSD_VALGRIND
+    execl("/bin/true", "/bin/true", NULL);
+#else
+    _exit(0);
+#endif
+}
+
 static pid_t spawn_replacement(const char* argv0)
 {
+    // 0  -> Definitely failed to launch
+    // -1 -> Maybe launched successfully or not, but either way lost comms and didn't get a PID.
+    // >0 -> PID of at least initially-successful launch
+    pid_t retval = 0;
+
     // Set up the more-complicated exec args, to be used much deeper during
     // execlp() of the final replacement child
     const char* cfpath = gdnsd_get_config_dir();
@@ -427,71 +476,52 @@ static pid_t spawn_replacement(const char* argv0)
     sigfillset(&all_sigs);
     sigset_t saved_mask;
     sigemptyset(&saved_mask);
-    if (pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask))
-        log_fatal("pthread_sigmask() failed");
+    if (pthread_sigmask(SIG_SETMASK, &all_sigs, &saved_mask)) {
+        log_err("replace failure: pthread_sigmask() failed");
+        return retval;
+    }
 
     int pipefd[2];
-    if (pipe2(pipefd, O_CLOEXEC))
-        log_fatal("pipe2(O_CLOEXEC) failed: %s", logf_errno());
+    if (pipe2(pipefd, O_CLOEXEC)) {
+        log_err("replace failure: pipe2(O_CLOEXEC) failed: %s", logf_errno());
+        return retval;
+    }
 
     pid_t middle_pid = fork();
-    if (middle_pid == -1)
-        log_fatal("fork() failed: %s", logf_errno());
-
-    if (!middle_pid) { // middle-child
+    if (middle_pid == -1) {
+        log_err("replace failure: fork() failed: %s", logf_errno());
+        close(pipefd[PIPE_WR]);
         close(pipefd[PIPE_RD]);
-        pid_t replacement_pid = fork();
-        if (replacement_pid == -1)
-            log_fatal("fork() failed: %s", logf_errno());
-
-        if (!replacement_pid) { // final-child
-            close(pipefd[PIPE_WR]);
-            gdnsd_reset_signals_for_exec();
-            execlp(argv0, argv0, "-c", cfpath, flags, "start", NULL);
-            log_fatal("execlp(%s) failed: %s", argv0, logf_errno());
-        }
-
-        // --- middle-parent code
-        uint32_t sendpid = (uint32_t)replacement_pid;
-        if (write(pipefd[PIPE_WR], &sendpid, 4) != 4)
-            log_fatal("write() of PID during replacement spawn failed: %s", logf_errno());
-#ifdef GDNSD_VALGRIND
-        execl("/bin/true", "/bin/true", NULL);
-#else
-        _exit(0);
-#endif
+        return retval;
     }
 
-    // --- original-parent code
-
-    uint32_t recvpid;
-    close(pipefd[PIPE_WR]);
-    if (read(pipefd[PIPE_RD], &recvpid, 4) != 4)
-        log_fatal("read() of PID during replacement spawn failed: %s", logf_errno());
-    close(pipefd[PIPE_RD]);
-    pid_t replacement_pid = (pid_t)recvpid;
-
-    int status;
-    pid_t wp_rv = waitpid(middle_pid, &status, 0);
-    if (wp_rv < 0) {
-        // We can assume ECHILD means the libev SIGCHLD handler beat us to waitpid()
-        if (errno != ECHILD)
-            log_fatal("waitpid(%li) for temporary middle process during replacement spawn failed: %s",
-                      (long)middle_pid, logf_errno());
-    } else {
-        if (wp_rv != middle_pid)
-            log_fatal("waitpid(%li) for temporary middle process during replacement spawn caught process %li instead",
-                      (long)middle_pid, (long)wp_rv);
-        if (status)
-            log_err("waitpid(%li) for temporary middle process during replacement spawn returned bad status %i",
-                    (long)middle_pid, status);
-    }
+    // The forked middle proc executes replacement_proc() and does not return
+    // to this function!
+    if (!middle_pid)
+        replacement_proc(argv0, cfpath, flags, pipefd);
 
     // restore previous signal mask from before fork
+    // This really should not fail, since saved_mask is right on the stack here
+    // and came from the same interface.  Fatal is reasonable here, as we're
+    // really in an unknown buggy situation for the main process at that point:
     if (pthread_sigmask(SIG_SETMASK, &saved_mask, NULL))
         log_fatal("pthread_sigmask() failed");
 
-    return replacement_pid;
+    // Close write-side of pipe in parent (middle proc does the writing)
+    close(pipefd[PIPE_WR]);
+
+    // Read the PID of the new daemon, sent to us by the middle proc.  If we
+    // read a zero for a definite failure-to-launch, that passes on directly to
+    // the caller.  A failure-to-read returns the special value -1, indicating
+    // indeterminate child status.
+    uint32_t recvpid;
+    ssize_t readrv = read(pipefd[PIPE_RD], &recvpid, 4);
+    if (readrv == 4)
+        retval = (pid_t)recvpid;
+    else
+        retval = (pid_t) -1;
+    close(pipefd[PIPE_RD]);
+    return retval;
 }
 
 // When a takeover starts (replacement_pid is assigned), send an immediate
@@ -624,12 +654,21 @@ static void handle_req_repl(css_conn_t* c, css_t* css)
     log_debug("REPLACE[old daemon]: Accepting replace command, spawning replacement server...");
     gdnsd_assert(!css->replace_conn_ctl);
     gdnsd_assert(!css->replace_conn_dmn);
-    css->replace_conn_ctl = c;
     css->replacement_pid = spawn_replacement(css->argv0);
-    log_info("REPLACE[old daemon]: Accepted replace command, spawned replacement daemon at PID %li", (long)css->replacement_pid);
-    ev_timer* w_replace = &css->w_replace;
-    ev_timer_start(css->loop, w_replace);
-    latr_all_reloaders(css);
+    if (css->replacement_pid < (pid_t)0) {
+        log_err("REPLACE[old daemon]: Replacement launch operation *may* have failed, resuming full service for now.  There is a chance the replacement is launching correctly but is untracked, and could succeed as an independent takover daemon shortly");
+        css->replacement_pid = 0;
+        respond(c, RESP_FAIL, 0, 0, NULL, false);
+    } else if (!css->replacement_pid) {
+        log_err("REPLACE[old daemon]: Replacement launch operation definitely failed, resuming full service");
+        respond(c, RESP_FAIL, 0, 0, NULL, false);
+    } else {
+        css->replace_conn_ctl = c;
+        log_info("REPLACE[old daemon]: Accepted replace command, spawned replacement daemon at PID %li", (long)css->replacement_pid);
+        ev_timer* w_replace = &css->w_replace;
+        ev_timer_start(css->loop, w_replace);
+        latr_all_reloaders(css);
+    }
 }
 
 F_NONNULL

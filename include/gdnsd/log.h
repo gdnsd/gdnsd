@@ -88,6 +88,36 @@ void gdnsd_logger(int level, const char* fmt, ...);
    } while (0)
 #endif
 
+// log_fatal_safe():
+// This is for special-case error exits that could occur between fork() and
+// exec() while other threads are also concurrently executing.  In these cases
+// many useful tools for error logging (including syslog calls, most
+// formatters, etc) are unavailable to use safely, so all we can easily do is
+// attempt a blind (and possibly useless) write to stderr and exit via _exit().
+// In theory we could add syslog support here through manual unix socket writes
+// to /dev/log or equivalent, and even build up some safe formatters for e.g.
+// errno codes.  However, that complexity seems like overkill for these very
+// few and rare cases.
+// The only current use-case for this is the fatal errors that can occur
+// between fork and exec in the daemon-replacement case in css.c.
+// The argument must be a string literal.
+
+// Note this auto-appends a "\n" for convenience, and should also help break
+// compilation if someone tries to pass an argument other than a string
+// literal:
+#ifdef GDNSD_NO_FATAL_COVERAGE
+#  define log_fatal_safe(M) ((void)(0))
+#else
+#  define log_fatal_safe(M) log_fatal_safe_(M "\n", sizeof(M "\n") - 1U)
+F_UNUSED F_NORETURN
+static void log_fatal_safe_(const char* const msg, const size_t len)
+{
+    ssize_t x V_UNUSED = // cppcheck-suppress unreadVariable
+        write(STDERR_FILENO, msg, len);
+    _exit(42);
+}
+#endif
+
 // GDNSD_NO_UNREACH_BUILTIN is to work around gcov coverage testing, which
 //   flags un-taken branches for all of the __builtin_unreachable()
 // log_devdebug() is suppressed at the preprocessor level if -DNDEBUG

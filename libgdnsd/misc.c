@@ -221,7 +221,7 @@ static unsigned wait_for_children(unsigned attempts)
         remaining = 0;
         for (unsigned i = 0; i < n_children; i++) {
             if (children[i]) {
-                if (kill(children[i], 0))
+                if (!kill(children[i], 0))
                     remaining++;
                 else
                     children[i] = 0;
@@ -267,6 +267,8 @@ unsigned gdnsd_uscale_ceil(unsigned v, double s)
 }
 
 // Keep updated if we add more signal handlers anywhere, even indirectly!
+// Note this must use the very limited log_fatal_safe() call, because one of
+// the callers is in the critical window of css's replacement-spawning code.
 void gdnsd_reset_signals_for_exec(void)
 {
     // reset handlers to default (but not PIPE/HUP, which may be SIG_IGN and we
@@ -276,19 +278,19 @@ void gdnsd_reset_signals_for_exec(void)
     defaultme.sa_handler = SIG_DFL;
     defaultme.sa_flags = 0;
     if (sigaction(SIGTERM, &defaultme, NULL))
-        log_fatal("sigaction() failed: %s", logf_errno());
+        log_fatal_safe("sigaction() failed");
     if (sigaction(SIGINT, &defaultme, NULL))
-        log_fatal("sigaction() failed: %s", logf_errno());
+        log_fatal_safe("sigaction() failed");
     if (sigaction(SIGCHLD, &defaultme, NULL))
-        log_fatal("sigaction() failed: %s", logf_errno());
+        log_fatal_safe("sigaction() failed");
     if (sigaction(SIGUSR1, &defaultme, NULL))
-        log_fatal("sigaction() failed: %s", logf_errno());
+        log_fatal_safe("sigaction() failed");
     if (sigaction(SIGUSR2, &defaultme, NULL))
-        log_fatal("sigaction() failed: %s", logf_errno());
+        log_fatal_safe("sigaction() failed");
 
     // unblock all signals
     sigset_t no_sigs;
     sigemptyset(&no_sigs);
     if (pthread_sigmask(SIG_SETMASK, &no_sigs, NULL))
-        log_fatal("pthread_sigmask() failed");
+        log_fatal_safe("pthread_sigmask() failed");
 }
