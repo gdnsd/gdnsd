@@ -1,8 +1,5 @@
 [![Build Status](https://travis-ci.com/gdnsd/gdnsd.svg?branch=master)](https://travis-ci.com/github/gdnsd/gdnsd)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/760/badge.svg)](https://scan.coverity.com/projects/760)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/gdnsd/gdnsd.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/gdnsd/gdnsd/alerts/)
-[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/gdnsd/gdnsd.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/gdnsd/gdnsd/context:cpp)
-
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=alert_status)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
