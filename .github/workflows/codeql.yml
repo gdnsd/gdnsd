@@ -70,10 +70,10 @@ jobs:
     #     echo "Run, Build Application using script"
     #     ./location_of_script_within_repo/buildscript.sh
     - run: |
-      sudo apt -y install ragel libev-dev liburcu-dev libsodium-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl
-      autoreconf -vif
-      ./configure --prefix=/usr
-      make
+        sudo apt -y install ragel libev-dev liburcu-dev libsodium-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl
+        autoreconf -vif
+        ./configure --prefix=/usr
+        make
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
