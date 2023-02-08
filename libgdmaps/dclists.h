@@ -28,6 +28,13 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+struct dclists {
+    unsigned count; // count of unique result lists
+    unsigned old_count; // count from object we cloned from
+    uint8_t** list;    // strings of dc numbers
+    const dcinfo_t* info; // dclists_t doesn't own "info", just uses it for reference a lot
+};
+
 typedef struct dclists dclists_t;
 
 typedef enum {
