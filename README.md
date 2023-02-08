@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.com/gdnsd/gdnsd.svg?branch=master)](https://travis-ci.com/github/gdnsd/gdnsd)
+[![CodeQL](https://github.com/gdnsd/gdnsd/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/gdnsd/gdnsd/actions/workflows/codeql.yml)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/760/badge.svg)](https://scan.coverity.com/projects/760)
 
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=alert_status)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
