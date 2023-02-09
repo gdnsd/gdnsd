@@ -23,6 +23,6 @@ jobs:
     - name: make
       run: make
     - name: make check
-      run: make check
+      run: make check V=1
 #    - name: make distcheck
 #      run: make distcheck
