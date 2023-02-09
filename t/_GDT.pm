@@ -545,6 +545,7 @@ sub test_log_output {
     # for the $partial/$line code and \n-checking .
     my $partial = '';
     while($retry--) {
+        seek($GDOUT_FH, 0, 1);  # SEEK_CUR+0, to clear EOF
         while(scalar(keys %$texts) && ($_ = <$GDOUT_FH>)) {
             $partial .= $_;
             if($partial =~ /\n$/) {
