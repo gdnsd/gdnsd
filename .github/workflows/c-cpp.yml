@@ -1,4 +1,6 @@
 name: C/C++ CI
+env:
+  SLOW_TESTS: 1
 
 on:
   push:
@@ -17,7 +19,7 @@ jobs:
     - name: autoreconf
       run: autoreconf -vif
     - name: configure
-      run: ./configure --prefix=/usr --enable-developer
+      run: ./configure --enable-developer
     - name: make
       run: make
     - name: make check
