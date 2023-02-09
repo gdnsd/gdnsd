@@ -82,7 +82,7 @@ my @edns_base = (
 # EDNS unknown option
 {
     my $optrr_req = Net::DNS::RR->new(@edns_base);
-    $optrr_req->option(0x5555 => 'foo');
+    _GDT::optrr_option_set($optrr_req, 0x5555, 'foo');
     my $optrr_res = Net::DNS::RR->new(@edns_base);
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',
@@ -96,7 +96,7 @@ my @edns_base = (
 # EDNS unknown option + zero optlen
 {
     my $optrr_req = Net::DNS::RR->new(@edns_base);
-    $optrr_req->option(0x5555 => '');
+    _GDT::optrr_option_set($optrr_req, 0x5555, '');
     my $optrr_res = Net::DNS::RR->new(@edns_base);
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',
@@ -126,7 +126,7 @@ my $optrr_resp = Net::DNS::RR->new(
         rcode => 0,
         flags => 0,
     );
-    $optrr_nsid->option(NSID => '');
+    _GDT::optrr_option_set($optrr_nsid, 'NSID', '');
 
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',
@@ -147,7 +147,7 @@ my $optrr_resp = Net::DNS::RR->new(
         rcode => 0,
         flags => 0,
     );
-    $optrr_nsid_withdata->option(NSID => pack('H*', '6578616D706C65'));
+    _GDT::optrr_option_set($optrr_nsid_withdata, 'NSID', pack('H*', '6578616D706C65'));
 
     _GDT->test_dns(
         qname => 'foo.example.com', qtype => 'A',

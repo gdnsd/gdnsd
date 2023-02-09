@@ -188,7 +188,9 @@ _GDT->test_dns(
 
 # V4 not enough addr bytes for src_mask
 my $optrr_short_v4 = Net::DNS::RR->new(@optrr_base);
-$optrr_short_v4->option('CLIENT-SUBNET' => pack('nCCa3', 1, 32, 0, inet_pton(AF_INET, "0.0.0.0")));
+my $data_v4 = pack('nCCa3', 1, 32, 0, inet_pton(AF_INET, "0.0.0.0"));
+_GDT::optrr_option_set($optrr_short_v4, 'CLIENT-SUBNET', $data_v4);
+
 _GDT->test_dns(
     v4_only => 1,
     qname => 'reflect-best.example.com', qtype => 'A',
@@ -200,7 +202,8 @@ _GDT->test_dns(
 
 # V6 not enough addr bytes for src_mask
 my $optrr_short_v6 = Net::DNS::RR->new(@optrr_base);
-$optrr_short_v6->option('CLIENT-SUBNET' => pack('nCCa15', 2, 128, 0, inet_pton(AF_INET6, "::")));
+my $data_v6 = pack('nCCa15', 2, 128, 0, inet_pton(AF_INET6, "::"));
+_GDT::optrr_option_set($optrr_short_v6, 'CLIENT-SUBNET', $data_v6);
 _GDT->test_dns(
     v6_only => 1,
     qname => 'reflect-best.example.com', qtype => 'AAAA',
@@ -212,7 +215,8 @@ _GDT->test_dns(
 
 # Bad address family
 my $optrr_badfam = Net::DNS::RR->new(@optrr_base);
-$optrr_badfam->option('CLIENT-SUBNET' => pack('nCCa16', 3, 128, 0, inet_pton(AF_INET6, "::")));
+my $data_badfam = pack('nCCa16', 3, 128, 0, inet_pton(AF_INET6, "::"));
+_GDT::optrr_option_set($optrr_badfam, 'CLIENT-SUBNET', $data_badfam);
 _GDT->test_dns(
     qname => 'reflect-best.example.com', qtype => 'AAAA',
     q_optrr => $optrr_badfam,
@@ -223,7 +227,8 @@ _GDT->test_dns(
 
 # option too short
 my $optrr_short_rdlen = Net::DNS::RR->new(@optrr_base);
-$optrr_short_rdlen->option('CLIENT-SUBNET' => pack('C', 1));
+my $data_short_rdlen = pack('C', 1);
+_GDT::optrr_option_set($optrr_short_rdlen, 'CLIENT-SUBNET', $data_short_rdlen);
 _GDT->test_dns(
     qname => 'reflect-best.example.com', qtype => 'AAAA',
     q_optrr => $optrr_short_rdlen,
@@ -234,7 +239,8 @@ _GDT->test_dns(
 
 # excess address bytes for src mask
 my $optrr_excess_addr = Net::DNS::RR->new(@optrr_base);
-$optrr_excess_addr->option('CLIENT-SUBNET' => pack('nCCa4', 1, 24, 0, inet_pton(AF_INET, "192.0.2.1")));
+my $data_excess_addr = pack('nCCa4', 1, 24, 0, inet_pton(AF_INET, "192.0.2.1"));
+_GDT::optrr_option_set($optrr_excess_addr, 'CLIENT-SUBNET', $data_excess_addr);
 _GDT->test_dns(
     qname => 'reflect-best.example.com', qtype => 'AAAA',
     q_optrr => $optrr_excess_addr,
@@ -245,7 +251,8 @@ _GDT->test_dns(
 
 # excess non-zero bits beyond mask in final address byte
 my $optrr_excess_bits = Net::DNS::RR->new(@optrr_base);
-$optrr_excess_bits->option('CLIENT-SUBNET' => pack('nCCa4', 1, 31, 0, inet_pton(AF_INET, "192.0.2.1")));
+my $data_excess_bits = pack('nCCa4', 1, 31, 0, inet_pton(AF_INET, "192.0.2.1"));
+_GDT::optrr_option_set($optrr_excess_bits, 'CLIENT-SUBNET', $data_excess_bits);
 _GDT->test_dns(
     qname => 'reflect-best.example.com', qtype => 'AAAA',
     q_optrr => $optrr_excess_bits,
@@ -256,7 +263,8 @@ _GDT->test_dns(
 
 # non-zero scope mask
 my $optrr_badscope = Net::DNS::RR->new(@optrr_base);
-$optrr_badscope->option('CLIENT-SUBNET' => pack('nCCa4', 1, 24, 1, inet_pton(AF_INET, "192.0.2.0")));
+my $data_badscope = pack('nCCa4', 1, 24, 1, inet_pton(AF_INET, "192.0.2.0"));
+_GDT::optrr_option_set($optrr_badscope, 'CLIENT-SUBNET', $data_badscope);
 _GDT->test_dns(
     qname => 'reflect-best.example.com', qtype => 'AAAA',
     q_optrr => $optrr_badscope,
@@ -267,7 +275,8 @@ _GDT->test_dns(
 
 # formerr for arbitrary junk family
 my $optrr_junkfam = Net::DNS::RR->new(@optrr_base);
-$optrr_junkfam->option('CLIENT-SUBNET' => pack('nCC', 42, 0, 0));
+my $data_junkfam = pack('nCC', 42, 0, 0);
+_GDT::optrr_option_set($optrr_junkfam, 'CLIENT-SUBNET', $data_junkfam);
 _GDT->test_dns(
     v4_only => 1,
     qname => 'reflect-best.example.com', qtype => 'A',

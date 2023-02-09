@@ -22,7 +22,7 @@ my $optrr_keepalive = Net::DNS::RR->new(
     rcode => 0,
     flags => 0,
 );
-$optrr_keepalive->option(11 => pack('n', 370));
+_GDT::optrr_option_set($optrr_keepalive, 'TCP-KEEPALIVE', pack('n', 370));
 
 my $big_answers = [
     'big.example.com 21600 MX 0 asdf.example.com',

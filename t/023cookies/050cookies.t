@@ -16,7 +16,7 @@ sub _mk_optrr_cookie {
         flags => 0,
     );
     if (defined $data) {
-        $optrr_cookie->option(COOKIE => $data);
+        _GDT::optrr_option_set($optrr_cookie, 'COOKIE', $data);
     }
     return $optrr_cookie;
 }
@@ -144,14 +144,14 @@ foreach my $proto (qw/v4_only v6_only/) {
     # Do it over TCP so we can do keepalive option response as well
 
     my $all_the_opts_query = _mk_optrr_cookie(hexstr('0123456789ABCDEF'));
-    $all_the_opts_query->option(NSID => '');
-    $all_the_opts_query->option(11 => '');
-    $all_the_opts_query->option('CLIENT-SUBNET' => pack('nCCa16', 2, 128, 0, inet_pton(AF_INET6, "::")));
+    _GDT::optrr_option_set($all_the_opts_query, 'TCP-KEEPALIVE', '');
+    _GDT::optrr_option_set($all_the_opts_query, 'NSID', '');
+    _GDT::optrr_option_set($all_the_opts_query, 'CLIENT-SUBNET', pack('nCCa16', 2, 128, 0, inet_pton(AF_INET6, "::")));
 
     my $all_the_opts_response = _mk_optrr_cookie(hexstr('0123456789ABCDEF0000000000000000'));
-    $all_the_opts_response->option('CLIENT-SUBNET' => pack('nCCa16', 2, 128, 0, inet_pton(AF_INET6, "::")));
-    $all_the_opts_response->option(11 => pack('n', 370));
-    $all_the_opts_response->option(NSID => 'foobar');
+    _GDT::optrr_option_set($all_the_opts_response, 'TCP-KEEPALIVE', pack('n', 370));
+    _GDT::optrr_option_set($all_the_opts_response, 'NSID', 'foobar');
+    _GDT::optrr_option_set($all_the_opts_response, 'CLIENT-SUBNET', pack('nCCa16', 2, 128, 0, inet_pton(AF_INET6, "::")));
 
     _GDT->test_dns(
         $proto => 1,
