@@ -12,7 +12,7 @@ my $optrr_req_nsid = Net::DNS::RR->new(
     rcode => 0,
     flags => 0,
 );
-$optrr_req_nsid->option(NSID => '');
+_GDT::optrr_option_set($optrr_req_nsid, 'NSID', '');
 
 my $optrr_nsid = Net::DNS::RR->new(
     type => "OPT",
@@ -22,7 +22,7 @@ my $optrr_nsid = Net::DNS::RR->new(
     rcode => 0,
     flags => 0,
 );
-$optrr_nsid->option(NSID => pack('H*', '6578616D706C65'));
+_GDT::optrr_option_set($optrr_nsid, 'NSID', pack('H*', '6578616D706C65'));
 
 my $optrr_nonsid = Net::DNS::RR->new(
     type => "OPT",

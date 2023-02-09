@@ -32,6 +32,7 @@ use Scalar::Util qw/looks_like_number/;
 use FindBin ();
 use File::Spec ();
 use Net::DNS 1.03 ();
+use Net::DNS::Parameters qw(ednsoptionbyname);
 use Net::DNS::Resolver ();
 use Test::More ();
 use File::Copy qw//;
@@ -648,6 +649,24 @@ sub get_resolver6 {
     );
 }
 
+# Helper to sets the option for an EDNS OPT record.
+
+#  Accesses Net::DNS internals, and is used instead of the upstream
+#    $optrr->option($name => $value)
+#  ...the API for which was changed in 1.35 by packing the data internally,
+#  therefore breaking in non-backwards-compatible ways, and also not allowing
+#  us to construct invalid data (e.g. too short) as we do in our tests.
+sub optrr_option_set {
+    my ($optrr, $name, $value) = @_;
+
+    my $number;
+    # hardcode here, as this was introduced in 1.04
+    $number = 11 if $name eq 'TCP-KEEPALIVE';
+
+    $number = ednsoptionbyname($name) unless defined $number;
+    $optrr->{option}->{$number} = $value;
+}
+
 # Creates a new Net::DNS::Packet which is a query response,
 #  to compare with the real server response for correctness.
 #  Args are: { headerparam => value }, $question, [ answers ], [ auths ], [ addtl ]
@@ -825,7 +844,7 @@ sub _compare_rrsets {
                 $_lastacookie = $acookieval;
                 if ($acookielen > 8) {
                     substr($acookieval, 8, $acookielen - 8, "\x00" x ($acookielen - 8));
-                    $a_rrset->[0]->option(COOKIE => $acookieval);
+                    _GDT::optrr_option_set($a_rrset->[0], 'COOKIE', $acookieval);
                 }
             }
         }
@@ -1282,12 +1301,14 @@ sub optrr_clientsub {
     if(defined $args{addr_v4} || defined $args{addr_v6}) {
         my $src_mask = $args{src_mask};
         my $addr_bytes = ($src_mask >> 3) + (($src_mask & 7) ? 1 : 0);
+        my $data_ecs;
         if(defined $args{addr_v4}) {
-            $optrr->option('CLIENT-SUBNET' => pack('nCCa' . $addr_bytes, 1, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET, $args{addr_v4})));
+            $data_ecs = pack('nCCa' . $addr_bytes, 1, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET, $args{addr_v4}));
         }
         else {
-            $optrr->option('CLIENT-SUBNET' => pack('nCCa' . $addr_bytes, 2, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET6, $args{addr_v6})));
+            $data_ecs = pack('nCCa' . $addr_bytes, 2, $args{src_mask}, $args{scope_mask}, inet_pton(AF_INET6, $args{addr_v6}));
         }
+        _GDT::optrr_option_set($optrr, 'CLIENT-SUBNET', $data_ecs);
     }
 
     $optrr;

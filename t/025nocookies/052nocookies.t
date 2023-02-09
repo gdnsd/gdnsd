@@ -14,7 +14,7 @@ sub _mk_optrr_cookie {
         flags => 0,
     );
     if (defined $data) {
-        $optrr_cookie->option(COOKIE => $data);
+        _GDT::optrr_option_set($optrr_cookie, 'COOKIE', $data);
     }
     return $optrr_cookie;
 }
