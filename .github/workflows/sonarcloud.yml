@@ -45,7 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@master
       - name: install-deps
-        run: sudo apt -y install ragel libev-dev liburcu-dev libsodium-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl gcov
+        run: sudo apt -y install ragel libev-dev liburcu-dev libsodium-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl
       - name: Run Build Wrapper
         env:
           CFLAGS: "-O0 -g -fprofile-arcs -ftest-coverage"
