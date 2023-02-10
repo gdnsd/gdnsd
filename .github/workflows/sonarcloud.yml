@@ -41,13 +41,13 @@ permissions:
 jobs:
   Analysis:
     runs-on: ubuntu-latest
-
     steps:
+      - name: Checkout
+        uses: actions/checkout@master
       - name: Analyze with SonarCloud
-
         # You can pin the exact commit or the version.
         # uses: SonarSource/sonarcloud-github-action@de2e56b42aa84d0b1c5b622644ac17e505c9a049
-        uses: SonarSource/sonarcloud-github-action@de2e56b42aa84d0b1c5b622644ac17e505c9a049
+        uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Generate a token on Sonarcloud.io, add it to the secrets of this repo with the name SONAR_TOKEN (Settings > Secrets > Actions > add new repository secret)
@@ -58,6 +58,7 @@ jobs:
             -Dsonar.organization=gdnsd
             -Dsonar.projectKey=gdnsd_gdnsd
             -Dsonar.projectName=gdnsd
+            -Dsonar.sources=.
             -Dsonar.scm.provider=git
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.sourceEncoding=UTF-8
