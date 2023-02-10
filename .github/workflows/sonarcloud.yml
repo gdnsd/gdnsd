@@ -44,6 +44,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@master
+      - name: Make bw-output dir
+        run: mkdir bw-output
       - name: Analyze with SonarCloud
         # You can pin the exact commit or the version.
         # uses: SonarSource/sonarcloud-github-action@de2e56b42aa84d0b1c5b622644ac17e505c9a049
@@ -70,4 +72,3 @@ jobs:
             -Dsonar.issue.ignore.block.e1.beginBlockRegexp=start-sonar-exclude
             -Dsonar.issue.ignore.block.e1.endBlockRegexp=end-sonar-exclude
             -Dsonar.cfamily.build-wrapper-output=bw-output
-            -Dsonar.cfamily.cache.enabled=false
