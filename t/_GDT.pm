@@ -881,7 +881,43 @@ sub _compare_rrsets {
     my $found = 0;
     for(my $i = 0; $i < scalar @$a_rrset; $i++) {
         for(my $j = 0; $j < scalar @comp_idx; $j++) {
-           if($a_rrset->[$i]->string eq $c_rrset->[$comp_idx[$j]]->string) {
+           my $a = $a_rrset->[$i];
+           my $c = $c_rrset->[$comp_idx[$j]];
+
+           # ->string output of OPT is not stable (broken in 1.36), due to the
+           #   inclusion of (unordered) hashes. Do a deep comparison instead,
+           #   comparing every option between $a and $c. Code in SVN trunk
+           #   suggests this may be fixed in later releases, but 1.36 is
+           #   found in the wild.
+           if($a->type eq 'OPT' && $c->type eq 'OPT') {
+               # bail-out early if the number of options differs
+               next unless scalar $a->options eq scalar $c->options;
+
+               my $a_matches = 0;
+               foreach my $opt ($a->options) {
+                   # check if the option is defined only in $a
+                   next unless defined $c->option($opt);
+                   # found in both, now check if they match
+                   # this is a scalar comparison, checking their binary forms
+                   next unless $a->option($opt) eq $c->option($opt);
+                   $a_matches++;
+               }
+
+               my $c_matches = 0;
+               foreach my $opt ($c->options) {
+                   # check if the option is defined only in $c
+                   next unless defined $a->option($opt);
+                   $c_matches++;
+               }
+
+               if ($a->options == $a_matches && $c->options == $c_matches) {
+                   $found++;
+                   splice(@comp_idx, $j, 1);
+                   last;
+               }
+           }
+
+           if($a->string eq $c->string) {
               $found++;
               splice(@comp_idx, $j, 1);
               last;
