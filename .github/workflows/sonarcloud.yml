@@ -58,7 +58,9 @@ jobs:
             make -j${TEST_CPUS} check
             gcov -a -b -p src/*.o src/plugins/*.o libgdmaps/*.o libgdnsd/*.o
             make clean
-            build-wrapper-linux-x86-64 --out-dir bw-output make -j${TEST_CPUS}
+            ls /opt/sonar-scanner
+            ls /opt/sonar-scanner/bin
+            /opt/sonar-scanner/bin/build-wrapper-linux-x86-64 --out-dir bw-output make -j${TEST_CPUS}
       - name: Analyze with SonarCloud
         # You can pin the exact commit or the version.
         # uses: SonarSource/sonarcloud-github-action@de2e56b42aa84d0b1c5b622644ac17e505c9a049
