@@ -1051,6 +1051,7 @@ sub test_dns {
     $args{qname}    ||= '.';
     $args{qtype}    ||= 'A';
     $args{header}   ||= {};
+    $args{qheader}  ||= {};
     $args{stats}    ||= [qw/udp_reqs noerror/];
     $args{resopts}  ||= {};
     $args{limit_v4} ||= 0;
@@ -1076,6 +1077,9 @@ sub test_dns {
     my $qpacket = $args{qpacket} || Net::DNS::Packet->new($args{qname}, $args{qtype});
     if(defined $args{qid}) {
         $qpacket->header->id($args{qid});
+    }
+    foreach my $qh (keys %{$args{qheader}}) {
+        $qpacket->header->$qh($args{qheader}->{$qh});
     }
     if(defined $args{q_optrr}) {
         $qpacket->push(additional => $args{q_optrr});

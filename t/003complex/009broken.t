@@ -163,7 +163,7 @@ my $optrr_resp = Net::DNS::RR->new(
 #  file in general, check that the RD bit is copied to the client,
 #  since all other tests keep it clear (as it should be).
 _GDT->test_dns(
-    resopts => { recurse => 1 },
+    qheader => { rd => 1 },
     qname => 'foo.example.com', qtype => 'A',
     header => { rd => 1 },
     answer => 'foo.example.com 21600 A 192.0.2.160',
