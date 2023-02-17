@@ -447,9 +447,8 @@ static void replacement_proc(const char* argv0, const char* cfpath, const char* 
     send_pidval_(pipefd[PIPE_WR], (uint32_t)replacement_pid);
 #ifdef GDNSD_VALGRIND
     execl("/bin/true", "/bin/true", NULL);
-#else
-    _exit(0);
 #endif
+    _exit(0);
 }
 
 static pid_t spawn_replacement(const char* argv0)
