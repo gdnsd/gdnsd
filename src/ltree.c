@@ -217,7 +217,7 @@ static ltree_rrset_ ## _typ ## _t* ltree_node_add_rrset_ ## _typ (ltree_node_t* 
         store_at = &(*store_at)->gen.next;\
     ltree_rrset_ ## _typ ## _t* nrr = xcalloc(sizeof(*nrr));\
     *store_at = (ltree_rrset_t*)nrr;\
-    (*store_at)->gen.type = _dtyp;\
+    nrr->gen.type = _dtyp;\
     return nrr;\
 }
 
@@ -657,7 +657,7 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, c
         store_at = &(*store_at)->gen.next;
     ltree_rrset_rfc3597_t* nrr = xcalloc(sizeof(*nrr));
     *store_at = (ltree_rrset_t*)nrr;
-    (*store_at)->gen.type = rrtype;
+    nrr->gen.type = rrtype;
     return nrr;
 }
 
