@@ -103,7 +103,7 @@ static as_af_t config_addrs(addrstate_t* as, as_af_t as_af, const char* resname,
 
     as->num_svcs = num_svcs;
 
-    res_which_t both[2] = { A_PRI, A_SEC };
+    const res_which_t both[2] = { A_PRI, A_SEC };
     for (unsigned i = 0; i < 2; i++) {
         res_which_t which = both[i];
         vscf_data_t* addrcfg = vscf_hash_get_data_bystringkey(cfg, which_str[which], true);

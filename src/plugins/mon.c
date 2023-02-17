@@ -98,7 +98,7 @@ static ev_timer sttl_update_timer;
 #define DEF_INTERVAL 10
 
 F_NONNULL
-static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED)
+static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) // cppcheck-suppress constParameter
 {
     gdnsd_assert(w == &sttl_update_timer);
     gdnsd_assert(revents == EV_TIMER);

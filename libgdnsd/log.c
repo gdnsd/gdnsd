@@ -177,7 +177,7 @@ bool gdnsd_log_neterr_rate_ok(void)
 static char* fmtbuf_common(const size_t size)
 {
     static __thread size_t buf_used = 0;
-    static __thread char buf[FMTBUF_SIZE];
+    static __thread char buf[FMTBUF_SIZE] = { 0 };
 
     char* rv = NULL;
 
