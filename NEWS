@@ -1,3 +1,22 @@
+3.8.1 - 2023-02-22
+    * Fixed several obscure and unlikely bugs which could be triggered when
+      there's a failure to launch a replacement daemon.  There were two
+      distinct classes of issue here: some of the bugs could cause undefined
+      behavior in the parent daemon due to unsafe logging calls in a forked
+      subprocess alongside the threaded parent, and the others could cause
+      the original daemon to safely exit with an error when it could and
+      should have merely logged about it and continued running.  Either way,
+      all of these bugs were only triggerable by a real operational issue
+      preventing the successful launch of a replacement daemon in the first
+      place (e.g. resource exhaustion or a missing daemon binary)
+    * Testsuite updated for compatibility with newer versions of Net::DNS
+      up through 1.36 (thanks paravoid!)
+    * A bunch of minor QA updates to catch up with changes in online
+      and local QA tools, compilers, distros, etc.   These are to clear up
+      some warnings and/or build issues, none of which should make any
+      functional difference at runtime.  These include fixes for Github
+      issues #220 and #230 .
+
 3.8.0 - 2021-08-13
     * The geoip plugin gained a new feature flag 'ignore_ecs' at the map level,
       which can be used to ignore EDNS Client Subnet data for all resources
