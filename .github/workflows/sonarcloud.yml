@@ -12,8 +12,6 @@ permissions:
 jobs:
   sonarcloud:
     runs-on: ubuntu-latest
-    env:
-      BUILD_WRAPPER_OUTPUT_DIR: bw-output
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -34,9 +32,9 @@ jobs:
             make check
             gcov -a -b -p src/*.o src/plugins/*.o libgdmaps/*.o libgdnsd/*.o
             make clean
-            build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} make
+            build-wrapper-linux-x86-64 --out-dir bw-output make
       - name: Analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Generate a token on Sonarcloud.io, add it to the secrets of this repo with the name SONAR_TOKEN (Settings > Secrets > Actions > add new repository secret)
-        run: sonar-scanner --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
+        run: sonar-scanner --define sonar.cfamily.build-wrapper-output=bw-output
