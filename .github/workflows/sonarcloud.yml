@@ -24,7 +24,7 @@ jobs:
       - name: Build
         env:
           CFLAGS: "-O0 -g -fprofile-arcs -ftest-coverage"
-          CPPFLAGS: "-DGDNSD_NO_UNREACH_BUILTIN -DGDNSD_NO_FATAL_COVERAGE -DGDNSD_COVERTEST_EXIT"
+          CPPFLAGS: "-DGDNSD_COVERTEST_EXIT"
           SLOW_TESTS: "1"
         run: |
             autoreconf -vif
