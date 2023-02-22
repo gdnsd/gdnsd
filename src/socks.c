@@ -66,7 +66,7 @@ static const socks_cfg_t socks_cfg_defaults = {
 };
 
 // Generic iterator for catching bad config hash keys in various places below
-F_NONNULL
+F_NONNULL F_NORETURN
 static bool bad_key(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* which_asvoid)
 {
     const char* which = which_asvoid;

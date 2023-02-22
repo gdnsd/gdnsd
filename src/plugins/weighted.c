@@ -609,12 +609,11 @@ static void config_auto(resource_t* res, vscf_data_t* res_cfg)
     vscf_destroy(res_cfg_noparams);
 }
 
-F_NONNULL
+F_NONNULL F_NORETURN
 static bool res_mixed_fail(const char* item_name, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* rname_asvoid)
 {
     const char* rname = rname_asvoid;
     log_fatal("plugin_weighted: resource '%s' seems to have explicit 'addrs_v4', 'addrs_v6', or 'cnames' configuration mixed with direct item config (e.g. '%s'), which is not allowed", rname, item_name);
-    return false;
 }
 
 static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t* res_cfg, void* idx_asvoid)

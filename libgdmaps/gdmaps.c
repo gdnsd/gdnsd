@@ -86,12 +86,11 @@ typedef struct {
     bool ignore_ecs;
 } gdmap_t;
 
-F_NONNULL
+F_NONNULL F_NORETURN
 static bool gdmap_badkey(const char* key, unsigned klen V_UNUSED, vscf_data_t* val V_UNUSED, const void* mapname_asvoid)
 {
     const char* mapname = mapname_asvoid;
     log_fatal("plugin_geoip: map '%s': invalid config key '%s'", mapname, key);
-    return false;
 }
 
 F_NONNULLX(1, 2, 3)

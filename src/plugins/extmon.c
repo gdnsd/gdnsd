@@ -321,6 +321,7 @@ static void spawn_helper(void)
         log_fatal("plugin_extmon: Failed to set O_NONBLOCK on pipe: %s", logf_errno());
 }
 
+F_NORETURN
 static bool bad_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, void* data V_UNUSED)
 {
     log_fatal("plugin_extmon: bad global option '%s'", key);

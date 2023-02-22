@@ -657,7 +657,7 @@ static ltree_rrset_rfc3597_t* ltree_node_add_rrset_rfc3597(ltree_node_t* node, c
         store_at = &(*store_at)->gen.next;
     ltree_rrset_rfc3597_t* nrr = xcalloc(sizeof(*nrr));
     *store_at = (ltree_rrset_t*)nrr;
-    nrr->gen.type = rrtype;
+    nrr->gen.type = (uint16_t)rrtype;
     return nrr;
 }
 

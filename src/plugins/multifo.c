@@ -67,7 +67,7 @@ static unsigned num_resources = 0;
 /* Local, static functions       */
 /*********************************/
 
-F_NONNULL
+F_NONNULL F_NORETURN
 static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d V_UNUSED, const void* resname_asvoid)
 {
     const char* resname = resname_asvoid;
