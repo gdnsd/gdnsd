@@ -7,7 +7,6 @@
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=security_rating)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
 
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=coverage)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=vulnerabilities)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=bugs)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=code_smells)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
