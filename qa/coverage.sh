@@ -13,6 +13,7 @@ set -x
 set -e
 
 CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage" CPPFLAGS="-DGDNSD_NO_UNREACH_BUILTIN -DGDNSD_NO_FATAL_COVERAGE -DGDNSD_COVERTEST_EXIT" ./configure --disable-developer --without-hardening
+rm -f *conftest*
 make clean
 make all
 
