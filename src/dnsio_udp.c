@@ -90,13 +90,6 @@
 // hardware, or improve kernel socket efficiency).
 #define MMSG_WIDTH 16U
 
-// This flag is set true early in dnsio_udp_init() only in the case that the
-// runtime check passes (in addition to the configure-time check that handles
-// the USE_MMSG define).
-#ifdef USE_MMSG
-static bool use_mmsg = false;
-#endif
-
 // These are initialized once at process start by dnsio_udp_init():
 static sigset_t sigmask_all;     // blocks all sigs
 static sigset_t sigmask_notusr2; // blocks all sigs except USR2
@@ -114,18 +107,6 @@ static void sighand_stop(int s V_UNUSED, siginfo_t* info, void* ucontext V_UNUSE
 
 void dnsio_udp_init(const pid_t main_pid)
 {
-#ifdef USE_MMSG
-    errno = 0;
-    sendmmsg(-1, 0, 0, 0);
-    if (errno != ENOSYS) {
-        errno = 0;
-        recvmmsg(-1, 0, 0, 0, 0);
-        use_mmsg = (errno != ENOSYS);
-        if (use_mmsg)
-            log_debug("using sendmmsg()/recvmmsg() interfaces for UDP");
-    }
-    errno = 0;
-#endif
     gdnsd_assume(main_pid);
     mainpid = main_pid;
     struct sigaction sa;
@@ -332,94 +313,6 @@ static void slow_idle_poll(const int fd)
 }
 
 F_HOT F_NONNULL
-static void process_msg(const int fd, struct dnsp_ctx* pctx, struct dns_stats* stats, struct msghdr* msg_hdr, const size_t buf_in_len)
-{
-    struct anysin* sa = msg_hdr->msg_name;
-    if (unlikely(
-                (sa->sa.sa_family == AF_INET && !sa->sin4.sin_port)
-                || (sa->sa.sa_family == AF_INET6 && !sa->sin6.sin6_port)
-            )) {
-        stats_own_inc(&stats->dropped);
-        return;
-    }
-
-    if (sa->sa.sa_family == AF_INET6)
-        ipv6_pktinfo_ifindex_fixup(msg_hdr);
-
-    sa->len = msg_hdr->msg_namelen;
-    struct iovec* iov = msg_hdr->msg_iov;
-    iov->iov_len = process_dns_query(pctx, sa, iov->iov_base, NULL, buf_in_len);
-    if (iov->iov_len) {
-        ssize_t sent;
-        do {
-            sent = sendmsg(fd, msg_hdr, MSG_DONTWAIT);
-        } while (unlikely(sent < 0 && errno == EINTR));
-        if (unlikely(sent < 0)) {
-            stats_own_inc(&stats->udp.sendfail);
-            log_neterr("UDP sendmsg() of %zu bytes to %s failed: %s",
-                       iov->iov_len, logf_anysin(sa), logf_errno());
-        }
-    }
-}
-
-F_HOT F_NONNULL
-static void mainloop(const int fd, struct dnsp_ctx* pctx, struct dns_stats* stats, const bool use_cmsg)
-{
-    const unsigned pgsz = get_pgsz();
-    const unsigned max_rounded = ((MAX_RESPONSE_BUF + pgsz - 1) / pgsz) * pgsz;
-
-    struct anysin sa;
-    void* buf = xaligned_alloc(pgsz, max_rounded);
-    struct iovec iov = {
-        .iov_base = buf,
-        .iov_len  = 0
-    };
-    struct msghdr msg_hdr;
-    union {
-        struct cmsghdr chdr;
-        char cbuf[CMSG_BUFSIZE];
-    } cmsg_buf;
-    memset(&msg_hdr, 0, sizeof(msg_hdr));
-    msg_hdr.msg_name       = &sa.sa;
-    msg_hdr.msg_iov        = &iov;
-    msg_hdr.msg_iovlen     = 1;
-    msg_hdr.msg_control    = use_cmsg ? cmsg_buf.cbuf : NULL;
-
-    const struct timeval tmout_short = { .tv_sec = 0, .tv_usec = FAST_RCVTIMEO_US };
-    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tmout_short, sizeof(tmout_short)))
-        log_fatal("Failed to set SO_RCVTIMEO on UDP socket: %s", logf_errno());
-
-    while (likely(!atomic_load_explicit(&thread_shutdown, memory_order_relaxed))) {
-        iov.iov_len = DNS_RECV_SIZE;
-        msg_hdr.msg_namelen    = GDNSD_ANYSIN_MAXLEN;
-        msg_hdr.msg_flags      = 0;
-        if (use_cmsg) {
-            msg_hdr.msg_controllen = CMSG_BUFSIZE;
-            memset(cmsg_buf.cbuf, 0, sizeof(cmsg_buf));
-        }
-
-        grcu_quiescent_state();
-        const ssize_t recvmsg_rv = recvmsg(fd, &msg_hdr, 0);
-        if (unlikely(recvmsg_rv < 0)) {
-            if (ERRNO_WOULDBLOCK) {
-                grcu_thread_offline();
-                slow_idle_poll(fd);
-                grcu_thread_online();
-            } else if (errno != EINTR) {
-                log_neterr("UDP recvmsg() error: %s", logf_errno());
-                stats_own_inc(&stats->udp.recvfail);
-            }
-            continue;
-        }
-        process_msg(fd, pctx, stats, &msg_hdr, (size_t)recvmsg_rv);
-    }
-
-    free(buf);
-}
-
-#ifdef USE_MMSG
-
-F_HOT F_NONNULL
 static void process_mmsgs(const int fd, struct dnsp_ctx* pctx, struct dns_stats* stats, struct mmsghdr* dgrams, const unsigned pkts)
 {
     // For each input packet, first check for source port zero (in which case
@@ -560,8 +453,6 @@ static void mainloop_mmsg(const int fd, struct dnsp_ctx* pctx, struct dns_stats*
     free(bufs);
 }
 
-#endif // USE_MMSG
-
 F_NONNULL F_PURE
 static bool is_ipv6(const struct anysin* sa)
 {
@@ -593,12 +484,7 @@ void* dnsio_udp_start(void* thread_asvoid)
                           ? true
                           : gdnsd_anysin_is_anyaddr(&addrconf->addr);
 
-#ifdef USE_MMSG
-    if (use_mmsg)
-        mainloop_mmsg(t->sock, pctx, stats, use_cmsg);
-    else
-#endif
-        mainloop(t->sock, pctx, stats, use_cmsg);
+    mainloop_mmsg(t->sock, pctx, stats, use_cmsg);
 
     grcu_unregister_thread();
     dnspacket_ctx_cleanup(pctx);

@@ -191,14 +191,6 @@ m4_include([libgdnsd/libgdnsd.m4])
 # include libgdmaps configure stuff
 m4_include([libgdmaps/libgdmaps.m4])
 
-# Linux, FreeBSD, and NetBSD all have this these days
-USE_MMSG=1
-AC_CHECK_DECLS([sendmmsg, recvmmsg, MSG_WAITFORONE],,[USE_MMSG=0],[[#include <sys/socket.h>]])
-AC_CHECK_FUNCS([sendmmsg recvmmsg],,[USE_MMSG=0])
-AS_IF([test $USE_MMSG -eq 1],[
-    AC_DEFINE([USE_MMSG],1,[recvmmsg and sendmmsg look usable])
-])
-
 # systemd unit dir for "make install" of gdnsd.service
 PKG_CHECK_VAR([SYSD_UNITDIR], [systemd], [systemdsystemunitdir])
 AC_MSG_CHECKING([for systemd system unit installdir])
@@ -358,10 +350,9 @@ AC_SUBST([GDNSD_DEFPATH_LIBEXEC])
 
 # BUILD_FEATURES for cmdline output
 B_FEAT="prod"
-if test "x$developer" != xno;    then B_FEAT="dev";             fi
-if test "x$HAS_SENDMMSG" = x1;   then B_FEAT="$B_FEAT mmsg";    fi
-if test "x$HAVE_LIBUNWIND" = x1; then B_FEAT="$B_FEAT unwind";  fi
-if test "x$HAVE_GEOIP2" = x1;    then B_FEAT="$B_FEAT geoip2";  fi
+if test "x$developer" != xno;    then B_FEAT="dev";               fi
+if test "x$HAVE_LIBUNWIND" = x1; then B_FEAT="$B_FEAT unwind";    fi
+if test "x$HAVE_GEOIP2" = x1;    then B_FEAT="$B_FEAT geoip2";    fi
 AC_DEFINE_UNQUOTED([BUILD_FEATURES], ["$B_FEAT"], [Build Features])
 
 # BUILD_INFO for cmdline output

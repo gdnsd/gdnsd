@@ -69,6 +69,7 @@ This is an attempt at a human-usable breakdown of all the human-affecting change
   * `long`, `size_t`, `intptr_t`, and `ptrdiff_t` must match the pointer width.
   * Must support lock-free C11 atomics on pointers.
 * libsodium: min version bumped to 1.0.12
+* `recvmmsg()` and `sendmmsg()` are now hard requirements.  The compile- and run- time detection and fallback to plain `recvmsg()` and `sendmsg()` has been removed.
 
 ## Revamping internals
 
