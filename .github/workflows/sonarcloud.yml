@@ -12,6 +12,7 @@ permissions:
 jobs:
   sonarcloud:
     runs-on: ubuntu-latest
+    if: github.repository == 'gdnsd/gdnsd'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
