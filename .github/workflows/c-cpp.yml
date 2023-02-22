@@ -13,7 +13,10 @@ jobs:
     name: Build in Developer Mode
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - name: checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
     - name: install-deps
       run: sudo apt -y install ragel libev-dev liburcu-dev libsodium-dev libunwind8-dev libmaxminddb-dev libsocket6-perl libio-socket-inet6-perl libwww-perl libhttp-daemon-perl libnet-dns-perl
     - name: autoreconf
