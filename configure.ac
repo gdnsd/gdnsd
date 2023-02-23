@@ -123,6 +123,7 @@ AX_APPEND_COMPILE_FLAGS([\
 
 if test $developer = yes -o $extrawarn = yes; then
     AX_APPEND_COMPILE_FLAGS([\
+        -Wmost \
         -Wextra \
         -Waggregate-return \
         -Walloca \
@@ -136,7 +137,6 @@ if test $developer = yes -o $extrawarn = yes; then
         -Wdouble-promotion \
         -Wduplicated-branches \
         -Wduplicated-cond \
-        -Wendif-labels \
         -Werror=vla \
         -Wfloat-equal \
         -Wfloat-conversion \
@@ -145,7 +145,6 @@ if test $developer = yes -o $extrawarn = yes; then
         -Winit-self \
         -Wjump-misses-init \
         -Wlogical-op \
-        -Wloop-analysis \
         -Wmissing-declarations \
         -Wmissing-include-dirs \
         -Wmissing-prototypes \
@@ -156,15 +155,14 @@ if test $developer = yes -o $extrawarn = yes; then
         -Wshadow \
         -Wsign-conversion \
         -Wshift-overflow=2 \
-        -Wstrict-aliasing=3 \
         -Wstrict-overflow=5 \
         -Wstrict-prototypes \
         -Wstringop-overflow=3 \
         -Wswitch-default \
         -Wswitch-enum \
         -Wtrampolines \
+        -Wtautological-compare \
         -Wundef \
-        -Wuninitialized \
         -Wunused \
         -Wwrite-strings \
         -Wthis-does-not-exist \
