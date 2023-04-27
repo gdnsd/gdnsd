@@ -200,6 +200,7 @@ static void process_file(const extf_svc_t* svc)
     } else {
         if (!vscf_is_hash(raw)) {
             log_err("plugin_extfile: Service type '%s': top level of file '%s' must be a hash", svc->name, svc->path);
+            vscf_destroy(raw);
             return;
         }
     }
