@@ -18,6 +18,11 @@ _GDT->write_statefile('extfile/extf_d', qq{
     192.0.2.1 => up/41
 });
 
+_GDT->write_statefile('extfile/extf_u', qq{
+    127.0.0.1 => down/42
+    192.0.2.1 => up/41
+});
+
 my $pid = _GDT->test_spawn_daemon_execute();
 
 _GDT->test_dns(

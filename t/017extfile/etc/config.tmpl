@@ -16,6 +16,13 @@ service_types => {
         file => extf_d
         interval = 5
     }
+    # intentionally unused
+    extf_u => {
+        plugin => extfile
+        direct => true
+        file => extf_u
+        interval = 5
+    }
 }
 
 plugins => {
