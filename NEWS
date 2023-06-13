@@ -1,5 +1,6 @@
-3.99.x
-    * Prototype work for future 4.x releases - not production quality!
+3.99.0-alpha1
+    * Alpha work for a future 4.0 release
+    * See VERSION4.md for details
 
 3.8.1 - 2023-02-22
     * Fixed several obscure and unlikely bugs which could be triggered when
