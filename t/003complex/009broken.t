@@ -40,9 +40,18 @@ my $pid = _GDT->test_spawn_daemon();
 
 {   # AXFR - stats result should be NOTIMP over TCP
     my @zone = ();
+    # Net::DNS 1.39 made axfr() ignore the persistent_tcp setting,
+    # which means the socket is closed, and in turn tcp_close_c increases.
+    #
+    # To ensure backwards-compatibility with older versions, turn off
+    # persistent_tcp before axfr() and restore it to its previous state
+    # (currently always 1).
+    my $saved = _GDT->get_resolver()->persistent_tcp;
+    _GDT->get_resolver()->persistent_tcp(0);
     eval { @zone = _GDT->get_resolver()->axfr('example.com'); };
+    _GDT->get_resolver()->persistent_tcp($saved);
     ok(!scalar @zone) or diag "AXFR gave us records???";
-    _GDT->stats_inc(qw/tcp_reqs tcp_conns notimp/);
+    _GDT->stats_inc(qw/tcp_reqs tcp_conns tcp_close_c notimp/);
     _GDT->test_stats();
 }
 
