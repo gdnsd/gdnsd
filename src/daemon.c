@@ -190,6 +190,9 @@ static void do_daemonize(void)
 
 void gdnsd_init_daemon(const bool daemonize)
 {
+    if (daemonize)
+        do_daemonize();
+
     // Ignore SIGPIPE and SIGCHLD universally (we do have some forks, but in
     // all cases we don't care to zombie them and gather exit status).
     struct sigaction sa_ign;
@@ -200,9 +203,6 @@ void gdnsd_init_daemon(const bool daemonize)
         log_fatal("sigaction(SIGPIPE, SIG_IGN) failed: %s", logf_errno());
     if (sigaction(SIGCHLD, &sa_ign, NULL))
         log_fatal("sigaction(SIGCHLD, SIG_IGN) failed: %s", logf_errno());
-
-    if (daemonize)
-        do_daemonize();
 }
 
 void gdnsd_daemon_notify_ready(void)
