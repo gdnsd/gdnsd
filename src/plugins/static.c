@@ -107,7 +107,7 @@ static int plugin_static_map_res(const char* resname, const uint8_t* zone_name)
                 }
                 if (!zone_name)
                     map_res_err("plugin_static: CNAME resource '%s' cannot be used for a DYNA record", resources[i].name);
-                uint8_t* dname = resources[i].dname;
+                const uint8_t* dname = resources[i].dname;
                 if (dname_isinzone(zone_name, dname))
                     map_res_err("plugin_static: Resource '%s' CNAME value '%s' cannot be used within zone '%s'", resources[i].name, logf_dname(dname), logf_dname(zone_name));
                 return (int)i;

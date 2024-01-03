@@ -195,7 +195,7 @@ void ltree_destroy(union ltree_node* node);
 F_WUNUSED F_NONNULL
 struct ltree_node_zroot* ltree_new_zone(const char* zname);
 F_WUNUSED F_NONNULL
-bool ltree_merge_zone(union ltree_node** root_of_dns_p, struct ltree_node_zroot* new_zone);
+bool ltree_merge_zone(union ltree_node** root_of_dns_p, struct ltree_node_zroot* zroot);
 void* ltree_zones_reloader_thread(void* init_asvoid);
 F_WUNUSED F_NONNULL
 bool ltree_postproc_zone(struct ltree_node_zroot* zroot, const uint32_t tstamp);

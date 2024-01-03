@@ -154,7 +154,7 @@ static void clear_dyn_addr_weights(void)
 // Main config code starts here
 
 F_NONNULL
-static void config_item_addrs(struct aitem* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, struct aset* addrset)
+static void config_item_addrs(struct aitem* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, const struct aset* addrset)
 {
     long wtemp = 0;
     if (!vscf_is_array(cfg_data)
@@ -205,7 +205,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
 
     struct iaga* iaga = iaga_asvoid;
 
-    struct aset* addrset = iaga->addrset;
+    const struct aset* addrset = iaga->addrset;
     struct aitem* res_item = iaga->res_item;
     unsigned lb_idx = iaga->lb_idx;
     iaga->lb_idx++;
@@ -246,7 +246,7 @@ static bool config_addr_group_addr(const char* lb_name, const unsigned lb_name_l
 }
 
 F_NONNULL
-static void config_item_addr_groups(struct aitem* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, vscf_data_t* cfg_data, struct aset* addrset)
+static void config_item_addr_groups(struct aitem* res_item, const char* res_name, const char* stanza, const char* item_name, const bool ipv6, const vscf_data_t* cfg_data, struct aset* addrset)
 {
     if (!vscf_is_hash(cfg_data))
         log_fatal("plugin_weighted: resource '%s' (%s), group '%s': groups values must be a hashes", res_name, stanza, item_name);
@@ -334,7 +334,7 @@ static void config_addrset(const char* res_name, const char* stanza, const bool 
     if (!vscf_is_hash(cfg))
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
 
-    vscf_data_t* parent = vscf_get_parent(cfg);
+    const vscf_data_t* parent = vscf_get_parent(cfg);
 
     // inherit down the applicable res-level parameters
     vscf_hash_inherit(parent, cfg, "service_types", true);
@@ -476,7 +476,7 @@ static bool config_item_cname(const char* item_name, unsigned klen V_UNUSED, vsc
 }
 
 F_NONNULL
-static void config_cnameset(const char* res_name, const char* stanza, struct cnset* cnset, vscf_data_t* cfg)
+static void config_cnameset(const char* res_name, const char* stanza, struct cnset* cnset, const vscf_data_t* cfg)
 {
     if (!vscf_is_hash(cfg))
         log_fatal("plugin_weighted: resource '%s' stanza '%s' value must be a hash", res_name, stanza);
@@ -636,7 +636,7 @@ static bool config_res(const char* res_name, unsigned klen V_UNUSED, vscf_data_t
     // grab explicit sub-stanzas
     vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v4", true);
     vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(res_cfg, "addrs_v6", true);
-    vscf_data_t* cnames_cfg = vscf_hash_get_data_byconstkey(res_cfg, "cnames", true);
+    const vscf_data_t* cnames_cfg = vscf_hash_get_data_byconstkey(res_cfg, "cnames", true);
     if (cnames_cfg)
         log_fatal("plugin_weighted: resource '%s': the pointless singleton 'cnames' substanza is no longer supported; move the data up a level without it", res_name);
 

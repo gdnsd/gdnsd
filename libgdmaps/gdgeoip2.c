@@ -42,8 +42,8 @@
 #include <maxminddb.h>
 
 struct offset_cache_item {
-    unsigned offset; // cppcheck-suppress unusedStructMember
-    uint32_t dclist; // cppcheck-suppress unusedStructMember
+    unsigned offset;
+    uint32_t dclist;
 };
 #define OFFSET_CACHE_SIZE 129113 // prime
 

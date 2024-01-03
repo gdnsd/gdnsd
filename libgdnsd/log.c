@@ -411,7 +411,7 @@ static const char rr_name_257[] = { "CAA" };
 const char* gdnsd_logf_rrtype(const unsigned rrtype)
 {
     char tmp[32];
-    const char* src = tmp;
+    const char* src;
     unsigned len = 0U;
 
     if (rrtype < num_rr_names) {
@@ -426,6 +426,7 @@ const char* gdnsd_logf_rrtype(const unsigned rrtype)
         int snp_rv = snprintf(tmp, 32, "TYPE%u", rrtype);
         gdnsd_assert(snp_rv > 4 && snp_rv < 32);
         len = (unsigned)snp_rv + 1U;
+        src = tmp;
     }
 
     if (!len)

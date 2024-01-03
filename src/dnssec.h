@@ -36,7 +36,7 @@ void dnssec_init_global(void);
 // auto-generated ephemeral ZSKs.  To be replaced later when we get into
 // dealing with proper key management.
 F_NONNULL
-bool dnssec_add_ephemeral_zsk(struct ltree_node_zroot* zroot, const unsigned alg);
+bool dnssec_add_ephemeral_zsk(struct ltree_node_zroot* zroot, const unsigned algid);
 
 // Called right after zone parsing completes, but before nsec/rrsig processing
 // begins, to set up ncache TTL and RRSIG expire/incept stamps

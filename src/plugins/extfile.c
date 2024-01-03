@@ -253,7 +253,7 @@ static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    struct extf_svc* svc = w->data;
+    const struct extf_svc* svc = w->data;
     gdnsd_assume(svc);
 
     if (svc->direct)

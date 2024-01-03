@@ -72,7 +72,7 @@ void nlist_destroy(struct nlist* nl)
 
 #ifndef NDEBUG
 F_NONNULL
-static void assert_clear_mask_bits(uint8_t* ipv6, const unsigned mask)
+static void assert_clear_mask_bits(const uint8_t* ipv6, const unsigned mask)
 {
     gdnsd_assume(mask < 129);
 

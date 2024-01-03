@@ -235,7 +235,7 @@ static void accumulate_statio(const struct dns_stats* this_stats)
 static void populate_statio(void)
 {
     memcpy(&statio, &statio_base, sizeof(statio));
-    struct dns_stats* this_stats = atomic_load_explicit(&stats_list_head, memory_order_acquire);
+    const struct dns_stats* this_stats = atomic_load_explicit(&stats_list_head, memory_order_acquire);
     while (this_stats) {
         accumulate_statio(this_stats);
         this_stats = this_stats->next;

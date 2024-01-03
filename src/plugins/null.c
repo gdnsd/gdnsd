@@ -80,7 +80,7 @@ static void null_interval_cb(struct ev_loop* loop V_UNUSED, struct ev_timer* t, 
 {
     gdnsd_assume(revents == EV_TIMER);
 
-    struct null_mon* mon = t->data;
+    const struct null_mon* mon = t->data;
     gdnsd_assume(mon);
     gdnsd_mon_state_updater(mon->idx, false);
 }

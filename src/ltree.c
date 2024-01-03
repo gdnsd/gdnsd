@@ -301,7 +301,7 @@ bool ltree_add_rec_dynaddr(struct ltree_node_zroot* zroot, const uint8_t* dname,
     if (unlikely(!node))
         return true; // find_or_add already logged about it
 
-    struct ltree_rrset_raw* rrset = NULL;
+    const struct ltree_rrset_raw* rrset = NULL;
     union ltree_rrset** store_at = &node->c.rrsets;
     while (*store_at) {
         rrset = (struct ltree_rrset_raw*)*store_at;
@@ -511,7 +511,7 @@ void realize_rdata(const union ltree_node* node, struct ltree_rrset_raw* raw, co
     for (unsigned i = 0; i < raw->gen.count; i++) {
         memcpy(&data_store[d_offs], left, left_len);
         d_offs += left_len;
-        uint8_t* rd = raw->scan_rdata[i];
+        const uint8_t* rd = raw->scan_rdata[i];
         unsigned rd_copy = ntohs(gdnsd_get_una16(rd)) + 2U;
         memcpy(&data_store[d_offs], rd, rd_copy);
         d_offs += rd_copy;
@@ -815,7 +815,7 @@ void ltree_destroy(union ltree_node* node)
         gdnsd_assert(!rrset->gen.type);
         struct ltree_rrset_enxd* e = &rrset->enxd;
         free(e->data);
-        free(e);
+        free(e); // cppcheck-suppress autovarInvalidDeallocation
         rrset = NULL;
     }
 

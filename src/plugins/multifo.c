@@ -83,13 +83,13 @@ static vscf_data_t* addrs_hash_from_array(vscf_data_t* ary, const char* resname,
 {
     gdnsd_assume(!vscf_is_hash(ary));
 
-    vscf_data_t* parent = vscf_get_parent(ary);
+    const vscf_data_t* parent = vscf_get_parent(ary);
     gdnsd_assert(vscf_is_hash(parent));
 
     vscf_data_t* newhash = vscf_hash_new();
     const unsigned alen = vscf_array_get_len(ary);
     for (unsigned i = 0; i < alen; i++) {
-        vscf_data_t* this_addr_cfg = vscf_array_get_data(ary, i);
+        const vscf_data_t* this_addr_cfg = vscf_array_get_data(ary, i);
         if (!vscf_is_simple(this_addr_cfg))
             log_fatal("plugin_multifo: resource '%s' (%s): if defined as an array, array values must all be address strings", resname, stanza);
         const unsigned lnum = i + 1;
@@ -401,7 +401,7 @@ static gdnsd_sttl_t resolve(const gdnsd_sttl_t* sttl_tbl, const struct aset* ase
 static gdnsd_sttl_t plugin_multifo_resolve(unsigned resnum, const unsigned qtype, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
-    struct res* res = &resources[resnum];
+    const struct res* res = &resources[resnum];
     gdnsd_sttl_t rv = GDNSD_STTL_TTL_MAX;
     if (qtype == DNS_TYPE_A && res->aset_v4)
         rv = resolve(sttl_tbl, res->aset_v4, result);

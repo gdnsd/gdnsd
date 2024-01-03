@@ -80,7 +80,7 @@ static bool bad_res_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d 
 }
 
 F_NONNULL
-static enum as_af config_addrs(struct addrstate* as, enum as_af as_af, const char* resname, const char* stanza, vscf_data_t* cfg)
+static enum as_af config_addrs(struct addrstate* as, enum as_af as_af, const char* resname, const char* stanza, const vscf_data_t* cfg)
 {
     unsigned num_svcs = 0;
     const char** svc_names = NULL;
@@ -154,8 +154,8 @@ static bool config_res(const char* resname, unsigned resname_len V_UNUSED, vscf_
 
     vscf_hash_bequeath_all(opts, "service_types", true, false);
 
-    vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
-    vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
+    const vscf_data_t* addrs_v4_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v4", true);
+    const vscf_data_t* addrs_v6_cfg = vscf_hash_get_data_byconstkey(opts, "addrs_v6", true);
     if (!addrs_v4_cfg && !addrs_v6_cfg) {
         struct addrstate* as = xmalloc(sizeof(*as));
         enum as_af which = config_addrs(as, A_AUTO, resname, "direct", opts);
@@ -268,7 +268,7 @@ static gdnsd_sttl_t resolve_addr(const gdnsd_sttl_t* sttl_tbl, const struct addr
 
 static gdnsd_sttl_t plugin_simplefo_resolve(unsigned resnum, const unsigned qtype, const struct client_info* cinfo V_UNUSED, struct dyn_result* result)
 {
-    struct res* res = &resources[resnum];
+    const struct res* res = &resources[resnum];
 
     const gdnsd_sttl_t* sttl_tbl = gdnsd_mon_get_sttl_table();
 

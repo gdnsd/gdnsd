@@ -107,7 +107,7 @@ struct thred {
     ev_idle idle_watcher;
     ev_async stop_watcher;
     ev_timer timeout_watcher;
-    CDL_ROOT(struct conn) connq; // cppcheck-suppress unusedStructMember
+    CDL_ROOT(struct conn) connq;
     size_t check_mode_conns; // conns using check_watcher at present
     unsigned churn_count; // number of struct conn cached in "churn"
     bool grace_mode; // final 5s grace mode flag
@@ -189,7 +189,7 @@ void dnsio_tcp_request_threads_stop(void)
 }
 
 F_NONNULL
-static void connq_set_timer(struct thred* thr, struct conn* head)
+static void connq_set_timer(struct thred* thr, const struct conn* head)
 {
     gdnsd_assert(!CDL_IS_EMPTY(&thr->connq));
     gdnsd_assert(CDL_IS_HEAD(&thr->connq, head));

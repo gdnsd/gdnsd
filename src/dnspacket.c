@@ -929,7 +929,7 @@ static unsigned encode_rrs_dynac(struct dnsp_ctx* ctx, const unsigned offset, co
 {
     gdnsd_assume(offset);
     gdnsd_assume(!rrset->gen.count);
-    struct ltree_rrset_raw* synth = synthesize_dynac(ctx, rrset);
+    const struct ltree_rrset_raw* synth = synthesize_dynac(ctx, rrset);
     if (!synth->gen.count)
         return offset;
     return encode_rrs_raw(ctx, offset, synth);
@@ -1145,7 +1145,7 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct search_resul
                 const unsigned num_zsks = dnssec_num_zsks(auth->sec);
                 unsigned resp_len = 0;
                 if (enxd) {
-                    struct ltree_rrset_enxd* enxd_rrset = &enxd->c.rrsets->enxd;
+                    const struct ltree_rrset_enxd* enxd_rrset = &enxd->c.rrsets->enxd;
                     resp_len = enxd_rrset->data_len;
                     memcpy(&packet[offset], enxd_rrset->data, enxd_rrset->data_len);
                 } else {

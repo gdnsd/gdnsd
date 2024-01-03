@@ -115,7 +115,7 @@ struct plugin {
 
 // Find a(nother) plugin by name.
 F_NONNULL F_PURE F_RETNN
-struct plugin* gdnsd_plugin_find(const char* plugin_name);
+struct plugin* gdnsd_plugin_find(const char* pname);
 
 // convenient macro for logging a config error and returning
 //  the error value -1 in a resolver plugin's map_res() callback

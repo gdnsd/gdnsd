@@ -118,7 +118,7 @@ struct css {
     uint32_t status_d;
     ev_io w_accept;
     ev_timer w_replace;
-    CDL_ROOT(struct tcp_lsnr) tcp_lsnrs; // cppcheck-suppress unusedStructMember
+    CDL_ROOT(struct tcp_lsnr) tcp_lsnrs;
     struct ev_loop* loop;
     struct css_conn* clients;
     struct css_connq reload_zones_queued;

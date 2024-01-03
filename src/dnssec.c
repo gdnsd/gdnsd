@@ -326,7 +326,7 @@ uint8_t* dnssec_sign_rrset(const union ltree_node* node, struct ltree_rrset_raw*
     for (unsigned i = 0; i < raw->gen.count; i++) {
         memcpy(&sign_buf[sbuf_len], left, left_len);
         sbuf_len += left_len;
-        uint8_t* rd = raw->scan_rdata[i];
+        const uint8_t* rd = raw->scan_rdata[i];
         unsigned rd_copy = ntohs(gdnsd_get_una16(rd)) + 2U;
         memcpy(&sign_buf[sbuf_len], rd, rd_copy);
         sbuf_len += rd_copy;
