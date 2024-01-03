@@ -179,15 +179,16 @@ static bool chal_tbl_hash_cset(chal_tbl_t* ctbl, const cset_t* cset, const bool 
     for (size_t i = 0; i < cset->count; i++) {
         const chal_t* ch = &cset->chals[i];
         chal_collide_t** slotptr = &ctbl->tbl[ch->dnhash & ctbl->mask];
+        chal_collide_t* slot = *slotptr;
         size_t old_ct = 0;
-        if (*slotptr) {
-            old_ct = (*slotptr)->count;
+        if (slot) {
+            old_ct = slot->count;
             if (check && old_ct > CHAL_COLLIDE_SANITY_MAX)
                 return true;
         }
-        *slotptr = xrealloc(*slotptr, sizeof(**slotptr) + (sizeof((*slotptr)->chals[0]) * (old_ct + 1U)));
-        (*slotptr)->chals[old_ct] = ch;
-        (*slotptr)->count = old_ct + 1U;
+        *slotptr = slot = xrealloc(slot, sizeof(*slot) + (sizeof(slot->chals[0]) * (old_ct + 1U)));
+        slot->chals[old_ct] = ch;
+        slot->count = old_ct + 1U;
     }
 
     return false;
