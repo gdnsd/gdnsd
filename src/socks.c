@@ -123,7 +123,7 @@ static void make_addr(const char* lspec_txt, const unsigned def_port, gdnsd_anys
 
 #define CFG_OPT_REMOVED(_opt_set, _gconf_loc) \
     do { \
-        vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
+        const vscf_data_t* _opt_setting = vscf_hash_get_data_byconstkey(_opt_set, #_gconf_loc, true); \
         if (_opt_setting) \
             log_warn("Config option %s is no longer supported, and will become a syntax error in a future major version upgrade", #_gconf_loc); \
     } while (0)
@@ -142,7 +142,7 @@ static void dns_listen_any(socks_cfg_t* socks_cfg, const dns_addr_t* addr_defs)
 }
 
 F_NONNULL
-static void process_listen_hashentry(dns_addr_t* addrconf, const char* lspec, vscf_data_t* addr_opts)
+static void process_listen_hashentry(dns_addr_t* addrconf, const char* lspec, const vscf_data_t* addr_opts)
 {
     if (!vscf_is_hash(addr_opts))
         log_fatal("DNS listen address '%s': per-address options must be a hash", lspec);
@@ -204,7 +204,7 @@ static void fill_dns_addrs(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
             dns_addr_t* addrconf = &socks_cfg->dns_addrs[i];
             memcpy(addrconf, addr_defs, sizeof(*addrconf));
             const char* lspec = vscf_hash_get_key_byindex(listen_opt, i, NULL);
-            vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
+            const vscf_data_t* addr_opts = vscf_hash_get_data_byindex(listen_opt, i);
             process_listen_hashentry(addrconf, lspec, addr_opts);
         }
     } else {
@@ -273,7 +273,7 @@ static void process_listen(socks_cfg_t* socks_cfg, vscf_data_t* listen_opt, cons
 }
 
 F_NONNULLX(1, 2)
-static void process_control_item(ctl_addr_t* item, const char* lspec, vscf_data_t* addr_opts)
+static void process_control_item(ctl_addr_t* item, const char* lspec, const vscf_data_t* addr_opts)
 {
     if (addr_opts) {
         if (!vscf_is_hash(addr_opts))
@@ -309,7 +309,7 @@ static void process_tcp_control(socks_cfg_t* socks_cfg, vscf_data_t* ctl_opt)
         socks_cfg->ctl_addrs = xcalloc_n(socks_cfg->num_ctl_addrs, sizeof(*socks_cfg->ctl_addrs));
         for (unsigned i = 0; i < socks_cfg->num_ctl_addrs; i++) {
             const char* lspec = vscf_hash_get_key_byindex(ctl_opt, i, NULL);
-            vscf_data_t* addr_opts = vscf_hash_get_data_byindex(ctl_opt, i);
+            const vscf_data_t* addr_opts = vscf_hash_get_data_byindex(ctl_opt, i);
             process_control_item(&socks_cfg->ctl_addrs[i], lspec, addr_opts);
         }
     } else {

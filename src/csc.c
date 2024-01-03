@@ -193,7 +193,7 @@ static size_t get_control_fds(struct msghdr* msg, int* fds, const size_t fds_rec
 }
 
 F_NONNULL
-size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds)
+size_t csc_txn_getfds(const csc_t* csc, const csbuf_t* req, csbuf_t* resp, int** resp_fds) // cppcheck-suppress constParameterPointer
 {
     ssize_t pktlen = send(csc->fd, req->raw, 8, 0);
     if (pktlen != 8)

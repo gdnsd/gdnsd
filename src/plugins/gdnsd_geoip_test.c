@@ -133,24 +133,24 @@ static void do_repl(const gdmaps_t* gdmaps)
 }
 
 F_NONNULL
-static vscf_data_t* conf_get_maps(vscf_data_t* cfg_root)
+static const vscf_data_t* conf_get_maps(const vscf_data_t* cfg_root)
 {
     // plugins stanza
-    vscf_data_t* plugins = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
+    const vscf_data_t* plugins = vscf_hash_get_data_byconstkey(cfg_root, "plugins", true);
     if (!plugins)
         log_fatal("Config file has no plugins stanza");
     if (!vscf_is_hash(plugins))
         log_fatal("Config stanza 'plugins' must be a hash");
 
     // plugins->geoip stanza
-    vscf_data_t* geoip = vscf_hash_get_data_byconstkey(plugins, "geoip", true);
+    const vscf_data_t* geoip = vscf_hash_get_data_byconstkey(plugins, "geoip", true);
     if (!geoip)
         log_fatal("Config file has no geoip plugin config");
     if (!vscf_is_hash(geoip))
         log_fatal("Plugin config for 'geoip' must be a hash");
 
     // plugins->geoip->maps stanza
-    vscf_data_t* maps = vscf_hash_get_data_byconstkey(geoip, "maps", true);
+    const vscf_data_t* maps = vscf_hash_get_data_byconstkey(geoip, "maps", true);
     if (!maps)
         log_fatal("Config file has no geoip maps defined");
     if (!vscf_is_hash(maps))
@@ -164,7 +164,7 @@ static gdmaps_t* gdmaps_standalone_init(const char* input_cfgdir)
     vscf_data_t* cfg_root = gdnsd_init_paths(input_cfgdir, false);
     if (!cfg_root)
         log_fatal("gdnsd_geoip_test cannot proceed without an actual config file");
-    vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
+    const vscf_data_t* maps_cfg = conf_get_maps(cfg_root);
     if (!maps_cfg)
         log_fatal("gdnsd_geoip_test: config has no 'maps' stanza");
     if (!vscf_is_hash(maps_cfg))

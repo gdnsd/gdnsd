@@ -42,7 +42,7 @@ static unsigned num_dclists = 0;
 static dclist_t** dclists = NULL; // one per resource in metafo case
 
 F_NONNULL
-static unsigned res_get_mapnum(vscf_data_t* res_cfg, const char* res_name)
+static unsigned res_get_mapnum(const vscf_data_t* res_cfg, const char* res_name)
 {
     // Get 'dclist' name, convert, store, return 0-based dclist index
     vscf_data_t* dc_cfg = vscf_hash_get_data_byconstkey(res_cfg, "datacenters", true);
@@ -89,7 +89,7 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname)
 {
     gdnsd_assert(mapnum < num_dclists);
 
-    dclist_t* this_map = dclists[mapnum];
+    const dclist_t* this_map = dclists[mapnum];
     for (unsigned i = 1; i <= this_map->num_dcs; i++)
         if (!strcmp(dcname, this_map->dc_names[i]))
             return i;
@@ -98,7 +98,7 @@ static unsigned map_get_dcidx(const unsigned mapnum, const char* dcname)
 }
 
 F_NONNULL
-static bool top_config_hook(vscf_data_t* top_config V_UNUSED)
+static bool top_config_hook(const vscf_data_t* top_config V_UNUSED)
 {
     gdnsd_assert(vscf_is_hash(top_config));
     return false;

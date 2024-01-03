@@ -55,7 +55,7 @@ void nlist_finish(nlist_t* nl);
 
 // must pass through _finish() before *any* of the xlate/merge funcs below
 F_NONNULL F_RETNN
-ntree_t* nlist_xlate_tree(const nlist_t* nl_a);
+ntree_t* nlist_xlate_tree(const nlist_t* nl);
 F_NONNULL F_RETNN
 ntree_t* nlist_merge2_tree(const nlist_t* nl_a, const nlist_t* nl_b);
 

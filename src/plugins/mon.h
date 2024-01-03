@@ -115,8 +115,8 @@ extern gdnsd_sttl_t* smgr_sttl_consumer_;
 //        does post-processing to pass monitoring requests all
 //        the way through from resolver->monitoring plugins via
 //        callbacks
-void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg);
-void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg);
+void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg);
+void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg);
 
 // conf can call this to pre-check the admin_state syntax
 // fails fatally if the admin_state pathname exists
@@ -125,7 +125,7 @@ void gdnsd_mon_check_admin_file(void);
 
 // main.c calls this for adding monio events to the main thread's eventloop
 F_NONNULL
-void gdnsd_mon_start(struct ev_loop* mon_loop);
+void gdnsd_mon_start(struct ev_loop* mloop);
 
 // JSON monitored-state output for control socket
 F_NONNULL F_RETNN

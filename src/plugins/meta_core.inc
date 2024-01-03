@@ -94,7 +94,7 @@ static resource_t* resources;
 // retval is new storage.
 // "plugin", if existed in config, will be marked afterwards
 F_NONNULL
-static char* get_defaulted_plugname(vscf_data_t* cfg, const char* resname, const char* dcname)
+static char* get_defaulted_plugname(const vscf_data_t* cfg, const char* resname, const char* dcname)
 {
     char* rv;
     vscf_data_t* plugname_data = vscf_hash_get_data_byconstkey(cfg, "plugin", true);
@@ -141,7 +141,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
         vscf_hash_add_val("plugin", 6, newhash, plugname_cfg);
         const unsigned alen = vscf_array_get_len(cfg);
         for (unsigned i = 0; i < alen; i++) {
-            vscf_data_t* this_addr_cfg = vscf_array_get_data(cfg, i);
+            const vscf_data_t* this_addr_cfg = vscf_array_get_data(cfg, i);
             if (!vscf_is_simple(this_addr_cfg))
                 log_fatal("plugin_" PNSTR ": resource '%s': datacenter '%s': if defined as an array, array values must all be address strings", resname, this_dc->dc_name);
             const unsigned lnum = i + 1;
@@ -190,7 +190,7 @@ static void inject_child_plugin_config(dc_t* this_dc, const char* resname, vscf_
 }
 
 F_NONNULL
-static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, vscf_data_t* dc_data)
+static void config_res_perdc(const char* resname, const vscf_data_t* res_cfg, dc_t* this_dc, const char* dc_name, vscf_data_t* dc_data)
 {
     this_dc->dc_name = xstrdup(dc_name);
 
@@ -261,7 +261,7 @@ static void config_res_perdc(const char* resname, vscf_data_t* res_cfg, dc_t* th
 }
 
 F_NONNULL
-static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t* dcmap_cfg, const char* resname)
+static void config_res_dcmap(resource_t* res, const vscf_data_t* res_cfg, const vscf_data_t* dcmap_cfg, const char* resname)
 {
     gdnsd_assert(vscf_is_hash(dcmap_cfg));
 
@@ -283,7 +283,7 @@ static void config_res_dcmap(resource_t* res, vscf_data_t* res_cfg, vscf_data_t*
 }
 
 F_NONNULL
-static void make_resource(resource_t* res, const char* res_name, vscf_data_t* res_cfg, const bool undef_dc_ok)
+static void make_resource(resource_t* res, const char* res_name, const vscf_data_t* res_cfg, const bool undef_dc_ok)
 {
     res->name = xstrdup(res_name);
 
@@ -300,7 +300,7 @@ static void make_resource(resource_t* res, const char* res_name, vscf_data_t* re
         log_fatal("plugin_" PNSTR ": resource '%s': option 'skip_first' must have the value 'true' or 'false'", res_name);
 
     // the core item: dcmap (dc -> result map)
-    vscf_data_t* dcs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "dcmap", true);
+    const vscf_data_t* dcs_cfg = vscf_hash_get_data_byconstkey(res_cfg, "dcmap", true);
     if (!dcs_cfg)
         log_fatal("plugin_" PNSTR ": resource '%s': missing required stanza 'dcmap'", res_name);
     if (!vscf_is_hash(dcs_cfg))
@@ -442,7 +442,7 @@ static void CB_LOAD_CONFIG(vscf_data_t* config)
 
     const bool undef_dc_ok = top_config_hook(config);
 
-    vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
+    const vscf_data_t* resources_cfg = vscf_hash_get_data_byconstkey(config, "resources", true);
     if (!resources_cfg)
         log_fatal("plugin_" PNSTR ": config has no 'resources' stanza");
     if (!vscf_is_hash(resources_cfg))
@@ -482,7 +482,7 @@ static int CB_MAP(const char* resname, const uint8_t* zone_name)
             char* resname_copy = xstrdup(resname);
             const unsigned reslen = slash - resname;
             resname_copy[reslen] = '\0';
-            char* dcname = resname_copy + reslen + 1;
+            const char* dcname = resname_copy + reslen + 1;
             rv = map_res_inner(resname_copy, zone_name, dcname);
             free(resname_copy);
         } else {

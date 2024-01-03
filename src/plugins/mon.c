@@ -98,7 +98,7 @@ static ev_timer sttl_update_timer;
 #define DEF_INTERVAL 10
 
 F_NONNULL
-static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED) // cppcheck-suppress constParameter
+static void sttl_table_update(struct ev_loop* loop V_UNUSED, ev_timer* w V_UNUSED, int revents V_UNUSED)
 {
     gdnsd_assert(w == &sttl_update_timer);
     gdnsd_assert(revents == EV_TIMER);
@@ -224,7 +224,7 @@ static bool admin_process_entry(const char* matchme, gdnsd_sttl_t* updates, gdns
 }
 
 F_NONNULL
-static bool admin_process_hash(vscf_data_t* raw, const bool check_only)
+static bool admin_process_hash(const vscf_data_t* raw, const bool check_only)
 {
     gdnsd_assert(vscf_is_hash(raw));
 
@@ -346,7 +346,7 @@ static void admin_timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUS
 {
     gdnsd_assert(revents == EV_TIMER);
     ev_timer_stop(loop, w);
-    ev_stat* afw = &admin_file_watcher;
+    const ev_stat* afw = &admin_file_watcher;
     if (afw->attr.st_nlink)
         admin_process_file(afw->path, false);
     else
@@ -506,7 +506,7 @@ static unsigned mon_thing(const char* svctype_name, const gdnsd_anysin_t* addr, 
         }
     } else {
         for (unsigned i = 0; i < num_smgrs; i++) {
-            smgr_t* that_smgr = &smgrs[i];
+            const smgr_t* that_smgr = &smgrs[i];
             if (that_smgr->is_cname && !gdnsd_dname_cmp(dname, that_smgr->dname) && this_svc == that_smgr->type)
                 return i;
         }
@@ -615,7 +615,7 @@ static bool bad_svc_opt(const char* key, unsigned klen V_UNUSED, vscf_data_t* d 
     log_fatal("Service type '%s', bad option '%s'", svcname, key);
 }
 
-void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
+void gdnsd_mon_cfg_stypes_p1(const vscf_data_t* svctypes_cfg)
 {
     unsigned num_svc_types_cfg = 0;
 
@@ -639,7 +639,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
         this_svc->name = xstrdup(vscf_hash_get_key_byindex(svctypes_cfg, i, NULL));
         if (!strcmp(this_svc->name, "up") || !strcmp(this_svc->name, "down"))
             log_fatal("Explicit service type name '%s' not allowed", this_svc->name);
-        vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
+        const vscf_data_t* svctype_cfg = vscf_hash_get_data_byindex(svctypes_cfg, i);
         if (!vscf_is_hash(svctype_cfg))
             log_fatal("Definition of service type '%s' must be a hash", this_svc->name);
         vscf_data_t* pname_cfg = vscf_hash_get_data_byconstkey(svctype_cfg, "plugin", true);
@@ -654,7 +654,7 @@ void gdnsd_mon_cfg_stypes_p1(vscf_data_t* svctypes_cfg)
     }
 }
 
-void gdnsd_mon_cfg_stypes_p2(vscf_data_t* svctypes_cfg)
+void gdnsd_mon_cfg_stypes_p2(const vscf_data_t* svctypes_cfg)
 {
 
     // If no plugins actually used any plugin-monitored services, there's

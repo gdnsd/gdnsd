@@ -253,7 +253,7 @@ static void timer_cb(struct ev_loop* loop, ev_timer* w, int revents V_UNUSED)
 {
     gdnsd_assert(revents == EV_TIMER);
 
-    extf_svc_t* svc = w->data;
+    const extf_svc_t* svc = w->data;
     gdnsd_assert(svc);
 
     if (svc->direct)
