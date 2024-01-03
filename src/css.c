@@ -520,6 +520,28 @@ static pid_t spawn_replacement(const char* argv0)
     else
         retval = (pid_t) -1;
     close(pipefd[PIPE_RD]);
+
+    // Reap the middle PID before continuing, so that the final child is
+    // known to be re-parented before it signals success (e.g. via systemd
+    // notification).  We'll log non-fatal errors here if something looks
+    // fishy, but ultimately the retval status is determined based on the
+    // success of the pipe read above.
+    int status;
+    pid_t wp_rv = waitpid(middle_pid, &status, 0);
+    if (wp_rv < 0) {
+        // We can assume ECHILD means the libev SIGCHLD handler beat us to waitpid()
+        if (errno != ECHILD)
+            log_err("waitpid(%li) for temporary middle process during replacement spawn failed: %s",
+                    (long)middle_pid, logf_errno());
+    } else {
+        if (wp_rv != middle_pid)
+            log_err("waitpid(%li) for temporary middle process during replacement spawn caught process %li instead",
+                    (long)middle_pid, (long)wp_rv);
+        if (status)
+            log_err("waitpid(%li) for temporary middle process during replacement spawn returned bad status %i",
+                    (long)middle_pid, status);
+    }
+
     return retval;
 }
 

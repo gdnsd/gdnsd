@@ -494,10 +494,9 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     ev_set_syserr_cb(&syserr_for_ev);
     ev_set_allocator(&alloc_for_ev);
 
-    // primary ev loop in main process to handle statio, monitors, control
-    // socket, signals, etc.  Note non-default loop, meaning no implicit
-    // SIGCHLD handler from libev.
-    struct ev_loop* loop = ev_loop_new(EVFLAG_AUTO);
+    // default ev loop in main process to handle statio, monitors, control
+    // socket, signals, etc.
+    struct ev_loop* loop = ev_default_loop(EVFLAG_AUTO);
     if (!loop)
         log_fatal("Could not initialize the default libev loop");
 
@@ -612,7 +611,6 @@ static css_t* runtime_execute(const char* argv0, socks_cfg_t* socks_cfg, css_t* 
     // as it could abort our clean shutdown sequence.
     ev_signal_stop(loop, p_sig_term);
     ev_signal_stop(loop, p_sig_int);
-    ev_loop_destroy(loop);
 
 #ifdef GDNSD_COVERTEST_EXIT
     // We have to use exit() when testing coverage, as raise()
