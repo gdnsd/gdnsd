@@ -233,12 +233,21 @@ static unsigned wait_for_children(unsigned attempts)
     return remaining;
 }
 
-// The main thread's libev loop will auto-reap child processes for us, we just
-// have to wait for the reaps to occur.
+// This is called once during clean daemon shutdown.  Because it is called
+// after the libev loop has exited, there will be no automatic child reaper in
+// place.  Therefore, we set SIGCHLD to SIG_IGN to avoid having to use
+// waitpid() logic here as well.
 void gdnsd_kill_registered_children(void)
 {
     if (!n_children)
         return;
+
+    struct sigaction sa_ign;
+    sigemptyset(&sa_ign.sa_mask);
+    sa_ign.sa_flags = 0;
+    sa_ign.sa_handler = SIG_IGN;
+    if (sigaction(SIGCHLD, &sa_ign, NULL))
+        log_fatal("sigaction(SIGCHLD, SIG_IGN) failed: %s", logf_errno());
 
     for (unsigned i = 0; i < n_children; i++) {
         log_info("Sending SIGTERM to child process %li", (long)children[i]);
