@@ -317,8 +317,8 @@ struct cfg* conf_load(const vscf_data_t* cfg_root, const bool force_zsd)
         set_nsid_ascii(cfg, nsid_data_ascii);
 
     const vscf_data_t* stypes_cfg = cfg_root
-                              ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
-                              : NULL;
+                                    ? vscf_hash_get_data_byconstkey(cfg_root, "service_types", true)
+                                    : NULL;
 
     // Phase 1 of service_types config
     gdnsd_mon_cfg_stypes_p1(stypes_cfg);
