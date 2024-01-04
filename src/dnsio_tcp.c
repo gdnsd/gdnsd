@@ -1028,10 +1028,11 @@ void* dnsio_tcp_start(void* thread_asvoid)
     thread_t thr = { 0 };
 
     const int backlog = (int)(addrconf->tcp_backlog ? addrconf->tcp_backlog : SOMAXCONN);
-    if (listen(t->sock, backlog) == -1)
+    const int lsock = t->sock; // copied out here just for gcc analyzer's sake
+    if (listen(lsock, backlog) == -1)
         log_fatal("Failed to listen(s, %i) on TCP socket %s: %s", backlog, logf_anysin(&addrconf->addr), logf_errno());
 
-    set_accf(addrconf, t->sock);
+    set_accf(addrconf, lsock);
 
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -1056,7 +1057,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
     idle_watcher->data = &thr;
 
     ev_io* accept_watcher = &thr.accept_watcher;
-    ev_io_init(accept_watcher, accept_handler, t->sock, EV_READ);
+    ev_io_init(accept_watcher, accept_handler, lsock, EV_READ);
     ev_set_priority(accept_watcher, -1);
     accept_watcher->data = &thr;
 
