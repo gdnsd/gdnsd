@@ -135,7 +135,8 @@ static void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* 
         }
     }
 
-    gdnsd_assume(svc);
+    if (!svc)
+	log_fatal("plugin_extfile: BUG: did not find expected service_type %s", svc_name);
 
     svc->mons = xrealloc_n(svc->mons, svc->num_mons + 1, sizeof(*svc->mons));
     struct extf_mon* mon = &svc->mons[svc->num_mons];
