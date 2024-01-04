@@ -7,5 +7,5 @@ if [ ! -f $PWD/qa/gdnsd.supp ]; then
 fi
 set -x
 set -e
-CFLAGS="-fanalyzer -fanalyzer-verbosity=0 -fanalyzer-checker=taint -fanalyzer-transitivity" ./configure --enable-developer --without-hardening --with-werror
+CFLAGS="-fanalyzer -fanalyzer-verbosity=0 -fanalyzer-transitivity" ./configure --enable-developer --without-hardening --with-werror
 make clean all
