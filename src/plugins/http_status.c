@@ -456,7 +456,8 @@ static void plugin_http_status_add_mon_addr(const char* desc, const char* svc_na
         }
     }
 
-    gdnsd_assert(this_mon->http_svc);
+    if (!this_mon->http_svc)
+	log_fatal("plugin_http_status: BUG: did not find expected service_type %s", svc_name);
 
     memcpy(&this_mon->addr, addr, sizeof(this_mon->addr));
     if (this_mon->addr.sa.sa_family == AF_INET) {

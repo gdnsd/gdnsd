@@ -424,7 +424,9 @@ static void add_mon_any(const char* desc, const char* svc_name, const char* thin
             break;
         }
     }
-    gdnsd_assert(this_mon->svc);
+
+    if (!this_mon->svc)
+	log_fatal("plugin_extmon: BUG: did not find expected service_type %s", svc_name);
 
     this_mon->thing = xstrdup(thing);
     this_mon->seen_once = false;
