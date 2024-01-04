@@ -1,3 +1,20 @@
+3.8.2 - 2024-01-04
+    * Fixed testsuite compatibility with Net::DNS 1.39 and higher.
+    * Fixed "gdnsd daemonize" (was universally broken in 3.8.1)
+    * Fixed an unlikely race in the daemon replacement sequence, which under
+      systemd may have caused the replacement to be flagged as an alien main
+      PID, with varying consequences depending on the systemd version (in
+      recent ones, just a harmless error message apparently)
+    * Fixed another process mgmt issue that caused a ~15s delay near the end
+      of the daemon's clean shutdown, iff extmon monitoring is used.
+    * Fixed a small memory leak that happens if a file parsed by the extfile
+      plugin has bad syntax
+    * extfile also no longer pointlessly loads or parses files which are not
+      actually used to control any resource
+    * Several minor QA tooling updates, and several minor QA-driven patches
+      of little consequence (e.g. constification, simplifications for
+      analysis, etc)
+
 3.8.1 - 2023-02-22
     * Fixed several obscure and unlikely bugs which could be triggered when
       there's a failure to launch a replacement daemon.  There were two
