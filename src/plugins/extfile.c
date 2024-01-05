@@ -136,7 +136,7 @@ static void plugin_extfile_add_mon_cname(const char* desc V_UNUSED, const char* 
     }
 
     if (!svc)
-	log_fatal("plugin_extfile: BUG: did not find expected service_type %s", svc_name);
+        log_fatal("plugin_extfile: BUG: did not find expected service_type %s", svc_name);
 
     svc->mons = xrealloc_n(svc->mons, svc->num_mons + 1, sizeof(*svc->mons));
     extf_mon_t* mon = &svc->mons[svc->num_mons];

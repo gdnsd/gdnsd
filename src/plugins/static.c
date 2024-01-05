@@ -189,7 +189,7 @@ static void add_mon_any(const char* svc_name, const unsigned idx)
     }
 
     if (!this_svc)
-	log_fatal("plugin_static: BUG: did not find expected service_type %s", svc_name);
+        log_fatal("plugin_static: BUG: did not find expected service_type %s", svc_name);
 
     static_mon_t* this_mon = xmalloc(sizeof(*this_mon));
     static_mons = xrealloc_n(static_mons, num_mons + 1, sizeof(*static_mons));
