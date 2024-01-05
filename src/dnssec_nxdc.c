@@ -84,17 +84,15 @@ struct tbf {
 // switching to higher-resolution clocks.
 #define TBF_BURST_FACTOR 10
 
-F_RETNN
-static struct tbf* tbf_new(const unsigned rate_per_ms)
+F_NONNULL
+static void tbf_init(struct tbf* tbf, const unsigned rate_per_ms)
 {
     gdnsd_assert(rate_per_ms);
     gdnsd_assert(rate_per_ms <= 1000U);
-    struct tbf* tbf = xmalloc(sizeof(*tbf));
     tbf->last_ms = gdnsd_qtime_ms();
     tbf->rate_per_ms = rate_per_ms;
     tbf->max_tokens = rate_per_ms * TBF_BURST_FACTOR;
     tbf->tokens = tbf->max_tokens;
-    return tbf;
 }
 
 F_NONNULL
@@ -128,12 +126,6 @@ F_NONNULL
 static void tbf_reset(struct tbf* tbf)
 {
     tbf->tokens = tbf->max_tokens;
-}
-
-F_NONNULL
-static void tbf_destroy(struct tbf* tbf)
-{
-    free(tbf);
 }
 
 // ----
@@ -196,7 +188,7 @@ struct nxdc {
     // per-thread secret key so hash collisions aren't predictable by
     // nxdomain-attackers trying to slow us down even more:
     uint8_t hkey[crypto_shorthash_KEYBYTES];
-    struct tbf* tbf;    // ratelimiter for misses causing synth->insert
+    struct tbf tbf;     // ratelimiter for misses causing synth->insert
     struct slot* table; // 2^scale slots
     uint8_t* items;     // #max_count of len item_size
     struct dns_stats* stats;
@@ -243,14 +235,13 @@ struct nxdc* nxdc_new(struct dns_stats* stats, const unsigned scale, const unsig
     n->items = xmalloc_n(n->max_count, n->item_size);
     gdnsd_rand32_init(&n->rstate);
     crypto_shorthash_keygen(n->hkey);
-    n->tbf = tbf_new(rate);
+    tbf_init(&n->tbf, rate);
     n->stats = stats;
     return n;
 }
 
 void nxdc_destroy(struct nxdc* n)
 {
-    tbf_destroy(n->tbf);
     free(n->items);
     free(n->table);
     free(n);
@@ -413,13 +404,13 @@ unsigned nxdc_synth(struct nxdc* n, const struct dnssec* sec, const uint8_t* nxd
         n->count = 0;
         memset(n->table, 0, sizeof(*n->table) * (n->mask + 1U));
         // we're about to burst misses, and it's not the traffic's fault, so:
-        tbf_reset(n->tbf);
+        tbf_reset(&n->tbf);
     }
 
     // tbf counts one token per ZSK.  It'd be nice if there were a simple and
     // semi-accurate way to weight by-algorithm...
     const unsigned num_zsks = dnssec_num_zsks(sec);
-    if (tbf_limit_exceeded(n->tbf, num_zsks)) {
+    if (tbf_limit_exceeded(&n->tbf, num_zsks)) {
         stats_own_inc(&n->stats->dnssec_nxdc_drop);
         return 0;
     }
