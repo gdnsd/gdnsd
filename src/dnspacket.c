@@ -27,6 +27,10 @@
 #include "chal.h"
 #include "cookie.h"
 
+#ifdef USE_DNSTAP
+#include "dnstap.h"
+#endif
+
 #include "plugins/plugapi.h"
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
@@ -197,6 +201,11 @@ struct dnsp_ctx {
 
     // The current transaction state
     txn_t txn;
+
+#ifdef USE_DNSTAP
+    // Dnstap context
+    dnstap_ctx_t* dnstap_ctx;
+#endif
 };
 
 static pthread_mutex_t stats_init_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -226,7 +235,7 @@ void dnspacket_wait_stats(const socks_cfg_t* socks_cfg)
     pthread_mutex_unlock(&stats_init_mutex);
 }
 
-static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad, const unsigned tcp_timeout_secs)
+static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool is_udp, const bool udp_is_ipv6, const bool tcp_pad, const unsigned tcp_timeout_secs, void* dnstap_ctx)
 {
     if (udp_is_ipv6)
         gdnsd_assert(is_udp);
@@ -253,17 +262,21 @@ static dnsp_ctx_t* dnspacket_ctx_init(dnspacket_stats_t** stats_out, const bool 
     pthread_mutex_unlock(&stats_init_mutex);
     pthread_cond_signal(&stats_init_cond);
 
+#ifdef USE_DNSTAP
+    ctx->dnstap_ctx = (dnstap_ctx_t*) dnstap_ctx;
+#endif
+
     return ctx;
 }
 
-dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6)
+dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6, void* dnstap_ctx)
 {
-    return dnspacket_ctx_init(stats_out, true, is_ipv6, false, 0);
+    return dnspacket_ctx_init(stats_out, true, is_ipv6, false, 0, dnstap_ctx);
 }
 
-dnsp_ctx_t* dnspacket_ctx_init_tcp(dnspacket_stats_t** stats_out, const bool pad, const unsigned timeout_secs)
+dnsp_ctx_t* dnspacket_ctx_init_tcp(dnspacket_stats_t** stats_out, const bool pad, const unsigned timeout_secs, void* dnstap_ctx)
 {
-    return dnspacket_ctx_init(stats_out, false, false, pad, timeout_secs);
+    return dnspacket_ctx_init(stats_out, false, false, pad, timeout_secs, dnstap_ctx);
 }
 
 void dnspacket_ctx_set_grace(dnsp_ctx_t* ctx)
@@ -2209,6 +2222,10 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, pkt_t* pkt
     // parse_optrr() will raise this value in the udp edns case as necc.
     ctx->txn.this_max_response = ctx->is_udp ? 512U : MAX_RESPONSE_DATA;
 
+#ifdef USE_DNSTAP
+    dnstap_log_query_message(ctx->dnstap_ctx, &(sa->sa), pkt->raw, packet_len);
+#endif
+
     unsigned res_offset = sizeof(wire_dns_header_t);
     const rcode_rv_t status = decode_query(ctx, &res_offset, packet_len);
 
@@ -2265,6 +2282,10 @@ unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, pkt_t* pkt
     hdr->arcount = htons(ctx->txn.arcount);
 
     gdnsd_assert(res_offset <= MAX_RESPONSE_BUF);
+
+#ifdef USE_DNSTAP
+    dnstap_log_response_message(ctx->dnstap_ctx, &(sa->sa), pkt->raw, res_offset);
+#endif
 
     return res_offset;
 }
