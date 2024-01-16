@@ -29,7 +29,9 @@ Finally:
   signing algorithm.  Without it, the daemon only supports ED25519 via
   libsodium.  It is not currently recommended to link libgnutls in
   distribution packaging at this time, as this code is not at all ready for
-  production use anyways.
+  production use anyways.  Detecting libgnutls requires "pkg-config" and
+  explicitly setting the configure argument --with-gnutls to the value "yes"
+  (required) or "check" (use only if found).
 
 The following have no real effect on the build or runtime, but are
 required in order to run the testsuite:

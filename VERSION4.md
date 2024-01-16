@@ -59,7 +59,7 @@ Experimental DNSSEC options (see bottom of this file) - no guarantees on the sta
 * `dnssec_deterministic_ecdsa` - Boolean, default `false`
 * `dnssec_max_active_zsks` - Integer, default `1`, range `1 - 4`
 * `dnssec_nxd_cache_scale` - Integer, default `10`, range `8 - 20`
-* `dnssec_nxd_sign_rate` - Integer, default `2`, range `1 - 1000`
+* `dnssec_nxd_sign_rate` - Integer, default `8`, range `1 - 1000`
 
 ### Options with changed defaults or allowed values
 

@@ -27,13 +27,13 @@ it's more of a detailed deep dive into implementation details!
 - P256 can be optionally provided by libgnutls (>= 3.6.10).  If not built with libgnutls, then only ED25519 is available.
 - The config option `dnssec_deterministic_ecdsa` can be set to use the deterministic variant of P256 from RFC 6979 (which gives consistent outputs for the same signed data every time and isn't susceptible to RNG flaws), as recommended by RFC 8624 for DNSSEC.
 
-A benchmarking tool `gdnsd_dnssec_bench` is included to test the approximate single-threaded signing speeds on your own machine with your own build of gdnsd and the relevant libraries.  A sample output from my laptop with both libraries:
+A benchmarking tool `gdnsd_dnssec_bench` is included to test the approximate single-threaded signing speeds on your own machine with your own build of gdnsd and the relevant libraries.  A sample output from my laptop (a modern Ryzen machine circa 2024) with both libraries:
 
-    $ src/gdnsd_dnssec_bench -i 100000 -s 256
-    Benchmark: 100000 iterations signing 256 byte messages:
-    Alg: Ed25519 (libsodium, deterministic)  Rate: 40.045/ms
-    Alg: P256 (libgnutls, non-deterministic) Rate: 14.171/ms
-    Alg: P256 (libgnutls, deterministic)     Rate: 13.094/ms
+    $ src/gdnsd_dnssec_bench -i 1000000 -s 256
+    Benchmark: 1000000 iterations signing 256 byte messages:
+    Alg: Ed25519 (libsodium, deterministic)  Rate: 68.385/ms
+    Alg: P256 (libgnutls, non-deterministic) Rate: 34.070/ms
+    Alg: P256 (libgnutls, deterministic)     Rate: 32.445/ms
 
 ### Signing
 
@@ -330,8 +330,8 @@ some while under a scan attack.  Even if they hadn't been dropped, NXDOMAINs
 are by their nature not actually carrying useful data the client can act on
 quickly.
 
-The ratelimiter defaults to two misses per millisecond per thread (configurable
-via option `dnssec_nxd_sign_rate`), and the token bucket burst level is fixed
-at 10 milliseconds worth of rate, which is a very tiny burst capacity.  This is
-intentional, as allowing large miss bursts could harm the latency of other
-query traffic.
+The ratelimiter defaults to eight misses per millisecond per thread
+(configurable via option `dnssec_nxd_sign_rate`), and the token bucket burst
+level is fixed at 10 milliseconds worth of rate, which is a very tiny burst
+capacity.  This is intentional, as allowing large miss bursts could harm the
+latency of other query traffic.

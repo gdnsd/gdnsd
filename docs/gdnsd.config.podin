@@ -697,7 +697,7 @@ If C<dnssec_enabled> is false, the per-thread caches will never be allocated.
 
 =item B<dnssec_nxd_sign_rate>
 
-Integer, default 2, range 1-1000.
+Integer, default 8, range 1-1000.
 
 This configures the per-thread rate limit for DNSSEC NXDOMAIN responses which
 are synthesized and signed in realtime and were not hits in the cache above.
@@ -716,7 +716,7 @@ C<NXDOMAIN> spam traffic.
 There is a benchark program C<gdnsd_dnssec_bench> shipped with gdnsd which can
 benchmark the single-threaded signs/ms rate of the available algorithms on your
 server hosts.  It's recommended that the rate configured here be set to a value
-well under what's reported by the benchmark, perhaps 10-25% of that rate.
+well under what's reported by the benchmark, perhaps 25% of that rate.
 
 Queries in violation of the ratelimit are dropped; no output generation or
 signing takes place, and no response is sent.  This is generally acceptable for
