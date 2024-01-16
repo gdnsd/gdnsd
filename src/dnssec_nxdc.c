@@ -395,7 +395,7 @@ static struct hval hash_nxd_name(const uint8_t* nxd_name, const size_t nxd_name_
     return output.hv;
 }
 
-unsigned nxdc_synth(struct nxdc* n, const struct dnssec* sec, const uint8_t* nxd_name, uint8_t* buf, uint64_t gen, const unsigned nxd_name_len)
+unsigned nxdc_synth(struct nxdc* n, uint8_t* buf, const struct dnssec* sec, const uint8_t* nxd_name, const uint64_t gen, const unsigned nxd_name_len)
 {
     const struct hval kh = hash_nxd_name(nxd_name, nxd_name_len, n->hkey);
     unsigned len = 0;

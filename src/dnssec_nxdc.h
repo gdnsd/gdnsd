@@ -35,6 +35,6 @@ F_NONNULL
 void nxdc_destroy(struct nxdc* n);
 
 F_NONNULL
-unsigned nxdc_synth(struct nxdc* n, const struct dnssec* sec, const uint8_t* nxd_name, uint8_t* buf, uint64_t gen, const unsigned nxd_name_len);
+unsigned nxdc_synth(struct nxdc* n, uint8_t* buf, const struct dnssec* sec, const uint8_t* nxd_name, const uint64_t gen, const unsigned nxd_name_len);
 
 #endif // GDNSD_DNSSEC_NXDC_H

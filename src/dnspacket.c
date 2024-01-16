@@ -1154,7 +1154,7 @@ static unsigned do_auth_response(struct dnsp_ctx* ctx, const struct search_resul
                     const unsigned nxd_name_len = ctx->txn.lqname[0] - res->comp_fixup_dnssec_nxd;
                     gdnsd_assert(gcfg->dnssec_enabled);
                     gdnsd_assume(ctx->nxdc);
-                    resp_len = nxdc_synth(ctx->nxdc, auth->sec,  nxd_name, &packet[offset], res->gen, nxd_name_len);
+                    resp_len = nxdc_synth(ctx->nxdc, &packet[offset], auth->sec, nxd_name, res->gen, nxd_name_len);
                     if (!resp_len)
                         return 0; // this causes a general "dropped" stat at outer scope, no output
                 }
