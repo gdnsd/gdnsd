@@ -354,24 +354,31 @@ static uint8_t* nxdc_evict(struct nxdc* n)
     // insertion that triggered the eviction
     uint8_t* new_data = tbl[rslot].data;
 
-    // Wipe the target slot and iteratively backshift the following ones until
-    // we reach an empty or a zero probe distance.  If we didn't do this we'd
-    // break runs that lookups were relying on, borking everything.  The other
-    // "obvious" strategy is tombstones, but those turn out to make the table
-    // performance horrible once you inevitably fill all empty space with them.
+    // Iteratively backshift (copy backwards by one) hash slots over the one
+    // being evicted, until we reach an empty or a zero probe distance.  If we
+    // didn't do this we'd break runs that lookups were relying on, borking
+    // everything.  The other "obvious" strategy is tombstones, but those turn
+    // out to make the table performance horrible once you inevitably fill all
+    // empty space with them. After any and all shifting is done (possibly
+    // none!), we need to zero out one slot at the end (either the original
+    // evicted slot, or the last of the set of shifted slots).
     do {
-        memset(&tbl[rslot], 0, sizeof(tbl[rslot]));
         const uint32_t next_slot = (rslot + 1U) & mask;
-        if (!tbl[next_slot].data) // empty, no breakage if we stop here
+        if (!tbl[next_slot].data) // empty, no need for any further backshift
             break;
         const uintptr_t next_pdist = (next_slot - tbl[next_slot].hash) & mask;
-        if (!next_pdist) // zero-distance, no breakage if we stop here
+        if (!next_pdist) // zero-distance, no need for any further backshift
             break;
-        // backshift the next slot up one, reducing its probe distance, and
-        // loop up to wipe the spot we pulled it from and go again
+        // backshift the next slot up to rslot's spot, reducing its probe
+        // distance.  Now our "rslot" target for further backshifts (or
+        // eventual wipe) is reset to what was next_slot (the source of the
+        // backshift).
         tbl[rslot] = tbl[next_slot];
         rslot = next_slot;
     } while (1);
+
+    // Wipe one slot (possibly the original slot, if no backshift was needed)
+    memset(&tbl[rslot], 0, sizeof(tbl[rslot]));
 
     return new_data;
 }
