@@ -145,10 +145,16 @@ static int net_sorter(const void* a_void, const void* b_void)
 {
     const net_t* a = a_void;
     const net_t* b = b_void;
-    int rv = memcmp(a->ipv6, b->ipv6, 16);
-    if (!rv)
-        rv = (int)a->mask - (int)b->mask;
-    return rv;
+    // nets.c:nets_parse() constrains input masks to 128, but the process of
+    // deleting networks via merging can also set the magic value 0xFF.
+    gdnsd_assert(a->mask <= 0xFF);
+    gdnsd_assert(b->mask <= 0xFF);
+    const int mcrv = memcmp(a->ipv6, b->ipv6, 16);
+    if (mcrv)
+	return mcrv;
+    const int am = (int)a->mask;
+    const int bm = (int)b->mask;
+    return (am > bm) - (am < bm);
 }
 
 F_NONNULL F_PURE
@@ -249,7 +255,7 @@ static bool nlist_normalize_1pass(nlist_t* nl)
             } else {
                 break;
             }
-            nb->mask = 0xFFFF; // illegally-huge, to sort deletes later
+            nb->mask = 0xFF; // illegally-huge, to sort deletes later
             memset(nb->ipv6, 0xFF, 16); // all-1's, also for sort...
             newcount--;
             j++;
