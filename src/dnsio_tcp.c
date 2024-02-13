@@ -944,7 +944,8 @@ void* dnsio_tcp_start(void* thread_asvoid)
     // Set up the struct conn churn buffer, which saves some per-new-connection
     // memory allocation churn by saving up to sqrt(max_clients) old struct
     // conn storage for reuse
-    thr.churn_alloc = lrint(floor(sqrt(addrconf->tcp_clients_per_thread)));
+    const double ca = sqrt(thr.max_clients); // avoids a pointless warning
+    thr.churn_alloc = (unsigned)ca;
     gdnsd_assume(thr.churn_alloc >= 4U); // because tcp_cpt min is 16U
     thr.churn = xmalloc_n(thr.churn_alloc, sizeof(*thr.churn));
 
