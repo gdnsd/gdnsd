@@ -223,7 +223,7 @@ The TCP threads also count this stuff:
 * tcp.close\_c - Count of TCP connections closed cleanly by the client
 * tcp.close\_s\_ok - Count of TCP connections closed cleanly by the server, usually due to an idle timeout being reached or during thread shutdown, etc.
 * tcp.close\_s\_err - Count of TCP connections closed by the server due to an error such as `tcp_recvfail`, `tcp_sendfail`, or `dropped` from the general stats.
-* tcp.close\_s\_kill - Count of TCP connections closed by the server, which were killed early to make room for a new client when `max_clients_per_thread` was reached.
+* tcp.close\_s\_kill - Count of TCP connections closed by the server, which were killed early to make room for a new client when `tcp_clients_per_thread` was reached.
 * tcp.proxy - TCP conns initiated on PROXY protocol listeners (also incs `tcp.conns`)
 * tcp.proxy\_fail - TCP PROXY conns killed for failure to parse an acceptable PROXY protocol header (also incs `tcp.close_s_err`)
 * tcp.dso\_estab - TCP connections which established an RFC 8490 DSO session (can only happen up to once per connection)
