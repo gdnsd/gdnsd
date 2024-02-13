@@ -68,23 +68,23 @@ static void sysd_notify_ready(void)
         sun.sun_path[0] = 0;
 
     char msg[64];
-    int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
+    const int snp_rv = snprintf(msg, 64, "MAINPID=%lu\nREADY=1", (unsigned long)getpid());
     if (snp_rv < 0 || snp_rv >= 64)
         log_fatal("BUG: snprintf()=>%i in sysd_notify_ready()", snp_rv);
 
-    int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+    const int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
         log_fatal("Cannot create AF_UNIX socket");
 
     struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
-    struct msghdr m = {
+    const struct msghdr m = {
         .msg_iov = &iov,
         .msg_iovlen = 1,
         .msg_name = &sun,
         .msg_namelen = sun_len
     };
 
-    ssize_t sm_rv = sendmsg(fd, &m, 0);
+    const ssize_t sm_rv = sendmsg(fd, &m, 0);
     if (sm_rv < 0)
         log_fatal("sendmsg() to systemd NOTIFY_SOCKET failed: %s", logf_errno());
 
