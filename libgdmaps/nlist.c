@@ -137,7 +137,7 @@ static int net_sorter(const void* a_void, const void* b_void)
     gdnsd_assume(b->mask <= 0xFF);
     const int mcrv = memcmp(a->ipv6, b->ipv6, 16);
     if (mcrv)
-	return mcrv;
+        return mcrv;
     const int am = (int)a->mask;
     const int bm = (int)b->mask;
     return (am > bm) - (am < bm);
