@@ -76,17 +76,9 @@ static void sysd_notify_ready(void)
     if (fd < 0)
         log_fatal("Cannot create AF_UNIX socket");
 
-    struct iovec iov = { .iov_base = msg, .iov_len = strlen(msg) };
-    const struct msghdr m = {
-        .msg_iov = &iov,
-        .msg_iovlen = 1,
-        .msg_name = &sun,
-        .msg_namelen = sun_len
-    };
-
-    const ssize_t sm_rv = sendmsg(fd, &m, 0);
-    if (sm_rv < 0)
-        log_fatal("sendmsg() to systemd NOTIFY_SOCKET failed: %s", logf_errno());
+    const ssize_t strv = sendto(fd, msg, strlen(msg), 0, &sun, sun_len);
+    if (strv < 0)
+        log_fatal("sendto() systemd NOTIFY_SOCKET failed: %s", logf_errno());
 
     if (close(fd))
         log_fatal("close() of systemd NOTIFY_SOCKET failed: %s", logf_errno());
