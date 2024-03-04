@@ -143,9 +143,9 @@ socklen_t gdnsd_sun_set_path(struct sockaddr_un* a, const char* path)
     a->sun_family = AF_UNIX;
     const unsigned plen = strlen(path) + 1;
     if (plen > sizeof(a->sun_path))
-        log_fatal("Implementation bug/limit: desired control socket path %s exceeds sun_path length of %zu", path, sizeof(a->sun_path));
+        log_fatal("Implementation bug/limit: desired control socket path '%s' exceeds sun_path length of %zu", path, sizeof(a->sun_path));
     memcpy(a->sun_path, path, plen);
-    return (offsetof(struct sockaddr_un, sun_path) + plen);
+    return sizeof(struct sockaddr_un);
 }
 
 int gdnsd_anysin_getaddrinfo(const char* addr_txt, const char* port_txt, gdnsd_anysin_t* result)
