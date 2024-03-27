@@ -1,5 +1,5 @@
 [![C/C++ CI](https://github.com/gdnsd/gdnsd/actions/workflows/c-cpp.yml/badge.svg?branch=master)](https://github.com/gdnsd/gdnsd/actions/workflows/c-cpp.yml)
-[![CodeQL](https://github.com/gdnsd/gdnsd/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/gdnsd/gdnsd/actions/workflows/codeql.yml)
+[![CodeQL](https://github.com/gdnsd/gdnsd/actions/workflows/codeql-analysis.yml/badge.svg?branch=master)](https://github.com/gdnsd/gdnsd/actions/workflows/codeql-analysis.yml)
 
 ## Overview
 
