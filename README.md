@@ -1,15 +1,5 @@
 [![C/C++ CI](https://github.com/gdnsd/gdnsd/actions/workflows/c-cpp.yml/badge.svg?branch=master)](https://github.com/gdnsd/gdnsd/actions/workflows/c-cpp.yml)
 [![CodeQL](https://github.com/gdnsd/gdnsd/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/gdnsd/gdnsd/actions/workflows/codeql.yml)
-[![Coverity Scan Build Status](https://scan.coverity.com/projects/760/badge.svg)](https://scan.coverity.com/projects/760)
-
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=alert_status)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
-[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=security_rating)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
-
-[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=vulnerabilities)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
-[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=bugs)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
-[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=gdnsd_gdnsd&metric=code_smells)](https://sonarcloud.io/dashboard?id=gdnsd_gdnsd)
 
 ## Overview
 
