@@ -1075,6 +1075,9 @@ sub query_server {
             $res->$k($ro->{$k})
         }
 
+        # Net::DNS <= 1.45 (r1982) did this internally
+        $query->edns->size($ro->{udppacketsize}) if defined $ro->{udppacketsize};
+
         if($expected) {
             $query->encode;  # generate a random ID, required with Net::DNS >= 1.46
             $expected->header->id($query->header->id);
