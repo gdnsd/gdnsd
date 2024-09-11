@@ -1056,6 +1056,7 @@ sub query_server {
         );
         send($sock, $qpacket_raw, 0);
         if($expected) {
+            $query->encode;  # generate a random ID, required with Net::DNS >= 1.46
             $expected->header->id($query->header->id);
             my $res_raw;
             recv($sock, $res_raw, 4096, 0);
@@ -1075,6 +1076,7 @@ sub query_server {
         }
 
         if($expected) {
+            $query->encode;  # generate a random ID, required with Net::DNS >= 1.46
             $expected->header->id($query->header->id);
             $size = _GDT->compare_packets($res->send($query), $expected, $limit_v4, $limit_v6, $wrr_v4, $wrr_v6);
         }
