@@ -133,8 +133,6 @@ src_gdnsd_SOURCES = \
 	src/chal.h \
 	src/cookie.c \
 	src/cookie.h \
-	src/kdf_compat.c \
-	src/kdf_compat.h \
 	src/zsrc_rfc1035.c \
 	src/zsrc_rfc1035.h \
 	src/ltarena.c \
