@@ -233,7 +233,7 @@ char* statio_serialize(size_t* dlen_p)
 // to leave an unused hole in the sequence, future additions must go on the
 // end, and future significant meaning changes will require deleting a slot and
 // then adding a new one.
-void statio_deserialize(uint64_t* data, size_t dlen)
+void statio_deserialize(const uint64_t* data, size_t dlen)
 {
     if (!dlen || dlen & 4U) {
         log_err("stats deserialization failed: length must be a non-zero multiple of 8");
