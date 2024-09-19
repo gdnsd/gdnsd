@@ -11,3 +11,11 @@
   fun:pthread_create*
   fun:spawn_zones_reloader_thread
 }
+
+# Workaround for https://bugs.kde.org/show_bug.cgi?id=402833
+{
+   memmove-overlap
+   Memcheck:Overlap
+   fun:__memcpy_chk
+   fun:memmove
+}
