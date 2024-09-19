@@ -91,6 +91,41 @@ _Static_assert(_Alignof(pkt_t) <= _Alignof(uint16_t), "No padding for pkt");
 struct conn;
 typedef struct conn conn_t;
 
+// I keep running into various warnings or analyzer issues with the various
+// ways I've cheated with cheap FP-conversion methods to square root a size_t
+// and output an unsigned.  So we'll just actually provide a proper integer
+// square root method to move past all this.  It only gets used once to size a
+// buffer on thread start, so perf really isn't critical.
+//
+// This code is more or less copypasta from a stackexchange answer and then
+// cleaned up for style and such, but I verified it produces the right answers
+// for all the allowed range of values we use it for.
+static unsigned sqrt_sizet(size_t input)
+{
+    // This is basically the inverse of CLZ, how many value bits to the right
+    // of the leading zeros?
+    size_t shiftme = input;
+    size_t valbits = 0;
+    while (shiftme) {
+        valbits++;
+        shiftme >>= 1;
+    }
+
+    // Approx starting point
+    size_t answer = 1LLU << (valbits >> 1);
+    if (valbits & 1)
+        answer += answer >> 1;
+
+    // Trial divisions to home in
+    size_t tmp;
+    do {
+        tmp = input / answer;
+        answer = (answer + tmp) >> 1;
+    } while (answer > tmp);
+
+    return answer;
+}
+
 // per-thread state
 typedef struct {
     // These pointers and values are fixed for the life of the thread:
@@ -1045,8 +1080,7 @@ void* dnsio_tcp_start(void* thread_asvoid)
     // Set up the conn_t churn buffer, which saves some per-new-connection
     // memory allocation churn by saving up to sqrt(max_clients) old conn_t
     // storage for reuse
-    const double ca = sqrt(thr.max_clients); // avoids a pointless warning
-    thr.churn_alloc = (unsigned)ca;
+    thr.churn_alloc = sqrt_sizet(thr.max_clients);
     gdnsd_assert(thr.churn_alloc >= 4U); // because tcp_cpt min is 16U
     thr.churn = xmalloc_n(thr.churn_alloc, sizeof(*thr.churn));
 
