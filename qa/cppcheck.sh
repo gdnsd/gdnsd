@@ -70,6 +70,7 @@ set -e
 # with code that depends on platform-specific config.h values, and I only tend
 # to run this when the local configuration is unix64
 cppcheck --platform=unix64 --std=c11 --enable=all --inconclusive \
+  --check-level=exhaustive \
   --suppress=missingIncludeSystem \
   --suppress=constParameterCallback \
   --suppress=unusedFunction \
