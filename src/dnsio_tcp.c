@@ -398,7 +398,7 @@ static bool conn_write_packet(thread_t* thr, conn_t* conn, size_t resp_size)
 {
     gdnsd_assert(resp_size);
     tcp_pkt_t* tpkt = thr->tpkt;
-    tpkt->pktbuf_size_hdr = htons((uint16_t)resp_size);
+    tpkt->pktbuf_size_hdr = htons((uint16_t)resp_size); // cppcheck-suppress redundantInitialization
     const size_t resp_send_size = resp_size + 2U;
     const ev_io* readw = &conn->read_watcher;
     const ssize_t send_rv = send(readw->fd, tpkt->pktbuf_raw, resp_send_size, 0);
