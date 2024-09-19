@@ -1,3 +1,16 @@
+3.8.3 - 2024-09-19
+    * Fixed testsuite compat with Net::DNS 1.46
+      (Thanks to Faidon Liambotis (again!) and Natanael Copa for this)
+    * Lots of small meta-level fixups/updates to QA-related tooling, etc
+    * Some minor docs corrections and code formatting fixes
+    * A few very small code cleanups/refactors related to UNIX sockets,
+      systemd notifications, and tcp churn pool sizing
+    * A pedantic change to one use of qsort() for netmapper purposes, in
+      light of the Qualys advisory about non-transitive comparisons
+      in https://www.qualys.com/2024/01/30/qsort.txt .  The original code
+      does not suffer these problems, but it's not immediately obvious, so
+      I refactored it to the more-obviously-correct idiom.
+
 3.8.2 - 2024-01-04
     * Fixed testsuite compatibility with Net::DNS 1.39 and higher.
     * Fixed "gdnsd daemonize" (was universally broken in 3.8.1)
