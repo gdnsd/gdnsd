@@ -791,7 +791,7 @@ static struct ltree_rrset_raw* synthesize_dynac(struct dnsp_ctx* ctx, const stru
 }
 
 F_NONNULL
-static void fixup_comp_offsets(uint8_t* packet, uint16_t* offsets, const unsigned num_offsets, const unsigned pkt_offset, const unsigned fixup_by)
+static void fixup_comp_offsets(uint8_t* packet, const uint16_t* offsets, const unsigned num_offsets, const unsigned pkt_offset, const unsigned fixup_by)
 {
     if (fixup_by) {
         gdnsd_assume(num_offsets);
