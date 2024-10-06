@@ -117,7 +117,28 @@ EXTRA_DIST += src/zscan_rfc1035.rl src/zscan_rfc1035.c
 #   up includes from $(srcdir)/src when compiling it.
 src_gdnsd_CPPFLAGS = -I$(srcdir)/src $(AM_CPPFLAGS)
 
+if HAS_DNSTAP
+src/dnstap.pb-c.c:
+	$(AM_V_GEN)@PROTOC_C@ --c_out=$(srcdir)/src -I$(srcdir)/src dnstap.proto
+src/dnstap.pb-c.h:
+	$(AM_V_GEN)@PROTOC_C@ --c_out=$(srcdir)/src -I$(srcdir)/src dnstap.proto
+
+CLEANFILES += src/dnstap.pb-c.c src/dnstap.pb-c.h
+
+export USE_DNSTAP = yes
+
+dnstap_SOURCES = \
+	src/dnstap.pb-c.c \
+	src/dnstap.pb-c.h \
+	src/dnstap.c \
+	src/dnstap.h 
+else
+dnstap_SOURCES =
+export USE_DNSTAP = no
+endif
+
 src_gdnsd_SOURCES = \
+	$(dnstap_SOURCES) \
 	src/zscan_rfc1035.c \
 	src/zscan_rfc1035.h \
 	src/main.c \
@@ -176,7 +197,7 @@ src_gdnsd_LDADD = \
 	src/plugins/libextmon_comms.a \
 	libgdnsd/libgdnsd.a \
 	libgdmaps/libgdmaps.a \
-	-lm -lurcu-qsbr -lev -lsodium $(LIBUNWIND_LIBS) $(GEOIP2_LIBS)
+	-lm -lurcu-qsbr -lev -lsodium $(LIBUNWIND_LIBS) $(GEOIP2_LIBS) $(DNSTAP_LIBS)
 
 #=====================================
 # libgdmaps/

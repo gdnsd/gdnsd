@@ -26,6 +26,10 @@
 #include "socks.h"
 #include "proxy.h"
 
+#ifdef USE_DNSTAP
+#include "dnstap.h"
+#endif
+
 #include <gdnsd/alloc.h>
 #include <gdnsd/log.h>
 #include <gdnsd/misc.h>
@@ -1125,13 +1129,19 @@ void* dnsio_tcp_start(void* thread_asvoid)
     // and ready before we register here
     register_thread(&thr);
 
+    void* dnstap_ctx = NULL;
+    
+#ifdef USE_DNSTAP
+    dnstap_ctx = dnstap_ctx_init(false);
+#endif
+
     // dnspacket_ctx_init() is what releases threads through the startup gates,
     // and main.c's call to dnspacket_wait_stats() waits for all threads to
     // have reached this point before entering the main runtime loop.
     // Therefore, this must happen after register_thread() above, to ensure
     // that all tcp threads are properly registered with the shutdown handler
     // before we begin processing possible future shutdown events.
-    thr.pctx = dnspacket_ctx_init_tcp(&thr.stats, addrconf->tcp_pad, addrconf->tcp_timeout);
+    thr.pctx = dnspacket_ctx_init_tcp(&thr.stats, addrconf->tcp_pad, addrconf->tcp_timeout, dnstap_ctx);
 
     rcu_register_thread();
     thr.rcu_is_online = true;
@@ -1142,6 +1152,11 @@ void* dnsio_tcp_start(void* thread_asvoid)
 
     unregister_thread(&thr);
     ev_loop_destroy(loop);
+
+#ifdef USE_DNSTAP
+    dnstap_ctx_cleanup((dnstap_ctx_t**) &dnstap_ctx);
+#endif
+
     dnspacket_ctx_cleanup(thr.pctx);
     for (unsigned i = 0; i < thr.churn_count; i++)
         free(thr.churn[i]);

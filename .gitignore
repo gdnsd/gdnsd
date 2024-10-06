@@ -67,3 +67,7 @@ clang_output_*
 # generated systemd unit file + initscript
 init/gdnsd.service
 init/gdnsd.init
+
+# Generated dnstap protobuf files
+/src/dnstap.pb-c.c
+/src/dnstap.pb-c.h

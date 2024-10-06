@@ -25,6 +25,8 @@ package _GDT;
 #  a pre-defined specification
 
 require 5.008001;
+use experimental 'smartmatch';
+no warnings 'experimental::smartmatch';
 use strict;
 use warnings;
 use POSIX ':sys_wait_h';
@@ -301,11 +303,15 @@ sub proc_tmpl {
         state_dir = $state_dir
     };
 
+    my $TESTOUTDIR = $ENV{TESTOUT_DIR};
+
     while(<$in_fh>) {
         s/\@std_testsuite_options\@/$std_opts/g;
         s/\@extra_port\@/$EXTRA_PORT/g;
         s/\@dns_port\@/$DNS_PORT/g;
         s/\@run_dir\@/$RUNDIR/g;
+        s/\@out_dir\@/$OUTDIR/g;
+        s/\@test_out_dir\@/$TESTOUTDIR/g;
         s/\@state_dir\@/$state_dir/g;
         s/\@extmon_helper_cfg\@/$EXTMON_HELPER_CFG/g;
         print $out_fh $_;
@@ -1353,6 +1359,44 @@ sub optrr_clientsub {
     }
 
     $optrr;
+}
+
+sub match_dnstap_output {
+    #my($dnstap_output, $expected) = @_;
+    my $gdt = shift;
+    my $dnstap_output = shift;
+    my $ref = shift;
+    my @expected = @{$ref};
+
+    my @dnstap_arr = ();
+    while (index($dnstap_output, "\n") != -1 && length $dnstap_output > 0){
+        my $line = substr($dnstap_output, 0, index($dnstap_output, "\n"));
+        push @dnstap_arr, $line;
+        $dnstap_output = substr($dnstap_output, index($dnstap_output, "\n") + 1);
+    }
+
+    if (length $dnstap_output > 0){
+        push @dnstap_arr, $dnstap_output;
+    }
+
+    my $actual_len = @dnstap_arr;
+    my $expected_len = @expected;
+    if ($actual_len != $expected_len){
+        return 0;
+    }
+        
+    foreach (@dnstap_arr){
+        $_ = substr($_, index($_, ' ') + 1);
+    }
+
+    my @sorted_dnstap = sort @dnstap_arr;
+    my @sorted_expected = sort @expected;
+
+    if (@sorted_dnstap ~~ @sorted_expected){
+        return 1;
+    }
+
+    return 0;
 }
 
 END {

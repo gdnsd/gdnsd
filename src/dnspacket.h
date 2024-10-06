@@ -118,10 +118,10 @@ F_HOT F_NONNULLX(1, 2, 3)
 unsigned process_dns_query(dnsp_ctx_t* ctx, const gdnsd_anysin_t* sa, pkt_t* pkt, dso_state_t* dso, const unsigned packet_len);
 
 F_NONNULL F_WUNUSED F_RETNN
-dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6);
+dnsp_ctx_t* dnspacket_ctx_init_udp(dnspacket_stats_t** stats_out, const bool is_ipv6, void* dnstap_ctx);
 
 F_NONNULL F_WUNUSED F_RETNN
-dnsp_ctx_t* dnspacket_ctx_init_tcp(dnspacket_stats_t** stats_out, const bool pad, const unsigned timeout_secs);
+dnsp_ctx_t* dnspacket_ctx_init_tcp(dnspacket_stats_t** stats_out, const bool pad, const unsigned timeout_secs, void* dnstap_ctx);
 
 // TCP threads call this on their context when they start graceful shutdown,
 // telling the dnspacket layer to advertise inactivity timeouts of zero for the

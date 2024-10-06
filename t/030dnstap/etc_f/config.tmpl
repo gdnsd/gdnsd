@@ -1,0 +1,12 @@
+options => {
+  @std_testsuite_options@
+  dnstap => {
+    enable => true
+    sink => @test_out_dir@/063capture.tap
+    unix_sink => false
+    identity => identity
+    version => version
+    log_queries => true
+    log_responses => true
+  }
+}
