@@ -833,11 +833,12 @@ sub _compare_rrsets {
     } elsif($rrtype eq 'CNAME') {
         $limit = 1;
     } elsif($rrtype eq 'OPT') {
+	my $cookie_num = ednsoptionbyname('COOKIE');
         $_lastacookie = undef;
-        my $ccookieval = $c_rrset->[0]->option('COOKIE');
+        my $ccookieval = $c_rrset->[0]->{option}{$cookie_num};
         if (defined $ccookieval) {
             my $ccookielen = length($ccookieval);
-            my $acookieval = $a_rrset->[0]->option('COOKIE');
+            my $acookieval = $a_rrset->[0]->{option}{$cookie_num};
             if (defined $acookieval) {
                 my $acookielen = length($acookieval);
                 return "Bad server cookie len ($acookielen != $ccookielen)" if ($acookielen != $ccookielen);
