@@ -63,6 +63,7 @@ my $compt_mxset = [
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,

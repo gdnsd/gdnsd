@@ -157,6 +157,7 @@ _GDT->test_dns(
 
 my @optrr_base = (
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,

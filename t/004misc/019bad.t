@@ -574,10 +574,10 @@ ok(!$@) or diag $@;
 # Test a valid query to make sure the server is still functioning
 eval {_GDT->query_server(
     undef,
-    Net::DNS::Packet->new('foo.example.com', 'A'),
+    Net::DNS::Packet->new('foo.example.com', 'A', 'IN'),
     _GDT->mkanswer({ },
-        Net::DNS::Question->new('foo.example.com', 'A'),
-        [Net::DNS::rr_add('foo.example.com 86400 A 192.0.2.3')], [], [],
+        Net::DNS::Question->new('foo.example.com', 'A', 'IN'),
+        [Net::DNS::rr_add('foo.example.com 86400 IN A 192.0.2.3')], [], [],
     ),
     _GDT->get_resolver(), {},
 )};

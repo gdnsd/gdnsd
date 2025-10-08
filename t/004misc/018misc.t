@@ -9,6 +9,7 @@ use Test::More tests => 12;
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,
@@ -16,8 +17,8 @@ my $optrr = Net::DNS::RR->new(
     flags => 0,
 );
 
-my $long_rr = Net::DNS::rr_add('this.is.an.rr.thats.longer.than.an.opt.rr.in.order.to.make.coverage.work A 192.0.2.1');
-my $long_root_rr = Net::DNS::rr_add('. MX 0 this.is.an.rr.thats.longer.than.an.opt.rr.in.order.to.make.coverage.work');
+my $long_rr = Net::DNS::rr_add('this.is.an.rr.thats.longer.than.an.opt.rr.in.order.to.make.coverage.work IN A 192.0.2.1');
+my $long_root_rr = Net::DNS::rr_add('. IN MX 0 this.is.an.rr.thats.longer.than.an.opt.rr.in.order.to.make.coverage.work');
 
 my $pid = _GDT->test_spawn_daemon();
 
@@ -56,7 +57,7 @@ _GDT->test_dns(
 
 {
     my $qpacket = Net::DNS::Packet->new();
-    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
+    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A', 'IN'));
     $qpacket->push('additional', $long_rr);
     _GDT->test_dns(
         qpacket => $qpacket,
@@ -66,7 +67,7 @@ _GDT->test_dns(
 
 {
     my $qpacket = Net::DNS::Packet->new();
-    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
+    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A', 'IN'));
     $qpacket->push('additional', $long_root_rr);
     _GDT->test_dns(
         qpacket => $qpacket,
@@ -77,10 +78,10 @@ _GDT->test_dns(
 # Try a bunch of records in all the non-question sections
 {
     my $qpacket = Net::DNS::Packet->new();
-    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A'));
-    $qpacket->push('answer', Net::DNS::RR->new('. A 192.0.2.1')) for 1..15;
-    $qpacket->push('auth', Net::DNS::RR->new('. AAAA ::192.0.2.1')) for 1..13;
-    $qpacket->push('additional', Net::DNS::RR->new('. MX 0 192.0.2.1')) for 1..11;
+    $qpacket->push('question', Net::DNS::Question->new('foo.example.com', 'A', 'IN'));
+    $qpacket->push('answer', Net::DNS::RR->new('. IN A 192.0.2.1')) for 1..15;
+    $qpacket->push('auth', Net::DNS::RR->new('. IN AAAA ::192.0.2.1')) for 1..13;
+    $qpacket->push('additional', Net::DNS::RR->new('. IN MX 0 192.0.2.1')) for 1..11;
     _GDT->test_dns(
         resopts => { usevc => 0, igntc => 1, udppacketsize => 1232 },
         qpacket => $qpacket,
@@ -119,6 +120,7 @@ _GDT->test_dns(
 {
     my @optrr_do = (
         type => "OPT",
+        class => 'IN',
         version => 0,
         name => "",
         size => 1232,

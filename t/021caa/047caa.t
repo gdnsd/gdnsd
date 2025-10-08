@@ -5,6 +5,7 @@ my $pid = _GDT->test_spawn_daemon();
 
 my $optrr_req_nsid = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 32000,
@@ -15,6 +16,7 @@ _GDT::optrr_option_set($optrr_req_nsid, 'NSID', '');
 
 my $optrr_nsid = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,

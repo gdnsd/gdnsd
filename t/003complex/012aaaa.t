@@ -7,6 +7,7 @@ my $neg_soa = 'example.com 900 SOA ns1.example.com dns-admin.example.net 1 7200 
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,

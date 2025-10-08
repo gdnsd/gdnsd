@@ -81,6 +81,7 @@ _GDT->test_dns(
 
 my @edns_base = (
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,
@@ -118,6 +119,7 @@ my @edns_base = (
 
 my $optrr_resp = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,
@@ -129,6 +131,7 @@ my $optrr_resp = Net::DNS::RR->new(
 {
     my $optrr_nsid = Net::DNS::RR->new(
         type => "OPT",
+        class => 'IN',
         version => 0,
         name => "",
         size => 1232,
@@ -150,6 +153,7 @@ my $optrr_resp = Net::DNS::RR->new(
 {
     my $optrr_nsid_withdata = Net::DNS::RR->new(
         type => "OPT",
+        class => 'IN',
         version => 0,
         name => "",
         size => 1232,

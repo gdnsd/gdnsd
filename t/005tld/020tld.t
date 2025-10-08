@@ -6,6 +6,7 @@ use Test::More tests => 6;
 
 my $optrr_req_nsid = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,
@@ -16,6 +17,7 @@ _GDT::optrr_option_set($optrr_req_nsid, 'NSID', '');
 
 my $optrr_nsid = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,
@@ -26,6 +28,7 @@ _GDT::optrr_option_set($optrr_nsid, 'NSID', pack('H*', '6578616D706C65'));
 
 my $optrr_nonsid = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,

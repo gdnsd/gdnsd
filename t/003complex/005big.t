@@ -7,6 +7,7 @@ my $pid = _GDT->test_spawn_daemon();
 
 my $optrr = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,
@@ -16,6 +17,7 @@ my $optrr = Net::DNS::RR->new(
 
 my $optrr_keepalive = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,

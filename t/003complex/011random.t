@@ -119,10 +119,10 @@ foreach (1..$_GDT::RAND_LOOPS) {
 
     eval {_GDT->query_server(
         undef,
-        Net::DNS::Packet->new('foo.example.com', 'A'),
+        Net::DNS::Packet->new('foo.example.com', 'A', 'IN'),
         _GDT->mkanswer({ },
-            Net::DNS::Question->new('foo.example.com', 'A'),
-            [Net::DNS::rr_add('foo.example.com 21600 A 192.0.2.160')], [], [],
+            Net::DNS::Question->new('foo.example.com', 'A', 'IN'),
+            [Net::DNS::rr_add('foo.example.com 21600 IN A 192.0.2.160')], [], [],
         ),
         _GDT->get_resolver(), {},
     )};
@@ -171,10 +171,10 @@ foreach (1..$_GDT::RAND_LOOPS) {
 
     eval {_GDT->query_server(
         undef,
-        Net::DNS::Packet->new('foo.example.com', 'A'),
+        Net::DNS::Packet->new('foo.example.com', 'A', 'IN'),
         _GDT->mkanswer({ },
-            Net::DNS::Question->new('foo.example.com', 'A'),
-            [Net::DNS::rr_add('foo.example.com 21600 A 192.0.2.160')], [], [],
+            Net::DNS::Question->new('foo.example.com', 'A', 'IN'),
+            [Net::DNS::rr_add('foo.example.com 21600 IN A 192.0.2.160')], [], [],
         ),
         _GDT->get_resolver(), {},
     )};

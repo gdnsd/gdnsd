@@ -7,6 +7,7 @@ sub _mk_optrr_cookie {
     my $data = shift;
     my $optrr_cookie = Net::DNS::RR->new(
         type => "OPT",
+        class => 'IN',
         version => 0,
         name => "",
         size => 1232,
@@ -26,6 +27,7 @@ my $pid = _GDT->test_spawn_daemon();
 # Test that input cookies are basically ignored when config disables cookies
 my $optrr_plain_1k = Net::DNS::RR->new(
     type => "OPT",
+    class => 'IN',
     version => 0,
     name => "",
     size => 1232,

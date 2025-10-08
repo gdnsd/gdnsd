@@ -1133,7 +1133,7 @@ sub test_dns {
         else {
             $aref = $args{$sec};
         }
-        map { if(!ref $aref->[$_]) { $aref->[$_] = Net::DNS::RR->new($aref->[$_]) } } (0..$#$aref);
+        map { if(!ref $aref->[$_]) { $aref->[$_] = Net::DNS::RR->new($aref->[$_]); $aref->[$_]->{class} ||= 1; } } (0..$#$aref);
     }
 
     my $qpacket = $args{qpacket} || Net::DNS::Packet->new($args{qname}, $args{qtype});

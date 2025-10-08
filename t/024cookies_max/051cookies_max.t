@@ -7,6 +7,7 @@ sub _mk_optrr_cookie {
     my $data = shift;
     my $optrr_cookie = Net::DNS::RR->new(
         type => "OPT",
+        class => 'IN',
         version => 0,
         name => "",
         size => 1232,
@@ -80,6 +81,7 @@ foreach my $proto (qw/v4_only v6_only/) {
     # still get a TC-bit.
     my $optrr_plain_1k = Net::DNS::RR->new(
         type => "OPT",
+        class => 'IN',
         version => 0,
         name => "",
         size => 1232,
