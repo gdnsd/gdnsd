@@ -76,7 +76,7 @@ static void sysd_notify_ready(void)
     if (fd < 0)
         log_fatal("Cannot create AF_UNIX socket");
 
-    const ssize_t strv = sendto(fd, msg, strlen(msg), 0, &sun, sun_len);
+    const ssize_t strv = sendto(fd, msg, strlen(msg), 0, (const struct sockaddr *)&sun, sun_len);
     if (strv < 0)
         log_fatal("sendto() systemd NOTIFY_SOCKET failed: %s", logf_errno());
 
