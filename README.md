@@ -21,13 +21,23 @@ Bug reports: https://github.com/gdnsd/gdnsd/issues
 
 Wikified docs: https://github.com/gdnsd/gdnsd/wiki
 
-Google Group for discussion: https://groups.google.com/forum/#!forum/gdnsd
-
 See the INSTALL file for details on prerequisites and build procedure
 for working from the source tree or a source tarball.
 
 The documentation is included in the source tree in POD format
 and installed as manpages and textfiles on installation.
+
+## Note: Codeberg migration in progress for 4.x
+
+There is an evolved development branch that is geared towards
+producing an eventual future 4.0 release.  The changes are
+significant, not the least of which is that the entire project has
+been ported from C to Zig.  Active development of that future will
+happen on Codeberg at: https://codeberg.org/gdnsd/gdnsd
+
+This github repo will remain for quite some time, primarily as the
+stable home base of the 3.x (and older) releases, and will be the
+source of any further 3.x releases.
 
 ## COPYRIGHT AND LICENSING
 
