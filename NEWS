@@ -1,3 +1,9 @@
+3.99.0-alpha3
+    * This is just the prior "alpha2" below, plus a bunch of bugfixes to make
+      the testsuite work with more-modern versions of Net::DNS.  I made this
+      tag for WMF's temporary use, it's not a real release anyone else should
+      reference.
+
 3.99.0-alpha2
     * Alpha work for a future 4.0 release
     * See VERSION4.md for details
