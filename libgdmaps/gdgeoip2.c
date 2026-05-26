@@ -198,6 +198,11 @@ static const char* GEOIP2_PATH_CITY[] = { "city", "names", "en", NULL };
     int mmrv_ = MMDB_aget_value(state->entry, &val, __VA_ARGS__);\
     if (mmrv_ == MMDB_SUCCESS && val.has_data && val.type == MMDB_DATA_TYPE_UTF8_STRING && val.utf8_string) {\
         if (lookup) {\
+            if (val.data_size >= DCMAP_LOOKUP_MAXLEN) {\
+                log_err("plugin_geoip: map %s: MMDB UTF-8 field length %u >= %u, refusing",\
+                        state->db->map_name, val.data_size, DCMAP_LOOKUP_MAXLEN);\
+                siglongjmp(state->db->jbuf, 1);\
+            }\
             memcpy(lookup, val.utf8_string, val.data_size);\
             lookup[val.data_size] = '\0';\
         }\
@@ -260,6 +265,11 @@ static void geoip2_dcmap_cb(void* data, char* lookup, const unsigned level)
     int mmrv = MMDB_aget_value(state->entry, &val, path_subd);
     if (mmrv == MMDB_SUCCESS && val.has_data && val.type == MMDB_DATA_TYPE_UTF8_STRING && val.utf8_string) {
         if (lookup) {
+            if (val.data_size >= DCMAP_LOOKUP_MAXLEN) {
+                log_err("plugin_geoip: map %s: MMDB UTF-8 subdivision field length %u >= %u, refusing",
+                        state->db->map_name, val.data_size, DCMAP_LOOKUP_MAXLEN);
+                siglongjmp(state->db->jbuf, 1);
+            }
             memcpy(lookup, val.utf8_string, val.data_size);
             lookup[val.data_size] = '\0';
         }
