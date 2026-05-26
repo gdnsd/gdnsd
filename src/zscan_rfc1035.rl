@@ -1054,13 +1054,11 @@ static void preprocess_buf(zscan_t* z, char* buf, const size_t buflen)
 F_NONNULL
 static void scanner(zscan_t* z, char* buf, const size_t bufsize)
 {
-    gdnsd_assert(bufsize);
-
     // This avoids the unfortunately common case of files with final lines
     //   that are unterminated by bailing out early.  This also incidentally
     //   but importantly protects from set_uval()'s strtoul running off the
     //   end of the buffer if we were parsing an integer at that point.
-    if (buf[bufsize - 1] != '\n') {
+    if (bufsize == 0 || buf[bufsize - 1] != '\n') {
         parse_error_noargs("No newline at end of file");
         return;
     }
