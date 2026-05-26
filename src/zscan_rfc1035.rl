@@ -131,10 +131,13 @@ F_NONNULL
 static void set_uval(zscan_t* z)
 {
     errno = 0;
-    z->uval = strtoul(z->tstart, NULL, 10);
-    z->tstart = NULL;
+    const unsigned long raw = strtoul(z->tstart, NULL, 10);
     if (errno)
         parse_error("Integer conversion error: %s", logf_errno());
+    if (raw > UINT32_MAX)
+        parse_error("Integer conversion error: value %lu is too large", raw);
+    z->uval = (unsigned)raw;
+    z->tstart = NULL;
 }
 
 F_NONNULL

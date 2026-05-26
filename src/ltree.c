@@ -514,7 +514,7 @@ bool ltree_add_rec_ns(const zone_t* zone, const uint8_t* dname, const uint8_t* r
 
 bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* rhs, unsigned ttl, const unsigned pref)
 {
-    if (pref > 65535U)
+    if (pref > UINT16_MAX)
         log_zfatal("Name '%s%s': MX preference value %u too large", logf_dname(dname), logf_dname(zone->dname), pref);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -528,11 +528,11 @@ bool ltree_add_rec_mx(const zone_t* zone, const uint8_t* dname, const uint8_t* r
 
 bool ltree_add_rec_srv_args(const zone_t* zone, const uint8_t* dname, lt_srv_args args)
 {
-    if (args.priority > 65535U)
+    if (args.priority > UINT16_MAX)
         log_zfatal("Name '%s%s': SRV priority value %u too large", logf_dname(dname), logf_dname(zone->dname), args.priority);
-    if (args.weight > 65535U)
+    if (args.weight > UINT16_MAX)
         log_zfatal("Name '%s%s': SRV weight value %u too large", logf_dname(dname), logf_dname(zone->dname), args.weight);
-    if (args.port > 65535U)
+    if (args.port > UINT16_MAX)
         log_zfatal("Name '%s%s': SRV port value %u too large", logf_dname(dname), logf_dname(zone->dname), args.port);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
@@ -548,10 +548,12 @@ bool ltree_add_rec_srv_args(const zone_t* zone, const uint8_t* dname, lt_srv_arg
 
 bool ltree_add_rec_naptr_args(const zone_t* zone, const uint8_t* dname, lt_naptr_args args)
 {
-    if (args.order > 65535U)
+    if (args.order > UINT16_MAX)
         log_zfatal("Name '%s%s': NAPTR order value %u too large", logf_dname(dname), logf_dname(zone->dname), args.order);
-    if (args.pref > 65535U)
+    if (args.pref > UINT16_MAX)
         log_zfatal("Name '%s%s': NAPTR preference value %u too large", logf_dname(dname), logf_dname(zone->dname), args.pref);
+    if (args.text_len > UINT16_MAX)
+        log_zfatal("Name '%s%s': NAPTR data len %u too large", logf_dname(dname), logf_dname(zone->dname), args.text_len);
 
     ltree_node_t* node = ltree_find_or_add_dname(zone, dname);
 
@@ -689,6 +691,9 @@ bool ltree_add_rec_rfc3597(const zone_t* zone, const uint8_t* dname, const unsig
             || (rrtype > 127 && rrtype < 256)
             || rrtype == 0)
         log_zfatal("Name '%s%s': %s not allowed", logf_dname(dname), logf_dname(zone->dname), type_desc);
+
+    if (rdlen > UINT16_MAX)
+        log_zfatal("Name '%s%s': data length %u is too large", logf_dname(dname), logf_dname(zone->dname), rdlen);
 
     ttl = clamp_ttl(zone, dname, type_desc, ttl);
 
