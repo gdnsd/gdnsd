@@ -13,6 +13,7 @@ Example http_status service_types config:
       url_path => /checkme      # default '/'
       vhost => www.example.com  # default none
       ok_codes => [ 200, 301 ], # default [ 200 ]
+      method => "GET"           # default 'GET'
       up_thresh => 20,
       ok_thresh => 10,
       down_thresh => 10,
