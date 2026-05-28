@@ -12,6 +12,7 @@ Example http_status service_types config:
       port => 8080,             # default 80
       url_path => /checkme      # default '/'
       vhost => www.example.com  # default none
+      method => GET             # default 'GET'
       ok_codes => [ 200, 301 ], # default [ 200 ]
       up_thresh => 20,
       ok_thresh => 10,

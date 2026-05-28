@@ -374,23 +374,24 @@ static void mon_timeout_cb(struct ev_loop* loop, struct ev_timer* t, const int r
 // _LEN sizes below are without trailing NUL, and without
 //   and printf templates (%s) either.
 
-static const char REQ_TMPL[] = "GET %s HTTP/1.0\r\nUser-Agent: gdnsd-monitor\r\n\r\n";
-static const char REQ_TMPL_VHOST[] = "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\nUser-Agent: gdnsd-monitor\r\n\r\n";
-#define REQ_TMPL_LEN (sizeof(REQ_TMPL) - 2U - 1U)
-#define REQ_TMPL_VHOST_LEN (sizeof(REQ_TMPL_VHOST) - 2U - 2U - 1U)
+static const char REQ_TMPL[] = "%s %s HTTP/1.0\r\nUser-Agent: gdnsd-monitor\r\n\r\n";
+static const char REQ_TMPL_VHOST[] = "%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\nUser-Agent: gdnsd-monitor\r\n\r\n";
+#define REQ_TMPL_LEN (sizeof(REQ_TMPL) - 2U - 2U - 1U)
+#define REQ_TMPL_VHOST_LEN (sizeof(REQ_TMPL_VHOST) - 2U - 2U - 2U - 1U)
 
 F_NONNULLX(1, 2)
-static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost)
+static void make_req_data(http_svc_t* s, const char* url_path, const char* vhost, const char* method)
 {
+    const unsigned method_len = strlen(method);
     const unsigned url_len = strlen(url_path);
     if (vhost) {
-        s->req_data_len = REQ_TMPL_VHOST_LEN + url_len + strlen(vhost);
+	s->req_data_len = REQ_TMPL_VHOST_LEN + method_len + url_len + strlen(vhost);
         s->req_data = xmalloc(s->req_data_len + 1);
-        snprintf(s->req_data, s->req_data_len + 1, REQ_TMPL_VHOST, url_path, vhost);
+	snprintf(s->req_data, s->req_data_len + 1, REQ_TMPL_VHOST, method, url_path, vhost);
     } else {
-        s->req_data_len = REQ_TMPL_LEN + url_len;
+	s->req_data_len = REQ_TMPL_LEN + method_len + url_len;
         s->req_data = xmalloc(s->req_data_len + 1);
-        snprintf(s->req_data, s->req_data_len + 1, REQ_TMPL, url_path);
+	snprintf(s->req_data, s->req_data_len + 1, REQ_TMPL, method, url_path);
     }
 }
 
@@ -399,6 +400,7 @@ static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cf
     // defaults
     const char* url_path = "/";
     const char* vhost = NULL;
+    const char* method = "GET";
     unsigned port = 80;
 
     service_types = xrealloc_n(service_types, num_http_svcs + 1, sizeof(*service_types));
@@ -411,6 +413,7 @@ static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cf
 
     SVC_OPT_STR(svc_cfg, name, url_path);
     SVC_OPT_STR(svc_cfg, name, vhost);
+    SVC_OPT_STR(svc_cfg, name, method);
     SVC_OPT_UINT(svc_cfg, name, port, 1LU, 65534LU);
     vscf_data_t* ok_codes_cfg = vscf_hash_get_data_byconstkey(svc_cfg, "ok_codes", true);
     if (ok_codes_cfg) {
@@ -437,7 +440,7 @@ static void plugin_http_status_add_svctype(const char* name, vscf_data_t* svc_cf
         this_svc->ok_codes[0] = 200LU;
     }
 
-    make_req_data(this_svc, url_path, vhost);
+    make_req_data(this_svc, url_path, vhost, method);
     this_svc->port = port;
     this_svc->timeout = timeout;
     this_svc->interval = interval;
