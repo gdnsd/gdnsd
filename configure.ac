@@ -59,6 +59,28 @@ AM_PROG_AR
 AC_PROG_RANLIB
 AC_PROG_LN_S
 
+# Check for Dnstap
+AC_ARG_ENABLE([dnstap],
+  AS_HELP_STRING([--enable-dnstap], [Enable dnstap support (requires fstrm, protobuf-c)]),
+  [], [enable_dnstap=no])
+
+AS_IF([test "$enable_dnstap" != "no"],[
+  AC_PATH_PROG([PROTOC_C], [protoc-c])
+  AS_IF([test -z "$PROTOC_C"],[
+    AC_MSG_ERROR([The protoc-c program was not found. Please install protobuf-c!])
+  ])
+  PKG_CHECK_MODULES([libfstrm], [libfstrm])
+  PKG_CHECK_MODULES([libprotobuf_c], [libprotobuf-c >= 1.0.0])
+  AC_SUBST([DNSTAP_CFLAGS], ["$libfstrm_CFLAGS $libprotobuf_c_CFLAGS"])
+  AC_SUBST([DNSTAP_LIBS], ["$libfstrm_LIBS $libprotobuf_c_LIBS"])
+])
+
+AM_CONDITIONAL([HAS_DNSTAP], [test "$enable_dnstap" != "no"])
+
+AS_IF([test "$enable_dnstap" != "no"],[
+  AC_DEFINE([USE_DNSTAP], [1], [Define to 1 to enable dnstap support])
+])
+
 # Check for --enable-developer
 developer=no
 AC_ARG_ENABLE([developer],

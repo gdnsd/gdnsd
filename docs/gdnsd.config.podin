@@ -157,6 +157,44 @@ Production configurations should always explicitly define their C<listen>
 option, as the default could be subject to breaking changes in major version
 upgrades.  The current default is the C<any> behavior above.
 
+=item B<dnstap>
+
+Sample dnstap config
+
+  options => {
+    dnstap => {
+      # enable or disable 
+      enable => true
+
+      # dnstap capture file
+      sink => /path/to/capture.tap
+
+      # if true, sink as unix socket used, else write to regular file
+      unix_sink => true
+      identity => identity
+      version => version
+      log_queries => true
+      log_responses => true
+
+      # if true, Multiple Producer, Single Consumer model been set
+      # if false, Single Producer, Single Consumer model been set
+      queue_model_mpsc => true
+
+      # This is the threshold number of bytes to
+      # accumulate in the output buffer before forcing a buffer flush.
+      buffer_hint => 0
+
+      # This is the number of queue entries to
+      # allocate per each input queue.
+      # This parameter must be a power-of-2
+      input_queue_size => 0
+
+      # This is the number of seconds to allow
+      # unflushed data to remain in the output buffer
+      flush_timeout => 0
+    }
+  }
+
 =item B<tcp_threads>
 
 Integer, default 2, min 1, max 1024.  This is the number of separate

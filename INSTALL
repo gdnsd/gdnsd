@@ -73,6 +73,9 @@ Interesting / Non-standard autoconf/make options
   Not generally for production use, but handy for development or tracking
     down evasive bugs.  If you just want debug symbols, put -g in CFLAGS.
 
+--enable-dnstap
+  Enable dnstap support
+  
 --with-testport=N
   The test suite needs to be able to bind to ~200 consecutive ports on
     127.0.0.1 and ::1, starting with port N.  The default is 12345.  If this
